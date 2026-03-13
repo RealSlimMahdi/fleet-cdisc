@@ -1,0 +1,1152 @@
+# Pymaverse — Workflow & Usage Guide
+
+> How to go from raw clinical data to validated SDTM and ADaM datasets.
+
+---
+
+## Core Concept
+
+Pymaverse adds **four chainable verb pipelines** directly onto every Polars DataFrame:
+
+```
+raw_df.sdtm.<verb>().<verb>()...to_frame()    →  SDTM DataFrame      (domain mapping)
+sdtm_df.adam.<verb>().<verb>()...to_frame()   →  ADaM BDS DataFrame  (ADVS, ADLB…)
+sdtm_df.adsl.<verb>().<verb>()...to_frame()   →  ADSL DataFrame      (one row/subject)
+sdtm_df.occds.<verb>().<verb>()...to_frame()  →  OCCDS DataFrame     (ADAE, ADCM…)
+```
+
+Importing the package is the only setup required — the namespaces register themselves automatically.
+
+```python
+import pymaverse
+import polars as pl
+```
+
+Nothing runs until you call `.to_frame()`. All intermediate verbs build an internal expression list that executes as a **single** Polars `with_columns` pass.
+
+---
+
+## Part 1 — Quick Start Examples
+
+### 1.1 Simplest possible SDTM derivation
+
+```python
+import pymaverse
+import polars as pl
+
+raw = pl.DataFrame({
+    "patient_id": ["001", "002", "003"],
+    "sex_raw":    ["M", "F", "M"],
+    "birth_date": ["1970-04-15", "1985-11-02", "1960-07-30"],
+})
+
+dm = (
+    raw.sdtm
+    .hardcode_no_ct("DOMAIN",  value="DM")
+    .hardcode_no_ct("STUDYID", value="MYSTUDY01")
+    .assign_no_ct("USUBJID",   source="patient_id")
+    .assign_ct("SEX",          source="sex_raw", ct_codelist="C66731",
+                               ct_mapping={"M": "M", "F": "F"})
+    .assign_datetime("BRTHDTC", source="birth_date", mode="date")
+    .to_frame()
+)
+
+print(dm)
+# ┌────────┬───────────┬─────────┬─────┬────────────┐
+# │ DOMAIN │ STUDYID   │ USUBJID │ SEX │ BRTHDTC    │
+# ╞════════╪═══════════╪═════════╪═════╪════════════╡
+# │ DM     │ MYSTUDY01 │ 001     │ M   │ 1970-04-15 │
+# │ DM     │ MYSTUDY01 │ 002     │ F   │ 1985-11-02 │
+# │ DM     │ MYSTUDY01 │ 003     │ M   │ 1960-07-30 │
+# └────────┴───────────┴─────────┴─────┴────────────┘
+```
+
+> **Key points:**
+>
+> - `hardcode_no_ct` sets the same literal value for every row
+> - `assign_no_ct` copies a column as-is
+> - `assign_ct` decodes values via a CT codelist mapping
+> - `assign_datetime` normalises strings to ISO 8601
+
+---
+
+### 1.2 Simplest possible ADaM derivation
+
+```python
+import pymaverse
+import polars as pl
+
+vs_sdtm = pl.DataFrame({
+    "USUBJID":  ["001-01", "001-01", "001-01"],
+    "VSDTC":    ["2024-01-10", "2024-01-17", "2024-01-24"],
+    "VSSTRESN": [120.0, 118.0, 115.0],
+    "TRTSDT":   ["2024-01-11", "2024-01-11", "2024-01-11"],
+    "ABLFL":    ["Y", None, None],
+})
+
+advs = (
+    vs_sdtm.adam
+    .source("USUBJID")
+    .rename("ADT",  source="VSDTC")
+    .derivation("AVAL", expression="VSSTRESN")
+    .study_day("ADY",  analysis_date="ADT", reference_date="TRTSDT")
+    .baseline("BASE", aval="AVAL", baseline_flag="ABLFL")
+    .chg("CHG",  aval="AVAL", base="BASE")
+    .pchg("PCHG", aval="AVAL", base="BASE")
+    .to_frame()
+)
+
+print(advs.select("USUBJID", "ADT", "AVAL", "ADY", "BASE", "CHG", "PCHG"))
+```
+
+> **Key points:**
+>
+> - `source` / `rename` pull columns from the SDTM input
+> - `derivation` evaluates any Polars expression
+> - Typed verbs (`study_day`, `baseline`, `chg`, `pchg`…) run standard ADaM calculations with IDE autocomplete
+
+---
+
+## Part 2 — Loading Data
+
+### 2.1 From CSV
+
+```python
+from pymaverse import load_raw_data
+
+raw_df = load_raw_data("datasets/cdiscpilot01/raw/dm_raw.csv").collect()
+```
+
+`load_raw_data` returns a **LazyFrame** — call `.collect()` to materialise it, or pass it directly into a namespace (Polars accepts both).
+
+### 2.2 From a directory
+
+```python
+from pymaverse import load_datasets
+
+all_raw = load_datasets("datasets/cdiscpilot01/raw/", pattern="*.csv")
+# Returns dict: {"dm_raw": LazyFrame, "vs_raw": LazyFrame, "ae_raw": LazyFrame}
+
+dm_raw  = all_raw["dm_raw"].collect()
+vs_raw  = all_raw["vs_raw"].collect()
+```
+
+### 2.3 Downloading from a URL
+
+```python
+from pymaverse import download_raw_data, load_raw_data
+from pathlib import Path
+
+dest = Path("downloads/cdisc_ct.yaml")
+download_raw_data("https://example.com/cdisc_ct_2024.yaml", destination=dest)
+raw = load_raw_data(dest).collect()
+```
+
+---
+
+## Part 3 — Controlled Terminology
+
+### 3.1 Load a CT file
+
+```python
+from pymaverse import load_controlled_terminology
+
+ct = load_controlled_terminology("ct/cdisc_ct.yaml")
+# {"C66731": {"M": "MALE", "F": "FEMALE"}, "C74457": {...}, ...}
+```
+
+### 3.2 Use the singleton CTValidator
+
+```python
+from pymaverse import get_validator
+
+validator = get_validator()
+validator.load_ct_file(
+    "ct/cdisc_ct.yaml",
+    aliases={"SEX": "C66731", "RACE": "C74457", "ETHNIC": "C66790"},
+)
+
+# Check a value
+ok, msg = validator.validate_value("C66731", "M")
+print(ok, msg)  # True, "Value 'M' is valid for codelist 'C66731'"
+
+# All valid terms for a codelist
+print(validator.get_valid_values("C66731"))  # {"M", "F", "UNDIFFERENTIATED", ...}
+```
+
+### 3.3 CT decoding inside `assign_ct`
+
+Once the singleton is loaded, `assign_ct` uses it automatically — no explicit mapping needed:
+
+```python
+validator.load_ct_file("ct/cdisc_ct.yaml")
+
+dm = (
+    raw_df.sdtm
+    .assign_ct("SEX",   source="raw_sex",  ct_codelist="C66731")
+    .assign_ct("RACE",  source="raw_race", ct_codelist="C74457")
+    .to_frame()
+)
+```
+
+---
+
+## Part 4 — Spec-Driven Derivation (YAML)
+
+For repeatable, auditable derivations, put the logic in a YAML spec file and let `from_spec()` replay it.
+
+### 4.1 Write the spec
+
+```yaml
+# specs/mystudy/sdtm/dm_spec.yaml
+domain: DM
+variables:
+  - target: STUDYID
+    algorithm: hardcode_no_ct
+    value: "MYSTUDY01"
+
+  - target: DOMAIN
+    algorithm: hardcode_no_ct
+    value: "DM"
+
+  - target: USUBJID
+    algorithm: assign_no_ct
+    source: patient_id
+
+  - target: SEX
+    algorithm: assign_ct
+    source: sex_raw
+    ct_codelist: C66731
+    ct_mapping:
+      "M": "M"
+      "F": "F"
+
+  - target: BRTHDTC
+    algorithm: assign_datetime
+    source: birth_date
+    mode: date
+
+  - target: RFSTDTC
+    algorithm: assign_datetime
+    source: start_date
+    mode: date
+```
+
+### 4.2 Execute the spec
+
+```python
+import pymaverse
+
+dm = raw_df.sdtm.from_spec("specs/mystudy/sdtm/dm_spec.yaml").to_frame()
+```
+
+One line. The spec replays every variable mapping in order.
+
+### 4.3 ADaM spec-driven
+
+```yaml
+# specs/mystudy/adam/advs_spec.yaml
+dataset: ADVS
+variables:
+  - target: STUDYID
+    algorithm: assigned
+    value: "MYSTUDY01"
+
+  - target: USUBJID
+    algorithm: source
+    source: USUBJID
+
+  - target: AVAL
+    algorithm: derivation
+    expression: "VSSTRESN"
+
+  - target: ADY
+    algorithm: std_function
+    func: study_day
+    analysis_date: ADT
+    reference_date: TRTSDT
+
+  - target: CHG
+    algorithm: std_function
+    func: chg
+    aval: AVAL
+    base: BASE
+```
+
+```python
+advs = vs_sdtm.adam.from_spec("specs/mystudy/adam/advs_spec.yaml").to_frame()
+```
+
+> **Backward compatibility:** `algorithm: std_function` in YAML specs still works and is
+> automatically routed to the appropriate typed method (`study_day`, `chg`, etc.) via the
+> internal `_std_function_dispatch()` handler. New specs can also use the verb name directly
+> as the `algorithm` value — e.g. `algorithm: study_day`.
+
+---
+
+## Part 5 — Complex End-to-End Example
+
+Full pipeline: raw eCRF → SDTM DM → SDTM VS → ADaM ADVS → save.
+
+```python
+import pymaverse
+from pymaverse import load_raw_data, get_validator, save_parquet
+import polars as pl
+from pathlib import Path
+
+# ── 1. Load CT ──────────────────────────────────────────────────────────────
+ct = get_validator()
+ct.load_ct_file(
+    "ct/cdisc_ct_2024_09.yaml",
+    aliases={"SEX": "C66731", "RACE": "C74457", "ETHNIC": "C66790"},
+)
+
+# ── 2. Load raw data ─────────────────────────────────────────────────────────
+dm_raw = load_raw_data("datasets/cdiscpilot01/raw/dm_raw.csv").collect()
+vs_raw = load_raw_data("datasets/cdiscpilot01/raw/vs_raw.csv").collect()
+
+# ── 3. Derive SDTM DM ────────────────────────────────────────────────────────
+dm_sdtm = (
+    dm_raw.sdtm
+    .hardcode_no_ct("STUDYID", value="CDISCPILOT01")
+    .hardcode_no_ct("DOMAIN",  value="DM")
+    .assign_no_ct("USUBJID",   source="patient_number")
+    .assign_no_ct("SUBJID",    source="patient_number")
+    .assign_no_ct("SITEID",    source="site_id")
+    .assign_no_ct("AGE",       source="age")
+    .hardcode_no_ct("AGEU",    value="YEARS")
+    .assign_ct("SEX",          source="sex",   ct_codelist="C66731")
+    .assign_ct("RACE",         source="race",  ct_codelist="C74457")
+    .assign_ct("ETHNIC",       source="ethnic", ct_codelist="C66790")
+    .assign_no_ct("ACTARMCD",  source="arm_code")
+    .assign_no_ct("ACTARM",    source="arm_label")
+    .assign_datetime("RFSTDTC", source="start_date",  mode="date")
+    .assign_datetime("RFENDTC", source="end_date",    mode="date")
+    .assign_datetime("BRTHDTC", source="birth_date",  mode="date")
+    .to_frame()
+)
+
+# ── 4. Derive SDTM VS ────────────────────────────────────────────────────────
+vs_sdtm = (
+    vs_raw.sdtm
+    .hardcode_no_ct("STUDYID", value="CDISCPILOT01")
+    .hardcode_no_ct("DOMAIN",  value="VS")
+    .assign_no_ct("USUBJID",   source="patient_number")
+    .assign_no_ct("VSTESTCD",  source="test_code")
+    .assign_no_ct("VSTEST",    source="test_name")
+    .assign_no_ct("VSORRES",   source="result_original")
+    .assign_no_ct("VSORRESU",  source="unit_original")
+    .assign_no_ct("VSSTRESN",  source="result_numeric")
+    .assign_no_ct("VSSTRESU",  source="unit_standard")
+    .assign_datetime("VSDTC",  source="collection_date", mode="date")
+    .assign_no_ct("VISIT",     source="visit_name")
+    .assign_no_ct("VISITNUM",  source="visit_number")
+    .remove_dup(subset=["USUBJID", "VSTESTCD", "VSDTC", "VISIT"])
+    .to_frame()
+)
+
+# ── 5. Derive ADaM ADVS ──────────────────────────────────────────────────────
+# First, join TRTSDT from DM so study day can be calculated
+trtsdt = dm_sdtm.select(["USUBJID", "RFSTDTC"]).rename({"RFSTDTC": "TRTSDT"})
+
+advs = (
+    vs_sdtm.adam
+    # Pass-through from SDTM VS
+    .source("STUDYID")
+    .source("USUBJID")
+    .source("VSTESTCD")
+    .rename("PARAMCD", source="VSTESTCD")
+    .rename("PARAM",   source="VSTEST")
+    .derivation("AVAL", expression="VSSTRESN")
+    .source("AVALU",   from_col="VSORRESU")
+    .rename("ADT",     source="VSDTC")
+    .source("VISIT")
+    .source("VISITNUM")
+    # Join TRTSDT from DM SDTM
+    .lookup(dataset=trtsdt, on="USUBJID", how="left")
+    # Standard ADaM calculations
+    .study_day("ADY",   analysis_date="ADT", reference_date="TRTSDT")
+    .flag("ABLFL",      criteria='pl.col("VISITNUM") == 1')
+    .baseline("BASE",   aval="AVAL", baseline_flag="ABLFL")
+    .chg("CHG",         aval="AVAL", base="BASE")
+    .pchg("PCHG",       aval="AVAL", base="BASE")
+    # Exclude pre-baseline records
+    .whereclauses(where='pl.col("ADY").is_not_null()')
+    .to_frame()
+)
+
+# ── 6. Save outputs ──────────────────────────────────────────────────────────
+out = Path("data/sdtm")
+out.mkdir(parents=True, exist_ok=True)
+save_parquet(dm_sdtm,  out / "dm.parquet")
+save_parquet(vs_sdtm,  out / "vs.parquet")
+save_parquet(advs, Path("data/adam") / "advs.parquet")
+
+print("Done — DM:", dm_sdtm.shape, "VS:", vs_sdtm.shape, "ADVS:", advs.shape)
+```
+
+---
+
+## Part 6 — Conditional Derivations
+
+### 6.1 `condition_add` — simple if/null
+
+```python
+ae = (
+    ae_raw.sdtm
+    .assign_no_ct("USUBJID", source="patient_number")
+    .assign_no_ct("AETERM",  source="adverse_event")
+    # Flag serious AEs only
+    .condition_add("AESER",
+                   condition='pl.col("serious_flag") == "Y"',
+                   then_value="Y")
+    .to_frame()
+)
+```
+
+### 6.2 `if_then_else` — multi-branch
+
+```python
+lb = (
+    lb_raw.sdtm
+    .assign_no_ct("LBTEST", source="test_name")
+    .if_then_else("LBNRIND",
+        when=[
+            {"condition": 'pl.col("LBSTRESN") < pl.col("LBSTNRLO")', "value": "LOW"},
+            {"condition": 'pl.col("LBSTRESN") > pl.col("LBSTNRHI")', "value": "HIGH"},
+        ],
+        else_value="NORMAL",
+    )
+    .to_frame()
+)
+```
+
+### 6.3 `condderivation` in ADaM — multi-branch with expressions
+
+```python
+advs = (
+    vs_sdtm.adam
+    .source("USUBJID")
+    .derivation("AVAL", expression="VSSTRESN")
+    .condderivation("DTYPE", conditions=[
+        {"condition": 'pl.col("VISITNUM") == 0', "value": "SCREENING"},
+        {"condition": 'pl.col("VISITNUM") == 1', "value": "BASELINE"},
+    ], else_value=None)
+    .to_frame()
+)
+```
+
+### 6.4 `recode` in ADaM — value mapping
+
+```python
+advs = (
+    vs_sdtm.adam
+    .source("USUBJID")
+    .recode("AVISIT",
+            source="VISIT",
+            recode_map={
+                "Screening":  "SCREENING",
+                "Day 1":      "BASELINE",
+                "Week 4":     "WEEK 4",
+                "Week 8":     "WEEK 8",
+                "Week 12":    "WEEK 12",
+                "End of Study": "EOT",
+            },
+            default=pl.col("VISIT"))   # unmapped → keep original
+    .to_frame()
+)
+```
+
+---
+
+## Part 7 — Working with Multiple Datasets
+
+### 7.1 `merge` in SDTM — joining a reference table
+
+```python
+# dm_raw has patient demographics; arm_ref has arm labels
+arm_ref = pl.DataFrame({
+    "arm_code": ["PLA", "LOW", "HIGH"],
+    "arm_label": ["Placebo", "Low Dose", "High Dose"],
+})
+
+dm = (
+    dm_raw.sdtm
+    .assign_no_ct("USUBJID",  source="patient_number")
+    .assign_no_ct("ACTARMCD", source="arm_code")
+    .merge(dataset=arm_ref, on="arm_code", how="left")
+    .assign_no_ct("ACTARM",   source="arm_label")
+    .to_frame()
+)
+```
+
+### 7.2 `multiple_responses` — expanding multi-answer fields
+
+```python
+# Raw data has pipe-delimited prior medications
+cm_raw = pl.DataFrame({
+    "patient_number": ["001", "002"],
+    "prior_meds":     ["Aspirin|Metformin", "Lisinopril"],
+})
+
+cm = (
+    cm_raw.sdtm
+    .assign_no_ct("USUBJID", source="patient_number")
+    .multiple_responses("CMTRT", source="prior_meds",
+                        delimiter="|", id_cols=["USUBJID"])
+    .to_frame()
+)
+# Expanded: 001 → 2 rows (Aspirin, Metformin), 002 → 1 row (Lisinopril)
+```
+
+### 7.3 `group_by` — creating a SUPPQUAL or summary domain
+
+```python
+# Create subject-level max severity from AE
+max_ae = (
+    ae_sdtm.sdtm
+    .group_by(
+        group_cols=["USUBJID"],
+        agg={"MAXSEV": ("AESEV", "max")},
+    )
+    .to_frame()
+)
+```
+
+---
+
+## Part 8 — Define-XML
+
+### 8.1 Validate a YAML define spec
+
+```python
+from pymaverse import DefineValidator
+
+v = DefineValidator("specs/mystudy/define_dm.yaml")
+v.validate()
+
+if v.has_errors():
+    for issue in v.get_errors():
+        print(issue)
+```
+
+### 8.2 Generate Define-XML XML
+
+```python
+from pymaverse import DefineXMLGenerator
+
+gen = DefineXMLGenerator("specs/mystudy/define_dm.yaml")
+xml_string = gen.generate()
+
+with open("outputs/define.xml", "w") as f:
+    f.write(xml_string)
+```
+
+---
+
+## Part 9 — CDISC Validation
+
+```python
+from pymaverse import ValidationService
+from pathlib import Path
+
+svc = ValidationService(rules_engine_path=Path("~/.local/cdisc-rules-engine"))
+
+# After deriving DM SDTM:
+result = svc.validate_sdtm(dm_sdtm, domain="DM", version="3.4")
+
+result.print_report()
+# ✓  Validation complete — 0 errors, 2 warnings
+
+result.save_html_report("outputs/dm_validation.html")
+```
+
+---
+
+## Part 10 — StudyContext (Path Management)
+
+For larger projects, `StudyContext` resolves configured paths automatically.
+
+```yaml
+# study_config.yaml
+study_id: MYSTUDY01
+company: Acme Pharma
+paths:
+  raw_data: data/raw
+  sdtm_data: data/sdtm
+  adam_data: data/adam
+  outputs: outputs
+```
+
+```python
+from pymaverse import load_study_context, load_raw_data
+
+ctx = load_study_context("study_config.yaml")
+
+# Paths resolved relative to the config file's directory
+dm_raw  = load_raw_data(ctx.raw_data_dir / "dm_raw.csv").collect()
+vs_raw  = load_raw_data(ctx.raw_data_dir / "vs_raw.csv").collect()
+
+# ... derive dm_sdtm, vs_sdtm ...
+
+save_parquet(dm_sdtm, ctx.sdtm_data_dir / "dm.parquet")
+```
+
+---
+
+## Part 11 — Saving Outputs
+
+```python
+from pymaverse import save_parquet
+from pymaverse.io import save_xpt  # requires pyreadstat extra
+
+# Parquet (fast, lossless — preferred for intermediate data)
+save_parquet(dm_sdtm, "data/sdtm/dm.parquet")
+
+# SAS XPT (required for regulatory submission)
+save_xpt(dm_sdtm, "outputs/dm.xpt")
+```
+
+Install XPT support:
+
+```bash
+uv sync --extra io
+```
+
+---
+
+## Quick Reference — Verb Cheat Sheet
+
+### SDTM verbs
+
+| Verb                 | When to use                                                    |
+| -------------------- | -------------------------------------------------------------- |
+| `assign_no_ct`       | Raw column → SDTM variable, no decoding needed                 |
+| `assign_ct`          | Raw column → SDTM variable, values need CT decoding            |
+| `assign_datetime`    | Date string → ISO 8601 date or datetime                        |
+| `hardcode_no_ct`     | Constant value (DOMAIN, STUDYID, AGEU…)                        |
+| `hardcode_ct`        | Constant value that should be CT-validated                     |
+| `condition_add`      | Add a flag column (`IF X THEN Y ELSE NULL`)                    |
+| `if_then_else`       | Multi-branch conditional string column                         |
+| `ae_aerel`           | Map relatedness text to standard AE relatedness values         |
+| `merge`              | Join a reference dataset (arm labels, site names…)             |
+| `remove_dup`         | Deduplicate (e.g. first occurrence per subject/visit)          |
+| `group_by`           | Aggregate to dataset-level or subject-level summaries          |
+| `dataset_level`      | Alias for `hardcode_no_ct` — for clarity in dataset-level vars |
+| `notsubmitted`       | Mark variables as intentionally null / not collected           |
+| `multiple_responses` | Expand pipe-delimited multi-answer text into rows              |
+
+### ADaM verbs — `df.adam` (BDS)
+
+| Verb             | When to use                                                            |
+| ---------------- | ---------------------------------------------------------------------- |
+| `source`         | Carry over a variable from SDTM unchanged                              |
+| `derivation`     | Calculate from a Polars expression (arbitrary logic)                   |
+| `assigned`       | Global constant (STUDYID, DTYPE…)                                      |
+| `recode`         | Map categorical values to analysis-ready labels                        |
+| `rename`         | Rename SDTM variable to ADaM name (VSDTC → ADT)                        |
+| `condderivation` | Multi-branch conditional with complex expressions                      |
+| `lookup`         | Join a reference dataset (TRTSDT from DM, lab normals…)                |
+| `whereclauses`   | Filter the dataset to a subpopulation                                  |
+| `study_day`      | ADY = (ADT − TRTSDT) + 1, CDISC convention                             |
+| `baseline`       | BASE = AVAL at the baseline record (ABLFL == "Y")                      |
+| `chg`            | CHG = AVAL − BASE                                                      |
+| `pchg`           | PCHG = (AVAL − BASE) / BASE × 100                                      |
+| `flag`           | General "Y" flag — expression, or `first`/`last`/`max`/`min` shorthand |
+| `bmi`            | BMI = weight / (height / 100)²                                         |
+| `nrind`          | LOW / NORMAL / HIGH vs normal range columns                            |
+| `on_treatment`   | ONTRTFL = "Y" when ADT within [TRTSDT, TRTEDT]                         |
+| `shift`          | Categorical shift string: "NORMAL to HIGH"                             |
+
+### ADSL verbs — `df.adsl` (one row per subject)
+
+| Verb                                                                                     | When to use                                                      |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `source`, `derivation`, `assigned`, `recode`, `rename`, `condderivation`, `whereclauses` | Same as `df.adam` base verbs                                     |
+| `first_date`                                                                             | Earliest date from an event-level dataset (AESTDTM, TRTSDT…)     |
+| `last_date`                                                                              | Latest date from an event-level dataset (AENDTM, TRTEDT…)        |
+| `duration`                                                                               | Days between two date columns (TRTDURD, DTHADY…)                 |
+| `count_events`                                                                           | Count matching records per subject (NUMAE, NUMSAE…); 0 when none |
+| `eligibility_flag`                                                                       | "Y" population flags (SAFFL, ITTFL, PPROTFL…)                    |
+
+### OCCDS verbs — `df.occds` (one row per event)
+
+| Verb                                                                                     | When to use                                                         |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `source`, `derivation`, `assigned`, `recode`, `rename`, `condderivation`, `whereclauses` | Same as `df.adam` base verbs                                        |
+| `seq`                                                                                    | Sequential 1-based record number per subject (ASEQ)                 |
+| `worst_flag`                                                                             | "Y" on worst-severity record per group (ANL01FL…)                   |
+| `treatment_emergent`                                                                     | TRTEMFL = "Y" for events starting on/after TRTSDT                   |
+| `onset_recovery`                                                                         | "Y" for events that both begin on-treatment and have a recorded end |
+
+---
+
+## Part 12 — BDS Extended Verbs (`flag`, `nrind`, `on_treatment`, `shift`)
+
+These verbs extend the core BDS pipeline with commonly needed clinical-trial derivations.
+
+### 12.1 `flag` — General "Y" flag variable
+
+`flag` replaces the old `flag_baseline` and covers any "Y" / null indicator column.
+
+**Expression-based criteria:**
+
+```python
+advs = (
+    vs_sdtm.adam
+    .flag("ABLFL",
+          criteria='pl.col("VISITNUM") == 1',   # any valid Polars expression
+          groups=["USUBJID", "PARAMCD"])
+    .to_frame()
+)
+```
+
+**Shorthand: `"first"` / `"last"` / `"max"` / `"min"`**
+
+These shorthands pick one record per group based on ordering or value.
+
+```python
+# Baseline flag = first record per subject/parameter
+advs = (
+    vs_sdtm.adam
+    .flag("ABLFL",
+          criteria="first",          # first row in group after sorting
+          order_by="ADY",            # sort key (required for first/last)
+          groups=["USUBJID", "PARAMCD"])
+    .to_frame()
+)
+
+# Peak flag = AVAL maximum per subject/parameter
+advs = (
+    vs_sdtm.adam
+    .flag("APKFL",
+          criteria="max",
+          value_col="AVAL",          # which column to maximise (required for max/min)
+          groups=["USUBJID", "PARAMCD"])
+    .to_frame()
+)
+```
+
+**Pre-filter with `where`:**
+
+```python
+# Flag only post-baseline records
+advs = (
+    vs_sdtm.adam
+    .flag("ANL01FL",
+          criteria="max",
+          value_col="AVAL",
+          where='pl.col("ABLFL").is_null()',    # exclude baseline row before flagging
+          groups=["USUBJID", "PARAMCD"])
+    .to_frame()
+)
+```
+
+---
+
+### 12.2 `nrind` — Normal range indicator
+
+Creates a LOW / NORMAL / HIGH column (e.g. ANRIND, BNRIND) from a value and its reference range.
+
+```python
+adlb = (
+    lb_sdtm.adam
+    .source("USUBJID")
+    .rename("ADT",    source="LBDTC")
+    .derivation("AVAL", expression="LBSTRESN")
+    .nrind("ANRIND",  value="AVAL",
+           low="LBSTNRLO",      # lower normal limit column
+           high="LBSTNRHI")     # upper normal limit column
+    .to_frame()
+)
+```
+
+The result is `"LOW"` when `AVAL < LBSTNRLO`, `"HIGH"` when `AVAL > LBSTNRHI`,
+`"NORMAL"` when in range, and `null` when `AVAL` is null.
+
+---
+
+### 12.3 `on_treatment` — On-treatment flag
+
+Sets `ONTRTFL = "Y"` when the analysis date falls within
+`[TRTSDT, TRTEDT]` (inclusive).
+
+```python
+advs = (
+    vs_sdtm.adam
+    .on_treatment("ONTRTFL",
+                  adt="ADT",
+                  trtsdt="TRTSDT",
+                  trtedt="TRTEDT")    # pass None / omit to use open-ended window
+    .to_frame()
+)
+```
+
+---
+
+### 12.4 `shift` — Baseline-to-post-baseline shift string
+
+Concatenates the baseline category and post-baseline category to form
+a shift table cell value (e.g. `"NORMAL to HIGH"`).
+
+```python
+adlb = (
+    lb_sdtm.adam
+    .nrind("BNRIND", value="BASE", low="LBSTNRLO", high="LBSTNRHI")   # baseline indicator
+    .nrind("ANRIND", value="AVAL", low="LBSTNRLO", high="LBSTNRHI")   # post-baseline indicator
+    .shift("SHIFT1",
+           baseline_cat="BNRIND",
+           post_cat="ANRIND",
+           sep=" to ")              # default separator
+    .to_frame()
+)
+# SHIFT1: "NORMAL to HIGH", "LOW to NORMAL", …
+```
+
+---
+
+## Part 13 — ADSL Derivations (`df.adsl`)
+
+`df.adsl` is optimised for patient-level summary datasets (one row per subject).
+It shares all base verbs with `df.adam` plus five ADSL-specific verbs.
+
+```python
+import polars as pl
+from pymaverse import ADSLNamespace   # registers df.adsl automatically on import
+
+adsl_base = pl.DataFrame({
+    "USUBJID": ["001-01", "001-02", "001-03"],
+})
+
+# Event-level AE dataset (many rows per subject)
+ae = pl.DataFrame({
+    "USUBJID":  ["001-01", "001-01", "001-02"],
+    "AESTDTC":  ["2024-01-15", "2024-02-10", "2024-01-20"],
+    "AESER":    ["N", "Y", "N"],
+})
+
+# Demographics / reference dates
+dm = pl.DataFrame({
+    "USUBJID": ["001-01", "001-02", "001-03"],
+    "RFSTDTC": ["2024-01-11", "2024-01-12", "2024-01-13"],  # first dose date
+    "RFENDTC": ["2024-03-01", "2024-04-01", None],           # last dose date
+})
+```
+
+### 13.1 `first_date` and `last_date`
+
+```python
+adsl = (
+    adsl_base.adsl
+    # Earliest AE start date
+    .first_date("AESTDT",
+                from_dataset=ae,
+                date_col="AESTDTC",
+                groups=["USUBJID"])          # default groups; usually just USUBJID
+    # Latest AE start date (subjects with no AEs get null)
+    .last_date("AEENDT",
+               from_dataset=ae,
+               date_col="AESTDTC",
+               groups=["USUBJID"])
+    .to_frame()
+)
+```
+
+Pass `where` to pre-filter the event dataset before taking the min/max:
+
+```python
+.first_date("SAESTDT",
+            from_dataset=ae,
+            date_col="AESTDTC",
+            where='pl.col("AESER") == "Y"',  # serious AEs only
+            groups=["USUBJID"])
+```
+
+---
+
+### 13.2 `duration`
+
+```python
+adsl = (
+    dm.adsl
+    .rename("TRTSDT", source="RFSTDTC")
+    .rename("TRTEDT", source="RFENDTC")
+    .duration("TRTDURD",
+              start_date="TRTSDT",
+              end_date="TRTEDT",
+              unit="days",      # only "days" currently supported
+              inclusive=True)   # (end - start) + 1; set False for exclusive
+    .to_frame()
+)
+```
+
+---
+
+### 13.3 `count_events`
+
+```python
+adsl = (
+    adsl_base.adsl
+    # Total AEs per subject
+    .count_events("NUMAE",
+                  from_dataset=ae,
+                  groups=["USUBJID"])
+    # Serious AEs per subject (0 for subjects with none)
+    .count_events("NUMSAE",
+                  from_dataset=ae,
+                  where='pl.col("AESER") == "Y"',
+                  groups=["USUBJID"])
+    .to_frame()
+)
+```
+
+---
+
+### 13.4 `eligibility_flag`
+
+```python
+adsl = (
+    adsl_base.adsl
+    .eligibility_flag("SAFFL",
+                      criteria='pl.col("TRTSDT").is_not_null()')
+    .eligibility_flag("ITTFL",
+                      criteria='pl.col("RANDDT").is_not_null()')
+    .to_frame()
+)
+# SAFFL / ITTFL: "Y" when criteria is true, null otherwise
+```
+
+---
+
+## Part 14 — OCCDS Derivations (`df.occds`)
+
+`df.occds` handles occurrence datasets (one row per event, e.g. ADAE, ADCM).
+
+```python
+import polars as pl
+from pymaverse import OCCDSNamespace   # registers df.occds automatically on import
+
+ae = pl.DataFrame({
+    "USUBJID":  ["001-01", "001-01", "001-02", "001-02"],
+    "AESTDTC":  ["2024-01-15", "2024-02-10", "2024-01-20", "2024-02-05"],
+    "AEENDT":   ["2024-01-20", None,           "2024-01-28", "2024-02-10"],
+    "AESEV":    ["MILD",       "SEVERE",       "MODERATE",   "MILD"],
+    "TRTSDT":   ["2024-01-11", "2024-01-11",   "2024-01-12", "2024-01-12"],
+    "TRTEDT":   ["2024-03-01", "2024-03-01",   "2024-04-01", "2024-04-01"],
+})
+```
+
+### 14.1 `seq`
+
+Sequential 1-based record number per subject (creates ASEQ per CDISC convention).
+
+```python
+adae = (
+    ae.occds
+    .seq("ASEQ", groups=["USUBJID"])   # resets to 1 for each subject
+    .to_frame()
+)
+```
+
+---
+
+### 14.2 `worst_flag`
+
+Flags the record with the worst severity per group. Supports categorical ordering
+or numeric grades.
+
+```python
+adae = (
+    ae.occds
+    .worst_flag("ANL01FL",
+                severity_col="AESEV",
+                groups=["USUBJID"],
+                severity_order=["MILD", "MODERATE", "SEVERE"])   # worst = last
+    .to_frame()
+)
+# ANL01FL is "Y" on the most severe AE per subject; null on all others.
+```
+
+---
+
+### 14.3 `treatment_emergent`
+
+```python
+adae = (
+    ae.occds
+    .treatment_emergent("TRTEMFL",
+                        start_date="AESTDTC",
+                        trtsdt="TRTSDT",
+                        trtedt="TRTEDT",
+                        offset_days=0)   # 0 = event must start on or after TRTSDT
+    .to_frame()
+)
+```
+
+---
+
+### 14.4 `onset_recovery`
+
+"Y" when the event starts on treatment **and** has a recorded end date (i.e. resolved).
+
+```python
+adae = (
+    ae.occds
+    .onset_recovery("RAEFL",
+                    start_date="AESTDTC",
+                    end_date="AEENDT",
+                    ref_date="TRTSDT")
+    .to_frame()
+)
+```
+
+---
+
+## Part 15 — Commands Reference
+
+### 15.1 Environment setup
+
+| Command                                                             | What it does                                      |
+| ------------------------------------------------------------------- | ------------------------------------------------- |
+| `uv sync`                                                           | Install all dependencies from `pyproject.toml`    |
+| `uv sync --extra dev`                                               | Include optional dev extras (linting, formatting) |
+| `uv sync --extra io`                                                | Include optional I/O extras (XPT export, Parquet) |
+| `uv sync --all-extras`                                              | Install all optional extras                       |
+| `uv run python -c "import pymaverse; print(pymaverse.__version__)"` | Verify installed version                          |
+
+---
+
+### 15.2 Running tests
+
+```bash
+# All tests
+uv run pytest tests/ -v
+
+# Single test file
+uv run pytest tests/unit/test_adam_namespace.py -v
+
+# Single test class
+uv run pytest tests/unit/test_adam_namespace.py::TestFlag -v
+
+# Single test method
+uv run pytest tests/unit/test_adam_namespace.py::TestFlag::test_expression_criteria -v
+
+# Filter by keyword
+uv run pytest -k "flag or baseline" -v
+
+# Stop after first failure
+uv run pytest tests/ -x
+
+# Show local variables in tracebacks
+uv run pytest tests/ -v --tb=long
+
+# Generate coverage HTML report (requires pytest-cov)
+uv run pytest tests/ --cov=src/pymaverse --cov-report=html
+```
+
+---
+
+### 15.3 Linting and formatting
+
+```bash
+# Check for lint errors
+uv run ruff check src/
+
+# Auto-fix lint errors
+uv run ruff check src/ --fix
+
+# Format code
+uv run ruff format src/
+
+# Check formatting without applying (CI-friendly)
+uv run ruff format src/ --check
+
+# Type check (if mypy is configured)
+uv run mypy src/pymaverse
+```
+
+---
+
+### 15.4 Generating Define-XML
+
+```python
+import pymaverse
+from pymaverse import DefinitionBuilder
+
+# Build from YAML spec files
+builder = DefinitionBuilder(
+    study_id="STUDY001",
+    spec_dir="specs/mystudy",   # directory containing domain YAML files
+)
+define_xml_str = builder.build()
+
+# Write to file
+with open("output/define.xml", "w", encoding="utf-8") as f:
+    f.write(define_xml_str)
+```
+
+From the command line (if a CLI entry-point is registered):
+
+```bash
+uv run pymaverse define \
+    --study STUDY001 \
+    --spec-dir specs/mystudy \
+    --out output/define.xml
+```
+
+---
+
+### 15.5 CDISC validation
+
+```python
+from pymaverse import get_validator
+
+validator = get_validator(
+    dataset_path="output/sdtm/vs.xpt",
+    define_xml_path="output/define.xml",
+    ruleset="SDTM",        # or "ADaM"
+)
+issues = validator.validate()
+for issue in issues:
+    print(issue)
+```
+
+---
+
+### 15.6 Saving datasets
+
+```python
+from pymaverse import save_parquet, save_xpt
+
+# Parquet (fast, lossless — preferred for development)
+save_parquet(advs, "output/adam/advs.parquet")
+
+# SAS Transport (XPT) — required for regulatory submission
+save_xpt(advs, "output/adam/advs.xpt",
+         dataset_label="Analysis Dataset for Vital Signs",
+         version="5")
+
+# Read back
+import polars as pl
+advs_reload = pl.read_parquet("output/adam/advs.parquet")
+```
+
+---
+
+### 15.7 Using `StudyContext`
+
+`StudyContext` keeps shared metadata (study ID, spec directory, CT codelist path) and
+avoids repeating it on every verb.
+
+```python
+from pymaverse import StudyContext
+
+ctx = StudyContext(
+    study_id="STUDY001",
+    spec_dir="specs/mystudy",
+    ct_path="specs/ct/cdisc_ct_2024.json",
+)
+
+# Pass context into namespace helpers that accept it
+advs = vs_sdtm.adam.from_spec(ctx.adam_spec("advs")).to_frame()
+```

@@ -1,0 +1,175 @@
+"""Unit tests for the SDTM Polars namespace extension (df.sdtm)."""
+
+import polars as pl
+import pytest
+
+import pymaverse  # noqa: F401 — triggers namespace registration
+
+
+class TestAssignNoCT:
+    def test_basic_rename(self, simple_raw):
+        result = simple_raw.sdtm.assign_no_ct("USUBJID", source="patient_number").to_frame()
+        assert "USUBJID" in result.columns
+        assert result["USUBJID"].to_list() == simple_raw["patient_number"].to_list()
+
+    def test_chained(self, simple_raw):
+        result = (
+            simple_raw.sdtm
+            .assign_no_ct("USUBJID", source="patient_number")
+            .assign_no_ct("SITEID", source="site_id")
+            .to_frame()
+        )
+        assert "USUBJID" in result.columns
+        assert "SITEID" in result.columns
+
+    def test_original_frame_unchanged(self, simple_raw):
+        simple_raw.sdtm.assign_no_ct("USUBJID", source="patient_number").to_frame()
+        assert "USUBJID" not in simple_raw.columns
+
+
+class TestHardcodeNoCT:
+    def test_constant_string(self, simple_raw):
+        result = simple_raw.sdtm.hardcode_no_ct("DOMAIN", value="DM").to_frame()
+        assert result["DOMAIN"].to_list() == ["DM", "DM", "DM"]
+
+    def test_constant_int(self, simple_raw):
+        result = simple_raw.sdtm.hardcode_no_ct("DMSEQ", value=1).to_frame()
+        assert result["DMSEQ"].to_list() == [1, 1, 1]
+
+
+class TestHardcodeCT:
+    def test_constant_with_ct(self, simple_raw):
+        result = simple_raw.sdtm.hardcode_ct("AGEU", value="YEARS", ct_codelist="C66789").to_frame()
+        assert result["AGEU"].to_list() == ["YEARS", "YEARS", "YEARS"]
+
+
+class TestAssignDatetime:
+    def test_date_iso(self, simple_raw):
+        result = simple_raw.sdtm.assign_datetime("RFSTDTC", source="first_dose_date").to_frame()
+        assert "RFSTDTC" in result.columns
+        assert result["RFSTDTC"][0] == "2014-01-02"
+
+    def test_datetime_mode(self, simple_raw):
+        result = simple_raw.sdtm.assign_datetime(
+            "RFSTDTC", source="first_dose_date", mode="datetime"
+        ).to_frame()
+        assert result["RFSTDTC"][0].startswith("2014-01-02")
+
+
+class TestAssignCT:
+    def test_with_explicit_mapping(self, simple_raw):
+        result = simple_raw.sdtm.assign_ct(
+            "SEX",
+            source="sex",
+            ct_codelist="C66731",
+            ct_mapping={"F": "F", "M": "M"},
+        ).to_frame()
+        assert result["SEX"].to_list() == ["F", "F", "M"]
+
+    def test_fallback_passthrough(self, simple_raw):
+        # Without CT loaded, should pass through the raw value
+        result = simple_raw.sdtm.assign_ct("SEX", source="sex", ct_codelist="NONEXISTENT").to_frame()
+        assert "SEX" in result.columns
+
+
+class TestConditionAdd:
+    def test_condition_true(self, simple_raw):
+        result = simple_raw.sdtm.condition_add(
+            "ARMCD_FLAG",
+            condition=pl.col("arm_code") == "Pbo",
+            then_value="Y",
+        ).to_frame()
+        flags = result["ARMCD_FLAG"].to_list()
+        assert flags[0] == "Y"
+        assert flags[1] is None
+
+    def test_condition_string_expr(self, simple_raw):
+        result = simple_raw.sdtm.condition_add(
+            "MALE_FLAG",
+            condition='pl.col("sex") == "M"',
+            then_value="Y",
+        ).to_frame()
+        flags = result["MALE_FLAG"].to_list()
+        assert flags[2] == "Y"
+
+
+class TestIfThenElse:
+    def test_multi_branch(self, simple_raw):
+        result = simple_raw.sdtm.if_then_else(
+            "ARMFULL",
+            when=[
+                {"condition": pl.col("arm_code") == "Pbo", "value": "Placebo Group"},
+                {"condition": pl.col("arm_code") == "Xan_Lo", "value": "Low Dose Group"},
+            ],
+            else_value="High Dose Group",
+        ).to_frame()
+        vals = result["ARMFULL"].to_list()
+        assert vals[0] == "Placebo Group"
+        assert vals[1] == "Low Dose Group"
+        assert vals[2] == "High Dose Group"
+
+
+class TestAEAerel:
+    def test_default_mapping(self):
+        df = pl.DataFrame({"ae_relationship": ["yes", "no", "possibly related", None]})
+        result = df.sdtm.ae_aerel(target="AEREL", source="ae_relationship").to_frame()
+        vals = result["AEREL"].to_list()
+        assert vals[0] == "RELATED"
+        assert vals[1] == "NOT RELATED"
+        assert vals[2] == "POSSIBLY RELATED"
+        assert vals[3] is None
+
+    def test_custom_mapping(self):
+        df = pl.DataFrame({"rel": ["yes", "no"]})
+        result = df.sdtm.ae_aerel(
+            target="AEREL",
+            source="rel",
+            aerel_map={"yes": "Y", "no": "N"},
+        ).to_frame()
+        assert result["AEREL"].to_list() == ["Y", "N"]
+
+
+class TestNotsubmitted:
+    def test_sets_null(self, simple_raw):
+        result = simple_raw.sdtm.notsubmitted("age", "sex").to_frame()
+        assert all(v is None for v in result["age"].to_list())
+        assert all(v is None for v in result["sex"].to_list())
+
+
+class TestDatasetLevel:
+    def test_alias_for_hardcode(self, simple_raw):
+        result = simple_raw.sdtm.dataset_level("STUDYID", value="STUDY01").to_frame()
+        assert result["STUDYID"].to_list() == ["STUDY01", "STUDY01", "STUDY01"]
+
+
+class TestRemoveDup:
+    def test_removes_duplicates(self):
+        df = pl.DataFrame({"id": [1, 1, 2], "val": ["a", "a", "b"]})
+        result = df.sdtm.remove_dup(subset=["id"]).to_frame()
+        assert result.height == 2
+
+
+class TestMultipleResponses:
+    def test_expands_rows(self):
+        df = pl.DataFrame({"USUBJID": ["S01"], "ae_terms": ["fever|rash"]})
+        result = df.sdtm.multiple_responses(
+            "AETERM", source="ae_terms", delimiter="|"
+        ).to_frame()
+        assert result.height == 2
+        assert set(result["AETERM"].to_list()) == {"fever", "rash"}
+
+
+class TestFromSpec:
+    def test_dm_spec(self, dm_raw, dm_spec_path):
+        result = dm_raw.sdtm.from_spec(dm_spec_path).to_frame()
+        assert "USUBJID" in result.columns
+        assert "DOMAIN" in result.columns
+        assert result["DOMAIN"][0] == "DM"
+        assert "STUDYID" in result.columns
+        assert result["STUDYID"][0] == "CDISCPILOT01"
+
+
+class TestToFrame:
+    def test_empty_pipeline_returns_original(self, simple_raw):
+        result = simple_raw.sdtm.to_frame()
+        assert result.shape == simple_raw.shape

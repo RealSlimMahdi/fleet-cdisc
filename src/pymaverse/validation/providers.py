@@ -1,0 +1,70 @@
+"""Validation provider abstractions and registry."""
+
+from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import Optional
+
+import polars as pl
+
+from .models import ValidationResult
+from .official import OfficialCDISCValidator
+
+
+def _to_rules_engine_version(version: str) -> str:
+    """Convert '3.4' → '3-4' for the rules engine CLI."""
+    return version.replace(".", "-")
+
+
+class ValidationProvider(ABC):
+    """Abstract interface for dataset validation providers."""
+
+    @abstractmethod
+    def validate_sdtm(self, df: pl.DataFrame, domain: str, version: str = "3.4") -> ValidationResult:
+        pass
+
+    @abstractmethod
+    def validate_adam(self, df: pl.DataFrame, dataset: str, version: str = "1.3") -> ValidationResult:
+        pass
+
+
+class OfficialRulesEngineProvider(ValidationProvider):
+    """Validation backed by the official CDISC Rules Engine."""
+
+    def __init__(self, rules_engine_path: Optional[Path] = None) -> None:
+        self.validator = OfficialCDISCValidator(rules_engine_path=rules_engine_path)
+
+    def validate_sdtm(self, df: pl.DataFrame, domain: str, version: str = "3.4") -> ValidationResult:
+        return self.validator.validate_dataset(
+            data=df,
+            standard="sdtmig",
+            version=_to_rules_engine_version(version),
+            dataset_name=f"{domain.lower()}.xpt",
+            domain=domain,
+        )
+
+    def validate_adam(self, df: pl.DataFrame, dataset: str, version: str = "1.3") -> ValidationResult:
+        return self.validator.validate_dataset(
+            data=df,
+            standard="adamig",
+            version=_to_rules_engine_version(version),
+            dataset_name=f"{dataset.lower()}.xpt",
+            domain=dataset,
+        )
+
+
+class ValidationProviderRegistry:
+    """Registry for selecting validation providers by name."""
+
+    _providers: dict[str, type[ValidationProvider]] = {
+        "official": OfficialRulesEngineProvider,
+    }
+
+    @classmethod
+    def create(cls, provider_name: str = "official", **kwargs) -> ValidationProvider:
+        provider_cls = cls._providers.get(provider_name)
+        if provider_cls is None:
+            available = ", ".join(sorted(cls._providers.keys()))
+            raise ValueError(
+                f"Unknown validation provider '{provider_name}'. Available: {available}"
+            )
+        return provider_cls(**kwargs)

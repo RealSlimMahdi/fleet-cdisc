@@ -1,0 +1,54 @@
+# ADaM ADVS (Analysis Dataset for Vital Signs) specification for CDISCPILOT01
+# Maps SDTM VS columns → ADaM ADVS variables
+
+dataset: ADVS
+description: >
+  Analysis dataset for Vital Signs derived from SDTM VS using Pymaverse
+  ADaM namespace derivation verbs.
+
+variables:
+  - target: STUDYID
+    algorithm: assigned
+    value: "CDISCPILOT01"
+
+  - target: USUBJID
+    algorithm: source
+    source: patient_number
+
+  - target: PARAMCD
+    algorithm: source
+    source: vstestcd
+
+  - target: PARAM
+    algorithm: source
+    source: vstest
+
+  - target: AVAL
+    algorithm: derivation
+    expression: "VSSTRESN"
+
+  - target: AVALU
+    algorithm: source
+    source: vsorresu
+
+  - target: ADT
+    algorithm: rename
+    source: vsdtc
+
+  - target: ADY
+    algorithm: std_function
+    func: study_day
+    analysis_date: ADT
+    reference_date: TRTSDT
+
+  - target: CHG
+    algorithm: std_function
+    func: chg
+    aval: AVAL
+    base: BASE
+
+  - target: PCHG
+    algorithm: std_function
+    func: pchg
+    aval: AVAL
+    base: BASE
