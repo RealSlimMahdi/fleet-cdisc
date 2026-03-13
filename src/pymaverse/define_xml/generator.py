@@ -79,8 +79,11 @@ class DefineXMLGenerator:
         }
         mdv = ET.Element("MetaDataVersion", attrib=attribs)
 
-        for std in metadata.get("standards", []):
-            mdv.append(self._build_standard(std))
+        standards = metadata.get("standards", [])
+        if standards:
+            stds_container = ET.SubElement(mdv, "def:Standards")
+            for std in standards:
+                stds_container.append(self._build_standard(std))
 
         if metadata.get("supporting_documents"):
             acrf = ET.SubElement(mdv, "def:AnnotatedCRF")

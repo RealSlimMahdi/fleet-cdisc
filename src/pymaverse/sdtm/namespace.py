@@ -17,7 +17,7 @@ Usage
     )
 
     # Or spec-driven:
-    result = raw_df.sdtm.from_spec("specs/dm_spec.yaml").to_frame()
+    result = raw_df.sdtm.from_spec("specs/cdiscpilot01/sdtm/define.yaml", dataset="DM").to_frame()
 """
 
 from __future__ import annotations
@@ -64,6 +64,26 @@ class SDTMNamespace:
     def assign_no_ct(self, target: str, *, source: str) -> "SDTMNamespace":
         """Copy *source* column to *target* with no CT validation."""
         return self._chain(pl.col(source).alias(target))
+
+    # ------------------------------------------------------------------ #
+    # 1b. derivation — expression-based derivation                        #
+    # ------------------------------------------------------------------ #
+
+    def derivation(
+        self,
+        target: str,
+        *,
+        expression: "str | pl.Expr",
+    ) -> "SDTMNamespace":
+        """
+        Derive *target* using a Polars expression or expression string.
+
+        Example::
+
+            .derivation("SITEID", expression="pl.col('site_id').cast(pl.String)")
+        """
+        expr = expression if isinstance(expression, pl.Expr) else parse_expression(str(expression))
+        return self._chain(expr.alias(target))
 
     # ------------------------------------------------------------------ #
     # 2. assign_ct — 1:1 mapping with CT decode/validation                #
@@ -410,24 +430,32 @@ class SDTMNamespace:
     # Spec-driven pipeline                                                 #
     # ------------------------------------------------------------------ #
 
-    def from_spec(self, spec_path: str | Path) -> "SDTMNamespace":
+    def from_spec(self, spec_path: str | Path, *, dataset: str | None = None) -> "SDTMNamespace":
         """
         Build a pipeline from a YAML specification file.
 
-        The YAML must have a top-level ``variables`` list where each entry
-        follows the :class:`~pymaverse.sdtm.models.SDTMVariableSpec` schema.
+        Reads a ``define.yaml`` with a top-level ``datasets`` list where each
+        variable carries a ``derivation`` block.  Pass *dataset* to select
+        which dataset to execute (e.g. ``dataset="DM"``).  When the file
+        contains only one dataset the *dataset* argument may be omitted.
 
         Example::
 
-            df.sdtm.from_spec("specs/cdiscpilot01/sdtm/dm_spec.yaml").to_frame()
+            df.sdtm.from_spec("specs/cdiscpilot01/sdtm/define.yaml", dataset="DM").to_frame()
         """
-        from .models import SDTMDomainSpec
+        from .models import SDTMDomainSpec, SDTMVariableSpec
 
         spec_data = yaml.safe_load(Path(spec_path).read_text())
-        spec = SDTMDomainSpec(**spec_data)
+
+        # ── Detect format: define.yaml has a top-level "datasets" key ──
+        if "datasets" in spec_data:
+            variables = self._extract_define_variables(spec_data, dataset)
+        else:
+            spec = SDTMDomainSpec(**spec_data)
+            variables = spec.variables
 
         ns: SDTMNamespace = self
-        for var in spec.variables:
+        for var in variables:
             alg = var.algorithm.value
             target = var.target
 
@@ -472,6 +500,43 @@ class SDTMNamespace:
 
         return ns
 
+    @staticmethod
+    def _extract_define_variables(
+        spec_data: dict, dataset: str | None
+    ) -> list:
+        """Convert define.yaml dataset variables into SDTMVariableSpec objects."""
+        from .models import SDTMVariableSpec
+
+        datasets = spec_data["datasets"]
+        if dataset is None:
+            if len(datasets) != 1:
+                names = [d["name"] for d in datasets]
+                raise ValueError(
+                    f"define.yaml contains {len(datasets)} datasets {names}. "
+                    "Pass dataset= to select one."
+                )
+            ds = datasets[0]
+        else:
+            matches = [d for d in datasets if d["name"].upper() == dataset.upper()]
+            if not matches:
+                names = [d["name"] for d in datasets]
+                raise ValueError(
+                    f"Dataset '{dataset}' not found in define.yaml. Available: {names}"
+                )
+            ds = matches[0]
+
+        result = []
+        for var in ds["variables"]:
+            drv = var.get("derivation")
+            if not drv:
+                continue  # no derivation → carry-through / manual column
+            spec = SDTMVariableSpec(
+                target=var["name"],
+                **drv,
+            )
+            result.append(spec)
+        return result
+
     # ------------------------------------------------------------------ #
     # Validation integration                                               #
     # ------------------------------------------------------------------ #
@@ -495,7 +560,99 @@ class SDTMNamespace:
         return self
 
     # ------------------------------------------------------------------ #
-    # Terminal operation                                                   #
+    # select — column selection / variable-leakage guard                  #
+    # ------------------------------------------------------------------ #
+
+    def select(
+        self,
+        columns: list[str] | None = None,
+        *,
+        spec: "str | Path | None" = None,
+        dataset: str | None = None,
+        drop_pattern: str | None = r"^_",
+    ) -> "SDTMNamespace":
+        """
+        Materialise the pipeline then select and reorder columns.
+
+        Resolution order:
+
+        1. ``spec`` + ``dataset``: derive the ordered column list from a
+           ``define.yaml``.  Only columns present in the frame are kept.
+        2. ``columns``: explicit list to keep (in that order).
+        3. Neither: keep all current columns (subject to ``drop_pattern``).
+
+        ``drop_pattern`` (default ``r"^_"``): regex applied *before* the
+        explicit selection — columns whose names match are removed.  This
+        enforces the convention that ``_``-prefixed columns are scratch
+        variables.  Set to ``None`` to disable (e.g. during debugging).
+
+        Examples::
+
+            # Keep only spec columns, drop scratch _ variables (default)
+            .select(spec="specs/sdtm/define.yaml", dataset="DM")
+
+            # Same but disable auto-drop for debugging
+            .select(spec="specs/sdtm/define.yaml", dataset="DM", drop_pattern=None)
+
+            # Just drop _ variables, keep everything else
+            .select()
+
+            # Fully disable — do nothing (passthrough, for debugging)
+            .select(drop_pattern=None)
+        """
+        import re
+
+        df = self.to_frame()
+
+        # Step 1: drop scratch variables matching the pattern
+        if drop_pattern is not None:
+            pat = re.compile(drop_pattern)
+            df = df.select([c for c in df.columns if not pat.search(c)])
+
+        # Step 2: resolve explicit column list (spec takes priority over columns)
+        col_list = columns
+        if spec is not None:
+            col_list = self._spec_columns(Path(spec), dataset)
+
+        # Step 3: intersect with existing columns (preserving spec order)
+        if col_list is not None:
+            existing = [c for c in col_list if c in df.columns]
+            df = df.select(existing)
+
+        return self._new_from(df)
+
+    @staticmethod
+    def _spec_columns(spec_path: Path, dataset: str | None) -> list[str]:
+        """Return the ordered variable-name list for *dataset* from a define.yaml."""
+        spec_data = yaml.safe_load(spec_path.read_text())
+        datasets = spec_data.get("datasets", [])
+        if dataset is None:
+            if len(datasets) != 1:
+                names = [d["name"] for d in datasets]
+                raise ValueError(
+                    f"define.yaml contains {len(datasets)} datasets {names}; "
+                    "pass dataset= to select one."
+                )
+            ds = datasets[0]
+        else:
+            matches = [d for d in datasets if d["name"].upper() == dataset.upper()]
+            if not matches:
+                names = [d["name"] for d in datasets]
+                raise ValueError(
+                    f"Dataset '{dataset}' not found in define.yaml. Available: {names}"
+                )
+            ds = matches[0]
+        return [v["name"] for v in ds["variables"]]
+
+    def _new_from(self, df: pl.DataFrame) -> "SDTMNamespace":
+        """Return a fresh SDTMNamespace wrapping *df* with an empty pipeline."""
+        new = object.__new__(SDTMNamespace)
+        new._df = df
+        new._pipeline = []
+        return new
+
+    # ------------------------------------------------------------------ #
+    # Terminal operations                                                  #
     # ------------------------------------------------------------------ #
 
     def to_frame(self) -> pl.DataFrame:
@@ -503,3 +660,36 @@ class SDTMNamespace:
         if not self._pipeline:
             return self._df
         return self._df.with_columns(self._pipeline)
+
+    def write_parquet(
+        self,
+        path: "str | Path",
+        *,
+        mkdir: bool = True,
+    ) -> pl.DataFrame:
+        """
+        Materialise the pipeline, write the result to *path* as Parquet,
+        and return the DataFrame.
+
+        This is a drop-in alternative to ``to_frame()`` when you want to
+        persist the dataset as part of the chain.
+
+        *mkdir*: when ``True`` (default) any missing parent directories are
+        created automatically.
+
+        Example::
+
+            dm = (
+                raw_df.sdtm
+                .assign_no_ct("USUBJID", source="patient_number")
+                ...
+                .select(spec="specs/sdtm/define.yaml", dataset="DM")
+                .write_parquet("outputs/cdiscpilot01/dm.parquet")
+            )
+        """
+        df = self.to_frame()
+        dest = Path(path)
+        if mkdir:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+        df.write_parquet(dest)
+        return df

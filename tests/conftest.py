@@ -83,13 +83,15 @@ def ct_sample_path() -> Path:
 
 
 @pytest.fixture
-def dm_spec_path() -> Path:
-    return SPECS_DIR / "dm_spec.yaml"
+def sdtm_define_path() -> Path:
+    """Unified SDTM define.yaml (drives both Define-XML and from_spec())."""
+    return SPECS_DIR / "define_sdtm.yaml"
 
 
 @pytest.fixture
-def advs_spec_path() -> Path:
-    return SPECS_DIR / "advs_spec.yaml"
+def adam_define_path() -> Path:
+    """Unified ADaM define.yaml (drives both Define-XML and from_spec())."""
+    return SPECS_DIR / "define_adam.yaml"
 
 
 # ------------------------------------------------------------------ #

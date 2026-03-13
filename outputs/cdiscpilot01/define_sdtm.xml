@@ -1,0 +1,404 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="define2-1.xsl"?>
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:def="http://www.cdisc.org/ns/def/v2.1" ODMVersion="1.3.2" FileOID="CDISC.CDISCPILOT01.1.Define-XML_2.1.0" FileType="Snapshot" CreationDateTime="2026-03-13T22:06:46" Originator="Pymaverse Team" SourceSystem="Pymaverse" SourceSystemVersion="0.1.0" def:Context="Submission">
+  <Study OID="STDY.CDISCPILOT01">
+    <GlobalVariables>
+      <StudyName>CDISCPILOT01</StudyName>
+      <StudyDescription>A Phase II, Randomized, Double-Blind, Placebo-Controlled, Parallel Group Study of the Efficacy, Safety, and Tolerability of Xanomeline in Patients with Mild to Moderate Alzheimer's Disease</StudyDescription>
+      <ProtocolName>CDISCPILOT01</ProtocolName>
+    </GlobalVariables>
+    <MetaDataVersion OID="MDV.CDISCPILOT01.1.SDTMIG.3.4" Name="CDISCPILOT01 SDTMIG Data Definitions" Description="Dataset metadata for CDISCPILOT01 SDTMIG datasets" def:DefineVersion="2.1.0">
+      <def:Standards>
+        <def:Standard OID="STD.SDTMIG" Name="SDTMIG" Type="IG" Version="3.4" Status="Final"/>
+        <def:Standard OID="STD.CT" Name="CDISC/NCI" Type="CT" Version="2023-12-15" Status="Final" PublishingSet="SDTMIG"/>
+      </def:Standards>
+      <ItemGroupDef OID="IG.DM" Name="DM" Repeating="No" IsReferenceData="No" SASDatasetName="DM" Domain="DM" def:Structure="One record per subject" Purpose="Tabulation" def:StandardOID="STD.SDTMIG" def:ArchiveLocationID="LF.DM">
+        <Description>
+          <TranslatedText xml:lang="en">Demographics</TranslatedText>
+        </Description>
+        <def:Class Name="SPECIAL PURPOSE"/>
+        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
+        <ItemRef ItemOID="IT.DOMAIN" OrderNumber="2" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2"/>
+        <ItemRef ItemOID="IT.SUBJID" OrderNumber="4" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.DM.RFSTDTC" OrderNumber="5" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.DM.RFENDTC" OrderNumber="6" Mandatory="No"/>
+        <ItemRef ItemOID="IT.DM.RFXSTDTC" OrderNumber="7" Mandatory="No"/>
+        <ItemRef ItemOID="IT.DM.RFXENDTC" OrderNumber="8" Mandatory="No"/>
+        <ItemRef ItemOID="IT.SITEID" OrderNumber="9" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.AGE" OrderNumber="10" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.AGEU" OrderNumber="11" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.SEX" OrderNumber="12" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.RACE" OrderNumber="13" Mandatory="No"/>
+        <ItemRef ItemOID="IT.ETHNIC" OrderNumber="14" Mandatory="No"/>
+        <ItemRef ItemOID="IT.ARMCD" OrderNumber="15" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ARM" OrderNumber="16" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ACTARMCD" OrderNumber="17" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ACTARM" OrderNumber="18" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.DM.RFICDTC" OrderNumber="19" Mandatory="No"/>
+        <def:leaf ID="LF.DM" xlink:href="dm.xpt" xlink:title="dm.xpt"/>
+      </ItemGroupDef>
+      <ItemGroupDef OID="IG.AE" Name="AE" Repeating="Yes" IsReferenceData="No" SASDatasetName="AE" Domain="AE" def:Structure="One record per adverse event per subject" Purpose="Tabulation" def:StandardOID="STD.SDTMIG" def:ArchiveLocationID="LF.AE">
+        <Description>
+          <TranslatedText xml:lang="en">Adverse Events</TranslatedText>
+        </Description>
+        <def:Class Name="EVENTS"/>
+        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
+        <ItemRef ItemOID="IT.DOMAIN" OrderNumber="2" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2"/>
+        <ItemRef ItemOID="IT.AE.AESEQ" OrderNumber="4" Mandatory="Yes" KeySequence="3"/>
+        <ItemRef ItemOID="IT.AE.AETERM" OrderNumber="5" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.AE.AEDECOD" OrderNumber="6" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.AE.AESTDTC" OrderNumber="7" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.AE.AEENDTC" OrderNumber="8" Mandatory="No"/>
+        <ItemRef ItemOID="IT.AE.AESEV" OrderNumber="9" Mandatory="No"/>
+        <ItemRef ItemOID="IT.AE.AESER" OrderNumber="10" Mandatory="No"/>
+        <ItemRef ItemOID="IT.AE.AEOUT" OrderNumber="11" Mandatory="No"/>
+        <ItemRef ItemOID="IT.AE.AEACN" OrderNumber="12" Mandatory="No"/>
+        <ItemRef ItemOID="IT.AE.AEREL" OrderNumber="13" Mandatory="No"/>
+        <def:leaf ID="LF.AE" xlink:href="ae.xpt" xlink:title="ae.xpt"/>
+      </ItemGroupDef>
+      <ItemGroupDef OID="IG.VS" Name="VS" Repeating="Yes" IsReferenceData="No" SASDatasetName="VS" Domain="VS" def:Structure="One record per vital sign measurement per subject per visit" Purpose="Tabulation" def:StandardOID="STD.SDTMIG" def:ArchiveLocationID="LF.VS">
+        <Description>
+          <TranslatedText xml:lang="en">Vital Signs</TranslatedText>
+        </Description>
+        <def:Class Name="FINDINGS"/>
+        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
+        <ItemRef ItemOID="IT.DOMAIN" OrderNumber="2" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2"/>
+        <ItemRef ItemOID="IT.VS.VSTESTCD" OrderNumber="4" Mandatory="Yes" KeySequence="3"/>
+        <ItemRef ItemOID="IT.VS.VSTEST" OrderNumber="5" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.VS.VSORRES" OrderNumber="6" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.VS.VSORRESU" OrderNumber="7" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.VS.VSSTRESN" OrderNumber="8" Mandatory="No"/>
+        <ItemRef ItemOID="IT.VS.VSSTRESU" OrderNumber="9" Mandatory="No"/>
+        <ItemRef ItemOID="IT.VS.VISITNUM" OrderNumber="10" Mandatory="No" KeySequence="4"/>
+        <ItemRef ItemOID="IT.VS.VISIT" OrderNumber="11" Mandatory="No"/>
+        <ItemRef ItemOID="IT.VS.VSDTC" OrderNumber="12" Mandatory="Yes"/>
+        <def:leaf ID="LF.VS" xlink:href="vs.xpt" xlink:title="vs.xpt"/>
+      </ItemGroupDef>
+      <ItemDef OID="IT.STUDYID" Name="STUDYID" DataType="text" SASFieldName="STUDYID" Length="12">
+        <Description>
+          <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned"/>
+      </ItemDef>
+      <ItemDef OID="IT.DOMAIN" Name="DOMAIN" DataType="text" SASFieldName="DOMAIN" Length="2">
+        <Description>
+          <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned"/>
+      </ItemDef>
+      <ItemDef OID="IT.USUBJID" Name="USUBJID" DataType="text" SASFieldName="USUBJID" Length="40">
+        <Description>
+          <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived">
+          <Description>
+            <TranslatedText xml:lang="en">Concatenation of STUDYID, SITEID, and SUBJID</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.SUBJID" Name="SUBJID" DataType="text" SASFieldName="SUBJID" Length="20">
+        <Description>
+          <TranslatedText xml:lang="en">Subject Identifier for the Study</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.DM.RFSTDTC" Name="RFSTDTC" DataType="datetime" SASFieldName="RFSTDTC">
+        <Description>
+          <TranslatedText xml:lang="en">Subject Reference Start Date/Time</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.DM.RFENDTC" Name="RFENDTC" DataType="datetime" SASFieldName="RFENDTC">
+        <Description>
+          <TranslatedText xml:lang="en">Subject Reference End Date/Time</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.DM.RFXSTDTC" Name="RFXSTDTC" DataType="datetime" SASFieldName="RFXSTDTC">
+        <Description>
+          <TranslatedText xml:lang="en">Date/Time of First Study Treatment</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived"/>
+      </ItemDef>
+      <ItemDef OID="IT.DM.RFXENDTC" Name="RFXENDTC" DataType="datetime" SASFieldName="RFXENDTC">
+        <Description>
+          <TranslatedText xml:lang="en">Date/Time of Last Study Treatment</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived"/>
+      </ItemDef>
+      <ItemDef OID="IT.SITEID" Name="SITEID" DataType="text" SASFieldName="SITEID" Length="20">
+        <Description>
+          <TranslatedText xml:lang="en">Study Site Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.AGE" Name="AGE" DataType="integer" SASFieldName="AGE">
+        <Description>
+          <TranslatedText xml:lang="en">Age</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.AGEU" Name="AGEU" DataType="text" SASFieldName="AGEU" Length="10">
+        <Description>
+          <TranslatedText xml:lang="en">Age Units</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned"/>
+      </ItemDef>
+      <ItemDef OID="IT.SEX" Name="SEX" DataType="text" SASFieldName="SEX" Length="2">
+        <Description>
+          <TranslatedText xml:lang="en">Sex</TranslatedText>
+        </Description>
+        <CodeListRef CodeListOID="C66731"/>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.RACE" Name="RACE" DataType="text" SASFieldName="RACE" Length="60">
+        <Description>
+          <TranslatedText xml:lang="en">Race</TranslatedText>
+        </Description>
+        <CodeListRef CodeListOID="C74457"/>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.ETHNIC" Name="ETHNIC" DataType="text" SASFieldName="ETHNIC" Length="60">
+        <Description>
+          <TranslatedText xml:lang="en">Ethnicity</TranslatedText>
+        </Description>
+        <CodeListRef CodeListOID="C66790"/>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.ARMCD" Name="ARMCD" DataType="text" SASFieldName="ARMCD" Length="20">
+        <Description>
+          <TranslatedText xml:lang="en">Planned Arm Code</TranslatedText>
+        </Description>
+        <def:Origin Type="Protocol"/>
+      </ItemDef>
+      <ItemDef OID="IT.ARM" Name="ARM" DataType="text" SASFieldName="ARM" Length="200">
+        <Description>
+          <TranslatedText xml:lang="en">Description of Planned Arm</TranslatedText>
+        </Description>
+        <def:Origin Type="Protocol"/>
+      </ItemDef>
+      <ItemDef OID="IT.ACTARMCD" Name="ACTARMCD" DataType="text" SASFieldName="ACTARMCD" Length="20">
+        <Description>
+          <TranslatedText xml:lang="en">Actual Arm Code</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned"/>
+      </ItemDef>
+      <ItemDef OID="IT.ACTARM" Name="ACTARM" DataType="text" SASFieldName="ACTARM" Length="200">
+        <Description>
+          <TranslatedText xml:lang="en">Description of Actual Arm</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned"/>
+      </ItemDef>
+      <ItemDef OID="IT.DM.RFICDTC" Name="RFICDTC" DataType="datetime" SASFieldName="RFICDTC">
+        <Description>
+          <TranslatedText xml:lang="en">Date/Time of Informed Consent</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.AE.AESEQ" Name="AESEQ" DataType="integer" SASFieldName="AESEQ">
+        <Description>
+          <TranslatedText xml:lang="en">Sequence Number</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned"/>
+      </ItemDef>
+      <ItemDef OID="IT.AE.AETERM" Name="AETERM" DataType="text" SASFieldName="AETERM" Length="200">
+        <Description>
+          <TranslatedText xml:lang="en">Reported Term for the Adverse Event</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.AE.AEDECOD" Name="AEDECOD" DataType="text" SASFieldName="AEDECOD" Length="200">
+        <Description>
+          <TranslatedText xml:lang="en">Dictionary-Derived Term</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived"/>
+      </ItemDef>
+      <ItemDef OID="IT.AE.AESTDTC" Name="AESTDTC" DataType="datetime" SASFieldName="AESTDTC">
+        <Description>
+          <TranslatedText xml:lang="en">Start Date/Time of Adverse Event</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.AE.AEENDTC" Name="AEENDTC" DataType="datetime" SASFieldName="AEENDTC">
+        <Description>
+          <TranslatedText xml:lang="en">End Date/Time of Adverse Event</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.AE.AESEV" Name="AESEV" DataType="text" SASFieldName="AESEV" Length="20">
+        <Description>
+          <TranslatedText xml:lang="en">Severity/Intensity</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.AE.AESER" Name="AESER" DataType="text" SASFieldName="AESER" Length="2">
+        <Description>
+          <TranslatedText xml:lang="en">Serious Event</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.AE.AEOUT" Name="AEOUT" DataType="text" SASFieldName="AEOUT" Length="60">
+        <Description>
+          <TranslatedText xml:lang="en">Outcome of Adverse Event</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.AE.AEACN" Name="AEACN" DataType="text" SASFieldName="AEACN" Length="60">
+        <Description>
+          <TranslatedText xml:lang="en">Action Taken with Study Treatment</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.AE.AEREL" Name="AEREL" DataType="text" SASFieldName="AEREL" Length="60">
+        <Description>
+          <TranslatedText xml:lang="en">Causality</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.VS.VSTESTCD" Name="VSTESTCD" DataType="text" SASFieldName="VSTESTCD" Length="8">
+        <Description>
+          <TranslatedText xml:lang="en">Vital Signs Test Short Name</TranslatedText>
+        </Description>
+        <CodeListRef CodeListOID="CL.VSTEST"/>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.VS.VSTEST" Name="VSTEST" DataType="text" SASFieldName="VSTEST" Length="40">
+        <Description>
+          <TranslatedText xml:lang="en">Vital Signs Test Name</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.VS.VSORRES" Name="VSORRES" DataType="text" SASFieldName="VSORRES" Length="20">
+        <Description>
+          <TranslatedText xml:lang="en">Result or Finding in Original Units</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.VS.VSORRESU" Name="VSORRESU" DataType="text" SASFieldName="VSORRESU" Length="20">
+        <Description>
+          <TranslatedText xml:lang="en">Original Units</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <ItemDef OID="IT.VS.VSSTRESN" Name="VSSTRESN" DataType="float" SASFieldName="VSSTRESN">
+        <Description>
+          <TranslatedText xml:lang="en">Numeric Result/Finding in Standard Units</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived"/>
+      </ItemDef>
+      <ItemDef OID="IT.VS.VSSTRESU" Name="VSSTRESU" DataType="text" SASFieldName="VSSTRESU" Length="20">
+        <Description>
+          <TranslatedText xml:lang="en">Standard Units</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived"/>
+      </ItemDef>
+      <ItemDef OID="IT.VS.VISITNUM" Name="VISITNUM" DataType="float" SASFieldName="VISITNUM">
+        <Description>
+          <TranslatedText xml:lang="en">Visit Number</TranslatedText>
+        </Description>
+        <def:Origin Type="Protocol"/>
+      </ItemDef>
+      <ItemDef OID="IT.VS.VISIT" Name="VISIT" DataType="text" SASFieldName="VISIT" Length="200">
+        <Description>
+          <TranslatedText xml:lang="en">Visit Name</TranslatedText>
+        </Description>
+        <def:Origin Type="Protocol"/>
+      </ItemDef>
+      <ItemDef OID="IT.VS.VSDTC" Name="VSDTC" DataType="datetime" SASFieldName="VSDTC">
+        <Description>
+          <TranslatedText xml:lang="en">Date/Time of Measurements</TranslatedText>
+        </Description>
+        <def:Origin Type="CRF"/>
+      </ItemDef>
+      <CodeList OID="C66731" Name="Sex" DataType="text">
+        <CodeListItem CodedValue="M">
+          <Decode>
+            <TranslatedText xml:lang="en">MALE</TranslatedText>
+          </Decode>
+        </CodeListItem>
+        <CodeListItem CodedValue="F">
+          <Decode>
+            <TranslatedText xml:lang="en">FEMALE</TranslatedText>
+          </Decode>
+        </CodeListItem>
+      </CodeList>
+      <CodeList OID="C74457" Name="Race" DataType="text">
+        <CodeListItem CodedValue="WHITE">
+          <Decode>
+            <TranslatedText xml:lang="en">WHITE</TranslatedText>
+          </Decode>
+        </CodeListItem>
+        <CodeListItem CodedValue="BLACK OR AFRICAN AMERICAN">
+          <Decode>
+            <TranslatedText xml:lang="en">BLACK OR AFRICAN AMERICAN</TranslatedText>
+          </Decode>
+        </CodeListItem>
+        <CodeListItem CodedValue="ASIAN">
+          <Decode>
+            <TranslatedText xml:lang="en">ASIAN</TranslatedText>
+          </Decode>
+        </CodeListItem>
+        <CodeListItem CodedValue="AMERICAN INDIAN OR ALASKA NATIVE">
+          <Decode>
+            <TranslatedText xml:lang="en">AMERICAN INDIAN OR ALASKA NATIVE</TranslatedText>
+          </Decode>
+        </CodeListItem>
+        <CodeListItem CodedValue="NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER">
+          <Decode>
+            <TranslatedText xml:lang="en">NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER</TranslatedText>
+          </Decode>
+        </CodeListItem>
+      </CodeList>
+      <CodeList OID="C66790" Name="Ethnicity" DataType="text">
+        <CodeListItem CodedValue="HISPANIC OR LATINO">
+          <Decode>
+            <TranslatedText xml:lang="en">HISPANIC OR LATINO</TranslatedText>
+          </Decode>
+        </CodeListItem>
+        <CodeListItem CodedValue="NOT HISPANIC OR LATINO">
+          <Decode>
+            <TranslatedText xml:lang="en">NOT HISPANIC OR LATINO</TranslatedText>
+          </Decode>
+        </CodeListItem>
+      </CodeList>
+      <CodeList OID="CL.VSTEST" Name="Vital Signs Test Code" DataType="text">
+        <CodeListItem CodedValue="SYSBP">
+          <Decode>
+            <TranslatedText xml:lang="en">Systolic Blood Pressure</TranslatedText>
+          </Decode>
+        </CodeListItem>
+        <CodeListItem CodedValue="DIABP">
+          <Decode>
+            <TranslatedText xml:lang="en">Diastolic Blood Pressure</TranslatedText>
+          </Decode>
+        </CodeListItem>
+        <CodeListItem CodedValue="PULSE">
+          <Decode>
+            <TranslatedText xml:lang="en">Pulse Rate</TranslatedText>
+          </Decode>
+        </CodeListItem>
+        <CodeListItem CodedValue="TEMP">
+          <Decode>
+            <TranslatedText xml:lang="en">Temperature</TranslatedText>
+          </Decode>
+        </CodeListItem>
+        <CodeListItem CodedValue="WEIGHT">
+          <Decode>
+            <TranslatedText xml:lang="en">Weight</TranslatedText>
+          </Decode>
+        </CodeListItem>
+        <CodeListItem CodedValue="HEIGHT">
+          <Decode>
+            <TranslatedText xml:lang="en">Height</TranslatedText>
+          </Decode>
+        </CodeListItem>
+      </CodeList>
+      <def:leaf ID="LF.DM" xlink:href="dm.xpt" xlink:title="dm.xpt"/>
+      <def:leaf ID="LF.AE" xlink:href="ae.xpt" xlink:title="ae.xpt"/>
+      <def:leaf ID="LF.VS" xlink:href="vs.xpt" xlink:title="vs.xpt"/>
+    </MetaDataVersion>
+  </Study>
+</ODM>

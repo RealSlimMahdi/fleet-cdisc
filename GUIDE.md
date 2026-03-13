@@ -197,39 +197,45 @@ For repeatable, auditable derivations, put the logic in a YAML spec file and let
 
 ### 4.1 Write the spec
 
+Dataset derivations live inside the study's `define.yaml`, under each dataset's `variables` list, in a `derivation:` block:
+
 ```yaml
-# specs/mystudy/sdtm/dm_spec.yaml
-domain: DM
-variables:
-  - target: STUDYID
-    algorithm: hardcode_no_ct
-    value: "MYSTUDY01"
+# specs/mystudy/sdtm/define.yaml
+metadata_version:
+  ...
+datasets:
+  - name: DM
+    ...
+    variables:
+      - name: STUDYID
+        derivation:
+          algorithm: hardcode_no_ct
+          value: "MYSTUDY01"
 
-  - target: DOMAIN
-    algorithm: hardcode_no_ct
-    value: "DM"
+      - name: DOMAIN
+        derivation:
+          algorithm: hardcode_no_ct
+          value: "DM"
 
-  - target: USUBJID
-    algorithm: assign_no_ct
-    source: patient_id
+      - name: USUBJID
+        derivation:
+          algorithm: assign_no_ct
+          source: patient_id
 
-  - target: SEX
-    algorithm: assign_ct
-    source: sex_raw
-    ct_codelist: C66731
-    ct_mapping:
-      "M": "M"
-      "F": "F"
+      - name: SEX
+        derivation:
+          algorithm: assign_ct
+          source: sex_raw
+          ct_codelist: C66731
+          ct_mapping:
+            "M": "M"
+            "F": "F"
 
-  - target: BRTHDTC
-    algorithm: assign_datetime
-    source: birth_date
-    mode: date
-
-  - target: RFSTDTC
-    algorithm: assign_datetime
-    source: start_date
-    mode: date
+      - name: RFSTDTC
+        derivation:
+          algorithm: assign_datetime
+          source: start_date
+          mode: date
 ```
 
 ### 4.2 Execute the spec
@@ -237,50 +243,51 @@ variables:
 ```python
 import pymaverse
 
-dm = raw_df.sdtm.from_spec("specs/mystudy/sdtm/dm_spec.yaml").to_frame()
+dm = raw_df.sdtm.from_spec("specs/mystudy/sdtm/define.yaml", dataset="DM").to_frame()
 ```
 
 One line. The spec replays every variable mapping in order.
 
 ### 4.3 ADaM spec-driven
 
+ADaM derivations follow the same pattern inside `specs/mystudy/adam/define.yaml`:
+
 ```yaml
-# specs/mystudy/adam/advs_spec.yaml
-dataset: ADVS
-variables:
-  - target: STUDYID
-    algorithm: assigned
-    value: "MYSTUDY01"
+datasets:
+  - name: ADVS
+    variables:
+      - name: STUDYID
+        derivation:
+          algorithm: assigned
+          value: "MYSTUDY01"
 
-  - target: USUBJID
-    algorithm: source
-    source: USUBJID
+      - name: AVAL
+        derivation:
+          algorithm: derivation
+          expression: "VSSTRESN"
 
-  - target: AVAL
-    algorithm: derivation
-    expression: "VSSTRESN"
+      - name: ADY
+        derivation:
+          algorithm: std_function
+          func: study_day
+          analysis_date: ADT
+          reference_date: TRTSDT
 
-  - target: ADY
-    algorithm: std_function
-    func: study_day
-    analysis_date: ADT
-    reference_date: TRTSDT
-
-  - target: CHG
-    algorithm: std_function
-    func: chg
-    aval: AVAL
-    base: BASE
+      - name: CHG
+        derivation:
+          algorithm: std_function
+          func: chg
+          aval: AVAL
+          base: BASE
 ```
 
 ```python
-advs = vs_sdtm.adam.from_spec("specs/mystudy/adam/advs_spec.yaml").to_frame()
+advs = vs_sdtm.adam.from_spec("specs/mystudy/adam/define.yaml", dataset="ADVS").to_frame()
 ```
 
-> **Backward compatibility:** `algorithm: std_function` in YAML specs still works and is
-> automatically routed to the appropriate typed method (`study_day`, `chg`, etc.) via the
-> internal `_std_function_dispatch()` handler. New specs can also use the verb name directly
-> as the `algorithm` value — e.g. `algorithm: study_day`.
+> **Note:** `algorithm: std_function` is automatically routed to the appropriate typed method
+> (`study_day`, `chg`, etc.) via the internal `_std_function_dispatch()` handler. New specs
+> can also use the verb name directly as the `algorithm` value — e.g. `algorithm: study_day`.
 
 ---
 

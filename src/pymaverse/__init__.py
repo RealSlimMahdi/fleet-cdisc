@@ -54,7 +54,11 @@ from .adam import (
     OncoNamespace, OphthaNamespace, PedsNamespace,
     VaccineNamespace, MetabolicNamespace, NeuroNamespace,
 )
-from .define_xml import DefineValidator, DefineXMLGenerator
+from .define_xml import (
+    CheckResult, DatasetChecker, TypeMismatch,
+    DefineSpecGenerator,
+    DefineValidator, DefineXMLGenerator,
+)
 from .validation import ValidationResult, ValidationService
 
 __all__ = [
@@ -85,7 +89,12 @@ __all__ = [
     "VaccineNamespace",
     "MetabolicNamespace",
     "NeuroNamespace",
-    # Define-XML
+    # Define-XML — simplified spec workflow
+    "DefineSpecGenerator",
+    "DatasetChecker",
+    "CheckResult",
+    "TypeMismatch",
+    # Define-XML — full Pharmaversepy-format workflow
     "DefineValidator",
     "DefineXMLGenerator",
     # Validation

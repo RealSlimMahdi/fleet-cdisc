@@ -24,7 +24,7 @@ Usage
     )
 
     # Or spec-driven:
-    result = vs_sdtm.adam.from_spec("specs/cdiscpilot01/adam/advs_spec.yaml").to_frame()
+    result = vs_sdtm.adam.from_spec("specs/cdiscpilot01/adam/define.yaml", dataset="ADVS").to_frame()
 """
 
 from __future__ import annotations
@@ -125,6 +125,33 @@ class AdamNamespace:
     def assigned(self, target: str, *, value: Any) -> "AdamNamespace":
         """Set *target* to a constant *value* for every record."""
         return self._chain(pl.lit(value).alias(target))
+
+    # ------------------------------------------------------------------ #
+    # 3b. assign_datetime — convert raw date/datetime to ISO 8601         #
+    # ------------------------------------------------------------------ #
+
+    def assign_datetime(
+        self,
+        target: str,
+        *,
+        source: str,
+        mode: str = "date",
+        input_format: str | None = None,
+    ) -> "AdamNamespace":
+        """
+        Parse *source* date string and store as ISO 8601 in *target*.
+
+        *mode*: ``"date"`` → YYYY-MM-DD, ``"datetime"`` → YYYY-MM-DDTHH:MM:SS.
+
+        Example::
+
+            .assign_datetime("ADT", source="vsdtc", mode="date")
+        """
+        from ..sdtm.utils import to_iso8601_date, to_iso8601_datetime
+
+        fn = to_iso8601_datetime if mode == "datetime" else to_iso8601_date
+        expr = pl.col(source).map_elements(fn, return_dtype=pl.String).alias(target)
+        return self._chain(expr)
 
     # ------------------------------------------------------------------ #
     # 4. recode — recode / group existing variable values                 #
@@ -581,21 +608,32 @@ class AdamNamespace:
     # Spec-driven pipeline                                                 #
     # ------------------------------------------------------------------ #
 
-    def from_spec(self, spec_path: str | Path) -> "AdamNamespace":
+    def from_spec(self, spec_path: str | Path, *, dataset: str | None = None) -> "AdamNamespace":
         """
         Build an ADaM derivation pipeline from a YAML specification file.
 
+        Reads a ``define.yaml`` with a top-level ``datasets`` list where each
+        variable carries a ``derivation`` block.  Pass *dataset* to select
+        which dataset to execute (e.g. ``dataset="ADVS"``).  When the file
+        contains only one dataset the *dataset* argument may be omitted.
+
         Example::
 
-            vs_df.adam.from_spec("specs/cdiscpilot01/adam/advs_spec.yaml").to_frame()
+            vs_df.adam.from_spec("specs/cdiscpilot01/adam/define.yaml", dataset="ADVS").to_frame()
         """
         from .models import ADAMDatasetSpec
 
         spec_data = yaml.safe_load(Path(spec_path).read_text())
-        spec = ADAMDatasetSpec(**spec_data)
+
+        # ── Detect format: define.yaml has a top-level "datasets" key ──
+        if "datasets" in spec_data:
+            variables = self._extract_define_variables(spec_data, dataset)
+        else:
+            spec = ADAMDatasetSpec(**spec_data)
+            variables = spec.variables
 
         ns: AdamNamespace = self
-        for var in spec.variables:
+        for var in variables:
             alg = var.algorithm.value
             target = var.target
 
@@ -680,6 +718,41 @@ class AdamNamespace:
 
         return ns
 
+    @staticmethod
+    def _extract_define_variables(spec_data: dict, dataset: str | None) -> list:
+        """Convert define.yaml dataset variables into ADAMVariableSpec objects."""
+        from .models import ADAMVariableSpec
+
+        datasets = spec_data["datasets"]
+        if dataset is None:
+            if len(datasets) != 1:
+                names = [d["name"] for d in datasets]
+                raise ValueError(
+                    f"define.yaml contains {len(datasets)} datasets {names}. "
+                    "Pass dataset= to select one."
+                )
+            ds = datasets[0]
+        else:
+            matches = [d for d in datasets if d["name"].upper() == dataset.upper()]
+            if not matches:
+                names = [d["name"] for d in datasets]
+                raise ValueError(
+                    f"Dataset '{dataset}' not found in define.yaml. Available: {names}"
+                )
+            ds = matches[0]
+
+        result = []
+        for var in ds["variables"]:
+            drv = var.get("derivation")
+            if not drv:
+                continue  # no derivation → carry-through / manual column
+            spec = ADAMVariableSpec(
+                target=var["name"],
+                **drv,
+            )
+            result.append(spec)
+        return result
+
     # ------------------------------------------------------------------ #
     # Validation integration                                               #
     # ------------------------------------------------------------------ #
@@ -702,8 +775,130 @@ class AdamNamespace:
     # Terminal operation                                                   #
     # ------------------------------------------------------------------ #
 
+    # ------------------------------------------------------------------ #
+    # select — column selection / variable-leakage guard                  #
+    # ------------------------------------------------------------------ #
+
+    def select(
+        self,
+        columns: list[str] | None = None,
+        *,
+        spec: "str | Path | None" = None,
+        dataset: str | None = None,
+        drop_pattern: str | None = r"^_",
+    ) -> "AdamNamespace":
+        """
+        Materialise the pipeline then select and reorder columns.
+
+        Resolution order:
+
+        1. ``spec`` + ``dataset``: derive the ordered column list from a
+           ``define.yaml``.  Only columns present in the frame are kept.
+        2. ``columns``: explicit list to keep (in that order).
+        3. Neither: keep all current columns (subject to ``drop_pattern``).
+
+        ``drop_pattern`` (default ``r"^_"``): regex applied *before* the
+        explicit selection — columns whose names match are removed.  This
+        enforces the convention that ``_``-prefixed columns are scratch
+        variables.  Set to ``None`` to disable (e.g. during debugging).
+
+        Examples::
+
+            # Keep only spec columns, drop scratch _ variables (default)
+            .select(spec="specs/adam/define.yaml", dataset="ADVS")
+
+            # Same but disable auto-drop for debugging
+            .select(spec="specs/adam/define.yaml", dataset="ADVS", drop_pattern=None)
+
+            # Just drop _ variables, keep everything else
+            .select()
+
+            # Fully disable — do nothing (passthrough, for debugging)
+            .select(drop_pattern=None)
+        """
+        import re
+
+        df = self.to_frame()
+
+        # Step 1: drop scratch variables matching the pattern
+        if drop_pattern is not None:
+            pat = re.compile(drop_pattern)
+            df = df.select([c for c in df.columns if not pat.search(c)])
+
+        # Step 2: resolve explicit column list (spec takes priority over columns)
+        col_list = columns
+        if spec is not None:
+            col_list = self._spec_columns(Path(spec), dataset)
+
+        # Step 3: intersect with existing columns (preserving spec order)
+        if col_list is not None:
+            existing = [c for c in col_list if c in df.columns]
+            df = df.select(existing)
+
+        return self._materialise_then(df)
+
+    @staticmethod
+    def _spec_columns(spec_path: Path, dataset: str | None) -> list[str]:
+        """Return the ordered variable-name list for *dataset* from a define.yaml."""
+        spec_data = yaml.safe_load(spec_path.read_text())
+        datasets = spec_data.get("datasets", [])
+        if dataset is None:
+            if len(datasets) != 1:
+                names = [d["name"] for d in datasets]
+                raise ValueError(
+                    f"define.yaml contains {len(datasets)} datasets {names}; "
+                    "pass dataset= to select one."
+                )
+            ds = datasets[0]
+        else:
+            matches = [d for d in datasets if d["name"].upper() == dataset.upper()]
+            if not matches:
+                names = [d["name"] for d in datasets]
+                raise ValueError(
+                    f"Dataset '{dataset}' not found in define.yaml. Available: {names}"
+                )
+            ds = matches[0]
+        return [v["name"] for v in ds["variables"]]
+
+    # ------------------------------------------------------------------ #
+    # Terminal operations                                                  #
+    # ------------------------------------------------------------------ #
+
     def to_frame(self) -> pl.DataFrame:
         """Materialise the accumulated pipeline into a Polars DataFrame."""
         if not self._pipeline:
             return self._df
         return self._df.with_columns(self._pipeline)
+
+    def write_parquet(
+        self,
+        path: "str | Path",
+        *,
+        mkdir: bool = True,
+    ) -> pl.DataFrame:
+        """
+        Materialise the pipeline, write the result to *path* as Parquet,
+        and return the DataFrame.
+
+        This is a drop-in alternative to ``to_frame()`` when you want to
+        persist the dataset as part of the chain.
+
+        *mkdir*: when ``True`` (default) any missing parent directories are
+        created automatically.
+
+        Example::
+
+            advs = (
+                vs_raw.adam
+                .rename("USUBJID", source="patient_number")
+                ...
+                .select(spec="specs/adam/define.yaml", dataset="ADVS")
+                .write_parquet("outputs/cdiscpilot01/advs.parquet")
+            )
+        """
+        df = self.to_frame()
+        dest = Path(path)
+        if mkdir:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+        df.write_parquet(dest)
+        return df

@@ -212,47 +212,35 @@ The YAML key `pymaverse_algorithm` in a variable spec is used to record the deri
 
 ## `specs/` — Study Derivation Specifications
 
-YAML files that describe domain-level derivation logic using the verb vocabulary. Consumed by `from_spec()`.
+YAML files that describe the study metadata, derivation logic, and Define-XML output. Consumed by both `from_spec()` and the Define-XML generator.
 
 ```
 specs/
 └── cdiscpilot01/
     ├── sdtm/
-    │   └── dm_spec.yaml     # DM domain — 18 variables, 14-verb vocabulary
+    │   └── define.yaml   # SDTM Define-XML spec + DM derivations
     └── adam/
-        └── advs_spec.yaml   # ADVS dataset — 10 variables, ADaM verbs
+        └── define.yaml   # ADaM Define-XML spec + ADSL/ADVS derivations
 ```
 
-**SDTM spec format:**
+**Define YAML format (single source of truth):**
 
 ```yaml
-domain: DM
-variables:
-  - target: STUDYID
-    algorithm: hardcode_no_ct
-    value: "CDISCPILOT01"
-  - target: SEX
-    algorithm: assign_ct
-    source: sex
-    ct_codelist: C66731
-    ct_mapping:
-      "F": "F"
-      "M": "M"
-```
-
-**ADaM spec format:**
-
-```yaml
-dataset: ADVS
-variables:
-  - target: AVAL
-    algorithm: derivation
-    expression: "VSSTRESN"
-  - target: ADY
-    algorithm: std_function
-    func: study_day
-    analysis_date: ADT
-    reference_date: TRTSDT
+datasets:
+  - name: DM
+    variables:
+      - name: STUDYID
+        derivation:
+          algorithm: hardcode_no_ct
+          value: "CDISCPILOT01"
+      - name: SEX
+        derivation:
+          algorithm: assign_ct
+          source: sex
+          ct_codelist: C66731
+          ct_mapping:
+            "F": "F"
+            "M": "M"
 ```
 
 ---
@@ -280,7 +268,7 @@ tests/
 ├── fixtures/
 │   ├── raw/                             # CSV copies of datasets for tests
 │   ├── ct/cdisc_ct_sample.yaml          # Sample CT for CT validator tests
-│   └── specs/                           # dm_spec.yaml, advs_spec.yaml
+│   └── specs/                           # define_sdtm.yaml, define_adam.yaml
 └── unit/
     ├── test_sdtm_namespace.py           # 20 tests — all 14 SDTM verbs
     ├── test_adam_namespace.py           # 24 tests — all 16 BDS ADaM verbs

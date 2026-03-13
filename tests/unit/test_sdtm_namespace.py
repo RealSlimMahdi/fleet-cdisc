@@ -160,13 +160,18 @@ class TestMultipleResponses:
 
 
 class TestFromSpec:
-    def test_dm_spec(self, dm_raw, dm_spec_path):
-        result = dm_raw.sdtm.from_spec(dm_spec_path).to_frame()
+    def test_dm_define_yaml(self, dm_raw, sdtm_define_path):
+        """from_spec() works with the unified define.yaml (dataset= selects DM)."""
+        result = dm_raw.sdtm.from_spec(sdtm_define_path, dataset="DM").to_frame()
         assert "USUBJID" in result.columns
         assert "DOMAIN" in result.columns
         assert result["DOMAIN"][0] == "DM"
-        assert "STUDYID" in result.columns
         assert result["STUDYID"][0] == "CDISCPILOT01"
+
+    def test_define_yaml_requires_dataset_arg_for_multi_dataset_file(self, dm_raw, sdtm_define_path):
+        """Calling from_spec() on a multi-dataset define.yaml without dataset= raises."""
+        with pytest.raises(ValueError, match="dataset="):
+            dm_raw.sdtm.from_spec(sdtm_define_path).to_frame()
 
 
 class TestToFrame:

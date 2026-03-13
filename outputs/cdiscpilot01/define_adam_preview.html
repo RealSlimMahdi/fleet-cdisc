@@ -1,0 +1,752 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html lang="en">
+<!--
+     xsl:version = "1.0"
+     xsl:vendor = "libxslt"
+     xsl:vendor-url = "http://xmlsoft.org/XSLT/"
+   -->
+<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta http-equiv="Content-Script-Type" content="text/javascript">
+  <meta http-equiv="Content-Style-Type" content="text/css">
+  <title>CDISCPILOT01: ADAMIG 1.1</title>
+<script type="text/javascript">
+<!--
+/**
+ * With one argument, return the textContent or innerText of the element.
+ * With two arguments, set the textContent or innerText of element to value.
+ */
+function textContent(element, value) {
+  "use strict";
+  var rtn;
+  var content = element.textContent;  // Check if textContent is defined
+  if (value === undefined) { // No value passed, so return current text
+    if (content !== undefined) {
+      rtn = content;
+    } else {
+      rtn = element.innerText;
+    }
+    return rtn;
+  }
+  else { // A value was passed, so set text
+    if (content !== undefined) {
+      element.textContent = value;
+    } else {
+      element.innerText = value;
+    }
+  }
+}
+
+var ITEM  = '\u00A0';
+var CLOSE = '\u25BA';
+var OPEN  = '\u25BC';
+
+function toggle_submenu(e) {
+  "use strict";
+  if (textContent(e)===OPEN) {
+    textContent(e, CLOSE);
+  }
+  else {
+    textContent(e, OPEN);
+  }
+
+  var i;
+  for (i=0; i < e.parentNode.childNodes.length; i++) {
+    var c;
+    c=e.parentNode.childNodes[i];
+    if (c.tagName==='UL') {c.style.display=(c.style.display==='none') ? 'block' : 'none';}
+   }
+}
+
+function reset_menus() {
+"use strict";
+  var li;
+  var c;
+  var i;
+  var j;
+  var li_tags = document.getElementsByTagName('LI');
+  for (i=0; i < li_tags.length; i++) {
+    li=li_tags[i];
+    if ( li.className.match('hmenu-item') ){
+      for (j=0; j < li.childNodes.length; j++) {
+        c=li.childNodes[j];
+        if ( c.tagName === 'SPAN' && c.className.match('hmenu-bullet') ) {textContent(c, ITEM);}
+        }
+      }
+    if ( li.className.match('hmenu-submenu') ) {
+      for (j=0; j < li.childNodes.length; j++) {
+        c=li.childNodes[j];
+        if ( c.tagName === 'SPAN' && c.className.match('hmenu-bullet') ) {textContent(c, CLOSE);}
+        else if ( c.tagName === 'UL' ) { c.style.display = 'none'; }
+        }
+    }
+  }
+}
+
+function toggle_vlm(element) {
+  var child_id = element.childNodes[0].getAttribute("id");
+  var vlm_rows = document.getElementsByClassName(child_id);
+  for (j=0; j < vlm_rows.length; j++) {
+    if (vlm_rows[j].style.display==='none') {
+      vlm_rows[j].style.display=''; }
+    else {
+      vlm_rows[j].style.display='none'; 
+      }
+    }
+}
+
+function expand_all_vlm() {
+  var vlm_rows = document.getElementsByClassName("vlm");
+  for (j=0; j < vlm_rows.length; j++) {
+      vlm_rows[j].style.display='';
+    }
+}
+
+function collapse_all_vlm() {
+  var vlm_rows = document.getElementsByClassName("vlm");
+  for (j=0; j < vlm_rows.length; j++) {
+      vlm_rows[j].style.display='none';
+    }
+}
+
+/**
+ * Open external documents (PDFs, ...) in a new window.
+ */
+document.onclick = function(e)
+{
+  var target = e ? e.target : window.event.srcElement;    
+  while (target && !/^(a|body)$/i.test(target.nodeName))
+  {
+    target = target.parentNode;
+  }
+
+  if (target && target.className.match('external'))
+  {
+    var external = window.open(target.href);
+    return external.closed;
+  }
+}
+//-->
+</script>
+  <style type="text/css">
+      .external-link-gif{
+        background: 
+        url(data:image/gif;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAAXNSR0IArs4c6QAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9gCGhErDWL4mOoAAAB6SURBVBjTbVCxDcAgDHNRP2KDY9gYO5YbWNno1mPY6E3pAJEIYCmCOCQOPogII6wNkug4d49KiXMz1EiUEg8uLBN3Ui7FVduYmxjG3JRru+facubVuIdLEV4Dzwe8V4BYg7t4Ap+d57qUnuWICBzi116v1ggfd3bM+AEZWXFvnym8EwAAAABJRU5ErkJggg==)
+       no-repeat
+       right center;
+        padding: 8px;
+      }      
+      
+      body{
+        background-color: #FFFFFF;
+        font-family: Verdana, Arial, Helvetica, sans-serif;
+        font-size: 62.5%;
+        margin: 0;
+        padding: 30px;
+      }
+      
+      h1{
+        font-size: 1.6em;
+        margin-left: 0;
+        font-weight: bolder;
+        text-align: left;
+        color: #696969;
+      }
+      
+      h1.header{
+        text-align: center;
+      }
+      
+      ul{
+        margin-left: 0px;
+      }
+      
+      a{
+      color: #0000FF;
+        text-decoration: underline;
+      }
+      a.visited{
+      color: #551A8B;
+        text-decoration: underline;
+      }
+      a:hover{
+      color: #FF9900;
+        text-decoration: underline;
+      }
+      a.tocItem{
+      color: #004A95;
+      text-decoration: none;
+      margin-top: 2px;
+      font-size: 1.4em;
+      }
+      .tocItem{
+      text-decoration: none;
+      margin-top: 2px;
+      font-size: 1.4em;
+      }
+      
+      #menu{
+        position: fixed;
+        left: 0px;
+        top: 10px;
+        width: 20%;
+        height: 96%;
+        bottom: 0px;
+        overflow: auto;
+        background-color: #FFFFFF;
+        color: #000000;
+        border: 0px;
+        text-align: left;
+        white-space: nowrap;
+      }
+ 
+      .hmenu li{
+        list-style-type: none;
+        line-height: 200%;
+        padding-left: 0;
+      }
+      .hmenu ul{
+        padding-left: 14px;
+        margin-left: 0;
+      }
+      .hmenu-item{
+      }
+      .hmenu-submenu{
+      }
+      .hmenu-bullet{
+        float: left;
+        width: 16px;
+        color: #AAAAAA;
+        font-size: 1.2em;
+      }
+      
+      div.buttons {
+        padding: 5px 0 5px 40px;
+        display: inline-block;
+      }
+        div.button {
+        padding: 5px 0 5px 0;   
+      }
+      
+      button { 
+        width: 100%;
+        -webkit-border-radius: 10px;
+        -moz-border-radius: 10px;
+        border-radius: 10px;
+        -webkit-box-shadow: 3px 3px 2px #888;
+        -moz-box-shadow: 3px 3px 2px #888;
+        box-shadow: 3px 3px 2px #888;
+        padding: 4px 16px 4px 16px;
+        display:block;
+        cursor: pointer;
+      }
+
+      #main{
+        position: absolute;
+        left: 22%;
+        top: 0px;
+        overflow: auto;
+        background-color: #FFFFFF;
+        color: #000000;
+        float: none !important;
+      }
+      
+      ul.codelist{
+        padding: 1px;
+        margin-left: 1px;
+        margin-right: 1px;
+        margin-top: 1px;
+        margin-bottom: 1px;
+        
+      }
+      .codelist li{
+        list-style-type:none;
+        line-height: 200%;
+        padding-left: 0;
+        text-indent: -4px;
+      }
+      
+      .codelist-caption{
+        font-size: 1.4em;
+        margin-top: 20px;
+        margin-bottom: 10px;
+        margin-left: 0;
+        font-weight: bolder;
+        text-align: left;
+        color: #696969;
+      }
+      
+      .codelist-item{
+        list-style-type: disk;
+        list-style-position: inside;
+        padding-left: 0;
+        padding-right: 0;
+        margin: 0 0 0 0;
+        }
+
+      .codelist-item-decode{
+        white-space: pre; /* CSS 2.0 */
+        white-space: pre-wrap; /* CSS 2.1 */
+         /* CSS 3.0 */
+        white-space: -pre-wrap; /* Opera 4-6 */
+        white-space: -o-pre-wrap; /* Opera 7 */
+        white-space: -moz-pre-wrap; /* Mozilla */
+        white-space: -hp-pre-wrap; /* HP Printers */
+        word-wrap: break-word; /* IE 5+ */
+      }      
+
+      ul.SubClass {
+        list-style-type: '- ';
+        padding-left: 5;
+        margin: 0 0 0 0;
+      }
+      ul.SubClass.li {}
+
+      #main .docinfo{
+        width: 95%;
+        text-align: right;
+        padding: 0px 5px;
+      }
+      
+      div.containerbox{
+        padding: 0px;
+        margin: 10px auto;
+        border: 0px;
+        page-break-after: always;
+      }
+      
+      .study-name{
+        font-size: 1.6em;
+        font-weight: bold;
+        text-align: left;
+        padding: 15px;
+        margin-left: 20px;
+        margin-top: 40px;
+        margin-right: 20px;
+        margin-bottom: 20px;
+        color: #696969;
+        border: 0px;
+      }
+      
+      div.study-metadata{
+        font-size: 1.6em;
+        font-weight: bold;
+        text-align: left;
+        padding: 0px;
+        margin-left: 0px;
+        margin-top: 00px;
+        margin-right: 0px;
+        margin-bottom: 0px;
+        color: #696969;
+        border: 0px;
+      }
+      
+      dl.study-metadata{
+        width: 95%;
+        padding: 5px 0px;
+        font-size: 0.8em;
+        color: black;
+      }
+      
+      dl.study-metadata dt{
+        clear: left;
+        float: left;
+        width: 200px;
+        margin: 0;
+        padding: 5px 5px 5px 0px;
+        font-weight: bold;
+      }
+      
+      dl.study-metadata dd{
+        margin-left: 210px;
+        padding: 5px;
+        font-weight: normal;
+        min-height: 20px;
+      }
+      
+      div.codelist{
+        page-break-after: avoid;
+      }
+      
+      div.qval-indent {
+      margin-left: 20px;
+      }
+      
+      div.qval-indent2 {
+      margin-left: 40px;
+      }
+      
+      table{
+        width: 95%;
+        border-spacing: 4px;
+        border: 1px solid #000000;
+        background-color: #EEEEEE;
+        margin-top: 5px;
+        border-collapse: collapse;
+        padding: 5px;
+        empty-cells: show;
+      }
+      
+      table caption{
+        border: 0px;
+        left: 20px;
+        font-size: 1.4em;
+        font-weight: bolder;
+        color: #696969;
+        margin: 10px auto;
+        text-align: left;
+      }
+      
+      .description{
+        margin-left: 0px;
+        color: black;
+        font-weight: normal;
+        font-size: 0.85em;
+      }
+      
+      table caption .dataset{
+        font-weight: normal;
+        float: right;
+      }
+
+      table caption.header{
+        font-size: 1.6em;
+        margin-left: 0;
+        font-weight: bolder;
+        text-align: center;
+        color: #696969;
+      }
+      
+      table tr{
+        border: 1px solid #000000;
+      }
+      
+      table tr.header{
+        background-color: #6699CC;
+        color: #FFFFFF;
+        font-weight: bold;
+      }
+      
+      table th{
+        font-weight: bold;
+        vertical-align: top;
+        text-align: left;
+        padding: 5px;
+        border: 1px solid #000000;
+        font-size: 1.3em;
+      }
+      
+      table th.codedvalue{
+        width: 20%;
+      }
+      table th.length{
+        width: 7%;
+      }
+ 
+      table th.label{
+        width: 13%;
+      }
+ 
+      table td{
+        vertical-align: top;
+        padding: 5px;
+        border: 1px solid #000000;
+        font-size: 1.2em;
+        line-height: 150%;
+      }
+
+      table td.datatype{
+        text-align: left;
+      }
+      table td.role{
+        text-align: left;
+      }
+      table td.number{
+        text-align: right;
+      }
+      
+      tr.tablerowodd{
+        background-color: #FFFFFF;
+      }
+      tr.tableroweven{
+        background-color: #EEEEEE;
+      }
+      
+      .linebreakcell{
+        vertical-align: top;
+        margin-top: 3px;
+        margin-bottom: 3px;
+      }
+      
+      .nci,
+      .extended{
+        font-style: italic;
+      }
+      .super{
+        vertical-align: super;
+      }
+      .footnote{
+        font-size: 1.2em;
+      }
+      
+      .valuelist-reference{
+      vertical-align: super;
+      font-size: 0.8em;
+      padding-left: 5px;
+      cursor: pointer;
+      }
+      
+      .valuelist-no-reference{
+      vertical-align: super;
+      font-size: 0.8em;
+      padding-left: 5px;
+      }
+      
+      div.formalexpression{
+        margin-top: 6px;
+        margin-bottom: 6px;      
+      }
+
+      span.label{
+        font-weight: bold;      
+      }
+
+      .formalexpression-reference{
+        vertical-align: super;
+        font-size: 0.8em;
+        padding-left: 5px;
+      }
+
+      .formalexpression-code{
+        font-family:"Courier New", monospace, serif;
+        font-size:1.2em;
+        line-height:120%;
+        display:block;
+        vertical-align:top;
+        margin: 0px;
+        padding: 5px 0 0 20px;
+        white-space:pre;  /* CSS 2.0 */
+        white-space: pre-wrap; /* CSS 2.1 */
+        /* CSS 3.0 */
+        white-space: -pre-wrap; /* Opera 4-6 */
+        white-space: -o-pre-wrap; /* Opera 7 */
+        white-space: -moz-pre-wrap; /* Mozilla */
+        white-space: -hp-pre-wrap; /* HP Printers */
+        word-wrap: break-word; /* IE 5+ */
+      }
+      
+      .method-code{
+        vertical-align: top;
+        white-space: pre; /* CSS 2.0 */
+        white-space: pre-wrap; /* CSS 2.1 */
+         /* CSS 3.0 */
+        white-space: -pre-wrap; /* Opera 4-6 */
+        white-space: -o-pre-wrap; /* Opera 7 */
+        white-space: -moz-pre-wrap; /* Mozilla */
+        white-space: -hp-pre-wrap; /* HP Printers */
+        word-wrap: break-word; /* IE 5+ */
+      }
+
+      .linktop{
+        font-size: 1.2em;
+        margin-top: 5px;
+      }
+      .documentinfo,
+      .stylesheetinfo{
+        font-size: 1.1em;
+        line-height: 60%;
+      }
+      
+      .invisible{
+        display: none;
+      }
+      
+      .standard-refeference {
+        width: 95%;
+        font-size: 1.0em;
+        font-weight: bold;
+        padding: 5px;
+        color: #696969;
+        white-space: nowrap;
+      }
+
+      .nodata{
+        width: 95%;
+        font-size: 1.0em;
+        font-weight: bold;
+        padding: 5px;
+        color: #000000;
+        white-space: nowrap;
+      }
+
+      span.unresolved{
+        color: #000000;
+      }
+      td.unresolved{
+      color: #000000;
+      }
+      td.span.unresolved{
+      color: #000000;
+      }
+      
+      span.prefix{
+        font-weight: normal;
+      }      
+
+      .arm-summary{
+        width: 95%;
+        border-spacing: 5px;
+        border-width: 1px;
+        border-color: #000000;
+        border-style: solid solid none solid;
+        background-color: #EEEEEE;
+        font-size: 1.2em;
+        line-height: 150%;
+        vertical-align: top;
+      }
+      .arm-summary-resultdisplay{
+        margin: 0px 0px 0px 0px;
+        padding: 10px 10px 10px 10px;  
+        border-spacing: 5px;
+        border-width: 1px;
+        border-color #000000;
+        border-style: none none solid none;
+      }
+
+      .arm-display-title{
+        margin-left: 5pt;
+      }
+      
+      .table.analysisresults-detail{
+        background-color: #EEEEEE;
+      }
+      
+      .arm-summary-result{
+        margin-left: 20px;
+        margin-top: 5px;
+        margin-bottom: 5px;
+      }
+      th span.arm-displaytitle{
+        font-weight: bold;
+      }
+      td span.arm-resulttitle{
+        font-weight: bold;
+      }
+      tr.arm-analysisresult{
+        background-color: #6699CC;
+        color: #FFFFFF;
+        font-weight: bold;
+        border: 1px solid #000000;
+      }
+      td.arm-label{
+        font-weight: bold;
+      }
+
+      p.arm-analysisvariable{
+        margin-top: 5px;
+        margin-bottom: 5px;
+      }
+      .arm-data-reference{
+        margin-top: 5px;
+        margin-bottom: 5px;
+      }
+      
+      .arm-code-context{
+        padding: 5px 0px;
+      }
+      .arm-code-ref{
+        font-size: 1.2em;
+        line-height: 150%;
+        padding: 5px;
+      }
+
+      .arm-code{
+        font-family:"Courier New", monospace, serif;
+        font-size:1.2em;
+        line-height:120%;
+        display:block;
+        vertical-align:top;
+        margin: 0px;
+        padding:0px;
+        white-space:pre;  /* CSS 2.0 */
+        white-space: pre-wrap; /* CSS 2.1 */
+        /* CSS 3.0 */
+        white-space: -pre-wrap; /* Opera 4-6 */
+        white-space: -o-pre-wrap; /* Opera 7 */
+        white-space: -moz-pre-wrap; /* Mozilla */
+        white-space: -hp-pre-wrap; /* HP Printers */
+        word-wrap: break-word; /* IE 5+ */
+      }
+      
+
+      
+      @media print{
+      
+        @page {
+          margin: 1.5cm;
+        }
+      
+        body,
+        h1,
+        table caption,
+        table caption.header{
+          color: #000;
+          background: #fff;
+          float: none !important;
+        }
+      
+        div.containerbox{
+          padding: 0px;
+          border: 0px;
+          page-break-after: always;
+        }
+      
+        a:link,
+        a:visited{
+          background: transparent;
+          text-decoration: none;
+          color: black;
+        }
+        a.external:link:after,
+        #main a:visited:after{
+          content: " (" attr(href) ") ";
+          font-size: 100%;
+          text-decoration: underline;
+          font-weight: normal;
+          color: black;
+        }
+        .external-link-gif,
+        .formalexpression-reference
+        .valuelist-reference{
+          display: none !important;
+          width: 0px;
+        }
+        
+        table{
+          border-width: 2px;
+        }
+
+        table tr.vlm{
+        display: table-row !important;
+        }
+      
+        #menu,
+        .linktop{
+          display: none !important;
+          width: 0px;
+        }
+        #main{
+          left: 2cm;
+          float: none !important;
+        }
+        span.prefix{
+          font-weight: normal;
+        }
+        
+        row, ul, img {
+          page-break-inside: avoid;
+        }
+      
+      }
+    </style>
+  </head><body onload="reset_menus();"><div id="menu"><a name="top" class="invisible" href="#main">Skip Navigation Link</a><span class="study-name">CDISCPILOT01</span><ul class="hmenu"><li class="hmenu-item"><span class="hmenu-bullet" onclick="toggle_submenu(this);">-</span><a class="tocItem" href="#Standards_Table">Standards</a></li><li class="hmenu-submenu"><span class="hmenu-bullet" onclick="toggle_submenu(this);">+</span><a class="tocItem" href="#datasets">Datasets</a><ul><li class="hmenu-item"><span class="hmenu-bullet">-</span><a class="tocItem" href="#IG.IG.ADSL">ADSL (Subject-Level Analysis Dataset)</a></li><li class="hmenu-item"><span class="hmenu-bullet">-</span><a class="tocItem" href="#IG.IG.ADVS">ADVS (Analysis Dataset for Vital Signs)</a></li></ul></li><li class="hmenu-submenu"><span onclick="toggle_submenu(this);" class="hmenu-bullet">+</span><a href="#decodelist" class="tocItem">Controlled Terminology</a><ul><li class="hmenu-submenu"><span class="hmenu-bullet" onclick="toggle_submenu(this);">+</span><a class="tocItem" href="#decodelist">CodeLists</a><ul><li class="hmenu-item"><span class="hmenu-bullet">-</span><a class="tocItem" href="#CL.C66731">Sex</a></li><li class="hmenu-item"><span class="hmenu-bullet">-</span><a class="tocItem" href="#CL.CL.DTYPE">Derivation Type</a></li><li class="hmenu-item"><span class="hmenu-bullet">-</span><a class="tocItem" href="#CL.CL.ANL01FL">Analysis Flag ANL01</a></li></ul></li></ul></li></ul></div><div id="main"><div class="docinfo"><p class="documentinfo">Date/Time of Define-XML document generation: 2026-03-13T21:06:43</p><p class="documentinfo">Define-XML version: 2.1.0</p><p class="documentinfo">Define-XML Context: Submission</p><p class="stylesheetinfo">Stylesheet version: 2019-02-11</p></div><div class="study-metadata"><dl class="study-metadata"><dt>Study Name</dt><dd>CDISCPILOT01</dd><dt>Study Description</dt><dd>A Phase II, Randomized, Double-Blind, Placebo-Controlled, Parallel Group Study of the Efficacy, Safety, and Tolerability of Xanomeline in Patients with Mild to Moderate Alzheimer's Disease</dd><dt>Protocol Name</dt><dd>CDISCPILOT01</dd><dt>Metadata Name</dt><dd>CDISCPILOT01 ADAMIG Data Definitions</dd><dt>Metadata Description</dt><dd>Dataset metadata for CDISCPILOT01 ADAMIG datasets</dd></dl></div><h1 class="invisible">Standards for Study CDISCPILOT01</h1><div class="containerbox"><table id="Standards_Table" summary="Standards"><caption class="header">Standards for Study CDISCPILOT01</caption><tr class="header"><th scope="col">Standard</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col">Documentation</th></tr><tr class="tablerowodd" id="STD.STD.ADAMIG"><td>ADAMIG 1.1</td><td>IG</td><td>Final</td><td></td></tr><tr class="tableroweven" id="STD.STD.CT"><td>CDISC/NCI ADAMIG 2023-12-15</td><td>CT</td><td>Final</td><td></td></tr></table></div><br><a id="datasets"></a><h1 class="invisible">Datasets</h1><div class="containerbox"><table summary="Data Definition Tables"><caption class="header">Datasets</caption><tr class="header"><th scope="col">Dataset</th><th scope="col">Description</th><th scope="col">Class
+            </th><th scope="col">Structure</th><th scope="col">Purpose</th><th scope="col">Keys</th><th scope="col">Documentation</th><th scope="col">Location</th></tr><tr class="tablerowodd" id="IG.ADSL"><td><a href="#IG.IG.ADSL">ADSL</a><span class="standard-refeference">[ADAMIG 1.1]</span></td><td>Subject-Level Analysis Dataset</td><td>SUBJECT LEVEL ANALYSIS DATASET</td><td>One record per subject</td><td>Analysis</td><td>STUDYID, USUBJID</td><td></td><td><a class="external" href="adsl.xpt"></a><span class="external-link-gif"></span> </td></tr><tr class="tableroweven" id="IG.ADVS"><td><a href="#IG.IG.ADVS">ADVS</a><span class="standard-refeference">[ADAMIG 1.1]</span></td><td>Analysis Dataset for Vital Signs</td><td>BASIC DATA STRUCTURE</td><td>One record per subject per parameter per analysis timepoint</td><td>Analysis</td><td>STUDYID, USUBJID, PARAMCD, VISITNUM</td><td></td><td><a class="external" href="advs.xpt"></a><span class="external-link-gif"></span> </td></tr></table></div><p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p><br><a id="IG.IG.ADSL"></a><div class="containerbox"><h1 class="invisible">Subject-Level Analysis Dataset (ADSL) </h1><table summary="ItemGroup IG.IG.ADSL"><caption><span>ADSL (Subject-Level Analysis Dataset) -  <span class="standard-refeference">[ADAMIG 1.1]</span><span class="dataset">Location: <a class="external" href="adsl.xpt"></a><span class="external-link-gif"></span> </span></span></caption><tr class="header"><th scope="col">Variable</th><th scope="col">Label / Description</th><th scope="col">Type</th><th scope="col" class="length">Length or Display Format</th><th scope="col" abbr="Format">Controlled Terms or ISO Format</th><th scope="col">Origin / Source / Method / Comment</th></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.STUDYID"></a>STUDYID</td><td>Study Identifier</td><td class="datatype">text</td><td class="number">12</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.USUBJID"></a>USUBJID</td><td>Unique Subject Identifier</td><td class="datatype">text</td><td class="number">40</td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.SUBJID"></a>SUBJID</td><td>Subject Identifier for the Study</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.SITEID"></a>SITEID</td><td>Study Site Identifier</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.AGE"></a>AGE</td><td>Age</td><td class="datatype">integer</td><td class="number"></td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.AGEU"></a>AGEU</td><td>Age Units</td><td class="datatype">text</td><td class="number">10</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.SEX"></a>SEX</td><td>Sex</td><td class="datatype">text</td><td class="number">2</td><td><span class="linebreakcell"><a href="#CL.C66731">Sex</a></span><ul class="codelist"><li class="codelist-item">• "M" = "MALE"</li><li class="codelist-item">• "F" = "FEMALE"</li></ul></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.RACE"></a>RACE</td><td>Race</td><td class="datatype">text</td><td class="number">60</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.ETHNIC"></a>ETHNIC</td><td>Ethnicity</td><td class="datatype">text</td><td class="number">60</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.ARMCD"></a>ARMCD</td><td>Planned Arm Code</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">Protocol</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.ARM"></a>ARM</td><td>Description of Planned Arm</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Protocol</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.ACTARMCD"></a>ACTARMCD</td><td>Actual Arm Code</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.ACTARM"></a>ACTARM</td><td>Description of Actual Arm</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.ADSL.TRT01P"></a>TRT01P</td><td>Planned Treatment for Period 01</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Protocol</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.ADSL.TRT01A"></a>TRT01A</td><td>Actual Treatment for Period 01</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.ADSL.TRTSDT"></a>TRTSDT</td><td>Date of First Exposure to Treatment</td><td class="datatype">date</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.ADSL.TRTEDT"></a>TRTEDT</td><td>Date of Last Exposure to Treatment</td><td class="datatype">date</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.ADSL.RFSTDTC"></a>RFSTDTC</td><td>Subject Reference Start Date/Time</td><td class="datatype">datetime</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.ADSL.RFENDTC"></a>RFENDTC</td><td>Subject Reference End Date/Time</td><td class="datatype">datetime</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.ADSL.RFICDTC"></a>RFICDTC</td><td>Date/Time of Informed Consent</td><td class="datatype">datetime</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.ADSL.DTHFL"></a>DTHFL</td><td>Subject Death Flag</td><td class="datatype">text</td><td class="number">2</td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.ADSL.SAFFL"></a>SAFFL</td><td>Safety Population Flag</td><td class="datatype">text</td><td class="number">2</td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.ADSL.ITTFL"></a>ITTFL</td><td>Intent-To-Treat Population Flag</td><td class="datatype">text</td><td class="number">2</td><td></td><td><div class="linebreakcell">Derived</div></td></tr></table></div><p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p><br><a id="IG.IG.ADVS"></a><div class="containerbox"><h1 class="invisible">Analysis Dataset for Vital Signs (ADVS) </h1><table summary="ItemGroup IG.IG.ADVS"><caption><span>ADVS (Analysis Dataset for Vital Signs) -  <span class="standard-refeference">[ADAMIG 1.1]</span><span class="dataset">Location: <a class="external" href="advs.xpt"></a><span class="external-link-gif"></span> </span></span></caption><tr class="header"><th scope="col">Variable</th><th scope="col">Label / Description</th><th scope="col">Type</th><th scope="col" class="length">Length or Display Format</th><th scope="col" abbr="Format">Controlled Terms or ISO Format</th><th scope="col">Origin / Source / Method / Comment</th></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.STUDYID"></a>STUDYID</td><td>Study Identifier</td><td class="datatype">text</td><td class="number">12</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.USUBJID"></a>USUBJID</td><td>Unique Subject Identifier</td><td class="datatype">text</td><td class="number">40</td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.PARAMCD"></a>PARAMCD</td><td>Parameter Code</td><td class="datatype">text</td><td class="number">8</td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.PARAM"></a>PARAM</td><td>Parameter</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.AVAL"></a>AVAL</td><td>Analysis Value</td><td class="datatype">float</td><td class="number"></td><td></td><td><div class="linebreakcell">Derived<p class="linebreakcell">Numeric analysis value; equal to VSSTRESN for continuous measures</p></div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.AVALU"></a>AVALU</td><td>Analysis Value Units</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.BASE"></a>BASE</td><td>Baseline Value</td><td class="datatype">float</td><td class="number"></td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.CHG"></a>CHG</td><td>Change from Baseline</td><td class="datatype">float</td><td class="number"></td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.PCHG"></a>PCHG</td><td>Percent Change from Baseline</td><td class="datatype">float</td><td class="number"></td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.ADT"></a>ADT</td><td>Analysis Date</td><td class="datatype">date</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.ADY"></a>ADY</td><td>Analysis Relative Day</td><td class="datatype">integer</td><td class="number"></td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.VISITNUM"></a>VISITNUM</td><td>Visit Number</td><td class="datatype">float</td><td class="number"></td><td></td><td><div class="linebreakcell">Protocol</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.VISIT"></a>VISIT</td><td>Visit Name</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Protocol</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.DTYPE"></a>DTYPE</td><td>Derivation Type</td><td class="datatype">text</td><td class="number">8</td><td><span class="linebreakcell"><a href="#CL.CL.DTYPE">Derivation Type</a></span><ul class="codelist"><li class="codelist-item">• "LOCF" = "Last Observation Carried Forward"</li><li class="codelist-item">• "WOCF" = "Worst Observation Carried Forward"</li></ul></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.ANL01FL"></a>ANL01FL</td><td>Analysis Flag 01</td><td class="datatype">text</td><td class="number">2</td><td><span class="linebreakcell"><a href="#CL.CL.ANL01FL">Analysis Flag ANL01</a></span><ul class="codelist"><li class="codelist-item">• "Y" = "Yes"</li></ul></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.SUBJID"></a>SUBJID</td><td>Subject Identifier for the Study</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.SITEID"></a>SITEID</td><td>Study Site Identifier</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.AGE"></a>AGE</td><td>Age</td><td class="datatype">integer</td><td class="number"></td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.AGEU"></a>AGEU</td><td>Age Units</td><td class="datatype">text</td><td class="number">10</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.SEX"></a>SEX</td><td>Sex</td><td class="datatype">text</td><td class="number">2</td><td><span class="linebreakcell"><a href="#CL.C66731">Sex</a></span><ul class="codelist"><li class="codelist-item">• "M" = "MALE"</li><li class="codelist-item">• "F" = "FEMALE"</li></ul></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.RACE"></a>RACE</td><td>Race</td><td class="datatype">text</td><td class="number">60</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ETHNIC"></a>ETHNIC</td><td>Ethnicity</td><td class="datatype">text</td><td class="number">60</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ARMCD"></a>ARMCD</td><td>Planned Arm Code</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">Protocol</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ARM"></a>ARM</td><td>Description of Planned Arm</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Protocol</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ACTARMCD"></a>ACTARMCD</td><td>Actual Arm Code</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ACTARM"></a>ACTARM</td><td>Description of Actual Arm</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.TRT01P"></a>TRT01P</td><td>Planned Treatment for Period 01</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Protocol</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.TRT01A"></a>TRT01A</td><td>Actual Treatment for Period 01</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.TRTSDT"></a>TRTSDT</td><td>Date of First Exposure to Treatment</td><td class="datatype">date</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.TRTEDT"></a>TRTEDT</td><td>Date of Last Exposure to Treatment</td><td class="datatype">date</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.RFSTDTC"></a>RFSTDTC</td><td>Subject Reference Start Date/Time</td><td class="datatype">datetime</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.RFENDTC"></a>RFENDTC</td><td>Subject Reference End Date/Time</td><td class="datatype">datetime</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.RFICDTC"></a>RFICDTC</td><td>Date/Time of Informed Consent</td><td class="datatype">datetime</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.DTHFL"></a>DTHFL</td><td>Subject Death Flag</td><td class="datatype">text</td><td class="number">2</td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.SAFFL"></a>SAFFL</td><td>Safety Population Flag</td><td class="datatype">text</td><td class="number">2</td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.ITTFL"></a>ITTFL</td><td>Intent-To-Treat Population Flag</td><td class="datatype">text</td><td class="number">2</td><td></td><td><div class="linebreakcell">Derived</div></td></tr></table></div><p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p><br><a id="decodelist"></a><div class="containerbox"><h1 class="header">CodeLists</h1><div class="codelist" id="CL.C66731"><div class="codelist-caption">Sex</div><table summary="Controlled Term - Sex"><tr class="header"><th scope="col" class="codedvalue">Permitted Value (Code)</th><th scope="col">Display Value (Decode)</th></tr><tr class="tablerowodd"><td>M</td><td class="codelist-item-decode">MALE</td></tr><tr class="tableroweven"><td>F</td><td class="codelist-item-decode">FEMALE</td></tr></table></div><div class="codelist" id="CL.CL.DTYPE"><div class="codelist-caption">Derivation Type</div><table summary="Controlled Term - Derivation Type"><tr class="header"><th scope="col" class="codedvalue">Permitted Value (Code)</th><th scope="col">Display Value (Decode)</th></tr><tr class="tablerowodd"><td>LOCF</td><td class="codelist-item-decode">Last Observation Carried Forward</td></tr><tr class="tableroweven"><td>WOCF</td><td class="codelist-item-decode">Worst Observation Carried Forward</td></tr></table></div><div class="codelist" id="CL.CL.ANL01FL"><div class="codelist-caption">Analysis Flag ANL01</div><table summary="Controlled Term - Analysis Flag ANL01"><tr class="header"><th scope="col" class="codedvalue">Permitted Value (Code)</th><th scope="col">Display Value (Decode)</th></tr><tr class="tablerowodd"><td>Y</td><td class="codelist-item-decode">Yes</td></tr></table></div><p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p><br></div></div></body></html>
