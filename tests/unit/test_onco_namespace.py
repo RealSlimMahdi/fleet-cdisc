@@ -1,36 +1,67 @@
 """Unit tests for the Oncology Polars namespace extension (df.onco)."""
 
 import polars as pl
+import polars.testing as plt
 import pytest
 
 import pymaverse  # noqa: F401 — triggers namespace registration
 
+# ---------------------------------------------------------------------------
+# Reference RECIST mapping — mirrors admiralonco aval_resp() exactly
+# ---------------------------------------------------------------------------
+_RECIST_MAPPING = [
+    ("CR",            1.0),
+    ("PR",            2.0),
+    ("SD",            3.0),
+    ("NON-CR/NON-PD", 4.0),
+    ("PD",            5.0),
+    ("NE",            6.0),
+    ("MISSING",       7.0),
+    ("UNKNOWN",       None),
+]
+
 
 class TestAvalResp:
-    def test_cr_maps_to_1(self):
-        df = pl.DataFrame({"OVRLRESP": ["CR"]})
-        assert df.onco.aval_resp("AVAL", source="OVRLRESP").to_frame()["AVAL"][0] == pytest.approx(1.0)
+    """
+    Test 1: RECIST text → numeric mapping (all 7 categories + unknown + null).
 
-    def test_full_recist_mapping(self):
-        df = pl.DataFrame({
-            "OVRLRESP": ["CR", "PR", "SD", "NON-CR/NON-PD", "PD", "NE", "MISSING", "UNKNOWN"],
-        })
+    Mirrors admiralonco test-derive_param_bor pattern of testing every
+    response category individually via parametrize, then the full vector.
+    """
+
+    @pytest.mark.parametrize("response,expected_aval", _RECIST_MAPPING)
+    def test_each_recist_category(self, response, expected_aval):
+        df = pl.DataFrame({"OVRLRESP": [response]})
+        aval = df.onco.aval_resp("AVAL", source="OVRLRESP").to_frame()["AVAL"][0]
+        if expected_aval is None:
+            assert aval is None
+        else:
+            assert aval == pytest.approx(expected_aval)
+
+    def test_full_vector_at_once(self):
+        """All 8 values in a single call — verifies correct row-wise behaviour."""
+        responses = [r for r, _ in _RECIST_MAPPING]
+        expected_aval = [e for _, e in _RECIST_MAPPING]
+        df = pl.DataFrame({"OVRLRESP": responses})
         result = df.onco.aval_resp("AVAL", source="OVRLRESP").to_frame()
-        expected = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, None]
-        vals = result["AVAL"].to_list()
-        for got, exp in zip(vals, expected):
-            if exp is None:
-                assert got is None
-            else:
-                assert got == pytest.approx(exp)
+        assert result["AVAL"].to_list() == expected_aval
 
-    def test_null_maps_to_null(self):
+    def test_null_input_maps_to_null(self):
         df = pl.DataFrame({"R": [None]}, schema={"R": pl.Utf8})
         result = df.onco.aval_resp("N", source="R").to_frame()
         assert result["N"][0] is None
 
+    def test_non_derived_columns_preserved(self):
+        """Input columns not named AVAL must survive the derivation."""
+        df = pl.DataFrame({"USUBJID": ["01-701-1015"], "OVRLRESP": ["CR"]})
+        result = df.onco.aval_resp("AVAL", source="OVRLRESP").to_frame()
+        assert "USUBJID" in result.columns
+        assert result["USUBJID"][0] == "01-701-1015"
+
 
 class TestTumorResponseFlag:
+    """Test 2: Flagging responders."""
+
     def test_cr_pr_flagged_by_default(self):
         df = pl.DataFrame({"RESP": ["CR", "PR", "SD", "PD"]})
         result = df.onco.tumor_response_flag("RSPFL", source="RESP").to_frame()
@@ -43,8 +74,29 @@ class TestTumorResponseFlag:
         ).to_frame()
         assert result["CBFL"].to_list() == ["Y", "Y", "Y", None]
 
+    def test_pd_never_flagged(self):
+        """PD must never be a responder under default settings."""
+        df = pl.DataFrame({"RESP": ["PD", "NE", "MISSING"]})
+        result = df.onco.tumor_response_flag("RSPFL", source="RESP").to_frame()
+        assert all(v is None for v in result["RSPFL"].to_list())
+
+    def test_custom_flag_value(self):
+        df = pl.DataFrame({"RESP": ["CR"]})
+        result = df.onco.tumor_response_flag(
+            "RSPFL", source="RESP", flag_value="1"
+        ).to_frame()
+        assert result["RSPFL"][0] == "1"
+
 
 class TestBestOverallResponse:
+    """
+    Test 3: Best Overall Response per subject group.
+
+    Admiral derives BOR as the response with the lowest numeric rank (most
+    favourable).  Multi-subject cases are crucial: each subject must receive
+    its own BOR independently.
+    """
+
     def test_best_response_is_pr(self):
         df = pl.DataFrame({
             "USUBJID": ["S01", "S01", "S01"],
@@ -66,20 +118,41 @@ class TestBestOverallResponse:
         ).to_frame()
         assert all(r == "NE" for r in result["BOR"].to_list())
 
-    def test_multi_subject(self):
+    def test_multi_subject_independent_bor(self):
+        """BOR must be computed independently per subject — core admiral pattern."""
         df = pl.DataFrame({
-            "USUBJID": ["S01", "S01", "S02", "S02"],
+            "STUDYID": ["CDISCPILOT01"] * 4,
+            "USUBJID": ["01-701-1015", "01-701-1015", "01-701-1023", "01-701-1023"],
             "OVRLRESP": ["SD", "CR", "PD", "PR"],
         })
         result = df.onco.best_overall_response(
             "BOR", source="OVRLRESP", groups=["USUBJID"]
         ).to_frame()
-        bor_map = dict(zip(result["USUBJID"].to_list(), result["BOR"].to_list()))
-        assert bor_map["S01"] == "CR"
-        assert bor_map["S02"] == "PR"
+        bor = dict(zip(result["USUBJID"].to_list(), result["BOR"].to_list()))
+        assert bor["01-701-1015"] == "CR"   # CR beats SD
+        assert bor["01-701-1023"] == "PR"   # PR beats PD
+
+    def test_subject_with_only_pd(self):
+        df = pl.DataFrame({
+            "USUBJID": ["S03", "S03"],
+            "OVRLRESP": ["PD", "PD"],
+        })
+        result = df.onco.best_overall_response(
+            "BOR", source="OVRLRESP", groups=["USUBJID"]
+        ).to_frame()
+        assert all(r == "PD" for r in result["BOR"].to_list())
 
 
 class TestFilterPD:
+    """
+    Test 4: filter_pd — keep records up to and including first PD per group.
+
+    Mirrors admiralonco test-filter_pd.R which tests:
+      - subjects with PD (rows after PD dropped)
+      - subjects without PD (all rows retained)
+      - multiple subjects in one call (independent per subject)
+    """
+
     def test_records_after_pd_dropped(self):
         df = pl.DataFrame({
             "USUBJID": ["S01", "S01", "S01", "S01"],
@@ -104,8 +177,87 @@ class TestFilterPD:
         ).to_frame()
         assert result.height == 2
 
+    def test_multi_subject_with_realistic_ids(self):
+        """
+        Multi-subject filter_pd — admiral's primary pattern.
+
+        01-701-1015: PD at 2024-02-01 → only 2 rows kept
+        01-701-1023: no PD            → all 3 rows kept
+        """
+        df = pl.DataFrame({
+            "STUDYID": ["CDISCPILOT01"] * 5,
+            "USUBJID": [
+                "01-701-1015", "01-701-1015", "01-701-1015",
+                "01-701-1023", "01-701-1023",
+            ],
+            "ADT": [
+                "2024-01-01", "2024-02-01", "2024-03-01",
+                "2024-01-01", "2024-02-01",
+            ],
+            "OVRLRESP": ["CR", "PD", "NE", "SD", "PR"],
+        })
+        result = df.onco.filter_pd(
+            response_col="OVRLRESP", date_col="ADT",
+            groups=["USUBJID"]
+        ).to_frame()
+        subj1015 = result.filter(pl.col("USUBJID") == "01-701-1015")
+        subj1023 = result.filter(pl.col("USUBJID") == "01-701-1023")
+        assert subj1015.height == 2   # row at PD date included, post-PD dropped
+        assert subj1023.height == 2   # no PD → all retained
+
+
+class TestConfirmedResponseFlag:
+    """
+    Test 5: confirmed_response_flag — response confirmed ≥ N days later.
+
+    Admiral (test-derive_param_confirmed_resp.R) tests:
+      - response confirmed → "Y"
+      - gap too short → null
+      - null response → null
+    """
+
+    def test_confirmed_with_sufficient_gap(self):
+        df = pl.DataFrame({
+            "USUBJID":  ["01-701-1015", "01-701-1015"],
+            "OVRLRESP": ["CR", "CR"],
+            "ADT":      ["2024-01-01", "2024-03-15"],   # 74 days apart
+        })
+        result = df.onco.confirmed_response_flag(
+            "CNFFL", source="OVRLRESP", date_col="ADT",
+            confirmation_days=28, groups=["USUBJID"]
+        ).to_frame()
+        # At least one "Y" in the group (≥28-day gap exists)
+        assert "Y" in result["CNFFL"].to_list()
+
+    def test_gap_too_short_gives_null(self):
+        df = pl.DataFrame({
+            "USUBJID":  ["S02", "S02"],
+            "OVRLRESP": ["PR", "PR"],
+            "ADT":      ["2024-01-01", "2024-01-20"],   # only 19 days
+        })
+        result = df.onco.confirmed_response_flag(
+            "CNFFL", source="OVRLRESP", date_col="ADT",
+            confirmation_days=28, groups=["USUBJID"]
+        ).to_frame()
+        assert all(v is None for v in result["CNFFL"].to_list())
+
+    def test_no_matching_response_gives_null(self):
+        """PD records should not be considered for confirmation."""
+        df = pl.DataFrame({
+            "USUBJID":  ["S03", "S03"],
+            "OVRLRESP": ["PD", "PD"],
+            "ADT":      ["2024-01-01", "2024-03-01"],
+        })
+        result = df.onco.confirmed_response_flag(
+            "CNFFL", source="OVRLRESP", date_col="ADT",
+            groups=["USUBJID"]
+        ).to_frame()
+        assert all(v is None for v in result["CNFFL"].to_list())
+
 
 class TestChaining:
+    """Test 6: multi-verb chaining produces all derived columns."""
+
     def test_full_onco_chain(self):
         df = pl.DataFrame({
             "USUBJID": ["S01", "S01", "S02"],
@@ -121,3 +273,6 @@ class TestChaining:
         assert "AVAL" in result.columns
         assert "RSPFL" in result.columns
         assert "BOR" in result.columns
+        # Original columns must still be present
+        assert "USUBJID" in result.columns
+        assert "OVRLRESP" in result.columns

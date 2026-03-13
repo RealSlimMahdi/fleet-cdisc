@@ -90,3 +90,71 @@ def dm_spec_path() -> Path:
 @pytest.fixture
 def advs_spec_path() -> Path:
     return SPECS_DIR / "advs_spec.yaml"
+
+
+# ------------------------------------------------------------------ #
+# Therapeutic-area shared frames (admiral-style, multi-subject)        #
+# ------------------------------------------------------------------ #
+
+@pytest.fixture
+def adrs_frame() -> pl.DataFrame:
+    """
+    Multi-subject overall response frame modelled on CDISC PILOT data.
+
+    Subject layout mirrors admiralonco test conventions:
+      01-701-1015  CR → PD                  BOR = CR
+      01-701-1023  SD → PR → SD             BOR = PR
+      01-701-1028  PD immediately           BOR = PD
+      01-701-1034  NE only                  BOR = NE
+      01-701-1039  no PD (PR, SD, PR)       all rows survive filter_pd
+    """
+    return pl.DataFrame({
+        "STUDYID": ["CDISCPILOT01"] * 11,
+        "USUBJID": [
+            "01-701-1015", "01-701-1015",
+            "01-701-1023", "01-701-1023", "01-701-1023",
+            "01-701-1028",
+            "01-701-1034",
+            "01-701-1039", "01-701-1039", "01-701-1039",
+            "01-701-1015",   # BOR row (different PARAMCD)
+        ],
+        "PARAMCD": ["OVR"] * 10 + ["BOR"],
+        "AVALC": [
+            "CR", "PD",
+            "SD", "PR", "SD",
+            "PD",
+            "NE",
+            "PR", "SD", "PR",
+            "CR",
+        ],
+        "ADT": [
+            "2020-01-01", "2020-02-01",
+            "2020-01-01", "2020-02-01", "2020-03-01",
+            "2020-01-01",
+            "2020-01-01",
+            "2020-01-01", "2020-02-01", "2020-03-01",
+            "2020-01-01",
+        ],
+    })
+
+
+@pytest.fixture
+def adis_frame() -> pl.DataFrame:
+    """
+    Multi-subject immunogenicity frame (ADIS-like) modelled on admiralvaccine
+    test conventions — covers below-LLOQ, in-range, and above-ULOQ rows.
+    """
+    return pl.DataFrame({
+        "STUDYID": ["VACCSTUDY01"] * 6,
+        "USUBJID": [
+            "01-001", "01-001",
+            "01-002", "01-002",
+            "01-003", "01-003",
+        ],
+        "PARAMCD": ["J0033VN", "J0033VN", "I0019NT", "I0019NT", "M0019LN", "M0019LN"],
+        "AVISITN": [10, 30, 10, 30, 10, 30],
+        "ISSTRESN": [1.0, 50.0, None, 98.2, None, None],
+        "ISLLOQ":   [4.0,  4.0,   4.0,  4.0,  8.0,  8.0],
+        "ISULOQ":   [200.0, 200.0, 200.0, 200.0, 150.0, 150.0],
+        "ISORRES":  [None, None, "3", None, ">150", None],
+    })

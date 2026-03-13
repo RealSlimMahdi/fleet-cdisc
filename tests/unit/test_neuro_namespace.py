@@ -5,36 +5,65 @@ import pytest
 
 import pymaverse  # noqa: F401 — triggers namespace registration
 
+# ---------------------------------------------------------------------------
+# All 4 pre-defined Centiloid calibration entries from the namespace module.
+# slope and intercept taken directly from _CENTILOID_CALIBRATIONS.
+# ---------------------------------------------------------------------------
+_CENTILOID_CALIBRATIONS = [
+    ("18F-Florbetapir",  "AVID FBP SUVR PIPELINE",     183.07,  -177.26),
+    ("18F-Florbetaben",  "AVID FBB SUVR PIPELINE",     156.06,  -148.13),
+    ("18F-Florbetapir",  "BERKELEY FBP SUVR PIPELINE",  188.22, -189.16),
+    ("18F-Florbetaben",  "BERKELEY FBB SUVR PIPELINE",  157.15, -151.87),
+]
+
+# ---------------------------------------------------------------------------
+# MMSE severity boundary values — test exactly AT each transition threshold
+# ---------------------------------------------------------------------------
+_MMSE_CATEGORY_CASES = [
+    (30, "Normal"),
+    (27, "Normal"),     # boundary: ≥27
+    (26, "Mild"),
+    (18, "Mild"),       # boundary: ≥18
+    (17, "Moderate"),
+    (10, "Moderate"),   # boundary: ≥10
+    (9,  "Severe"),
+    (0,  "Severe"),
+]
+
+# ---------------------------------------------------------------------------
+# MoCA category boundary values
+# ---------------------------------------------------------------------------
+_MOCA_CATEGORY_CASES = [
+    (30, "Normal"),
+    (26, "Normal"),   # boundary: ≥26
+    (25, "MCI"),
+    (18, "MCI"),      # boundary: ≥18
+    (17, "Impaired"),
+    (0,  "Impaired"),
+]
+
 
 class TestCentiloid:
+    """
+    Test 1: Centiloid conversion (custom slopes and all 4 pre-defined calibrations).
+    """
+
     def test_custom_slope_intercept(self):
-        # Centiloid = 183.07 * 1.25 − 177.26 = 228.8375 − 177.26 = 51.5775
         df = pl.DataFrame({"SUVR": [1.25]})
         result = df.neuro.centiloid(
             "CLV", suvr_col="SUVR", slope=183.07, intercept=-177.26
         ).to_frame()
         assert result["CLV"][0] == pytest.approx(183.07 * 1.25 - 177.26, abs=0.01)
 
-    def test_predefined_florbetapir_avid(self):
-        df = pl.DataFrame({"SUVR": [1.0]})
+    @pytest.mark.parametrize("tracer,pipeline,slope,intercept", _CENTILOID_CALIBRATIONS)
+    def test_all_predefined_calibrations(self, tracer, pipeline, slope, intercept):
+        """All 4 pre-defined tracer/pipeline combinations produce the correct result."""
+        suvr = 1.2
+        df = pl.DataFrame({"SUVR": [suvr]})
         result = df.neuro.centiloid(
-            "CLV", suvr_col="SUVR",
-            tracer="18F-Florbetapir",
-            pipeline="AVID FBP SUVR PIPELINE",
+            "CLV", suvr_col="SUVR", tracer=tracer, pipeline=pipeline
         ).to_frame()
-        # slope=183.07, intercept=-177.26 → 183.07*1.0 − 177.26 = 5.81
-        assert result["CLV"][0] == pytest.approx(183.07 - 177.26, abs=0.01)
-
-    def test_predefined_florbetaben_berkeley(self):
-        df = pl.DataFrame({"SUVR": [1.5]})
-        result = df.neuro.centiloid(
-            "CLV", suvr_col="SUVR",
-            tracer="18F-Florbetaben",
-            pipeline="BERKELEY FBB SUVR PIPELINE",
-        ).to_frame()
-        # slope=157.15, intercept=-151.87
-        expected = 157.15 * 1.5 - 151.87
-        assert result["CLV"][0] == pytest.approx(expected, abs=0.01)
+        assert result["CLV"][0] == pytest.approx(slope * suvr + intercept, abs=0.01)
 
     def test_unknown_combination_raises(self):
         df = pl.DataFrame({"SUVR": [1.0]})
@@ -49,27 +78,24 @@ class TestCentiloid:
         with pytest.raises(ValueError, match="slope"):
             df.neuro.centiloid("CLV", suvr_col="SUVR").to_frame()
 
+    def test_non_derived_columns_preserved(self):
+        df = pl.DataFrame({"USUBJID": ["01-701-1015"], "SUVR": [1.2]})
+        result = df.neuro.centiloid(
+            "CLV", suvr_col="SUVR", slope=183.07, intercept=-177.26
+        ).to_frame()
+        assert "USUBJID" in result.columns
+
 
 class TestMmseCategory:
-    def test_normal(self):
-        df = pl.DataFrame({"MMSE": [30, 27]})
-        result = df.neuro.mmse_category("MMSECG", score_col="MMSE").to_frame()
-        assert result["MMSECG"].to_list() == ["Normal", "Normal"]
+    """
+    Test 2: MMSE category — all 4 severity bands with boundary values.
+    """
 
-    def test_mild(self):
-        df = pl.DataFrame({"MMSE": [26, 18]})
+    @pytest.mark.parametrize("score,expected_category", _MMSE_CATEGORY_CASES)
+    def test_mmse_boundary_values(self, score, expected_category):
+        df = pl.DataFrame({"MMSE": [score]})
         result = df.neuro.mmse_category("MMSECG", score_col="MMSE").to_frame()
-        assert result["MMSECG"].to_list() == ["Mild", "Mild"]
-
-    def test_moderate(self):
-        df = pl.DataFrame({"MMSE": [17, 10]})
-        result = df.neuro.mmse_category("MMSECG", score_col="MMSE").to_frame()
-        assert result["MMSECG"].to_list() == ["Moderate", "Moderate"]
-
-    def test_severe(self):
-        df = pl.DataFrame({"MMSE": [9, 0]})
-        result = df.neuro.mmse_category("MMSECG", score_col="MMSE").to_frame()
-        assert result["MMSECG"].to_list() == ["Severe", "Severe"]
+        assert result["MMSECG"][0] == expected_category
 
     def test_all_categories_in_order(self):
         df = pl.DataFrame({"MMSE": [28, 22, 15, 8]})
@@ -78,6 +104,8 @@ class TestMmseCategory:
 
 
 class TestCdrsob:
+    """Test 3: CDR Sum-of-Boxes = sum of 6 domain scores."""
+
     def test_sum_of_boxes(self):
         df = pl.DataFrame({
             "CDRMEM":  [2.0],
@@ -93,33 +121,38 @@ class TestCdrsob:
         ).to_frame()
         assert result["CDRSOB"][0] == pytest.approx(4.5)
 
-    def test_null_propagates(self):
-        df = pl.DataFrame({
-            "A": [1.0],
-            "B": [None],
-        })
+    def test_all_zeros(self):
+        df = pl.DataFrame({"A": [0.0], "B": [0.0], "C": [0.0]})
+        result = df.neuro.cdrsob_total("TOT", domain_cols=["A", "B", "C"]).to_frame()
+        assert result["TOT"][0] == pytest.approx(0.0)
+
+    def test_null_propagates_to_total(self):
+        """Any null domain score should make the total null (strict null-safety)."""
+        df = pl.DataFrame({"A": [1.0], "B": [None]})
         result = df.neuro.cdrsob_total("TOT", domain_cols=["A", "B"]).to_frame()
         assert result["TOT"][0] is None
 
 
 class TestMocaCategory:
-    def test_normal_26_and_above(self):
-        df = pl.DataFrame({"MOCA": [26, 30]})
-        result = df.neuro.moca_category("MOACG", score_col="MOCA").to_frame()
-        assert result["MOACG"].to_list() == ["Normal", "Normal"]
+    """
+    Test 4: MoCA category — Normal / MCI / Impaired with boundary values.
+    """
 
-    def test_mci(self):
-        df = pl.DataFrame({"MOCA": [18, 25]})
+    @pytest.mark.parametrize("score,expected_category", _MOCA_CATEGORY_CASES)
+    def test_moca_boundary_values(self, score, expected_category):
+        df = pl.DataFrame({"MOCA": [score]})
         result = df.neuro.moca_category("MOACG", score_col="MOCA").to_frame()
-        assert result["MOACG"].to_list() == ["MCI", "MCI"]
+        assert result["MOACG"][0] == expected_category
 
-    def test_impaired(self):
-        df = pl.DataFrame({"MOCA": [0, 17]})
+    def test_full_vector_all_categories(self):
+        df = pl.DataFrame({"MOCA": [28, 22, 10]})
         result = df.neuro.moca_category("MOACG", score_col="MOCA").to_frame()
-        assert result["MOACG"].to_list() == ["Impaired", "Impaired"]
+        assert result["MOACG"].to_list() == ["Normal", "MCI", "Impaired"]
 
 
 class TestPanssTotal:
+    """Test 5: PANSS total = positive + negative + general subscales."""
+
     def test_sum_subscales(self):
         df = pl.DataFrame({
             "PANSSPOS": [14.0],
@@ -133,3 +166,37 @@ class TestPanssTotal:
             general_col="PANSSGEN",
         ).to_frame()
         assert result["PANSSTOT"][0] == pytest.approx(60.0)
+
+    def test_null_subscale_propagates(self):
+        """Null in any subscale should yield null total."""
+        df = pl.DataFrame({
+            "PANSSPOS": [14.0],
+            "PANSSNEG": [None],
+            "PANSSGEN": [30.0],
+        })
+        result = df.neuro.panss_total(
+            "PANSSTOT",
+            positive_col="PANSSPOS",
+            negative_col="PANSSNEG",
+            general_col="PANSSGEN",
+        ).to_frame()
+        assert result["PANSSTOT"][0] is None
+
+    def test_multi_subject(self):
+        """Multiple subjects evaluated independently."""
+        df = pl.DataFrame({
+            "STUDYID":  ["NEUROSTUDY"] * 2,
+            "USUBJID":  ["01-701-1015", "01-701-1023"],
+            "PANSSPOS": [14.0, 7.0],
+            "PANSSNEG": [16.0, 7.0],
+            "PANSSGEN": [30.0, 16.0],
+        })
+        result = df.neuro.panss_total(
+            "PANSSTOT",
+            positive_col="PANSSPOS",
+            negative_col="PANSSNEG",
+            general_col="PANSSGEN",
+        ).to_frame()
+        totals = dict(zip(result["USUBJID"].to_list(), result["PANSSTOT"].to_list()))
+        assert totals["01-701-1015"] == pytest.approx(60.0)
+        assert totals["01-701-1023"] == pytest.approx(30.0)
