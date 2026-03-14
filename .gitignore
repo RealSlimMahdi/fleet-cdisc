@@ -8,3 +8,10 @@ wheels/
 
 # Virtual environments
 .venv
+
+# MkDocs build output
+site/
+
+# Coverage
+coverage.xml
+.coverage

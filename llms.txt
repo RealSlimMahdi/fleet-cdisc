@@ -1,0 +1,128 @@
+# Pymaverse
+
+> CDISC SDTM/ADaM derivation toolkit for Polars DataFrames.
+
+Pymaverse adds chainable verb pipelines directly onto every Polars DataFrame so you can build standards-compliant CDISC datasets with minimal boilerplate. Importing the package registers `.sdtm`, `.adam`, `.adsl`, and `.occds` namespaces automatically.
+
+## Install
+
+```
+pip install pymaverse
+```
+
+## Quickstart
+
+```python
+import pymaverse
+import polars as pl
+
+dm = (
+    raw_df.sdtm
+    .hardcode_no_ct("DOMAIN",  value="DM")
+    .hardcode_no_ct("STUDYID", value="MYSTUDY01")
+    .assign_no_ct("USUBJID",   source="patient_id")
+    .assign_ct("SEX", source="sex_raw",
+               ct_codelist="C66731", ct_mapping={"M": "M", "F": "F"})
+    .to_frame()
+)
+```
+
+Nothing runs until `.to_frame()`. All verbs accumulate into a single `df.with_columns(...)` pass.
+
+## Namespaces
+
+- `df.sdtm` — 14 SDTM derivation verbs (domain mapping, CT lookup, datetime normalisation)
+- `df.adam` — 16 ADaM BDS verbs (study day, baseline, change from baseline, flags, imputation)
+- `df.adsl` — 6 patient-level verbs (treatment dates, duration, population flags, AE counts)
+- `df.occds` — 5 occurrence verbs (first/last date, worst severity, any-flag)
+- `df.onco` — Oncology: AVAL response, BOR, filter_pd
+- `df.ophtha` — Ophthalmology: ETDRS/LogMAR, study eye derivation
+- `df.peds` — Pediatrics: age derivations, prematurity flag
+- `df.vaccine` — Vaccine: fever flag, seroconversion, ADIS AVAL
+- `df.metabolic` — Metabolic: waist-to-hip ratio, body fat %
+- `df.neuro` — Neuroscience: Centiloid, MMSE, CDR-SoB
+
+## SDTM verbs
+
+- `assign_no_ct(target, source)` — copy raw column, no CT validation
+- `hardcode_no_ct(target, value)` — constant literal for all rows
+- `assign_ct(target, source, ct_codelist, ct_mapping)` — recode through CT codelist
+- `assign_datetime(target, source, mode)` — normalise to ISO 8601 date/datetime
+- `derivation(target, expression)` — arbitrary Polars expression
+- `if_then_else(target, when, else_value)` — multi-branch conditional
+- `to_frame()` — materialise
+
+## ADaM verbs
+
+- `source(target)` — pass-through column
+- `derivation(target, expression)` — arbitrary Polars expression
+- `assigned(target, value)` — constant literal
+- `study_day(target, analysis_date, reference_date)` — CDISC study-day formula
+- `flag(target, criteria, groups)` — per-group boolean flag
+- `baseline(target, aval, baseline_flag)` — carry baseline AVAL within groups
+- `chg(target, aval, base)` — change from baseline
+- `pchg(target, aval, base)` — percent change from baseline
+- `imputation(target, method, groups)` — LOCF/WOCF imputation
+- `to_frame()` — materialise
+
+## ADSL verbs
+
+- `source(target)` — pass-through column
+- `first_date(target, from_dataset, date_col, where)` — earliest event date per subject
+- `last_date(target, from_dataset, date_col, where)` — latest event date per subject
+- `duration(target, start_date, end_date)` — integer day count
+- `eligibility_flag(target, criteria)` — "Y"/null flag based on row condition
+- `count_events(target, from_dataset, where)` — integer event count per subject
+- `to_frame()` — materialise
+
+## define.yaml
+
+A single YAML file is the source of truth for a study: it declares output variables, derivation algorithms, codelists, and structural metadata. The same file drives Define-XML 2.1 generation, pipeline execution, and post-dataset checks.
+
+### Derivation algorithms
+
+- `assigned` → `.assigned(target, value=...)`
+- `source` → `.source(target, from_col=...)`
+- `derivation` → `.derivation(target, expression=...)`
+- `first_date` → `.first_date(target, from_dataset=..., date_col=..., where=...)`
+- `last_date` → `.last_date(...)`
+- `duration` → `.duration(target, start_date=..., end_date=...)`
+- `flag` → `.eligibility_flag(target, criteria=...)`
+- `count` → `.count_events(target, from_dataset=..., where=...)`
+
+### Spec-driven pipeline
+
+```python
+from pymaverse import load_study_context
+
+ctx = load_study_context("specs/cdiscpilot01/adam/define.yaml")
+adsl = ctx.build("ADSL")
+```
+
+### Define-XML generation
+
+```python
+from pymaverse import DefineXMLGenerator
+
+gen = DefineXMLGenerator("specs/cdiscpilot01/adam/define.yaml")
+gen.write("outputs/cdiscpilot01/define_adam.xml")
+```
+
+## Controlled Terminology
+
+```python
+from pymaverse import CTValidator
+
+ct = CTValidator.get_instance()
+ct.load_ct_file("specs/ct/sdtm_ct.yaml")
+ok, msg = ct.validate_value("C66731", "M")
+```
+
+## Documentation
+
+Full docs: https://pymaverse.github.io/pymaverse/
+
+- Getting started: https://pymaverse.github.io/pymaverse/getting-started/installation/
+- define.yaml guide: https://pymaverse.github.io/pymaverse/concepts/define-yaml/
+- API reference: https://pymaverse.github.io/pymaverse/api/
+- ADSL example notebook: https://pymaverse.github.io/pymaverse/examples/adsl_pipeline/

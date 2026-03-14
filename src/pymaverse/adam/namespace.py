@@ -608,7 +608,13 @@ class AdamNamespace:
     # Spec-driven pipeline                                                 #
     # ------------------------------------------------------------------ #
 
-    def from_spec(self, spec_path: str | Path, *, dataset: str | None = None) -> "AdamNamespace":
+    def from_spec(
+        self,
+        spec_path: str | Path,
+        *,
+        dataset: str | None = None,
+        only: "list[str] | None" = None,
+    ) -> "AdamNamespace":
         """
         Build an ADaM derivation pipeline from a YAML specification file.
 
@@ -616,6 +622,24 @@ class AdamNamespace:
         variable carries a ``derivation`` block.  Pass *dataset* to select
         which dataset to execute (e.g. ``dataset="ADVS"``).  When the file
         contains only one dataset the *dataset* argument may be omitted.
+
+        *only*: optional allow-list — power-user override to process a subset of
+        variables from the spec.  For dependency-driven staging, declare
+        ``depends_on: [col, ...]`` in the YAML derivation block instead;
+        ``from_spec()`` will flush automatically before any variable whose
+        declared dependencies are not yet committed to the frame::
+
+            # define.yaml
+            - name: ADY
+              derivation:
+                algorithm: study_day
+                analysis_date: ADT
+                reference_date: TRTSDT
+                depends_on: [ADT]    # flush before ADY if ADT only pending
+
+        With ``depends_on`` set, a single call suffices::
+
+            advs = vs_df.adam.from_spec("specs/.../define.yaml", dataset="ADVS").to_frame()
 
         Example::
 
@@ -636,6 +660,13 @@ class AdamNamespace:
         for var in variables:
             alg = var.algorithm.value
             target = var.target
+            if only is not None and target not in only:
+                continue
+
+            # ── auto-flush when a declared dependency is not yet committed ──
+            deps = getattr(var, "depends_on", None) or []
+            if deps and any(d not in ns._df.columns for d in deps):
+                ns = ns._materialise_then(ns.to_frame())
 
             if alg == "source":
                 ns = ns.source(target, from_col=var.source)

@@ -763,6 +763,12 @@ document.onclick = function(e)
 <li class="hmenu-item">
 <span class="hmenu-bullet">-</span><a class="tocItem" href="#IG.IG.ADVS">ADVS (Analysis Dataset for Vital Signs)</a>
 </li>
+<li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#IG.IG.ADAE">ADAE (Adverse Event Analysis Dataset)</a>
+</li>
+<li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#IG.IG.ADEX">ADEX (Exposure Analysis Dataset)</a>
+</li>
 </ul>
 </li>
 <li class="hmenu-submenu">
@@ -784,7 +790,7 @@ document.onclick = function(e)
 </div>
 <div id="main">
 <div class="docinfo">
-<p class="documentinfo">Date/Time of Define-XML document generation: 2026-03-14T21:24:45</p>
+<p class="documentinfo">Date/Time of Define-XML document generation: 2026-03-14T23:12:03</p>
 <p class="documentinfo">Define-XML version: 2.1.0</p>
 <p class="documentinfo">Define-XML Context: Submission</p>
 <p class="stylesheetinfo">Stylesheet version: 2019-02-11</p>
@@ -862,6 +868,32 @@ document.onclick = function(e)
 <td></td>
 <td>
 <a class="external" href="advs.xpt"></a><span class="external-link-gif"></span> </td>
+</tr>
+<tr class="tablerowodd" id="IG.ADAE">
+<td>
+<a href="#IG.IG.ADAE">ADAE</a><span class="standard-refeference">[ADAMIG 1.1]</span>
+</td>
+<td>Adverse Event Analysis Dataset</td>
+<td>OCCURRENCE DATA STRUCTURE</td>
+<td>One record per subject per adverse event</td>
+<td>Analysis</td>
+<td>STUDYID, USUBJID, ASEQ</td>
+<td></td>
+<td>
+<a class="external" href="adae.xpt"></a><span class="external-link-gif"></span> </td>
+</tr>
+<tr class="tableroweven" id="IG.ADEX">
+<td>
+<a href="#IG.IG.ADEX">ADEX</a><span class="standard-refeference">[ADAMIG 1.1]</span>
+</td>
+<td>Exposure Analysis Dataset</td>
+<td>BASIC DATA STRUCTURE</td>
+<td>One record per subject per exposure record</td>
+<td>Analysis</td>
+<td>STUDYID, USUBJID, ASEQ</td>
+<td></td>
+<td>
+<a class="external" href="adex.xpt"></a><span class="external-link-gif"></span> </td>
 </tr>
 </table></div>
 <p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p>
@@ -1147,7 +1179,7 @@ document.onclick = function(e)
 <td class="datatype">float</td>
 <td class="number"></td>
 <td></td>
-<td><div class="linebreakcell">Derived<p class="linebreakcell">Numeric analysis value; equal to VSSTRESN for continuous measures</p>
+<td><div class="linebreakcell">Derived<p class="linebreakcell">Numeric analysis value; cast from raw vsorres string</p>
 </div></td>
 </tr>
 <tr class="tableroweven">
@@ -1161,33 +1193,6 @@ document.onclick = function(e)
 </tr>
 <tr class="tablerowodd">
 <td>
-<a id="IG.ADVS.IT.ADVS.BASE"></a>BASE</td>
-<td>Baseline Value</td>
-<td class="datatype">float</td>
-<td class="number"></td>
-<td></td>
-<td><div class="linebreakcell">Derived</div></td>
-</tr>
-<tr class="tableroweven">
-<td>
-<a id="IG.ADVS.IT.ADVS.CHG"></a>CHG</td>
-<td>Change from Baseline</td>
-<td class="datatype">float</td>
-<td class="number"></td>
-<td></td>
-<td><div class="linebreakcell">Derived</div></td>
-</tr>
-<tr class="tablerowodd">
-<td>
-<a id="IG.ADVS.IT.ADVS.PCHG"></a>PCHG</td>
-<td>Percent Change from Baseline</td>
-<td class="datatype">float</td>
-<td class="number"></td>
-<td></td>
-<td><div class="linebreakcell">Derived</div></td>
-</tr>
-<tr class="tableroweven">
-<td>
 <a id="IG.ADVS.IT.ADVS.ADT"></a>ADT</td>
 <td>Analysis Date</td>
 <td class="datatype">date</td>
@@ -1195,7 +1200,7 @@ document.onclick = function(e)
 <td>ISO 8601</td>
 <td><div class="linebreakcell">Derived</div></td>
 </tr>
-<tr class="tablerowodd">
+<tr class="tableroweven">
 <td>
 <a id="IG.ADVS.IT.ADVS.ADY"></a>ADY</td>
 <td>Analysis Relative Day</td>
@@ -1204,7 +1209,43 @@ document.onclick = function(e)
 <td></td>
 <td><div class="linebreakcell">Derived</div></td>
 </tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADVS.IT.ADVS.ABLFL"></a>ABLFL</td>
+<td>Baseline Record Flag</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
 <tr class="tableroweven">
+<td>
+<a id="IG.ADVS.IT.ADVS.BASE"></a>BASE</td>
+<td>Baseline Value</td>
+<td class="datatype">float</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADVS.IT.ADVS.CHG"></a>CHG</td>
+<td>Change from Baseline</td>
+<td class="datatype">float</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADVS.IT.ADVS.PCHG"></a>PCHG</td>
+<td>Percent Change from Baseline</td>
+<td class="datatype">float</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
 <td>
 <a id="IG.ADVS.IT.ADVS.VISITNUM"></a>VISITNUM</td>
 <td>Visit Number</td>
@@ -1213,7 +1254,7 @@ document.onclick = function(e)
 <td></td>
 <td><div class="linebreakcell">Protocol</div></td>
 </tr>
-<tr class="tablerowodd">
+<tr class="tableroweven">
 <td>
 <a id="IG.ADVS.IT.ADVS.VISIT"></a>VISIT</td>
 <td>Visit Name</td>
@@ -1222,7 +1263,7 @@ document.onclick = function(e)
 <td></td>
 <td><div class="linebreakcell">Protocol</div></td>
 </tr>
-<tr class="tableroweven">
+<tr class="tablerowodd">
 <td>
 <a id="IG.ADVS.IT.ADVS.DTYPE"></a>DTYPE</td>
 <td>Derivation Type</td>
@@ -1236,7 +1277,7 @@ document.onclick = function(e)
 </td>
 <td><div class="linebreakcell">Derived</div></td>
 </tr>
-<tr class="tablerowodd">
+<tr class="tableroweven">
 <td>
 <a id="IG.ADVS.IT.ADVS.ANL01FL"></a>ANL01FL</td>
 <td>Analysis Flag 01</td>
@@ -1247,7 +1288,7 @@ document.onclick = function(e)
 </td>
 <td><div class="linebreakcell">Derived</div></td>
 </tr>
-<tr class="tableroweven">
+<tr class="tablerowodd">
 <td>
 <a id="IG.ADVS.IT.SUBJID"></a>SUBJID</td>
 <td>Subject Identifier for the Study</td>
@@ -1256,7 +1297,7 @@ document.onclick = function(e)
 <td></td>
 <td><div class="linebreakcell">CRF</div></td>
 </tr>
-<tr class="tablerowodd">
+<tr class="tableroweven">
 <td>
 <a id="IG.ADVS.IT.SITEID"></a>SITEID</td>
 <td>Study Site Identifier</td>
@@ -1265,7 +1306,7 @@ document.onclick = function(e)
 <td></td>
 <td><div class="linebreakcell">CRF</div></td>
 </tr>
-<tr class="tableroweven">
+<tr class="tablerowodd">
 <td>
 <a id="IG.ADVS.IT.AGE"></a>AGE</td>
 <td>Age</td>
@@ -1274,7 +1315,7 @@ document.onclick = function(e)
 <td></td>
 <td><div class="linebreakcell">CRF</div></td>
 </tr>
-<tr class="tablerowodd">
+<tr class="tableroweven">
 <td>
 <a id="IG.ADVS.IT.AGEU"></a>AGEU</td>
 <td>Age Units</td>
@@ -1283,7 +1324,7 @@ document.onclick = function(e)
 <td></td>
 <td><div class="linebreakcell">Assigned</div></td>
 </tr>
-<tr class="tableroweven">
+<tr class="tablerowodd">
 <td>
 <a id="IG.ADVS.IT.SEX"></a>SEX</td>
 <td>Sex</td>
@@ -1297,7 +1338,7 @@ document.onclick = function(e)
 </td>
 <td><div class="linebreakcell">CRF</div></td>
 </tr>
-<tr class="tablerowodd">
+<tr class="tableroweven">
 <td>
 <a id="IG.ADVS.IT.RACE"></a>RACE</td>
 <td>Race</td>
@@ -1306,7 +1347,7 @@ document.onclick = function(e)
 <td></td>
 <td><div class="linebreakcell">CRF</div></td>
 </tr>
-<tr class="tableroweven">
+<tr class="tablerowodd">
 <td>
 <a id="IG.ADVS.IT.ETHNIC"></a>ETHNIC</td>
 <td>Ethnicity</td>
@@ -1315,7 +1356,7 @@ document.onclick = function(e)
 <td></td>
 <td><div class="linebreakcell">CRF</div></td>
 </tr>
-<tr class="tablerowodd">
+<tr class="tableroweven">
 <td>
 <a id="IG.ADVS.IT.ARMCD"></a>ARMCD</td>
 <td>Planned Arm Code</td>
@@ -1324,7 +1365,7 @@ document.onclick = function(e)
 <td></td>
 <td><div class="linebreakcell">Protocol</div></td>
 </tr>
-<tr class="tableroweven">
+<tr class="tablerowodd">
 <td>
 <a id="IG.ADVS.IT.ARM"></a>ARM</td>
 <td>Description of Planned Arm</td>
@@ -1333,7 +1374,7 @@ document.onclick = function(e)
 <td></td>
 <td><div class="linebreakcell">Protocol</div></td>
 </tr>
-<tr class="tablerowodd">
+<tr class="tableroweven">
 <td>
 <a id="IG.ADVS.IT.ACTARMCD"></a>ACTARMCD</td>
 <td>Actual Arm Code</td>
@@ -1342,7 +1383,7 @@ document.onclick = function(e)
 <td></td>
 <td><div class="linebreakcell">Assigned</div></td>
 </tr>
-<tr class="tableroweven">
+<tr class="tablerowodd">
 <td>
 <a id="IG.ADVS.IT.ACTARM"></a>ACTARM</td>
 <td>Description of Actual Arm</td>
@@ -1351,7 +1392,7 @@ document.onclick = function(e)
 <td></td>
 <td><div class="linebreakcell">Assigned</div></td>
 </tr>
-<tr class="tablerowodd">
+<tr class="tableroweven">
 <td>
 <a id="IG.ADVS.IT.ADVS.TRT01P"></a>TRT01P</td>
 <td>Planned Treatment for Period 01</td>
@@ -1360,7 +1401,7 @@ document.onclick = function(e)
 <td></td>
 <td><div class="linebreakcell">Protocol</div></td>
 </tr>
-<tr class="tableroweven">
+<tr class="tablerowodd">
 <td>
 <a id="IG.ADVS.IT.ADVS.TRT01A"></a>TRT01A</td>
 <td>Actual Treatment for Period 01</td>
@@ -1369,7 +1410,7 @@ document.onclick = function(e)
 <td></td>
 <td><div class="linebreakcell">Assigned</div></td>
 </tr>
-<tr class="tablerowodd">
+<tr class="tableroweven">
 <td>
 <a id="IG.ADVS.IT.ADVS.TRTSDT"></a>TRTSDT</td>
 <td>Date of First Exposure to Treatment</td>
@@ -1378,7 +1419,7 @@ document.onclick = function(e)
 <td>ISO 8601</td>
 <td><div class="linebreakcell">Derived</div></td>
 </tr>
-<tr class="tableroweven">
+<tr class="tablerowodd">
 <td>
 <a id="IG.ADVS.IT.ADVS.TRTEDT"></a>TRTEDT</td>
 <td>Date of Last Exposure to Treatment</td>
@@ -1387,7 +1428,7 @@ document.onclick = function(e)
 <td>ISO 8601</td>
 <td><div class="linebreakcell">Derived</div></td>
 </tr>
-<tr class="tablerowodd">
+<tr class="tableroweven">
 <td>
 <a id="IG.ADVS.IT.ADVS.RFSTDTC"></a>RFSTDTC</td>
 <td>Subject Reference Start Date/Time</td>
@@ -1396,7 +1437,7 @@ document.onclick = function(e)
 <td>ISO 8601</td>
 <td><div class="linebreakcell">CRF</div></td>
 </tr>
-<tr class="tableroweven">
+<tr class="tablerowodd">
 <td>
 <a id="IG.ADVS.IT.ADVS.RFENDTC"></a>RFENDTC</td>
 <td>Subject Reference End Date/Time</td>
@@ -1405,7 +1446,7 @@ document.onclick = function(e)
 <td>ISO 8601</td>
 <td><div class="linebreakcell">CRF</div></td>
 </tr>
-<tr class="tablerowodd">
+<tr class="tableroweven">
 <td>
 <a id="IG.ADVS.IT.ADVS.RFICDTC"></a>RFICDTC</td>
 <td>Date/Time of Informed Consent</td>
@@ -1414,7 +1455,7 @@ document.onclick = function(e)
 <td>ISO 8601</td>
 <td><div class="linebreakcell">CRF</div></td>
 </tr>
-<tr class="tableroweven">
+<tr class="tablerowodd">
 <td>
 <a id="IG.ADVS.IT.ADVS.DTHFL"></a>DTHFL</td>
 <td>Subject Death Flag</td>
@@ -1423,7 +1464,7 @@ document.onclick = function(e)
 <td></td>
 <td><div class="linebreakcell">Derived</div></td>
 </tr>
-<tr class="tablerowodd">
+<tr class="tableroweven">
 <td>
 <a id="IG.ADVS.IT.ADVS.SAFFL"></a>SAFFL</td>
 <td>Safety Population Flag</td>
@@ -1432,10 +1473,369 @@ document.onclick = function(e)
 <td></td>
 <td><div class="linebreakcell">Derived</div></td>
 </tr>
-<tr class="tableroweven">
+<tr class="tablerowodd">
 <td>
 <a id="IG.ADVS.IT.ADVS.ITTFL"></a>ITTFL</td>
 <td>Intent-To-Treat Population Flag</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+</table>
+</div>
+<p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p>
+<br><a id="IG.IG.ADAE"></a><div class="containerbox">
+<h1 class="invisible">Adverse Event Analysis Dataset (ADAE) </h1>
+<table summary="ItemGroup IG.IG.ADAE">
+<caption><span>ADAE (Adverse Event Analysis Dataset) -  <span class="standard-refeference">[ADAMIG 1.1]</span><span class="dataset">Location: <a class="external" href="adae.xpt"></a><span class="external-link-gif"></span> </span></span></caption>
+<tr class="header">
+<th scope="col">Variable</th>
+<th scope="col">Label / Description</th>
+<th scope="col">Type</th>
+<th scope="col" class="length">Length or Display Format</th>
+<th scope="col" abbr="Format">Controlled Terms or ISO Format</th>
+<th scope="col">Origin / Source / Method / Comment</th>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADAE.IT.STUDYID"></a>STUDYID</td>
+<td>Study Identifier</td>
+<td class="datatype">text</td>
+<td class="number">12</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADAE.IT.USUBJID"></a>USUBJID</td>
+<td>Unique Subject Identifier</td>
+<td class="datatype">text</td>
+<td class="number">40</td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADAE.IT.ADAE.AETERM"></a>AETERM</td>
+<td>Reported Term for the Adverse Event</td>
+<td class="datatype">text</td>
+<td class="number">200</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADAE.IT.ADAE.AESTDTC"></a>AESTDTC</td>
+<td>Start Date/Time of Adverse Event</td>
+<td class="datatype">datetime</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADAE.IT.ADAE.AEENDTC"></a>AEENDTC</td>
+<td>End Date/Time of Adverse Event</td>
+<td class="datatype">datetime</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADAE.IT.ADAE.AESEV"></a>AESEV</td>
+<td>Severity/Intensity</td>
+<td class="datatype">text</td>
+<td class="number">20</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADAE.IT.ADAE.AESER"></a>AESER</td>
+<td>Serious Event</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADAE.IT.ADAE.AEREL"></a>AEREL</td>
+<td>Causality</td>
+<td class="datatype">text</td>
+<td class="number">60</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADAE.IT.ADAE.AEOUT"></a>AEOUT</td>
+<td>Outcome of Adverse Event</td>
+<td class="datatype">text</td>
+<td class="number">60</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADAE.IT.ADAE.AEACN"></a>AEACN</td>
+<td>Action Taken with Study Treatment</td>
+<td class="datatype">text</td>
+<td class="number">60</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADAE.IT.ADAE.ASTDT"></a>ASTDT</td>
+<td>Analysis Start Date</td>
+<td class="datatype">date</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADAE.IT.ADAE.AENDT"></a>AENDT</td>
+<td>Analysis End Date</td>
+<td class="datatype">date</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADAE.IT.ADAE.ADY"></a>ADY</td>
+<td>Analysis Relative Day</td>
+<td class="datatype">integer</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADAE.IT.ADAE.TRTEMFL"></a>TRTEMFL</td>
+<td>Treatment Emergent Analysis Flag</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADAE.IT.ADAE.ANL01FL"></a>ANL01FL</td>
+<td>Analysis Flag 01 (worst severity)</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADAE.IT.ADAE.ASEQ"></a>ASEQ</td>
+<td>Analysis Sequence Number</td>
+<td class="datatype">integer</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADAE.IT.ADAE.TRTSDT"></a>TRTSDT</td>
+<td>Date of First Exposure to Treatment</td>
+<td class="datatype">date</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADAE.IT.ADAE.TRTEDT"></a>TRTEDT</td>
+<td>Date of Last Exposure to Treatment</td>
+<td class="datatype">date</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADAE.IT.ADAE.TRT01P"></a>TRT01P</td>
+<td>Planned Treatment for Period 01</td>
+<td class="datatype">text</td>
+<td class="number">200</td>
+<td></td>
+<td><div class="linebreakcell">Protocol</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADAE.IT.AGE"></a>AGE</td>
+<td>Age</td>
+<td class="datatype">integer</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADAE.IT.SEX"></a>SEX</td>
+<td>Sex</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td>
+<span class="linebreakcell"><a href="#CL.C66731">Sex</a></span><ul class="codelist">
+<li class="codelist-item">&#8226;&#160;"M" = "MALE"</li>
+<li class="codelist-item">&#8226;&#160;"F" = "FEMALE"</li>
+</ul>
+</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADAE.IT.ADAE.SAFFL"></a>SAFFL</td>
+<td>Safety Population Flag</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+</table>
+</div>
+<p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p>
+<br><a id="IG.IG.ADEX"></a><div class="containerbox">
+<h1 class="invisible">Exposure Analysis Dataset (ADEX) </h1>
+<table summary="ItemGroup IG.IG.ADEX">
+<caption><span>ADEX (Exposure Analysis Dataset) -  <span class="standard-refeference">[ADAMIG 1.1]</span><span class="dataset">Location: <a class="external" href="adex.xpt"></a><span class="external-link-gif"></span> </span></span></caption>
+<tr class="header">
+<th scope="col">Variable</th>
+<th scope="col">Label / Description</th>
+<th scope="col">Type</th>
+<th scope="col" class="length">Length or Display Format</th>
+<th scope="col" abbr="Format">Controlled Terms or ISO Format</th>
+<th scope="col">Origin / Source / Method / Comment</th>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADEX.IT.STUDYID"></a>STUDYID</td>
+<td>Study Identifier</td>
+<td class="datatype">text</td>
+<td class="number">12</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADEX.IT.USUBJID"></a>USUBJID</td>
+<td>Unique Subject Identifier</td>
+<td class="datatype">text</td>
+<td class="number">40</td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADEX.IT.ADEX.EXTRT"></a>EXTRT</td>
+<td>Name of Actual Treatment</td>
+<td class="datatype">text</td>
+<td class="number">200</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADEX.IT.ADEX.EXDOSE"></a>EXDOSE</td>
+<td>Dose per Administration</td>
+<td class="datatype">float</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADEX.IT.ADEX.EXDOSU"></a>EXDOSU</td>
+<td>Dose Units</td>
+<td class="datatype">text</td>
+<td class="number">20</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADEX.IT.ADEX.ASTDT"></a>ASTDT</td>
+<td>Analysis Start Date</td>
+<td class="datatype">date</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADEX.IT.ADEX.AENDT"></a>AENDT</td>
+<td>Analysis End Date</td>
+<td class="datatype">date</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADEX.IT.ADEX.ASEQ"></a>ASEQ</td>
+<td>Analysis Sequence Number</td>
+<td class="datatype">integer</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADEX.IT.ADEX.EXDURD"></a>EXDURD</td>
+<td>Exposure Duration (days, inclusive)</td>
+<td class="datatype">integer</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADEX.IT.ADEX.TRTSDT"></a>TRTSDT</td>
+<td>Date of First Exposure to Treatment</td>
+<td class="datatype">date</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADEX.IT.ADEX.TRTEDT"></a>TRTEDT</td>
+<td>Date of Last Exposure to Treatment</td>
+<td class="datatype">date</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADEX.IT.ADEX.TRT01P"></a>TRT01P</td>
+<td>Planned Treatment for Period 01</td>
+<td class="datatype">text</td>
+<td class="number">200</td>
+<td></td>
+<td><div class="linebreakcell">Protocol</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADEX.IT.AGE"></a>AGE</td>
+<td>Age</td>
+<td class="datatype">integer</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADEX.IT.ADEX.SAFFL"></a>SAFFL</td>
+<td>Safety Population Flag</td>
 <td class="datatype">text</td>
 <td class="number">2</td>
 <td></td>

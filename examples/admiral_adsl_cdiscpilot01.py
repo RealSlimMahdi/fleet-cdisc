@@ -461,3 +461,175 @@ print(f"   TRTDURD range                    : {adsl_final['TRTDURD'].min()} – 
 print(f"   Subjects with ≥1 AE              : {(adsl_final['NUMAE'] > 0).sum()}")
 print(f"   Subjects with ≥1 serious AE      : {(adsl_final['NUMSAE'] > 0).sum()}")
 print(f"   LSTALVDT range                   : {adsl_final['LSTALVDT'].min()} → {adsl_final['LSTALVDT'].max()}")
+
+# ════════════════════════════════════════════════════════════════════════════
+# 13. ADaM ADVS — inline method-chaining  (admiral: create_advs)
+#     https://pharmaverse.github.io/admiralvaccine/articles/advs.html
+#
+#     Steps reproduced from admiral vignette
+#     a) Join ADSL → TRTSDT for study-day derivation
+#     b) Rename par/result columns     → PARAMCD, PARAM, AVAL, AVALU, ADT
+#     c) Study day                     → ADY    (derive_vars_dt)
+#     d) Baseline flag                 → ABLFL  (flag_variables)
+#     e) Baseline value                → BASE   (derive_var_base)
+#     f) Change / % change             → CHG, PCHG (derive_var_chg)
+# ════════════════════════════════════════════════════════════════════════════
+print("\n══ 13. ADaM ADVS (inline) ═══════════════════════════════════════════════")
+
+vs_raw = pl.read_csv(RAW / "vs_raw.csv")
+
+_trtsdt_map = adsl_final.select(["USUBJID", "TRTSDT"])
+
+advs = (
+    vs_raw.adam
+    .assigned("STUDYID", value="CDISCPILOT01")
+    .rename(  "USUBJID",  source="patient_number")
+    .rename(  "PARAMCD",  source="vstestcd")
+    .rename(  "PARAM",    source="vstest")
+    .rename(  "AVALU",    source="vsorresu")
+    .derivation("AVAL",   expression="pl.col('vsorres').cast(pl.Float64, strict=False)")
+    .assign_datetime("ADT", source="vsdtc", mode="date")
+    .lookup(dataset=_trtsdt_map, on="USUBJID", how="left")
+    .study_day("ADY", analysis_date="ADT", reference_date="TRTSDT")
+    # admiral: flag_variables — last pre-dose visit (vsdy ≤ 0)
+    .flag("ABLFL", criteria='pl.col("vsdy") <= 0', groups=["USUBJID", "PARAMCD"])
+    .to_frame()   # materialise — ABLFL must exist before baseline() window fn
+    .adam
+    # admiral: derive_var_base
+    .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", groups=["USUBJID", "PARAMCD"])
+    .to_frame()   # materialise — BASE must exist before chg()/pchg()
+    .adam
+    # admiral: derive_var_chg
+    .chg( "CHG",  aval="AVAL", base="BASE")
+    .pchg("PCHG", aval="AVAL", base="BASE")
+    .to_frame()
+)
+
+ADVS_COLS = ["STUDYID", "USUBJID", "PARAMCD", "PARAM",
+             "AVAL", "AVALU", "ADT", "ADY", "ABLFL", "BASE", "CHG", "PCHG", "TRTSDT"]
+advs_final = advs.select([c for c in ADVS_COLS if c in advs.columns])
+advs_final.write_parquet(OUT / "advs_admiral.parquet")
+
+print(f"   Shape      : {advs_final.shape[0]} records × {advs_final.shape[1]} variables")
+print(f"   Parameters : {sorted(advs_final['PARAMCD'].unique().to_list())}")
+print(f"   ABLFL = Y  : {(advs_final['ABLFL'] == 'Y').sum()} records")
+print(f"   CHG range  : {advs_final['CHG'].drop_nulls().min():.2f} – {advs_final['CHG'].drop_nulls().max():.2f}")
+
+# ════════════════════════════════════════════════════════════════════════════
+# 14. ADaM ADAE — inline method-chaining  (admiral: create_adae)
+#     https://pharmaverse.github.io/admiral/articles/adae.html
+#
+#     Steps reproduced from admiral vignette
+#     a) Join ADSL treatment dates
+#     b) Analysis dates               → ASTDT, AENDT (derive_vars_dt)
+#     c) Study day                    → ADY           (derive_vars_dt)
+#     d) Treatment-emergent flag      → TRTEMFL       (derive_var_trtemfl)
+#     e) Worst severity flag per term → ANL01FL       (slice_derivation)
+#     f) Sequence number              → ASEQ          (derive_var_obs_number)
+# ════════════════════════════════════════════════════════════════════════════
+print("\n══ 14. ADaM ADAE (inline) ═══════════════════════════════════════════════")
+
+_adsl_trt = adsl_final.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "SAFFL"])
+ae_with_trt = ae.join(_adsl_trt, on="USUBJID", how="left")
+
+adae = (
+    ae_with_trt.adam
+    .assigned("STUDYID", value="CDISCPILOT01")
+    .source(  "USUBJID")
+    .source(  "AETERM")
+    .source(  "AESTDTC")
+    .source(  "AEENDTC")
+    .source(  "AESEV")
+    .source(  "AESER")
+    .source(  "AEREL")
+    .source(  "AEOUT")
+    .source(  "AEACN")
+    # admiral: derive_vars_dt
+    .rename("ASTDT", source="AESTDTC")
+    .rename("AENDT", source="AEENDTC")
+    .to_frame()   # materialise — ASTDT must exist before study_day references it
+    .adam
+    .study_day("ADY", analysis_date="ASTDT", reference_date="TRTSDT")
+    .to_frame()
+    .occds
+    # admiral: derive_var_trtemfl
+    .treatment_emergent("TRTEMFL", start_date="AESTDTC",
+                        trtsdt="TRTSDT", trtedt="TRTEDT")
+    # admiral: slice_derivation (worst severity per subject × AE term)
+    .worst_flag("ANL01FL", severity_col="AESEV",
+                severity_order=["MILD", "MODERATE", "SEVERE"],
+                groups=["USUBJID", "AETERM"])
+    # admiral: derive_var_obs_number
+    .seq("ASEQ", groups=["USUBJID"])
+    .to_frame()
+)
+
+ADAE_COLS = ["STUDYID", "USUBJID", "ASEQ", "AETERM",
+             "AESTDTC", "AEENDTC", "AESEV", "AESER", "AEREL", "AEOUT", "AEACN",
+             "ASTDT", "AENDT", "ADY", "TRTEMFL", "ANL01FL",
+             "TRTSDT", "TRTEDT", "TRT01P", "SAFFL"]
+adae_final = adae.select([c for c in ADAE_COLS if c in adae.columns])
+adae_final.write_parquet(OUT / "adae_admiral.parquet")
+
+_te = (adae_final["TRTEMFL"] == "Y").sum()
+print(f"   Shape                  : {adae_final.shape[0]} records × {adae_final.shape[1]} variables")
+print(f"   Treatment-emergent AEs : {_te} / {adae_final.shape[0]}")
+print(f"   Serious AEs (AESER=Y)  : {(adae_final['AESER'] == 'Y').sum()}")
+print(f"   ANL01FL = Y (worst)    : {(adae_final['ANL01FL'] == 'Y').sum()} records")
+
+# ════════════════════════════════════════════════════════════════════════════
+# 15. ADaM ADEX — inline method-chaining  (admiral: create_adex)
+#     https://pharmaverse.github.io/admiral/articles/adex.html
+#
+#     Steps reproduced from admiral vignette
+#     a) Join ADSL
+#     b) Analysis start/end dates → ASTDT, AENDT (derive_vars_dt)
+#     c) Exposure duration        → EXDURD (derive_var_dur, inclusive)
+#     d) Sequence number          → ASEQ   (derive_var_obs_number)
+# ════════════════════════════════════════════════════════════════════════════
+print("\n══ 15. ADaM ADEX (inline) ═══════════════════════════════════════════════")
+
+_adsl_ex = adsl_final.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "SAFFL"])
+
+adex = (
+    ex.join(_adsl_ex, on="USUBJID", how="left")
+    .adam
+    .assigned("STUDYID", value="CDISCPILOT01")
+    .source(  "USUBJID")
+    .source(  "EXTRT")
+    .source(  "EXDOSE")
+    .source(  "EXDOSU")
+    # admiral: derive_vars_dt
+    .rename("ASTDT", source="EXSTDTC")
+    .rename("AENDT", source="EXENDTC")
+    .to_frame()   # materialise — ASTDT/AENDT must exist before EXDURD references them
+    .adam
+    # admiral: derive_var_dur (inclusive end-date convention)
+    .derivation("EXDURD",
+                expression="(pl.col('AENDT').cast(pl.Date) - pl.col('ASTDT').cast(pl.Date))"
+                           ".dt.total_days() + 1")
+    .to_frame()
+    # admiral: derive_var_obs_number
+    .occds
+    .seq("ASEQ", groups=["USUBJID"])
+    .to_frame()
+)
+
+ADEX_COLS = ["STUDYID", "USUBJID", "ASEQ", "EXTRT", "EXDOSE", "EXDOSU",
+             "ASTDT", "AENDT", "EXDURD", "TRTSDT", "TRTEDT", "TRT01P", "SAFFL"]
+adex_final = adex.select([c for c in ADEX_COLS if c in adex.columns])
+adex_final.write_parquet(OUT / "adex_admiral.parquet")
+
+print(f"   Shape        : {adex_final.shape[0]} records × {adex_final.shape[1]} variables")
+print(f"   Treatments   : {adex_final['EXTRT'].unique().to_list()}")
+print(f"   EXDURD range : {adex_final['EXDURD'].min()} – {adex_final['EXDURD'].max()} days")
+
+# ════════════════════════════════════════════════════════════════════════════
+# 16. Cross-dataset summary
+# ════════════════════════════════════════════════════════════════════════════
+print("\n══ 16. Cross-dataset summary ════════════════════════════════════════════")
+print(f"   ADSL : {adsl_final.shape[0]} subjects × {adsl_final.shape[1]} variables  → adsl_admiral.parquet")
+print(f"   ADVS : {advs_final.shape[0]} records  × {advs_final.shape[1]} variables  → advs_admiral.parquet")
+print(f"   ADAE : {adae_final.shape[0]} records  × {adae_final.shape[1]} variables  → adae_admiral.parquet")
+print(f"   ADEX : {adex_final.shape[0]} records  × {adex_final.shape[1]} variables  → adex_admiral.parquet")
+print(f"\n   All outputs in {OUT}/")

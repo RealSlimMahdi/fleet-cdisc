@@ -88,6 +88,9 @@ class ADAMVariableSpec(BaseModel):
     # whereclauses
     where: Optional[str] = None
 
+    # auto-staging: columns that must be committed to the frame before this derivation runs
+    depends_on: Optional[list[str]] = None
+
     model_config = {"extra": "allow"}
 
 
