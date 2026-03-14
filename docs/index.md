@@ -48,12 +48,12 @@ Nothing runs until you call `.to_frame()`. All intermediate verbs accumulate int
 
 Importing `pymaverse` registers four chainable namespaces on **every** Polars DataFrame:
 
-| Namespace | Target dataset | Description |
-|-----------|---------------|-------------|
-| `df.sdtm` | SDTM domains | 14 derivation verbs: domain mapping, CT lookup, datetime normalisation |
-| `df.adam` | ADaM BDS | 16 derivation verbs: study day, baseline, change, flags |
-| `df.adsl` | ADSL | 6 patient-level verbs: treatment dates, duration, population flags |
-| `df.occds`| OCCDS (ADAE, ADCM…) | 5 occurrence verbs: first/last date, worst severity |
+| Namespace  | Target dataset      | Description                                                            |
+| ---------- | ------------------- | ---------------------------------------------------------------------- |
+| `df.sdtm`  | SDTM domains        | 14 derivation verbs: domain mapping, CT lookup, datetime normalisation |
+| `df.adam`  | ADaM BDS            | 16 derivation verbs: study day, baseline, change, flags                |
+| `df.adsl`  | ADSL                | 6 patient-level verbs: treatment dates, duration, population flags     |
+| `df.occds` | OCCDS (ADAE, ADCM…) | 5 occurrence verbs: first/last date, worst severity                    |
 
 Therapeutic-area extensions (`df.onco`, `df.ophtha`, `df.peds`, `df.vaccine`, `df.metabolic`, `df.neuro`) mirror the [admiral TA packages](https://pharmaverse.github.io/admiral/).
 

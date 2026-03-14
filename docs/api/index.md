@@ -8,16 +8,16 @@ import pymaverse
 
 ## Modules
 
-| Module | Description |
-|--------|-------------|
-| [`sdtm`](sdtm.md) | SDTM namespace — 14 derivation verbs |
-| [`adam`](adam.md) | ADaM BDS namespace — 16 derivation verbs |
-| [`adsl`](adsl.md) | ADSL namespace — 6 patient-level verbs |
-| [`occds`](occds.md) | OCCDS namespace — 5 occurrence verbs |
-| [`ta`](ta.md) | Therapeutic-area extensions (onco, ophtha, peds, vaccine, metabolic, neuro) |
-| [`define_xml`](define_xml.md) | Define-XML generation, validation, spec generation |
-| [`ct`](ct.md) | Controlled terminology loading and validation |
-| [`core`](core.md) | `StudyContext`, `PipelineDAG`, exceptions |
+| Module                        | Description                                                                 |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| [`sdtm`](sdtm.md)             | SDTM namespace — 14 derivation verbs                                        |
+| [`adam`](adam.md)             | ADaM BDS namespace — 16 derivation verbs                                    |
+| [`adsl`](adsl.md)             | ADSL namespace — 6 patient-level verbs                                      |
+| [`occds`](occds.md)           | OCCDS namespace — 5 occurrence verbs                                        |
+| [`ta`](ta.md)                 | Therapeutic-area extensions (onco, ophtha, peds, vaccine, metabolic, neuro) |
+| [`define_xml`](define_xml.md) | Define-XML generation, validation, spec generation                          |
+| [`ct`](ct.md)                 | Controlled terminology loading and validation                               |
+| [`core`](core.md)             | `StudyContext`, `PipelineDAG`, exceptions                                   |
 
 ## Namespace registration
 

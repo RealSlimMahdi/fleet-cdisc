@@ -49,16 +49,16 @@ The schema is validated by the bundled JSON Schema (`define_spec_schema.json`), 
 
 Each variable's `derivation.algorithm` maps directly to an `.adsl` (or `.adam`) verb:
 
-| `algorithm` | Namespace verb | What it does |
-|-------------|---------------|--------------|
-| `assigned`  | `.assigned(target, value=...)` | Constant literal for all rows |
-| `source`    | `.source(target, from_col=...)` | Copy column from predecessor |
-| `derivation`| `.derivation(target, expression=...)` | Arbitrary Polars expression |
-| `first_date`| `.first_date(target, from_dataset=..., date_col=..., where=...)` | Earliest event date per subject |
-| `last_date` | `.last_date(...)` | Latest event date per subject |
-| `duration`  | `.duration(target, start_date=..., end_date=...)` | Integer day count |
-| `flag`      | `.eligibility_flag(target, criteria=...)` | `"Y"` / `null` flag |
-| `count`     | `.count_events(target, from_dataset=..., where=...)` | Integer event count |
+| `algorithm`  | Namespace verb                                                   | What it does                    |
+| ------------ | ---------------------------------------------------------------- | ------------------------------- |
+| `assigned`   | `.assigned(target, value=...)`                                   | Constant literal for all rows   |
+| `source`     | `.source(target, from_col=...)`                                  | Copy column from predecessor    |
+| `derivation` | `.derivation(target, expression=...)`                            | Arbitrary Polars expression     |
+| `first_date` | `.first_date(target, from_dataset=..., date_col=..., where=...)` | Earliest event date per subject |
+| `last_date`  | `.last_date(...)`                                                | Latest event date per subject   |
+| `duration`   | `.duration(target, start_date=..., end_date=...)`                | Integer day count               |
+| `flag`       | `.eligibility_flag(target, criteria=...)`                        | `"Y"` / `null` flag             |
+| `count`      | `.count_events(target, from_dataset=..., where=...)`             | Integer event count             |
 
 ### Example — TRTSDT (date of first dose)
 
@@ -137,7 +137,7 @@ Variables can reference codelists declared in the `codelists` block:
 - name: SEX
   label: Sex
   type: text
-  codelist: C66731        # references the oid in codelists[]
+  codelist: C66731 # references the oid in codelists[]
   derivation:
     algorithm: source
     source: SEX

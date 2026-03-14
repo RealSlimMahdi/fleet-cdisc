@@ -61,7 +61,7 @@ plugins:
             separate_signature: true
             filters: ["!^_"]
   - mkdocs-jupyter:
-      execute: false          # notebooks are pre-executed and committed with output
+      execute: false # notebooks are pre-executed and committed with output
       include_source: true
   - git-revision-date-localized:
       enable_creation_date: true

@@ -3,21 +3,21 @@
 ## CTValidator
 
 ::: pymaverse.ct.CTValidator
-    options:
-      show_root_heading: true
-      heading_level: 3
-      filters: ["!^_"]
+options:
+show*root_heading: true
+heading_level: 3
+filters: ["!^*"]
 
 ## load_controlled_terminology
 
 ::: pymaverse.ct.load_controlled_terminology
-    options:
-      show_root_heading: true
-      heading_level: 3
+options:
+show_root_heading: true
+heading_level: 3
 
 ## get_validator
 
 ::: pymaverse.ct.get_validator
-    options:
-      show_root_heading: true
-      heading_level: 3
+options:
+show_root_heading: true
+heading_level: 3

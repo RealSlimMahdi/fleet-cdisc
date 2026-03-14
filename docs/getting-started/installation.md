@@ -21,12 +21,12 @@
 
 ### Optional extras
 
-| Extra | Installs | When to use |
-|-------|----------|-------------|
-| `io` | `pyreadstat` | Reading SAS XPT (`.xpt`) files |
-| `all` | All extras | Full feature set |
-| `docs` | MkDocs + plugins | Building this documentation |
-| `dev` | pytest, ruff, io | Contributing to Pymaverse |
+| Extra  | Installs         | When to use                    |
+| ------ | ---------------- | ------------------------------ |
+| `io`   | `pyreadstat`     | Reading SAS XPT (`.xpt`) files |
+| `all`  | All extras       | Full feature set               |
+| `docs` | MkDocs + plugins | Building this documentation    |
+| `dev`  | pytest, ruff, io | Contributing to Pymaverse      |
 
 ```bash
 # SAS XPT support

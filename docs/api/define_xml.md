@@ -4,32 +4,32 @@ Pymaverse generates and validates CDISC Define-XML 2.1 documents from `define.ya
 
 ## DefineXMLGenerator
 
-::: pymaverse.define_xml.DefineXMLGenerator
-    options:
-      show_root_heading: true
-      heading_level: 3
-      filters: ["!^_"]
+::: pymaverse.define*xml.DefineXMLGenerator
+options:
+show_root_heading: true
+heading_level: 3
+filters: ["!^*"]
 
 ## DefineSpecGenerator
 
-::: pymaverse.define_xml.DefineSpecGenerator
-    options:
-      show_root_heading: true
-      heading_level: 3
-      filters: ["!^_"]
+::: pymaverse.define*xml.DefineSpecGenerator
+options:
+show_root_heading: true
+heading_level: 3
+filters: ["!^*"]
 
 ## DefineValidator
 
-::: pymaverse.define_xml.DefineValidator
-    options:
-      show_root_heading: true
-      heading_level: 3
-      filters: ["!^_"]
+::: pymaverse.define*xml.DefineValidator
+options:
+show_root_heading: true
+heading_level: 3
+filters: ["!^*"]
 
 ## DatasetChecker
 
-::: pymaverse.define_xml.DatasetChecker
-    options:
-      show_root_heading: true
-      heading_level: 3
-      filters: ["!^_"]
+::: pymaverse.define*xml.DatasetChecker
+options:
+show_root_heading: true
+heading_level: 3
+filters: ["!^*"]

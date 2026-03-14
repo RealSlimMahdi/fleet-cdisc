@@ -5,47 +5,47 @@ Pymaverse ships six TA namespaces that mirror the [admiral TA packages](https://
 ## Oncology — `df.onco`
 
 ::: pymaverse.adam.OncoNamespace
-    options:
-      show_root_heading: true
-      heading_level: 3
-      filters: ["!^_"]
+options:
+show*root_heading: true
+heading_level: 3
+filters: ["!^*"]
 
 ## Ophthalmology — `df.ophtha`
 
 ::: pymaverse.adam.OphthaNamespace
-    options:
-      show_root_heading: true
-      heading_level: 3
-      filters: ["!^_"]
+options:
+show*root_heading: true
+heading_level: 3
+filters: ["!^*"]
 
 ## Pediatrics — `df.peds`
 
 ::: pymaverse.adam.PedsNamespace
-    options:
-      show_root_heading: true
-      heading_level: 3
-      filters: ["!^_"]
+options:
+show*root_heading: true
+heading_level: 3
+filters: ["!^*"]
 
 ## Vaccine — `df.vaccine`
 
 ::: pymaverse.adam.VaccineNamespace
-    options:
-      show_root_heading: true
-      heading_level: 3
-      filters: ["!^_"]
+options:
+show*root_heading: true
+heading_level: 3
+filters: ["!^*"]
 
 ## Metabolic — `df.metabolic`
 
 ::: pymaverse.adam.MetabolicNamespace
-    options:
-      show_root_heading: true
-      heading_level: 3
-      filters: ["!^_"]
+options:
+show*root_heading: true
+heading_level: 3
+filters: ["!^*"]
 
 ## Neuroscience — `df.neuro`
 
 ::: pymaverse.adam.NeuroNamespace
-    options:
-      show_root_heading: true
-      heading_level: 3
-      filters: ["!^_"]
+options:
+show*root_heading: true
+heading_level: 3
+filters: ["!^*"]

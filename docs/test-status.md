@@ -47,10 +47,10 @@ tests/
 
 ## Coverage targets
 
-| Module | Target |
-|--------|--------|
-| `sdtm` | ≥ 90% |
-| `adam` | ≥ 90% |
-| `adsl` | ≥ 90% |
-| `define_xml` | ≥ 85% |
-| `ct` | ≥ 85% |
+| Module       | Target |
+| ------------ | ------ |
+| `sdtm`       | ≥ 90%  |
+| `adam`       | ≥ 90%  |
+| `adsl`       | ≥ 90%  |
+| `define_xml` | ≥ 85%  |
+| `ct`         | ≥ 85%  |
