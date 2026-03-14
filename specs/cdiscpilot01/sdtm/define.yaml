@@ -77,6 +77,10 @@ datasets:
     repeating: false
     class: SPECIAL PURPOSE
     keys: [STUDYID, USUBJID]
+    inputs:
+      - name: dm_raw
+        type: raw
+        path: datasets/cdiscpilot01/raw/dm_raw.csv
     variables:
       - name: STUDYID
         label: Study Identifier
@@ -273,6 +277,10 @@ datasets:
     repeating: true
     class: EVENTS
     keys: [STUDYID, USUBJID, AESEQ]
+    inputs:
+      - name: ae_raw
+        type: raw
+        path: datasets/cdiscpilot01/raw/ae_raw.csv
     variables:
       - name: STUDYID
         label: Study Identifier
@@ -405,6 +413,10 @@ datasets:
     repeating: true
     class: FINDINGS
     keys: [STUDYID, USUBJID, VSTESTCD, VISITNUM]
+    inputs:
+      - name: vs_raw
+        type: raw
+        path: datasets/cdiscpilot01/raw/vs_raw.csv
     variables:
       - name: STUDYID
         label: Study Identifier
@@ -523,5 +535,3 @@ datasets:
         derivation:
           algorithm: assign_datetime
           source: vs_date
-
-

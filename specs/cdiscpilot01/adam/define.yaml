@@ -52,6 +52,9 @@ datasets:
     repeating: false
     class: SUBJECT LEVEL ANALYSIS DATASET
     keys: [STUDYID, USUBJID]
+    inputs:
+      - name: DM
+        type: dataset
     variables:
       - name: STUDYID
         label: Study Identifier
@@ -276,6 +279,11 @@ datasets:
     repeating: true
     class: BASIC DATA STRUCTURE
     keys: [STUDYID, USUBJID, PARAMCD, VISITNUM]
+    inputs:
+      - name: VS
+        type: dataset
+      - name: ADSL
+        type: dataset
     variables:
       - name: STUDYID
         label: Study Identifier

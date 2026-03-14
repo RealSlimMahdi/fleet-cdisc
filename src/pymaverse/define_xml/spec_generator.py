@@ -24,6 +24,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from lxml import etree as lxml_etree
+
 import jsonschema
 import yaml
 
@@ -78,14 +80,63 @@ class DefineSpecGenerator:
     # Public API                                                           #
     # ------------------------------------------------------------------ #
 
-    def generate(self, output_path: str | Path) -> None:
-        """Write a Define-XML 2.1 document to *output_path*."""
+    def generate(
+        self,
+        output_path: str | Path,
+        *,
+        html_preview: bool = True,
+        xsl_path: str | Path | None = None,
+    ) -> None:
+        """Write a Define-XML 2.1 document to *output_path*.
+
+        Parameters
+        ----------
+        output_path:
+            Destination path for the ``.xml`` file.
+        html_preview:
+            When ``True`` (default), also write an HTML preview by applying
+            the CDISC ``define2-1.xsl`` stylesheet via lxml.  The HTML file
+            is written alongside the XML with a ``_preview.html`` suffix
+            (e.g. ``define_sdtm.xml`` → ``define_sdtm_preview.html``).
+        xsl_path:
+            Path to the ``define2-1.xsl`` stylesheet.  Defaults to
+            ``define2-1.xsl`` in the same directory as *output_path*, which
+            is the standard layout used by Pymaverse.
+        """
         root = self._build_odm()
         xml_str = self._to_pretty_xml(root)
         out = Path(output_path)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(xml_str, encoding="utf-8")
         print(f"Define-XML generated: {out}")
+
+        if html_preview:
+            self._write_html_preview(out, xsl_path)
+
+    def _write_html_preview(
+        self,
+        xml_path: Path,
+        xsl_path: str | Path | None,
+    ) -> None:
+        """Apply the define2-1.xsl transform and write an HTML preview file."""
+        resolved_xsl = Path(xsl_path) if xsl_path else xml_path.parent / "define2-1.xsl"
+
+        if not resolved_xsl.exists():
+            print(
+                f"HTML preview skipped: XSL stylesheet not found at '{resolved_xsl}'. "
+                "Place define2-1.xsl in the same directory as the XML output, "
+                "or pass xsl_path= explicitly."
+            )
+            return
+
+        xml_doc = lxml_etree.parse(str(xml_path))  # noqa: S320 — local file, not user input
+        xsl_doc = lxml_etree.parse(str(resolved_xsl))  # noqa: S320 — local file, not user input
+        transform = lxml_etree.XSLT(xsl_doc)
+        html_doc = transform(xml_doc)
+
+        html_path = xml_path.with_name(xml_path.stem + "_preview.html")
+        html_path.write_bytes(lxml_etree.tostring(html_doc, pretty_print=True, method="html"))
+        print(f"HTML preview generated: {html_path}")
 
     def to_xml_string(self) -> str:
         """Return the Define-XML as a formatted string without writing a file."""

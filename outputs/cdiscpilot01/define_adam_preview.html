@@ -5,7 +5,7 @@
      xsl:vendor = "libxslt"
      xsl:vendor-url = "http://xmlsoft.org/XSLT/"
    -->
-<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<head>
   <meta http-equiv="Content-Script-Type" content="text/javascript">
   <meta http-equiv="Content-Style-Type" content="text/css">
   <title>CDISCPILOT01: ADAMIG 1.1</title>
@@ -748,5 +748,754 @@ document.onclick = function(e)
       
       }
     </style>
-  </head><body onload="reset_menus();"><div id="menu"><a name="top" class="invisible" href="#main">Skip Navigation Link</a><span class="study-name">CDISCPILOT01</span><ul class="hmenu"><li class="hmenu-item"><span class="hmenu-bullet" onclick="toggle_submenu(this);">-</span><a class="tocItem" href="#Standards_Table">Standards</a></li><li class="hmenu-submenu"><span class="hmenu-bullet" onclick="toggle_submenu(this);">+</span><a class="tocItem" href="#datasets">Datasets</a><ul><li class="hmenu-item"><span class="hmenu-bullet">-</span><a class="tocItem" href="#IG.IG.ADSL">ADSL (Subject-Level Analysis Dataset)</a></li><li class="hmenu-item"><span class="hmenu-bullet">-</span><a class="tocItem" href="#IG.IG.ADVS">ADVS (Analysis Dataset for Vital Signs)</a></li></ul></li><li class="hmenu-submenu"><span onclick="toggle_submenu(this);" class="hmenu-bullet">+</span><a href="#decodelist" class="tocItem">Controlled Terminology</a><ul><li class="hmenu-submenu"><span class="hmenu-bullet" onclick="toggle_submenu(this);">+</span><a class="tocItem" href="#decodelist">CodeLists</a><ul><li class="hmenu-item"><span class="hmenu-bullet">-</span><a class="tocItem" href="#CL.C66731">Sex</a></li><li class="hmenu-item"><span class="hmenu-bullet">-</span><a class="tocItem" href="#CL.CL.DTYPE">Derivation Type</a></li><li class="hmenu-item"><span class="hmenu-bullet">-</span><a class="tocItem" href="#CL.CL.ANL01FL">Analysis Flag ANL01</a></li></ul></li></ul></li></ul></div><div id="main"><div class="docinfo"><p class="documentinfo">Date/Time of Define-XML document generation: 2026-03-13T21:06:43</p><p class="documentinfo">Define-XML version: 2.1.0</p><p class="documentinfo">Define-XML Context: Submission</p><p class="stylesheetinfo">Stylesheet version: 2019-02-11</p></div><div class="study-metadata"><dl class="study-metadata"><dt>Study Name</dt><dd>CDISCPILOT01</dd><dt>Study Description</dt><dd>A Phase II, Randomized, Double-Blind, Placebo-Controlled, Parallel Group Study of the Efficacy, Safety, and Tolerability of Xanomeline in Patients with Mild to Moderate Alzheimer's Disease</dd><dt>Protocol Name</dt><dd>CDISCPILOT01</dd><dt>Metadata Name</dt><dd>CDISCPILOT01 ADAMIG Data Definitions</dd><dt>Metadata Description</dt><dd>Dataset metadata for CDISCPILOT01 ADAMIG datasets</dd></dl></div><h1 class="invisible">Standards for Study CDISCPILOT01</h1><div class="containerbox"><table id="Standards_Table" summary="Standards"><caption class="header">Standards for Study CDISCPILOT01</caption><tr class="header"><th scope="col">Standard</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col">Documentation</th></tr><tr class="tablerowodd" id="STD.STD.ADAMIG"><td>ADAMIG 1.1</td><td>IG</td><td>Final</td><td></td></tr><tr class="tableroweven" id="STD.STD.CT"><td>CDISC/NCI ADAMIG 2023-12-15</td><td>CT</td><td>Final</td><td></td></tr></table></div><br><a id="datasets"></a><h1 class="invisible">Datasets</h1><div class="containerbox"><table summary="Data Definition Tables"><caption class="header">Datasets</caption><tr class="header"><th scope="col">Dataset</th><th scope="col">Description</th><th scope="col">Class
-            </th><th scope="col">Structure</th><th scope="col">Purpose</th><th scope="col">Keys</th><th scope="col">Documentation</th><th scope="col">Location</th></tr><tr class="tablerowodd" id="IG.ADSL"><td><a href="#IG.IG.ADSL">ADSL</a><span class="standard-refeference">[ADAMIG 1.1]</span></td><td>Subject-Level Analysis Dataset</td><td>SUBJECT LEVEL ANALYSIS DATASET</td><td>One record per subject</td><td>Analysis</td><td>STUDYID, USUBJID</td><td></td><td><a class="external" href="adsl.xpt"></a><span class="external-link-gif"></span> </td></tr><tr class="tableroweven" id="IG.ADVS"><td><a href="#IG.IG.ADVS">ADVS</a><span class="standard-refeference">[ADAMIG 1.1]</span></td><td>Analysis Dataset for Vital Signs</td><td>BASIC DATA STRUCTURE</td><td>One record per subject per parameter per analysis timepoint</td><td>Analysis</td><td>STUDYID, USUBJID, PARAMCD, VISITNUM</td><td></td><td><a class="external" href="advs.xpt"></a><span class="external-link-gif"></span> </td></tr></table></div><p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p><br><a id="IG.IG.ADSL"></a><div class="containerbox"><h1 class="invisible">Subject-Level Analysis Dataset (ADSL) </h1><table summary="ItemGroup IG.IG.ADSL"><caption><span>ADSL (Subject-Level Analysis Dataset) -  <span class="standard-refeference">[ADAMIG 1.1]</span><span class="dataset">Location: <a class="external" href="adsl.xpt"></a><span class="external-link-gif"></span> </span></span></caption><tr class="header"><th scope="col">Variable</th><th scope="col">Label / Description</th><th scope="col">Type</th><th scope="col" class="length">Length or Display Format</th><th scope="col" abbr="Format">Controlled Terms or ISO Format</th><th scope="col">Origin / Source / Method / Comment</th></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.STUDYID"></a>STUDYID</td><td>Study Identifier</td><td class="datatype">text</td><td class="number">12</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.USUBJID"></a>USUBJID</td><td>Unique Subject Identifier</td><td class="datatype">text</td><td class="number">40</td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.SUBJID"></a>SUBJID</td><td>Subject Identifier for the Study</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.SITEID"></a>SITEID</td><td>Study Site Identifier</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.AGE"></a>AGE</td><td>Age</td><td class="datatype">integer</td><td class="number"></td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.AGEU"></a>AGEU</td><td>Age Units</td><td class="datatype">text</td><td class="number">10</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.SEX"></a>SEX</td><td>Sex</td><td class="datatype">text</td><td class="number">2</td><td><span class="linebreakcell"><a href="#CL.C66731">Sex</a></span><ul class="codelist"><li class="codelist-item">• "M" = "MALE"</li><li class="codelist-item">• "F" = "FEMALE"</li></ul></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.RACE"></a>RACE</td><td>Race</td><td class="datatype">text</td><td class="number">60</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.ETHNIC"></a>ETHNIC</td><td>Ethnicity</td><td class="datatype">text</td><td class="number">60</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.ARMCD"></a>ARMCD</td><td>Planned Arm Code</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">Protocol</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.ARM"></a>ARM</td><td>Description of Planned Arm</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Protocol</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.ACTARMCD"></a>ACTARMCD</td><td>Actual Arm Code</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.ACTARM"></a>ACTARM</td><td>Description of Actual Arm</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.ADSL.TRT01P"></a>TRT01P</td><td>Planned Treatment for Period 01</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Protocol</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.ADSL.TRT01A"></a>TRT01A</td><td>Actual Treatment for Period 01</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.ADSL.TRTSDT"></a>TRTSDT</td><td>Date of First Exposure to Treatment</td><td class="datatype">date</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.ADSL.TRTEDT"></a>TRTEDT</td><td>Date of Last Exposure to Treatment</td><td class="datatype">date</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.ADSL.RFSTDTC"></a>RFSTDTC</td><td>Subject Reference Start Date/Time</td><td class="datatype">datetime</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.ADSL.RFENDTC"></a>RFENDTC</td><td>Subject Reference End Date/Time</td><td class="datatype">datetime</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.ADSL.RFICDTC"></a>RFICDTC</td><td>Date/Time of Informed Consent</td><td class="datatype">datetime</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.ADSL.DTHFL"></a>DTHFL</td><td>Subject Death Flag</td><td class="datatype">text</td><td class="number">2</td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tableroweven"><td><a id="IG.ADSL.IT.ADSL.SAFFL"></a>SAFFL</td><td>Safety Population Flag</td><td class="datatype">text</td><td class="number">2</td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADSL.IT.ADSL.ITTFL"></a>ITTFL</td><td>Intent-To-Treat Population Flag</td><td class="datatype">text</td><td class="number">2</td><td></td><td><div class="linebreakcell">Derived</div></td></tr></table></div><p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p><br><a id="IG.IG.ADVS"></a><div class="containerbox"><h1 class="invisible">Analysis Dataset for Vital Signs (ADVS) </h1><table summary="ItemGroup IG.IG.ADVS"><caption><span>ADVS (Analysis Dataset for Vital Signs) -  <span class="standard-refeference">[ADAMIG 1.1]</span><span class="dataset">Location: <a class="external" href="advs.xpt"></a><span class="external-link-gif"></span> </span></span></caption><tr class="header"><th scope="col">Variable</th><th scope="col">Label / Description</th><th scope="col">Type</th><th scope="col" class="length">Length or Display Format</th><th scope="col" abbr="Format">Controlled Terms or ISO Format</th><th scope="col">Origin / Source / Method / Comment</th></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.STUDYID"></a>STUDYID</td><td>Study Identifier</td><td class="datatype">text</td><td class="number">12</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.USUBJID"></a>USUBJID</td><td>Unique Subject Identifier</td><td class="datatype">text</td><td class="number">40</td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.PARAMCD"></a>PARAMCD</td><td>Parameter Code</td><td class="datatype">text</td><td class="number">8</td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.PARAM"></a>PARAM</td><td>Parameter</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.AVAL"></a>AVAL</td><td>Analysis Value</td><td class="datatype">float</td><td class="number"></td><td></td><td><div class="linebreakcell">Derived<p class="linebreakcell">Numeric analysis value; equal to VSSTRESN for continuous measures</p></div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.AVALU"></a>AVALU</td><td>Analysis Value Units</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.BASE"></a>BASE</td><td>Baseline Value</td><td class="datatype">float</td><td class="number"></td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.CHG"></a>CHG</td><td>Change from Baseline</td><td class="datatype">float</td><td class="number"></td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.PCHG"></a>PCHG</td><td>Percent Change from Baseline</td><td class="datatype">float</td><td class="number"></td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.ADT"></a>ADT</td><td>Analysis Date</td><td class="datatype">date</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.ADY"></a>ADY</td><td>Analysis Relative Day</td><td class="datatype">integer</td><td class="number"></td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.VISITNUM"></a>VISITNUM</td><td>Visit Number</td><td class="datatype">float</td><td class="number"></td><td></td><td><div class="linebreakcell">Protocol</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.VISIT"></a>VISIT</td><td>Visit Name</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Protocol</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.DTYPE"></a>DTYPE</td><td>Derivation Type</td><td class="datatype">text</td><td class="number">8</td><td><span class="linebreakcell"><a href="#CL.CL.DTYPE">Derivation Type</a></span><ul class="codelist"><li class="codelist-item">• "LOCF" = "Last Observation Carried Forward"</li><li class="codelist-item">• "WOCF" = "Worst Observation Carried Forward"</li></ul></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.ANL01FL"></a>ANL01FL</td><td>Analysis Flag 01</td><td class="datatype">text</td><td class="number">2</td><td><span class="linebreakcell"><a href="#CL.CL.ANL01FL">Analysis Flag ANL01</a></span><ul class="codelist"><li class="codelist-item">• "Y" = "Yes"</li></ul></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.SUBJID"></a>SUBJID</td><td>Subject Identifier for the Study</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.SITEID"></a>SITEID</td><td>Study Site Identifier</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.AGE"></a>AGE</td><td>Age</td><td class="datatype">integer</td><td class="number"></td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.AGEU"></a>AGEU</td><td>Age Units</td><td class="datatype">text</td><td class="number">10</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.SEX"></a>SEX</td><td>Sex</td><td class="datatype">text</td><td class="number">2</td><td><span class="linebreakcell"><a href="#CL.C66731">Sex</a></span><ul class="codelist"><li class="codelist-item">• "M" = "MALE"</li><li class="codelist-item">• "F" = "FEMALE"</li></ul></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.RACE"></a>RACE</td><td>Race</td><td class="datatype">text</td><td class="number">60</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ETHNIC"></a>ETHNIC</td><td>Ethnicity</td><td class="datatype">text</td><td class="number">60</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ARMCD"></a>ARMCD</td><td>Planned Arm Code</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">Protocol</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ARM"></a>ARM</td><td>Description of Planned Arm</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Protocol</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ACTARMCD"></a>ACTARMCD</td><td>Actual Arm Code</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ACTARM"></a>ACTARM</td><td>Description of Actual Arm</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.TRT01P"></a>TRT01P</td><td>Planned Treatment for Period 01</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Protocol</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.TRT01A"></a>TRT01A</td><td>Actual Treatment for Period 01</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.TRTSDT"></a>TRTSDT</td><td>Date of First Exposure to Treatment</td><td class="datatype">date</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.TRTEDT"></a>TRTEDT</td><td>Date of Last Exposure to Treatment</td><td class="datatype">date</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.RFSTDTC"></a>RFSTDTC</td><td>Subject Reference Start Date/Time</td><td class="datatype">datetime</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.RFENDTC"></a>RFENDTC</td><td>Subject Reference End Date/Time</td><td class="datatype">datetime</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.RFICDTC"></a>RFICDTC</td><td>Date/Time of Informed Consent</td><td class="datatype">datetime</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.DTHFL"></a>DTHFL</td><td>Subject Death Flag</td><td class="datatype">text</td><td class="number">2</td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.ADVS.IT.ADVS.SAFFL"></a>SAFFL</td><td>Safety Population Flag</td><td class="datatype">text</td><td class="number">2</td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tableroweven"><td><a id="IG.ADVS.IT.ADVS.ITTFL"></a>ITTFL</td><td>Intent-To-Treat Population Flag</td><td class="datatype">text</td><td class="number">2</td><td></td><td><div class="linebreakcell">Derived</div></td></tr></table></div><p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p><br><a id="decodelist"></a><div class="containerbox"><h1 class="header">CodeLists</h1><div class="codelist" id="CL.C66731"><div class="codelist-caption">Sex</div><table summary="Controlled Term - Sex"><tr class="header"><th scope="col" class="codedvalue">Permitted Value (Code)</th><th scope="col">Display Value (Decode)</th></tr><tr class="tablerowodd"><td>M</td><td class="codelist-item-decode">MALE</td></tr><tr class="tableroweven"><td>F</td><td class="codelist-item-decode">FEMALE</td></tr></table></div><div class="codelist" id="CL.CL.DTYPE"><div class="codelist-caption">Derivation Type</div><table summary="Controlled Term - Derivation Type"><tr class="header"><th scope="col" class="codedvalue">Permitted Value (Code)</th><th scope="col">Display Value (Decode)</th></tr><tr class="tablerowodd"><td>LOCF</td><td class="codelist-item-decode">Last Observation Carried Forward</td></tr><tr class="tableroweven"><td>WOCF</td><td class="codelist-item-decode">Worst Observation Carried Forward</td></tr></table></div><div class="codelist" id="CL.CL.ANL01FL"><div class="codelist-caption">Analysis Flag ANL01</div><table summary="Controlled Term - Analysis Flag ANL01"><tr class="header"><th scope="col" class="codedvalue">Permitted Value (Code)</th><th scope="col">Display Value (Decode)</th></tr><tr class="tablerowodd"><td>Y</td><td class="codelist-item-decode">Yes</td></tr></table></div><p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p><br></div></div></body></html>
+  </head>
+<body onload="reset_menus();">
+<div id="menu">
+<a name="top" class="invisible" href="#main">Skip Navigation Link</a><span class="study-name">CDISCPILOT01</span><ul class="hmenu">
+<li class="hmenu-item">
+<span class="hmenu-bullet" onclick="toggle_submenu(this);">-</span><a class="tocItem" href="#Standards_Table">Standards</a>
+</li>
+<li class="hmenu-submenu">
+<span class="hmenu-bullet" onclick="toggle_submenu(this);">+</span><a class="tocItem" href="#datasets">Datasets</a><ul>
+<li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#IG.IG.ADSL">ADSL (Subject-Level Analysis Dataset)</a>
+</li>
+<li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#IG.IG.ADVS">ADVS (Analysis Dataset for Vital Signs)</a>
+</li>
+</ul>
+</li>
+<li class="hmenu-submenu">
+<span onclick="toggle_submenu(this);" class="hmenu-bullet">+</span><a href="#decodelist" class="tocItem">Controlled Terminology</a><ul><li class="hmenu-submenu">
+<span class="hmenu-bullet" onclick="toggle_submenu(this);">+</span><a class="tocItem" href="#decodelist">CodeLists</a><ul>
+<li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#CL.C66731">Sex</a>
+</li>
+<li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#CL.CL.DTYPE">Derivation Type</a>
+</li>
+<li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#CL.CL.ANL01FL">Analysis Flag ANL01</a>
+</li>
+</ul>
+</li></ul>
+</li>
+</ul>
+</div>
+<div id="main">
+<div class="docinfo">
+<p class="documentinfo">Date/Time of Define-XML document generation: 2026-03-14T21:24:45</p>
+<p class="documentinfo">Define-XML version: 2.1.0</p>
+<p class="documentinfo">Define-XML Context: Submission</p>
+<p class="stylesheetinfo">Stylesheet version: 2019-02-11</p>
+</div>
+<div class="study-metadata"><dl class="study-metadata">
+<dt>Study Name</dt>
+<dd>CDISCPILOT01</dd>
+<dt>Study Description</dt>
+<dd>A Phase II, Randomized, Double-Blind, Placebo-Controlled, Parallel Group Study of the Efficacy, Safety, and Tolerability of Xanomeline in Patients with Mild to Moderate Alzheimer's Disease</dd>
+<dt>Protocol Name</dt>
+<dd>CDISCPILOT01</dd>
+<dt>Metadata Name</dt>
+<dd>CDISCPILOT01 ADAMIG Data Definitions</dd>
+<dt>Metadata Description</dt>
+<dd>Dataset metadata for CDISCPILOT01 ADAMIG datasets</dd>
+</dl></div>
+<h1 class="invisible">Standards for Study CDISCPILOT01</h1>
+<div class="containerbox"><table id="Standards_Table" summary="Standards">
+<caption class="header">Standards for Study CDISCPILOT01</caption>
+<tr class="header">
+<th scope="col">Standard</th>
+<th scope="col">Type</th>
+<th scope="col">Status</th>
+<th scope="col">Documentation</th>
+</tr>
+<tr class="tablerowodd" id="STD.STD.ADAMIG">
+<td>ADAMIG 1.1</td>
+<td>IG</td>
+<td>Final</td>
+<td></td>
+</tr>
+<tr class="tableroweven" id="STD.STD.CT">
+<td>CDISC/NCI ADAMIG 2023-12-15</td>
+<td>CT</td>
+<td>Final</td>
+<td></td>
+</tr>
+</table></div>
+<br><a id="datasets"></a><h1 class="invisible">Datasets</h1>
+<div class="containerbox"><table summary="Data Definition Tables">
+<caption class="header">Datasets</caption>
+<tr class="header">
+<th scope="col">Dataset</th>
+<th scope="col">Description</th>
+<th scope="col">Class
+            </th>
+<th scope="col">Structure</th>
+<th scope="col">Purpose</th>
+<th scope="col">Keys</th>
+<th scope="col">Documentation</th>
+<th scope="col">Location</th>
+</tr>
+<tr class="tablerowodd" id="IG.ADSL">
+<td>
+<a href="#IG.IG.ADSL">ADSL</a><span class="standard-refeference">[ADAMIG 1.1]</span>
+</td>
+<td>Subject-Level Analysis Dataset</td>
+<td>SUBJECT LEVEL ANALYSIS DATASET</td>
+<td>One record per subject</td>
+<td>Analysis</td>
+<td>STUDYID, USUBJID</td>
+<td></td>
+<td>
+<a class="external" href="adsl.xpt"></a><span class="external-link-gif"></span> </td>
+</tr>
+<tr class="tableroweven" id="IG.ADVS">
+<td>
+<a href="#IG.IG.ADVS">ADVS</a><span class="standard-refeference">[ADAMIG 1.1]</span>
+</td>
+<td>Analysis Dataset for Vital Signs</td>
+<td>BASIC DATA STRUCTURE</td>
+<td>One record per subject per parameter per analysis timepoint</td>
+<td>Analysis</td>
+<td>STUDYID, USUBJID, PARAMCD, VISITNUM</td>
+<td></td>
+<td>
+<a class="external" href="advs.xpt"></a><span class="external-link-gif"></span> </td>
+</tr>
+</table></div>
+<p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p>
+<br><a id="IG.IG.ADSL"></a><div class="containerbox">
+<h1 class="invisible">Subject-Level Analysis Dataset (ADSL) </h1>
+<table summary="ItemGroup IG.IG.ADSL">
+<caption><span>ADSL (Subject-Level Analysis Dataset) -  <span class="standard-refeference">[ADAMIG 1.1]</span><span class="dataset">Location: <a class="external" href="adsl.xpt"></a><span class="external-link-gif"></span> </span></span></caption>
+<tr class="header">
+<th scope="col">Variable</th>
+<th scope="col">Label / Description</th>
+<th scope="col">Type</th>
+<th scope="col" class="length">Length or Display Format</th>
+<th scope="col" abbr="Format">Controlled Terms or ISO Format</th>
+<th scope="col">Origin / Source / Method / Comment</th>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADSL.IT.STUDYID"></a>STUDYID</td>
+<td>Study Identifier</td>
+<td class="datatype">text</td>
+<td class="number">12</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADSL.IT.USUBJID"></a>USUBJID</td>
+<td>Unique Subject Identifier</td>
+<td class="datatype">text</td>
+<td class="number">40</td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADSL.IT.SUBJID"></a>SUBJID</td>
+<td>Subject Identifier for the Study</td>
+<td class="datatype">text</td>
+<td class="number">20</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADSL.IT.SITEID"></a>SITEID</td>
+<td>Study Site Identifier</td>
+<td class="datatype">text</td>
+<td class="number">20</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADSL.IT.AGE"></a>AGE</td>
+<td>Age</td>
+<td class="datatype">integer</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADSL.IT.AGEU"></a>AGEU</td>
+<td>Age Units</td>
+<td class="datatype">text</td>
+<td class="number">10</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADSL.IT.SEX"></a>SEX</td>
+<td>Sex</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td>
+<span class="linebreakcell"><a href="#CL.C66731">Sex</a></span><ul class="codelist">
+<li class="codelist-item">&#8226;&#160;"M" = "MALE"</li>
+<li class="codelist-item">&#8226;&#160;"F" = "FEMALE"</li>
+</ul>
+</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADSL.IT.RACE"></a>RACE</td>
+<td>Race</td>
+<td class="datatype">text</td>
+<td class="number">60</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADSL.IT.ETHNIC"></a>ETHNIC</td>
+<td>Ethnicity</td>
+<td class="datatype">text</td>
+<td class="number">60</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADSL.IT.ARMCD"></a>ARMCD</td>
+<td>Planned Arm Code</td>
+<td class="datatype">text</td>
+<td class="number">20</td>
+<td></td>
+<td><div class="linebreakcell">Protocol</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADSL.IT.ARM"></a>ARM</td>
+<td>Description of Planned Arm</td>
+<td class="datatype">text</td>
+<td class="number">200</td>
+<td></td>
+<td><div class="linebreakcell">Protocol</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADSL.IT.ACTARMCD"></a>ACTARMCD</td>
+<td>Actual Arm Code</td>
+<td class="datatype">text</td>
+<td class="number">20</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADSL.IT.ACTARM"></a>ACTARM</td>
+<td>Description of Actual Arm</td>
+<td class="datatype">text</td>
+<td class="number">200</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADSL.IT.ADSL.TRT01P"></a>TRT01P</td>
+<td>Planned Treatment for Period 01</td>
+<td class="datatype">text</td>
+<td class="number">200</td>
+<td></td>
+<td><div class="linebreakcell">Protocol</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADSL.IT.ADSL.TRT01A"></a>TRT01A</td>
+<td>Actual Treatment for Period 01</td>
+<td class="datatype">text</td>
+<td class="number">200</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADSL.IT.ADSL.TRTSDT"></a>TRTSDT</td>
+<td>Date of First Exposure to Treatment</td>
+<td class="datatype">date</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADSL.IT.ADSL.TRTEDT"></a>TRTEDT</td>
+<td>Date of Last Exposure to Treatment</td>
+<td class="datatype">date</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADSL.IT.ADSL.RFSTDTC"></a>RFSTDTC</td>
+<td>Subject Reference Start Date/Time</td>
+<td class="datatype">datetime</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADSL.IT.ADSL.RFENDTC"></a>RFENDTC</td>
+<td>Subject Reference End Date/Time</td>
+<td class="datatype">datetime</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADSL.IT.ADSL.RFICDTC"></a>RFICDTC</td>
+<td>Date/Time of Informed Consent</td>
+<td class="datatype">datetime</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADSL.IT.ADSL.DTHFL"></a>DTHFL</td>
+<td>Subject Death Flag</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADSL.IT.ADSL.SAFFL"></a>SAFFL</td>
+<td>Safety Population Flag</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADSL.IT.ADSL.ITTFL"></a>ITTFL</td>
+<td>Intent-To-Treat Population Flag</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+</table>
+</div>
+<p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p>
+<br><a id="IG.IG.ADVS"></a><div class="containerbox">
+<h1 class="invisible">Analysis Dataset for Vital Signs (ADVS) </h1>
+<table summary="ItemGroup IG.IG.ADVS">
+<caption><span>ADVS (Analysis Dataset for Vital Signs) -  <span class="standard-refeference">[ADAMIG 1.1]</span><span class="dataset">Location: <a class="external" href="advs.xpt"></a><span class="external-link-gif"></span> </span></span></caption>
+<tr class="header">
+<th scope="col">Variable</th>
+<th scope="col">Label / Description</th>
+<th scope="col">Type</th>
+<th scope="col" class="length">Length or Display Format</th>
+<th scope="col" abbr="Format">Controlled Terms or ISO Format</th>
+<th scope="col">Origin / Source / Method / Comment</th>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADVS.IT.STUDYID"></a>STUDYID</td>
+<td>Study Identifier</td>
+<td class="datatype">text</td>
+<td class="number">12</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADVS.IT.USUBJID"></a>USUBJID</td>
+<td>Unique Subject Identifier</td>
+<td class="datatype">text</td>
+<td class="number">40</td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADVS.IT.ADVS.PARAMCD"></a>PARAMCD</td>
+<td>Parameter Code</td>
+<td class="datatype">text</td>
+<td class="number">8</td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADVS.IT.ADVS.PARAM"></a>PARAM</td>
+<td>Parameter</td>
+<td class="datatype">text</td>
+<td class="number">200</td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADVS.IT.ADVS.AVAL"></a>AVAL</td>
+<td>Analysis Value</td>
+<td class="datatype">float</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">Derived<p class="linebreakcell">Numeric analysis value; equal to VSSTRESN for continuous measures</p>
+</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADVS.IT.ADVS.AVALU"></a>AVALU</td>
+<td>Analysis Value Units</td>
+<td class="datatype">text</td>
+<td class="number">20</td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADVS.IT.ADVS.BASE"></a>BASE</td>
+<td>Baseline Value</td>
+<td class="datatype">float</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADVS.IT.ADVS.CHG"></a>CHG</td>
+<td>Change from Baseline</td>
+<td class="datatype">float</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADVS.IT.ADVS.PCHG"></a>PCHG</td>
+<td>Percent Change from Baseline</td>
+<td class="datatype">float</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADVS.IT.ADVS.ADT"></a>ADT</td>
+<td>Analysis Date</td>
+<td class="datatype">date</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADVS.IT.ADVS.ADY"></a>ADY</td>
+<td>Analysis Relative Day</td>
+<td class="datatype">integer</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADVS.IT.ADVS.VISITNUM"></a>VISITNUM</td>
+<td>Visit Number</td>
+<td class="datatype">float</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">Protocol</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADVS.IT.ADVS.VISIT"></a>VISIT</td>
+<td>Visit Name</td>
+<td class="datatype">text</td>
+<td class="number">200</td>
+<td></td>
+<td><div class="linebreakcell">Protocol</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADVS.IT.ADVS.DTYPE"></a>DTYPE</td>
+<td>Derivation Type</td>
+<td class="datatype">text</td>
+<td class="number">8</td>
+<td>
+<span class="linebreakcell"><a href="#CL.CL.DTYPE">Derivation Type</a></span><ul class="codelist">
+<li class="codelist-item">&#8226;&#160;"LOCF" = "Last Observation Carried Forward"</li>
+<li class="codelist-item">&#8226;&#160;"WOCF" = "Worst Observation Carried Forward"</li>
+</ul>
+</td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADVS.IT.ADVS.ANL01FL"></a>ANL01FL</td>
+<td>Analysis Flag 01</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td>
+<span class="linebreakcell"><a href="#CL.CL.ANL01FL">Analysis Flag ANL01</a></span><ul class="codelist"><li class="codelist-item">&#8226;&#160;"Y" = "Yes"</li></ul>
+</td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADVS.IT.SUBJID"></a>SUBJID</td>
+<td>Subject Identifier for the Study</td>
+<td class="datatype">text</td>
+<td class="number">20</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADVS.IT.SITEID"></a>SITEID</td>
+<td>Study Site Identifier</td>
+<td class="datatype">text</td>
+<td class="number">20</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADVS.IT.AGE"></a>AGE</td>
+<td>Age</td>
+<td class="datatype">integer</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADVS.IT.AGEU"></a>AGEU</td>
+<td>Age Units</td>
+<td class="datatype">text</td>
+<td class="number">10</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADVS.IT.SEX"></a>SEX</td>
+<td>Sex</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td>
+<span class="linebreakcell"><a href="#CL.C66731">Sex</a></span><ul class="codelist">
+<li class="codelist-item">&#8226;&#160;"M" = "MALE"</li>
+<li class="codelist-item">&#8226;&#160;"F" = "FEMALE"</li>
+</ul>
+</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADVS.IT.RACE"></a>RACE</td>
+<td>Race</td>
+<td class="datatype">text</td>
+<td class="number">60</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADVS.IT.ETHNIC"></a>ETHNIC</td>
+<td>Ethnicity</td>
+<td class="datatype">text</td>
+<td class="number">60</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADVS.IT.ARMCD"></a>ARMCD</td>
+<td>Planned Arm Code</td>
+<td class="datatype">text</td>
+<td class="number">20</td>
+<td></td>
+<td><div class="linebreakcell">Protocol</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADVS.IT.ARM"></a>ARM</td>
+<td>Description of Planned Arm</td>
+<td class="datatype">text</td>
+<td class="number">200</td>
+<td></td>
+<td><div class="linebreakcell">Protocol</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADVS.IT.ACTARMCD"></a>ACTARMCD</td>
+<td>Actual Arm Code</td>
+<td class="datatype">text</td>
+<td class="number">20</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADVS.IT.ACTARM"></a>ACTARM</td>
+<td>Description of Actual Arm</td>
+<td class="datatype">text</td>
+<td class="number">200</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADVS.IT.ADVS.TRT01P"></a>TRT01P</td>
+<td>Planned Treatment for Period 01</td>
+<td class="datatype">text</td>
+<td class="number">200</td>
+<td></td>
+<td><div class="linebreakcell">Protocol</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADVS.IT.ADVS.TRT01A"></a>TRT01A</td>
+<td>Actual Treatment for Period 01</td>
+<td class="datatype">text</td>
+<td class="number">200</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADVS.IT.ADVS.TRTSDT"></a>TRTSDT</td>
+<td>Date of First Exposure to Treatment</td>
+<td class="datatype">date</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADVS.IT.ADVS.TRTEDT"></a>TRTEDT</td>
+<td>Date of Last Exposure to Treatment</td>
+<td class="datatype">date</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADVS.IT.ADVS.RFSTDTC"></a>RFSTDTC</td>
+<td>Subject Reference Start Date/Time</td>
+<td class="datatype">datetime</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADVS.IT.ADVS.RFENDTC"></a>RFENDTC</td>
+<td>Subject Reference End Date/Time</td>
+<td class="datatype">datetime</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADVS.IT.ADVS.RFICDTC"></a>RFICDTC</td>
+<td>Date/Time of Informed Consent</td>
+<td class="datatype">datetime</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADVS.IT.ADVS.DTHFL"></a>DTHFL</td>
+<td>Subject Death Flag</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.ADVS.IT.ADVS.SAFFL"></a>SAFFL</td>
+<td>Safety Population Flag</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.ADVS.IT.ADVS.ITTFL"></a>ITTFL</td>
+<td>Intent-To-Treat Population Flag</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+</table>
+</div>
+<p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p>
+<br><a id="decodelist"></a><div class="containerbox">
+<h1 class="header">CodeLists</h1>
+<div class="codelist" id="CL.C66731">
+<div class="codelist-caption">Sex</div>
+<table summary="Controlled Term - Sex">
+<tr class="header">
+<th scope="col" class="codedvalue">Permitted Value (Code)</th>
+<th scope="col">Display Value (Decode)</th>
+</tr>
+<tr class="tablerowodd">
+<td>M</td>
+<td class="codelist-item-decode">MALE</td>
+</tr>
+<tr class="tableroweven">
+<td>F</td>
+<td class="codelist-item-decode">FEMALE</td>
+</tr>
+</table>
+</div>
+<div class="codelist" id="CL.CL.DTYPE">
+<div class="codelist-caption">Derivation Type</div>
+<table summary="Controlled Term - Derivation Type">
+<tr class="header">
+<th scope="col" class="codedvalue">Permitted Value (Code)</th>
+<th scope="col">Display Value (Decode)</th>
+</tr>
+<tr class="tablerowodd">
+<td>LOCF</td>
+<td class="codelist-item-decode">Last Observation Carried Forward</td>
+</tr>
+<tr class="tableroweven">
+<td>WOCF</td>
+<td class="codelist-item-decode">Worst Observation Carried Forward</td>
+</tr>
+</table>
+</div>
+<div class="codelist" id="CL.CL.ANL01FL">
+<div class="codelist-caption">Analysis Flag ANL01</div>
+<table summary="Controlled Term - Analysis Flag ANL01">
+<tr class="header">
+<th scope="col" class="codedvalue">Permitted Value (Code)</th>
+<th scope="col">Display Value (Decode)</th>
+</tr>
+<tr class="tablerowodd">
+<td>Y</td>
+<td class="codelist-item-decode">Yes</td>
+</tr>
+</table>
+</div>
+<p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p>
+<br>
+</div>
+</div>
+</body>
+</html>

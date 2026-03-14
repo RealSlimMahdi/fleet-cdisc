@@ -162,11 +162,39 @@
           "minItems": 1,
           "items": { "type": "string" }
         },
+        "inputs": {
+          "type": "array",
+          "description": "Upstream datasets or raw source files this dataset depends on. Used to build the pipeline DAG.",
+          "items": { "$ref": "#/$defs/dataset_input" },
+          "default": []
+        },
         "variables": {
           "type": "array",
           "description": "Ordered list of variable definitions.",
           "minItems": 1,
           "items": { "$ref": "#/$defs/variable" }
+        }
+      }
+    },
+    "dataset_input": {
+      "type": "object",
+      "title": "DatasetInput",
+      "description": "An upstream dependency of a dataset — either a raw source file or another pipeline dataset.",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Logical node name. For raw files use a short identifier (e.g. 'dm_raw'); for datasets use the dataset name (e.g. 'DM', 'ADSL')."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["raw", "dataset"],
+          "description": "'raw' for source files (csv, sas7bdat, xpt, parquet, etc.); 'dataset' for upstream pipeline datasets."
+        },
+        "path": {
+          "type": "string",
+          "description": "File path for raw inputs relative to the repo root. Omit for dataset-type inputs (path is resolved from the DAG)."
         }
       }
     },

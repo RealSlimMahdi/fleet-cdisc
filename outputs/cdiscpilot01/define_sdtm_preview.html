@@ -5,7 +5,7 @@
      xsl:vendor = "libxslt"
      xsl:vendor-url = "http://xmlsoft.org/XSLT/"
    -->
-<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<head>
   <meta http-equiv="Content-Script-Type" content="text/javascript">
   <meta http-equiv="Content-Style-Type" content="text/css">
   <title>CDISCPILOT01: SDTMIG 3.4</title>
@@ -748,7 +748,709 @@ document.onclick = function(e)
       
       }
     </style>
-  </head><body onload="reset_menus();"><div id="menu"><a name="top" class="invisible" href="#main">Skip Navigation Link</a><span class="study-name">CDISCPILOT01</span><ul class="hmenu"><li class="hmenu-item"><span class="hmenu-bullet" onclick="toggle_submenu(this);">-</span><a class="tocItem" href="#Standards_Table">Standards</a></li><li class="hmenu-submenu"><span class="hmenu-bullet" onclick="toggle_submenu(this);">+</span><a class="tocItem" href="#datasets">Datasets</a><ul><li class="hmenu-item"><span class="hmenu-bullet">-</span><a class="tocItem" href="#IG.IG.DM">DM (Demographics)</a></li><li class="hmenu-item"><span class="hmenu-bullet">-</span><a class="tocItem" href="#IG.IG.AE">AE (Adverse Events)</a></li><li class="hmenu-item"><span class="hmenu-bullet">-</span><a class="tocItem" href="#IG.IG.VS">VS (Vital Signs)</a></li></ul></li><li class="hmenu-submenu"><span onclick="toggle_submenu(this);" class="hmenu-bullet">+</span><a href="#decodelist" class="tocItem">Controlled Terminology</a><ul><li class="hmenu-submenu"><span class="hmenu-bullet" onclick="toggle_submenu(this);">+</span><a class="tocItem" href="#decodelist">CodeLists</a><ul><li class="hmenu-item"><span class="hmenu-bullet">-</span><a class="tocItem" href="#CL.C66731">Sex</a></li><li class="hmenu-item"><span class="hmenu-bullet">-</span><a class="tocItem" href="#CL.C74457">Race</a></li><li class="hmenu-item"><span class="hmenu-bullet">-</span><a class="tocItem" href="#CL.C66790">Ethnicity</a></li><li class="hmenu-item"><span class="hmenu-bullet">-</span><a class="tocItem" href="#CL.CL.VSTEST">Vital Signs Test Code</a></li></ul></li></ul></li></ul></div><div id="main"><div class="docinfo"><p class="documentinfo">Date/Time of Define-XML document generation: 2026-03-13T21:06:43</p><p class="documentinfo">Define-XML version: 2.1.0</p><p class="documentinfo">Define-XML Context: Submission</p><p class="stylesheetinfo">Stylesheet version: 2019-02-11</p></div><div class="study-metadata"><dl class="study-metadata"><dt>Study Name</dt><dd>CDISCPILOT01</dd><dt>Study Description</dt><dd>A Phase II, Randomized, Double-Blind, Placebo-Controlled, Parallel Group Study of the Efficacy, Safety, and Tolerability of Xanomeline in Patients with Mild to Moderate Alzheimer's Disease</dd><dt>Protocol Name</dt><dd>CDISCPILOT01</dd><dt>Metadata Name</dt><dd>CDISCPILOT01 SDTMIG Data Definitions</dd><dt>Metadata Description</dt><dd>Dataset metadata for CDISCPILOT01 SDTMIG datasets</dd></dl></div><h1 class="invisible">Standards for Study CDISCPILOT01</h1><div class="containerbox"><table id="Standards_Table" summary="Standards"><caption class="header">Standards for Study CDISCPILOT01</caption><tr class="header"><th scope="col">Standard</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col">Documentation</th></tr><tr class="tablerowodd" id="STD.STD.SDTMIG"><td>SDTMIG 3.4</td><td>IG</td><td>Final</td><td></td></tr><tr class="tableroweven" id="STD.STD.CT"><td>CDISC/NCI SDTMIG 2023-12-15</td><td>CT</td><td>Final</td><td></td></tr></table></div><br><a id="datasets"></a><h1 class="invisible">Datasets</h1><div class="containerbox"><table summary="Data Definition Tables"><caption class="header">Datasets</caption><tr class="header"><th scope="col">Dataset</th><th scope="col">Description</th><th scope="col">Class
-            </th><th scope="col">Structure</th><th scope="col">Purpose</th><th scope="col">Keys</th><th scope="col">Documentation</th><th scope="col">Location</th></tr><tr class="tablerowodd" id="IG.DM"><td><a href="#IG.IG.DM">DM</a><span class="standard-refeference">[SDTMIG 3.4]</span></td><td>Demographics</td><td>SPECIAL PURPOSE</td><td>One record per subject</td><td>Tabulation</td><td>STUDYID, USUBJID</td><td></td><td><a class="external" href="dm.xpt"></a><span class="external-link-gif"></span> </td></tr><tr class="tableroweven" id="IG.AE"><td><a href="#IG.IG.AE">AE</a><span class="standard-refeference">[SDTMIG 3.4]</span></td><td>Adverse Events</td><td>EVENTS</td><td>One record per adverse event per subject</td><td>Tabulation</td><td>STUDYID, USUBJID, AESEQ</td><td></td><td><a class="external" href="ae.xpt"></a><span class="external-link-gif"></span> </td></tr><tr class="tablerowodd" id="IG.VS"><td><a href="#IG.IG.VS">VS</a><span class="standard-refeference">[SDTMIG 3.4]</span></td><td>Vital Signs</td><td>FINDINGS</td><td>One record per vital sign measurement per subject per visit</td><td>Tabulation</td><td>STUDYID, USUBJID, VSTESTCD, VISITNUM</td><td></td><td><a class="external" href="vs.xpt"></a><span class="external-link-gif"></span> </td></tr></table></div><p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p><br><a id="IG.IG.DM"></a><div class="containerbox"><h1 class="invisible">Demographics (DM) </h1><table summary="ItemGroup IG.IG.DM"><caption><span>DM (Demographics) -  <span class="standard-refeference">[SDTMIG 3.4]</span><span class="dataset">Location: <a class="external" href="dm.xpt"></a><span class="external-link-gif"></span> </span></span></caption><tr class="header"><th scope="col">Variable</th><th scope="col">Label / Description</th><th scope="col">Type</th><th scope="col" class="length">Length or Display Format</th><th scope="col" abbr="Format">Controlled Terms or ISO Format</th><th scope="col">Origin / Source / Method / Comment</th></tr><tr class="tablerowodd"><td><a id="IG.DM.IT.STUDYID"></a>STUDYID</td><td>Study Identifier</td><td class="datatype">text</td><td class="number">12</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tableroweven"><td><a id="IG.DM.IT.DOMAIN"></a>DOMAIN</td><td>Domain Abbreviation</td><td class="datatype">text</td><td class="number">2</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tablerowodd"><td><a id="IG.DM.IT.USUBJID"></a>USUBJID</td><td>Unique Subject Identifier</td><td class="datatype">text</td><td class="number">40</td><td></td><td><div class="linebreakcell">Derived<p class="linebreakcell">Concatenation of STUDYID, SITEID, and SUBJID</p></div></td></tr><tr class="tableroweven"><td><a id="IG.DM.IT.SUBJID"></a>SUBJID</td><td>Subject Identifier for the Study</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.DM.IT.DM.RFSTDTC"></a>RFSTDTC</td><td>Subject Reference Start Date/Time</td><td class="datatype">datetime</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.DM.IT.DM.RFENDTC"></a>RFENDTC</td><td>Subject Reference End Date/Time</td><td class="datatype">datetime</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.DM.IT.DM.RFXSTDTC"></a>RFXSTDTC</td><td>Date/Time of First Study Treatment</td><td class="datatype">datetime</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tableroweven"><td><a id="IG.DM.IT.DM.RFXENDTC"></a>RFXENDTC</td><td>Date/Time of Last Study Treatment</td><td class="datatype">datetime</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.DM.IT.SITEID"></a>SITEID</td><td>Study Site Identifier</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.DM.IT.AGE"></a>AGE</td><td>Age</td><td class="datatype">integer</td><td class="number"></td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.DM.IT.AGEU"></a>AGEU</td><td>Age Units</td><td class="datatype">text</td><td class="number">10</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tableroweven"><td><a id="IG.DM.IT.SEX"></a>SEX</td><td>Sex</td><td class="datatype">text</td><td class="number">2</td><td><span class="linebreakcell"><a href="#CL.C66731">Sex</a></span><ul class="codelist"><li class="codelist-item">• "M" = "MALE"</li><li class="codelist-item">• "F" = "FEMALE"</li></ul></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.DM.IT.RACE"></a>RACE</td><td>Race</td><td class="datatype">text</td><td class="number">60</td><td><span class="linebreakcell"><a href="#CL.C74457">Race</a></span><ul class="codelist"><li class="codelist-item">• "WHITE" = "WHITE"</li><li class="codelist-item">• "BLACK OR AFRICAN AMERICAN" = "BLACK OR AFRICAN AMERICAN"</li><li class="codelist-item">• "ASIAN" = "ASIAN"</li><li class="codelist-item">• "AMERICAN INDIAN OR ALASKA NATIVE" = "AMERICAN INDIAN OR ALASKA NATIVE"</li><li class="codelist-item">• "NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER" = "NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER"</li></ul></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.DM.IT.ETHNIC"></a>ETHNIC</td><td>Ethnicity</td><td class="datatype">text</td><td class="number">60</td><td><span class="linebreakcell"><a href="#CL.C66790">Ethnicity</a></span><ul class="codelist"><li class="codelist-item">• "HISPANIC OR LATINO" = "HISPANIC OR LATINO"</li><li class="codelist-item">• "NOT HISPANIC OR LATINO" = "NOT HISPANIC OR LATINO"</li></ul></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.DM.IT.ARMCD"></a>ARMCD</td><td>Planned Arm Code</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">Protocol</div></td></tr><tr class="tableroweven"><td><a id="IG.DM.IT.ARM"></a>ARM</td><td>Description of Planned Arm</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Protocol</div></td></tr><tr class="tablerowodd"><td><a id="IG.DM.IT.ACTARMCD"></a>ACTARMCD</td><td>Actual Arm Code</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tableroweven"><td><a id="IG.DM.IT.ACTARM"></a>ACTARM</td><td>Description of Actual Arm</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tablerowodd"><td><a id="IG.DM.IT.DM.RFICDTC"></a>RFICDTC</td><td>Date/Time of Informed Consent</td><td class="datatype">datetime</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">CRF</div></td></tr></table></div><p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p><br><a id="IG.IG.AE"></a><div class="containerbox"><h1 class="invisible">Adverse Events (AE) </h1><table summary="ItemGroup IG.IG.AE"><caption><span>AE (Adverse Events) -  <span class="standard-refeference">[SDTMIG 3.4]</span><span class="dataset">Location: <a class="external" href="ae.xpt"></a><span class="external-link-gif"></span> </span></span></caption><tr class="header"><th scope="col">Variable</th><th scope="col">Label / Description</th><th scope="col">Type</th><th scope="col" class="length">Length or Display Format</th><th scope="col" abbr="Format">Controlled Terms or ISO Format</th><th scope="col">Origin / Source / Method / Comment</th></tr><tr class="tablerowodd"><td><a id="IG.AE.IT.STUDYID"></a>STUDYID</td><td>Study Identifier</td><td class="datatype">text</td><td class="number">12</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tableroweven"><td><a id="IG.AE.IT.DOMAIN"></a>DOMAIN</td><td>Domain Abbreviation</td><td class="datatype">text</td><td class="number">2</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tablerowodd"><td><a id="IG.AE.IT.USUBJID"></a>USUBJID</td><td>Unique Subject Identifier</td><td class="datatype">text</td><td class="number">40</td><td></td><td><div class="linebreakcell">Derived<p class="linebreakcell">Concatenation of STUDYID, SITEID, and SUBJID</p></div></td></tr><tr class="tableroweven"><td><a id="IG.AE.IT.AE.AESEQ"></a>AESEQ</td><td>Sequence Number</td><td class="datatype">integer</td><td class="number"></td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tablerowodd"><td><a id="IG.AE.IT.AE.AETERM"></a>AETERM</td><td>Reported Term for the Adverse Event</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.AE.IT.AE.AEDECOD"></a>AEDECOD</td><td>Dictionary-Derived Term</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.AE.IT.AE.AESTDTC"></a>AESTDTC</td><td>Start Date/Time of Adverse Event</td><td class="datatype">datetime</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.AE.IT.AE.AEENDTC"></a>AEENDTC</td><td>End Date/Time of Adverse Event</td><td class="datatype">datetime</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.AE.IT.AE.AESEV"></a>AESEV</td><td>Severity/Intensity</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.AE.IT.AE.AESER"></a>AESER</td><td>Serious Event</td><td class="datatype">text</td><td class="number">2</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.AE.IT.AE.AEOUT"></a>AEOUT</td><td>Outcome of Adverse Event</td><td class="datatype">text</td><td class="number">60</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.AE.IT.AE.AEACN"></a>AEACN</td><td>Action Taken with Study Treatment</td><td class="datatype">text</td><td class="number">60</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.AE.IT.AE.AEREL"></a>AEREL</td><td>Causality</td><td class="datatype">text</td><td class="number">60</td><td></td><td><div class="linebreakcell">CRF</div></td></tr></table></div><p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p><br><a id="IG.IG.VS"></a><div class="containerbox"><h1 class="invisible">Vital Signs (VS) </h1><table summary="ItemGroup IG.IG.VS"><caption><span>VS (Vital Signs) -  <span class="standard-refeference">[SDTMIG 3.4]</span><span class="dataset">Location: <a class="external" href="vs.xpt"></a><span class="external-link-gif"></span> </span></span></caption><tr class="header"><th scope="col">Variable</th><th scope="col">Label / Description</th><th scope="col">Type</th><th scope="col" class="length">Length or Display Format</th><th scope="col" abbr="Format">Controlled Terms or ISO Format</th><th scope="col">Origin / Source / Method / Comment</th></tr><tr class="tablerowodd"><td><a id="IG.VS.IT.STUDYID"></a>STUDYID</td><td>Study Identifier</td><td class="datatype">text</td><td class="number">12</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tableroweven"><td><a id="IG.VS.IT.DOMAIN"></a>DOMAIN</td><td>Domain Abbreviation</td><td class="datatype">text</td><td class="number">2</td><td></td><td><div class="linebreakcell">Assigned</div></td></tr><tr class="tablerowodd"><td><a id="IG.VS.IT.USUBJID"></a>USUBJID</td><td>Unique Subject Identifier</td><td class="datatype">text</td><td class="number">40</td><td></td><td><div class="linebreakcell">Derived<p class="linebreakcell">Concatenation of STUDYID, SITEID, and SUBJID</p></div></td></tr><tr class="tableroweven"><td><a id="IG.VS.IT.VS.VSTESTCD"></a>VSTESTCD</td><td>Vital Signs Test Short Name</td><td class="datatype">text</td><td class="number">8</td><td><a href="#CL.CL.VSTEST">Vital Signs Test Code</a><p class="linebreakcell">
+  </head>
+<body onload="reset_menus();">
+<div id="menu">
+<a name="top" class="invisible" href="#main">Skip Navigation Link</a><span class="study-name">CDISCPILOT01</span><ul class="hmenu">
+<li class="hmenu-item">
+<span class="hmenu-bullet" onclick="toggle_submenu(this);">-</span><a class="tocItem" href="#Standards_Table">Standards</a>
+</li>
+<li class="hmenu-submenu">
+<span class="hmenu-bullet" onclick="toggle_submenu(this);">+</span><a class="tocItem" href="#datasets">Datasets</a><ul>
+<li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#IG.IG.DM">DM (Demographics)</a>
+</li>
+<li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#IG.IG.AE">AE (Adverse Events)</a>
+</li>
+<li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#IG.IG.VS">VS (Vital Signs)</a>
+</li>
+</ul>
+</li>
+<li class="hmenu-submenu">
+<span onclick="toggle_submenu(this);" class="hmenu-bullet">+</span><a href="#decodelist" class="tocItem">Controlled Terminology</a><ul><li class="hmenu-submenu">
+<span class="hmenu-bullet" onclick="toggle_submenu(this);">+</span><a class="tocItem" href="#decodelist">CodeLists</a><ul>
+<li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#CL.C66731">Sex</a>
+</li>
+<li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#CL.C74457">Race</a>
+</li>
+<li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#CL.C66790">Ethnicity</a>
+</li>
+<li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#CL.CL.VSTEST">Vital Signs Test Code</a>
+</li>
+</ul>
+</li></ul>
+</li>
+</ul>
+</div>
+<div id="main">
+<div class="docinfo">
+<p class="documentinfo">Date/Time of Define-XML document generation: 2026-03-14T21:24:45</p>
+<p class="documentinfo">Define-XML version: 2.1.0</p>
+<p class="documentinfo">Define-XML Context: Submission</p>
+<p class="stylesheetinfo">Stylesheet version: 2019-02-11</p>
+</div>
+<div class="study-metadata"><dl class="study-metadata">
+<dt>Study Name</dt>
+<dd>CDISCPILOT01</dd>
+<dt>Study Description</dt>
+<dd>A Phase II, Randomized, Double-Blind, Placebo-Controlled, Parallel Group Study of the Efficacy, Safety, and Tolerability of Xanomeline in Patients with Mild to Moderate Alzheimer's Disease</dd>
+<dt>Protocol Name</dt>
+<dd>CDISCPILOT01</dd>
+<dt>Metadata Name</dt>
+<dd>CDISCPILOT01 SDTMIG Data Definitions</dd>
+<dt>Metadata Description</dt>
+<dd>Dataset metadata for CDISCPILOT01 SDTMIG datasets</dd>
+</dl></div>
+<h1 class="invisible">Standards for Study CDISCPILOT01</h1>
+<div class="containerbox"><table id="Standards_Table" summary="Standards">
+<caption class="header">Standards for Study CDISCPILOT01</caption>
+<tr class="header">
+<th scope="col">Standard</th>
+<th scope="col">Type</th>
+<th scope="col">Status</th>
+<th scope="col">Documentation</th>
+</tr>
+<tr class="tablerowodd" id="STD.STD.SDTMIG">
+<td>SDTMIG 3.4</td>
+<td>IG</td>
+<td>Final</td>
+<td></td>
+</tr>
+<tr class="tableroweven" id="STD.STD.CT">
+<td>CDISC/NCI SDTMIG 2023-12-15</td>
+<td>CT</td>
+<td>Final</td>
+<td></td>
+</tr>
+</table></div>
+<br><a id="datasets"></a><h1 class="invisible">Datasets</h1>
+<div class="containerbox"><table summary="Data Definition Tables">
+<caption class="header">Datasets</caption>
+<tr class="header">
+<th scope="col">Dataset</th>
+<th scope="col">Description</th>
+<th scope="col">Class
+            </th>
+<th scope="col">Structure</th>
+<th scope="col">Purpose</th>
+<th scope="col">Keys</th>
+<th scope="col">Documentation</th>
+<th scope="col">Location</th>
+</tr>
+<tr class="tablerowodd" id="IG.DM">
+<td>
+<a href="#IG.IG.DM">DM</a><span class="standard-refeference">[SDTMIG 3.4]</span>
+</td>
+<td>Demographics</td>
+<td>SPECIAL PURPOSE</td>
+<td>One record per subject</td>
+<td>Tabulation</td>
+<td>STUDYID, USUBJID</td>
+<td></td>
+<td>
+<a class="external" href="dm.xpt"></a><span class="external-link-gif"></span> </td>
+</tr>
+<tr class="tableroweven" id="IG.AE">
+<td>
+<a href="#IG.IG.AE">AE</a><span class="standard-refeference">[SDTMIG 3.4]</span>
+</td>
+<td>Adverse Events</td>
+<td>EVENTS</td>
+<td>One record per adverse event per subject</td>
+<td>Tabulation</td>
+<td>STUDYID, USUBJID, AESEQ</td>
+<td></td>
+<td>
+<a class="external" href="ae.xpt"></a><span class="external-link-gif"></span> </td>
+</tr>
+<tr class="tablerowodd" id="IG.VS">
+<td>
+<a href="#IG.IG.VS">VS</a><span class="standard-refeference">[SDTMIG 3.4]</span>
+</td>
+<td>Vital Signs</td>
+<td>FINDINGS</td>
+<td>One record per vital sign measurement per subject per visit</td>
+<td>Tabulation</td>
+<td>STUDYID, USUBJID, VSTESTCD, VISITNUM</td>
+<td></td>
+<td>
+<a class="external" href="vs.xpt"></a><span class="external-link-gif"></span> </td>
+</tr>
+</table></div>
+<p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p>
+<br><a id="IG.IG.DM"></a><div class="containerbox">
+<h1 class="invisible">Demographics (DM) </h1>
+<table summary="ItemGroup IG.IG.DM">
+<caption><span>DM (Demographics) -  <span class="standard-refeference">[SDTMIG 3.4]</span><span class="dataset">Location: <a class="external" href="dm.xpt"></a><span class="external-link-gif"></span> </span></span></caption>
+<tr class="header">
+<th scope="col">Variable</th>
+<th scope="col">Label / Description</th>
+<th scope="col">Type</th>
+<th scope="col" class="length">Length or Display Format</th>
+<th scope="col" abbr="Format">Controlled Terms or ISO Format</th>
+<th scope="col">Origin / Source / Method / Comment</th>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.DM.IT.STUDYID"></a>STUDYID</td>
+<td>Study Identifier</td>
+<td class="datatype">text</td>
+<td class="number">12</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.DM.IT.DOMAIN"></a>DOMAIN</td>
+<td>Domain Abbreviation</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.DM.IT.USUBJID"></a>USUBJID</td>
+<td>Unique Subject Identifier</td>
+<td class="datatype">text</td>
+<td class="number">40</td>
+<td></td>
+<td><div class="linebreakcell">Derived<p class="linebreakcell">Concatenation of STUDYID, SITEID, and SUBJID</p>
+</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.DM.IT.SUBJID"></a>SUBJID</td>
+<td>Subject Identifier for the Study</td>
+<td class="datatype">text</td>
+<td class="number">20</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.DM.IT.DM.RFSTDTC"></a>RFSTDTC</td>
+<td>Subject Reference Start Date/Time</td>
+<td class="datatype">datetime</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.DM.IT.DM.RFENDTC"></a>RFENDTC</td>
+<td>Subject Reference End Date/Time</td>
+<td class="datatype">datetime</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.DM.IT.DM.RFXSTDTC"></a>RFXSTDTC</td>
+<td>Date/Time of First Study Treatment</td>
+<td class="datatype">datetime</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.DM.IT.DM.RFXENDTC"></a>RFXENDTC</td>
+<td>Date/Time of Last Study Treatment</td>
+<td class="datatype">datetime</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.DM.IT.SITEID"></a>SITEID</td>
+<td>Study Site Identifier</td>
+<td class="datatype">text</td>
+<td class="number">20</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.DM.IT.AGE"></a>AGE</td>
+<td>Age</td>
+<td class="datatype">integer</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.DM.IT.AGEU"></a>AGEU</td>
+<td>Age Units</td>
+<td class="datatype">text</td>
+<td class="number">10</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.DM.IT.SEX"></a>SEX</td>
+<td>Sex</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td>
+<span class="linebreakcell"><a href="#CL.C66731">Sex</a></span><ul class="codelist">
+<li class="codelist-item">&#8226;&#160;"M" = "MALE"</li>
+<li class="codelist-item">&#8226;&#160;"F" = "FEMALE"</li>
+</ul>
+</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.DM.IT.RACE"></a>RACE</td>
+<td>Race</td>
+<td class="datatype">text</td>
+<td class="number">60</td>
+<td>
+<span class="linebreakcell"><a href="#CL.C74457">Race</a></span><ul class="codelist">
+<li class="codelist-item">&#8226;&#160;"WHITE" = "WHITE"</li>
+<li class="codelist-item">&#8226;&#160;"BLACK OR AFRICAN AMERICAN" = "BLACK OR AFRICAN AMERICAN"</li>
+<li class="codelist-item">&#8226;&#160;"ASIAN" = "ASIAN"</li>
+<li class="codelist-item">&#8226;&#160;"AMERICAN INDIAN OR ALASKA NATIVE" = "AMERICAN INDIAN OR ALASKA NATIVE"</li>
+<li class="codelist-item">&#8226;&#160;"NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER" = "NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER"</li>
+</ul>
+</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.DM.IT.ETHNIC"></a>ETHNIC</td>
+<td>Ethnicity</td>
+<td class="datatype">text</td>
+<td class="number">60</td>
+<td>
+<span class="linebreakcell"><a href="#CL.C66790">Ethnicity</a></span><ul class="codelist">
+<li class="codelist-item">&#8226;&#160;"HISPANIC OR LATINO" = "HISPANIC OR LATINO"</li>
+<li class="codelist-item">&#8226;&#160;"NOT HISPANIC OR LATINO" = "NOT HISPANIC OR LATINO"</li>
+</ul>
+</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.DM.IT.ARMCD"></a>ARMCD</td>
+<td>Planned Arm Code</td>
+<td class="datatype">text</td>
+<td class="number">20</td>
+<td></td>
+<td><div class="linebreakcell">Protocol</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.DM.IT.ARM"></a>ARM</td>
+<td>Description of Planned Arm</td>
+<td class="datatype">text</td>
+<td class="number">200</td>
+<td></td>
+<td><div class="linebreakcell">Protocol</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.DM.IT.ACTARMCD"></a>ACTARMCD</td>
+<td>Actual Arm Code</td>
+<td class="datatype">text</td>
+<td class="number">20</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.DM.IT.ACTARM"></a>ACTARM</td>
+<td>Description of Actual Arm</td>
+<td class="datatype">text</td>
+<td class="number">200</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.DM.IT.DM.RFICDTC"></a>RFICDTC</td>
+<td>Date/Time of Informed Consent</td>
+<td class="datatype">datetime</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+</table>
+</div>
+<p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p>
+<br><a id="IG.IG.AE"></a><div class="containerbox">
+<h1 class="invisible">Adverse Events (AE) </h1>
+<table summary="ItemGroup IG.IG.AE">
+<caption><span>AE (Adverse Events) -  <span class="standard-refeference">[SDTMIG 3.4]</span><span class="dataset">Location: <a class="external" href="ae.xpt"></a><span class="external-link-gif"></span> </span></span></caption>
+<tr class="header">
+<th scope="col">Variable</th>
+<th scope="col">Label / Description</th>
+<th scope="col">Type</th>
+<th scope="col" class="length">Length or Display Format</th>
+<th scope="col" abbr="Format">Controlled Terms or ISO Format</th>
+<th scope="col">Origin / Source / Method / Comment</th>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.AE.IT.STUDYID"></a>STUDYID</td>
+<td>Study Identifier</td>
+<td class="datatype">text</td>
+<td class="number">12</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.AE.IT.DOMAIN"></a>DOMAIN</td>
+<td>Domain Abbreviation</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.AE.IT.USUBJID"></a>USUBJID</td>
+<td>Unique Subject Identifier</td>
+<td class="datatype">text</td>
+<td class="number">40</td>
+<td></td>
+<td><div class="linebreakcell">Derived<p class="linebreakcell">Concatenation of STUDYID, SITEID, and SUBJID</p>
+</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.AE.IT.AE.AESEQ"></a>AESEQ</td>
+<td>Sequence Number</td>
+<td class="datatype">integer</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.AE.IT.AE.AETERM"></a>AETERM</td>
+<td>Reported Term for the Adverse Event</td>
+<td class="datatype">text</td>
+<td class="number">200</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.AE.IT.AE.AEDECOD"></a>AEDECOD</td>
+<td>Dictionary-Derived Term</td>
+<td class="datatype">text</td>
+<td class="number">200</td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.AE.IT.AE.AESTDTC"></a>AESTDTC</td>
+<td>Start Date/Time of Adverse Event</td>
+<td class="datatype">datetime</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.AE.IT.AE.AEENDTC"></a>AEENDTC</td>
+<td>End Date/Time of Adverse Event</td>
+<td class="datatype">datetime</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.AE.IT.AE.AESEV"></a>AESEV</td>
+<td>Severity/Intensity</td>
+<td class="datatype">text</td>
+<td class="number">20</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.AE.IT.AE.AESER"></a>AESER</td>
+<td>Serious Event</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.AE.IT.AE.AEOUT"></a>AEOUT</td>
+<td>Outcome of Adverse Event</td>
+<td class="datatype">text</td>
+<td class="number">60</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.AE.IT.AE.AEACN"></a>AEACN</td>
+<td>Action Taken with Study Treatment</td>
+<td class="datatype">text</td>
+<td class="number">60</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.AE.IT.AE.AEREL"></a>AEREL</td>
+<td>Causality</td>
+<td class="datatype">text</td>
+<td class="number">60</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+</table>
+</div>
+<p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p>
+<br><a id="IG.IG.VS"></a><div class="containerbox">
+<h1 class="invisible">Vital Signs (VS) </h1>
+<table summary="ItemGroup IG.IG.VS">
+<caption><span>VS (Vital Signs) -  <span class="standard-refeference">[SDTMIG 3.4]</span><span class="dataset">Location: <a class="external" href="vs.xpt"></a><span class="external-link-gif"></span> </span></span></caption>
+<tr class="header">
+<th scope="col">Variable</th>
+<th scope="col">Label / Description</th>
+<th scope="col">Type</th>
+<th scope="col" class="length">Length or Display Format</th>
+<th scope="col" abbr="Format">Controlled Terms or ISO Format</th>
+<th scope="col">Origin / Source / Method / Comment</th>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.VS.IT.STUDYID"></a>STUDYID</td>
+<td>Study Identifier</td>
+<td class="datatype">text</td>
+<td class="number">12</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.VS.IT.DOMAIN"></a>DOMAIN</td>
+<td>Domain Abbreviation</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.VS.IT.USUBJID"></a>USUBJID</td>
+<td>Unique Subject Identifier</td>
+<td class="datatype">text</td>
+<td class="number">40</td>
+<td></td>
+<td><div class="linebreakcell">Derived<p class="linebreakcell">Concatenation of STUDYID, SITEID, and SUBJID</p>
+</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.VS.IT.VS.VSTESTCD"></a>VSTESTCD</td>
+<td>Vital Signs Test Short Name</td>
+<td class="datatype">text</td>
+<td class="number">8</td>
+<td>
+<a href="#CL.CL.VSTEST">Vital Signs Test Code</a><p class="linebreakcell">
                   [6 Terms]
-                </p></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.VS.IT.VS.VSTEST"></a>VSTEST</td><td>Vital Signs Test Name</td><td class="datatype">text</td><td class="number">40</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.VS.IT.VS.VSORRES"></a>VSORRES</td><td>Result or Finding in Original Units</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tablerowodd"><td><a id="IG.VS.IT.VS.VSORRESU"></a>VSORRESU</td><td>Original Units</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">CRF</div></td></tr><tr class="tableroweven"><td><a id="IG.VS.IT.VS.VSSTRESN"></a>VSSTRESN</td><td>Numeric Result/Finding in Standard Units</td><td class="datatype">float</td><td class="number"></td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tablerowodd"><td><a id="IG.VS.IT.VS.VSSTRESU"></a>VSSTRESU</td><td>Standard Units</td><td class="datatype">text</td><td class="number">20</td><td></td><td><div class="linebreakcell">Derived</div></td></tr><tr class="tableroweven"><td><a id="IG.VS.IT.VS.VISITNUM"></a>VISITNUM</td><td>Visit Number</td><td class="datatype">float</td><td class="number"></td><td></td><td><div class="linebreakcell">Protocol</div></td></tr><tr class="tablerowodd"><td><a id="IG.VS.IT.VS.VISIT"></a>VISIT</td><td>Visit Name</td><td class="datatype">text</td><td class="number">200</td><td></td><td><div class="linebreakcell">Protocol</div></td></tr><tr class="tableroweven"><td><a id="IG.VS.IT.VS.VSDTC"></a>VSDTC</td><td>Date/Time of Measurements</td><td class="datatype">datetime</td><td class="number"></td><td>ISO 8601</td><td><div class="linebreakcell">CRF</div></td></tr></table></div><p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p><br><a id="decodelist"></a><div class="containerbox"><h1 class="header">CodeLists</h1><div class="codelist" id="CL.C66731"><div class="codelist-caption">Sex</div><table summary="Controlled Term - Sex"><tr class="header"><th scope="col" class="codedvalue">Permitted Value (Code)</th><th scope="col">Display Value (Decode)</th></tr><tr class="tablerowodd"><td>M</td><td class="codelist-item-decode">MALE</td></tr><tr class="tableroweven"><td>F</td><td class="codelist-item-decode">FEMALE</td></tr></table></div><div class="codelist" id="CL.C74457"><div class="codelist-caption">Race</div><table summary="Controlled Term - Race"><tr class="header"><th scope="col" class="codedvalue">Permitted Value (Code)</th><th scope="col">Display Value (Decode)</th></tr><tr class="tablerowodd"><td>WHITE</td><td class="codelist-item-decode">WHITE</td></tr><tr class="tableroweven"><td>BLACK OR AFRICAN AMERICAN</td><td class="codelist-item-decode">BLACK OR AFRICAN AMERICAN</td></tr><tr class="tablerowodd"><td>ASIAN</td><td class="codelist-item-decode">ASIAN</td></tr><tr class="tableroweven"><td>AMERICAN INDIAN OR ALASKA NATIVE</td><td class="codelist-item-decode">AMERICAN INDIAN OR ALASKA NATIVE</td></tr><tr class="tablerowodd"><td>NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER</td><td class="codelist-item-decode">NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER</td></tr></table></div><div class="codelist" id="CL.C66790"><div class="codelist-caption">Ethnicity</div><table summary="Controlled Term - Ethnicity"><tr class="header"><th scope="col" class="codedvalue">Permitted Value (Code)</th><th scope="col">Display Value (Decode)</th></tr><tr class="tablerowodd"><td>HISPANIC OR LATINO</td><td class="codelist-item-decode">HISPANIC OR LATINO</td></tr><tr class="tableroweven"><td>NOT HISPANIC OR LATINO</td><td class="codelist-item-decode">NOT HISPANIC OR LATINO</td></tr></table></div><div class="codelist" id="CL.CL.VSTEST"><div class="codelist-caption">Vital Signs Test Code</div><table summary="Controlled Term - Vital Signs Test Code"><tr class="header"><th scope="col" class="codedvalue">Permitted Value (Code)</th><th scope="col">Display Value (Decode)</th></tr><tr class="tablerowodd"><td>SYSBP</td><td class="codelist-item-decode">Systolic Blood Pressure</td></tr><tr class="tableroweven"><td>DIABP</td><td class="codelist-item-decode">Diastolic Blood Pressure</td></tr><tr class="tablerowodd"><td>PULSE</td><td class="codelist-item-decode">Pulse Rate</td></tr><tr class="tableroweven"><td>TEMP</td><td class="codelist-item-decode">Temperature</td></tr><tr class="tablerowodd"><td>WEIGHT</td><td class="codelist-item-decode">Weight</td></tr><tr class="tableroweven"><td>HEIGHT</td><td class="codelist-item-decode">Height</td></tr></table></div><p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p><br></div></div></body></html>
+                </p>
+</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.VS.IT.VS.VSTEST"></a>VSTEST</td>
+<td>Vital Signs Test Name</td>
+<td class="datatype">text</td>
+<td class="number">40</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.VS.IT.VS.VSORRES"></a>VSORRES</td>
+<td>Result or Finding in Original Units</td>
+<td class="datatype">text</td>
+<td class="number">20</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.VS.IT.VS.VSORRESU"></a>VSORRESU</td>
+<td>Original Units</td>
+<td class="datatype">text</td>
+<td class="number">20</td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.VS.IT.VS.VSSTRESN"></a>VSSTRESN</td>
+<td>Numeric Result/Finding in Standard Units</td>
+<td class="datatype">float</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.VS.IT.VS.VSSTRESU"></a>VSSTRESU</td>
+<td>Standard Units</td>
+<td class="datatype">text</td>
+<td class="number">20</td>
+<td></td>
+<td><div class="linebreakcell">Derived</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.VS.IT.VS.VISITNUM"></a>VISITNUM</td>
+<td>Visit Number</td>
+<td class="datatype">float</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">Protocol</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.VS.IT.VS.VISIT"></a>VISIT</td>
+<td>Visit Name</td>
+<td class="datatype">text</td>
+<td class="number">200</td>
+<td></td>
+<td><div class="linebreakcell">Protocol</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.VS.IT.VS.VSDTC"></a>VSDTC</td>
+<td>Date/Time of Measurements</td>
+<td class="datatype">datetime</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+</table>
+</div>
+<p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p>
+<br><a id="decodelist"></a><div class="containerbox">
+<h1 class="header">CodeLists</h1>
+<div class="codelist" id="CL.C66731">
+<div class="codelist-caption">Sex</div>
+<table summary="Controlled Term - Sex">
+<tr class="header">
+<th scope="col" class="codedvalue">Permitted Value (Code)</th>
+<th scope="col">Display Value (Decode)</th>
+</tr>
+<tr class="tablerowodd">
+<td>M</td>
+<td class="codelist-item-decode">MALE</td>
+</tr>
+<tr class="tableroweven">
+<td>F</td>
+<td class="codelist-item-decode">FEMALE</td>
+</tr>
+</table>
+</div>
+<div class="codelist" id="CL.C74457">
+<div class="codelist-caption">Race</div>
+<table summary="Controlled Term - Race">
+<tr class="header">
+<th scope="col" class="codedvalue">Permitted Value (Code)</th>
+<th scope="col">Display Value (Decode)</th>
+</tr>
+<tr class="tablerowodd">
+<td>WHITE</td>
+<td class="codelist-item-decode">WHITE</td>
+</tr>
+<tr class="tableroweven">
+<td>BLACK OR AFRICAN AMERICAN</td>
+<td class="codelist-item-decode">BLACK OR AFRICAN AMERICAN</td>
+</tr>
+<tr class="tablerowodd">
+<td>ASIAN</td>
+<td class="codelist-item-decode">ASIAN</td>
+</tr>
+<tr class="tableroweven">
+<td>AMERICAN INDIAN OR ALASKA NATIVE</td>
+<td class="codelist-item-decode">AMERICAN INDIAN OR ALASKA NATIVE</td>
+</tr>
+<tr class="tablerowodd">
+<td>NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER</td>
+<td class="codelist-item-decode">NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER</td>
+</tr>
+</table>
+</div>
+<div class="codelist" id="CL.C66790">
+<div class="codelist-caption">Ethnicity</div>
+<table summary="Controlled Term - Ethnicity">
+<tr class="header">
+<th scope="col" class="codedvalue">Permitted Value (Code)</th>
+<th scope="col">Display Value (Decode)</th>
+</tr>
+<tr class="tablerowodd">
+<td>HISPANIC OR LATINO</td>
+<td class="codelist-item-decode">HISPANIC OR LATINO</td>
+</tr>
+<tr class="tableroweven">
+<td>NOT HISPANIC OR LATINO</td>
+<td class="codelist-item-decode">NOT HISPANIC OR LATINO</td>
+</tr>
+</table>
+</div>
+<div class="codelist" id="CL.CL.VSTEST">
+<div class="codelist-caption">Vital Signs Test Code</div>
+<table summary="Controlled Term - Vital Signs Test Code">
+<tr class="header">
+<th scope="col" class="codedvalue">Permitted Value (Code)</th>
+<th scope="col">Display Value (Decode)</th>
+</tr>
+<tr class="tablerowodd">
+<td>SYSBP</td>
+<td class="codelist-item-decode">Systolic Blood Pressure</td>
+</tr>
+<tr class="tableroweven">
+<td>DIABP</td>
+<td class="codelist-item-decode">Diastolic Blood Pressure</td>
+</tr>
+<tr class="tablerowodd">
+<td>PULSE</td>
+<td class="codelist-item-decode">Pulse Rate</td>
+</tr>
+<tr class="tableroweven">
+<td>TEMP</td>
+<td class="codelist-item-decode">Temperature</td>
+</tr>
+<tr class="tablerowodd">
+<td>WEIGHT</td>
+<td class="codelist-item-decode">Weight</td>
+</tr>
+<tr class="tableroweven">
+<td>HEIGHT</td>
+<td class="codelist-item-decode">Height</td>
+</tr>
+</table>
+</div>
+<p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p>
+<br>
+</div>
+</div>
+</body>
+</html>

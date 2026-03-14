@@ -45,6 +45,9 @@ from . import adam  # noqa: F401
 from .core import (
     StudyContext,
     load_study_context,
+    build_dag,
+    PipelineDAG,
+    PipelineNode,
 )
 from .ct import CTValidator, get_validator, load_controlled_terminology
 from .io import load_raw_data, load_datasets, save_parquet
@@ -66,6 +69,9 @@ __all__ = [
     # Core
     "StudyContext",
     "load_study_context",
+    "build_dag",
+    "PipelineDAG",
+    "PipelineNode",
     # CT
     "CTValidator",
     "get_validator",
