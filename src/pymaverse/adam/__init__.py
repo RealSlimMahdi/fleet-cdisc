@@ -2,6 +2,7 @@
 
 from .models import ADAMAlgorithm, ADAMDatasetSpec, ADAMVariableSpec
 from .namespace import AdamNamespace
+from .transforms import register_transform, get_transform, list_transforms, clear_transforms
 from .adsl_namespace import ADSLNamespace       # registers df.adsl
 from .occds_namespace import OCCDSNamespace     # registers df.occds
 # TA-specific namespace extensions
@@ -19,6 +20,11 @@ __all__ = [
     "AdamNamespace",
     "ADSLNamespace",
     "OCCDSNamespace",
+    # Transform registry
+    "register_transform",
+    "get_transform",
+    "list_transforms",
+    "clear_transforms",
     # TA namespaces
     "OncoNamespace",
     "OphthaNamespace",
