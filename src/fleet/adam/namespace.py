@@ -605,6 +605,74 @@ class AdamNamespace:
         return self._materialise_then(df.filter(filter_expr))
 
     # ------------------------------------------------------------------ #
+    # 18. transform — arbitrary DataFrame → DataFrame function            #
+    # ------------------------------------------------------------------ #
+
+    def transform(
+        self,
+        fn: "str | Callable[[pl.DataFrame], pl.DataFrame]",
+        *,
+        label: str | None = None,  # noqa: ARG002  — cosmetic, intentionally unused
+    ) -> "AdamNamespace":
+        """
+        Apply an arbitrary ``(pl.DataFrame) -> pl.DataFrame`` function.
+
+        The pending expression pipeline is materialised before the function
+        is called, so the function always receives a fully committed frame.
+
+        Parameters
+        ----------
+        fn:
+            Either a callable directly, or the registered name of a transform
+            (see :func:`fleet.adam.transforms.register_transform`).
+        label:
+            Optional cosmetic label for documentation/lineage; has no effect
+            on the output.
+
+        Raises
+        ------
+        KeyError
+            If *fn* is a string that has not been registered.
+        TypeError
+            If *fn* is neither a callable nor a string, or if the function
+            does not return a ``pl.DataFrame``.
+
+        Example::
+
+            from fleet.adam.transforms import register_transform
+
+            @register_transform("add_agegr1")
+            def add_agegr1(df):
+                return df.with_columns(
+                    pl.when(pl.col("AGE") < 65).then(pl.lit("<65"))
+                      .otherwise(pl.lit(">=65")).alias("AGEGR1")
+                )
+
+            result = dm.adam.assigned("STUDYID", value="S01").transform("add_agegr1").to_frame()
+        """
+        from .transforms import get_transform
+
+        if isinstance(fn, str):
+            fn = get_transform(fn)  # raises KeyError if not found
+        elif not callable(fn):
+            raise TypeError(
+                f"transform() expects a callable or a registered name string, "
+                f"got {type(fn).__name__!r}."
+            )
+
+        # Materialise pending expressions so the function sees a full frame.
+        committed = self.to_frame()
+        result = fn(committed)
+
+        if not isinstance(result, pl.DataFrame):
+            raise TypeError(
+                f"Transform function must return a polars DataFrame, "
+                f"got {type(result).__name__!r}."
+            )
+
+        return self._materialise_then(result)
+
+    # ------------------------------------------------------------------ #
     # Spec-driven pipeline                                                 #
     # ------------------------------------------------------------------ #
 
@@ -614,6 +682,7 @@ class AdamNamespace:
         *,
         dataset: str | None = None,
         only: "list[str] | None" = None,
+        omit: "list[str] | None" = None,
     ) -> "AdamNamespace":
         """
         Build an ADaM derivation pipeline from a YAML specification file.
@@ -623,8 +692,16 @@ class AdamNamespace:
         which dataset to execute (e.g. ``dataset="ADVS"``).  When the file
         contains only one dataset the *dataset* argument may be omitted.
 
-        *only*: optional allow-list — power-user override to process a subset of
-        variables from the spec.  For dependency-driven staging, declare
+        *only*: optional allow-list — process only the listed variable names.
+        *omit*: optional deny-list — skip the listed variable names; useful when
+        you want to override a spec variable with custom inline logic::
+
+            dm.adam.from_spec(..., omit=["MYVAR"]).assigned("MYVAR", value="override")
+
+        ``only`` and ``omit`` are mutually exclusive; specifying both raises
+        ``ValueError``.
+
+        For dependency-driven staging, declare
         ``depends_on: [col, ...]`` in the YAML derivation block instead;
         ``from_spec()`` will flush automatically before any variable whose
         declared dependencies are not yet committed to the frame::
@@ -647,6 +724,12 @@ class AdamNamespace:
         """
         from .models import ADAMDatasetSpec
 
+        if only is not None and omit is not None:
+            raise ValueError(
+                "Cannot specify both only= and omit= in from_spec(). "
+                "Use only= to allow-list variables, or omit= to deny-list them."
+            )
+
         spec_data = yaml.safe_load(Path(spec_path).read_text())
 
         # ── Detect format: define.yaml has a top-level "datasets" key ──
@@ -661,6 +744,8 @@ class AdamNamespace:
             alg = var.algorithm.value
             target = var.target
             if only is not None and target not in only:
+                continue
+            if omit is not None and target in omit:
                 continue
 
             # ── auto-flush when a declared dependency is not yet committed ──
