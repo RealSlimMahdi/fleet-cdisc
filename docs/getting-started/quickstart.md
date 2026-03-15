@@ -86,6 +86,52 @@ adsl = (
 
 ---
 
+## Initialising a new study workspace
+
+`StudyContext.init()` scaffolds the expected folder layout and starter `define.yaml` files in one call:
+
+```python
+from pymaverse import StudyContext
+
+ctx = StudyContext.init(
+    "./studies/MYSTUDY01",
+    study_id="MYSTUDY01",
+    company="Acme Pharma",   # optional
+)
+```
+
+This creates:
+
+```
+studies/MYSTUDY01/
+  study_config.yaml        ← load later with load_study_context()
+  data/
+    raw/
+    sdtm/
+    adam/
+  metadata/
+    sdtm/
+      define.yaml          ← pre-filled SDTM boilerplate
+    adam/
+      define.yaml          ← pre-filled ADaM boilerplate
+  outputs/
+```
+
+Each `define.yaml` is pre-populated with the `study:` block and has its `$schema` pointer set, so your IDE validates it immediately. The `codelists` and `datasets` sections start empty and ready to fill in.
+
+If any of the three files (`study_config.yaml`, `metadata/sdtm/define.yaml`, `metadata/adam/define.yaml`) already exist, `StudyContext.init()` raises a `StudyConfigError` without touching anything — protecting in-progress work.
+
+To reload an existing workspace in subsequent sessions:
+
+```python
+from pathlib import Path
+from pymaverse import load_study_context
+
+ctx = load_study_context(Path("./studies/MYSTUDY01/study_config.yaml"))
+```
+
+---
+
 ## Full pipeline example
 
 See the [ADSL Pipeline notebook](../examples/adsl_pipeline.ipynb) for a complete, pre-executed walkthrough using the CDISCPILOT01 dataset — covering all 10 admiral-equivalent steps from raw data to final ADSL.

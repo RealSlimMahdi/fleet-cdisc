@@ -6,6 +6,7 @@ All notable changes to Pymaverse are documented here.
 
 ### Added
 
+- `StudyContext.init()` — scaffolds a new study workspace (folder tree, `study_config.yaml`, SDTM and ADaM `define.yaml` boilerplates) in one call; raises `StudyConfigError` if already initialised
 - MkDocs documentation site with Material theme
 - `mike` versioned deployment to GitHub Pages
 - Pre-executed example notebook: ADSL pipeline (CDISCPILOT01)

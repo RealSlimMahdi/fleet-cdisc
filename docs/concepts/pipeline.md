@@ -93,3 +93,34 @@ This means you pay no cost for columns you don't chain. Expression ordering mirr
 | `worst_severity(target, severity_col, order, groups)` | Worst severity flag                |
 | `any_flag(target, col, value, groups)`                | `"Y"` if event exists in group     |
 | `to_frame()`                                          | Materialise                        |
+
+---
+
+## StudyContext — workspace initialisation
+
+`StudyContext.init()` is the recommended starting point for any new study. It
+creates the folder tree expected by all path helpers (`raw_data_dir`,
+`sdtm_data_dir`, `metadata_sdtm_dir`, …) and writes ready-to-edit boilerplate
+files, so the very first `load_study_context()` call in your pipeline script
+can succeed immediately.
+
+```python
+from pymaverse import StudyContext, load_study_context
+from pathlib import Path
+
+# ── Once, when starting a new study ──────────────────────────────────────
+ctx = StudyContext.init(
+    "./studies/STUDY01",
+    study_id="STUDY01",
+    company="Acme Pharma",
+)
+
+# ── Every subsequent session ──────────────────────────────────────────────
+ctx = load_study_context(Path("./studies/STUDY01/study_config.yaml"))
+```
+
+| Outcome                     | Behaviour                                                      |
+| --------------------------- | -------------------------------------------------------------- |
+| Directories already exist   | Silently skipped (`mkdir -p` semantics)                        |
+| `study_config.yaml` exists  | Raises `StudyConfigError` — use `load_study_context()` instead |
+| Either `define.yaml` exists | Raises `StudyConfigError` — protects in-progress spec work     |
