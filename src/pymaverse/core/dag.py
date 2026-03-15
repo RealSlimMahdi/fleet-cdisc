@@ -217,6 +217,44 @@ class PipelineDAG:
         """
         return {name: list(node.inputs) for name, node in self.nodes.items()}
 
+    def generate(self, output_path: str | Path) -> None:
+        """Write the DAG to *output_path* as a JSON file.
+
+        The file contains the full adjacency representation produced by
+        :meth:`to_dict` plus the topological execution order, so it is
+        self-contained and can be consumed by external tools without needing
+        to re-parse the define YAMLs.
+
+        Parameters
+        ----------
+        output_path:
+            Destination path for the ``.json`` file (e.g.
+            ``outputs/cdiscpilot01/pipeline_dag.json``).
+
+        Example
+        -------
+        ::
+
+            dag = build_dag(
+                "specs/cdiscpilot01/sdtm/define.yaml",
+                "specs/cdiscpilot01/adam/define.yaml",
+                output_dir="outputs/cdiscpilot01",
+            )
+            dag.generate("outputs/cdiscpilot01/pipeline_dag.json")
+        """
+        import json
+
+        out = Path(output_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "execution_order": self.execution_order(),
+            "nodes": self.to_dict(),
+            "snakemake": self.to_snakemake(),
+            "airflow": self.to_airflow(),
+        }
+        out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        print(f"Pipeline DAG generated: {out}")
+
 
 # ───────────────────────────────────────────────────────── build_dag() ── #
 

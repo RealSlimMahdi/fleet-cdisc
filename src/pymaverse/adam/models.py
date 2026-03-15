@@ -27,7 +27,6 @@ class ADAMAlgorithm(str, Enum):
     NRIND = "nrind"
     ON_TREATMENT = "on_treatment"
     SHIFT = "shift"
-    TRANSFORM = "transform"
 
 
 class ADAMVariableSpec(BaseModel):
@@ -88,9 +87,6 @@ class ADAMVariableSpec(BaseModel):
 
     # whereclauses
     where: Optional[str] = None
-
-    # transform
-    callable_name: Optional[str] = None        # registry key for algorithm: transform
 
     # auto-staging: columns that must be committed to the frame before this derivation runs
     depends_on: Optional[list[str]] = None

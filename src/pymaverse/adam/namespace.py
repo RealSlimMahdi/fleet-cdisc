@@ -35,7 +35,6 @@ from typing import Any, TYPE_CHECKING
 import polars as pl
 import yaml
 
-from .transforms import get_transform
 from .utils import (
     baseline,
     bmi as _bmi_expr,
@@ -606,89 +605,6 @@ class AdamNamespace:
         return self._materialise_then(df.filter(filter_expr))
 
     # ------------------------------------------------------------------ #
-    # 18. transform — custom derivation function                           #
-    # ------------------------------------------------------------------ #
-
-    def transform(
-        self,
-        fn: "str | Callable[[pl.DataFrame], pl.DataFrame]",
-        *,
-        label: str | None = None,
-    ) -> "AdamNamespace":
-        """
-        Apply a custom derivation function to the current dataset.
-
-        Use ``transform`` when a derivation is too complex to express as a
-        single Polars expression — for example multi-column logic, external
-        lookups, statistical models, or study-specific business rules.
-
-        *fn* accepts either:
-
-        - A **callable** with signature ``(pl.DataFrame) -> pl.DataFrame``
-        - A **string name** referencing a function previously registered
-          with :func:`~pymaverse.adam.transforms.register_transform`
-
-        The current pipeline is materialised before calling *fn*, and the
-        returned DataFrame is wrapped in a fresh namespace so chaining
-        continues normally.
-
-        *label* is an optional human-readable note (ignored at runtime).
-        It is useful for self-documenting pipelines and shows up in logs.
-
-        Examples
-        --------
-        **Direct callable** — simplest approach for one-off logic::
-
-            def derive_agegr1(df: pl.DataFrame) -> pl.DataFrame:
-                return df.with_columns(
-                    pl.when(pl.col("AGE") < 65).then(pl.lit("<65"))
-                      .otherwise(pl.lit(">=65"))
-                      .alias("AGEGR1")
-                )
-
-            adsl = (
-                dm.adam
-                .source("USUBJID")
-                .transform(derive_agegr1, label="Age-group classification")
-                .to_frame()
-            )
-
-        **Registered name** — reusable across pipelines::
-
-            from pymaverse.adam.transforms import register_transform
-
-            @register_transform("derive_agegr1")
-            def derive_agegr1(df: pl.DataFrame) -> pl.DataFrame:
-                ...
-
-            adsl = dm.adam.transform("derive_agegr1").to_frame()
-
-        **In a YAML spec** — ``callable`` references a registered name::
-
-            # define.yaml
-            - name: AGEGR1
-              label: Pooled Age Group 1
-              derivation:
-                algorithm: transform
-                callable: derive_agegr1
-        """
-        if isinstance(fn, str):
-            fn = get_transform(fn)
-        if not callable(fn):
-            raise TypeError(
-                f"transform expects a callable or a registered name (str), "
-                f"got {type(fn).__name__}"
-            )
-        df = self.to_frame()
-        result = fn(df)
-        if not isinstance(result, pl.DataFrame):
-            raise TypeError(
-                f"Transform function must return a polars DataFrame, "
-                f"got {type(result).__name__}"
-            )
-        return self._materialise_then(result)
-
-    # ------------------------------------------------------------------ #
     # Spec-driven pipeline                                                 #
     # ------------------------------------------------------------------ #
 
@@ -698,7 +614,6 @@ class AdamNamespace:
         *,
         dataset: str | None = None,
         only: "list[str] | None" = None,
-        omit: "list[str] | None" = None,
     ) -> "AdamNamespace":
         """
         Build an ADaM derivation pipeline from a YAML specification file.
@@ -709,12 +624,7 @@ class AdamNamespace:
         contains only one dataset the *dataset* argument may be omitted.
 
         *only*: optional allow-list — power-user override to process a subset of
-        variables from the spec.  *omit*: optional deny-list — skip these
-        variables (the inverse of *only*; more convenient when most variables
-        come from the spec and only a few are overridden inline).
-        ``only`` and ``omit`` are mutually exclusive.
-
-        For dependency-driven staging, declare
+        variables from the spec.  For dependency-driven staging, declare
         ``depends_on: [col, ...]`` in the YAML derivation block instead;
         ``from_spec()`` will flush automatically before any variable whose
         declared dependencies are not yet committed to the frame::
@@ -731,23 +641,11 @@ class AdamNamespace:
 
             advs = vs_df.adam.from_spec("specs/.../define.yaml", dataset="ADVS").to_frame()
 
-        *omit* example — derive AGEGR1 inline, skip it in the spec::
-
-            adsl = (
-                dm.adam
-                .from_spec(spec, dataset="ADSL", omit=["AGEGR1"])
-                .transform(my_custom_agegr1)
-                .to_frame()
-            )
-
         Example::
 
             vs_df.adam.from_spec("specs/cdiscpilot01/adam/define.yaml", dataset="ADVS").to_frame()
         """
         from .models import ADAMDatasetSpec
-
-        if only is not None and omit is not None:
-            raise ValueError("Cannot specify both 'only' and 'omit'. Use one or the other.")
 
         spec_data = yaml.safe_load(Path(spec_path).read_text())
 
@@ -763,8 +661,6 @@ class AdamNamespace:
             alg = var.algorithm.value
             target = var.target
             if only is not None and target not in only:
-                continue
-            if omit is not None and target in omit:
                 continue
 
             # ── auto-flush when a declared dependency is not yet committed ──
@@ -849,14 +745,6 @@ class AdamNamespace:
             elif alg == "whereclauses":
                 if var.where:
                     ns = ns.whereclauses(where=var.where)
-            elif alg == "transform":
-                callable_name = getattr(var, "callable_name", None)
-                if not callable_name:
-                    raise ValueError(
-                        f"Variable '{target}': algorithm 'transform' requires "
-                        f"'callable' referencing a registered transform name."
-                    )
-                ns = ns.transform(callable_name, label=target)
             # lookup: skip in spec-driven (requires external dataset object)
 
         return ns
@@ -889,11 +777,6 @@ class AdamNamespace:
             drv = var.get("derivation")
             if not drv:
                 continue  # no derivation → carry-through / manual column
-            # YAML uses 'callable' but the model field is 'callable_name'
-            # to avoid shadowing the Python builtin.
-            drv = dict(drv)
-            if "callable" in drv:
-                drv["callable_name"] = drv.pop("callable")
             spec = ADAMVariableSpec(
                 target=var["name"],
                 **drv,
