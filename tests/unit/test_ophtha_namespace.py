@@ -1,4 +1,4 @@
-"""Unit tests for the Ophthalmology Polars namespace extension (df.ophtha)."""
+"""Unit tests for the Ophthalmology Polars namespace extension (df.adam.ophtha)."""
 
 import polars as pl
 import polars.testing as plt
@@ -44,7 +44,7 @@ class TestEtdrsToLogmar:
     def test_reference_values(self, etdrs, expected_logmar):
         """Single-row parametrized check matching admiral's reference vector."""
         df = pl.DataFrame({"ETDRS": [float(etdrs)]})
-        result = df.ophtha.etdrs_to_logmar("LOGMAR", source="ETDRS").to_frame()
+        result = df.adam.ophtha.etdrs_to_logmar("LOGMAR", source="ETDRS").to_frame()
         assert result["LOGMAR"][0] == pytest.approx(expected_logmar, abs=1e-4)
 
     def test_full_vector_at_once(self):
@@ -52,13 +52,13 @@ class TestEtdrsToLogmar:
         etdrs_vals = [float(e) for e, _ in _ETDRS_LOGMAR_PAIRS]
         expected = [lm for _, lm in _ETDRS_LOGMAR_PAIRS]
         df = pl.DataFrame({"ETDRS": etdrs_vals})
-        result = df.ophtha.etdrs_to_logmar("LOGMAR", source="ETDRS").to_frame()
+        result = df.adam.ophtha.etdrs_to_logmar("LOGMAR", source="ETDRS").to_frame()
         for got, exp in zip(result["LOGMAR"].to_list(), expected):
             assert got == pytest.approx(exp, abs=1e-4)
 
     def test_non_derived_columns_preserved(self):
         df = pl.DataFrame({"USUBJID": ["01-701-1015"], "ETDRS": [50.0]})
-        result = df.ophtha.etdrs_to_logmar("LOGMAR", source="ETDRS").to_frame()
+        result = df.adam.ophtha.etdrs_to_logmar("LOGMAR", source="ETDRS").to_frame()
         assert "USUBJID" in result.columns
 
 
@@ -67,19 +67,19 @@ class TestLogmarToEtdrs:
 
     def test_logmar_07_gives_50(self):
         df = pl.DataFrame({"LOGMAR": [0.7]})
-        result = df.ophtha.logmar_to_etdrs("ETDRS", source="LOGMAR").to_frame()
+        result = df.adam.ophtha.logmar_to_etdrs("ETDRS", source="LOGMAR").to_frame()
         assert result["ETDRS"][0] == pytest.approx(50.0, abs=0.1)
 
     def test_logmar_0_gives_85(self):
         df = pl.DataFrame({"LOGMAR": [0.0]})
-        result = df.ophtha.logmar_to_etdrs("ETDRS", source="LOGMAR").to_frame()
+        result = df.adam.ophtha.logmar_to_etdrs("ETDRS", source="LOGMAR").to_frame()
         assert result["ETDRS"][0] == pytest.approx(85.0, abs=0.1)
 
     def test_roundtrip(self):
         """ETDRS → LogMAR → ETDRS must recover original values within rounding."""
         df = pl.DataFrame({"ETDRS": [55.0, 70.0, 20.0]})
-        logmar_df = df.ophtha.etdrs_to_logmar("LOGMAR", source="ETDRS").to_frame()
-        result = logmar_df.ophtha.logmar_to_etdrs("ETDRS_RT", source="LOGMAR").to_frame()
+        logmar_df = df.adam.ophtha.etdrs_to_logmar("LOGMAR", source="ETDRS").to_frame()
+        result = logmar_df.adam.ophtha.logmar_to_etdrs("ETDRS_RT", source="LOGMAR").to_frame()
         for orig, rt in zip(df["ETDRS"].to_list(), result["ETDRS_RT"].to_list()):
             assert rt == pytest.approx(orig, abs=0.2)
 
@@ -95,13 +95,13 @@ class TestStudyEye:
     @pytest.mark.parametrize("code,expected_eye", _EYE_CODE_MAPPING)
     def test_eye_code_mapping(self, code, expected_eye):
         df = pl.DataFrame({"SCSTRESC": [code]})
-        result = df.ophtha.study_eye("STUDYEYE", source="SCSTRESC").to_frame()
+        result = df.adam.ophtha.study_eye("STUDYEYE", source="SCSTRESC").to_frame()
         assert result["STUDYEYE"][0] == expected_eye
 
     def test_case_insensitive_full_vector(self):
         """admiral tests case-insensitive parsing — lower/mixed case must work."""
         df = pl.DataFrame({"SCSTRESC": ["os", "Od", "oU", "op"]})
-        result = df.ophtha.study_eye("STUDYEYE", source="SCSTRESC").to_frame()
+        result = df.adam.ophtha.study_eye("STUDYEYE", source="SCSTRESC").to_frame()
         assert result["STUDYEYE"].to_list() == ["LEFT", "RIGHT", "BILATERAL", None]
 
     def test_multi_subject_realistic(self):
@@ -111,7 +111,7 @@ class TestStudyEye:
             "USUBJID": ["P01", "P02", "P04", "P05"],
             "SCSTRESC": ["OS", "OD", "OU", "OD"],
         })
-        result = df.ophtha.study_eye("STUDYEYE", source="SCSTRESC").to_frame()
+        result = df.adam.ophtha.study_eye("STUDYEYE", source="SCSTRESC").to_frame()
         eyes = dict(zip(result["USUBJID"].to_list(), result["STUDYEYE"].to_list()))
         assert eyes["P01"] == "LEFT"
         assert eyes["P02"] == "RIGHT"
@@ -126,7 +126,7 @@ class TestAffectedEye:
             "AELOC":    ["EYE"],
             "AELAT":    ["BILATERAL"],
         })
-        result = df.ophtha.affected_eye(
+        result = df.adam.ophtha.affected_eye(
             "AFEYE", loc_col="AELOC", lat_col="AELAT"
         ).to_frame()
         assert result["AFEYE"][0] == "Both Eyes"
@@ -137,7 +137,7 @@ class TestAffectedEye:
             "AELOC":    ["EYE"],
             "AELAT":    ["RIGHT"],
         })
-        result = df.ophtha.affected_eye(
+        result = df.adam.ophtha.affected_eye(
             "AFEYE", loc_col="AELOC", lat_col="AELAT"
         ).to_frame()
         assert result["AFEYE"][0] == "Study Eye"
@@ -148,7 +148,7 @@ class TestAffectedEye:
             "AELOC":    ["EYE"],
             "AELAT":    ["LEFT"],
         })
-        result = df.ophtha.affected_eye(
+        result = df.adam.ophtha.affected_eye(
             "AFEYE", loc_col="AELOC", lat_col="AELAT"
         ).to_frame()
         assert result["AFEYE"][0] == "Fellow Eye"
@@ -159,7 +159,7 @@ class TestAffectedEye:
             "AELOC":    ["NOSE"],
             "AELAT":    ["RIGHT"],
         })
-        result = df.ophtha.affected_eye(
+        result = df.adam.ophtha.affected_eye(
             "AFEYE", loc_col="AELOC", lat_col="AELAT"
         ).to_frame()
         assert result["AFEYE"][0] is None
@@ -180,7 +180,7 @@ class TestBcvaCriterion:
     ])
     def test_direction_variants(self, direction, values, threshold, expected):
         df = pl.DataFrame({"ETDRS": values})
-        result = df.ophtha.bcva_criterion(
+        result = df.adam.ophtha.bcva_criterion(
             "FL", value_col="ETDRS", threshold=threshold, direction=direction
         ).to_frame()
         assert result["FL"].to_list() == expected
@@ -188,7 +188,7 @@ class TestBcvaCriterion:
     def test_at_exact_ge_threshold_flagged(self):
         """At exactly the ge threshold → must flag (inclusive)."""
         df = pl.DataFrame({"ETDRS": [70.0]})
-        result = df.ophtha.bcva_criterion(
+        result = df.adam.ophtha.bcva_criterion(
             "FL", value_col="ETDRS", threshold=70.0, direction="ge"
         ).to_frame()
         assert result["FL"][0] == "Y"
@@ -196,7 +196,7 @@ class TestBcvaCriterion:
     def test_at_exact_gt_threshold_not_flagged(self):
         """At exactly the gt threshold → must NOT flag (exclusive)."""
         df = pl.DataFrame({"ETDRS": [70.0]})
-        result = df.ophtha.bcva_criterion(
+        result = df.adam.ophtha.bcva_criterion(
             "FL", value_col="ETDRS", threshold=70.0, direction="gt"
         ).to_frame()
         assert result["FL"][0] is None
@@ -204,6 +204,6 @@ class TestBcvaCriterion:
     def test_invalid_direction_raises(self):
         df = pl.DataFrame({"ETDRS": [50.0]})
         with pytest.raises(ValueError, match="direction"):
-            df.ophtha.bcva_criterion(
+            df.adam.ophtha.bcva_criterion(
                 "X", value_col="ETDRS", threshold=50, direction="eq"
             ).to_frame()

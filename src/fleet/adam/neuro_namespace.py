@@ -1,7 +1,7 @@
 """
-ADaM Neuroscience Polars namespace extension (admiralneuro-inspired).
+ADaM Neuroscience namespace extension (admiralneuro-inspired).
 
-Registers ``df.neuro`` on every Polars DataFrame.
+Accessed via ``df.adam.neuro`` on any Polars DataFrame.
 
 Key derivations ported from pharmaverse/admiralneuro and clinical neuroscience:
   - ``centiloid``       — amyloid PET SUVR → Centiloid scale (Navitsky et al.)
@@ -15,14 +15,14 @@ Usage
     import fleet  # triggers registration
 
     adapet = (
-        pet_df.neuro
+        pet_df.adam.neuro
         .source("USUBJID")
         .centiloid("CLV", suvr_col="SUVR", slope=183.07, intercept=-177.26)
         .to_frame()
     )
 
     adcog = (
-        cog_df.neuro
+        cog_df.adam.neuro
         .mmse_category("MMSECG", score_col="AVAL")
         .to_frame()
     )
@@ -44,7 +44,6 @@ _CENTILOID_CALIBRATIONS: dict[tuple[str, str, str], tuple[float, float]] = {
 }
 
 
-@pl.api.register_dataframe_namespace("neuro")
 class NeuroNamespace:
     """
     Immutable pipeline builder for ADaM neuroscience derivations.

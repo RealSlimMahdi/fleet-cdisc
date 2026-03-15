@@ -2,16 +2,16 @@
 Fleet — CDISC-compliant clinical data derivation using Polars.
 
 Importing this package registers the following Polars namespace extensions:
-  - ``df.sdtm``      — 14 SDTM derivation verbs (BDS/domain mapping)
-  - ``df.adam``      — 16 ADaM derivation verbs (BDS datasets)
-  - ``df.adsl``      —  6 patient-level verbs (one row per subject)
-  - ``df.occds``     —  5 occurrence verbs (one row per event)
-  - ``df.onco``      — Oncology (admiralonco-inspired): aval_resp, BOR, filter_pd
-  - ``df.ophtha``    — Ophthalmology (admiralophtha): ETDRS/LogMAR, study eye
-  - ``df.peds``      — Pediatrics (admiralpeds): age derivations, prematurity
-  - ``df.vaccine``   — Vaccine (admiralvaccine): fever, seroconversion, ADIS AVAL
-  - ``df.metabolic`` — Metabolic (admiralmetabolic): waist ratios, body fat %
-  - ``df.neuro``     — Neuroscience (admiralneuro): Centiloid, MMSE, CDR-SoB
+  - ``df.sdtm``           — 14 SDTM derivation verbs (BDS/domain mapping)
+  - ``df.adam``           — 16 ADaM derivation verbs (BDS datasets)
+  - ``df.adam.adsl``      —  6 patient-level verbs (one row per subject)
+  - ``df.adam.occds``     —  5 occurrence verbs (one row per event)
+  - ``df.adam.onco``      — Oncology (admiralonco-inspired)
+  - ``df.adam.ophtha``    — Ophthalmology (admiralophtha)
+  - ``df.adam.peds``      — Pediatrics (admiralpeds)
+  - ``df.adam.vaccine``   — Vaccine (admiralvaccine)
+  - ``df.adam.metabolic`` — Metabolic (admiralmetabolic)
+  - ``df.adam.neuro``     — Neuroscience (admiralneuro)
 
 Usage
 -----
@@ -39,8 +39,8 @@ Usage
 from ._version import __version__
 
 # Importing sdtm/adam triggers the @pl.api.register_dataframe_namespace decorators
-from . import sdtm  # noqa: F401
-from . import adam  # noqa: F401
+from . import sdtm  # noqa: F401  (registers df.sdtm)
+from . import adam  # noqa: F401  (registers df.adam)
 
 from .core import (
     StudyContext,
@@ -57,6 +57,7 @@ from .adam import (
     OncoNamespace, OphthaNamespace, PedsNamespace,
     VaccineNamespace, MetabolicNamespace, NeuroNamespace,
 )
+# TA namespace classes are also importable directly for type hints / isinstance
 from .define_xml import (
     CheckResult, DatasetChecker, TypeMismatch,
     DefineSpecGenerator,
@@ -83,12 +84,12 @@ __all__ = [
     # SDTM
     "SDTMAlgorithm",
     "SDTMNamespace",
-    # ADaM core
+    # ADaM core + sub-structures (accessed via df.adam, df.adam.adsl, df.adam.occds)
     "ADAMAlgorithm",
     "AdamNamespace",
     "ADSLNamespace",
     "OCCDSNamespace",
-    # ADaM TA extensions
+    # ADaM TA extensions (accessed via df.adam.<ta>)
     "OncoNamespace",
     "OphthaNamespace",
     "PedsNamespace",

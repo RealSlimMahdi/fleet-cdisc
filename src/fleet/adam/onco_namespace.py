@@ -1,7 +1,7 @@
 """
-ADaM Oncology Polars namespace extension (admiralonco-inspired).
+ADaM Oncology namespace extension (admiralonco-inspired).
 
-Registers ``df.onco`` on every Polars DataFrame.
+Accessed via ``df.adam.onco`` on any Polars DataFrame.
 
 Key derivations ported from pharmaverse/admiralonco:
   - ``aval_resp``             — RECIST response text → numeric code
@@ -15,7 +15,7 @@ Usage
     import fleet  # triggers registration
 
     adrs = (
-        rs_sdtm.onco
+        rs_sdtm.adam.onco
         .source("USUBJID")
         .aval_resp("AVAL", source="OVRLRESP")
         .best_overall_response("BOR", source="OVRLRESP", groups=["USUBJID"])
@@ -73,7 +73,6 @@ def _num_resp_expr(num_expr: pl.Expr) -> pl.Expr:
     )
 
 
-@pl.api.register_dataframe_namespace("onco")
 class OncoNamespace:
     """
     Immutable pipeline builder for ADaM oncology derivations.

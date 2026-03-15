@@ -1,4 +1,4 @@
-"""Unit tests for the ADaM OCCDS Polars namespace extension (df.occds)."""
+"""Unit tests for the ADaM OCCDS Polars namespace extension (df.adam.occds)."""
 
 import polars as pl
 import pytest
@@ -23,21 +23,21 @@ def ae_frame():
 
 class TestBaseVerbs:
     def test_source(self, ae_frame):
-        result = ae_frame.occds.source("USUBJID").to_frame()
+        result = ae_frame.adam.occds.source("USUBJID").to_frame()
         assert "USUBJID" in result.columns
 
     def test_assigned(self, ae_frame):
-        result = ae_frame.occds.assigned("STUDYID", value="TEST01").to_frame()
+        result = ae_frame.adam.occds.assigned("STUDYID", value="TEST01").to_frame()
         assert result["STUDYID"].to_list() == ["TEST01"] * 4
 
     def test_derivation(self, ae_frame):
-        result = ae_frame.occds.derivation(
+        result = ae_frame.adam.occds.derivation(
             "AETERM2", expression='pl.col("AETERM").str.to_uppercase()'
         ).to_frame()
         assert result["AETERM2"][0] == "HEADACHE"
 
     def test_whereclauses(self, ae_frame):
-        result = ae_frame.occds.whereclauses(
+        result = ae_frame.adam.occds.whereclauses(
             where='pl.col("AESEV") == "MILD"'
         ).to_frame()
         assert result.height == 2
@@ -45,19 +45,19 @@ class TestBaseVerbs:
 
 class TestSeq:
     def test_seq_starts_at_one(self, ae_frame):
-        result = ae_frame.occds.seq("ASEQ", groups=["USUBJID"]).to_frame()
+        result = ae_frame.adam.occds.seq("ASEQ", groups=["USUBJID"]).to_frame()
         rows_001 = result.filter(pl.col("USUBJID") == "01-001")
         assert sorted(rows_001["ASEQ"].to_list()) == [1, 2, 3]
 
     def test_seq_resets_per_subject(self, ae_frame):
-        result = ae_frame.occds.seq("ASEQ", groups=["USUBJID"]).to_frame()
+        result = ae_frame.adam.occds.seq("ASEQ", groups=["USUBJID"]).to_frame()
         rows_002 = result.filter(pl.col("USUBJID") == "01-002")
         assert rows_002["ASEQ"].to_list() == [1]
 
 
 class TestWorstFlag:
     def test_worst_per_body_system(self, ae_frame):
-        result = ae_frame.occds.worst_flag(
+        result = ae_frame.adam.occds.worst_flag(
             "ANL01FL",
             severity_col="AESEV",
             groups=["USUBJID", "AEBODSYS"],
@@ -71,7 +71,7 @@ class TestWorstFlag:
         assert nervous_001["ANL01FL"][0] == "Y"
 
     def test_worst_flag_non_worst_is_null(self, ae_frame):
-        result = ae_frame.occds.worst_flag(
+        result = ae_frame.adam.occds.worst_flag(
             "ANL01FL",
             severity_col="AESEV",
             groups=["USUBJID"],
@@ -86,7 +86,7 @@ class TestWorstFlag:
 
 class TestTreatmentEmergent:
     def test_on_treatment_flagged(self, ae_frame):
-        result = ae_frame.occds.treatment_emergent(
+        result = ae_frame.adam.occds.treatment_emergent(
             "TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT"
         ).to_frame()
         # All events start after TRTSDT and before TRTEDT
@@ -98,7 +98,7 @@ class TestTreatmentEmergent:
             "TRTSDT":  ["2024-01-10"],
             "TRTEDT":  ["2024-03-10"],
         })
-        result = df.occds.treatment_emergent(
+        result = df.adam.occds.treatment_emergent(
             "TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT"
         ).to_frame()
         assert result["TRTEMFL"][0] is None
@@ -106,7 +106,7 @@ class TestTreatmentEmergent:
 
 class TestOnsetRecovery:
     def test_recovered_flagged(self, ae_frame):
-        result = ae_frame.occds.onset_recovery(
+        result = ae_frame.adam.occds.onset_recovery(
             "RCVRYFL", start_date="AESTDTC", end_date="AEENDTC", ref_date="TRTSDT"
         ).to_frame()
         # Row 0: started on-trt, has end date → Y

@@ -1,7 +1,7 @@
 """
-ADaM Pediatrics Polars namespace extension (admiralpeds-inspired).
+ADaM Pediatrics namespace extension (admiralpeds-inspired).
 
-Registers ``df.peds`` on every Polars DataFrame.
+Accessed via ``df.adam.peds`` on any Polars DataFrame.
 
 Key derivations ported from pharmaverse/admiralpeds and pediatric standards:
   - ``age_days``          — age in whole days between two date columns
@@ -22,7 +22,7 @@ Usage
     import fleet  # triggers registration
 
     adsl = (
-        dm_sdtm.peds
+        dm_sdtm.adam.peds
         .source("USUBJID")
         .age_days("AGEDAYS", birth_date="BRTHDT", analysis_date="RFSTDTC")
         .age_years("AGE", birth_date="BRTHDT", analysis_date="RFSTDTC")
@@ -38,7 +38,6 @@ from typing import Any
 import polars as pl
 
 
-@pl.api.register_dataframe_namespace("peds")
 class PedsNamespace:
     """
     Immutable pipeline builder for paediatric ADaM derivations.

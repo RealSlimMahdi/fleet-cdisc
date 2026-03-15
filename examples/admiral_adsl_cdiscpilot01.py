@@ -26,7 +26,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import polars as pl
-import fleet  # noqa: F401 — registers .sdtm / .adam / .adsl namespace extensions
+import fleet  # noqa: F401 — registers .sdtm / .adam namespace extensions
 
 RAW = Path("datasets/cdiscpilot01/raw")
 OUT = Path("outputs/cdiscpilot01")
@@ -193,7 +193,7 @@ print(f"── 2d. SDTM AE : {ae.shape[0]} records  × {ae.shape[1]} variables")
 print("\n── 3–5. ADSL base + treatment dates ────────────────────────────────────")
 
 adsl = (
-    dm.adsl
+    dm.adam.adsl
     # ── demographics from DM ──────────────────────────────────────────────
     .source("STUDYID")
     .source("USUBJID")
@@ -217,7 +217,7 @@ adsl = (
     .source("RFICDTC")
     .to_frame()
     # ── treatment start date from EX (admiral: derive_vars_merged, mode="first") ──
-    .adsl
+    .adam.adsl
     .first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")
     # ── treatment end date from EX (admiral: derive_vars_merged, mode="last") ──
     .last_date( "TRTEDT", from_dataset=ex, date_col="EXENDTC")
@@ -297,7 +297,7 @@ print(f"   EOSSTT counts: {adsl['EOSSTT'].value_counts().to_dicts()}")
 print("\n── 7. Age grouping (AGEGR1) ─────────────────────────────────────────────")
 
 adsl = (
-    adsl.adsl
+    adsl.adam.adsl
     .condderivation("AGEGR1",
                     conditions=[
                         {"condition": "pl.col('AGE') < 18",  "value": "<18"},
@@ -331,7 +331,7 @@ adsl = (
           .alias("SAFFL")
     )
     # ITTFL: all randomised subjects (ARMCD not SCRNFAIL)
-    .adsl
+    .adam.adsl
     .eligibility_flag("ITTFL",
                       criteria='pl.col("ARMCD") != "SCRNFAIL"')
     .to_frame()
@@ -389,7 +389,7 @@ print(f"   LSTALVDT range: {adsl['LSTALVDT'].min()} → {adsl['LSTALVDT'].max()}
 print("\n── 10. AE counts ────────────────────────────────────────────────────────")
 
 adsl = (
-    adsl.adsl
+    adsl.adam.adsl
     .count_events("NUMAE",  from_dataset=ae)
     .count_events("NUMSAE", from_dataset=ae,
                   where='pl.col("AESER") == "Y"')
@@ -551,7 +551,7 @@ adae = (
     .adam
     .study_day("ADY", analysis_date="ASTDT", reference_date="TRTSDT")
     .to_frame()
-    .occds
+    .adam.occds
     # admiral: derive_var_trtemfl
     .treatment_emergent("TRTEMFL", start_date="AESTDTC",
                         trtsdt="TRTSDT", trtedt="TRTEDT")
@@ -610,7 +610,7 @@ adex = (
                            ".dt.total_days() + 1")
     .to_frame()
     # admiral: derive_var_obs_number
-    .occds
+    .adam.occds
     .seq("ASEQ", groups=["USUBJID"])
     .to_frame()
 )

@@ -1,4 +1,4 @@
-"""Unit tests for the Vaccine Polars namespace extension (df.vaccine)."""
+"""Unit tests for the Vaccine Polars namespace extension (df.adam.vaccine)."""
 
 import polars as pl
 import pytest
@@ -24,26 +24,26 @@ class TestFeverFlag:
 
     def test_above_threshold_flagged(self):
         df = pl.DataFrame({"TEMP": [37.0, 38.1, 39.0, 38.0]})
-        result = df.vaccine.fever_flag("FEVFL", temp_col="TEMP").to_frame()
+        result = df.adam.vaccine.fever_flag("FEVFL", temp_col="TEMP").to_frame()
         # > 38.0, not >=
         assert result["FEVFL"].to_list() == [None, "Y", "Y", None]
 
     def test_at_exact_threshold_not_flagged(self):
         """Exactly AT the threshold must NOT flag (strict >)."""
         df = pl.DataFrame({"TEMP": [38.0]})
-        result = df.vaccine.fever_flag("FEVFL", temp_col="TEMP").to_frame()
+        result = df.adam.vaccine.fever_flag("FEVFL", temp_col="TEMP").to_frame()
         assert result["FEVFL"][0] is None
 
     def test_custom_threshold(self):
         df = pl.DataFrame({"TEMP": [39.0, 39.5, 40.0]})
-        result = df.vaccine.fever_flag(
+        result = df.adam.vaccine.fever_flag(
             "HIGHFL", temp_col="TEMP", threshold=39.0
         ).to_frame()
         assert result["HIGHFL"].to_list() == [None, "Y", "Y"]
 
     def test_custom_flag_value(self):
         df = pl.DataFrame({"TEMP": [39.0]})
-        result = df.vaccine.fever_flag(
+        result = df.adam.vaccine.fever_flag(
             "FEVFL", temp_col="TEMP", flag_value="1"
         ).to_frame()
         assert result["FEVFL"][0] == "1"
@@ -54,7 +54,7 @@ class TestFeverFlag:
             "USUBJID": ["01-001"],
             "TEMP":    [39.5],
         })
-        result = df.vaccine.fever_flag("FEVFL", temp_col="TEMP").to_frame()
+        result = df.adam.vaccine.fever_flag("FEVFL", temp_col="TEMP").to_frame()
         assert "STUDYID" in result.columns
         assert "USUBJID" in result.columns
 
@@ -67,7 +67,7 @@ class TestSeroconversionFlag:
             "AVAL": [400.0, 1600.0, 300.0],
             "BASE": [100.0, 100.0,  100.0],
         })
-        result = df.vaccine.seroconversion_flag(
+        result = df.adam.vaccine.seroconversion_flag(
             "SRCONVFL", aval_col="AVAL", base_col="BASE"
         ).to_frame()
         assert result["SRCONVFL"].to_list() == ["Y", "Y", None]
@@ -75,7 +75,7 @@ class TestSeroconversionFlag:
     def test_exactly_four_fold_flagged(self):
         """Exactly 4.0-fold rise must be flagged (≥ is inclusive)."""
         df = pl.DataFrame({"AVAL": [400.0], "BASE": [100.0]})
-        result = df.vaccine.seroconversion_flag(
+        result = df.adam.vaccine.seroconversion_flag(
             "SRCONVFL", aval_col="AVAL", base_col="BASE"
         ).to_frame()
         assert result["SRCONVFL"][0] == "Y"
@@ -83,14 +83,14 @@ class TestSeroconversionFlag:
     def test_zero_base_gives_null(self):
         """Zero denominator must produce null, not an error or infinity."""
         df = pl.DataFrame({"AVAL": [100.0], "BASE": [0.0]})
-        result = df.vaccine.seroconversion_flag(
+        result = df.adam.vaccine.seroconversion_flag(
             "SRCONVFL", aval_col="AVAL", base_col="BASE"
         ).to_frame()
         assert result["SRCONVFL"][0] is None
 
     def test_null_base_gives_null(self):
         df = pl.DataFrame({"AVAL": [100.0], "BASE": [None]})
-        result = df.vaccine.seroconversion_flag(
+        result = df.adam.vaccine.seroconversion_flag(
             "SRCONVFL", aval_col="AVAL", base_col="BASE"
         ).to_frame()
         assert result["SRCONVFL"][0] is None
@@ -100,7 +100,7 @@ class TestSeroconversionFlag:
             "AVAL": [200.0, 300.0],
             "BASE": [100.0, 100.0],
         })
-        result = df.vaccine.seroconversion_flag(
+        result = df.adam.vaccine.seroconversion_flag(
             "SRCONV2FL", aval_col="AVAL", base_col="BASE", fold_rise=2.0
         ).to_frame()
         assert result["SRCONV2FL"].to_list() == ["Y", "Y"]
@@ -111,7 +111,7 @@ class TestSeroresponseFlag:
 
     def test_above_threshold(self):
         df = pl.DataFrame({"AVAL": [30.0, 40.0, 50.0]})
-        result = df.vaccine.seroresponse_flag(
+        result = df.adam.vaccine.seroresponse_flag(
             "SRSFL", aval_col="AVAL", threshold=40.0
         ).to_frame()
         assert result["SRSFL"].to_list() == [None, "Y", "Y"]
@@ -119,7 +119,7 @@ class TestSeroresponseFlag:
     def test_exactly_at_threshold_flagged(self):
         """Exactly AT the threshold must flag (≥ is inclusive)."""
         df = pl.DataFrame({"AVAL": [40.0]})
-        result = df.vaccine.seroresponse_flag(
+        result = df.adam.vaccine.seroresponse_flag(
             "SRSFL", aval_col="AVAL", threshold=40.0
         ).to_frame()
         assert result["SRSFL"][0] == "Y"
@@ -149,7 +149,7 @@ class TestAvalAdis:
             "ISULOQ":   [uloq],
             "ISORRES":  [orres],
         })
-        result = df.vaccine.aval_adis(
+        result = df.adam.vaccine.aval_adis(
             "AVAL",
             stresn_col="ISSTRESN", lloq_col="ISLLOQ",
             uloq_col="ISULOQ", orres_col="ISORRES"
@@ -164,7 +164,7 @@ class TestAvalAdis:
             "ISULOQ":   [200.0],
             "ISORRES":  ["1"],
         })
-        result = df.vaccine.aval_adis(
+        result = df.adam.vaccine.aval_adis(
             "AVAL",
             stresn_col="ISSTRESN", lloq_col="ISLLOQ",
             uloq_col="ISULOQ", orres_col="ISORRES",
@@ -180,7 +180,7 @@ class TestAvalAdis:
             "ISULOQ":   [200.0],
             "ISORRES":  [">200"],
         })
-        result = df.vaccine.aval_adis(
+        result = df.adam.vaccine.aval_adis(
             "AVAL",
             stresn_col="ISSTRESN", lloq_col="ISLLOQ",
             uloq_col="ISULOQ", orres_col="ISORRES"
@@ -194,7 +194,7 @@ class TestAvalAdis:
             "ISULOQ":   [200.0],
             "ISORRES":  [None],
         })
-        result = df.vaccine.aval_adis(
+        result = df.adam.vaccine.aval_adis(
             "AVAL",
             stresn_col="ISSTRESN", lloq_col="ISLLOQ",
             uloq_col="ISULOQ", orres_col="ISORRES"
@@ -206,7 +206,7 @@ class TestAvalAdis:
         Full ADIS fixture test — verifies correct LOQ handling across 3 subjects
         and 2 visits each, mirroring admiral's multi-parameter test 1.
         """
-        result = adis_frame.vaccine.aval_adis(
+        result = adis_frame.adam.vaccine.aval_adis(
             "AVAL",
             stresn_col="ISSTRESN", lloq_col="ISLLOQ",
             uloq_col="ISULOQ", orres_col="ISORRES"
@@ -229,7 +229,7 @@ class TestEventFlag:
             "AVAL":    [3.5, 1.0, 4.5],
             "AVALC":   ["3.5", "1.0", "4.5"],
         })
-        result = df.vaccine.event_flag(
+        result = df.adam.vaccine.event_flag(
             "EVENTFL", aval_col="AVAL", cutoff=2.5,
             groups=["USUBJID", "FAOBJ", "ATPTREF"]
         ).to_frame()
@@ -245,7 +245,7 @@ class TestEventFlag:
             "AVAL":    [1.0, 1.5, 2.0],
             "AVALC":   ["1.0", "1.5", "2.0"],
         })
-        result = df.vaccine.event_flag(
+        result = df.adam.vaccine.event_flag(
             "EVENTFL", aval_col="AVAL", cutoff=2.5,
             groups=["USUBJID", "FAOBJ", "ATPTREF"],
             no_event_value="N"
@@ -261,7 +261,7 @@ class TestEventFlag:
             "AVAL":    [3.5, 1.0, 1.0, 2.0],
             "AVALC":   ["3.5", "1.0", "1.0", "2.0"],
         })
-        result = df.vaccine.event_flag(
+        result = df.adam.vaccine.event_flag(
             "EVENTFL", aval_col="AVAL", cutoff=2.5,
             groups=["USUBJID", "FAOBJ", "ATPTREF"],
             no_event_value="N"
@@ -279,7 +279,7 @@ class TestEventFlag:
             "AVAL":    [1.0, 2.0],
             "AVALC":   ["1.0", "2.0"],
         })
-        result = df.vaccine.event_flag(
+        result = df.adam.vaccine.event_flag(
             "EVENTFL", aval_col="AVAL", cutoff=2.5,
             groups=["USUBJID", "FAOBJ", "ATPTREF"]
         ).to_frame()

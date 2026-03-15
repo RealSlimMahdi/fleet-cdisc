@@ -69,7 +69,7 @@ advs = (
 
 ```python
 adsl = (
-    dm_sdtm.adsl
+    dm_sdtm.adam.adsl
     .source("USUBJID")
     .source("AGE")
     .source("SEX")

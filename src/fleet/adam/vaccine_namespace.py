@@ -1,7 +1,7 @@
 """
-ADaM Vaccine Polars namespace extension (admiralvaccine-inspired).
+ADaM Vaccine namespace extension (admiralvaccine-inspired).
 
-Registers ``df.vaccine`` on every Polars DataFrame.
+Accessed via ``df.adam.vaccine`` on any Polars DataFrame.
 
 Key derivations ported from pharmaverse/admiralvaccine:
   - ``fever_flag``          — flag elevated temperature records (ADFACE)
@@ -15,7 +15,7 @@ Usage
     import fleet  # triggers registration
 
     adface = (
-        face_df.vaccine
+        face_df.adam.vaccine
         .source("USUBJID")
         .fever_flag("FEVFL", temp_col="AVAL", threshold=38.0)
         .event_flag("EVENTFL", aval_col="AVAL", cutoff=2.5,
@@ -24,7 +24,7 @@ Usage
     )
 
     adis = (
-        is_df.vaccine
+        is_df.adam.vaccine
         .aval_adis("AVAL", stresn_col="ISSTRESN", lloq_col="ISLLOQ",
                    uloq_col="ISULOQ", orres_col="ISORRES")
         .seroconversion_flag("SRCONVFL", aval_col="AVAL", base_col="BASE")
@@ -40,7 +40,6 @@ from typing import Any
 import polars as pl
 
 
-@pl.api.register_dataframe_namespace("vaccine")
 class VaccineNamespace:
     """
     Immutable pipeline builder for ADaM vaccine derivations.

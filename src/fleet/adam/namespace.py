@@ -2,8 +2,15 @@
 ADaM Polars namespace extension (BDS datasets).
 
 Registers ``df.adam`` on every Polars DataFrame.
-For patient-level (ADSL) derivations use ``df.adsl``.
-For occurrence datasets (ADAE/ADCM) use ``df.occds``.
+All ADaM sub-structures and extensions are accessed via properties:
+  - ``df.adam.adsl``   — one-row-per-subject derivations
+  - ``df.adam.occds``  — one-row-per-event derivations
+  - ``df.adam.onco``   — Oncology TA extension
+  - ``df.adam.ophtha`` — Ophthalmology TA extension
+  - ``df.adam.peds``   — Pediatrics TA extension
+  - ``df.adam.vaccine``— Vaccine TA extension
+  - ``df.adam.metabolic`` — Metabolic TA extension
+  - ``df.adam.neuro``  — Neuroscience TA extension
 
 Usage
 -----
@@ -48,7 +55,14 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
-    pass
+    from .adsl_namespace import ADSLNamespace
+    from .occds_namespace import OCCDSNamespace
+    from .onco_namespace import OncoNamespace
+    from .ophtha_namespace import OphthaNamespace
+    from .peds_namespace import PedsNamespace
+    from .vaccine_namespace import VaccineNamespace
+    from .metabolic_namespace import MetabolicNamespace
+    from .neuro_namespace import NeuroNamespace
 
 
 @pl.api.register_dataframe_namespace("adam")
@@ -975,6 +989,62 @@ class AdamNamespace:
                 )
             ds = matches[0]
         return [v["name"] for v in ds["variables"]]
+
+    # ------------------------------------------------------------------ #
+    # ADaM sub-structures (accessed as df.adam.adsl / df.adam.occds)       #
+    # ------------------------------------------------------------------ #
+
+    @property
+    def adsl(self) -> "ADSLNamespace":
+        """ADSL (one-row-per-subject) derivations: treatment dates, duration, population flags."""
+        from .adsl_namespace import ADSLNamespace
+        return ADSLNamespace(self.to_frame())
+
+    @property
+    def occds(self) -> "OCCDSNamespace":
+        """OCCDS (one-row-per-event) derivations: sequencing, worst flag, treatment-emergent."""
+        from .occds_namespace import OCCDSNamespace
+        return OCCDSNamespace(self.to_frame())
+
+    # ------------------------------------------------------------------ #
+    # Therapeutic-area extensions (accessed as df.adam.<ta>)               #
+    # ------------------------------------------------------------------ #
+
+    @property
+    def onco(self) -> "OncoNamespace":
+        """Oncology derivations (admiralonco-inspired): RECIST, BOR, response flags."""
+        from .onco_namespace import OncoNamespace
+        return OncoNamespace(self.to_frame())
+
+    @property
+    def ophtha(self) -> "OphthaNamespace":
+        """Ophthalmology derivations (admiralophtha-inspired): ETDRS/LogMAR, study eye."""
+        from .ophtha_namespace import OphthaNamespace
+        return OphthaNamespace(self.to_frame())
+
+    @property
+    def peds(self) -> "PedsNamespace":
+        """Pediatrics derivations (admiralpeds-inspired): age, prematurity, BMI."""
+        from .peds_namespace import PedsNamespace
+        return PedsNamespace(self.to_frame())
+
+    @property
+    def vaccine(self) -> "VaccineNamespace":
+        """Vaccine derivations (admiralvaccine-inspired): fever, seroconversion."""
+        from .vaccine_namespace import VaccineNamespace
+        return VaccineNamespace(self.to_frame())
+
+    @property
+    def metabolic(self) -> "MetabolicNamespace":
+        """Metabolic derivations (admiralmetabolic-inspired): waist ratios, body fat."""
+        from .metabolic_namespace import MetabolicNamespace
+        return MetabolicNamespace(self.to_frame())
+
+    @property
+    def neuro(self) -> "NeuroNamespace":
+        """Neuroscience derivations (admiralneuro-inspired): Centiloid, MMSE, CDR-SoB."""
+        from .neuro_namespace import NeuroNamespace
+        return NeuroNamespace(self.to_frame())
 
     # ------------------------------------------------------------------ #
     # Terminal operations                                                  #

@@ -1,7 +1,7 @@
 """
-ADaM Ophthalmology Polars namespace extension (admiralophtha-inspired).
+ADaM Ophthalmology namespace extension (admiralophtha-inspired).
 
-Registers ``df.ophtha`` on every Polars DataFrame.
+Accessed via ``df.adam.ophtha`` on any Polars DataFrame.
 
 Key derivations ported from pharmaverse/admiralophtha:
   - ``etdrs_to_logmar``   — ETDRS score → LogMAR (Beck et al. formula)
@@ -15,7 +15,7 @@ Usage
     import fleet  # triggers registration
 
     adbcva = (
-        bcva_df.ophtha
+        bcva_df.adam.ophtha
         .etdrs_to_logmar("LOGMAR", source="ETDRS")
         .study_eye("STUDYEYE", source="SCSTRESC")
         .bcva_criterion("BCVACR1FL", value_col="ETDRS", threshold=70,
@@ -31,7 +31,6 @@ from typing import Any
 import polars as pl
 
 
-@pl.api.register_dataframe_namespace("ophtha")
 class OphthaNamespace:
     """
     Immutable pipeline builder for ADaM ophthalmology derivations.

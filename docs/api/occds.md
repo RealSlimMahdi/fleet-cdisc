@@ -1,6 +1,6 @@
 # OCCDS Namespace
 
-The `df.occds` namespace builds occurrence datasets (ADAE, ADCM, …).
+The `df.adam.occds` namespace builds occurrence datasets (ADAE, ADCM, …).
 
 ::: fleet.adam.OCCDSNamespace
 options:

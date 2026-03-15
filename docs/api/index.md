@@ -8,25 +8,29 @@ import fleet
 
 ## Modules
 
-| Module                        | Description                                                                 |
-| ----------------------------- | --------------------------------------------------------------------------- |
-| [`sdtm`](sdtm.md)             | SDTM namespace — 14 derivation verbs                                        |
-| [`adam`](adam.md)             | ADaM BDS namespace — 16 derivation verbs                                    |
-| [`adsl`](adsl.md)             | ADSL namespace — 6 patient-level verbs                                      |
-| [`occds`](occds.md)           | OCCDS namespace — 5 occurrence verbs                                        |
-| [`ta`](ta.md)                 | Therapeutic-area extensions (onco, ophtha, peds, vaccine, metabolic, neuro) |
-| [`define_xml`](define_xml.md) | Define-XML generation, validation, spec generation                          |
-| [`ct`](ct.md)                 | Controlled terminology loading and validation                               |
-| [`core`](core.md)             | `StudyContext`, `PipelineDAG`, exceptions                                   |
+| Module                        | Description                                             |
+| ----------------------------- | ------------------------------------------------------- |
+| [`sdtm`](sdtm.md)             | SDTM namespace — 14 derivation verbs                    |
+| [`adam`](adam.md)             | ADaM BDS namespace — 16 derivation verbs                |
+| [`adsl`](adsl.md)             | ADSL namespace (`df.adam.adsl`) — 6 patient-level verbs |
+| [`occds`](occds.md)           | OCCDS namespace (`df.adam.occds`) — 5 occurrence verbs  |
+| [`ta`](ta.md)                 | Therapeutic-area extensions (`df.adam.<ta>`)            |
+| [`define_xml`](define_xml.md) | Define-XML generation, validation, spec generation      |
+| [`ct`](ct.md)                 | Controlled terminology loading and validation           |
+| [`core`](core.md)             | `StudyContext`, `PipelineDAG`, exceptions               |
 
 ## Namespace registration
 
-Importing `fleet` registers all namespace extensions on every `polars.DataFrame`.
-You never need to import individual submodules:
+Importing `fleet` registers two core namespace extensions on every `polars.DataFrame`.
+All ADaM sub-structures and TA extensions are accessed as nested properties of `df.adam`:
 
 ```python
-import fleet          # registers df.sdtm, df.adam, df.adsl, df.occds
+import fleet          # registers df.sdtm, df.adam
 import polars as pl
 
-pl.DataFrame({"x": [1]}).sdtm  # works immediately
+pl.DataFrame({"x": [1]}).sdtm         # SDTM verbs
+pl.DataFrame({"x": [1]}).adam         # ADaM BDS verbs
+pl.DataFrame({"x": [1]}).adam.adsl    # ADSL verbs
+pl.DataFrame({"x": [1]}).adam.occds   # OCCDS verbs
+pl.DataFrame({"x": [1]}).adam.onco    # TA extensions via df.adam.<ta>
 ```

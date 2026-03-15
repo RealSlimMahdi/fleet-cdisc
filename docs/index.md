@@ -46,16 +46,27 @@ Nothing runs until you call `.to_frame()`. All intermediate verbs accumulate int
 
 ## Namespace Extensions
 
-Importing `fleet` registers four chainable namespaces on **every** Polars DataFrame:
+Importing `fleet` registers two chainable namespaces on **every** Polars DataFrame:
 
-| Namespace  | Target dataset      | Description                                                            |
-| ---------- | ------------------- | ---------------------------------------------------------------------- |
-| `df.sdtm`  | SDTM domains        | 14 derivation verbs: domain mapping, CT lookup, datetime normalisation |
-| `df.adam`  | ADaM BDS            | 16 derivation verbs: study day, baseline, change, flags                |
-| `df.adsl`  | ADSL                | 6 patient-level verbs: treatment dates, duration, population flags     |
-| `df.occds` | OCCDS (ADAE, ADCM…) | 5 occurrence verbs: first/last date, worst severity                    |
+| Namespace | Target dataset | Description                                                            |
+| --------- | -------------- | ---------------------------------------------------------------------- |
+| `df.sdtm` | SDTM domains   | 14 derivation verbs: domain mapping, CT lookup, datetime normalisation |
+| `df.adam` | ADaM BDS       | 16 derivation verbs: study day, baseline, change, flags                |
 
-Therapeutic-area extensions (`df.onco`, `df.ophtha`, `df.peds`, `df.vaccine`, `df.metabolic`, `df.neuro`) mirror the [admiral TA packages](https://pharmaverse.github.io/admiral/).
+ADaM sub-structures and therapeutic-area extensions are nested under `df.adam`:
+
+| Property            | Target dataset      | Description                                                        |
+| ------------------- | ------------------- | ------------------------------------------------------------------ |
+| `df.adam.adsl`      | ADSL                | 6 patient-level verbs: treatment dates, duration, population flags |
+| `df.adam.occds`     | OCCDS (ADAE, ADCM…) | 5 occurrence verbs: first/last date, worst severity                |
+| `df.adam.onco`      | Oncology            | RECIST response, BOR, filter_pd                                    |
+| `df.adam.ophtha`    | Ophthalmology       | ETDRS/LogMAR, study eye                                            |
+| `df.adam.peds`      | Pediatrics          | Age derivations, prematurity                                       |
+| `df.adam.vaccine`   | Vaccine             | Fever, seroconversion, ADIS AVAL                                   |
+| `df.adam.metabolic` | Metabolic           | Waist ratios, body fat %                                           |
+| `df.adam.neuro`     | Neuroscience        | Centiloid, MMSE, CDR-SoB                                           |
+
+These mirror the [admiral TA packages](https://pharmaverse.github.io/admiral/).
 
 ---
 
@@ -69,7 +80,7 @@ graph LR
     end
     subgraph Fleet
         SDTM[df.sdtm pipeline]
-        ADAM[df.adam / df.adsl pipeline]
+        ADAM[df.adam / df.adam.adsl pipeline]
         XML[Define-XML generator]
         VAL[Validation service]
     end

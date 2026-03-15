@@ -1,6 +1,6 @@
 # ADSL Namespace
 
-The `df.adsl` namespace builds one-row-per-subject ADSL datasets.
+The `df.adam.adsl` namespace builds one-row-per-subject ADSL datasets.
 
 ::: fleet.adam.ADSLNamespace
 options:

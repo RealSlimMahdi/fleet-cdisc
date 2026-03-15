@@ -21,7 +21,7 @@ Run from the repo root:
 from pathlib import Path
 
 import polars as pl
-import fleet  # noqa: F401 — registers .sdtm / .adam / .adsl / .occds namespaces
+import fleet  # noqa: F401 — registers .sdtm / .adam namespace extensions
 from fleet import DatasetChecker, DefineSpecGenerator
 
 RAW       = Path("datasets/cdiscpilot01/raw")
@@ -194,7 +194,7 @@ adae_sourced = (
 )
 
 adae = (
-    adae_sourced.occds
+    adae_sourced.adam.occds
     .treatment_emergent("TRTEMFL", start_date="AESTDTC",
                         trtsdt="TRTSDT", trtedt="TRTEDT")
     .worst_flag("ANL01FL", severity_col="AESEV",

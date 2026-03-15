@@ -1,7 +1,7 @@
 """
-ADaM Metabolic Polars namespace extension (admiralmetabolic-inspired).
+ADaM Metabolic namespace extension (admiralmetabolic-inspired).
 
-Registers ``df.metabolic`` on every Polars DataFrame.
+Accessed via ``df.adam.metabolic`` on any Polars DataFrame.
 
 Key derivations ported from pharmaverse/admiralmetabolic:
   - ``waist_hip_ratio``    — WAISTHIP = WSTCIR / HIPCIR (per subject/visit)
@@ -14,7 +14,7 @@ Usage
     import fleet  # triggers registration
 
     advs = (
-        vs_long_df.metabolic
+        vs_long_df.adam.metabolic
         .waist_hip_ratio("WAISTHIP", waist_col="WSTCIR", hip_col="HIPCIR")
         .waist_height_ratio("WAISTHGT", waist_col="WSTCIR", height_col="HEIGHT")
         .to_frame()
@@ -28,7 +28,6 @@ from typing import Any
 import polars as pl
 
 
-@pl.api.register_dataframe_namespace("metabolic")
 class MetabolicNamespace:
     """
     Immutable pipeline builder for ADaM metabolic / cardiometabolic derivations.

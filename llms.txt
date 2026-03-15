@@ -2,7 +2,7 @@
 
 > CDISC SDTM/ADaM derivation toolkit for Polars DataFrames.
 
-Fleet adds chainable verb pipelines directly onto every Polars DataFrame so you can build standards-compliant CDISC datasets with minimal boilerplate. Importing the package registers `.sdtm`, `.adam`, `.adsl`, and `.occds` namespaces automatically.
+Fleet adds chainable verb pipelines directly onto every Polars DataFrame so you can build standards-compliant CDISC datasets with minimal boilerplate. Importing the package registers `.sdtm` and `.adam` namespaces automatically.
 
 ## Install
 
@@ -33,14 +33,17 @@ Nothing runs until `.to_frame()`. All verbs accumulate into a single `df.with_co
 
 - `df.sdtm` — 14 SDTM derivation verbs (domain mapping, CT lookup, datetime normalisation)
 - `df.adam` — 16 ADaM BDS verbs (study day, baseline, change from baseline, flags, imputation)
-- `df.adsl` — 6 patient-level verbs (treatment dates, duration, population flags, AE counts)
-- `df.occds` — 5 occurrence verbs (first/last date, worst severity, any-flag)
-- `df.onco` — Oncology: AVAL response, BOR, filter_pd
-- `df.ophtha` — Ophthalmology: ETDRS/LogMAR, study eye derivation
-- `df.peds` — Pediatrics: age derivations, prematurity flag
-- `df.vaccine` — Vaccine: fever flag, seroconversion, ADIS AVAL
-- `df.metabolic` — Metabolic: waist-to-hip ratio, body fat %
-- `df.neuro` — Neuroscience: Centiloid, MMSE, CDR-SoB
+- `df.adam.adsl` — 6 patient-level verbs (treatment dates, duration, population flags, AE counts)
+- `df.adam.occds` — 5 occurrence verbs (first/last date, worst severity, any-flag)
+
+### Therapeutic-area extensions (via `df.adam.<ta>`)
+
+- `df.adam.onco` — Oncology: AVAL response, BOR, filter_pd
+- `df.adam.ophtha` — Ophthalmology: ETDRS/LogMAR, study eye derivation
+- `df.adam.peds` — Pediatrics: age derivations, prematurity flag
+- `df.adam.vaccine` — Vaccine: fever flag, seroconversion, ADIS AVAL
+- `df.adam.metabolic` — Metabolic: waist-to-hip ratio, body fat %
+- `df.adam.neuro` — Neuroscience: Centiloid, MMSE, CDR-SoB
 
 ## SDTM verbs
 

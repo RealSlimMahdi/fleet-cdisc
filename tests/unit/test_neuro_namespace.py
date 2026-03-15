@@ -1,4 +1,4 @@
-"""Unit tests for the Neuroscience Polars namespace extension (df.neuro)."""
+"""Unit tests for the Neuroscience Polars namespace extension (df.adam.neuro)."""
 
 import polars as pl
 import pytest
@@ -50,7 +50,7 @@ class TestCentiloid:
 
     def test_custom_slope_intercept(self):
         df = pl.DataFrame({"SUVR": [1.25]})
-        result = df.neuro.centiloid(
+        result = df.adam.neuro.centiloid(
             "CLV", suvr_col="SUVR", slope=183.07, intercept=-177.26
         ).to_frame()
         assert result["CLV"][0] == pytest.approx(183.07 * 1.25 - 177.26, abs=0.01)
@@ -60,7 +60,7 @@ class TestCentiloid:
         """All 4 pre-defined tracer/pipeline combinations produce the correct result."""
         suvr = 1.2
         df = pl.DataFrame({"SUVR": [suvr]})
-        result = df.neuro.centiloid(
+        result = df.adam.neuro.centiloid(
             "CLV", suvr_col="SUVR", tracer=tracer, pipeline=pipeline
         ).to_frame()
         assert result["CLV"][0] == pytest.approx(slope * suvr + intercept, abs=0.01)
@@ -68,7 +68,7 @@ class TestCentiloid:
     def test_unknown_combination_raises(self):
         df = pl.DataFrame({"SUVR": [1.0]})
         with pytest.raises(ValueError, match="No calibration found"):
-            df.neuro.centiloid(
+            df.adam.neuro.centiloid(
                 "CLV", suvr_col="SUVR",
                 tracer="MyTracer", pipeline="MyPipeline"
             ).to_frame()
@@ -76,11 +76,11 @@ class TestCentiloid:
     def test_no_params_raises(self):
         df = pl.DataFrame({"SUVR": [1.0]})
         with pytest.raises(ValueError, match="slope"):
-            df.neuro.centiloid("CLV", suvr_col="SUVR").to_frame()
+            df.adam.neuro.centiloid("CLV", suvr_col="SUVR").to_frame()
 
     def test_non_derived_columns_preserved(self):
         df = pl.DataFrame({"USUBJID": ["01-701-1015"], "SUVR": [1.2]})
-        result = df.neuro.centiloid(
+        result = df.adam.neuro.centiloid(
             "CLV", suvr_col="SUVR", slope=183.07, intercept=-177.26
         ).to_frame()
         assert "USUBJID" in result.columns
@@ -94,12 +94,12 @@ class TestMmseCategory:
     @pytest.mark.parametrize("score,expected_category", _MMSE_CATEGORY_CASES)
     def test_mmse_boundary_values(self, score, expected_category):
         df = pl.DataFrame({"MMSE": [score]})
-        result = df.neuro.mmse_category("MMSECG", score_col="MMSE").to_frame()
+        result = df.adam.neuro.mmse_category("MMSECG", score_col="MMSE").to_frame()
         assert result["MMSECG"][0] == expected_category
 
     def test_all_categories_in_order(self):
         df = pl.DataFrame({"MMSE": [28, 22, 15, 8]})
-        result = df.neuro.mmse_category("MMSECG", score_col="MMSE").to_frame()
+        result = df.adam.neuro.mmse_category("MMSECG", score_col="MMSE").to_frame()
         assert result["MMSECG"].to_list() == ["Normal", "Mild", "Moderate", "Severe"]
 
 
@@ -115,7 +115,7 @@ class TestCdrsob:
             "CDRHOME": [0.0],
             "CDRPERS": [0.0],
         })
-        result = df.neuro.cdrsob_total(
+        result = df.adam.neuro.cdrsob_total(
             "CDRSOB",
             domain_cols=["CDRMEM", "CDRORNT", "CDRJDGM", "CDRCOMM", "CDRHOME", "CDRPERS"],
         ).to_frame()
@@ -123,13 +123,13 @@ class TestCdrsob:
 
     def test_all_zeros(self):
         df = pl.DataFrame({"A": [0.0], "B": [0.0], "C": [0.0]})
-        result = df.neuro.cdrsob_total("TOT", domain_cols=["A", "B", "C"]).to_frame()
+        result = df.adam.neuro.cdrsob_total("TOT", domain_cols=["A", "B", "C"]).to_frame()
         assert result["TOT"][0] == pytest.approx(0.0)
 
     def test_null_propagates_to_total(self):
         """Any null domain score should make the total null (strict null-safety)."""
         df = pl.DataFrame({"A": [1.0], "B": [None]})
-        result = df.neuro.cdrsob_total("TOT", domain_cols=["A", "B"]).to_frame()
+        result = df.adam.neuro.cdrsob_total("TOT", domain_cols=["A", "B"]).to_frame()
         assert result["TOT"][0] is None
 
 
@@ -141,12 +141,12 @@ class TestMocaCategory:
     @pytest.mark.parametrize("score,expected_category", _MOCA_CATEGORY_CASES)
     def test_moca_boundary_values(self, score, expected_category):
         df = pl.DataFrame({"MOCA": [score]})
-        result = df.neuro.moca_category("MOACG", score_col="MOCA").to_frame()
+        result = df.adam.neuro.moca_category("MOACG", score_col="MOCA").to_frame()
         assert result["MOACG"][0] == expected_category
 
     def test_full_vector_all_categories(self):
         df = pl.DataFrame({"MOCA": [28, 22, 10]})
-        result = df.neuro.moca_category("MOACG", score_col="MOCA").to_frame()
+        result = df.adam.neuro.moca_category("MOACG", score_col="MOCA").to_frame()
         assert result["MOACG"].to_list() == ["Normal", "MCI", "Impaired"]
 
 
@@ -159,7 +159,7 @@ class TestPanssTotal:
             "PANSSNEG": [16.0],
             "PANSSGEN": [30.0],
         })
-        result = df.neuro.panss_total(
+        result = df.adam.neuro.panss_total(
             "PANSSTOT",
             positive_col="PANSSPOS",
             negative_col="PANSSNEG",
@@ -174,7 +174,7 @@ class TestPanssTotal:
             "PANSSNEG": [None],
             "PANSSGEN": [30.0],
         })
-        result = df.neuro.panss_total(
+        result = df.adam.neuro.panss_total(
             "PANSSTOT",
             positive_col="PANSSPOS",
             negative_col="PANSSNEG",
@@ -191,7 +191,7 @@ class TestPanssTotal:
             "PANSSNEG": [16.0, 7.0],
             "PANSSGEN": [30.0, 16.0],
         })
-        result = df.neuro.panss_total(
+        result = df.adam.neuro.panss_total(
             "PANSSTOT",
             positive_col="PANSSPOS",
             negative_col="PANSSNEG",

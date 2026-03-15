@@ -1,4 +1,4 @@
-"""Unit tests for the Oncology Polars namespace extension (df.onco)."""
+"""Unit tests for the Oncology Polars namespace extension (df.adam.onco)."""
 
 import polars as pl
 import polars.testing as plt
@@ -32,7 +32,7 @@ class TestAvalResp:
     @pytest.mark.parametrize("response,expected_aval", _RECIST_MAPPING)
     def test_each_recist_category(self, response, expected_aval):
         df = pl.DataFrame({"OVRLRESP": [response]})
-        aval = df.onco.aval_resp("AVAL", source="OVRLRESP").to_frame()["AVAL"][0]
+        aval = df.adam.onco.aval_resp("AVAL", source="OVRLRESP").to_frame()["AVAL"][0]
         if expected_aval is None:
             assert aval is None
         else:
@@ -43,18 +43,18 @@ class TestAvalResp:
         responses = [r for r, _ in _RECIST_MAPPING]
         expected_aval = [e for _, e in _RECIST_MAPPING]
         df = pl.DataFrame({"OVRLRESP": responses})
-        result = df.onco.aval_resp("AVAL", source="OVRLRESP").to_frame()
+        result = df.adam.onco.aval_resp("AVAL", source="OVRLRESP").to_frame()
         assert result["AVAL"].to_list() == expected_aval
 
     def test_null_input_maps_to_null(self):
         df = pl.DataFrame({"R": [None]}, schema={"R": pl.Utf8})
-        result = df.onco.aval_resp("N", source="R").to_frame()
+        result = df.adam.onco.aval_resp("N", source="R").to_frame()
         assert result["N"][0] is None
 
     def test_non_derived_columns_preserved(self):
         """Input columns not named AVAL must survive the derivation."""
         df = pl.DataFrame({"USUBJID": ["01-701-1015"], "OVRLRESP": ["CR"]})
-        result = df.onco.aval_resp("AVAL", source="OVRLRESP").to_frame()
+        result = df.adam.onco.aval_resp("AVAL", source="OVRLRESP").to_frame()
         assert "USUBJID" in result.columns
         assert result["USUBJID"][0] == "01-701-1015"
 
@@ -64,12 +64,12 @@ class TestTumorResponseFlag:
 
     def test_cr_pr_flagged_by_default(self):
         df = pl.DataFrame({"RESP": ["CR", "PR", "SD", "PD"]})
-        result = df.onco.tumor_response_flag("RSPFL", source="RESP").to_frame()
+        result = df.adam.onco.tumor_response_flag("RSPFL", source="RESP").to_frame()
         assert result["RSPFL"].to_list() == ["Y", "Y", None, None]
 
     def test_custom_responses(self):
         df = pl.DataFrame({"RESP": ["CR", "PR", "SD", "PD"]})
-        result = df.onco.tumor_response_flag(
+        result = df.adam.onco.tumor_response_flag(
             "CBFL", source="RESP", responses=["CR", "PR", "SD"]
         ).to_frame()
         assert result["CBFL"].to_list() == ["Y", "Y", "Y", None]
@@ -77,12 +77,12 @@ class TestTumorResponseFlag:
     def test_pd_never_flagged(self):
         """PD must never be a responder under default settings."""
         df = pl.DataFrame({"RESP": ["PD", "NE", "MISSING"]})
-        result = df.onco.tumor_response_flag("RSPFL", source="RESP").to_frame()
+        result = df.adam.onco.tumor_response_flag("RSPFL", source="RESP").to_frame()
         assert all(v is None for v in result["RSPFL"].to_list())
 
     def test_custom_flag_value(self):
         df = pl.DataFrame({"RESP": ["CR"]})
-        result = df.onco.tumor_response_flag(
+        result = df.adam.onco.tumor_response_flag(
             "RSPFL", source="RESP", flag_value="1"
         ).to_frame()
         assert result["RSPFL"][0] == "1"
@@ -102,7 +102,7 @@ class TestBestOverallResponse:
             "USUBJID": ["S01", "S01", "S01"],
             "OVRLRESP": ["SD", "PR", "PD"],
         })
-        result = df.onco.best_overall_response(
+        result = df.adam.onco.best_overall_response(
             "BOR", source="OVRLRESP", groups=["USUBJID"]
         ).to_frame()
         # PR is rank 2, SD=3, PD=5 → best is PR
@@ -113,7 +113,7 @@ class TestBestOverallResponse:
             "USUBJID": ["S02", "S02"],
             "OVRLRESP": ["NE", "NE"],
         })
-        result = df.onco.best_overall_response(
+        result = df.adam.onco.best_overall_response(
             "BOR", source="OVRLRESP", groups=["USUBJID"]
         ).to_frame()
         assert all(r == "NE" for r in result["BOR"].to_list())
@@ -125,7 +125,7 @@ class TestBestOverallResponse:
             "USUBJID": ["01-701-1015", "01-701-1015", "01-701-1023", "01-701-1023"],
             "OVRLRESP": ["SD", "CR", "PD", "PR"],
         })
-        result = df.onco.best_overall_response(
+        result = df.adam.onco.best_overall_response(
             "BOR", source="OVRLRESP", groups=["USUBJID"]
         ).to_frame()
         bor = dict(zip(result["USUBJID"].to_list(), result["BOR"].to_list()))
@@ -137,7 +137,7 @@ class TestBestOverallResponse:
             "USUBJID": ["S03", "S03"],
             "OVRLRESP": ["PD", "PD"],
         })
-        result = df.onco.best_overall_response(
+        result = df.adam.onco.best_overall_response(
             "BOR", source="OVRLRESP", groups=["USUBJID"]
         ).to_frame()
         assert all(r == "PD" for r in result["BOR"].to_list())
@@ -159,7 +159,7 @@ class TestFilterPD:
             "ADT":     ["2024-01-01", "2024-02-01", "2024-03-01", "2024-04-01"],
             "OVRLRESP": ["SD", "PD", "PD", "NE"],
         })
-        result = df.onco.filter_pd(
+        result = df.adam.onco.filter_pd(
             response_col="OVRLRESP", date_col="ADT", groups=["USUBJID"]
         ).to_frame()
         # Only rows up to and including first PD (2024-02-01)
@@ -172,7 +172,7 @@ class TestFilterPD:
             "ADT":     ["2024-01-01", "2024-02-01"],
             "OVRLRESP": ["SD", "PR"],
         })
-        result = df.onco.filter_pd(
+        result = df.adam.onco.filter_pd(
             response_col="OVRLRESP", date_col="ADT", groups=["USUBJID"]
         ).to_frame()
         assert result.height == 2
@@ -196,7 +196,7 @@ class TestFilterPD:
             ],
             "OVRLRESP": ["CR", "PD", "NE", "SD", "PR"],
         })
-        result = df.onco.filter_pd(
+        result = df.adam.onco.filter_pd(
             response_col="OVRLRESP", date_col="ADT",
             groups=["USUBJID"]
         ).to_frame()
@@ -222,7 +222,7 @@ class TestConfirmedResponseFlag:
             "OVRLRESP": ["CR", "CR"],
             "ADT":      ["2024-01-01", "2024-03-15"],   # 74 days apart
         })
-        result = df.onco.confirmed_response_flag(
+        result = df.adam.onco.confirmed_response_flag(
             "CNFFL", source="OVRLRESP", date_col="ADT",
             confirmation_days=28, groups=["USUBJID"]
         ).to_frame()
@@ -235,7 +235,7 @@ class TestConfirmedResponseFlag:
             "OVRLRESP": ["PR", "PR"],
             "ADT":      ["2024-01-01", "2024-01-20"],   # only 19 days
         })
-        result = df.onco.confirmed_response_flag(
+        result = df.adam.onco.confirmed_response_flag(
             "CNFFL", source="OVRLRESP", date_col="ADT",
             confirmation_days=28, groups=["USUBJID"]
         ).to_frame()
@@ -248,7 +248,7 @@ class TestConfirmedResponseFlag:
             "OVRLRESP": ["PD", "PD"],
             "ADT":      ["2024-01-01", "2024-03-01"],
         })
-        result = df.onco.confirmed_response_flag(
+        result = df.adam.onco.confirmed_response_flag(
             "CNFFL", source="OVRLRESP", date_col="ADT",
             groups=["USUBJID"]
         ).to_frame()
@@ -264,7 +264,7 @@ class TestChaining:
             "OVRLRESP": ["CR", "PD", "PR"],
         })
         result = (
-            df.onco
+            df.adam.onco
             .aval_resp("AVAL", source="OVRLRESP")
             .tumor_response_flag("RSPFL", source="OVRLRESP")
             .best_overall_response("BOR", source="OVRLRESP", groups=["USUBJID"])

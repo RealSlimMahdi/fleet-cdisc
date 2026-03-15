@@ -1,4 +1,4 @@
-"""Unit tests for the Metabolic Polars namespace extension (df.metabolic)."""
+"""Unit tests for the Metabolic Polars namespace extension (df.adam.metabolic)."""
 
 import polars as pl
 import pytest
@@ -11,7 +11,7 @@ class TestWaistHipRatio:
 
     def test_basic_ratio(self):
         df = pl.DataFrame({"WSTCIR": [90.0], "HIPCIR": [100.0]})
-        result = df.metabolic.waist_hip_ratio(
+        result = df.adam.metabolic.waist_hip_ratio(
             "WAISTHIP", waist_col="WSTCIR", hip_col="HIPCIR"
         ).to_frame()
         assert result["WAISTHIP"][0] == pytest.approx(0.9)
@@ -21,7 +21,7 @@ class TestWaistHipRatio:
             "WSTCIR": [110.0, 120.0],
             "HIPCIR": [125.0, 135.0],
         })
-        result = df.metabolic.waist_hip_ratio(
+        result = df.adam.metabolic.waist_hip_ratio(
             "WAISTHIP", waist_col="WSTCIR", hip_col="HIPCIR"
         ).to_frame()
         assert result["WAISTHIP"][0] == pytest.approx(0.88, abs=0.001)
@@ -33,7 +33,7 @@ class TestWaistHipRatio:
             "WSTCIR":  [90.0],
             "HIPCIR":  [100.0],
         })
-        result = df.metabolic.waist_hip_ratio(
+        result = df.adam.metabolic.waist_hip_ratio(
             "WAISTHIP", waist_col="WSTCIR", hip_col="HIPCIR"
         ).to_frame()
         assert "USUBJID" in result.columns
@@ -44,7 +44,7 @@ class TestWaistHeightRatio:
 
     def test_ratio_computation(self):
         df = pl.DataFrame({"WSTCIR": [88.0], "HEIGHT": [170.0]})
-        result = df.metabolic.waist_height_ratio(
+        result = df.adam.metabolic.waist_height_ratio(
             "WAISTHGT", waist_col="WSTCIR", height_col="HEIGHT"
         ).to_frame()
         assert result["WAISTHGT"][0] == pytest.approx(88.0 / 170.0, abs=0.001)
@@ -56,7 +56,7 @@ class TestBodyFatPct:
     def test_male_40yo_bmi25(self):
         # BF% = 1.2*25 + 0.23*40 - 10.8*1 - 5.4 = 30 + 9.2 - 10.8 - 5.4 = 23.0
         df = pl.DataFrame({"BMI": [25.0], "AGE": [40.0], "SEX": ["M"]})
-        result = df.metabolic.body_fat_pct(
+        result = df.adam.metabolic.body_fat_pct(
             "BFPCT", bmi_col="BMI", age_col="AGE", sex_col="SEX"
         ).to_frame()
         assert result["BFPCT"][0] == pytest.approx(23.0, abs=0.1)
@@ -64,7 +64,7 @@ class TestBodyFatPct:
     def test_female_40yo_bmi25(self):
         # BF% = 1.2*25 + 0.23*40 - 10.8*0 - 5.4 = 30 + 9.2 - 0 - 5.4 = 33.8
         df = pl.DataFrame({"BMI": [25.0], "AGE": [40.0], "SEX": ["F"]})
-        result = df.metabolic.body_fat_pct(
+        result = df.adam.metabolic.body_fat_pct(
             "BFPCT", bmi_col="BMI", age_col="AGE", sex_col="SEX"
         ).to_frame()
         assert result["BFPCT"][0] == pytest.approx(33.8, abs=0.1)
@@ -72,7 +72,7 @@ class TestBodyFatPct:
     def test_null_bmi_gives_null(self):
         """Null BMI input must propagate as null — not an error."""
         df = pl.DataFrame({"BMI": [None], "AGE": [40.0], "SEX": ["M"]})
-        result = df.metabolic.body_fat_pct(
+        result = df.adam.metabolic.body_fat_pct(
             "BFPCT", bmi_col="BMI", age_col="AGE", sex_col="SEX"
         ).to_frame()
         assert result["BFPCT"][0] is None
@@ -80,7 +80,7 @@ class TestBodyFatPct:
     def test_custom_sex_encoding(self):
         """Non-default male value — e.g., '1' instead of 'M'."""
         df = pl.DataFrame({"BMI": [25.0], "AGE": [40.0], "SEX": ["1"]})
-        result_custom = df.metabolic.body_fat_pct(
+        result_custom = df.adam.metabolic.body_fat_pct(
             "BFPCT", bmi_col="BMI", age_col="AGE", sex_col="SEX",
             sex_male_value="1"
         ).to_frame()
@@ -96,7 +96,7 @@ class TestVisceralFatFlag:
             "WSTCIR": [103.0, 100.0, 95.0],
             "SEX":    ["M",   "M",   "M"],
         })
-        result = df.metabolic.visceral_fat_flag(
+        result = df.adam.metabolic.visceral_fat_flag(
             "ABDFL", waist_col="WSTCIR", sex_col="SEX"
         ).to_frame()
         assert result["ABDFL"].to_list() == ["Y", None, None]
@@ -106,7 +106,7 @@ class TestVisceralFatFlag:
             "WSTCIR": [89.0, 88.0, 80.0],
             "SEX":    ["F",  "F",  "F"],
         })
-        result = df.metabolic.visceral_fat_flag(
+        result = df.adam.metabolic.visceral_fat_flag(
             "ABDFL", waist_col="WSTCIR", sex_col="SEX"
         ).to_frame()
         assert result["ABDFL"].to_list() == ["Y", "Y", None]
@@ -114,7 +114,7 @@ class TestVisceralFatFlag:
     def test_exactly_at_male_threshold_flagged(self):
         """Exactly at 102.0 cm (male threshold) → flagged (inclusive >=)."""
         df = pl.DataFrame({"WSTCIR": [102.0], "SEX": ["M"]})
-        result = df.metabolic.visceral_fat_flag(
+        result = df.adam.metabolic.visceral_fat_flag(
             "ABDFL", waist_col="WSTCIR", sex_col="SEX"
         ).to_frame()
         assert result["ABDFL"][0] == "Y"
@@ -127,7 +127,7 @@ class TestVisceralFatFlag:
             "WSTCIR":  [103.0,    89.0,     95.0,     80.0  ],
             "SEX":     ["M",      "F",      "M",      "F"   ],
         })
-        result = df.metabolic.visceral_fat_flag(
+        result = df.adam.metabolic.visceral_fat_flag(
             "ABDFL", waist_col="WSTCIR", sex_col="SEX"
         ).to_frame()
         flags = dict(zip(result["USUBJID"].to_list(), result["ABDFL"].to_list()))
@@ -147,7 +147,7 @@ class TestChaining:
             "HEIGHT": [170.0],
         })
         result = (
-            df.metabolic
+            df.adam.metabolic
             .waist_hip_ratio("WAISTHIP", waist_col="WSTCIR", hip_col="HIPCIR")
             .waist_height_ratio("WAISTHGT", waist_col="WSTCIR", height_col="HEIGHT")
             .to_frame()

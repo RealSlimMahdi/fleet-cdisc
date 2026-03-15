@@ -1,14 +1,14 @@
 """
-ADaM ADSL Polars namespace extension (one-row-per-subject datasets).
+ADaM ADSL namespace extension (one-row-per-subject datasets).
 
-Registers ``df.adsl`` on every Polars DataFrame.
+Accessed via ``df.adam.adsl`` on any Polars DataFrame.
 
 Usage
 -----
     import fleet  # triggers registration
 
     adsl = (
-        dm_sdtm.adsl
+        dm_sdtm.adam.adsl
         .source("USUBJID")
         .assigned("STUDYID", value="MYSTUDY01")
         .first_date("AESTDTM", from_dataset=ae_sdtm, date_col="AESTDTC",
@@ -28,7 +28,6 @@ from typing import Any
 import polars as pl
 
 
-@pl.api.register_dataframe_namespace("adsl")
 class ADSLNamespace:
     """
     Immutable pipeline builder for ADSL (one-row-per-subject) derivations.

@@ -1,14 +1,14 @@
 """
-ADaM OCCDS Polars namespace extension (one-row-per-event occurrence datasets).
+ADaM OCCDS namespace extension (one-row-per-event occurrence datasets).
 
-Registers ``df.occds`` on every Polars DataFrame.
+Accessed via ``df.adam.occds`` on any Polars DataFrame.
 
 Usage
 -----
     import fleet  # triggers registration
 
     adae = (
-        ae_sdtm.occds
+        ae_sdtm.adam.occds
         .source("USUBJID")
         .source("AETERM")
         .treatment_emergent("TRTEMFL", start_date="AESTDTC",
@@ -28,7 +28,6 @@ from typing import Any
 import polars as pl
 
 
-@pl.api.register_dataframe_namespace("occds")
 class OCCDSNamespace:
     """
     Immutable pipeline builder for OCCDS (one-row-per-event) derivations.
