@@ -75,8 +75,7 @@ class AdamNamespace:
     """
 
     def __init__(self, df: pl.DataFrame) -> None:
-        self._df = df
-        self._pipeline: list[pl.Expr] = []
+        self._lazy = df.lazy()
 
     # ------------------------------------------------------------------ #
     # Internal chaining helper                                             #
@@ -84,15 +83,13 @@ class AdamNamespace:
 
     def _chain(self, *exprs: pl.Expr) -> "AdamNamespace":
         new = object.__new__(AdamNamespace)
-        new._df = self._df
-        new._pipeline = self._pipeline + list(exprs)
+        new._lazy = self._lazy.with_columns(list(exprs))
         return new
 
     def _materialise_then(self, df: pl.DataFrame) -> "AdamNamespace":
-        """Return a new namespace wrapping *df* with an empty pipeline."""
+        """Return a new namespace wrapping *df* as a lazy plan."""
         new = object.__new__(AdamNamespace)
-        new._df = df
-        new._pipeline = []
+        new._lazy = df.lazy()
         return new
 
     # ------------------------------------------------------------------ #
@@ -193,14 +190,10 @@ class AdamNamespace:
         """
         # Build an if/then/else chain to avoid the deprecated replace(default=) API.
         if recode_map:
-            # Start from first mapping
-            items = list(recode_map.items())
-            k0, v0 = items[0]
-            chain = pl.when(pl.col(source) == k0).then(pl.lit(v0))
-            for k, v in items[1:]:
-                chain = chain.when(pl.col(source) == k).then(pl.lit(v))
             default_expr = default if isinstance(default, pl.Expr) else pl.lit(default)
-            expr = chain.otherwise(default_expr).alias(target)
+            expr = pl.col(source).replace_strict(
+                recode_map, default=default_expr, return_dtype=pl.String
+            ).alias(target)
         else:
             default_expr = default if isinstance(default, pl.Expr) else pl.lit(default)
             expr = default_expr.alias(target)
@@ -764,7 +757,7 @@ class AdamNamespace:
 
             # ── auto-flush when a declared dependency is not yet committed ──
             deps = getattr(var, "depends_on", None) or []
-            if deps and any(d not in ns._df.columns for d in deps):
+            if deps and any(d not in ns._lazy.columns for d in deps):
                 ns = ns._materialise_then(ns.to_frame())
 
             if alg == "source":
@@ -957,13 +950,34 @@ class AdamNamespace:
 
         # Step 2: resolve explicit column list (spec takes priority over columns)
         col_list = columns
+        type_map: dict[str, str] = {}
         if spec is not None:
-            col_list = self._spec_columns(Path(spec), dataset)
+            spec_path = Path(spec)
+            col_list = self._spec_columns(spec_path, dataset)
+            type_map = self._spec_type_map(spec_path, dataset)
 
         # Step 3: intersect with existing columns (preserving spec order)
         if col_list is not None:
             existing = [c for c in col_list if c in df.columns]
             df = df.select(existing)
+
+        # Step 4: cast date/datetime columns declared in the spec
+        if type_map:
+            casts = []
+            for col_name, spec_type in type_map.items():
+                if col_name not in df.columns:
+                    continue
+                dtype = df[col_name].dtype
+                if spec_type == "date":
+                    if dtype == pl.String:
+                        casts.append(pl.col(col_name).str.to_date("%Y-%m-%d", strict=False))
+                    elif dtype.is_(pl.Datetime) or str(dtype).startswith("Datetime"):
+                        casts.append(pl.col(col_name).cast(pl.Date))
+                elif spec_type == "datetime":
+                    if dtype == pl.String:
+                        casts.append(pl.col(col_name).str.to_datetime(strict=False))
+            if casts:
+                df = df.with_columns(casts)
 
         return self._materialise_then(df)
 
@@ -989,6 +1003,24 @@ class AdamNamespace:
                 )
             ds = matches[0]
         return [v["name"] for v in ds["variables"]]
+
+    @staticmethod
+    def _spec_type_map(spec_path: Path, dataset: str | None) -> dict[str, str]:
+        """Return ``{col_name: type}`` for date/datetime variables in *dataset*."""
+        spec_data = yaml.safe_load(spec_path.read_text())
+        datasets = spec_data.get("datasets", [])
+        if dataset is None:
+            ds = datasets[0] if len(datasets) == 1 else None
+        else:
+            matches = [d for d in datasets if d["name"].upper() == dataset.upper()]
+            ds = matches[0] if matches else None
+        if ds is None:
+            return {}
+        return {
+            v["name"]: v["type"]
+            for v in ds["variables"]
+            if v.get("type") in ("date", "datetime")
+        }
 
     # ------------------------------------------------------------------ #
     # ADaM sub-structures (accessed as df.adam.adsl / df.adam.occds)       #
@@ -1052,9 +1084,7 @@ class AdamNamespace:
 
     def to_frame(self) -> pl.DataFrame:
         """Materialise the accumulated pipeline into a Polars DataFrame."""
-        if not self._pipeline:
-            return self._df
-        return self._df.with_columns(self._pipeline)
+        return self._lazy.collect()
 
     def write_parquet(
         self,

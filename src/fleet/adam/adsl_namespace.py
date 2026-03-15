@@ -38,8 +38,7 @@ class ADSLNamespace:
     """
 
     def __init__(self, df: pl.DataFrame) -> None:
-        self._df = df
-        self._pipeline: list[pl.Expr] = []
+        self._lazy = df.lazy()
 
     # ------------------------------------------------------------------ #
     # Internal helpers                                                     #
@@ -47,14 +46,12 @@ class ADSLNamespace:
 
     def _chain(self, *exprs: pl.Expr) -> "ADSLNamespace":
         new = object.__new__(ADSLNamespace)
-        new._df = self._df
-        new._pipeline = self._pipeline + list(exprs)
+        new._lazy = self._lazy.with_columns(list(exprs))
         return new
 
     def _materialise_then(self, df: pl.DataFrame) -> "ADSLNamespace":
         new = object.__new__(ADSLNamespace)
-        new._df = df
-        new._pipeline = []
+        new._lazy = df.lazy()
         return new
 
     # ------------------------------------------------------------------ #
@@ -86,13 +83,10 @@ class ADSLNamespace:
     ) -> "ADSLNamespace":
         """Map values in *source* to recoded values; unmapped → *default*."""
         if recode_map:
-            items = list(recode_map.items())
-            k0, v0 = items[0]
-            chain = pl.when(pl.col(source) == k0).then(pl.lit(v0))
-            for k, v in items[1:]:
-                chain = chain.when(pl.col(source) == k).then(pl.lit(v))
             default_expr = default if isinstance(default, pl.Expr) else pl.lit(default)
-            expr = chain.otherwise(default_expr).alias(target)
+            expr = pl.col(source).replace_strict(
+                recode_map, default=default_expr, return_dtype=pl.String
+            ).alias(target)
         else:
             default_expr = default if isinstance(default, pl.Expr) else pl.lit(default)
             expr = default_expr.alias(target)
@@ -275,6 +269,4 @@ class ADSLNamespace:
 
     def to_frame(self) -> pl.DataFrame:
         """Materialise the accumulated pipeline into a Polars DataFrame."""
-        if not self._pipeline:
-            return self._df
-        return self._df.with_columns(self._pipeline)
+        return self._lazy.collect()

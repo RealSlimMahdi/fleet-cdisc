@@ -766,6 +766,9 @@ document.onclick = function(e)
 <li class="hmenu-item">
 <span class="hmenu-bullet">-</span><a class="tocItem" href="#IG.IG.VS">VS (Vital Signs)</a>
 </li>
+<li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#IG.IG.EX">EX (Exposure)</a>
+</li>
 </ul>
 </li>
 <li class="hmenu-submenu">
@@ -790,7 +793,7 @@ document.onclick = function(e)
 </div>
 <div id="main">
 <div class="docinfo">
-<p class="documentinfo">Date/Time of Define-XML document generation: 2026-03-14T23:37:46</p>
+<p class="documentinfo">Date/Time of Define-XML document generation: 2026-03-15T23:34:37</p>
 <p class="documentinfo">Define-XML version: 2.1.0</p>
 <p class="documentinfo">Define-XML Context: Submission</p>
 <p class="stylesheetinfo">Stylesheet version: 2019-02-11</p>
@@ -881,6 +884,19 @@ document.onclick = function(e)
 <td></td>
 <td>
 <a class="external" href="vs.xpt"></a><span class="external-link-gif"></span> </td>
+</tr>
+<tr class="tableroweven" id="IG.EX">
+<td>
+<a href="#IG.IG.EX">EX</a><span class="standard-refeference">[SDTMIG 3.4]</span>
+</td>
+<td>Exposure</td>
+<td>INTERVENTIONS</td>
+<td>One record per protocol-specified study treatment per subject</td>
+<td>Tabulation</td>
+<td>STUDYID, USUBJID, EXSEQ</td>
+<td></td>
+<td>
+<a class="external" href="ex.xpt"></a><span class="external-link-gif"></span> </td>
 </tr>
 </table></div>
 <p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p>
@@ -1342,6 +1358,103 @@ document.onclick = function(e)
 <td>
 <a id="IG.VS.IT.VS.VSDTC"></a>VSDTC</td>
 <td>Date/Time of Measurements</td>
+<td class="datatype">datetime</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+</table>
+</div>
+<p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p>
+<br><a id="IG.IG.EX"></a><div class="containerbox">
+<h1 class="invisible">Exposure (EX) </h1>
+<table summary="ItemGroup IG.IG.EX">
+<caption><span>EX (Exposure) -  <span class="standard-refeference">[SDTMIG 3.4]</span><span class="dataset">Location: <a class="external" href="ex.xpt"></a><span class="external-link-gif"></span> </span></span></caption>
+<tr class="header">
+<th scope="col">Variable</th>
+<th scope="col">Label / Description</th>
+<th scope="col">Type</th>
+<th scope="col" class="length">Length or Display Format</th>
+<th scope="col" abbr="Format">Controlled Terms or ISO Format</th>
+<th scope="col">Origin / Source / Method / Comment</th>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.EX.IT.STUDYID"></a>STUDYID</td>
+<td>Study Identifier</td>
+<td class="datatype">text</td>
+<td class="number">12</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.EX.IT.DOMAIN"></a>DOMAIN</td>
+<td>Domain Abbreviation</td>
+<td class="datatype">text</td>
+<td class="number">2</td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.EX.IT.USUBJID"></a>USUBJID</td>
+<td>Unique Subject Identifier</td>
+<td class="datatype">text</td>
+<td class="number">40</td>
+<td></td>
+<td><div class="linebreakcell">Derived<p class="linebreakcell">Concatenation of STUDYID, SITEID, and SUBJID</p>
+</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.EX.IT.EX.EXSEQ"></a>EXSEQ</td>
+<td>Sequence Number</td>
+<td class="datatype">integer</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">Assigned</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.EX.IT.EX.EXTRT"></a>EXTRT</td>
+<td>Name of Actual Treatment</td>
+<td class="datatype">text</td>
+<td class="number">200</td>
+<td></td>
+<td><div class="linebreakcell">Protocol</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.EX.IT.EX.EXDOSE"></a>EXDOSE</td>
+<td>Dose per Administration</td>
+<td class="datatype">float</td>
+<td class="number"></td>
+<td></td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.EX.IT.EX.EXDOSU"></a>EXDOSU</td>
+<td>Dose Units</td>
+<td class="datatype">text</td>
+<td class="number">20</td>
+<td></td>
+<td><div class="linebreakcell">Protocol</div></td>
+</tr>
+<tr class="tableroweven">
+<td>
+<a id="IG.EX.IT.EX.EXSTDTC"></a>EXSTDTC</td>
+<td>Start Date/Time of Treatment</td>
+<td class="datatype">datetime</td>
+<td class="number"></td>
+<td>ISO 8601</td>
+<td><div class="linebreakcell">CRF</div></td>
+</tr>
+<tr class="tablerowodd">
+<td>
+<a id="IG.EX.IT.EX.EXENDTC"></a>EXENDTC</td>
+<td>End Date/Time of Treatment</td>
 <td class="datatype">datetime</td>
 <td class="number"></td>
 <td>ISO 8601</td>

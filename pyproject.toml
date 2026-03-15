@@ -81,3 +81,10 @@ addopts = "-v --tb=short"
 [tool.coverage.run]
 source = ["src/fleet"]
 omit = ["tests/*"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.15.6",
+]

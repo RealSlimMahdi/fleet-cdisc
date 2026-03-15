@@ -48,8 +48,7 @@ class VaccineNamespace:
     """
 
     def __init__(self, df: pl.DataFrame) -> None:
-        self._df = df
-        self._pipeline: list[pl.Expr] = []
+        self._lazy = df.lazy()
 
     # ------------------------------------------------------------------ #
     # Internal helpers                                                     #
@@ -57,14 +56,12 @@ class VaccineNamespace:
 
     def _chain(self, *exprs: pl.Expr) -> "VaccineNamespace":
         new = object.__new__(VaccineNamespace)
-        new._df = self._df
-        new._pipeline = self._pipeline + list(exprs)
+        new._lazy = self._lazy.with_columns(list(exprs))
         return new
 
     def _materialise_then(self, df: pl.DataFrame) -> "VaccineNamespace":
         new = object.__new__(VaccineNamespace)
-        new._df = df
-        new._pipeline = []
+        new._lazy = df.lazy()
         return new
 
     # ------------------------------------------------------------------ #
@@ -337,6 +334,4 @@ class VaccineNamespace:
 
     def to_frame(self) -> pl.DataFrame:
         """Materialise the pipeline and return a ``pl.DataFrame``."""
-        if not self._pipeline:
-            return self._df
-        return self._df.with_columns(self._pipeline)
+        return self._lazy.collect()

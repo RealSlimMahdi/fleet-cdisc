@@ -40,8 +40,7 @@ class OCCDSNamespace:
     """
 
     def __init__(self, df: pl.DataFrame) -> None:
-        self._df = df
-        self._pipeline: list[pl.Expr] = []
+        self._lazy = df.lazy()
 
     # ------------------------------------------------------------------ #
     # Internal helpers                                                     #
@@ -49,14 +48,12 @@ class OCCDSNamespace:
 
     def _chain(self, *exprs: pl.Expr) -> "OCCDSNamespace":
         new = object.__new__(OCCDSNamespace)
-        new._df = self._df
-        new._pipeline = self._pipeline + list(exprs)
+        new._lazy = self._lazy.with_columns(list(exprs))
         return new
 
     def _materialise_then(self, df: pl.DataFrame) -> "OCCDSNamespace":
         new = object.__new__(OCCDSNamespace)
-        new._df = df
-        new._pipeline = []
+        new._lazy = df.lazy()
         return new
 
     # ------------------------------------------------------------------ #
@@ -88,13 +85,10 @@ class OCCDSNamespace:
     ) -> "OCCDSNamespace":
         """Map values in *source* to recoded values; unmapped → *default*."""
         if recode_map:
-            items = list(recode_map.items())
-            k0, v0 = items[0]
-            chain = pl.when(pl.col(source) == k0).then(pl.lit(v0))
-            for k, v in items[1:]:
-                chain = chain.when(pl.col(source) == k).then(pl.lit(v))
             default_expr = default if isinstance(default, pl.Expr) else pl.lit(default)
-            expr = chain.otherwise(default_expr).alias(target)
+            expr = pl.col(source).replace_strict(
+                recode_map, default=default_expr, return_dtype=pl.String
+            ).alias(target)
         else:
             default_expr = default if isinstance(default, pl.Expr) else pl.lit(default)
             expr = default_expr.alias(target)
@@ -193,32 +187,35 @@ class OCCDSNamespace:
         grps = groups or ["USUBJID"]
 
         # Encode severity as an integer rank for comparison
-        items = [(val, idx) for idx, val in enumerate(sev_order)]
-        k0, v0 = items[0]
-        rank_chain = pl.when(pl.col(severity_col) == k0).then(pl.lit(v0))
-        for k, v in items[1:]:
-            rank_chain = rank_chain.when(pl.col(severity_col) == k).then(pl.lit(v))
-        rank_expr = rank_chain.otherwise(pl.lit(-1)).alias("__sev_rank__")
+        rank_map = {val: idx for idx, val in enumerate(sev_order)}
+        rank_expr = pl.col(severity_col).replace_strict(
+            rank_map, default=-1
+        ).alias("__sev_rank__")
 
-        df = self.to_frame().with_columns(rank_expr)
-        max_rank = df.group_by(grps).agg(pl.col("__sev_rank__").max().alias("__max_sev__"))
-        df = df.join(max_rank, on=grps, how="left")
+        # Use window function to find max rank per group (stays lazy)
+        max_sev_expr = pl.col("__sev_rank__").max().over(grps).alias("__max_sev__")
 
         match_cond = pl.col("__sev_rank__") == pl.col("__max_sev__")
         if where is not None:
             where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
             match_cond = where_expr & match_cond
 
-        df = (
-            df.with_columns(
-                pl.when(match_cond)
-                .then(pl.lit("Y"))
-                .otherwise(pl.lit(None))
-                .alias(target)
-            )
+        flag_expr = (
+            pl.when(match_cond)
+            .then(pl.lit("Y"))
+            .otherwise(pl.lit(None))
+            .alias(target)
+        )
+
+        new = object.__new__(OCCDSNamespace)
+        new._lazy = (
+            self._lazy
+            .with_columns(rank_expr)
+            .with_columns(max_sev_expr)
+            .with_columns(flag_expr)
             .drop(["__sev_rank__", "__max_sev__"])
         )
-        return self._materialise_then(df)
+        return new
 
     def treatment_emergent(
         self,
@@ -289,6 +286,4 @@ class OCCDSNamespace:
 
     def to_frame(self) -> pl.DataFrame:
         """Materialise the accumulated pipeline into a Polars DataFrame."""
-        if not self._pipeline:
-            return self._df
-        return self._df.with_columns(self._pipeline)
+        return self._lazy.collect()

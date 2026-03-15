@@ -207,12 +207,11 @@ adae = (
         pl.col("TRT01P"), pl.col("AGE"), pl.col("SEX"), pl.col("SAFFL"),
     )
 )
-_adae_cols = ["STUDYID", "USUBJID", "AETERM", "AESTDTC", "AEENDTC", "AESEV",
-              "AESER", "AEREL", "AEOUT", "AEACN", "ASTDT", "AENDT", "ADY",
-              "TRTEMFL", "ANL01FL", "ASEQ",
-              "TRTSDT", "TRTEDT", "TRT01P", "AGE", "SEX", "SAFFL"]
-adae = adae.select([c for c in _adae_cols if c in adae.columns])
-adae.write_parquet(OUT / "adae.parquet")
+adae = (
+    adae.adam
+    .select(spec=ADAM_SPEC, dataset="ADAE")
+    .write_parquet(OUT / "adae.parquet")
+)
 
 _te = (adae["TRTEMFL"] == "Y").sum()
 print(f"   {adae.shape[0]} records × {adae.shape[1]} variables")
@@ -238,18 +237,19 @@ adex_s1 = (
 adex = (
     adex_s1
     .with_columns(
-        ((pl.col("AENDT").cast(pl.Date) - pl.col("ASTDT").cast(pl.Date))
+        ((pl.col("AENDT").str.to_date("%Y-%m-%d", strict=False)
+          - pl.col("ASTDT").str.to_date("%Y-%m-%d", strict=False))
          .dt.total_days() + 1).alias("EXDURD"),
         (pl.int_range(pl.len()).over("USUBJID") + 1).cast(pl.Int64).alias("ASEQ"),
         pl.col("TRTSDT"), pl.col("TRTEDT"),
         pl.col("TRT01P"), pl.col("AGE"), pl.col("SAFFL"),
     )
 )
-_adex_cols = ["STUDYID", "USUBJID", "EXTRT", "EXDOSE", "EXDOSU",
-              "ASTDT", "AENDT", "ASEQ", "EXDURD",
-              "TRTSDT", "TRTEDT", "TRT01P", "AGE", "SAFFL"]
-adex = adex.select([c for c in _adex_cols if c in adex.columns])
-adex.write_parquet(OUT / "adex.parquet")
+adex = (
+    adex.adam
+    .select(spec=ADAM_SPEC, dataset="ADEX")
+    .write_parquet(OUT / "adex.parquet")
+)
 
 print(f"   {adex.shape[0]} records × {adex.shape[1]} variables")
 print(f"   EXDURD range : {adex['EXDURD'].min()} – {adex['EXDURD'].max()} days")

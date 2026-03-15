@@ -44,8 +44,7 @@ class SDTMNamespace:
     """
 
     def __init__(self, df: pl.DataFrame) -> None:
-        self._df = df
-        self._pipeline: list[pl.Expr] = []
+        self._lazy = df.lazy()
 
     # ------------------------------------------------------------------ #
     # Internal chaining helper                                             #
@@ -53,8 +52,7 @@ class SDTMNamespace:
 
     def _chain(self, *exprs: pl.Expr) -> "SDTMNamespace":
         new = object.__new__(SDTMNamespace)
-        new._df = self._df
-        new._pipeline = self._pipeline + list(exprs)
+        new._lazy = self._lazy.with_columns(list(exprs))
         return new
 
     # ------------------------------------------------------------------ #
@@ -105,13 +103,7 @@ class SDTMNamespace:
         *ct_validator*: if supplied (or auto-resolved), used for decode.
         """
         if ct_mapping:
-            # Build if/when chain to avoid deprecated replace(default=) API
-            items = list(ct_mapping.items())
-            k0, v0 = items[0]
-            expr_chain = pl.when(pl.col(source) == k0).then(pl.lit(v0))
-            for k, v in items[1:]:
-                expr_chain = expr_chain.when(pl.col(source) == k).then(pl.lit(v))
-            mapping_expr = expr_chain.otherwise(pl.col(source)).alias(target)
+            mapping_expr = pl.col(source).replace(ct_mapping).alias(target)
             return self._chain(mapping_expr)
 
         # Try to auto-resolve from the singleton CTValidator
@@ -132,13 +124,8 @@ class SDTMNamespace:
                     for coded, info in all_ct.items()
                 }
                 if decode_map:
-                    items = list(decode_map.items())
-                    k0, v0 = items[0]
-                    expr_chain = pl.when(pl.col(source) == k0).then(pl.lit(v0))
-                    for k, v in items[1:]:
-                        expr_chain = expr_chain.when(pl.col(source) == k).then(pl.lit(v))
                     return self._chain(
-                        expr_chain.otherwise(pl.col(source)).alias(target)
+                        pl.col(source).replace(decode_map).alias(target)
                     )
             except Exception:
                 pass
@@ -308,12 +295,11 @@ class SDTMNamespace:
         This verb materialises the current pipeline first (join needs a
         concrete frame), then returns a namespace wrapping the joined frame.
         """
-        joined = self.to_frame().join(dataset, on=on, how=how)
+        joined = self._lazy.join(dataset.lazy(), on=on, how=how)
         new = object.__new__(SDTMNamespace)
-        new._df = joined
-        new._pipeline = []
+        new._lazy = joined
         if target_cols:
-            new._pipeline = [pl.col(c) for c in target_cols]
+            new._lazy = new._lazy.with_columns([pl.col(c) for c in target_cols])
         return new
 
     # ------------------------------------------------------------------ #
@@ -331,10 +317,8 @@ class SDTMNamespace:
 
         Materialises, deduplicates, and returns a fresh namespace.
         """
-        deduped = self.to_frame().unique(subset=subset, keep=keep)  # type: ignore[arg-type]
         new = object.__new__(SDTMNamespace)
-        new._df = deduped
-        new._pipeline = []
+        new._lazy = self._lazy.unique(subset=subset, keep=keep)  # type: ignore[arg-type]
         return new
 
     # ------------------------------------------------------------------ #
@@ -359,10 +343,8 @@ class SDTMNamespace:
                 agg=[pl.col("VSSTRESN").max().alias("AVAL")],
             )
         """
-        grouped = self.to_frame().group_by(group_cols).agg(agg)
         new = object.__new__(SDTMNamespace)
-        new._df = grouped
-        new._pipeline = []
+        new._lazy = self._lazy.group_by(group_cols).agg(agg)
         return new
 
     # ------------------------------------------------------------------ #
@@ -410,10 +392,9 @@ class SDTMNamespace:
             .multiple_responses("AETERM", source="ae_terms", delimiter="|",
                                  id_cols=["USUBJID"])
         """
-        df = self.to_frame()
-        # Split source into list, then explode
-        expanded = (
-            df
+        new = object.__new__(SDTMNamespace)
+        new._lazy = (
+            self._lazy
             .with_columns(
                 pl.col(source).str.split(delimiter).alias("__split__")
             )
@@ -421,9 +402,6 @@ class SDTMNamespace:
             .with_columns(pl.col("__split__").str.strip_chars().alias(target))
             .drop("__split__")
         )
-        new = object.__new__(SDTMNamespace)
-        new._df = expanded
-        new._pipeline = []
         return new
 
     # ------------------------------------------------------------------ #
@@ -611,13 +589,34 @@ class SDTMNamespace:
 
         # Step 2: resolve explicit column list (spec takes priority over columns)
         col_list = columns
+        type_map: dict[str, str] = {}
         if spec is not None:
-            col_list = self._spec_columns(Path(spec), dataset)
+            spec_path = Path(spec)
+            col_list = self._spec_columns(spec_path, dataset)
+            type_map = self._spec_type_map(spec_path, dataset)
 
         # Step 3: intersect with existing columns (preserving spec order)
         if col_list is not None:
             existing = [c for c in col_list if c in df.columns]
             df = df.select(existing)
+
+        # Step 4: cast date/datetime columns declared in the spec
+        if type_map:
+            casts = []
+            for col_name, spec_type in type_map.items():
+                if col_name not in df.columns:
+                    continue
+                dtype = df[col_name].dtype
+                if spec_type == "date":
+                    if dtype == pl.String:
+                        casts.append(pl.col(col_name).str.to_date("%Y-%m-%d", strict=False))
+                    elif dtype.is_(pl.Datetime) or str(dtype).startswith("Datetime"):
+                        casts.append(pl.col(col_name).cast(pl.Date))
+                elif spec_type == "datetime":
+                    if dtype == pl.String:
+                        casts.append(pl.col(col_name).str.to_datetime(strict=False))
+            if casts:
+                df = df.with_columns(casts)
 
         return self._new_from(df)
 
@@ -644,11 +643,28 @@ class SDTMNamespace:
             ds = matches[0]
         return [v["name"] for v in ds["variables"]]
 
+    @staticmethod
+    def _spec_type_map(spec_path: Path, dataset: str | None) -> dict[str, str]:
+        """Return ``{col_name: type}`` for date/datetime variables in *dataset*."""
+        spec_data = yaml.safe_load(spec_path.read_text())
+        datasets = spec_data.get("datasets", [])
+        if dataset is None:
+            ds = datasets[0] if len(datasets) == 1 else None
+        else:
+            matches = [d for d in datasets if d["name"].upper() == dataset.upper()]
+            ds = matches[0] if matches else None
+        if ds is None:
+            return {}
+        return {
+            v["name"]: v["type"]
+            for v in ds["variables"]
+            if v.get("type") in ("date", "datetime")
+        }
+
     def _new_from(self, df: pl.DataFrame) -> "SDTMNamespace":
-        """Return a fresh SDTMNamespace wrapping *df* with an empty pipeline."""
+        """Return a fresh SDTMNamespace wrapping *df* as a lazy plan."""
         new = object.__new__(SDTMNamespace)
-        new._df = df
-        new._pipeline = []
+        new._lazy = df.lazy()
         return new
 
     # ------------------------------------------------------------------ #
@@ -657,9 +673,7 @@ class SDTMNamespace:
 
     def to_frame(self) -> pl.DataFrame:
         """Materialise the accumulated pipeline into a Polars DataFrame."""
-        if not self._pipeline:
-            return self._df
-        return self._df.with_columns(self._pipeline)
+        return self._lazy.collect()
 
     def write_parquet(
         self,

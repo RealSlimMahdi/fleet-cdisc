@@ -1,14 +1,14 @@
-"""Thread-safe CDISC Controlled Terminology validator with caching.
+"""CDISC Controlled Terminology validator with caching.
 
-Adapted from pharmaversepy utils/ct_validator.py.
-Supports singleton pattern for application-wide CT state.
+Provides a module-level singleton ``_validator`` for application-wide CT state.
+Use ``get_validator()`` (or the re-exported ``fleet.get_validator``) to access it.
 """
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from threading import RLock
+from threading import Lock
 
 from .loader import CTError, load_controlled_terminology
 
@@ -16,36 +16,31 @@ logger = logging.getLogger(__name__)
 
 
 class CTValidator:
-    """Thread-safe validator for CDISC Controlled Terminology.
+    """Validator for CDISC Controlled Terminology.
 
     Provides caching, lazy loading, and validation of SDTM/ADaM values
     against CDISC controlled terminology codelists. Supports both NCI
     codelist codes (e.g., C66731) and human-readable aliases (e.g., SEX).
 
     Usage:
-        >>> validator = CTValidator.get_instance()
+        >>> from fleet import get_validator
+        >>> validator = get_validator()
         >>> validator.load_ct_file("ct/cdisc_ct.yaml", aliases={"SEX": "C66731"})
         >>> validator.validate_value("SEX", "M")
         (True, "Value 'M' is valid for codelist 'C66731'")
     """
 
-    _instance: CTValidator | None = None
-    _lock: RLock = RLock()
-
     def __init__(self) -> None:
+        self._lock = Lock()
         self._ct_cache: dict[str, dict[str, str]] = {}
         self._codelist_aliases: dict[str, str] = {}
         self._ct_path: Path | None = None
         self._initialized: bool = False
 
     @classmethod
-    def get_instance(cls) -> CTValidator:
-        """Return the process-wide singleton CTValidator (thread-safe)."""
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = cls()
-        return cls._instance
+    def get_instance(cls) -> "CTValidator":
+        """Return the module-level singleton. Kept for backward compatibility."""
+        return _validator
 
     def load_ct_file(
         self,
@@ -113,8 +108,7 @@ class CTValidator:
             alias: Human-readable name, e.g., "SEX".
             codelist_name: NCI codelist code, e.g., "C66731".
         """
-        with self._lock:
-            self._codelist_aliases[alias] = codelist_name
+        self._codelist_aliases[alias] = codelist_name
 
     def validate_value(
         self,
@@ -172,13 +166,12 @@ class CTValidator:
 
     def get_cache_info(self) -> dict[str, object]:
         """Return diagnostic information about the current cache state."""
-        with self._lock:
-            return {
-                "codelists_loaded": list(self._ct_cache.keys()),
-                "aliases": dict(self._codelist_aliases),
-                "ct_path": str(self._ct_path) if self._ct_path else None,
-                "initialized": self._initialized,
-            }
+        return {
+            "codelists_loaded": list(self._ct_cache.keys()),
+            "aliases": dict(self._codelist_aliases),
+            "ct_path": str(self._ct_path) if self._ct_path else None,
+            "initialized": self._initialized,
+        }
 
     def apply_ct_mapping(self, codelist_name: str, value: str | None) -> str | None:
         """Map an SDTM code to its decoded CT value (e.g., "M" → "Male").
@@ -192,6 +185,10 @@ class CTValidator:
         return codelist.get(value, value)
 
 
+# Module-level singleton — created once when the module is first imported.
+_validator = CTValidator()
+
+
 def get_validator() -> CTValidator:
-    """Convenience function to retrieve the singleton CTValidator."""
-    return CTValidator.get_instance()
+    """Return the module-level singleton CTValidator."""
+    return _validator

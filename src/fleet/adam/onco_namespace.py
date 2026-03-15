@@ -46,31 +46,12 @@ _NUM_TO_RESP: dict[int, str] = {v: k for k, v in _RESP_TO_NUM.items()}
 
 def _resp_num_expr(source: str) -> pl.Expr:
     """Return an expression mapping *source* to its RECIST numeric rank."""
-    chain = (
-        pl.when(pl.col(source) == "CR").then(1)
-        .when(pl.col(source) == "PR").then(2)
-        .when(pl.col(source) == "SD").then(3)
-        .when(pl.col(source) == "NON-CR/NON-PD").then(4)
-        .when(pl.col(source) == "PD").then(5)
-        .when(pl.col(source) == "NE").then(6)
-        .when(pl.col(source) == "MISSING").then(7)
-        .otherwise(None)
-    )
-    return chain
+    return pl.col(source).replace_strict(_RESP_TO_NUM, default=None)
 
 
 def _num_resp_expr(num_expr: pl.Expr) -> pl.Expr:
     """Return an expression mapping a numeric RECIST rank back to text."""
-    return (
-        pl.when(num_expr == 1).then(pl.lit("CR"))
-        .when(num_expr == 2).then(pl.lit("PR"))
-        .when(num_expr == 3).then(pl.lit("SD"))
-        .when(num_expr == 4).then(pl.lit("NON-CR/NON-PD"))
-        .when(num_expr == 5).then(pl.lit("PD"))
-        .when(num_expr == 6).then(pl.lit("NE"))
-        .when(num_expr == 7).then(pl.lit("MISSING"))
-        .otherwise(pl.lit(None))
-    )
+    return num_expr.replace_strict(_NUM_TO_RESP, default=None)
 
 
 class OncoNamespace:
@@ -82,8 +63,7 @@ class OncoNamespace:
     """
 
     def __init__(self, df: pl.DataFrame) -> None:
-        self._df = df
-        self._pipeline: list[pl.Expr] = []
+        self._lazy = df.lazy()
 
     # ------------------------------------------------------------------ #
     # Internal helpers                                                     #
@@ -91,14 +71,12 @@ class OncoNamespace:
 
     def _chain(self, *exprs: pl.Expr) -> "OncoNamespace":
         new = object.__new__(OncoNamespace)
-        new._df = self._df
-        new._pipeline = self._pipeline + list(exprs)
+        new._lazy = self._lazy.with_columns(list(exprs))
         return new
 
     def _materialise_then(self, df: pl.DataFrame) -> "OncoNamespace":
         new = object.__new__(OncoNamespace)
-        new._df = df
-        new._pipeline = []
+        new._lazy = df.lazy()
         return new
 
     # ------------------------------------------------------------------ #
@@ -342,6 +320,4 @@ class OncoNamespace:
 
     def to_frame(self) -> pl.DataFrame:
         """Materialise the pipeline and return a ``pl.DataFrame``."""
-        if not self._pipeline:
-            return self._df
-        return self._df.with_columns(self._pipeline)
+        return self._lazy.collect()
