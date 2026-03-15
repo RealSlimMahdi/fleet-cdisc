@@ -2,7 +2,7 @@
 
 The `df.sdtm` namespace maps raw clinical data to CDISC SDTM domains.
 
-::: pymaverse.sdtm.SDTMNamespace
+::: fleet.sdtm.SDTMNamespace
 options:
 show*root_heading: true
 heading_level: 2

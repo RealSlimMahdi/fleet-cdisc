@@ -1,19 +1,19 @@
-# Pymaverse
+# Fleet
 
 > CDISC SDTM/ADaM derivation toolkit for Polars DataFrames.
 
-Pymaverse adds chainable verb pipelines directly onto every Polars DataFrame so you can build standards-compliant CDISC datasets with minimal boilerplate. Importing the package registers `.sdtm`, `.adam`, `.adsl`, and `.occds` namespaces automatically.
+Fleet adds chainable verb pipelines directly onto every Polars DataFrame so you can build standards-compliant CDISC datasets with minimal boilerplate. Importing the package registers `.sdtm`, `.adam`, `.adsl`, and `.occds` namespaces automatically.
 
 ## Install
 
 ```
-pip install pymaverse
+pip install fleet
 ```
 
 ## Quickstart
 
 ```python
-import pymaverse
+import fleet
 import polars as pl
 
 dm = (
@@ -93,7 +93,7 @@ A single YAML file is the source of truth for a study: it declares output variab
 ### Spec-driven pipeline
 
 ```python
-from pymaverse import load_study_context
+from fleet import load_study_context
 
 ctx = load_study_context("specs/cdiscpilot01/adam/define.yaml")
 adsl = ctx.build("ADSL")
@@ -102,7 +102,7 @@ adsl = ctx.build("ADSL")
 ### Define-XML generation
 
 ```python
-from pymaverse import DefineXMLGenerator
+from fleet import DefineXMLGenerator
 
 gen = DefineXMLGenerator("specs/cdiscpilot01/adam/define.yaml")
 gen.write("outputs/cdiscpilot01/define_adam.xml")
@@ -111,7 +111,7 @@ gen.write("outputs/cdiscpilot01/define_adam.xml")
 ## Controlled Terminology
 
 ```python
-from pymaverse import CTValidator
+from fleet import CTValidator
 
 ct = CTValidator.get_instance()
 ct.load_ct_file("specs/ct/sdtm_ct.yaml")
@@ -120,9 +120,9 @@ ok, msg = ct.validate_value("C66731", "M")
 
 ## Documentation
 
-Full docs: https://pymaverse.github.io/pymaverse/
+Full docs: https://fleet.github.io/fleet/
 
-- Getting started: https://pymaverse.github.io/pymaverse/getting-started/installation/
-- define.yaml guide: https://pymaverse.github.io/pymaverse/concepts/define-yaml/
-- API reference: https://pymaverse.github.io/pymaverse/api/
-- ADSL example notebook: https://pymaverse.github.io/pymaverse/examples/adsl_pipeline/
+- Getting started: https://fleet.github.io/fleet/getting-started/installation/
+- define.yaml guide: https://fleet.github.io/fleet/concepts/define-yaml/
+- API reference: https://fleet.github.io/fleet/api/
+- ADSL example notebook: https://fleet.github.io/fleet/examples/adsl_pipeline/

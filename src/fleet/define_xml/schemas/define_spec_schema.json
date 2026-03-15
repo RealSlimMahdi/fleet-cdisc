@@ -1,0 +1,405 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fleet.org/schemas/define-spec.json",
+  "title": "Fleet Define Specification",
+  "description": "Simplified JSON Schema for defining SDTM or ADaM dataset metadata in Fleet. Enforces structure, types, and codelist references. Generates Define-XML 2.1 and powers post-dataset checks.",
+  "type": "object",
+  "required": ["study", "datasets"],
+  "additionalProperties": false,
+  "properties": {
+    "study": { "$ref": "#/$defs/study" },
+    "codelists": {
+      "type": "array",
+      "description": "Shared codelists referenced by variables in this define.",
+      "items": { "$ref": "#/$defs/codelist" },
+      "default": []
+    },
+    "datasets": {
+      "type": "array",
+      "description": "Dataset definitions — one entry per SDTM domain or ADaM dataset.",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/dataset" }
+    }
+  },
+  "$defs": {
+    "study": {
+      "type": "object",
+      "title": "Study",
+      "description": "Study-level metadata shared across all datasets in this define.",
+      "required": ["id", "name", "description", "protocol_name", "originator", "standard", "standard_version"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Study identifier (e.g. CDISCPILOT01).",
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable study name.",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "description": "Full study description.",
+          "minLength": 1
+        },
+        "protocol_name": {
+          "type": "string",
+          "description": "Protocol identifier."
+        },
+        "originator": {
+          "type": "string",
+          "description": "Organization or team creating this define.",
+          "minLength": 1
+        },
+        "source_system": {
+          "type": "string",
+          "description": "Software generating the Define-XML.",
+          "default": "Fleet"
+        },
+        "source_system_version": {
+          "type": "string",
+          "description": "Version of the generating software.",
+          "default": "0.1.0"
+        },
+        "standard": {
+          "type": "string",
+          "description": "CDISC implementation guide this define conforms to.",
+          "enum": ["SDTMIG", "ADAMIG", "SENDIG"]
+        },
+        "standard_version": {
+          "type": "string",
+          "description": "Version of the implementation guide (e.g. '3.4' for SDTMIG).",
+          "pattern": "^\\d+\\.\\d+(\\.\\d+)?$"
+        },
+        "ct_version": {
+          "type": "string",
+          "description": "CDISC Controlled Terminology version used (e.g. '2023-12-15').",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        }
+      }
+    },
+    "codelist": {
+      "type": "object",
+      "title": "Codelist",
+      "description": "A controlled terminology codelist referenced by variables.",
+      "required": ["oid", "name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "oid": {
+          "type": "string",
+          "description": "Unique codelist identifier (e.g. C66731, CL.RACE).",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable codelist name."
+        },
+        "type": {
+          "type": "string",
+          "description": "Data type of the coded values.",
+          "enum": ["text", "integer", "float"]
+        },
+        "standard_oid": {
+          "type": "string",
+          "description": "Reference to the IG standard OID for this codelist (e.g. STD.CT)."
+        },
+        "items": {
+          "type": "array",
+          "description": "Individual coded values.",
+          "items": {
+            "type": "object",
+            "required": ["coded_value"],
+            "additionalProperties": false,
+            "properties": {
+              "coded_value": {
+                "type": "string",
+                "description": "The controlled term (submission value)."
+              },
+              "decode": {
+                "type": "string",
+                "description": "Human-readable meaning of the coded value."
+              }
+            }
+          }
+        }
+      }
+    },
+    "dataset": {
+      "type": "object",
+      "title": "Dataset",
+      "description": "Definition of a single SDTM domain or ADaM dataset.",
+      "required": ["name", "label", "structure", "keys", "variables"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "SAS dataset name / domain (e.g. DM, ADSL).",
+          "pattern": "^[A-Z][A-Z0-9]{1,7}$"
+        },
+        "label": {
+          "type": "string",
+          "description": "Dataset label (max 40 chars for SAS compatibility).",
+          "maxLength": 40
+        },
+        "structure": {
+          "type": "string",
+          "description": "Observation structure description (e.g. 'One record per subject')."
+        },
+        "repeating": {
+          "type": "boolean",
+          "description": "Whether the dataset has multiple records per subject.",
+          "default": true
+        },
+        "class": {
+          "type": "string",
+          "description": "CDISC dataset class (e.g. SPECIAL PURPOSE, FINDINGS, EVENTS)."
+        },
+        "keys": {
+          "type": "array",
+          "description": "Ordered list of key variable names that uniquely identify a record.",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "inputs": {
+          "type": "array",
+          "description": "Upstream datasets or raw source files this dataset depends on. Used to build the pipeline DAG.",
+          "items": { "$ref": "#/$defs/dataset_input" },
+          "default": []
+        },
+        "variables": {
+          "type": "array",
+          "description": "Ordered list of variable definitions.",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/variable" }
+        }
+      }
+    },
+    "dataset_input": {
+      "type": "object",
+      "title": "DatasetInput",
+      "description": "An upstream dependency of a dataset — either a raw source file or another pipeline dataset.",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Logical node name. For raw files use a short identifier (e.g. 'dm_raw'); for datasets use the dataset name (e.g. 'DM', 'ADSL')."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["raw", "dataset"],
+          "description": "'raw' for source files (csv, sas7bdat, xpt, parquet, etc.); 'dataset' for upstream pipeline datasets."
+        },
+        "path": {
+          "type": "string",
+          "description": "File path for raw inputs relative to the repo root. Omit for dataset-type inputs (path is resolved from the DAG)."
+        }
+      }
+    },
+    "variable": {
+      "type": "object",
+      "title": "Variable",
+      "description": "A single variable (column) in a dataset.",
+      "required": ["name", "label", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Variable name (uppercase, max 8 chars for SAS compatibility).",
+          "pattern": "^[A-Z_][A-Z0-9_]{0,7}$"
+        },
+        "label": {
+          "type": "string",
+          "description": "Variable label (max 40 chars).",
+          "maxLength": 40
+        },
+        "type": {
+          "type": "string",
+          "description": "ODM data type. 'text' maps to Polars String; 'integer' to Int64; 'float' to Float64; 'date' to Date; 'datetime' to Datetime.",
+          "enum": ["text", "integer", "float", "date", "datetime"]
+        },
+        "length": {
+          "type": "integer",
+          "description": "Maximum character length (for text variables).",
+          "minimum": 1
+        },
+        "mandatory": {
+          "type": "boolean",
+          "description": "Whether the variable is required in every record.",
+          "default": false
+        },
+        "origin": {
+          "type": "string",
+          "description": "How the value originates.",
+          "enum": ["Assigned", "Derived", "CRF", "Protocol", "eDT", "Other"]
+        },
+        "codelist": {
+          "type": "string",
+          "description": "OID of the codelist this variable references (must match a codelist oid in this define)."
+        },
+        "comment": {
+          "type": "string",
+          "description": "Free-text comment or derivation note for this variable."
+        },
+        "derivation": {
+          "$ref": "#/$defs/derivation",
+          "description": "Derivation rule that drives the pipeline when from_spec() is called. Omit for columns that are not programmatically derived (e.g. carry-through columns)."
+        }
+      }
+    },
+    "derivation": {
+      "type": "object",
+      "title": "Derivation",
+      "description": "Describes how a variable is programmatically derived by the Fleet pipeline engine. When present, from_spec() uses this block to build the transform expression instead of a separate _spec.yaml file.",
+      "required": ["algorithm"],
+      "additionalProperties": true,
+      "properties": {
+        "algorithm": {
+          "type": "string",
+          "description": "Derivation verb. SDTM: assign_no_ct | assign_ct | assign_datetime | hardcode_no_ct | hardcode_ct | condition_add | if_then_else | ae_aerel | notsubmitted | dataset_level. ADaM: source | assigned | derivation | rename | recode | condderivation | std_function | study_day | baseline | chg | pchg | bmi | flag | nrind | on_treatment | shift | whereclauses."
+        },
+        "source": {
+          "type": "string",
+          "description": "Source column name in the input DataFrame (assign_no_ct, assign_ct, assign_datetime, source, rename, recode)."
+        },
+        "value": {
+          "description": "Constant value to hardcode into this variable (hardcode_no_ct, hardcode_ct, assigned)."
+        },
+        "expression": {
+          "type": "string",
+          "description": "Polars column name or expression string (derivation, condderivation)."
+        },
+        "ct_codelist": {
+          "type": "string",
+          "description": "CDISC controlled terminology codelist OID (assign_ct, hardcode_ct)."
+        },
+        "ct_mapping": {
+          "type": "object",
+          "description": "Explicit raw-value → CT-value mapping (assign_ct). Keys and values are strings.",
+          "additionalProperties": { "type": "string" }
+        },
+        "input_format": {
+          "type": "string",
+          "description": "strftime format of the source date/datetime column (assign_datetime)."
+        },
+        "func": {
+          "type": "string",
+          "description": "Standard function name for std_function algorithm: study_day | chg | pchg | bmi | baseline.",
+          "enum": ["study_day", "chg", "pchg", "bmi", "baseline"]
+        },
+        "analysis_date": {
+          "type": "string",
+          "description": "Analysis date column name (study_day, on_treatment)."
+        },
+        "reference_date": {
+          "type": "string",
+          "description": "Reference/start-of-treatment date column name (study_day)."
+        },
+        "aval": {
+          "type": "string",
+          "description": "Analysis value column name (chg, pchg, nrind)."
+        },
+        "base": {
+          "type": "string",
+          "description": "Baseline value column name (chg, pchg)."
+        },
+        "baseline_flag": {
+          "type": "string",
+          "description": "Baseline flag column name used when deriving BASE (baseline)."
+        },
+        "baseline_criteria": {
+          "type": "string",
+          "description": "Boolean expression identifying baseline records (baseline)."
+        },
+        "groups": {
+          "type": "array",
+          "description": "Partition columns for windowed operations (baseline, flag).",
+          "items": { "type": "string" }
+        },
+        "criteria": {
+          "type": "string",
+          "description": "Flag criteria expression or sentinel: first | last | max | min (flag)."
+        },
+        "flag_order_by": {
+          "type": "string",
+          "description": "Sort column for first/last flag criteria (flag)."
+        },
+        "flag_value": {
+          "type": "string",
+          "description": "String emitted when the flag condition is met. Defaults to Y.",
+          "default": "Y"
+        },
+        "low": {
+          "type": "string",
+          "description": "Lower normal range column name (nrind)."
+        },
+        "high": {
+          "type": "string",
+          "description": "Upper normal range column name (nrind)."
+        },
+        "trtedt": {
+          "type": "string",
+          "description": "End-of-treatment date column name (on_treatment)."
+        },
+        "baseline_cat": {
+          "type": "string",
+          "description": "Baseline category column (shift)."
+        },
+        "post_cat": {
+          "type": "string",
+          "description": "Post-baseline category column (shift)."
+        },
+        "recode_map": {
+          "type": "object",
+          "description": "Value mapping dict for recode algorithm.",
+          "additionalProperties": {}
+        },
+        "default": {
+          "description": "Default value for recode when the source value is not in recode_map."
+        },
+        "conditions": {
+          "type": "array",
+          "description": "List of when/then condition pairs for condderivation.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "when": { "type": "string" },
+              "then": {}
+            }
+          }
+        },
+        "else_value": {
+          "description": "Fallback value for condderivation or if_then_else when no condition matches."
+        },
+        "when": {
+          "type": "array",
+          "description": "List of when/then/else clause dicts for if_then_else (SDTM).",
+          "items": { "type": "object" }
+        },
+        "condition": {
+          "type": "string",
+          "description": "Boolean expression for condition_add (SDTM)."
+        },
+        "then_value": {
+          "type": "string",
+          "description": "Value emitted when condition is true (condition_add, SDTM)."
+        },
+        "aerel_source": {
+          "type": "string",
+          "description": "Source column for ae_aerel algorithm (SDTM)."
+        },
+        "aerel_map": {
+          "type": "object",
+          "description": "Mapping dict for ae_aerel algorithm (SDTM).",
+          "additionalProperties": { "type": "string" }
+        },
+        "where": {
+          "type": "string",
+          "description": "Filter expression for whereclauses algorithm (ADaM)."
+        }
+      }
+    }
+  }
+}

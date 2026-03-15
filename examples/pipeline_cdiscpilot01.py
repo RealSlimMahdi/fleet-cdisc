@@ -21,8 +21,8 @@ Run from the repo root:
 from pathlib import Path
 
 import polars as pl
-import pymaverse  # noqa: F401 — registers .sdtm / .adam / .adsl / .occds namespaces
-from pymaverse import DatasetChecker, DefineSpecGenerator
+import fleet  # noqa: F401 — registers .sdtm / .adam / .adsl / .occds namespaces
+from fleet import DatasetChecker, DefineSpecGenerator
 
 RAW       = Path("datasets/cdiscpilot01/raw")
 SPECS     = Path("specs/cdiscpilot01")

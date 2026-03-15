@@ -1,4 +1,4 @@
-# Pymaverse — Project Structure
+# Fleet — Project Structure
 
 > A CDISC SDTM/ADaM derivation toolkit built on Polars namespace extensions.
 
@@ -7,8 +7,8 @@
 ## Repository Layout
 
 ```
-Pymaverse/
-├── src/pymaverse/          # Main package
+Fleet/
+├── src/fleet/          # Main package
 │   ├── __init__.py         # Public API surface + namespace registration
 │   ├── _version.py         # Package version ("0.1.0")
 │   ├── core/               # Shared foundation
@@ -33,17 +33,17 @@ Pymaverse/
 
 ---
 
-## `src/pymaverse/` — Module by Module
+## `src/fleet/` — Module by Module
 
 ### `__init__.py` — Package Entry Point
 
-Importing `pymaverse` does two things automatically:
+Importing `fleet` does two things automatically:
 
 1. **Registers namespace extensions** on all Polars DataFrames (`df.sdtm`, `df.adam`, `df.adsl`, `df.occds`)
 2. **Re-exports the full public API** so everything is reachable from one import
 
 ```python
-import pymaverse  # registers df.sdtm, df.adam, df.adsl, df.occds everywhere
+import fleet  # registers df.sdtm, df.adam, df.adsl, df.occds everywhere
 ```
 
 ---
@@ -52,7 +52,7 @@ import pymaverse  # registers df.sdtm, df.adam, df.adsl, df.occds everywhere
 
 | File               | Purpose                                                                                                                                                                               |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `exceptions.py`    | All custom exception classes — `PymaverseError`, `SDTMError`, `ADAMError`, `CTError`, `PymaverseIOError`, `SpecError`, `ValidationError`                                              |
+| `exceptions.py`    | All custom exception classes — `FleetError`, `SDTMError`, `ADAMError`, `CTError`, `FleetIOError`, `SpecError`, `ValidationError`                                              |
 | `study_context.py` | `StudyContext` — wraps a study root directory and resolves configured paths (raw data, SDTM, ADaM, metadata, outputs). Loaded via `load_study_context(config_path)` from a YAML file. |
 
 **`StudyContext`** is useful when your study files live in a standard directory layout and you want paths resolved automatically rather than hard-coded.
@@ -102,7 +102,7 @@ The `assign_ct` SDTM verb and `recode` ADaM verb use the singleton automatically
 
 ### `sdtm/` — SDTM Derivation Namespace
 
-The core of Pymaverse for SDTM work. Registers `df.sdtm` on every Polars DataFrame.
+The core of Fleet for SDTM work. Registers `df.sdtm` on every Polars DataFrame.
 
 | File           | Purpose                                                                                                                         |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -195,7 +195,7 @@ Registers `df.adam` on every Polars DataFrame.
 | `validator.py`                       | `DefineValidator` — validates a YAML Define-XML spec against the schema; reports `DefineIssue` objects |
 | `generator.py`                       | `DefineXMLGenerator` — converts a YAML spec into a Define-XML 2.1 ODM XML string                       |
 
-The YAML key `pymaverse_algorithm` in a variable spec is used to record the derivation verb for traceability in the generated XML.
+The YAML key `fleet_algorithm` in a variable spec is used to record the derivation verb for traceability in the generated XML.
 
 ---
 

@@ -2,7 +2,7 @@
 """
 Admiral-inspired ADSL pipeline for CDISCPILOT01.
 
-Reproduces the admiral "Creating ADSL" programming flow in Python/Pymaverse:
+Reproduces the admiral "Creating ADSL" programming flow in Python/Fleet:
   https://pharmaverse.github.io/admiral/articles/adsl.html
 
 Admiral programming-flow steps reproduced
@@ -26,7 +26,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import polars as pl
-import pymaverse  # noqa: F401 — registers .sdtm / .adam / .adsl namespace extensions
+import fleet  # noqa: F401 — registers .sdtm / .adam / .adsl namespace extensions
 
 RAW = Path("datasets/cdiscpilot01/raw")
 OUT = Path("outputs/cdiscpilot01")

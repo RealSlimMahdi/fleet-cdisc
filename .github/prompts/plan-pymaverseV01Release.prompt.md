@@ -1,4 +1,4 @@
-# Plan: Pymaverse v0.1.0 Release Readiness
+# Plan: Fleet v0.1.0 Release Readiness
 
 **TL;DR**: The library is substantially complete and ready for v0.1.0. `pyproject.toml` and `_version.py` already declare `0.1.0`. No stubs, TODOs, or FIXMEs found. Two hard blockers to verify before tagging; everything else is polish.
 
@@ -32,7 +32,7 @@
 ### Phase 3 — Release
 
 6. Tag `v0.1.0` in git and trigger the publish workflow.
-7. Verify the PyPI package installs correctly: `pip install pymaverse==0.1.0`.
+7. Verify the PyPI package installs correctly: `pip install fleet==0.1.0`.
 8. Rebuild and deploy MkDocs docs site (`mkdocs gh-deploy` or CI equivalent).
 
 ---
@@ -40,7 +40,7 @@
 ## Relevant Files
 
 - `pyproject.toml` — version declared as `0.1.0`, build system (hatchling), dependencies all set
-- `src/pymaverse/_version.py` — `__version__ = "0.1.0"`, matches pyproject.toml
+- `src/fleet/_version.py` — `__version__ = "0.1.0"`, matches pyproject.toml
 - `docs/changelog.md` — add Known Issues + Unreleased roadmap
 - `examples/admiral_adsl_cdiscpilot01.py` — must run clean (end-to-end ADSL)
 - `examples/pipeline_cdiscpilot01.py` — must run clean (spec-driven SDTM/ADaM/Define-XML)
@@ -51,10 +51,10 @@
 
 ## Verification
 
-1. `pytest --cov=src/pymaverse --cov-report=term-missing` — all targets pass
+1. `pytest --cov=src/fleet --cov-report=term-missing` — all targets pass
 2. `uv run python examples/admiral_adsl_cdiscpilot01.py` — exits cleanly
 3. `uv run python examples/pipeline_cdiscpilot01.py` — exits cleanly, outputs written to `outputs/cdiscpilot01/`
-4. `pip install pymaverse==0.1.0` from a fresh venv — imports without error
+4. `pip install fleet==0.1.0` from a fresh venv — imports without error
 5. MkDocs site builds without warnings: `mkdocs build --strict`
 
 ---

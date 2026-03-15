@@ -1,11 +1,11 @@
 [project]
-name = "pymaverse"
+name = "fleet"
 version = "0.1.0"
 description = "CDISC SDTM/ADaM toolkit for Polars DataFrames via namespace extension"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
 authors = [
-    { name = "Pymaverse Contributors" }
+    { name = "Fleet Contributors" }
 ]
 keywords = ["polars", "cdisc", "sdtm", "adam", "clinical-trials", "pharma", "namespace"]
 classifiers = [
@@ -34,7 +34,7 @@ io = [
 
 # FULL: All extras
 all = [
-    "pymaverse[io]",
+    "fleet[io]",
 ]
 
 # DEV: Development tools
@@ -42,7 +42,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
     "ruff>=0.3.0",
-    "pymaverse[io]",
+    "fleet[io]",
 ]
 
 # DOCS: Documentation site
@@ -56,14 +56,14 @@ docs = [
 ]
 
 [project.urls]
-Repository = "https://github.com/pymaverse/pymaverse"
+Repository = "https://github.com/fleet/fleet"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/pymaverse"]
+packages = ["src/fleet"]
 
 [tool.ruff]
 line-length = 100
@@ -79,5 +79,5 @@ pythonpath = ["src"]
 addopts = "-v --tb=short"
 
 [tool.coverage.run]
-source = ["src/pymaverse"]
+source = ["src/fleet"]
 omit = ["tests/*"]

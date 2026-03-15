@@ -2,7 +2,7 @@
 
 The `df.adam` namespace builds ADaM BDS datasets (ADVS, ADLB, …).
 
-::: pymaverse.adam.AdamNamespace
+::: fleet.adam.AdamNamespace
 options:
 show*root_heading: true
 heading_level: 2

@@ -3,14 +3,14 @@
 ## Prerequisites
 
 - Python 3.12+
-- Pymaverse installed — see [Installation](installation.md)
+- Fleet installed — see [Installation](installation.md)
 
 ---
 
 ## Your first SDTM domain
 
 ```python
-import pymaverse
+import fleet
 import polars as pl
 
 raw = pl.DataFrame({
@@ -91,7 +91,7 @@ adsl = (
 `StudyContext.init()` scaffolds the expected folder layout and starter `define.yaml` files in one call:
 
 ```python
-from pymaverse import StudyContext
+from fleet import StudyContext
 
 ctx = StudyContext.init(
     "./studies/MYSTUDY01",
@@ -125,7 +125,7 @@ To reload an existing workspace in subsequent sessions:
 
 ```python
 from pathlib import Path
-from pymaverse import load_study_context
+from fleet import load_study_context
 
 ctx = load_study_context(Path("./studies/MYSTUDY01/study_config.yaml"))
 ```

@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Pymaverse are documented here.
+All notable changes to Fleet are documented here.
 
 ## [Unreleased]
 

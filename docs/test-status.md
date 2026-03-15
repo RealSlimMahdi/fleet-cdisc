@@ -1,6 +1,6 @@
 # Test Status
 
-Pymaverse uses [pytest](https://docs.pytest.org/) with coverage reporting.
+Fleet uses [pytest](https://docs.pytest.org/) with coverage reporting.
 
 ## Run the test suite locally
 
@@ -12,14 +12,14 @@ uv sync --extra dev
 uv run pytest
 
 # With coverage report
-uv run pytest --cov=pymaverse --cov-report=term-missing
+uv run pytest --cov=fleet --cov-report=term-missing
 ```
 
 ## CI status
 
 Tests run automatically on every push and pull request via GitHub Actions.
 
-[![CI](https://github.com/pymaverse/pymaverse/actions/workflows/ci.yml/badge.svg)](https://github.com/pymaverse/pymaverse/actions/workflows/ci.yml)
+[![CI](https://github.com/fleet/fleet/actions/workflows/ci.yml/badge.svg)](https://github.com/fleet/fleet/actions/workflows/ci.yml)
 
 ## Test structure
 

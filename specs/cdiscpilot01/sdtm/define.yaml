@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../../src/pymaverse/define_xml/schemas/define_spec_schema.json
+# yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json
 # SDTM Define Specification — CDISCPILOT01
 # Single source of truth: describes output structure AND drives from_spec() derivations.
 # Used for: (1) Define-XML 2.1 generation  (2) post-dataset structure checks  (3) pipeline execution.
@@ -11,8 +11,8 @@ study:
     of the Efficacy, Safety, and Tolerability of Xanomeline in Patients with Mild
     to Moderate Alzheimer's Disease
   protocol_name: CDISCPILOT01
-  originator: Pymaverse Team
-  source_system: Pymaverse
+  originator: Fleet Team
+  source_system: Fleet
   source_system_version: "0.1.0"
   standard: SDTMIG
   standard_version: "3.4"

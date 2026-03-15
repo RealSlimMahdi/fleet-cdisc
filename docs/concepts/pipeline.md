@@ -2,7 +2,7 @@
 
 ## How the pipeline works
 
-Every Pymaverse namespace (`sdtm`, `adam`, `adsl`, `occds`) follows the same pattern:
+Every Fleet namespace (`sdtm`, `adam`, `adsl`, `occds`) follows the same pattern:
 
 1. **Access** the namespace on a Polars DataFrame: `df.sdtm`
 2. **Chain** verb calls — each returns a new namespace object accumulating `pl.Expr` objects
@@ -105,7 +105,7 @@ files, so the very first `load_study_context()` call in your pipeline script
 can succeed immediately.
 
 ```python
-from pymaverse import StudyContext, load_study_context
+from fleet import StudyContext, load_study_context
 from pathlib import Path
 
 # ── Once, when starting a new study ──────────────────────────────────────

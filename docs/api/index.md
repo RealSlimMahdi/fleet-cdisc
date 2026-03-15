@@ -1,9 +1,9 @@
 # API Reference
 
-Pymaverse's public API is reachable from a single import:
+Fleet's public API is reachable from a single import:
 
 ```python
-import pymaverse
+import fleet
 ```
 
 ## Modules
@@ -21,11 +21,11 @@ import pymaverse
 
 ## Namespace registration
 
-Importing `pymaverse` registers all namespace extensions on every `polars.DataFrame`.
+Importing `fleet` registers all namespace extensions on every `polars.DataFrame`.
 You never need to import individual submodules:
 
 ```python
-import pymaverse          # registers df.sdtm, df.adam, df.adsl, df.occds
+import fleet          # registers df.sdtm, df.adam, df.adsl, df.occds
 import polars as pl
 
 pl.DataFrame({"x": [1]}).sdtm  # works immediately

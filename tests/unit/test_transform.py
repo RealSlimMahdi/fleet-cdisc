@@ -3,8 +3,8 @@
 import polars as pl
 import pytest
 
-import pymaverse  # noqa: F401 — triggers namespace registration
-from pymaverse.adam.transforms import (
+import fleet  # noqa: F401 — triggers namespace registration
+from fleet.adam.transforms import (
     register_transform,
     get_transform,
     list_transforms,

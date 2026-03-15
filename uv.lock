@@ -399,6 +399,64 @@ wheels = [
 ]
 
 [[package]]
+name = "fleet"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "httpx" },
+    { name = "jsonschema" },
+    { name = "lxml" },
+    { name = "polars" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+]
+
+[package.optional-dependencies]
+all = [
+    { name = "pyreadstat" },
+]
+dev = [
+    { name = "pyreadstat" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+docs = [
+    { name = "mike" },
+    { name = "mkdocs-git-revision-date-localized-plugin" },
+    { name = "mkdocs-jupyter" },
+    { name = "mkdocs-llmstxt" },
+    { name = "mkdocs-material" },
+    { name = "mkdocstrings", extra = ["python"] },
+]
+io = [
+    { name = "pyreadstat" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fleet", extras = ["io"], marker = "extra == 'all'" },
+    { name = "fleet", extras = ["io"], marker = "extra == 'dev'" },
+    { name = "httpx", specifier = ">=0.27.0" },
+    { name = "jsonschema", specifier = ">=4.26.0" },
+    { name = "lxml", specifier = ">=5.0.0" },
+    { name = "mike", marker = "extra == 'docs'", specifier = ">=2.1" },
+    { name = "mkdocs-git-revision-date-localized-plugin", marker = "extra == 'docs'", specifier = ">=1.2" },
+    { name = "mkdocs-jupyter", marker = "extra == 'docs'", specifier = ">=0.25" },
+    { name = "mkdocs-llmstxt", marker = "extra == 'docs'", specifier = ">=0.2" },
+    { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5" },
+    { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.25" },
+    { name = "polars", specifier = ">=1.0.0" },
+    { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pyreadstat", marker = "extra == 'io'", specifier = ">=1.2.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.3.0" },
+]
+provides-extras = ["io", "all", "dev", "docs"]
+
+[[package]]
 name = "ghp-import"
 version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1493,64 +1551,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/b0/77/a5b8c569bf593b014
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/21/705964c7812476f378728bdf590ca4b771ec72385c533964653c68e86bdc/pygments-2.19.2-py3-none-any.whl", hash = "sha256:86540386c03d588bb81d44bc3928634ff26449851e99741617ecb9037ee5ec0b", size = 1225217, upload-time = "2025-06-21T13:39:07.939Z" },
 ]
-
-[[package]]
-name = "pymaverse"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "httpx" },
-    { name = "jsonschema" },
-    { name = "lxml" },
-    { name = "polars" },
-    { name = "pydantic" },
-    { name = "pyyaml" },
-]
-
-[package.optional-dependencies]
-all = [
-    { name = "pyreadstat" },
-]
-dev = [
-    { name = "pyreadstat" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-docs = [
-    { name = "mike" },
-    { name = "mkdocs-git-revision-date-localized-plugin" },
-    { name = "mkdocs-jupyter" },
-    { name = "mkdocs-llmstxt" },
-    { name = "mkdocs-material" },
-    { name = "mkdocstrings", extra = ["python"] },
-]
-io = [
-    { name = "pyreadstat" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "httpx", specifier = ">=0.27.0" },
-    { name = "jsonschema", specifier = ">=4.26.0" },
-    { name = "lxml", specifier = ">=5.0.0" },
-    { name = "mike", marker = "extra == 'docs'", specifier = ">=2.1" },
-    { name = "mkdocs-git-revision-date-localized-plugin", marker = "extra == 'docs'", specifier = ">=1.2" },
-    { name = "mkdocs-jupyter", marker = "extra == 'docs'", specifier = ">=0.25" },
-    { name = "mkdocs-llmstxt", marker = "extra == 'docs'", specifier = ">=0.2" },
-    { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5" },
-    { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.25" },
-    { name = "polars", specifier = ">=1.0.0" },
-    { name = "pydantic", specifier = ">=2.0.0" },
-    { name = "pymaverse", extras = ["io"], marker = "extra == 'all'" },
-    { name = "pymaverse", extras = ["io"], marker = "extra == 'dev'" },
-    { name = "pyreadstat", marker = "extra == 'io'", specifier = ">=1.2.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.3.0" },
-]
-provides-extras = ["io", "all", "dev", "docs"]
 
 [[package]]
 name = "pymdown-extensions"

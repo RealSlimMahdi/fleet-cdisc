@@ -4,7 +4,7 @@ import polars as pl
 import polars.testing as plt
 import pytest
 
-import pymaverse  # noqa: F401 — triggers namespace registration
+import fleet  # noqa: F401 — triggers namespace registration
 
 # ---------------------------------------------------------------------------
 # Reference values from admiralophtha test-convert_etdrs_to_logmar.R

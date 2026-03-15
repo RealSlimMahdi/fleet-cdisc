@@ -28,7 +28,7 @@ jobs:
         run: uv sync --extra dev
 
       - name: Run tests
-        run: uv run pytest --cov=pymaverse --cov-report=xml --cov-report=term-missing
+        run: uv run pytest --cov=fleet --cov-report=xml --cov-report=term-missing
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4

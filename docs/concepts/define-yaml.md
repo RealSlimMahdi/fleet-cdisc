@@ -1,6 +1,6 @@
 # How `define.yaml` Drives DataFrame Creation
 
-`define.yaml` is the **single source of truth** for a Pymaverse study. One file simultaneously:
+`define.yaml` is the **single source of truth** for a Fleet study. One file simultaneously:
 
 1. Declares all output variables (fed to Define-XML 2.1 generation)
 2. Specifies how each variable is derived (executed as a pipeline)
@@ -12,7 +12,7 @@
 ## File Layout
 
 ```yaml
-# yaml-language-server: $schema=../../../src/pymaverse/define_xml/schemas/define_spec_schema.json
+# yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json
 study:
   id:             CDISCPILOT01
   standard:       ADAMIG
@@ -109,7 +109,7 @@ graph TD
 ### Running the full pipeline programmatically
 
 ```python
-from pymaverse import load_study_context
+from fleet import load_study_context
 
 ctx = load_study_context("specs/cdiscpilot01/adam/define.yaml")
 
@@ -121,7 +121,7 @@ advs = ctx.build("ADVS")
 ### Generating Define-XML from the same spec
 
 ```python
-from pymaverse import DefineXMLGenerator
+from fleet import DefineXMLGenerator
 
 gen = DefineXMLGenerator("specs/cdiscpilot01/adam/define.yaml")
 gen.write("outputs/cdiscpilot01/define_adam.xml")
@@ -143,7 +143,7 @@ Variables can reference codelists declared in the `codelists` block:
     source: SEX
 ```
 
-Pymaverse threads CT validation through the pipeline automatically — invalid values raise a `CTError` at runtime.
+Fleet threads CT validation through the pipeline automatically — invalid values raise a `CTError` at runtime.
 
 ---
 
@@ -152,13 +152,13 @@ Pymaverse threads CT validation through the pipeline automatically — invalid v
 The YAML spec is validated against the bundled schema at:
 
 ```
-src/pymaverse/define_xml/schemas/define_spec_schema.json
+src/fleet/define_xml/schemas/define_spec_schema.json
 ```
 
 Add this comment to the top of every spec file to activate YAML language-server auto-complete in VS Code or any LSP-enabled editor:
 
 ```yaml
-# yaml-language-server: $schema=../../../src/pymaverse/define_xml/schemas/define_spec_schema.json
+# yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json
 ```
 
 ---
@@ -167,5 +167,5 @@ Add this comment to the top of every spec file to activate YAML language-server 
 
 - The `inputs` block declares which upstream datasets the pipeline should join/merge.
 - Variables with no `derivation` block are expected to flow in via the `source` dataset — they appear in Define-XML as `origin: CRF`.
-- Run `pymaverse validate-spec specs/cdiscpilot01/adam/define.yaml` (CLI forthcoming) or call  
+- Run `fleet validate-spec specs/cdiscpilot01/adam/define.yaml` (CLI forthcoming) or call  
   `DefineValidator("...").validate()` to catch schema errors before running.

@@ -4,13 +4,13 @@ from pathlib import Path
 
 import pytest
 
-import pymaverse  # noqa: F401
-from pymaverse.define_xml import DefineValidator, DefineXMLGenerator
+import fleet  # noqa: F401
+from fleet.define_xml import DefineValidator, DefineXMLGenerator
 
 
 PHARMAVERSEPY = Path(__file__).parent.parent.parent.parent / "Pharmaversepy"
 DEFINE_YAML = PHARMAVERSEPY / "studies/CDISCPILOT01/metadata/define.yaml"
-SCHEMA_PATH = Path(__file__).parent.parent.parent / "src/pymaverse/define_xml/schemas/define_xml_2_1_schema.json"
+SCHEMA_PATH = Path(__file__).parent.parent.parent / "src/fleet/define_xml/schemas/define_xml_2_1_schema.json"
 
 
 @pytest.mark.skipif(not DEFINE_YAML.exists(), reason="PharmaversePY define.yaml not found")

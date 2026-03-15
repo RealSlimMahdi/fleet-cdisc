@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for Pymaverse tests."""
+"""Shared pytest fixtures for Fleet tests."""
 
 from pathlib import Path
 

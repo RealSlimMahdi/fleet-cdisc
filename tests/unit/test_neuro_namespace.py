@@ -3,7 +3,7 @@
 import polars as pl
 import pytest
 
-import pymaverse  # noqa: F401 — triggers namespace registration
+import fleet  # noqa: F401 — triggers namespace registration
 
 # ---------------------------------------------------------------------------
 # All 4 pre-defined Centiloid calibration entries from the namespace module.

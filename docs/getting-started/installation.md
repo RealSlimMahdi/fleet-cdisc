@@ -10,13 +10,13 @@
 === "uv (recommended)"
 
     ```bash
-    uv add pymaverse
+    uv add fleet
     ```
 
 === "pip"
 
     ```bash
-    pip install pymaverse
+    pip install fleet
     ```
 
 ### Optional extras
@@ -26,21 +26,21 @@
 | `io`   | `pyreadstat`     | Reading SAS XPT (`.xpt`) files |
 | `all`  | All extras       | Full feature set               |
 | `docs` | MkDocs + plugins | Building this documentation    |
-| `dev`  | pytest, ruff, io | Contributing to Pymaverse      |
+| `dev`  | pytest, ruff, io | Contributing to Fleet      |
 
 ```bash
 # SAS XPT support
-uv add "pymaverse[io]"
+uv add "fleet[io]"
 
 # Development
-uv add "pymaverse[dev]"
+uv add "fleet[dev]"
 ```
 
 ## Verify the installation
 
 ```python
-import pymaverse
-print(pymaverse.__version__)  # e.g. 0.1.0
+import fleet
+print(fleet.__version__)  # e.g. 0.1.0
 ```
 
 After the import the `.sdtm`, `.adam`, `.adsl`, and `.occds` namespaces are available on every `polars.DataFrame`.
@@ -52,7 +52,7 @@ After the import the `.sdtm`, `.adam`, `.adsl`, and `.occds` namespaces are avai
 ## 1. SDTM domain from raw data
 
 ```python
-import pymaverse
+import fleet
 import polars as pl
 
 raw = pl.DataFrame({
@@ -121,11 +121,11 @@ adsl = (
 
 ## 4. define.yaml-driven pipeline
 
-Pymaverse can read a `define.yaml` specification and execute the whole pipeline
+Fleet can read a `define.yaml` specification and execute the whole pipeline
 without hand-writing verbs:
 
 ```python
-from pymaverse import load_study_context
+from fleet import load_study_context
 
 ctx = load_study_context("specs/cdiscpilot01/adam/define.yaml")
 adsl = ctx.build("ADSL")   # reads inputs, applies derivations, validates output
@@ -136,7 +136,7 @@ See [How define.yaml works](../concepts/define-yaml.md) for the full spec format
 ## 5. Generate Define-XML
 
 ```python
-from pymaverse import DefineXMLGenerator
+from fleet import DefineXMLGenerator
 
 gen = DefineXMLGenerator("specs/cdiscpilot01/adam/define.yaml")
 gen.write("outputs/cdiscpilot01/define_adam.xml")

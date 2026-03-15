@@ -1,4 +1,4 @@
-# Pymaverse — Workflow & Usage Guide
+# Fleet — Workflow & Usage Guide
 
 > How to go from raw clinical data to validated SDTM and ADaM datasets.
 
@@ -6,7 +6,7 @@
 
 ## Core Concept
 
-Pymaverse adds **four chainable verb pipelines** directly onto every Polars DataFrame:
+Fleet adds **four chainable verb pipelines** directly onto every Polars DataFrame:
 
 ```
 raw_df.sdtm.<verb>().<verb>()...to_frame()    →  SDTM DataFrame      (domain mapping)
@@ -18,7 +18,7 @@ sdtm_df.occds.<verb>().<verb>()...to_frame()  →  OCCDS DataFrame     (ADAE, AD
 Importing the package is the only setup required — the namespaces register themselves automatically.
 
 ```python
-import pymaverse
+import fleet
 import polars as pl
 ```
 
@@ -31,7 +31,7 @@ Nothing runs until you call `.to_frame()`. All intermediate verbs build an inter
 ### 1.1 Simplest possible SDTM derivation
 
 ```python
-import pymaverse
+import fleet
 import polars as pl
 
 raw = pl.DataFrame({
@@ -73,7 +73,7 @@ print(dm)
 ### 1.2 Simplest possible ADaM derivation
 
 ```python
-import pymaverse
+import fleet
 import polars as pl
 
 vs_sdtm = pl.DataFrame({
@@ -112,7 +112,7 @@ print(advs.select("USUBJID", "ADT", "AVAL", "ADY", "BASE", "CHG", "PCHG"))
 ### 2.1 From CSV
 
 ```python
-from pymaverse import load_raw_data
+from fleet import load_raw_data
 
 raw_df = load_raw_data("datasets/cdiscpilot01/raw/dm_raw.csv").collect()
 ```
@@ -122,7 +122,7 @@ raw_df = load_raw_data("datasets/cdiscpilot01/raw/dm_raw.csv").collect()
 ### 2.2 From a directory
 
 ```python
-from pymaverse import load_datasets
+from fleet import load_datasets
 
 all_raw = load_datasets("datasets/cdiscpilot01/raw/", pattern="*.csv")
 # Returns dict: {"dm_raw": LazyFrame, "vs_raw": LazyFrame, "ae_raw": LazyFrame}
@@ -134,7 +134,7 @@ vs_raw  = all_raw["vs_raw"].collect()
 ### 2.3 Downloading from a URL
 
 ```python
-from pymaverse import download_raw_data, load_raw_data
+from fleet import download_raw_data, load_raw_data
 from pathlib import Path
 
 dest = Path("downloads/cdisc_ct.yaml")
@@ -149,7 +149,7 @@ raw = load_raw_data(dest).collect()
 ### 3.1 Load a CT file
 
 ```python
-from pymaverse import load_controlled_terminology
+from fleet import load_controlled_terminology
 
 ct = load_controlled_terminology("ct/cdisc_ct.yaml")
 # {"C66731": {"M": "MALE", "F": "FEMALE"}, "C74457": {...}, ...}
@@ -158,7 +158,7 @@ ct = load_controlled_terminology("ct/cdisc_ct.yaml")
 ### 3.2 Use the singleton CTValidator
 
 ```python
-from pymaverse import get_validator
+from fleet import get_validator
 
 validator = get_validator()
 validator.load_ct_file(
@@ -241,7 +241,7 @@ datasets:
 ### 4.2 Execute the spec
 
 ```python
-import pymaverse
+import fleet
 
 dm = raw_df.sdtm.from_spec("specs/mystudy/sdtm/define.yaml", dataset="DM").to_frame()
 ```
@@ -296,8 +296,8 @@ advs = vs_sdtm.adam.from_spec("specs/mystudy/adam/define.yaml", dataset="ADVS").
 Full pipeline: raw eCRF → SDTM DM → SDTM VS → ADaM ADVS → save.
 
 ```python
-import pymaverse
-from pymaverse import load_raw_data, get_validator, save_parquet
+import fleet
+from fleet import load_raw_data, get_validator, save_parquet
 import polars as pl
 from pathlib import Path
 
@@ -527,7 +527,7 @@ max_ae = (
 ### 8.1 Validate a YAML define spec
 
 ```python
-from pymaverse import DefineValidator
+from fleet import DefineValidator
 
 v = DefineValidator("specs/mystudy/define_dm.yaml")
 v.validate()
@@ -540,7 +540,7 @@ if v.has_errors():
 ### 8.2 Generate Define-XML XML
 
 ```python
-from pymaverse import DefineXMLGenerator
+from fleet import DefineXMLGenerator
 
 gen = DefineXMLGenerator("specs/mystudy/define_dm.yaml")
 xml_string = gen.generate()
@@ -554,7 +554,7 @@ with open("outputs/define.xml", "w") as f:
 ## Part 9 — CDISC Validation
 
 ```python
-from pymaverse import ValidationService
+from fleet import ValidationService
 from pathlib import Path
 
 svc = ValidationService(rules_engine_path=Path("~/.local/cdisc-rules-engine"))
@@ -586,7 +586,7 @@ paths:
 ```
 
 ```python
-from pymaverse import load_study_context, load_raw_data
+from fleet import load_study_context, load_raw_data
 
 ctx = load_study_context("study_config.yaml")
 
@@ -604,8 +604,8 @@ save_parquet(dm_sdtm, ctx.sdtm_data_dir / "dm.parquet")
 ## Part 11 — Saving Outputs
 
 ```python
-from pymaverse import save_parquet
-from pymaverse.io import save_xpt  # requires pyreadstat extra
+from fleet import save_parquet
+from fleet.io import save_xpt  # requires pyreadstat extra
 
 # Parquet (fast, lossless — preferred for intermediate data)
 save_parquet(dm_sdtm, "data/sdtm/dm.parquet")
@@ -819,7 +819,7 @@ It shares all base verbs with `df.adam` plus five ADSL-specific verbs.
 
 ```python
 import polars as pl
-from pymaverse import ADSLNamespace   # registers df.adsl automatically on import
+from fleet import ADSLNamespace   # registers df.adsl automatically on import
 
 adsl_base = pl.DataFrame({
     "USUBJID": ["001-01", "001-02", "001-03"],
@@ -931,7 +931,7 @@ adsl = (
 
 ```python
 import polars as pl
-from pymaverse import OCCDSNamespace   # registers df.occds automatically on import
+from fleet import OCCDSNamespace   # registers df.occds automatically on import
 
 ae = pl.DataFrame({
     "USUBJID":  ["001-01", "001-01", "001-02", "001-02"],
@@ -1019,7 +1019,7 @@ adae = (
 | `uv sync --extra dev`                                               | Include optional dev extras (linting, formatting) |
 | `uv sync --extra io`                                                | Include optional I/O extras (XPT export, Parquet) |
 | `uv sync --all-extras`                                              | Install all optional extras                       |
-| `uv run python -c "import pymaverse; print(pymaverse.__version__)"` | Verify installed version                          |
+| `uv run python -c "import fleet; print(fleet.__version__)"` | Verify installed version                          |
 
 ---
 
@@ -1048,7 +1048,7 @@ uv run pytest tests/ -x
 uv run pytest tests/ -v --tb=long
 
 # Generate coverage HTML report (requires pytest-cov)
-uv run pytest tests/ --cov=src/pymaverse --cov-report=html
+uv run pytest tests/ --cov=src/fleet --cov-report=html
 ```
 
 ---
@@ -1069,7 +1069,7 @@ uv run ruff format src/
 uv run ruff format src/ --check
 
 # Type check (if mypy is configured)
-uv run mypy src/pymaverse
+uv run mypy src/fleet
 ```
 
 ---
@@ -1077,8 +1077,8 @@ uv run mypy src/pymaverse
 ### 15.4 Generating Define-XML
 
 ```python
-import pymaverse
-from pymaverse import DefinitionBuilder
+import fleet
+from fleet import DefinitionBuilder
 
 # Build from YAML spec files
 builder = DefinitionBuilder(
@@ -1095,7 +1095,7 @@ with open("output/define.xml", "w", encoding="utf-8") as f:
 From the command line (if a CLI entry-point is registered):
 
 ```bash
-uv run pymaverse define \
+uv run fleet define \
     --study STUDY001 \
     --spec-dir specs/mystudy \
     --out output/define.xml
@@ -1106,7 +1106,7 @@ uv run pymaverse define \
 ### 15.5 CDISC validation
 
 ```python
-from pymaverse import get_validator
+from fleet import get_validator
 
 validator = get_validator(
     dataset_path="output/sdtm/vs.xpt",
@@ -1123,7 +1123,7 @@ for issue in issues:
 ### 15.6 Saving datasets
 
 ```python
-from pymaverse import save_parquet, save_xpt
+from fleet import save_parquet, save_xpt
 
 # Parquet (fast, lossless — preferred for development)
 save_parquet(advs, "output/adam/advs.parquet")
@@ -1146,7 +1146,7 @@ advs_reload = pl.read_parquet("output/adam/advs.parquet")
 avoids repeating it on every verb.
 
 ```python
-from pymaverse import StudyContext
+from fleet import StudyContext
 
 ctx = StudyContext(
     study_id="STUDY001",

@@ -1,8 +1,8 @@
-site_name: Pymaverse
+site_name: Fleet
 site_description: CDISC SDTM/ADaM derivation toolkit for Polars DataFrames
-site_url: https://pymaverse.github.io/pymaverse/
-repo_url: https://github.com/pymaverse/pymaverse
-repo_name: pymaverse/pymaverse
+site_url: https://fleet.github.io/fleet/
+repo_url: https://github.com/fleet/fleet
+repo_name: fleet/fleet
 edit_uri: edit/main/docs/
 
 theme:
@@ -43,7 +43,7 @@ extra:
     default: latest
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/pymaverse/pymaverse
+      link: https://github.com/fleet/fleet
 
 plugins:
   - search

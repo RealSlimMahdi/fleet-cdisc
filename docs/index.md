@@ -1,21 +1,21 @@
-# Pymaverse
+# Fleet
 
 **CDISC SDTM/ADaM derivation toolkit for [Polars](https://pola.rs) DataFrames.**
 
-[![CI](https://github.com/pymaverse/pymaverse/actions/workflows/ci.yml/badge.svg)](https://github.com/pymaverse/pymaverse/actions/workflows/ci.yml)
-[![Docs](https://github.com/pymaverse/pymaverse/actions/workflows/docs.yml/badge.svg)](https://pymaverse.github.io/pymaverse/)
-[![PyPI](https://img.shields.io/pypi/v/pymaverse)](https://pypi.org/project/pymaverse/)
+[![CI](https://github.com/fleet/fleet/actions/workflows/ci.yml/badge.svg)](https://github.com/fleet/fleet/actions/workflows/ci.yml)
+[![Docs](https://github.com/fleet/fleet/actions/workflows/docs.yml/badge.svg)](https://fleet.github.io/fleet/)
+[![PyPI](https://img.shields.io/pypi/v/fleet)](https://pypi.org/project/fleet/)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 ---
 
-## What is Pymaverse?
+## What is Fleet?
 
-Pymaverse adds **chainable verb pipelines** directly onto every Polars DataFrame so you can build standards-compliant CDISC datasets with minimal boilerplate:
+Fleet adds **chainable verb pipelines** directly onto every Polars DataFrame so you can build standards-compliant CDISC datasets with minimal boilerplate:
 
 ```python
-import pymaverse
+import fleet
 import polars as pl
 
 # SDTM DM domain from raw data
@@ -46,7 +46,7 @@ Nothing runs until you call `.to_frame()`. All intermediate verbs accumulate int
 
 ## Namespace Extensions
 
-Importing `pymaverse` registers four chainable namespaces on **every** Polars DataFrame:
+Importing `fleet` registers four chainable namespaces on **every** Polars DataFrame:
 
 | Namespace  | Target dataset      | Description                                                            |
 | ---------- | ------------------- | ---------------------------------------------------------------------- |
@@ -67,7 +67,7 @@ graph LR
         RAW[Raw CSV / SAS XPT]
         SPEC[define.yaml]
     end
-    subgraph Pymaverse
+    subgraph Fleet
         SDTM[df.sdtm pipeline]
         ADAM[df.adam / df.adsl pipeline]
         XML[Define-XML generator]
