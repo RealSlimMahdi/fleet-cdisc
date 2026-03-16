@@ -15,8 +15,8 @@
      If short, identify uncovered lines and add targeted tests.
 
 2. Run both example scripts from a clean environment to confirm no regressions:
-   - `uv run python examples/admiral_adsl_cdiscpilot01.py`
-   - `uv run python examples/pipeline_cdiscpilot01.py`
+   - `uv run python examples/cdiscpilot01_inline.py`
+   - `uv run python examples/cdiscpilot01_spec_driven.py`
 
 3. Confirm a CI/CD release workflow exists (e.g., `.github/workflows/release.yml`) that tags and publishes to PyPI. If missing, create one.
 
@@ -42,8 +42,8 @@
 - `pyproject.toml` — version declared as `0.1.0`, build system (hatchling), dependencies all set
 - `src/fleet/_version.py` — `__version__ = "0.1.0"`, matches pyproject.toml
 - `docs/changelog.md` — add Known Issues + Unreleased roadmap
-- `examples/admiral_adsl_cdiscpilot01.py` — must run clean (end-to-end ADSL)
-- `examples/pipeline_cdiscpilot01.py` — must run clean (spec-driven SDTM/ADaM/Define-XML)
+- `examples/cdiscpilot01_inline.py` — must run clean (end-to-end inline ADSL)
+- `examples/cdiscpilot01_spec_driven.py` — must run clean (spec-driven SDTM/ADaM/Define-XML)
 - `tests/unit/` — 12 test files, 200+ tests; run coverage report
 - `.github/workflows/` — verify or create release workflow
 
@@ -52,8 +52,8 @@
 ## Verification
 
 1. `pytest --cov=src/fleet --cov-report=term-missing` — all targets pass
-2. `uv run python examples/admiral_adsl_cdiscpilot01.py` — exits cleanly
-3. `uv run python examples/pipeline_cdiscpilot01.py` — exits cleanly, outputs written to `outputs/cdiscpilot01/`
+2. `uv run python examples/cdiscpilot01_inline.py` — exits cleanly
+3. `uv run python examples/cdiscpilot01_spec_driven.py` — exits cleanly, outputs written to `outputs/cdiscpilot01/`
 4. `pip install fleet==0.1.0` from a fresh venv — imports without error
 5. MkDocs site builds without warnings: `mkdocs build --strict`
 

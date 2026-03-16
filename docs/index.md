@@ -96,7 +96,8 @@ graph LR
 
 ## Quick Links
 
-- [Installation & Quickstart](getting-started/installation.md)
+- **New to Fleet?** Read [Why Fleet?](why-fleet.md) to understand how we compare to manual approaches.
+- [Installation](getting-started/installation.md) & [Quickstart](getting-started/quickstart.md)
 - [How define.yaml drives DataFrame creation](concepts/define-yaml.md)
 - [ADSL pipeline walkthrough (notebook)](examples/adsl_pipeline.ipynb)
 - [API Reference](api/index.md)

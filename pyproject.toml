@@ -1,13 +1,13 @@
 [project]
 name = "fleet"
 version = "0.1.0"
-description = "CDISC SDTM/ADaM toolkit for Polars DataFrames via namespace extension"
+description = "An opinionated framework to create CDISC SDTM/ADaM using Polars DataFrames via namespace extension"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
 authors = [
     { name = "Fleet Contributors" }
 ]
-keywords = ["polars", "cdisc", "sdtm", "adam", "clinical-trials", "pharma", "namespace"]
+keywords = ["polars", "cdisc", "sdtm", "adam", "define.xml", "clinical-trials", "pharma", "namespace"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",

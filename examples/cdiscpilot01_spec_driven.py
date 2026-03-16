@@ -27,7 +27,7 @@ Datasets produced
   ADaM  ADEX — exposure BDS           (from_spec driven)
 
 Run from the repo root:
-    uv run python examples/pipeline_cdiscpilot01.py
+    uv run python examples/cdiscpilot01_spec_driven.py
 """
 from pathlib import Path
 

@@ -36,7 +36,7 @@ Admiral programming-flow steps reproduced
 10. AE counts               NUMAE, NUMSAE                     (admiral: count_vals / custom)
 
 Run from repo root:
-    uv run python examples/admiral_adsl_cdiscpilot01.py
+    uv run python examples/cdiscpilot01_inline.py
 """
 from __future__ import annotations
 

@@ -92,15 +92,21 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting Started:
+      - Why Fleet?: why-fleet.md
       - Installation: getting-started/installation.md
       - Quickstart: getting-started/quickstart.md
+      - Troubleshooting Guide: getting-started/troubleshooting.md
   - Concepts:
       - How define.yaml Works: concepts/define-yaml.md
       - Namespace Pipeline: concepts/pipeline.md
+      - Advanced Patterns: concepts/advanced.md
   - Examples:
-      - ADSL Pipeline (CDISCPILOT01): examples/adsl_pipeline.ipynb
+      - Multi-Domain Pipeline: examples/full_pipeline.md
+      - Code-Driven Workflow: examples/01_code_driven_pipeline.ipynb
+      - Spec-Driven Workflow: examples/02_spec_driven_pipeline.ipynb
   - API Reference:
       - Overview: api/index.md
+      - Verb Cheat Sheet: api/cheat_sheet.md
       - SDTM Namespace: api/sdtm.md
       - ADaM Namespace: api/adam.md
       - ADSL Namespace: api/adsl.md

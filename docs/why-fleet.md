@@ -1,0 +1,77 @@
+# Why Fleet?
+
+Fleet is designed to bridge the gap between modern, high-performance data engineering and the specialized business logic of clinical statistical programming (SDTM and ADaM).
+
+While traditional tools (like SAS or SQL) or general-purpose Python libraries (like Pandas or plain Polars) are capable of building clinical datasets, they often require writing hundreds of lines of boilerplate code to handle common CDISC requirements: merging controlled terminology, calculating study days, deriving baselines, and maintaining traceability.
+
+Fleet solves this by extending [Polars](https://pola.rs/) with **chainable, domain-specific verbs**.
+
+## The Fleet Advantage
+
+### 1. Simplicity: Intent-Driven Syntax
+
+With Fleet, your code reads like a specification. Instead of writing complex join logic and conditional expressions, you use verbs that exactly match CDISC concepts.
+
+**Without Fleet (Manual Polars):**
+
+```python
+import polars as pl
+
+# Deriving a baseline value requires multiple steps and intermediate variables
+# 1. Filter to baseline records
+baseline_df = adbd.filter(pl.col("ABLFL") == "Y").select(["USUBJID", "PARAMCD", "AVAL"])
+baseline_df = baseline_df.rename({"AVAL": "BASE"})
+
+# 2. Join back to the main dataset
+adbd = adbd.join(baseline_df, on=["USUBJID", "PARAMCD"], how="left")
+
+# 3. Calculate change from baseline
+adbd = adbd.with_columns((pl.col("AVAL") - pl.col("BASE")).alias("CHG"))
+```
+
+**With Fleet:**
+
+```python
+import fleet
+
+# Intent is immediately clear in a single chain
+adbd = (
+    adbd.adam
+    .baseline(flag_col="ABLFL", target_col="AVAL", new_name="BASE")
+    .chg(new_name="CHG", from_col="AVAL", base_col="BASE")
+    .to_frame()
+)
+```
+
+### 2. Power: High Performance Lazy Evaluation
+
+Fleet doesn't just wrap Polars; it deeply integrates with its lazy evaluation engine. When you chain Fleet verbs (e.g., `.assign_ct()`, `.study_day()`), no computation happens immediately.
+
+Instead, Fleet accumulates your business logic into a single, optimized set of Polars expressions. When you call `.to_frame()`, Polars executes the entire pipeline in **one pass**, leveraging multithreading and query optimization.
+
+- **No intermediate DataFrames:** Saves memory.
+- **Blazing fast:** Processes millions of records in milliseconds.
+- **Zero overhead:** Fleet verbs compile down to native Polars `pl.Expr` objects.
+
+### 3. Clarity: Specification-Driven Development
+
+Fleet natively understands the `define.yaml` specification. You can define your metadata, controlled terminology, and derivation rules in a single, human-readable file.
+
+Fleet can read this YAML to automatically apply derivations, validate data, and generate CDISC-compliant `define.xml` exports, ensuring your documentation and your code are never out of sync. You can choose to be fully code-driven, fully spec-driven, or a hybrid of both.
+
+### 4. Flexibility: Built for Extension
+
+Fleet comes with built-in namespaces for core SDTM (`df.sdtm`), ADaM BDS (`df.adam`), ADSL (`df.adam.adsl`), OCCDS (`df.adam.occds`), and specialized therapeutic areas (Oncology, Ophthalmology, Vaccines, etc.).
+
+If you have proprietary study requirements, Fleet is designed to be easily extended with custom verbs using standard Polars expressions via the `.derivation()` method, or by subclassing the namespaces to add your own company-specific logic.
+
+### 5. AI-Native Architecture
+
+Fleet was built with AI code generation in mind from day one. You can stop wrestling with niche SAS macros or fragmented statistical R packages that trip up modern Large Language Models (LLMs).
+
+- **Standardised Foundation:** Built entirely on Python and Polars, two of the most widely represented tools in LLM training data.
+- **Unified Package:** No need to juggle 10 different sub-packages. One import (`import fleet`) gives agents everything they need.
+- **Clear Intent-Driven API:** Because derivations are simple verbs (`.study_day()`, `.baseline()`), an AI code agent naturally scripts correct, readable pipelines with fewer token hallucinations.
+- **Tight AI Feedback Loops:** Fleet drastically accelerates the developer and agent feedback cycle. The `define.yaml` structure is validated through bundled JSON schemas, and CDISC core data validations output structured error arrays. This allows coding agents to course-correct immediately.
+- **Readable Specs:** The declarative, YAML-based approach limits token overhead and naturally reflects clinical data specification standards, making it the perfect bridge between LLMs and regulatory outputs.
+- **Built-in `llms.txt`:** Fleet natively provides structured AI context (like `llms.txt` and schemas) so your coding agents always know precisely how to write and validate Fleet pipelines.

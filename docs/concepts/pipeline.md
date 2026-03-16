@@ -1,6 +1,59 @@
 # Namespace Pipeline Architecture
 
-## How the pipeline works
+When using Fleet, you have two primary ways to create datasets: **Code-driven** (writing Python pipelines manually) or **Spec-driven** (authoring a `define.yaml` and having Fleet write the pipelines for you).
+
+## The Recommended Approach: Spec-First with Custom Extensions
+
+For the majority of modern statistical programming tasks, we highly recommend a hybrid "**Spec-First**" workflow.
+
+In this approach, you let AI or your documentation team generate the `define.yaml`. Fleet consumes this YAML to automatically manage 90% of the derivations, dependencies, traceability, and Define-XML generation. Then, for the 10% of highly complex, proprietary derivations that do not fit neatly into a YAML file, you apply a thin layer of manual Polars python code on top of the built data step.
+
+This hybrid approach ensures high reproducibility and documentation sync, while leaving an "escape hatch" open for when code must take over.
+
+### 1. Code-Driven (Inline Python)
+
+Best for: Quick exploration, ad-hoc analysis, smaller studies, or initial data discovery.
+
+You construct your pipelines entirely in Python by chaining namespace verbs on Polars DataFrames. All logic is embedded directly in your scripts.
+
+**Example:**
+
+```python
+adsl = (
+    dm.adam.adsl
+    .source("USUBJID")
+    .study_day("ADY", analysis_date="ADT", reference_date="TRTSDT")
+    .to_frame()
+)
+```
+
+### 2. Spec-Driven (`define.yaml`)
+
+Best for: Production clinical trials, regulatory submissions, repeatability across projects.
+
+You define metadata, controlled terminology, and derivations in a central `define.yaml` file. Fleet reads the specification and automatically builds the datasets. In this model, your Python scripts simply load the study context and call `.build()`.
+
+**Example of the Hybrid Escape Hatch:**
+
+```python
+# The standard derivations live in define.yaml.
+from fleet import load_study_context
+import polars as pl
+
+ctx = load_study_context("specs/study01/adam/define.yaml")
+base_adsl = ctx.build("ADSL")
+
+# Add custom logic for the 10% of edge-case scenarios not covered by the spec:
+final_adsl = (
+    base_adsl.adam.adsl
+    .derivation("CUSTOM_FLAG", expression=pl.when(pl.col("AGE") > 80).then(pl.lit("Y")).otherwise(pl.lit("N")))
+    .to_frame()
+)
+```
+
+---
+
+## How the pipeline works underneath
 
 Every Fleet namespace (`sdtm`, `adam`, `adsl`, `occds`) follows the same pattern:
 
