@@ -32,6 +32,58 @@ _EYE_CODE_MAPPING = [
 ]
 
 
+@pytest.fixture
+def ophtha_frame():
+    """Minimal frame for shared verb tests on the ophtha namespace."""
+    return pl.DataFrame({
+        "USUBJID": ["01-001", "01-002"],
+        "ETDRS":   [85.0, 30.0],
+        "FOCID":   ["OS", "OD"],
+    })
+
+
+class TestBaseVerbs:
+    """Shared verbs inherited from SharedADaMVerbsMixin."""
+
+    def test_source(self, ophtha_frame):
+        result = ophtha_frame.adam.ophtha.source("USUBJID").to_frame()
+        assert "USUBJID" in result.columns
+
+    def test_assigned(self, ophtha_frame):
+        result = ophtha_frame.adam.ophtha.assigned("STUDYID", value="OPH01").to_frame()
+        assert result["STUDYID"].to_list() == ["OPH01"] * 2
+
+    def test_derivation(self, ophtha_frame):
+        result = ophtha_frame.adam.ophtha.derivation(
+            "ETDRS2", expression='pl.col("ETDRS") * 2'
+        ).to_frame()
+        assert result["ETDRS2"].to_list() == [170.0, 60.0]
+
+    def test_recode(self, ophtha_frame):
+        result = ophtha_frame.adam.ophtha.recode(
+            "EYE", source="FOCID", recode_map={"OS": "LEFT", "OD": "RIGHT"}
+        ).to_frame()
+        assert result["EYE"].to_list() == ["LEFT", "RIGHT"]
+
+    def test_rename(self, ophtha_frame):
+        result = ophtha_frame.adam.ophtha.rename("SUBJ", source="USUBJID").to_frame()
+        assert result["SUBJ"].to_list() == ophtha_frame["USUBJID"].to_list()
+
+    def test_condderivation(self, ophtha_frame):
+        result = ophtha_frame.adam.ophtha.condderivation(
+            "VACAT",
+            conditions=[{"condition": 'pl.col("ETDRS") >= 70', "value": "GOOD"}],
+            else_value="POOR",
+        ).to_frame()
+        assert result["VACAT"].to_list() == ["GOOD", "POOR"]
+
+    def test_whereclauses(self, ophtha_frame):
+        result = ophtha_frame.adam.ophtha.whereclauses(
+            where='pl.col("FOCID") == "OS"'
+        ).to_frame()
+        assert result.height == 1
+
+
 class TestEtdrsToLogmar:
     """
     Test 1: ETDRS → LogMAR conversion.

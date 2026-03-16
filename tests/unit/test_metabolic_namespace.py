@@ -6,6 +6,58 @@ import pytest
 import fleet  # noqa: F401 — triggers namespace registration
 
 
+@pytest.fixture
+def metab_frame():
+    """Minimal frame for shared verb tests on the metabolic namespace."""
+    return pl.DataFrame({
+        "USUBJID": ["01-001", "01-002"],
+        "WSTCIR":  [90.0, 110.0],
+        "SEX":     ["F", "M"],
+    })
+
+
+class TestBaseVerbs:
+    """Shared verbs inherited from SharedADaMVerbsMixin."""
+
+    def test_source(self, metab_frame):
+        result = metab_frame.adam.metabolic.source("USUBJID").to_frame()
+        assert "USUBJID" in result.columns
+
+    def test_assigned(self, metab_frame):
+        result = metab_frame.adam.metabolic.assigned("STUDYID", value="MET01").to_frame()
+        assert result["STUDYID"].to_list() == ["MET01"] * 2
+
+    def test_derivation(self, metab_frame):
+        result = metab_frame.adam.metabolic.derivation(
+            "WCIR_CM", expression='pl.col("WSTCIR") / 10'
+        ).to_frame()
+        assert result["WCIR_CM"].to_list() == [9.0, 11.0]
+
+    def test_recode(self, metab_frame):
+        result = metab_frame.adam.metabolic.recode(
+            "SEXN", source="SEX", recode_map={"F": "1", "M": "2"}
+        ).to_frame()
+        assert result["SEXN"].to_list() == ["1", "2"]
+
+    def test_rename(self, metab_frame):
+        result = metab_frame.adam.metabolic.rename("SUBJ", source="USUBJID").to_frame()
+        assert result["SUBJ"].to_list() == metab_frame["USUBJID"].to_list()
+
+    def test_condderivation(self, metab_frame):
+        result = metab_frame.adam.metabolic.condderivation(
+            "WSTCAT",
+            conditions=[{"condition": 'pl.col("WSTCIR") > 100', "value": "HIGH"}],
+            else_value="NORMAL",
+        ).to_frame()
+        assert result["WSTCAT"].to_list() == ["NORMAL", "HIGH"]
+
+    def test_whereclauses(self, metab_frame):
+        result = metab_frame.adam.metabolic.whereclauses(
+            where='pl.col("SEX") == "F"'
+        ).to_frame()
+        assert result.height == 1
+
+
 class TestWaistHipRatio:
     """Test 1: Waist-to-hip ratio."""
 

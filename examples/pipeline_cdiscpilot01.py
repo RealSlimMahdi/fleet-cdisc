@@ -7,6 +7,17 @@ and executed via ``df.adam.from_spec()``.  OCCDS-specific verbs that the spec
 cannot yet express (treatment_emergent, worst_flag, seq) are applied inline
 immediately after the spec phase.
 
+Shared-verb mixin architecture
+-------------------------------
+Fleet's ``SharedADaMVerbsMixin`` provides seven verbs — ``source``,
+``assigned``, ``derivation``, ``recode``, ``rename``, ``condderivation``,
+``whereclauses`` — to **every** ADaM sub-namespace.
+
+For post-spec OCCDS derivations (steps 7–8 below) this means ``derivation``
+is available directly on the ``occds`` namespace, so inline calculations
+(e.g. EXDURD) and event-level sequence numbers can be chained without
+intermediate materialisation or namespace switching.
+
 Datasets produced
 -----------------
   SDTM  DM   — demographics (inline; input for ADaM)
@@ -252,15 +263,13 @@ adex_s1 = (
 )
 
 adex = (
-    adex_s1.adam
+    adex_s1.adam.occds                  # enter occds directly — shared verbs via mixin
     # admiral: derive_var_dur (inclusive end-date convention)
-    .derivation("EXDURD",
+    .derivation("EXDURD",              # shared verb on occds via mixin
                 expression="(pl.col('AENDT').cast(pl.Date) - pl.col('ASTDT').cast(pl.Date))"
                            ".dt.total_days() + 1")
-    .to_frame()
     # admiral: derive_var_obs_number
-    .adam.occds
-    .seq("ASEQ", groups=["USUBJID"])
+    .seq("ASEQ", groups=["USUBJID"])   # occds-specific verb
     .to_frame()
     .with_columns(
         pl.col("TRTSDT"), pl.col("TRTEDT"),

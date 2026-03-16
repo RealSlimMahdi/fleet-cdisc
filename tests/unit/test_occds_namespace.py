@@ -42,6 +42,30 @@ class TestBaseVerbs:
         ).to_frame()
         assert result.height == 2
 
+    def test_recode(self, ae_frame):
+        result = ae_frame.adam.occds.recode(
+            "AESEVN", source="AESEV",
+            recode_map={"MILD": "1", "MODERATE": "2", "SEVERE": "3"},
+        ).to_frame()
+        assert result["AESEVN"][0] == "1"   # Headache=MILD
+        assert result["AESEVN"][1] == "3"   # Nausea=SEVERE
+
+    def test_rename(self, ae_frame):
+        result = ae_frame.adam.occds.rename("AEDECOD", source="AETERM").to_frame()
+        assert result["AEDECOD"].to_list() == ae_frame["AETERM"].to_list()
+
+    def test_condderivation(self, ae_frame):
+        result = ae_frame.adam.occds.condderivation(
+            "SEVGR",
+            conditions=[
+                {"condition": 'pl.col("AESEV") == "SEVERE"', "value": "HIGH"},
+            ],
+            else_value="LOW",
+        ).to_frame()
+        # Only Nausea is SEVERE
+        assert result["SEVGR"][1] == "HIGH"
+        assert result["SEVGR"][0] == "LOW"
+
 
 class TestSeq:
     def test_seq_starts_at_one(self, ae_frame):

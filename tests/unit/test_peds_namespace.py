@@ -29,6 +29,51 @@ def age_frame():
     })
 
 
+class TestBaseVerbs:
+    """Shared verbs inherited from SharedADaMVerbsMixin."""
+
+    def test_source(self, age_frame):
+        result = age_frame.adam.peds.source("BRTHDT").to_frame()
+        assert "BRTHDT" in result.columns
+
+    def test_assigned(self, age_frame):
+        result = age_frame.adam.peds.assigned("STUDYID", value="PED01").to_frame()
+        assert result["STUDYID"].to_list() == ["PED01"] * 2
+
+    def test_derivation(self, age_frame):
+        result = age_frame.adam.peds.derivation(
+            "CONST", expression="pl.lit(1)"
+        ).to_frame()
+        assert result["CONST"].to_list() == [1, 1]
+
+    def test_recode(self, age_frame):
+        df = age_frame.with_columns(pl.Series("GRP", ["A", "B"]))
+        result = df.adam.peds.recode(
+            "GRPCD", source="GRP", recode_map={"A": "GroupA", "B": "GroupB"}
+        ).to_frame()
+        assert result["GRPCD"].to_list() == ["GroupA", "GroupB"]
+
+    def test_rename(self, age_frame):
+        result = age_frame.adam.peds.rename("DOB", source="BRTHDT").to_frame()
+        assert result["DOB"].to_list() == age_frame["BRTHDT"].to_list()
+
+    def test_condderivation(self, age_frame):
+        df = age_frame.with_columns(pl.Series("AGE", [5, 12]))
+        result = df.adam.peds.condderivation(
+            "AGEGR",
+            conditions=[{"condition": 'pl.col("AGE") < 6', "value": "Infant"}],
+            else_value="Child",
+        ).to_frame()
+        assert result["AGEGR"].to_list() == ["Infant", "Child"]
+
+    def test_whereclauses(self, age_frame):
+        df = age_frame.with_columns(pl.Series("AGE", [5, 12]))
+        result = df.adam.peds.whereclauses(
+            where='pl.col("AGE") > 6'
+        ).to_frame()
+        assert result.height == 1
+
+
 class TestAgeDays:
     """Test 1: Age in days derivation."""
 

@@ -56,6 +56,24 @@ class TestBaseVerbs:
         ).to_frame()
         assert result.height == 2
 
+    def test_recode(self, subject_frame):
+        result = subject_frame.adam.adsl.recode(
+            "RANDFL_N", source="RANDFL",
+            recode_map={"Y": "1", "N": "0"},
+        ).to_frame()
+        assert result["RANDFL_N"].to_list() == ["1", "1", "1"]
+
+    def test_condderivation(self, subject_frame):
+        result = subject_frame.adam.adsl.condderivation(
+            "AGEGR",
+            conditions=[
+                {"condition": 'pl.col("AGE") < 40', "value": "<40"},
+                {"condition": 'pl.col("AGE") <= 64', "value": "40-64"},
+            ],
+            else_value=">64",
+        ).to_frame()
+        assert result["AGEGR"].to_list() == ["40-64", "40-64", "<40"]
+
 
 class TestFirstDate:
     def test_first_ae_date(self, subject_frame, ae_dataset):

@@ -43,6 +43,59 @@ _MOCA_CATEGORY_CASES = [
 ]
 
 
+@pytest.fixture
+def neuro_frame():
+    """Minimal frame for shared verb tests on the neuro namespace."""
+    return pl.DataFrame({
+        "USUBJID": ["01-001", "01-002"],
+        "MMSE":    [28, 15],
+        "ARM":     ["Active", "Placebo"],
+    })
+
+
+class TestBaseVerbs:
+    """Shared verbs inherited from SharedADaMVerbsMixin."""
+
+    def test_source(self, neuro_frame):
+        result = neuro_frame.adam.neuro.source("USUBJID").to_frame()
+        assert "USUBJID" in result.columns
+
+    def test_assigned(self, neuro_frame):
+        result = neuro_frame.adam.neuro.assigned("STUDYID", value="NEU01").to_frame()
+        assert result["STUDYID"].to_list() == ["NEU01"] * 2
+
+    def test_derivation(self, neuro_frame):
+        result = neuro_frame.adam.neuro.derivation(
+            "MMSE2", expression='pl.col("MMSE") * 2'
+        ).to_frame()
+        assert result["MMSE2"].to_list() == [56, 30]
+
+    def test_recode(self, neuro_frame):
+        result = neuro_frame.adam.neuro.recode(
+            "ARMCD", source="ARM",
+            recode_map={"Active": "ACT", "Placebo": "PBO"}
+        ).to_frame()
+        assert result["ARMCD"].to_list() == ["ACT", "PBO"]
+
+    def test_rename(self, neuro_frame):
+        result = neuro_frame.adam.neuro.rename("SUBJ", source="USUBJID").to_frame()
+        assert result["SUBJ"].to_list() == neuro_frame["USUBJID"].to_list()
+
+    def test_condderivation(self, neuro_frame):
+        result = neuro_frame.adam.neuro.condderivation(
+            "SEVCAT",
+            conditions=[{"condition": 'pl.col("MMSE") >= 27', "value": "Normal"}],
+            else_value="Impaired",
+        ).to_frame()
+        assert result["SEVCAT"].to_list() == ["Normal", "Impaired"]
+
+    def test_whereclauses(self, neuro_frame):
+        result = neuro_frame.adam.neuro.whereclauses(
+            where='pl.col("MMSE") >= 27'
+        ).to_frame()
+        assert result.height == 1
+
+
 class TestCentiloid:
     """
     Test 1: Centiloid conversion (custom slopes and all 4 pre-defined calibrations).

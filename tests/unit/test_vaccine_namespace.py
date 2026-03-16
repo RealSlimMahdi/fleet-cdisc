@@ -19,6 +19,58 @@ _LLOQ_ULOQ_CASES = [
 ]
 
 
+@pytest.fixture
+def vaccine_frame():
+    """Minimal frame for shared verb tests on the vaccine namespace."""
+    return pl.DataFrame({
+        "USUBJID": ["01-001", "01-002", "01-003"],
+        "TEMP":    [37.0, 38.5, 39.0],
+        "SEX":     ["F", "M", "F"],
+    })
+
+
+class TestBaseVerbs:
+    """Shared verbs inherited from SharedADaMVerbsMixin."""
+
+    def test_source(self, vaccine_frame):
+        result = vaccine_frame.adam.vaccine.source("USUBJID").to_frame()
+        assert "USUBJID" in result.columns
+
+    def test_assigned(self, vaccine_frame):
+        result = vaccine_frame.adam.vaccine.assigned("STUDYID", value="VAC01").to_frame()
+        assert result["STUDYID"].to_list() == ["VAC01"] * 3
+
+    def test_derivation(self, vaccine_frame):
+        result = vaccine_frame.adam.vaccine.derivation(
+            "TEMP_F", expression='pl.col("TEMP") * 9 / 5 + 32'
+        ).to_frame()
+        assert result["TEMP_F"][0] == pytest.approx(98.6)
+
+    def test_recode(self, vaccine_frame):
+        result = vaccine_frame.adam.vaccine.recode(
+            "SEXN", source="SEX", recode_map={"F": "Female", "M": "Male"}
+        ).to_frame()
+        assert result["SEXN"].to_list() == ["Female", "Male", "Female"]
+
+    def test_rename(self, vaccine_frame):
+        result = vaccine_frame.adam.vaccine.rename("SUBJ", source="USUBJID").to_frame()
+        assert result["SUBJ"].to_list() == vaccine_frame["USUBJID"].to_list()
+
+    def test_condderivation(self, vaccine_frame):
+        result = vaccine_frame.adam.vaccine.condderivation(
+            "FEVCAT",
+            conditions=[{"condition": 'pl.col("TEMP") >= 38.0', "value": "FEVER"}],
+            else_value="NORMAL",
+        ).to_frame()
+        assert result["FEVCAT"].to_list() == ["NORMAL", "FEVER", "FEVER"]
+
+    def test_whereclauses(self, vaccine_frame):
+        result = vaccine_frame.adam.vaccine.whereclauses(
+            where='pl.col("TEMP") >= 38.0'
+        ).to_frame()
+        assert result.height == 2
+
+
 class TestFeverFlag:
     """Test 1: Temperature fever flag — strict > threshold."""
 

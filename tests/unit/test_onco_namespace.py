@@ -21,6 +21,60 @@ _RECIST_MAPPING = [
 ]
 
 
+@pytest.fixture
+def onco_frame():
+    """Minimal frame for shared verb tests on the onco namespace."""
+    return pl.DataFrame({
+        "USUBJID": ["01-001", "01-002", "01-003"],
+        "RSSTRESC": ["CR", "PR", "PD"],
+        "AGE":      [55, 68, 42],
+    })
+
+
+class TestBaseVerbs:
+    """Shared verbs inherited from SharedADaMVerbsMixin."""
+
+    def test_source(self, onco_frame):
+        result = onco_frame.adam.onco.source("USUBJID").to_frame()
+        assert "USUBJID" in result.columns
+
+    def test_assigned(self, onco_frame):
+        result = onco_frame.adam.onco.assigned("STUDYID", value="ONC01").to_frame()
+        assert result["STUDYID"].to_list() == ["ONC01"] * 3
+
+    def test_derivation(self, onco_frame):
+        result = onco_frame.adam.onco.derivation(
+            "AGE2", expression='pl.col("AGE") * 2'
+        ).to_frame()
+        assert result["AGE2"].to_list() == [110, 136, 84]
+
+    def test_recode(self, onco_frame):
+        result = onco_frame.adam.onco.recode(
+            "RESP", source="RSSTRESC",
+            recode_map={"CR": "Complete", "PR": "Partial"},
+            default="Other",
+        ).to_frame()
+        assert result["RESP"].to_list() == ["Complete", "Partial", "Other"]
+
+    def test_rename(self, onco_frame):
+        result = onco_frame.adam.onco.rename("SUBJ", source="USUBJID").to_frame()
+        assert result["SUBJ"].to_list() == onco_frame["USUBJID"].to_list()
+
+    def test_condderivation(self, onco_frame):
+        result = onco_frame.adam.onco.condderivation(
+            "AGEGR",
+            conditions=[{"condition": 'pl.col("AGE") < 60', "value": "<60"}],
+            else_value=">=60",
+        ).to_frame()
+        assert result["AGEGR"].to_list() == ["<60", ">=60", "<60"]
+
+    def test_whereclauses(self, onco_frame):
+        result = onco_frame.adam.onco.whereclauses(
+            where='pl.col("RSSTRESC") == "CR"'
+        ).to_frame()
+        assert result.height == 1
+
+
 class TestAvalResp:
     """
     Test 1: RECIST text → numeric mapping (all 7 categories + unknown + null).

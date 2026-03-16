@@ -5,6 +5,23 @@ Admiral-inspired ADSL pipeline for CDISCPILOT01.
 Reproduces the admiral "Creating ADSL" programming flow in Python/Fleet:
   https://pharmaverse.github.io/admiral/articles/adsl.html
 
+Shared-verb mixin architecture
+-------------------------------
+Fleet's ``SharedADaMVerbsMixin`` provides seven verbs — ``source``,
+``assigned``, ``derivation``, ``recode``, ``rename``, ``condderivation``,
+``whereclauses`` — to **every** ADaM sub-namespace (``adsl``, ``occds``,
+``onco``, ``ophtha``, ``peds``, ``vaccine``, ``metabolic``, ``neuro``).
+
+This means the pipeline can stay in a single sub-namespace without
+break-and-re-enter chains whenever a shared verb is needed.
+For example, ``derivation()`` can now be called directly on ``adsl``
+without switching to the base ``adam`` namespace, and ``source()`` /
+``rename()`` / ``assigned()`` can be called on ``occds`` so that
+event-level pipelines don't need intermediate materialisations.
+
+For OCCDS datasets (ADAE, ADEX) this means the entire derivation +
+sequence number chain can run in one ``adam.occds`` pipeline.
+
 Admiral programming-flow steps reproduced
 ------------------------------------------
 1.  Read in Data            DM, AE (raw CSVs); EX and DS synthesised from dm_raw
@@ -213,9 +230,8 @@ adsl = (
     .source("RFSTDTC")
     .source("RFENDTC")
     .source("RFICDTC")
-    .to_frame()
     # ── treatment start date from EX (admiral: derive_vars_merged, mode="first") ──
-    .adam.adsl
+    # first_date / last_date materialise internally — no chain break needed
     .first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")
     # ── treatment end date from EX (admiral: derive_vars_merged, mode="last") ──
     .last_date( "TRTEDT", from_dataset=ex, date_col="EXENDTC")
@@ -350,9 +366,8 @@ adsl = (
     .last_date("_ae_end",   from_dataset=ae, date_col="AEENDTC")
     # Latest AE start date per subject
     .last_date("_ae_start", from_dataset=ae, date_col="AESTDTC")
-    .to_frame()
-    .adam
     # LSTALVDT: max across AE end, AE start, and treatment end (admiral: derive_vars_extreme_event)
+    # derivation is a shared verb on adsl via the mixin — no namespace switch needed
     .derivation("LSTALVDT",
                 expression='pl.max_horizontal(pl.col("_ae_end"), pl.col("_ae_start"), pl.col("TRTEDT"))')
     .to_frame()
@@ -529,8 +544,7 @@ adae = (
     # admiral: derive_vars_dt
     .rename("ASTDT", source="AESTDTC")
     .rename("AENDT", source="AEENDTC")
-    .to_frame()   # materialise — ASTDT must exist before study_day references it
-    .adam
+    # study_day uses _chain — ASTDT resolves from the lazy plan (no materialise needed)
     .study_day("ADY", analysis_date="ASTDT", reference_date="TRTSDT")
     .to_frame()
     .adam.occds
@@ -575,25 +589,21 @@ _adsl_ex = adsl_final.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "SAFFL"])
 
 adex = (
     ex.join(_adsl_ex, on="USUBJID", how="left")
-    .adam
-    .assigned("STUDYID", value="CDISCPILOT01")
-    .source(  "USUBJID")
-    .source(  "EXTRT")
-    .source(  "EXDOSE")
-    .source(  "EXDOSU")
+    .adam.occds                                 # shared verbs via mixin — single-namespace chain
+    .assigned("STUDYID", value="CDISCPILOT01") # shared verb (mixin)
+    .source(  "USUBJID")                       # shared verb (mixin)
+    .source(  "EXTRT")                         # shared verb (mixin)
+    .source(  "EXDOSE")                        # shared verb (mixin)
+    .source(  "EXDOSU")                        # shared verb (mixin)
     # admiral: derive_vars_dt
-    .rename("ASTDT", source="EXSTDTC")
-    .rename("AENDT", source="EXENDTC")
-    .to_frame()   # materialise — ASTDT/AENDT must exist before EXDURD references them
-    .adam
+    .rename("ASTDT", source="EXSTDTC")         # shared verb (mixin)
+    .rename("AENDT", source="EXENDTC")         # shared verb (mixin)
     # admiral: derive_var_dur (inclusive end-date convention)
-    .derivation("EXDURD",
+    .derivation("EXDURD",                      # shared verb (mixin)
                 expression="(pl.col('AENDT').cast(pl.Date) - pl.col('ASTDT').cast(pl.Date))"
                            ".dt.total_days() + 1")
-    .to_frame()
     # admiral: derive_var_obs_number
-    .adam.occds
-    .seq("ASEQ", groups=["USUBJID"])
+    .seq("ASEQ", groups=["USUBJID"])           # occds-specific verb
     .to_frame()
 )
 
