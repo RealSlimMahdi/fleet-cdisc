@@ -1,5 +1,5 @@
 [project]
-name = "fleet"
+name = "fleet-cdisc"
 version = "0.1.0"
 description = "An opinionated framework to create CDISC SDTM/ADaM using Polars DataFrames via namespace extension"
 requires-python = ">=3.12"
