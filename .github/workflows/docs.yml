@@ -44,18 +44,25 @@ jobs:
         id: version
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/v}"
+            echo "alias=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
           else
-            VERSION="${{ github.event.inputs.version || 'latest' }}"
+            echo "alias=${{ github.event.inputs.version || 'dev' }}" >> "$GITHUB_OUTPUT"
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
           fi
-          echo "alias=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Deploy docs with mike
         run: |
-          uv run mike deploy \
-            --push \
-            --update-aliases \
-            "${{ steps.version.outputs.alias }}" latest
+          if [[ "${{ steps.version.outputs.is_release }}" == "true" ]]; then
+            uv run mike deploy \
+              --push \
+              --update-aliases \
+              "${{ steps.version.outputs.alias }}" latest
+          else
+            uv run mike deploy \
+              --push \
+              "${{ steps.version.outputs.alias }}"
+          fi
 
       - name: Set default version
         run: uv run mike set-default --push latest
