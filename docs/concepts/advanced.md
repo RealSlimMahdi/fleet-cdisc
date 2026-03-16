@@ -6,7 +6,9 @@ Fleet provides significant flexibility to handle complex clinical trial scenario
 
 While Fleet provides verbs like `.study_day()` or `.baseline()`, you will often need custom logic to derive variables specific to a study.
 
-You can use the `.derivation()` verb to inject custom [Polars expressions](https://pola.rs/) into the pipeline.
+### Simple Inline Derivations
+
+For row-by-row logic or straightforward column math, use the `.derivation()` verb to inject custom [Polars expressions](https://pola.rs/) directly into the pipeline:
 
 ```python
 import polars as pl
@@ -14,7 +16,7 @@ import polars as pl
 # Custom derivation: categorising age into predefined buckets
 adsl = (
     dm.adam.adsl
-    ...
+    # ... other standard verbs
     .derivation(
         "AGEGR1",
         expression=(
@@ -26,6 +28,47 @@ adsl = (
     .to_frame()
 )
 ```
+
+### Complex Multi-Dataset Derivations (Escaping the Pipeline)
+
+For highly complex, advanced logic—such as derivations requiring customized multi-dataset joins, complex rolling window aggregations, or logic that simply cannot be expressed linearly in standard verbs—the recommended pattern is to "escape" the automated pipeline.
+
+Because Fleet is built securely on Polars DataFrames, you can drop out to native Polars, compute your advanced logic, merge it back, and then seamlessly resume your Fleet pipeline.
+
+```python
+import polars as pl
+
+# 1. Start by compiling your base ADSL dataset to a Polars DataFrame
+# (Assuming you already have adsl base and adverse events dataframes)
+base_adsl = ctx.build("ADSL") # Or adsl_pipeline.to_frame()
+
+# 2. Compute complex custom logic using pure Polars (e.g. tracking a multi-step clinical event pattern)
+# Here we find patients who had a Severe AE specifically after taking a certain concomitant medication.
+complex_events = (
+    base_adsl.select(["USUBJID", "TRTSDT"])
+    .join(ae_df.filter(pl.col("AESEV") == "SEVERE"), on="USUBJID", how="inner")
+    .join(cm_df.filter(pl.col("CMINDC") == "NAUSEA"), on="USUBJID", how="left")
+    .group_by("USUBJID")
+    .agg([
+        pl.when(pl.col("AESTDTC").min() > pl.col("CMSTDTC").min())
+          .then(pl.lit("Y"))
+          .otherwise(pl.lit("N"))
+          .alias("CUSTFL")
+    ])
+)
+
+# 3. Merge the result natively using Polars
+merged_adsl = base_adsl.join(complex_events, on="USUBJID", how="left")
+
+# 4. Jump back into Fleet if you need to finalize any remaining standard derivations or metadata
+final_adsl = (
+    merged_adsl.adam.adsl
+    .derivation("CUSTFL", expression=pl.col("CUSTFL").fill_null("N"))
+    .to_frame()
+)
+```
+
+This pattern ensures you are never bottlenecked by the package API: if you can write it in Polars, you can execute it in Fleet.
 
 ## Subclassing Namespaces
 

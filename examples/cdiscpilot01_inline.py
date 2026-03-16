@@ -64,7 +64,7 @@ print(f"   ae_raw : {ae_raw.shape[0]:>3} rows   columns → {ae_raw.columns}")
 #       adsl <- dm %>% select(-DOMAIN) %>% mutate(TRT01P = ARM, ...)
 # ════════════════════════════════════════════════════════════════════════════
 dm = (
-    dm_raw.sdtm
+    dm_raw.sdtm  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .hardcode_no_ct("STUDYID",  value="CDISCPILOT01")
     .hardcode_no_ct("DOMAIN",   value="DM")
     .assign_no_ct(  "USUBJID",  source="patient_number")
@@ -112,7 +112,7 @@ print(f"\n── 2a. SDTM DM : {dm.shape[0]} subjects × {dm.shape[1]} variables
 #       EXDOSE > 0  OR  (EXDOSE == 0 AND EXTRT contains "PLACEBO")
 # ════════════════════════════════════════════════════════════════════════════
 ex = (
-    dm_raw.sdtm
+    dm_raw.sdtm  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .hardcode_no_ct("STUDYID",  value="CDISCPILOT01")
     .hardcode_no_ct("DOMAIN",   value="EX")
     .assign_no_ct(  "USUBJID",  source="patient_number")
@@ -144,7 +144,7 @@ print(f"── 2b. SDTM EX : {ex.shape[0]} records  × {ex.shape[1]} variables "
 _ds_cols = ["STUDYID", "DOMAIN", "USUBJID", "DSSEQ", "DSCAT", "DSTERM", "DSDECOD", "DSSTDTC"]
 
 ds_completed = (
-    dm_raw.sdtm
+    dm_raw.sdtm  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .hardcode_no_ct("STUDYID",  value="CDISCPILOT01")
     .hardcode_no_ct("DOMAIN",   value="DS")
     .assign_no_ct(  "USUBJID",  source="patient_number")
@@ -158,7 +158,7 @@ ds_completed = (
 )
 
 ds_randomized = (
-    dm_raw.sdtm
+    dm_raw.sdtm  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .hardcode_no_ct("STUDYID",  value="CDISCPILOT01")
     .hardcode_no_ct("DOMAIN",   value="DS")
     .assign_no_ct(  "USUBJID",  source="patient_number")
@@ -179,7 +179,7 @@ print(f"── 2c. SDTM DS : {ds.shape[0]} records  × {ds.shape[1]} variables "
 # 2d. Build SDTM AE (Adverse Events) from ae_raw
 # ════════════════════════════════════════════════════════════════════════════
 ae = (
-    ae_raw.sdtm
+    ae_raw.sdtm  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .hardcode_no_ct("STUDYID",  value="CDISCPILOT01")
     .hardcode_no_ct("DOMAIN",   value="AE")
     .assign_no_ct(  "USUBJID",  source="patient_number")
@@ -208,7 +208,7 @@ print(f"── 2d. SDTM AE : {ae.shape[0]} records  × {ae.shape[1]} variables")
 print("\n── 3–5. ADSL base + treatment dates ────────────────────────────────────")
 
 adsl = (
-    dm.adam.adsl
+    dm.adam.adsl  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     # ── demographics from DM ──────────────────────────────────────────────
     .source("STUDYID")
     .source("USUBJID")
@@ -260,7 +260,7 @@ _ds_disp = (
 )
 
 adsl = (
-    adsl.adam.adsl
+    adsl.adam.adsl  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     # EOSDT: latest date of DISPOSITION EVENT (admiral: derive_vars_merged)
     .last_date("EOSDT", from_dataset=ds, date_col="DSSTDTC",
                where='pl.col("DSCAT") == "DISPOSITION EVENT"')
@@ -269,7 +269,7 @@ adsl = (
                 where='pl.col("DSDECOD") == "RANDOMIZED"')
     .to_frame()
     # Bring in DSDECOD/DSTERM from DS for status/reason derivations
-    .adam
+    .adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .lookup(dataset=_ds_disp, on="USUBJID", how="left")
     # EOSSTT: map disposition decode to study status (admiral: format_eosstt)
     .condderivation("EOSSTT",
@@ -304,7 +304,7 @@ print(f"   EOSSTT counts: {adsl['EOSSTT'].value_counts().to_dicts()}")
 print("\n── 7. Age grouping (AGEGR1) ─────────────────────────────────────────────")
 
 adsl = (
-    adsl.adam.adsl
+    adsl.adam.adsl  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .condderivation("AGEGR1",
                     conditions=[
                         {"condition": "pl.col('AGE') < 18",  "value": "<18"},
@@ -333,10 +333,10 @@ _ex_max_dose = (
 )
 
 adsl = (
-    adsl.adam
+    adsl.adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .lookup(dataset=_ex_max_dose, on="USUBJID", how="left")
     .to_frame()
-    .adam.adsl
+    .adam.adsl  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     # SAFFL: subjects with at least one dose > 0 (admiral: derive_var_merged_exist_flag)
     .eligibility_flag("SAFFL",
                       criteria='pl.col("_EXDOSE_MAX") > 0')
@@ -361,7 +361,7 @@ print(f"   ITTFL : {adsl['ITTFL'].value_counts().to_dicts()}")
 print("\n── 9. Last date known alive (LSTALVDT) ──────────────────────────────────")
 
 adsl = (
-    adsl.adam.adsl
+    adsl.adam.adsl  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     # Latest AE end date per subject (admiral: derive_vars_extreme_event source)
     .last_date("_ae_end",   from_dataset=ae, date_col="AEENDTC")
     # Latest AE start date per subject
@@ -386,7 +386,7 @@ print(f"   LSTALVDT range: {adsl['LSTALVDT'].min()} → {adsl['LSTALVDT'].max()}
 print("\n── 10. AE counts ────────────────────────────────────────────────────────")
 
 adsl = (
-    adsl.adam.adsl
+    adsl.adam.adsl  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .count_events("NUMAE",  from_dataset=ae)
     .count_events("NUMSAE", from_dataset=ae,
                   where='pl.col("AESER") == "Y"')
@@ -478,7 +478,7 @@ vs_raw = pl.read_csv(RAW / "vs_raw.csv")
 _trtsdt_map = adsl_final.select(["USUBJID", "TRTSDT"])
 
 advs = (
-    vs_raw.adam
+    vs_raw.adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .assigned("STUDYID", value="CDISCPILOT01")
     .rename(  "USUBJID",  source="patient_number")
     .rename(  "PARAMCD",  source="vstestcd")
@@ -491,11 +491,11 @@ advs = (
     # admiral: flag_variables — last pre-dose visit (vsdy ≤ 0)
     .flag("ABLFL", criteria='pl.col("vsdy") <= 0', groups=["USUBJID", "PARAMCD"])
     .to_frame()   # materialise — ABLFL must exist before baseline() window fn
-    .adam
+    .adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     # admiral: derive_var_base
     .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", groups=["USUBJID", "PARAMCD"])
     .to_frame()   # materialise — BASE must exist before chg()/pchg()
-    .adam
+    .adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     # admiral: derive_var_chg
     .chg( "CHG",  aval="AVAL", base="BASE")
     .pchg("PCHG", aval="AVAL", base="BASE")
@@ -530,7 +530,7 @@ _adsl_trt = adsl_final.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "SAFFL"]
 ae_with_trt = ae.join(_adsl_trt, on="USUBJID", how="left")
 
 adae = (
-    ae_with_trt.adam
+    ae_with_trt.adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .assigned("STUDYID", value="CDISCPILOT01")
     .source(  "USUBJID")
     .source(  "AETERM")
@@ -547,7 +547,7 @@ adae = (
     # study_day uses _chain — ASTDT resolves from the lazy plan (no materialise needed)
     .study_day("ADY", analysis_date="ASTDT", reference_date="TRTSDT")
     .to_frame()
-    .adam.occds
+    .adam.occds  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     # admiral: derive_var_trtemfl
     .treatment_emergent("TRTEMFL", start_date="AESTDTC",
                         trtsdt="TRTSDT", trtedt="TRTEDT")
@@ -589,7 +589,7 @@ _adsl_ex = adsl_final.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "SAFFL"])
 
 adex = (
     ex.join(_adsl_ex, on="USUBJID", how="left")
-    .adam.occds                                 # shared verbs via mixin — single-namespace chain
+    .adam.occds                                 # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .assigned("STUDYID", value="CDISCPILOT01") # shared verb (mixin)
     .source(  "USUBJID")                       # shared verb (mixin)
     .source(  "EXTRT")                         # shared verb (mixin)

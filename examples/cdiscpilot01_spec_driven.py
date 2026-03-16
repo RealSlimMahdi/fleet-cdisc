@@ -50,7 +50,7 @@ vs_raw = pl.read_csv(RAW / "vs_raw.csv")
 
 # ── 2. SDTM DM ───────────────────────────────────────────────────────────────
 dm = (
-    dm_raw.sdtm
+    dm_raw.sdtm  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .hardcode_no_ct("STUDYID",  value="CDISCPILOT01")
     .hardcode_no_ct("DOMAIN",   value="DM")
     .assign_no_ct(  "USUBJID",  source="patient_number")
@@ -85,7 +85,7 @@ print(f"SDTM DM  : {dm.shape[0]} subjects  ·  {dm.shape[1]} columns")
 
 # ── 3. Synthesise SDTM EX (one record per subject) ───────────────────────────
 ex = (
-    dm_raw.sdtm
+    dm_raw.sdtm  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .hardcode_no_ct("STUDYID",  value="CDISCPILOT01")
     .hardcode_no_ct("DOMAIN",   value="EX")
     .assign_no_ct(  "USUBJID",  source="patient_number")
@@ -107,7 +107,7 @@ ex = (
 
 # ── 4. Synthesise SDTM AE ─────────────────────────────────────────────────────
 ae = (
-    ae_raw.sdtm
+    ae_raw.sdtm  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .hardcode_no_ct("STUDYID",  value="CDISCPILOT01")
     .hardcode_no_ct("DOMAIN",   value="AE")
     .assign_no_ct(  "USUBJID",  source="patient_number")
@@ -141,10 +141,10 @@ _ex_max_dose = (
 )
 
 dm_enriched = (
-    dm.adam
+    dm.adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .lookup(dataset=_ex_max_dose, on="USUBJID", how="left")
     .to_frame()
-    .adam.adsl
+    .adam.adsl  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     # Treatment dates from EX (admiral: derive_vars_merged)
     .first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")
     .last_date( "TRTEDT", from_dataset=ex, date_col="EXENDTC")
@@ -167,7 +167,7 @@ dm_enriched = (
 )
 
 adsl = (
-    dm_enriched.adam
+    dm_enriched.adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .from_spec(ADAM_SPEC, dataset="ADSL")
     .select(spec=ADAM_SPEC, dataset="ADSL")
     .write_parquet(OUT / "adsl.parquet")
@@ -183,14 +183,14 @@ print("\n── ADaM ADVS (spec-driven) ─────────────�
 
 _trtsdt_map = adsl.select(["USUBJID", "TRTSDT"])
 vs_with_trtsdt = (
-    vs_raw.adam
+    vs_raw.adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .rename("USUBJID", source="patient_number")
     .lookup(dataset=_trtsdt_map, on="USUBJID", how="left")
     .to_frame()
 )
 
 advs = (
-    vs_with_trtsdt.adam
+    vs_with_trtsdt.adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .from_spec(ADAM_SPEC, dataset="ADVS")
     .select(spec=ADAM_SPEC, dataset="ADVS")
     .write_parquet(OUT / "advs.parquet")
@@ -206,19 +206,19 @@ print("\n── ADaM ADAE (spec-driven + occds verbs) ────────�
 
 _adsl_trt = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "AGE", "SEX", "SAFFL"])
 ae_with_trt = (
-    ae.adam
+    ae.adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .lookup(dataset=_adsl_trt, on="USUBJID", how="left")
     .to_frame()
 )
 
 adae_sourced = (
-    ae_with_trt.adam
+    ae_with_trt.adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .from_spec(ADAM_SPEC, dataset="ADAE")
     .to_frame()
 )
 
 adae = (
-    adae_sourced.adam.occds
+    adae_sourced.adam.occds  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .treatment_emergent("TRTEMFL", start_date="AESTDTC",
                         trtsdt="TRTSDT", trtedt="TRTEDT")
     .worst_flag("ANL01FL", severity_col="AESEV",
@@ -232,7 +232,7 @@ adae = (
     )
 )
 adae = (
-    adae.adam
+    adae.adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .select(spec=ADAM_SPEC, dataset="ADAE")
     .write_parquet(OUT / "adae.parquet")
 )
@@ -251,19 +251,19 @@ print("\n── ADaM ADEX (spec-driven) ─────────────�
 
 _adsl_ex = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "AGE", "SAFFL"])
 ex_with_adsl = (
-    ex.adam
+    ex.adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .lookup(dataset=_adsl_ex, on="USUBJID", how="left")
     .to_frame()
 )
 
 adex_s1 = (
-    ex_with_adsl.adam
+    ex_with_adsl.adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .from_spec(ADAM_SPEC, dataset="ADEX")
     .to_frame()
 )
 
 adex = (
-    adex_s1.adam.occds                  # enter occds directly — shared verbs via mixin
+    adex_s1.adam.occds      # type: ignore[attr-defined]  # runtime namespace registered by fleet
     # admiral: derive_var_dur (inclusive end-date convention)
     .derivation("EXDURD",              # shared verb on occds via mixin
                 expression="(pl.col('AENDT').cast(pl.Date) - pl.col('ASTDT').cast(pl.Date))"
@@ -277,7 +277,7 @@ adex = (
     )
 )
 adex = (
-    adex.adam
+    adex.adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .select(spec=ADAM_SPEC, dataset="ADEX")
     .write_parquet(OUT / "adex.parquet")
 )

@@ -32,39 +32,39 @@ def main():
 
     print("--- 2. Deriving SDTM ---")
     dm = (
-        raw_dm.sdtm
+        raw_dm.sdtm  # type: ignore[attr-defined]  # runtime namespace registered by fleet
         .hardcode_no_ct("DOMAIN", value="DM")
-        .assign_no_ct("USUBJID", "subject_id")
-        .assign_no_ct("ARM", "arm")
-        .assign_ct("SEX", "sex", ct_codelist="C66731", ct_mapping={"M": "M", "F": "F"})
-        .assign_datetime("BRTHDTC", "dob", mode="date")
+        .assign_no_ct("USUBJID", source="subject_id")
+        .assign_no_ct("ARM", source="arm")
+        .assign_ct("SEX", source="sex", ct_codelist="C66731", ct_mapping={"M": "M", "F": "F"})
+        .assign_datetime("BRTHDTC", source="dob", mode="date")
         .to_frame()
     )
     print("\nDM Dataset:")
     print(dm)
 
     vs = (
-        raw_vs.sdtm
+        raw_vs.sdtm  # type: ignore[attr-defined]  # runtime namespace registered by fleet
         .hardcode_no_ct("DOMAIN", value="VS")
-        .assign_no_ct("USUBJID", "subject_id")
+        .assign_no_ct("USUBJID", source="subject_id")
         .assign_ct(
-            "VSTESTCD", "test_name", 
+            "VSTESTCD", source="test_name",
             ct_codelist="C66741", 
             ct_mapping={"Weight": "WEIGHT", "Heart Rate": "HR"}
         )
-        .assign_no_ct("VSSTRESN", "result")
-        .assign_datetime("VSDTC", "date", mode="date")
+        .assign_no_ct("VSSTRESN", source="result")
+        .assign_datetime("VSDTC", source="date", mode="date")
         .to_frame()
     )
     print("\nVS Dataset:")
     print(vs)
 
     ae = (
-        raw_ae.sdtm
+        raw_ae.sdtm  # type: ignore[attr-defined]  # runtime namespace registered by fleet
         .hardcode_no_ct("DOMAIN", value="AE")
-        .assign_no_ct("USUBJID", "subject_id")
-        .assign_no_ct("AEDECOD", "ae_term")
-        .assign_datetime("AESTDTC", "start_date", mode="date")
+        .assign_no_ct("USUBJID", source="subject_id")
+        .assign_no_ct("AEDECOD", source="ae_term")
+        .assign_datetime("AESTDTC", source="start_date", mode="date")
         .to_frame()
     )
     print("\nAE Dataset:")
@@ -72,11 +72,11 @@ def main():
 
     print("--- 3. Deriving ADaM ---")
     adsl = (
-        dm.adam.adsl
+        dm.adam.adsl  # type: ignore[attr-defined]  # runtime namespace registered by fleet
         .source("USUBJID")
         .source("ARM")
         .source("SEX")
-        .first_date("TRTSDT", ae, "AESTDTC") 
+        .first_date("TRTSDT", from_dataset=ae, date_col="AESTDTC")
         .to_frame()
     )
     print("\nADSL Dataset:")
@@ -85,11 +85,11 @@ def main():
     vs_with_adsl = vs.join(adsl.select(["USUBJID", "TRTSDT"]), on="USUBJID", how="left")
 
     advs = (
-        vs_with_adsl.adam
+        vs_with_adsl.adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
         .source("USUBJID")
         .source("VSTESTCD")
         .source("VSSTRESN")
-        .derivation("ABLFL", pl.lit("Y")) 
+        .derivation("ABLFL", expression=pl.lit("Y"))
         .baseline("BASE", aval="VSSTRESN", baseline_flag="ABLFL")
         .to_frame()
     )
