@@ -95,29 +95,29 @@ print(f"   dm_raw: {dm_raw.shape[0]:>2} rows   columns → {dm_raw.columns}")
 #    TRTSDT = first_dose_date, TRT01P = arm_description, DOSEP from arm
 # ════════════════════════════════════════════════════════════════════════════
 adsl = (
-    dm_raw
-    .rename({"patient_number": "USUBJID", "arm_description": "TRT01P",
-             "first_dose_date": "TRTSDT", "sex": "SEX", "race": "RACE",
-             "age": "AGE"})
-    .with_columns([
-        # Planned dose from treatment arm
-        pl.when(pl.col("arm_code") == "Xan_Hi").then(pl.lit(81.0))
-          .when(pl.col("arm_code") == "Xan_Lo").then(pl.lit(54.0))
-          .otherwise(pl.lit(0.0))
-          .alias("DOSEP"),
-        # Numeric sex covariate (admiral: compute_bmi / SEXN)
-        pl.when(pl.col("SEX") == "M").then(pl.lit(1))
-          .when(pl.col("SEX") == "F").then(pl.lit(2))
-          .otherwise(pl.lit(3))
-          .cast(pl.Int64)
-          .alias("SEXN"),
-        # Numeric arm covariate (admiral: ARMN)
-        pl.when(pl.col("arm_code") == "Xan_Hi").then(pl.lit(2))
-          .when(pl.col("arm_code") == "Xan_Lo").then(pl.lit(1))
-          .otherwise(pl.lit(0))
-          .cast(pl.Int64)
-          .alias("ARMN"),
-    ])
+    dm_raw.adam.adsl
+    .rename("USUBJID", source="patient_number")
+    .rename("TRT01P", source="arm_description")
+    .rename("TRTSDT", source="first_dose_date")
+    .rename("SEX", source="sex")
+    .rename("RACE", source="race")
+    .rename("AGE", source="age")
+    # Planned dose from treatment arm
+    .condderivation("DOSEP", conditions=[
+        {"condition": pl.col("arm_code") == "Xan_Hi", "value": 81.0},
+        {"condition": pl.col("arm_code") == "Xan_Lo", "value": 54.0},
+    ], else_value=0.0)
+    # Numeric sex covariate (admiral: compute_bmi / SEXN)
+    .condderivation("SEXN", conditions=[
+        {"condition": pl.col("SEX") == "M", "value": 1},
+        {"condition": pl.col("SEX") == "F", "value": 2},
+    ], else_value=3)
+    # Numeric arm covariate (admiral: ARMN)
+    .condderivation("ARMN", conditions=[
+        {"condition": pl.col("arm_code") == "Xan_Hi", "value": 2},
+        {"condition": pl.col("arm_code") == "Xan_Lo", "value": 1},
+    ], else_value=0)
+    .to_frame()
     .select(["USUBJID", "TRT01P", "TRTSDT", "DOSEP", "SEX", "SEXN", "RACE",
              "AGE", "ARMN"])
 )
@@ -160,7 +160,8 @@ adpc = (
     # ── Step 5. Merge early ADSL variables ──────────────────────────────────
     # admiral: derive_vars_merged(dataset_add = adsl, new_vars = adsl_vars,
     #           by_vars = exprs(STUDYID, USUBJID))
-    .merge_adsl(adsl, keep_cols=["TRT01P", "TRTSDT", "DOSEP"])
+    .merge_adsl(adsl, keep_cols=["TRT01P", "TRTSDT", "DOSEP", "SEX", "SEXN",
+                                  "RACE", "AGE", "ARMN"])
 
     # ── Step 6. EVID = 0 for all concentration records ──────────────────────
     # admiral: mutate(EVID = 0)
@@ -220,17 +221,14 @@ adpc = (
     # DOSEP already merged from ADSL above.
     # DOSEA is derived as the actual dose from the reference dosing record.
     # In this single-dose dataset we use DOSEP as a proxy for DOSEA.
-    .derivation("DOSEA", expression=pl.col("DOSEP"))
+    .source("DOSEA", from_col="DOSEP")
     .assigned("DOSEU", value="mg")
 
     # ── Step 15. DTYPE for BLQ-imputed records ───────────────────────────────
     # admiral: set_values_to = exprs(DTYPE = "HALFLLOQ") on BLQ records
-    .derivation(
-        "DTYPE",
-        expression=pl.when(pl.col("BLQFL") == "Y")
-                     .then(pl.lit("HALFLLOQ"))
-                     .otherwise(pl.lit(None)),
-    )
+    .condderivation("DTYPE", conditions=[
+        {"condition": pl.col("BLQFL") == "Y", "value": "HALFLLOQ"},
+    ], else_value=None)
 
     # ── Step 16. Analysis flags ───────────────────────────────────────────────
     # admiral: mutate(ANL01FL = "Y", ANL02FL = if_else(is.na(DTYPE), "Y", NA))
@@ -249,10 +247,7 @@ adpc = (
 #                             new_vars = exprs(HTBL = VSSTRESN))
 adpc = adpc.join(htbl, on="USUBJID", how="left")
 
-# ── Step 19. Merge remaining ADSL variables ───────────────────────────────────
-# admiral: derive_vars_merged(dataset_add = select(adsl, !!!negate_vars(adsl_vars)))
-adsl_remaining = adsl.select(["USUBJID", "SEX", "SEXN", "RACE", "AGE", "ARMN"])
-adpc = adpc.join(adsl_remaining, on="USUBJID", how="left")
+# ── Step 19. ADSL variables already merged via merge_adsl() in the pipeline ──
 
 print("\n── ADPC preview ─────────────────────────────────────────────────────────")
 preview_cols = ["USUBJID", "PCTPT", "NFRLT", "AFRLT", "ARRLT", "MRRLT",
