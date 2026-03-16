@@ -80,3 +80,39 @@ dm = (
 ## 5. Spec Driven Development (`define.yaml`)
 
 Fleet supports reading schemas and standard standard version outputs from YAML specs. Always respect the `StudyContext.init()` initialization methods and Schema definitions when implementing CLI commands. Schema is managed via `pydantic`.
+
+## 6. Publishing to PyPI
+
+The package distribution name is `fleet-cdisc` (import name remains `fleet`).
+
+### Build
+
+```bash
+# Remove any previous build artifacts, then rebuild
+rm -rf dist/
+uv run python -m build
+```
+
+This produces `dist/fleet_cdisc-0.1.0-py3-none-any.whl` and `dist/fleet_cdisc-0.1.0.tar.gz`.
+
+### Upload to TestPyPI (staging)
+
+```bash
+uv run twine upload --repository testpypi dist/*
+```
+
+Use `__token__` as the username and your TestPyPI API token as the password.
+
+### Verify TestPyPI install
+
+```bash
+pip install -i https://test.pypi.org/simple/ fleet-cdisc==0.1.0
+```
+
+### Upload to real PyPI
+
+```bash
+uv run twine upload dist/*
+```
+
+Use `__token__` as the username and your PyPI API token as the password.
