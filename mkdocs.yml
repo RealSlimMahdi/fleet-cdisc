@@ -1,8 +1,8 @@
 site_name: Fleet
 site_description: CDISC SDTM/ADaM derivation toolkit for Polars DataFrames
-site_url: https://fleet.github.io/fleet/
-repo_url: https://github.com/fleet/fleet
-repo_name: fleet/fleet
+site_url: https://realslimmahdi.github.io/fleet-cdisc/
+repo_url: https://github.com/RealSlimMahdi/fleet-cdisc
+repo_name: RealSlimMahdi/fleet-cdisc
 edit_uri: edit/main/docs/
 
 theme:

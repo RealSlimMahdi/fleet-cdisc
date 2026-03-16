@@ -5,6 +5,13 @@ on:
     branches: [main, master]
     tags:
       - "v*"
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "pyproject.toml"
+      - ".github/workflows/docs.yml"
+      - "examples/**"
+      - "specs/**"
   workflow_dispatch:
     inputs:
       version:
