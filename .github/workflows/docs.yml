@@ -77,3 +77,7 @@ jobs:
       - name: Set default version
         if: ${{ startsWith(github.ref, 'refs/tags/v') && steps.version.outputs.version != 'latest' }}
         run: uv run mike set-default --push latest
+
+      - name: Set default version (dev)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: uv run mike set-default --push dev
