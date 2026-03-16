@@ -49,3 +49,11 @@ options:
 show*root_heading: true
 heading_level: 3
 filters: ["!^*"]
+
+## Pharmacokinetics — `df.adam.pk`
+
+::: fleet.adam.PKNamespace
+options:
+show*root_heading: true
+heading_level: 3
+filters: ["!^*"]

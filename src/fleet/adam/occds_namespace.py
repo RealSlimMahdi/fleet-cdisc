@@ -27,10 +27,10 @@ from typing import Any, Self
 
 import polars as pl
 
-from ._mixins import SharedADaMVerbsMixin
+from ._mixins import MultiRowMixin, SharedADaMVerbsMixin
 
 
-class OCCDSNamespace(SharedADaMVerbsMixin):
+class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin):
     """
     Immutable pipeline builder for OCCDS (one-row-per-event) derivations.
 
@@ -45,28 +45,6 @@ class OCCDSNamespace(SharedADaMVerbsMixin):
     # ------------------------------------------------------------------ #
     # OCCDS-specific verbs                                                 #
     # ------------------------------------------------------------------ #
-
-    def seq(
-        self,
-        target: str = "ASEQ",
-        *,
-        groups: list[str] | None = None,
-    ) -> Self:
-        """
-        Sequential 1-based record number within each group, preserving row order.
-
-        Materialises the current pipeline before assigning sequence numbers.
-
-        Example::
-
-            .seq("ASEQ", groups=["USUBJID"])
-        """
-        grps = groups or ["USUBJID"]
-        df = self.to_frame()
-        df = df.with_columns(
-            (pl.int_range(pl.len()).over(grps) + 1).cast(pl.Int64).alias(target)
-        )
-        return self._materialise_then(df)
 
     def worst_flag(
         self,

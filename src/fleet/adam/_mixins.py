@@ -194,3 +194,74 @@ class SharedADaMVerbsMixin:
             where if isinstance(where, pl.Expr) else parse_expression(str(where))
         )
         return self._materialise_then(df.filter(filter_expr))
+
+    def merge_adsl(
+        self,
+        adsl: pl.DataFrame,
+        *,
+        by: list[str] | None = None,
+        keep_cols: list[str] | None = None,
+    ) -> Self:
+        """
+        Left-join ADSL columns onto the current dataset.
+
+        Materialises the pipeline, left-joins *adsl* (optionally restricted to
+        *keep_cols* + *by* key columns), and returns a fresh namespace.
+
+        Parameters
+        ----------
+        adsl:
+            The ADSL ``pl.DataFrame`` to merge in.
+        by:
+            Key column(s) for the join (default ``["USUBJID"]``).
+        keep_cols:
+            Subset of ADSL columns to bring in (excluding *by* keys, which are
+            always included).  When ``None``, all ADSL columns are merged.
+
+        Example::
+
+            .merge_adsl(adsl_df, keep_cols=["TRTSDT", "TRTEDT", "TRT01P"])
+        """
+        join_keys = by if by is not None else ["USUBJID"]
+        if keep_cols is not None:
+            extra = [c for c in join_keys if c not in keep_cols]
+            adsl = adsl.select(keep_cols + extra)
+        df = self.to_frame()
+        joined = df.join(adsl, on=join_keys, how="left")
+        return self._materialise_then(joined)
+
+
+class MultiRowMixin:
+    """
+    Mixin for ADaM datasets with multiple rows per subject (OCCDS, PK, etc.).
+
+    Provides ``seq()`` — a sequential 1-based record-number verb.  Any
+    namespace class that needs this verb should inherit from this mixin in
+    *addition* to ``SharedADaMVerbsMixin``::
+
+        class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin): ...
+        class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin): ...
+    """
+
+    def seq(
+        self,
+        target: str = "ASEQ",
+        *,
+        groups: list[str] | None = None,
+    ) -> Self:
+        """
+        Sequential 1-based record number within each group, preserving row order.
+
+        Materialises the current pipeline before assigning sequence numbers.
+
+        Example::
+
+            .seq("ASEQ", groups=["USUBJID"])
+            .seq("PCSEQ", groups=["USUBJID"])
+        """
+        grps = groups or ["USUBJID"]
+        df = self.to_frame()
+        df = df.with_columns(
+            (pl.int_range(pl.len()).over(grps) + 1).cast(pl.Int64).alias(target)
+        )
+        return self._materialise_then(df)

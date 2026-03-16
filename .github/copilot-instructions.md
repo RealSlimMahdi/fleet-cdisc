@@ -116,3 +116,70 @@ uv run twine upload dist/*
 ```
 
 Use `__token__` as the username and your PyPI API token as the password.
+
+## 7. ADaM Namespace Mixin Discipline (NO code duplication)
+
+Fleet's ADaM layer is built from composable namespace classes (`ADSLNamespace`, `OCCDSNamespace`, `OncoNamespace`, …). Many verbs are identical across these classes. **Duplicating verb implementations across namespace classes is strictly forbidden.**
+
+### The rule
+
+> **If a verb makes sense for 2 or more namespaces, it MUST live in a mixin in `src/fleet/adam/_mixins.py`. NEVER copy the implementation into individual namespace classes.**
+
+### Decision tree
+
+| Scope                                   | Action                                                                      |
+| --------------------------------------- | --------------------------------------------------------------------------- |
+| Verb used in **1** namespace only       | Implement directly in that class                                            |
+| Verb used in **2 or more** namespaces   | Extract into a mixin in `_mixins.py`; all namespaces inherit it             |
+| Verb used in **all** namespaces         | Add to `SharedADaMVerbsMixin`                                               |
+| Verb used in a **subset** of namespaces | Create a focused mixin (e.g. `DateDerivationMixin`) and inherit selectively |
+
+### How to add a shared verb
+
+1. Add the method to the appropriate mixin class in `src/fleet/adam/_mixins.py`.
+2. The method return type MUST be `Self` (from `typing`) so IDE auto-complete resolves to the concrete subclass at each call-site.
+3. Every namespace class that inherits from that mixin gets the verb automatically — **no per-class edits needed**.
+
+```python
+# src/fleet/adam/_mixins.py
+class SharedADaMVerbsMixin:
+    def my_new_verb(self, target: str, *, param: str) -> Self:
+        ...
+        return self._chain(some_expr.alias(target))
+```
+
+### How to expose a verb only in some namespaces
+
+Create a separate mixin and inherit selectively:
+
+```python
+# _mixins.py
+class DateDerivationMixin:
+    def impute_date(self, target: str, *, source: str) -> Self: ...
+
+# adsl_namespace.py  ← needs date verbs
+class ADSLNamespace(SharedADaMVerbsMixin, DateDerivationMixin): ...
+
+# onco_namespace.py  ← does NOT need date verbs
+class OncoNamespace(SharedADaMVerbsMixin): ...
+```
+
+### How to extend a shared verb in one namespace
+
+Override the method and call `super()` to reuse the base logic:
+
+```python
+class ADSLNamespace(SharedADaMVerbsMixin):
+    def derivation(self, target: str, *, expression: str | pl.Expr) -> Self:
+        # ADSL-specific validation here
+        ...
+        return super().derivation(target, expression=expression)
+```
+
+### Chaining infrastructure
+
+All mixin methods MUST use `self._chain(*exprs)` to append Polars expressions to the lazy plan and `self._materialise_then(df)` for operations that require materialisation (e.g. filters). These helpers are defined in `SharedADaMVerbsMixin` and ensure the returned instance is always the correct concrete subtype.
+
+### Canonical reference
+
+`src/fleet/adam/_mixins.py` is the **single source of truth** for all shared ADaM verbs. Read the module docstring there before adding, removing, or modifying any shared verb — it explains the full architecture.

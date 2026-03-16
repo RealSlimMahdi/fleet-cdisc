@@ -61,6 +61,7 @@ if TYPE_CHECKING:
     from .onco_namespace import OncoNamespace
     from .ophtha_namespace import OphthaNamespace
     from .peds_namespace import PedsNamespace
+    from .pk_namespace import PKNamespace
     from .vaccine_namespace import VaccineNamespace
     from .metabolic_namespace import MetabolicNamespace
     from .neuro_namespace import NeuroNamespace
@@ -920,6 +921,12 @@ class AdamNamespace(SharedADaMVerbsMixin):
         """Neuroscience derivations (admiralneuro-inspired): Centiloid, MMSE, CDR-SoB."""
         from .neuro_namespace import NeuroNamespace
         return NeuroNamespace(self.to_frame())
+
+    @property
+    def pk(self) -> "PKNamespace":
+        """PK (pharmacokinetics) derivations: BLQ flags, actual/nominal time, dose normalisation."""
+        from .pk_namespace import PKNamespace
+        return PKNamespace(self.to_frame())
 
     # ------------------------------------------------------------------ #
     # Terminal operations                                                  #

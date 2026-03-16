@@ -49,3 +49,23 @@ This cheat sheet summarises the most common verbs across Fleet namespaces. For f
 | `.first_occ(target, date_col, groups)`                 | Flags the first chronological record per group.          | `.first_occ("AOCCFL", "ASTDT", ["USUBJID", "AEDECOD"])`             |
 | `.worst_severity(target, severity_col, order, groups)` | Flags worst event when multiple occur.                   | `.worst_severity("AOCCSFL", "AESEV", ["MILD","MODERATE","SEVERE"])` |
 | `.any_flag(target, col, value, groups)`                | Emits `"Y"` if _any_ record in the group meets criteria. | `.any_flag("ANYSEVERE", "AESEV", "SEVERE", ["USUBJID"])`            |
+
+## PK Namespace (`df.adam.pk`)
+
+| Verb                                                          | Description                                                                  | Example                                                         |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `.blq_flag(target, *, conc_col, lloq_col)`                    | Flag BLQ records: `"Y"` when `conc < LLOQ`, else null.                       | `.blq_flag("BLQFL", conc_col="PCSTRESN", lloq_col="PCLLOQ")`    |
+| `.blq_impute(target, *, conc_col, lloq_col, method)`          | Impute BLQ concentrations (`half_lloq`, `zero`, `lloq`, or `missing`).       | `.blq_impute("AVAL", conc_col="PCSTRESN", lloq_col="PCLLOQ")`   |
+| `.blqfn(target, *, conc_col, lloq_col)`                       | Numeric BLQ flag: `1` when BLQ, `0` otherwise.                               | `.blqfn("BLQFN", conc_col="PCSTRESN", lloq_col="PCLLOQ")`       |
+| `.nominal_time(target, *, from_col, input_unit, output_unit)` | Derive nominal elapsed time with unit conversion.                            | `.nominal_time("NTIME", from_col="PCTPTNUM")`                   |
+| `.actual_time(target, *, sample_dtm, dose_dtm, unit)`         | Derive actual elapsed time between two datetime columns.                     | `.actual_time("ATIME", sample_dtm="PCDTC", dose_dtm="EXSTDTC")` |
+| `.predose_flag(target, *, time_col, window_hrs)`              | Flag pre-dose samples within a window before dosing.                         | `.predose_flag("PREDFL", time_col="ATIME")`                     |
+| `.dose_normalized(target, *, conc_col, dose_col)`             | Dose-normalise concentration: `conc / dose`.                                 | `.dose_normalized("AVALDNM", conc_col="AVAL", dose_col="DOSE")` |
+| `.evid(target, *, from_col, dose_indicator, conc_indicator)`  | Derive `EVID` (event ID) for NONMEM-style datasets.                          | `.evid("EVID")`                                                 |
+| `.mrrlt(target, *, arrlt_col)`                                | Clip negative ARRLT to 0 for MRRLT (modified relative time).                 | `.mrrlt("MRRLT", arrlt_col="ARRLT")`                            |
+| `.log_conc(target, *, conc_col, base)`                        | Log-transform concentration (`"e"`, `"2"`, or `"10"`).                       | `.log_conc("DVL", conc_col="DV")`                               |
+| `.mdv(target, *, conc_col, evid_col)`                         | Derive `MDV` (Missing Dependent Variable) for PopPK datasets.                | `.mdv("MDV", conc_col="DV", evid_col="EVID")`                   |
+| `.amt(target, *, dose_col, evid_col)`                         | Derive `AMT`: dose amount on dosing records, null on observations.           | `.amt("AMT", dose_col="EXDOSE", evid_col="EVID")`               |
+| `.cmt(target, *, evid_col, dose_cmt, conc_cmt)`               | Derive `CMT` compartment number following NONMEM convention.                 | `.cmt("CMT", evid_col="EVID", dose_cmt=1, conc_cmt=2)`          |
+| `.avalcat(target, *, conc_col, lloq_col, blq_label, digits)`  | Listing-ready categorised analysis value (`AVALCAT1`).                       | `.avalcat("AVALCAT1", conc_col="PCSTRESC", lloq_col="PCLLOQ")`  |
+| `.anl_flag(target, *, exclude_dtype, dtype_col)`              | Derive analysis flag (`ANL01FL` for all records, `ANL02FL` excluding DTYPE). | `.anl_flag("ANL01FL")`                                          |
