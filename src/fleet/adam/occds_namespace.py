@@ -23,108 +23,24 @@ Usage
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Self
 
 import polars as pl
 
+from ._mixins import SharedADaMVerbsMixin
 
-class OCCDSNamespace:
+
+class OCCDSNamespace(SharedADaMVerbsMixin):
     """
     Immutable pipeline builder for OCCDS (one-row-per-event) derivations.
 
     Covers occurrence datasets: ADAE, ADCM, ADMH, ADEX, etc.
 
-    Includes the base ADaM verbs (source, derivation, assigned, recode, rename,
-    condderivation, whereclauses) plus OCCDS-specific verbs for event sequencing,
+    Inherits shared verbs from ``SharedADaMVerbsMixin``
+    (source, derivation, assigned, recode, rename, condderivation,
+    whereclauses) and adds OCCDS-specific verbs for event sequencing,
     worst-record flagging, and treatment-emergent classification.
     """
-
-    def __init__(self, df: pl.DataFrame) -> None:
-        self._lazy = df.lazy()
-
-    # ------------------------------------------------------------------ #
-    # Internal helpers                                                     #
-    # ------------------------------------------------------------------ #
-
-    def _chain(self, *exprs: pl.Expr) -> "OCCDSNamespace":
-        new = object.__new__(OCCDSNamespace)
-        new._lazy = self._lazy.with_columns(list(exprs))
-        return new
-
-    def _materialise_then(self, df: pl.DataFrame) -> "OCCDSNamespace":
-        new = object.__new__(OCCDSNamespace)
-        new._lazy = df.lazy()
-        return new
-
-    # ------------------------------------------------------------------ #
-    # Base verbs (shared with df.adam)                                    #
-    # ------------------------------------------------------------------ #
-
-    def source(self, target: str, *, from_col: str | None = None) -> "OCCDSNamespace":
-        """Copy a column from the predecessor dataset."""
-        src = from_col if from_col is not None else target
-        return self._chain(pl.col(src).alias(target))
-
-    def derivation(self, target: str, *, expression: str | pl.Expr) -> "OCCDSNamespace":
-        """Arbitrary Polars expression derivation."""
-        from ..sdtm.utils import parse_expression
-        expr = expression if isinstance(expression, pl.Expr) else parse_expression(str(expression))
-        return self._chain(expr.alias(target))
-
-    def assigned(self, target: str, *, value: Any) -> "OCCDSNamespace":
-        """Global constant for every event record."""
-        return self._chain(pl.lit(value).alias(target))
-
-    def recode(
-        self,
-        target: str,
-        *,
-        source: str,
-        recode_map: dict[Any, Any],
-        default: Any = None,
-    ) -> "OCCDSNamespace":
-        """Map values in *source* to recoded values; unmapped → *default*."""
-        if recode_map:
-            default_expr = default if isinstance(default, pl.Expr) else pl.lit(default)
-            expr = pl.col(source).replace_strict(
-                recode_map, default=default_expr, return_dtype=pl.String
-            ).alias(target)
-        else:
-            default_expr = default if isinstance(default, pl.Expr) else pl.lit(default)
-            expr = default_expr.alias(target)
-        return self._chain(expr)
-
-    def rename(self, target: str, *, source: str) -> "OCCDSNamespace":
-        """Rename *source* column to *target*."""
-        return self._chain(pl.col(source).alias(target))
-
-    def condderivation(
-        self,
-        target: str,
-        *,
-        conditions: list[dict[str, Any]],
-        else_value: Any = None,
-    ) -> "OCCDSNamespace":
-        """Multi-branch conditional derivation."""
-        from ..sdtm.utils import parse_expression
-        if not conditions:
-            return self._chain(pl.lit(else_value).alias(target))
-        first = conditions[0]
-        c0 = (first["condition"] if isinstance(first["condition"], pl.Expr)
-               else parse_expression(str(first["condition"])))
-        chain = pl.when(c0).then(pl.lit(first["value"]))
-        for branch in conditions[1:]:
-            c = (branch["condition"] if isinstance(branch["condition"], pl.Expr)
-                 else parse_expression(str(branch["condition"])))
-            chain = chain.when(c).then(pl.lit(branch["value"]))
-        return self._chain(chain.otherwise(pl.lit(else_value)).alias(target))
-
-    def whereclauses(self, *, where: str | pl.Expr) -> "OCCDSNamespace":
-        """Filter events by *where* expression."""
-        from ..sdtm.utils import parse_expression
-        df = self.to_frame()
-        filter_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
-        return self._materialise_then(df.filter(filter_expr))
 
     # ------------------------------------------------------------------ #
     # OCCDS-specific verbs                                                 #
@@ -135,7 +51,7 @@ class OCCDSNamespace:
         target: str = "ASEQ",
         *,
         groups: list[str] | None = None,
-    ) -> "OCCDSNamespace":
+    ) -> Self:
         """
         Sequential 1-based record number within each group, preserving row order.
 
@@ -160,7 +76,7 @@ class OCCDSNamespace:
         groups: list[str] | None = None,
         severity_order: list[Any] | None = None,
         where: str | pl.Expr | None = None,
-    ) -> "OCCDSNamespace":
+    ) -> Self:
         """
         Flag the record with the worst (highest-ranked) severity per group.
 
@@ -225,7 +141,7 @@ class OCCDSNamespace:
         trtsdt: str,
         trtedt: str | None = None,
         offset_days: int = 0,
-    ) -> "OCCDSNamespace":
+    ) -> Self:
         """
         Set *target* to ``"Y"`` for treatment-emergent events.
 
@@ -258,7 +174,7 @@ class OCCDSNamespace:
         start_date: str,
         end_date: str,
         ref_date: str,
-    ) -> "OCCDSNamespace":
+    ) -> Self:
         """
         Flag events that start within the reference window AND have a recorded end.
 
@@ -280,10 +196,3 @@ class OCCDSNamespace:
             .alias(target)
         )
 
-    # ------------------------------------------------------------------ #
-    # Terminal operation                                                   #
-    # ------------------------------------------------------------------ #
-
-    def to_frame(self) -> pl.DataFrame:
-        """Materialise the accumulated pipeline into a Polars DataFrame."""
-        return self._lazy.collect()

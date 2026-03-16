@@ -1,5 +1,6 @@
 """ADaM module — imports trigger Polars namespace registration for df.adam."""
 
+from ._mixins import SharedADaMVerbsMixin
 from .models import ADAMAlgorithm, ADAMDatasetSpec, ADAMVariableSpec
 from .namespace import AdamNamespace
 from .transforms import register_transform, get_transform, list_transforms, clear_transforms
@@ -14,6 +15,9 @@ from .metabolic_namespace import MetabolicNamespace
 from .neuro_namespace import NeuroNamespace
 
 __all__ = [
+    # Mixin
+    "SharedADaMVerbsMixin",
+    # Spec models
     "ADAMAlgorithm",
     "ADAMDatasetSpec",
     "ADAMVariableSpec",

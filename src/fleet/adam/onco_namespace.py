@@ -26,9 +26,11 @@ Usage
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Self
 
 import polars as pl
+
+from ._mixins import SharedADaMVerbsMixin
 
 # RECIST / RECIST-like response order (lower = more favourable)
 _RESP_TO_NUM: dict[str, int] = {
@@ -54,68 +56,20 @@ def _num_resp_expr(num_expr: pl.Expr) -> pl.Expr:
     return num_expr.replace_strict(_NUM_TO_RESP, default=None)
 
 
-class OncoNamespace:
+class OncoNamespace(SharedADaMVerbsMixin):
     """
     Immutable pipeline builder for ADaM oncology derivations.
 
-    Mirrors the API style of ``AdamNamespace`` — each verb returns a new
-    ``OncoNamespace`` instance; ``to_frame()`` materialises the result.
+    Inherits shared verbs from ``SharedADaMVerbsMixin``.
+    Each verb returns a new ``OncoNamespace`` instance;
+    ``to_frame()`` materialises the result.
     """
-
-    def __init__(self, df: pl.DataFrame) -> None:
-        self._lazy = df.lazy()
-
-    # ------------------------------------------------------------------ #
-    # Internal helpers                                                     #
-    # ------------------------------------------------------------------ #
-
-    def _chain(self, *exprs: pl.Expr) -> "OncoNamespace":
-        new = object.__new__(OncoNamespace)
-        new._lazy = self._lazy.with_columns(list(exprs))
-        return new
-
-    def _materialise_then(self, df: pl.DataFrame) -> "OncoNamespace":
-        new = object.__new__(OncoNamespace)
-        new._lazy = df.lazy()
-        return new
-
-    # ------------------------------------------------------------------ #
-    # Base verbs (mirror core ADaM verbs for convenience)                 #
-    # ------------------------------------------------------------------ #
-
-    def source(self, target: str, *, from_col: str | None = None) -> "OncoNamespace":
-        """Copy *from_col* (or *target* itself) to *target*."""
-        src = from_col if from_col is not None else target
-        return self._chain(pl.col(src).alias(target))
-
-    def assigned(self, target: str, *, value: Any) -> "OncoNamespace":
-        """Set *target* to a constant *value* for every record."""
-        return self._chain(pl.lit(value).alias(target))
-
-    def derivation(
-        self, target: str, *, expression: str | pl.Expr
-    ) -> "OncoNamespace":
-        """Arbitrary Polars expression derivation."""
-        from ..sdtm.utils import parse_expression
-        expr = (
-            expression
-            if isinstance(expression, pl.Expr)
-            else parse_expression(str(expression))
-        )
-        return self._chain(expr.alias(target))
-
-    def whereclauses(self, *, where: str | pl.Expr) -> "OncoNamespace":
-        """Filter the dataset to records matching *where*."""
-        from ..sdtm.utils import parse_expression
-        df = self.to_frame()
-        fexpr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
-        return self._materialise_then(df.filter(fexpr))
 
     # ------------------------------------------------------------------ #
     # 1. aval_resp — RECIST text → numeric                                #
     # ------------------------------------------------------------------ #
 
-    def aval_resp(self, target: str, *, source: str) -> "OncoNamespace":
+    def aval_resp(self, target: str, *, source: str) -> Self:
         """
         Map RECIST / oncology response text values in *source* to numeric codes.
 
@@ -151,7 +105,7 @@ class OncoNamespace:
         source: str,
         responses: list[str] | None = None,
         flag_value: str = "Y",
-    ) -> "OncoNamespace":
+    ) -> Self:
         """
         Flag records where *source* is in *responses* (default: ``["CR", "PR"]``).
 
@@ -181,7 +135,7 @@ class OncoNamespace:
         *,
         source: str,
         groups: list[str] | None = None,
-    ) -> "OncoNamespace":
+    ) -> Self:
         """
         Derive the best overall response (BOR) within each *groups* partition.
 
@@ -214,7 +168,7 @@ class OncoNamespace:
         responses: list[str] | None = None,
         groups: list[str] | None = None,
         flag_value: str = "Y",
-    ) -> "OncoNamespace":
+    ) -> Self:
         """
         Flag a confirmed response: the subject must have a response record in
         *responses* followed by another response record at least *confirmation_days*
@@ -282,7 +236,7 @@ class OncoNamespace:
         response_col: str,
         date_col: str,
         groups: list[str] | None = None,
-    ) -> "OncoNamespace":
+    ) -> Self:
         """
         Filter the dataset to keep only records up to and including the first
         progressive disease (PD) observation per *groups* partition.
@@ -314,10 +268,3 @@ class OncoNamespace:
 
         return self._materialise_then(filtered)
 
-    # ------------------------------------------------------------------ #
-    # Materialise                                                          #
-    # ------------------------------------------------------------------ #
-
-    def to_frame(self) -> pl.DataFrame:
-        """Materialise the pipeline and return a ``pl.DataFrame``."""
-        return self._lazy.collect()

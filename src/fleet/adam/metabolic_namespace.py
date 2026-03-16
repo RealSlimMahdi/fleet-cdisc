@@ -23,66 +23,19 @@ Usage
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Self
 
 import polars as pl
 
+from ._mixins import SharedADaMVerbsMixin
 
-class MetabolicNamespace:
+
+class MetabolicNamespace(SharedADaMVerbsMixin):
     """
     Immutable pipeline builder for ADaM metabolic / cardiometabolic derivations.
 
-    Follows the same immutable-builder pattern as ``AdamNamespace``.
+    Inherits shared verbs from ``SharedADaMVerbsMixin``.
     """
-
-    def __init__(self, df: pl.DataFrame) -> None:
-        self._lazy = df.lazy()
-
-    # ------------------------------------------------------------------ #
-    # Internal helpers                                                     #
-    # ------------------------------------------------------------------ #
-
-    def _chain(self, *exprs: pl.Expr) -> "MetabolicNamespace":
-        new = object.__new__(MetabolicNamespace)
-        new._lazy = self._lazy.with_columns(list(exprs))
-        return new
-
-    def _materialise_then(self, df: pl.DataFrame) -> "MetabolicNamespace":
-        new = object.__new__(MetabolicNamespace)
-        new._lazy = df.lazy()
-        return new
-
-    # ------------------------------------------------------------------ #
-    # Base verbs                                                           #
-    # ------------------------------------------------------------------ #
-
-    def source(self, target: str, *, from_col: str | None = None) -> "MetabolicNamespace":
-        """Copy *from_col* (or *target* itself) to *target*."""
-        src = from_col if from_col is not None else target
-        return self._chain(pl.col(src).alias(target))
-
-    def assigned(self, target: str, *, value: Any) -> "MetabolicNamespace":
-        """Set *target* to a constant *value* for every record."""
-        return self._chain(pl.lit(value).alias(target))
-
-    def derivation(
-        self, target: str, *, expression: str | pl.Expr
-    ) -> "MetabolicNamespace":
-        """Arbitrary Polars expression derivation."""
-        from ..sdtm.utils import parse_expression
-        expr = (
-            expression
-            if isinstance(expression, pl.Expr)
-            else parse_expression(str(expression))
-        )
-        return self._chain(expr.alias(target))
-
-    def whereclauses(self, *, where: str | pl.Expr) -> "MetabolicNamespace":
-        """Filter the dataset to records matching *where*."""
-        from ..sdtm.utils import parse_expression
-        df = self.to_frame()
-        fexpr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
-        return self._materialise_then(df.filter(fexpr))
 
     # ------------------------------------------------------------------ #
     # 1. waist_hip_ratio — WSTCIR / HIPCIR                               #
@@ -95,7 +48,7 @@ class MetabolicNamespace:
         waist_col: str,
         hip_col: str,
         round_digits: int | None = 3,
-    ) -> "MetabolicNamespace":
+    ) -> Self:
         """
         Derive waist-to-hip ratio: ``WAISTHIP = waist_col / hip_col``.
 
@@ -124,7 +77,7 @@ class MetabolicNamespace:
         waist_col: str,
         height_col: str,
         round_digits: int | None = 3,
-    ) -> "MetabolicNamespace":
+    ) -> Self:
         """
         Derive waist-to-height ratio: ``WAISTHGT = waist_col / height_col``.
 
@@ -155,7 +108,7 @@ class MetabolicNamespace:
         sex_col: str,
         sex_male_value: str = "M",
         round_digits: int | None = 1,
-    ) -> "MetabolicNamespace":
+    ) -> Self:
         """
         Estimate body fat percentage using the Deurenberg formula (1991).
 
@@ -202,7 +155,7 @@ class MetabolicNamespace:
         male_threshold: float = 102.0,
         female_threshold: float = 88.0,
         flag_value: str = "Y",
-    ) -> "MetabolicNamespace":
+    ) -> Self:
         """
         Flag subjects with abdominal obesity based on IDF/WHO waist circumference
         thresholds (values expected in **centimetres**).
@@ -227,10 +180,3 @@ class MetabolicNamespace:
             .alias(target)
         )
 
-    # ------------------------------------------------------------------ #
-    # Materialise                                                          #
-    # ------------------------------------------------------------------ #
-
-    def to_frame(self) -> pl.DataFrame:
-        """Materialise the pipeline and return a ``pl.DataFrame``."""
-        return self._lazy.collect()

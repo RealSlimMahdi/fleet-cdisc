@@ -26,66 +26,19 @@ Usage
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Self
 
 import polars as pl
 
+from ._mixins import SharedADaMVerbsMixin
 
-class OphthaNamespace:
+
+class OphthaNamespace(SharedADaMVerbsMixin):
     """
     Immutable pipeline builder for ADaM ophthalmology derivations.
 
-    Follows the same immutable-builder pattern as ``AdamNamespace``.
+    Inherits shared verbs from ``SharedADaMVerbsMixin``.
     """
-
-    def __init__(self, df: pl.DataFrame) -> None:
-        self._lazy = df.lazy()
-
-    # ------------------------------------------------------------------ #
-    # Internal helpers                                                     #
-    # ------------------------------------------------------------------ #
-
-    def _chain(self, *exprs: pl.Expr) -> "OphthaNamespace":
-        new = object.__new__(OphthaNamespace)
-        new._lazy = self._lazy.with_columns(list(exprs))
-        return new
-
-    def _materialise_then(self, df: pl.DataFrame) -> "OphthaNamespace":
-        new = object.__new__(OphthaNamespace)
-        new._lazy = df.lazy()
-        return new
-
-    # ------------------------------------------------------------------ #
-    # Base verbs                                                           #
-    # ------------------------------------------------------------------ #
-
-    def source(self, target: str, *, from_col: str | None = None) -> "OphthaNamespace":
-        """Copy *from_col* (or *target* itself) to *target*."""
-        src = from_col if from_col is not None else target
-        return self._chain(pl.col(src).alias(target))
-
-    def assigned(self, target: str, *, value: Any) -> "OphthaNamespace":
-        """Set *target* to a constant *value* for every record."""
-        return self._chain(pl.lit(value).alias(target))
-
-    def derivation(
-        self, target: str, *, expression: str | pl.Expr
-    ) -> "OphthaNamespace":
-        """Arbitrary Polars expression derivation."""
-        from ..sdtm.utils import parse_expression
-        expr = (
-            expression
-            if isinstance(expression, pl.Expr)
-            else parse_expression(str(expression))
-        )
-        return self._chain(expr.alias(target))
-
-    def whereclauses(self, *, where: str | pl.Expr) -> "OphthaNamespace":
-        """Filter the dataset to records matching *where*."""
-        from ..sdtm.utils import parse_expression
-        df = self.to_frame()
-        fexpr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
-        return self._materialise_then(df.filter(fexpr))
 
     # ------------------------------------------------------------------ #
     # 1. etdrs_to_logmar — ETDRS score → LogMAR                          #
@@ -97,7 +50,7 @@ class OphthaNamespace:
         *,
         source: str,
         round_digits: int | None = 4,
-    ) -> "OphthaNamespace":
+    ) -> Self:
         """
         Convert an ETDRS letter score in *source* to LogMAR units.
 
@@ -124,7 +77,7 @@ class OphthaNamespace:
         *,
         source: str,
         round_digits: int | None = 1,
-    ) -> "OphthaNamespace":
+    ) -> Self:
         """
         Convert a LogMAR value in *source* back to ETDRS letter score.
 
@@ -150,7 +103,7 @@ class OphthaNamespace:
         target: str,
         *,
         source: str,
-    ) -> "OphthaNamespace":
+    ) -> Self:
         """
         Map SC FOCID laterality codes to plain-text study eye labels.
 
@@ -192,7 +145,7 @@ class OphthaNamespace:
         lat_col: str,
         study_eye_col: str = "STUDYEYE",
         loc_values: list[str] | None = None,
-    ) -> "OphthaNamespace":
+    ) -> Self:
         """
         Derive Affected Eye (``AFEYE``) from the laterality and study eye columns.
 
@@ -260,7 +213,7 @@ class OphthaNamespace:
         threshold: float,
         direction: str = "ge",
         flag_value: str = "Y",
-    ) -> "OphthaNamespace":
+    ) -> Self:
         """
         Flag records where *value_col* meets a BCVA criterion threshold.
 
@@ -293,10 +246,3 @@ class OphthaNamespace:
             .alias(target)
         )
 
-    # ------------------------------------------------------------------ #
-    # Materialise                                                          #
-    # ------------------------------------------------------------------ #
-
-    def to_frame(self) -> pl.DataFrame:
-        """Materialise the pipeline and return a ``pl.DataFrame``."""
-        return self._lazy.collect()

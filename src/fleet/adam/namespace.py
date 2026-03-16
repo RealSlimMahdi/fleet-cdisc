@@ -42,6 +42,7 @@ from typing import Any, TYPE_CHECKING
 import polars as pl
 import yaml
 
+from ._mixins import SharedADaMVerbsMixin
 from .utils import (
     baseline,
     bmi as _bmi_expr,
@@ -66,76 +67,17 @@ if TYPE_CHECKING:
 
 
 @pl.api.register_dataframe_namespace("adam")
-class AdamNamespace:
+class AdamNamespace(SharedADaMVerbsMixin):
     """
     Immutable pipeline builder for ADaM derivations.
 
     Each verb appends to a lazy expression list; ``to_frame()`` materialises
     everything in one ``with_columns`` call (unless the verb requires a join/filter).
+
+    Inherits shared verbs from ``SharedADaMVerbsMixin``:
+    ``source``, ``derivation``, ``assigned``, ``recode``, ``rename``,
+    ``condderivation``, ``whereclauses``.
     """
-
-    def __init__(self, df: pl.DataFrame) -> None:
-        self._lazy = df.lazy()
-
-    # ------------------------------------------------------------------ #
-    # Internal chaining helper                                             #
-    # ------------------------------------------------------------------ #
-
-    def _chain(self, *exprs: pl.Expr) -> "AdamNamespace":
-        new = object.__new__(AdamNamespace)
-        new._lazy = self._lazy.with_columns(list(exprs))
-        return new
-
-    def _materialise_then(self, df: pl.DataFrame) -> "AdamNamespace":
-        """Return a new namespace wrapping *df* as a lazy plan."""
-        new = object.__new__(AdamNamespace)
-        new._lazy = df.lazy()
-        return new
-
-    # ------------------------------------------------------------------ #
-    # 1. source — direct copy from predecessor (SDTM) variable            #
-    # ------------------------------------------------------------------ #
-
-    def source(self, target: str, *, from_col: str | None = None) -> "AdamNamespace":
-        """
-        Direct copy from a predecessor SDTM column.
-
-        If *from_col* is omitted, *target* is assumed to exist already and
-        a pass-through identity expression is added (ensures column order).
-        """
-        src = from_col if from_col is not None else target
-        return self._chain(pl.col(src).alias(target))
-
-    # ------------------------------------------------------------------ #
-    # 2. derivation — expression-based derivation                         #
-    # ------------------------------------------------------------------ #
-
-    def derivation(
-        self,
-        target: str,
-        *,
-        expression: str | pl.Expr,
-    ) -> "AdamNamespace":
-        """
-        Derive *target* using a Polars expression or expression string.
-
-        Example::
-
-            .derivation("AVAL", expression="VSSTRESN")
-            .derivation("AVAL", expression='pl.col("VSSTRESN").cast(pl.Float64)')
-        """
-        from ..sdtm.utils import parse_expression
-
-        expr = expression if isinstance(expression, pl.Expr) else parse_expression(str(expression))
-        return self._chain(expr.alias(target))
-
-    # ------------------------------------------------------------------ #
-    # 3. assigned — global constant for all records                       #
-    # ------------------------------------------------------------------ #
-
-    def assigned(self, target: str, *, value: Any) -> "AdamNamespace":
-        """Set *target* to a constant *value* for every record."""
-        return self._chain(pl.lit(value).alias(target))
 
     # ------------------------------------------------------------------ #
     # 3b. assign_datetime — convert raw date/datetime to ISO 8601         #
@@ -164,84 +106,7 @@ class AdamNamespace:
         expr = pl.col(source).map_elements(fn, return_dtype=pl.String).alias(target)
         return self._chain(expr)
 
-    # ------------------------------------------------------------------ #
-    # 4. recode — recode / group existing variable values                 #
-    # ------------------------------------------------------------------ #
 
-    def recode(
-        self,
-        target: str,
-        *,
-        source: str,
-        recode_map: dict[Any, Any],
-        default: Any = None,
-    ) -> "AdamNamespace":
-        """
-        Map raw values in *source* to recoded values.
-
-        Unmapped values get *default* (null by default).
-
-        Example::
-
-            .recode("AVISIT", source="visit_label", recode_map={
-                "Week 1": "WEEK 1",
-                "Week 4": "WEEK 4",
-            }, default=pl.col("visit_label"))
-        """
-        # Build an if/then/else chain to avoid the deprecated replace(default=) API.
-        if recode_map:
-            default_expr = default if isinstance(default, pl.Expr) else pl.lit(default)
-            expr = pl.col(source).replace_strict(
-                recode_map, default=default_expr, return_dtype=pl.String
-            ).alias(target)
-        else:
-            default_expr = default if isinstance(default, pl.Expr) else pl.lit(default)
-            expr = default_expr.alias(target)
-        return self._chain(expr)
-
-    # ------------------------------------------------------------------ #
-    # 5. rename — rename a column (e.g., VSDTC → ADT)                    #
-    # ------------------------------------------------------------------ #
-
-    def rename(self, target: str, *, source: str) -> "AdamNamespace":
-        """Create *target* as a copy of *source* (use for variable renaming)."""
-        return self._chain(pl.col(source).alias(target))
-
-    # ------------------------------------------------------------------ #
-    # 6. condderivation — complex conditional derivation                  #
-    # ------------------------------------------------------------------ #
-
-    def condderivation(
-        self,
-        target: str,
-        *,
-        conditions: list[dict[str, Any]],
-        else_value: Any = None,
-    ) -> "AdamNamespace":
-        """
-        Multi-branch conditional derivation.
-
-        *conditions*: list of ``{"condition": expr_str | pl.Expr, "value": any}``.
-
-        Example::
-
-            .condderivation("DTYPE", conditions=[
-                {"condition": 'pl.col("AVISITN") == 0', "value": "BASELINE"},
-            ], else_value=None)
-        """
-        from ..sdtm.utils import parse_expression
-
-        if not conditions:
-            return self._chain(pl.lit(else_value).alias(target))
-
-        first = conditions[0]
-        c0 = first["condition"] if isinstance(first["condition"], pl.Expr) else parse_expression(str(first["condition"]))
-        chain = pl.when(c0).then(pl.lit(first["value"]))
-        for branch in conditions[1:]:
-            c = branch["condition"] if isinstance(branch["condition"], pl.Expr) else parse_expression(str(branch["condition"]))
-            chain = chain.when(c).then(pl.lit(branch["value"]))
-        expr = chain.otherwise(pl.lit(else_value)).alias(target)
-        return self._chain(expr)
 
     # ------------------------------------------------------------------ #
     # 7. lookup — merge/join with subset conditions                       #
@@ -590,29 +455,7 @@ class AdamNamespace:
             )
 
     # ------------------------------------------------------------------ #
-    # 17. whereclauses — value-level subsetting (filter rows)             #
-    # ------------------------------------------------------------------ #
-
-    def whereclauses(self, *, where: str | pl.Expr) -> "AdamNamespace":
-        """
-        Filter the dataset to records matching *where*.
-
-        This materialises the current pipeline before filtering.
-
-        *where*: a Polars expression or expression string.
-
-        Example::
-
-            .whereclauses(where='pl.col("PARAMCD") == "SYSBP"')
-        """
-        from ..sdtm.utils import parse_expression
-
-        df = self.to_frame()
-        filter_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
-        return self._materialise_then(df.filter(filter_expr))
-
-    # ------------------------------------------------------------------ #
-    # 18. transform — arbitrary DataFrame → DataFrame function            #
+    # 17. transform — arbitrary DataFrame → DataFrame function            #
     # ------------------------------------------------------------------ #
 
     def transform(
@@ -1081,10 +924,6 @@ class AdamNamespace:
     # ------------------------------------------------------------------ #
     # Terminal operations                                                  #
     # ------------------------------------------------------------------ #
-
-    def to_frame(self) -> pl.DataFrame:
-        """Materialise the accumulated pipeline into a Polars DataFrame."""
-        return self._lazy.collect()
 
     def write_parquet(
         self,

@@ -30,9 +30,11 @@ Usage
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Self
 
 import polars as pl
+
+from ._mixins import SharedADaMVerbsMixin
 
 # Centiloid calibration table (tracer + pipeline + ref_region → slope, intercept)
 # Source: Navitsky et al. (2018), Sims et al. (2024), Royse et al. (2021)
@@ -44,61 +46,12 @@ _CENTILOID_CALIBRATIONS: dict[tuple[str, str, str], tuple[float, float]] = {
 }
 
 
-class NeuroNamespace:
+class NeuroNamespace(SharedADaMVerbsMixin):
     """
     Immutable pipeline builder for ADaM neuroscience derivations.
 
-    Follows the same immutable-builder pattern as ``AdamNamespace``.
+    Inherits shared verbs from ``SharedADaMVerbsMixin``.
     """
-
-    def __init__(self, df: pl.DataFrame) -> None:
-        self._lazy = df.lazy()
-
-    # ------------------------------------------------------------------ #
-    # Internal helpers                                                     #
-    # ------------------------------------------------------------------ #
-
-    def _chain(self, *exprs: pl.Expr) -> "NeuroNamespace":
-        new = object.__new__(NeuroNamespace)
-        new._lazy = self._lazy.with_columns(list(exprs))
-        return new
-
-    def _materialise_then(self, df: pl.DataFrame) -> "NeuroNamespace":
-        new = object.__new__(NeuroNamespace)
-        new._lazy = df.lazy()
-        return new
-
-    # ------------------------------------------------------------------ #
-    # Base verbs                                                           #
-    # ------------------------------------------------------------------ #
-
-    def source(self, target: str, *, from_col: str | None = None) -> "NeuroNamespace":
-        """Copy *from_col* (or *target* itself) to *target*."""
-        src = from_col if from_col is not None else target
-        return self._chain(pl.col(src).alias(target))
-
-    def assigned(self, target: str, *, value: Any) -> "NeuroNamespace":
-        """Set *target* to a constant *value* for every record."""
-        return self._chain(pl.lit(value).alias(target))
-
-    def derivation(
-        self, target: str, *, expression: str | pl.Expr
-    ) -> "NeuroNamespace":
-        """Arbitrary Polars expression derivation."""
-        from ..sdtm.utils import parse_expression
-        expr = (
-            expression
-            if isinstance(expression, pl.Expr)
-            else parse_expression(str(expression))
-        )
-        return self._chain(expr.alias(target))
-
-    def whereclauses(self, *, where: str | pl.Expr) -> "NeuroNamespace":
-        """Filter the dataset to records matching *where*."""
-        from ..sdtm.utils import parse_expression
-        df = self.to_frame()
-        fexpr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
-        return self._materialise_then(df.filter(fexpr))
 
     # ------------------------------------------------------------------ #
     # 1. centiloid — amyloid PET SUVR → Centiloid scale                  #
@@ -115,7 +68,7 @@ class NeuroNamespace:
         pipeline: str | None = None,
         ref_region: str = "Whole Cerebellum",
         round_digits: int | None = 2,
-    ) -> "NeuroNamespace":
+    ) -> Self:
         """
         Convert amyloid PET SUVR to the Centiloid scale.
 
@@ -182,7 +135,7 @@ class NeuroNamespace:
         target: str,
         *,
         score_col: str,
-    ) -> "NeuroNamespace":
+    ) -> Self:
         """
         Categorise MMSE total score into severity levels.
 
@@ -221,7 +174,7 @@ class NeuroNamespace:
         *,
         domain_cols: list[str],
         round_digits: int | None = 1,
-    ) -> "NeuroNamespace":
+    ) -> Self:
         """
         Compute the CDR Sum of Boxes (CDR-SoB) as the sum of *domain_cols*.
 
@@ -254,7 +207,7 @@ class NeuroNamespace:
         score_col: str,
         normal_threshold: int = 26,
         mci_threshold: int = 18,
-    ) -> "NeuroNamespace":
+    ) -> Self:
         """
         Categorise MoCA total score (0–30) into three bands.
 
@@ -292,7 +245,7 @@ class NeuroNamespace:
         positive_col: str,
         negative_col: str,
         general_col: str,
-    ) -> "NeuroNamespace":
+    ) -> Self:
         """
         Compute PANSS total score = positive + negative + general subscale totals.
 
@@ -310,10 +263,3 @@ class NeuroNamespace:
             .alias(target)
         )
 
-    # ------------------------------------------------------------------ #
-    # Materialise                                                          #
-    # ------------------------------------------------------------------ #
-
-    def to_frame(self) -> pl.DataFrame:
-        """Materialise the pipeline and return a ``pl.DataFrame``."""
-        return self._lazy.collect()

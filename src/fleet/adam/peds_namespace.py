@@ -33,66 +33,19 @@ Usage
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Self
 
 import polars as pl
 
+from ._mixins import SharedADaMVerbsMixin
 
-class PedsNamespace:
+
+class PedsNamespace(SharedADaMVerbsMixin):
     """
     Immutable pipeline builder for paediatric ADaM derivations.
 
-    Follows the same immutable-builder pattern as ``AdamNamespace``.
+    Inherits shared verbs from ``SharedADaMVerbsMixin``.
     """
-
-    def __init__(self, df: pl.DataFrame) -> None:
-        self._lazy = df.lazy()
-
-    # ------------------------------------------------------------------ #
-    # Internal helpers                                                     #
-    # ------------------------------------------------------------------ #
-
-    def _chain(self, *exprs: pl.Expr) -> "PedsNamespace":
-        new = object.__new__(PedsNamespace)
-        new._lazy = self._lazy.with_columns(list(exprs))
-        return new
-
-    def _materialise_then(self, df: pl.DataFrame) -> "PedsNamespace":
-        new = object.__new__(PedsNamespace)
-        new._lazy = df.lazy()
-        return new
-
-    # ------------------------------------------------------------------ #
-    # Base verbs                                                           #
-    # ------------------------------------------------------------------ #
-
-    def source(self, target: str, *, from_col: str | None = None) -> "PedsNamespace":
-        """Copy *from_col* (or *target* itself) to *target*."""
-        src = from_col if from_col is not None else target
-        return self._chain(pl.col(src).alias(target))
-
-    def assigned(self, target: str, *, value: Any) -> "PedsNamespace":
-        """Set *target* to a constant *value* for every record."""
-        return self._chain(pl.lit(value).alias(target))
-
-    def derivation(
-        self, target: str, *, expression: str | pl.Expr
-    ) -> "PedsNamespace":
-        """Arbitrary Polars expression derivation."""
-        from ..sdtm.utils import parse_expression
-        expr = (
-            expression
-            if isinstance(expression, pl.Expr)
-            else parse_expression(str(expression))
-        )
-        return self._chain(expr.alias(target))
-
-    def whereclauses(self, *, where: str | pl.Expr) -> "PedsNamespace":
-        """Filter the dataset to records matching *where*."""
-        from ..sdtm.utils import parse_expression
-        df = self.to_frame()
-        fexpr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
-        return self._materialise_then(df.filter(fexpr))
 
     # ------------------------------------------------------------------ #
     # 1. age_days — age in whole days                                     #
@@ -104,7 +57,7 @@ class PedsNamespace:
         *,
         birth_date: str,
         analysis_date: str,
-    ) -> "PedsNamespace":
+    ) -> Self:
         """
         Compute age in whole days as ``analysis_date - birth_date``.
 
@@ -129,7 +82,7 @@ class PedsNamespace:
         *,
         birth_date: str,
         analysis_date: str,
-    ) -> "PedsNamespace":
+    ) -> Self:
         """
         Compute age in whole months (floor of days / 30.4375).
 
@@ -154,7 +107,7 @@ class PedsNamespace:
         birth_date: str,
         analysis_date: str,
         round_digits: int | None = 2,
-    ) -> "PedsNamespace":
+    ) -> Self:
         """
         Compute age in decimal years (days / 365.25).
 
@@ -181,7 +134,7 @@ class PedsNamespace:
         age_days_col: str,
         gestational_weeks_col: str,
         term_weeks: int = 40,
-    ) -> "PedsNamespace":
+    ) -> Self:
         """
         Compute gestational-corrected age in decimal years for preterm infants.
 
@@ -217,7 +170,7 @@ class PedsNamespace:
         gestational_weeks_col: str,
         threshold: int = 37,
         flag_value: str = "Y",
-    ) -> "PedsNamespace":
+    ) -> Self:
         """
         Set *target* to *flag_value* when gestational weeks < *threshold*.
 
@@ -245,7 +198,7 @@ class PedsNamespace:
         *,
         bmi_col: str,
         labels: dict[str, float] | None = None,
-    ) -> "PedsNamespace":
+    ) -> Self:
         """
         Categorise BMI using WHO adult thresholds (or a custom *labels* dict).
 
@@ -296,10 +249,3 @@ class PedsNamespace:
         expr = chain.otherwise(pl.lit(last_label)).alias(target)
         return self._chain(expr)
 
-    # ------------------------------------------------------------------ #
-    # Materialise                                                          #
-    # ------------------------------------------------------------------ #
-
-    def to_frame(self) -> pl.DataFrame:
-        """Materialise the pipeline and return a ``pl.DataFrame``."""
-        return self._lazy.collect()

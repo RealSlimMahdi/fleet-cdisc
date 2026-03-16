@@ -23,106 +23,22 @@ Usage
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Self
 
 import polars as pl
 
+from ._mixins import SharedADaMVerbsMixin
 
-class ADSLNamespace:
+
+class ADSLNamespace(SharedADaMVerbsMixin):
     """
     Immutable pipeline builder for ADSL (one-row-per-subject) derivations.
 
-    Includes the base ADaM verbs (source, derivation, assigned, recode, rename,
-    condderivation, whereclauses) plus ADSL-specific verbs that pull summary
+    Inherits shared verbs from ``SharedADaMVerbsMixin``
+    (source, derivation, assigned, recode, rename, condderivation,
+    whereclauses) and adds ADSL-specific verbs that pull summary
     statistics from event-level datasets (AE, CM, MH, EX…).
     """
-
-    def __init__(self, df: pl.DataFrame) -> None:
-        self._lazy = df.lazy()
-
-    # ------------------------------------------------------------------ #
-    # Internal helpers                                                     #
-    # ------------------------------------------------------------------ #
-
-    def _chain(self, *exprs: pl.Expr) -> "ADSLNamespace":
-        new = object.__new__(ADSLNamespace)
-        new._lazy = self._lazy.with_columns(list(exprs))
-        return new
-
-    def _materialise_then(self, df: pl.DataFrame) -> "ADSLNamespace":
-        new = object.__new__(ADSLNamespace)
-        new._lazy = df.lazy()
-        return new
-
-    # ------------------------------------------------------------------ #
-    # Base verbs (shared with df.adam)                                    #
-    # ------------------------------------------------------------------ #
-
-    def source(self, target: str, *, from_col: str | None = None) -> "ADSLNamespace":
-        """Copy a column from the predecessor dataset (pass-through)."""
-        src = from_col if from_col is not None else target
-        return self._chain(pl.col(src).alias(target))
-
-    def derivation(self, target: str, *, expression: str | pl.Expr) -> "ADSLNamespace":
-        """Arbitrary Polars expression derivation."""
-        from ..sdtm.utils import parse_expression
-        expr = expression if isinstance(expression, pl.Expr) else parse_expression(str(expression))
-        return self._chain(expr.alias(target))
-
-    def assigned(self, target: str, *, value: Any) -> "ADSLNamespace":
-        """Global constant for every subject record."""
-        return self._chain(pl.lit(value).alias(target))
-
-    def recode(
-        self,
-        target: str,
-        *,
-        source: str,
-        recode_map: dict[Any, Any],
-        default: Any = None,
-    ) -> "ADSLNamespace":
-        """Map values in *source* to recoded values; unmapped → *default*."""
-        if recode_map:
-            default_expr = default if isinstance(default, pl.Expr) else pl.lit(default)
-            expr = pl.col(source).replace_strict(
-                recode_map, default=default_expr, return_dtype=pl.String
-            ).alias(target)
-        else:
-            default_expr = default if isinstance(default, pl.Expr) else pl.lit(default)
-            expr = default_expr.alias(target)
-        return self._chain(expr)
-
-    def rename(self, target: str, *, source: str) -> "ADSLNamespace":
-        """Rename *source* column to *target*."""
-        return self._chain(pl.col(source).alias(target))
-
-    def condderivation(
-        self,
-        target: str,
-        *,
-        conditions: list[dict[str, Any]],
-        else_value: Any = None,
-    ) -> "ADSLNamespace":
-        """Multi-branch conditional derivation."""
-        from ..sdtm.utils import parse_expression
-        if not conditions:
-            return self._chain(pl.lit(else_value).alias(target))
-        first = conditions[0]
-        c0 = (first["condition"] if isinstance(first["condition"], pl.Expr)
-               else parse_expression(str(first["condition"])))
-        chain = pl.when(c0).then(pl.lit(first["value"]))
-        for branch in conditions[1:]:
-            c = (branch["condition"] if isinstance(branch["condition"], pl.Expr)
-                 else parse_expression(str(branch["condition"])))
-            chain = chain.when(c).then(pl.lit(branch["value"]))
-        return self._chain(chain.otherwise(pl.lit(else_value)).alias(target))
-
-    def whereclauses(self, *, where: str | pl.Expr) -> "ADSLNamespace":
-        """Filter subjects by *where* expression."""
-        from ..sdtm.utils import parse_expression
-        df = self.to_frame()
-        filter_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
-        return self._materialise_then(df.filter(filter_expr))
 
     # ------------------------------------------------------------------ #
     # ADSL-specific verbs                                                  #
@@ -136,7 +52,7 @@ class ADSLNamespace:
         date_col: str,
         where: str | pl.Expr | None = None,
         groups: list[str] | None = None,
-    ) -> "ADSLNamespace":
+    ) -> Self:
         """
         Derive *target* as the earliest date in *date_col* from *from_dataset*.
 
@@ -166,7 +82,7 @@ class ADSLNamespace:
         date_col: str,
         where: str | pl.Expr | None = None,
         groups: list[str] | None = None,
-    ) -> "ADSLNamespace":
+    ) -> Self:
         """
         Derive *target* as the latest date in *date_col* from *from_dataset*.
 
@@ -194,7 +110,7 @@ class ADSLNamespace:
         end_date: str,
         unit: str = "days",
         inclusive: bool = True,
-    ) -> "ADSLNamespace":
+    ) -> Self:
         """
         Derive *target* as the duration between two date columns.
 
@@ -218,7 +134,7 @@ class ADSLNamespace:
         from_dataset: pl.DataFrame,
         where: str | pl.Expr | None = None,
         groups: list[str] | None = None,
-    ) -> "ADSLNamespace":
+    ) -> Self:
         """
         Derive *target* as the count of matching records in *from_dataset*.
 
@@ -246,7 +162,7 @@ class ADSLNamespace:
         target: str,
         *,
         criteria: str | pl.Expr,
-    ) -> "ADSLNamespace":
+    ) -> Self:
         """
         Set *target* to ``"Y"`` where *criteria* is true, null otherwise.
 
@@ -263,10 +179,4 @@ class ADSLNamespace:
             pl.when(crit_expr).then(pl.lit("Y")).otherwise(pl.lit(None)).alias(target)
         )
 
-    # ------------------------------------------------------------------ #
-    # Terminal operation                                                   #
-    # ------------------------------------------------------------------ #
 
-    def to_frame(self) -> pl.DataFrame:
-        """Materialise the accumulated pipeline into a Polars DataFrame."""
-        return self._lazy.collect()
