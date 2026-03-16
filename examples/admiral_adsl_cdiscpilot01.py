@@ -319,22 +319,23 @@ print(f"   AGEGR1 distribution: {_agegr.to_dicts()}")
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── 8. Population flags ──────────────────────────────────────────────────")
 
-# Subjects with ≥1 EX record → treated (used for SAFFL)
-subjects_exposed = ex.select("USUBJID").unique()
+# Pre-compute max EXDOSE per subject so eligibility_flag can reference it
+_ex_max_dose = (
+    ex.group_by("USUBJID")
+      .agg(pl.col("EXDOSE").max().alias("_EXDOSE_MAX"))
+)
+adsl = adsl.join(_ex_max_dose, on="USUBJID", how="left")
 
 adsl = (
-    adsl
-    .with_columns(
-        pl.col("USUBJID")
-          .is_in(subjects_exposed["USUBJID"].to_list())
-          .map_elements(lambda v: "Y" if v else None, return_dtype=pl.String)
-          .alias("SAFFL")
-    )
+    adsl.adam.adsl
+    # SAFFL: subjects with at least one dose > 0 (admiral: derive_var_merged_exist_flag)
+    .eligibility_flag("SAFFL",
+                      criteria='pl.col("_EXDOSE_MAX") > 0')
     # ITTFL: all randomised subjects (ARMCD not SCRNFAIL)
-    .adam.adsl
     .eligibility_flag("ITTFL",
                       criteria='pl.col("ARMCD") != "SCRNFAIL"')
     .to_frame()
+    .drop("_EXDOSE_MAX")
 )
 
 print(f"   SAFFL : {adsl['SAFFL'].value_counts().to_dicts()}")

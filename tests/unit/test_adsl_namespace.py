@@ -16,6 +16,8 @@ def subject_frame():
         "TRTEDT":  ["2024-03-10", "2024-03-11", "2024-03-12"],
         "RANDFL":  ["Y", "Y", "Y"],
         "COMPLFL": ["Y", "N", "Y"],
+        "EXDOSE":  [54.0, 0.0, 81.0],
+        "RANDDT":  ["2024-01-09", "2024-01-10", None],
     })
 
 
@@ -138,11 +140,25 @@ class TestCountEvents:
 
 
 class TestEligibilityFlag:
-    def test_all_randomised(self, subject_frame):
+    def test_saffl_at_least_one_dose(self, subject_frame):
+        """SAFFL = 'Y' when patient has at least one dose > 0."""
         result = subject_frame.adam.adsl.eligibility_flag(
-            "SAFFL", criteria='pl.col("RANDFL") == "Y"'
+            "SAFFL", criteria='pl.col("EXDOSE") > 0'
         ).to_frame()
-        assert result["SAFFL"].to_list() == ["Y", "Y", "Y"]
+        flags = result["SAFFL"].to_list()
+        assert flags[0] == "Y"   # 01-001: EXDOSE=54 → Y
+        assert flags[1] is None   # 01-002: EXDOSE=0  → null
+        assert flags[2] == "Y"   # 01-003: EXDOSE=81 → Y
+
+    def test_ittfl_has_randomization_date(self, subject_frame):
+        """ITTFL = 'Y' when patient has a randomization date."""
+        result = subject_frame.adam.adsl.eligibility_flag(
+            "ITTFL", criteria='pl.col("RANDDT").is_not_null()'
+        ).to_frame()
+        flags = result["ITTFL"].to_list()
+        assert flags[0] == "Y"   # 01-001: RANDDT present → Y
+        assert flags[1] == "Y"   # 01-002: RANDDT present → Y
+        assert flags[2] is None   # 01-003: RANDDT missing → null
 
     def test_partial_compliant(self, subject_frame):
         result = subject_frame.adam.adsl.eligibility_flag(
