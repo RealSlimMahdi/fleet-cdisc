@@ -95,24 +95,22 @@ print(f"\n── 2a. SDTM DM : {dm.shape[0]} subjects × {dm.shape[1]} variables
 #       EXDOSE > 0  OR  (EXDOSE == 0 AND EXTRT contains "PLACEBO")
 # ════════════════════════════════════════════════════════════════════════════
 ex = (
-    dm_raw.with_columns(
-        pl.lit("CDISCPILOT01").alias("STUDYID"),
-        pl.lit("EX").alias("DOMAIN"),
-        pl.col("patient_number").alias("USUBJID"),
-        pl.col("arm_description").alias("EXTRT"),
-        pl.when(pl.col("arm_code") == "Pbo")
-          .then(pl.lit(0.0))
-          .when(pl.col("arm_code") == "Xan_Lo")
-          .then(pl.lit(54.0))
-          .when(pl.col("arm_code") == "Xan_Hi")
-          .then(pl.lit(81.0))
-          .otherwise(None)
-          .alias("EXDOSE"),
-        pl.lit("mg").alias("EXDOSU"),
-        pl.col("first_dose_date").alias("EXSTDTC"),
-        pl.col("last_dose_date").alias("EXENDTC"),
-        pl.lit(1).alias("EXSEQ"),
-    )
+    dm_raw.sdtm
+    .hardcode_no_ct("STUDYID",  value="CDISCPILOT01")
+    .hardcode_no_ct("DOMAIN",   value="EX")
+    .assign_no_ct(  "USUBJID",  source="patient_number")
+    .assign_no_ct(  "EXTRT",    source="arm_description")
+    .if_then_else(  "EXDOSE",
+                    when=[
+                        {"condition": pl.col("arm_code") == "Pbo",    "value": 0.0},
+                        {"condition": pl.col("arm_code") == "Xan_Lo", "value": 54.0},
+                        {"condition": pl.col("arm_code") == "Xan_Hi", "value": 81.0},
+                    ])
+    .hardcode_no_ct("EXDOSU",   value="mg")
+    .assign_no_ct(  "EXSTDTC",  source="first_dose_date")
+    .assign_no_ct(  "EXENDTC",  source="last_dose_date")
+    .hardcode_no_ct("EXSEQ",    value=1)
+    .to_frame()
     .select(["STUDYID", "DOMAIN", "USUBJID", "EXSEQ",
              "EXTRT", "EXDOSE", "EXDOSU", "EXSTDTC", "EXENDTC"])
 )
@@ -129,30 +127,30 @@ print(f"── 2b. SDTM EX : {ex.shape[0]} records  × {ex.shape[1]} variables "
 _ds_cols = ["STUDYID", "DOMAIN", "USUBJID", "DSSEQ", "DSCAT", "DSTERM", "DSDECOD", "DSSTDTC"]
 
 ds_completed = (
-    dm_raw.with_columns(
-        pl.lit("CDISCPILOT01").alias("STUDYID"),
-        pl.lit("DS").alias("DOMAIN"),
-        pl.col("patient_number").alias("USUBJID"),
-        pl.lit(1).alias("DSSEQ"),
-        pl.lit("DISPOSITION EVENT").alias("DSCAT"),
-        pl.lit("PROTOCOL COMPLETED").alias("DSTERM"),
-        pl.lit("COMPLETED").alias("DSDECOD"),
-        pl.col("last_dose_date").alias("DSSTDTC"),
-    )
+    dm_raw.sdtm
+    .hardcode_no_ct("STUDYID",  value="CDISCPILOT01")
+    .hardcode_no_ct("DOMAIN",   value="DS")
+    .assign_no_ct(  "USUBJID",  source="patient_number")
+    .hardcode_no_ct("DSSEQ",    value=1)
+    .hardcode_no_ct("DSCAT",    value="DISPOSITION EVENT")
+    .hardcode_no_ct("DSTERM",   value="PROTOCOL COMPLETED")
+    .hardcode_no_ct("DSDECOD",  value="COMPLETED")
+    .assign_no_ct(  "DSSTDTC",  source="last_dose_date")
+    .to_frame()
     .select(_ds_cols)
 )
 
 ds_randomized = (
-    dm_raw.with_columns(
-        pl.lit("CDISCPILOT01").alias("STUDYID"),
-        pl.lit("DS").alias("DOMAIN"),
-        pl.col("patient_number").alias("USUBJID"),
-        pl.lit(2).alias("DSSEQ"),
-        pl.lit("PROTOCOL MILESTONE").alias("DSCAT"),
-        pl.lit("RANDOMIZED").alias("DSTERM"),
-        pl.lit("RANDOMIZED").alias("DSDECOD"),
-        pl.col("first_dose_date").alias("DSSTDTC"),
-    )
+    dm_raw.sdtm
+    .hardcode_no_ct("STUDYID",  value="CDISCPILOT01")
+    .hardcode_no_ct("DOMAIN",   value="DS")
+    .assign_no_ct(  "USUBJID",  source="patient_number")
+    .hardcode_no_ct("DSSEQ",    value=2)
+    .hardcode_no_ct("DSCAT",    value="PROTOCOL MILESTONE")
+    .hardcode_no_ct("DSTERM",   value="RANDOMIZED")
+    .hardcode_no_ct("DSDECOD",  value="RANDOMIZED")
+    .assign_no_ct(  "DSSTDTC",  source="first_dose_date")
+    .to_frame()
     .select(_ds_cols)
 )
 
@@ -164,21 +162,21 @@ print(f"── 2c. SDTM DS : {ds.shape[0]} records  × {ds.shape[1]} variables "
 # 2d. Build SDTM AE (Adverse Events) from ae_raw
 # ════════════════════════════════════════════════════════════════════════════
 ae = (
-    ae_raw.with_columns(
-        pl.lit("CDISCPILOT01").alias("STUDYID"),
-        pl.lit("AE").alias("DOMAIN"),
-        pl.col("patient_number").alias("USUBJID"),
-        pl.col("ae_term").alias("AETERM"),
-        pl.col("ae_start_date").alias("AESTDTC"),
-        pl.col("ae_end_date").alias("AEENDTC"),
-        pl.col("ae_severity").alias("AESEV"),
-        pl.col("ae_serious").alias("AESER"),
-        pl.col("ae_outcome").alias("AEOUT"),
-        pl.col("ae_action_taken").alias("AEACN"),
-        pl.col("ae_relationship").alias("AEREL"),
-        # AESEQ: running count within each subject
-        pl.col("ae_term").cum_count().over("patient_number").alias("AESEQ"),
-    )
+    ae_raw.sdtm
+    .hardcode_no_ct("STUDYID",  value="CDISCPILOT01")
+    .hardcode_no_ct("DOMAIN",   value="AE")
+    .assign_no_ct(  "USUBJID",  source="patient_number")
+    .assign_no_ct(  "AETERM",   source="ae_term")
+    .assign_no_ct(  "AESTDTC",  source="ae_start_date")
+    .assign_no_ct(  "AEENDTC",  source="ae_end_date")
+    .assign_no_ct(  "AESEV",    source="ae_severity")
+    .assign_no_ct(  "AESER",    source="ae_serious")
+    .assign_no_ct(  "AEOUT",    source="ae_outcome")
+    .assign_no_ct(  "AEACN",    source="ae_action_taken")
+    .assign_no_ct(  "AEREL",    source="ae_relationship")
+    # AESEQ: running count within each subject
+    .derivation(    "AESEQ",    expression='pl.col("ae_term").cum_count().over("patient_number")')
+    .to_frame()
     .select(["STUDYID", "DOMAIN", "USUBJID", "AESEQ",
              "AETERM", "AESTDTC", "AEENDTC", "AESEV", "AESER", "AEOUT", "AEACN", "AEREL"])
 )
@@ -239,51 +237,44 @@ print(f"   Sample: TRTSDT={adsl['TRTSDT'][0]!r}  TRTEDT={adsl['TRTEDT'][0]!r}  T
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── 6. Disposition variables ─────────────────────────────────────────────")
 
-# EOSDT: latest date of DISPOSITION EVENT per subject
-ds_eosdt = (
+# Pre-filter DS for disposition status/reason derivations
+_ds_disp = (
     ds.filter(pl.col("DSCAT") == "DISPOSITION EVENT")
-      .group_by("USUBJID")
-      .agg(pl.col("DSSTDTC").max().alias("EOSDT"))
-)
-
-# EOSSTT: status mapped from DSDECOD (admiral: format_eosstt)
-ds_eosstt = (
-    ds.filter(pl.col("DSCAT") == "DISPOSITION EVENT")
-      .with_columns(
-          pl.when(pl.col("DSDECOD") == "COMPLETED")
-            .then(pl.lit("COMPLETED"))
-            .when(pl.col("DSDECOD") == "SCREEN FAILURE")
-            .then(pl.lit(None))
-            .otherwise(pl.lit("DISCONTINUED"))
-            .alias("EOSSTT")
-      )
-      .select(["USUBJID", "EOSSTT"])
-)
-
-# DCSREAS / DCSREASP: reason for discontinuation (null for completed subjects)
-ds_dcsreas = (
-    ds.filter(
-        (pl.col("DSCAT") == "DISPOSITION EVENT")
-        & pl.col("DSDECOD").is_not_null()
-        & (~pl.col("DSDECOD").is_in(["COMPLETED", "SCREEN FAILURE"]))
-    )
-    .select(pl.col("USUBJID"),
-            pl.col("DSDECOD").alias("DCSREAS"),
-            pl.col("DSTERM").alias("DCSREASP"))
-)
-
-# RANDDT: date of RANDOMIZED protocol milestone
-ds_randdt = (
-    ds.filter(pl.col("DSDECOD") == "RANDOMIZED")
-      .select(pl.col("USUBJID"), pl.col("DSSTDTC").alias("RANDDT"))
+      .select(["USUBJID", "DSDECOD", "DSTERM"])
 )
 
 adsl = (
-    adsl
-    .join(ds_eosdt,   on="USUBJID", how="left")
-    .join(ds_eosstt,  on="USUBJID", how="left")
-    .join(ds_dcsreas, on="USUBJID", how="left")
-    .join(ds_randdt,  on="USUBJID", how="left")
+    adsl.adam.adsl
+    # EOSDT: latest date of DISPOSITION EVENT (admiral: derive_vars_merged)
+    .last_date("EOSDT", from_dataset=ds, date_col="DSSTDTC",
+               where='pl.col("DSCAT") == "DISPOSITION EVENT"')
+    # RANDDT: date of RANDOMIZED protocol milestone (admiral: derive_vars_merged)
+    .first_date("RANDDT", from_dataset=ds, date_col="DSSTDTC",
+                where='pl.col("DSDECOD") == "RANDOMIZED"')
+    .to_frame()
+    # Bring in DSDECOD/DSTERM from DS for status/reason derivations
+    .adam
+    .lookup(dataset=_ds_disp, on="USUBJID", how="left")
+    # EOSSTT: map disposition decode to study status (admiral: format_eosstt)
+    .condderivation("EOSSTT",
+                    conditions=[
+                        {"condition": 'pl.col("DSDECOD").is_null()',           "value": None},
+                        {"condition": 'pl.col("DSDECOD") == "COMPLETED"',      "value": "COMPLETED"},
+                        {"condition": 'pl.col("DSDECOD") == "SCREEN FAILURE"', "value": None},
+                    ],
+                    else_value="DISCONTINUED")
+    # DCSREAS: discontinuation reason (admiral: derive_vars_merged)
+    .derivation("DCSREAS",
+                expression='pl.when(~pl.col("DSDECOD").is_in(["COMPLETED", "SCREEN FAILURE"]) '
+                           '& pl.col("DSDECOD").is_not_null())'
+                           '.then(pl.col("DSDECOD")).otherwise(None)')
+    # DCSREASP: detailed reason term
+    .derivation("DCSREASP",
+                expression='pl.when(~pl.col("DSDECOD").is_in(["COMPLETED", "SCREEN FAILURE"]) '
+                           '& pl.col("DSDECOD").is_not_null())'
+                           '.then(pl.col("DSTERM")).otherwise(None)')
+    .to_frame()
+    .drop(["DSDECOD", "DSTERM"])
 )
 
 print(f"   {adsl.shape[0]} subjects × {adsl.shape[1]} variables")
@@ -324,10 +315,12 @@ _ex_max_dose = (
     ex.group_by("USUBJID")
       .agg(pl.col("EXDOSE").max().alias("_EXDOSE_MAX"))
 )
-adsl = adsl.join(_ex_max_dose, on="USUBJID", how="left")
 
 adsl = (
-    adsl.adam.adsl
+    adsl.adam
+    .lookup(dataset=_ex_max_dose, on="USUBJID", how="left")
+    .to_frame()
+    .adam.adsl
     # SAFFL: subjects with at least one dose > 0 (admiral: derive_var_merged_exist_flag)
     .eligibility_flag("SAFFL",
                       criteria='pl.col("_EXDOSE_MAX") > 0')
@@ -351,30 +344,18 @@ print(f"   ITTFL : {adsl['ITTFL'].value_counts().to_dicts()}")
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── 9. Last date known alive (LSTALVDT) ──────────────────────────────────")
 
-ae_last_end = (
-    ae.filter(pl.col("AEENDTC").is_not_null())
-      .group_by("USUBJID")
-      .agg(pl.col("AEENDTC").max().alias("_ae_end"))
-)
-
-ae_last_start = (
-    ae.filter(pl.col("AESTDTC").is_not_null())
-      .group_by("USUBJID")
-      .agg(pl.col("AESTDTC").max().alias("_ae_start"))
-)
-
 adsl = (
-    adsl
-    .join(ae_last_end,   on="USUBJID", how="left")
-    .join(ae_last_start, on="USUBJID", how="left")
-    .with_columns(
-        # ISO 8601 strings are lexicographically comparable; max_horizontal ignores nulls
-        pl.max_horizontal(
-            pl.col("_ae_end"),
-            pl.col("_ae_start"),
-            pl.col("TRTEDT"),
-        ).alias("LSTALVDT")
-    )
+    adsl.adam.adsl
+    # Latest AE end date per subject (admiral: derive_vars_extreme_event source)
+    .last_date("_ae_end",   from_dataset=ae, date_col="AEENDTC")
+    # Latest AE start date per subject
+    .last_date("_ae_start", from_dataset=ae, date_col="AESTDTC")
+    .to_frame()
+    .adam
+    # LSTALVDT: max across AE end, AE start, and treatment end (admiral: derive_vars_extreme_event)
+    .derivation("LSTALVDT",
+                expression='pl.max_horizontal(pl.col("_ae_end"), pl.col("_ae_start"), pl.col("TRTEDT"))')
+    .to_frame()
     .drop(["_ae_end", "_ae_start"])
 )
 

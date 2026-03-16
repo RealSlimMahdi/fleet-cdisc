@@ -74,40 +74,42 @@ print(f"SDTM DM  : {dm.shape[0]} subjects  ·  {dm.shape[1]} columns")
 
 # ── 3. Synthesise SDTM EX (one record per subject) ───────────────────────────
 ex = (
-    dm_raw.with_columns(
-        pl.lit("CDISCPILOT01").alias("STUDYID"),
-        pl.lit("EX").alias("DOMAIN"),
-        pl.col("patient_number").alias("USUBJID"),
-        pl.col("arm_description").alias("EXTRT"),
-        pl.when(pl.col("arm_code") == "Pbo")   .then(pl.lit(0.0))
-          .when(pl.col("arm_code") == "Xan_Lo").then(pl.lit(54.0))
-          .when(pl.col("arm_code") == "Xan_Hi").then(pl.lit(81.0))
-          .otherwise(None).alias("EXDOSE"),
-        pl.lit("mg").alias("EXDOSU"),
-        pl.col("first_dose_date").alias("EXSTDTC"),
-        pl.col("last_dose_date").alias("EXENDTC"),
-        pl.lit(1).alias("EXSEQ"),
-    )
+    dm_raw.sdtm
+    .hardcode_no_ct("STUDYID",  value="CDISCPILOT01")
+    .hardcode_no_ct("DOMAIN",   value="EX")
+    .assign_no_ct(  "USUBJID",  source="patient_number")
+    .assign_no_ct(  "EXTRT",    source="arm_description")
+    .if_then_else(  "EXDOSE",
+                    when=[
+                        {"condition": pl.col("arm_code") == "Pbo",    "value": 0.0},
+                        {"condition": pl.col("arm_code") == "Xan_Lo", "value": 54.0},
+                        {"condition": pl.col("arm_code") == "Xan_Hi", "value": 81.0},
+                    ])
+    .hardcode_no_ct("EXDOSU",   value="mg")
+    .assign_no_ct(  "EXSTDTC",  source="first_dose_date")
+    .assign_no_ct(  "EXENDTC",  source="last_dose_date")
+    .hardcode_no_ct("EXSEQ",    value=1)
+    .to_frame()
     .select(["STUDYID", "DOMAIN", "USUBJID", "EXSEQ",
              "EXTRT", "EXDOSE", "EXDOSU", "EXSTDTC", "EXENDTC"])
 )
 
 # ── 4. Synthesise SDTM AE ─────────────────────────────────────────────────────
 ae = (
-    ae_raw.with_columns(
-        pl.lit("CDISCPILOT01").alias("STUDYID"),
-        pl.lit("AE").alias("DOMAIN"),
-        pl.col("patient_number").alias("USUBJID"),
-        pl.col("ae_term").alias("AETERM"),
-        pl.col("ae_start_date").alias("AESTDTC"),
-        pl.col("ae_end_date").alias("AEENDTC"),
-        pl.col("ae_severity").alias("AESEV"),
-        pl.col("ae_serious").alias("AESER"),
-        pl.col("ae_outcome").alias("AEOUT"),
-        pl.col("ae_action_taken").alias("AEACN"),
-        pl.col("ae_relationship").alias("AEREL"),
-        pl.col("ae_term").cum_count().over("patient_number").alias("AESEQ"),
-    )
+    ae_raw.sdtm
+    .hardcode_no_ct("STUDYID",  value="CDISCPILOT01")
+    .hardcode_no_ct("DOMAIN",   value="AE")
+    .assign_no_ct(  "USUBJID",  source="patient_number")
+    .assign_no_ct(  "AETERM",   source="ae_term")
+    .assign_no_ct(  "AESTDTC",  source="ae_start_date")
+    .assign_no_ct(  "AEENDTC",  source="ae_end_date")
+    .assign_no_ct(  "AESEV",    source="ae_severity")
+    .assign_no_ct(  "AESER",    source="ae_serious")
+    .assign_no_ct(  "AEOUT",    source="ae_outcome")
+    .assign_no_ct(  "AEACN",    source="ae_action_taken")
+    .assign_no_ct(  "AEREL",    source="ae_relationship")
+    .derivation(    "AESEQ",    expression='pl.col("ae_term").cum_count().over("patient_number")')
+    .to_frame()
     .select(["STUDYID", "DOMAIN", "USUBJID", "AESEQ",
              "AETERM", "AESTDTC", "AEENDTC", "AESEV", "AESER",
              "AEOUT", "AEACN", "AEREL"])
@@ -122,29 +124,35 @@ print(f"SDTM AE  : {ae.shape[0]} records  ·  {ae.shape[1]} columns")
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── ADaM ADSL (spec-driven) ──────────────────────────────────────────────")
 
-_ex_dates = (
+_ex_max_dose = (
     ex.group_by("USUBJID")
-      .agg(pl.col("EXSTDTC").min().alias("TRTSDT"),
-           pl.col("EXENDTC").max().alias("TRTEDT"))
+      .agg(pl.col("EXDOSE").max().alias("_EXDOSE_MAX"))
 )
-_subjects_exposed = ex.select("USUBJID").unique()
 
 dm_enriched = (
-    dm
-    .join(_ex_dates, on="USUBJID", how="left")
-    .with_columns(
-        pl.col("ARM").alias("TRT01P"),
-        pl.col("ACTARM").alias("TRT01A"),
-        pl.when(pl.col("AGE") < 18) .then(pl.lit("<18"))
-          .when(pl.col("AGE") <= 64).then(pl.lit("18-64"))
-          .otherwise(pl.lit(">64")).alias("AGEGR1"),
-        pl.col("USUBJID")
-          .is_in(_subjects_exposed["USUBJID"].to_list())
-          .map_elements(lambda v: "Y" if v else None, return_dtype=pl.String)
-          .alias("SAFFL"),
-        pl.when(pl.col("ARMCD") != "SCRNFAIL")
-          .then(pl.lit("Y")).otherwise(pl.lit(None)).alias("ITTFL"),
-    )
+    dm.adam
+    .lookup(dataset=_ex_max_dose, on="USUBJID", how="left")
+    .to_frame()
+    .adam.adsl
+    # Treatment dates from EX (admiral: derive_vars_merged)
+    .first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")
+    .last_date( "TRTEDT", from_dataset=ex, date_col="EXENDTC")
+    # Treatment variables (admiral: mutate TRT01P=ARM, TRT01A=ACTARM)
+    .rename("TRT01P", source="ARM")
+    .rename("TRT01A", source="ACTARM")
+    # Age grouping (admiral: derive_vars_cat)
+    .condderivation("AGEGR1",
+                    conditions=[
+                        {"condition": "pl.col('AGE') < 18",  "value": "<18"},
+                        {"condition": "pl.col('AGE') <= 64", "value": "18-64"},
+                        {"condition": "pl.col('AGE') > 64",  "value": ">64"},
+                    ],
+                    else_value="Missing")
+    # Population flags (admiral: derive_var_merged_exist_flag)
+    .eligibility_flag("SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0')
+    .eligibility_flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"')
+    .to_frame()
+    .drop("_EXDOSE_MAX")
 )
 
 adsl = (
@@ -164,9 +172,10 @@ print("\n── ADaM ADVS (spec-driven) ─────────────�
 
 _trtsdt_map = adsl.select(["USUBJID", "TRTSDT"])
 vs_with_trtsdt = (
-    vs_raw
-    .with_columns(pl.col("patient_number").alias("USUBJID"))
-    .join(_trtsdt_map, on="USUBJID", how="left")
+    vs_raw.adam
+    .rename("USUBJID", source="patient_number")
+    .lookup(dataset=_trtsdt_map, on="USUBJID", how="left")
+    .to_frame()
 )
 
 advs = (
@@ -185,7 +194,11 @@ print(f"   Parameters: {sorted(advs['PARAMCD'].unique().to_list())}")
 print("\n── ADaM ADAE (spec-driven + occds verbs) ────────────────────────────────")
 
 _adsl_trt = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "AGE", "SEX", "SAFFL"])
-ae_with_trt = ae.join(_adsl_trt, on="USUBJID", how="left")
+ae_with_trt = (
+    ae.adam
+    .lookup(dataset=_adsl_trt, on="USUBJID", how="left")
+    .to_frame()
+)
 
 adae_sourced = (
     ae_with_trt.adam
@@ -226,7 +239,11 @@ print(f"   Serious AEs (AESER=Y)  : {(adae['AESER'] == 'Y').sum()}")
 print("\n── ADaM ADEX (spec-driven) ──────────────────────────────────────────────")
 
 _adsl_ex = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "AGE", "SAFFL"])
-ex_with_adsl = ex.join(_adsl_ex, on="USUBJID", how="left")
+ex_with_adsl = (
+    ex.adam
+    .lookup(dataset=_adsl_ex, on="USUBJID", how="left")
+    .to_frame()
+)
 
 adex_s1 = (
     ex_with_adsl.adam
@@ -235,12 +252,17 @@ adex_s1 = (
 )
 
 adex = (
-    adex_s1
+    adex_s1.adam
+    # admiral: derive_var_dur (inclusive end-date convention)
+    .derivation("EXDURD",
+                expression="(pl.col('AENDT').cast(pl.Date) - pl.col('ASTDT').cast(pl.Date))"
+                           ".dt.total_days() + 1")
+    .to_frame()
+    # admiral: derive_var_obs_number
+    .adam.occds
+    .seq("ASEQ", groups=["USUBJID"])
+    .to_frame()
     .with_columns(
-        ((pl.col("AENDT").str.to_date("%Y-%m-%d", strict=False)
-          - pl.col("ASTDT").str.to_date("%Y-%m-%d", strict=False))
-         .dt.total_days() + 1).alias("EXDURD"),
-        (pl.int_range(pl.len()).over("USUBJID") + 1).cast(pl.Int64).alias("ASEQ"),
         pl.col("TRTSDT"), pl.col("TRTEDT"),
         pl.col("TRT01P"), pl.col("AGE"), pl.col("SAFFL"),
     )
