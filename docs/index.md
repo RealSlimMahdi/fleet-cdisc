@@ -2,9 +2,9 @@
 
 **CDISC SDTM/ADaM derivation toolkit for [Polars](https://pola.rs) DataFrames.**
 
-[![CI](https://github.com/fleet/fleet/actions/workflows/ci.yml/badge.svg)](https://github.com/fleet/fleet/actions/workflows/ci.yml)
-[![Docs](https://github.com/fleet/fleet/actions/workflows/docs.yml/badge.svg)](https://fleet.github.io/fleet/)
-[![PyPI](https://img.shields.io/pypi/v/fleet)](https://pypi.org/project/fleet/)
+[![CI](https://github.com/RealSlimMahdi/fleet-cdisc/actions/workflows/ci.yml/badge.svg)](https://github.com/RealSlimMahdi/fleet-cdisc/actions/workflows/ci.yml)
+[![Docs](https://github.com/RealSlimMahdi/fleet-cdisc/actions/workflows/docs.yml/badge.svg)](https://realslimmahdi.github.io/fleet-cdisc/)
+[![PyPI](https://img.shields.io/pypi/v/fleet-cdisc)](https://pypi.org/project/fleet-cdisc/)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 

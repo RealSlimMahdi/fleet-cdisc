@@ -19,7 +19,7 @@ uv run pytest --cov=fleet --cov-report=term-missing
 
 Tests run automatically on every push and pull request via GitHub Actions.
 
-[![CI](https://github.com/fleet/fleet/actions/workflows/ci.yml/badge.svg)](https://github.com/fleet/fleet/actions/workflows/ci.yml)
+[![CI](https://github.com/RealSlimMahdi/fleet-cdisc/actions/workflows/ci.yml/badge.svg)](https://github.com/RealSlimMahdi/fleet-cdisc/actions/workflows/ci.yml)
 
 ## Test structure
 
