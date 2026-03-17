@@ -48,23 +48,23 @@ Nothing runs until you call `.to_frame()`. All intermediate verbs accumulate int
 
 Importing `fleet` registers two chainable namespaces on **every** Polars DataFrame:
 
-| Namespace | Target dataset | Description                                                            |
-| --------- | -------------- | ---------------------------------------------------------------------- |
-| `df.sdtm` | SDTM domains   | 14 derivation verbs: domain mapping, CT lookup, datetime normalisation |
-| `df.adam` | ADaM BDS       | 16 derivation verbs: study day, baseline, change, flags                |
+| Namespace | Target dataset | Description                                                                                   |
+| --------- | -------------- | --------------------------------------------------------------------------------------------- |
+| `df.sdtm` | SDTM domains   | 14 derivation verbs: domain mapping, CT lookup, datetime normalisation                        |
+| `df.adam` | ADaM BDS       | 22 derivation verbs: study day, baseline, change, flags, BSA, MAP, QTc, LOCF, summary records |
 
 ADaM sub-structures and therapeutic-area extensions are nested under `df.adam`:
 
-| Property            | Target dataset      | Description                                                        |
-| ------------------- | ------------------- | ------------------------------------------------------------------ |
-| `df.adam.adsl`      | ADSL                | 6 patient-level verbs: treatment dates, duration, population flags |
-| `df.adam.occds`     | OCCDS (ADAE, ADCM…) | 5 occurrence verbs: first/last date, worst severity                |
-| `df.adam.onco`      | Oncology            | RECIST response, BOR, filter_pd                                    |
-| `df.adam.ophtha`    | Ophthalmology       | ETDRS/LogMAR, study eye                                            |
-| `df.adam.peds`      | Pediatrics          | Age derivations, prematurity                                       |
-| `df.adam.vaccine`   | Vaccine             | Fever, seroconversion, ADIS AVAL                                   |
-| `df.adam.metabolic` | Metabolic           | Waist ratios, body fat %                                           |
-| `df.adam.neuro`     | Neuroscience        | Centiloid, MMSE, CDR-SoB                                           |
+| Property            | Target dataset      | Description                                                                                 |
+| ------------------- | ------------------- | ------------------------------------------------------------------------------------------- |
+| `df.adam.adsl`      | ADSL                | 8 patient-level verbs: treatment dates, duration, population flags, age conversion, periods |
+| `df.adam.occds`     | OCCDS (ADAE, ADCM…) | 5 occurrence verbs: first/last date, worst severity                                         |
+| `df.adam.onco`      | Oncology            | RECIST response, BOR, filter_pd                                                             |
+| `df.adam.ophtha`    | Ophthalmology       | ETDRS/LogMAR, study eye                                                                     |
+| `df.adam.peds`      | Pediatrics          | Age derivations, prematurity                                                                |
+| `df.adam.vaccine`   | Vaccine             | Fever, seroconversion, ADIS AVAL                                                            |
+| `df.adam.metabolic` | Metabolic           | Waist ratios, body fat %                                                                    |
+| `df.adam.neuro`     | Neuroscience        | Centiloid, MMSE, CDR-SoB                                                                    |
 
 These mirror the [admiral TA packages](https://pharmaverse.github.io/admiral/).
 

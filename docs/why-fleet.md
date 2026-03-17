@@ -61,7 +61,7 @@ Fleet can read this YAML to automatically apply derivations, validate data, and 
 
 ### 4. Flexibility: Built for Extension
 
-Fleet comes with built-in namespaces for core SDTM (`df.sdtm`), ADaM BDS (`df.adam`), ADSL (`df.adam.adsl`), OCCDS (`df.adam.occds`), and specialized therapeutic areas (Oncology, Ophthalmology, Vaccines, etc.).
+Fleet comes with built-in namespaces for core SDTM (`df.sdtm`), ADaM BDS (`df.adam`), ADSL (`df.adam.adsl`), OCCDS (`df.adam.occds`), and specialized therapeutic areas (Oncology, Ophthalmology, Vaccines, etc.). Fleet also includes verbs for Body Surface Area (`bsa`), Mean Arterial Pressure (`map`), corrected QT (`qtc`), LOCF imputation, summary record derivation, and parameter-level record generation.
 
 If you have proprietary study requirements, Fleet is designed to be easily extended with custom verbs using standard Polars expressions via the `.derivation()` method, or by subclassing the namespaces to add your own company-specific logic.
 

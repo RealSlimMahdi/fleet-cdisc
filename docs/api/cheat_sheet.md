@@ -23,14 +23,23 @@ This cheat sheet summarises the most common verbs across Fleet namespaces. For f
 
 ## ADaM BDS Namespace (`df.adam`)
 
-| Verb                                                | Description                                                          | Example                                               |
-| --------------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------- |
-| `.study_day(target, analysis_date, reference_date)` | Calculate CDISC study day algorithm.                                 | `.study_day("ADY", "ADT", "TRTSDT")`                  |
-| `.baseline(target, aval, baseline_flag)`            | Find the baseline record per USUBJID/PARAMCD, broadcast to `target`. | `.baseline("BASE", "AVAL", "ABLFL")`                  |
-| `.chg(target, aval, base)`                          | Change (`AVAL - BASE`)                                               | `.chg("CHG", "AVAL", "BASE")`                         |
-| `.pchg(target, aval, base)`                         | Percent change `(CHG / BASE) * 100`                                  | `.pchg("PCHG", "AVAL", "BASE")`                       |
-| `.flag(target, criteria, groups)`                   | Assign boolean `"Y"` based on Polars criteria.                       | `.flag("CRIT1FL", pl.col("AVAL") > 10)`               |
-| `.imputation(target, method, groups)`               | LOCF or WOCF imputations.                                            | `.imputation("AVAL", "LOCF", ["USUBJID", "PARAMCD"])` |
+| Verb                                                | Description                                                                | Example                                                                 |
+| --------------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `.study_day(target, analysis_date, reference_date)` | Calculate CDISC study day algorithm.                                       | `.study_day("ADY", "ADT", "TRTSDT")`                                    |
+| `.baseline(target, aval, baseline_flag)`            | Find the baseline record per USUBJID/PARAMCD, broadcast to `target`.       | `.baseline("BASE", "AVAL", "ABLFL")`                                    |
+| `.chg(target, aval, base)`                          | Change (`AVAL - BASE`)                                                     | `.chg("CHG", "AVAL", "BASE")`                                           |
+| `.pchg(target, aval, base)`                         | Percent change `(CHG / BASE) * 100`                                        | `.pchg("PCHG", "AVAL", "BASE")`                                         |
+| `.flag(target, criteria, groups)`                   | Assign boolean `"Y"` based on Polars criteria.                             | `.flag("CRIT1FL", pl.col("AVAL") > 10)`                                 |
+| `.bmi(target, weight, height)`                      | BMI = weight / (height / 100)²                                             | `.bmi("BMI", weight="WEIGHT", height="HEIGHT")`                         |
+| `.nrind(target, value, low, high)`                  | Normal range indicator: LOW / NORMAL / HIGH.                               | `.nrind("ANRIND", value="AVAL", low="LO", high="HI")`                   |
+| `.on_treatment(target, adt, trtsdt, trtedt)`        | On-treatment flag within [TRTSDT, TRTEDT].                                 | `.on_treatment("ONTRTFL", adt="ADT", trtsdt="TRTSDT", trtedt="TRTEDT")` |
+| `.shift(target, baseline_cat, post_cat)`            | Categorical shift string: "NORMAL to HIGH".                                | `.shift("SHIFT1", baseline_cat="BNRIND", post_cat="ANRIND")`            |
+| `.bsa(target, weight, height, method)`              | Body Surface Area (m²). Methods: Mosteller, DuBois, Haycock, Gehan-George. | `.bsa("BSA", weight="WEIGHT", height="HEIGHT")`                         |
+| `.map(target, systolic, diastolic)`                 | Mean Arterial Pressure: DBP + (SBP - DBP) / 3.                             | `.map("MAP", systolic="SYSBP", diastolic="DIABP")`                      |
+| `.qtc(target, qt, rr, method)`                      | Corrected QT interval (Fridericia or Bazett).                              | `.qtc("QTCF", qt="QT", rr="RR")`                                        |
+| `.derive_summary_records(by_vars, ...)`             | Aggregate by group and append summary rows.                                | `.derive_summary_records(by_vars=["USUBJID"], ...)`                     |
+| `.derive_locf_records(by_vars, ...)`                | Forward-fill (LOCF) within patient groups.                                 | `.derive_locf_records(by_vars=["USUBJID", "PARAMCD"])`                  |
+| `.derive_param(by_vars, ...)`                       | Derive a new parameter from existing records and append rows.              | `.derive_param(by_vars=["USUBJID"], ...)`                               |
 
 ## ADSL Namespace (`df.adam.adsl`)
 
@@ -41,6 +50,8 @@ This cheat sheet summarises the most common verbs across Fleet namespaces. For f
 | `.duration(target, start_date, end_date)`            | Number of elapsed days (start to end + 1).                               | `.duration("TRTDUR", "TRTSDT", "TRTEDT")`                       |
 | `.eligibility_flag(target, criteria)`                | Single-row evaluation into a `"Y"` flag.                                 | `.eligibility_flag("ITTFL", pl.col("ARM") != "Screen Failure")` |
 | `.count_events(target, from_dataset, where)`         | Tally events for a subject.                                              | `.count_events("AECNT", ae_df)`                                 |
+| `.age_years(target, age_col, age_unit_col)`          | Unit-aware age conversion (YEARS, MONTHS, WEEKS, DAYS).                  | `.age_years("AAGE", age_col="AGE", age_unit_col="AGEU")`        |
+| `.derive_period(periods, start_date)`                | Create APxxSDT, APxxEDT, TRTxxP Subperiod/Phase variables.               | `.derive_period(periods=[{"number": 1, ...}])`                  |
 
 ## OCCDS Namespace (`df.adam.occds`)
 

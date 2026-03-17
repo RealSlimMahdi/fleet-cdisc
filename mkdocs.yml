@@ -40,10 +40,10 @@ theme:
 extra:
   version:
     provider: mike
-    default: latest
+    default: dev
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/fleet/fleet
+      link: https://github.com/RealSlimMahdi/fleet-cdisc
 
 plugins:
   - search

@@ -37,7 +37,7 @@ Usage
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import yaml
@@ -45,26 +45,42 @@ import yaml
 from ._mixins import SharedADaMVerbsMixin
 from .utils import (
     baseline,
-    bmi as _bmi_expr,
     chg,
-    flag_baseline,
-    nrind as _nrind_expr,
-    on_treatment as _on_treatment_expr,
     pchg,
-    shift as _shift_expr,
     study_day,
+)
+from .utils import (
+    bmi as _bmi_expr,
+)
+from .utils import (
+    bsa as _bsa_expr,
+)
+from .utils import (
+    mean_arterial_pressure as _map_expr,
+)
+from .utils import (
+    nrind as _nrind_expr,
+)
+from .utils import (
+    on_treatment as _on_treatment_expr,
+)
+from .utils import (
+    qtc as _qtc_expr,
+)
+from .utils import (
+    shift as _shift_expr,
 )
 
 if TYPE_CHECKING:
     from .adsl_namespace import ADSLNamespace
+    from .metabolic_namespace import MetabolicNamespace
+    from .neuro_namespace import NeuroNamespace
     from .occds_namespace import OCCDSNamespace
     from .onco_namespace import OncoNamespace
     from .ophtha_namespace import OphthaNamespace
     from .peds_namespace import PedsNamespace
     from .pk_namespace import PKNamespace
     from .vaccine_namespace import VaccineNamespace
-    from .metabolic_namespace import MetabolicNamespace
-    from .neuro_namespace import NeuroNamespace
 
 
 @pl.api.register_dataframe_namespace("adam")
@@ -91,7 +107,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         source: str,
         mode: str = "date",
         input_format: str | None = None,
-    ) -> "AdamNamespace":
+    ) -> AdamNamespace:
         """
         Parse *source* date string and store as ISO 8601 in *target*.
 
@@ -107,8 +123,6 @@ class AdamNamespace(SharedADaMVerbsMixin):
         expr = pl.col(source).map_elements(fn, return_dtype=pl.String).alias(target)
         return self._chain(expr)
 
-
-
     # ------------------------------------------------------------------ #
     # 7. lookup — merge/join with subset conditions                       #
     # ------------------------------------------------------------------ #
@@ -121,7 +135,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         on: str | list[str],
         how: str = "left",
         where: str | None = None,
-    ) -> "AdamNamespace":
+    ) -> AdamNamespace:
         """
         SQL-style join against a lookup *dataset*.
 
@@ -151,7 +165,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         *,
         analysis_date: str,
         reference_date: str,
-    ) -> "AdamNamespace":
+    ) -> AdamNamespace:
         """
         Compute study day: ``(analysis_date - reference_date)`` with CDISC convention.
 
@@ -174,7 +188,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         aval: str = "AVAL",
         baseline_flag: str = "ABLFL",
         groups: list[str] | None = None,
-    ) -> "AdamNamespace":
+    ) -> AdamNamespace:
         """
         Derive BASE as the AVAL at the baseline record (``baseline_flag == "Y"``.
 
@@ -186,8 +200,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                        groups=["USUBJID", "PARAMCD"])
         """
         return self._chain(
-            baseline(aval=aval, baseline_flag_col=baseline_flag,
-                     group_by=groups, target=target)
+            baseline(aval=aval, baseline_flag_col=baseline_flag, group_by=groups, target=target)
         )
 
     # ------------------------------------------------------------------ #
@@ -200,7 +213,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         *,
         aval: str = "AVAL",
         base: str = "BASE",
-    ) -> "AdamNamespace":
+    ) -> AdamNamespace:
         """
         Change from baseline: ``CHG = AVAL - BASE``.
 
@@ -220,7 +233,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         *,
         aval: str = "AVAL",
         base: str = "BASE",
-    ) -> "AdamNamespace":
+    ) -> AdamNamespace:
         """
         Percent change from baseline: ``PCHG = (AVAL - BASE) / BASE * 100``.
 
@@ -246,7 +259,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         value_col: str | None = None,
         where: str | pl.Expr | None = None,
         flag_value: str = "Y",
-    ) -> "AdamNamespace":
+    ) -> AdamNamespace:
         """
         Set *target* to *flag_value* (default ``"Y"``) for records matching *criteria*.
 
@@ -285,9 +298,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 if not order_by:
                     raise ValueError(f"flag criteria='{criteria}' requires order_by.")
                 descending = criteria == "last"
-                row_cond = (
-                    pl.col(order_by).rank("ordinal", descending=descending).over(grps) == 1
-                )
+                row_cond = pl.col(order_by).rank("ordinal", descending=descending).over(grps) == 1
             else:
                 if not value_col:
                     raise ValueError(f"flag criteria='{criteria}' requires value_col.")
@@ -299,24 +310,17 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 row_cond = pl.col(value_col) == agg_val
         else:
             row_cond = (
-                criteria if isinstance(criteria, pl.Expr)
-                else parse_expression(str(criteria))
+                criteria if isinstance(criteria, pl.Expr) else parse_expression(str(criteria))
             )
 
         if where is not None:
-            where_expr = (
-                where if isinstance(where, pl.Expr)
-                else parse_expression(str(where))
-            )
+            where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
             final_cond = where_expr & row_cond
         else:
             final_cond = row_cond
 
         return self._chain(
-            pl.when(final_cond)
-            .then(pl.lit(flag_value))
-            .otherwise(pl.lit(None))
-            .alias(target)
+            pl.when(final_cond).then(pl.lit(flag_value)).otherwise(pl.lit(None)).alias(target)
         )
 
     # ------------------------------------------------------------------ #
@@ -329,7 +333,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         *,
         weight: str,
         height: str,
-    ) -> "AdamNamespace":
+    ) -> AdamNamespace:
         """
         BMI = weight_kg / (height_cm / 100) ** 2.
 
@@ -350,7 +354,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         value: str,
         low: str,
         high: str,
-    ) -> "AdamNamespace":
+    ) -> AdamNamespace:
         """
         Categorise *value* relative to normal range columns: LOW / NORMAL / HIGH.
 
@@ -371,7 +375,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         adt: str,
         trtsdt: str,
         trtedt: str,
-    ) -> "AdamNamespace":
+    ) -> AdamNamespace:
         """
         Set *target* to ``"Y"`` when *adt* falls within [trtsdt, trtedt] (inclusive).
 
@@ -379,9 +383,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
 
             .on_treatment("ONTRTFL", adt="ADT", trtsdt="TRTSDT", trtedt="TRTEDT")
         """
-        return self._chain(
-            _on_treatment_expr(adt=adt, trtsdt=trtsdt, trtedt=trtedt, target=target)
-        )
+        return self._chain(_on_treatment_expr(adt=adt, trtsdt=trtsdt, trtedt=trtedt, target=target))
 
     # ------------------------------------------------------------------ #
     # 16. shift — baseline-to-post categorical shift string               #
@@ -394,7 +396,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         baseline_cat: str,
         post_cat: str,
         sep: str = " to ",
-    ) -> "AdamNamespace":
+    ) -> AdamNamespace:
         """
         Categorical shift label: ``"<baseline_cat><sep><post_cat>"``.
 
@@ -404,9 +406,241 @@ class AdamNamespace(SharedADaMVerbsMixin):
             # → "NORMAL to HIGH", "NORMAL to LOW", etc.
         """
         return self._chain(
-            _shift_expr(baseline_cat=baseline_cat, post_cat=post_cat,
-                        target=target, sep=sep)
+            _shift_expr(baseline_cat=baseline_cat, post_cat=post_cat, target=target, sep=sep)
         )
+
+    # ------------------------------------------------------------------ #
+    # 17. bsa — Body Surface Area                                          #
+    # ------------------------------------------------------------------ #
+
+    def bsa(
+        self,
+        target: str,
+        *,
+        weight: str,
+        height: str,
+        method: str = "Mosteller",
+    ) -> AdamNamespace:
+        """
+        Body Surface Area (m²).
+
+        *method*: ``Mosteller`` (default), ``DuBois``, ``Haycock``, ``Gehan-George``.
+
+        Example::
+
+            .bsa("BSA", weight="WEIGHT", height="HEIGHT")
+        """
+        return self._chain(_bsa_expr(weight=weight, height=height, method=method, target=target))
+
+    # ------------------------------------------------------------------ #
+    # 18. map — Mean Arterial Pressure                                     #
+    # ------------------------------------------------------------------ #
+
+    def map(
+        self,
+        target: str = "MAP",
+        *,
+        systolic: str = "SYSBP",
+        diastolic: str = "DIABP",
+    ) -> AdamNamespace:
+        """
+        Mean Arterial Pressure: ``DBP + (SBP - DBP) / 3``.
+
+        Example::
+
+            .map("MAP", systolic="SYSBP", diastolic="DIABP")
+        """
+        return self._chain(_map_expr(systolic=systolic, diastolic=diastolic, target=target))
+
+    # ------------------------------------------------------------------ #
+    # 19. qtc — Corrected QT interval                                      #
+    # ------------------------------------------------------------------ #
+
+    def qtc(
+        self,
+        target: str = "QTC",
+        *,
+        qt: str = "QT",
+        rr: str = "RR",
+        method: str = "Fridericia",
+    ) -> AdamNamespace:
+        """
+        Corrected QT interval.
+
+        *method*: ``Fridericia`` (default) or ``Bazett``.
+
+        Example::
+
+            .qtc("QTCF", qt="QT", rr="RR", method="Fridericia")
+        """
+        return self._chain(_qtc_expr(qt=qt, rr=rr, method=method, target=target))
+
+    # ------------------------------------------------------------------ #
+    # 20. derive_summary_records — aggregate and append new rows          #
+    # ------------------------------------------------------------------ #
+
+    def derive_summary_records(
+        self,
+        *,
+        by_vars: list[str],
+        analysis_var: str = "AVAL",
+        set_values_to: dict[str, Any],
+        stat: str = "mean",
+    ) -> AdamNamespace:
+        """
+        Compute a summary statistic per group and append the results as new records.
+
+        *set_values_to*: column → value mapping applied to every new record
+        (e.g. ``{"PARAMCD": "AVGBP", "DTYPE": "AVERAGE"}``).
+
+        *stat*: ``"mean"`` (default), ``"sum"``, ``"min"``, ``"max"``, ``"median"``,
+        ``"count"``.
+
+        Materialises the current pipeline before concatenation.
+
+        Example::
+
+            .derive_summary_records(
+                by_vars=["USUBJID", "PARAMCD"],
+                analysis_var="AVAL",
+                set_values_to={"DTYPE": "AVERAGE"},
+                stat="mean",
+            )
+        """
+        stat_lower = stat.lower()
+        agg_map = {
+            "mean": pl.col(analysis_var).mean(),
+            "sum": pl.col(analysis_var).sum(),
+            "min": pl.col(analysis_var).min(),
+            "max": pl.col(analysis_var).max(),
+            "median": pl.col(analysis_var).median(),
+            "count": pl.col(analysis_var).count().cast(pl.Float64),
+        }
+        if stat_lower not in agg_map:
+            raise ValueError(f"Unknown stat '{stat}'. Supported: {', '.join(agg_map)}.")
+
+        df = self.to_frame()
+        summary = df.group_by(by_vars).agg(agg_map[stat_lower].alias(analysis_var))
+
+        # Apply constant values to the summary rows
+        for col_name, col_val in set_values_to.items():
+            summary = summary.with_columns(pl.lit(col_val).alias(col_name))
+
+        # Align schemas before concat: add missing columns as null in both directions
+        for c in df.columns:
+            if c not in summary.columns:
+                summary = summary.with_columns(pl.lit(None).cast(df.schema[c]).alias(c))
+        for c in summary.columns:
+            if c not in df.columns:
+                df = df.with_columns(pl.lit(None).cast(summary.schema[c]).alias(c))
+
+        col_order = df.columns
+        summary = summary.select(col_order)
+
+        combined = pl.concat([df, summary], how="vertical_relaxed")
+        return self._materialise_then(combined)
+
+    # ------------------------------------------------------------------ #
+    # 21. derive_locf_records — last observation carried forward          #
+    # ------------------------------------------------------------------ #
+
+    def derive_locf_records(
+        self,
+        *,
+        by_vars: list[str] | None = None,
+        analysis_var: str = "AVAL",
+        order_by: str = "ADT",
+    ) -> AdamNamespace:
+        """
+        Forward-fill *analysis_var* within each group (LOCF).
+
+        Sorts by *order_by* within each group defined by *by_vars*,
+        then forward-fills null values in *analysis_var*.
+
+        Materialises the current pipeline, applies the fill, and returns.
+
+        Example::
+
+            .derive_locf_records(
+                by_vars=["USUBJID", "PARAMCD"],
+                analysis_var="AVAL",
+                order_by="ADT",
+            )
+        """
+        grps = by_vars or ["USUBJID", "PARAMCD"]
+        df = self.to_frame()
+        df = df.sort(grps + [order_by])
+        df = df.with_columns(pl.col(analysis_var).forward_fill().over(grps).alias(analysis_var))
+        return self._materialise_then(df)
+
+    # ------------------------------------------------------------------ #
+    # 22. derive_param — append a computed parameter as new records        #
+    # ------------------------------------------------------------------ #
+
+    def derive_param(
+        self,
+        *,
+        by_vars: list[str] | None = None,
+        set_values_to: dict[str, Any],
+        parameter_filter: dict[str, str],
+        analysis_value: pl.Expr,
+    ) -> AdamNamespace:
+        """
+        Derive a new parameter (e.g. BMI) from existing records and append
+        the computed rows to the dataset.
+
+        *parameter_filter*: ``{PARAMCD: value}`` pairs identifying the source
+        records to pivot on (e.g. ``{"WEIGHT": "WEIGHT", "HEIGHT": "HEIGHT"}``).
+        Each key is a local alias; the value is the ``PARAMCD`` it matches.
+
+        *analysis_value*: a Polars expression referencing the aliases to
+        compute the new AVAL (e.g. ``pl.col("WEIGHT") / (pl.col("HEIGHT")/100)**2``).
+
+        *set_values_to*: constant columns on the new rows
+        (e.g. ``{"PARAMCD": "BMI", "PARAM": "Body Mass Index"}``).
+
+        Materialises the pipeline before appending.
+
+        Example::
+
+            .derive_param(
+                by_vars=["USUBJID", "ADT"],
+                set_values_to={"PARAMCD": "BMI", "PARAM": "Body Mass Index"},
+                parameter_filter={"WEIGHT": "WEIGHT", "HEIGHT": "HEIGHT"},
+                analysis_value=pl.col("WEIGHT") / (pl.col("HEIGHT") / 100) ** 2,
+            )
+        """
+        grps = by_vars or ["USUBJID"]
+        df = self.to_frame()
+
+        # Pivot: for each alias in parameter_filter, get AVAL as that alias
+        pivoted_parts = []
+        for alias, paramcd_val in parameter_filter.items():
+            part = df.filter(pl.col("PARAMCD") == paramcd_val).select(
+                grps + [pl.col("AVAL").alias(alias)]
+            )
+            pivoted_parts.append(part)
+
+        # Join all pivoted parts on the by_vars
+        joined = pivoted_parts[0]
+        for part in pivoted_parts[1:]:
+            joined = joined.join(part, on=grps, how="inner")
+
+        # Compute the new AVAL
+        new_rows = joined.with_columns(analysis_value.alias("AVAL")).select(grps + ["AVAL"])
+
+        # Apply set_values_to constants
+        for col_name, col_val in set_values_to.items():
+            new_rows = new_rows.with_columns(pl.lit(col_val).alias(col_name))
+
+        # Align schemas and concat
+        for c in df.columns:
+            if c not in new_rows.columns:
+                new_rows = new_rows.with_columns(pl.lit(None).cast(df.schema[c]).alias(c))
+        new_rows = new_rows.select(df.columns)
+
+        combined = pl.concat([df, new_rows], how="vertical_relaxed")
+        return self._materialise_then(combined)
 
     # ------------------------------------------------------------------ #
     # Private: YAML spec dispatcher for algorithm: std_function           #
@@ -423,20 +657,25 @@ class AdamNamespace(SharedADaMVerbsMixin):
         base: str = "BASE",
         weight: str | None = None,
         height: str | None = None,
+        systolic: str | None = None,
+        diastolic: str | None = None,
+        qt: str | None = None,
+        rr: str | None = None,
+        method: str | None = None,
         baseline_flag: str = "ABLFL",
         baseline_criteria: str | pl.Expr | None = None,
         groups: list[str] | None = None,
-    ) -> "AdamNamespace":
+    ) -> AdamNamespace:
         """Route YAML ``algorithm: std_function`` entries to the appropriate typed method."""
         func = func.lower()
         if func == "study_day":
             if not analysis_date or not reference_date:
                 raise ValueError("study_day requires analysis_date and reference_date.")
-            return self.study_day(target, analysis_date=analysis_date,
-                                   reference_date=reference_date)
+            return self.study_day(
+                target, analysis_date=analysis_date, reference_date=reference_date
+            )
         elif func == "baseline":
-            return self.baseline(target, aval=aval, baseline_flag=baseline_flag,
-                                  groups=groups)
+            return self.baseline(target, aval=aval, baseline_flag=baseline_flag, groups=groups)
         elif func == "chg":
             return self.chg(target, aval=aval, base=base)
         elif func == "pchg":
@@ -449,10 +688,23 @@ class AdamNamespace(SharedADaMVerbsMixin):
             if not weight or not height:
                 raise ValueError("bmi requires weight and height.")
             return self.bmi(target, weight=weight, height=height)
+        elif func == "bsa":
+            if not weight or not height:
+                raise ValueError("bsa requires weight and height.")
+            return self.bsa(target, weight=weight, height=height, method=method or "Mosteller")
+        elif func in ("map", "mean_arterial_pressure"):
+            if not systolic or not diastolic:
+                raise ValueError("map requires systolic and diastolic.")
+            return self.map(target, systolic=systolic, diastolic=diastolic)
+        elif func == "qtc":
+            if not qt or not rr:
+                raise ValueError("qtc requires qt and rr.")
+            return self.qtc(target, qt=qt, rr=rr, method=method or "Fridericia")
         else:
             raise ValueError(
                 f"Unknown func='{func}'. "
-                "Valid: study_day, baseline, chg, pchg, flag, flag_baseline, bmi."
+                "Valid: study_day, baseline, chg, pchg, flag, flag_baseline, "
+                "bmi, bsa, map, qtc."
             )
 
     # ------------------------------------------------------------------ #
@@ -461,10 +713,10 @@ class AdamNamespace(SharedADaMVerbsMixin):
 
     def transform(
         self,
-        fn: "str | Callable[[pl.DataFrame], pl.DataFrame]",
+        fn: str | Callable[[pl.DataFrame], pl.DataFrame],
         *,
         label: str | None = None,  # noqa: ARG002  — cosmetic, intentionally unused
-    ) -> "AdamNamespace":
+    ) -> AdamNamespace:
         """
         Apply an arbitrary ``(pl.DataFrame) -> pl.DataFrame`` function.
 
@@ -517,8 +769,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
 
         if not isinstance(result, pl.DataFrame):
             raise TypeError(
-                f"Transform function must return a polars DataFrame, "
-                f"got {type(result).__name__!r}."
+                f"Transform function must return a polars DataFrame, got {type(result).__name__!r}."
             )
 
         return self._materialise_then(result)
@@ -532,9 +783,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
         spec_path: str | Path,
         *,
         dataset: str | None = None,
-        only: "list[str] | None" = None,
-        omit: "list[str] | None" = None,
-    ) -> "AdamNamespace":
+        only: list[str] | None = None,
+        omit: list[str] | None = None,
+    ) -> AdamNamespace:
         """
         Build an ADaM derivation pipeline from a YAML specification file.
 
@@ -620,7 +871,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
             elif alg == "rename":
                 ns = ns.rename(target, source=var.source or target)
             elif alg == "condderivation":
-                ns = ns.condderivation(target, conditions=var.conditions or [], else_value=var.else_value)
+                ns = ns.condderivation(
+                    target, conditions=var.conditions or [], else_value=var.else_value
+                )
             elif alg == "std_function":
                 ns = ns._std_function_dispatch(
                     target,
@@ -631,12 +884,27 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     base=var.base or "BASE",
                     weight=var.weight,
                     height=var.height,
+                    systolic=getattr(var, "systolic", None),
+                    diastolic=getattr(var, "diastolic", None),
+                    qt=getattr(var, "qt", None),
+                    rr=getattr(var, "rr", None),
+                    method=getattr(var, "method", None),
                     baseline_flag=var.baseline_flag or "ABLFL",
                     baseline_criteria=var.baseline_criteria,
                     groups=getattr(var, "groups", None),
                 )
             # New first-class BDS algorithm names usable directly in YAML specs
-            elif alg in ("study_day", "baseline", "chg", "pchg", "bmi"):
+            elif alg in (
+                "study_day",
+                "baseline",
+                "chg",
+                "pchg",
+                "bmi",
+                "bsa",
+                "map",
+                "mean_arterial_pressure",
+                "qtc",
+            ):
                 ns = ns._std_function_dispatch(
                     target,
                     func=alg,
@@ -646,6 +914,11 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     base=var.base or "BASE",
                     weight=var.weight,
                     height=var.height,
+                    systolic=getattr(var, "systolic", None),
+                    diastolic=getattr(var, "diastolic", None),
+                    qt=getattr(var, "qt", None),
+                    rr=getattr(var, "rr", None),
+                    method=getattr(var, "method", None),
                     baseline_flag=var.baseline_flag or "ABLFL",
                     groups=getattr(var, "groups", None),
                 )
@@ -728,8 +1001,8 @@ class AdamNamespace(SharedADaMVerbsMixin):
         self,
         dataset: str,
         version: str = "1.3",
-        rules_engine_path: "Path | None" = None,
-    ) -> "AdamNamespace":
+        rules_engine_path: Path | None = None,
+    ) -> AdamNamespace:
         """Run CDISC ADaM validation and print the report. Returns self."""
         from ..validation.service import ValidationService
 
@@ -750,10 +1023,10 @@ class AdamNamespace(SharedADaMVerbsMixin):
         self,
         columns: list[str] | None = None,
         *,
-        spec: "str | Path | None" = None,
+        spec: str | Path | None = None,
         dataset: str | None = None,
         drop_pattern: str | None = r"^_",
-    ) -> "AdamNamespace":
+    ) -> AdamNamespace:
         """
         Materialise the pipeline then select and reorder columns.
 
@@ -861,9 +1134,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         if ds is None:
             return {}
         return {
-            v["name"]: v["type"]
-            for v in ds["variables"]
-            if v.get("type") in ("date", "datetime")
+            v["name"]: v["type"] for v in ds["variables"] if v.get("type") in ("date", "datetime")
         }
 
     # ------------------------------------------------------------------ #
@@ -871,15 +1142,17 @@ class AdamNamespace(SharedADaMVerbsMixin):
     # ------------------------------------------------------------------ #
 
     @property
-    def adsl(self) -> "ADSLNamespace":
+    def adsl(self) -> ADSLNamespace:
         """ADSL (one-row-per-subject) derivations: treatment dates, duration, population flags."""
         from .adsl_namespace import ADSLNamespace
+
         return ADSLNamespace(self.to_frame())
 
     @property
-    def occds(self) -> "OCCDSNamespace":
+    def occds(self) -> OCCDSNamespace:
         """OCCDS (one-row-per-event) derivations: sequencing, worst flag, treatment-emergent."""
         from .occds_namespace import OCCDSNamespace
+
         return OCCDSNamespace(self.to_frame())
 
     # ------------------------------------------------------------------ #
@@ -887,45 +1160,52 @@ class AdamNamespace(SharedADaMVerbsMixin):
     # ------------------------------------------------------------------ #
 
     @property
-    def onco(self) -> "OncoNamespace":
+    def onco(self) -> OncoNamespace:
         """Oncology derivations (admiralonco-inspired): RECIST, BOR, response flags."""
         from .onco_namespace import OncoNamespace
+
         return OncoNamespace(self.to_frame())
 
     @property
-    def ophtha(self) -> "OphthaNamespace":
+    def ophtha(self) -> OphthaNamespace:
         """Ophthalmology derivations (admiralophtha-inspired): ETDRS/LogMAR, study eye."""
         from .ophtha_namespace import OphthaNamespace
+
         return OphthaNamespace(self.to_frame())
 
     @property
-    def peds(self) -> "PedsNamespace":
+    def peds(self) -> PedsNamespace:
         """Pediatrics derivations (admiralpeds-inspired): age, prematurity, BMI."""
         from .peds_namespace import PedsNamespace
+
         return PedsNamespace(self.to_frame())
 
     @property
-    def vaccine(self) -> "VaccineNamespace":
+    def vaccine(self) -> VaccineNamespace:
         """Vaccine derivations (admiralvaccine-inspired): fever, seroconversion."""
         from .vaccine_namespace import VaccineNamespace
+
         return VaccineNamespace(self.to_frame())
 
     @property
-    def metabolic(self) -> "MetabolicNamespace":
+    def metabolic(self) -> MetabolicNamespace:
         """Metabolic derivations (admiralmetabolic-inspired): waist ratios, body fat."""
         from .metabolic_namespace import MetabolicNamespace
+
         return MetabolicNamespace(self.to_frame())
 
     @property
-    def neuro(self) -> "NeuroNamespace":
+    def neuro(self) -> NeuroNamespace:
         """Neuroscience derivations (admiralneuro-inspired): Centiloid, MMSE, CDR-SoB."""
         from .neuro_namespace import NeuroNamespace
+
         return NeuroNamespace(self.to_frame())
 
     @property
-    def pk(self) -> "PKNamespace":
+    def pk(self) -> PKNamespace:
         """PK (pharmacokinetics) derivations: BLQ flags, actual/nominal time, dose normalisation."""
         from .pk_namespace import PKNamespace
+
         return PKNamespace(self.to_frame())
 
     # ------------------------------------------------------------------ #
@@ -934,7 +1214,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
 
     def write_parquet(
         self,
-        path: "str | Path",
+        path: str | Path,
         *,
         mkdir: bool = True,
     ) -> pl.DataFrame:

@@ -32,8 +32,8 @@ Nothing runs until `.to_frame()`. All verbs accumulate into a single `df.with_co
 ## Namespaces
 
 - `df.sdtm` — 14 SDTM derivation verbs (domain mapping, CT lookup, datetime normalisation)
-- `df.adam` — 16 ADaM BDS verbs (study day, baseline, change from baseline, flags, imputation)
-- `df.adam.adsl` — 6 patient-level verbs (treatment dates, duration, population flags, AE counts)
+- `df.adam` — 22 ADaM BDS verbs (study day, baseline, change, flags, BSA, MAP, QTc, LOCF, summary records, derived parameters)
+- `df.adam.adsl` — 8 patient-level verbs (treatment dates, duration, population flags, AE counts, age conversion, periods)
 - `df.adam.occds` — 5 occurrence verbs (first/last date, worst severity, any-flag)
 
 ### Therapeutic-area extensions (via `df.adam.<ta>`)
@@ -65,7 +65,16 @@ Nothing runs until `.to_frame()`. All verbs accumulate into a single `df.with_co
 - `baseline(target, aval, baseline_flag)` — carry baseline AVAL within groups
 - `chg(target, aval, base)` — change from baseline
 - `pchg(target, aval, base)` — percent change from baseline
-- `imputation(target, method, groups)` — LOCF/WOCF imputation
+- `bmi(target, weight, height)` — Body Mass Index
+- `nrind(target, value, low, high)` — normal range indicator (LOW/NORMAL/HIGH)
+- `on_treatment(target, adt, trtsdt, trtedt)` — on-treatment flag
+- `shift(target, baseline_cat, post_cat)` — categorical shift string
+- `bsa(target, weight, height, method)` — Body Surface Area (Mosteller, DuBois, Haycock, Gehan-George)
+- `map(target, systolic, diastolic)` — Mean Arterial Pressure
+- `qtc(target, qt, rr, method)` — Corrected QT interval (Fridericia or Bazett)
+- `derive_summary_records(by_vars, analysis_var, set_values_to, stat)` — aggregate and append summary rows
+- `derive_locf_records(by_vars, analysis_var, order_by)` — forward-fill (LOCF) within patient groups
+- `derive_param(by_vars, set_values_to, parameter_filter, analysis_value)` — derive new parameter rows
 - `to_frame()` — materialise
 
 ## ADSL verbs
@@ -76,6 +85,8 @@ Nothing runs until `.to_frame()`. All verbs accumulate into a single `df.with_co
 - `duration(target, start_date, end_date)` — integer day count
 - `eligibility_flag(target, criteria)` — "Y"/null flag based on row condition
 - `count_events(target, from_dataset, where)` — integer event count per subject
+- `age_years(target, age_col, age_unit_col)` — unit-aware age conversion (YEARS, MONTHS, WEEKS, DAYS)
+- `derive_period(periods, start_date)` — create Subperiod/Phase variables (APxxSDT, APxxEDT, TRTxxP)
 - `to_frame()` — materialise
 
 ## define.yaml
@@ -123,9 +134,9 @@ ok, msg = ct.validate_value("C66731", "M")
 
 ## Documentation
 
-Full docs: https://fleet.github.io/fleet/
+Full docs: https://realslimmahdi.github.io/fleet-cdisc/
 
-- Getting started: https://fleet.github.io/fleet/getting-started/installation/
-- define.yaml guide: https://fleet.github.io/fleet/concepts/define-yaml/
-- API reference: https://fleet.github.io/fleet/api/
-- ADSL example notebook: https://fleet.github.io/fleet/examples/adsl_pipeline/
+- Getting started: https://realslimmahdi.github.io/fleet-cdisc/getting-started/installation/
+- define.yaml guide: https://realslimmahdi.github.io/fleet-cdisc/concepts/define-yaml/
+- API reference: https://realslimmahdi.github.io/fleet-cdisc/api/
+- ADSL example notebook: https://realslimmahdi.github.io/fleet-cdisc/examples/adsl_pipeline/

@@ -52,7 +52,7 @@ import fleet  # registers df.sdtm, df.adam, df.adsl, df.occds everywhere
 
 | File               | Purpose                                                                                                                                                                               |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `exceptions.py`    | All custom exception classes — `FleetError`, `SDTMError`, `ADAMError`, `CTError`, `FleetIOError`, `SpecError`, `ValidationError`                                              |
+| `exceptions.py`    | All custom exception classes — `FleetError`, `SDTMError`, `ADAMError`, `CTError`, `FleetIOError`, `SpecError`, `ValidationError`                                                      |
 | `study_context.py` | `StudyContext` — wraps a study root directory and resolves configured paths (raw data, SDTM, ADaM, metadata, outputs). Loaded via `load_study_context(config_path)` from a YAML file. |
 
 **`StudyContext`** is useful when your study files live in a standard directory layout and you want paths resolved automatically rather than hard-coded.
@@ -146,11 +146,11 @@ Every verb returns a _new_ `SDTMNamespace` instance with the expression appended
 
 Registers `df.adam` on every Polars DataFrame.
 
-| File           | Purpose                                                                                                                    |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `models.py`    | `ADAMAlgorithm` enum (9 verb names), `ADAMVariableSpec`, `ADAMDatasetSpec`                                                 |
-| `utils.py`     | Standard ADaM calculation functions — all return `pl.Expr`: `study_day`, `baseline`, `chg`, `pchg`, `flag_baseline`, `bmi` |
-| `namespace.py` | `AdamNamespace` — the actual namespace class with all 9 verbs                                                              |
+| File           | Purpose                                                                                                                                                                                                                              |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `models.py`    | `ADAMAlgorithm` enum (9 verb names), `ADAMVariableSpec`, `ADAMDatasetSpec`                                                                                                                                                           |
+| `utils.py`     | Standard ADaM calculation functions — all return `pl.Expr`: `study_day`, `baseline`, `chg`, `pchg`, `flag_baseline`, `bmi`, `bsa`, `mean_arterial_pressure`, `qtc`, `age_in_years`, `extreme_flag`, `nrind`, `on_treatment`, `shift` |
+| `namespace.py` | `AdamNamespace` — the BDS namespace class with 22 verbs including record-generating verbs (`derive_summary_records`, `derive_locf_records`, `derive_param`)                                                                          |
 
 **The 9 ADaM derivation verbs:**
 
@@ -168,14 +168,17 @@ Registers `df.adam` on every Polars DataFrame.
 
 **`std_function` — standard ADaM functions:**
 
-| `func=`           | Extra params                      | Calculates                                 |
-| ----------------- | --------------------------------- | ------------------------------------------ |
-| `"study_day"`     | `analysis_date`, `reference_date` | `ADY = ADT - RFSTDTC + 1` (signed)         |
-| `"baseline"`      | `aval`, `baseline_flag`           | `BASE = AVAL` at the baseline record       |
-| `"chg"`           | `aval`, `base`                    | `CHG = AVAL - BASE`                        |
-| `"pchg"`          | `aval`, `base`                    | `PCHG = (AVAL - BASE) / BASE * 100`        |
-| `"flag_baseline"` | `baseline_criteria`               | Sets `ABLFL = "Y"` where condition is true |
-| `"bmi"`           | `height`, `weight`                | `BMI = weight / (height/100)²`             |
+| `func=`           | Extra params                      | Calculates                                   |
+| ----------------- | --------------------------------- | -------------------------------------------- |
+| `"study_day"`     | `analysis_date`, `reference_date` | `ADY = ADT - RFSTDTC + 1` (signed)           |
+| `"baseline"`      | `aval`, `baseline_flag`           | `BASE = AVAL` at the baseline record         |
+| `"chg"`           | `aval`, `base`                    | `CHG = AVAL - BASE`                          |
+| `"pchg"`          | `aval`, `base`                    | `PCHG = (AVAL - BASE) / BASE * 100`          |
+| `"flag_baseline"` | `baseline_criteria`               | Sets `ABLFL = "Y"` where condition is true   |
+| `"bmi"`           | `height`, `weight`                | `BMI = weight / (height/100)²`               |
+| `"bsa"`           | `height`, `weight`, `method`      | Body Surface Area (4 methods)                |
+| `"map"`           | `systolic`, `diastolic`           | Mean Arterial Pressure                       |
+| `"qtc"`           | `qt`, `rr`, `method`              | Corrected QT interval (Fridericia or Bazett) |
 
 **Special methods** (same as SDTM):
 

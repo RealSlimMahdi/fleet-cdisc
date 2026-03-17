@@ -108,32 +108,43 @@ This means you pay no cost for columns you don't chain. Expression ordering mirr
 
 ## ADaM verbs at a glance
 
-| Verb                                               | Purpose                           |
-| -------------------------------------------------- | --------------------------------- |
-| `source(target)`                                   | Pass-through column               |
-| `derivation(target, expression)`                   | Arbitrary `pl.Expr`               |
-| `assigned(target, value)`                          | Constant literal                  |
-| `study_day(target, analysis_date, reference_date)` | CDISC study-day formula           |
-| `flag(target, criteria, groups)`                   | Per-group boolean flag            |
-| `baseline(target, aval, baseline_flag)`            | Carry baseline AVAL within groups |
-| `chg(target, aval, base)`                          | Change from baseline              |
-| `pchg(target, aval, base)`                         | Percent change from baseline      |
-| `imputation(target, method, groups)`               | LOCF / WOCF imputation            |
-| `to_frame()`                                       | Materialise                       |
+| Verb                                               | Purpose                                   |
+| -------------------------------------------------- | ----------------------------------------- |
+| `source(target)`                                   | Pass-through column                       |
+| `derivation(target, expression)`                   | Arbitrary `pl.Expr`                       |
+| `assigned(target, value)`                          | Constant literal                          |
+| `study_day(target, analysis_date, reference_date)` | CDISC study-day formula                   |
+| `flag(target, criteria, groups)`                   | Per-group boolean flag                    |
+| `baseline(target, aval, baseline_flag)`            | Carry baseline AVAL within groups         |
+| `chg(target, aval, base)`                          | Change from baseline                      |
+| `pchg(target, aval, base)`                         | Percent change from baseline              |
+| `bmi(target, weight, height)`                      | Body Mass Index                           |
+| `nrind(target, value, low, high)`                  | Normal range indicator (LOW/NORMAL/HIGH)  |
+| `on_treatment(target, adt, trtsdt, trtedt)`        | On-treatment flag                         |
+| `shift(target, baseline_cat, post_cat)`            | Categorical shift string                  |
+| `bsa(target, weight, height, method)`              | Body Surface Area (4 methods)             |
+| `map(target, systolic, diastolic)`                 | Mean Arterial Pressure                    |
+| `qtc(target, qt, rr, method)`                      | Corrected QT interval (Fridericia/Bazett) |
+| `derive_summary_records(by_vars, ...)`             | Aggregate by group, append summary rows   |
+| `derive_locf_records(by_vars, ...)`                | Forward-fill (LOCF) within patient groups |
+| `derive_param(by_vars, ...)`                       | Derive a new parameter and append as rows |
+| `to_frame()`                                       | Materialise                               |
 
 ---
 
 ## ADSL verbs at a glance
 
-| Verb                                                | Purpose                           |
-| --------------------------------------------------- | --------------------------------- |
-| `source(target)`                                    | Pass-through column               |
-| `first_date(target, from_dataset, date_col, where)` | Earliest event date per subject   |
-| `last_date(target, from_dataset, date_col, where)`  | Latest event date per subject     |
-| `duration(target, start_date, end_date)`            | Integer day count                 |
-| `eligibility_flag(target, criteria)`                | `"Y"` flag based on row condition |
-| `count_events(target, from_dataset, where)`         | Event count per subject           |
-| `to_frame()`                                        | Materialise                       |
+| Verb                                                | Purpose                                   |
+| --------------------------------------------------- | ----------------------------------------- |
+| `source(target)`                                    | Pass-through column                       |
+| `first_date(target, from_dataset, date_col, where)` | Earliest event date per subject           |
+| `last_date(target, from_dataset, date_col, where)`  | Latest event date per subject             |
+| `duration(target, start_date, end_date)`            | Integer day count                         |
+| `eligibility_flag(target, criteria)`                | `"Y"` flag based on row condition         |
+| `count_events(target, from_dataset, where)`         | Event count per subject                   |
+| `age_years(target, age_col, age_unit_col)`          | Unit-aware age conversion to years        |
+| `derive_period(periods, start_date)`                | Subperiod/Phase variables (APxxSDT, etc.) |
+| `to_frame()`                                        | Materialise                               |
 
 ---
 

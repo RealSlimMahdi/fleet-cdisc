@@ -645,25 +645,31 @@ uv sync --extra io
 
 ### ADaM verbs — `df.adam` (BDS)
 
-| Verb             | When to use                                                            |
-| ---------------- | ---------------------------------------------------------------------- |
-| `source`         | Carry over a variable from SDTM unchanged                              |
-| `derivation`     | Calculate from a Polars expression (arbitrary logic)                   |
-| `assigned`       | Global constant (STUDYID, DTYPE…)                                      |
-| `recode`         | Map categorical values to analysis-ready labels                        |
-| `rename`         | Rename SDTM variable to ADaM name (VSDTC → ADT)                        |
-| `condderivation` | Multi-branch conditional with complex expressions                      |
-| `lookup`         | Join a reference dataset (TRTSDT from DM, lab normals…)                |
-| `whereclauses`   | Filter the dataset to a subpopulation                                  |
-| `study_day`      | ADY = (ADT − TRTSDT) + 1, CDISC convention                             |
-| `baseline`       | BASE = AVAL at the baseline record (ABLFL == "Y")                      |
-| `chg`            | CHG = AVAL − BASE                                                      |
-| `pchg`           | PCHG = (AVAL − BASE) / BASE × 100                                      |
-| `flag`           | General "Y" flag — expression, or `first`/`last`/`max`/`min` shorthand |
-| `bmi`            | BMI = weight / (height / 100)²                                         |
-| `nrind`          | LOW / NORMAL / HIGH vs normal range columns                            |
-| `on_treatment`   | ONTRTFL = "Y" when ADT within [TRTSDT, TRTEDT]                         |
-| `shift`          | Categorical shift string: "NORMAL to HIGH"                             |
+| Verb                     | When to use                                                            |
+| ------------------------ | ---------------------------------------------------------------------- |
+| `source`                 | Carry over a variable from SDTM unchanged                              |
+| `derivation`             | Calculate from a Polars expression (arbitrary logic)                   |
+| `assigned`               | Global constant (STUDYID, DTYPE…)                                      |
+| `recode`                 | Map categorical values to analysis-ready labels                        |
+| `rename`                 | Rename SDTM variable to ADaM name (VSDTC → ADT)                        |
+| `condderivation`         | Multi-branch conditional with complex expressions                      |
+| `lookup`                 | Join a reference dataset (TRTSDT from DM, lab normals…)                |
+| `whereclauses`           | Filter the dataset to a subpopulation                                  |
+| `study_day`              | ADY = (ADT − TRTSDT) + 1, CDISC convention                             |
+| `baseline`               | BASE = AVAL at the baseline record (ABLFL == "Y")                      |
+| `chg`                    | CHG = AVAL − BASE                                                      |
+| `pchg`                   | PCHG = (AVAL − BASE) / BASE × 100                                      |
+| `flag`                   | General "Y" flag — expression, or `first`/`last`/`max`/`min` shorthand |
+| `bmi`                    | BMI = weight / (height / 100)²                                         |
+| `nrind`                  | LOW / NORMAL / HIGH vs normal range columns                            |
+| `on_treatment`           | ONTRTFL = "Y" when ADT within [TRTSDT, TRTEDT]                         |
+| `shift`                  | Categorical shift string: "NORMAL to HIGH"                             |
+| `bsa`                    | Body Surface Area (Mosteller, DuBois, Haycock, Gehan-George)           |
+| `map`                    | Mean Arterial Pressure: DBP + (SBP − DBP) / 3                          |
+| `qtc`                    | Corrected QT interval (Fridericia or Bazett method)                    |
+| `derive_summary_records` | Aggregate by group and append summary rows to the dataset              |
+| `derive_locf_records`    | Forward-fill (LOCF) within patient groups                              |
+| `derive_param`           | Derive a new parameter from existing records and append as rows        |
 
 ### ADSL verbs — `df.adsl` (one row per subject)
 
@@ -675,6 +681,8 @@ uv sync --extra io
 | `duration`                                                                               | Days between two date columns (TRTDURD, DTHADY…)                 |
 | `count_events`                                                                           | Count matching records per subject (NUMAE, NUMSAE…); 0 when none |
 | `eligibility_flag`                                                                       | "Y" population flags (SAFFL, ITTFL, PPROTFL…)                    |
+| `age_years`                                                                              | Unit-aware age conversion (YEARS, MONTHS, WEEKS, DAYS → years)   |
+| `derive_period`                                                                          | Create Subperiod/Phase variables (APxxSDT, APxxEDT, TRTxxP)      |
 
 ### OCCDS verbs — `df.occds` (one row per event)
 
@@ -812,6 +820,117 @@ adlb = (
 
 ---
 
+## Part 12b — Admiral-Parity BDS Verbs (`bsa`, `map`, `qtc`, `derive_summary_records`, `derive_locf_records`, `derive_param`)
+
+These verbs close the feature gap with the Admiral R package.
+
+### 12b.1 `bsa` — Body Surface Area
+
+Calculates BSA in m². Supports four standard methods.
+
+```python
+advs = (
+    vs_sdtm.adam
+    .bsa("BSA",
+         weight="WEIGHT",
+         height="HEIGHT",
+         method="Mosteller")    # also: "DuBois", "Haycock", "Gehan-George"
+    .to_frame()
+)
+```
+
+---
+
+### 12b.2 `map` — Mean Arterial Pressure
+
+```python
+advs = (
+    vs_sdtm.adam
+    .map("MAP",
+         systolic="SYSBP",
+         diastolic="DIABP")    # MAP = DBP + (SBP - DBP) / 3
+    .to_frame()
+)
+```
+
+---
+
+### 12b.3 `qtc` — Corrected QT Interval
+
+```python
+adeg = (
+    eg_sdtm.adam
+    .qtc("QTCF",
+         qt="QT",
+         rr="RR",
+         method="Fridericia")    # also: "Bazett"
+    .to_frame()
+)
+```
+
+---
+
+### 12b.4 `derive_summary_records` — Aggregate and append new rows
+
+Computes a summary statistic per group and appends the results as new records to the dataset.
+
+```python
+advs = (
+    vs_sdtm.adam
+    .source("USUBJID")
+    .source("PARAMCD")
+    .derivation("AVAL", expression="VSSTRESN")
+    .derive_summary_records(
+        by_vars=["USUBJID", "PARAMCD"],
+        analysis_var="AVAL",
+        set_values_to={"DTYPE": "AVERAGE"},
+        stat="mean",    # also: "sum", "min", "max", "median", "count"
+    )
+    .to_frame()
+)
+# New rows are appended with DTYPE="AVERAGE" and AVAL set to the mean per group.
+```
+
+---
+
+### 12b.5 `derive_locf_records` — Last Observation Carried Forward
+
+Forward-fills null values in `analysis_var` within each group.
+
+```python
+advs = (
+    vs_sdtm.adam
+    .derive_locf_records(
+        by_vars=["USUBJID", "PARAMCD"],
+        analysis_var="AVAL",
+        order_by="ADT",
+    )
+    .to_frame()
+)
+```
+
+---
+
+### 12b.6 `derive_param` — Derive a new parameter from existing records
+
+Pivots source parameters, computes a new AVAL, and appends the computed rows. This is the record-level equivalent of `.bmi()` — instead of adding a column, it adds rows.
+
+```python
+advs = (
+    vs_sdtm.adam
+    .derive_param(
+        by_vars=["USUBJID", "ADT"],
+        set_values_to={"PARAMCD": "BMI", "PARAM": "Body Mass Index"},
+        parameter_filter={"WEIGHT": "WEIGHT", "HEIGHT": "HEIGHT"},
+        analysis_value=pl.col("WEIGHT") / (pl.col("HEIGHT") / 100) ** 2,
+    )
+    .to_frame()
+)
+# New rows appear with PARAMCD="BMI" and AVAL computed from the expression.
+```
+
+---
+
 ## Part 13 — ADSL Derivations (`df.adsl`)
 
 `df.adsl` is optimised for patient-level summary datasets (one row per subject).
@@ -925,6 +1044,47 @@ adsl = (
 
 ---
 
+### 13.5 `age_years` — Unit-aware age conversion
+
+Converts age to years, handling common unit strings (YEARS, MONTHS, WEEKS, DAYS). Unknown units return null.
+
+```python
+adsl = (
+    dm_sdtm.adam.adsl
+    .source("USUBJID")
+    .source("AGE")
+    .source("AGEU")
+    .age_years("AAGE", age_col="AGE", age_unit_col="AGEU")
+    .to_frame()
+)
+# AAGE: 45.0 (if AGEU="YEARS"), 5.2 (if AGE=62, AGEU="MONTHS"), etc.
+```
+
+---
+
+### 13.6 `derive_period` — Subperiod / Phase variables
+
+Creates standard period columns (APxxSDT, APxxEDT, TRTxxP) from a list of period definitions.
+
+```python
+adsl = (
+    dm_sdtm.adam.adsl
+    .source("USUBJID")
+    .derive_period(
+        periods=[
+            {"number": 1, "start": "AP01SDT", "end": "AP01EDT",
+             "treatment": "TRT01P"},
+            {"number": 2, "start": "AP02SDT", "end": "AP02EDT",
+             "treatment": "TRT02P"},
+        ],
+    )
+    .to_frame()
+)
+# Creates AP01SDT, AP01EDT, TRT01P, AP02SDT, AP02EDT, TRT02P columns.
+```
+
+---
+
 ## Part 14 — OCCDS Derivations (`df.occds`)
 
 `df.occds` handles occurrence datasets (one row per event, e.g. ADAE, ADCM).
@@ -1013,12 +1173,12 @@ adae = (
 
 ### 15.1 Environment setup
 
-| Command                                                             | What it does                                      |
-| ------------------------------------------------------------------- | ------------------------------------------------- |
-| `uv sync`                                                           | Install all dependencies from `pyproject.toml`    |
-| `uv sync --extra dev`                                               | Include optional dev extras (linting, formatting) |
-| `uv sync --extra io`                                                | Include optional I/O extras (XPT export, Parquet) |
-| `uv sync --all-extras`                                              | Install all optional extras                       |
+| Command                                                     | What it does                                      |
+| ----------------------------------------------------------- | ------------------------------------------------- |
+| `uv sync`                                                   | Install all dependencies from `pyproject.toml`    |
+| `uv sync --extra dev`                                       | Include optional dev extras (linting, formatting) |
+| `uv sync --extra io`                                        | Include optional I/O extras (XPT export, Parquet) |
+| `uv sync --all-extras`                                      | Install all optional extras                       |
 | `uv run python -c "import fleet; print(fleet.__version__)"` | Verify installed version                          |
 
 ---

@@ -11,8 +11,8 @@ import fleet
 | Module                        | Description                                                  |
 | ----------------------------- | ------------------------------------------------------------ |
 | [`sdtm`](sdtm.md)             | SDTM namespace — 14 derivation verbs                         |
-| [`adam`](adam.md)             | ADaM BDS namespace — 16 derivation verbs                     |
-| [`adsl`](adsl.md)             | ADSL namespace (`df.adam.adsl`) — 6 patient-level verbs      |
+| [`adam`](adam.md)             | ADaM BDS namespace — 22 derivation verbs                     |
+| [`adsl`](adsl.md)             | ADSL namespace (`df.adam.adsl`) — 8 patient-level verbs      |
 | [`occds`](occds.md)           | OCCDS namespace (`df.adam.occds`) — 5 occurrence verbs       |
 | [`ta`](ta.md)                 | Therapeutic-area extensions (`df.adam.<ta>`, including `pk`) |
 | [`define_xml`](define_xml.md) | Define-XML generation, validation, spec generation           |
