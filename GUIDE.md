@@ -1317,3 +1317,29 @@ ctx = StudyContext(
 # Pass context into namespace helpers that accept it
 advs = vs_sdtm.adam.from_spec(ctx.adam_spec("advs")).to_frame()
 ```
+
+---
+
+## Maintaining `llms.txt`
+
+`llms.txt` is **generated — never edit it by hand**. All content lives in `scripts/build_llms.py` (static sections as Python strings) or in `examples/*.py` (example code embedded at runtime).
+
+### Regenerate
+
+```bash
+uv run python scripts/build_llms.py
+```
+
+### CI stale-check (exit 1 if out of date)
+
+```bash
+uv run python scripts/build_llms.py --check
+```
+
+### Where to make changes
+
+| What to change                                     | Where to edit                                                               |
+| -------------------------------------------------- | --------------------------------------------------------------------------- |
+| Static section content (verb tables, rules, prose) | `scripts/build_llms.py` — edit the relevant `_*_section()` function         |
+| Example code (Golden Master section)               | `examples/cdiscpilot01_inline.py` or `examples/cdiscpilot01_spec_driven.py` |
+| Section order                                      | `scripts/build_llms.py` — edit the `build()` function                       |

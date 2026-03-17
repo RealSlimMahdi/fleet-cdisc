@@ -1,0 +1,449 @@
+#!/usr/bin/env python3
+"""
+Generate llms.txt from static Python strings + live example files.
+
+Usage
+-----
+# Regenerate llms.txt (written to repo root by default):
+    uv run python scripts/build_llms.py
+
+# Write to a custom path:
+    uv run python scripts/build_llms.py --output path/to/llms.txt
+
+# CI stale-check (exits 1 if llms.txt is out of date):
+    uv run python scripts/build_llms.py --check
+
+Editing guide
+-------------
+* Static section content  → edit the string-returning functions below.
+* Example code            → edit examples/cdiscpilot01_inline.py or
+                            examples/cdiscpilot01_spec_driven.py.
+* Section order           → edit build().
+* Never edit llms.txt by hand — it is overwritten on every run.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).parent.parent
+
+
+# ---------------------------------------------------------------------------
+# Helper
+# ---------------------------------------------------------------------------
+
+def _example(filename: str) -> str:
+    """Read examples/<filename> and wrap it in a fenced python code block."""
+    path = REPO_ROOT / "examples" / filename
+    source = path.read_text(encoding="utf-8")
+    return f"```python\n{source}\n```"
+
+
+# ---------------------------------------------------------------------------
+# Section builders
+# ---------------------------------------------------------------------------
+
+def _header_section() -> str:
+    return """\
+# Fleet
+
+> CDISC SDTM/ADaM derivation toolkit for Polars DataFrames.
+
+Fleet adds chainable verb pipelines directly onto every Polars DataFrame so you can build \
+standards-compliant CDISC datasets with minimal boilerplate. Importing the package registers \
+`.sdtm` and `.adam` namespaces automatically.\
+"""
+
+
+def _rules_section() -> str:
+    return """\
+## Rules for AI Agents
+
+1. **Fleet-first verb priority** — Always reach for a named Fleet verb (`study_day`, \
+`baseline`, `chg`, `treatment_emergent`, …) before falling back to a raw \
+`derivation(expression=...)` call. Named verbs encode CDISC semantics, enforce correct \
+argument names, and appear in Define-XML traceability. Use `derivation` only as a last \
+resort for logic not yet covered by a typed verb.
+
+2. **Polars-only** — Fleet pipelines are built on Polars. Never introduce Pandas, NumPy \
+array operations, or any other DataFrame library. All expressions must be `pl.Expr` objects \
+or expression strings that Fleet will evaluate with `eval()`.
+
+3. **Lazy execution** — No computation happens until `.to_frame()` is called. Intermediate \
+verbs only accumulate expressions. Do not attempt to inspect column values mid-chain; \
+materialise first (`to_frame()`) when a result must exist before the next derivation step \
+(e.g. `ABLFL` must exist before `baseline()`).\
+"""
+
+
+def _install_section() -> str:
+    return """\
+## Install
+
+```
+pip install fleet-cdisc
+```\
+"""
+
+
+def _quickstart_section() -> str:
+    return """\
+## Quickstart
+
+```python
+import fleet
+import polars as pl
+
+dm = (
+    raw_df.sdtm
+    .hardcode_no_ct("DOMAIN",  value="DM")
+    .hardcode_no_ct("STUDYID", value="MYSTUDY01")
+    .assign_no_ct("USUBJID",   source="patient_id")
+    .assign_ct("SEX", source="sex_raw",
+               ct_codelist="C66731", ct_mapping={"M": "M", "F": "F"})
+    .to_frame()
+)
+```
+
+Nothing runs until `.to_frame()`. All verbs accumulate into a single `df.with_columns(...)` pass.\
+"""
+
+
+def _golden_master_section() -> str:
+    inline = _example("cdiscpilot01_inline.py")
+    spec = _example("cdiscpilot01_spec_driven.py")
+    return f"""\
+## Golden Master Examples
+
+These are the canonical end-to-end reference pipelines. Prefer these patterns when generating \
+Fleet code — they demonstrate correct chaining, namespace switching, and materialisation points.
+
+### Inline pipeline
+
+{inline}
+
+### Spec-driven pipeline
+
+{spec}\
+"""
+
+
+def _namespaces_section() -> str:
+    return """\
+## Namespaces
+
+- `df.sdtm` — 14 SDTM derivation verbs (domain mapping, CT lookup, datetime normalisation)
+- `df.adam` — ADaM BDS verbs (study day, baseline, change, flags, BSA, MAP, QTc, LOCF, \
+summary records, derived parameters)
+- `df.adam.adsl` — patient-level verbs (treatment dates, duration, population flags, AE \
+counts, age conversion, periods)
+- `df.adam.occds` — occurrence verbs (treatment-emergent flag, worst severity, onset/recovery \
+dates, sequence number)
+
+### Therapeutic-area extensions (via `df.adam.<ta>`)
+
+- `df.adam.onco` — Oncology: AVAL response, BOR, filter_pd
+- `df.adam.ophtha` — Ophthalmology: ETDRS/LogMAR, study eye derivation
+- `df.adam.peds` — Pediatrics: age derivations, prematurity flag
+- `df.adam.vaccine` — Vaccine: fever flag, seroconversion, ADIS AVAL
+- `df.adam.metabolic` — Metabolic: waist-to-hip ratio, body fat %
+- `df.adam.neuro` — Neuroscience: Centiloid, MMSE, CDR-SoB\
+"""
+
+
+def _sdtm_verbs_section() -> str:
+    return """\
+## SDTM verbs
+
+- `assign_no_ct(target, *, source)` — copy raw column, no CT validation
+- `hardcode_no_ct(target, *, value)` — constant literal for all rows
+- `hardcode_ct(target, *, value, ct_codelist=None)` — constant literal, CT-validated
+- `assign_ct(target, *, source, ct_codelist, ct_mapping=None)` — recode through CT codelist
+- `assign_datetime(target, *, source, mode)` — normalise to ISO 8601 date/datetime
+- `derivation(target, *, expression)` — arbitrary Polars expression
+- `condition_add(target, *, condition, then_value)` — `IF condition THEN value ELSE NULL`
+- `if_then_else(target, *, when, else_value=None)` — multi-branch conditional
+- `ae_aerel(target, *, source, aerel_map=None)` — standard AE relatedness mapping
+- `merge(target_cols=None, *, dataset, on, how="left")` — join another DataFrame
+- `remove_dup(*, subset=None, keep="first")` — deduplicate rows
+- `group_by(*, group_cols, agg)` — group-and-aggregate
+- `dataset_level(target, *, value)` — alias for `hardcode_no_ct`; marks dataset-level constants
+- `notsubmitted(*targets)` — set one or more columns to null (not for submission)
+- `multiple_responses(target, *, source, delimiter="|", id_cols=None)` — expand pipe-delimited fields
+- `to_frame()` — materialise\
+"""
+
+
+def _shared_adam_verbs_section() -> str:
+    return """\
+## Shared ADaM verbs (available on all sub-namespaces)
+
+These verbs are defined once in `SharedADaMVerbsMixin` (`src/fleet/adam/_mixins.py`) and \
+inherited by every ADaM sub-namespace: `adsl`, `occds`, `onco`, `ophtha`, `peds`, `vaccine`, \
+`metabolic`, `neuro`. You can call them directly on any sub-namespace without switching \
+back to the base `adam` namespace.
+
+- `source(target, *, from_col=None)` — pass-through column from prior dataset
+- `derivation(target, *, expression)` — arbitrary Polars expression string or `pl.Expr`
+- `assigned(target, *, value)` — constant literal for all rows
+- `recode(target, *, source, recode_map, default=None)` — map raw values to new values
+- `rename(target, *, source)` — rename a column (e.g. `VSDTC → ADT`)
+- `condderivation(target, *, conditions, else_value=None)` — multi-branch conditional derivation
+- `whereclauses(*, where)` — filter rows by expression (materialises internally)
+- `merge_adsl(adsl_dataset, *, on="USUBJID", vars=None)` — join ADSL columns onto current dataset
+- `seq(target, *, groups)` — sequential 1-based record number per group\
+"""
+
+
+def _adam_verbs_section() -> str:
+    return """\
+## ADaM verbs
+
+Available on `df.adam` (BDS base namespace). Shared verbs (source, derivation, assigned, \
+recode, rename, condderivation, whereclauses, merge_adsl, seq) are also available here via \
+the shared mixin.
+
+- `study_day(target, *, analysis_date, reference_date)` — CDISC study-day formula \
+(`ADY = ADT − RFSTDTC + 1`, signed)
+- `flag(target, *, criteria, groups)` — per-group boolean flag (e.g. `ABLFL`)
+- `baseline(target, *, aval, baseline_flag, groups)` — carry `AVAL` at baseline row into `BASE`
+- `chg(target, *, aval, base)` — change from baseline (`CHG = AVAL − BASE`)
+- `pchg(target, *, aval, base)` — percent change from baseline
+- `bmi(target, *, weight, height)` — Body Mass Index (`weight / (height/100)²`)
+- `bsa(target, *, weight, height, method)` — Body Surface Area (Mosteller, DuBois, Haycock, Gehan)
+- `map(target, *, systolic, diastolic)` — Mean Arterial Pressure (`(SBP + 2×DBP) / 3`)
+- `qtc(target, *, qt, rr, method)` — Corrected QT interval (Fridericia or Bazett)
+- `nrind(target, *, value, low, high)` — normal range indicator (`LOW / NORMAL / HIGH`)
+- `on_treatment(target, *, adt, trtsdt, trtedt)` — on-treatment flag
+- `shift(target, *, baseline_cat, post_cat)` — categorical shift string
+- `derive_summary_records(*, by_vars, analysis_var, set_values_to, stat)` — aggregate and append summary rows
+- `derive_locf_records(*, by_vars, analysis_var, order_by)` — forward-fill (LOCF) within groups
+- `derive_param(*, by_vars, set_values_to, parameter_filter, analysis_value)` — derive new parameter rows
+- `lookup(target_cols=None, *, dataset, on, how="left", where=None)` — left-join a reference DataFrame
+- `assign_datetime(target, *, source, mode)` — normalise date string to ISO 8601
+- `from_spec(spec_path, *, dataset)` — execute all derivations defined in `define.yaml`
+- `to_frame()` — materialise\
+"""
+
+
+def _adsl_verbs_section() -> str:
+    return """\
+## ADSL verbs
+
+- `source(target)` — pass-through column
+- `first_date(target, *, from_dataset, date_col, where=None)` — earliest event date per subject
+- `last_date(target, *, from_dataset, date_col, where=None)` — latest event date per subject
+- `duration(target, *, start_date, end_date)` — integer day count
+- `eligibility_flag(target, *, criteria)` — `"Y"` / null flag based on row condition
+- `count_events(target, *, from_dataset, where=None)` — integer event count per subject
+- `age_years(target, *, age_col, age_unit_col)` — unit-aware age conversion (YEARS, MONTHS, WEEKS, DAYS)
+- `derive_period(*, periods, start_date)` — create Subperiod/Phase variables (APxxSDT, APxxEDT, TRTxxP)
+- `to_frame()` — materialise\
+"""
+
+
+def _occds_verbs_section() -> str:
+    return """\
+## OCCDS verbs
+
+Available on `df.adam.occds` (and `df.adam.pk` for sequence). Shared verbs \
+(source, derivation, assigned, recode, rename, condderivation, whereclauses, merge_adsl, seq) \
+are also available here via the shared mixin.
+
+- `treatment_emergent(target, *, start_date, trtsdt, trtedt)` — derive TRTEMFL using \
+`TRTSDT ≤ event start ≤ TRTEDT` window
+- `worst_flag(target, *, severity_col, severity_order, groups)` — flag the row with the \
+worst severity value per group (custom ordering)
+- `onset_recovery(*, onset_target, recovery_target, start_col, end_col)` — derive onset \
+and recovery date columns
+- `seq(target, *, groups)` — sequential 1-based record number per group (ASEQ)
+- `to_frame()` — materialise\
+"""
+
+
+def _verb_mapping_section() -> str:
+    return """\
+## Operation → Fleet Verb Mapping
+
+| CDISC Operation | Fleet Verb | Namespace | Notes |
+| --- | --- | --- | --- |
+| Copy column | `assign_no_ct` | `sdtm` | Direct 1:1 rename, no CT |
+| Copy column | `source` | `adam` / all sub-ns | Pass-through column |
+| Rename variable | `rename` | `adam` / all sub-ns | e.g. `VSDTC → ADT` |
+| Constant value | `hardcode_no_ct` | `sdtm` | Same literal for every row |
+| Constant value | `assigned` | `adam` / all sub-ns | Same literal for every row |
+| CT recode | `assign_ct` | `sdtm` | Decodes via codelist |
+| CT recode | `recode` | `adam` / all sub-ns | Map raw→decoded values |
+| Multi-branch conditional | `if_then_else` | `sdtm` | List of `{condition, value}` branches |
+| Multi-branch conditional | `condderivation` | `adam` / all sub-ns | Same pattern as `if_then_else` |
+| Arbitrary expression | `derivation` | `sdtm` / `adam` | Last resort — use a Fleet verb first |
+| ISO datetime parse | `assign_datetime` | `sdtm` / `adam` | Normalises to `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS` |
+| Study day (ADY) | `study_day` | `adam` | `ADY = ADT − RFSTDTC + 1` (signed) |
+| Baseline flag (ABLFL) | `flag` | `adam` | Per-group boolean flag |
+| Baseline value (BASE) | `baseline` | `adam` | Carries AVAL at baseline row |
+| Change from baseline (CHG) | `chg` | `adam` | `CHG = AVAL − BASE` |
+| % change from baseline | `pchg` | `adam` | `PCHG = (AVAL − BASE) / BASE × 100` |
+| BMI | `bmi` | `adam` | `weight / (height/100)²` |
+| BSA | `bsa` | `adam` | 4 methods: Mosteller, DuBois, Haycock, Gehan |
+| Mean arterial pressure (MAP) | `map` | `adam` | `(SBP + 2×DBP) / 3` |
+| Corrected QT (QTc) | `qtc` | `adam` | Fridericia or Bazett method |
+| Normal range indicator | `nrind` | `adam` | Returns `LOW / NORMAL / HIGH` |
+| On-treatment flag | `on_treatment` | `adam` | `TRTSDT ≤ ADT ≤ TRTEDT` |
+| Categorical shift | `shift` | `adam` | `"BASELINE / POST-BASELINE"` string |
+| LOCF imputation records | `derive_locf_records` | `adam` | Forward-fill within patient groups |
+| Summary records | `derive_summary_records` | `adam` | Aggregate and append summary rows |
+| Derived parameter rows | `derive_param` | `adam` | New parameter rows from existing ones |
+| Join reference dataset | `lookup` | `adam` | Left-join another DataFrame into lazy plan |
+| Merge ADSL columns | `merge_adsl` | `adam` / all sub-ns | Join ADSL onto current dataset |
+| Filter rows | `whereclauses` | `adam` / all sub-ns | Filter by expression (materialises first) |
+| Treatment dates (ADSL) | `first_date` / `last_date` | `adam.adsl` | Earliest/latest event date per subject |
+| Treatment duration (TRTDURD) | `duration` | `adam.adsl` | Integer day count between two date columns |
+| Population flag (SAFFL, etc.) | `eligibility_flag` | `adam.adsl` | `"Y"` / null based on row condition |
+| Event count (NUMAE, NUMSAE) | `count_events` | `adam.adsl` | Integer event count per subject |
+| Age conversion | `age_years` | `adam.adsl` | Unit-aware: YEARS, MONTHS, WEEKS, DAYS |
+| Period variables | `derive_period` | `adam.adsl` | APxxSDT, APxxEDT, TRTxxP |
+| Sequence number (ASEQ) | `seq` | `adam.occds` / `adam.pk` | Sequential 1-based record number per group |
+| Worst severity | `worst_flag` | `adam.occds` | Worst value per group (custom ordering) |
+| Treatment-emergent flag | `treatment_emergent` | `adam.occds` | TRTEMFL using TRTSDT/TRTEDT window |
+| Onset/recovery dates | `onset_recovery` | `adam.occds` | Onset and recovery date derivation |
+| Run spec derivations | `from_spec` | `adam` | Execute all derivations defined in define.yaml |\
+"""
+
+
+def _define_yaml_section() -> str:
+    return """\
+## define.yaml
+
+A single YAML file is the source of truth for a study: it declares output variables, \
+derivation algorithms, codelists, and structural metadata. The same file drives Define-XML 2.1 \
+generation, pipeline execution, and post-dataset checks.
+
+### Derivation algorithms
+
+- `assigned` → `.assigned(target, value=...)`
+- `source` → `.source(target, from_col=...)`
+- `derivation` → `.derivation(target, expression=...)`
+- `first_date` → `.first_date(target, from_dataset=..., date_col=..., where=...)`
+- `last_date` → `.last_date(...)`
+- `duration` → `.duration(target, start_date=..., end_date=...)`
+- `flag` → `.eligibility_flag(target, criteria=...)`
+- `count` → `.count_events(target, from_dataset=..., where=...)`
+
+### Spec-driven pipeline
+
+```python
+from fleet import load_study_context
+
+ctx = load_study_context("specs/cdiscpilot01/adam/define.yaml")
+adsl = ctx.build("ADSL")
+```
+
+### Define-XML generation
+
+```python
+from fleet import DefineXMLGenerator
+
+gen = DefineXMLGenerator("specs/cdiscpilot01/adam/define.yaml")
+gen.write("outputs/cdiscpilot01/define_adam.xml")
+```\
+"""
+
+
+def _ct_section() -> str:
+    return """\
+## Controlled Terminology
+
+```python
+from fleet import CTValidator
+
+ct = CTValidator.get_instance()
+ct.load_ct_file("specs/ct/sdtm_ct.yaml")
+ok, msg = ct.validate_value("C66731", "M")
+```\
+"""
+
+
+def _docs_section() -> str:
+    return """\
+## Documentation
+
+Full docs: https://realslimmahdi.github.io/fleet-cdisc/
+
+- Getting started: https://realslimmahdi.github.io/fleet-cdisc/getting-started/installation/
+- define.yaml guide: https://realslimmahdi.github.io/fleet-cdisc/concepts/define-yaml/
+- API reference: https://realslimmahdi.github.io/fleet-cdisc/api/
+- ADSL example notebook: https://realslimmahdi.github.io/fleet-cdisc/examples/adsl_pipeline/\
+"""
+
+
+# ---------------------------------------------------------------------------
+# Assembly
+# ---------------------------------------------------------------------------
+
+def build() -> str:
+    """Assemble all sections into the final llms.txt content."""
+    sections = [
+        _header_section(),
+        _rules_section(),
+        _install_section(),
+        _quickstart_section(),
+        _golden_master_section(),
+        _namespaces_section(),
+        _sdtm_verbs_section(),
+        _shared_adam_verbs_section(),
+        _adam_verbs_section(),
+        _adsl_verbs_section(),
+        _occds_verbs_section(),
+        _verb_mapping_section(),
+        _define_yaml_section(),
+        _ct_section(),
+        _docs_section(),
+    ]
+    return "\n\n".join(sections) + "\n"
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Generate llms.txt from static strings + example files."
+    )
+    parser.add_argument(
+        "--output",
+        default=str(REPO_ROOT / "llms.txt"),
+        help="Output path (default: llms.txt at repo root)",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Exit 1 if llms.txt is stale (do not write)",
+    )
+    args = parser.parse_args()
+
+    content = build()
+    output_path = Path(args.output)
+
+    if args.check:
+        if not output_path.exists():
+            print(f"STALE: {output_path} does not exist. Run without --check to generate it.")
+            sys.exit(1)
+        existing = output_path.read_text(encoding="utf-8")
+        if existing != content:
+            print(
+                f"STALE: {output_path} is out of date. "
+                "Run `uv run python scripts/build_llms.py` to regenerate."
+            )
+            sys.exit(1)
+        print(f"OK: {output_path} is up to date.")
+    else:
+        output_path.write_text(content, encoding="utf-8")
+        print(f"Written: {output_path}")
+
+
+if __name__ == "__main__":
+    main()

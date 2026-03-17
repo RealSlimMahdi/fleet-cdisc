@@ -26,7 +26,10 @@ Fleet/
 │   ├── fixtures/           # CT files, spec YAMLs, raw CSVs for tests
 │   └── unit/               # Unit tests per module
 │
-├── examples/               # (reserved for notebooks / scripts)
+├── examples/               # End-to-end reference pipelines (cdiscpilot01_inline.py, …)
+├── scripts/                # Developer utility scripts
+│   └── build_llms.py       # llms.txt generator (run: uv run python scripts/build_llms.py)
+├── llms.txt                # LLM context file — GENERATED, do not edit by hand
 ├── pyproject.toml          # Build config, dependencies, tool settings
 └── uv.lock                 # Locked dependency tree
 ```
@@ -286,6 +289,16 @@ Run the suite:
 ```bash
 uv run pytest tests/ -v
 ```
+
+---
+
+## `scripts/` — Developer Utilities
+
+| File            | Purpose                                                                                                                                                               |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `build_llms.py` | Generates `llms.txt` from static Python strings and live `examples/*.py` files. Run with `uv run python scripts/build_llms.py`. Use `--check` for CI stale detection. |
+
+`llms.txt` is the only output of this script and must never be edited by hand.
 
 ---
 
