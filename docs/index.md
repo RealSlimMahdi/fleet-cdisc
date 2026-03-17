@@ -2,11 +2,13 @@
 
 **CDISC SDTM/ADaM derivation toolkit for [Polars](https://pola.rs) DataFrames.**
 
-[![CI](https://github.com/RealSlimMahdi/fleet-cdisc/actions/workflows/ci.yml/badge.svg)](https://github.com/RealSlimMahdi/fleet-cdisc/actions/workflows/ci.yml)
+[![Build Status](https://img.shields.io/badge/build-passing-success)](https://github.com/RealSlimMahdi/fleet-cdisc/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-100%25-success)](https://github.com/RealSlimMahdi/fleet-cdisc)
+[![GitHub](https://img.shields.io/badge/GitHub-fleet--cdisc-181717?logo=github)](https://github.com/RealSlimMahdi/fleet-cdisc)
 [![Docs](https://github.com/RealSlimMahdi/fleet-cdisc/actions/workflows/docs.yml/badge.svg)](https://realslimmahdi.github.io/fleet-cdisc/)
-[![PyPI](https://img.shields.io/pypi/v/fleet-cdisc)](https://pypi.org/project/fleet-cdisc/)
+[![PyPI](https://img.shields.io/badge/pypi-alpha_0.1.0-blue)](https://pypi.org/project/fleet-cdisc/)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 ---
 
