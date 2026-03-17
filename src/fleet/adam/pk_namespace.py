@@ -64,21 +64,27 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         conc_col: str,
         lloq_col: str,
     ) -> Self:
-        """
-        Flag records where the concentration is below the limit of quantification.
+        """Flag records where concentration is below the LLOQ.
 
-        Sets *target* to ``"Y"`` when *conc_col* < *lloq_col*, otherwise ``null``.
+        Sets *target* to ``"Y"`` when *conc_col* < *lloq_col*, null otherwise.
 
-        Parameters
-        ----------
-        conc_col:
-            Column containing the observed concentration value.
-        lloq_col:
-            Column containing the lower limit of quantification (LLOQ).
+        Args:
+            target: Name of the output flag column.
+            conc_col: Column containing the observed concentration.
+            lloq_col: Column containing the lower limit of quantification.
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .blq_flag("BLQFL", conc_col="PCSTRESN", lloq_col="PCLLOQ")
+        Examples:
+            Derive BLQ flag from PC data::
+
+                adpc = (
+                    pc_raw.adam.pk
+                    .blq_flag("BLQFL", conc_col="PCSTRESN",
+                              lloq_col="PCLLOQ")
+                    .to_frame()
+                )
         """
         cond = pl.col(conc_col).cast(pl.Float64) < pl.col(lloq_col).cast(pl.Float64)
         return self._chain(
@@ -96,29 +102,27 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         lloq_col: str,
         method: str = "half_lloq",
     ) -> Self:
-        """
-        Impute BLQ concentrations with a standard substitution method.
+        """Impute BLQ concentrations with a standard substitution method.
 
-        Sets *target* to the imputed (or original) numeric concentration.
+        Args:
+            target: Name of the output numeric column.
+            conc_col: Column containing the observed concentration.
+            lloq_col: Column containing the LLOQ.
+            method: One of ``"half_lloq"`` (default), ``"zero"``, ``"lloq"``,
+                or ``"missing"``.
 
-        Parameters
-        ----------
-        conc_col:
-            Column containing the observed concentration value.
-        lloq_col:
-            Column containing the LLOQ.
-        method:
-            One of:
+        Returns:
+            Self: The namespace with *target* appended.
 
-            * ``"half_lloq"`` (default) — replace BLQ with ``LLOQ / 2``
-            * ``"zero"``                — replace BLQ with ``0``
-            * ``"lloq"``               — replace BLQ with ``LLOQ``
-            * ``"missing"``            — replace BLQ with ``null``
+        Examples:
+            Impute BLQ values with half the LLOQ::
 
-        Example::
-
-            .blq_impute("AVAL", conc_col="PCSTRESN", lloq_col="PCLLOQ")
-            .blq_impute("AVAL", conc_col="PCSTRESN", lloq_col="PCLLOQ", method="zero")
+                adpc = (
+                    pc_raw.adam.pk
+                    .blq_impute("AVAL", conc_col="PCSTRESN",
+                                lloq_col="PCLLOQ", method="half_lloq")
+                    .to_frame()
+                )
         """
         valid_methods = {"half_lloq", "zero", "lloq", "missing"}
         if method not in valid_methods:
@@ -152,24 +156,27 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         input_unit: str = "h",
         output_unit: str = "h",
     ) -> Self:
-        """
-        Derive nominal elapsed time from a planned timepoint column (e.g. ``PCTPTNUM``).
+        """Derive nominal elapsed time from a planned timepoint column.
 
         Applies a unit conversion from *input_unit* to *output_unit*.
 
-        Parameters
-        ----------
-        from_col:
-            Source column of nominal planned time values (numeric).
-        input_unit:
-            Unit of *from_col* values.  One of ``"s"``, ``"min"``, ``"h"``, ``"d"``.
-        output_unit:
-            Desired unit of *target*.  Same choices as *input_unit*.
+        Args:
+            target: Name of the output column.
+            from_col: Source column of nominal time values (numeric).
+            input_unit: Unit of *from_col* — ``"s"``, ``"min"``, ``"h"``, or ``"d"``.
+            output_unit: Desired unit of *target* (same choices).
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .nominal_time("NTIME", from_col="PCTPTNUM")
-            .nominal_time("NTIME", from_col="PCTPTNUM", input_unit="h", output_unit="d")
+        Examples:
+            Copy nominal time in hours::
+
+                adpc = (
+                    pc_raw.adam.pk
+                    .nominal_time("NTIME", from_col="PCTPTNUM")
+                    .to_frame()
+                )
         """
         valid_units = set(_UNIT_SCALE)
         for u in (input_unit, output_unit):
@@ -190,25 +197,29 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         dose_dtm: str,
         unit: str = "h",
     ) -> Self:
-        """
-        Derive actual elapsed time as the difference between two datetime columns.
+        """Derive actual elapsed time between sample and dose datetimes.
 
-        Parses *sample_dtm* and *dose_dtm* as ISO 8601 datetime strings (or
-        ``pl.Datetime`` columns) and returns the elapsed duration in *unit*.
+        Parses *sample_dtm* and *dose_dtm* as ISO 8601 strings and returns
+        the elapsed duration in *unit*.
 
-        Parameters
-        ----------
-        sample_dtm:
-            Column containing the sample collection datetime.
-        dose_dtm:
-            Column containing the reference dose datetime.
-        unit:
-            Output unit.  One of ``"s"``, ``"min"``, ``"h"``, ``"d"``.
+        Args:
+            target: Name of the output column.
+            sample_dtm: Column containing the sample collection datetime.
+            dose_dtm: Column containing the reference dose datetime.
+            unit: Output unit — ``"s"``, ``"min"``, ``"h"``, or ``"d"``.
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .actual_time("ATIME", sample_dtm="PCDTC", dose_dtm="EXSTDTC")
-            .actual_time("ATIME", sample_dtm="PCDTC", dose_dtm="EXSTDTC", unit="min")
+        Examples:
+            Derive actual time in hours from PC and EX datetimes::
+
+                adpc = (
+                    pc_raw.adam.pk
+                    .actual_time("ATIME", sample_dtm="PCDTC",
+                                 dose_dtm="EXSTDTC")
+                    .to_frame()
+                )
         """
         if unit not in _UNIT_SCALE:
             raise ValueError(
@@ -238,25 +249,26 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         time_col: str,
         window_hrs: float = 1.0,
     ) -> Self:
-        """
-        Flag pre-dose samples within an allowable window before dosing.
+        """Flag pre-dose samples within an allowable window before dosing.
 
-        Sets *target* to ``"Y"`` when ``-window_hrs <= time_col < 0``, else ``null``.
-        Typically applied after :meth:`actual_time` has been derived.
+        Sets *target* to ``"Y"`` when ``-window_hrs <= time_col < 0``.
 
-        Parameters
-        ----------
-        time_col:
-            Column containing the elapsed time relative to dose (hours or
-            the same unit chosen in :meth:`actual_time`).
-        window_hrs:
-            Size of the pre-dose window in the same unit as *time_col*
-            (default ``1.0``).
+        Args:
+            target: Name of the output flag column.
+            time_col: Column containing elapsed time relative to dose.
+            window_hrs: Size of the pre-dose window (default ``1.0``).
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .predose_flag("PREDFL", time_col="ATIME")
-            .predose_flag("PREDFL", time_col="ATIME", window_hrs=2.0)
+        Examples:
+            Flag pre-dose samples within 1 hour::
+
+                adpc = (
+                    pc_raw.adam.pk
+                    .predose_flag("PREDFL", time_col="ATIME")
+                    .to_frame()
+                )
         """
         t = pl.col(time_col).cast(pl.Float64)
         cond = (t >= -window_hrs) & (t < 0.0)
@@ -274,21 +286,27 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         conc_col: str,
         dose_col: str,
     ) -> Self:
-        """
-        Dose-normalise concentration: ``target = conc / dose``.
+        """Dose-normalise concentration: ``target = conc / dose``.
 
-        Returns ``null`` when *dose_col* is null or zero to avoid division errors.
+        Returns null when *dose_col* is null or zero.
 
-        Parameters
-        ----------
-        conc_col:
-            Column containing the concentration (e.g. ``"AVAL"``).
-        dose_col:
-            Column containing the administered dose (e.g. ``"DOSE"``).
+        Args:
+            target: Name of the output column.
+            conc_col: Column containing the concentration.
+            dose_col: Column containing the administered dose.
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .dose_normalized("AVALDNM", conc_col="AVAL", dose_col="DOSE")
+        Examples:
+            Derive dose-normalised concentration::
+
+                adpc = (
+                    pc_raw.adam.pk
+                    .dose_normalized("AVALDNM", conc_col="AVAL",
+                                     dose_col="DOSE")
+                    .to_frame()
+                )
         """
         dose = pl.col(dose_col).cast(pl.Float64)
         conc = pl.col(conc_col).cast(pl.Float64)
@@ -303,35 +321,28 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         dose_indicator: int = 1,
         conc_indicator: int = 0,
     ) -> Self:
-        """
-        Derive Event ID (``EVID``) — a standard Population PK variable.
+        """Derive Event ID (EVID) for Population PK datasets.
 
-        If *from_col* is provided the column is cast to ``Int64`` and aliased;
-        this supports datasets that were built by stacking concentration and
-        dosing records (concentration records ``EVID=0``, dosing records
-        ``EVID=1``).
+        When *from_col* is provided, casts and aliases it.  Otherwise assigns
+        *conc_indicator* to every row.
 
-        When *from_col* is ``None`` the verb assigns *conc_indicator* to every
-        row — useful when the frame already contains only concentration records
-        and the dosing rows will be appended later.
+        Args:
+            target: Name of the output column (default ``"EVID"``).
+            from_col: Existing integer column encoding EVID.
+            dose_indicator: Value for dosing records (default ``1``).
+            conc_indicator: Value for concentration records (default ``0``).
 
-        Parameters
-        ----------
-        from_col:
-            Existing integer column that encodes EVID.  When provided the
-            column is simply cast and aliased.
-        dose_indicator:
-            Integer value that marks dosing records (default ``1``).
-        conc_indicator:
-            Integer value that marks concentration records (default ``0``).
+        Returns:
+            Self: The namespace with *target* appended.
 
-        Example::
+        Examples:
+            Assign EVID=0 to all concentration records::
 
-            # Assign EVID=0 to every row (pure concentration dataset)
-            .evid("EVID")
-
-            # Re-use an existing flag column
-            .evid("EVID", from_col="IS_DOSE_ROW")
+                adpc = (
+                    pc_raw.adam.pk
+                    .evid("EVID")
+                    .to_frame()
+                )
         """
         if from_col is not None:
             expr = pl.col(from_col).cast(pl.Int64).alias(target)
@@ -345,22 +356,26 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         *,
         arrlt_col: str,
     ) -> Self:
-        """
-        Derive Modified Relative Time from Reference Dose (``MRRLT``).
+        """Derive Modified Relative Time (MRRLT): ``max(ARRLT, 0)``.
 
-        Clips negative *arrlt_col* values to zero: ``MRRLT = max(ARRLT, 0)``.
-        Pre-dose records that have a negative actual relative time are set to
-        ``0`` so they align with the reference dose timepoint.
+        Clips negative pre-dose times to zero so they align with the
+        reference dose timepoint.
 
-        Parameters
-        ----------
-        arrlt_col:
-            Column containing the Actual Relative Time from Reference Dose
-            (``ARRLT``), typically derived via :meth:`actual_time`.
+        Args:
+            target: Name of the output column.
+            arrlt_col: Column containing the actual relative time (ARRLT).
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .mrrlt("MRRLT", arrlt_col="ARRLT")
+        Examples:
+            Clip pre-dose relative times to zero::
+
+                adpc = (
+                    pc_raw.adam.pk
+                    .mrrlt("MRRLT", arrlt_col="ARRLT")
+                    .to_frame()
+                )
         """
         t = pl.col(arrlt_col).cast(pl.Float64)
         return self._chain(
@@ -374,22 +389,27 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         conc_col: str,
         lloq_col: str,
     ) -> Self:
-        """
-        Derive a **numeric** BLQ flag (``BLQFN``).
+        """Derive a numeric BLQ flag (``1`` / ``0``).
 
-        Sets *target* to ``1`` when *conc_col* < *lloq_col*, otherwise ``0``.
-        Complements :meth:`blq_flag` which returns a character ``"Y"``/null.
+        Complements :meth:`blq_flag` which returns character ``"Y"``/null.
 
-        Parameters
-        ----------
-        conc_col:
-            Column containing the observed concentration value.
-        lloq_col:
-            Column containing the LLOQ.
+        Args:
+            target: Name of the output column.
+            conc_col: Column containing the observed concentration.
+            lloq_col: Column containing the LLOQ.
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .blqfn("BLQFN", conc_col="PCSTRESN", lloq_col="PCLLOQ")
+        Examples:
+            Derive numeric BLQ indicator::
+
+                adpc = (
+                    pc_raw.adam.pk
+                    .blqfn("BLQFN", conc_col="PCSTRESN",
+                           lloq_col="PCLLOQ")
+                    .to_frame()
+                )
         """
         cond = pl.col(conc_col).cast(pl.Float64) < pl.col(lloq_col).cast(pl.Float64)
         return self._chain(
@@ -403,23 +423,26 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         conc_col: str,
         base: str = "e",
     ) -> Self:
-        """
-        Derive the logarithm of concentration (e.g. ``DVL`` in ADPPK).
+        """Derive the logarithm of concentration.
 
-        Returns ``null`` when *conc_col* is ``null`` or ``≤ 0`` to avoid
-        undefined results.
+        Returns null when *conc_col* is null or <= 0.
 
-        Parameters
-        ----------
-        conc_col:
-            Column containing the numeric concentration (e.g. ``"DV"``).
-        base:
-            Logarithm base: ``"e"`` (natural, default), ``"2"``, or ``"10"``.
+        Args:
+            target: Name of the output column.
+            conc_col: Column containing the numeric concentration.
+            base: Logarithm base — ``"e"`` (default), ``"2"``, or ``"10"``.
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .log_conc("DVL", conc_col="DV")
-            .log_conc("DVL", conc_col="DV", base="10")
+        Examples:
+            Derive natural log of DV::
+
+                adpc = (
+                    pc_raw.adam.pk
+                    .log_conc("DVL", conc_col="DV")
+                    .to_frame()
+                )
         """
         valid_bases = {"e", "2", "10"}
         if base not in valid_bases:
@@ -444,28 +467,27 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         conc_col: str | None = None,
         evid_col: str | None = None,
     ) -> Self:
-        """
-        Derive ``MDV`` (Missing Dependent Variable) for Population PK datasets.
+        """Derive MDV (Missing Dependent Variable) for PopPK datasets.
 
-        NONMEM / PopPK convention: ``MDV = 1`` when the dependent variable is
-        missing or the record is a dosing record; ``MDV = 0`` otherwise.
+        ``MDV = 1`` when the dependent variable is missing or the record is
+        a dosing record; ``0`` otherwise.
 
-        * If *evid_col* is supplied every dosing record (``EVID = 1``) gets
-          ``MDV = 1``.
-        * If *conc_col* is supplied every row with a null concentration gets
-          ``MDV = 1``.
-        * Both conditions can be combined (logical OR).
+        Args:
+            target: Name of the output column (default ``"MDV"``).
+            conc_col: Concentration column (null → ``MDV = 1``).
+            evid_col: Event ID column (``EVID = 1`` → ``MDV = 1``).
 
-        Parameters
-        ----------
-        conc_col:
-            Column containing the concentration value (``DV`` or ``AVAL``).
-        evid_col:
-            Column containing the Event ID flag (``EVID``).
+        Returns:
+            Self: The namespace with *target* appended.
 
-        Example::
+        Examples:
+            Derive MDV from concentration and EVID::
 
-            .mdv("MDV", conc_col="DV", evid_col="EVID")
+                adpc = (
+                    pc_raw.adam.pk
+                    .mdv("MDV", conc_col="DV", evid_col="EVID")
+                    .to_frame()
+                )
         """
         conditions: list[pl.Expr] = []
         if evid_col is not None:
@@ -489,22 +511,27 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         dose_col: str,
         evid_col: str = "EVID",
     ) -> Self:
-        """
-        Derive ``AMT`` (dose amount) for Population PK / NONMEM-style datasets.
+        """Derive AMT (dose amount) for PopPK / NONMEM-style datasets.
 
-        Sets *target* to *dose_col* value on dosing records (``EVID = 1``) and
-        to ``null`` on observation records (``EVID = 0``).
+        Sets *target* to the dose on dosing records (``EVID = 1``) and null
+        on observation records.
 
-        Parameters
-        ----------
-        dose_col:
-            Column containing the administered dose amount (e.g. ``"EXDOSE"``).
-        evid_col:
-            Column containing the Event ID (default ``"EVID"``).
+        Args:
+            target: Name of the output column (default ``"AMT"``).
+            dose_col: Column containing the administered dose amount.
+            evid_col: Column containing the Event ID (default ``"EVID"``).
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .amt("AMT", dose_col="EXDOSE", evid_col="EVID")
+        Examples:
+            Derive AMT from the exposure dose::
+
+                adpc = (
+                    pc_raw.adam.pk
+                    .amt("AMT", dose_col="EXDOSE", evid_col="EVID")
+                    .to_frame()
+                )
         """
         dose = pl.col(dose_col).cast(pl.Float64)
         evid = pl.col(evid_col).cast(pl.Int64)
@@ -520,24 +547,28 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         dose_cmt: int = 1,
         conc_cmt: int = 2,
     ) -> Self:
-        """
-        Derive ``CMT`` (compartment number) for Population PK datasets.
+        """Derive CMT (compartment number) for PopPK datasets.
 
         Assigns *dose_cmt* on dosing records and *conc_cmt* on observation
         records, following NONMEM convention.
 
-        Parameters
-        ----------
-        evid_col:
-            Column containing the Event ID (default ``"EVID"``).
-        dose_cmt:
-            Compartment number for dosing records (default ``1``).
-        conc_cmt:
-            Compartment number for concentration records (default ``2``).
+        Args:
+            target: Name of the output column (default ``"CMT"``).
+            evid_col: Column containing the Event ID (default ``"EVID"``).
+            dose_cmt: Compartment number for dosing records (default ``1``).
+            conc_cmt: Compartment number for concentration records (default ``2``).
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .cmt("CMT", evid_col="EVID", dose_cmt=1, conc_cmt=2)
+        Examples:
+            Assign compartment numbers::
+
+                adpc = (
+                    pc_raw.adam.pk
+                    .cmt("CMT", evid_col="EVID", dose_cmt=1, conc_cmt=2)
+                    .to_frame()
+                )
         """
         evid = pl.col(evid_col).cast(pl.Int64)
         return self._chain(
@@ -557,32 +588,30 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         blq_label: str = "BLQ",
         digits: int = 3,
     ) -> Self:
-        """
-        Derive a listing-ready categorised analysis value (``AVALCAT1``).
+        """Derive a listing-ready categorised analysis value (AVALCAT1).
 
         Encodes BLQ records as *blq_label* and formats numeric concentrations
-        to *digits* significant digits as a string, matching admiral's
-        ``AVALCAT1`` derivation.
+        to *digits* significant digits as a string.
 
-        Parameters
-        ----------
-        conc_col:
-            Column containing the raw concentration string or numeric value.
-            When equal to ``"<BLQ"`` (or null when *lloq_col* is provided for
-            comparison) the BLQ label is used.
-        lloq_col:
-            Optional LLOQ column.  When provided the BLQ check uses
-            ``conc < LLOQ`` on the cast numeric value. When ``None`` the column
-            is treated as a string and ``"<BLQ"`` values are flagged.
-        blq_label:
-            Label for BLQ records (default ``"BLQ"``).
-        digits:
-            Number of significant digits for numeric formatting (default ``3``).
+        Args:
+            target: Name of the output column.
+            conc_col: Column containing the concentration value.
+            lloq_col: Optional LLOQ column for numeric BLQ check.
+            blq_label: Label for BLQ records (default ``"BLQ"``).
+            digits: Significant digits for numeric formatting (default ``3``).
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .avalcat("AVALCAT1", conc_col="PCSTRESC", lloq_col="PCLLOQ")
-            .avalcat("AVALCAT1", conc_col="AVAL", lloq_col="PCLLOQ", digits=3)
+        Examples:
+            Derive AVALCAT1 from concentration and LLOQ::
+
+                adpc = (
+                    pc_raw.adam.pk
+                    .avalcat("AVALCAT1", conc_col="PCSTRESC",
+                             lloq_col="PCLLOQ")
+                    .to_frame()
+                )
         """
         if lloq_col is not None:
             conc_num = pl.col(conc_col).cast(pl.Float64, strict=False)
@@ -609,27 +638,27 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         exclude_dtype: bool = False,
         dtype_col: str = "DTYPE",
     ) -> Self:
-        """
-        Derive an analysis flag variable (``ANL01FL``, ``ANL02FL``, etc.).
+        """Derive an analysis flag variable (ANL01FL, ANL02FL, etc.).
 
-        * When *exclude_dtype* is ``False`` (default): sets *target* to
-          ``"Y"`` for **all** records — equivalent to admiral's ``ANL01FL``.
-        * When *exclude_dtype* is ``True``: sets *target* to ``"Y"`` only for
-          records where *dtype_col* is null (i.e. excludes ``"COPY"`` or
-          ``"HALFLLOQ"`` records) — equivalent to admiral's ``ANL02FL``.
+        When *exclude_dtype* is False (default), all records get ``"Y"``.
+        When True, only records with null *dtype_col* get ``"Y"``.
 
-        Parameters
-        ----------
-        exclude_dtype:
-            When ``True``, ``"Y"`` is only assigned to non-DTYPE records.
-        dtype_col:
-            The ``DTYPE`` column to inspect when *exclude_dtype* is ``True``
-            (default ``"DTYPE"``).
+        Args:
+            target: Name of the output flag column.
+            exclude_dtype: When True, exclude DTYPE records.
+            dtype_col: Column to inspect (default ``"DTYPE"``).
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .anl_flag("ANL01FL")                            # all records
-            .anl_flag("ANL02FL", exclude_dtype=True)        # non-DTYPE only
+        Examples:
+            Flag all records for analysis::
+
+                adpc = (
+                    pc_raw.adam.pk
+                    .anl_flag("ANL01FL")
+                    .to_frame()
+                )
         """
         if exclude_dtype:
             expr = (

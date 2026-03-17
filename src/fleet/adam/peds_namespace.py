@@ -58,14 +58,25 @@ class PedsNamespace(SharedADaMVerbsMixin):
         birth_date: str,
         analysis_date: str,
     ) -> Self:
-        """
-        Compute age in whole days as ``analysis_date - birth_date``.
+        """Compute age in whole days.
 
-        Both columns are cast to ``pl.Date`` before subtraction.
+        Args:
+            target: Name of the output column.
+            birth_date: Column containing the date of birth.
+            analysis_date: Column containing the reference date.
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .age_days("AGEDAYS", birth_date="BRTHDT", analysis_date="RFSTDTC")
+        Examples:
+            Derive age in days from birth and reference dates::
+
+                adsl = (
+                    dm_raw.adam.peds
+                    .age_days("AGEDAYS", birth_date="BRTHDT",
+                              analysis_date="RFSTDTC")
+                    .to_frame()
+                )
         """
         expr = (
             pl.col(analysis_date).cast(pl.Date) - pl.col(birth_date).cast(pl.Date)
@@ -83,12 +94,25 @@ class PedsNamespace(SharedADaMVerbsMixin):
         birth_date: str,
         analysis_date: str,
     ) -> Self:
-        """
-        Compute age in whole months (floor of days / 30.4375).
+        """Compute age in whole months (floor of days / 30.4375).
 
-        Example::
+        Args:
+            target: Name of the output column.
+            birth_date: Column containing the date of birth.
+            analysis_date: Column containing the reference date.
 
-            .age_months("AGEMOS", birth_date="BRTHDT", analysis_date="RFSTDTC")
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Derive age in months::
+
+                adsl = (
+                    dm_raw.adam.peds
+                    .age_months("AGEMOS", birth_date="BRTHDT",
+                                analysis_date="RFSTDTC")
+                    .to_frame()
+                )
         """
         days = (
             pl.col(analysis_date).cast(pl.Date) - pl.col(birth_date).cast(pl.Date)
@@ -108,12 +132,26 @@ class PedsNamespace(SharedADaMVerbsMixin):
         analysis_date: str,
         round_digits: int | None = 2,
     ) -> Self:
-        """
-        Compute age in decimal years (days / 365.25).
+        """Compute age in decimal years (days / 365.25).
 
-        Example::
+        Args:
+            target: Name of the output column.
+            birth_date: Column containing the date of birth.
+            analysis_date: Column containing the reference date.
+            round_digits: Decimal places to round to (default ``2``).
 
-            .age_years("AGE", birth_date="BRTHDT", analysis_date="RFSTDTC")
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Derive age in years::
+
+                adsl = (
+                    dm_raw.adam.peds
+                    .age_years("AGE", birth_date="BRTHDT",
+                               analysis_date="RFSTDTC")
+                    .to_frame()
+                )
         """
         days = (
             pl.col(analysis_date).cast(pl.Date) - pl.col(birth_date).cast(pl.Date)
@@ -135,19 +173,29 @@ class PedsNamespace(SharedADaMVerbsMixin):
         gestational_weeks_col: str,
         term_weeks: int = 40,
     ) -> Self:
-        """
-        Compute gestational-corrected age in decimal years for preterm infants.
+        """Compute gestational-corrected age in decimal years.
 
-        Corrected age = chronological age − prematurity correction
-        where correction = (term_weeks − gestational_weeks) / 52.18 years.
+        Corrected age = chronological age − (term_weeks − gestational_weeks) / 52.18.
+        No correction when gestational weeks >= *term_weeks*.
 
-        If gestational weeks ≥ *term_weeks*, no correction is applied
-        (correction is zero).
+        Args:
+            target: Name of the output column.
+            age_days_col: Column containing age in days.
+            gestational_weeks_col: Column containing gestational age in weeks.
+            term_weeks: Full-term threshold (default ``40``).
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .corrected_age("CORAGE", age_days_col="AGEDAYS",
-                           gestational_weeks_col="GESTAG")
+        Examples:
+            Derive corrected age for preterm infants::
+
+                adsl = (
+                    dm_raw.adam.peds
+                    .corrected_age("CORAGE", age_days_col="AGEDAYS",
+                                   gestational_weeks_col="GESTAG")
+                    .to_frame()
+                )
         """
         prematurity_years = (
             pl.when(pl.col(gestational_weeks_col) < term_weeks)
@@ -171,15 +219,29 @@ class PedsNamespace(SharedADaMVerbsMixin):
         threshold: int = 37,
         flag_value: str = "Y",
     ) -> Self:
-        """
-        Set *target* to *flag_value* when gestational weeks < *threshold*.
+        """Flag infants born before *threshold* gestational weeks.
 
-        The default threshold of 37 weeks matches the standard clinical definition
-        of prematurity.
+        Default threshold of 37 weeks matches the clinical definition of
+        prematurity.
 
-        Example::
+        Args:
+            target: Name of the output flag column.
+            gestational_weeks_col: Column containing gestational age in weeks.
+            threshold: Weeks below which prematurity is flagged (default ``37``).
+            flag_value: Value to assign (default ``"Y"``).
 
-            .prematurity_flag("PREMFL", gestational_weeks_col="GESTAG")
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Derive prematurity flag::
+
+                adsl = (
+                    dm_raw.adam.peds
+                    .prematurity_flag("PREMFL",
+                                     gestational_weeks_col="GESTAG")
+                    .to_frame()
+                )
         """
         return self._chain(
             pl.when(pl.col(gestational_weeks_col) < threshold)
@@ -199,30 +261,28 @@ class PedsNamespace(SharedADaMVerbsMixin):
         bmi_col: str,
         labels: dict[str, float] | None = None,
     ) -> Self:
-        """
-        Categorise BMI using WHO adult thresholds (or a custom *labels* dict).
+        """Categorise BMI using WHO adult thresholds.
 
-        Default thresholds (WHO adult):
+        Default categories: Underweight (<18.5), Normal weight (18.5–24.9),
+        Overweight (25.0–29.9), Obese (≥30.0).
 
-        ============  =================
-        BMI range     Category
-        ============  =================
-        < 18.5        Underweight
-        18.5 – 24.9   Normal weight
-        25.0 – 29.9   Overweight
-        ≥ 30.0        Obese
-        ============  =================
+        Args:
+            target: Name of the output column.
+            bmi_col: Column containing the BMI value.
+            labels: Optional ``{"label": upper_bound}`` dict to override
+                default thresholds.
 
-        *labels*: optional ``{"label": upper_bound, ...}`` ordered dict that
-        overrides the defaults.  The last category has no upper bound.
+        Returns:
+            Self: The namespace with *target* appended.
 
-        .. note::
-            For age- and sex-specific paediatric BMI categories based on WHO/CDC
-            growth charts, use a lookup join with the reference tables.
+        Examples:
+            Categorise BMI with WHO thresholds::
 
-        Example::
-
-            .bmi_category("BMICG", bmi_col="BMI")
+                adsl = (
+                    dm_raw.adam.peds
+                    .bmi_category("BMICG", bmi_col="BMI")
+                    .to_frame()
+                )
         """
         default_thresholds: list[tuple[str, float]] = [
             ("Underweight", 18.5),

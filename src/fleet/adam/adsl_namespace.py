@@ -53,16 +53,31 @@ class ADSLNamespace(SharedADaMVerbsMixin):
         where: str | pl.Expr | None = None,
         groups: list[str] | None = None,
     ) -> Self:
-        """
-        Derive *target* as the earliest date in *date_col* from *from_dataset*.
+        """Derive *target* as the earliest date in *date_col* from *from_dataset*.
 
         Materialises the current pipeline, aggregates *from_dataset* to
-        subject level, then left-joins. Useful for ASTDTM, TRTSDT, etc.
+        subject level, then left-joins.  Useful for ASTDTM, TRTSDT, etc.
 
-        Example::
+        Args:
+            target: Name of the output date column.
+            from_dataset: Source ``pl.DataFrame`` to aggregate.
+            date_col: Date column to take the minimum of.
+            where: Optional filter applied to *from_dataset* before aggregation.
+            groups: Join key columns (default ``["USUBJID"]``).
 
-            .first_date("AESTDTM", from_dataset=ae_sdtm, date_col="AESTDTC",
-                         where='pl.col("AESER") == "Y"')
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Derive earliest serious AE start date::
+
+                adsl = (
+                    dm_raw.adam.adsl
+                    .first_date("AESTDTM", from_dataset=ae_sdtm,
+                                date_col="AESTDTC",
+                                where='pl.col("AESER") == "Y"')
+                    .to_frame()
+                )
         """
         from ..sdtm.utils import parse_expression
 
@@ -84,14 +99,29 @@ class ADSLNamespace(SharedADaMVerbsMixin):
         where: str | pl.Expr | None = None,
         groups: list[str] | None = None,
     ) -> Self:
-        """
-        Derive *target* as the latest date in *date_col* from *from_dataset*.
+        """Derive *target* as the latest date in *date_col* from *from_dataset*.
 
         Useful for AENDTM, TRTEDT, DTHDT, etc.
 
-        Example::
+        Args:
+            target: Name of the output date column.
+            from_dataset: Source ``pl.DataFrame`` to aggregate.
+            date_col: Date column to take the maximum of.
+            where: Optional filter applied to *from_dataset* before aggregation.
+            groups: Join key columns (default ``["USUBJID"]``).
 
-            .last_date("TRTEDT", from_dataset=ex_sdtm, date_col="EXENDTC")
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Derive latest treatment end date::
+
+                adsl = (
+                    dm_raw.adam.adsl
+                    .last_date("TRTEDT", from_dataset=ex_sdtm,
+                               date_col="EXENDTC")
+                    .to_frame()
+                )
         """
         from ..sdtm.utils import parse_expression
 
@@ -113,15 +143,27 @@ class ADSLNamespace(SharedADaMVerbsMixin):
         unit: str = "days",
         inclusive: bool = True,
     ) -> Self:
-        """
-        Derive *target* as the duration between two date columns.
+        """Derive *target* as the duration between two date columns.
 
-        *unit*: ``"days"`` (default; only unit currently supported).
-        *inclusive*: if True, adds 1 so both start and end dates are counted.
+        Args:
+            target: Name of the output column (e.g. ``"TRTDURD"``).
+            start_date: Column containing the start date.
+            end_date: Column containing the end date.
+            unit: Duration unit (default ``"days"``; only unit supported).
+            inclusive: If True, adds 1 so both dates are counted.
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .duration("TRTDURD", start_date="TRTSDT", end_date="TRTEDT")
+        Examples:
+            Derive treatment duration in days::
+
+                adsl = (
+                    dm_raw.adam.adsl
+                    .duration("TRTDURD", start_date="TRTSDT",
+                              end_date="TRTEDT")
+                    .to_frame()
+                )
         """
         diff = (pl.col(end_date).cast(pl.Date) - pl.col(start_date).cast(pl.Date)).dt.total_days()
         expr = (diff + 1 if inclusive else diff).alias(target)
@@ -135,16 +177,27 @@ class ADSLNamespace(SharedADaMVerbsMixin):
         where: str | pl.Expr | None = None,
         groups: list[str] | None = None,
     ) -> Self:
-        """
-        Derive *target* as the count of matching records in *from_dataset*.
+        """Derive *target* as the count of matching records in *from_dataset*.
 
         Returns 0 for subjects with no matching records (never null).
 
-        Example::
+        Args:
+            target: Name of the output count column.
+            from_dataset: Source ``pl.DataFrame`` to count.
+            where: Optional filter applied before counting.
+            groups: Join key columns (default ``["USUBJID"]``).
 
-            .count_events("NUMAE",    from_dataset=ae_sdtm)
-            .count_events("NUMSAEFL", from_dataset=ae_sdtm,
-                           where='pl.col("AESER") == "Y"')
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Count total AE records per subject::
+
+                adsl = (
+                    dm_raw.adam.adsl
+                    .count_events("NUMAE", from_dataset=ae_sdtm)
+                    .to_frame()
+                )
         """
         from ..sdtm.utils import parse_expression
 
@@ -164,15 +217,26 @@ class ADSLNamespace(SharedADaMVerbsMixin):
         *,
         criteria: str | pl.Expr,
     ) -> Self:
-        """
-        Set *target* to ``"Y"`` where *criteria* is true, null otherwise.
+        """Set *target* to ``"Y"`` where *criteria* is true, null otherwise.
 
         Used for population flags: SAFFL, ITTFL, PPROTFL, ENRLFL, COMPLFL.
 
-        Example::
+        Args:
+            target: Name of the output flag column.
+            criteria: Boolean expression or expression string.
 
-            .eligibility_flag("SAFFL",   criteria='pl.col("RANDFL") == "Y"')
-            .eligibility_flag("PPROTFL", criteria='pl.col("COMPLFL") == "Y"')
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Derive the safety population flag::
+
+                adsl = (
+                    dm_raw.adam.adsl
+                    .eligibility_flag("SAFFL",
+                                     criteria='pl.col("RANDFL") == "Y"')
+                    .to_frame()
+                )
         """
         from ..sdtm.utils import parse_expression
 
@@ -192,15 +256,27 @@ class ADSLNamespace(SharedADaMVerbsMixin):
         age_col: str = "AGE",
         age_unit_col: str = "AGEU",
     ) -> Self:
-        """
-        Convert age to years, handling common unit strings.
+        """Convert age to years, handling common unit strings.
 
         Recognises *AGEU* values: ``YEARS``, ``MONTHS``, ``WEEKS``, ``DAYS``
         (case-insensitive).  Unknown units produce null.
 
-        Example::
+        Args:
+            target: Name of the output column (default ``"AAGE"``).
+            age_col: Source age column.
+            age_unit_col: Column containing the age unit string.
 
-            .age_years("AAGE", age_col="AGE", age_unit_col="AGEU")
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Derive age in years from DM variables::
+
+                adsl = (
+                    dm_raw.adam.adsl
+                    .age_years("AAGE", age_col="AGE", age_unit_col="AGEU")
+                    .to_frame()
+                )
         """
         from .utils import age_in_years as _age_in_years_expr
 
@@ -218,29 +294,34 @@ class ADSLNamespace(SharedADaMVerbsMixin):
         periods: list[dict[str, Any]],
         start_date: str = "TRTSDT",
     ) -> Self:
-        """
-        Create standard Subperiod / Phase variables (APxxSDT, APxxEDT, TRTxxP, …).
+        """Create standard Subperiod / Phase variables.
 
-        *periods* is a list of dicts, each with at least:
-
-        - ``"number"``: integer period number (1, 2, …)
-        - ``"start"``: column name for the period start date
-        - ``"end"``: column name for the period end date
-        - ``"treatment"``: (optional) column name or literal for TRTxxP
-
-        The method generates ``AP{nn}SDT``, ``AP{nn}EDT``, and optionally
+        Generates ``AP{nn}SDT``, ``AP{nn}EDT``, and optionally
         ``TRT{nn:02d}P`` columns for each period.
 
-        Example::
+        Args:
+            periods: List of dicts each with ``"number"``, ``"start"``,
+                ``"end"``, and optionally ``"treatment"``.
+            start_date: Reference start date column (default ``"TRTSDT"``).
 
-            .derive_period(
-                periods=[
-                    {"number": 1, "start": "AP01SDT", "end": "AP01EDT",
-                     "treatment": "TRT01P"},
-                    {"number": 2, "start": "AP02SDT", "end": "AP02EDT",
-                     "treatment": "TRT02P"},
-                ],
-            )
+        Returns:
+            Self: The namespace with period columns appended.
+
+        Examples:
+            Define two treatment periods::
+
+                adsl = (
+                    dm_raw.adam.adsl
+                    .derive_period(
+                        periods=[
+                            {"number": 1, "start": "AP01SDT",
+                             "end": "AP01EDT", "treatment": "TRT01P"},
+                            {"number": 2, "start": "AP02SDT",
+                             "end": "AP02EDT", "treatment": "TRT02P"},
+                        ],
+                    )
+                    .to_frame()
+                )
         """
         exprs: list[pl.Expr] = []
         for period in periods:

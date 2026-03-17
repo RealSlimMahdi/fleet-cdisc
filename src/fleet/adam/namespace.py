@@ -108,14 +108,27 @@ class AdamNamespace(SharedADaMVerbsMixin):
         mode: str = "date",
         input_format: str | None = None,
     ) -> AdamNamespace:
-        """
-        Parse *source* date string and store as ISO 8601 in *target*.
+        """Parse a date string and store as ISO 8601 in *target*.
 
-        *mode*: ``"date"`` → YYYY-MM-DD, ``"datetime"`` → YYYY-MM-DDTHH:MM:SS.
+        Args:
+            target: Name of the output column.
+            source: Name of the raw date string column.
+            mode: ``"date"`` for YYYY-MM-DD or ``"datetime"`` for
+                YYYY-MM-DDTHH:MM:SS.
+            input_format: Optional ``strftime`` format string for non-standard
+                input dates.
 
-        Example::
+        Returns:
+            AdamNamespace: The namespace with *target* appended.
 
-            .assign_datetime("ADT", source="vsdtc", mode="date")
+        Examples:
+            Convert a raw visit-date column to ADT::
+
+                advs = (
+                    vs_raw.adam
+                    .assign_datetime("ADT", source="VSDTC", mode="date")
+                    .to_frame()
+                )
         """
         from ..sdtm.utils import to_iso8601_date, to_iso8601_datetime
 
@@ -136,11 +149,34 @@ class AdamNamespace(SharedADaMVerbsMixin):
         how: str = "left",
         where: str | None = None,
     ) -> AdamNamespace:
-        """
-        SQL-style join against a lookup *dataset*.
+        """SQL-style join against a lookup *dataset*.
 
-        *where*: optional filter applied to *dataset* before the join.
-        Materialises current pipeline then returns a fresh namespace.
+        Optionally filters *dataset* with *where* before the join.
+        Materialises the current pipeline then returns a fresh namespace.
+
+        Args:
+            target_cols: Optional columns to keep from the joined result.
+            dataset: The lookup ``pl.DataFrame`` to join.
+            on: Key column name(s) for the join.
+            how: Join strategy (default ``"left"``).
+            where: Optional filter expression applied to *dataset* before
+                the join.
+
+        Returns:
+            AdamNamespace: A fresh namespace wrapping the joined frame.
+
+        Examples:
+            Join a parameter-code lookup table on ``VSTESTCD``::
+
+                advs = (
+                    vs_df.adam
+                    .lookup(
+                        dataset=paramcd_lookup,
+                        on="VSTESTCD",
+                        how="left",
+                    )
+                    .to_frame()
+                )
         """
         from ..sdtm.utils import parse_expression
 
@@ -166,14 +202,28 @@ class AdamNamespace(SharedADaMVerbsMixin):
         analysis_date: str,
         reference_date: str,
     ) -> AdamNamespace:
-        """
-        Compute study day: ``(analysis_date - reference_date)`` with CDISC convention.
+        """Compute CDISC study day.
 
-        Day 1 = reference date; there is no day 0 (pre-reference days are negative).
+        Day 1 = reference date; there is no day 0 (pre-reference days are
+        negative).
 
-        Example::
+        Args:
+            target: Name of the output column (e.g. ``"ADY"``).
+            analysis_date: Name of the analysis date column.
+            reference_date: Name of the reference date column.
 
-            .study_day("ADY", analysis_date="ADT", reference_date="TRTSDT")
+        Returns:
+            AdamNamespace: The namespace with *target* appended.
+
+        Examples:
+            Derive ADY from ADT and TRTSDT::
+
+                advs = (
+                    vs_raw.adam
+                    .study_day("ADY", analysis_date="ADT",
+                               reference_date="TRTSDT")
+                    .to_frame()
+                )
         """
         return self._chain(study_day(analysis_date, reference_date, target=target))
 
@@ -189,15 +239,29 @@ class AdamNamespace(SharedADaMVerbsMixin):
         baseline_flag: str = "ABLFL",
         groups: list[str] | None = None,
     ) -> AdamNamespace:
-        """
-        Derive BASE as the AVAL at the baseline record (``baseline_flag == "Y"``.
+        """Derive BASE as the AVAL where the baseline flag equals ``"Y"``.
 
-        Uses a window function — all records in the same group receive the same value.
+        Uses a window function so all records in the same group receive the
+        same baseline value.
 
-        Example::
+        Args:
+            target: Name of the output column (e.g. ``"BASE"``).
+            aval: Analysis value column (default ``"AVAL"``).
+            baseline_flag: Flag column indicating the baseline record.
+            groups: Partition columns (default ``["USUBJID", "PARAMCD"]``).
 
-            .baseline("BASE", aval="AVAL", baseline_flag="ABLFL",
-                       groups=["USUBJID", "PARAMCD"])
+        Returns:
+            AdamNamespace: The namespace with *target* appended.
+
+        Examples:
+            Propagate baseline AVAL to all records::
+
+                advs = (
+                    vs_raw.adam
+                    .baseline("BASE", aval="AVAL", baseline_flag="ABLFL",
+                              groups=["USUBJID", "PARAMCD"])
+                    .to_frame()
+                )
         """
         return self._chain(
             baseline(aval=aval, baseline_flag_col=baseline_flag, group_by=groups, target=target)
@@ -214,12 +278,24 @@ class AdamNamespace(SharedADaMVerbsMixin):
         aval: str = "AVAL",
         base: str = "BASE",
     ) -> AdamNamespace:
-        """
-        Change from baseline: ``CHG = AVAL - BASE``.
+        """Compute change from baseline: ``CHG = AVAL - BASE``.
 
-        Example::
+        Args:
+            target: Name of the output column (e.g. ``"CHG"``).
+            aval: Analysis value column.
+            base: Baseline value column.
 
-            .chg("CHG", aval="AVAL", base="BASE")
+        Returns:
+            AdamNamespace: The namespace with *target* appended.
+
+        Examples:
+            Derive CHG from AVAL and BASE::
+
+                advs = (
+                    vs_raw.adam
+                    .chg("CHG", aval="AVAL", base="BASE")
+                    .to_frame()
+                )
         """
         return self._chain(chg(aval=aval, base=base, target=target))
 
@@ -234,14 +310,27 @@ class AdamNamespace(SharedADaMVerbsMixin):
         aval: str = "AVAL",
         base: str = "BASE",
     ) -> AdamNamespace:
-        """
-        Percent change from baseline: ``PCHG = (AVAL - BASE) / BASE * 100``.
+        """Compute percent change from baseline.
 
-        Returns null when BASE is null or zero.
+        ``PCHG = (AVAL - BASE) / BASE * 100``.  Returns null when BASE is
+        null or zero.
 
-        Example::
+        Args:
+            target: Name of the output column (e.g. ``"PCHG"``).
+            aval: Analysis value column.
+            base: Baseline value column.
 
-            .pchg("PCHG", aval="AVAL", base="BASE")
+        Returns:
+            AdamNamespace: The namespace with *target* appended.
+
+        Examples:
+            Derive PCHG from AVAL and BASE::
+
+                advs = (
+                    vs_raw.adam
+                    .pchg("PCHG", aval="AVAL", base="BASE")
+                    .to_frame()
+                )
         """
         return self._chain(pchg(aval=aval, base=base, target=target))
 
@@ -260,34 +349,54 @@ class AdamNamespace(SharedADaMVerbsMixin):
         where: str | pl.Expr | None = None,
         flag_value: str = "Y",
     ) -> AdamNamespace:
-        """
-        Set *target* to *flag_value* (default ``"Y"``) for records matching *criteria*.
+        """Set *target* to *flag_value* for records matching *criteria*.
 
-        *criteria* accepts:
+        Supports row-level boolean expressions and built-in shortcuts
+        ``"first"``, ``"last"``, ``"max"``, and ``"min"`` that operate
+        within each group.
 
-        - Any Polars expression or expression string (row-level boolean)
-        - ``"first"`` — first record per group ordered by *order_by*
-        - ``"last"``  — last record per group ordered by *order_by*
-        - ``"max"``   — record(s) with maximum *value_col* per group
-        - ``"min"``   — record(s) with minimum *value_col* per group
+        Args:
+            target: Name of the output flag column.
+            criteria: A Polars expression / string, or one of ``"first"``,
+                ``"last"``, ``"max"``, ``"min"``.
+            groups: Partition columns (default ``["USUBJID", "PARAMCD"]``).
+            order_by: Sort column required for ``"first"``/``"last"``.
+            value_col: Value column required for ``"max"``/``"min"``.
+            where: Optional pre-filter \u2014 only matching rows are candidates.
+            flag_value: Value to assign (default ``"Y"``).
 
-        *groups*: partition columns (default ``["USUBJID", "PARAMCD"]``).
-        *where*:  optional pre-filter — only rows satisfying this are candidates.
+        Returns:
+            AdamNamespace: The namespace with *target* appended.
 
-        Examples::
+        Examples:
 
-            # Baseline flag by visit number
-            .flag("ABLFL",    criteria='pl.col("VISITNUM") == 1',
-                               groups=["USUBJID", "PARAMCD"])
+            Baseline flag by visit number::
 
-            # Last on-treatment observation per parameter
-            .flag("LSTOBSFL", criteria="last", order_by="ADT",
-                               groups=["USUBJID", "PARAMCD"],
-                               where='pl.col("ONTRTFL") == "Y"')
+                advs = (
+                    vs_raw.adam
+                    .flag("ABLFL", criteria='pl.col("VISITNUM") == 1',
+                          groups=["USUBJID", "PARAMCD"])
+                    .to_frame()
+                )
 
-            # Record with peak AVAL per parameter
-            .flag("AMXFL",    criteria="max", value_col="AVAL",
-                               groups=["USUBJID", "PARAMCD"])
+            Last on-treatment observation per parameter::
+
+                advs = (
+                    vs_raw.adam
+                    .flag("LSTOBSFL", criteria="last", order_by="ADT",
+                          groups=["USUBJID", "PARAMCD"],
+                          where='pl.col("ONTRTFL") == "Y"')
+                    .to_frame()
+                )
+
+            Record with peak AVAL per parameter::
+
+                advs = (
+                    vs_raw.adam
+                    .flag("AMXFL", criteria="max", value_col="AVAL",
+                          groups=["USUBJID", "PARAMCD"])
+                    .to_frame()
+                )
         """
         from ..sdtm.utils import parse_expression
 
@@ -334,12 +443,24 @@ class AdamNamespace(SharedADaMVerbsMixin):
         weight: str,
         height: str,
     ) -> AdamNamespace:
-        """
-        BMI = weight_kg / (height_cm / 100) ** 2.
+        """Derive Body Mass Index: ``weight_kg / (height_cm / 100) ** 2``.
 
-        Example::
+        Args:
+            target: Name of the output column.
+            weight: Column containing weight in kg.
+            height: Column containing height in cm.
 
-            .bmi("BMI", weight="WEIGHT", height="HEIGHT")
+        Returns:
+            AdamNamespace: The namespace with *target* appended.
+
+        Examples:
+            Compute BMI from weight and height::
+
+                advs = (
+                    vs_raw.adam
+                    .bmi("BMI", weight="WEIGHT", height="HEIGHT")
+                    .to_frame()
+                )
         """
         return self._chain(_bmi_expr(weight=weight, height=height, target=target))
 
@@ -355,12 +476,26 @@ class AdamNamespace(SharedADaMVerbsMixin):
         low: str,
         high: str,
     ) -> AdamNamespace:
-        """
-        Categorise *value* relative to normal range columns: LOW / NORMAL / HIGH.
+        """Categorise *value* relative to normal range: LOW / NORMAL / HIGH.
 
-        Example::
+        Args:
+            target: Name of the output column (e.g. ``"NRIND"``).
+            value: Column containing the numeric result.
+            low: Column containing the lower limit of normal.
+            high: Column containing the upper limit of normal.
 
-            .nrind("LBNRIND", value="LBSTRESN", low="LBSTNRLO", high="LBSTNRHI")
+        Returns:
+            AdamNamespace: The namespace with *target* appended.
+
+        Examples:
+            Derive normal range indicator for lab results::
+
+                adlb = (
+                    lb_raw.adam
+                    .nrind("NRIND", value="LBSTRESN",
+                           low="LBSTNRLO", high="LBSTNRHI")
+                    .to_frame()
+                )
         """
         return self._chain(_nrind_expr(value=value, low=low, high=high, target=target))
 
@@ -376,12 +511,26 @@ class AdamNamespace(SharedADaMVerbsMixin):
         trtsdt: str,
         trtedt: str,
     ) -> AdamNamespace:
-        """
-        Set *target* to ``"Y"`` when *adt* falls within [trtsdt, trtedt] (inclusive).
+        """Set *target* to ``"Y"`` when *adt* is within [trtsdt, trtedt].
 
-        Example::
+        Args:
+            target: Name of the output column (default ``"ONTRTFL"``).
+            adt: Analysis date column.
+            trtsdt: Treatment start date column.
+            trtedt: Treatment end date column.
 
-            .on_treatment("ONTRTFL", adt="ADT", trtsdt="TRTSDT", trtedt="TRTEDT")
+        Returns:
+            AdamNamespace: The namespace with *target* appended.
+
+        Examples:
+            Derive on-treatment flag::
+
+                advs = (
+                    vs_raw.adam
+                    .on_treatment("ONTRTFL", adt="ADT",
+                                  trtsdt="TRTSDT", trtedt="TRTEDT")
+                    .to_frame()
+                )
         """
         return self._chain(_on_treatment_expr(adt=adt, trtsdt=trtsdt, trtedt=trtedt, target=target))
 
@@ -397,13 +546,26 @@ class AdamNamespace(SharedADaMVerbsMixin):
         post_cat: str,
         sep: str = " to ",
     ) -> AdamNamespace:
-        """
-        Categorical shift label: ``"<baseline_cat><sep><post_cat>"``.
+        """Derive a categorical shift label: ``"<baseline><sep><post>"``.
 
-        Example::
+        Args:
+            target: Name of the output column (e.g. ``"SHIFT1"``).
+            baseline_cat: Column with baseline category (e.g. ``"BNRIND"``).
+            post_cat: Column with post-baseline category (e.g. ``"NRIND"``).
+            sep: Separator string (default ``" to "``).
 
-            .shift("SHIFT1", baseline_cat="BNRIND", post_cat="NRIND")
-            # → "NORMAL to HIGH", "NORMAL to LOW", etc.
+        Returns:
+            AdamNamespace: The namespace with *target* appended.
+
+        Examples:
+            Create a shift variable from baseline and post normal range::
+
+                adlb = (
+                    lb_raw.adam
+                    .shift("SHIFT1", baseline_cat="BNRIND",
+                           post_cat="NRIND")
+                    .to_frame()
+                )
         """
         return self._chain(
             _shift_expr(baseline_cat=baseline_cat, post_cat=post_cat, target=target, sep=sep)
@@ -421,14 +583,26 @@ class AdamNamespace(SharedADaMVerbsMixin):
         height: str,
         method: str = "Mosteller",
     ) -> AdamNamespace:
-        """
-        Body Surface Area (m²).
+        """Derive Body Surface Area in m².
 
-        *method*: ``Mosteller`` (default), ``DuBois``, ``Haycock``, ``Gehan-George``.
+        Args:
+            target: Name of the output column.
+            weight: Column containing weight in kg.
+            height: Column containing height in cm.
+            method: Formula to use — ``"Mosteller"`` (default), ``"DuBois"``,
+                ``"Haycock"``, or ``"Gehan-George"``.
 
-        Example::
+        Returns:
+            AdamNamespace: The namespace with *target* appended.
 
-            .bsa("BSA", weight="WEIGHT", height="HEIGHT")
+        Examples:
+            Compute BSA using the Mosteller formula::
+
+                advs = (
+                    vs_raw.adam
+                    .bsa("BSA", weight="WEIGHT", height="HEIGHT")
+                    .to_frame()
+                )
         """
         return self._chain(_bsa_expr(weight=weight, height=height, method=method, target=target))
 
@@ -443,12 +617,24 @@ class AdamNamespace(SharedADaMVerbsMixin):
         systolic: str = "SYSBP",
         diastolic: str = "DIABP",
     ) -> AdamNamespace:
-        """
-        Mean Arterial Pressure: ``DBP + (SBP - DBP) / 3``.
+        """Derive Mean Arterial Pressure: ``DBP + (SBP - DBP) / 3``.
 
-        Example::
+        Args:
+            target: Name of the output column (default ``"MAP"``).
+            systolic: Systolic blood pressure column.
+            diastolic: Diastolic blood pressure column.
 
-            .map("MAP", systolic="SYSBP", diastolic="DIABP")
+        Returns:
+            AdamNamespace: The namespace with *target* appended.
+
+        Examples:
+            Compute MAP from blood pressure columns::
+
+                advs = (
+                    vs_raw.adam
+                    .map("MAP", systolic="SYSBP", diastolic="DIABP")
+                    .to_frame()
+                )
         """
         return self._chain(_map_expr(systolic=systolic, diastolic=diastolic, target=target))
 
@@ -464,14 +650,26 @@ class AdamNamespace(SharedADaMVerbsMixin):
         rr: str = "RR",
         method: str = "Fridericia",
     ) -> AdamNamespace:
-        """
-        Corrected QT interval.
+        """Derive corrected QT interval.
 
-        *method*: ``Fridericia`` (default) or ``Bazett``.
+        Args:
+            target: Name of the output column (default ``"QTC"``).
+            qt: QT interval column.
+            rr: RR interval column.
+            method: Correction formula — ``"Fridericia"`` (default) or
+                ``"Bazett"``.
 
-        Example::
+        Returns:
+            AdamNamespace: The namespace with *target* appended.
 
-            .qtc("QTCF", qt="QT", rr="RR", method="Fridericia")
+        Examples:
+            Derive QTcF from QT and RR::
+
+                adeg = (
+                    eg_raw.adam
+                    .qtc("QTCF", qt="QT", rr="RR", method="Fridericia")
+                    .to_frame()
+                )
         """
         return self._chain(_qtc_expr(qt=qt, rr=rr, method=method, target=target))
 
@@ -498,14 +696,19 @@ class AdamNamespace(SharedADaMVerbsMixin):
 
         Materialises the current pipeline before concatenation.
 
-        Example::
+        Examples:
+            Compute mean AVAL per subject and parameter::
 
-            .derive_summary_records(
-                by_vars=["USUBJID", "PARAMCD"],
-                analysis_var="AVAL",
-                set_values_to={"DTYPE": "AVERAGE"},
-                stat="mean",
-            )
+                advs = (
+                    vs_raw.adam
+                    .derive_summary_records(
+                        by_vars=["USUBJID", "PARAMCD"],
+                        analysis_var="AVAL",
+                        set_values_to={"DTYPE": "AVERAGE"},
+                        stat="mean",
+                    )
+                    .to_frame()
+                )
         """
         stat_lower = stat.lower()
         agg_map = {
@@ -559,13 +762,18 @@ class AdamNamespace(SharedADaMVerbsMixin):
 
         Materialises the current pipeline, applies the fill, and returns.
 
-        Example::
+        Examples:
+            Forward-fill AVAL within each subject / parameter::
 
-            .derive_locf_records(
-                by_vars=["USUBJID", "PARAMCD"],
-                analysis_var="AVAL",
-                order_by="ADT",
-            )
+                advs = (
+                    vs_raw.adam
+                    .derive_locf_records(
+                        by_vars=["USUBJID", "PARAMCD"],
+                        analysis_var="AVAL",
+                        order_by="ADT",
+                    )
+                    .to_frame()
+                )
         """
         grps = by_vars or ["USUBJID", "PARAMCD"]
         df = self.to_frame()
@@ -601,14 +809,23 @@ class AdamNamespace(SharedADaMVerbsMixin):
 
         Materialises the pipeline before appending.
 
-        Example::
+        Examples:
+            Derive BMI as a new PARAMCD from WEIGHT and HEIGHT::
 
-            .derive_param(
-                by_vars=["USUBJID", "ADT"],
-                set_values_to={"PARAMCD": "BMI", "PARAM": "Body Mass Index"},
-                parameter_filter={"WEIGHT": "WEIGHT", "HEIGHT": "HEIGHT"},
-                analysis_value=pl.col("WEIGHT") / (pl.col("HEIGHT") / 100) ** 2,
-            )
+                advs = (
+                    vs_raw.adam
+                    .derive_param(
+                        by_vars=["USUBJID", "ADT"],
+                        set_values_to={"PARAMCD": "BMI",
+                                       "PARAM": "Body Mass Index"},
+                        parameter_filter={"WEIGHT": "WEIGHT",
+                                          "HEIGHT": "HEIGHT"},
+                        analysis_value=(
+                            pl.col("WEIGHT") / (pl.col("HEIGHT") / 100) ** 2
+                        ),
+                    )
+                    .to_frame()
+                )
         """
         grps = by_vars or ["USUBJID"]
         df = self.to_frame()
@@ -723,35 +940,38 @@ class AdamNamespace(SharedADaMVerbsMixin):
         The pending expression pipeline is materialised before the function
         is called, so the function always receives a fully committed frame.
 
-        Parameters
-        ----------
-        fn:
-            Either a callable directly, or the registered name of a transform
-            (see :func:`fleet.adam.transforms.register_transform`).
-        label:
-            Optional cosmetic label for documentation/lineage; has no effect
-            on the output.
+        Args:
+            fn: Either a callable directly, or the registered name of a
+                transform (see :func:`fleet.adam.transforms.register_transform`).
+            label: Optional cosmetic label for documentation/lineage; has no
+                effect on the output.
 
-        Raises
-        ------
-        KeyError
-            If *fn* is a string that has not been registered.
-        TypeError
-            If *fn* is neither a callable nor a string, or if the function
-            does not return a ``pl.DataFrame``.
+        Raises:
+            KeyError: If *fn* is a string that has not been registered.
+            TypeError: If *fn* is neither a callable nor a string, or if the
+                function does not return a ``pl.DataFrame``.
 
-        Example::
+        Returns:
+            AdamNamespace: A fresh namespace wrapping the transformed frame.
 
-            from fleet.adam.transforms import register_transform
+        Examples:
+            Register and apply a custom age-group transform::
 
-            @register_transform("add_agegr1")
-            def add_agegr1(df):
-                return df.with_columns(
-                    pl.when(pl.col("AGE") < 65).then(pl.lit("<65"))
-                      .otherwise(pl.lit(">=65")).alias("AGEGR1")
+                from fleet.adam.transforms import register_transform
+
+                @register_transform("add_agegr1")
+                def add_agegr1(df):
+                    return df.with_columns(
+                        pl.when(pl.col("AGE") < 65).then(pl.lit("<65"))
+                          .otherwise(pl.lit(">=65")).alias("AGEGR1")
+                    )
+
+                adsl = (
+                    dm_raw.adam
+                    .assigned("STUDYID", value="S01")
+                    .transform("add_agegr1")
+                    .to_frame()
                 )
-
-            result = dm.adam.assigned("STUDYID", value="S01").transform("add_agegr1").to_frame()
         """
         from .transforms import get_transform
 
@@ -820,9 +1040,15 @@ class AdamNamespace(SharedADaMVerbsMixin):
 
             advs = vs_df.adam.from_spec("specs/.../define.yaml", dataset="ADVS").to_frame()
 
-        Example::
+        Examples:
+            Build ADVS from a YAML specification::
 
-            vs_df.adam.from_spec("specs/cdiscpilot01/adam/define.yaml", dataset="ADVS").to_frame()
+                advs = (
+                    vs_raw.adam
+                    .from_spec("specs/cdiscpilot01/adam/define.yaml",
+                               dataset="ADVS")
+                    .to_frame()
+                )
         """
         from .models import ADAMDatasetSpec
 
@@ -1003,7 +1229,29 @@ class AdamNamespace(SharedADaMVerbsMixin):
         version: str = "1.3",
         rules_engine_path: Path | None = None,
     ) -> AdamNamespace:
-        """Run CDISC ADaM validation and print the report. Returns self."""
+        """Run CDISC ADaM validation and print the report.
+
+        Returns *self* so the chain can continue after validation.
+
+        Args:
+            dataset: ADaM dataset name (e.g. ``"ADSL"``, ``"ADVS"``).
+            version: ADaM IG version to validate against (default ``"1.3"``).
+            rules_engine_path: Optional path to a custom rules engine.
+
+        Returns:
+            AdamNamespace: The same namespace instance (for continued
+                chaining).
+
+        Examples:
+            Validate an ADSL dataset against ADaM 1.3::
+
+                adsl = (
+                    dm_df.adam.adsl
+                    .source("USUBJID")
+                    .validate("ADSL", version="1.3")
+                    .to_frame()
+                )
+        """
         from ..validation.service import ValidationService
 
         svc = ValidationService(rules_engine_path=rules_engine_path)
@@ -1042,19 +1290,32 @@ class AdamNamespace(SharedADaMVerbsMixin):
         enforces the convention that ``_``-prefixed columns are scratch
         variables.  Set to ``None`` to disable (e.g. during debugging).
 
-        Examples::
+        Examples:
 
-            # Keep only spec columns, drop scratch _ variables (default)
-            .select(spec="specs/adam/define.yaml", dataset="ADVS")
+            Keep only spec columns, drop scratch ``_`` variables (default)::
 
-            # Same but disable auto-drop for debugging
-            .select(spec="specs/adam/define.yaml", dataset="ADVS", drop_pattern=None)
+                advs = (
+                    vs_raw.adam
+                    .select(spec="specs/adam/define.yaml", dataset="ADVS")
+                    .to_frame()
+                )
 
-            # Just drop _ variables, keep everything else
-            .select()
+            Disable auto-drop for debugging::
 
-            # Fully disable — do nothing (passthrough, for debugging)
-            .select(drop_pattern=None)
+                advs = (
+                    vs_raw.adam
+                    .select(spec="specs/adam/define.yaml", dataset="ADVS",
+                            drop_pattern=None)
+                    .to_frame()
+                )
+
+            Drop ``_`` variables only, keep everything else::
+
+                advs = (
+                    vs_raw.adam
+                    .select()
+                    .to_frame()
+                )
         """
         import re
 
@@ -1228,15 +1489,15 @@ class AdamNamespace(SharedADaMVerbsMixin):
         *mkdir*: when ``True`` (default) any missing parent directories are
         created automatically.
 
-        Example::
+        Examples:
+            Materialise and write ADVS to Parquet::
 
-            advs = (
-                vs_raw.adam
-                .rename("USUBJID", source="patient_number")
-                ...
-                .select(spec="specs/adam/define.yaml", dataset="ADVS")
-                .write_parquet("outputs/cdiscpilot01/advs.parquet")
-            )
+                advs = (
+                    vs_raw.adam
+                    .rename("USUBJID", source="patient_number")
+                    .select(spec="specs/adam/define.yaml", dataset="ADVS")
+                    .write_parquet("outputs/cdiscpilot01/advs.parquet")
+                )
         """
         df = self.to_frame()
         dest = Path(path)

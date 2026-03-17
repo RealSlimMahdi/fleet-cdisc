@@ -55,25 +55,29 @@ class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         severity_order: list[Any] | None = None,
         where: str | pl.Expr | None = None,
     ) -> Self:
-        """
-        Flag the record with the worst (highest-ranked) severity per group.
+        """Flag the record with the worst severity per group.
 
-        *severity_order*: list of severity values from least to most severe.
-                          Defaults to ``["MILD", "MODERATE", "SEVERE"]``.
-                          Use integers for numeric grades: ``[1, 2, 3, 4]``.
-        *where*: optional pre-filter — only candidate rows are eligible.
+        Args:
+            target: Name of the output flag column.
+            severity_col: Column containing severity values.
+            groups: Partition columns (default ``["USUBJID"]``).
+            severity_order: Values from least to most severe
+                (default ``["MILD", "MODERATE", "SEVERE"]``).
+            where: Optional pre-filter for candidate rows.
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            # Categorical severity
-            .worst_flag("ANL01FL", severity_col="AESEV",
-                         groups=["USUBJID", "AEBODSYS"],
-                         severity_order=["MILD", "MODERATE", "SEVERE"])
+        Examples:
+            Flag worst AE by categorical severity per body system::
 
-            # Numeric CTCAE grade
-            .worst_flag("ANL01FL", severity_col="AETOXGR",
-                         groups=["USUBJID", "AEBODSYS"],
-                         severity_order=[1, 2, 3, 4])
+                adae = (
+                    ae_raw.adam.occds
+                    .worst_flag("ANL01FL", severity_col="AESEV",
+                                groups=["USUBJID", "AEBODSYS"],
+                                severity_order=["MILD", "MODERATE", "SEVERE"])
+                    .to_frame()
+                )
         """
         from ..sdtm.utils import parse_expression
 
@@ -120,16 +124,31 @@ class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         trtedt: str | None = None,
         offset_days: int = 0,
     ) -> Self:
-        """
-        Set *target* to ``"Y"`` for treatment-emergent events.
+        """Set *target* to ``"Y"`` for treatment-emergent events.
 
-        An event is treatment-emergent when *start_date* >= *trtsdt* + *offset_days*.
-        If *trtedt* is provided, also requires *start_date* <= *trtedt*.
+        An event is treatment-emergent when *start_date* >= *trtsdt* +
+        *offset_days*.  If *trtedt* is provided, also requires
+        *start_date* <= *trtedt*.
 
-        Example::
+        Args:
+            target: Name of the output flag column (default ``"TRTEMFL"``).
+            start_date: Event start date column.
+            trtsdt: Treatment start date column.
+            trtedt: Optional treatment end date column.
+            offset_days: Grace period in days (default ``0``).
 
-            .treatment_emergent("TRTEMFL", start_date="AESTDTC",
-                                  trtsdt="TRTSDT", trtedt="TRTEDT")
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Derive treatment-emergent flag for ADAE::
+
+                adae = (
+                    ae_raw.adam.occds
+                    .treatment_emergent("TRTEMFL", start_date="AESTDTC",
+                                        trtsdt="TRTSDT", trtedt="TRTEDT")
+                    .to_frame()
+                )
         """
         start = pl.col(start_date).cast(pl.Date)
         ref = pl.col(trtsdt).cast(pl.Date)
@@ -153,15 +172,29 @@ class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         end_date: str,
         ref_date: str,
     ) -> Self:
-        """
-        Flag events that start within the reference window AND have a recorded end.
+        """Flag events that started on/after the reference date and have recovered.
 
-        Set *target* to ``"Y"`` when *start_date* >= *ref_date* AND *end_date* is not null.
+        Sets *target* to ``"Y"`` when *start_date* >= *ref_date* and
+        *end_date* is not null.
 
-        Example::
+        Args:
+            target: Name of the output flag column.
+            start_date: Event start date column.
+            end_date: Event end date column.
+            ref_date: Reference date column (e.g. ``"TRTSDT"``).
 
-            .onset_recovery("RCVRYFL", start_date="AESTDTC",
-                             end_date="AEENDTC", ref_date="TRTSDT")
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Derive recovery flag for adverse events::
+
+                adae = (
+                    ae_raw.adam.occds
+                    .onset_recovery("RCVRYFL", start_date="AESTDTC",
+                                    end_date="AEENDTC", ref_date="TRTSDT")
+                    .to_frame()
+                )
         """
         cond = (
             (pl.col(start_date).cast(pl.Date) >= pl.col(ref_date).cast(pl.Date))

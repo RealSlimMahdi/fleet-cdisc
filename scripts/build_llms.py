@@ -75,7 +75,12 @@ or expression strings that Fleet will evaluate with `eval()`.
 3. **Lazy execution** — No computation happens until `.to_frame()` is called. Intermediate \
 verbs only accumulate expressions. Do not attempt to inspect column values mid-chain; \
 materialise first (`to_frame()`) when a result must exist before the next derivation step \
-(e.g. `ABLFL` must exist before `baseline()`).\
+(e.g. `ABLFL` must exist before `baseline()`).
+
+4. **Google-style docstrings** — All public verbs use Google-style docstrings with `Args:`, \
+`Returns:`, and `Examples:` sections. Every example must be a complete pipeline snippet \
+ending with `.to_frame()`. Never use NumPy/Sphinx `Parameters ----------` style or bare \
+`Example::` headers.\
 """
 
 

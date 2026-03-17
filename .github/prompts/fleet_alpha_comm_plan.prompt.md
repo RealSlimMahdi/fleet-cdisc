@@ -1,0 +1,141 @@
+---
+description: Communication plan for the Alpha release of the Fleet library
+author: Mahdi About
+---
+
+# Fleet Alpha Release Communication Plan
+
+Below are the drafted communications for the Alpha release of Fleet, tailored to different audiences.
+
+## 1. LinkedIn Post: Announcing the Alpha Release
+
+**Goal:** Present the tool to your network of statistical programmers and data scientists, letting the code speak for itself while highlighting the lean stack and built-in features.
+
+**Draft:**
+
+After 15 years of building clinical trial reporting pipelines—from Phase 1 to Phase 4 submissions—I’ve developed a healthy allergy to slow, bloated data step processes and convoluted toolchains.
+
+Today, I’m putting the Alpha release of **Fleet** out into the wild.
+
+Fleet is a Python-based CDISC SDTM/ADaM derivation toolkit built entirely on **Polars**. No Pandas. No memory leaks on massive datasets. Just blazing-fast, lazy evaluation through a clean namespace extension API (`df.sdtm` and `df.adam`).
+
+But it’s not just fast; it’s fundamentally lean. It operates with a razor-thin dependency stack—doing one thing perfectly without the bloat. It was also consciously designed for modern IDEs; the intelligent namespace chaining means you get perfect native autocomplete, logical standard progression (`ADaM Core` → `ADSL` → `ADaM TA`), and incredibly accurate AI code prediction.
+
+If you want to know what I mean by clean, here is what building a DM domain looks like using inline pipeline chaining:
+
+```python
+import fleet
+
+dm = (
+    raw_df.sdtm
+    .hardcode_no_ct("DOMAIN", value="DM")
+    .assign_no_ct("USUBJID", source="patient_number")
+    .assign_ct("SEX", source="sex", ct_codelist="C66731")
+    .assign_datetime("BRTHDTC", source="birth_date")
+    .validate("DM", version="3.4")
+    .to_frame()
+)
+```
+
+No boilerplate. No merging nightmare. It natively handles controlled terminology and **CDISC Core implementation** validation. Plus, because the namespace API is so strict and predictable, it is completely **LLM-friendly**—AI coding assistants can generate these pipelines with near-zero hallucinations.
+
+And if you prefer a metadata-driven approach? You just point it at your `define.yaml`:
+`dm = raw_df.sdtm.from_spec("define.yaml", dataset="DM").to_frame()`
+
+Oh, and the best part? It includes **native `define.xml` generation**. Say goodbye to relying on Pinnacle 21 or other heavy third-party applications just to build your metadata.
+
+If you are tired of waiting for datasets to compile, give it a spin. It’s minimalistic by design and actually respects your time.
+
+Check out the repo here: [Link]
+`uv pip install fleet-cdisc` and let me know when you inevitably try to break it.
+
+#ClinicalTrials #CDISC #Polars #Python #StatisticalProgramming #DataScience #AI
+
+---
+
+## 2. Email to Leadership: The "Why not just Admiral?" Pitch
+
+**Goal:** Address the elephant in the room with leadership, using a visual example of why a native Python/Polars approach is a massive workflow upgrade, emphasizing cost-saving lean tech, LLM readiness, IDE integration, and tool independence.
+
+**Subject:** The Alpha release of Fleet: being ready for the Python Transition in Clinical Data Science
+
+**Draft:**
+
+Hi Team,
+
+I'm writing to share that I have been working for a while on the Alpha version of Fleet, a Python-based CDISC SDTM/ADaM toolkit, is officially ready for internal review.
+
+The obvious question I expect is: _"Why are we building this when Admiral already exists?"_
+
+Admiral is an excellent R package. But as we transition our biometrics workflows to Python to align with modern data science, simply writing "R code in Python" using Pandas isn't an upgrade—it's a downgrade in performance.
+
+Here is why Fleet is different, and why we need it:
+
+- **Future-Proof Performance & Lean Stack:** Fleet is built entirely on Polars, not Pandas. It uses lazy evaluation and multi-threading, processing massive ADaM datasets extremely fast. Furthermore, it has a highly limited tech stack—meaning we aren't maintaining massive, vulnerable dependency trees.
+- **Readable, LLM-Friendly API:** The API is structured cleanly as a namespace. This structure was designed for the modern IDE, meaning statistical programmers benefit from perfect native autocompletion and logical semantic chaining (`ADaM Core` → `ADSL` → `ADaM TA`). Crucially, this strict design makes it heavily **LLM-friendly**; our AI copilots can generate accurate pipelines without hallucinating syntax.
+- **Native define.xml & Built-in CDISC Core:** Fleet generates `define.xml` natively out of the box and seamlessly integrates CDISC Core validation rules directly into the pipeline. We can bypass reliance on external, bloated software (like Pinnacle 21) just for basic metadata generation.
+
+Here is all it takes to build and validate a domain:
+
+```python
+dm = (
+    raw_df.sdtm
+    .hardcode_no_ct("DOMAIN", value="DM")
+    .assign_no_ct("USUBJID", source="subject_id")
+    .assign_ct("SEX", source="sex", ct_codelist="C66731")
+    .validate("DM", version="3.4")
+    .to_frame()
+)
+```
+
+- **Talent Retention:** The next generation of clinical data scientists are Python-native. We need a modern stack to attract them, rather than forcing them into legacy R syntax or clunky Pandas workarounds.
+
+Fleet isn't about replacing what works today; it's about building the infrastructure that will survive the scale of submissions over the next 5-10 years. I'd like 15 minutes at the next leadership sync to demo a pipeline. It runs faster than my setup time.
+
+Best,
+Mahdi
+
+---
+
+## 3. Pitch to the Pharmaverse Board
+
+**Goal:** Position Fleet as the premier Python/Polars solution for the Pharmaverse ecosystem by showing them the beauty of the namespace architecture, its hyper-focused footprint, its readiness for modern IDEs, and its alignment with the AI era.
+
+**Draft:**
+
+**Title:** Expanding Pharmaverse into High-Performance Python: A Proposal to Incubate Fleet
+
+Hello Pharmaverse Board,
+
+My name is Mahdi About. I’ve been a statistical programmer for 15 years, navigating every phase of clinical reporting and submissions. I've watched the Pharmaverse ecosystem mature into an incredible asset for the industry—but right now, it is heavily weighted toward R.
+
+As the broader industry shifts toward Python, we need a standard-bearer for SDTM/ADaM derivations in the Python ecosystem that isn't just a slow translation of R logic.
+
+I am submitting **Fleet** for consideration to join the Pharmaverse.
+
+Fleet is a minimalist, high-performance CDISC toolkit built exclusively on Polars DataFrame namespace extensions.
+
+**Why Fleet fits the Pharmaverse vision:**
+
+1. **Unapologetically Performant:** By enforcing Polars (and strictly forbidding Pandas), Fleet introduces lazy-evaluation semantics and memory safety to clinical dataset generation.
+2. **Beautiful API Designed for Modern IDEs & LLMs:** The pipeline is strictly aligned with CDISC terminology and structured purely through chainable namespaces. This delivers flawless auto-completion, AI code prediction, and logical CDISC progression (`ADaM Core` → `ADSL` → `ADaM TA`) right inside the development environment. Furthermore, this deliberate rigidity inherently allows AI coding assistants to generate SDTM/ADaM pipelines accurately without hallucinating parameters.
+3. **End-to-End CDISC Alignment (Core & define.xml):** It bridges the gap between standards and execution perfectly. Fleet integrates **CDISC Core** rule execution dynamically into the pipeline and features **native `define.xml` generation**, totally removing the reliance on external validator tools like Pinnacle 21 for everyday workflow steps.
+4. **Laser-Focused Footprint:** Fleet is a targeted, narrow library with a hyper-limited tech stack. It avoids feature bloat, making it incredibly straightforward to audit, install, and maintain within strict enterprise environments.
+
+Code speaks loudest. This is the entire footprint needed to safely construct, validate, and write a domain:
+
+```python
+result = (
+    raw_df.sdtm
+    .assign_no_ct("USUBJID", source="patient_number")
+    .assign_ct("SEX", source="sex", ct_codelist="C66731")
+    .validate("DM", version="3.4")
+    .write_parquet("outputs/dm.parquet")
+)
+```
+
+The industry doesn't just need a Python version of what we already have. It needs a modern, scalable architecture designed for how Python—and its modern development suites—work best. Fleet provides exactly that. I would welcome the opportunity to present the alpha build to the technical committee and discuss how we can bring true, high-speed Python tooling into the Pharmaverse.
+
+Best regards,
+
+Mahdi About

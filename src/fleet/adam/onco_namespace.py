@@ -70,27 +70,26 @@ class OncoNamespace(SharedADaMVerbsMixin):
     # ------------------------------------------------------------------ #
 
     def aval_resp(self, target: str, *, source: str) -> Self:
-        """
-        Map RECIST / oncology response text values in *source* to numeric codes.
+        """Map RECIST response text to numeric codes.
 
-        Mapping (from admiralonco ``aval_resp``):
+        Mapping: CR=1, PR=2, SD=3, NON-CR/NON-PD=4, PD=5, NE=6,
+        MISSING=7.  Other/null values produce null.
 
-        ===============   ====
-        Response          Code
-        ===============   ====
-        CR                   1
-        PR                   2
-        SD                   3
-        NON-CR/NON-PD        4
-        PD                   5
-        NE                   6
-        MISSING              7
-        (other / null)    null
-        ===============   ====
+        Args:
+            target: Name of the output numeric column.
+            source: Column containing RECIST response text.
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .aval_resp("AVAL", source="OVRLRESP")
+        Examples:
+            Map overall response to a numeric code::
+
+                adrs = (
+                    rs_raw.adam.onco
+                    .aval_resp("AVAL", source="OVRLRESP")
+                    .to_frame()
+                )
         """
         return self._chain(_resp_num_expr(source).cast(pl.Float64).alias(target))
 
@@ -106,16 +105,25 @@ class OncoNamespace(SharedADaMVerbsMixin):
         responses: list[str] | None = None,
         flag_value: str = "Y",
     ) -> Self:
-        """
-        Flag records where *source* is in *responses* (default: ``["CR", "PR"]``).
+        """Flag records where *source* matches a target response.
 
-        Returns *flag_value* (default ``"Y"``), null otherwise.
+        Args:
+            target: Name of the output flag column.
+            source: Column containing response text.
+            responses: Values to flag (default ``["CR", "PR"]``).
+            flag_value: Value to assign for matching records (default ``"Y"``).
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .tumor_response_flag("RSPFL", source="OVRLRESP")                 # CR or PR
-            .tumor_response_flag("CBFL",  source="OVRLRESP",
-                                 responses=["CR", "PR", "SD"])                # clinical benefit
+        Examples:
+            Flag objective responders (CR or PR)::
+
+                adrs = (
+                    rs_raw.adam.onco
+                    .tumor_response_flag("RSPFL", source="OVRLRESP")
+                    .to_frame()
+                )
         """
         rsp = responses if responses is not None else ["CR", "PR"]
         return self._chain(
@@ -136,18 +144,28 @@ class OncoNamespace(SharedADaMVerbsMixin):
         source: str,
         groups: list[str] | None = None,
     ) -> Self:
-        """
-        Derive the best overall response (BOR) within each *groups* partition.
+        """Derive best overall response (BOR) per group.
 
-        The most favourable response is the one with the lowest RECIST numeric
-        rank (CR=1 < PR=2 < SD=3 < NON-CR/NON-PD=4 < PD=5 < NE=6 < MISSING=7).
+        The most favourable response is the one with the lowest RECIST rank
+        (CR < PR < SD < NON-CR/NON-PD < PD < NE < MISSING).
 
-        All records within the group receive the same BOR text value.
+        Args:
+            target: Name of the output column.
+            source: Column containing RECIST response text.
+            groups: Partition columns (default ``["USUBJID"]``).
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .best_overall_response("BOR", source="OVRLRESP",
-                                    groups=["USUBJID"])
+        Examples:
+            Derive BOR per subject::
+
+                adrs = (
+                    rs_raw.adam.onco
+                    .best_overall_response("BOR", source="OVRLRESP",
+                                           groups=["USUBJID"])
+                    .to_frame()
+                )
         """
         grps = groups or ["USUBJID"]
         num_expr = _resp_num_expr(source)
@@ -169,22 +187,33 @@ class OncoNamespace(SharedADaMVerbsMixin):
         groups: list[str] | None = None,
         flag_value: str = "Y",
     ) -> Self:
-        """
-        Flag a confirmed response: the subject must have a response record in
-        *responses* followed by another response record at least *confirmation_days*
-        later within the same *groups* partition.
+        """Flag a confirmed response sustained for at least *confirmation_days*.
 
-        Materialises the pipeline then returns a fresh namespace.
+        A response is confirmed when two response records in *responses*
+        exist at least *confirmation_days* apart within the same group.
 
-        Example::
+        Args:
+            target: Name of the output flag column.
+            source: Column containing response text.
+            date_col: Assessment date column.
+            confirmation_days: Minimum gap in days (default ``28``).
+            responses: Values to consider (default ``["CR", "PR"]``).
+            groups: Partition columns (default ``["USUBJID"]``).
+            flag_value: Value to assign (default ``"Y"``).
 
-            .confirmed_response_flag(
-                "CRSPFL",
-                source="OVRLRESP",
-                date_col="ADT",
-                confirmation_days=28,
-                groups=["USUBJID"],
-            )
+        Returns:
+            Self: A fresh namespace wrapping the updated frame.
+
+        Examples:
+            Flag confirmed CR/PR responses::
+
+                adrs = (
+                    rs_raw.adam.onco
+                    .confirmed_response_flag(
+                        "CRSPFL", source="OVRLRESP", date_col="ADT",
+                        confirmation_days=28, groups=["USUBJID"])
+                    .to_frame()
+                )
         """
         rsp = responses if responses is not None else ["CR", "PR"]
         grps = groups or ["USUBJID"]
@@ -237,17 +266,28 @@ class OncoNamespace(SharedADaMVerbsMixin):
         date_col: str,
         groups: list[str] | None = None,
     ) -> Self:
-        """
-        Filter the dataset to keep only records up to and including the first
-        progressive disease (PD) observation per *groups* partition.
+        """Keep records up to and including the first PD per group.
 
-        Records for groups without any PD observation are fully retained.
-        Materialises the current pipeline before filtering.
+        Groups without any PD observation are fully retained.
+        Materialises the pipeline before filtering.
 
-        Example::
+        Args:
+            response_col: Column containing response text.
+            date_col: Assessment date column.
+            groups: Partition columns (default ``["USUBJID"]``).
 
-            .filter_pd(response_col="OVRLRESP", date_col="ADT",
-                       groups=["USUBJID"])
+        Returns:
+            Self: A fresh namespace wrapping the filtered frame.
+
+        Examples:
+            Filter to records up to first progressive disease::
+
+                adrs = (
+                    rs_raw.adam.onco
+                    .filter_pd(response_col="OVRLRESP", date_col="ADT",
+                               groups=["USUBJID"])
+                    .to_frame()
+                )
         """
         grps = groups or ["USUBJID"]
         df = self.to_frame()

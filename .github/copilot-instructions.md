@@ -183,3 +183,49 @@ All mixin methods MUST use `self._chain(*exprs)` to append Polars expressions to
 ### Canonical reference
 
 `src/fleet/adam/_mixins.py` is the **single source of truth** for all shared ADaM verbs. Read the module docstring there before adding, removing, or modifying any shared verb — it explains the full architecture.
+
+## 8. Docstring Convention (Google-style)
+
+All public functions and methods **MUST** use Google-style docstrings with these sections (in order):
+
+1. **One-sentence summary** (imperative mood).
+2. **Extended description** (optional, 2–3 sentences max). Reference CDISC spec where applicable.
+3. **Args:** — one line per parameter, keyword-only markers implicit.
+4. **Returns:** — type and short description.
+5. **Raises:** — only if non-obvious exceptions can occur.
+6. **Examples:** — at least one copy-pasteable, CDISC-compliant code block ending with `.to_frame()`.
+
+### Rules
+
+- Use `Examples:` (plural, no trailing `::`) as the section header inside the docstring, followed by a description and `::` for the code block.
+- Every example must be a **complete pipeline snippet** (not a bare `.verb(...)` fragment).
+- Never use NumPy/Sphinx `Parameters ----------` style — always use `Args:`.
+- Never use bare `Example::` (singular with double colon) — always `Examples:`.
+- Private helpers (`_chain`, `_materialise_then`, etc.) are exempt.
+
+### Template
+
+```python
+def verb_name(self, target: str, *, source: str) -> Self:
+    """One-sentence summary of what the verb does.
+
+    Longer description if needed (2-3 sentences max).
+
+    Args:
+        target: Name of the output column to create.
+        source: Name of the input column.
+
+    Returns:
+        Self: The namespace with *target* appended; call ``.to_frame()``
+            to materialise.
+
+    Examples:
+        Copy the raw subject ID to USUBJID::
+
+            dm = (
+                raw_df.sdtm
+                .assign_no_ct("USUBJID", source="subject_id")
+                .to_frame()
+            )
+    """
+```

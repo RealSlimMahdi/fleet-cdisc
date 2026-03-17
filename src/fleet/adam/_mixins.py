@@ -107,7 +107,22 @@ class SharedADaMVerbsMixin:
         return new
 
     def to_frame(self) -> pl.DataFrame:
-        """Materialise the accumulated pipeline into a Polars DataFrame."""
+        """Materialise the accumulated pipeline into a Polars DataFrame.
+
+        Returns:
+            pl.DataFrame: The fully materialised result of all chained
+                ADaM verbs.
+
+        Examples:
+            Collect the pipeline result::
+
+                advs = (
+                    vs_df.adam
+                    .source("USUBJID")
+                    .derivation("AVAL", expression="VSSTRESN")
+                    .to_frame()
+                )
+        """
         return self._lazy.collect()
 
     # ------------------------------------------------------------------ #
@@ -115,12 +130,53 @@ class SharedADaMVerbsMixin:
     # ------------------------------------------------------------------ #
 
     def source(self, target: str, *, from_col: str | None = None) -> Self:
-        """Copy *from_col* (or *target* itself) to *target*."""
+        """Copy a source column into the ADaM dataset.
+
+        When *from_col* is ``None``, the column named *target* is carried
+        through as-is (identity copy).
+
+        Args:
+            target: Name of the output ADaM variable.
+            from_col: Name of the input column to copy from.  Defaults to
+                *target* when omitted.
+
+        Returns:
+            Self: The namespace with *target* appended; call ``.to_frame()``
+                to materialise.
+
+        Examples:
+            Copy ``AEDECOD`` from the source data::
+
+                adae = (
+                    ae_df.adam
+                    .source("AEDECOD", from_col="AEDECOD")
+                    .to_frame()
+                )
+        """
         src = from_col if from_col is not None else target
         return self._chain(pl.col(src).alias(target))
 
     def derivation(self, target: str, *, expression: str | pl.Expr) -> Self:
-        """Arbitrary Polars expression derivation."""
+        """Derive *target* using an arbitrary Polars expression.
+
+        Args:
+            target: Name of the output ADaM variable.
+            expression: A Polars expression object or a string that evaluates
+                to one.
+
+        Returns:
+            Self: The namespace with *target* appended; call ``.to_frame()``
+                to materialise.
+
+        Examples:
+            Compute ``AVAL`` from a raw numeric column::
+
+                advs = (
+                    vs_df.adam
+                    .derivation("AVAL", expression="pl.col('VSSTRESN').cast(pl.Float64)")
+                    .to_frame()
+                )
+        """
         from ..sdtm.utils import parse_expression
 
         expr = (
@@ -131,7 +187,25 @@ class SharedADaMVerbsMixin:
         return self._chain(expr.alias(target))
 
     def assigned(self, target: str, *, value: Any) -> Self:
-        """Set *target* to a constant *value* for every record."""
+        """Set *target* to a constant *value* for every record.
+
+        Args:
+            target: Name of the output ADaM variable.
+            value: The literal value to broadcast.
+
+        Returns:
+            Self: The namespace with *target* appended; call ``.to_frame()``
+                to materialise.
+
+        Examples:
+            Set a constant ``PARAMCD``::
+
+                advs = (
+                    vs_df.adam
+                    .assigned("PARAMCD", value="SYSBP")
+                    .to_frame()
+                )
+        """
         return self._chain(pl.lit(value).alias(target))
 
     def recode(
@@ -142,7 +216,30 @@ class SharedADaMVerbsMixin:
         recode_map: dict[Any, Any],
         default: Any = None,
     ) -> Self:
-        """Map values in *source* to recoded values; unmapped → *default*."""
+        """Map values in *source* to recoded values in *target*.
+
+        Unmapped values fall back to *default*.
+
+        Args:
+            target: Name of the output ADaM variable.
+            source: Name of the input column containing coded values.
+            recode_map: ``{old_value: new_value}`` mapping.
+            default: Value for entries not present in *recode_map*.
+
+        Returns:
+            Self: The namespace with *target* appended; call ``.to_frame()``
+                to materialise.
+
+        Examples:
+            Recode numeric sex to character::
+
+                adsl = (
+                    dm_df.adam.adsl
+                    .recode("SEX", source="SEXN",
+                            recode_map={1: "M", 2: "F"})
+                    .to_frame()
+                )
+        """
         if recode_map:
             default_expr = default if isinstance(default, pl.Expr) else pl.lit(default)
             expr = pl.col(source).replace_strict(
@@ -154,7 +251,25 @@ class SharedADaMVerbsMixin:
         return self._chain(expr)
 
     def rename(self, target: str, *, source: str) -> Self:
-        """Create *target* as a copy of *source* (variable renaming)."""
+        """Create *target* as a copy of *source* (variable renaming).
+
+        Args:
+            target: Name of the output ADaM variable.
+            source: Name of the existing column to rename.
+
+        Returns:
+            Self: The namespace with *target* appended; call ``.to_frame()``
+                to materialise.
+
+        Examples:
+            Rename ``VSTEST`` to ``PARAM``::
+
+                advs = (
+                    vs_df.adam
+                    .rename("PARAM", source="VSTEST")
+                    .to_frame()
+                )
+        """
         return self._chain(pl.col(source).alias(target))
 
     def condderivation(
@@ -164,7 +279,31 @@ class SharedADaMVerbsMixin:
         conditions: list[dict[str, Any]],
         else_value: Any = None,
     ) -> Self:
-        """Multi-branch conditional derivation (when/then/otherwise chain)."""
+        """Multi-branch conditional derivation (when/then/otherwise chain).
+
+        Branches are evaluated in order; the first matching condition wins.
+
+        Args:
+            target: Name of the output ADaM variable.
+            conditions: List of ``{"condition": expr, "value": any}`` dicts.
+            else_value: Fallback value when no condition matches.
+
+        Returns:
+            Self: The namespace with *target* appended; call ``.to_frame()``
+                to materialise.
+
+        Examples:
+            Derive ``DTYPE`` based on imputation method::
+
+                advs = (
+                    vs_df.adam
+                    .condderivation("DTYPE", conditions=[
+                        {"condition": 'pl.col("LOCF_FLAG") == "Y"', "value": "LOCF"},
+                        {"condition": 'pl.col("WOCF_FLAG") == "Y"', "value": "WOCF"},
+                    ], else_value=None)
+                    .to_frame()
+                )
+        """
         from ..sdtm.utils import parse_expression
 
         if not conditions:
@@ -186,7 +325,26 @@ class SharedADaMVerbsMixin:
         return self._chain(chain.otherwise(pl.lit(else_value)).alias(target))
 
     def whereclauses(self, *, where: str | pl.Expr) -> Self:
-        """Filter records by *where* expression (materialises first)."""
+        """Filter records by a *where* expression.
+
+        Materialises the pipeline before applying the filter.
+
+        Args:
+            where: A Polars expression (or string) that evaluates to a
+                boolean mask.
+
+        Returns:
+            Self: A fresh namespace wrapping the filtered frame.
+
+        Examples:
+            Subset to on-treatment records only::
+
+                advs = (
+                    vs_df.adam
+                    .whereclauses(where='pl.col("ONTRTFL") == "Y"')
+                    .to_frame()
+                )
+        """
         from ..sdtm.utils import parse_expression
 
         df = self.to_frame()
@@ -202,25 +360,29 @@ class SharedADaMVerbsMixin:
         by: list[str] | None = None,
         keep_cols: list[str] | None = None,
     ) -> Self:
-        """
-        Left-join ADSL columns onto the current dataset.
+        """Left-join ADSL columns onto the current dataset.
 
         Materialises the pipeline, left-joins *adsl* (optionally restricted to
-        *keep_cols* + *by* key columns), and returns a fresh namespace.
+        *keep_cols* plus the *by* key columns), and returns a fresh namespace.
 
-        Parameters
-        ----------
-        adsl:
-            The ADSL ``pl.DataFrame`` to merge in.
-        by:
-            Key column(s) for the join (default ``["USUBJID"]``).
-        keep_cols:
-            Subset of ADSL columns to bring in (excluding *by* keys, which are
-            always included).  When ``None``, all ADSL columns are merged.
+        Args:
+            adsl: The ADSL ``pl.DataFrame`` to merge in.
+            by: Key column(s) for the join (default ``["USUBJID"]``).
+            keep_cols: Subset of ADSL columns to bring in (excluding *by*
+                keys, which are always included).  When ``None``, all ADSL
+                columns are merged.
 
-        Example::
+        Returns:
+            Self: A fresh namespace wrapping the joined frame.
 
-            .merge_adsl(adsl_df, keep_cols=["TRTSDT", "TRTEDT", "TRT01P"])
+        Examples:
+            Merge treatment date columns from ADSL::
+
+                advs = (
+                    vs_df.adam
+                    .merge_adsl(adsl_df, keep_cols=["TRTSDT", "TRTEDT", "TRT01P"])
+                    .to_frame()
+                )
         """
         join_keys = by if by is not None else ["USUBJID"]
         if keep_cols is not None:
@@ -249,15 +411,26 @@ class MultiRowMixin:
         *,
         groups: list[str] | None = None,
     ) -> Self:
-        """
-        Sequential 1-based record number within each group, preserving row order.
+        """Sequential 1-based record number within each group.
 
-        Materialises the current pipeline before assigning sequence numbers.
+        Preserves row order.  Materialises the current pipeline before
+        assigning sequence numbers.
 
-        Example::
+        Args:
+            target: Name of the output sequence column (default ``"ASEQ"``).
+            groups: Partition columns (default ``["USUBJID"]``).
 
-            .seq("ASEQ", groups=["USUBJID"])
-            .seq("PCSEQ", groups=["USUBJID"])
+        Returns:
+            Self: A fresh namespace with the sequence column added.
+
+        Examples:
+            Add a per-subject sequence number::
+
+                adae = (
+                    ae_df.adam.occds
+                    .seq("ASEQ", groups=["USUBJID"])
+                    .to_frame()
+                )
         """
         grps = groups or ["USUBJID"]
         df = self.to_frame()

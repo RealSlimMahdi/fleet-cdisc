@@ -49,17 +49,28 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
         hip_col: str,
         round_digits: int | None = 3,
     ) -> Self:
-        """
-        Derive waist-to-hip ratio: ``WAISTHIP = waist_col / hip_col``.
+        """Derive waist-to-hip ratio: ``waist_col / hip_col``.
 
-        Mirrors ``admiralmetabolic::derive_param_waisthip``.
+        Both columns must be in the same unit.
 
-        Both columns must be in the **same unit** (cm, in, etc.).
-        No automatic unit conversion is performed.
+        Args:
+            target: Name of the output column.
+            waist_col: Column containing waist circumference.
+            hip_col: Column containing hip circumference.
+            round_digits: Decimal places to round to (default ``3``).
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .waist_hip_ratio("WAISTHIP", waist_col="WSTCIR", hip_col="HIPCIR")
+        Examples:
+            Derive waist-to-hip ratio::
+
+                advs = (
+                    vs_raw.adam.metabolic
+                    .waist_hip_ratio("WAISTHIP", waist_col="WSTCIR",
+                                     hip_col="HIPCIR")
+                    .to_frame()
+                )
         """
         expr = pl.col(waist_col) / pl.col(hip_col)
         if round_digits is not None:
@@ -78,17 +89,28 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
         height_col: str,
         round_digits: int | None = 3,
     ) -> Self:
-        """
-        Derive waist-to-height ratio: ``WAISTHGT = waist_col / height_col``.
+        """Derive waist-to-height ratio: ``waist_col / height_col``.
 
-        Mirrors ``admiralmetabolic::derive_param_waisthgt``.
+        Both columns must be in the same unit.
 
-        Both columns must be in the **same unit**.
+        Args:
+            target: Name of the output column.
+            waist_col: Column containing waist circumference.
+            height_col: Column containing height.
+            round_digits: Decimal places to round to (default ``3``).
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .waist_height_ratio("WAISTHGT", waist_col="WSTCIR",
-                                 height_col="HEIGHT")
+        Examples:
+            Derive waist-to-height ratio::
+
+                advs = (
+                    vs_raw.adam.metabolic
+                    .waist_height_ratio("WAISTHGT", waist_col="WSTCIR",
+                                        height_col="HEIGHT")
+                    .to_frame()
+                )
         """
         expr = pl.col(waist_col) / pl.col(height_col)
         if round_digits is not None:
@@ -109,22 +131,31 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
         sex_male_value: str = "M",
         round_digits: int | None = 1,
     ) -> Self:
-        """
-        Estimate body fat percentage using the Deurenberg formula (1991).
+        """Estimate body fat percentage using the Deurenberg formula.
 
-        Formula:
+        ``BF% = 1.2 × BMI + 0.23 × age − 10.8 × sex_num − 5.4``
+        where sex_num = 1 (male) or 0 (female).
 
-            BF% = 1.2 × BMI + 0.23 × age − 10.8 × sex_num − 5.4
+        Args:
+            target: Name of the output column.
+            bmi_col: Column containing BMI.
+            age_col: Column containing age in years.
+            sex_col: Column containing sex code.
+            sex_male_value: Value indicating male (default ``"M"``).
+            round_digits: Decimal places to round to (default ``1``).
 
-        where ``sex_num`` = 1 for male, 0 for female.
+        Returns:
+            Self: The namespace with *target* appended.
 
-        Reference:
-            Deurenberg P. et al., *Br J Nutr* 1991;65(2):105-14.
+        Examples:
+            Estimate body fat percentage::
 
-        Example::
-
-            .body_fat_pct("BFPCT", bmi_col="BMI", age_col="AGE",
-                          sex_col="SEX", sex_male_value="M")
+                advs = (
+                    vs_raw.adam.metabolic
+                    .body_fat_pct("BFPCT", bmi_col="BMI", age_col="AGE",
+                                  sex_col="SEX")
+                    .to_frame()
+                )
         """
         sex_num = (
             pl.when(pl.col(sex_col) == sex_male_value)
@@ -156,17 +187,31 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
         female_threshold: float = 88.0,
         flag_value: str = "Y",
     ) -> Self:
-        """
-        Flag subjects with abdominal obesity based on IDF/WHO waist circumference
-        thresholds (values expected in **centimetres**).
+        """Flag subjects with abdominal obesity by waist circumference.
 
-        Default thresholds (ATP III / NCEP):
-        - Male:   ≥ 102 cm
-        - Female: ≥  88 cm
+        Default ATP III / NCEP thresholds: male ≥ 102 cm, female ≥ 88 cm.
 
-        Example::
+        Args:
+            target: Name of the output flag column.
+            waist_col: Column containing waist circumference in cm.
+            sex_col: Column containing sex code.
+            sex_male_value: Value indicating male (default ``"M"``).
+            male_threshold: Threshold for males (default ``102.0``).
+            female_threshold: Threshold for females (default ``88.0``).
+            flag_value: Value to assign (default ``"Y"``).
 
-            .visceral_fat_flag("ABDFL", waist_col="WSTCIR", sex_col="SEX")
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Flag abdominal obesity::
+
+                advs = (
+                    vs_raw.adam.metabolic
+                    .visceral_fat_flag("ABDFL", waist_col="WSTCIR",
+                                       sex_col="SEX")
+                    .to_frame()
+                )
         """
         is_male = pl.col(sex_col) == sex_male_value
         waist = pl.col(waist_col)

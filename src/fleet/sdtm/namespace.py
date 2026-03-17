@@ -60,7 +60,26 @@ class SDTMNamespace:
     # ------------------------------------------------------------------ #
 
     def assign_no_ct(self, target: str, *, source: str) -> "SDTMNamespace":
-        """Copy *source* column to *target* with no CT validation."""
+
+        """Copy *source* column to *target* with no controlled-terminology validation.
+
+        Args:
+            target: Name of the output SDTM variable to create.
+            source: Name of the raw/source column to copy from.
+
+        Returns:
+            SDTMNamespace: The namespace with *target* appended; call
+                ``.to_frame()`` to materialise.
+
+        Examples:
+            Copy the raw subject identifier to ``USUBJID``::
+
+                dm = (
+                    raw_df.sdtm
+                    .assign_no_ct("USUBJID", source="subject_id")
+                    .to_frame()
+                )
+        """
         return self._chain(pl.col(source).alias(target))
 
     # ------------------------------------------------------------------ #
@@ -73,12 +92,25 @@ class SDTMNamespace:
         *,
         expression: "str | pl.Expr",
     ) -> "SDTMNamespace":
-        """
-        Derive *target* using a Polars expression or expression string.
+        """Derive *target* using a Polars expression or expression string.
 
-        Example::
+        Args:
+            target: Name of the output SDTM variable to create.
+            expression: A Polars expression object or a string that evaluates
+                to one (e.g. ``"pl.col('site_id').cast(pl.String)"``).
 
-            .derivation("SITEID", expression="pl.col('site_id').cast(pl.String)")
+        Returns:
+            SDTMNamespace: The namespace with *target* appended; call
+                ``.to_frame()`` to materialise.
+
+        Examples:
+            Cast a raw site column to string for ``SITEID``::
+
+                dm = (
+                    raw_df.sdtm
+                    .derivation("SITEID", expression="pl.col('site_id').cast(pl.String)")
+                    .to_frame()
+                )
         """
         expr = expression if isinstance(expression, pl.Expr) else parse_expression(str(expression))
         return self._chain(expr.alias(target))
@@ -96,11 +128,36 @@ class SDTMNamespace:
         ct_mapping: dict[str, str] | None = None,
         ct_validator: "CTValidator | None" = None,
     ) -> "SDTMNamespace":
-        """
-        Copy *source* to *target*, translating values into the CT decode.
+        """Copy *source* to *target*, translating values via controlled terminology.
 
-        *ct_mapping*: explicit ``{raw_value: ct_value}`` override.
-        *ct_validator*: if supplied (or auto-resolved), used for decode.
+        Values are decoded using *ct_mapping* (explicit override) or, when
+        omitted, from the singleton ``CTValidator`` for the given codelist.
+
+        Args:
+            target: Name of the output SDTM variable.
+            source: Name of the raw column containing coded values.
+            ct_codelist: CDISC CT codelist identifier (e.g. ``"C66731"``).
+            ct_mapping: Explicit ``{raw_value: ct_value}`` mapping.  When
+                provided, the CT validator is bypassed.
+            ct_validator: Optional pre-built validator instance.
+
+        Returns:
+            SDTMNamespace: The namespace with *target* appended; call
+                ``.to_frame()`` to materialise.
+
+        Examples:
+            Map raw ``sex`` values to CDISC Sex codelist (C66731)::
+
+                dm = (
+                    raw_df.sdtm
+                    .assign_ct(
+                        "SEX",
+                        source="sex",
+                        ct_codelist="C66731",
+                        ct_mapping={"M": "M", "F": "F"},
+                    )
+                    .to_frame()
+                )
         """
         if ct_mapping:
             mapping_expr = pl.col(source).replace(ct_mapping).alias(target)
@@ -145,11 +202,27 @@ class SDTMNamespace:
         mode: str = "date",          # "date" | "datetime"
         input_format: str | None = None,
     ) -> "SDTMNamespace":
-        """
-        Parse *source* date string and format as ISO 8601.
+        """Parse *source* date string and format as ISO 8601.
 
-        *mode*: ``"date"`` → YYYY-MM-DD, ``"datetime"`` → YYYY-MM-DDTHH:MM:SS.
-        *input_format*: optional strptime format hint (unused in current impl).
+        Args:
+            target: Name of the output ``--DTC`` variable.
+            source: Name of the raw column containing date strings.
+            mode: ``"date"`` (default) for YYYY-MM-DD or ``"datetime"`` for
+                YYYY-MM-DDTHH:MM:SS.
+            input_format: Optional strptime format hint.
+
+        Returns:
+            SDTMNamespace: The namespace with *target* appended; call
+                ``.to_frame()`` to materialise.
+
+        Examples:
+            Parse a raw AE start date into ISO 8601 ``AESTDTC``::
+
+                ae = (
+                    raw_df.sdtm
+                    .assign_datetime("AESTDTC", source="ae_start_date")
+                    .to_frame()
+                )
         """
         if mode == "datetime":
             fn = to_iso8601_datetime
@@ -170,7 +243,27 @@ class SDTMNamespace:
         value: Any,
         ct_codelist: str | None = None,
     ) -> "SDTMNamespace":
-        """Set *target* to *value* (validated against CT if codelist provided)."""
+        """Set *target* to a constant *value*, validated against controlled terminology.
+
+        Args:
+            target: Name of the output SDTM variable.
+            value: The literal value to assign.
+            ct_codelist: CDISC CT codelist for validation (e.g. ``"C66741"``).
+
+        Returns:
+            SDTMNamespace: The namespace with *target* appended; call
+                ``.to_frame()`` to materialise.
+
+        Examples:
+            Set ``STUDYID`` to a constant study identifier::
+
+                dm = (
+                    raw_df.sdtm
+                    .hardcode_ct("STUDYID", value="CDISCPILOT01",
+                                 ct_codelist="C66741")
+                    .to_frame()
+                )
+        """
         return self._chain(pl.lit(value).alias(target))
 
     # ------------------------------------------------------------------ #
@@ -178,7 +271,25 @@ class SDTMNamespace:
     # ------------------------------------------------------------------ #
 
     def hardcode_no_ct(self, target: str, *, value: Any) -> "SDTMNamespace":
-        """Set *target* to a literal *value* for every row."""
+        """Set *target* to a literal *value* for every row, with no CT validation.
+
+        Args:
+            target: Name of the output SDTM variable.
+            value: The literal value to assign to every row.
+
+        Returns:
+            SDTMNamespace: The namespace with *target* appended; call
+                ``.to_frame()`` to materialise.
+
+        Examples:
+            Hardcode the ``DOMAIN`` variable to ``"DM"``::
+
+                dm = (
+                    raw_df.sdtm
+                    .hardcode_no_ct("DOMAIN", value="DM")
+                    .to_frame()
+                )
+        """
         return self._chain(pl.lit(value).alias(target))
 
     # ------------------------------------------------------------------ #
@@ -192,10 +303,30 @@ class SDTMNamespace:
         condition: str | pl.Expr,
         then_value: Any,
     ) -> "SDTMNamespace":
-        """
-        WHERE *condition* is true, set *target* = *then_value*, else null.
+        """Set *target* to *then_value* where *condition* is true, else null.
 
-        *condition*: a Polars expression or a string that evaluates to one.
+        Args:
+            target: Name of the output SDTM variable.
+            condition: A Polars expression (or string) that evaluates to a
+                boolean mask.
+            then_value: The value to assign when *condition* is true.
+
+        Returns:
+            SDTMNamespace: The namespace with *target* appended; call
+                ``.to_frame()`` to materialise.
+
+        Examples:
+            Set ``AEOUT`` to ``"FATAL"`` where the death flag is set::
+
+                ae = (
+                    raw_df.sdtm
+                    .condition_add(
+                        "AEOUT",
+                        condition='pl.col("death_flag") == "Y"',
+                        then_value="FATAL",
+                    )
+                    .to_frame()
+                )
         """
         cond_expr = condition if isinstance(condition, pl.Expr) else parse_expression(condition)
         expr = pl.when(cond_expr).then(pl.lit(then_value)).otherwise(pl.lit(None)).alias(target)
@@ -212,18 +343,30 @@ class SDTMNamespace:
         when: list[dict[str, Any]],
         else_value: Any = None,
     ) -> "SDTMNamespace":
-        """
-        Multi-branch conditional mapping.
+        """Multi-branch conditional mapping.
 
-        *when*: list of ``{"condition": expr_str, "value": any}`` dicts.
         Branches are evaluated in order; first match wins.
 
-        Example::
+        Args:
+            target: Name of the output SDTM variable.
+            when: List of ``{"condition": expr_str, "value": any}`` dicts.
+            else_value: Fallback value when no branch matches.
 
-            .if_then_else("AGEU", when=[
-                {"condition": 'pl.col("age_unit") == "years"', "value": "YEARS"},
-                {"condition": 'pl.col("age_unit") == "months"', "value": "MONTHS"},
-            ], else_value="YEARS")
+        Returns:
+            SDTMNamespace: The namespace with *target* appended; call
+                ``.to_frame()`` to materialise.
+
+        Examples:
+            Map raw age-unit strings to CDISC ``AGEU`` values::
+
+                dm = (
+                    raw_df.sdtm
+                    .if_then_else("AGEU", when=[
+                        {"condition": 'pl.col("age_unit") == "years"', "value": "YEARS"},
+                        {"condition": 'pl.col("age_unit") == "months"', "value": "MONTHS"},
+                    ], else_value="YEARS")
+                    .to_frame()
+                )
         """
         if not when:
             return self._chain(pl.lit(else_value).alias(target))
@@ -262,10 +405,28 @@ class SDTMNamespace:
         source: str = "ae_relationship",
         aerel_map: dict[str, str] | None = None,
     ) -> "SDTMNamespace":
-        """
-        Map free-text AE causality string to controlled AEREL values.
+        """Map free-text AE causality strings to controlled ``AEREL`` values.
 
-        Mapping is case-insensitive against *aerel_map* (defaults to built-in).
+        Mapping is case-insensitive against *aerel_map* (defaults to the
+        built-in CDISC causality mapping).
+
+        Args:
+            target: Output column name (default ``"AEREL"``).
+            source: Raw column containing causality strings.
+            aerel_map: Optional ``{raw_text: decoded_value}`` override.
+
+        Returns:
+            SDTMNamespace: The namespace with *target* appended; call
+                ``.to_frame()`` to materialise.
+
+        Examples:
+            Derive ``AEREL`` from raw causality using the default mapping::
+
+                ae = (
+                    raw_df.sdtm
+                    .ae_aerel("AEREL", source="ae_relationship")
+                    .to_frame()
+                )
         """
         mapping = aerel_map or self._DEFAULT_AEREL_MAP
 
@@ -289,11 +450,30 @@ class SDTMNamespace:
         on: str | list[str],
         how: str = "left",
     ) -> "SDTMNamespace":
-        """
-        Join *dataset* into the pipeline using key *on*.
+        """Join *dataset* into the pipeline using key column(s) *on*.
 
-        This verb materialises the current pipeline first (join needs a
-        concrete frame), then returns a namespace wrapping the joined frame.
+        Materialises the current pipeline first (join requires a concrete
+        frame), then returns a namespace wrapping the joined result.
+
+        Args:
+            target_cols: Optional list of columns to keep from the joined
+                result. When ``None``, all columns are retained.
+            dataset: The ``pl.DataFrame`` to merge in.
+            on: Key column name(s) for the join.
+            how: Join strategy (default ``"left"``).
+
+        Returns:
+            SDTMNamespace: A fresh namespace wrapping the joined frame.
+
+        Examples:
+            Merge supplemental qualifier data onto the DM domain::
+
+                dm = (
+                    raw_df.sdtm
+                    .hardcode_no_ct("DOMAIN", value="DM")
+                    .merge(dataset=suppdm_df, on="USUBJID")
+                    .to_frame()
+                )
         """
         joined = self._lazy.join(dataset.lazy(), on=on, how=how)
         new = object.__new__(SDTMNamespace)
@@ -312,10 +492,28 @@ class SDTMNamespace:
         subset: list[str] | None = None,
         keep: str = "first",
     ) -> "SDTMNamespace":
-        """
-        Remove duplicate rows, optionally on a *subset* of columns.
+        """Remove duplicate rows, optionally on a *subset* of columns.
 
         Materialises, deduplicates, and returns a fresh namespace.
+
+        Args:
+            subset: Column(s) to consider for duplicate detection.  When
+                ``None``, all columns are used.
+            keep: Which duplicate to keep: ``"first"`` (default), ``"last"``,
+                or ``"none"``.
+
+        Returns:
+            SDTMNamespace: A fresh namespace wrapping the deduplicated frame.
+
+        Examples:
+            Deduplicate VS records on subject and visit::
+
+                vs = (
+                    raw_df.sdtm
+                    .assign_no_ct("USUBJID", source="subject_id")
+                    .remove_dup(subset=["USUBJID", "VISIT"])
+                    .to_frame()
+                )
         """
         new = object.__new__(SDTMNamespace)
         new._lazy = self._lazy.unique(subset=subset, keep=keep)  # type: ignore[arg-type]
@@ -331,17 +529,28 @@ class SDTMNamespace:
         group_cols: list[str],
         agg: list[pl.Expr],
     ) -> "SDTMNamespace":
-        """
-        Group by *group_cols* and apply *agg* aggregations.
+        """Group by *group_cols* and apply *agg* aggregations.
 
         Materialises, groups, and returns a fresh namespace.
 
-        Example::
+        Args:
+            group_cols: Column(s) to group by.
+            agg: List of Polars aggregation expressions.
 
-            .group_by(
-                group_cols=["USUBJID", "VSTESTCD"],
-                agg=[pl.col("VSSTRESN").max().alias("AVAL")],
-            )
+        Returns:
+            SDTMNamespace: A fresh namespace wrapping the grouped frame.
+
+        Examples:
+            Compute max vital-sign result per subject and test::
+
+                vs_agg = (
+                    raw_df.sdtm
+                    .group_by(
+                        group_cols=["USUBJID", "VSTESTCD"],
+                        agg=[pl.col("VSSTRESN").max().alias("AVAL")],
+                    )
+                    .to_frame()
+                )
         """
         new = object.__new__(SDTMNamespace)
         new._lazy = self._lazy.group_by(group_cols).agg(agg)
@@ -352,7 +561,25 @@ class SDTMNamespace:
     # ------------------------------------------------------------------ #
 
     def dataset_level(self, target: str, *, value: Any) -> "SDTMNamespace":
-        """Set a dataset-level constant on *target* (alias for hardcode_no_ct)."""
+        """Set a dataset-level constant on *target* (alias for ``hardcode_no_ct``).
+
+        Args:
+            target: Name of the output SDTM variable.
+            value: The literal constant to broadcast to every row.
+
+        Returns:
+            SDTMNamespace: The namespace with *target* appended; call
+                ``.to_frame()`` to materialise.
+
+        Examples:
+            Hardcode ``STUDYID`` at the dataset level::
+
+                dm = (
+                    raw_df.sdtm
+                    .dataset_level("STUDYID", value="CDISCPILOT01")
+                    .to_frame()
+                )
+        """
         return self.hardcode_no_ct(target, value=value)
 
     # ------------------------------------------------------------------ #
@@ -360,11 +587,27 @@ class SDTMNamespace:
     # ------------------------------------------------------------------ #
 
     def notsubmitted(self, *targets: str) -> "SDTMNamespace":
-        """
-        Mark one or more variables as not submitted (set to null).
+        """Mark one or more variables as not submitted (set to null).
 
-        Useful to explicitly drop or null out eCRF fields not
-        included in SDTM submission.
+        Useful to explicitly null out eCRF fields that are not included in
+        the SDTM submission.
+
+        Args:
+            *targets: One or more variable names to null out.
+
+        Returns:
+            SDTMNamespace: The namespace with each *target* set to null;
+                call ``.to_frame()`` to materialise.
+
+        Examples:
+            Null out internal scratch fields before submission::
+
+                dm = (
+                    raw_df.sdtm
+                    .assign_no_ct("USUBJID", source="subject_id")
+                    .notsubmitted("_raw_id", "_site_code")
+                    .to_frame()
+                )
         """
         exprs = [pl.lit(None).alias(t) for t in targets]
         return self._chain(*exprs)
@@ -381,16 +624,31 @@ class SDTMNamespace:
         delimiter: str = "|",
         id_cols: list[str] | None = None,
     ) -> "SDTMNamespace":
-        """
-        Explode a delimited multi-response field into separate rows.
+        """Explode a delimited multi-response field into separate rows.
 
         Materialises the current pipeline, then splits *source* on
         *delimiter* and explodes, keeping *id_cols* intact.
 
-        Example::
+        Args:
+            target: Name of the output column for the split values.
+            source: Name of the raw column containing delimited responses.
+            delimiter: Separator between responses (default ``"|"``).
+            id_cols: Columns to carry through unchanged.
 
-            .multiple_responses("AETERM", source="ae_terms", delimiter="|",
-                                 id_cols=["USUBJID"])
+        Returns:
+            SDTMNamespace: A fresh namespace with one row per response.
+
+        Examples:
+            Explode pipe-delimited AE terms into separate rows::
+
+                ae = (
+                    raw_df.sdtm
+                    .multiple_responses(
+                        "AETERM", source="ae_terms", delimiter="|",
+                        id_cols=["USUBJID"],
+                    )
+                    .to_frame()
+                )
         """
         new = object.__new__(SDTMNamespace)
         new._lazy = (
@@ -409,17 +667,29 @@ class SDTMNamespace:
     # ------------------------------------------------------------------ #
 
     def from_spec(self, spec_path: str | Path, *, dataset: str | None = None) -> "SDTMNamespace":
-        """
-        Build a pipeline from a YAML specification file.
+        """Build a pipeline from a YAML specification file.
 
         Reads a ``define.yaml`` with a top-level ``datasets`` list where each
         variable carries a ``derivation`` block.  Pass *dataset* to select
         which dataset to execute (e.g. ``dataset="DM"``).  When the file
         contains only one dataset the *dataset* argument may be omitted.
 
-        Example::
+        Args:
+            spec_path: Path to the ``define.yaml`` specification file.
+            dataset: Name of the dataset to execute from the spec.
 
-            df.sdtm.from_spec("specs/cdiscpilot01/sdtm/define.yaml", dataset="DM").to_frame()
+        Returns:
+            SDTMNamespace: A namespace pre-loaded with all spec-driven
+                derivations; call ``.to_frame()`` to materialise.
+
+        Examples:
+            Build and materialise the DM domain from a spec::
+
+                dm = (
+                    raw_df.sdtm
+                    .from_spec("specs/cdiscpilot01/sdtm/define.yaml", dataset="DM")
+                    .to_frame()
+                )
         """
         from .models import SDTMDomainSpec, SDTMVariableSpec
 
@@ -525,10 +795,29 @@ class SDTMNamespace:
         version: str = "3.4",
         rules_engine_path: "Path | None" = None,
     ) -> "SDTMNamespace":
-        """
-        Run CDISC conformance validation and print the report.
+        """Run CDISC SDTM conformance validation and print the report.
 
-        Returns *self* so the chain can continue.
+        Returns *self* so the chain can continue after validation.
+
+        Args:
+            domain: SDTM domain code (e.g. ``"DM"``, ``"AE"``).
+            version: SDTM IG version to validate against (default ``"3.4"``).
+            rules_engine_path: Optional path to a custom rules engine.
+
+        Returns:
+            SDTMNamespace: The same namespace instance (for continued
+                chaining).
+
+        Examples:
+            Validate a DM domain against SDTM 3.4::
+
+                dm = (
+                    raw_df.sdtm
+                    .hardcode_no_ct("DOMAIN", value="DM")
+                    .assign_no_ct("USUBJID", source="subject_id")
+                    .validate("DM", version="3.4")
+                    .to_frame()
+                )
         """
         from ..validation.service import ValidationService
 
@@ -564,19 +853,23 @@ class SDTMNamespace:
         enforces the convention that ``_``-prefixed columns are scratch
         variables.  Set to ``None`` to disable (e.g. during debugging).
 
-        Examples::
+        Examples:
+            Keep only spec columns, drop scratch ``_`` variables (default)::
 
-            # Keep only spec columns, drop scratch _ variables (default)
-            .select(spec="specs/sdtm/define.yaml", dataset="DM")
+                dm = (
+                    raw_df.sdtm
+                    .select(spec="specs/sdtm/define.yaml", dataset="DM")
+                    .to_frame()
+                )
 
-            # Same but disable auto-drop for debugging
-            .select(spec="specs/sdtm/define.yaml", dataset="DM", drop_pattern=None)
+            Disable auto-drop for debugging::
 
-            # Just drop _ variables, keep everything else
-            .select()
-
-            # Fully disable — do nothing (passthrough, for debugging)
-            .select(drop_pattern=None)
+                dm = (
+                    raw_df.sdtm
+                    .select(spec="specs/sdtm/define.yaml", dataset="DM",
+                            drop_pattern=None)
+                    .to_frame()
+                )
         """
         import re
 
@@ -672,7 +965,22 @@ class SDTMNamespace:
     # ------------------------------------------------------------------ #
 
     def to_frame(self) -> pl.DataFrame:
-        """Materialise the accumulated pipeline into a Polars DataFrame."""
+        """Materialise the accumulated pipeline into a Polars DataFrame.
+
+        Returns:
+            pl.DataFrame: The fully materialised result of all chained
+                SDTM verbs.
+
+        Examples:
+            Collect the pipeline result::
+
+                dm = (
+                    raw_df.sdtm
+                    .hardcode_no_ct("DOMAIN", value="DM")
+                    .assign_no_ct("USUBJID", source="subject_id")
+                    .to_frame()
+                )
+        """
         return self._lazy.collect()
 
     def write_parquet(
@@ -691,15 +999,15 @@ class SDTMNamespace:
         *mkdir*: when ``True`` (default) any missing parent directories are
         created automatically.
 
-        Example::
+        Examples:
+            Write the DM domain to Parquet::
 
-            dm = (
-                raw_df.sdtm
-                .assign_no_ct("USUBJID", source="patient_number")
-                ...
-                .select(spec="specs/sdtm/define.yaml", dataset="DM")
-                .write_parquet("outputs/cdiscpilot01/dm.parquet")
-            )
+                dm = (
+                    raw_df.sdtm
+                    .assign_no_ct("USUBJID", source="patient_number")
+                    .select(spec="specs/sdtm/define.yaml", dataset="DM")
+                    .write_parquet("outputs/cdiscpilot01/dm.parquet")
+                )
         """
         df = self.to_frame()
         dest = Path(path)

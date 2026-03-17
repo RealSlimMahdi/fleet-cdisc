@@ -69,40 +69,33 @@ class NeuroNamespace(SharedADaMVerbsMixin):
         ref_region: str = "Whole Cerebellum",
         round_digits: int | None = 2,
     ) -> Self:
-        """
-        Convert amyloid PET SUVR to the Centiloid scale.
+        """Convert amyloid PET SUVR to the Centiloid scale.
 
-        Formula (Centiloid Working Group):
+        ``Centiloid = slope * SUVR + intercept``.  Provide either *slope* and
+        *intercept* directly or *tracer* + *pipeline* for a built-in lookup.
 
-            Centiloid = slope × SUVR + intercept
+        Args:
+            target: Name of the output column.
+            suvr_col: Column containing the SUVR value.
+            slope: Calibration slope (provide with *intercept*).
+            intercept: Calibration intercept.
+            tracer: Tracer name for built-in lookup.
+            pipeline: Pipeline name for built-in lookup.
+            ref_region: Reference region (default ``"Whole Cerebellum"``).
+            round_digits: Decimal places to round to (default ``2``).
 
-        Provide either:
+        Returns:
+            Self: The namespace with *target* appended.
 
-        - *slope* and *intercept* directly (custom calibration), or
-        - *tracer* + *pipeline* to look up pre-defined parameters from the
-          built-in calibration table (see table below).
+        Examples:
+            Convert SUVR to Centiloid with custom parameters::
 
-        Supported tracer × pipeline combinations
-        (reference region always "Whole Cerebellum"):
-
-        ==================  ==============================  =======  =========
-        Tracer              Pipeline                        Slope    Intercept
-        ==================  ==============================  =======  =========
-        18F-Florbetapir     AVID FBP SUVR PIPELINE         183.07   -177.26
-        18F-Florbetaben     AVID FBB SUVR PIPELINE         156.06   -148.13
-        18F-Florbetapir     BERKELEY FBP SUVR PIPELINE     188.22   -189.16
-        18F-Florbetaben     BERKELEY FBB SUVR PIPELINE     157.15   -151.87
-        ==================  ==============================  =======  =========
-
-        Example::
-
-            # Custom parameters
-            .centiloid("CLV", suvr_col="SUVR", slope=183.07, intercept=-177.26)
-
-            # Pre-defined lookup
-            .centiloid("CLV", suvr_col="SUVR",
-                       tracer="18F-Florbetapir",
-                       pipeline="AVID FBP SUVR PIPELINE")
+                adapet = (
+                    pet_raw.adam.neuro
+                    .centiloid("CLV", suvr_col="SUVR",
+                               slope=183.07, intercept=-177.26)
+                    .to_frame()
+                )
         """
         if slope is not None and intercept is not None:
             s, i = slope, intercept
@@ -136,23 +129,25 @@ class NeuroNamespace(SharedADaMVerbsMixin):
         *,
         score_col: str,
     ) -> Self:
-        """
-        Categorise MMSE total score into severity levels.
+        """Categorise MMSE total score into severity levels.
 
-        Thresholds (Folstein / O'Bryant 2008):
+        27–30 = Normal, 18–26 = Mild, 10–17 = Moderate, 0–9 = Severe.
 
-        ==========  ============
-        MMSE score  Category
-        ==========  ============
-        27 – 30     Normal
-        18 – 26     Mild
-        10 – 17     Moderate
-        0 –  9      Severe
-        ==========  ============
+        Args:
+            target: Name of the output column.
+            score_col: Column containing the MMSE total score.
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .mmse_category("MMSECG", score_col="AVAL")
+        Examples:
+            Derive MMSE category::
+
+                adcog = (
+                    cog_raw.adam.neuro
+                    .mmse_category("MMSECG", score_col="AVAL")
+                    .to_frame()
+                )
         """
         score = pl.col(score_col)
         return self._chain(
@@ -175,21 +170,29 @@ class NeuroNamespace(SharedADaMVerbsMixin):
         domain_cols: list[str],
         round_digits: int | None = 1,
     ) -> Self:
-        """
-        Compute the CDR Sum of Boxes (CDR-SoB) as the sum of *domain_cols*.
+        """Compute CDR Sum of Boxes (CDR-SoB) from domain box scores.
 
         Standard domains: Memory, Orientation, Judgment, Community Affairs,
-        Home & Hobbies, Personal Care (6 boxes, each scored 0–3).
+        Home & Hobbies, Personal Care (6 boxes, each 0–3).
 
-        Null handling: records where one or more domain columns are null yield a
-        null total.
+        Args:
+            target: Name of the output column.
+            domain_cols: List of CDR domain score columns.
+            round_digits: Decimal places to round to (default ``1``).
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .cdrsob_total("CDRSOB", domain_cols=[
-                "CDRMEM", "CDRORNT", "CDRJDGM",
-                "CDRCOMM", "CDRHOME", "CDRPERS",
-            ])
+        Examples:
+            Derive CDR-SoB total from 6 domains::
+
+                adcog = (
+                    cog_raw.adam.neuro
+                    .cdrsob_total("CDRSOB", domain_cols=[
+                        "CDRMEM", "CDRORNT", "CDRJDGM",
+                        "CDRCOMM", "CDRHOME", "CDRPERS"])
+                    .to_frame()
+                )
         """
         total = sum(pl.col(c) for c in domain_cols)  # type: ignore[arg-type]
         if round_digits is not None:
@@ -208,22 +211,27 @@ class NeuroNamespace(SharedADaMVerbsMixin):
         normal_threshold: int = 26,
         mci_threshold: int = 18,
     ) -> Self:
-        """
-        Categorise MoCA total score (0–30) into three bands.
-
-        =================  ==========
-        MoCA score         Category
-        =================  ==========
-        ≥ normal_threshold Normal
-        ≥ mci_threshold    MCI
-        < mci_threshold    Impaired
-        =================  ==========
+        """Categorise MoCA total score into Normal / MCI / Impaired.
 
         Defaults: Normal ≥ 26, MCI 18–25, Impaired < 18.
 
-        Example::
+        Args:
+            target: Name of the output column.
+            score_col: Column containing the MoCA total score.
+            normal_threshold: Lower bound for Normal (default ``26``).
+            mci_threshold: Lower bound for MCI (default ``18``).
 
-            .moca_category("MOACG", score_col="AVAL")
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Derive MoCA category::
+
+                adcog = (
+                    cog_raw.adam.neuro
+                    .moca_category("MOACG", score_col="AVAL")
+                    .to_frame()
+                )
         """
         score = pl.col(score_col)
         return self._chain(
@@ -246,17 +254,27 @@ class NeuroNamespace(SharedADaMVerbsMixin):
         negative_col: str,
         general_col: str,
     ) -> Self:
-        """
-        Compute PANSS total score = positive + negative + general subscale totals.
+        """Compute PANSS total = positive + negative + general subscales.
 
-        Each subscale column should already be the subscale summary.
+        Args:
+            target: Name of the output column.
+            positive_col: Column containing the positive subscale total.
+            negative_col: Column containing the negative subscale total.
+            general_col: Column containing the general subscale total.
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .panss_total("PANSSTOT",
-                         positive_col="PANSSPOS",
-                         negative_col="PANSSNEG",
-                         general_col="PANSSGEN")
+        Examples:
+            Derive PANSS total score::
+
+                adnpi = (
+                    npi_raw.adam.neuro
+                    .panss_total("PANSSTOT", positive_col="PANSSPOS",
+                                 negative_col="PANSSNEG",
+                                 general_col="PANSSGEN")
+                    .to_frame()
+                )
         """
         return self._chain(
             (pl.col(positive_col) + pl.col(negative_col) + pl.col(general_col))

@@ -51,16 +51,26 @@ class OphthaNamespace(SharedADaMVerbsMixin):
         source: str,
         round_digits: int | None = 4,
     ) -> Self:
-        """
-        Convert an ETDRS letter score in *source* to LogMAR units.
+        """Convert an ETDRS letter score to LogMAR units.
 
-        Formula (Beck et al., Am J Ophthalmol 2003):
+        Formula (Beck et al.): ``logMAR = -0.02 × ETDRS + 1.7``.
 
-            logMAR = -0.02 × ETDRS + 1.7
+        Args:
+            target: Name of the output column.
+            source: Column containing the ETDRS letter score.
+            round_digits: Decimal places to round to (default ``4``).
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .etdrs_to_logmar("LOGMAR", source="ETDRS")
+        Examples:
+            Convert ETDRS to LogMAR::
+
+                adbcva = (
+                    bcva_raw.adam.ophtha
+                    .etdrs_to_logmar("LOGMAR", source="ETDRS")
+                    .to_frame()
+                )
         """
         expr = (-0.02 * pl.col(source) + 1.7)
         if round_digits is not None:
@@ -78,16 +88,26 @@ class OphthaNamespace(SharedADaMVerbsMixin):
         source: str,
         round_digits: int | None = 1,
     ) -> Self:
-        """
-        Convert a LogMAR value in *source* back to ETDRS letter score.
+        """Convert a LogMAR value back to ETDRS letter score.
 
-        Inverse of the Beck formula:
+        Inverse of the Beck formula: ``ETDRS = (1.7 - logMAR) / 0.02``.
 
-            ETDRS = (1.7 - logMAR) / 0.02
+        Args:
+            target: Name of the output column.
+            source: Column containing the LogMAR value.
+            round_digits: Decimal places to round to (default ``1``).
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .logmar_to_etdrs("ETDRS", source="LOGMAR")
+        Examples:
+            Convert LogMAR back to ETDRS::
+
+                adbcva = (
+                    bcva_raw.adam.ophtha
+                    .logmar_to_etdrs("ETDRS", source="LOGMAR")
+                    .to_frame()
+                )
         """
         expr = (1.7 - pl.col(source)) / 0.02
         if round_digits is not None:
@@ -104,23 +124,25 @@ class OphthaNamespace(SharedADaMVerbsMixin):
         *,
         source: str,
     ) -> Self:
-        """
-        Map SC FOCID laterality codes to plain-text study eye labels.
+        """Map SC FOCID laterality codes to study eye labels.
 
-        ========  ===========
-        FOCID     STUDYEYE
-        ========  ===========
-        OS        LEFT
-        OD        RIGHT
-        OU        BILATERAL
-        (other)   null
-        ========  ===========
+        OS → LEFT, OD → RIGHT, OU → BILATERAL, other → null.
 
-        Mirrors ``admiralophtha::derive_var_studyeye``.
+        Args:
+            target: Name of the output column.
+            source: Column containing the FOCID code.
 
-        Example::
+        Returns:
+            Self: The namespace with *target* appended.
 
-            .study_eye("STUDYEYE", source="SCSTRESC")
+        Examples:
+            Derive study eye from SC domain::
+
+                adbcva = (
+                    bcva_raw.adam.ophtha
+                    .study_eye("STUDYEYE", source="SCSTRESC")
+                    .to_frame()
+                )
         """
         return self._chain(
             pl.when(pl.col(source).str.to_uppercase() == "OS")
@@ -146,22 +168,30 @@ class OphthaNamespace(SharedADaMVerbsMixin):
         study_eye_col: str = "STUDYEYE",
         loc_values: list[str] | None = None,
     ) -> Self:
-        """
-        Derive Affected Eye (``AFEYE``) from the laterality and study eye columns.
+        """Derive Affected Eye (AFEYE) from laterality and study eye.
 
-        Logic (mirrors ``admiralophtha::derive_var_afeye``):
+        Maps laterality/study-eye combinations to ``"Study Eye"``,
+        ``"Fellow Eye"``, or ``"Both Eyes"``.
 
-        - Laterality == ``"BILATERAL"`` and location in *loc_values* → ``"Both Eyes"``
-        - Study Eye == ``"BILATERAL"`` and laterality in valid list → ``"Study Eye"``
-        - Laterality matches Study Eye → ``"Study Eye"``
-        - Laterality differs from Study Eye → ``"Fellow Eye"``
-        - Otherwise → null
+        Args:
+            target: Name of the output column.
+            loc_col: Column containing the anatomical location.
+            lat_col: Column containing the laterality.
+            study_eye_col: Study eye column (default ``"STUDYEYE"``).
+            loc_values: Valid location values (default ``["EYE"]``).
 
-        *loc_values*: valid location values (default: ``["EYE"]``).
+        Returns:
+            Self: The namespace with *target* appended.
 
-        Example::
+        Examples:
+            Derive AFEYE for AE records::
 
-            .affected_eye("AFEYE", loc_col="AELOC", lat_col="AELAT")
+                adae = (
+                    ae_raw.adam.ophtha
+                    .affected_eye("AFEYE", loc_col="AELOC",
+                                  lat_col="AELAT")
+                    .to_frame()
+                )
         """
         locs = [v.upper() for v in (loc_values or ["EYE"])]
         valid_lat = ["LEFT", "RIGHT", "BILATERAL"]
@@ -214,17 +244,28 @@ class OphthaNamespace(SharedADaMVerbsMixin):
         direction: str = "ge",
         flag_value: str = "Y",
     ) -> Self:
-        """
-        Flag records where *value_col* meets a BCVA criterion threshold.
+        """Flag records meeting a BCVA criterion threshold.
 
-        *direction*: ``"ge"`` (≥), ``"gt"`` (>), ``"le"`` (≤), ``"lt"`` (<).
+        Args:
+            target: Name of the output flag column.
+            value_col: Column containing the BCVA score.
+            threshold: Numeric threshold value.
+            direction: Comparison — ``"ge"`` (≥), ``"gt"`` (>), ``"le"`` (≤),
+                ``"lt"`` (<).
+            flag_value: Value to assign (default ``"Y"``).
 
-        Equivalent to the ``CRITx``/``CRITxFL`` pair in admiralophtha.
+        Returns:
+            Self: The namespace with *target* appended.
 
-        Example::
+        Examples:
+            Flag records with ETDRS >= 70::
 
-            .bcva_criterion("BCVACR1FL", value_col="ETDRS",
-                            threshold=70, direction="ge")
+                adbcva = (
+                    bcva_raw.adam.ophtha
+                    .bcva_criterion("BCVACR1FL", value_col="ETDRS",
+                                    threshold=70, direction="ge")
+                    .to_frame()
+                )
         """
         direction = direction.lower()
         col = pl.col(value_col)
