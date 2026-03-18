@@ -16,7 +16,7 @@ import fleet
 | [`occds`](occds.md)           | OCCDS namespace (`df.adam.occds`) — 5 occurrence verbs       |
 | [`ta`](ta.md)                 | Therapeutic-area extensions (`df.adam.<ta>`, including `pk`) |
 | [`define_xml`](define_xml.md) | Define-XML generation, validation, spec generation           |
-| [`ct`](ct.md)                 | Controlled terminology loading and validation                |
+| [`ct`](ct.md)                 | Controlled terminology — CDISC Library API, code generation, validation |
 | [`core`](core.md)             | `StudyContext`, `PipelineDAG`, exceptions                    |
 
 ## Namespace registration

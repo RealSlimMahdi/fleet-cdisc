@@ -48,7 +48,7 @@ dm = (
     .hardcode_no_ct("DOMAIN", value="DM")
     .assign_no_ct("USUBJID", source="subject_id")
     .assign_no_ct("ARM", source="arm")
-    .assign_ct("SEX", source="sex", ct_codelist="C66731", ct_mapping={"M": "M", "F": "F"})
+    .assign_ct("SEX", source="sex", ct_codelist=SEX, ct_mapping={"M": "M", "F": "F"})
     .assign_datetime("BRTHDTC", source="dob", mode="date")
     .to_frame()
 )
@@ -63,7 +63,7 @@ vs = (
     .assign_no_ct("USUBJID", source="subject_id")
     .assign_ct(
         "VSTESTCD", source="test_name",
-        ct_codelist="C66741",
+        ct_codelist=VSTESTCD,
         ct_mapping={"Weight": "WEIGHT", "Heart Rate": "HR"}
     )
     .assign_no_ct("VSSTRESN", source="result")

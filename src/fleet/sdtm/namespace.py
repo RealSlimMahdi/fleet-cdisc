@@ -10,7 +10,7 @@ Usage
     result = (
         raw_df.sdtm
         .assign_no_ct("USUBJID", source="patient_number")
-        .assign_ct("SEX", source="sex", ct_codelist="C66731")
+        .assign_ct("SEX", source="sex", ct_codelist=SEX)
         .assign_datetime("BRTHDTC", source="birth_date")
         .hardcode_no_ct("DOMAIN", value="DM")
         .to_frame()
@@ -124,7 +124,7 @@ class SDTMNamespace:
         target: str,
         *,
         source: str,
-        ct_codelist: str,
+        ct_codelist: str | type,
         ct_mapping: dict[str, str] | None = None,
         ct_validator: "CTValidator | None" = None,
     ) -> "SDTMNamespace":
@@ -133,12 +133,31 @@ class SDTMNamespace:
         Values are decoded using *ct_mapping* (explicit override) or, when
         omitted, from the singleton ``CTValidator`` for the given codelist.
 
+        ``ct_mapping`` and ``ct_codelist`` are complementary:
+
+        * **With** ``ct_mapping`` — raw values are translated through the
+          supplied dictionary.  Use this when the source column contains
+          non-standard codes that need remapping (e.g.
+          ``{"1": "M", "2": "F"}``).
+        * **Without** ``ct_mapping`` — the raw values are assumed to
+          *already* match the CDISC submission values (e.g. the source
+          column already contains ``"M"`` / ``"F"``).  In this mode the
+          values are passed through and validated against the
+          ``ct_codelist`` via the ``CTValidator``.
+
+        In both cases ``ct_codelist`` identifies the NCI codelist used for
+        downstream validation (e.g. Define-XML, P21).
+
         Args:
             target: Name of the output SDTM variable.
             source: Name of the raw column containing coded values.
-            ct_codelist: CDISC CT codelist identifier (e.g. ``"C66731"``).
+            ct_codelist: CDISC CT codelist identifier — either a string
+                (e.g. ``"C66731"``) or a generated codelist class
+                (e.g. ``SEX``) that exposes ``_concept_id``.
             ct_mapping: Explicit ``{raw_value: ct_value}`` mapping.  When
-                provided, the CT validator is bypassed.
+                provided, the CT validator is bypassed.  May be omitted when
+                raw data already matches the CDISC submission values — the
+                codelist is still recorded for validation.
             ct_validator: Optional pre-built validator instance.
 
         Returns:
@@ -146,19 +165,36 @@ class SDTMNamespace:
                 ``.to_frame()`` to materialise.
 
         Examples:
-            Map raw ``sex`` values to CDISC Sex codelist (C66731)::
+            Map raw ``sex`` values to CDISC Sex codelist using a generated
+            codelist class::
+
+                from codelists import SEX
 
                 dm = (
                     raw_df.sdtm
                     .assign_ct(
                         "SEX",
                         source="sex",
-                        ct_codelist="C66731",
+                        ct_codelist=SEX,
                         ct_mapping={"M": "M", "F": "F"},
                     )
                     .to_frame()
                 )
+
+            Using a generated codelist class instead of a raw code::
+
+                from codelists import SEX
+
+                dm = (
+                    raw_df.sdtm
+                    .assign_ct("SEX", source="sex", ct_codelist=SEX)
+                    .to_frame()
+                )
         """
+        # Resolve codelist class to its concept ID string.
+        if not isinstance(ct_codelist, str):
+            ct_codelist = getattr(ct_codelist, "_concept_id", None) or ct_codelist.__name__
+
         if ct_mapping:
             mapping_expr = pl.col(source).replace(ct_mapping).alias(target)
             return self._chain(mapping_expr)
@@ -248,19 +284,23 @@ class SDTMNamespace:
         Args:
             target: Name of the output SDTM variable.
             value: The literal value to assign.
-            ct_codelist: CDISC CT codelist for validation (e.g. ``"C66741"``).
+            ct_codelist: CDISC CT codelist for validation — pass a generated
+                codelist class (e.g. ``SEX``) or a raw NCI concept ID string
+                (e.g. ``"C66741"``).  Prefer the class form.
 
         Returns:
             SDTMNamespace: The namespace with *target* appended; call
                 ``.to_frame()`` to materialise.
 
         Examples:
-            Set ``STUDYID`` to a constant study identifier::
+            Set ``AGEU`` to a constant value with CT validation::
+
+                from codelists import AGEU
 
                 dm = (
                     raw_df.sdtm
-                    .hardcode_ct("STUDYID", value="CDISCPILOT01",
-                                 ct_codelist="C66741")
+                    .hardcode_ct("AGEU", value="YEARS",
+                                 ct_codelist=AGEU)
                     .to_frame()
                 )
         """

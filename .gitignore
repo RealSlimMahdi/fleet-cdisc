@@ -9,6 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+# Env variables
+.env
+
 # MkDocs build output
 site/
 

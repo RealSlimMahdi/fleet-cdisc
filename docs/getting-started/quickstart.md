@@ -9,9 +9,28 @@
 
 ## Your first SDTM domain
 
+### Step 1: Bootstrap Controlled Terminology
+
+Before writing SDTM pipelines, generate your study's controlled terminology constants from the CDISC Library. This requires a CDISC API key in a `.env` file at your project root:
+
+```bash title=".env"
+CDISC_API_KEY=your-key-here
+```
+
+Then bootstrap the codelists for your study's domains:
+
+```bash
+fleet init-ct --domains DM,AE,VS,EX --output codelists.py
+```
+
+This queries the **SDTM Implementation Guide** to discover every codelist referenced by variables in those domains, downloads the term definitions from the CDISC Library, and generates a typed Python module with IDE auto-completion.
+
+### Step 2: Write your pipeline
+
 ```python
 import fleet
 import polars as pl
+from codelists import SEX  # generated in Step 1
 
 raw = pl.DataFrame({
     "patient_id": ["001", "002", "003"],
@@ -24,15 +43,14 @@ dm = (
     .hardcode_no_ct("DOMAIN",  value="DM")
     .hardcode_no_ct("STUDYID", value="MYSTUDY01")
     .assign_no_ct("USUBJID",   source="patient_id")
-    .assign_ct("SEX", source="sex_raw",
-               ct_codelist="C66731", ct_mapping={"M": "M", "F": "F"})
+    .assign_ct("SEX", source="sex_raw", ct_codelist=SEX)
     .assign_datetime("BRTHDTC", source="birth_date", mode="date")
     .to_frame()
 )
 print(dm)
 ```
 
-Nothing runs until `.to_frame()`. All preceding verbs accumulate into a single Polars `with_columns` pass.
+`assign_ct` accepts the generated codelist class directly — no need to look up NCI concept IDs. When `ct_mapping` is omitted (as above), raw values are passed through and validated against the codelist. Add `ct_mapping={"1": "M", "2": "F"}` if your raw data needs recoding.
 
 ---
 
@@ -90,15 +108,36 @@ Fleet also provides Admiral-parity verbs for advanced BDS derivations — `bsa()
 
 ## Initialising a new study workspace
 
-`StudyContext.init()` scaffolds the expected folder layout and starter `define.yaml` files in one call:
+The **bootstrapping pipeline** is the recommended way to set up a new study.
+It creates the folder tree, queries the CDISC Library IG to generate
+`define.yaml` specs, and downloads the referenced codelists:
+
+```bash
+# Step 1 — create study_config.yaml + directory structure
+fleet init cfg --study-id MYSTUDY01 --company "Acme Pharma" \
+  --domains DM,AE,VS,EX --adam-datasets ADSL,ADVS --root ./studies/MYSTUDY01
+
+# Step 2 — generate define.yaml from the CDISC Library IG
+fleet init define
+
+# Step 3 — generate codelists.py from define.yaml codelist references
+fleet init ct
+```
+
+See the [CLI Reference](cli.md) for full argument details and standalone
+commands like `fleet init-ct` and `fleet add-ct`.
+
+The same first step can be done programmatically with `StudyContext.init()`:
 
 ```python
-from fleet import StudyContext
+from fleet import StudyContext, SDTMConfig, ADAMConfig
 
 ctx = StudyContext.init(
     "./studies/MYSTUDY01",
     study_id="MYSTUDY01",
-    company="Acme Pharma",   # optional
+    company="Acme Pharma",
+    sdtm=SDTMConfig(ig_version="3-4", domains=["DM", "AE", "VS", "EX"]),
+    adam=ADAMConfig(ig_version="1-1", datasets=["ADSL", "ADVS"]),
 )
 ```
 
@@ -112,16 +151,12 @@ studies/MYSTUDY01/
     sdtm/
     adam/
   metadata/
-    sdtm/
-      define.yaml          ← pre-filled SDTM boilerplate
-    adam/
-      define.yaml          ← pre-filled ADaM boilerplate
+    sdtm/                  ← define.yaml created by `fleet init define`
+    adam/                   ← define.yaml created by `fleet init define`
   outputs/
 ```
 
-Each `define.yaml` is pre-populated with the `study:` block and has its `$schema` pointer set, so your IDE validates it immediately. The `codelists` and `datasets` sections start empty and ready to fill in.
-
-If any of the three files (`study_config.yaml`, `metadata/sdtm/define.yaml`, `metadata/adam/define.yaml`) already exist, `StudyContext.init()` raises a `StudyConfigError` without touching anything — protecting in-progress work.
+If `study_config.yaml` already exists, `StudyContext.init()` raises a `StudyConfigError` without touching anything — protecting in-progress work.
 
 To reload an existing workspace in subsequent sessions:
 
@@ -142,6 +177,7 @@ See the [ADSL Pipeline notebook](../examples/adsl_pipeline.ipynb) for a complete
 
 ## Next steps
 
+- [CLI Reference](cli.md) — bootstrapping pipeline and standalone CT commands
 - [How define.yaml drives DataFrame creation](../concepts/define-yaml.md)
 - [Namespace pipeline architecture](../concepts/pipeline.md)
 - [API reference](../api/index.md)

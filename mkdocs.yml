@@ -95,6 +95,7 @@ nav:
       - Why Fleet?: why-fleet.md
       - Installation: getting-started/installation.md
       - Quickstart: getting-started/quickstart.md
+      - CLI Reference: getting-started/cli.md
       - Troubleshooting Guide: getting-started/troubleshooting.md
   - Concepts:
       - How define.yaml Works: concepts/define-yaml.md

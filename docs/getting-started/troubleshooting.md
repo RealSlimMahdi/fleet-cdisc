@@ -26,7 +26,7 @@ Order matters in a Fleet pipeline! Make sure that a dependency variable is deriv
 **What it means:** In a spec-driven pipeline, your `define.yaml` uses an algorithm name under a `derivation` block that doesn't match any recognised namespace verbs.
 
 **How to fix it:**
-Check your spelling against the supported lists of verbs in the [Namespace Pipeline](../concepts/pipeline.md) or the API Reference.
+Check your spelling against the supported lists of verbs in the [Namespace Pipeline](../concepts/pipeline.md) or the API Reference. The JSON Schema (`define_spec_schema.json`) enforces a strict `enum` of valid algorithm names — if you include the `# yaml-language-server: $schema=...` directive at the top of your YAML file, your editor will flag invalid algorithms and empty `derivation: {}` blocks before you even run the pipeline.
 
 ## Debugging Lazy Evaluation
 

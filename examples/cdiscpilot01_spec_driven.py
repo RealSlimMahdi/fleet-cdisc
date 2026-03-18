@@ -30,10 +30,14 @@ Run from the repo root:
     uv run python examples/cdiscpilot01_spec_driven.py
 """
 from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import polars as pl
 import fleet  # noqa: F401 — registers .sdtm / .adam namespace extensions
 from fleet import DatasetChecker, DefineSpecGenerator
+from specs.cdiscpilot01.sdtm.codelists import SEX, RACE, ETHNIC
 
 RAW       = Path("datasets/cdiscpilot01/raw")
 SPECS     = Path("specs/cdiscpilot01")
@@ -58,11 +62,11 @@ dm = (
     .derivation(    "SITEID",   expression="pl.col('site_id').cast(pl.String)")
     .assign_no_ct(  "AGE",      source="age")
     .hardcode_no_ct("AGEU",     value="YEARS")
-    .assign_ct(     "SEX",      source="sex",    ct_codelist="C66731",
+    .assign_ct(     "SEX",      source="sex",    ct_codelist=SEX,
                     ct_mapping={"F": "F", "M": "M"})
-    .assign_ct(     "RACE",     source="race",   ct_codelist="C74457",
+    .assign_ct(     "RACE",     source="race",   ct_codelist=RACE,
                     ct_mapping={"WHITE": "WHITE", "BLACK OR AFRICAN AMERICAN": "BLACK OR AFRICAN AMERICAN"})
-    .assign_ct(     "ETHNIC",   source="ethnic", ct_codelist="C66790",
+    .assign_ct(     "ETHNIC",   source="ethnic", ct_codelist=ETHNIC,
                     ct_mapping={"HISPANIC OR LATINO": "HISPANIC OR LATINO",
                                 "NOT HISPANIC OR LATINO": "NOT HISPANIC OR LATINO"})
     .if_then_else(  "ARMCD",

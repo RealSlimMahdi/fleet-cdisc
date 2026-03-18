@@ -75,3 +75,35 @@ Fleet was built with AI code generation in mind from day one. You can stop wrest
 - **Tight AI Feedback Loops:** Fleet drastically accelerates the developer and agent feedback cycle. The `define.yaml` structure is validated through bundled JSON schemas, and CDISC core data validations output structured error arrays. This allows coding agents to course-correct immediately.
 - **Readable Specs:** The declarative, YAML-based approach limits token overhead and naturally reflects clinical data specification standards, making it the perfect bridge between LLMs and regulatory outputs.
 - **Built-in `llms.txt`:** Fleet natively provides structured AI context (like `llms.txt` and schemas) so your coding agents always know precisely how to write and validate Fleet pipelines.
+
+### 6. Native CDISC Library Integration
+
+Fleet is the first open-source clinical toolkit with **built-in CDISC Library API support**. Instead of manually downloading PDF terminology files or maintaining hand-curated codelist dictionaries, Fleet connects directly to the authoritative source.
+
+```bash
+# Full bootstrapping pipeline: config → define.yaml → codelists.py
+fleet init cfg --study-id STUDY01 --domains DM,AE,VS,EX --adam-datasets ADSL,ADVS
+fleet init define
+fleet init ct
+
+# Or standalone: bootstrap codelists directly from the SDTM IG
+fleet init-ct --domains DM,AE,VS,EX --output codelists.py
+```
+
+- **Source of truth is the CDISC Library IG** — Fleet queries the Implementation Guide model to discover every variable and codelist for your domains. No manual curation, no guessing concept IDs.
+- **IDE auto-completion for CT values** — the generated `codelists.py` gives you typed constants (`SEX.M`, `RACE.WHITE`) with full definitions as code comments. Your IDE autocompletes both the codelist name and every permitted submission value.
+- **Incremental domain expansion** — start with DM and AE, then `fleet add-ct --domains LB,CM` later. Existing codelists are preserved; only new ones are added.
+- **Version-pinned reproducibility** — pin your CT package version (e.g. `--package sdtmct-2025-09-26`) so every team member and CI run generates identical constants.
+
+```python
+from codelists import SEX, RACE
+
+dm = (
+    raw_df.sdtm
+    .assign_ct("SEX", source="sex", ct_codelist=SEX)
+    .assign_ct("RACE", source="race", ct_codelist=RACE)
+    .to_frame()
+)
+```
+
+No NCI codes to memorise. No CSV lookups at runtime. Just import the codelist and use it — the `_concept_id` is carried through for Define-XML generation and P21 validation automatically.

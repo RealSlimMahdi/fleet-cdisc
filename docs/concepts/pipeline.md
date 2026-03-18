@@ -67,7 +67,7 @@ result = (
     .assign_no_ct("USUBJID", source="patient_id")   # 2. chain
     .hardcode_no_ct("DOMAIN", value="DM")
     .assign_ct("SEX", source="sex_raw",
-               ct_codelist="C66731", ct_mapping={"M": "M", "F": "F"})
+               ct_codelist=SEX, ct_mapping={"M": "M", "F": "F"})
     .to_frame()                  # 3. materialise
 )
 ```
@@ -162,14 +162,24 @@ This means you pay no cost for columns you don't chain. Expression ordering mirr
 
 ## StudyContext — workspace initialisation
 
-`StudyContext.init()` is the recommended starting point for any new study. It
-creates the folder tree expected by all path helpers (`raw_data_dir`,
-`sdtm_data_dir`, `metadata_sdtm_dir`, …) and writes ready-to-edit boilerplate
-files, so the very first `load_study_context()` call in your pipeline script
-can succeed immediately.
+The recommended way to start a new study is the **bootstrapping pipeline** via
+the Fleet CLI:
+
+```bash
+fleet init cfg --study-id STUDY01 --company "Acme Pharma" \
+  --domains DM,AE,VS,EX --adam-datasets ADSL,ADVS --root ./studies/STUDY01
+fleet init define          # queries CDISC Library IG → define.yaml
+fleet init ct              # reads define.yaml → codelists.py
+```
+
+See the [CLI Reference](../getting-started/cli.md) for full details.
+
+`StudyContext.init()` can also be used programmatically — it creates the folder
+tree and writes `study_config.yaml`. Define specs and codelists are produced by
+the subsequent pipeline steps (`fleet init define`, `fleet init ct`).
 
 ```python
-from fleet import StudyContext, load_study_context
+from fleet import StudyContext, SDTMConfig, ADAMConfig, load_study_context
 from pathlib import Path
 
 # ── Once, when starting a new study ──────────────────────────────────────
@@ -177,14 +187,15 @@ ctx = StudyContext.init(
     "./studies/STUDY01",
     study_id="STUDY01",
     company="Acme Pharma",
+    sdtm=SDTMConfig(ig_version="3-4", domains=["DM", "AE", "VS", "EX"]),
+    adam=ADAMConfig(ig_version="1-1", datasets=["ADSL", "ADVS"]),
 )
 
 # ── Every subsequent session ──────────────────────────────────────────────
 ctx = load_study_context(Path("./studies/STUDY01/study_config.yaml"))
 ```
 
-| Outcome                     | Behaviour                                                      |
-| --------------------------- | -------------------------------------------------------------- |
-| Directories already exist   | Silently skipped (`mkdir -p` semantics)                        |
-| `study_config.yaml` exists  | Raises `StudyConfigError` — use `load_study_context()` instead |
-| Either `define.yaml` exists | Raises `StudyConfigError` — protects in-progress spec work     |
+| Outcome                    | Behaviour                                                      |
+| -------------------------- | -------------------------------------------------------------- |
+| Directories already exist  | Silently skipped (`mkdir -p` semantics)                        |
+| `study_config.yaml` exists | Raises `StudyConfigError` — use `load_study_context()` instead |

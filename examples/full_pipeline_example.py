@@ -5,8 +5,14 @@ This script demonstrates creating DM, VS, and AE SDTM datasets from raw mock dat
 and subsequently deriving ADSL and ADVS ADaM datasets from those SDTMs.
 """
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import polars as pl
 import fleet
+from specs.cdiscpilot01.sdtm.codelists import SEX, VSTESTCD
 
 def main():
     print("--- 1. Loading Raw Mock Data ---")
@@ -36,7 +42,7 @@ def main():
         .hardcode_no_ct("DOMAIN", value="DM")
         .assign_no_ct("USUBJID", source="subject_id")
         .assign_no_ct("ARM", source="arm")
-        .assign_ct("SEX", source="sex", ct_codelist="C66731", ct_mapping={"M": "M", "F": "F"})
+        .assign_ct("SEX", source="sex", ct_codelist=SEX, ct_mapping={"M": "M", "F": "F"})
         .assign_datetime("BRTHDTC", source="dob", mode="date")
         .to_frame()
     )
@@ -49,7 +55,7 @@ def main():
         .assign_no_ct("USUBJID", source="subject_id")
         .assign_ct(
             "VSTESTCD", source="test_name",
-            ct_codelist="C66741", 
+            ct_codelist=VSTESTCD, 
             ct_mapping={"Weight": "WEIGHT", "Heart Rate": "HR"}
         )
         .assign_no_ct("VSSTRESN", source="result")
