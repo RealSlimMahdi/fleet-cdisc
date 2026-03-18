@@ -8,16 +8,16 @@ import fleet
 
 ## Modules
 
-| Module                        | Description                                                  |
-| ----------------------------- | ------------------------------------------------------------ |
-| [`sdtm`](sdtm.md)             | SDTM namespace — 14 derivation verbs                         |
-| [`adam`](adam.md)             | ADaM BDS namespace — 22 derivation verbs                     |
-| [`adsl`](adsl.md)             | ADSL namespace (`df.adam.adsl`) — 8 patient-level verbs      |
-| [`occds`](occds.md)           | OCCDS namespace (`df.adam.occds`) — 5 occurrence verbs       |
-| [`ta`](ta.md)                 | Therapeutic-area extensions (`df.adam.<ta>`, including `pk`) |
-| [`define_xml`](define_xml.md) | Define-XML generation, validation, spec generation           |
+| Module                        | Description                                                             |
+| ----------------------------- | ----------------------------------------------------------------------- |
+| [`sdtm`](sdtm.md)             | SDTM namespace — 14 derivation verbs                                    |
+| [`adam`](adam.md)             | ADaM BDS namespace — 22 derivation verbs                                |
+| [`adsl`](adsl.md)             | ADSL namespace (`df.adam.adsl`) — 8 patient-level verbs                 |
+| [`occds`](occds.md)           | OCCDS namespace (`df.adam.occds`) — 5 occurrence verbs                  |
+| [`ta`](ta.md)                 | Therapeutic-area extensions (`df.adam.<ta>`, including `pk`)            |
+| [`define_xml`](define_xml.md) | Define-XML generation, validation, spec generation                      |
 | [`ct`](ct.md)                 | Controlled terminology — CDISC Library API, code generation, validation |
-| [`core`](core.md)             | `StudyContext`, `PipelineDAG`, exceptions                    |
+| [`core`](core.md)             | `StudyContext`, `PipelineDAG`, exceptions                               |
 
 ## Namespace registration
 

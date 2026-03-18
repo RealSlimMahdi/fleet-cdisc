@@ -27,16 +27,16 @@ fleet init cfg --study-id CDISCPILOT01 --company "CDISC" \
   --domains DM,AE,VS,EX --adam-datasets ADSL,ADVS,ADAE --root ./my_study
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--study-id` | *(required)* | Study identifier |
-| `--company` | *(none)* | Originator / company name |
-| `--domains` | *(none)* | Comma-separated SDTM domains |
-| `--adam-datasets` | *(none)* | Comma-separated ADaM datasets |
-| `--ig` | `3-4` | SDTM IG version |
-| `--adam-ig` | `1-1` | ADaM IG version |
-| `--package` | `sdtmct-2023-12-15` | CT package version |
-| `--root` / `-r` | `.` | Study root directory |
+| Option            | Default             | Description                   |
+| ----------------- | ------------------- | ----------------------------- |
+| `--study-id`      | _(required)_        | Study identifier              |
+| `--company`       | _(none)_            | Originator / company name     |
+| `--domains`       | _(none)_            | Comma-separated SDTM domains  |
+| `--adam-datasets` | _(none)_            | Comma-separated ADaM datasets |
+| `--ig`            | `3-4`               | SDTM IG version               |
+| `--adam-ig`       | `1-1`               | ADaM IG version               |
+| `--package`       | `sdtmct-2023-12-15` | CT package version            |
+| `--root` / `-r`   | `.`                 | Study root directory          |
 
 ### `fleet init define`
 
@@ -49,11 +49,11 @@ fleet init define --adam-only                  # ADaM only
 fleet init define --config path/to/config.yaml # custom config location
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--config` / `-c` | `study_config.yaml` | Path to config file |
-| `--sdtm-only` | *(off)* | Generate SDTM define only |
-| `--adam-only` | *(off)* | Generate ADaM define only |
+| Option            | Default             | Description               |
+| ----------------- | ------------------- | ------------------------- |
+| `--config` / `-c` | `study_config.yaml` | Path to config file       |
+| `--sdtm-only`     | _(off)_             | Generate SDTM define only |
+| `--adam-only`     | _(off)_             | Generate ADaM define only |
 
 The generated YAML includes variable names, labels, types, mandatory flags, codelist references, and origin hints — all sourced from the CDISC Library. Variables are created **without** derivation blocks (carry-through columns); add derivation blocks to drive the pipeline.
 
@@ -67,10 +67,10 @@ fleet init ct --config path/to/config.yaml   # custom config location
 fleet init ct --no-docs                      # lightweight file
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--config` / `-c` | `study_config.yaml` | Path to config file |
-| `--no-docs` | *(off)* | Omit definitions and preferred terms |
+| Option            | Default             | Description                          |
+| ----------------- | ------------------- | ------------------------------------ |
+| `--config` / `-c` | `study_config.yaml` | Path to config file                  |
+| `--no-docs`       | _(off)_             | Omit definitions and preferred terms |
 
 ---
 
@@ -90,13 +90,13 @@ fleet init-ct --domains DM,AE,VS,EX --output specs/my_study/sdtm/codelists.py
 
 ### Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--domains` | *(required)* | Comma-separated SDTM domain abbreviations (e.g. `DM,AE,VS,EX,LB`) |
-| `--output` / `-o` | `codelists.py` | Output file path |
-| `--ig` | `3-4` | SDTM IG version |
-| `--package` | `sdtmct-2023-12-15` | CT package version to download terms from |
-| `--no-docs` | *(off)* | Omit definitions and preferred terms (smaller file) |
+| Option            | Default             | Description                                                       |
+| ----------------- | ------------------- | ----------------------------------------------------------------- |
+| `--domains`       | _(required)_        | Comma-separated SDTM domain abbreviations (e.g. `DM,AE,VS,EX,LB`) |
+| `--output` / `-o` | `codelists.py`      | Output file path                                                  |
+| `--ig`            | `3-4`               | SDTM IG version                                                   |
+| `--package`       | `sdtmct-2023-12-15` | CT package version to download terms from                         |
+| `--no-docs`       | _(off)_             | Omit definitions and preferred terms (smaller file)               |
 
 ### Examples
 
@@ -184,11 +184,11 @@ fleet define-xml --spec specs/cdiscpilot01/sdtm/define.yaml --output outputs/def
 
 ### Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--spec` / `-s` | *(required)* | Path to the `define.yaml` specification file |
-| `--output` / `-o` | *(required)* | Output path for the Define-XML file |
-| `--no-preview` | *(off)* | Skip generating the HTML preview alongside the XML |
+| Option            | Default      | Description                                        |
+| ----------------- | ------------ | -------------------------------------------------- |
+| `--spec` / `-s`   | _(required)_ | Path to the `define.yaml` specification file       |
+| `--output` / `-o` | _(required)_ | Output path for the Define-XML file                |
+| `--no-preview`    | _(off)_      | Skip generating the HTML preview alongside the XML |
 
 By default, an HTML preview is generated alongside the XML (e.g. `define_sdtm.xml` → `define_sdtm_preview.html`) using the CDISC `define2-1.xsl` stylesheet. Place `define2-1.xsl` in the same directory as the output XML, or the preview step will be skipped with a warning.
 

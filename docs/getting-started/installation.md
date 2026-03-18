@@ -26,7 +26,7 @@
 | `io`   | `pyreadstat`     | Reading SAS XPT (`.xpt`) files |
 | `all`  | All extras       | Full feature set               |
 | `docs` | MkDocs + plugins | Building this documentation    |
-| `dev`  | pytest, ruff, io | Contributing to Fleet      |
+| `dev`  | pytest, ruff, io | Contributing to Fleet          |
 
 ```bash
 # SAS XPT support

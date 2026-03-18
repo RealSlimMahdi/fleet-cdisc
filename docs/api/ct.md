@@ -13,15 +13,15 @@ Fleet provides three layers for working with CDISC Controlled Terminology:
 The `CDISCClient` wraps `httpx` to authenticate against the CDISC Library REST API. It requires an API key set via a `.env` file or the `CDISC_API_KEY` environment variable.
 
 ::: fleet.ct.CDISCClient
-    options:
-      show_root_heading: true
-      heading_level: 3
-      filters: ["!^_"]
+options:
+show*root_heading: true
+heading_level: 3
+filters: ["!^*"]
 
 ::: fleet.ct.CDISCClientConfig
-    options:
-      show_root_heading: true
-      heading_level: 3
+options:
+show_root_heading: true
+heading_level: 3
 
 ---
 
@@ -61,29 +61,29 @@ The generated `codelists.py` contains:
 
 - **One class per codelist** with `_concept_id` attribute and submission value constants:
 
-    ```python
-    class C66731:
-        """SEX (C66731)."""
-        _concept_id = "C66731"
-        F = "F"
-        M = "M"
-        U = "U"
-    ```
+  ```python
+  class C66731:
+      """SEX (C66731)."""
+      _concept_id = "C66731"
+      F = "F"
+      M = "M"
+      U = "U"
+  ```
 
 - **Human-readable aliases** derived from the CDISC submission value:
 
-    ```python
-    SEX = C66731
-    RACE = C74457
-    ```
+  ```python
+  SEX = C66731
+  RACE = C74457
+  ```
 
 - **`__all__`** for clean wildcard imports:
 
-    ```python
-    from codelists import SEX, RACE
-    # or
-    from codelists import *
-    ```
+  ```python
+  from codelists import SEX, RACE
+  # or
+  from codelists import *
+  ```
 
 ### Using generated codelists in pipelines
 
@@ -101,10 +101,10 @@ dm = (
 `assign_ct` accepts either a codelist class (`SEX`) or a raw NCI concept ID string (`"C66731"`). The class form is preferred for readability and auto-completion.
 
 ::: fleet.ct.CodelistGenerator
-    options:
-      show_root_heading: true
-      heading_level: 3
-      filters: ["!^_"]
+options:
+show*root_heading: true
+heading_level: 3
+filters: ["!^*"]
 
 ---
 
@@ -113,21 +113,21 @@ dm = (
 The singleton `CTValidator` provides runtime validation of values against loaded codelists.
 
 ::: fleet.ct.CTValidator
-    options:
-      show_root_heading: true
-      heading_level: 3
-      filters: ["!^_"]
+options:
+show*root_heading: true
+heading_level: 3
+filters: ["!^*"]
 
 ## load_controlled_terminology
 
 ::: fleet.ct.load_controlled_terminology
-    options:
-      show_root_heading: true
-      heading_level: 3
+options:
+show_root_heading: true
+heading_level: 3
 
 ## get_validator
 
 ::: fleet.ct.get_validator
-    options:
-      show_root_heading: true
-      heading_level: 3
+options:
+show_root_heading: true
+heading_level: 3
