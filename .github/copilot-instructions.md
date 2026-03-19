@@ -145,37 +145,53 @@ Fleet supports reading schemas and standard standard version outputs from YAML s
 
 The package distribution name is `fleet-cdisc` (import name remains `fleet`).
 
-### Build
+### How versioning works
+
+The **git tag** is the single source of truth for published versions. The CI publish workflow (`.github/workflows/publish.yml`) extracts the version from the tag name (e.g. `v0.2.0` → `0.2.0`) and injects it into both `pyproject.toml` and `src/fleet/_version.py` before building. You do **not** need to manually edit version strings before releasing.
+
+### CI/CD publish triggers
+
+| Trigger | Target | Version source |
+|---|---|---|
+| Push a `v*` tag (e.g. `v0.2.0`) | **PyPI** | Tag name, `v` prefix stripped |
+| Push to `devel` branch | **TestPyPI** | Dev version from commit SHA |
+
+### Releasing a new version (step-by-step)
+
+1. Make sure all changes are merged into `main`.
+2. Tag the release commit:
+   ```bash
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+3. The publish workflow will automatically:
+   - Write `0.2.0` into `pyproject.toml` and `_version.py`
+   - Build the wheel and sdist
+   - Upload to PyPI using the `PYPI_API_TOKEN` secret
+4. Verify the release:
+   ```bash
+   pip install fleet-cdisc==0.2.0
+   python -c "import fleet; print(fleet.__version__)"
+   ```
+
+### Local build (optional, for testing)
 
 ```bash
-# Remove any previous build artifacts, then rebuild
 rm -rf dist/
 uv run python -m build
 ```
 
-This produces `dist/fleet_cdisc-0.1.0-py3-none-any.whl` and `dist/fleet_cdisc-0.1.0.tar.gz`.
-
-### Upload to TestPyPI (staging)
+### Manual upload (rarely needed)
 
 ```bash
+# TestPyPI
 uv run twine upload --repository testpypi dist/*
-```
 
-Use `__token__` as the username and your TestPyPI API token as the password.
-
-### Verify TestPyPI install
-
-```bash
-pip install -i https://test.pypi.org/simple/ fleet-cdisc==0.1.0
-```
-
-### Upload to real PyPI
-
-```bash
+# PyPI
 uv run twine upload dist/*
 ```
 
-Use `__token__` as the username and your PyPI API token as the password.
+Use `__token__` as the username and the corresponding API token as the password.
 
 ## 7. ADaM Namespace Mixin Discipline (NO code duplication)
 

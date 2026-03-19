@@ -1324,6 +1324,149 @@ advs = vs_sdtm.adam.from_spec(ctx.adam_spec("advs")).to_frame()
 
 ---
 
+## Part 16 — Releasing a New Version
+
+Fleet uses **git tags** as the single source of truth for published versions. The CI publish workflow (`.github/workflows/publish.yml`) automatically extracts the version from the tag, writes it into `pyproject.toml` and `src/fleet/_version.py`, builds the package, and uploads it to PyPI. You never need to manually edit version strings.
+
+The package distribution name on PyPI is `fleet-cdisc` (the import name remains `fleet`).
+
+### Prerequisites
+
+Before releasing, make sure:
+
+- All changes are merged into `main` and CI is green.
+- The `PYPI_API_TOKEN` secret is configured in the GitHub repository settings (Settings → Secrets and variables → Actions).
+- The `TEST_PYPI_API_TOKEN` secret is configured if you use TestPyPI from the `devel` branch.
+- The changelog (`docs/changelog.md`) is up to date.
+
+### Step-by-step release process
+
+#### 1. Verify the code is ready
+
+Ensure you are on `main` with a clean working tree and all tests pass:
+
+```bash
+git checkout main
+git pull origin main
+uv run pytest
+uv run ruff check
+```
+
+#### 2. Update the changelog
+
+Move items from `[Unreleased]` into a new version section in `docs/changelog.md`:
+
+```markdown
+## [0.2.0] — 2026-03-18
+
+### Added
+- ...
+
+### Changed
+- ...
+```
+
+Commit the changelog update:
+
+```bash
+git add docs/changelog.md
+git commit -m "docs: update changelog for v0.2.0"
+git push origin main
+```
+
+#### 3. Create and push the tag
+
+The tag name **must** start with `v` followed by a valid version number (e.g. `v0.2.0`). This is what triggers the publish workflow and determines the version written into the package.
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+> **Tip:** Use [semantic versioning](https://semver.org/): `MAJOR.MINOR.PATCH`.
+> Bump MAJOR for breaking API changes, MINOR for new features, PATCH for bug-fixes.
+
+#### 4. Monitor the publish workflow
+
+Open the **Actions** tab in GitHub and watch the "Publish" workflow run. It will:
+
+1. Check out the tagged commit.
+2. Inject the version (`0.2.0`) into `pyproject.toml` and `src/fleet/_version.py`.
+3. Build the wheel (`.whl`) and source distribution (`.tar.gz`).
+4. Upload both to **PyPI** using the `PYPI_API_TOKEN` secret.
+
+If the workflow fails, check the logs — common issues are an expired API token or a version that already exists on PyPI.
+
+#### 5. Verify the release
+
+Install the published package and confirm the version:
+
+```bash
+pip install fleet-cdisc==0.2.0
+python -c "import fleet; print(fleet.__version__)"
+# Expected output: 0.2.0
+```
+
+#### 6. Create a GitHub Release (optional but recommended)
+
+Go to the repository → **Releases** → **Draft a new release**, select the `v0.2.0` tag, paste the changelog excerpt, and publish.
+
+### How it works under the hood
+
+The publish workflow triggers on two events:
+
+| Trigger | Target | Version strategy |
+|---|---|---|
+| Push a `v*` tag (e.g. `v0.2.0`) | **PyPI** | Strips `v` prefix → `0.2.0` |
+| Push to `devel` branch | **TestPyPI** | Dev version from short commit SHA |
+
+Before building, the workflow uses `sed` to replace the version in both:
+
+- `pyproject.toml` → `version = "0.2.0"`
+- `src/fleet/_version.py` → `__version__ = "0.2.0"`
+
+This means the version in your local source files (e.g. `0.1.0`) is a development placeholder — the tag controls what gets published.
+
+### Testing with TestPyPI
+
+Every push to the `devel` branch automatically publishes a dev build to TestPyPI:
+
+```bash
+pip install -i https://test.pypi.org/simple/ fleet-cdisc
+```
+
+### Local build (optional, for testing)
+
+```bash
+rm -rf dist/
+uv run python -m build
+```
+
+### Manual upload (rarely needed)
+
+```bash
+# TestPyPI
+uv run twine upload --repository testpypi dist/*
+
+# PyPI
+uv run twine upload dist/*
+```
+
+Use `__token__` as the username and the corresponding API token as the password.
+
+### Quick reference
+
+```bash
+# Full release flow (after merging to main)
+git checkout main && git pull origin main
+uv run pytest                    # verify tests pass
+# ... update docs/changelog.md, commit & push ...
+git tag v0.2.0                   # create the version tag
+git push origin v0.2.0           # triggers PyPI publish
+```
+
+---
+
 ## Maintaining `llms.txt`
 
 `llms.txt` is **generated — never edit it by hand**. All content lives in `scripts/build_llms.py` (static sections as Python strings) or in `examples/*.py` (example code embedded at runtime).

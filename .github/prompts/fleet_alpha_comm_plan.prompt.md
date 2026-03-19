@@ -58,7 +58,7 @@ Check out the repo here: [Link]
 
 **Goal:** Address the elephant in the room with leadership, using a visual example of why a native Python/Polars approach is a massive workflow upgrade, emphasizing cost-saving lean tech, LLM readiness, IDE integration, and tool independence.
 
-**Subject:** The Alpha release of Fleet: being ready for the Python Transition in Clinical Data Science
+**Subject:** The Alpha release of Fleet: leading the Python Transition in Clinical Data Science
 
 **Draft:**
 
@@ -110,7 +110,7 @@ Hello Pharmaverse Board,
 
 My name is Mahdi About. I’ve been a statistical programmer for 15 years, navigating every phase of clinical reporting and submissions. I've watched the Pharmaverse ecosystem mature into an incredible asset for the industry—but right now, it is heavily weighted toward R.
 
-As the broader industry shifts toward Python, we need a standard-bearer for SDTM/ADaM derivations in the Python ecosystem that isn't just a slow translation of R logic.
+As the broader industry shifts toward a multi programming language paradigm, we need a standard-bearer for SDTM/ADaM derivations in the Python ecosystem that isn't just a basic translation of R logic.
 
 I am submitting **Fleet** for consideration to join the Pharmaverse.
 
