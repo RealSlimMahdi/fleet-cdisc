@@ -151,10 +151,10 @@ The **git tag** is the single source of truth for published versions. The CI pub
 
 ### CI/CD publish triggers
 
-| Trigger | Target | Version source |
-|---|---|---|
-| Push a `v*` tag (e.g. `v0.2.0`) | **PyPI** | Tag name, `v` prefix stripped |
-| Push to `devel` branch | **TestPyPI** | Dev version from commit SHA |
+| Trigger                         | Target       | Version source                |
+| ------------------------------- | ------------ | ----------------------------- |
+| Push a `v*` tag (e.g. `v0.2.0`) | **PyPI**     | Tag name, `v` prefix stripped |
+| Push to `devel` branch          | **TestPyPI** | Dev version from commit SHA   |
 
 ### Releasing a new version (step-by-step)
 

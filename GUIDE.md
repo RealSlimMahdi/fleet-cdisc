@@ -1360,9 +1360,11 @@ Move items from `[Unreleased]` into a new version section in `docs/changelog.md`
 ## [0.2.0] — 2026-03-18
 
 ### Added
+
 - ...
 
 ### Changed
+
 - ...
 ```
 
@@ -1415,10 +1417,10 @@ Go to the repository → **Releases** → **Draft a new release**, select the `v
 
 The publish workflow triggers on two events:
 
-| Trigger | Target | Version strategy |
-|---|---|---|
-| Push a `v*` tag (e.g. `v0.2.0`) | **PyPI** | Strips `v` prefix → `0.2.0` |
-| Push to `devel` branch | **TestPyPI** | Dev version from short commit SHA |
+| Trigger                         | Target       | Version strategy                  |
+| ------------------------------- | ------------ | --------------------------------- |
+| Push a `v*` tag (e.g. `v0.2.0`) | **PyPI**     | Strips `v` prefix → `0.2.0`       |
+| Push to `devel` branch          | **TestPyPI** | Dev version from short commit SHA |
 
 Before building, the workflow uses `sed` to replace the version in both:
 

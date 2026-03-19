@@ -201,5 +201,3 @@ fleet define-xml --spec specs/cdiscpilot01/sdtm/define.yaml --output outputs/def
 # Generate ADaM Define-XML without preview
 fleet define-xml --spec specs/cdiscpilot01/adam/define.yaml --output outputs/define_adam.xml --no-preview
 ```
-
-
