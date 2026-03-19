@@ -83,6 +83,102 @@ class DefineScaffolder:
         client: An authenticated ``CDISCClient`` instance.
     """
 
+
+# ------------------------------------------------------------------ #
+# Module-level IG parsers (re-usable outside DefineScaffolder)         #
+# ------------------------------------------------------------------ #
+
+
+def parse_ig_variable(var: dict[str, Any]) -> dict[str, Any]:
+    """Parse an IG variable response into define.yaml variable format.
+
+    This is the module-level equivalent of
+    ``DefineScaffolder._parse_ig_variable``.
+    """
+    name = var.get("name", "")
+    label = var.get("label", "")
+    simple_type = var.get("simpleDatatype", "Char")
+    fleet_type = _TYPE_MAP.get(simple_type, "text")
+    core = var.get("core", "Perm")
+    mandatory = _CORE_MAP.get(core, False)
+
+    result: dict[str, Any] = {
+        "name": name,
+        "label": label[:40] if label else name,
+        "type": fleet_type,
+    }
+
+    if fleet_type == "text":
+        result["length"] = 200
+
+    result["mandatory"] = mandatory
+
+    if name in ("STUDYID", "DOMAIN"):
+        result["origin"] = "Assigned"
+    elif core in ("Req", "Required"):
+        result["origin"] = "CRF"
+    else:
+        result["origin"] = "Derived"
+
+    for cl in var.get("_links", {}).get("codelist", []):
+        m = re.search(r"codelists/(C\d+)", cl.get("href", ""))
+        if m:
+            result["codelist"] = m.group(1)
+            break
+
+    return result
+
+
+def parse_ig_dataset(detail: dict[str, Any]) -> dict[str, Any]:
+    """Parse an IG dataset response into define.yaml format.
+
+    This is the module-level equivalent of
+    ``DefineScaffolder._parse_ig_dataset``.
+    """
+    name = detail.get("name", "")
+    label = detail.get("label", "")
+    description = detail.get("description", "")
+    ds_class = detail.get("datasetClass", detail.get("class", ""))
+
+    structure = detail.get("structure", description or f"One record per {name}")
+    repeating = name not in ("DM", "ADSL")
+
+    variables = []
+    keys: list[str] = []
+    for var in sorted(
+        detail.get("datasetVariables", []),
+        key=lambda v: int(v.get("ordinal", 999)),
+    ):
+        var_dict = parse_ig_variable(var)
+        variables.append(var_dict)
+        role = var.get("role", "")
+        if role == "Identifier" and var.get("core", "") in ("Req", "Required"):
+            keys.append(var_dict["name"])
+
+    if not keys:
+        candidate_keys = [v["name"] for v in variables if v["name"] in ("STUDYID", "USUBJID")]
+        keys = candidate_keys or [variables[0]["name"]] if variables else ["STUDYID"]
+
+    ds: dict[str, Any] = {
+        "name": name,
+        "label": label[:40] if label else name,
+        "structure": structure,
+        "repeating": repeating,
+        "keys": keys,
+        "variables": variables,
+    }
+    if ds_class:
+        ds["class"] = ds_class
+    return ds
+
+
+class DefineScaffolder:
+    """Generates ``define.yaml`` files by querying the CDISC Library IG API.
+
+    Args:
+        client: An authenticated ``CDISCClient`` instance.
+    """
+
     def __init__(self, client: CDISCClient) -> None:
         self._client = client
 
@@ -258,82 +354,11 @@ class DefineScaffolder:
 
     def _parse_ig_dataset(self, detail: dict[str, Any]) -> dict[str, Any]:
         """Parse an IG dataset response into define.yaml format."""
-        name = detail.get("name", "")
-        label = detail.get("label", "")
-        description = detail.get("description", "")
-        ds_class = detail.get("datasetClass", detail.get("class", ""))
-
-        # Determine structure and keys from the IG
-        structure = detail.get("structure", description or f"One record per {name}")
-        repeating = name not in ("DM", "ADSL")  # heuristic; DM/ADSL are non-repeating
-
-        variables = []
-        keys: list[str] = []
-        for var in sorted(
-            detail.get("datasetVariables", []),
-            key=lambda v: int(v.get("ordinal", 999)),
-        ):
-            var_dict = self._parse_ig_variable(var)
-            variables.append(var_dict)
-            # Key variables are typically those with role "Identifier" and core "Req"
-            role = var.get("role", "")
-            if role == "Identifier" and var.get("core", "") in ("Req", "Required"):
-                keys.append(var_dict["name"])
-
-        # Fallback: at least STUDYID + USUBJID as keys
-        if not keys:
-            candidate_keys = [v["name"] for v in variables if v["name"] in ("STUDYID", "USUBJID")]
-            keys = candidate_keys or [variables[0]["name"]] if variables else ["STUDYID"]
-
-        ds: dict[str, Any] = {
-            "name": name,
-            "label": label[:40] if label else name,
-            "structure": structure,
-            "repeating": repeating,
-            "keys": keys,
-            "variables": variables,
-        }
-        if ds_class:
-            ds["class"] = ds_class
-        return ds
+        return parse_ig_dataset(detail)
 
     def _parse_ig_variable(self, var: dict[str, Any]) -> dict[str, Any]:
         """Parse an IG variable response into define.yaml variable format."""
-        name = var.get("name", "")
-        label = var.get("label", "")
-        simple_type = var.get("simpleDatatype", "Char")
-        fleet_type = _TYPE_MAP.get(simple_type, "text")
-        core = var.get("core", "Perm")
-        mandatory = _CORE_MAP.get(core, False)
-
-        result: dict[str, Any] = {
-            "name": name,
-            "label": label[:40] if label else name,
-            "type": fleet_type,
-        }
-
-        if fleet_type == "text":
-            # Default length for text variables
-            result["length"] = 200
-
-        result["mandatory"] = mandatory
-
-        # Variable origin heuristic
-        if name in ("STUDYID", "DOMAIN"):
-            result["origin"] = "Assigned"
-        elif core in ("Req", "Required"):
-            result["origin"] = "CRF"
-        else:
-            result["origin"] = "Derived"
-
-        # Codelist reference
-        for cl in var.get("_links", {}).get("codelist", []):
-            m = re.search(r"codelists/(C\d+)", cl.get("href", ""))
-            if m:
-                result["codelist"] = m.group(1)
-                break
-
-        return result
+        return parse_ig_variable(var)
 
     # -- YAML writer ---------------------------------------------------- #
 

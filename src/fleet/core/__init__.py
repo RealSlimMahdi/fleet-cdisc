@@ -9,6 +9,7 @@ from .exceptions import (
     SpecError,
     ValidationError,
 )
+from .scaffolder import parse_ig_dataset, parse_ig_variable
 from .study_context import (
     ADAMConfig,
     CTConfig,

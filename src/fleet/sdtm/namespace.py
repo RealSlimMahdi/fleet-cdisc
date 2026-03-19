@@ -29,13 +29,14 @@ import polars as pl
 import yaml
 
 from .utils import parse_expression, to_iso8601_date, to_iso8601_datetime
+from ._tdd_mixin import TrialDesignMixin
 
 if TYPE_CHECKING:
     from ..ct.validator import CTValidator
 
 
 @pl.api.register_dataframe_namespace("sdtm")
-class SDTMNamespace:
+class SDTMNamespace(TrialDesignMixin):
     """
     Immutable pipeline builder for SDTM derivations.
 

@@ -121,6 +121,7 @@ Nothing runs until `.to_frame()`. All verbs accumulate into a single `df.with_co
 def _golden_master_section() -> str:
     inline = _example("cdiscpilot01_inline.py")
     spec = _example("cdiscpilot01_spec_driven.py")
+    tdd = _example("tdd_example.py")
     return f"""\
 ## Golden Master Examples
 
@@ -133,7 +134,11 @@ Fleet code — they demonstrate correct chaining, namespace switching, and mater
 
 ### Spec-driven pipeline
 
-{spec}\
+{spec}
+
+### Trial Design Domains pipeline
+
+{tdd}\
 """
 
 
@@ -148,6 +153,16 @@ summary records, derived parameters)
 counts, age conversion, periods)
 - `df.adam.occds` — occurrence verbs (treatment-emergent flag, worst severity, onset/recovery \
 dates, sequence number)
+
+### Trial Design Domain extensions (via `df.sdtm`)
+
+- Protocol-reference verbs: `fetch_structure`, `study_header`, `add_elements`, `add_arms`, \
+`add_visits`, `add_parameters`, `add_criteria`
+- Subject-level verbs: `visit_map`, `element_boundaries`, `epoch_assign`, `study_day`
+- Pydantic models: `TrialElement`, `TrialArm`, `TrialVisit`, `TrialParameter`, `TrialCriterion`
+- Collection models: `TrialElements`, `TrialArms`, `TrialVisits`, `TrialParameters`, `TrialCriteria`
+- Enum: `Epoch` (NCI C99079 — 14 standard trial epoch values)
+- Utility: `parse_trial_design(mermaid_text)` — parse Mermaid flowcharts into TE + TA collections
 
 ### Therapeutic-area extensions (via `df.adam.<ta>`)
 
@@ -182,6 +197,56 @@ accepts a generated codelist class (e.g. `SEX`) or a raw NCI concept ID string (
 - `notsubmitted(*targets)` — set one or more columns to null (not for submission)
 - `multiple_responses(target, *, source, delimiter="|", id_cols=None)` — expand pipe-delimited fields
 - `to_frame()` — materialise\
+"""
+
+
+def _tdd_verbs_section() -> str:
+    return """\
+## Trial Design Domain (TDD) verbs
+
+Fleet supports all 7 CDISC Trial Design Model domains through `df.sdtm`. Protocol-reference \
+domains (TE, TA, TV, TS, TI) follow a fixed sequence: `fetch_structure() → study_header() → \
+add_*() → to_frame()`. Subject-level domains (SV, SE) mix freely with standard SDTM verbs.
+
+### Protocol-reference verbs
+
+- `fetch_structure(domain, *, ig_version="3-4", save_to=None)` — query CDISC Library for \
+domain IG structure; caches YAML; performs schema reconciliation against static Pydantic models
+- `study_header(study_id, domain)` — hardcode STUDYID + DOMAIN columns
+- `add_elements(elements: TrialElements)` — materialise validated TE rows
+- `add_arms(arms: TrialArms, *, te=None)` — materialise TA rows; opt-in FK validation \
+(ETCD ∈ TE.ETCD) when `te=` is provided
+- `add_visits(visits: TrialVisits)` — materialise TV rows
+- `add_parameters(params: TrialParameters)` — materialise TS rows
+- `add_criteria(criteria: TrialCriteria)` — materialise TI rows
+
+### Subject-level verbs
+
+- `visit_map(target_num, target_name, *, date_col, planned_visits, ref_date=None, \
+tolerance=None)` — map raw visit dates to planned visits from TV
+- `element_boundaries(target_start, target_end, *, milestones, element_col, subject_col)` \
+— derive element start/end dates from milestone columns
+- `epoch_assign(target, *, date_col, epoch_ranges)` — assign EPOCH based on date ranges
+- `study_day(target, *, date_col, ref_date_col)` — CDISC study day (no day 0)
+
+### Pydantic models
+
+Row models: `TrialElement`, `TrialArm`, `TrialVisit`, `TrialParameter`, `TrialCriterion`. \
+Collection models: `TrialElements`, `TrialArms`, `TrialVisits`, `TrialParameters`, \
+`TrialCriteria`. Collections enforce integrity at construction time (unique keys, ordering, \
+FK references) and provide `to_polars()` for DataFrame conversion.
+
+### Epoch enum
+
+`Epoch` (NCI C99079) provides all 14 CDISC-standard trial epoch values: SCREENING, BASELINE, \
+RUN-IN, WASHOUT, TREATMENT, BLINDED TREATMENT, OPEN LABEL TREATMENT, CONTINUATION TREATMENT, \
+INDUCTION TREATMENT, FOLLOW-UP, LONG-TERM FOLLOW-UP, OBSERVATION, PRE-SCREENING.
+
+### Mermaid parser
+
+`parse_trial_design(mermaid_text) → (TrialElements, TrialArms)` — extract TE and TA \
+collections from a Mermaid flowchart. Subgraphs → epochs, nodes → elements, labelled edges \
+→ arm assignments.\
 """
 
 
@@ -441,6 +506,7 @@ Full docs: https://realslimmahdi.github.io/fleet-cdisc/
 
 - Getting started: https://realslimmahdi.github.io/fleet-cdisc/getting-started/installation/
 - define.yaml guide: https://realslimmahdi.github.io/fleet-cdisc/concepts/define-yaml/
+- Trial Design Domains: https://realslimmahdi.github.io/fleet-cdisc/concepts/tdd/
 - API reference: https://realslimmahdi.github.io/fleet-cdisc/api/
 - ADSL example notebook: https://realslimmahdi.github.io/fleet-cdisc/examples/adsl_pipeline/\
 """
@@ -460,6 +526,7 @@ def build() -> str:
         _golden_master_section(),
         _namespaces_section(),
         _sdtm_verbs_section(),
+        _tdd_verbs_section(),
         _shared_adam_verbs_section(),
         _adam_verbs_section(),
         _adsl_verbs_section(),
