@@ -10,11 +10,6 @@ from .models import ValidationResult
 from .official import OfficialCDISCValidator
 
 
-def _to_rules_engine_version(version: str) -> str:
-    """Convert '3.4' → '3-4' for the rules engine CLI."""
-    return version.replace(".", "-")
-
-
 class ValidationProvider(ABC):
     """Abstract interface for dataset validation providers."""
 
@@ -37,7 +32,7 @@ class OfficialRulesEngineProvider(ValidationProvider):
         return self.validator.validate_dataset(
             data=df,
             standard="sdtmig",
-            version=_to_rules_engine_version(version),
+            version=version.replace(".", "-"),
             dataset_name=f"{domain.lower()}.xpt",
             domain=domain,
         )
@@ -46,7 +41,7 @@ class OfficialRulesEngineProvider(ValidationProvider):
         return self.validator.validate_dataset(
             data=df,
             standard="adamig",
-            version=_to_rules_engine_version(version),
+            version=version.replace(".", "-"),
             dataset_name=f"{dataset.lower()}.xpt",
             domain=dataset,
         )

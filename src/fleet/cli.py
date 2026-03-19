@@ -372,10 +372,6 @@ def _run_init_ct_pipeline(args: argparse.Namespace) -> None:
 # ── Standalone commands ─────────────────────────────────────────────── #
 
 
-def _parse_domains(raw: str) -> list[str]:
-    return [d.strip().upper() for d in raw.split(",") if d.strip()]
-
-
 def _run_init_ct(args: argparse.Namespace) -> None:
     from .ct.api import CDISCClient
     from .ct.generator import CodelistGenerator

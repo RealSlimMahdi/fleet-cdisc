@@ -160,9 +160,5 @@ def save_xpt(df: pl.DataFrame, output_path: Path) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     pandas_df = df.to_pandas()
     pandas_df.columns = [c[:8].upper() for c in pandas_df.columns]
-
-    try:
-        pyreadstat.write_xport(pandas_df, str(output_path))
-        return output_path
-    except Exception as e:
-        raise FleetIOError(f"Failed to write XPT to {output_path}: {e}") from e
+    pyreadstat.write_xport(pandas_df, str(output_path))
+    return output_path

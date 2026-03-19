@@ -79,16 +79,8 @@ class ADSLNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        from ..sdtm.utils import parse_expression
-
-        grps = groups or ["USUBJID"]
-        src = from_dataset
-        if where is not None:
-            where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
-            src = src.filter(where_expr)
-        agg_df = src.group_by(grps).agg(pl.col(date_col).min().alias(target))
-        df = self.to_frame().join(agg_df, on=grps, how="left")
-        return self._materialise_then(df)
+        return self._date_agg(target, from_dataset=from_dataset, date_col=date_col,
+                              where=where, groups=groups, agg_fn="min")
 
     def last_date(
         self,
@@ -123,6 +115,20 @@ class ADSLNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
+        return self._date_agg(target, from_dataset=from_dataset, date_col=date_col,
+                              where=where, groups=groups, agg_fn="max")
+
+    def _date_agg(
+        self,
+        target: str,
+        *,
+        from_dataset: pl.DataFrame,
+        date_col: str,
+        where: str | pl.Expr | None,
+        groups: list[str] | None,
+        agg_fn: str,
+    ) -> Self:
+        """Shared implementation for first_date/last_date."""
         from ..sdtm.utils import parse_expression
 
         grps = groups or ["USUBJID"]
@@ -130,7 +136,9 @@ class ADSLNamespace(SharedADaMVerbsMixin):
         if where is not None:
             where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
             src = src.filter(where_expr)
-        agg_df = src.group_by(grps).agg(pl.col(date_col).max().alias(target))
+        col = pl.col(date_col)
+        agg_expr = (col.min() if agg_fn == "min" else col.max()).alias(target)
+        agg_df = src.group_by(grps).agg(agg_expr)
         df = self.to_frame().join(agg_df, on=grps, how="left")
         return self._materialise_then(df)
 

@@ -925,8 +925,7 @@ class SDTMNamespace:
         type_map: dict[str, str] = {}
         if spec is not None:
             spec_path = Path(spec)
-            col_list = self._spec_columns(spec_path, dataset)
-            type_map = self._spec_type_map(spec_path, dataset)
+            col_list, type_map = self._spec_dataset_meta(spec_path, dataset)
 
         # Step 3: intersect with existing columns (preserving spec order)
         if col_list is not None:
@@ -954,8 +953,13 @@ class SDTMNamespace:
         return self._new_from(df)
 
     @staticmethod
-    def _spec_columns(spec_path: Path, dataset: str | None) -> list[str]:
-        """Return the ordered variable-name list for *dataset* from a define.yaml."""
+    def _spec_dataset_meta(
+        spec_path: Path, dataset: str | None
+    ) -> tuple[list[str], dict[str, str]]:
+        """Return ``(column_names, date_type_map)`` for *dataset* from a define.yaml.
+
+        Parses the YAML once and resolves the dataset, avoiding duplicate I/O.
+        """
         spec_data = yaml.safe_load(spec_path.read_text())
         datasets = spec_data.get("datasets", [])
         if dataset is None:
@@ -974,25 +978,13 @@ class SDTMNamespace:
                     f"Dataset '{dataset}' not found in define.yaml. Available: {names}"
                 )
             ds = matches[0]
-        return [v["name"] for v in ds["variables"]]
-
-    @staticmethod
-    def _spec_type_map(spec_path: Path, dataset: str | None) -> dict[str, str]:
-        """Return ``{col_name: type}`` for date/datetime variables in *dataset*."""
-        spec_data = yaml.safe_load(spec_path.read_text())
-        datasets = spec_data.get("datasets", [])
-        if dataset is None:
-            ds = datasets[0] if len(datasets) == 1 else None
-        else:
-            matches = [d for d in datasets if d["name"].upper() == dataset.upper()]
-            ds = matches[0] if matches else None
-        if ds is None:
-            return {}
-        return {
+        columns = [v["name"] for v in ds["variables"]]
+        type_map = {
             v["name"]: v["type"]
             for v in ds["variables"]
             if v.get("type") in ("date", "datetime")
         }
+        return columns, type_map
 
     def _new_from(self, df: pl.DataFrame) -> "SDTMNamespace":
         """Return a fresh SDTMNamespace wrapping *df* as a lazy plan."""

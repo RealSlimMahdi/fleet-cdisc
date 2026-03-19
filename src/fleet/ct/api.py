@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 _DEFAULT_BASE_URL = "https://library.cdisc.org/api"
 
 
-@dataclass(frozen=True)
+@dataclass
 class CDISCClientConfig:
     """Configuration for the CDISC Library API client.
 
@@ -46,15 +46,13 @@ class CDISCClientConfig:
     base_url: str = _DEFAULT_BASE_URL
 
     def __post_init__(self) -> None:
-        # Allow env-vars / .env to fill in blanks.
         if not self.api_key:
             _try_load_dotenv()
-            key = os.environ.get("CDISC_API_KEY", "")
-            object.__setattr__(self, "api_key", key)
+            self.api_key = os.environ.get("CDISC_API_KEY", "")
         if self.base_url == _DEFAULT_BASE_URL:
             env_url = os.environ.get("CDISC_BASE_URL", "")
             if env_url:
-                object.__setattr__(self, "base_url", env_url.rstrip("/"))
+                self.base_url = env_url.rstrip("/")
 
 
 def _try_load_dotenv() -> None:

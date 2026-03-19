@@ -96,7 +96,7 @@ def main():
         .source("VSTESTCD")
         .source("VSSTRESN")
         .derivation("ABLFL", expression=pl.lit("Y"))
-        .baseline("BASE", aval="VSSTRESN", baseline_flag="ABLFL")
+        .baseline("BASE", aval="VSSTRESN", baseline_flag="ABLFL", groups=["USUBJID", "VSTESTCD"])
         .to_frame()
     )
     print("\nADVS Dataset:")
