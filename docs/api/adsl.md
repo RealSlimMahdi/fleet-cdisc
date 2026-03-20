@@ -4,7 +4,7 @@ The `df.adam.adsl` namespace builds one-row-per-subject ADSL datasets.
 
 ::: fleet.adam.ADSLNamespace
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 2
 members_order: source
-filters: ["!^*"]
+filters: ["!^_"]

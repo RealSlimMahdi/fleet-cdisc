@@ -14,9 +14,9 @@ The `CDISCClient` wraps `httpx` to authenticate against the CDISC Library REST A
 
 ::: fleet.ct.CDISCClient
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 3
-filters: ["!^*"]
+filters: ["!^_"]
 
 ::: fleet.ct.CDISCClientConfig
 options:
@@ -102,9 +102,9 @@ dm = (
 
 ::: fleet.ct.CodelistGenerator
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 3
-filters: ["!^*"]
+filters: ["!^_"]
 
 ---
 
@@ -114,9 +114,9 @@ The singleton `CTValidator` provides runtime validation of values against loaded
 
 ::: fleet.ct.CTValidator
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 3
-filters: ["!^*"]
+filters: ["!^_"]
 
 ## load_controlled_terminology
 

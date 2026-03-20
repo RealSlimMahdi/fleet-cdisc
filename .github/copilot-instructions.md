@@ -324,7 +324,61 @@ def verb_name(self, target: str, *, source: str) -> Self:
     """
 ```
 
-## 9. Validation & Verification Requirements
+## 9. Documentation Files (`docs/`) — Formatting Rules
+
+Files under `docs/api/` contain **mkdocstrings directives** — special YAML blocks embedded in Markdown that reference Python module paths. These are NOT regular Markdown and must NEVER be reformatted by Markdown linters, Prettier, or other automated tools.
+
+### Critical rules for `docs/api/*.md` files
+
+1. **NEVER escape underscores in `:::` directives.** The `:::` line is a Python dotted path, not Markdown prose. Writing `\_` instead of `_` will break the build.
+
+   ```markdown
+   <!-- WRONG — build will fail -->
+
+   ::: fleet.sdtm.\_tdd_mixin
+
+   <!-- CORRECT -->
+
+   ::: fleet.sdtm.\_tdd_mixin
+   ```
+
+2. **NEVER replace underscores with asterisks in YAML option blocks.** Markdown formatters may interpret `_word_` as emphasis and "normalize" `_` to `*`. This silently breaks mkdocstrings options.
+
+   ```yaml
+   # WRONG — option is silently ignored
+   show*root_heading: true
+   filters: ["!^*"]
+
+   # CORRECT
+   show_root_heading: true
+   filters: ["!^_"]
+   ```
+
+3. **After editing any `docs/api/*.md` file, always verify the build:**
+
+   ```bash
+   uv run mkdocs build --clean
+   ```
+
+   The build MUST complete with zero `ERROR` lines. Warnings about unclosed divs from pandoc are acceptable.
+
+### Known corruption pattern
+
+Markdown formatters (Prettier, markdownlint --fix, editor extensions) may auto-replace `_` with `*` inside mkdocstrings option blocks and escape `_` with `\_` in `:::` directives. If you see `show*root_heading`, `filters: ["!^*"]`, or `\_` in a `:::` line, fix them immediately — they are formatting corruption, not intentional content.
+
+### Standard mkdocstrings block template
+
+Every API doc entry should follow this pattern exactly:
+
+```markdown
+::: fleet.<module>.<ClassName>
+options:
+show*root_heading: true
+heading_level: 3
+filters: ["!^*"]
+```
+
+## 10. Validation & Verification Requirements
 
 After **every new feature implementation or bug fix**, the following checks MUST all pass before the change is considered complete:
 
@@ -368,4 +422,4 @@ After **every new feature implementation or bug fix**, the following checks MUST
 
 ### Verification order
 
-Run checks in this order: lint → tests → examples → llms.txt → docs review. Fix any failure before proceeding to the next step.
+Run checks in this order: lint → tests → examples → llms.txt → docs build → docs review. Fix any failure before proceeding to the next step.

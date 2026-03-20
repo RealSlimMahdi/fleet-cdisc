@@ -7,7 +7,7 @@ heading_level: 2
 members_order: source
 show_root_heading: true
 
-::: fleet.sdtm.\_tdd_mixin
+::: fleet.sdtm._tdd_mixin
 options:
 show_source: false
 heading_level: 2

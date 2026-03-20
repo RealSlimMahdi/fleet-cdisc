@@ -8,7 +8,7 @@ Fleet generates and validates CDISC Define-XML 2.1 documents from `define.yaml` 
 options:
 show_root_heading: true
 heading_level: 3
-filters: ["!^*"]
+filters: ["!^_"]
 
 ## DefineSpecGenerator
 
@@ -16,7 +16,7 @@ filters: ["!^*"]
 options:
 show_root_heading: true
 heading_level: 3
-filters: ["!^*"]
+filters: ["!^_"]
 
 ## DefineValidator
 
@@ -24,7 +24,7 @@ filters: ["!^*"]
 options:
 show_root_heading: true
 heading_level: 3
-filters: ["!^*"]
+filters: ["!^_"]
 
 ## DatasetChecker
 
@@ -32,4 +32,4 @@ filters: ["!^*"]
 options:
 show_root_heading: true
 heading_level: 3
-filters: ["!^*"]
+filters: ["!^_"]

@@ -6,54 +6,54 @@ Fleet ships six TA extensions accessible via `df.adam.<ta>`, mirroring the [admi
 
 ::: fleet.adam.OncoNamespace
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 3
-filters: ["!^*"]
+filters: ["!^_"]
 
 ## Ophthalmology — `df.adam.ophtha`
 
 ::: fleet.adam.OphthaNamespace
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 3
-filters: ["!^*"]
+filters: ["!^_"]
 
 ## Pediatrics — `df.adam.peds`
 
 ::: fleet.adam.PedsNamespace
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 3
-filters: ["!^*"]
+filters: ["!^_"]
 
 ## Vaccine — `df.adam.vaccine`
 
 ::: fleet.adam.VaccineNamespace
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 3
-filters: ["!^*"]
+filters: ["!^_"]
 
 ## Metabolic — `df.adam.metabolic`
 
 ::: fleet.adam.MetabolicNamespace
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 3
-filters: ["!^*"]
+filters: ["!^_"]
 
 ## Neuroscience — `df.adam.neuro`
 
 ::: fleet.adam.NeuroNamespace
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 3
-filters: ["!^*"]
+filters: ["!^_"]
 
 ## Pharmacokinetics — `df.adam.pk`
 
 ::: fleet.adam.PKNamespace
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 3
-filters: ["!^*"]
+filters: ["!^_"]
