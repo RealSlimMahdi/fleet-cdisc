@@ -104,7 +104,24 @@ TrialElements(elements=[
 
 ## Cross-Domain FK Validation
 
-Pass upstream collections to `add_*()` verbs for foreign-key validation:
+Pass upstream collections to `add_*()` verbs for foreign-key validation.
+First, define the arm rows using the `TrialArms` / `TrialArm` models
+(each ETCD must match an element defined in `te_rows` above):
+
+```python
+from fleet.sdtm.tdd import TrialArm, TrialArms
+
+ta_rows = TrialArms(arms=[
+    TrialArm(armcd="PBO", arm="Placebo", taetord=1,
+             etcd="SCRN", element="Screening", epoch=Epoch.SCREENING),
+    TrialArm(armcd="PBO", arm="Placebo", taetord=2,
+             etcd="TRT", element="Treatment", epoch=Epoch.TREATMENT),
+    TrialArm(armcd="PBO", arm="Placebo", taetord=3,
+             etcd="FU", element="Follow-up", epoch=Epoch.FOLLOW_UP),
+])
+```
+
+Then build TA with or without FK validation:
 
 ```python
 # Validates TA.ETCD ∈ TE.ETCD
