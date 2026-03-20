@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import re
 from datetime import datetime
 from typing import Any
@@ -63,16 +64,94 @@ def to_iso8601_datetime(value: str | None) -> str | None:
 # Expression parsing                                                   #
 # ------------------------------------------------------------------ #
 
-def parse_expression(expr_str: str) -> pl.Expr:
+# AST node types allowed in expression strings.  Anything not listed
+# here is rejected *before* ``eval`` is called.
+_ALLOWED_AST_NODES: frozenset[type] = frozenset(
+    {
+        ast.Expression,
+        ast.Attribute,
+        ast.Call,
+        ast.Name,
+        ast.Constant,
+        ast.BinOp,
+        ast.UnaryOp,
+        ast.Compare,
+        ast.BoolOp,
+        ast.IfExp,
+        ast.Subscript,
+        ast.List,
+        ast.Tuple,
+        ast.Dict,
+        ast.Starred,
+        ast.keyword,
+        ast.Slice,
+        ast.Index,  # py 3.8 compat
+        # Operators
+        ast.Add,
+        ast.Sub,
+        ast.Mult,
+        ast.Div,
+        ast.FloorDiv,
+        ast.Mod,
+        ast.Pow,
+        ast.USub,
+        ast.UAdd,
+        ast.Not,
+        ast.Invert,
+        ast.Eq,
+        ast.NotEq,
+        ast.Lt,
+        ast.LtE,
+        ast.Gt,
+        ast.GtE,
+        ast.Is,
+        ast.IsNot,
+        ast.In,
+        ast.NotIn,
+        ast.And,
+        ast.Or,
+        ast.BitAnd,
+        ast.BitOr,
+        ast.BitXor,
+        ast.Load,
+    }
+)
+
+
+def _validate_ast(expr_str: str) -> None:
+    """Validate *expr_str* against an AST whitelist before eval.
+
+    Rejects any node type not in ``_ALLOWED_AST_NODES`` and any
+    ``Name`` containing double-underscore identifiers.
     """
-    Evaluate a simple Polars expression string.
+    try:
+        tree = ast.parse(expr_str, mode="eval")
+    except SyntaxError as exc:
+        raise ValueError(f"Syntax error in expression {expr_str!r}: {exc}") from exc
+
+    for node in ast.walk(tree):
+        if type(node) not in _ALLOWED_AST_NODES:
+            raise ValueError(
+                f"Disallowed construct {type(node).__name__!r} in expression {expr_str!r}"
+            )
+        if isinstance(node, ast.Name) and "__" in node.id:
+            raise ValueError(
+                f"Dunder identifier {node.id!r} is not allowed in expression {expr_str!r}"
+            )
+
+
+def parse_expression(expr_str: str) -> pl.Expr:
+    """Evaluate a simple Polars expression string.
 
     Supports column references: ``pl.col("NAME")`` or plain ``NAME``.
-    For safety, only polars and builtins are exposed.
+    Complex expressions are validated against an AST whitelist before
+    evaluation to prevent code injection.
     """
     # Allow bare column name shorthand: e.g. "VSSTRESN" → pl.col("VSSTRESN")
-    if re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', expr_str.strip()):
+    if re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", expr_str.strip()):
         return pl.col(expr_str.strip())
+
+    _validate_ast(expr_str)
 
     local_ns: dict[str, Any] = {"pl": pl}
     try:
@@ -87,6 +166,7 @@ def parse_expression(expr_str: str) -> pl.Expr:
 # ------------------------------------------------------------------ #
 # Sequence number generation                                           #
 # ------------------------------------------------------------------ #
+
 
 def make_seq_expr(group_by: list[str] | None = None, target: str = "SEQ") -> pl.Expr:
     """Return an expression that adds sequential row numbers (1-based)."""

@@ -64,6 +64,7 @@ methods.  No ``if TYPE_CHECKING`` stubs or protocol tricks are needed.
 
 from __future__ import annotations
 
+import copy
 from typing import Any, Self
 
 import polars as pl
@@ -96,13 +97,13 @@ class SharedADaMVerbsMixin:
 
     def _chain(self, *exprs: pl.Expr) -> Self:
         """Append expressions to the lazy plan; return a *new* namespace."""
-        new = object.__new__(self.__class__)
+        new = copy.copy(self)
         new._lazy = self._lazy.with_columns(list(exprs))
         return new
 
     def _materialise_then(self, df: pl.DataFrame) -> Self:
         """Return a fresh namespace wrapping *df* as a new lazy plan."""
-        new = object.__new__(self.__class__)
+        new = copy.copy(self)
         new._lazy = df.lazy()
         return new
 
@@ -124,6 +125,66 @@ class SharedADaMVerbsMixin:
                 )
         """
         return self._lazy.collect()
+
+    # ------------------------------------------------------------------ #
+    # Debugging & observability                                            #
+    # ------------------------------------------------------------------ #
+
+    def inspect(self, prefix: str = "DEBUG") -> Self:
+        """Materialise the pipeline at this point and log its state.
+
+        Creates a hard checkpoint: the pipeline resumes from the
+        materialised frame, making it easy to isolate exactly where a
+        derivation goes wrong.
+
+        Args:
+            prefix: Label printed alongside the diagnostic output.
+
+        Returns:
+            Self: A fresh namespace wrapping the materialised frame; call
+                further verbs or ``.to_frame()`` to continue.
+
+        Examples:
+            Inspect the pipeline after baseline derivation::
+
+                advs = (
+                    vs_df.adam
+                    .source("USUBJID")
+                    .baseline("BASE", aval="AVAL", baseline_flag="ABLFL")
+                    .inspect(prefix="After BASE")
+                    .chg("CHG", aval="AVAL", base="BASE")
+                    .to_frame()
+                )
+        """
+        df = self._lazy.collect()
+        print(f"[{prefix}] Schema: {df.schema}")
+        print(f"[{prefix}] Shape:  {df.shape}")
+        print(df.head(5))
+        return self._materialise_then(df)
+
+    def explain(self) -> Self:
+        """Print the current Polars query plan without materialising.
+
+        Useful for understanding how Polars will optimise the accumulated
+        derivation pipeline.
+
+        Returns:
+            Self: The same namespace instance (unchanged); call further
+                verbs or ``.to_frame()`` to continue.
+
+        Examples:
+            Print the query plan before collecting::
+
+                advs = (
+                    vs_df.adam
+                    .source("USUBJID")
+                    .derivation("AVAL", expression="VSSTRESN")
+                    .explain()
+                    .to_frame()
+                )
+        """
+        print(self._lazy.explain())
+        return self
 
     # ------------------------------------------------------------------ #
     # Shared verbs                                                         #
@@ -179,11 +240,7 @@ class SharedADaMVerbsMixin:
         """
         from ..sdtm.utils import parse_expression
 
-        expr = (
-            expression
-            if isinstance(expression, pl.Expr)
-            else parse_expression(str(expression))
-        )
+        expr = expression if isinstance(expression, pl.Expr) else parse_expression(str(expression))
         return self._chain(expr.alias(target))
 
     def assigned(self, target: str, *, value: Any) -> Self:
@@ -242,9 +299,11 @@ class SharedADaMVerbsMixin:
         """
         if recode_map:
             default_expr = default if isinstance(default, pl.Expr) else pl.lit(default)
-            expr = pl.col(source).replace_strict(
-                recode_map, default=default_expr, return_dtype=pl.String
-            ).alias(target)
+            expr = (
+                pl.col(source)
+                .replace_strict(recode_map, default=default_expr, return_dtype=pl.String)
+                .alias(target)
+            )
         else:
             default_expr = default if isinstance(default, pl.Expr) else pl.lit(default)
             expr = default_expr.alias(target)
@@ -348,9 +407,7 @@ class SharedADaMVerbsMixin:
         from ..sdtm.utils import parse_expression
 
         df = self.to_frame()
-        filter_expr = (
-            where if isinstance(where, pl.Expr) else parse_expression(str(where))
-        )
+        filter_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
         return self._materialise_then(df.filter(filter_expr))
 
     def merge_adsl(
@@ -434,7 +491,5 @@ class MultiRowMixin:
         """
         grps = groups or ["USUBJID"]
         df = self.to_frame()
-        df = df.with_columns(
-            (pl.int_range(pl.len()).over(grps) + 1).cast(pl.Int64).alias(target)
-        )
+        df = df.with_columns((pl.int_range(pl.len()).over(grps) + 1).cast(pl.Int64).alias(target))
         return self._materialise_then(df)

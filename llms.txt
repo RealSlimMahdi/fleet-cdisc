@@ -1378,9 +1378,9 @@ if __name__ == "__main__":
 - `dataset_level(target, *, value)` — alias for `hardcode_no_ct`; marks dataset-level constants
 - `notsubmitted(*targets)` — set one or more columns to null (not for submission)
 - `multiple_responses(target, *, source, delimiter="|", id_cols=None)` — expand pipe-delimited fields
+- `inspect(prefix="DEBUG")` — materialise pipeline, print schema/shape/head, return checkpoint (hard)
+- `explain()` — print the Polars query plan without materialising
 - `to_frame()` — materialise
-
-## Trial Design Domain (TDD) verbs
 
 Fleet supports all 7 CDISC Trial Design Model domains through `df.sdtm`. Protocol-reference domains (TE, TA, TV, TS, TI) follow a fixed sequence: `fetch_structure() → study_header() → add_*() → to_frame()`. Subject-level domains (SV, SE) mix freely with standard SDTM verbs.
 
@@ -1426,6 +1426,8 @@ These verbs are defined once in `SharedADaMVerbsMixin` (`src/fleet/adam/_mixins.
 - `whereclauses(*, where)` — filter rows by expression (materialises internally)
 - `merge_adsl(adsl_dataset, *, on="USUBJID", vars=None)` — join ADSL columns onto current dataset
 - `seq(target, *, groups)` — sequential 1-based record number per group
+- `inspect(prefix="DEBUG")` — materialise pipeline, print schema/shape/head, return checkpoint
+- `explain()` — print the Polars query plan without materialising
 
 ## ADaM verbs
 
@@ -1517,6 +1519,8 @@ Available on `df.adam.occds` (and `df.adam.pk` for sequence). Shared verbs (sour
 | Treatment-emergent flag | `treatment_emergent` | `adam.occds` | TRTEMFL using TRTSDT/TRTEDT window |
 | Onset/recovery dates | `onset_recovery` | `adam.occds` | Onset and recovery date derivation |
 | Run spec derivations | `from_spec` | `adam` | Execute all derivations defined in define.yaml |
+| Debug pipeline (checkpoint) | `inspect` | `sdtm` / `adam` / all sub-ns | Materialise, log schema+shape+head, resume from checkpoint |
+| Debug pipeline (plan) | `explain` | `sdtm` / `adam` / all sub-ns | Print Polars query plan without materialising |
 
 ## define.yaml
 

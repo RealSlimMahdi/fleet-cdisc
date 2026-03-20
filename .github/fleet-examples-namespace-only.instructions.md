@@ -15,3 +15,15 @@ applyTo: "examples/**/*.py"
 - Preserve lazy/chained style and avoid mixed patterns where part of the pipeline is namespace-based and part is ad hoc DataFrame logic.
 - Only use non-namespace operations for basic IO boundaries (read/write files, constants, simple printing), not for derivation logic.
 - For shared ADaM logic needed in multiple namespaces, implement in mixins instead of per-namespace duplication.
+
+# Validation requirement
+
+- After any change to example scripts, **ALL** `.py` files in `examples/` must be re-run and pass without error. This includes:
+  ```
+  uv run python examples/full_pipeline_example.py
+  uv run python examples/cdiscpilot01_inline.py
+  uv run python examples/cdiscpilot01_spec_driven.py
+  uv run python examples/adnca_example.py
+  uv run python examples/tdd_example.py
+  ```
+- If a new example script is added, it must also be added to the validation list in `.github/copilot-instructions.md` §3 and §9.

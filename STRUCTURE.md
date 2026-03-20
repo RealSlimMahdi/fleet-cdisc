@@ -107,11 +107,11 @@ The `assign_ct` SDTM verb and `recode` ADaM verb use the singleton automatically
 
 The core of Fleet for SDTM work. Registers `df.sdtm` on every Polars DataFrame.
 
-| File           | Purpose                                                                                                                         |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `models.py`    | `SDTMAlgorithm` enum (the 14 verb names), `SDTMVariableSpec` (Pydantic model for one variable in a YAML spec), `SDTMDomainSpec` |
-| `utils.py`     | Internal helpers — `to_iso8601_date`, `to_iso8601_datetime`, `parse_expression(str) → pl.Expr`, `make_seq_expr`                 |
-| `namespace.py` | `SDTMNamespace` — the actual namespace class with all 14 verbs                                                                  |
+| File           | Purpose                                                                                                                              |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `models.py`    | `SDTMAlgorithm` enum (the 14 verb names), `SDTMVariableSpec` (Pydantic model for one variable in a YAML spec), `SDTMDomainSpec`      |
+| `utils.py`     | Internal helpers — `to_iso8601_date`, `to_iso8601_datetime`, `parse_expression(str) → pl.Expr` (with AST whitelist), `make_seq_expr` |
+| `namespace.py` | `SDTMNamespace` — the actual namespace class with all 14 verbs                                                                       |
 
 **The 14 SDTM derivation verbs:**
 
@@ -138,10 +138,12 @@ The core of Fleet for SDTM work. Registers `df.sdtm` on every Polars DataFrame.
 | --------------------------- | ------------------------------------------------------------------------ |
 | `from_spec(spec_path)`      | Load a YAML spec file and replay all its variable mappings automatically |
 | `validate(domain, version)` | Run CDISC rules-engine validation on the result                          |
+| `inspect(prefix)`           | Materialise pipeline, log schema/shape/head, return checkpoint           |
+| `explain()`                 | Print the Polars query plan without materialising                        |
 | `to_frame()`                | **Materialise** — execute the whole pipeline and return a `pl.DataFrame` |
 
 **How the pipeline works:**  
-Every verb returns a _new_ `SDTMNamespace` instance with the expression appended to an internal list. Nothing executes until `to_frame()` is called, which runs all expressions in a single `with_columns` pass.
+Every verb returns a _new_ `SDTMNamespace` instance (via `copy.copy(self)`) with the expression appended to an internal lazy plan. Nothing executes until `to_frame()` is called, which collects the lazy frame. Both `_chain` and `_materialise_then` use `copy.copy` to preserve all instance state across chaining calls.
 
 ---
 
@@ -185,11 +187,13 @@ Registers `df.adam` on every Polars DataFrame.
 
 **Special methods** (same as SDTM):
 
-| Method                       | Purpose                               |
-| ---------------------------- | ------------------------------------- |
-| `from_spec(spec_path)`       | YAML-driven derivation                |
-| `validate(dataset, version)` | CDISC rules-engine validation         |
-| `to_frame()`                 | Materialise and return `pl.DataFrame` |
+| Method                       | Purpose                                            |
+| ---------------------------- | -------------------------------------------------- |
+| `from_spec(spec_path)`       | YAML-driven derivation                             |
+| `validate(dataset, version)` | CDISC rules-engine validation                      |
+| `inspect(prefix)`            | Materialise pipeline, log state, return checkpoint |
+| `explain()`                  | Print query plan without materialising             |
+| `to_frame()`                 | Materialise and return `pl.DataFrame`              |
 
 ---
 

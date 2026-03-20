@@ -22,6 +22,7 @@ Usage
 
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
@@ -52,8 +53,14 @@ class SDTMNamespace(TrialDesignMixin):
     # ------------------------------------------------------------------ #
 
     def _chain(self, *exprs: pl.Expr) -> "SDTMNamespace":
-        new = object.__new__(SDTMNamespace)
+        new = copy.copy(self)
         new._lazy = self._lazy.with_columns(list(exprs))
+        return new
+
+    def _materialise_then(self, df: pl.DataFrame) -> "SDTMNamespace":
+        """Return a fresh namespace wrapping *df* as a new lazy plan."""
+        new = copy.copy(self)
+        new._lazy = df.lazy()
         return new
 
     # ------------------------------------------------------------------ #
@@ -61,7 +68,6 @@ class SDTMNamespace(TrialDesignMixin):
     # ------------------------------------------------------------------ #
 
     def assign_no_ct(self, target: str, *, source: str) -> "SDTMNamespace":
-
         """Copy *source* column to *target* with no controlled-terminology validation.
 
         Args:
@@ -204,6 +210,7 @@ class SDTMNamespace(TrialDesignMixin):
         if ct_validator is None:
             try:
                 from ..ct.validator import get_validator
+
                 ct_validator = get_validator()
             except Exception:
                 ct_validator = None
@@ -214,13 +221,10 @@ class SDTMNamespace(TrialDesignMixin):
                 # Build decode map from CT (code → decode/preferred term)
                 all_ct = ct_validator._ct_cache.get(ct_codelist, {})
                 decode_map = {
-                    coded: info.get("preferred_term", coded)
-                    for coded, info in all_ct.items()
+                    coded: info.get("preferred_term", coded) for coded, info in all_ct.items()
                 }
                 if decode_map:
-                    return self._chain(
-                        pl.col(source).replace(decode_map).alias(target)
-                    )
+                    return self._chain(pl.col(source).replace(decode_map).alias(target))
             except Exception:
                 pass
 
@@ -236,7 +240,7 @@ class SDTMNamespace(TrialDesignMixin):
         target: str,
         *,
         source: str,
-        mode: str = "date",          # "date" | "datetime"
+        mode: str = "date",  # "date" | "datetime"
         input_format: str | None = None,
     ) -> "SDTMNamespace":
         """Parse *source* date string and format as ISO 8601.
@@ -414,10 +418,18 @@ class SDTMNamespace(TrialDesignMixin):
 
         # Build nested pl.when().then().when().then()...
         first = when[0]
-        cond = first["condition"] if isinstance(first["condition"], pl.Expr) else parse_expression(first["condition"])
+        cond = (
+            first["condition"]
+            if isinstance(first["condition"], pl.Expr)
+            else parse_expression(first["condition"])
+        )
         chain = pl.when(cond).then(pl.lit(first["value"]))
         for branch in when[1:]:
-            c = branch["condition"] if isinstance(branch["condition"], pl.Expr) else parse_expression(branch["condition"])
+            c = (
+                branch["condition"]
+                if isinstance(branch["condition"], pl.Expr)
+                else parse_expression(branch["condition"])
+            )
             chain = chain.when(c).then(pl.lit(branch["value"]))
         expr = chain.otherwise(pl.lit(else_value)).alias(target)
         return self._chain(expr)
@@ -517,11 +529,9 @@ class SDTMNamespace(TrialDesignMixin):
                 )
         """
         joined = self._lazy.join(dataset.lazy(), on=on, how=how)
-        new = object.__new__(SDTMNamespace)
-        new._lazy = joined
         if target_cols:
-            new._lazy = new._lazy.with_columns([pl.col(c) for c in target_cols])
-        return new
+            joined = joined.with_columns([pl.col(c) for c in target_cols])
+        return self._materialise_then(joined.collect())
 
     # ------------------------------------------------------------------ #
     # 10. remove_dup — deduplicate rows                                    #
@@ -556,9 +566,9 @@ class SDTMNamespace(TrialDesignMixin):
                     .to_frame()
                 )
         """
-        new = object.__new__(SDTMNamespace)
-        new._lazy = self._lazy.unique(subset=subset, keep=keep)  # type: ignore[arg-type]
-        return new
+        return self._materialise_then(
+            self._lazy.unique(subset=subset, keep=keep).collect()  # type: ignore[arg-type]
+        )
 
     # ------------------------------------------------------------------ #
     # 11. group_by — aggregate records                                     #
@@ -593,9 +603,7 @@ class SDTMNamespace(TrialDesignMixin):
                     .to_frame()
                 )
         """
-        new = object.__new__(SDTMNamespace)
-        new._lazy = self._lazy.group_by(group_cols).agg(agg)
-        return new
+        return self._materialise_then(self._lazy.group_by(group_cols).agg(agg).collect())
 
     # ------------------------------------------------------------------ #
     # 12. dataset_level — constant for whole dataset (alias hardcode_no_ct)
@@ -691,17 +699,13 @@ class SDTMNamespace(TrialDesignMixin):
                     .to_frame()
                 )
         """
-        new = object.__new__(SDTMNamespace)
-        new._lazy = (
-            self._lazy
-            .with_columns(
-                pl.col(source).str.split(delimiter).alias("__split__")
-            )
+        return self._materialise_then(
+            self._lazy.with_columns(pl.col(source).str.split(delimiter).alias("__split__"))
             .explode("__split__")
             .with_columns(pl.col("__split__").str.strip_chars().alias(target))
             .drop("__split__")
+            .collect()
         )
-        return new
 
     # ------------------------------------------------------------------ #
     # Spec-driven pipeline                                                 #
@@ -790,9 +794,7 @@ class SDTMNamespace(TrialDesignMixin):
         return ns
 
     @staticmethod
-    def _extract_define_variables(
-        spec_data: dict, dataset: str | None
-    ) -> list:
+    def _extract_define_variables(spec_data: dict, dataset: str | None) -> list:
         """Convert define.yaml dataset variables into SDTMVariableSpec objects."""
         from .models import SDTMVariableSpec
 
@@ -981,17 +983,13 @@ class SDTMNamespace(TrialDesignMixin):
             ds = matches[0]
         columns = [v["name"] for v in ds["variables"]]
         type_map = {
-            v["name"]: v["type"]
-            for v in ds["variables"]
-            if v.get("type") in ("date", "datetime")
+            v["name"]: v["type"] for v in ds["variables"] if v.get("type") in ("date", "datetime")
         }
         return columns, type_map
 
     def _new_from(self, df: pl.DataFrame) -> "SDTMNamespace":
         """Return a fresh SDTMNamespace wrapping *df* as a lazy plan."""
-        new = object.__new__(SDTMNamespace)
-        new._lazy = df.lazy()
-        return new
+        return self._materialise_then(df)
 
     # ------------------------------------------------------------------ #
     # Terminal operations                                                  #
@@ -1015,6 +1013,66 @@ class SDTMNamespace(TrialDesignMixin):
                 )
         """
         return self._lazy.collect()
+
+    # ------------------------------------------------------------------ #
+    # Debugging & observability                                            #
+    # ------------------------------------------------------------------ #
+
+    def inspect(self, prefix: str = "DEBUG") -> "SDTMNamespace":
+        """Materialise the pipeline at this point and log its state.
+
+        Creates a hard checkpoint: the pipeline resumes from the
+        materialised frame, making it easy to isolate exactly where a
+        derivation goes wrong.
+
+        Args:
+            prefix: Label printed alongside the diagnostic output.
+
+        Returns:
+            SDTMNamespace: A fresh namespace wrapping the materialised
+                frame; call further verbs or ``.to_frame()`` to continue.
+
+        Examples:
+            Inspect the pipeline after assigning key variables::
+
+                dm = (
+                    raw_df.sdtm
+                    .hardcode_no_ct("DOMAIN", value="DM")
+                    .assign_no_ct("USUBJID", source="subject_id")
+                    .inspect(prefix="After USUBJID")
+                    .assign_no_ct("SITEID", source="site_number")
+                    .to_frame()
+                )
+        """
+        df = self._lazy.collect()
+        print(f"[{prefix}] Schema: {df.schema}")
+        print(f"[{prefix}] Shape:  {df.shape}")
+        print(df.head(5))
+        return self._materialise_then(df)
+
+    def explain(self) -> "SDTMNamespace":
+        """Print the current Polars query plan without materialising.
+
+        Useful for understanding how Polars will optimise the accumulated
+        derivation pipeline.
+
+        Returns:
+            SDTMNamespace: The same namespace instance (unchanged); call
+                further verbs or ``.to_frame()`` to continue.
+
+        Examples:
+            Print the query plan before collecting::
+
+                dm = (
+                    raw_df.sdtm
+                    .hardcode_no_ct("DOMAIN", value="DM")
+                    .assign_no_ct("USUBJID", source="subject_id")
+                    .explain()
+                    .to_frame()
+                )
+        """
+        print(self._lazy.explain())
+        return self
 
     def write_parquet(
         self,

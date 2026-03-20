@@ -76,7 +76,9 @@ class TrialDesignMixin:
                 f"Expected sequence: {' → '.join(_STAGE_SEQUENCE)}"
             )
         if stage is not None and stage < required:
-            current_label = _STAGE_SEQUENCE[stage] if stage < len(_STAGE_SEQUENCE) else f"stage {stage}"
+            current_label = (
+                _STAGE_SEQUENCE[stage] if stage < len(_STAGE_SEQUENCE) else f"stage {stage}"
+            )
             raise ValueError(
                 f"Cannot call {verb}() at {current_label}. "
                 f"Expected sequence: {' → '.join(_STAGE_SEQUENCE)}"
@@ -140,9 +142,7 @@ class TrialDesignMixin:
             meta = self._fetch_ig_domain(domain, ig_version)
             if cache_path:
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
-                cache_path.write_text(
-                    yaml.dump(meta, default_flow_style=False, sort_keys=False)
-                )
+                cache_path.write_text(yaml.dump(meta, default_flow_style=False, sort_keys=False))
 
         # Propagate to the new namespace instance
         new = self._chain()  # type: ignore[attr-defined]
@@ -184,8 +184,6 @@ class TrialDesignMixin:
             pl.lit(domain.upper()).alias("DOMAIN"),
         )
         new._tdd_stage = 2
-        new._domain_meta = getattr(self, "_domain_meta", {})
-        new._reconciliation_report = getattr(self, "_reconciliation_report", [])
         return new  # type: ignore[return-value]
 
     # ------------------------------------------------------------------ #
@@ -247,8 +245,7 @@ class TrialDesignMixin:
             for a in arms.arms:
                 if a.etcd not in valid_etcds:
                     raise ValueError(
-                        f"TA.ETCD '{a.etcd}' not found in TE. "
-                        f"Valid: {sorted(valid_etcds)}"
+                        f"TA.ETCD '{a.etcd}' not found in TE. Valid: {sorted(valid_etcds)}"
                     )
         return self._materialise_collection(arms.to_polars())
 
@@ -431,14 +428,9 @@ class TrialDesignMixin:
             .rename({"__tv_num__": target_num, "__tv_name__": target_name})
         )
 
-        df = df.join(best, on="__row_idx__", how="left").drop(
-            "__row_idx__", "__actual_dy__"
-        )
+        df = df.join(best, on="__row_idx__", how="left").drop("__row_idx__", "__actual_dy__")
 
-        new = object.__new__(self.__class__)
-        new._lazy = df.lazy()
-        self._copy_tdd_state(new)
-        return new  # type: ignore[return-value]
+        return self._materialise_then(df)  # type: ignore[attr-defined]
 
     def element_boundaries(
         self,
@@ -493,17 +485,9 @@ class TrialDesignMixin:
         # End = next element's start within same subject
         df = self._lazy.collect()  # type: ignore[attr-defined]
         df = df.with_columns(start_expr)
-        df = df.with_columns(
-            pl.col(target_start)
-            .shift(-1)
-            .over(subject_col)
-            .alias(target_end)
-        )
+        df = df.with_columns(pl.col(target_start).shift(-1).over(subject_col).alias(target_end))
 
-        new = object.__new__(self.__class__)
-        new._lazy = df.lazy()
-        self._copy_tdd_state(new)
-        return new  # type: ignore[return-value]
+        return self._materialise_then(df)  # type: ignore[attr-defined]
 
     def epoch_assign(
         self,
@@ -552,14 +536,26 @@ class TrialDesignMixin:
         # Build nested when/then
         first = ranges[0]
         expr = pl.when(
-            (pl.col(date_col).str.to_date(strict=False) >= pl.lit(first["start"]).str.to_date(strict=False))
-            & (pl.col(date_col).str.to_date(strict=False) <= pl.lit(first["end"]).str.to_date(strict=False))
+            (
+                pl.col(date_col).str.to_date(strict=False)
+                >= pl.lit(first["start"]).str.to_date(strict=False)
+            )
+            & (
+                pl.col(date_col).str.to_date(strict=False)
+                <= pl.lit(first["end"]).str.to_date(strict=False)
+            )
         ).then(pl.lit(first["epoch"]))
 
         for r in ranges[1:]:
             expr = expr.when(
-                (pl.col(date_col).str.to_date(strict=False) >= pl.lit(r["start"]).str.to_date(strict=False))
-                & (pl.col(date_col).str.to_date(strict=False) <= pl.lit(r["end"]).str.to_date(strict=False))
+                (
+                    pl.col(date_col).str.to_date(strict=False)
+                    >= pl.lit(r["start"]).str.to_date(strict=False)
+                )
+                & (
+                    pl.col(date_col).str.to_date(strict=False)
+                    <= pl.lit(r["end"]).str.to_date(strict=False)
+                )
             ).then(pl.lit(r["epoch"]))
 
         final_expr = expr.otherwise(pl.lit(None)).alias(target)
@@ -600,12 +596,7 @@ class TrialDesignMixin:
             - pl.col(ref_date_col).str.to_date(strict=False).cast(pl.Date)
         ).dt.total_days()
 
-        day_expr = (
-            pl.when(diff_expr >= 0)
-            .then(diff_expr + 1)
-            .otherwise(diff_expr)
-            .alias(target)
-        )
+        day_expr = pl.when(diff_expr >= 0).then(diff_expr + 1).otherwise(diff_expr).alias(target)
 
         return self._chain(day_expr)  # type: ignore[attr-defined]
 
@@ -624,23 +615,11 @@ class TrialDesignMixin:
 
         # Broadcast header onto the collection rows
         if header_cols:
-            df = df.with_columns(
-                [pl.lit(v).alias(k) for k, v in header_cols.items()]
-            )
+            df = df.with_columns([pl.lit(v).alias(k) for k, v in header_cols.items()])
 
-        new = object.__new__(self.__class__)
-        new._lazy = df.lazy()
+        new = self._materialise_then(df)  # type: ignore[attr-defined]
         new._tdd_stage = 3
-        new._domain_meta = getattr(self, "_domain_meta", {})
-        new._reconciliation_report = getattr(self, "_reconciliation_report", [])
         return new  # type: ignore[return-value]
-
-    def _copy_tdd_state(self, target: object) -> None:
-        """Copy TDD state attributes to *target* namespace."""
-        for attr in ("_tdd_stage", "_domain_meta", "_reconciliation_report"):
-            val = getattr(self, attr, None)
-            if val is not None:
-                setattr(target, attr, val)
 
     @staticmethod
     def _fetch_ig_domain(domain: str, ig_version: str) -> dict[str, Any]:
@@ -693,7 +672,17 @@ _DOMAIN_FIELDS: dict[str, set[str]] = {
     "TS": {"STUDYID", "DOMAIN", "TSPARMCD", "TSPARM", "TSVAL", "TSVALNF", "TSVALCD"},
     "TI": {"STUDYID", "DOMAIN", "IETESTCD", "IETEST", "IECAT", "IESCAT", "TIRL"},
     "SV": {"STUDYID", "DOMAIN", "USUBJID", "VISITNUM", "VISIT", "SVSTDTC", "SVENDTC", "EPOCH"},
-    "SE": {"STUDYID", "DOMAIN", "USUBJID", "SESEQ", "ETCD", "ELEMENT", "SESTDTC", "SEENDTC", "EPOCH"},
+    "SE": {
+        "STUDYID",
+        "DOMAIN",
+        "USUBJID",
+        "SESEQ",
+        "ETCD",
+        "ELEMENT",
+        "SESTDTC",
+        "SEENDTC",
+        "EPOCH",
+    },
 }
 
 # Type mapping from CDISC simpleDatatype to expected Python/Polars types
@@ -733,8 +722,15 @@ def _reconcile_schema(domain: str, meta: dict[str, Any]) -> list[str]:
         if vname in ig_vars:
             ig_type = ig_vars[vname].get("type", "Char")
             if ig_type in ("Num", "Integer") and vname in (
-                "ETCD", "ARMCD", "ELEMENT", "ARM", "VISIT",
-                "TSPARMCD", "TSPARM", "IETESTCD", "IETEST",
+                "ETCD",
+                "ARMCD",
+                "ELEMENT",
+                "ARM",
+                "VISIT",
+                "TSPARMCD",
+                "TSPARM",
+                "IETESTCD",
+                "IETEST",
             ):
                 report.append(
                     f"TDD reconciliation [{domain}]: IG type '{ig_type}' for "

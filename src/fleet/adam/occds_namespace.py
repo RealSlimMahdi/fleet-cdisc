@@ -86,9 +86,7 @@ class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin):
 
         # Encode severity as an integer rank for comparison
         rank_map = {val: idx for idx, val in enumerate(sev_order)}
-        rank_expr = pl.col(severity_col).replace_strict(
-            rank_map, default=-1
-        ).alias("__sev_rank__")
+        rank_expr = pl.col(severity_col).replace_strict(rank_map, default=-1).alias("__sev_rank__")
 
         # Use window function to find max rank per group (stays lazy)
         max_sev_expr = pl.col("__sev_rank__").max().over(grps).alias("__max_sev__")
@@ -98,22 +96,15 @@ class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin):
             where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
             match_cond = where_expr & match_cond
 
-        flag_expr = (
-            pl.when(match_cond)
-            .then(pl.lit("Y"))
-            .otherwise(pl.lit(None))
-            .alias(target)
-        )
+        flag_expr = pl.when(match_cond).then(pl.lit("Y")).otherwise(pl.lit(None)).alias(target)
 
-        new = object.__new__(OCCDSNamespace)
-        new._lazy = (
-            self._lazy
-            .with_columns(rank_expr)
+        return self._materialise_then(
+            self._lazy.with_columns(rank_expr)
             .with_columns(max_sev_expr)
             .with_columns(flag_expr)
             .drop(["__sev_rank__", "__max_sev__"])
+            .collect()
         )
-        return new
 
     def treatment_emergent(
         self,
@@ -157,12 +148,7 @@ class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         cond = start >= ref
         if trtedt:
             cond = cond & (start <= pl.col(trtedt).cast(pl.Date))
-        return self._chain(
-            pl.when(cond)
-            .then(pl.lit("Y"))
-            .otherwise(pl.lit(None))
-            .alias(target)
-        )
+        return self._chain(pl.when(cond).then(pl.lit("Y")).otherwise(pl.lit(None)).alias(target))
 
     def onset_recovery(
         self,
@@ -196,14 +182,7 @@ class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin):
                     .to_frame()
                 )
         """
-        cond = (
-            (pl.col(start_date).cast(pl.Date) >= pl.col(ref_date).cast(pl.Date))
-            & pl.col(end_date).is_not_null()
-        )
-        return self._chain(
-            pl.when(cond)
-            .then(pl.lit("Y"))
-            .otherwise(pl.lit(None))
-            .alias(target)
-        )
-
+        cond = (pl.col(start_date).cast(pl.Date) >= pl.col(ref_date).cast(pl.Date)) & pl.col(
+            end_date
+        ).is_not_null()
+        return self._chain(pl.when(cond).then(pl.lit("Y")).otherwise(pl.lit(None)).alias(target))

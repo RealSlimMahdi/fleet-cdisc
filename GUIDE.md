@@ -605,6 +605,47 @@ save_parquet(dm_sdtm, ctx.sdtm_data_dir / "dm.parquet")
 
 ---
 
+## Part 10b — Debugging Pipelines
+
+Fleet pipelines are lazy — nothing runs until `.to_frame()`. This makes debugging mid-pipeline
+failures tricky. Two chainable debug verbs solve this:
+
+### `.inspect()` — hard checkpoint
+
+Materialises the pipeline at that point, prints schema + shape + first rows, and returns
+a fresh namespace wrapping the collected frame. The pipeline resumes from the checkpoint.
+
+```python
+dm = (
+    raw_df.sdtm
+    .hardcode_no_ct("DOMAIN", value="DM")
+    .assign_no_ct("USUBJID", source="subject_id")
+    .inspect(prefix="After USUBJID")       # prints schema, shape, head
+    .assign_datetime("BRTHDTC", source="birth_date")
+    .to_frame()
+)
+```
+
+### `.explain()` — query plan
+
+Prints the Polars logical plan without materialising. Useful for understanding how
+Polars will optimise the pipeline.
+
+```python
+dm = (
+    raw_df.sdtm
+    .hardcode_no_ct("DOMAIN", value="DM")
+    .assign_no_ct("USUBJID", source="subject_id")
+    .explain()                              # prints the query plan
+    .to_frame()
+)
+```
+
+Both verbs are available on `.sdtm` and all ADaM sub-namespaces (`.adam`, `.adam.adsl`,
+`.adam.occds`, etc.).
+
+---
+
 ## Part 11 — Saving Outputs
 
 ```python

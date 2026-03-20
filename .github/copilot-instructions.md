@@ -42,10 +42,18 @@ uv run ruff format
 
 ### Running Examples
 
+All Python scripts in `examples/` are part of the project's validation surface. **Every script must execute without error** after any change.
+
 ```bash
-# Test the full ADSL/ADVS end-to-end pipeline:
+# Run ALL example scripts (mandatory after every feature change):
 uv run python examples/full_pipeline_example.py
+uv run python examples/cdiscpilot01_inline.py
+uv run python examples/cdiscpilot01_spec_driven.py
+uv run python examples/adnca_example.py
+uv run python examples/tdd_example.py
 ```
+
+If a new `.py` file is added to `examples/`, it MUST also be included in this validation list and run as part of verification.
 
 ### CDISC Controlled Terminology CLI
 
@@ -255,7 +263,16 @@ class ADSLNamespace(SharedADaMVerbsMixin):
 
 ### Chaining infrastructure
 
-All mixin methods MUST use `self._chain(*exprs)` to append Polars expressions to the lazy plan and `self._materialise_then(df)` for operations that require materialisation (e.g. filters). These helpers are defined in `SharedADaMVerbsMixin` and ensure the returned instance is always the correct concrete subtype.
+All mixin methods MUST use `self._chain(*exprs)` to append Polars expressions to the lazy plan and `self._materialise_then(df)` for operations that require materialisation (e.g. filters). These helpers use `copy.copy(self)` internally to preserve all instance state (including subclass attributes) across chaining calls, then update only the `_lazy` plan. They are defined in `SharedADaMVerbsMixin` and ensure the returned instance is always the correct concrete subtype.
+
+### Debugging verbs
+
+Both `SDTMNamespace` and all ADaM sub-namespaces expose two chainable debug verbs:
+
+- **`inspect(prefix="DEBUG")`** — materialises the pipeline at that point, prints schema + shape + head rows, and returns a fresh namespace wrapping the collected frame (hard checkpoint).
+- **`explain()`** — prints the Polars query plan without materialising, returns `self` unchanged.
+
+Use `.inspect()` to isolate which derivation step introduced bad data or types. Use `.explain()` to understand Polars optimisation without triggering computation.
 
 ### Canonical reference
 
@@ -306,3 +323,49 @@ def verb_name(self, target: str, *, source: str) -> Self:
             )
     """
 ```
+
+## 9. Validation & Verification Requirements
+
+After **every new feature implementation or bug fix**, the following checks MUST all pass before the change is considered complete:
+
+### Mandatory checks
+
+1. **Tests** — The full test suite must pass:
+
+   ```bash
+   uv run pytest
+   ```
+
+2. **Linting & formatting** — Code must be clean:
+
+   ```bash
+   uv run ruff check
+   uv run ruff format --check
+   ```
+
+3. **All example scripts** — Every `.py` file in `examples/` must run without error:
+   ```bash
+   uv run python examples/full_pipeline_example.py
+   uv run python examples/cdiscpilot01_inline.py
+   uv run python examples/cdiscpilot01_spec_driven.py
+   uv run python examples/adnca_example.py
+   uv run python examples/tdd_example.py
+   ```
+   If a new example script is added to `examples/`, it MUST be added to this list and to the §3 "Running Examples" section above.
+
+### Conditional checks
+
+4. **LLM context file** — If the change affects any **user-facing API** (new verbs, renamed parameters, changed signatures, new CLI commands), regenerate and verify `llms.txt`:
+
+   ```bash
+   uv run python scripts/build_llms.py
+   uv run python scripts/build_llms.py --check
+   ```
+
+5. **GUIDE.md and STRUCTURE.md updates** — If the change involves a **major architectural or API change** (new namespace, new module, restructured directory layout, new top-level workflow concept), the relevant file(s) MUST be updated:
+   - `GUIDE.md` — for workflow, usage patterns, or API surface changes.
+   - `STRUCTURE.md` — for new modules, directories, or file additions/removals.
+
+### Verification order
+
+Run checks in this order: lint → tests → examples → llms.txt → docs review. Fix any failure before proceeding to the next step.

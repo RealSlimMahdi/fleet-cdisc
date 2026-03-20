@@ -74,6 +74,11 @@ result = (
 
 Nothing runs at step 2 — verbs only build an internal expression list.
 
+To inspect intermediate state or the query plan during development, use the
+chainable debug verbs `.inspect()` (hard checkpoint with diagnostic output)
+and `.explain()` (print the Polars query plan). See
+[Advanced Patterns](advanced.md#pipeline-debugging-observability) for details.
+
 ---
 
 ## Lazy evaluation

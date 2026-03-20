@@ -112,3 +112,38 @@ adlb = (
     .to_frame()
 )
 ```
+
+## Pipeline Debugging & Observability
+
+Fleet pipelines are lazy — all derivations accumulate until `.to_frame()` collects the result. This can make it hard to pinpoint which step introduced bad data or types. Two chainable verbs help:
+
+### `.inspect()` — Hard Checkpoint
+
+Materialises the pipeline at that point, prints schema, shape, and first rows, then returns a fresh namespace wrapping the collected frame. The pipeline resumes from this checkpoint.
+
+```python
+adsl = (
+    dm.adam.adsl
+    .source("USUBJID")
+    .first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")
+    .inspect(prefix="After TRTSDT")   # prints and checkpoints
+    .duration("TRTDURD", start_date="TRTSDT", end_date="TRTEDT")
+    .to_frame()
+)
+```
+
+### `.explain()` — Query Plan
+
+Prints the Polars logical plan without materialising. Useful for understanding how Polars optimises the accumulated derivation pipeline.
+
+```python
+advs = (
+    vs_raw.adam
+    .source("USUBJID")
+    .derivation("AVAL", expression="VSSTRESN")
+    .explain()   # shows optimised plan
+    .to_frame()
+)
+```
+
+Both verbs are available on `df.sdtm`, `df.adam`, and all ADaM sub-namespaces.
