@@ -103,6 +103,6 @@ graph LR
 - [Installation](getting-started/installation.md) & [Quickstart](getting-started/quickstart.md)
 - [CLI Reference](getting-started/cli.md) — bootstrapping pipeline (`fleet init cfg/define/ct`) and standalone CT commands
 - [How define.yaml drives DataFrame creation](concepts/define-yaml.md)
-- [ADSL pipeline walkthrough (notebook)](examples/adsl_pipeline.ipynb)
+- [ADSL pipeline walkthrough (notebook)](examples/02_spec_driven_pipeline.ipynb)
 - [API Reference](api/index.md)
 - [Test Status](test-status.md)

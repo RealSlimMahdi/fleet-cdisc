@@ -171,7 +171,7 @@ ctx = load_study_context(Path("./studies/MYSTUDY01/study_config.yaml"))
 
 ## Full pipeline example
 
-See the [ADSL Pipeline notebook](../examples/adsl_pipeline.ipynb) for a complete, pre-executed walkthrough using the CDISCPILOT01 dataset — covering all 10 admiral-equivalent steps from raw data to final ADSL.
+See the [ADSL Pipeline notebook](../examples/02_spec_driven_pipeline.ipynb) for a complete, pre-executed walkthrough using the CDISCPILOT01 dataset — covering all 10 admiral-equivalent steps from raw data to final ADSL.
 
 ---
 

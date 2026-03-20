@@ -146,6 +146,6 @@ gen.write("outputs/cdiscpilot01/define_adam.xml")
 ## Next steps
 
 - [Quickstart](quickstart.md)
-- [Full ADSL pipeline example (notebook)](../examples/adsl_pipeline.ipynb)
+- [Full ADSL pipeline example (notebook)](../examples/02_spec_driven_pipeline.ipynb)
 - [define.yaml concept guide](../concepts/define-yaml.md)
 - [API reference](../api/index.md)
