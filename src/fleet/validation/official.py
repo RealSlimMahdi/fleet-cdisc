@@ -4,10 +4,10 @@ import json
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 import polars as pl
 
+from .engine import discover_engine
 from .models import Severity, ValidationIssue, ValidationResult
 
 
@@ -34,21 +34,43 @@ def _build_result(
 
 
 class OfficialCDISCValidator:
-    """Wrapper for the official CDISC Rules Engine CLI."""
+    """Wrapper for the official CDISC Rules Engine CLI.
 
-    def __init__(self, rules_engine_path: Optional[Path] = None) -> None:
-        if rules_engine_path is None:
-            self.rules_engine_path = Path(__file__).parent.parent.parent.parent / "cdisc-rules-engine"
+    Discovers the engine automatically via ``discover_engine()``
+    (env var → ``~/.fleet/bin/core`` → legacy ``../cdisc-rules-engine/core.py``),
+    or accepts an explicit *rules_engine_path*.
+    """
+
+    def __init__(self, rules_engine_path: Path | None = None) -> None:
+        if rules_engine_path is not None:
+            self._executable = Path(rules_engine_path)
+            if not self._executable.is_file():
+                raise FileNotFoundError(f"CDISC Rules Engine not found at {self._executable}.")
         else:
-            self.rules_engine_path = Path(rules_engine_path)
+            found = discover_engine()
+            if found is None:
+                raise FileNotFoundError(
+                    "CDISC Rules Engine not found.\n\n"
+                    "Install it with:\n"
+                    "  fleet install-engine\n\n"
+                    "Or set FLEET_RULES_ENGINE to the path of an existing binary/script."
+                )
+            self._executable = found
 
-        self.core_script = self.rules_engine_path / "core.py"
+        self._is_legacy = self._executable.suffix == ".py"
 
-        if not self.core_script.exists():
-            raise FileNotFoundError(
-                f"CDISC Rules Engine not found at {self.rules_engine_path}. "
-                "Please install the rules engine or provide the correct path."
-            )
+    def _build_cmd(self, *args: str) -> list[str]:
+        """Build the subprocess command list."""
+        if self._is_legacy:
+            return ["python", str(self._executable), *args]
+        return [str(self._executable), *args]
+
+    @property
+    def _cwd(self) -> str | None:
+        """Working directory for subprocess — only needed for legacy core.py."""
+        if self._is_legacy:
+            return str(self._executable.parent)
+        return None
 
     def validate_dataset(
         self,
@@ -56,7 +78,7 @@ class OfficialCDISCValidator:
         standard: str,
         version: str,
         dataset_name: str = "dataset",
-        domain: Optional[str] = None,
+        domain: str | None = None,
     ) -> ValidationResult:
         """Run CDISC rules engine validation on a Polars DataFrame."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -65,24 +87,27 @@ class OfficialCDISCValidator:
             self._save_as_xpt(data, dataset_path)
 
             output_file = tmpdir_path / "validation_result"
-            cmd = [
-                "python",
-                str(self.core_script),
+            cmd = self._build_cmd(
                 "validate",
-                "-s", standard,
-                "-v", version,
-                "-dp", str(dataset_path),
-                "-o", str(output_file),
-                "-of", "JSON",
+                "-s",
+                standard,
+                "-v",
+                version,
+                "-dp",
+                str(dataset_path),
+                "-o",
+                str(output_file),
+                "-of",
+                "JSON",
                 "-rr",
-            ]
+            )
 
             try:
                 result = subprocess.run(
                     cmd,
                     capture_output=True,
                     text=True,
-                    cwd=str(self.rules_engine_path),
+                    cwd=self._cwd,
                     timeout=300,
                 )
                 json_output = output_file.with_suffix(".json")
@@ -135,22 +160,21 @@ class OfficialCDISCValidator:
     @staticmethod
     def _save_as_xpt(df: pl.DataFrame, path: Path) -> None:
         try:
+            import pandas  # noqa: F401
             import pyreadstat  # noqa: F401
-            import pandas as pd
 
             pd_df = df.to_pandas()
             pyreadstat.write_xport(pd_df, str(path))
         except ImportError as exc:
             raise ImportError(
-                "pyreadstat is required for XPT export. "
-                "Install it with: uv add fleet[io]"
+                "pyreadstat is required for XPT export. Install it with: uv add fleet[io]"
             ) from exc
 
     @staticmethod
     def _parse_validation_result(
         data: dict,
         df: pl.DataFrame,
-        domain: Optional[str],
+        domain: str | None,
     ) -> ValidationResult:
         results = data.get("results", [])
         errors: list[ValidationIssue] = []

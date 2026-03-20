@@ -41,6 +41,20 @@ class CTConfig(BaseModel):
     package: str = Field(default="sdtmct-2023-12-15")
 
 
+class ValidationConfig(BaseModel):
+    """CDISC Rules Engine configuration.
+
+    Optional — when omitted, Fleet auto-discovers the engine via
+    ``FLEET_RULES_ENGINE`` env var or the managed install at ``~/.fleet/bin``.
+    Set ``engine_path`` to share a team-wide path in version control.
+    """
+
+    engine_path: str | None = Field(
+        default=None,
+        description="Path to the CDISC Rules Engine executable (absolute or relative to study root).",
+    )
+
+
 class StudyConfig(BaseModel):
     """Top-level study configuration model.
 
@@ -56,6 +70,7 @@ class StudyConfig(BaseModel):
     sdtm: SDTMConfig = Field(default_factory=SDTMConfig)
     adam: ADAMConfig = Field(default_factory=ADAMConfig)
     ct: CTConfig = Field(default_factory=CTConfig)
+    validation: ValidationConfig = Field(default_factory=ValidationConfig)
 
 
 class StudyConfigError(Exception):

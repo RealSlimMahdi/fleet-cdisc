@@ -1,5 +1,6 @@
 """Validation module for Fleet."""
 
+from .engine import discover_engine, doctor, install_engine, uninstall_engine
 from .models import Severity, ValidationIssue, ValidationResult
 from .providers import (
     OfficialRulesEngineProvider,
@@ -16,4 +17,8 @@ __all__ = [
     "OfficialRulesEngineProvider",
     "ValidationProviderRegistry",
     "ValidationService",
+    "discover_engine",
+    "install_engine",
+    "uninstall_engine",
+    "doctor",
 ]

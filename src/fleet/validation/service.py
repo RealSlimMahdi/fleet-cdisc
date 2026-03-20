@@ -1,7 +1,6 @@
 """Unified validation service."""
 
 from pathlib import Path
-from typing import Optional
 
 import polars as pl
 
@@ -14,9 +13,9 @@ class ValidationService:
 
     def __init__(
         self,
-        provider: Optional[ValidationProvider] = None,
+        provider: ValidationProvider | None = None,
         provider_name: str = "official",
-        rules_engine_path: Optional[Path] = None,
+        rules_engine_path: Path | None = None,
     ) -> None:
         if provider is not None:
             self.provider = provider

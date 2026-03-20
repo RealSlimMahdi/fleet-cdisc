@@ -17,6 +17,7 @@ from .study_context import (
     StudyConfig,
     StudyContext,
     StudyPathConfig,
+    ValidationConfig,
     load_study_context,
 )
 from .study_context import StudyConfigError as StudyContextError
@@ -33,6 +34,7 @@ __all__ = [
     "SDTMConfig",
     "ADAMConfig",
     "CTConfig",
+    "ValidationConfig",
     "StudyContext",
     "StudyContextError",
     "load_study_context",

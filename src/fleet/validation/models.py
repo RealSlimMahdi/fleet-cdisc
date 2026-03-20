@@ -3,11 +3,11 @@
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 
 class Severity(Enum):
     """Validation issue severity levels."""
+
     ERROR = "Error"
     WARNING = "Warning"
     INFO = "Info"
@@ -16,12 +16,13 @@ class Severity(Enum):
 @dataclass
 class ValidationIssue:
     """A single validation issue."""
+
     severity: Severity
     rule_id: str
     message: str
-    variable: Optional[str] = None
-    rows_affected: Optional[int] = None
-    suggested_fix: Optional[str] = None
+    variable: str | None = None
+    rows_affected: int | None = None
+    suggested_fix: str | None = None
 
     def __str__(self) -> str:
         parts = [f"[{self.severity.value}] {self.rule_id}: {self.message}"]
@@ -37,6 +38,7 @@ class ValidationIssue:
 @dataclass
 class ValidationResult:
     """Collected results of a CDISC validation run."""
+
     dataset_name: str
     dataset_type: str
     model_version: str
@@ -116,12 +118,14 @@ class ValidationResult:
         errors_html = (
             f"<div class='section'><div class='section-title'>Errors ({len(self.errors)})</div>"
             f"{issue_cards(self.errors)}</div>"
-            if self.errors else ""
+            if self.errors
+            else ""
         )
         warnings_html = (
             f"<div class='section'><div class='section-title'>Warnings ({len(self.warnings)})</div>"
             f"{issue_cards(self.warnings, 'warning')}</div>"
-            if self.warnings else ""
+            if self.warnings
+            else ""
         )
 
         return f"""<!DOCTYPE html>

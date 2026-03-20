@@ -209,6 +209,34 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Skip generating the HTML preview alongside the XML.",
     )
 
+    # -- install-engine ------------------------------------------------- #
+    inst = sub.add_parser(
+        "install-engine",
+        help="Download the CDISC Rules Engine binary for validation.",
+    )
+    inst.add_argument(
+        "--version",
+        default="latest",
+        help="Release tag to download (default: latest).",
+    )
+    inst.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-download even if already installed.",
+    )
+
+    # -- uninstall-engine ----------------------------------------------- #
+    sub.add_parser(
+        "uninstall-engine",
+        help="Remove the managed CDISC Rules Engine binary.",
+    )
+
+    # -- doctor --------------------------------------------------------- #
+    sub.add_parser(
+        "doctor",
+        help="Check Fleet setup: engine, dependencies, environment.",
+    )
+
     return parser
 
 
@@ -439,6 +467,33 @@ def _run_add_ct(args: argparse.Namespace) -> None:
     print(f"Updated {dest} — {len(gen._codelists)} codelists")
 
 
+def _run_install_engine(args: argparse.Namespace) -> None:
+    from .validation.engine import install_engine
+
+    try:
+        install_engine(version=args.version, force=args.force)
+    except RuntimeError as exc:
+        print(f"Error: {exc}")
+        sys.exit(1)
+
+
+def _run_uninstall_engine() -> None:
+    from .validation.engine import uninstall_engine
+
+    uninstall_engine()
+
+
+def _run_doctor() -> None:
+    from .validation.engine import doctor
+
+    checks = doctor()
+    print("Fleet Doctor")
+    print("=" * 40)
+    for name, status in checks.items():
+        print(f"  {name:.<20s} {status}")
+    print()
+
+
 def _run_define_xml(args: argparse.Namespace) -> None:
     from .define_xml.spec_generator import DefineSpecGenerator
 
@@ -482,6 +537,12 @@ def main() -> None:
         _run_add_ct(args)
     elif args.command == "define-xml":
         _run_define_xml(args)
+    elif args.command == "install-engine":
+        _run_install_engine(args)
+    elif args.command == "uninstall-engine":
+        _run_uninstall_engine()
+    elif args.command == "doctor":
+        _run_doctor()
     else:
         parser.print_help()
         sys.exit(1)

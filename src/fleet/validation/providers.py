@@ -2,7 +2,6 @@
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional
 
 import polars as pl
 
@@ -14,21 +13,27 @@ class ValidationProvider(ABC):
     """Abstract interface for dataset validation providers."""
 
     @abstractmethod
-    def validate_sdtm(self, df: pl.DataFrame, domain: str, version: str = "3.4") -> ValidationResult:
+    def validate_sdtm(
+        self, df: pl.DataFrame, domain: str, version: str = "3.4"
+    ) -> ValidationResult:
         pass
 
     @abstractmethod
-    def validate_adam(self, df: pl.DataFrame, dataset: str, version: str = "1.3") -> ValidationResult:
+    def validate_adam(
+        self, df: pl.DataFrame, dataset: str, version: str = "1.3"
+    ) -> ValidationResult:
         pass
 
 
 class OfficialRulesEngineProvider(ValidationProvider):
     """Validation backed by the official CDISC Rules Engine."""
 
-    def __init__(self, rules_engine_path: Optional[Path] = None) -> None:
+    def __init__(self, rules_engine_path: Path | None = None) -> None:
         self.validator = OfficialCDISCValidator(rules_engine_path=rules_engine_path)
 
-    def validate_sdtm(self, df: pl.DataFrame, domain: str, version: str = "3.4") -> ValidationResult:
+    def validate_sdtm(
+        self, df: pl.DataFrame, domain: str, version: str = "3.4"
+    ) -> ValidationResult:
         return self.validator.validate_dataset(
             data=df,
             standard="sdtmig",
@@ -37,7 +42,9 @@ class OfficialRulesEngineProvider(ValidationProvider):
             domain=domain,
         )
 
-    def validate_adam(self, df: pl.DataFrame, dataset: str, version: str = "1.3") -> ValidationResult:
+    def validate_adam(
+        self, df: pl.DataFrame, dataset: str, version: str = "1.3"
+    ) -> ValidationResult:
         return self.validator.validate_dataset(
             data=df,
             standard="adamig",
