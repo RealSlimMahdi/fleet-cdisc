@@ -1,19 +1,20 @@
 """CDISC Rules Engine installer and discovery.
 
 Manages downloading, installing, and locating the official CDISC Rules Engine
-executable. The binary is stored in a platform-appropriate location and is
-discovered automatically by the validation subsystem.
+executable. The engine bundle is stored in a platform-appropriate location and
+is discovered automatically by the validation subsystem.
 
 Install locations:
 
-- **macOS / Linux:** ``~/.fleet/bin/core``
-- **Windows:** ``%LOCALAPPDATA%\\fleet\\bin\\core.exe``
+- **macOS / Linux:** ``~/.fleet/cdisc-rules-engine/core/core``
+- **Windows:** ``%LOCALAPPDATA%\\fleet\\cdisc-rules-engine\\core\\core.exe``
 
 Discovery order:
 
 1. ``FLEET_RULES_ENGINE`` environment variable (explicit executable path).
-2. Managed install location (see above).
-3. Legacy ``../cdisc-rules-engine/core.py`` (development fallback).
+2. ``validation.engine_path`` from ``study_config.yaml`` (team-shared).
+3. Managed install from ``fleet install-engine``.
+4. Legacy ``../cdisc-rules-engine/core.py`` (development fallback).
 """
 
 from __future__ import annotations

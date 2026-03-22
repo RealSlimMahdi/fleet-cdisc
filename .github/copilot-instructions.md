@@ -107,6 +107,46 @@ uv run fleet define-xml --spec specs/cdiscpilot01/sdtm/define.yaml --output outp
 uv run fleet define-xml --spec specs/cdiscpilot01/adam/define.yaml --output outputs/define_adam.xml --no-preview
 ```
 
+### CDISC Rules Engine (Validation)
+
+Fleet wraps the official CDISC Rules Engine for regulatory-grade validation. The engine is distributed as a PyInstaller bundle and must be installed before validation commands can run.
+
+```bash
+# Download the CDISC Rules Engine binary for your platform (macOS/Linux/Windows)
+uv run fleet install-engine
+
+# Pin to a specific release tag
+uv run fleet install-engine --version v0.15
+
+# Re-download (overwrite existing installation)
+uv run fleet install-engine --force
+
+# Check installation health: engine, pyreadstat, etc.
+uv run fleet doctor
+
+# Remove the managed engine installation
+uv run fleet uninstall-engine
+```
+
+The engine binary is stored at a platform-appropriate location:
+
+- **macOS / Linux:** `~/.fleet/cdisc-rules-engine/core/core`
+- **Windows:** `%LOCALAPPDATA%\fleet\cdisc-rules-engine\core\core.exe`
+
+**Discovery order** (first match wins):
+
+1. `FLEET_RULES_ENGINE` environment variable (or `.env` file).
+2. `validation.engine_path` in `study_config.yaml` (team-shared, committed to VCS).
+3. Managed install from `fleet install-engine`.
+4. Legacy `../cdisc-rules-engine/core.py` (development fallback).
+
+To share an engine path across a team, add it to `study_config.yaml`:
+
+```yaml
+validation:
+  engine_path: tools/cdisc-core # relative to study root
+```
+
 ### Building and Serving Documentation
 
 ```bash

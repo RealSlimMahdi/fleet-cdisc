@@ -43,9 +43,9 @@ No boilerplate. No merging nightmare. It natively handles controlled terminology
 And if you prefer a metadata-driven approach? You just point it at your `define.yaml`:
 `dm = raw_df.sdtm.from_spec("define.yaml", dataset="DM").to_frame()`
 
-Oh, and the best part? It includes **native `define.xml` generation**. Say goodbye to relying on Pinnacle 21 or other heavy third-party applications just to build your metadata.
+Oh, and the best part? It includes **native `define.xml` generation**. Say goodbye to relying on heavy third-party applications just to build a table.
 
-If you are tired of waiting for datasets to compile, give it a spin. It’s minimalistic by design and actually respects your time.
+If you are tired of waiting for **ADLB** to run, give it a spin. It’s minimalistic by design and actually respects your time.
 
 Check out the repo here: [Link]
 `uv pip install fleet-cdisc` and let me know when you inevitably try to break it.
@@ -64,19 +64,19 @@ Check out the repo here: [Link]
 
 Hi Team,
 
-I'm writing to share that I have been working for a while on the Alpha version of Fleet, a Python-based CDISC SDTM/ADaM toolkit, is officially ready for internal review.
+I'm writing to share that I have been working for a while on the Alpha version of Fleet, a Python-based CDISC SDTM/ADaM generation library, and it is officially advanced enough to share with you. I believe it has the potential to be a game-changer for our clinical data science workflows, in the python ecosystem.
 
-The obvious question I expect is: _"Why are we building this when Admiral already exists?"_
+The obvious question I expect is: _"Why are you building this when Admiral already exists?"_
 
-Admiral is an excellent R package. But as we transition our biometrics workflows to Python to align with modern data science, simply writing "R code in Python" using Pandas isn't an upgrade—it's a downgrade in performance.
+Admiral is an excellent R package. But Roche has been historically very R-centric, while the broader industry is rapidly shifting toward a multi-language ecosystem. We cannot ignore the scenario where Python becomes the lingua franca of statistical programming, the same way it is now the dominant language for AI and ML.
 
 Here is why Fleet is different, and why we need it:
 
 - **Future-Proof Performance & Lean Stack:** Fleet is built entirely on Polars, not Pandas. It uses lazy evaluation and multi-threading, processing massive ADaM datasets extremely fast. Furthermore, it has a highly limited tech stack—meaning we aren't maintaining massive, vulnerable dependency trees.
-- **Readable, LLM-Friendly API:** The API is structured cleanly as a namespace. This structure was designed for the modern IDE, meaning statistical programmers benefit from perfect native autocompletion and logical semantic chaining (`ADaM Core` → `ADSL` → `ADaM TA`). Crucially, this strict design makes it heavily **LLM-friendly**; our AI copilots can generate accurate pipelines without hallucinating syntax.
+- **Readable, LLM-Friendly API:** The API is structured cleanly as a namespace. This structure was designed for the modern IDE, meaning statistical programmers benefit from perfect native autocompletion and logical semantic chaining (`ADaM Core` → `ADSL` → `ADaM TA`). Crucially, this strict design makes it heavily **LLM-friendly**; I anticipate that our AI copilots will generate accurate pipelines without hallucinating syntax.
 - **Native define.xml & Built-in CDISC Core:** Fleet generates `define.xml` natively out of the box and seamlessly integrates CDISC Core validation rules directly into the pipeline. We can bypass reliance on external, bloated software (like Pinnacle 21) just for basic metadata generation.
 
-Here is all it takes to build and validate a domain:
+Here is all it takes to build and validate a (very simple 🙈) domain:
 
 ```python
 dm = (
@@ -89,9 +89,11 @@ dm = (
 )
 ```
 
-- **Talent Retention:** The next generation of clinical data scientists are Python-native. We need a modern stack to attract them, rather than forcing them into legacy R syntax or clunky Pandas workarounds.
+- **Talent Retention:** The next generation of clinical data scientists are Python-native. Having a modern python stack to attract them, rather than forcing them into R, SAS or clunky Pandas workarounds.
 
-Fleet isn't about replacing what works today; it's about building the infrastructure that will survive the scale of submissions over the next 5-10 years. I'd like 15 minutes at the next leadership sync to demo a pipeline. It runs faster than my setup time.
+Fleet isn't about replacing what works today; it's about exploring what submissions over the next 5-10 years could look like. I'd like 15 minutes at the next leadership sync to demo a pipeline. It runs faster than my setup time.
+
+Fun fact: this project is the result of exploring LLM capabilities in a language that I always wanted to master. While I have made all archtectural decisions with production-readiness in mind, it is a testimony to how powerful these tools are and how we could work in near future.
 
 Best,
 Mahdi
@@ -140,3 +142,23 @@ The industry doesn't just need a Python version of what we already have. It need
 Best regards,
 
 Mahdi About
+
+| Workstream                                         | Status | What has been done                                                                                                | Evidence                                   | Potential next step                                                                                       |
+| -------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| Core product foundation (Polars-based toolkit)     | ✅     | Python package scaffolded, modular architecture in place, SDTM/ADaM/CT/Define-XML/validation components organized | pyproject.toml, STRUCTURE.md, fleet        | Start GA hardening plan with explicit non-functional targets (performance, compatibility, support policy) |
+| SDTM derivation capability                         | ✅     | SDTM namespace and verb model implemented and documented                                                          | sdtm, sdtm.md, GUIDE.md                    | Add domain-level acceptance tests for additional SDTM domains beyond current examples                     |
+| ADaM derivation capability                         | ✅     | ADaM namespace, ADSL/OCCDS and therapeutic extensions implemented                                                 | adam, adam.md, adsl.md, occds.md           | Expand end-to-end examples for ADAE/ADLB parity scenarios                                                 |
+| Spec-driven pipelines (define.yaml workflow)       | ✅     | Spec-driven execution, study context/config patterns, and metadata-first workflow implemented                     | specs, GUIDE.md, define-yaml.md            | Add governance checks for spec schema versioning and backward compatibility                               |
+| Controlled terminology + CDISC Library integration | ✅     | CT loading/validation plus CDISC API client and codelist code-generation added                                    | ct, changelog.md, ct.md                    | Add resilience features (retry/backoff, offline cache strategy, API quota monitoring)                     |
+| Define-XML generation and validation               | ✅     | Define-XML generation pipeline and validator included                                                             | define_xml, define_xml.md, changelog.md    | Add regression suite against more sponsor-style real-world metadata packs                                 |
+| CLI bootstrapping (init cfg/define/ct)             | ✅     | End-to-end CLI for study bootstrapping and CT initialization implemented                                          | cli.py, cli.md, GUIDE.md                   | Add command telemetry/logging conventions and richer failure diagnostics                                  |
+| Validation engine integration                      | ✅     | Integration layer for CDISC Rules Engine present (install/discover/doctor/validate flow)                          | validation, GUIDE.md                       | Add CI smoke test with pinned engine artifact in a nightly pipeline                                       |
+| Test suite and quality gates                       | ✅     | Pytest suite present, coverage targets documented, CI runs tests and coverage upload                              | tests, test-status.md, ci.yml              | Enforce coverage thresholds directly in CI to prevent regressions                                         |
+| CI/CD automation                                   | ✅     | Separate workflows for CI, package publish, and docs deployment are configured                                    | ci.yml, publish.yml, docs.yml              | Migrate publish job tooling to uv-only path for consistency with project policy                           |
+| Documentation program                              | ✅     | Full docs structure exists (getting started, concepts, API, examples) and generated site is present               | docs, site, mkdocs.yml                     | Add executive-facing architecture page and maturity roadmap page                                          |
+| Examples and reproducibility assets                | ✅     | Multiple runnable example scripts and notebooks included                                                          | examples, examples                         | Add a single orchestration script to run all examples with pass/fail summary                              |
+| Packaging and distribution readiness               | ✅     | Package metadata, console entry point, and release automation to TestPyPI/PyPI configured                         | pyproject.toml, publish.yml                | Add signed artifacts and release attestation                                                              |
+| Alpha release milestone                            | ✅     | Alpha maturity declared and version 0.1.0 is defined with changelog entry                                         | pyproject.toml, \_version.py, changelog.md | Define criteria and timeline for beta (stability, API freeze, validation breadth)                         |
+| Beta/GA readiness program                          | 🟡     | Strong foundation exists, but explicit beta/GA gates are not yet formalized in repo docs                          | changelog.md, CONTRIBUTING.md              | Publish a formal readiness matrix (quality, compliance, performance, support, deprecation policy)         |
+
+If you want, I can produce a second version of this table as a one-page “management dashboard” with just 6-8 top-level rows and a Red/Amber/Green view.

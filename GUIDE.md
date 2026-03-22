@@ -697,6 +697,59 @@ Calling verbs out of order raises a `ValueError`.
 
 Fleet integrates with the official CDISC Rules Engine for regulatory-grade validation.
 
+### 11.1 Install the CDISC Rules Engine
+
+Before running validation, install the engine binary:
+
+```bash
+# Download the latest CDISC Rules Engine for your platform
+uv run fleet install-engine
+
+# Verify installation
+uv run fleet doctor
+```
+
+Expected output:
+
+```
+Fleet Doctor
+========================================
+  engine.............. /Users/you/.fleet/cdisc-rules-engine/core/core
+  type................ binary
+  status.............. OK — validate command available
+  pyreadstat.......... installed
+```
+
+The engine is stored at:
+
+- **macOS / Linux:** `~/.fleet/cdisc-rules-engine/core/core`
+- **Windows:** `%LOCALAPPDATA%\fleet\cdisc-rules-engine\core\core.exe`
+
+You can also pin a specific version or force a re-download:
+
+```bash
+uv run fleet install-engine --version v0.15
+uv run fleet install-engine --force
+```
+
+### 11.2 Engine discovery
+
+Fleet finds the engine automatically using a 4-tier discovery chain (first match wins):
+
+1. **`FLEET_RULES_ENGINE` env var** — set in `.env` or shell; highest priority.
+2. **`study_config.yaml`** — `validation.engine_path` (relative or absolute); committed to VCS for team use.
+3. **Managed install** — `~/.fleet/cdisc-rules-engine/` from `fleet install-engine`.
+4. **Legacy** — `../cdisc-rules-engine/core.py` (development fallback).
+
+For team projects, set the engine path in `study_config.yaml`:
+
+```yaml
+validation:
+  engine_path: tools/cdisc-core # relative to study root
+```
+
+### 11.3 Run validation
+
 ```python
 from fleet import ValidationService
 
@@ -723,7 +776,13 @@ advs_result.print_report()
 - `.print_report()` — formatted console output
 - `.save_html_report(path)` — HTML report for archiving
 
-> **Note:** The CDISC Rules Engine and `pyreadstat` must be installed. Datasets are temporarily saved as XPT files for validation.
+### 11.4 Remove the engine
+
+```bash
+uv run fleet uninstall-engine
+```
+
+> **Note:** `pyreadstat` is also required for validation (XPT serialization). Install it with `uv sync --extra io`.
 
 ---
 
@@ -848,13 +907,16 @@ uv run fleet init define
 # 3. Generate codelists.py
 uv run fleet init ct
 
-# 4. Write derivation pipelines (Parts 4–10 above)
+# 4. Install the CDISC Rules Engine (one-time setup)
+uv run fleet install-engine
 
-# 5. Generate Define-XML
+# 5. Write derivation pipelines (Parts 4–10 above)
+
+# 6. Generate Define-XML
 uv run fleet define-xml --spec metadata/sdtm/define.yaml --output outputs/define_sdtm.xml
 uv run fleet define-xml --spec metadata/adam/define.yaml  --output outputs/define_adam.xml
 
-# 6. Export XPT files for regulatory submission (from Python — see Part 13)
+# 7. Export XPT files for regulatory submission (from Python — see Part 13)
 ```
 
 ---

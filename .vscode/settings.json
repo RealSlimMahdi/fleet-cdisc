@@ -3,5 +3,6 @@
     "uv": true,
     "mkdir": true
   },
-  "python.analysis.typeCheckingMode": "standard"
+  "python.analysis.typeCheckingMode": "standard",
+  "github.copilot.chat.codeGeneration.useInstructionFiles": true
 }

@@ -213,8 +213,9 @@ The YAML key `fleet_algorithm` in a variable spec is used to record the derivati
 
 | File           | Purpose                                                                                                                                              |
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `engine.py`    | Engine installer and discovery — `install_engine()`, `uninstall_engine()`, `discover_engine()`, `doctor()`; manages `~/.fleet/cdisc-rules-engine/`   |
 | `models.py`    | `Severity` enum (`ERROR/WARNING/INFO`), `ValidationIssue` dataclass, `ValidationResult` (with `.is_valid`, `.print_report()`, `.save_html_report()`) |
-| `official.py`  | `OfficialCDISCValidator` — wraps the `cdisc-rules-engine` CLI via subprocess                                                                         |
+| `official.py`  | `OfficialCDISCValidator` — wraps the CDISC Rules Engine binary (or legacy `core.py`) via subprocess                                                  |
 | `providers.py` | `ValidationProvider` ABC, `OfficialRulesEngineProvider`, `ValidationProviderRegistry` (plugin registry)                                              |
 | `service.py`   | `ValidationService` — high-level `.validate_sdtm()` and `.validate_adam()` methods                                                                   |
 

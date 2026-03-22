@@ -2,6 +2,15 @@
 
 **CDISC SDTM/ADaM derivation toolkit for [Polars](https://pola.rs) DataFrames.**
 
+<div class="grid cards" markdown>
+
+- :material-speedometer: **Performance** first, built on top of the famous Polars library
+- :material-robot-happy-outline: **LLM** friendly from the ground up
+- :material-package-variant-closed-minus: **Lean**, built on less than 5 dependencies
+- :fontawesome-brands-internet-explorer: **Internet Explorer** ... huh?
+
+</div>
+
 [![Build Status](https://img.shields.io/badge/build-passing-success)](https://github.com/RealSlimMahdi/fleet-cdisc/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-success)](https://github.com/RealSlimMahdi/fleet-cdisc)
 [![GitHub](https://img.shields.io/badge/GitHub-fleet--cdisc-181717?logo=github)](https://github.com/RealSlimMahdi/fleet-cdisc)

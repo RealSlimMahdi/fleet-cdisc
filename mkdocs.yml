@@ -7,10 +7,12 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
+  favicon: img/favicon.png
+  logo: img/logo.png
   palette:
     - scheme: default
-      primary: teal
-      accent: cyan
+      primary: grey
+      accent: teal
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
@@ -70,11 +72,15 @@ plugins:
 markdown_extensions:
   - admonition
   - pymdownx.details
+  - pymdownx.emoji:
+      # yaml-ignore
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
           class: mermaid
-          format: !!python/name:pymdownx.superfences.fence_code_format
+          format: pymdownx.superfences.fence_code_format
   - pymdownx.highlight:
       anchor_linenums: true
       line_spans: __span
