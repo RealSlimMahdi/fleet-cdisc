@@ -4,11 +4,7 @@
   "title": "Define-XML 2.1 YAML Specification",
   "description": "JSON Schema for validating CDISC Define-XML 2.1 specifications in YAML format. Enables VS Code autocomplete and Pydantic validation.",
   "type": "object",
-  "required": [
-    "odm_header",
-    "study",
-    "metadata_version"
-  ],
+  "required": ["odm_header", "study", "metadata_version"],
   "properties": {
     "odm_header": {
       "$ref": "#/$defs/odm_header"
@@ -27,12 +23,7 @@
         "pattern": "^[a-z][a-z0-9_]*$"
       },
       "default": [],
-      "examples": [
-        [
-          "my_survival_model",
-          "bayesian_imputation"
-        ]
-      ]
+      "examples": [["my_survival_model", "bayesian_imputation"]]
     }
   },
   "additionalProperties": false,
@@ -72,66 +63,48 @@
           "type": "string",
           "description": "ODM version number",
           "pattern": "^\\d+\\.\\d+(?:\\.\\d+)?$",
-          "examples": [
-            "1.3.2"
-          ]
+          "examples": ["1.3.2"]
         },
         "file_oid": {
           "type": "string",
           "description": "Unique file identifier (OID format)",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "www.cdisc.org/CDISCPILOT01/1/Define-XML_2.1.0"
-          ]
+          "examples": ["www.cdisc.org/CDISCPILOT01/1/Define-XML_2.1.0"]
         },
         "file_type": {
           "type": "string",
           "description": "Type of ODM file",
-          "enum": [
-            "Snapshot",
-            "Transactional"
-          ]
+          "enum": ["Snapshot", "Transactional"]
         },
         "creation_date_time": {
           "type": "string",
           "description": "File creation timestamp (ISO 8601 format)",
           "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$",
-          "examples": [
-            "2026-02-13T10:30:00"
-          ]
+          "examples": ["2026-02-13T10:30:00"]
         },
         "originator": {
           "type": "string",
           "description": "Organization creating the Define-XML file",
           "minLength": 1,
           "maxLength": 200,
-          "examples": [
-            "Pharmaverse CDISCPILOT01 Team"
-          ]
+          "examples": ["Pharmaverse CDISCPILOT01 Team"]
         },
         "source_system": {
           "type": "string",
           "description": "System generating the Define-XML file",
           "maxLength": 200,
-          "examples": [
-            "PharmaversePy"
-          ]
+          "examples": ["PharmaversePy"]
         },
         "source_system_version": {
           "type": "string",
           "description": "Version of the generating system",
           "maxLength": 50,
-          "examples": [
-            "1.0.0"
-          ]
+          "examples": ["1.0.0"]
         },
         "def_context": {
           "type": "string",
           "description": "Context of the submission",
-          "enum": [
-            "Submission",
-            "Other"
-          ]
+          "enum": ["Submission", "Other"]
         }
       },
       "additionalProperties": false
@@ -140,18 +113,13 @@
       "type": "object",
       "title": "Study",
       "description": "Study element containing global metadata about the clinical study",
-      "required": [
-        "oid",
-        "global_variables"
-      ],
+      "required": ["oid", "global_variables"],
       "properties": {
         "oid": {
           "type": "string",
           "description": "Unique study identifier (OID format)",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "STDY.CDISCPILOT01"
-          ]
+          "examples": ["STDY.CDISCPILOT01"]
         },
         "global_variables": {
           "$ref": "#/$defs/global_variables"
@@ -163,38 +131,28 @@
       "type": "object",
       "title": "Global Variables",
       "description": "Global study metadata elements",
-      "required": [
-        "study_name",
-        "study_description",
-        "protocol_name"
-      ],
+      "required": ["study_name", "study_description", "protocol_name"],
       "properties": {
         "study_name": {
           "type": "string",
           "description": "Short study name",
           "minLength": 1,
           "maxLength": 200,
-          "examples": [
-            "CDISCPILOT01"
-          ]
+          "examples": ["CDISCPILOT01"]
         },
         "study_description": {
           "type": "string",
           "description": "Full study description",
           "minLength": 1,
           "maxLength": 2000,
-          "examples": [
-            "A Phase II, Randomized, Double-Blind, Placebo-Controlled Study"
-          ]
+          "examples": ["A Phase II, Randomized, Double-Blind, Placebo-Controlled Study"]
         },
         "protocol_name": {
           "type": "string",
           "description": "Protocol identifier",
           "minLength": 1,
           "maxLength": 200,
-          "examples": [
-            "CDISCPILOT01"
-          ]
+          "examples": ["CDISCPILOT01"]
         }
       },
       "additionalProperties": false
@@ -203,46 +161,33 @@
       "type": "object",
       "title": "MetaDataVersion",
       "description": "Container for all study metadata including datasets, variables, codelists, etc.",
-      "required": [
-        "oid",
-        "name",
-        "description",
-        "define_version"
-      ],
+      "required": ["oid", "name", "description", "define_version"],
       "properties": {
         "oid": {
           "type": "string",
           "description": "Unique metadata version identifier (OID format)",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "MDV.CDISCPILOT01.1.SDTMIG.3.1.2.SDTM.1.2"
-          ]
+          "examples": ["MDV.CDISCPILOT01.1.SDTMIG.3.1.2.SDTM.1.2"]
         },
         "name": {
           "type": "string",
           "description": "Metadata version name",
           "minLength": 1,
           "maxLength": 200,
-          "examples": [
-            "CDISCPILOT01 SDTM Data Definitions"
-          ]
+          "examples": ["CDISCPILOT01 SDTM Data Definitions"]
         },
         "description": {
           "type": "string",
           "description": "Metadata version description",
           "minLength": 1,
           "maxLength": 2000,
-          "examples": [
-            "Data Definitions for CDISCPILOT01 SDTM datasets"
-          ]
+          "examples": ["Data Definitions for CDISCPILOT01 SDTM datasets"]
         },
         "define_version": {
           "type": "string",
           "description": "Define-XML specification version",
           "pattern": "^\\d+\\.\\d+(?:\\.\\d+)?$",
-          "examples": [
-            "2.1.0"
-          ]
+          "examples": ["2.1.0"]
         },
         "standards": {
           "type": "array",
@@ -324,87 +269,51 @@
       "type": "object",
       "title": "Standard",
       "description": "Standard used in the study (SDTMIG, CT, ADaM, etc.)",
-      "required": [
-        "oid",
-        "name",
-        "type",
-        "version"
-      ],
+      "required": ["oid", "name", "type", "version"],
       "properties": {
         "oid": {
           "type": "string",
           "description": "Unique standard identifier (OID format)",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "STD.1",
-            "STD.SDTMIG"
-          ]
+          "examples": ["STD.1", "STD.SDTMIG"]
         },
         "name": {
           "type": "string",
           "description": "Standard name",
           "minLength": 1,
           "maxLength": 100,
-          "examples": [
-            "SDTMIG",
-            "CDISC/NCI",
-            "ADaM"
-          ]
+          "examples": ["SDTMIG", "CDISC/NCI", "ADaM"]
         },
         "type": {
           "type": "string",
           "description": "Type of standard",
-          "enum": [
-            "IG",
-            "CT",
-            "AD"
-          ],
-          "examples": [
-            "IG"
-          ]
+          "enum": ["IG", "CT", "AD"],
+          "examples": ["IG"]
         },
         "version": {
           "type": "string",
           "description": "Version of the standard",
           "minLength": 1,
           "maxLength": 50,
-          "examples": [
-            "3.1.2",
-            "2023-12-15"
-          ]
+          "examples": ["3.1.2", "2023-12-15"]
         },
         "status": {
           "type": "string",
           "description": "Status of the standard",
-          "enum": [
-            "Final",
-            "Draft",
-            "Provisional"
-          ],
-          "examples": [
-            "Final"
-          ]
+          "enum": ["Final", "Draft", "Provisional"],
+          "examples": ["Final"]
         },
         "publishing_set": {
           "type": "string",
           "description": "Publishing set (required for CT standards)",
-          "enum": [
-            "SDTM",
-            "ADaM",
-            "CDASH",
-            "SEND"
-          ],
-          "examples": [
-            "SDTM"
-          ]
+          "enum": ["SDTM", "ADaM", "CDASH", "SEND"],
+          "examples": ["SDTM"]
         },
         "comment_oid": {
           "type": "string",
           "description": "Reference to a comment definition",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "COM.STD1"
-          ]
+          "examples": ["COM.STD1"]
         }
       },
       "additionalProperties": false,
@@ -416,27 +325,20 @@
         }
       },
       "then": {
-        "required": [
-          "publishing_set"
-        ]
+        "required": ["publishing_set"]
       }
     },
     "supporting_document": {
       "type": "object",
       "title": "Supporting Document",
       "description": "Reference to a supporting document",
-      "required": [
-        "leaf_id"
-      ],
+      "required": ["leaf_id"],
       "properties": {
         "leaf_id": {
           "type": "string",
           "description": "Reference to leaf definition ID",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "LF.acrf",
-            "LF.csdrg"
-          ]
+          "examples": ["LF.acrf", "LF.csdrg"]
         }
       },
       "additionalProperties": false
@@ -445,19 +347,13 @@
       "type": "object",
       "title": "ValueListDef",
       "description": "Value-level metadata definition for conditional variable properties",
-      "required": [
-        "oid",
-        "item_refs"
-      ],
+      "required": ["oid", "item_refs"],
       "properties": {
         "oid": {
           "type": "string",
           "description": "Unique value list identifier (OID format)",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "VL.LB.LBORRES",
-            "VL.SUPPDM.QVAL"
-          ]
+          "examples": ["VL.LB.LBORRES", "VL.SUPPDM.QVAL"]
         },
         "item_refs": {
           "type": "array",
@@ -474,60 +370,42 @@
       "type": "object",
       "title": "ValueList ItemRef",
       "description": "Reference to an ItemDef in a ValueList with conditional criteria",
-      "required": [
-        "item_oid",
-        "order_number",
-        "mandatory",
-        "where_clause_oid"
-      ],
+      "required": ["item_oid", "order_number", "mandatory", "where_clause_oid"],
       "properties": {
         "item_oid": {
           "type": "string",
           "description": "Reference to ItemDef OID",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "IT.LB.LBORRES.SET1.LBSPEC.BLOOD"
-          ]
+          "examples": ["IT.LB.LBORRES.SET1.LBSPEC.BLOOD"]
         },
         "order_number": {
           "type": "integer",
           "description": "Display order number",
           "minimum": 1,
-          "examples": [
-            1
-          ]
+          "examples": [1]
         },
         "mandatory": {
           "type": "string",
           "description": "Whether this value is mandatory",
-          "enum": [
-            "Yes",
-            "No"
-          ]
+          "enum": ["Yes", "No"]
         },
         "role": {
           "type": "string",
           "description": "Variable role in dataset",
           "maxLength": 100,
-          "examples": [
-            "Record Qualifier"
-          ]
+          "examples": ["Record Qualifier"]
         },
         "method_oid": {
           "type": "string",
           "description": "Reference to derivation method",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "MT.RACE"
-          ]
+          "examples": ["MT.RACE"]
         },
         "where_clause_oid": {
           "type": "string",
           "description": "Reference to where clause definition",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "WC.LB.LBTESTCD.SET1.LBSPEC.BLOOD"
-          ]
+          "examples": ["WC.LB.LBTESTCD.SET1.LBSPEC.BLOOD"]
         }
       },
       "additionalProperties": false
@@ -536,26 +414,19 @@
       "type": "object",
       "title": "WhereClauseDef",
       "description": "Conditional logic definition for value-level metadata",
-      "required": [
-        "oid",
-        "range_checks"
-      ],
+      "required": ["oid", "range_checks"],
       "properties": {
         "oid": {
           "type": "string",
           "description": "Unique where clause identifier (OID format)",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "WC.LB.LBTESTCD.SET1.LBSPEC.BLOOD"
-          ]
+          "examples": ["WC.LB.LBTESTCD.SET1.LBSPEC.BLOOD"]
         },
         "comment_oid": {
           "type": "string",
           "description": "Reference to a comment definition",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "COM.SUBJECTDATA-JOIN-DM"
-          ]
+          "examples": ["COM.SUBJECTDATA-JOIN-DM"]
         },
         "range_checks": {
           "type": "array",
@@ -572,44 +443,24 @@
       "type": "object",
       "title": "RangeCheck",
       "description": "Conditional check specification",
-      "required": [
-        "comparator",
-        "soft_hard",
-        "item_oid",
-        "check_values"
-      ],
+      "required": ["comparator", "soft_hard", "item_oid", "check_values"],
       "properties": {
         "comparator": {
           "type": "string",
           "description": "Comparison operator",
-          "enum": [
-            "EQ",
-            "NE",
-            "IN",
-            "LT",
-            "GT",
-            "LE",
-            "GE"
-          ],
-          "examples": [
-            "EQ"
-          ]
+          "enum": ["EQ", "NE", "IN", "LT", "GT", "LE", "GE"],
+          "examples": ["EQ"]
         },
         "soft_hard": {
           "type": "string",
           "description": "Type of check",
-          "enum": [
-            "Soft",
-            "Hard"
-          ]
+          "enum": ["Soft", "Hard"]
         },
         "item_oid": {
           "type": "string",
           "description": "Reference to variable being checked",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "IT.LB.LBTESTCD"
-          ]
+          "examples": ["IT.LB.LBTESTCD"]
         },
         "check_values": {
           "type": "array",
@@ -618,12 +469,7 @@
             "type": "string"
           },
           "minItems": 1,
-          "examples": [
-            [
-              "BILI",
-              "GLUC"
-            ]
-          ]
+          "examples": [["BILI", "GLUC"]]
         }
       },
       "additionalProperties": false
@@ -653,10 +499,7 @@
           "type": "string",
           "description": "Unique dataset identifier (OID format)",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "IG.DM",
-            "IG.AE"
-          ]
+          "examples": ["IG.DM", "IG.AE"]
         },
         "domain": {
           "type": "string",
@@ -664,11 +507,7 @@
           "minLength": 1,
           "maxLength": 8,
           "pattern": "^[A-Z0-9]+$",
-          "examples": [
-            "DM",
-            "AE",
-            "VS"
-          ]
+          "examples": ["DM", "AE", "VS"]
         },
         "name": {
           "type": "string",
@@ -676,92 +515,64 @@
           "minLength": 1,
           "maxLength": 8,
           "pattern": "^[A-Z0-9]+$",
-          "examples": [
-            "DM",
-            "AE"
-          ]
+          "examples": ["DM", "AE"]
         },
         "repeating": {
           "type": "string",
           "description": "Whether dataset has multiple records per subject",
-          "enum": [
-            "Yes",
-            "No"
-          ]
+          "enum": ["Yes", "No"]
         },
         "is_reference_data": {
           "type": "string",
           "description": "Whether dataset contains reference data vs subject data",
-          "enum": [
-            "Yes",
-            "No"
-          ]
+          "enum": ["Yes", "No"]
         },
         "sas_dataset_name": {
           "type": "string",
           "description": "SAS dataset name (max 8 characters)",
           "minLength": 1,
           "maxLength": 8,
-          "examples": [
-            "DM",
-            "AE"
-          ]
+          "examples": ["DM", "AE"]
         },
         "purpose": {
           "type": "string",
           "description": "Dataset purpose",
-          "enum": [
-            "Tabulation",
-            "Analysis"
-          ]
+          "enum": ["Tabulation", "Analysis"]
         },
         "structure": {
           "type": "string",
           "description": "Description of dataset structure",
           "minLength": 1,
           "maxLength": 200,
-          "examples": [
-            "One record per subject",
-            "One record per adverse event"
-          ]
+          "examples": ["One record per subject", "One record per adverse event"]
         },
         "standard_oid": {
           "type": "string",
           "description": "Reference to standard definition",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "STD.1"
-          ]
+          "examples": ["STD.1"]
         },
         "archive_location_id": {
           "type": "string",
           "description": "Reference to data file location (leaf ID)",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "LF.DM"
-          ]
+          "examples": ["LF.DM"]
         },
         "is_non_standard": {
           "type": "string",
           "description": "Indicator for non-standard dataset (omit if standard)",
-          "enum": [
-            "Yes"
-          ]
+          "enum": ["Yes"]
         },
         "has_no_data": {
           "type": "string",
           "description": "Indicator that dataset has no data (omit if has data)",
-          "enum": [
-            "Yes"
-          ]
+          "enum": ["Yes"]
         },
         "comment_oid": {
           "type": "string",
           "description": "Reference to comment definition",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "COM.DOMAIN.DM"
-          ]
+          "examples": ["COM.DOMAIN.DM"]
         },
         "description": {
           "$ref": "#/$defs/translated_text",
@@ -770,9 +581,7 @@
         "class": {
           "type": "object",
           "description": "SDTM class designation",
-          "required": [
-            "name"
-          ],
+          "required": ["name"],
           "properties": {
             "name": {
               "type": "string",
@@ -789,9 +598,7 @@
                 "OCCURRENCE DATA STRUCTURE",
                 "BASIC DATA STRUCTURE"
               ],
-              "examples": [
-                "SPECIAL PURPOSE"
-              ]
+              "examples": ["SPECIAL PURPOSE"]
             }
           },
           "additionalProperties": false
@@ -799,35 +606,25 @@
         "leaf": {
           "type": "object",
           "description": "Reference to data file",
-          "required": [
-            "id",
-            "href",
-            "title"
-          ],
+          "required": ["id", "href", "title"],
           "properties": {
             "id": {
               "type": "string",
               "description": "Leaf identifier",
               "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-              "examples": [
-                "LF.DM"
-              ]
+              "examples": ["LF.DM"]
             },
             "href": {
               "type": "string",
               "description": "File path (relative)",
               "minLength": 1,
-              "examples": [
-                "dm.xpt"
-              ]
+              "examples": ["dm.xpt"]
             },
             "title": {
               "type": "string",
               "description": "Display title",
               "minLength": 1,
-              "examples": [
-                "dm.xpt"
-              ]
+              "examples": ["dm.xpt"]
             }
           },
           "additionalProperties": false
@@ -851,60 +648,42 @@
       "type": "object",
       "title": "ItemRef",
       "description": "Reference to a variable in a dataset",
-      "required": [
-        "item_oid",
-        "order_number",
-        "mandatory"
-      ],
+      "required": ["item_oid", "order_number", "mandatory"],
       "properties": {
         "item_oid": {
           "type": "string",
           "description": "Reference to ItemDef OID",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "IT.STUDYID",
-            "IT.DM.AGE"
-          ]
+          "examples": ["IT.STUDYID", "IT.DM.AGE"]
         },
         "order_number": {
           "type": "integer",
           "description": "Display order in dataset",
           "minimum": 1,
-          "examples": [
-            1
-          ]
+          "examples": [1]
         },
         "mandatory": {
           "type": "string",
           "description": "Whether variable is required",
-          "enum": [
-            "Yes",
-            "No"
-          ]
+          "enum": ["Yes", "No"]
         },
         "key_sequence": {
           "type": "integer",
           "description": "Sort order for dataset uniqueness",
           "minimum": 1,
-          "examples": [
-            1
-          ]
+          "examples": [1]
         },
         "method_oid": {
           "type": "string",
           "description": "Reference to derivation method",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "MT.USUBJID"
-          ]
+          "examples": ["MT.USUBJID"]
         },
         "role": {
           "type": "string",
           "description": "Variable role in dataset",
           "maxLength": 100,
-          "examples": [
-            "Record Qualifier"
-          ]
+          "examples": ["Record Qualifier"]
         },
         "comment_oid": {
           "type": "string",
@@ -917,23 +696,13 @@
       "type": "object",
       "title": "ItemDef",
       "description": "Variable definition with properties, codelist, and origin",
-      "required": [
-        "oid",
-        "name",
-        "data_type",
-        "sas_field_name",
-        "description",
-        "origin"
-      ],
+      "required": ["oid", "name", "data_type", "sas_field_name", "description", "origin"],
       "properties": {
         "oid": {
           "type": "string",
           "description": "Unique variable identifier (OID format)",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "IT.STUDYID",
-            "IT.DM.AGE"
-          ]
+          "examples": ["IT.STUDYID", "IT.DM.AGE"]
         },
         "name": {
           "type": "string",
@@ -941,11 +710,7 @@
           "minLength": 1,
           "maxLength": 8,
           "pattern": "^[A-Z][A-Z0-9]*$",
-          "examples": [
-            "STUDYID",
-            "AGE",
-            "SEX"
-          ]
+          "examples": ["STUDYID", "AGE", "SEX"]
         },
         "data_type": {
           "type": "string",
@@ -966,53 +731,39 @@
             "incompleteDate",
             "incompleteTime"
           ],
-          "examples": [
-            "text"
-          ]
+          "examples": ["text"]
         },
         "length": {
           "type": "integer",
           "description": "Variable length (required for text and integer)",
           "minimum": 1,
           "maximum": 2000,
-          "examples": [
-            8
-          ]
+          "examples": [8]
         },
         "sas_field_name": {
           "type": "string",
           "description": "SAS variable name (max 8 characters)",
           "minLength": 1,
           "maxLength": 8,
-          "examples": [
-            "STUDYID",
-            "AGE"
-          ]
+          "examples": ["STUDYID", "AGE"]
         },
         "significant_digits": {
           "type": "integer",
           "description": "Number of significant digits for float variables",
           "minimum": 1,
-          "examples": [
-            2
-          ]
+          "examples": [2]
         },
         "display_format": {
           "type": "string",
           "description": "Display format specification",
           "maxLength": 50,
-          "examples": [
-            "5.2",
-            "DATE9."
-          ]
+          "examples": ["5.2", "DATE9."]
         },
         "comment_oid": {
           "type": "string",
           "description": "Reference to comment definition",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "COM.AGEU"
-          ]
+          "examples": ["COM.AGEU"]
         },
         "description": {
           "$ref": "#/$defs/translated_text",
@@ -1021,18 +772,13 @@
         "codelist_ref": {
           "type": "object",
           "description": "Reference to controlled terminology codelist",
-          "required": [
-            "codelist_oid"
-          ],
+          "required": ["codelist_oid"],
           "properties": {
             "codelist_oid": {
               "type": "string",
               "description": "Reference to CodeList OID",
               "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-              "examples": [
-                "CL.SEX",
-                "CL.RACE"
-              ]
+              "examples": ["CL.SEX", "CL.RACE"]
             }
           },
           "additionalProperties": false
@@ -1040,17 +786,13 @@
         "value_list_ref": {
           "type": "object",
           "description": "Reference to value-level metadata",
-          "required": [
-            "value_list_oid"
-          ],
+          "required": ["value_list_oid"],
           "properties": {
             "value_list_oid": {
               "type": "string",
               "description": "Reference to ValueListDef OID",
               "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-              "examples": [
-                "VL.LB.LBORRES"
-              ]
+              "examples": ["VL.LB.LBORRES"]
             }
           },
           "additionalProperties": false
@@ -1067,54 +809,31 @@
       "if": {
         "properties": {
           "data_type": {
-            "enum": [
-              "text",
-              "integer"
-            ]
+            "enum": ["text", "integer"]
           }
         }
       },
       "then": {
-        "required": [
-          "length"
-        ]
+        "required": ["length"]
       }
     },
     "origin": {
       "type": "object",
       "title": "Origin",
       "description": "Variable origin specification",
-      "required": [
-        "type",
-        "source"
-      ],
+      "required": ["type", "source"],
       "properties": {
         "type": {
           "type": "string",
           "description": "Origin type",
-          "enum": [
-            "Collected",
-            "Derived",
-            "Assigned",
-            "Protocol",
-            "Predecessor"
-          ],
-          "examples": [
-            "Collected"
-          ]
+          "enum": ["Collected", "Derived", "Assigned", "Protocol", "Predecessor"],
+          "examples": ["Collected"]
         },
         "source": {
           "type": "string",
           "description": "Origin source",
-          "enum": [
-            "Investigator",
-            "Sponsor",
-            "Vendor",
-            "Subject"
-          ],
-          "examples": [
-            "Investigator"
-          ]
+          "enum": ["Investigator", "Sponsor", "Vendor", "Subject"],
+          "examples": ["Investigator"]
         },
         "description": {
           "$ref": "#/$defs/translated_text",
@@ -1134,17 +853,13 @@
       "type": "object",
       "title": "DocumentRef",
       "description": "Reference to a source document with optional page references",
-      "required": [
-        "leaf_id"
-      ],
+      "required": ["leaf_id"],
       "properties": {
         "leaf_id": {
           "type": "string",
           "description": "Reference to leaf definition ID",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "LF.acrf"
-          ]
+          "examples": ["LF.acrf"]
         },
         "pdf_page_refs": {
           "type": "array",
@@ -1160,27 +875,18 @@
       "type": "object",
       "title": "PDFPageRef",
       "description": "PDF page reference (physical page number or named destination)",
-      "required": [
-        "page_ref",
-        "type"
-      ],
+      "required": ["page_ref", "type"],
       "properties": {
         "page_ref": {
           "type": "string",
           "description": "Page number or named destination",
           "minLength": 1,
-          "examples": [
-            "6",
-            "section2.1"
-          ]
+          "examples": ["6", "section2.1"]
         },
         "type": {
           "type": "string",
           "description": "Type of reference",
-          "enum": [
-            "PhysicalRef",
-            "NamedDestination"
-          ]
+          "enum": ["PhysicalRef", "NamedDestination"]
         }
       },
       "additionalProperties": false
@@ -1189,59 +895,38 @@
       "type": "object",
       "title": "CodeList",
       "description": "Controlled terminology codelist definition",
-      "required": [
-        "oid",
-        "name",
-        "data_type"
-      ],
+      "required": ["oid", "name", "data_type"],
       "properties": {
         "oid": {
           "type": "string",
           "description": "Unique codelist identifier (OID format)",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "CL.SEX",
-            "CL.RACE"
-          ]
+          "examples": ["CL.SEX", "CL.RACE"]
         },
         "name": {
           "type": "string",
           "description": "Codelist name",
           "minLength": 1,
           "maxLength": 200,
-          "examples": [
-            "Sex",
-            "Race"
-          ]
+          "examples": ["Sex", "Race"]
         },
         "data_type": {
           "type": "string",
           "description": "Data type of coded values",
-          "enum": [
-            "text",
-            "integer",
-            "float"
-          ],
-          "examples": [
-            "text"
-          ]
+          "enum": ["text", "integer", "float"],
+          "examples": ["text"]
         },
         "standard_oid": {
           "type": "string",
           "description": "Reference to controlled terminology standard",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "STD.2"
-          ]
+          "examples": ["STD.2"]
         },
         "sas_format_name": {
           "type": "string",
           "description": "SAS format name",
           "maxLength": 32,
-          "examples": [
-            "$SEX",
-            "$RACE"
-          ]
+          "examples": ["$SEX", "$RACE"]
         },
         "code_list_items": {
           "type": "array",
@@ -1269,14 +954,10 @@
       "additionalProperties": false,
       "oneOf": [
         {
-          "required": [
-            "code_list_items"
-          ]
+          "required": ["code_list_items"]
         },
         {
-          "required": [
-            "enumerated_items"
-          ]
+          "required": ["enumerated_items"]
         }
       ]
     },
@@ -1284,27 +965,18 @@
       "type": "object",
       "title": "CodeListItem",
       "description": "Individual code item with decode and optional NCI code",
-      "required": [
-        "coded_value",
-        "decode"
-      ],
+      "required": ["coded_value", "decode"],
       "properties": {
         "coded_value": {
           "type": "string",
           "description": "Code value",
           "minLength": 1,
-          "examples": [
-            "M",
-            "F",
-            "SCREENING"
-          ]
+          "examples": ["M", "F", "SCREENING"]
         },
         "extended_value": {
           "type": "string",
           "description": "Indicates extensible code (allows other values)",
-          "enum": [
-            "Yes"
-          ]
+          "enum": ["Yes"]
         },
         "decode": {
           "$ref": "#/$defs/translated_text",
@@ -1321,18 +993,13 @@
       "type": "object",
       "title": "EnumeratedItem",
       "description": "Enumerated item (non-extensible)",
-      "required": [
-        "coded_value"
-      ],
+      "required": ["coded_value"],
       "properties": {
         "coded_value": {
           "type": "string",
           "description": "Enumerated value",
           "minLength": 1,
-          "examples": [
-            "SCREENING",
-            "Body Mass Index"
-          ]
+          "examples": ["SCREENING", "Body Mass Index"]
         },
         "alias": {
           "$ref": "#/$defs/alias",
@@ -1345,43 +1012,26 @@
       "type": "object",
       "title": "MethodDef",
       "description": "Computational method or algorithm definition",
-      "required": [
-        "oid",
-        "name",
-        "type",
-        "description"
-      ],
+      "required": ["oid", "name", "type", "description"],
       "properties": {
         "oid": {
           "type": "string",
           "description": "Unique method identifier (OID format)",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "MT.AGE",
-            "MT.USUBJID"
-          ]
+          "examples": ["MT.AGE", "MT.USUBJID"]
         },
         "name": {
           "type": "string",
           "description": "Method name",
           "minLength": 1,
           "maxLength": 200,
-          "examples": [
-            "Algorithm to derive AGE"
-          ]
+          "examples": ["Algorithm to derive AGE"]
         },
         "type": {
           "type": "string",
           "description": "Type of method",
-          "enum": [
-            "Computation",
-            "Imputation",
-            "Transpose",
-            "Other"
-          ],
-          "examples": [
-            "Computation"
-          ]
+          "enum": ["Computation", "Imputation", "Transpose", "Other"],
+          "examples": ["Computation"]
         },
         "description": {
           "$ref": "#/$defs/translated_text",
@@ -1401,19 +1051,13 @@
       "type": "object",
       "title": "FormalExpression",
       "description": "Formal code expression in specific language",
-      "required": [
-        "context",
-        "expression"
-      ],
+      "required": ["context", "expression"],
       "properties": {
         "context": {
           "type": "string",
           "description": "Expression language or system",
           "minLength": 1,
-          "examples": [
-            "SAS 9.0 or later",
-            "Python 3.8+"
-          ]
+          "examples": ["SAS 9.0 or later", "Python 3.8+"]
         },
         "expression": {
           "type": "string",
@@ -1427,19 +1071,13 @@
       "type": "object",
       "title": "CommentDef",
       "description": "Comment or note definition",
-      "required": [
-        "oid",
-        "description"
-      ],
+      "required": ["oid", "description"],
       "properties": {
         "oid": {
           "type": "string",
           "description": "Unique comment identifier (OID format)",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "COM.AGEU",
-            "COM.DOMAIN.DM"
-          ]
+          "examples": ["COM.AGEU", "COM.DOMAIN.DM"]
         },
         "description": {
           "$ref": "#/$defs/translated_text",
@@ -1456,41 +1094,29 @@
       "type": "object",
       "title": "DocumentRef with Page",
       "description": "Document reference with optional page reference",
-      "required": [
-        "leaf_id"
-      ],
+      "required": ["leaf_id"],
       "properties": {
         "leaf_id": {
           "type": "string",
           "description": "Reference to leaf definition ID",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "LF.csdrg"
-          ]
+          "examples": ["LF.csdrg"]
         },
         "pdf_page_ref": {
           "type": "object",
           "description": "Specific page reference",
-          "required": [
-            "page_refs",
-            "type"
-          ],
+          "required": ["page_refs", "type"],
           "properties": {
             "page_refs": {
               "type": "string",
               "description": "Page number or named destination",
               "minLength": 1,
-              "examples": [
-                "section2.1"
-              ]
+              "examples": ["section2.1"]
             },
             "type": {
               "type": "string",
               "description": "Type of reference",
-              "enum": [
-                "PhysicalRef",
-                "NamedDestination"
-              ]
+              "enum": ["PhysicalRef", "NamedDestination"]
             }
           },
           "additionalProperties": false
@@ -1502,38 +1128,25 @@
       "type": "object",
       "title": "Leaf",
       "description": "External document or dataset file definition",
-      "required": [
-        "id",
-        "href",
-        "title"
-      ],
+      "required": ["id", "href", "title"],
       "properties": {
         "id": {
           "type": "string",
           "description": "Unique leaf identifier (OID format)",
           "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
-          "examples": [
-            "LF.acrf",
-            "LF.DM"
-          ]
+          "examples": ["LF.acrf", "LF.DM"]
         },
         "href": {
           "type": "string",
           "description": "File path (relative to Define-XML location)",
           "minLength": 1,
-          "examples": [
-            "acrf.pdf",
-            "dm.xpt"
-          ]
+          "examples": ["acrf.pdf", "dm.xpt"]
         },
         "title": {
           "type": "string",
           "description": "Display title for the document/file",
           "minLength": 1,
-          "examples": [
-            "Annotated CRF",
-            "dm.xpt"
-          ]
+          "examples": ["Annotated CRF", "dm.xpt"]
         }
       },
       "additionalProperties": false
@@ -1542,30 +1155,20 @@
       "type": "object",
       "title": "TranslatedText",
       "description": "Translatable text element with language specification",
-      "required": [
-        "text",
-        "lang"
-      ],
+      "required": ["text", "lang"],
       "properties": {
         "text": {
           "type": "string",
           "description": "Text content",
           "minLength": 1,
-          "examples": [
-            "Demographics",
-            "Age"
-          ]
+          "examples": ["Demographics", "Age"]
         },
         "lang": {
           "type": "string",
           "description": "Language code (ISO 639-1)",
           "pattern": "^[a-z]{2}$",
           "default": "en",
-          "examples": [
-            "en",
-            "ja",
-            "de"
-          ]
+          "examples": ["en", "ja", "de"]
         }
       },
       "additionalProperties": false
@@ -1574,10 +1177,7 @@
       "type": "object",
       "title": "Alias",
       "description": "NCI code alias for controlled terminology",
-      "required": [
-        "context",
-        "name"
-      ],
+      "required": ["context", "name"],
       "properties": {
         "context": {
           "type": "string",
@@ -1588,10 +1188,7 @@
           "type": "string",
           "description": "NCI C-code",
           "pattern": "^C\\d+$",
-          "examples": [
-            "C20197",
-            "C16576"
-          ]
+          "examples": ["C20197", "C16576"]
         }
       },
       "additionalProperties": false
@@ -1603,10 +1200,7 @@
       "oneOf": [
         {
           "description": "Copy raw source variable to SDTM column without CT validation.",
-          "required": [
-            "algorithm",
-            "source_variable"
-          ],
+          "required": ["algorithm", "source_variable"],
           "properties": {
             "algorithm": {
               "const": "assign_no_ct"
@@ -1620,10 +1214,7 @@
         },
         {
           "description": "Copy raw source variable and validate against a CDISC CT codelist.",
-          "required": [
-            "algorithm",
-            "source_variable"
-          ],
+          "required": ["algorithm", "source_variable"],
           "properties": {
             "algorithm": {
               "const": "assign_ct"
@@ -1641,10 +1232,7 @@
         },
         {
           "description": "Parse source column and format as ISO 8601 datetime string.",
-          "required": [
-            "algorithm",
-            "source_variable"
-          ],
+          "required": ["algorithm", "source_variable"],
           "properties": {
             "algorithm": {
               "enum": ["assign_dtc", "assign_datetime"]
@@ -1658,10 +1246,7 @@
         },
         {
           "description": "Set a constant value and validate it against a CDISC CT codelist.",
-          "required": [
-            "algorithm",
-            "constant_value"
-          ],
+          "required": ["algorithm", "constant_value"],
           "properties": {
             "algorithm": {
               "const": "hardcode_ct"
@@ -1679,10 +1264,7 @@
         },
         {
           "description": "Set a constant string value without CT validation.",
-          "required": [
-            "algorithm",
-            "constant_value"
-          ],
+          "required": ["algorithm", "constant_value"],
           "properties": {
             "algorithm": {
               "const": "hardcode_no_ct"
@@ -1696,10 +1278,7 @@
         },
         {
           "description": "if-then-else: assign condition_true_value when condition is met, else condition_false_value.",
-          "required": [
-            "algorithm",
-            "condition"
-          ],
+          "required": ["algorithm", "condition"],
           "properties": {
             "algorithm": {
               "const": "condition_add"
@@ -1721,10 +1300,7 @@
         },
         {
           "description": "Build a string by filling {column_name} placeholders in concat_pattern.",
-          "required": [
-            "algorithm",
-            "concat_pattern"
-          ],
+          "required": ["algorithm", "concat_pattern"],
           "properties": {
             "algorithm": {
               "const": "concatenate"
@@ -1742,12 +1318,7 @@
         },
         {
           "description": "Bring a variable in from another dataset via a key join.",
-          "required": [
-            "algorithm",
-            "merge_dataset",
-            "merge_key",
-            "source_variable"
-          ],
+          "required": ["algorithm", "merge_dataset", "merge_key", "source_variable"],
           "properties": {
             "algorithm": {
               "const": "merge"
@@ -1769,9 +1340,7 @@
         },
         {
           "description": "Dataset-level derivation (e.g. sequence number). No additional fields required.",
-          "required": [
-            "algorithm"
-          ],
+          "required": ["algorithm"],
           "properties": {
             "algorithm": {
               "const": "dataset_level"
@@ -1781,10 +1350,7 @@
         },
         {
           "description": "Direct copy from a source SDTM or ADaM variable.",
-          "required": [
-            "algorithm",
-            "source_variable"
-          ],
+          "required": ["algorithm", "source_variable"],
           "properties": {
             "algorithm": {
               "const": "source"
@@ -1802,10 +1368,7 @@
         },
         {
           "description": "Arbitrary Polars expression evaluated on the working dataset.",
-          "required": [
-            "algorithm",
-            "derivation_expression"
-          ],
+          "required": ["algorithm", "derivation_expression"],
           "properties": {
             "algorithm": {
               "const": "derivation"
@@ -1819,10 +1382,7 @@
         },
         {
           "description": "Convert an ISO 8601 date/datetime string to a SAS-style numeric date.",
-          "required": [
-            "algorithm",
-            "source_variable"
-          ],
+          "required": ["algorithm", "source_variable"],
           "properties": {
             "algorithm": {
               "const": "date_conversion"
@@ -1836,11 +1396,7 @@
         },
         {
           "description": "CDISC study day: event_date - ref_date + 1 (positive) or event_date - ref_date (negative).",
-          "required": [
-            "algorithm",
-            "source_variable",
-            "reference_date"
-          ],
+          "required": ["algorithm", "source_variable", "reference_date"],
           "properties": {
             "algorithm": {
               "const": "study_day_calc"
@@ -1858,10 +1414,7 @@
         },
         {
           "description": "Pull a variable from a dataset that was pre-merged via pharmaversepy_engine_config.",
-          "required": [
-            "algorithm",
-            "source_variable"
-          ],
+          "required": ["algorithm", "source_variable"],
           "properties": {
             "algorithm": {
               "const": "merge_lookup"
@@ -1879,10 +1432,7 @@
         },
         {
           "description": "Y/null flag: returns 'Y' when the Polars boolean expression is True.",
-          "required": [
-            "algorithm",
-            "condition"
-          ],
+          "required": ["algorithm", "condition"],
           "properties": {
             "algorithm": {
               "const": "flag_derivation"
@@ -1896,10 +1446,7 @@
         },
         {
           "description": "Flag first event per group as 'Y', all others null.",
-          "required": [
-            "algorithm",
-            "grouping_variables"
-          ],
+          "required": ["algorithm", "grouping_variables"],
           "properties": {
             "algorithm": {
               "const": "first_occurrence"
@@ -1924,10 +1471,7 @@
         },
         {
           "description": "Map Polars condition strings to output category values using when-then logic.",
-          "required": [
-            "algorithm",
-            "categories"
-          ],
+          "required": ["algorithm", "categories"],
           "properties": {
             "algorithm": {
               "const": "categorization"
@@ -1945,10 +1489,7 @@
         },
         {
           "description": "Y/null treatment-emergent flag evaluated via a Polars expression.",
-          "required": [
-            "algorithm",
-            "derivation_expression"
-          ],
+          "required": ["algorithm", "derivation_expression"],
           "properties": {
             "algorithm": {
               "const": "treatment_emergent"
@@ -1962,10 +1503,7 @@
         },
         {
           "description": "Set a constant value (ADaM). Value may be string, number, or boolean.",
-          "required": [
-            "algorithm",
-            "constant_value"
-          ],
+          "required": ["algorithm", "constant_value"],
           "properties": {
             "algorithm": {
               "const": "hardcode"
@@ -1989,9 +1527,7 @@
         },
         {
           "description": "Custom algorithm \u2014 declare the verb in the 'custom_algorithms' list at the define.yaml root and register a handler via SDTMEngine.register_algorithm_handler() or ADAMEngine.register_algorithm_handler() before running the engine. All additional fields are allowed.",
-          "required": [
-            "algorithm"
-          ],
+          "required": ["algorithm"],
           "properties": {
             "algorithm": {
               "type": "string",
@@ -2078,12 +1614,7 @@
               "type": {
                 "type": "string",
                 "description": "Join type (left, inner, outer)",
-                "enum": [
-                  "left",
-                  "inner",
-                  "outer",
-                  "right"
-                ]
+                "enum": ["left", "inner", "outer", "right"]
               },
               "columns": {
                 "type": "array",
@@ -2093,10 +1624,7 @@
                 "description": "Subset of columns to bring in (all if omitted)"
               }
             },
-            "required": [
-              "dataset",
-              "keys"
-            ],
+            "required": ["dataset", "keys"],
             "additionalProperties": true
           }
         }

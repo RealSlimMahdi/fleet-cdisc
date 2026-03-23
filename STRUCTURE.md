@@ -115,22 +115,22 @@ The core of Fleet for SDTM work. Registers `df.sdtm` on every Polars DataFrame.
 
 **The 14 SDTM derivation verbs:**
 
-| Verb                 | Signature                                           | Purpose                                                              |
-| -------------------- | --------------------------------------------------- | -------------------------------------------------------------------- |
-| `assign_no_ct`       | `(target, *, source)`                               | Direct 1:1 column copy/rename, no CT lookup                          |
-| `assign_ct`          | `(target, *, source, ct_codelist, ct_mapping=None)` | Copy column and decode values via CT codelist                        |
-| `assign_dtc`         | `(target, *, source, mode="date", input_format=None)` | Parse date string → ISO 8601; preserves partial dates              |
-| `hardcode_ct`        | `(target, *, value, ct_codelist=None)`              | Set every row to a literal constant (CT-validated)                   |
-| `hardcode_no_ct`     | `(target, *, value)`                                | Set every row to a literal constant, no CT                           |
-| `condition_add`      | `(target, *, condition, then_value)`                | `IF condition THEN value ELSE NULL`                                  |
-| `if_then_else`       | `(target, *, when, else_value=None)`                | Multi-branch conditional (list of `{condition, value}`)              |
-| `ae_aerel`           | `(target="AEREL", *, source, aerel_map=None)`       | Standard adverse-event relatedness mapping                           |
-| `merge`              | `(target_cols=None, *, dataset, on, how="left")`    | Join another DataFrame into the pipeline                             |
-| `remove_dup`         | `(*, subset=None, keep="first")`                    | Deduplicate rows by subset of columns                                |
-| `group_by`           | `(*, group_cols, agg)`                              | Group-and-aggregate to produce a summary row                         |
-| `dataset_level`      | `(target, *, value)`                                | Alias for `hardcode_no_ct` — marks dataset-level constants           |
-| `notsubmitted`       | `(*targets)`                                        | Set one or more columns to null (not for submission)                 |
-| `multiple_responses` | `(target, *, source, delimiter="\|", id_cols=None)` | Expand pipe-delimited multi-answer fields into separate rows         |
+| Verb                 | Signature                                             | Purpose                                                      |
+| -------------------- | ----------------------------------------------------- | ------------------------------------------------------------ |
+| `assign_no_ct`       | `(target, *, source)`                                 | Direct 1:1 column copy/rename, no CT lookup                  |
+| `assign_ct`          | `(target, *, source, ct_codelist, ct_mapping=None)`   | Copy column and decode values via CT codelist                |
+| `assign_dtc`         | `(target, *, source, mode="date", input_format=None)` | Parse date string → ISO 8601; preserves partial dates        |
+| `hardcode_ct`        | `(target, *, value, ct_codelist=None)`                | Set every row to a literal constant (CT-validated)           |
+| `hardcode_no_ct`     | `(target, *, value)`                                  | Set every row to a literal constant, no CT                   |
+| `condition_add`      | `(target, *, condition, then_value)`                  | `IF condition THEN value ELSE NULL`                          |
+| `if_then_else`       | `(target, *, when, else_value=None)`                  | Multi-branch conditional (list of `{condition, value}`)      |
+| `ae_aerel`           | `(target="AEREL", *, source, aerel_map=None)`         | Standard adverse-event relatedness mapping                   |
+| `merge`              | `(target_cols=None, *, dataset, on, how="left")`      | Join another DataFrame into the pipeline                     |
+| `remove_dup`         | `(*, subset=None, keep="first")`                      | Deduplicate rows by subset of columns                        |
+| `group_by`           | `(*, group_cols, agg)`                                | Group-and-aggregate to produce a summary row                 |
+| `dataset_level`      | `(target, *, value)`                                  | Alias for `hardcode_no_ct` — marks dataset-level constants   |
+| `notsubmitted`       | `(*targets)`                                          | Set one or more columns to null (not for submission)         |
+| `multiple_responses` | `(target, *, source, delimiter="\|", id_cols=None)`   | Expand pipe-delimited multi-answer fields into separate rows |
 
 **Special methods:**
 

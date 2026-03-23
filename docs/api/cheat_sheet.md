@@ -13,13 +13,13 @@ This cheat sheet summarises the most common verbs across Fleet namespaces. For f
 
 ## SDTM Namespace (`df.sdtm`)
 
-| Verb                                                  | Description                                                                 | Example                                                         |
-| ----------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `.assign_no_ct(target, source)`                       | Map a column entirely without Controlled Terminology.                       | `.assign_no_ct("USUBJID", source="patient_id")`                 |
-| `.hardcode_no_ct(target, value)`                      | Assign a constant literal.                                                  | `.hardcode_no_ct("DOMAIN", "DM")`                               |
-| `.assign_ct(target, source, ct_codelist, ct_mapping)` | Map values explicitly through a dictionary and validate against a codelist. | `.assign_ct("SEX", "sex_raw", "C66731", {"M":"M", "F":"F"})`    |
-| `.assign_dtc(target, source)`                        | Normalise dates to ISO 8601 strings.                                        | `.assign_dtc("RFSTDTC", source="first_dose_dt")`                  |
-| `.if_then_else(target, when, else_value)`             | Derive a value conditionally.                                               | `.if_then_else("AGEGR1", pl.col("AGE") < 18, "ADULT")`          |
+| Verb                                                  | Description                                                                 | Example                                                      |
+| ----------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `.assign_no_ct(target, source)`                       | Map a column entirely without Controlled Terminology.                       | `.assign_no_ct("USUBJID", source="patient_id")`              |
+| `.hardcode_no_ct(target, value)`                      | Assign a constant literal.                                                  | `.hardcode_no_ct("DOMAIN", "DM")`                            |
+| `.assign_ct(target, source, ct_codelist, ct_mapping)` | Map values explicitly through a dictionary and validate against a codelist. | `.assign_ct("SEX", "sex_raw", "C66731", {"M":"M", "F":"F"})` |
+| `.assign_dtc(target, source)`                         | Normalise dates to ISO 8601 strings.                                        | `.assign_dtc("RFSTDTC", source="first_dose_dt")`             |
+| `.if_then_else(target, when, else_value)`             | Derive a value conditionally.                                               | `.if_then_else("AGEGR1", pl.col("AGE") < 18, "ADULT")`       |
 
 ## ADaM BDS Namespace (`df.adam`)
 
