@@ -1,6 +1,5 @@
 ---
 description: Communication plan for the Alpha release of the Fleet library
-author: Mahdi About
 ---
 
 # Fleet Alpha Release Communication Plan
@@ -58,7 +57,7 @@ Check out the repo here: [Link]
 
 **Goal:** Address the elephant in the room with leadership, using a visual example of why a native Python/Polars approach is a massive workflow upgrade, emphasizing cost-saving lean tech, LLM readiness, IDE integration, and tool independence.
 
-**Subject:** The Alpha release of Fleet: leading the Python Transition in Clinical Data Science
+**Subject:** The Alpha release of Fleet: leading the Python Adoption in Clinical Data Science
 
 **Draft:**
 
@@ -89,11 +88,26 @@ dm = (
 )
 ```
 
-- **Talent Retention:** The next generation of clinical data scientists are Python-native. Having a modern python stack to attract them, rather than forcing them into R, SAS or clunky Pandas workarounds.
+- **Talent Pool:** The next generation of clinical data scientists are Python-native. Having a modern python stack to attract them, rather than forcing them into R, SAS or clunky Pandas workarounds.
+
+- **Speed:** It runs faster than my setup time: on a short benchmark I ran, the entire ADSL derivation took 0.007 seconds with Fleet vs 0.407 seconds with Admiral—a speedup factor of ~58×. Even including library loading and I/O, the full script ran in 0.257 seconds with Fleet vs 1.235 seconds with Admiral—a speedup factor of ~4.8×.
+
+### Internal Timer (derivation logic only, avg of 5 runs)
+
+| Dataset   | fleet-cdisc |     admiral | Speedup Factor |
+| --------- | ----------: | ----------: | -------------: |
+| ADSL      |     0.007 s |     0.407 s |       **~58×** |
+| ADVS      |     0.009 s |     0.214 s |       **~24×** |
+| ADAE      |     0.006 s |     0.116 s |       **~19×** |
+| **TOTAL** | **0.022 s** | **0.737 s** |       **~34×** |
+
+### Wall Clock (including library loading + I/O, avg of 5 runs)
+
+| Metric      | fleet-cdisc | admiral | Speedup Factor |
+| ----------- | ----------: | ------: | -------------: |
+| Full script |     0.257 s | 1.235 s |      **~4.8×** |
 
 Fleet isn't about replacing what works today; it's about exploring what submissions over the next 5-10 years could look like. I'd like 15 minutes at the next leadership sync to demo a pipeline. It runs faster than my setup time.
-
-Fun fact: this project is the result of exploring LLM capabilities in a language that I always wanted to master. While I have made all archtectural decisions with production-readiness in mind, it is a testimony to how powerful these tools are and how we could work in near future.
 
 Best,
 Mahdi
