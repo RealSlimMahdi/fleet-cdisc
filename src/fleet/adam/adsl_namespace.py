@@ -79,8 +79,14 @@ class ADSLNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        return self._date_agg(target, from_dataset=from_dataset, date_col=date_col,
-                              where=where, groups=groups, agg_fn="min")
+        return self._date_agg(
+            target,
+            from_dataset=from_dataset,
+            date_col=date_col,
+            where=where,
+            groups=groups,
+            agg_fn="min",
+        )
 
     def last_date(
         self,
@@ -115,8 +121,14 @@ class ADSLNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        return self._date_agg(target, from_dataset=from_dataset, date_col=date_col,
-                              where=where, groups=groups, agg_fn="max")
+        return self._date_agg(
+            target,
+            from_dataset=from_dataset,
+            date_col=date_col,
+            where=where,
+            groups=groups,
+            agg_fn="max",
+        )
 
     def _date_agg(
         self,
@@ -224,20 +236,26 @@ class ADSLNamespace(SharedADaMVerbsMixin):
         target: str,
         *,
         criteria: str | pl.Expr,
+        false_value: str | None = None,
     ) -> Self:
-        """Set *target* to ``"Y"`` where *criteria* is true, null otherwise.
+        """Set *target* to ``"Y"`` where *criteria* is true.
+
+        By default non-matching records receive null.  Pass
+        ``false_value="N"`` to use ``"Y"``/``"N"`` convention instead.
 
         Used for population flags: SAFFL, ITTFL, PPROTFL, ENRLFL, COMPLFL.
 
         Args:
             target: Name of the output flag column.
             criteria: Boolean expression or expression string.
+            false_value: Value for non-matching records (default ``None``).
+                Set to ``"N"`` for Admiral-style Y/N flags.
 
         Returns:
             Self: The namespace with *target* appended.
 
         Examples:
-            Derive the safety population flag::
+            Derive the safety population flag (Y/null)::
 
                 adsl = (
                     dm_raw.adam.adsl
@@ -245,13 +263,22 @@ class ADSLNamespace(SharedADaMVerbsMixin):
                                      criteria='pl.col("RANDFL") == "Y"')
                     .to_frame()
                 )
+
+            Derive with Y/N convention::
+
+                adsl = (
+                    dm_raw.adam.adsl
+                    .eligibility_flag("SAFFL",
+                                     criteria='pl.col("RANDFL") == "Y"',
+                                     false_value="N")
+                    .to_frame()
+                )
         """
         from ..sdtm.utils import parse_expression
 
         crit_expr = criteria if isinstance(criteria, pl.Expr) else parse_expression(str(criteria))
-        return self._chain(
-            pl.when(crit_expr).then(pl.lit("Y")).otherwise(pl.lit(None)).alias(target)
-        )
+        else_val = pl.lit(false_value) if false_value is not None else pl.lit(None)
+        return self._chain(pl.when(crit_expr).then(pl.lit("Y")).otherwise(else_val).alias(target))
 
     # ------------------------------------------------------------------ #
     # ADSL: age_years — unit-aware age conversion                         #
@@ -291,6 +318,51 @@ class ADSLNamespace(SharedADaMVerbsMixin):
         return self._chain(
             _age_in_years_expr(age_col=age_col, age_unit_col=age_unit_col, target=target)
         )
+
+    # ------------------------------------------------------------------ #
+    # ADSL: age_from_dates — date-based age calculation                   #
+    # ------------------------------------------------------------------ #
+
+    def age_from_dates(
+        self,
+        target: str = "AAGE",
+        *,
+        birth_date: str = "BRTHDT",
+        reference_date: str = "TRTSDT",
+        round_digits: int | None = 1,
+    ) -> Self:
+        """Compute age in years from two date columns.
+
+        Uses ``(reference_date - birth_date) / 365.25`` for a more precise
+        calculation than unit-conversion from ``AGE``.  Null when either
+        date is missing.
+
+        Args:
+            target: Name of the output column (default ``"AAGE"``).
+            birth_date: Date-of-birth column (``pl.Date``).
+            reference_date: Reference date column (``pl.Date``).
+            round_digits: Decimal places to round to (default ``1``).
+
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Derive age from birth and randomisation dates::
+
+                adsl = (
+                    dm_raw.adam.adsl
+                    .age_from_dates("AAGE", birth_date="BRTHDT",
+                                    reference_date="RANDDT")
+                    .to_frame()
+                )
+        """
+        days = (
+            pl.col(reference_date).cast(pl.Date) - pl.col(birth_date).cast(pl.Date)
+        ).dt.total_days()
+        expr = days / 365.25
+        if round_digits is not None:
+            expr = expr.round(round_digits)
+        return self._chain(expr.alias(target))
 
     # ------------------------------------------------------------------ #
     # ADSL: derive_period — Subperiod / Phase variables                   #

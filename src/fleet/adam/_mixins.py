@@ -449,6 +449,228 @@ class SharedADaMVerbsMixin:
         joined = df.join(adsl, on=join_keys, how="left")
         return self._materialise_then(joined)
 
+    # ------------------------------------------------------------------ #
+    # Date derivation verbs                                                #
+    # ------------------------------------------------------------------ #
+
+    def derive_dt(
+        self,
+        target: str,
+        *,
+        source: str,
+        dtf: str | None = None,
+        day_imputation: str = "first",
+        month_imputation: str = "first",
+    ) -> Self:
+        """Derive an analysis date (``pl.Date``) from a ``--DTC`` string.
+
+        Parses an ISO 8601 character date/time variable (e.g. ``AESTDTC``)
+        into a native ``pl.Date`` column, imputing partial dates according
+        to the chosen strategies.
+
+        Args:
+            target: Name of the output ``pl.Date`` column (e.g. ``"ADT"``).
+            source: Name of the ``--DTC`` input column.
+            dtf: When set, also produces this Date Imputation Flag column
+                (``"M"`` = month imputed, ``"D"`` = day imputed, ``null`` =
+                complete).
+            day_imputation: ``"first"`` (01), ``"last"`` (end-of-month),
+                ``"mid"`` (15), ``"none"`` (null if missing), a column
+                name, or a date literal ``"YYYY-MM-DD"``.
+            month_imputation: ``"first"`` (01), ``"last"`` (12),
+                ``"mid"`` (06), ``"none"`` (null if missing), a column
+                name, or a date literal ``"YYYY-MM-DD"``.
+
+        Returns:
+            Self: The namespace with *target* (and optionally *dtf*)
+                appended; call ``.to_frame()`` to materialise.
+
+        Examples:
+            Derive ADT with default imputation (first)::
+
+                advs = (
+                    vs_df.adam
+                    .derive_dt("ADT", source="VSDTC")
+                    .to_frame()
+                )
+
+            Derive ASTDT with DTF flag and mid-month imputation::
+
+                adae = (
+                    ae_df.adam
+                    .derive_dt("ASTDT", source="AESTDTC", dtf="ASTDTF",
+                               day_imputation="mid", month_imputation="mid")
+                    .to_frame()
+                )
+        """
+        from .utils import dtf_expr, impute_dtc_to_date
+
+        exprs: list[pl.Expr] = [
+            impute_dtc_to_date(
+                source,
+                target,
+                day_imputation=day_imputation,
+                month_imputation=month_imputation,
+            )
+        ]
+        if dtf is not None:
+            exprs.append(dtf_expr(source, dtf))
+        return self._chain(*exprs)
+
+    def derive_dtm(
+        self,
+        target: str,
+        *,
+        source: str,
+        dtf: str | None = None,
+        tmf: str | None = None,
+        day_imputation: str = "first",
+        month_imputation: str = "first",
+        time_imputation: str = "first",
+    ) -> Self:
+        """Derive an analysis datetime (``pl.Datetime``) from a ``--DTC`` string.
+
+        Parses an ISO 8601 character date/time variable into a native
+        ``pl.Datetime`` column, imputing partial dates **and** times
+        according to the chosen strategies.
+
+        For partial dates (YYYY-MM or YYYY), the pipeline materialises
+        internally so that date imputation can feed into the datetime
+        construction.
+
+        Args:
+            target: Name of the output ``pl.Datetime`` column
+                (e.g. ``"ADTM"``).
+            source: Name of the ``--DTC`` input column.
+            dtf: Optional Date Imputation Flag column name.
+            tmf: Optional Time Imputation Flag column name.
+            day_imputation: Strategy for missing day component.
+            month_imputation: Strategy for missing month component.
+            time_imputation: ``"first"`` (00:00:00), ``"last"`` (23:59:59),
+                ``"mid"`` (12:00:00), ``"none"`` (null if missing), a column
+                name, or a datetime literal.
+
+        Returns:
+            Self: The namespace with *target* (and optionally *dtf*, *tmf*)
+                appended; call ``.to_frame()`` to materialise.
+
+        Examples:
+            Derive ADTM with end-of-day time imputation::
+
+                adae = (
+                    ae_df.adam
+                    .derive_dtm("ADTM", source="AESTDTC", tmf="ASTTMF",
+                                time_imputation="last")
+                    .to_frame()
+                )
+        """
+        from .utils import (
+            dtf_expr,
+            impute_dtc_to_date,
+            impute_dtc_to_datetime,
+            tmf_expr,
+        )
+
+        col = pl.col(source)
+        length = col.str.len_chars()
+
+        # For records with partial dates (len < 10) we need a two-step
+        # approach: first impute the date, then build the datetime.
+        # Materialise so we can reference the imputed date column.
+        date_expr = impute_dtc_to_date(
+            source,
+            "__dtm_date_tmp__",
+            day_imputation=day_imputation,
+            month_imputation=month_imputation,
+        )
+        df = self._lazy.with_columns(date_expr).collect()
+
+        # Build the datetime expression using impute_dtc_to_datetime
+        dtm_expr = impute_dtc_to_datetime(
+            source,
+            target,
+            day_imputation=day_imputation,
+            month_imputation=month_imputation,
+            time_imputation=time_imputation,
+        )
+
+        # For partial dates, override with the imputed date + time
+        from .utils import _resolve_time
+
+        time_suffix = _resolve_time(time_imputation)
+        if time_imputation == "none":
+            partial_dtm = pl.lit(None, dtype=pl.Datetime("us"))
+        elif isinstance(time_suffix, str) and time_suffix.startswith("T"):
+            partial_dtm = (
+                pl.col("__dtm_date_tmp__").dt.to_string("%Y-%m-%d") + pl.lit(time_suffix)
+            ).str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
+        else:
+            partial_dtm = (
+                pl.col("__dtm_date_tmp__").dt.to_string("%Y-%m-%d")
+                + pl.lit("T")
+                + pl.col(time_suffix).cast(pl.Time).cast(pl.String)
+            ).str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
+
+        dtm_full = (
+            pl.when(col.is_null() | (length == 0))
+            .then(pl.lit(None, dtype=pl.Datetime("us")))
+            .when(length >= 10)
+            .then(dtm_expr)
+            .otherwise(partial_dtm)
+            .alias(target)
+        )
+
+        exprs: list[pl.Expr] = [dtm_full]
+        if dtf is not None:
+            exprs.append(dtf_expr(source, dtf))
+        if tmf is not None:
+            exprs.append(tmf_expr(source, tmf))
+
+        result = df.with_columns(exprs)
+        if "__dtm_date_tmp__" in result.columns:
+            result = result.drop("__dtm_date_tmp__")
+        return self._materialise_then(result)
+
+    def format_iso(self, target: str, *, source: str) -> Self:
+        """Format a ``pl.Date`` or ``pl.Datetime`` column as an ISO 8601 string.
+
+        Detects the source column type:
+        - ``pl.Date`` → ``"YYYY-MM-DD"``
+        - ``pl.Datetime`` → ``"YYYY-MM-DDTHH:MM:SS"``
+
+        Args:
+            target: Name of the output ``pl.String`` column.
+            source: Name of the input date/datetime column.
+
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Export ADT as an ISO string for submission::
+
+                advs = (
+                    vs_df.adam
+                    .derive_dt("ADT", source="VSDTC")
+                    .format_iso("ADTC", source="ADT")
+                    .to_frame()
+                )
+        """
+        # Materialise to inspect dtype
+        df = self._lazy.collect()
+        dtype = df[source].dtype
+        if dtype == pl.Date:
+            fmt = "%Y-%m-%d"
+        elif dtype.is_(pl.Datetime) or str(dtype).startswith("Datetime"):
+            fmt = "%Y-%m-%dT%H:%M:%S"
+        else:
+            # Already a string or unknown type — pass through
+            return self._materialise_then(
+                df.with_columns(pl.col(source).cast(pl.String).alias(target))
+            )
+        return self._materialise_then(
+            df.with_columns(pl.col(source).dt.to_string(fmt).alias(target))
+        )
+
 
 class MultiRowMixin:
     """

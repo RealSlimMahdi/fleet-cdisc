@@ -69,7 +69,7 @@ sv = (
     raw_visits.sdtm
     .hardcode_no_ct("DOMAIN", value="SV")
     .assign_no_ct("USUBJID", source="subject_id")
-    .assign_datetime("SVSTDTC", source="visit_date")
+    .assign_dtc("SVSTDTC", source="visit_date")
     .visit_map("VISITNUM", "VISIT", date_col="SVSTDTC",
                planned_visits=tv_rows, ref_date="RFSTDTC",
                tolerance={"before": 3, "after": 3})

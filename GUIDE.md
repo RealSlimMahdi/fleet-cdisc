@@ -234,9 +234,9 @@ dm = (
     .assign_no_ct(  "ARM",      source="arm_description")
     .assign_no_ct(  "ACTARMCD", source="arm_code")
     .assign_no_ct(  "ACTARM",   source="arm_description")
-    .assign_datetime("RFSTDTC", source="first_dose_date",       mode="date")
-    .assign_datetime("RFENDTC", source="last_dose_date",        mode="date")
-    .assign_datetime("RFICDTC", source="informed_consent_date", mode="date")
+    .assign_dtc("RFSTDTC", source="first_dose_date")
+    .assign_dtc("RFENDTC", source="last_dose_date")
+    .assign_dtc("RFICDTC", source="informed_consent_date")
     .to_frame()
 )
 
@@ -273,9 +273,8 @@ datasets:
             "M": "M"
       - name: RFSTDTC
         derivation:
-          algorithm: assign_datetime
+          algorithm: assign_dtc
           source: first_dose_date
-          mode: date
 ```
 
 Then execute in one line:
@@ -304,8 +303,8 @@ ae = (
     .hardcode_no_ct("DOMAIN",  value="AE")
     .assign_no_ct(  "USUBJID", source="patient_number")
     .assign_no_ct(  "AETERM",  source="ae_term")
-    .assign_datetime("AESTDTC", source="ae_start_date", mode="date")
-    .assign_datetime("AEENDTC", source="ae_end_date",   mode="date")
+    .assign_dtc("AESTDTC", source="ae_start_date")
+    .assign_dtc("AEENDTC", source="ae_end_date")
     .assign_no_ct(  "AESEV",   source="ae_severity")
     .assign_no_ct(  "AESER",   source="ae_serious")
     .assign_no_ct(  "AEOUT",   source="ae_outcome")
@@ -339,7 +338,7 @@ vs = (
     .assign_no_ct(  "VSORRESU", source="vsorresu")
     .derivation(    "VSSTRESN", expression="pl.col('vsorres').cast(pl.Float64, strict=False)")
     .assign_no_ct(  "VSSTRESU", source="vsorresu")
-    .assign_datetime("VSDTC",  source="vsdtc", mode="date")
+    .assign_dtc("VSDTC",  source="vsdtc")
     .remove_dup(subset=["USUBJID", "VSTESTCD", "VSDTC"])
     .to_frame()
 )
@@ -482,7 +481,7 @@ advs = (
     .rename(  "PARAM",    source="vstest")
     .rename(  "AVALU",    source="vsorresu")
     .derivation("AVAL",   expression="pl.col('vsorres').cast(pl.Float64, strict=False)")
-    .assign_datetime("ADT", source="vsdtc", mode="date")
+    .derive_dt("ADT", source="vsdtc")
     # Join TRTSDT for study day calculation
     .lookup(dataset=_trtsdt_map, on="USUBJID", how="left")
     .study_day("ADY", analysis_date="ADT", reference_date="TRTSDT")
@@ -870,7 +869,7 @@ dm = (
     .hardcode_no_ct("DOMAIN", value="DM")
     .assign_no_ct("USUBJID", source="patient_number")
     .inspect(prefix="After USUBJID")
-    .assign_datetime("RFSTDTC", source="first_dose_date", mode="date")
+    .assign_dtc("RFSTDTC", source="first_dose_date")
     .to_frame()
 )
 ```
@@ -929,7 +928,7 @@ uv run fleet define-xml --spec metadata/adam/define.yaml  --output outputs/defin
 | -------------------- | ------------------------------------------- |
 | `assign_no_ct`       | Raw column → SDTM variable, no decoding     |
 | `assign_ct`          | Raw column → SDTM variable with CT decoding |
-| `assign_datetime`    | Date string → ISO 8601                      |
+| `assign_dtc`         | Date string → ISO 8601                      |
 | `hardcode_no_ct`     | Constant value (DOMAIN, STUDYID, AGEU…)     |
 | `hardcode_ct`        | Constant value, CT-validated                |
 | `condition_add`      | `IF X THEN Y ELSE NULL`                     |

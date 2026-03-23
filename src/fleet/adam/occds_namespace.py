@@ -54,6 +54,7 @@ class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         groups: list[str] | None = None,
         severity_order: list[Any] | None = None,
         where: str | pl.Expr | None = None,
+        mode: str = "first",
     ) -> Self:
         """Flag the record with the worst severity per group.
 
@@ -64,6 +65,9 @@ class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin):
             severity_order: Values from least to most severe
                 (default ``["MILD", "MODERATE", "SEVERE"]``).
             where: Optional pre-filter for candidate rows.
+            mode: ``"first"`` (default) flags only the first record at
+                worst severity per group.  ``"all"`` flags every record
+                at worst severity.
 
         Returns:
             Self: The namespace with *target* appended.
@@ -76,6 +80,15 @@ class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin):
                     .worst_flag("ANL01FL", severity_col="AESEV",
                                 groups=["USUBJID", "AEBODSYS"],
                                 severity_order=["MILD", "MODERATE", "SEVERE"])
+                    .to_frame()
+                )
+
+            Flag all tied worst records::
+
+                adae = (
+                    ae_raw.adam.occds
+                    .worst_flag("ANL01FL", severity_col="AESEV",
+                                groups=["USUBJID"], mode="all")
                     .to_frame()
                 )
         """
@@ -96,7 +109,19 @@ class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin):
             where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
             match_cond = where_expr & match_cond
 
-        flag_expr = pl.when(match_cond).then(pl.lit("Y")).otherwise(pl.lit(None)).alias(target)
+        if mode == "first":
+            # Among tied worst records, pick only the first (by row order)
+            tie_rank = (
+                pl.when(match_cond).then(pl.lit(1)).otherwise(pl.lit(None)).cum_sum().over(grps)
+            )
+            flag_expr = (
+                pl.when(match_cond & (tie_rank == 1))
+                .then(pl.lit("Y"))
+                .otherwise(pl.lit(None))
+                .alias(target)
+            )
+        else:
+            flag_expr = pl.when(match_cond).then(pl.lit("Y")).otherwise(pl.lit(None)).alias(target)
 
         return self._materialise_then(
             self._lazy.with_columns(rank_expr)

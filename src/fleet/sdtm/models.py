@@ -9,7 +9,8 @@ class SDTMAlgorithm(str, Enum):
     """Derivation verbs for SDTM variable mappings."""
     ASSIGN_NO_CT = "assign_no_ct"
     ASSIGN_CT = "assign_ct"
-    ASSIGN_DATETIME = "assign_datetime"
+    ASSIGN_DTC = "assign_dtc"
+    ASSIGN_DATETIME = "assign_datetime"  # legacy alias
     HARDCODE_CT = "hardcode_ct"
     HARDCODE_NO_CT = "hardcode_no_ct"
     CONDITION_ADD = "condition_add"
@@ -28,7 +29,7 @@ class SDTMVariableSpec(BaseModel):
     target: str
     algorithm: SDTMAlgorithm
 
-    # assign_no_ct / assign_ct / assign_datetime
+    # assign_no_ct / assign_ct / assign_dtc
     source: Optional[str] = None
 
     # assign_ct / hardcode_ct
@@ -66,7 +67,7 @@ class SDTMVariableSpec(BaseModel):
     # multiple_responses
     delimiter: Optional[str] = None
 
-    # assign_datetime
+    # assign_dtc
     input_format: Optional[str] = None   # e.g. "%Y-%m-%d"
     output_format: Optional[str] = None  # e.g. "ISO8601"
 

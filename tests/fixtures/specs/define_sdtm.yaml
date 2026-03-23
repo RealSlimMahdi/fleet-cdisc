@@ -125,7 +125,7 @@ datasets:
         mandatory: true
         origin: CRF
         derivation:
-          algorithm: assign_datetime
+          algorithm: assign_dtc
           source: first_dose_date
 
       - name: RFENDTC
@@ -134,7 +134,7 @@ datasets:
         mandatory: false
         origin: CRF
         derivation:
-          algorithm: assign_datetime
+          algorithm: assign_dtc
           source: last_dose_date
 
       - name: RFXSTDTC
@@ -263,7 +263,7 @@ datasets:
         mandatory: false
         origin: CRF
         derivation:
-          algorithm: assign_datetime
+          algorithm: assign_dtc
           source: informed_consent_date
 
   # ─────────────────────────────────────────────────────────────── AE ─── #
@@ -336,7 +336,7 @@ datasets:
         mandatory: true
         origin: CRF
         derivation:
-          algorithm: assign_datetime
+          algorithm: assign_dtc
           source: ae_start_date
 
       - name: AEENDTC
@@ -345,7 +345,7 @@ datasets:
         mandatory: false
         origin: CRF
         derivation:
-          algorithm: assign_datetime
+          algorithm: assign_dtc
           source: ae_end_date
 
       - name: AESEV
@@ -521,7 +521,7 @@ datasets:
         mandatory: true
         origin: CRF
         derivation:
-          algorithm: assign_datetime
+          algorithm: assign_dtc
           source: vs_date
 
 

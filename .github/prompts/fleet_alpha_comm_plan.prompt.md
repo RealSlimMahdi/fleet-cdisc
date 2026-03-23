@@ -32,7 +32,7 @@ dm = (
     .hardcode_no_ct("DOMAIN", value="DM")
     .assign_no_ct("USUBJID", source="patient_number")
     .assign_ct("SEX", source="sex", ct_codelist=SEX)
-    .assign_datetime("BRTHDTC", source="birth_date")
+    .assign_dtc("BRTHDTC", source="birth_date")
     .validate("DM", version="3.4")
     .to_frame()
 )

@@ -97,46 +97,6 @@ class AdamNamespace(SharedADaMVerbsMixin):
     """
 
     # ------------------------------------------------------------------ #
-    # 3b. assign_datetime — convert raw date/datetime to ISO 8601         #
-    # ------------------------------------------------------------------ #
-
-    def assign_datetime(
-        self,
-        target: str,
-        *,
-        source: str,
-        mode: str = "date",
-        input_format: str | None = None,
-    ) -> AdamNamespace:
-        """Parse a date string and store as ISO 8601 in *target*.
-
-        Args:
-            target: Name of the output column.
-            source: Name of the raw date string column.
-            mode: ``"date"`` for YYYY-MM-DD or ``"datetime"`` for
-                YYYY-MM-DDTHH:MM:SS.
-            input_format: Optional ``strftime`` format string for non-standard
-                input dates.
-
-        Returns:
-            AdamNamespace: The namespace with *target* appended.
-
-        Examples:
-            Convert a raw visit-date column to ADT::
-
-                advs = (
-                    vs_raw.adam
-                    .assign_datetime("ADT", source="VSDTC", mode="date")
-                    .to_frame()
-                )
-        """
-        from ..sdtm.utils import to_iso8601_date, to_iso8601_datetime
-
-        fn = to_iso8601_datetime if mode == "datetime" else to_iso8601_date
-        expr = pl.col(source).map_elements(fn, return_dtype=pl.String).alias(target)
-        return self._chain(expr)
-
-    # ------------------------------------------------------------------ #
     # 7. lookup — merge/join with subset conditions                       #
     # ------------------------------------------------------------------ #
 
@@ -402,31 +362,52 @@ class AdamNamespace(SharedADaMVerbsMixin):
 
         grps = groups or ["USUBJID", "PARAMCD"]
 
+        # Parse where clause first — used for scoping below
+        where_expr: pl.Expr | None = None
+        if where is not None:
+            where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
+
         if isinstance(criteria, str) and criteria in ("first", "last", "max", "min"):
             if criteria in ("first", "last"):
                 if not order_by:
                     raise ValueError(f"flag criteria='{criteria}' requires order_by.")
                 descending = criteria == "last"
-                row_cond = pl.col(order_by).rank("ordinal", descending=descending).over(grps) == 1
+                if where_expr is not None:
+                    # Pre-filter semantics: rank only within where-matching
+                    # rows by assigning null rank to non-matching rows, then
+                    # pick rank == 1 among the remaining.
+                    masked_val = pl.when(where_expr).then(pl.col(order_by)).otherwise(pl.lit(None))
+                    row_cond = where_expr & (
+                        masked_val.rank("ordinal", descending=descending).over(grps) == 1
+                    )
+                else:
+                    row_cond = (
+                        pl.col(order_by).rank("ordinal", descending=descending).over(grps) == 1
+                    )
             else:
                 if not value_col:
                     raise ValueError(f"flag criteria='{criteria}' requires value_col.")
-                agg_val = (
-                    pl.col(value_col).max().over(grps)
-                    if criteria == "max"
-                    else pl.col(value_col).min().over(grps)
-                )
-                row_cond = pl.col(value_col) == agg_val
+                if where_expr is not None:
+                    masked_val = pl.when(where_expr).then(pl.col(value_col)).otherwise(pl.lit(None))
+                    agg_val = (
+                        masked_val.max().over(grps)
+                        if criteria == "max"
+                        else masked_val.min().over(grps)
+                    )
+                    row_cond = where_expr & (pl.col(value_col) == agg_val)
+                else:
+                    agg_val = (
+                        pl.col(value_col).max().over(grps)
+                        if criteria == "max"
+                        else pl.col(value_col).min().over(grps)
+                    )
+                    row_cond = pl.col(value_col) == agg_val
+            final_cond = row_cond
         else:
             row_cond = (
                 criteria if isinstance(criteria, pl.Expr) else parse_expression(str(criteria))
             )
-
-        if where is not None:
-            where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
-            final_cond = where_expr & row_cond
-        else:
-            final_cond = row_cond
+            final_cond = (where_expr & row_cond) if where_expr is not None else row_cond
 
         return self._chain(
             pl.when(final_cond).then(pl.lit(flag_value)).otherwise(pl.lit(None)).alias(target)
@@ -510,14 +491,19 @@ class AdamNamespace(SharedADaMVerbsMixin):
         adt: str,
         trtsdt: str,
         trtedt: str,
+        open_ended: bool = True,
     ) -> AdamNamespace:
         """Set *target* to ``"Y"`` when *adt* is within [trtsdt, trtedt].
+
+        When *open_ended* is ``True`` (default) and *trtedt* is null, the
+        interval is treated as ongoing (``adt >= trtsdt`` suffices).
 
         Args:
             target: Name of the output column (default ``"ONTRTFL"``).
             adt: Analysis date column.
             trtsdt: Treatment start date column.
             trtedt: Treatment end date column.
+            open_ended: Treat null *trtedt* as open-ended (default ``True``).
 
         Returns:
             AdamNamespace: The namespace with *target* appended.
@@ -532,7 +518,15 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        return self._chain(_on_treatment_expr(adt=adt, trtsdt=trtsdt, trtedt=trtedt, target=target))
+        return self._chain(
+            _on_treatment_expr(
+                adt=adt,
+                trtsdt=trtsdt,
+                trtedt=trtedt,
+                target=target,
+                open_ended=open_ended,
+            )
+        )
 
     # ------------------------------------------------------------------ #
     # 16. shift — baseline-to-post categorical shift string               #
@@ -1386,9 +1380,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
             ds = matches[0]
         columns = [v["name"] for v in ds["variables"]]
         type_map = {
-            v["name"]: v["type"]
-            for v in ds["variables"]
-            if v.get("type") in ("date", "datetime")
+            v["name"]: v["type"] for v in ds["variables"] if v.get("type") in ("date", "datetime")
         }
         return columns, type_map
 

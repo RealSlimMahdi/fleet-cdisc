@@ -119,7 +119,7 @@ The core of Fleet for SDTM work. Registers `df.sdtm` on every Polars DataFrame.
 | -------------------- | --------------------------------------------------- | -------------------------------------------------------------------- |
 | `assign_no_ct`       | `(target, *, source)`                               | Direct 1:1 column copy/rename, no CT lookup                          |
 | `assign_ct`          | `(target, *, source, ct_codelist, ct_mapping=None)` | Copy column and decode values via CT codelist                        |
-| `assign_datetime`    | `(target, *, source, mode="date")`                  | Parse date string → ISO 8601 (`YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`) |
+| `assign_dtc`         | `(target, *, source, mode="date", input_format=None)` | Parse date string → ISO 8601; preserves partial dates              |
 | `hardcode_ct`        | `(target, *, value, ct_codelist=None)`              | Set every row to a literal constant (CT-validated)                   |
 | `hardcode_no_ct`     | `(target, *, value)`                                | Set every row to a literal constant, no CT                           |
 | `condition_add`      | `(target, *, condition, then_value)`                | `IF condition THEN value ELSE NULL`                                  |

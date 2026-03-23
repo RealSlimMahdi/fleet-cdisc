@@ -49,7 +49,7 @@ dm = (
     .assign_no_ct("USUBJID", source="subject_id")
     .assign_no_ct("ARM", source="arm")
     .assign_ct("SEX", source="sex", ct_codelist=SEX, ct_mapping={"M": "M", "F": "F"})
-    .assign_datetime("BRTHDTC", source="dob", mode="date")
+    .assign_dtc("BRTHDTC", source="dob")
     .to_frame()
 )
 ```
@@ -67,7 +67,7 @@ vs = (
         ct_mapping={"Weight": "WEIGHT", "Heart Rate": "HR"}
     )
     .assign_no_ct("VSSTRESN", source="result")
-    .assign_datetime("VSDTC", source="date", mode="date")
+    .assign_dtc("VSDTC", source="date")
     .to_frame()
 )
 ```
@@ -80,7 +80,7 @@ ae = (
     .hardcode_no_ct("DOMAIN", value="AE")
     .assign_no_ct("USUBJID", source="subject_id")
     .assign_no_ct("AEDECOD", source="ae_term")
-    .assign_datetime("AESTDTC", source="start_date", mode="date")
+    .assign_dtc("AESTDTC", source="start_date")
     .to_frame()
 )
 ```

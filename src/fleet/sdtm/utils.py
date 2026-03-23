@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import ast
 import re
-from datetime import datetime
 from typing import Any
 
 import polars as pl
 
 
 # ------------------------------------------------------------------ #
-# ISO 8601 date/datetime helpers                                       #
+# ISO 8601 date/datetime helpers (vectorised)                          #
 # ------------------------------------------------------------------ #
 
 _ISO_DATE_FMTS = [
@@ -31,33 +30,62 @@ _ISO_DATETIME_FMTS = [
 ]
 
 
-def _try_parse(value: str, formats: list[str]) -> datetime | None:
-    for fmt in formats:
-        try:
-            return datetime.strptime(value, fmt)
-        except (ValueError, TypeError):
-            continue
-    return None
+def dtc_date_expr(source: str, target: str, *, input_format: str | None = None) -> pl.Expr:
+    """Return a vectorised expression that parses *source* to ISO 8601 date string.
+
+    Tries each format in ``_ISO_DATE_FMTS`` via ``pl.coalesce``; partial dates
+    (e.g. ``"2014-01"``, ``"2014"``) that fail all formats are preserved as-is.
+
+    Args:
+        source: Name of the input column containing date strings.
+        target: Name of the output column.
+        input_format: When provided, skips the coalesce chain and uses a
+            single ``str.to_date`` call for maximum performance.
+
+    Returns:
+        pl.Expr: Expression producing an ISO 8601 date string (``pl.String``).
+    """
+    col = pl.col(source)
+    if input_format is not None:
+        parsed = col.str.to_date(input_format, strict=False)
+        return (
+            pl.when(parsed.is_not_null())
+            .then(parsed.dt.to_string("%Y-%m-%d"))
+            .otherwise(col)
+            .alias(target)
+        )
+    candidates = [
+        col.str.to_date(fmt, strict=False).dt.to_string("%Y-%m-%d") for fmt in _ISO_DATE_FMTS
+    ]
+    return pl.coalesce(*candidates, col).alias(target)
 
 
-def to_iso8601_date(value: str | None) -> str | None:
-    """Convert a date string to ISO 8601 (YYYY-MM-DD)."""
-    if not value:
-        return None
-    dt = _try_parse(str(value), _ISO_DATE_FMTS)
-    if dt:
-        return dt.strftime("%Y-%m-%d")
-    return str(value)
+def dtc_datetime_expr(source: str, target: str, *, input_format: str | None = None) -> pl.Expr:
+    """Return a vectorised expression that parses *source* to ISO 8601 datetime string.
 
+    Args:
+        source: Name of the input column containing datetime strings.
+        target: Name of the output column.
+        input_format: When provided, skips the coalesce chain and uses a
+            single ``str.to_datetime`` call for maximum performance.
 
-def to_iso8601_datetime(value: str | None) -> str | None:
-    """Convert a datetime string to ISO 8601 (YYYY-MM-DDTHH:MM:SS)."""
-    if not value:
-        return None
-    dt = _try_parse(str(value), _ISO_DATETIME_FMTS + _ISO_DATE_FMTS)
-    if dt:
-        return dt.strftime("%Y-%m-%dT%H:%M:%S")
-    return str(value)
+    Returns:
+        pl.Expr: Expression producing an ISO 8601 datetime string (``pl.String``).
+    """
+    col = pl.col(source)
+    if input_format is not None:
+        parsed = col.str.to_datetime(input_format, strict=False)
+        return (
+            pl.when(parsed.is_not_null())
+            .then(parsed.dt.to_string("%Y-%m-%dT%H:%M:%S"))
+            .otherwise(col)
+            .alias(target)
+        )
+    all_fmts = _ISO_DATETIME_FMTS + _ISO_DATE_FMTS
+    candidates = [
+        col.str.to_datetime(fmt, strict=False).dt.to_string("%Y-%m-%dT%H:%M:%S") for fmt in all_fmts
+    ]
+    return pl.coalesce(*candidates, col).alias(target)
 
 
 # ------------------------------------------------------------------ #

@@ -44,7 +44,7 @@ dm = (
     .hardcode_no_ct("STUDYID", value="MYSTUDY01")
     .assign_no_ct("USUBJID",   source="patient_id")
     .assign_ct("SEX", source="sex_raw", ct_codelist=SEX)
-    .assign_datetime("BRTHDTC", source="birth_date", mode="date")
+    .assign_dtc("BRTHDTC", source="birth_date")
     .to_frame()
 )
 print(dm)

@@ -185,7 +185,7 @@ def _sdtm_verbs_section() -> str:
 - `assign_ct(target, *, source, ct_codelist, ct_mapping=None)` — recode through CT codelist; \
 accepts a generated codelist class (e.g. `SEX`) or a raw NCI concept ID string (e.g. `"C66731"`); \
 `ct_mapping` is optional when raw data already matches CDISC submission values
-- `assign_datetime(target, *, source, mode)` — normalise to ISO 8601 date/datetime
+- `assign_dtc(target, *, source, mode="date", input_format=None)` — normalise to ISO 8601 date/datetime; preserves partial dates
 - `derivation(target, *, expression)` — arbitrary Polars expression
 - `condition_add(target, *, condition, then_value)` — `IF condition THEN value ELSE NULL`
 - `if_then_else(target, *, when, else_value=None)` — multi-branch conditional
@@ -267,7 +267,10 @@ back to the base `adam` namespace.
 - `condderivation(target, *, conditions, else_value=None)` — multi-branch conditional derivation
 - `whereclauses(*, where)` — filter rows by expression (materialises internally)
 - `merge_adsl(adsl_dataset, *, on="USUBJID", vars=None)` — join ADSL columns onto current dataset
-- `seq(target, *, groups)` — sequential 1-based record number per group\
+- `seq(target, *, groups)` — sequential 1-based record number per group
+- `derive_dt(target, *, source, dtf=None, day_imputation="first", month_imputation="first")` — impute partial --DTC to `pl.Date`; optional DTF flag
+- `derive_dtm(target, *, source, dtf=None, tmf=None, day_imputation="first", month_imputation="first", time_imputation="first")` — impute partial --DTC to `pl.Datetime`; optional DTF/TMF flags
+- `format_iso(target, *, source)` — format `Date` or `Datetime` column as ISO 8601 string\
 """
 
 
@@ -296,7 +299,9 @@ the shared mixin.
 - `derive_locf_records(*, by_vars, analysis_var, order_by)` — forward-fill (LOCF) within groups
 - `derive_param(*, by_vars, set_values_to, parameter_filter, analysis_value)` — derive new parameter rows
 - `lookup(target_cols=None, *, dataset, on, how="left", where=None)` — left-join a reference DataFrame
-- `assign_datetime(target, *, source, mode)` — normalise date string to ISO 8601
+- `derive_dt(target, *, source, dtf=None, day_imputation="first", month_imputation="first")` — impute partial --DTC to `pl.Date`; optional DTF flag
+- `derive_dtm(target, *, source, dtf=None, tmf=None, day_imputation="first", month_imputation="first", time_imputation="first")` — impute partial --DTC to `pl.Datetime`; optional DTF/TMF flags
+- `format_iso(target, *, source)` — format `pl.Date` or `pl.Datetime` column as ISO 8601 string
 - `from_spec(spec_path, *, dataset)` — execute all derivations defined in `define.yaml`
 - `to_frame()` — materialise\
 """
@@ -353,7 +358,10 @@ def _verb_mapping_section() -> str:
 | Multi-branch conditional | `if_then_else` | `sdtm` | List of `{condition, value}` branches |
 | Multi-branch conditional | `condderivation` | `adam` / all sub-ns | Same pattern as `if_then_else` |
 | Arbitrary expression | `derivation` | `sdtm` / `adam` | Last resort — use a Fleet verb first |
-| ISO datetime parse | `assign_datetime` | `sdtm` / `adam` | Normalises to `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS` |
+| ISO 8601 parse (SDTM) | `assign_dtc` | `sdtm` | Normalises to `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`; preserves partial dates |
+| Date imputation (ADaM) | `derive_dt` | `adam` / all sub-ns | Imputes partial --DTC → `pl.Date` with optional DTF flag |
+| Datetime imputation (ADaM) | `derive_dtm` | `adam` / all sub-ns | Imputes partial --DTC → `pl.Datetime` with optional DTF/TMF flags |
+| ISO export | `format_iso` | `adam` / all sub-ns | Formats `Date`/`Datetime` column as ISO 8601 string |
 | Study day (ADY) | `study_day` | `adam` | `ADY = ADT − RFSTDTC + 1` (signed) |
 | Baseline flag (ABLFL) | `flag` | `adam` | Per-group boolean flag |
 | Baseline value (BASE) | `baseline` | `adam` | Carries AVAL at baseline row |

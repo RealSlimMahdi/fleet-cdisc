@@ -264,6 +264,7 @@
           "enum": [
             "assign_no_ct",
             "assign_ct",
+            "assign_dtc",
             "assign_datetime",
             "hardcode_no_ct",
             "hardcode_ct",
@@ -298,7 +299,7 @@
         },
         "source": {
           "type": "string",
-          "description": "Source column name in the input DataFrame (assign_no_ct, assign_ct, assign_datetime, source, rename, recode)."
+          "description": "Source column name in the input DataFrame (assign_no_ct, assign_ct, assign_dtc, source, rename, recode)."
         },
         "value": {
           "description": "Constant value to hardcode into this variable (hardcode_no_ct, hardcode_ct, assigned)."
@@ -318,7 +319,7 @@
         },
         "input_format": {
           "type": "string",
-          "description": "strftime format of the source date/datetime column (assign_datetime)."
+          "description": "strftime format of the source date/datetime column (assign_dtc)."
         },
         "func": {
           "type": "string",

@@ -69,7 +69,7 @@ dm = (
     .assign_no_ct("USUBJID",   source="patient_id")
     .assign_ct("SEX", source="sex_raw",
                ct_codelist=SEX, ct_mapping={"M": "M", "F": "F"})
-    .assign_datetime("BRTHDTC", source="birth_date", mode="date")
+    .assign_dtc("BRTHDTC", source="birth_date")
     .to_frame()
 )
 ```

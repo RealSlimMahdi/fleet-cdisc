@@ -104,7 +104,7 @@ This means you pay no cost for columns you don't chain. Expression ordering mirr
 | `assign_no_ct(target, source)`                       | Copy raw column, no CT validation      |
 | `hardcode_no_ct(target, value)`                      | Constant literal for all rows          |
 | `assign_ct(target, source, ct_codelist, ct_mapping)` | Recode values through a CT codelist    |
-| `assign_datetime(target, source, mode)`              | Normalise to ISO 8601 date or datetime |
+| `assign_dtc(target, source)`                         | Normalise to ISO 8601 date or datetime |
 | `derivation(target, expression)`                     | Arbitrary `pl.Expr`                    |
 | `if_then_else(target, when, else_value)`             | Multi-branch conditional               |
 | `to_frame()`                                         | Materialise                            |

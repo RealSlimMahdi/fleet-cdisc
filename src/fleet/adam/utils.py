@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import polars as pl
 
 
@@ -69,7 +71,6 @@ def flag_baseline(
     Typically: earliest pre-treatment measurement.
     Returns "Y" for the baseline record, null otherwise.
     """
-    groups = group_by or ["USUBJID", "PARAMCD"]
     # Row index within group (use pl.int_range over groups to find first hit)
     is_baseline = criteria_expr
     ranked = pl.when(is_baseline).then(pl.lit("Y")).otherwise(pl.lit(None)).alias(target)
@@ -94,17 +95,28 @@ def nrind(value: str, low: str, high: str, target: str = "NRIND") -> pl.Expr:
     )
 
 
-def on_treatment(adt: str, trtsdt: str, trtedt: str, target: str = "ONTRTFL") -> pl.Expr:
-    """ONTRTFL = "Y" when ADT is on or between TRTSDT and TRTEDT (inclusive)."""
-    return (
-        pl.when(
-            (pl.col(adt).cast(pl.Date) >= pl.col(trtsdt).cast(pl.Date))
-            & (pl.col(adt).cast(pl.Date) <= pl.col(trtedt).cast(pl.Date))
-        )
-        .then(pl.lit("Y"))
-        .otherwise(pl.lit(None))
-        .alias(target)
-    )
+def on_treatment(
+    adt: str,
+    trtsdt: str,
+    trtedt: str,
+    target: str = "ONTRTFL",
+    *,
+    open_ended: bool = True,
+) -> pl.Expr:
+    """ONTRTFL = "Y" when ADT is on or between TRTSDT and TRTEDT (inclusive).
+
+    When *open_ended* is ``True`` (default) and TRTEDT is null the interval
+    is treated as ongoing — ``adt >= trtsdt`` is sufficient for "Y".
+    """
+    adt_d = pl.col(adt).cast(pl.Date)
+    start_d = pl.col(trtsdt).cast(pl.Date)
+    end_d = pl.col(trtedt).cast(pl.Date)
+
+    on_trt = (adt_d >= start_d) & (adt_d <= end_d)
+    if open_ended:
+        on_trt = on_trt | (end_d.is_null() & (adt_d >= start_d))
+
+    return pl.when(on_trt).then(pl.lit("Y")).otherwise(pl.lit(None)).alias(target)
 
 
 def shift(baseline_cat: str, post_cat: str, target: str = "SHIFT1", sep: str = " to ") -> pl.Expr:
@@ -267,3 +279,264 @@ def extreme_flag(
     else:
         raise ValueError(f"extreme_flag mode must be 'max' or 'min', got '{mode}'.")
     return pl.when(val == extreme).then(pl.lit("Y")).otherwise(pl.lit(None)).alias(target)
+
+
+# ------------------------------------------------------------------ #
+# Partial-date imputation helpers (vectorised)                         #
+# ------------------------------------------------------------------ #
+
+_IMPUTE_KEYWORDS: frozenset[str] = frozenset({"first", "last", "mid", "none"})
+
+# ISO 8601 date literal pattern (used to distinguish literal from col name)
+_DATE_LITERAL_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_DATETIME_LITERAL_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$")
+
+
+def _is_date_literal(value: str) -> bool:
+    return bool(_DATE_LITERAL_RE.match(value))
+
+
+def _is_datetime_literal(value: str) -> bool:
+    return bool(_DATETIME_LITERAL_RE.match(value) or _DATE_LITERAL_RE.match(value))
+
+
+def _resolve_day(strategy: str) -> pl.Expr:
+    """Return an expression that yields the imputed day-of-month as a 2-char string."""
+    if strategy == "first":
+        return pl.lit("01")
+    if strategy == "mid":
+        return pl.lit("15")
+    if strategy == "last":
+        # We need month context — handled at call-site via _pad_to_full_date
+        raise ValueError("day_imputation='last' must be handled at call-site")
+    if strategy == "none":
+        return pl.lit(None, dtype=pl.String)
+    # Column reference or date literal
+    if _is_date_literal(strategy):
+        day = int(strategy.split("-")[2])
+        return pl.lit(f"{day:02d}")
+    # Column reference: extract day-of-month from that column
+    return pl.col(strategy).cast(pl.Date).dt.day().cast(pl.String).str.pad_start(2, "0")
+
+
+def _resolve_month(strategy: str) -> pl.Expr:
+    """Return an expression that yields the imputed month as a 2-char string."""
+    if strategy == "first":
+        return pl.lit("01")
+    if strategy == "mid":
+        return pl.lit("06")
+    if strategy == "last":
+        return pl.lit("12")
+    if strategy == "none":
+        return pl.lit(None, dtype=pl.String)
+    if _is_date_literal(strategy):
+        month = int(strategy.split("-")[1])
+        return pl.lit(f"{month:02d}")
+    return pl.col(strategy).cast(pl.Date).dt.month().cast(pl.String).str.pad_start(2, "0")
+
+
+def _resolve_time(strategy: str) -> str | None:
+    """Return a time literal string for the chosen imputation strategy."""
+    if strategy == "first":
+        return "T00:00:00"
+    if strategy == "mid":
+        return "T12:00:00"
+    if strategy == "last":
+        return "T23:59:59"
+    if strategy == "none":
+        return None
+    # Fixed datetime literal: extract time part
+    if _is_datetime_literal(strategy) and "T" in strategy:
+        return "T" + strategy.split("T")[1]
+    if _is_date_literal(strategy):
+        return "T00:00:00"
+    # Column reference — return sentinel; handled at call-site
+    return strategy
+
+
+def dtf_expr(source: str, target: str = "DTF") -> pl.Expr:
+    """Derive the Date Imputation Flag from a ``--DTC`` character column.
+
+    Returns:
+        ``"M"`` when only year is present (month was imputed),
+        ``"D"`` when year-month is present (day was imputed),
+        ``null`` when the date is complete (YYYY-MM-DD or longer).
+    """
+    length = pl.col(source).str.len_chars()
+    return (
+        pl.when(pl.col(source).is_null() | (length == 0))
+        .then(pl.lit(None, dtype=pl.String))
+        .when(length <= 4)
+        .then(pl.lit("M"))
+        .when(length <= 7)
+        .then(pl.lit("D"))
+        .otherwise(pl.lit(None, dtype=pl.String))
+        .alias(target)
+    )
+
+
+def tmf_expr(source: str, target: str = "TMF") -> pl.Expr:
+    """Derive the Time Imputation Flag from a ``--DTC`` character column.
+
+    Returns:
+        ``"H"`` when no time part is present (hours imputed),
+        ``"M"`` when only hours present (minutes imputed),
+        ``"S"`` when hours+minutes present (seconds imputed),
+        ``null`` when the datetime is complete.
+    """
+    length = pl.col(source).str.len_chars()
+    return (
+        pl.when(pl.col(source).is_null() | (length == 0))
+        .then(pl.lit(None, dtype=pl.String))
+        .when(length <= 10)
+        .then(pl.lit("H"))
+        .when(length <= 13)
+        .then(pl.lit("M"))
+        .when(length <= 16)
+        .then(pl.lit("S"))
+        .otherwise(pl.lit(None, dtype=pl.String))
+        .alias(target)
+    )
+
+
+def impute_dtc_to_date(
+    source: str,
+    target: str,
+    *,
+    day_imputation: str = "first",
+    month_imputation: str = "first",
+) -> pl.Expr:
+    """Pad a partial ``--DTC`` string and parse to ``pl.Date``.
+
+    Handles four levels of completeness based on string length:
+    - ``>=10``  → already complete (YYYY-MM-DD or longer), parse directly
+    - ``7``     → YYYY-MM, append ``-DD`` using *day_imputation*
+    - ``4``     → YYYY, append ``-MM-DD`` using *month_imputation* and *day_imputation*
+    - null/empty → null
+
+    For ``day_imputation="last"`` the last day of the month is calculated
+    using Polars date arithmetic.
+
+    Args:
+        source: Name of the ``--DTC`` column (``pl.String``).
+        target: Name of the output ``pl.Date`` column.
+        day_imputation: One of ``"first"``, ``"last"``, ``"mid"``, ``"none"``,
+            a column name, or a date literal (``"YYYY-MM-DD"``).
+        month_imputation: One of ``"first"``, ``"last"``, ``"mid"``, ``"none"``,
+            a column name, or a date literal (``"YYYY-MM-DD"``).
+
+    Returns:
+        pl.Expr: Expression producing a ``pl.Date`` column.
+    """
+    col = pl.col(source)
+    length = col.str.len_chars()
+    date_part = col.str.slice(0, 10)  # strip any time portion
+
+    # Complete date: just parse the first 10 characters
+    complete = date_part.str.to_date("%Y-%m-%d", strict=False)
+
+    # YYYY-MM: append day
+    if day_imputation == "none":
+        with_day = pl.lit(None, dtype=pl.Date)
+    elif day_imputation == "last":
+        # Parse YYYY-MM-01 then go to next month and subtract 1 day
+        first_of_month = (col.str.slice(0, 7) + pl.lit("-01")).str.to_date("%Y-%m-%d", strict=False)
+        with_day = first_of_month.dt.month_end()
+    else:
+        day_val = _resolve_day(day_imputation)
+        with_day = (col.str.slice(0, 7) + pl.lit("-") + day_val).str.to_date(
+            "%Y-%m-%d", strict=False
+        )
+
+    # YYYY: append month and day
+    if month_imputation == "none":
+        with_month_day = pl.lit(None, dtype=pl.Date)
+    else:
+        month_val = _resolve_month(month_imputation)
+        if day_imputation == "none":
+            with_month_day = pl.lit(None, dtype=pl.Date)
+        elif day_imputation == "last":
+            first_of_month = (
+                col.str.slice(0, 4) + pl.lit("-") + month_val + pl.lit("-01")
+            ).str.to_date("%Y-%m-%d", strict=False)
+            with_month_day = first_of_month.dt.month_end()
+        else:
+            day_val = _resolve_day(day_imputation)
+            with_month_day = (
+                col.str.slice(0, 4) + pl.lit("-") + month_val + pl.lit("-") + day_val
+            ).str.to_date("%Y-%m-%d", strict=False)
+
+    return (
+        pl.when(col.is_null() | (length == 0))
+        .then(pl.lit(None, dtype=pl.Date))
+        .when(length >= 10)
+        .then(complete)
+        .when(length >= 7)
+        .then(with_day)
+        .when(length >= 4)
+        .then(with_month_day)
+        .otherwise(pl.lit(None, dtype=pl.Date))
+        .alias(target)
+    )
+
+
+def impute_dtc_to_datetime(
+    source: str,
+    target: str,
+    *,
+    day_imputation: str = "first",
+    month_imputation: str = "first",
+    time_imputation: str = "first",
+) -> pl.Expr:
+    """Pad a partial ``--DTC`` string and parse to ``pl.Datetime``.
+
+    Extends :func:`impute_dtc_to_date` with time handling:
+    - ``>= 19`` → complete datetime, parse directly
+    - ``10-18`` → date complete but time partially or fully missing, impute time
+    - ``< 10``  → partial date, impute date components first then time
+
+    Args:
+        source: Name of the ``--DTC`` column (``pl.String``).
+        target: Name of the output ``pl.Datetime`` column.
+        day_imputation: Strategy for missing day component.
+        month_imputation: Strategy for missing month component.
+        time_imputation: Strategy for missing time component.
+
+    Returns:
+        pl.Expr: Expression producing a ``pl.Datetime`` column.
+    """
+    col = pl.col(source)
+    length = col.str.len_chars()
+
+    time_suffix = _resolve_time(time_imputation)
+
+    # Full datetime string: parse directly
+    full_dtm = col.str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
+
+    # Date part complete (len >= 10) but time missing or partial:
+    # get the date portion and append the default time
+    if time_imputation == "none":
+        date_with_time = pl.lit(None, dtype=pl.Datetime("us"))
+    elif isinstance(time_suffix, str) and time_suffix.startswith("T"):
+        date_with_time = (col.str.slice(0, 10) + pl.lit(time_suffix)).str.to_datetime(
+            "%Y-%m-%dT%H:%M:%S", strict=False
+        )
+    else:
+        # Column reference for time — extract time from that column
+        date_with_time = (
+            col.str.slice(0, 10) + pl.lit("T") + pl.col(time_suffix).cast(pl.Time).cast(pl.String)
+        ).str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
+
+    # Partial dates (len < 10) require materialisation for date imputation
+    # and are handled by the derive_dtm verb in _mixins.py.
+    # This function only handles complete/nearly-complete strings.
+    return (
+        pl.when(col.is_null() | (length == 0))
+        .then(pl.lit(None, dtype=pl.Datetime("us")))
+        .when(length >= 19)
+        .then(full_dtm)
+        .when(length >= 10)
+        .then(date_with_time)
+        .otherwise(pl.lit(None, dtype=pl.Datetime("us")))
+        .alias(target)
+    )

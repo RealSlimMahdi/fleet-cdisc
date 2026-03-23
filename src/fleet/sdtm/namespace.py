@@ -11,7 +11,7 @@ Usage
         raw_df.sdtm
         .assign_no_ct("USUBJID", source="patient_number")
         .assign_ct("SEX", source="sex", ct_codelist=SEX)
-        .assign_datetime("BRTHDTC", source="birth_date")
+        .assign_dtc("BRTHDTC", source="birth_date")
         .hardcode_no_ct("DOMAIN", value="DM")
         .to_frame()
     )
@@ -29,7 +29,7 @@ from typing import Any, TYPE_CHECKING
 import polars as pl
 import yaml
 
-from .utils import parse_expression, to_iso8601_date, to_iso8601_datetime
+from .utils import dtc_date_expr, dtc_datetime_expr, parse_expression
 from ._tdd_mixin import TrialDesignMixin
 
 if TYPE_CHECKING:
@@ -232,25 +232,30 @@ class SDTMNamespace(TrialDesignMixin):
         return self._chain(pl.col(source).alias(target))
 
     # ------------------------------------------------------------------ #
-    # 3. assign_datetime — convert raw date/datetime to ISO 8601          #
+    # 3. assign_dtc — convert raw date/datetime to ISO 8601 string        #
     # ------------------------------------------------------------------ #
 
-    def assign_datetime(
+    def assign_dtc(
         self,
         target: str,
         *,
         source: str,
-        mode: str = "date",  # "date" | "datetime"
+        mode: str = "date",
         input_format: str | None = None,
     ) -> "SDTMNamespace":
         """Parse *source* date string and format as ISO 8601.
+
+        Uses fully vectorised Polars date parsing (no row-by-row Python).
+        Partial dates (e.g. ``"2014-01"``, ``"2014"``) are preserved as-is.
 
         Args:
             target: Name of the output ``--DTC`` variable.
             source: Name of the raw column containing date strings.
             mode: ``"date"`` (default) for YYYY-MM-DD or ``"datetime"`` for
                 YYYY-MM-DDTHH:MM:SS.
-            input_format: Optional strptime format hint.
+            input_format: Optional strptime format string.  When provided the
+                coalesce chain is skipped and a single ``str.to_date`` call is
+                used for maximum performance.
 
         Returns:
             SDTMNamespace: The namespace with *target* appended; call
@@ -261,16 +266,14 @@ class SDTMNamespace(TrialDesignMixin):
 
                 ae = (
                     raw_df.sdtm
-                    .assign_datetime("AESTDTC", source="ae_start_date")
+                    .assign_dtc("AESTDTC", source="ae_start_date")
                     .to_frame()
                 )
         """
         if mode == "datetime":
-            fn = to_iso8601_datetime
+            expr = dtc_datetime_expr(source, target, input_format=input_format)
         else:
-            fn = to_iso8601_date
-
-        expr = pl.col(source).map_elements(fn, return_dtype=pl.String).alias(target)
+            expr = dtc_date_expr(source, target, input_format=input_format)
         return self._chain(expr)
 
     # ------------------------------------------------------------------ #
@@ -761,8 +764,8 @@ class SDTMNamespace(TrialDesignMixin):
                     ct_codelist=var.ct_codelist or "",
                     ct_mapping=var.ct_mapping,
                 )
-            elif alg == "assign_datetime":
-                ns = ns.assign_datetime(
+            elif alg in ("assign_dtc", "assign_datetime"):
+                ns = ns.assign_dtc(
                     target,
                     source=var.source or target,
                     mode="datetime" if "DT" in target and "C" in target else "date",

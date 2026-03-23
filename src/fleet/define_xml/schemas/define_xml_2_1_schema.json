@@ -1647,7 +1647,7 @@
           ],
           "properties": {
             "algorithm": {
-              "const": "assign_datetime"
+              "enum": ["assign_dtc", "assign_datetime"]
             },
             "source_variable": {
               "type": "string",
@@ -1999,6 +1999,7 @@
                 "enum": [
                   "assign_no_ct",
                   "assign_ct",
+                  "assign_dtc",
                   "assign_datetime",
                   "hardcode_ct",
                   "hardcode_no_ct",
