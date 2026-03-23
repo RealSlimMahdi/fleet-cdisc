@@ -1,13 +1,13 @@
 # Fleet
 
-**CDISC SDTM/ADaM derivation toolkit for [Polars](https://pola.rs) DataFrames.**
+**Fleet** is a lazy expression accumulator with an immutable builder API that specializes in creating **CDISC SDTM/ADaM** datasets using the well-known [Polars](https://pola.rs) library.
 
 <div class="grid cards" markdown>
 
-- :material-speedometer: **Performance** first, built on top of the famous Polars library
-- :material-robot-happy-outline: **LLM** friendly from the ground up
-- :material-package-variant-closed-minus: **Lean**, built on less than 5 dependencies
-- :fontawesome-brands-internet-explorer: **Internet Explorer** ... huh?
+- :material-speedometer: **Performance** blazing fast polars API
+- :material-robot-happy-outline: Designed as an **AI-first** toolkit
+- :material-package-variant-closed-minus: **Seven**, the exact number of dependencies
+- :simple-gitextensions: **Extensible API** to match your own standards
 
 </div>
 
