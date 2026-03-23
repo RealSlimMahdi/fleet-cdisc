@@ -1,6 +1,7 @@
 <a id="readme-top"></a>
 
 <!-- PROJECT SHIELDS -->
+
 [![Contributors][contributors-shield]][contributors-url]
 [![Forks][forks-shield]][forks-url]
 [![Stargazers][stars-shield]][stars-url]
@@ -58,6 +59,7 @@
 ---
 
 <!-- ABOUT THE PROJECT -->
+
 ## About The Project
 
 Fleet is a **lazy expression accumulator** with an immutable builder API that specializes in creating **CDISC SDTM/ADaM** datasets using [Polars](https://pola.rs) namespace extensions.
@@ -66,12 +68,12 @@ Clinical statistical programming often requires hundreds of lines of boilerplate
 
 **Why Fleet?**
 
-* **Intent-driven syntax** — your code reads like the CDISC spec itself
-* **Lazy evaluation** — all verbs accumulate into a single Polars `with_columns` pass; nothing runs until `.to_frame()`
-* **Zero Pandas** — built entirely on Polars for blazing-fast, multi-threaded execution
-* **AI-first design** — structured API surface optimized for LLM-assisted programming
-* **Dual workflow** — inline Python pipeline chaining *or* metadata-driven `define.yaml` approach
-* **Seven dependencies** — minimal footprint, maximum capability
+- **Intent-driven syntax** — your code reads like the CDISC spec itself
+- **Lazy evaluation** — all verbs accumulate into a single Polars `with_columns` pass; nothing runs until `.to_frame()`
+- **Zero Pandas** — built entirely on Polars for blazing-fast, multi-threaded execution
+- **AI-first design** — structured API surface optimized for LLM-assisted programming
+- **Dual workflow** — inline Python pipeline chaining _or_ metadata-driven `define.yaml` approach
+- **Seven dependencies** — minimal footprint, maximum capability
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -122,13 +124,14 @@ Nothing runs until `.to_frame()`. All intermediate verbs accumulate into a singl
 ---
 
 <!-- GETTING STARTED -->
+
 ## Getting Started
 
 ### Prerequisites
 
-* **Python 3.12+**
-* [**uv**](https://docs.astral.sh/uv/getting-started/installation/) — the only supported package manager
-* **CDISC Library API key** (optional, for CLI bootstrapping) — get one at [library.cdisc.org](https://library.cdisc.org)
+- **Python 3.12+**
+- [**uv**](https://docs.astral.sh/uv/getting-started/installation/) — the only supported package manager
+- **CDISC Library API key** (optional, for CLI bootstrapping) — get one at [library.cdisc.org](https://library.cdisc.org)
 
 ### Installation
 
@@ -158,27 +161,115 @@ python -c "import fleet; print(fleet.__version__)"
 
 ## Namespace Extensions
 
-Importing `fleet` registers chainable namespaces on **every** Polars DataFrame:
+Importing `fleet` registers chainable namespaces on **every** Polars DataFrame. All ADaM namespaces also inherit **11 shared verbs** from the common mixin: `source`, `derivation`, `assigned`, `recode`, `rename`, `condderivation`, `whereclauses`, `merge_adsl`, `derive_dt`, `derive_dtm`, `format_iso`.
 
-| Namespace | Target | Verbs | Description |
-| --- | --- | --- | --- |
-| `df.sdtm` | SDTM domains | 14 | Domain mapping, CT lookup, datetime normalisation |
-| `df.adam` | ADaM BDS | 22 | Study day, baseline, change, flags, BSA, MAP, QTc, LOCF |
-| `df.adam.adsl` | ADSL | 8 | Treatment dates, duration, population flags, eligibility |
-| `df.adam.occds` | OCCDS (ADAE, ADCM…) | 5 | Treatment-emergent, worst severity, sequencing |
-| `df.adam.onco` | Oncology | — | RECIST response, BOR |
-| `df.adam.ophtha` | Ophthalmology | — | ETDRS/LogMAR, study eye |
-| `df.adam.peds` | Pediatrics | — | Age derivations, prematurity |
-| `df.adam.vaccine` | Vaccine | — | Fever, seroconversion |
-| `df.adam.metabolic` | Metabolic | — | Waist ratios, body fat % |
-| `df.adam.neuro` | Neuroscience | — | Centiloid, MMSE, CDR-SoB |
-| `df.adam.pk` | Pharmacokinetics | — | ADNCA pipeline |
+<details>
+<summary><b><code>df.sdtm</code></b> — SDTM domains (14 verbs)</summary>
+
+`assign_no_ct` · `assign_ct` · `assign_dtc` · `hardcode_ct` · `hardcode_no_ct` · `condition_add` · `if_then_else` · `ae_aerel` · `merge` · `remove_dup` · `group_by` · `dataset_level` · `notsubmitted` · `multiple_responses`
+
+</details>
+
+<details>
+<summary><b><code>df.adam</code></b> — ADaM BDS (28 verbs: 17 specific + 11 shared)</summary>
+
+**Specific:** `lookup` · `study_day` · `baseline` · `chg` · `pchg` · `flag` · `bmi` · `nrind` · `on_treatment` · `shift` · `bsa` · `map` · `qtc` · `derive_summary_records` · `derive_locf_records` · `derive_param` · `transform`
+
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso`
+
+</details>
+
+<details>
+<summary><b><code>df.adam.adsl</code></b> — ADSL (20 verbs: 9 specific + 11 shared)</summary>
+
+**Specific:** `first_date` · `last_date` · `duration` · `count_events` · `eligibility_flag` · `age_years` · `age_from_dates` · `derive_period`
+
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso`
+
+</details>
+
+<details>
+<summary><b><code>df.adam.occds</code></b> — OCCDS / ADAE, ADCM… (15 verbs: 3 specific + 11 shared + 1 multi-row)</summary>
+
+**Specific:** `worst_flag` · `treatment_emergent` · `onset_recovery`
+
+**Multi-row:** `seq`
+
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso`
+
+</details>
+
+<details>
+<summary><b><code>df.adam.onco</code></b> — Oncology (16 verbs: 5 specific + 11 shared)</summary>
+
+**Specific:** `aval_resp` · `tumor_response_flag` · `best_overall_response` · `confirmed_response_flag` · `filter_pd`
+
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso`
+
+</details>
+
+<details>
+<summary><b><code>df.adam.ophtha</code></b> — Ophthalmology (16 verbs: 5 specific + 11 shared)</summary>
+
+**Specific:** `etdrs_to_logmar` · `logmar_to_etdrs` · `study_eye` · `affected_eye` · `bcva_criterion`
+
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso`
+
+</details>
+
+<details>
+<summary><b><code>df.adam.peds</code></b> — Pediatrics (17 verbs: 6 specific + 11 shared)</summary>
+
+**Specific:** `age_days` · `age_months` · `age_years` · `corrected_age` · `prematurity_flag` · `bmi_category`
+
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso`
+
+</details>
+
+<details>
+<summary><b><code>df.adam.vaccine</code></b> — Vaccine (16 verbs: 5 specific + 11 shared)</summary>
+
+**Specific:** `fever_flag` · `seroconversion_flag` · `seroresponse_flag` · `aval_adis` · `event_flag`
+
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso`
+
+</details>
+
+<details>
+<summary><b><code>df.adam.metabolic</code></b> — Metabolic (15 verbs: 4 specific + 11 shared)</summary>
+
+**Specific:** `waist_hip_ratio` · `waist_height_ratio` · `body_fat_pct` · `visceral_fat_flag`
+
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso`
+
+</details>
+
+<details>
+<summary><b><code>df.adam.neuro</code></b> — Neuroscience (16 verbs: 5 specific + 11 shared)</summary>
+
+**Specific:** `centiloid` · `mmse_category` · `cdrsob_total` · `moca_category` · `panss_total`
+
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso`
+
+</details>
+
+<details>
+<summary><b><code>df.adam.pk</code></b> — Pharmacokinetics (27 verbs: 15 specific + 11 shared + 1 multi-row)</summary>
+
+**Specific:** `blq_flag` · `blq_impute` · `nominal_time` · `actual_time` · `predose_flag` · `dose_normalized` · `evid` · `mrrlt` · `blqfn` · `log_conc` · `mdv` · `amt` · `cmt` · `avalcat` · `anl_flag`
+
+**Multi-row:** `seq`
+
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso`
+
+</details>
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ---
 
 <!-- USAGE EXAMPLES -->
+
 ## Usage
 
 ### Code-Driven Pipeline
@@ -326,6 +417,7 @@ For detailed module-by-module documentation, see [STRUCTURE.md](STRUCTURE.md).
 ---
 
 <!-- ROADMAP -->
+
 ## Roadmap
 
 - [x] SDTM namespace with 14 derivation verbs
@@ -349,6 +441,7 @@ See the [open issues](https://github.com/RealSlimMahdi/fleet-cdisc/issues) for a
 ---
 
 <!-- CONTRIBUTING -->
+
 ## Contributing
 
 Contributions are what make the open-source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
@@ -388,6 +481,7 @@ uv run python examples/tdd_example.py
 ---
 
 <!-- LICENSE -->
+
 ## License
 
 Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
@@ -397,18 +491,20 @@ Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
 ---
 
 <!-- ACKNOWLEDGMENTS -->
+
 ## Acknowledgments
 
-* [Polars](https://pola.rs/) — the blazing-fast DataFrame library that powers Fleet
-* [CDISC](https://www.cdisc.org/) — the clinical data standards that Fleet implements
-* [Pharmaverse](https://pharmaverse.org/) — inspiration from the R ecosystem, particularly the admiral family of packages
-* [Best-README-Template](https://github.com/othneildrew/Best-README-Template) — the template that inspired this README
+- [Polars](https://pola.rs/) — the blazing-fast DataFrame library that powers Fleet
+- [CDISC](https://www.cdisc.org/) — the clinical data standards that Fleet implements
+- [Pharmaverse](https://pharmaverse.org/) — inspiration from the R ecosystem, particularly the admiral family of packages
+- [Best-README-Template](https://github.com/othneildrew/Best-README-Template) — the template that inspired this README
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ---
 
 <!-- MARKDOWN LINKS & IMAGES -->
+
 [contributors-shield]: https://img.shields.io/github/contributors/RealSlimMahdi/fleet-cdisc.svg?style=for-the-badge
 [contributors-url]: https://github.com/RealSlimMahdi/fleet-cdisc/graphs/contributors
 [forks-shield]: https://img.shields.io/github/forks/RealSlimMahdi/fleet-cdisc.svg?style=for-the-badge
