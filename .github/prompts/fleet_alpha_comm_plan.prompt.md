@@ -174,5 +174,3 @@ Mahdi About
 | Packaging and distribution readiness               | ✅     | Package metadata, console entry point, and release automation to TestPyPI/PyPI configured                         | pyproject.toml, publish.yml                | Add signed artifacts and release attestation                                                              |
 | Alpha release milestone                            | ✅     | Alpha maturity declared and version 0.1.0 is defined with changelog entry                                         | pyproject.toml, \_version.py, changelog.md | Define criteria and timeline for beta (stability, API freeze, validation breadth)                         |
 | Beta/GA readiness program                          | 🟡     | Strong foundation exists, but explicit beta/GA gates are not yet formalized in repo docs                          | changelog.md, CONTRIBUTING.md              | Publish a formal readiness matrix (quality, compliance, performance, support, deprecation policy)         |
-
-If you want, I can produce a second version of this table as a one-page “management dashboard” with just 6-8 top-level rows and a Red/Amber/Green view.
