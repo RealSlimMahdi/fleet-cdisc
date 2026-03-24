@@ -11,13 +11,13 @@
 
 </div>
 
-[![Build Status](https://img.shields.io/badge/build-passing-success)](https://github.com/RealSlimMahdi/fleet-cdisc/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-100%25-success)](https://github.com/RealSlimMahdi/fleet-cdisc)
-[![GitHub](https://img.shields.io/badge/GitHub-fleet--cdisc-181717?logo=github)](https://github.com/RealSlimMahdi/fleet-cdisc)
-[![Docs](https://github.com/RealSlimMahdi/fleet-cdisc/actions/workflows/docs.yml/badge.svg)](https://realslimmahdi.github.io/fleet-cdisc/)
-[![PyPI](https://img.shields.io/badge/pypi-alpha_0.1.0-blue)](https://pypi.org/project/fleet-cdisc/)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Build Status](https://img.shields.io/badge/build-passing-success?style=for-the-badge)](https://github.com/RealSlimMahdi/fleet-cdisc/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-100%25-success?style=for-the-badge)](https://github.com/RealSlimMahdi/fleet-cdisc)
+[![GitHub](https://img.shields.io/badge/GitHub-fleet--cdisc-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/RealSlimMahdi/fleet-cdisc)
+[![Docs](https://img.shields.io/badge/docs-passing-success?style=for-the-badge)](https://realslimmahdi.github.io/fleet-cdisc/)
+[![PyPI](https://img.shields.io/pypi/v/fleet-cdisc?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/fleet-cdisc/)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/github/license/RealSlimMahdi/fleet-cdisc.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
 ---
 
