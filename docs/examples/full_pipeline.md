@@ -1,6 +1,6 @@
 # End-to-End Walkthrough: Multi-Domain Pipeline
 
-[![Open in Colab](https://img.shields.io/badge/Open_in_Colab-F9AB00?style=for-the-badge&logo=googlecolab&logoColor=white)](https://colab.research.google.com/github/RealSlimMahdi/fleet-cdisc/blob/main/docs/examples/01_code_driven_pipeline.ipynb)
+[![Open in Colab](https://img.shields.io/badge/Open_in_Colab-F9AB00?style=for-the-badge&logo=googlecolab&logoColor=white)](https://colab.research.google.com/github/RealSlimMahdi/fleet-cdisc/blob/devel/docs/examples/01_code_driven_pipeline.ipynb)
 
 > **Interactive Playground** — Click the badge above to launch a notebook in Google Colab and experiment with Fleet live, no local setup needed.
 
