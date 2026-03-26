@@ -42,6 +42,57 @@ class TestHardcodeCT:
         result = simple_raw.sdtm.hardcode_ct("AGEU", value="YEARS", ct_codelist="C66789").to_frame()
         assert result["AGEU"].to_list() == ["YEARS", "YEARS", "YEARS"]
 
+    def test_warns_on_invalid_value(self, simple_raw):
+        """When CT is loaded and the value is not valid, a warning is emitted."""
+        from fleet.ct.validator import get_validator
+
+        validator = get_validator()
+        # Seed a tiny codelist so validation can fire
+        validator._ct_cache["C_TEST"] = {"YEARS": {}, "MONTHS": {}}
+        try:
+            with pytest.warns(UserWarning, match="not in codelist"):
+                simple_raw.sdtm.hardcode_ct(
+                    "AGEU", value="INVALID", ct_codelist="C_TEST"
+                ).to_frame()
+        finally:
+            validator._ct_cache.pop("C_TEST", None)
+
+    def test_no_warning_on_valid_value(self, simple_raw):
+        """No warning when the value IS in the loaded codelist."""
+        from fleet.ct.validator import get_validator
+
+        validator = get_validator()
+        validator._ct_cache["C_TEST2"] = {"YEARS": {}, "MONTHS": {}}
+        try:
+            import warnings
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("error")
+                result = simple_raw.sdtm.hardcode_ct(
+                    "AGEU", value="YEARS", ct_codelist="C_TEST2"
+                ).to_frame()
+            assert result["AGEU"].to_list() == ["YEARS", "YEARS", "YEARS"]
+        finally:
+            validator._ct_cache.pop("C_TEST2", None)
+
+    def test_codelist_class_resolved(self, simple_raw):
+        """A codelist class with ``_concept_id`` is resolved to its ID."""
+        from fleet.ct.validator import get_validator
+
+        validator = get_validator()
+        validator._ct_cache["C99999"] = {"YEARS": {}}
+        try:
+
+            class FakeCodelist:
+                _concept_id = "C99999"
+
+            result = simple_raw.sdtm.hardcode_ct(
+                "AGEU", value="YEARS", ct_codelist=FakeCodelist
+            ).to_frame()
+            assert result["AGEU"].to_list() == ["YEARS", "YEARS", "YEARS"]
+        finally:
+            validator._ct_cache.pop("C99999", None)
+
 
 class TestAssignDtc:
     def test_date_iso(self, simple_raw):

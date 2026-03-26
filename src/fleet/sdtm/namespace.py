@@ -285,9 +285,15 @@ class SDTMNamespace(TrialDesignMixin):
         target: str,
         *,
         value: Any,
-        ct_codelist: str | None = None,
+        ct_codelist: str | type | None = None,
     ) -> "SDTMNamespace":
         """Set *target* to a constant *value*, validated against controlled terminology.
+
+        When *ct_codelist* is provided **and** a ``CTValidator`` has been
+        initialised with CT data, the *value* is checked at pipeline-build
+        time.  A warning is emitted if the value is not a valid submission
+        value for that codelist.  If CT data is not loaded, the validation
+        is silently skipped and the value is assigned as-is.
 
         Args:
             target: Name of the output SDTM variable.
@@ -312,6 +318,23 @@ class SDTMNamespace(TrialDesignMixin):
                     .to_frame()
                 )
         """
+        if ct_codelist is not None:
+            # Resolve codelist class to its concept ID string.
+            if not isinstance(ct_codelist, str):
+                ct_codelist = getattr(ct_codelist, "_concept_id", None) or ct_codelist.__name__
+
+            try:
+                from ..ct.validator import get_validator
+
+                validator = get_validator()
+                valid, msg = validator.validate_value(ct_codelist, str(value))
+                if not valid:
+                    import warnings
+
+                    warnings.warn(msg, stacklevel=2)
+            except Exception:
+                pass  # CT not loaded — skip validation
+
         return self._chain(pl.lit(value).alias(target))
 
     # ------------------------------------------------------------------ #
