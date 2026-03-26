@@ -107,11 +107,11 @@ The `assign_ct` SDTM verb and `recode` ADaM verb use the singleton automatically
 
 The core of Fleet for SDTM work. Registers `df.sdtm` on every Polars DataFrame.
 
-| File           | Purpose                                                                                                                              |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `models.py`    | `SDTMAlgorithm` enum (the 14 verb names), `SDTMVariableSpec` (Pydantic model for one variable in a YAML spec), `SDTMDomainSpec`      |
-| `utils.py`     | Internal helpers — `to_iso8601_date`, `to_iso8601_datetime`, `parse_expression(str) → pl.Expr` (with AST whitelist), `make_seq_expr` |
-| `namespace.py` | `SDTMNamespace` — the actual namespace class with all 14 verbs                                                                       |
+| File           | Purpose                                                                                                                         |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `models.py`    | `SDTMAlgorithm` enum (the 14 verb names), `SDTMVariableSpec` (Pydantic model for one variable in a YAML spec), `SDTMDomainSpec` |
+| `utils.py`     | Internal helpers — `to_iso8601_date`, `to_iso8601_datetime`, `parse_expression(str) → pl.Expr` (with AST whitelist)             |
+| `namespace.py` | `SDTMNamespace` — the actual namespace class with all 14 verbs                                                                  |
 
 **The 14 SDTM derivation verbs:**
 
@@ -151,11 +151,11 @@ Every verb returns a _new_ `SDTMNamespace` instance (via `copy.copy(self)`) with
 
 Registers `df.adam` on every Polars DataFrame.
 
-| File           | Purpose                                                                                                                                                                                                                              |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `models.py`    | `ADAMAlgorithm` enum (9 verb names), `ADAMVariableSpec`, `ADAMDatasetSpec`                                                                                                                                                           |
-| `utils.py`     | Standard ADaM calculation functions — all return `pl.Expr`: `study_day`, `baseline`, `chg`, `pchg`, `flag_baseline`, `bmi`, `bsa`, `mean_arterial_pressure`, `qtc`, `age_in_years`, `extreme_flag`, `nrind`, `on_treatment`, `shift` |
-| `namespace.py` | `AdamNamespace` — the BDS namespace class with 22 verbs including record-generating verbs (`derive_summary_records`, `derive_locf_records`, `derive_param`)                                                                          |
+| File           | Purpose                                                                                                                                                                                             |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `models.py`    | `ADAMAlgorithm` enum (9 verb names), `ADAMVariableSpec`, `ADAMDatasetSpec`                                                                                                                          |
+| `utils.py`     | Standard ADaM calculation functions — all return `pl.Expr`: `study_day`, `baseline`, `chg`, `pchg`, `bmi`, `bsa`, `mean_arterial_pressure`, `qtc`, `age_in_years`, `nrind`, `on_treatment`, `shift` |
+| `namespace.py` | `AdamNamespace` — the BDS namespace class with 22 verbs including record-generating verbs (`derive_summary_records`, `derive_locf_records`, `derive_param`)                                         |
 
 **The 9 ADaM derivation verbs:**
 

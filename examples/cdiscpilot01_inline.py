@@ -503,17 +503,24 @@ advs = (
     # admiral: derive_var_chg
     .chg( "CHG",  aval="AVAL", base="BASE")
     .pchg("PCHG", aval="AVAL", base="BASE")
+    # admiral: restrict_derivation + derive_var_extreme_flag
+    # ANL01FL — last valid assessment per subject/parameter (non-null AVAL)
+    .flag("ANL01FL", criteria="last", order_by="ADT",
+          groups=["USUBJID", "PARAMCD"],
+          where='~pl.col("AVAL").is_null()')
     .to_frame()
 )
 
 ADVS_COLS = ["STUDYID", "USUBJID", "PARAMCD", "PARAM",
-             "AVAL", "AVALU", "ADT", "ADY", "ABLFL", "BASE", "CHG", "PCHG", "TRTSDT"]
+             "AVAL", "AVALU", "ADT", "ADY", "ABLFL", "BASE", "CHG", "PCHG",
+             "ANL01FL", "TRTSDT"]
 advs_final = advs.select([c for c in ADVS_COLS if c in advs.columns])
 advs_final.write_parquet(OUT / "advs_admiral.parquet")
 
 print(f"   Shape      : {advs_final.shape[0]} records × {advs_final.shape[1]} variables")
 print(f"   Parameters : {sorted(advs_final['PARAMCD'].unique().to_list())}")
 print(f"   ABLFL = Y  : {(advs_final['ABLFL'] == 'Y').sum()} records")
+print(f"   ANL01FL = Y: {(advs_final['ANL01FL'] == 'Y').sum()} records")
 print(f"   CHG range  : {advs_final['CHG'].drop_nulls().min():.2f} – {advs_final['CHG'].drop_nulls().max():.2f}")
 
 # ════════════════════════════════════════════════════════════════════════════

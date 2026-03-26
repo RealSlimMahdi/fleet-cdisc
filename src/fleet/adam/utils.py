@@ -60,23 +60,6 @@ def pchg(aval: str = "AVAL", base: str = "BASE", target: str = "PCHG") -> pl.Exp
     )
 
 
-def flag_baseline(
-    criteria_expr: pl.Expr,
-    group_by: list[str] | None = None,
-    target: str = "ABLFL",
-) -> pl.Expr:
-    """
-    Flag the baseline record within each group using *criteria_expr*.
-
-    Typically: earliest pre-treatment measurement.
-    Returns "Y" for the baseline record, null otherwise.
-    """
-    # Row index within group (use pl.int_range over groups to find first hit)
-    is_baseline = criteria_expr
-    ranked = pl.when(is_baseline).then(pl.lit("Y")).otherwise(pl.lit(None)).alias(target)
-    return ranked
-
-
 def bmi(weight: str = "weight_kg", height: str = "height_cm", target: str = "BMI") -> pl.Expr:
     """BMI = weight_kg / (height_m^2). Height input assumed in cm."""
     height_m = pl.col(height) / 100.0
@@ -252,40 +235,8 @@ def age_in_years(
 
 
 # ------------------------------------------------------------------ #
-# Admiral-parity: Extreme flags (min / max)                            #
-# ------------------------------------------------------------------ #
-
-
-def extreme_flag(
-    value_col: str = "AVAL",
-    *,
-    mode: str = "max",
-    groups: list[str] | None = None,
-    target: str = "ANL01FL",
-) -> pl.Expr:
-    """
-    Flag the record(s) with the extreme (max or min) value per group.
-
-    Returns ``"Y"`` for records matching the extreme, null otherwise.
-
-    *mode*: ``"max"`` or ``"min"``.
-    """
-    grps = groups or ["USUBJID", "PARAMCD"]
-    val = pl.col(value_col)
-    if mode == "max":
-        extreme = val.max().over(grps)
-    elif mode == "min":
-        extreme = val.min().over(grps)
-    else:
-        raise ValueError(f"extreme_flag mode must be 'max' or 'min', got '{mode}'.")
-    return pl.when(val == extreme).then(pl.lit("Y")).otherwise(pl.lit(None)).alias(target)
-
-
-# ------------------------------------------------------------------ #
 # Partial-date imputation helpers (vectorised)                         #
 # ------------------------------------------------------------------ #
-
-_IMPUTE_KEYWORDS: frozenset[str] = frozenset({"first", "last", "mid", "none"})
 
 # ISO 8601 date literal pattern (used to distinguish literal from col name)
 _DATE_LITERAL_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")

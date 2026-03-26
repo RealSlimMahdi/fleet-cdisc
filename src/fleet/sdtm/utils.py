@@ -191,13 +191,3 @@ def parse_expression(expr_str: str) -> pl.Expr:
         raise ValueError(f"Cannot parse expression {expr_str!r}: {exc}") from exc
 
 
-# ------------------------------------------------------------------ #
-# Sequence number generation                                           #
-# ------------------------------------------------------------------ #
-
-
-def make_seq_expr(group_by: list[str] | None = None, target: str = "SEQ") -> pl.Expr:
-    """Return an expression that adds sequential row numbers (1-based)."""
-    if group_by:
-        return pl.int_range(pl.len()).over(group_by).alias(target) + 1
-    return (pl.int_range(pl.len()) + 1).alias(target)

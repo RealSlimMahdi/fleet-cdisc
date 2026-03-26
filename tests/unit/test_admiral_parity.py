@@ -2,7 +2,7 @@
 Unit tests for Admiral-parity additions.
 
 Covers:
-- utils.py: bsa, mean_arterial_pressure, qtc, age_in_years, extreme_flag
+- utils.py: bsa, mean_arterial_pressure, qtc, age_in_years
 - namespace.py: bsa(), map(), qtc(), derive_summary_records(),
                 derive_locf_records(), derive_param()
 - adsl_namespace.py: age_years(), derive_period()
@@ -17,7 +17,6 @@ import fleet  # noqa: F401 — triggers namespace registration
 from fleet.adam.utils import (
     age_in_years,
     bsa,
-    extreme_flag,
     mean_arterial_pressure,
     qtc,
 )
@@ -131,46 +130,6 @@ class TestAgeInYears:
         df = pl.DataFrame({"AGE": [45.0], "AGEU": ["CENTURIES"]})
         result = df.select(age_in_years("AGE", "AGEU"))
         assert result["AAGE"][0] is None
-
-
-class TestExtremeFlag:
-    @pytest.fixture
-    def bds_frame(self):
-        return pl.DataFrame(
-            {
-                "USUBJID": ["01", "01", "01", "02", "02"],
-                "PARAMCD": ["SBP", "SBP", "SBP", "SBP", "SBP"],
-                "AVAL": [120.0, 140.0, 130.0, 110.0, 115.0],
-            }
-        )
-
-    def test_max_flag(self, bds_frame):
-        result = bds_frame.select(
-            "USUBJID",
-            "AVAL",
-            extreme_flag("AVAL", mode="max", groups=["USUBJID", "PARAMCD"]),
-        )
-        flags = result["ANL01FL"].to_list()
-        assert flags == [
-            "Y" if v == max(bds_frame.filter(pl.col("USUBJID") == u)["AVAL"]) else None
-            for u, v in zip(result["USUBJID"].to_list(), result["AVAL"].to_list())
-        ]
-
-    def test_min_flag(self, bds_frame):
-        result = bds_frame.select(
-            "USUBJID",
-            "AVAL",
-            extreme_flag("AVAL", mode="min", groups=["USUBJID", "PARAMCD"]),
-        )
-        # Subject 01: min=120, Subject 02: min=110
-        flags = result["ANL01FL"].to_list()
-        assert flags[0] == "Y"  # 120 is min for 01
-        assert flags[1] is None  # 140 is not min
-        assert flags[3] == "Y"  # 110 is min for 02
-
-    def test_invalid_mode_raises(self):
-        with pytest.raises(ValueError, match="must be 'max' or 'min'"):
-            extreme_flag("AVAL", mode="avg")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -384,3 +343,153 @@ class TestDeriveSummarySchemaAlignment:
             assert col in result.columns
         # DTYPE column exists
         assert "DTYPE" in result.columns
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 5. ANL01FL — admiral restrict_derivation + derive_var_extreme_flag
+# ══════════════════════════════════════════════════════════════════════
+
+
+class TestANL01FLAdmiralParity:
+    """Byte-for-byte parity with admiral's ANL01FL derivation for BDS.
+
+    Admiral pattern::
+
+        advs <- restrict_derivation(
+          advs,
+          derivation = derive_var_extreme_flag,
+          args = params(
+            by_vars = exprs(USUBJID, PARAMCD),
+            order   = exprs(ADT),
+            new_var = ANL01FL,
+            mode    = "last"
+          ),
+          filter = !is.na(AVAL)
+        )
+
+    Within each (USUBJID, PARAMCD) group, the *last* record by ADT
+    among rows with non-null AVAL receives ``"Y"``; all others
+    (including rows with null AVAL) receive ``null``.
+    """
+
+    @pytest.fixture
+    def bds_multi_record(self):
+        """BDS frame with multiple records per subject/parameter.
+
+        Designed to exercise:
+        - Multiple dates per group → only the latest gets ANL01FL = "Y"
+        - Null AVAL → excluded by restrict_derivation filter
+        - Single-record group → trivially flagged "Y"
+        """
+        return pl.DataFrame({
+            "USUBJID": [
+                "01", "01", "01",  # SYSBP: 3 records, one has null AVAL
+                "01",              # DIABP: 1 record
+                "02", "02",        # SYSBP: 2 records, both valid
+            ],
+            "PARAMCD": [
+                "SYSBP", "SYSBP", "SYSBP",
+                "DIABP",
+                "SYSBP", "SYSBP",
+            ],
+            "AVAL": [
+                120.0, 130.0, None,  # 01/SYSBP: null at latest date
+                80.0,                # 01/DIABP: single record
+                118.0, 125.0,        # 02/SYSBP: both valid
+            ],
+            "ADT": [
+                "2014-01-02", "2014-01-05", "2014-01-10",
+                "2014-01-02",
+                "2014-01-03", "2014-01-07",
+            ],
+        })
+
+    def test_last_valid_flagged(self, bds_multi_record):
+        """Last non-null-AVAL record per group gets ANL01FL = 'Y'."""
+        result = (
+            bds_multi_record.adam
+            .flag("ANL01FL", criteria="last", order_by="ADT",
+                  groups=["USUBJID", "PARAMCD"],
+                  where='~pl.col("AVAL").is_null()')
+            .to_frame()
+        )
+
+        flags = result["ANL01FL"].to_list()
+
+        # Admiral expected output:
+        # Row 0: 01/SYSBP/2014-01-02 AVAL=120  → null  (not last valid)
+        # Row 1: 01/SYSBP/2014-01-05 AVAL=130  → "Y"   (last valid — 01-10 has null AVAL)
+        # Row 2: 01/SYSBP/2014-01-10 AVAL=null  → null  (excluded by filter)
+        # Row 3: 01/DIABP/2014-01-02 AVAL=80   → "Y"   (only record in group)
+        # Row 4: 02/SYSBP/2014-01-03 AVAL=118  → null  (not last)
+        # Row 5: 02/SYSBP/2014-01-07 AVAL=125  → "Y"   (last valid)
+        assert flags == [None, "Y", None, "Y", None, "Y"]
+
+    def test_all_valid_single_record_groups(self):
+        """Every group has exactly one record → all get ANL01FL = 'Y'."""
+        df = pl.DataFrame({
+            "USUBJID": ["01", "02"],
+            "PARAMCD": ["SYSBP", "SYSBP"],
+            "AVAL": [120.0, 118.0],
+            "ADT": ["2014-01-02", "2014-01-03"],
+        })
+        result = (
+            df.adam
+            .flag("ANL01FL", criteria="last", order_by="ADT",
+                  groups=["USUBJID", "PARAMCD"],
+                  where='~pl.col("AVAL").is_null()')
+            .to_frame()
+        )
+        assert result["ANL01FL"].to_list() == ["Y", "Y"]
+
+    def test_all_null_aval_group(self):
+        """Group where all AVAL are null → no records flagged."""
+        df = pl.DataFrame({
+            "USUBJID": ["01", "01"],
+            "PARAMCD": ["SYSBP", "SYSBP"],
+            "AVAL": [None, None],
+            "ADT": ["2014-01-02", "2014-01-05"],
+        })
+        result = (
+            df.adam
+            .flag("ANL01FL", criteria="last", order_by="ADT",
+                  groups=["USUBJID", "PARAMCD"],
+                  where='~pl.col("AVAL").is_null()')
+            .to_frame()
+        )
+        assert result["ANL01FL"].to_list() == [None, None]
+
+    def test_with_avisit_grouping(self):
+        """ANL01FL with AVISIT in by_vars — admiral's typical BDS pattern.
+
+        Admiral::
+
+            restrict_derivation(
+              derivation = derive_var_extreme_flag,
+              args = params(
+                by_vars = exprs(USUBJID, PARAMCD, AVISIT),
+                order   = exprs(ADT, AVAL),
+                mode    = "last"
+              ),
+              filter = !is.na(AVAL)
+            )
+        """
+        df = pl.DataFrame({
+            "USUBJID": ["01", "01", "01", "01"],
+            "PARAMCD": ["SYSBP", "SYSBP", "SYSBP", "SYSBP"],
+            "AVISIT":  ["Week 2", "Week 2", "Week 4", "Week 4"],
+            "AVAL":    [120.0, 125.0, 130.0, None],
+            "ADT":     ["2014-01-10", "2014-01-12", "2014-01-24", "2014-01-26"],
+        })
+        result = (
+            df.adam
+            .flag("ANL01FL", criteria="last", order_by="ADT",
+                  groups=["USUBJID", "PARAMCD", "AVISIT"],
+                  where='~pl.col("AVAL").is_null()')
+            .to_frame()
+        )
+        flags = result["ANL01FL"].to_list()
+        # Week 2: 01-10 (120) → null, 01-12 (125) → "Y" (last valid)
+        # Week 4: 01-24 (130) → "Y" (last valid — 01-26 has null AVAL)
+        #         01-26 (null) → null (excluded)
+        assert flags == [None, "Y", "Y", None]

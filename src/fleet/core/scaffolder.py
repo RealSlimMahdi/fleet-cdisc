@@ -76,14 +76,6 @@ def _resolve_schema_rel(output_path: Path) -> str:
         return os.path.relpath(schema_abs, output_path.parent)
 
 
-class DefineScaffolder:
-    """Generates ``define.yaml`` files by querying the CDISC Library IG API.
-
-    Args:
-        client: An authenticated ``CDISCClient`` instance.
-    """
-
-
 # ------------------------------------------------------------------ #
 # Module-level IG parsers (re-usable outside DefineScaffolder)         #
 # ------------------------------------------------------------------ #
