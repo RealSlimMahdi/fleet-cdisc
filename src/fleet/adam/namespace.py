@@ -19,7 +19,7 @@ Usage
     result = (
         vs_sdtm.adam
         .source("USUBJID")
-        .rename("ADT", source="VSDTC")
+        .derive_dt("ADT", source="VSDTC")
         .derivation("AVAL", expression="VSSTRESN")
         .study_day("ADY", analysis_date="ADT", reference_date="TRTSDT")
         .flag("ABLFL", criteria='pl.col("VISITNUM") == 1',

@@ -27,3 +27,11 @@ class SpecError(FleetError):
 
 class ValidationError(FleetError):
     """Raised when CDISC validation encounters a fatal error."""
+
+
+class TLGError(FleetError):
+    """Raised when TLG namespace operations fail."""
+
+
+class SchemaError(TLGError):
+    """Raised when a DataFrame fails TLG spec validation."""

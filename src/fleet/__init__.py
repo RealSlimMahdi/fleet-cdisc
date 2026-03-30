@@ -36,32 +36,56 @@ Usage
     )
 """
 
-from ._version import __version__
-
 # Importing sdtm/adam triggers the @pl.api.register_dataframe_namespace decorators
-from . import sdtm  # noqa: F401  (registers df.sdtm)
-from . import adam  # noqa: F401  (registers df.adam)
-
+from . import (
+    adam,  # noqa: F401  (registers df.adam)
+    sdtm,  # noqa: F401  (registers df.sdtm)
+    tlg,  # noqa: F401  (registers df.tlg)
+)
+from ._version import __version__
+from .adam import (
+    ADAMAlgorithm,
+    AdamNamespace,
+    ADSLNamespace,
+    MetabolicNamespace,
+    NeuroNamespace,
+    OCCDSNamespace,
+    OncoNamespace,
+    OphthaNamespace,
+    PedsNamespace,
+    VaccineNamespace,
+)
 from .core import (
-    StudyContext,
-    load_study_context,
-    build_dag,
     PipelineDAG,
     PipelineNode,
+    StudyContext,
+    build_dag,
+    load_study_context,
 )
 from .ct import CTValidator, get_validator, load_controlled_terminology
-from .io import load_raw_data, load_datasets, save_parquet
-from .sdtm import SDTMAlgorithm, SDTMNamespace
-from .adam import (
-    ADAMAlgorithm, AdamNamespace, ADSLNamespace, OCCDSNamespace,
-    OncoNamespace, OphthaNamespace, PedsNamespace,
-    VaccineNamespace, MetabolicNamespace, NeuroNamespace,
-)
+
 # TA namespace classes are also importable directly for type hints / isinstance
 from .define_xml import (
-    CheckResult, DatasetChecker, TypeMismatch,
+    CheckResult,
+    DatasetChecker,
     DefineSpecGenerator,
-    DefineValidator, DefineXMLGenerator,
+    DefineValidator,
+    DefineXMLGenerator,
+    TypeMismatch,
+)
+from .io import load_datasets, load_raw_data, save_parquet
+from .sdtm import SDTMAlgorithm, SDTMNamespace
+from .tlg import (
+    AEListingSpec,
+    AESummarySpec,
+    AETLGNamespace,
+    Column,
+    GroupPool,
+    Row,
+    Statistic,
+    TLGNamespace,
+    TLGSpec,
+    VSSummarySpec,
 )
 from .validation import ValidationResult, ValidationService
 
@@ -96,6 +120,17 @@ __all__ = [
     "VaccineNamespace",
     "MetabolicNamespace",
     "NeuroNamespace",
+    # TLG namespace (accessed via df.tlg, df.tlg.ae)
+    "TLGNamespace",
+    "AETLGNamespace",
+    "TLGSpec",
+    "AESummarySpec",
+    "AEListingSpec",
+    "VSSummarySpec",
+    "Row",
+    "Column",
+    "Statistic",
+    "GroupPool",
     # Define-XML — simplified spec workflow
     "DefineSpecGenerator",
     "DatasetChecker",

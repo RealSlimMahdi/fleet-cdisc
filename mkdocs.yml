@@ -123,5 +123,7 @@ nav:
       - Define-XML: api/define_xml.md
       - Controlled Terminology: api/ct.md
       - Core: api/core.md
+  - Quality & Compliance:
+      - Validation Strategy: validation-strategy.md
   - Test Status: test-status.md
   - Changelog: changelog.md

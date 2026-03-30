@@ -553,8 +553,8 @@ adae = (
     .source(  "AEOUT")
     .source(  "AEACN")
     # admiral: derive_vars_dt
-    .rename("ASTDT", source="AESTDTC")
-    .rename("AENDT", source="AEENDTC")
+    .derive_dt("ASTDT", source="AESTDTC")
+    .derive_dt("AENDT", source="AEENDTC")
     # study_day uses _chain — ASTDT resolves from the lazy plan (no materialise needed)
     .study_day("ADY", analysis_date="ASTDT", reference_date="TRTSDT")
     .to_frame()
@@ -607,11 +607,11 @@ adex = (
     .source(  "EXDOSE")                        # shared verb (mixin)
     .source(  "EXDOSU")                        # shared verb (mixin)
     # admiral: derive_vars_dt
-    .rename("ASTDT", source="EXSTDTC")         # shared verb (mixin)
-    .rename("AENDT", source="EXENDTC")         # shared verb (mixin)
+    .derive_dt("ASTDT", source="EXSTDTC")      # shared verb (mixin)
+    .derive_dt("AENDT", source="EXENDTC")      # shared verb (mixin)
     # admiral: derive_var_dur (inclusive end-date convention)
     .derivation("EXDURD",                      # shared verb (mixin)
-                expression="(pl.col('AENDT').cast(pl.Date) - pl.col('ASTDT').cast(pl.Date))"
+                expression="(pl.col('AENDT') - pl.col('ASTDT'))"
                            ".dt.total_days() + 1")
     # admiral: derive_var_obs_number
     .seq("ASEQ", groups=["USUBJID"])           # occds-specific verb

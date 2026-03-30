@@ -534,8 +534,8 @@ adae = (
     .source("AEREL")
     .source("AEOUT")
     .source("AEACN")
-    .rename("ASTDT", source="AESTDTC")
-    .rename("AENDT", source="AEENDTC")
+    .derive_dt("ASTDT", source="AESTDTC")
+    .derive_dt("AENDT", source="AEENDTC")
     .study_day("ADY", analysis_date="ASTDT", reference_date="TRTSDT")
     .to_frame()
     # OCCDS-specific verbs

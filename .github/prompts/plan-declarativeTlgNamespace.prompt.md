@@ -277,7 +277,7 @@ ARD is the **computation** layer. Rendering (HTML, RTF, LaTeX) is a separate fut
 
 ### Further Considerations
 
-1. **Rendering layer**: ARD is computation-only. A `.to_html()` / `.to_rtf()` renderer consuming ARD would be Phase 6. Deliberately out of scope for initial implementation — keeps first iteration minimal.
+1. **Rendering layer**: ARD is computation-only. A `.to_html()` / `.to_rtf()` `.to_pptx` renderer consuming ARD would be Phase 6. Deliberately out of scope for initial implementation — keeps first iteration minimal.
 
 2. **Graph specs**: The Vega-Lite analogy extends naturally to figures (forest plots, Kaplan-Meier curves). `TLGSpec(output_type="forest_plot")` with appropriate row/column encodings is future work.
 

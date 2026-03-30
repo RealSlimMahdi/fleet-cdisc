@@ -5,8 +5,10 @@ from .exceptions import (
     ADAMError,
     CTError,
     FleetError,
+    SchemaError,
     SDTMError,
     SpecError,
+    TLGError,
     ValidationError,
 )
 from .scaffolder import parse_ig_dataset, parse_ig_variable
@@ -28,6 +30,8 @@ __all__ = [
     "ADAMError",
     "CTError",
     "SpecError",
+    "TLGError",
+    "SchemaError",
     "ValidationError",
     "StudyConfig",
     "StudyPathConfig",
