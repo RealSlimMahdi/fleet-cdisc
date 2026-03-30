@@ -40,14 +40,14 @@ It is not a toy or prototype — it is a usable toolkit with genuine technical m
 
 ### Key Numbers
 
-| Metric                    | Fleet                   | Pharmaverse                |
-| ------------------------- | ----------------------- | -------------------------- |
+| Metric                    | Fleet                    | Pharmaverse                |
+| ------------------------- | ------------------------ | -------------------------- |
 | Languages                 | Python (Polars)          | R (tidyverse)              |
 | SDTM verbs                | 15                       | ~12 (oak)                  |
 | ADaM verbs                | 85+ across 10 namespaces | ~80 (admiral + extensions) |
-| CDISC Library integration | **Native**              | None                       |
-| CDISC Rules Engine        | **Embedded**            | None                       |
-| Contributors              | Small team              | 300+                       |
+| CDISC Library integration | **Native**               | None                       |
+| CDISC Rules Engine        | **Embedded**             | None                       |
+| Contributors              | Small team               | 300+                       |
 
 ---
 
@@ -259,8 +259,8 @@ Each sponsor **self-validates** their software. The R Validation Hub white paper
 
 # Domain Coverage Comparison
 
-| Domain                 | Fleet                  | Admiral + Extensions       |
-| ---------------------- | ---------------------- | -------------------------- |
+| Domain                 | Fleet                          | Admiral + Extensions       |
+| ---------------------- | ------------------------------ | -------------------------- |
 | SDTM (general)         | ✅ 15 verbs                    | ⚠️ oak (early, v0.x)       |
 | ADSL                   | ✅ Full (8 verbs)              | ✅ Full                    |
 | BDS (ADVS, ADLB)       | ✅ Full (17 verbs)             | ✅ Full                    |
