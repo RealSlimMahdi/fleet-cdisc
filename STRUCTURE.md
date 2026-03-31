@@ -153,9 +153,10 @@ Registers `df.adam` on every Polars DataFrame.
 
 | File           | Purpose                                                                                                                                                                                             |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `models.py`    | `ADAMAlgorithm` enum (9 verb names), `ADAMVariableSpec`, `ADAMDatasetSpec`                                                                                                                          |
+| `models.py`    | `ADAMAlgorithm` enum (11 verb names), `ADAMVariableSpec`, `ADAMDatasetSpec`                                                                                                                          |
 | `utils.py`     | Standard ADaM calculation functions — all return `pl.Expr`: `study_day`, `baseline`, `chg`, `pchg`, `bmi`, `bsa`, `mean_arterial_pressure`, `qtc`, `age_in_years`, `nrind`, `on_treatment`, `shift` |
-| `namespace.py` | `AdamNamespace` — the BDS namespace class with 22 verbs including record-generating verbs (`derive_summary_records`, `derive_locf_records`, `derive_param`)                                         |
+| `namespace.py` | `AdamNamespace` — the BDS namespace class with 24 verbs including record-generating verbs (`derive_summary_records`, `derive_locf_records`, `derive_param`) and toxicity grading (`atoxgr`, `combine_grades`) |
+| `grading/`     | CTCAE / DAIDS toxicity-grading sub-package (see below)                                                                                                                                               |
 
 **The 9 ADaM derivation verbs:**
 
@@ -194,6 +195,22 @@ Registers `df.adam` on every Polars DataFrame.
 | `inspect(prefix)`            | Materialise pipeline, log state, return checkpoint |
 | `explain()`                  | Print query plan without materialising             |
 | `to_frame()`                 | Materialise and return `pl.DataFrame`              |
+
+**Toxicity grading verbs (CTCAE / DAIDS):**
+
+| Verb             | Signature                                                                         | Purpose                                              |
+| ---------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `atoxgr`         | `(target, *, system, direction, term_var, unit_var=None, ...)`                    | Derive toxicity grades 0–4 using CTCAE or DAIDS      |
+| `combine_grades` | `(target="ATOXGR", *, low_var="ATOXGRL", high_var="ATOXGRH", ...)`               | Combine low (negative) and high (positive) grades     |
+
+**`grading/` sub-package:**
+
+| File             | Purpose                                                                                |
+| ---------------- | -------------------------------------------------------------------------------------- |
+| `_models.py`     | Pydantic models for the criteria DSL: `CriteriaFile`, `TermCriteria`, `GradeRule`, etc. |
+| `_compiler.py`   | Translates JSON criteria into Polars `when/then/otherwise` expression chains            |
+| `_registry.py`   | `GradingSystem` enum (8 systems) and `load_criteria()` with caching                    |
+| `criteria/*.json` | Bundled grading criteria (CTCAE v4/v5/v6 + DAIDS, each with SI and USCV units)         |
 
 ---
 

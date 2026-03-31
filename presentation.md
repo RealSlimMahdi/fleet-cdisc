@@ -40,14 +40,14 @@ It is not a toy or prototype — it is a usable toolkit with genuine technical m
 
 ### Key Numbers
 
-| Metric                    | Fleet                    | Pharmaverse                |
-| ------------------------- | ------------------------ | -------------------------- |
-| Languages                 | Python (Polars)          | R (tidyverse)              |
-| SDTM verbs                | 15                       | ~12 (oak)                  |
-| ADaM verbs                | 85+ across 10 namespaces | ~80 (admiral + extensions) |
-| CDISC Library integration | **Native**               | None                       |
-| CDISC Rules Engine        | **Embedded**             | None                       |
-| Contributors              | Small team               | 300+                       |
+| Metric                    | Fleet                    | Pharmaverse                   |
+| ------------------------- | ------------------------ | ----------------------------- |
+| Languages                 | Python (Polars)          | R (tidyverse)                 |
+| SDTM verbs                | 18 (14 core + 4 TDD)     | ~12 (oak v0.2)                |
+| ADaM verbs                | 85+ across 10 namespaces | ~80+ (admiral + 6 extensions) |
+| CDISC Library integration | **Native**               | None                          |
+| CDISC Rules Engine        | **Embedded**             | None                          |
+| Contributors              | Small team               | 300+                          |
 
 ---
 
@@ -66,7 +66,7 @@ dm = (
 
 ### Design Principles
 
-- **Polars-only** — no Pandas dependency; lazy evaluation throughout
+- **Polars-only** — no Pandas dependency; lazy evaluation where possible
 - **Namespace chaining** — `df.sdtm`, `df.adam.adsl`, `df.adam.occds`, `df.adam.onco`, `df.adam.pk`, `df.adam.neuro`, …
 - **Dual workflow** — inline Python pipelines _or_ metadata-driven `define.yaml`
 - **Closed loop** — metadata → code → validation in one toolkit
@@ -80,7 +80,7 @@ An R ecosystem of **20+ packages** maintained by Roche, GSK, J&J, and community.
 | Package             | Role                   | Maturity           |
 | ------------------- | ---------------------- | ------------------ |
 | **admiral**         | ADaM derivations       | Production (v1.2+) |
-| **oak**             | SDTM mappings          | Early (v0.x)       |
+| **oak**             | SDTM mappings          | Growing (v0.2)     |
 | **NEST / Teal**     | TLG + Shiny apps       | Production         |
 | **metacore**        | Metadata specification | Production         |
 | **xportr**          | XPT export             | Production         |
@@ -107,8 +107,8 @@ adsl = (
     .source("USUBJID")
     .rename("TRT01P", source="ARM")
     .derive_dt("TRTSDT", source="RFSTDTC")
-    .duration("TRTDURD", start="TRTSDT",
-              end="TRTEDT", unit="days")
+    .duration("TRTDURD", start_date="TRTSDT",
+              end_date="TRTEDT", unit="days")
     .to_frame()
 )
 ```
@@ -253,7 +253,7 @@ result = validator.validate(dataset=dm, dataset_name="DM")
 
 Each sponsor **self-validates** their software. The R Validation Hub white paper (Nicholls et al.) proposes a risk-based framework — but it's a recommendation, not a requirement.
 
-**Fleet's 450+ unit tests and CDISC Engine integration match or exceed admiral's actual validation surface.**
+**Fleet's 540+ unit tests and CDISC Engine integration provide a solid validation surface.**
 
 ---
 
@@ -261,17 +261,18 @@ Each sponsor **self-validates** their software. The R Validation Hub white paper
 
 | Domain                 | Fleet                          | Admiral + Extensions       |
 | ---------------------- | ------------------------------ | -------------------------- |
-| SDTM (general)         | ✅ 15 verbs                    | ⚠️ oak (early, v0.x)       |
+| SDTM (general)         | ✅ 18 verbs (14+4 TDD)         | ⚠️ oak (v0.2, growing)     |
 | ADSL                   | ✅ Full (8 verbs)              | ✅ Full                    |
-| BDS (ADVS, ADLB)       | ✅ Full (17 verbs)             | ✅ Full                    |
-| OCCDS (ADAE)           | ✅ Full                        | ✅ Full                    |
-| Oncology (ADRS, ADTTE) | ✅ RECIST + BOR (5 verbs)      | ✅ admiralonco             |
-| PK/ADNCA               | ✅ 15 verbs                    | ✅ admiralpharmaverseadam  |
-| Vaccines               | ✅ 5 verbs                     | ✅ admiralvaccine          |
-| Ophthalmology          | ✅ 5 verbs                     | ✅ admiralophtha           |
-| Pediatrics             | ✅ Age, prematurity, BMI (6)   | ⚠️ Partial                 |
-| Neuroscience           | ✅ Centiloid, MMSE, PANSS (5)  | ❌ No equivalent           |
-| Metabolic              | ✅ WHR, body fat, visceral (4) | ❌ No equivalent           |
+| BDS (ADVS, ADLB)       | ✅ Full (17 verbs)             | ✅ Full (~58 derive\_\*)   |
+| OCCDS (ADAE)           | ✅ Full (3+seq)                | ✅ Full                    |
+| Oncology (ADRS, ADTTE) | ✅ RECIST + BOR (5 verbs)      | ✅ admiralonco (v1.4)      |
+| PK/ADNCA               | ✅ 15 verbs                    | ⚠️ admiral core (nfrlt)    |
+| Vaccines               | ✅ 5 verbs                     | ✅ admiralvaccine (v0.6)   |
+| Ophthalmology          | ✅ 5 verbs                     | ✅ admiralophtha (v1.4)    |
+| Pediatrics             | ✅ Age, prematurity, BMI (6)   | ✅ admiralpeds (v0.3)      |
+| Neuroscience           | ✅ Centiloid, MMSE, PANSS (5)  | ✅ admiralneuro (v0.2)     |
+| Metabolic              | ✅ WHR, body fat, visceral (4) | ✅ admiralmetabolic (v0.3) |
+| Toxicity grading       | ❌ Not implemented             | ✅ CTC v4/v5/v6, DAIDS     |
 | **TLG**                | ✅ ARD + specs                 | ✅ NEST/Teal (more mature) |
 
 ---
@@ -406,12 +407,13 @@ Fleet is a **strong technical foundation** with a **community gap**. The next 12
 
 ```
 src/fleet/
-├── sdtm/                  # 15 SDTM verbs + TDD mixin
+├── sdtm/                  # 14 SDTM verbs + 4 TDD mixin
 ├── adam/
-│   ├── _mixins.py         # 12 shared verbs (NO duplication)
+│   ├── _mixins.py         # 11 shared verbs (NO duplication)
 │   ├── adsl_namespace     # 8 ADSL-specific verbs
-│   ├── occds_namespace    # OCCDS (AE/CM/MH)
-│   ├── onco_namespace     # RECIST, BOR (5 verbs)
+│   ├── namespace.py       # 17 BDS verbs (baseline, chg, pchg…)
+│   ├── occds_namespace    # 3 OCCDS + seq (AE/CM/MH)
+│   ├── onco_namespace     # 5 oncology (RECIST, BOR)
 │   ├── pk_namespace       # 15 PK/NCA verbs
 │   ├── vaccine_namespace  # 5 vaccine verbs
 │   ├── ophtha_namespace   # 5 ophthalmology verbs
@@ -426,7 +428,7 @@ src/fleet/
 └── cli.py                 # fleet init/define-xml/install-engine
 ```
 
-**450+ unit tests | 6 end-to-end example scripts | 20 test files | Auto-generated `llms.txt`**
+**540+ unit tests | 6 end-to-end example scripts | 20 test files | Auto-generated `llms.txt`**
 
 ---
 

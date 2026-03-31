@@ -2,6 +2,9 @@
 
 from ._mixins import MultiRowMixin, SharedADaMVerbsMixin
 from .adsl_namespace import ADSLNamespace  # accessed via df.adam.adsl
+
+# Grading sub-package
+from .grading import GradingSystem
 from .metabolic_namespace import MetabolicNamespace
 from .models import ADAMAlgorithm, ADAMDatasetSpec, ADAMVariableSpec
 from .namespace import AdamNamespace
@@ -40,4 +43,6 @@ __all__ = [
     "VaccineNamespace",
     "MetabolicNamespace",
     "NeuroNamespace",
+    # Grading
+    "GradingSystem",
 ]

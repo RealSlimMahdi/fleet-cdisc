@@ -552,6 +552,61 @@ adae = (
 
 ---
 
+## Part 9b — ADLB Toxicity Grading (CTCAE / DAIDS)
+
+Fleet implements NCI CTCAE and DAIDS toxicity grading, matching the functionality of Admiral's `derive_var_atoxgr` family.
+
+### Supported systems
+
+| System | Versions | Unit systems |
+|--------|----------|--------------|
+| CTCAE  | v4, v5, v6 | SI, USCV |
+| DAIDS  | current | SI, USCV |
+
+Use `fleet.adam.grading.list_systems()` to list all eight system identifiers.
+
+### Basic usage
+
+```python
+adlb = (
+    raw_df.adam
+    # Grade low-direction parameters (e.g. Anemia → ATOXGRL)
+    .atoxgr("ATOXGRL", system="ctcae_v5", direction="L",
+            term_var="ATOXDSCL", unit_var="AVALU")
+    # Grade high-direction parameters (e.g. ALT increased → ATOXGRH)
+    .atoxgr("ATOXGRH", system="ctcae_v5", direction="H",
+            term_var="ATOXDSCH", unit_var="AVALU")
+    # Combine: low grades become negative, high grades stay positive
+    .combine_grades("ATOXGR")
+    .to_frame()
+)
+```
+
+### Key concepts
+
+- **`term_var`** — Column holding the toxicity-description term (must match the criteria file terms, case-insensitive).
+- **`direction`** — `"L"` for low abnormalities (e.g. Anemia), `"H"` for high (e.g. ALT increased).
+- **`unit_var`** — Optional column holding the unit of measure. When provided, only rows with matching units are graded.
+- **`high_indicator` / `low_indicator`** — Values in `BNRIND` indicating baseline abnormality status (default `["HIGH"]` / `["LOW"]`). Used for baseline-dependent grading (e.g. ALT with abnormal baseline uses `BASE` instead of `ANRHI`).
+- **`signif_dig`** — Significant figures for floating-point comparison safety (default 5).
+
+### Custom criteria
+
+Pass a file path instead of a system identifier to use custom grading criteria:
+
+```python
+adlb = (
+    raw_df.adam
+    .atoxgr("ATOXGRL", system="path/to/my_criteria.json",
+            direction="L", term_var="ATOXDSCL")
+    .to_frame()
+)
+```
+
+The custom JSON must conform to Fleet's criteria schema (see `src/fleet/adam/grading/_models.py`).
+
+---
+
 ## Part 10 — Trial Design Domains (TDD)
 
 Fleet supports all seven CDISC Trial Design domains through rich Pydantic models and a fixed-sequence pipeline.
@@ -968,6 +1023,8 @@ uv run fleet define-xml --spec metadata/adam/define.yaml  --output outputs/defin
 | `derive_summary_records` | Append aggregate rows             |
 | `derive_locf_records`    | LOCF imputation                   |
 | `derive_param`           | Derive new parameter rows         |
+| `atoxgr`                 | CTCAE / DAIDS toxicity grading    |
+| `combine_grades`         | Combine low/high grades → ATOXGR  |
 
 ### ADSL verbs (`df.adam.adsl`)
 

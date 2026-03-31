@@ -23,3 +23,6 @@ coverage.xml
 # MacOS files
 .DS_Store
 outputs/.DS_Store
+
+# PowerPoint files
+$*.pptx

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 class ADAMAlgorithm(str, Enum):
     """Derivation verbs for ADaM variable derivations."""
+
     # Base verbs
     SOURCE = "source"
     DERIVATION = "derivation"
@@ -15,7 +16,7 @@ class ADAMAlgorithm(str, Enum):
     RENAME = "rename"
     CONDDERIVATION = "condderivation"
     LOOKUP = "lookup"
-    STD_FUNCTION = "std_function"   # YAML backward compat; dispatches to typed methods
+    STD_FUNCTION = "std_function"  # YAML backward compat; dispatches to typed methods
     WHERECLAUSES = "whereclauses"
     # BDS first-class methods (also valid as direct YAML algorithm keys)
     STUDY_DAY = "study_day"
@@ -27,10 +28,13 @@ class ADAMAlgorithm(str, Enum):
     NRIND = "nrind"
     ON_TREATMENT = "on_treatment"
     SHIFT = "shift"
+    ATOXGR = "atoxgr"
+    COMBINE_GRADES = "combine_grades"
 
 
 class ADAMVariableSpec(BaseModel):
     """Specification for a single ADaM variable derivation."""
+
     target: str
     algorithm: ADAMAlgorithm
 
@@ -65,25 +69,40 @@ class ADAMVariableSpec(BaseModel):
     weight: Optional[str] = None
     baseline_flag: Optional[str] = None
     baseline_criteria: Optional[str] = None
-    groups: Optional[list[str]] = None          # shared partition columns
+    groups: Optional[list[str]] = None  # shared partition columns
 
     # flag()
-    criteria: Optional[str] = None              # row expression or "first"/"last"/"max"/"min"
-    flag_order_by: Optional[str] = None         # column for first/last ordering
-    flag_value_col: Optional[str] = None        # column for max/min comparison
-    flag_where: Optional[str] = None            # candidate pre-filter expression
+    criteria: Optional[str] = None  # row expression or "first"/"last"/"max"/"min"
+    flag_order_by: Optional[str] = None  # column for first/last ordering
+    flag_value_col: Optional[str] = None  # column for max/min comparison
+    flag_where: Optional[str] = None  # candidate pre-filter expression
     flag_value: str = "Y"
 
     # nrind()
-    low: Optional[str] = None                   # lower normal range column
-    high: Optional[str] = None                  # upper normal range column
+    low: Optional[str] = None  # lower normal range column
+    high: Optional[str] = None  # upper normal range column
 
     # on_treatment()
-    trtedt: Optional[str] = None                # end-of-treatment date column
+    trtedt: Optional[str] = None  # end-of-treatment date column
 
     # shift()
-    baseline_cat: Optional[str] = None          # baseline category column
-    post_cat: Optional[str] = None              # post-baseline category column
+    baseline_cat: Optional[str] = None  # baseline category column
+    post_cat: Optional[str] = None  # post-baseline category column
+
+    # atoxgr()
+    system: Optional[str] = None  # grading system (e.g. "ctcae_v5")
+    direction: Optional[str] = None  # "L" or "H"
+    term_var: Optional[str] = None  # toxicity description variable
+    unit_var: Optional[str] = None  # unit of measure variable
+    high_indicator: Optional[list[str]] = None  # BNRIND values for high baseline
+    low_indicator: Optional[list[str]] = None  # BNRIND values for low baseline
+    signif_dig: int = 5  # significant figures for comparison
+
+    # combine_grades()
+    low_var: Optional[str] = None  # low-direction grade column
+    high_var: Optional[str] = None  # high-direction grade column
+    low_desc_var: Optional[str] = None  # low-direction description column
+    high_desc_var: Optional[str] = None  # high-direction description column
 
     # whereclauses
     where: Optional[str] = None
@@ -96,6 +115,7 @@ class ADAMVariableSpec(BaseModel):
 
 class ADAMDatasetSpec(BaseModel):
     """Full specification for an ADaM dataset derivation."""
+
     dataset: str
     description: Optional[str] = None
     variables: list[ADAMVariableSpec]
