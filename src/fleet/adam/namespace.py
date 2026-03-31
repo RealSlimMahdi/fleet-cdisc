@@ -42,45 +42,45 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 import yaml
 
-from ._mixins import SharedADaMVerbsMixin
-from .utils import (
+from fleet.adam._mixins import SharedADaMVerbsMixin
+from fleet.adam.utils import (
     baseline,
     chg,
     pchg,
     study_day,
 )
-from .utils import (
+from fleet.adam.utils import (
     bmi as _bmi_expr,
 )
-from .utils import (
+from fleet.adam.utils import (
     bsa as _bsa_expr,
 )
-from .utils import (
+from fleet.adam.utils import (
     mean_arterial_pressure as _map_expr,
 )
-from .utils import (
+from fleet.adam.utils import (
     nrind as _nrind_expr,
 )
-from .utils import (
+from fleet.adam.utils import (
     on_treatment as _on_treatment_expr,
 )
-from .utils import (
+from fleet.adam.utils import (
     qtc as _qtc_expr,
 )
-from .utils import (
+from fleet.adam.utils import (
     shift as _shift_expr,
 )
 
 if TYPE_CHECKING:
-    from .adsl_namespace import ADSLNamespace
-    from .metabolic_namespace import MetabolicNamespace
-    from .neuro_namespace import NeuroNamespace
-    from .occds_namespace import OCCDSNamespace
-    from .onco_namespace import OncoNamespace
-    from .ophtha_namespace import OphthaNamespace
-    from .peds_namespace import PedsNamespace
-    from .pk_namespace import PKNamespace
-    from .vaccine_namespace import VaccineNamespace
+    from fleet.adam.adsl_namespace import ADSLNamespace
+    from fleet.adam.metabolic_namespace import MetabolicNamespace
+    from fleet.adam.neuro_namespace import NeuroNamespace
+    from fleet.adam.occds_namespace import OCCDSNamespace
+    from fleet.adam.onco_namespace import OncoNamespace
+    from fleet.adam.ophtha_namespace import OphthaNamespace
+    from fleet.adam.peds_namespace import PedsNamespace
+    from fleet.adam.pk_namespace import PKNamespace
+    from fleet.adam.vaccine_namespace import VaccineNamespace
 
 
 @pl.api.register_dataframe_namespace("adam")
@@ -138,7 +138,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        from ..sdtm.utils import parse_expression
+        from fleet.sdtm.utils import parse_expression
 
         lookup_df = dataset
         if where:
@@ -358,7 +358,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        from ..sdtm.utils import parse_expression
+        from fleet.sdtm.utils import parse_expression
 
         grps = groups or ["USUBJID", "PARAMCD"]
 
@@ -967,7 +967,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        from .transforms import get_transform
+        from fleet.adam.transforms import get_transform
 
         if isinstance(fn, str):
             fn = get_transform(fn)  # raises KeyError if not found
@@ -1041,8 +1041,8 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        from .grading import load_criteria
-        from .grading._compiler import grade_dataset
+        from fleet.adam.grading import load_criteria
+        from fleet.adam.grading._compiler import grade_dataset
 
         criteria = load_criteria(system)
         indicators: dict[str, list[str]] = {
@@ -1103,7 +1103,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        from .grading._compiler import combine_grades_expr
+        from fleet.adam.grading._compiler import combine_grades_expr
 
         expr = combine_grades_expr(
             low_var,
@@ -1169,7 +1169,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        from .models import ADAMDatasetSpec
+        from fleet.adam.models import ADAMDatasetSpec
 
         if only is not None and omit is not None:
             raise ValueError(
@@ -1306,7 +1306,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
     @staticmethod
     def _extract_define_variables(spec_data: dict, dataset: str | None) -> list:
         """Convert define.yaml dataset variables into ADAMVariableSpec objects."""
-        from .models import ADAMVariableSpec
+        from fleet.adam.models import ADAMVariableSpec
 
         datasets = spec_data["datasets"]
         if dataset is None:
@@ -1371,7 +1371,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        from ..validation.service import ValidationService
+        from fleet.validation.service import ValidationService
 
         svc = ValidationService(rules_engine_path=rules_engine_path)
         result = svc.validate_adam(self.to_frame(), dataset=dataset, version=version)
@@ -1516,14 +1516,14 @@ class AdamNamespace(SharedADaMVerbsMixin):
     @property
     def adsl(self) -> ADSLNamespace:
         """ADSL (one-row-per-subject) derivations: treatment dates, duration, population flags."""
-        from .adsl_namespace import ADSLNamespace
+        from fleet.adam.adsl_namespace import ADSLNamespace
 
         return ADSLNamespace(self.to_frame())
 
     @property
     def occds(self) -> OCCDSNamespace:
         """OCCDS (one-row-per-event) derivations: sequencing, worst flag, treatment-emergent."""
-        from .occds_namespace import OCCDSNamespace
+        from fleet.adam.occds_namespace import OCCDSNamespace
 
         return OCCDSNamespace(self.to_frame())
 
@@ -1534,49 +1534,49 @@ class AdamNamespace(SharedADaMVerbsMixin):
     @property
     def onco(self) -> OncoNamespace:
         """Oncology derivations (admiralonco-inspired): RECIST, BOR, response flags."""
-        from .onco_namespace import OncoNamespace
+        from fleet.adam.onco_namespace import OncoNamespace
 
         return OncoNamespace(self.to_frame())
 
     @property
     def ophtha(self) -> OphthaNamespace:
         """Ophthalmology derivations (admiralophtha-inspired): ETDRS/LogMAR, study eye."""
-        from .ophtha_namespace import OphthaNamespace
+        from fleet.adam.ophtha_namespace import OphthaNamespace
 
         return OphthaNamespace(self.to_frame())
 
     @property
     def peds(self) -> PedsNamespace:
         """Pediatrics derivations (admiralpeds-inspired): age, prematurity, BMI."""
-        from .peds_namespace import PedsNamespace
+        from fleet.adam.peds_namespace import PedsNamespace
 
         return PedsNamespace(self.to_frame())
 
     @property
     def vaccine(self) -> VaccineNamespace:
         """Vaccine derivations (admiralvaccine-inspired): fever, seroconversion."""
-        from .vaccine_namespace import VaccineNamespace
+        from fleet.adam.vaccine_namespace import VaccineNamespace
 
         return VaccineNamespace(self.to_frame())
 
     @property
     def metabolic(self) -> MetabolicNamespace:
         """Metabolic derivations (admiralmetabolic-inspired): waist ratios, body fat."""
-        from .metabolic_namespace import MetabolicNamespace
+        from fleet.adam.metabolic_namespace import MetabolicNamespace
 
         return MetabolicNamespace(self.to_frame())
 
     @property
     def neuro(self) -> NeuroNamespace:
         """Neuroscience derivations (admiralneuro-inspired): Centiloid, MMSE, CDR-SoB."""
-        from .neuro_namespace import NeuroNamespace
+        from fleet.adam.neuro_namespace import NeuroNamespace
 
         return NeuroNamespace(self.to_frame())
 
     @property
     def pk(self) -> PKNamespace:
         """PK (pharmacokinetics) derivations: BLQ flags, actual/nominal time, dose normalisation."""
-        from .pk_namespace import PKNamespace
+        from fleet.adam.pk_namespace import PKNamespace
 
         return PKNamespace(self.to_frame())
 

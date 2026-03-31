@@ -5,8 +5,8 @@ from pathlib import Path
 
 import polars as pl
 
-from .models import ValidationResult
-from .official import OfficialCDISCValidator
+from fleet.validation.models import ValidationResult
+from fleet.validation.official import OfficialCDISCValidator
 
 
 class ValidationProvider(ABC):

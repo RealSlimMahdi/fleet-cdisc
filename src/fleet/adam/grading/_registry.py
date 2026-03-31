@@ -7,7 +7,7 @@ from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 
-from ._models import CriteriaFile
+from fleet.adam.grading._models import CriteriaFile
 
 _CRITERIA_DIR: Path = Path(__file__).parent / "criteria"
 

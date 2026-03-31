@@ -1,13 +1,14 @@
 """SDTM module — imports trigger Polars namespace registration."""
 
-from .models import SDTMAlgorithm, SDTMDomainSpec, SDTMVariableSpec
-from .namespace import SDTMNamespace
-from .tdd import (
+from fleet.sdtm._tdd_mixin import TrialDesignMixin
+from fleet.sdtm.models import SDTMAlgorithm, SDTMDomainSpec, SDTMVariableSpec
+from fleet.sdtm.namespace import SDTMNamespace
+from fleet.sdtm.tdd import (
     Epoch,
     TrialArm,
     TrialArms,
-    TrialCriterion,
     TrialCriteria,
+    TrialCriterion,
     TrialElement,
     TrialElements,
     TrialParameter,
@@ -16,7 +17,6 @@ from .tdd import (
     TrialVisits,
     parse_trial_design,
 )
-from ._tdd_mixin import TrialDesignMixin
 
 __all__ = [
     "SDTMAlgorithm",

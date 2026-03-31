@@ -41,7 +41,7 @@ from typing import TYPE_CHECKING, Any
 import yaml
 
 if TYPE_CHECKING:
-    from .api import CDISCClient
+    from fleet.ct.api import CDISCClient
 
 
 def _safe_identifier(name: str) -> str:

@@ -248,7 +248,7 @@ def _parse_domains(raw: str) -> list[str]:
 
 
 def _run_init_cfg(args: argparse.Namespace) -> None:
-    from .core.study_context import (
+    from fleet.core.study_context import (
         ADAMConfig,
         CTConfig,
         SDTMConfig,
@@ -282,9 +282,9 @@ def _run_init_cfg(args: argparse.Namespace) -> None:
 
 
 def _run_init_define(args: argparse.Namespace) -> None:
-    from .core.scaffolder import DefineScaffolder
-    from .core.study_context import load_study_context
-    from .ct.api import CDISCClient
+    from fleet.core.scaffolder import DefineScaffolder
+    from fleet.core.study_context import load_study_context
+    from fleet.ct.api import CDISCClient
 
     config_path = Path(args.config)
     if not config_path.is_file():
@@ -349,9 +349,9 @@ def _run_init_define(args: argparse.Namespace) -> None:
 
 
 def _run_init_ct_pipeline(args: argparse.Namespace) -> None:
-    from .core.study_context import load_study_context
-    from .ct.api import CDISCClient
-    from .ct.generator import CodelistGenerator, extract_concept_ids
+    from fleet.core.study_context import load_study_context
+    from fleet.ct.api import CDISCClient
+    from fleet.ct.generator import CodelistGenerator, extract_concept_ids
 
     config_path = Path(args.config)
     if not config_path.is_file():
@@ -401,8 +401,8 @@ def _run_init_ct_pipeline(args: argparse.Namespace) -> None:
 
 
 def _run_init_ct(args: argparse.Namespace) -> None:
-    from .ct.api import CDISCClient
-    from .ct.generator import CodelistGenerator
+    from fleet.ct.api import CDISCClient
+    from fleet.ct.generator import CodelistGenerator
 
     domains = _parse_domains(args.domains)
     output = Path(args.output)
@@ -428,8 +428,8 @@ def _run_init_ct(args: argparse.Namespace) -> None:
 
 
 def _run_add_ct(args: argparse.Namespace) -> None:
-    from .ct.api import CDISCClient
-    from .ct.generator import (
+    from fleet.ct.api import CDISCClient
+    from fleet.ct.generator import (
         CodelistGenerator,
         existing_concept_ids,
         extract_ig_concept_ids,
@@ -468,7 +468,7 @@ def _run_add_ct(args: argparse.Namespace) -> None:
 
 
 def _run_install_engine(args: argparse.Namespace) -> None:
-    from .validation.engine import install_engine
+    from fleet.validation.engine import install_engine
 
     try:
         install_engine(version=args.version, force=args.force)
@@ -478,13 +478,13 @@ def _run_install_engine(args: argparse.Namespace) -> None:
 
 
 def _run_uninstall_engine() -> None:
-    from .validation.engine import uninstall_engine
+    from fleet.validation.engine import uninstall_engine
 
     uninstall_engine()
 
 
 def _run_doctor() -> None:
-    from .validation.engine import doctor
+    from fleet.validation.engine import doctor
 
     checks = doctor()
     print("Fleet Doctor")
@@ -495,7 +495,7 @@ def _run_doctor() -> None:
 
 
 def _run_define_xml(args: argparse.Namespace) -> None:
-    from .define_xml.spec_generator import DefineSpecGenerator
+    from fleet.define_xml.spec_generator import DefineSpecGenerator
 
     spec = Path(args.spec)
     output = Path(args.output)

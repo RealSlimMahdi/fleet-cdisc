@@ -20,7 +20,7 @@ from typing import Any
 
 import httpx
 
-from ..core.exceptions import CTError
+from fleet.core.exceptions import CTError
 
 logger = logging.getLogger(__name__)
 
@@ -173,20 +173,13 @@ class CDISCClient:
             status = exc.response.status_code
             if status == 401:
                 raise CTError(
-                    "CDISC API authentication failed (401). "
-                    "Check your CDISC_API_KEY."
+                    "CDISC API authentication failed (401). Check your CDISC_API_KEY."
                 ) from exc
             if status == 404:
-                raise CTError(
-                    f"Resource not found on CDISC Library: {path}"
-                ) from exc
-            raise CTError(
-                f"CDISC API request failed ({status}): {exc}"
-            ) from exc
+                raise CTError(f"Resource not found on CDISC Library: {path}") from exc
+            raise CTError(f"CDISC API request failed ({status}): {exc}") from exc
         except httpx.HTTPError as exc:
-            raise CTError(
-                f"Network error contacting CDISC Library: {exc}"
-            ) from exc
+            raise CTError(f"Network error contacting CDISC Library: {exc}") from exc
 
     def close(self) -> None:
         """Close the underlying HTTP transport."""

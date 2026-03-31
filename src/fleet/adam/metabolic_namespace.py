@@ -23,11 +23,11 @@ Usage
 
 from __future__ import annotations
 
-from typing import Any, Self
+from typing import Self
 
 import polars as pl
 
-from ._mixins import SharedADaMVerbsMixin
+from fleet.adam._mixins import SharedADaMVerbsMixin
 
 
 class MetabolicNamespace(SharedADaMVerbsMixin):

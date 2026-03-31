@@ -17,7 +17,7 @@ import polars as pl
 import yaml
 from pydantic import BaseModel
 
-from ..core.exceptions import SchemaError
+from fleet.core.exceptions import SchemaError
 
 
 class Statistic(str, Enum):  # noqa: UP042

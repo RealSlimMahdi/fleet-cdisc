@@ -4,8 +4,8 @@ from pathlib import Path
 
 import polars as pl
 
-from .models import ValidationResult
-from .providers import ValidationProvider, ValidationProviderRegistry
+from fleet.validation.models import ValidationResult
+from fleet.validation.providers import ValidationProvider, ValidationProviderRegistry
 
 
 class ValidationService:

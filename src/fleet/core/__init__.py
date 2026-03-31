@@ -1,7 +1,7 @@
 """Core module: shared utilities and study context."""
 
-from .dag import PipelineDAG, PipelineNode, build_dag
-from .exceptions import (
+from fleet.core.dag import PipelineDAG, PipelineNode, build_dag
+from fleet.core.exceptions import (
     ADAMError,
     CTError,
     FleetError,
@@ -11,8 +11,8 @@ from .exceptions import (
     TLGError,
     ValidationError,
 )
-from .scaffolder import parse_ig_dataset, parse_ig_variable
-from .study_context import (
+from fleet.core.scaffolder import parse_ig_dataset, parse_ig_variable
+from fleet.core.study_context import (
     ADAMConfig,
     CTConfig,
     SDTMConfig,
@@ -22,7 +22,7 @@ from .study_context import (
     ValidationConfig,
     load_study_context,
 )
-from .study_context import StudyConfigError as StudyContextError
+from fleet.core.study_context import StudyConfigError as StudyContextError
 
 __all__ = [
     "FleetError",

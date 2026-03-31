@@ -27,7 +27,7 @@ from typing import Any, Self
 
 import polars as pl
 
-from ._mixins import SharedADaMVerbsMixin
+from fleet.adam._mixins import SharedADaMVerbsMixin
 
 
 class ADSLNamespace(SharedADaMVerbsMixin):
@@ -141,7 +141,7 @@ class ADSLNamespace(SharedADaMVerbsMixin):
         agg_fn: str,
     ) -> Self:
         """Shared implementation for first_date/last_date."""
-        from ..sdtm.utils import parse_expression
+        from fleet.sdtm.utils import parse_expression
 
         grps = groups or ["USUBJID"]
         src = from_dataset
@@ -219,7 +219,7 @@ class ADSLNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        from ..sdtm.utils import parse_expression
+        from fleet.sdtm.utils import parse_expression
 
         grps = groups or ["USUBJID"]
         src = from_dataset
@@ -274,7 +274,7 @@ class ADSLNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        from ..sdtm.utils import parse_expression
+        from fleet.sdtm.utils import parse_expression
 
         crit_expr = criteria if isinstance(criteria, pl.Expr) else parse_expression(str(criteria))
         else_val = pl.lit(false_value) if false_value is not None else pl.lit(None)
@@ -313,7 +313,7 @@ class ADSLNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        from .utils import age_in_years as _age_in_years_expr
+        from fleet.adam.utils import age_in_years as _age_in_years_expr
 
         return self._chain(
             _age_in_years_expr(age_col=age_col, age_unit_col=age_unit_col, target=target)

@@ -1,13 +1,13 @@
 """Validation module for Fleet."""
 
-from .engine import discover_engine, doctor, install_engine, uninstall_engine
-from .models import Severity, ValidationIssue, ValidationResult
-from .providers import (
+from fleet.validation.engine import discover_engine, doctor, install_engine, uninstall_engine
+from fleet.validation.models import Severity, ValidationIssue, ValidationResult
+from fleet.validation.providers import (
     OfficialRulesEngineProvider,
     ValidationProvider,
     ValidationProviderRegistry,
 )
-from .service import ValidationService
+from fleet.validation.service import ValidationService
 
 __all__ = [
     "Severity",

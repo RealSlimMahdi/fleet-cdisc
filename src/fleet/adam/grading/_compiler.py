@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from ._models import (
+from fleet.adam.grading._models import (
     BranchCondition,
     ComparisonRule,
     GradeRule,
@@ -20,7 +20,7 @@ from ._models import (
 )
 
 if TYPE_CHECKING:
-    from ._models import CriteriaFile
+    from fleet.adam.grading._models import CriteriaFile
 
 # ---------------------------------------------------------------------------
 # Operator map

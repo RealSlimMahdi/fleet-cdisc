@@ -9,7 +9,7 @@ from typing import Literal
 import httpx
 import polars as pl
 
-from ..core.exceptions import IOError as FleetIOError
+from fleet.core.exceptions import IOError as FleetIOError
 
 
 def download_raw_data(
@@ -110,10 +110,7 @@ def load_datasets(
     Raises:
         FleetIOError: If any file fails to load.
     """
-    return {
-        name: load_raw_data(path, file_type, **kwargs)
-        for name, path in file_paths.items()
-    }
+    return {name: load_raw_data(path, file_type, **kwargs) for name, path in file_paths.items()}
 
 
 def save_parquet(df: pl.DataFrame, output_path: Path, **kwargs) -> Path:
@@ -153,8 +150,7 @@ def save_xpt(df: pl.DataFrame, output_path: Path) -> Path:
         import pyreadstat
     except ImportError as exc:
         raise ImportError(
-            "pyreadstat is required to write XPT files. "
-            "Install it with: uv add fleet[io]"
+            "pyreadstat is required to write XPT files. Install it with: uv add fleet[io]"
         ) from exc
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

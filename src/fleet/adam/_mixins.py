@@ -238,7 +238,7 @@ class SharedADaMVerbsMixin:
                     .to_frame()
                 )
         """
-        from ..sdtm.utils import parse_expression
+        from fleet.sdtm.utils import parse_expression
 
         expr = expression if isinstance(expression, pl.Expr) else parse_expression(str(expression))
         return self._chain(expr.alias(target))
@@ -363,7 +363,7 @@ class SharedADaMVerbsMixin:
                     .to_frame()
                 )
         """
-        from ..sdtm.utils import parse_expression
+        from fleet.sdtm.utils import parse_expression
 
         if not conditions:
             return self._chain(pl.lit(else_value).alias(target))
@@ -404,7 +404,7 @@ class SharedADaMVerbsMixin:
                     .to_frame()
                 )
         """
-        from ..sdtm.utils import parse_expression
+        from fleet.sdtm.utils import parse_expression
 
         df = self.to_frame()
         filter_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
@@ -503,7 +503,7 @@ class SharedADaMVerbsMixin:
                     .to_frame()
                 )
         """
-        from .utils import dtf_expr, impute_dtc_to_date
+        from fleet.adam.utils import dtf_expr, impute_dtc_to_date
 
         exprs: list[pl.Expr] = [
             impute_dtc_to_date(
@@ -564,7 +564,7 @@ class SharedADaMVerbsMixin:
                     .to_frame()
                 )
         """
-        from .utils import (
+        from fleet.adam.utils import (
             dtf_expr,
             impute_dtc_to_date,
             impute_dtc_to_datetime,
@@ -595,7 +595,7 @@ class SharedADaMVerbsMixin:
         )
 
         # For partial dates, override with the imputed date + time
-        from .utils import _resolve_time
+        from fleet.adam.utils import _resolve_time
 
         time_suffix = _resolve_time(time_imputation)
         if time_imputation == "none":

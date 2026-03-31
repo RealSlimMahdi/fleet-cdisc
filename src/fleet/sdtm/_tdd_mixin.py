@@ -16,12 +16,12 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import yaml
 
-from .tdd import (
+from fleet.sdtm.tdd import (
     Epoch,
     TrialArms,
     TrialCriteria,
@@ -624,7 +624,7 @@ class TrialDesignMixin:
     @staticmethod
     def _fetch_ig_domain(domain: str, ig_version: str) -> dict[str, Any]:
         """Fetch domain metadata from the CDISC Library IG."""
-        from ..ct.api import CDISCClient
+        from fleet.ct.api import CDISCClient
 
         with CDISCClient() as client:
             detail = client._get(f"/mdr/sdtmig/{ig_version}/datasets/{domain}")

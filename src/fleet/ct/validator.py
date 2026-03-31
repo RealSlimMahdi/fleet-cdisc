@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from threading import Lock
 
-from .loader import CTError, load_controlled_terminology
+from fleet.ct.loader import CTError, load_controlled_terminology
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ class CTValidator:
         self._initialized: bool = False
 
     @classmethod
-    def get_instance(cls) -> "CTValidator":
+    def get_instance(cls) -> CTValidator:
         """Return the module-level singleton. Kept for backward compatibility."""
         return _validator
 
@@ -65,9 +65,7 @@ class CTValidator:
                 self._initialized = True
                 if aliases:
                     self._codelist_aliases.update(aliases)
-                logger.info(
-                    "Loaded %d codelists from %s", len(self._ct_cache), ct_path
-                )
+                logger.info("Loaded %d codelists from %s", len(self._ct_cache), ct_path)
             except CTError:
                 raise
 

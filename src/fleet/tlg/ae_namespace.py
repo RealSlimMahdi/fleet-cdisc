@@ -10,8 +10,8 @@ from typing import Any
 
 import polars as pl
 
-from ._ard import compute_big_n, default_fmt_fn, expand_pools, format_ard, validate_ard
-from ._specs import (
+from fleet.tlg._ard import compute_big_n, default_fmt_fn, expand_pools, format_ard, validate_ard
+from fleet.tlg._specs import (
     AEListingSpec,
     AESummarySpec,
     GroupPool,
@@ -372,7 +372,7 @@ def _ard_row(
 def _rows_to_ard(rows: list[dict[str, Any]]) -> pl.DataFrame:
     """Convert a list of ARD row dicts to a {cards}-compatible Polars DataFrame."""
     if not rows:
-        from ._ard import ARD_SCHEMA
+        from fleet.tlg._ard import ARD_SCHEMA
 
         return pl.DataFrame(schema=ARD_SCHEMA)
 

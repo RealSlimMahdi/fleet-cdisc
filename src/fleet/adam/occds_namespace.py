@@ -27,7 +27,7 @@ from typing import Any, Self
 
 import polars as pl
 
-from ._mixins import MultiRowMixin, SharedADaMVerbsMixin
+from fleet.adam._mixins import MultiRowMixin, SharedADaMVerbsMixin
 
 
 class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin):
@@ -92,7 +92,7 @@ class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin):
                     .to_frame()
                 )
         """
-        from ..sdtm.utils import parse_expression
+        from fleet.sdtm.utils import parse_expression
 
         sev_order = severity_order or ["MILD", "MODERATE", "SEVERE"]
         grps = groups or ["USUBJID"]

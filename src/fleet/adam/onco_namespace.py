@@ -26,11 +26,11 @@ Usage
 
 from __future__ import annotations
 
-from typing import Any, Self
+from typing import Self
 
 import polars as pl
 
-from ._mixins import SharedADaMVerbsMixin
+from fleet.adam._mixins import SharedADaMVerbsMixin
 
 # RECIST / RECIST-like response order (lower = more favourable)
 _RESP_TO_NUM: dict[str, int] = {

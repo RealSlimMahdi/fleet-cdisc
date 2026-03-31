@@ -30,11 +30,11 @@ Usage
 
 from __future__ import annotations
 
-from typing import Any, Self
+from typing import Self
 
 import polars as pl
 
-from ._mixins import SharedADaMVerbsMixin
+from fleet.adam._mixins import SharedADaMVerbsMixin
 
 # Centiloid calibration table (tracer + pipeline + ref_region → slope, intercept)
 # Source: Navitsky et al. (2018), Sims et al. (2024), Royse et al. (2021)

@@ -29,7 +29,7 @@ from typing import Self
 
 import polars as pl
 
-from ._mixins import MultiRowMixin, SharedADaMVerbsMixin
+from fleet.adam._mixins import MultiRowMixin, SharedADaMVerbsMixin
 
 _UNIT_SCALE: dict[str, float] = {
     "s": 1.0,

@@ -7,8 +7,8 @@ from pathlib import Path
 
 import polars as pl
 
-from .engine import discover_engine
-from .models import Severity, ValidationIssue, ValidationResult
+from fleet.validation.engine import discover_engine
+from fleet.validation.models import Severity, ValidationIssue, ValidationResult
 
 
 def _build_result(

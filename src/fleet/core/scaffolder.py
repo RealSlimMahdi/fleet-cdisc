@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any
 import yaml
 
 if TYPE_CHECKING:
-    from ..ct.api import CDISCClient
+    from fleet.ct.api import CDISCClient
 
 # CDISC simpleDatatype → Fleet define.yaml type
 _TYPE_MAP: dict[str, str] = {
@@ -365,7 +365,7 @@ class DefineScaffolder:
         output_path: Path,
     ) -> Path:
         """Write the assembled define spec to a YAML file."""
-        from .._version import __version__
+        from fleet._version import __version__
 
         output_path = output_path.resolve()
         output_path.parent.mkdir(parents=True, exist_ok=True)

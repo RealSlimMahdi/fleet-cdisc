@@ -24,16 +24,16 @@ from __future__ import annotations
 
 import copy
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import polars as pl
 import yaml
 
-from .utils import dtc_date_expr, dtc_datetime_expr, parse_expression
-from ._tdd_mixin import TrialDesignMixin
+from fleet.sdtm._tdd_mixin import TrialDesignMixin
+from fleet.sdtm.utils import dtc_date_expr, dtc_datetime_expr, parse_expression
 
 if TYPE_CHECKING:
-    from ..ct.validator import CTValidator
+    from fleet.ct.validator import CTValidator
 
 
 @pl.api.register_dataframe_namespace("sdtm")
@@ -52,12 +52,12 @@ class SDTMNamespace(TrialDesignMixin):
     # Internal chaining helper                                             #
     # ------------------------------------------------------------------ #
 
-    def _chain(self, *exprs: pl.Expr) -> "SDTMNamespace":
+    def _chain(self, *exprs: pl.Expr) -> SDTMNamespace:
         new = copy.copy(self)
         new._lazy = self._lazy.with_columns(list(exprs))
         return new
 
-    def _materialise_then(self, df: pl.DataFrame) -> "SDTMNamespace":
+    def _materialise_then(self, df: pl.DataFrame) -> SDTMNamespace:
         """Return a fresh namespace wrapping *df* as a new lazy plan."""
         new = copy.copy(self)
         new._lazy = df.lazy()
@@ -67,7 +67,7 @@ class SDTMNamespace(TrialDesignMixin):
     # 1. assign_no_ct — direct 1:1 column rename                          #
     # ------------------------------------------------------------------ #
 
-    def assign_no_ct(self, target: str, *, source: str) -> "SDTMNamespace":
+    def assign_no_ct(self, target: str, *, source: str) -> SDTMNamespace:
         """Copy *source* column to *target* with no controlled-terminology validation.
 
         Args:
@@ -97,8 +97,8 @@ class SDTMNamespace(TrialDesignMixin):
         self,
         target: str,
         *,
-        expression: "str | pl.Expr",
-    ) -> "SDTMNamespace":
+        expression: str | pl.Expr,
+    ) -> SDTMNamespace:
         """Derive *target* using a Polars expression or expression string.
 
         Args:
@@ -133,8 +133,8 @@ class SDTMNamespace(TrialDesignMixin):
         source: str,
         ct_codelist: str | type,
         ct_mapping: dict[str, str] | None = None,
-        ct_validator: "CTValidator | None" = None,
-    ) -> "SDTMNamespace":
+        ct_validator: CTValidator | None = None,
+    ) -> SDTMNamespace:
         """Copy *source* to *target*, translating values via controlled terminology.
 
         Values are decoded using *ct_mapping* (explicit override) or, when
@@ -209,7 +209,7 @@ class SDTMNamespace(TrialDesignMixin):
         # Try to auto-resolve from the singleton CTValidator
         if ct_validator is None:
             try:
-                from ..ct.validator import get_validator
+                from fleet.ct.validator import get_validator
 
                 ct_validator = get_validator()
             except Exception:
@@ -242,7 +242,7 @@ class SDTMNamespace(TrialDesignMixin):
         source: str,
         mode: str = "date",
         input_format: str | None = None,
-    ) -> "SDTMNamespace":
+    ) -> SDTMNamespace:
         """Parse *source* date string and format as ISO 8601.
 
         Uses fully vectorised Polars date parsing (no row-by-row Python).
@@ -286,7 +286,7 @@ class SDTMNamespace(TrialDesignMixin):
         *,
         value: Any,
         ct_codelist: str | type | None = None,
-    ) -> "SDTMNamespace":
+    ) -> SDTMNamespace:
         """Set *target* to a constant *value*, validated against controlled terminology.
 
         When *ct_codelist* is provided **and** a ``CTValidator`` has been
@@ -324,7 +324,7 @@ class SDTMNamespace(TrialDesignMixin):
                 ct_codelist = getattr(ct_codelist, "_concept_id", None) or ct_codelist.__name__
 
             try:
-                from ..ct.validator import get_validator
+                from fleet.ct.validator import get_validator
 
                 validator = get_validator()
                 valid, msg = validator.validate_value(ct_codelist, str(value))
@@ -341,7 +341,7 @@ class SDTMNamespace(TrialDesignMixin):
     # 5. hardcode_no_ct — literal constant, no CT                         #
     # ------------------------------------------------------------------ #
 
-    def hardcode_no_ct(self, target: str, *, value: Any) -> "SDTMNamespace":
+    def hardcode_no_ct(self, target: str, *, value: Any) -> SDTMNamespace:
         """Set *target* to a literal *value* for every row, with no CT validation.
 
         Args:
@@ -373,7 +373,7 @@ class SDTMNamespace(TrialDesignMixin):
         *,
         condition: str | pl.Expr,
         then_value: Any,
-    ) -> "SDTMNamespace":
+    ) -> SDTMNamespace:
         """Set *target* to *then_value* where *condition* is true, else null.
 
         Args:
@@ -413,7 +413,7 @@ class SDTMNamespace(TrialDesignMixin):
         *,
         when: list[dict[str, Any]],
         else_value: Any = None,
-    ) -> "SDTMNamespace":
+    ) -> SDTMNamespace:
         """Multi-branch conditional mapping.
 
         Branches are evaluated in order; first match wins.
@@ -483,7 +483,7 @@ class SDTMNamespace(TrialDesignMixin):
         *,
         source: str = "ae_relationship",
         aerel_map: dict[str, str] | None = None,
-    ) -> "SDTMNamespace":
+    ) -> SDTMNamespace:
         """Map free-text AE causality strings to controlled ``AEREL`` values.
 
         Mapping is case-insensitive against *aerel_map* (defaults to the
@@ -528,7 +528,7 @@ class SDTMNamespace(TrialDesignMixin):
         dataset: pl.DataFrame,
         on: str | list[str],
         how: str = "left",
-    ) -> "SDTMNamespace":
+    ) -> SDTMNamespace:
         """Join *dataset* into the pipeline using key column(s) *on*.
 
         Materialises the current pipeline first (join requires a concrete
@@ -568,7 +568,7 @@ class SDTMNamespace(TrialDesignMixin):
         *,
         subset: list[str] | None = None,
         keep: str = "first",
-    ) -> "SDTMNamespace":
+    ) -> SDTMNamespace:
         """Remove duplicate rows, optionally on a *subset* of columns.
 
         Materialises, deduplicates, and returns a fresh namespace.
@@ -605,7 +605,7 @@ class SDTMNamespace(TrialDesignMixin):
         *,
         group_cols: list[str],
         agg: list[pl.Expr],
-    ) -> "SDTMNamespace":
+    ) -> SDTMNamespace:
         """Group by *group_cols* and apply *agg* aggregations.
 
         Materialises, groups, and returns a fresh namespace.
@@ -635,7 +635,7 @@ class SDTMNamespace(TrialDesignMixin):
     # 12. dataset_level — constant for whole dataset (alias hardcode_no_ct)
     # ------------------------------------------------------------------ #
 
-    def dataset_level(self, target: str, *, value: Any) -> "SDTMNamespace":
+    def dataset_level(self, target: str, *, value: Any) -> SDTMNamespace:
         """Set a dataset-level constant on *target* (alias for ``hardcode_no_ct``).
 
         Args:
@@ -661,7 +661,7 @@ class SDTMNamespace(TrialDesignMixin):
     # 13. notsubmitted — mark variable as null / not-submitted            #
     # ------------------------------------------------------------------ #
 
-    def notsubmitted(self, *targets: str) -> "SDTMNamespace":
+    def notsubmitted(self, *targets: str) -> SDTMNamespace:
         """Mark one or more variables as not submitted (set to null).
 
         Useful to explicitly null out eCRF fields that are not included in
@@ -698,7 +698,7 @@ class SDTMNamespace(TrialDesignMixin):
         source: str,
         delimiter: str = "|",
         id_cols: list[str] | None = None,
-    ) -> "SDTMNamespace":
+    ) -> SDTMNamespace:
         """Explode a delimited multi-response field into separate rows.
 
         Materialises the current pipeline, then splits *source* on
@@ -737,7 +737,7 @@ class SDTMNamespace(TrialDesignMixin):
     # Spec-driven pipeline                                                 #
     # ------------------------------------------------------------------ #
 
-    def from_spec(self, spec_path: str | Path, *, dataset: str | None = None) -> "SDTMNamespace":
+    def from_spec(self, spec_path: str | Path, *, dataset: str | None = None) -> SDTMNamespace:
         """Build a pipeline from a YAML specification file.
 
         Reads a ``define.yaml`` with a top-level ``datasets`` list where each
@@ -762,7 +762,7 @@ class SDTMNamespace(TrialDesignMixin):
                     .to_frame()
                 )
         """
-        from .models import SDTMDomainSpec, SDTMVariableSpec
+        from fleet.sdtm.models import SDTMDomainSpec
 
         spec_data = yaml.safe_load(Path(spec_path).read_text())
 
@@ -822,7 +822,7 @@ class SDTMNamespace(TrialDesignMixin):
     @staticmethod
     def _extract_define_variables(spec_data: dict, dataset: str | None) -> list:
         """Convert define.yaml dataset variables into SDTMVariableSpec objects."""
-        from .models import SDTMVariableSpec
+        from fleet.sdtm.models import SDTMVariableSpec
 
         datasets = spec_data["datasets"]
         if dataset is None:
@@ -862,8 +862,8 @@ class SDTMNamespace(TrialDesignMixin):
         self,
         domain: str,
         version: str = "3.4",
-        rules_engine_path: "Path | None" = None,
-    ) -> "SDTMNamespace":
+        rules_engine_path: Path | None = None,
+    ) -> SDTMNamespace:
         """Run CDISC SDTM conformance validation and print the report.
 
         Returns *self* so the chain can continue after validation.
@@ -888,7 +888,7 @@ class SDTMNamespace(TrialDesignMixin):
                     .to_frame()
                 )
         """
-        from ..validation.service import ValidationService
+        from fleet.validation.service import ValidationService
 
         svc = ValidationService(rules_engine_path=rules_engine_path)
         result = svc.validate_sdtm(self.to_frame(), domain=domain, version=version)
@@ -903,10 +903,10 @@ class SDTMNamespace(TrialDesignMixin):
         self,
         columns: list[str] | None = None,
         *,
-        spec: "str | Path | None" = None,
+        spec: str | Path | None = None,
         dataset: str | None = None,
         drop_pattern: str | None = r"^_",
-    ) -> "SDTMNamespace":
+    ) -> SDTMNamespace:
         """
         Materialise the pipeline then select and reorder columns.
 
@@ -1013,7 +1013,7 @@ class SDTMNamespace(TrialDesignMixin):
         }
         return columns, type_map
 
-    def _new_from(self, df: pl.DataFrame) -> "SDTMNamespace":
+    def _new_from(self, df: pl.DataFrame) -> SDTMNamespace:
         """Return a fresh SDTMNamespace wrapping *df* as a lazy plan."""
         return self._materialise_then(df)
 
@@ -1044,7 +1044,7 @@ class SDTMNamespace(TrialDesignMixin):
     # Debugging & observability                                            #
     # ------------------------------------------------------------------ #
 
-    def inspect(self, prefix: str = "DEBUG") -> "SDTMNamespace":
+    def inspect(self, prefix: str = "DEBUG") -> SDTMNamespace:
         """Materialise the pipeline at this point and log its state.
 
         Creates a hard checkpoint: the pipeline resumes from the
@@ -1076,7 +1076,7 @@ class SDTMNamespace(TrialDesignMixin):
         print(df.head(5))
         return self._materialise_then(df)
 
-    def explain(self) -> "SDTMNamespace":
+    def explain(self) -> SDTMNamespace:
         """Print the current Polars query plan without materialising.
 
         Useful for understanding how Polars will optimise the accumulated
@@ -1102,7 +1102,7 @@ class SDTMNamespace(TrialDesignMixin):
 
     def write_parquet(
         self,
-        path: "str | Path",
+        path: str | Path,
         *,
         mkdir: bool = True,
     ) -> pl.DataFrame:

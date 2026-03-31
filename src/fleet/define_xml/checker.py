@@ -54,7 +54,7 @@ import polars as pl
 import yaml
 
 if TYPE_CHECKING:
-    from ..validation.models import ValidationResult
+    from fleet.validation.models import ValidationResult
 
 _SCHEMA_PATH = Path(__file__).parent / "schemas" / "define_spec_schema.json"
 
@@ -62,20 +62,31 @@ _SCHEMA_PATH = Path(__file__).parent / "schemas" / "define_spec_schema.json"
 # A column passes the type check if its dtype is an instance of any of the
 # listed Polars types.
 _POLARS_COMPAT: dict[str, tuple[type, ...]] = {
-    "text":     (pl.String, pl.Categorical, pl.Enum),
-    "integer":  (pl.Int8, pl.Int16, pl.Int32, pl.Int64,
-                 pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64),
-    "float":    (pl.Float32, pl.Float64,
-                 pl.Int8, pl.Int16, pl.Int32, pl.Int64,          # integers are accepted in float cols
-                 pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64),
-    "date":     (pl.Date,),
-    "datetime": (pl.Datetime, pl.Date),                          # Date is acceptable in datetime columns
+    "text": (pl.String, pl.Categorical, pl.Enum),
+    "integer": (pl.Int8, pl.Int16, pl.Int32, pl.Int64, pl.UInt8, pl.UInt16, pl.UInt32, pl.UInt64),
+    "float": (
+        pl.Float32,
+        pl.Float64,
+        pl.Int8,
+        pl.Int16,
+        pl.Int32,
+        pl.Int64,  # integers are accepted in float cols
+        pl.UInt8,
+        pl.UInt16,
+        pl.UInt32,
+        pl.UInt64,
+    ),
+    "date": (pl.Date,),
+    "datetime": (pl.Datetime, pl.Date),  # Date is acceptable in datetime columns
 }
 
 # Human-readable type family name for reporting
 _TYPE_LABEL: dict[str, str] = {
-    "text": "String/Categorical", "integer": "Int*", "float": "Float*/Int*",
-    "date": "Date", "datetime": "Datetime/Date",
+    "text": "String/Categorical",
+    "integer": "Int*",
+    "float": "Float*/Int*",
+    "date": "Date",
+    "datetime": "Datetime/Date",
 }
 
 
@@ -129,9 +140,9 @@ class CheckResult:
     def print_report(self) -> None:
         """Print a human-readable validation summary to stdout."""
         status = "PASS" if self.is_valid else "FAIL"
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"  Dataset Checker — {self.dataset}  [{status}]")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         if self.errors:
             print(f"\n  ERRORS ({len(self.errors)}):")
             for e in self.errors:
@@ -223,15 +234,13 @@ class DatasetChecker:
         ds_def = self._datasets.get(dataset.upper())
         if ds_def is None:
             result.errors.append(
-                f"Dataset '{dataset}' not found in define. "
-                f"Available: {sorted(self._datasets)}"
+                f"Dataset '{dataset}' not found in define. Available: {sorted(self._datasets)}"
             )
             return result
 
         # Build variable index (exclude private _-prefix names)
         vars_by_name: dict[str, dict[str, Any]] = {
-            v["name"]: v for v in ds_def["variables"]
-            if not v["name"].startswith("_")
+            v["name"]: v for v in ds_def["variables"] if not v["name"].startswith("_")
         }
 
         # Labels always populated regardless of other flags
@@ -257,11 +266,7 @@ class DatasetChecker:
         ds_def = self._datasets.get(dataset.upper())
         if ds_def is None:
             return {}
-        return {
-            v["name"]: v["label"]
-            for v in ds_def["variables"]
-            if not v["name"].startswith("_")
-        }
+        return {v["name"]: v["label"] for v in ds_def["variables"] if not v["name"].startswith("_")}
 
     # ------------------------------------------------------------------ #
     # Check runners                                                        #
@@ -335,7 +340,7 @@ class DatasetChecker:
         *,
         standard: str | None = None,
         version: str | None = None,
-    ) -> "ValidationResult":
+    ) -> ValidationResult:
         """Run the official CDISC Rules Engine against *df*.
 
         Standard (``"SDTMIG"`` / ``"ADAMIG"``) and version are auto-detected
@@ -360,7 +365,7 @@ class DatasetChecker:
         -------
         ValidationResult
         """
-        from ..validation.service import ValidationService
+        from fleet.validation.service import ValidationService
 
         study = self._data.get("study", {})
         detected_standard = (standard or study.get("standard", "SDTMIG")).upper()
@@ -410,12 +415,11 @@ class DatasetChecker:
             Resolved path of the written file.
         """
         try:
-            import pyreadstat
             import pandas as pd
+            import pyreadstat
         except ImportError as exc:
             raise ImportError(
-                "pyreadstat is required for XPT export. "
-                "Install it with: uv add fleet[io]"
+                "pyreadstat is required for XPT export. Install it with: uv add fleet[io]"
             ) from exc
 
         if reorder:
@@ -437,6 +441,7 @@ class DatasetChecker:
 
     def _validate_schema(self) -> None:
         import jsonschema
+
         schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
         validator = jsonschema.Draft202012Validator(schema)
         errors = list(validator.iter_errors(self._data))

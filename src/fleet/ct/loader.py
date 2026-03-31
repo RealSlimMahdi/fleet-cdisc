@@ -11,7 +11,7 @@ import httpx
 import polars as pl
 import yaml
 
-from ..core.exceptions import CTError
+from fleet.core.exceptions import CTError
 
 
 def load_controlled_terminology(

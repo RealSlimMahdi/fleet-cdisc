@@ -37,13 +37,13 @@ Usage
 """
 
 # Importing sdtm/adam triggers the @pl.api.register_dataframe_namespace decorators
-from . import (
+from fleet import (
     adam,  # noqa: F401  (registers df.adam)
     sdtm,  # noqa: F401  (registers df.sdtm)
     tlg,  # noqa: F401  (registers df.tlg)
 )
-from ._version import __version__
-from .adam import (
+from fleet._version import __version__
+from fleet.adam import (
     ADAMAlgorithm,
     AdamNamespace,
     ADSLNamespace,
@@ -55,17 +55,17 @@ from .adam import (
     PedsNamespace,
     VaccineNamespace,
 )
-from .core import (
+from fleet.core import (
     PipelineDAG,
     PipelineNode,
     StudyContext,
     build_dag,
     load_study_context,
 )
-from .ct import CTValidator, get_validator, load_controlled_terminology
+from fleet.ct import CTValidator, get_validator, load_controlled_terminology
 
 # TA namespace classes are also importable directly for type hints / isinstance
-from .define_xml import (
+from fleet.define_xml import (
     CheckResult,
     DatasetChecker,
     DefineSpecGenerator,
@@ -73,9 +73,9 @@ from .define_xml import (
     DefineXMLGenerator,
     TypeMismatch,
 )
-from .io import load_datasets, load_raw_data, save_parquet
-from .sdtm import SDTMAlgorithm, SDTMNamespace
-from .tlg import (
+from fleet.io import load_datasets, load_raw_data, save_parquet
+from fleet.sdtm import SDTMAlgorithm, SDTMNamespace
+from fleet.tlg import (
     AEListingSpec,
     AESummarySpec,
     AETLGNamespace,
@@ -87,7 +87,7 @@ from .tlg import (
     TLGSpec,
     VSSummarySpec,
 )
-from .validation import ValidationResult, ValidationService
+from fleet.validation import ValidationResult, ValidationService
 
 __all__ = [
     "__version__",

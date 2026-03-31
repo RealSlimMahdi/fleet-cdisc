@@ -1,9 +1,9 @@
 """Define-XML module for Fleet."""
 
-from .checker import CheckResult, DatasetChecker, TypeMismatch
-from .generator import DefineXMLGenerator
-from .spec_generator import DefineSpecGenerator
-from .validator import DefineIssue, DefineValidator
+from fleet.define_xml.checker import CheckResult, DatasetChecker, TypeMismatch
+from fleet.define_xml.generator import DefineXMLGenerator
+from fleet.define_xml.spec_generator import DefineSpecGenerator
+from fleet.define_xml.validator import DefineIssue, DefineValidator
 
 __all__ = [
     # Simplified spec workflow

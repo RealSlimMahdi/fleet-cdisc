@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from ._models import ComparisonRule, CriteriaFile, GradeRule, TermCriteria
-from ._registry import GradingSystem, list_systems, load_criteria
+from fleet.adam.grading._models import ComparisonRule, CriteriaFile, GradeRule, TermCriteria
+from fleet.adam.grading._registry import GradingSystem, list_systems, load_criteria
 
 __all__ = [
     "ComparisonRule",
