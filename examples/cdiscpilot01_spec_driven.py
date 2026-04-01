@@ -30,9 +30,6 @@ Run from the repo root:
     uv run python examples/cdiscpilot01_spec_driven.py
 """
 from pathlib import Path
-import sys
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import polars as pl
 import fleet  # noqa: F401 — registers .sdtm / .adam namespace extensions

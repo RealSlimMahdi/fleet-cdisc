@@ -9,11 +9,6 @@ Demonstrates:
   - Switching to DAIDS grading
 """
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 import polars as pl
 
 import fleet  # noqa: F401  — registers the .adam namespace
