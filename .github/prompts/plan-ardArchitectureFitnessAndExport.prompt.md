@@ -71,6 +71,7 @@ correspondence between what you write and what the ARD contains:
 | `stat` / `stat_fmt`           | computed               | — auto                                                 |
 | `warning` / `error`           | computed               | — auto                                                 |
 | `context`                     | inferred               | — auto from sub-namespace name                         |
+| `variable=""` header rows     | `OverallStat` list     | `.header_rows([OverallStat(...)])`                     |
 
 Data input verbs:
 
@@ -194,6 +195,145 @@ or `TLGContext` object added.
 
 ---
 
+### Scenario D — Summary header rows (any AE, SAE, deaths, grade 3–4, QTcF thresholds, …)
+
+**Decision: `OverallStat` model + `.header_rows()` builder verb, both on the shared base.**
+
+#### Design
+
+`OverallStat` describes a single whole-dataset aggregate row: apply an optional filter,
+count subjects (or events), emit one flat ARD row with no level hierarchy. It belongs to
+`TLGSpec` — the _base class_ — so every sub-spec and every domain inherits `header_rows`
+for free. The `.header_rows()` verb lives on `TLGBuilder` base for the same reason.
+
+```python
+class OverallStat(BaseModel):
+    label: str                                # → variable_level in ARD
+    filter: pl.Expr | None = None             # None = no filter (count all subjects)
+    statistics: list[Statistic] | None = None # None = inherit from spec.statistics
+```
+
+ARD output contract for `OverallStat` rows:
+
+- `variable = ""` — signals "header row" to the renderer (no indentation, no level label)
+- `variable_level = OverallStat.label` — becomes the display stub text
+- Rows appear **before** hierarchy rows in the ARD; renderer preserves this order
+- `statistics` override is per-row (e.g. deaths should not carry `N_PCT` when the
+  denominator is all-subjects)
+
+#### AE example
+
+```python
+from fleet.tlg import OverallStat
+
+# Spec-driven
+spec = AESummarySpec(
+    header_rows=[
+        OverallStat("Subjects with any AE"),
+        OverallStat("Subjects with ≥1 SAE",       filter=pl.col("AESER") == "Y"),
+        OverallStat("Subjects with Grade 3–4 AE", filter=pl.col("AETOXGR").is_in(["3","4"])),
+        OverallStat("Deaths",                     filter=pl.col("AESDTH") == "Y",
+                                                   statistics=[Statistic.N_SUBJECTS]),
+    ],
+)
+ard = adae.tlg.ae.t_summary(adsl=adsl, spec=spec)
+
+# Inline builder — identical output
+ard = (
+    adae.tlg.ae
+    .population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
+    .by("TRTA")
+    .header_rows([
+        OverallStat("Subjects with any AE"),
+        OverallStat("≥1 SAE",       filter=pl.col("AESER") == "Y"),
+        OverallStat("Grade 3–4 AE", filter=pl.col("AETOXGR").is_in(["3","4"])),
+        OverallStat("Deaths",       filter=pl.col("AESDTH") == "Y",
+                                     statistics=[Statistic.N_SUBJECTS]),
+    ])
+    .rows(["AEBODSYS", "AEDECOD"])
+    .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
+    .to_ard()
+)
+```
+
+#### Cross-domain examples — same API, different columns
+
+VS abnormality flags:
+
+```python
+ard = (
+    advs.tlg.vs
+    .population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
+    .filter(pl.col("PARAMCD") == "SYSBP")
+    .by("TRTA")
+    .header_rows([
+        OverallStat("Subjects with any measurement"),
+        OverallStat("High value",     filter=pl.col("ANRHI") == "Y"),
+        OverallStat("Critical value", filter=pl.col("ANRC2HI") == "Y"),
+    ])
+    .rows(["AVISIT"])
+    .stats([Statistic.MEAN, Statistic.SD])
+    .to_ard()
+)
+```
+
+ECG / QTcF threshold rows:
+
+```python
+ard = (
+    adeg.tlg.ecg
+    .population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
+    .filter(pl.col("PARAMCD") == "QTcF")
+    .by("TRTA")
+    .header_rows([
+        OverallStat("> 450 ms",         filter=pl.col("AVAL") > 450),
+        OverallStat("> 480 ms",         filter=pl.col("AVAL") > 480),
+        OverallStat("> 500 ms",         filter=pl.col("AVAL") > 500),
+        OverallStat("Increase > 30 ms", filter=pl.col("CHG") > 30),
+        OverallStat("Increase > 60 ms", filter=pl.col("CHG") > 60),
+    ])
+    .rows(["AVISIT"])
+    .stats([Statistic.MEAN, Statistic.SD])
+    .to_ard()
+)
+```
+
+Lab toxicity grades (CTCAE):
+
+```python
+ard = (
+    adlb.tlg.lb
+    .population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
+    .filter(pl.col("PARAMCD") == "ALT")
+    .by("TRTA")
+    .header_rows([
+        OverallStat("Any elevation",    filter=pl.col("ANRHI") == "Y"),
+        OverallStat("Grade ≥ 3",        filter=pl.col("ATOXGRN") >= 3),
+        OverallStat("> 3× ULN",         filter=pl.col("AVAL") > 3 * pl.col("A1HI")),
+        OverallStat("> 5× ULN",         filter=pl.col("AVAL") > 5 * pl.col("A1HI")),
+        OverallStat("> 10× ULN",        filter=pl.col("AVAL") > 10 * pl.col("A1HI")),
+    ])
+    .rows(["AVISIT"])
+    .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
+    .to_ard()
+)
+```
+
+#### Why this scales
+
+- **No per-domain code**: `OverallStat` has no knowledge of AE, VS, ECG, or lab columns.
+  It is just a filter + label + optional stat override. Domain specificity lives entirely
+  in the `filter` expression the user writes.
+- **`header_rows` on `TLGSpec` base**: all future sub-specs (`ECGSummarySpec`,
+  `LBSummarySpec`, …) inherit it without any additional code.
+- **`.header_rows()` on `TLGBuilder` base**: all future sub-namespaces (`.ecg`, `.lb`, …)
+  get the verb automatically.
+- **Renderer contract**: `variable == ""` rows are rendered as a distinct display class —
+  no indentation, no level column, optional visual separator above the hierarchy section.
+  Fully domain-agnostic.
+
+---
+
 ## Where Does This Live?
 
 **Computation** (`fleet.tlg`): stays in Fleet — ARD schema, spec models, and pool logic
@@ -246,6 +386,7 @@ post-processing.
    - `.filter(expr)` — stores `dataset_filter`
    - `.by(col)` — stores `group1`
    - `.by2(col)` — stores `group2`
+   - `.header_rows(overallstats)` — stores `OverallStat` list (see Phase 0c)
    - `.rows(fields)` — stores variable hierarchy (1 or 2 fields)
    - `.stats(statistics)` — stores stat list
    - `.pools(pools)` — stores pool definitions
@@ -263,6 +404,28 @@ post-processing.
    - Builder verbs on AE and VS.
    - Builder and spec paths produce identical ARD for the same inputs.
    - `.to_spec()` round-trip: builder → spec YAML → `from_yaml()` → same ARD.
+
+### Phase 0c — `OverallStat` header rows
+
+9. `_specs.py`:
+   - Add `OverallStat(label, filter=None, statistics=None)` Pydantic model.
+   - Add `header_rows: list[OverallStat] = []` to `TLGSpec` base so all sub-specs
+     (`AESummarySpec`, `VSSummarySpec`, and every future domain spec) inherit it.
+10. `ae_namespace.py` (and `vs_namespace.py`): in `t_summary()`, before the hierarchy
+    row loop, iterate `spec.header_rows`; for each:
+    - Apply `OverallStat.filter` (if any) to the dataset.
+    - Resolve effective statistics: `OverallStat.statistics or spec.statistics`.
+    - Count unique subjects (or events for `N_EVENTS`) per arm.
+    - Emit ARD rows with `variable=""`, `variable_level=OverallStat.label`.
+    - Append before hierarchy rows so ARD order matches display order.
+11. `_builder.py`: add `.header_rows(overallstats)` to `TLGBuilder` base.
+12. `__init__.py`: export `OverallStat`.
+13. Tests:
+    - Header rows appear before hierarchy rows in ARD.
+    - `filter=None` counts all subjects.
+    - Per-row `statistics` override respected.
+    - Spec-driven and builder paths produce identical ARD.
+    - Cross-domain: works identically on VS and AE namespaces.
 
 ### Phase 1 — Lock display contract from NEST AET01
 
@@ -339,13 +502,15 @@ post-processing.
 
 ## Relevant Files
 
-- `src/fleet/tlg/_specs.py` — replace `filter` with `adsl_filter` + `dataset_filter`
+- `src/fleet/tlg/_specs.py` — replace `filter` with `adsl_filter` + `dataset_filter`;
+  add `OverallStat` model; add `header_rows: list[OverallStat] = []` to `TLGSpec` base
 - `src/fleet/tlg/_builder.py` — new: `TLGBuilder` base class with all fluent verbs
+  including `.header_rows()`
 - `src/fleet/tlg/_ard.py` — no schema changes; `group2` columns already present
 - `src/fleet/tlg/ae_namespace.py` — filter rename, builder wiring, `to_html`, `to_pdf`, `to_slides`
 - `src/fleet/tlg/vs_namespace.py` — new: mirrors AE namespace with VS defaults
 - `src/fleet/tlg/namespace.py` — add `.vs` property
-- `src/fleet/tlg/__init__.py` — export `TLGBuilder`, VS symbols, render entry points
+- `src/fleet/tlg/__init__.py` — export `TLGBuilder`, `OverallStat`, VS symbols, render entry points
 - `src/fleet/tlg/render/__init__.py` — new sub-module init
 - `src/fleet/tlg/render/_models.py` — `RenderMetadata`, `TableModel`, `ListingModel`
 - `src/fleet/tlg/render/html.py` — HTML renderer with injection support
@@ -387,6 +552,11 @@ post-processing.
   the `group2` nesting that B1 would have added via NestedRow.
 - **C**: C3 pre-merge pattern is the documented approach; no `stratify_by` field or
   `TLGContext` object added.
+- **D**: `OverallStat` model on `TLGSpec` base; `header_rows` field inherited by all
+  domain sub-specs automatically. `.header_rows()` verb on `TLGBuilder` base. ARD contract:
+  `variable=""`, `variable_level=label`, emitted before hierarchy rows. `statistics`
+  override per row; defaults to spec-level statistics. No per-domain code required for
+  any future domain (VS, ECG, LB, CM, …).
 - **Location**: `fleet.tlg` stays in Fleet; `fleet.tlg.render` is the rendering sub-module;
   extractable to `fleet-render` if/when non-Fleet users need it.
 - **Slides**: format decided in Phase 6b (PPTX, HTML slides, or PDF landscape).
