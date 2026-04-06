@@ -42,45 +42,45 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 import yaml
 
-from fleet.adam._mixins import SharedADaMVerbsMixin
-from fleet.adam.utils import (
+from ._mixins import SharedADaMVerbsMixin
+from .utils import (
     baseline,
     chg,
     pchg,
     study_day,
 )
-from fleet.adam.utils import (
+from .utils import (
     bmi as _bmi_expr,
 )
-from fleet.adam.utils import (
+from .utils import (
     bsa as _bsa_expr,
 )
-from fleet.adam.utils import (
+from .utils import (
     mean_arterial_pressure as _map_expr,
 )
-from fleet.adam.utils import (
+from .utils import (
     nrind as _nrind_expr,
 )
-from fleet.adam.utils import (
+from .utils import (
     on_treatment as _on_treatment_expr,
 )
-from fleet.adam.utils import (
+from .utils import (
     qtc as _qtc_expr,
 )
-from fleet.adam.utils import (
+from .utils import (
     shift as _shift_expr,
 )
 
 if TYPE_CHECKING:
-    from fleet.adam.adsl_namespace import ADSLNamespace
-    from fleet.adam.metabolic_namespace import MetabolicNamespace
-    from fleet.adam.neuro_namespace import NeuroNamespace
-    from fleet.adam.occds_namespace import OCCDSNamespace
-    from fleet.adam.onco_namespace import OncoNamespace
-    from fleet.adam.ophtha_namespace import OphthaNamespace
-    from fleet.adam.peds_namespace import PedsNamespace
-    from fleet.adam.pk_namespace import PKNamespace
-    from fleet.adam.vaccine_namespace import VaccineNamespace
+    from .adsl_namespace import ADSLNamespace
+    from .metabolic_namespace import MetabolicNamespace
+    from .neuro_namespace import NeuroNamespace
+    from .occds_namespace import OCCDSNamespace
+    from .onco_namespace import OncoNamespace
+    from .ophtha_namespace import OphthaNamespace
+    from .peds_namespace import PedsNamespace
+    from .pk_namespace import PKNamespace
+    from .vaccine_namespace import VaccineNamespace
 
 
 @pl.api.register_dataframe_namespace("adam")
@@ -138,7 +138,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        from fleet.sdtm.utils import parse_expression
+        from ..sdtm.utils import parse_expression
 
         lookup_df = dataset
         if where:
@@ -358,7 +358,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        from fleet.sdtm.utils import parse_expression
+        from ..sdtm.utils import parse_expression
 
         grps = groups or ["USUBJID", "PARAMCD"]
 
@@ -967,7 +967,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        from fleet.adam.transforms import get_transform
+        from .transforms import get_transform
 
         if isinstance(fn, str):
             fn = get_transform(fn)  # raises KeyError if not found
@@ -987,131 +987,6 @@ class AdamNamespace(SharedADaMVerbsMixin):
             )
 
         return self._materialise_then(result)
-
-    # ------------------------------------------------------------------ #
-    # Toxicity grading — CTCAE / DAIDS                                     #
-    # ------------------------------------------------------------------ #
-
-    def atoxgr(
-        self,
-        target: str,
-        *,
-        system: str,
-        direction: str,
-        term_var: str,
-        unit_var: str | None = None,
-        high_indicator: list[str] | None = None,
-        low_indicator: list[str] | None = None,
-        signif_dig: int = 5,
-    ) -> AdamNamespace:
-        """Derive NCI toxicity grades using CTCAE or DAIDS criteria.
-
-        Evaluates each distinct term in *term_var* against the criteria for
-        *system* and *direction*, producing grades ``"0"``–``"4"`` (or
-        ``null`` when not gradable).  Materialises the current pipeline.
-
-        Built-in systems: ``"ctcae_v4"``, ``"ctcae_v5"``, ``"ctcae_v6"``,
-        ``"daids"`` (each with an ``"_uscv"`` variant for US conventional
-        units).  Pass a file path for custom criteria.
-
-        Args:
-            target: Name of the output grade column (e.g. ``"ATOXGRL"``).
-            system: Grading-system identifier or path to a custom JSON file.
-            direction: ``"L"`` for low abnormalities, ``"H"`` for high.
-            term_var: Column holding the toxicity-description term (e.g.
-                ``"ATOXDSCL"``).
-            unit_var: Optional column holding the unit of measure.
-            high_indicator: Values in ``BNRIND`` that mean the baseline was
-                abnormally high (default ``["HIGH"]``).
-            low_indicator: Values in ``BNRIND`` that mean the baseline was
-                abnormally low (default ``["LOW"]``).
-            signif_dig: Significant figures for floating-point comparison
-                (default ``5``).
-
-        Returns:
-            AdamNamespace: A fresh namespace with *target* added.
-
-        Examples:
-            Derive low-direction toxicity grades using CTCAE v5::
-
-                adlb = (
-                    raw_df.adam
-                    .atoxgr("ATOXGRL", system="ctcae_v5", direction="L",
-                            term_var="ATOXDSCL", unit_var="AVALU")
-                    .to_frame()
-                )
-        """
-        from fleet.adam.grading import load_criteria
-        from fleet.adam.grading._compiler import grade_dataset
-
-        criteria = load_criteria(system)
-        indicators: dict[str, list[str]] = {
-            "high_indicator": high_indicator or ["HIGH"],
-            "low_indicator": low_indicator or ["LOW"],
-        }
-
-        df = self.to_frame()
-        graded = grade_dataset(
-            df,
-            criteria,
-            target=target,
-            direction=direction,
-            term_var=term_var,
-            unit_var=unit_var,
-            signif_dig=signif_dig,
-            indicators=indicators,
-        )
-        return self._materialise_then(graded)
-
-    def combine_grades(
-        self,
-        target: str = "ATOXGR",
-        *,
-        low_var: str = "ATOXGRL",
-        high_var: str = "ATOXGRH",
-        low_desc_var: str | None = "ATOXDSCL",
-        high_desc_var: str | None = "ATOXDSCH",
-    ) -> AdamNamespace:
-        """Combine low and high toxicity grades into a single signed column.
-
-        Low grades are negated (``"3"`` → ``"-3"``); high grades remain
-        positive.  When both sides are ``"0"`` the result is ``"0"``.
-        Follows Admiral ``derive_var_atoxgr`` conventions.
-
-        Args:
-            target: Name of the output column (default ``"ATOXGR"``).
-            low_var: Low-direction grade column (default ``"ATOXGRL"``).
-            high_var: High-direction grade column (default ``"ATOXGRH"``).
-            low_desc_var: Low-direction description column (default
-                ``"ATOXDSCL"``).  Set to ``None`` to skip.
-            high_desc_var: High-direction description column (default
-                ``"ATOXDSCH"``).  Set to ``None`` to skip.
-
-        Returns:
-            AdamNamespace: The namespace with *target* appended.
-
-        Examples:
-            Combine ATOXGRL and ATOXGRH into ATOXGR::
-
-                adlb = (
-                    raw_df.adam
-                    .atoxgr("ATOXGRL", system="ctcae_v5", direction="L",
-                            term_var="ATOXDSCL", unit_var="AVALU")
-                    .atoxgr("ATOXGRH", system="ctcae_v5", direction="H",
-                            term_var="ATOXDSCH", unit_var="AVALU")
-                    .combine_grades("ATOXGR")
-                    .to_frame()
-                )
-        """
-        from fleet.adam.grading._compiler import combine_grades_expr
-
-        expr = combine_grades_expr(
-            low_var,
-            high_var,
-            low_desc_var=low_desc_var,
-            high_desc_var=high_desc_var,
-        ).alias(target)
-        return self._chain(expr)
 
     # ------------------------------------------------------------------ #
     # Spec-driven pipeline                                                 #
@@ -1169,7 +1044,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        from fleet.adam.models import ADAMDatasetSpec
+        from .models import ADAMDatasetSpec
 
         if only is not None and omit is not None:
             raise ValueError(
@@ -1306,7 +1181,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
     @staticmethod
     def _extract_define_variables(spec_data: dict, dataset: str | None) -> list:
         """Convert define.yaml dataset variables into ADAMVariableSpec objects."""
-        from fleet.adam.models import ADAMVariableSpec
+        from .models import ADAMVariableSpec
 
         datasets = spec_data["datasets"]
         if dataset is None:
@@ -1371,7 +1246,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        from fleet.validation.service import ValidationService
+        from ..validation.service import ValidationService
 
         svc = ValidationService(rules_engine_path=rules_engine_path)
         result = svc.validate_adam(self.to_frame(), dataset=dataset, version=version)
@@ -1516,14 +1391,14 @@ class AdamNamespace(SharedADaMVerbsMixin):
     @property
     def adsl(self) -> ADSLNamespace:
         """ADSL (one-row-per-subject) derivations: treatment dates, duration, population flags."""
-        from fleet.adam.adsl_namespace import ADSLNamespace
+        from .adsl_namespace import ADSLNamespace
 
         return ADSLNamespace(self.to_frame())
 
     @property
     def occds(self) -> OCCDSNamespace:
         """OCCDS (one-row-per-event) derivations: sequencing, worst flag, treatment-emergent."""
-        from fleet.adam.occds_namespace import OCCDSNamespace
+        from .occds_namespace import OCCDSNamespace
 
         return OCCDSNamespace(self.to_frame())
 
@@ -1534,49 +1409,49 @@ class AdamNamespace(SharedADaMVerbsMixin):
     @property
     def onco(self) -> OncoNamespace:
         """Oncology derivations (admiralonco-inspired): RECIST, BOR, response flags."""
-        from fleet.adam.onco_namespace import OncoNamespace
+        from .onco_namespace import OncoNamespace
 
         return OncoNamespace(self.to_frame())
 
     @property
     def ophtha(self) -> OphthaNamespace:
         """Ophthalmology derivations (admiralophtha-inspired): ETDRS/LogMAR, study eye."""
-        from fleet.adam.ophtha_namespace import OphthaNamespace
+        from .ophtha_namespace import OphthaNamespace
 
         return OphthaNamespace(self.to_frame())
 
     @property
     def peds(self) -> PedsNamespace:
         """Pediatrics derivations (admiralpeds-inspired): age, prematurity, BMI."""
-        from fleet.adam.peds_namespace import PedsNamespace
+        from .peds_namespace import PedsNamespace
 
         return PedsNamespace(self.to_frame())
 
     @property
     def vaccine(self) -> VaccineNamespace:
         """Vaccine derivations (admiralvaccine-inspired): fever, seroconversion."""
-        from fleet.adam.vaccine_namespace import VaccineNamespace
+        from .vaccine_namespace import VaccineNamespace
 
         return VaccineNamespace(self.to_frame())
 
     @property
     def metabolic(self) -> MetabolicNamespace:
         """Metabolic derivations (admiralmetabolic-inspired): waist ratios, body fat."""
-        from fleet.adam.metabolic_namespace import MetabolicNamespace
+        from .metabolic_namespace import MetabolicNamespace
 
         return MetabolicNamespace(self.to_frame())
 
     @property
     def neuro(self) -> NeuroNamespace:
         """Neuroscience derivations (admiralneuro-inspired): Centiloid, MMSE, CDR-SoB."""
-        from fleet.adam.neuro_namespace import NeuroNamespace
+        from .neuro_namespace import NeuroNamespace
 
         return NeuroNamespace(self.to_frame())
 
     @property
     def pk(self) -> PKNamespace:
         """PK (pharmacokinetics) derivations: BLQ flags, actual/nominal time, dose normalisation."""
-        from fleet.adam.pk_namespace import PKNamespace
+        from .pk_namespace import PKNamespace
 
         return PKNamespace(self.to_frame())
 

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Admiral-inspired ADSL pipeline for CDISCPILOT01.
 
@@ -40,11 +41,13 @@ Run from repo root:
 from __future__ import annotations
 
 from pathlib import Path
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import polars as pl
-
 import fleet  # noqa: F401 — registers .sdtm / .adam namespace extensions
-from specs.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
+from specs.cdiscpilot01.sdtm.codelists import SEX, RACE, ETHNIC
 
 RAW = Path("datasets/cdiscpilot01/raw")
 OUT = Path("outputs/cdiscpilot01")
@@ -430,7 +433,7 @@ adsl_final = adsl.select(FINAL_COLS)
 
 print("\n── 11. Final ADSL ───────────────────────────────────────────────────────")
 print(f"   Shape   : {adsl_final.shape[0]} subjects × {adsl_final.shape[1]} variables")
-print("\n   First 5 rows (key columns):")
+print(f"\n   First 5 rows (key columns):")
 print(adsl_final.select(
     ["USUBJID", "AGE", "AGEGR1", "SEX", "TRT01P",
      "TRTSDT", "TRTEDT", "TRTDURD", "EOSSTT", "SAFFL", "NUMAE"]

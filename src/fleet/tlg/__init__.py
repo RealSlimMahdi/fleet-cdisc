@@ -13,7 +13,7 @@ Usage
     ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl)
 """
 
-from fleet.tlg._ard import (
+from ._ard import (
     ARD_COLUMN_ORDER,
     ARD_COLUMNS,
     ARD_GROUP_COLUMNS,
@@ -25,7 +25,7 @@ from fleet.tlg._ard import (
     format_ard,
     validate_ard,
 )
-from fleet.tlg._specs import (
+from ._specs import (
     AEListingSpec,
     AESummarySpec,
     Column,
@@ -35,8 +35,8 @@ from fleet.tlg._specs import (
     TLGSpec,
     VSSummarySpec,
 )
-from fleet.tlg.ae_namespace import AETLGNamespace
-from fleet.tlg.namespace import TLGNamespace
+from .ae_namespace import AETLGNamespace
+from .namespace import TLGNamespace
 
 __all__ = [
     # Namespace

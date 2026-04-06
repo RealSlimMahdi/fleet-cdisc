@@ -25,7 +25,7 @@ import math
 
 import polars as pl
 
-from fleet.tlg._specs import GroupPool, SchemaError
+from ._specs import GroupPool, SchemaError
 
 # ------------------------------------------------------------------ #
 # Canonical ARD schema (aligned with {cards})                          #

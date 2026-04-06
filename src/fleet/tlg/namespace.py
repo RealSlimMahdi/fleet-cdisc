@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 if TYPE_CHECKING:
-    from fleet.tlg.ae_namespace import AETLGNamespace
+    from .ae_namespace import AETLGNamespace
 
 
 @pl.api.register_dataframe_namespace("tlg")
@@ -30,7 +30,7 @@ class TLGNamespace:
     @property
     def ae(self) -> AETLGNamespace:
         """AE (adverse event) tables and listings."""
-        from fleet.tlg.ae_namespace import AETLGNamespace
+        from .ae_namespace import AETLGNamespace
 
         return AETLGNamespace(self._df)
 
@@ -40,7 +40,7 @@ class TLGNamespace:
         Returns:
             list[str]: Diagnostic messages from all sub-namespace specs.
         """
-        from fleet.tlg.ae_namespace import AETLGNamespace
+        from .ae_namespace import AETLGNamespace
 
         diagnostics: list[str] = []
         ae_ns = AETLGNamespace(self._df)
