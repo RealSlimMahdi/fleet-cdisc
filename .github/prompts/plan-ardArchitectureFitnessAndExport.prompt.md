@@ -138,14 +138,14 @@ The two styles are parallel paths to the same ARD output — matching the inline
 ```
 Inline (B2 builder)                   Spec-driven (define.yaml equivalent)
 ─────────────────────────────────     ──────────────────────────────────────
-df.tlg.ae                             AESummarySpec(
+df.tlg.ae                               AESummarySpec(
   .population(adsl, ...)                adsl_filter=...,
-  .filter(...)            ≡             dataset_filter=...,
-  .by("TRTA")                           rows=[...],
-  .rows([...])                          statistics=[...],
-  .stats([...])                         pools=[...],
-  .pools([...])                       )
-  .to_ard()               ≡           df.tlg.ae.t_summary(adsl=adsl, spec=spec)
+  .filter(...)            ≡              dataset_filter=...,
+  .by("TRTA")                           by=...,
+  .rows([...])                          rows=[...],
+  .stats([...])                         statistics=[...],
+  .pools([...])                         pools=[...],)
+  .to_ard()               ≡             df.tlg.ae.t_summary(adsl=adsl, spec=spec)
 ```
 
 The `TLGBuilder` class (returned by the first builder verb) accumulates state that maps
