@@ -14,9 +14,9 @@ The `CDISCClient` wraps `httpx` to authenticate against the CDISC Library REST A
 
 ::: fleet.ct.CDISCClient
 options:
-show_root_heading: true
+show*root_heading: true
 heading_level: 3
-filters: ["!^_"]
+filters: ["!^*"]
 
 ::: fleet.ct.CDISCClientConfig
 options:
@@ -102,9 +102,9 @@ dm = (
 
 ::: fleet.ct.CodelistGenerator
 options:
-show_root_heading: true
+show*root_heading: true
 heading_level: 3
-filters: ["!^_"]
+filters: ["!^*"]
 
 ---
 
@@ -112,11 +112,80 @@ filters: ["!^_"]
 
 The singleton `CTValidator` provides runtime validation of values against loaded codelists.
 
+### How CT validation works
+
+**Validation fires at pipeline-build time** — when you call `.hardcode_ct()` or `.assign_ct()` in
+Python, not when you call `.to_frame()`. The check happens during the method call itself, before
+any data is processed.
+
+**The validator is opt-in via initialization.** Fleet ships a module-level singleton that starts
+empty. You must load CT data into it before using `ct_codelist=` parameters. If the singleton
+has no data loaded, validation is silently skipped and the value is assigned as-is — no error,
+no warning.
+
+**Failures warn, they do not block.** If a value is not a valid CDISC submission term, a Python
+`UserWarning` is emitted via `warnings.warn()`. The pipeline continues and the value is still
+written to the output. This design keeps pipelines runnable during development even before CT
+packages are fully loaded.
+
+#### Step-by-step — enabling CT validation
+
+```python
+import warnings
+from fleet import load_controlled_terminology, get_validator
+
+# 1. Load the CT package once, at script/session start.
+#    The file is a YAML or CSV produced by `fleet init ct` or `fleet init-ct`.
+load_controlled_terminology("specs/cdiscpilot01/sdtm/ct_package.yaml")
+
+# 2. Import the generated codelist classes.
+from specs.cdiscpilot01.sdtm.codelists import AGEU, SEX
+
+# 3. Build your pipeline — validation fires here on each verb call.
+import warnings
+with warnings.catch_warnings(record=True) as caught:
+    warnings.simplefilter("always")
+    dm = (
+        raw_df.sdtm
+        .hardcode_ct("AGEU", value="YEARS", ct_codelist=AGEU)   # OK — valid term
+        .hardcode_ct("AGEU", value="YRS",   ct_codelist=AGEU)   # Warns immediately
+        .to_frame()
+    )
+
+# Any invalid values produce a warning at the .hardcode_ct() call site,
+# not when .to_frame() runs.
+for w in caught:
+    print(w.message)
+# UserWarning: Value 'YRS' not in codelist 'C66781'. Valid values: DAYS, HOURS, MINUTES, MONTHS, WEEKS, YEARS
+```
+
+#### Inspecting the validator state
+
+```python
+from fleet import get_validator
+
+v = get_validator()
+print(v.get_cache_info())
+# {'codelists_loaded': ['C66781', 'C66731', ...], 'aliases': {'AGEU': 'C66781', ...},
+#  'ct_path': 'specs/.../ct_package.yaml', 'initialized': True}
+
+# Check all valid terms for a codelist
+print(v.get_valid_values("C66781"))  # ['DAYS', 'HOURS', 'MINUTES', 'MONTHS', 'WEEKS', 'YEARS']
+```
+
+#### ADaM namespaces
+
+The ADaM namespace verbs (`.assigned()`, `.derivation()`, etc.) do **not** accept a
+`ct_codelist=` parameter — ADaM CT compliance is validated post-hoc via the CDISC Rules Engine
+rather than inline. CT validation at pipeline-build time is a feature of the SDTM namespace only.
+
+---
+
 ::: fleet.ct.CTValidator
 options:
-show_root_heading: true
+show*root_heading: true
 heading_level: 3
-filters: ["!^_"]
+filters: ["!^*"]
 
 ## load_controlled_terminology
 
