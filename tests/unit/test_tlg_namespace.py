@@ -11,6 +11,7 @@ from fleet.tlg import (
     AESummarySpec,
     Column,
     GroupPool,
+    OverallStat,
     Row,
     Statistic,
     TLGSpec,
@@ -527,7 +528,7 @@ class TestAEListing:
 
     def test_listing_with_filter(self, adae: pl.DataFrame) -> None:
         spec = AEListingSpec(
-            filter=pl.col("AESER") == "Y",
+            dataset_filter=pl.col("AESER") == "Y",
         )
         listing = adae.tlg.ae.l_listing(spec=spec)
         assert len(listing) == 1  # Only SUBJ-03's serious AE
@@ -681,3 +682,308 @@ class TestFormatting:
                 assert fmt_fn_val == "xx.x"
                 # Should have exactly one decimal place
                 assert "." in fmt_str
+
+
+# ================================================================== #
+# Filter rename: adsl_filter + dataset_filter                          #
+# ================================================================== #
+
+
+class TestFilterRename:
+    """adsl_filter and dataset_filter replace the old filter field."""
+
+    def test_adsl_filter_affects_big_n(self, adae: pl.DataFrame, adsl: pl.DataFrame) -> None:
+        spec = AESummarySpec(adsl_filter=pl.col("SAFFL") == "Y")
+        ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl, spec=spec)
+        big_n = ard.filter(pl.col("stat_name") == "N")
+        big_n_map = dict(zip(big_n["group1_level"].to_list(), big_n["stat"].to_list()))
+        # SUBJ-06 has SAFFL=N in Drug B, so Drug B big-N = 1
+        assert big_n_map["Drug B"] == 1.0
+
+    def test_dataset_filter_subsets_data(self, adae: pl.DataFrame, adsl: pl.DataFrame) -> None:
+        spec = AESummarySpec(dataset_filter=pl.col("AESER") == "Y")
+        ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl, spec=spec)
+        # Only serious AEs should appear (SUBJ-03, Drug A, NAUSEA)
+        non_big_n = ard.filter(pl.col("stat_name") != "N")
+        levels = non_big_n["variable_level"].unique().to_list()
+        # Only GASTRO/NAUSEA should appear (the one serious AE)
+        assert "HEADACHE" not in levels
+
+    def test_both_filters_independent(self, adae: pl.DataFrame, adsl: pl.DataFrame) -> None:
+        spec = AESummarySpec(
+            adsl_filter=pl.col("SAFFL") == "Y",
+            dataset_filter=pl.col("AESER") == "Y",
+        )
+        ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl, spec=spec)
+        big_n = ard.filter(pl.col("stat_name") == "N")
+        big_n_map = dict(zip(big_n["group1_level"].to_list(), big_n["stat"].to_list()))
+        # adsl_filter shrinks Drug A big-N but only arms with data appear
+        # Only Drug A has serious AEs in our fixture data
+        assert big_n_map["Drug A"] == 2.0
+        # dataset_filter limits to serious AEs only
+        non_big_n = ard.filter(pl.col("stat_name") != "N")
+        assert "HEADACHE" not in non_big_n["variable_level"].unique().to_list()
+
+
+# ================================================================== #
+# Builder API                                                          #
+# ================================================================== #
+
+
+class TestBuilderAPI:
+    """TLGBuilder fluent API produces correct ARDs."""
+
+    def test_builder_basic_ae(self, adae: pl.DataFrame, adsl: pl.DataFrame) -> None:
+        ard = (
+            adae.tlg.ae.population(adsl)
+            .by("TRTA")
+            .rows(["AEBODSYS", "AEDECOD"])
+            .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
+            .to_ard()
+        )
+        assert len(ard) > 0
+        assert set(ard.columns) == TestARDStructure.EXPECTED_COLUMNS
+
+    def test_builder_matches_spec(self, adae: pl.DataFrame, adsl: pl.DataFrame) -> None:
+        """Builder and spec paths produce identical ARD for the same inputs."""
+        spec = AESummarySpec(
+            statistics=[Statistic.N_SUBJECTS, Statistic.N_PCT],
+        )
+        ard_spec = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl, spec=spec)
+        ard_builder = (
+            adae.tlg.ae.population(adsl)
+            .by("TRTA")
+            .rows(["AEBODSYS", "AEDECOD"])
+            .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
+            .to_ard()
+        )
+        assert ard_spec.shape == ard_builder.shape
+        # Same stat values for Big-N
+        big_n_spec = dict(
+            zip(
+                ard_spec.filter(pl.col("stat_name") == "N")["group1_level"].to_list(),
+                ard_spec.filter(pl.col("stat_name") == "N")["stat"].to_list(),
+            )
+        )
+        big_n_builder = dict(
+            zip(
+                ard_builder.filter(pl.col("stat_name") == "N")["group1_level"].to_list(),
+                ard_builder.filter(pl.col("stat_name") == "N")["stat"].to_list(),
+            )
+        )
+        assert big_n_spec == big_n_builder
+
+    def test_builder_with_pools(self, adae: pl.DataFrame, adsl: pl.DataFrame) -> None:
+        ard = (
+            adae.tlg.ae.population(adsl)
+            .by("TRTA")
+            .rows(["AEBODSYS", "AEDECOD"])
+            .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
+            .pools([GroupPool(label="Total", arms="*")])
+            .to_ard()
+        )
+        assert "Total" in ard["group1_level"].to_list()
+
+    def test_builder_with_filter(self, adae: pl.DataFrame, adsl: pl.DataFrame) -> None:
+        ard = (
+            adae.tlg.ae.population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
+            .filter(pl.col("AESER") == "Y")
+            .by("TRTA")
+            .rows(["AEBODSYS", "AEDECOD"])
+            .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
+            .to_ard()
+        )
+        non_big_n = ard.filter(pl.col("stat_name") != "N")
+        assert "HEADACHE" not in non_big_n["variable_level"].unique().to_list()
+
+    def test_builder_to_spec_roundtrip(self, adae: pl.DataFrame, adsl: pl.DataFrame) -> None:
+        builder = (
+            adae.tlg.ae.population(adsl)
+            .by("TRTA")
+            .rows(["AEBODSYS", "AEDECOD"])
+            .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
+            .pools([GroupPool(label="Total", arms="*")])
+            .column_order(["Placebo", "Drug A", "Drug B", "Total"])
+        )
+        spec = builder.to_spec()
+        assert isinstance(spec, AESummarySpec)
+        assert len(spec.rows) == 2
+        assert spec.statistics == [Statistic.N_SUBJECTS, Statistic.N_PCT]
+        assert len(spec.pools) == 1
+        assert spec.column_order == ["Placebo", "Drug A", "Drug B", "Total"]
+
+
+# ================================================================== #
+# VS Namespace                                                         #
+# ================================================================== #
+
+
+@pytest.fixture()
+def advs() -> pl.DataFrame:
+    """Minimal ADVS-like DataFrame for VS summary tests."""
+    return pl.DataFrame(
+        {
+            "USUBJID": [
+                "SUBJ-01",
+                "SUBJ-01",
+                "SUBJ-02",
+                "SUBJ-02",
+                "SUBJ-03",
+                "SUBJ-03",
+                "SUBJ-04",
+                "SUBJ-04",
+            ],
+            "TRTA": [
+                "Placebo",
+                "Placebo",
+                "Placebo",
+                "Placebo",
+                "Drug A",
+                "Drug A",
+                "Drug A",
+                "Drug A",
+            ],
+            "PARAMCD": [
+                "SYSBP",
+                "DIABP",
+                "SYSBP",
+                "DIABP",
+                "SYSBP",
+                "DIABP",
+                "SYSBP",
+                "DIABP",
+            ],
+            "AVAL": [
+                120.0,
+                80.0,
+                130.0,
+                85.0,
+                115.0,
+                75.0,
+                125.0,
+                78.0,
+            ],
+        }
+    )
+
+
+class TestVSNamespace:
+    """VS summary namespace produces correct ARDs."""
+
+    def test_vs_basic_summary(self, advs: pl.DataFrame, adsl: pl.DataFrame) -> None:
+        ard = advs.tlg.vs.t_summary(groupby="TRTA", adsl=adsl)
+        assert len(ard) > 0
+        assert (ard["context"] == "t_vs_summary").all()
+
+    def test_vs_builder(self, advs: pl.DataFrame, adsl: pl.DataFrame) -> None:
+        ard = (
+            advs.tlg.vs.population(adsl)
+            .by("TRTA")
+            .rows(["PARAMCD"])
+            .stats([Statistic.MEAN, Statistic.SD])
+            .to_ard()
+        )
+        assert len(ard) > 0
+        stat_names = ard.filter(pl.col("stat_name") != "N")["stat_name"].unique().to_list()
+        assert "mean" in stat_names
+        assert "sd" in stat_names
+
+    def test_vs_with_dataset_filter(self, advs: pl.DataFrame, adsl: pl.DataFrame) -> None:
+        spec = VSSummarySpec(dataset_filter=pl.col("PARAMCD") == "SYSBP")
+        ard = advs.tlg.vs.t_summary(groupby="TRTA", adsl=adsl, spec=spec)
+        non_big_n = ard.filter(pl.col("stat_name") != "N")
+        levels = non_big_n["variable_level"].unique().to_list()
+        assert "SYSBP" in levels
+        assert "DIABP" not in levels
+
+
+# ================================================================== #
+# OverallStat header rows                                              #
+# ================================================================== #
+
+
+class TestOverallStatHeaderRows:
+    """OverallStat header rows appear before hierarchy rows."""
+
+    def test_header_rows_before_hierarchy(self, adae: pl.DataFrame, adsl: pl.DataFrame) -> None:
+        spec = AESummarySpec(
+            header_rows=[
+                OverallStat(label="Subjects with any AE"),
+            ],
+        )
+        ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl, spec=spec)
+        # Header rows have variable=""
+        header = ard.filter((pl.col("variable") == "") & (pl.col("stat_name") != "N"))
+        assert len(header) > 0
+        assert "Subjects with any AE" in header["variable_level"].to_list()
+
+    def test_header_row_with_filter(self, adae: pl.DataFrame, adsl: pl.DataFrame) -> None:
+        spec = AESummarySpec(
+            header_rows=[
+                OverallStat(label="Serious AEs", filter=pl.col("AESER") == "Y"),
+            ],
+        )
+        ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl, spec=spec)
+        hdr = ard.filter((pl.col("variable") == "") & (pl.col("variable_level") == "Serious AEs"))
+        # Drug A arm: SUBJ-03 has 1 serious AE
+        drug_a_n = hdr.filter((pl.col("group1_level") == "Drug A") & (pl.col("stat_name") == "n"))
+        assert drug_a_n["stat"][0] == 1.0
+
+    def test_header_row_no_filter_counts_all(self, adae: pl.DataFrame, adsl: pl.DataFrame) -> None:
+        spec = AESummarySpec(
+            header_rows=[OverallStat(label="Any AE")],
+        )
+        ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl, spec=spec)
+        hdr = ard.filter(
+            (pl.col("variable") == "")
+            & (pl.col("variable_level") == "Any AE")
+            & (pl.col("stat_name") == "n")
+        )
+        # Placebo has 2 unique subjects with AEs (SUBJ-01, SUBJ-02)
+        placebo = hdr.filter(pl.col("group1_level") == "Placebo")
+        assert placebo["stat"][0] == 2.0
+
+    def test_header_row_stat_override(self, adae: pl.DataFrame, adsl: pl.DataFrame) -> None:
+        spec = AESummarySpec(
+            header_rows=[
+                OverallStat(
+                    label="Deaths",
+                    filter=pl.col("AESER") == "Y",
+                    statistics=[Statistic.N_SUBJECTS],
+                ),
+            ],
+        )
+        ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl, spec=spec)
+        hdr = ard.filter((pl.col("variable") == "") & (pl.col("variable_level") == "Deaths"))
+        # Only N_SUBJECTS stat, not N_PCT (the spec default)
+        assert set(hdr["stat_name"].to_list()) == {"n"}
+
+    def test_header_rows_via_builder(self, adae: pl.DataFrame, adsl: pl.DataFrame) -> None:
+        ard = (
+            adae.tlg.ae.population(adsl)
+            .by("TRTA")
+            .header_rows(
+                [
+                    OverallStat(label="Any AE"),
+                    OverallStat(label="Serious AEs", filter=pl.col("AESER") == "Y"),
+                ]
+            )
+            .rows(["AEBODSYS", "AEDECOD"])
+            .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
+            .to_ard()
+        )
+        header = ard.filter((pl.col("variable") == "") & (pl.col("stat_name") != "N"))
+        labels = header["variable_level"].unique().to_list()
+        assert "Any AE" in labels
+        assert "Serious AEs" in labels
+
+    def test_header_rows_on_vs(self, advs: pl.DataFrame, adsl: pl.DataFrame) -> None:
+        spec = VSSummarySpec(
+            header_rows=[OverallStat(label="Subjects with any measurement")],
+        )
+        ard = advs.tlg.vs.t_summary(groupby="TRTA", adsl=adsl, spec=spec)
+        hdr = ard.filter(
+            (pl.col("variable") == "")
+            & (pl.col("variable_level") == "Subjects with any measurement")
+        )
+        assert len(hdr) > 0

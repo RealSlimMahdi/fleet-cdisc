@@ -1,22 +1,24 @@
-# -*- coding: utf-8 -*-
 """
 TLG Example — AE summary tables from CDISCPILOT01.
 
-Demonstrates two approaches:
+Demonstrates three approaches:
   1. **Default spec** — zero-config AE summary using standard column names
   2. **Custom spec**  — declarative spec override with pooled treatment arms,
      additional statistics, custom row hierarchy, and column ordering
+  3. **Inline builder** — fluent API alternative to spec-driven approach
 
 The script:
   a) Loads raw CDISCPILOT01 data and builds SDTM AE + DM
   b) Derives a minimal ADSL and ADAE (reusing the Fleet pipeline patterns)
   c) Produces an AE summary ARD (default)
   d) Produces an AE summary ARD (custom spec with pools)
-  e) Produces an AE listing (custom spec)
+  e) Produces an AE summary ARD (inline builder with header rows)
+  f) Produces an AE listing (custom spec)
 
 Run from repo root:
     uv run python examples/tlg_ae_example.py
 """
+
 from __future__ import annotations
 
 import sys
@@ -26,16 +28,25 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import polars as pl
 
-import fleet  # noqa: F401 — registers .sdtm / .adam / .tlg namespaces
-from fleet.tlg import (
+# Show full ARD tables in the terminal
+pl.Config.set_tbl_cols(20)
+pl.Config.set_tbl_rows(200)
+pl.Config.set_tbl_width_chars(220)
+
+import fleet  # noqa: E402, F401 — registers .sdtm / .adam / .tlg namespaces
+from fleet.tlg import (  # noqa: E402
     AEListingSpec,
     AESummarySpec,
     Column,
     GroupPool,
+    OverallStat,
+    RenderMetadata,
     Row,
     Statistic,
+    ard_to_table_model,
+    render_html,
 )
-from specs.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
+from specs.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX  # noqa: E402
 
 RAW = Path("datasets/cdiscpilot01/raw")
 
@@ -55,23 +66,29 @@ print(f"   ae_raw : {ae_raw.shape[0]:>3} rows  ×  {ae_raw.shape[1]} cols")
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 2. SDTM DM ══════════════════════════════════════════════════════════")
 dm = (
-    dm_raw.sdtm
-    .hardcode_no_ct("STUDYID", value="CDISCPILOT01")
+    dm_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")
     .hardcode_no_ct("DOMAIN", value="DM")
     .assign_no_ct("USUBJID", source="patient_number")
     .assign_no_ct("AGE", source="age")
-    .assign_ct("SEX", source="sex", ct_codelist=SEX,
-               ct_mapping={"F": "F", "M": "M"})
-    .assign_ct("RACE", source="race", ct_codelist=RACE,
-               ct_mapping={
-                   "WHITE": "WHITE",
-                   "BLACK OR AFRICAN AMERICAN": "BLACK OR AFRICAN AMERICAN",
-               })
-    .assign_ct("ETHNIC", source="ethnic", ct_codelist=ETHNIC,
-               ct_mapping={
-                   "HISPANIC OR LATINO": "HISPANIC OR LATINO",
-                   "NOT HISPANIC OR LATINO": "NOT HISPANIC OR LATINO",
-               })
+    .assign_ct("SEX", source="sex", ct_codelist=SEX, ct_mapping={"F": "F", "M": "M"})
+    .assign_ct(
+        "RACE",
+        source="race",
+        ct_codelist=RACE,
+        ct_mapping={
+            "WHITE": "WHITE",
+            "BLACK OR AFRICAN AMERICAN": "BLACK OR AFRICAN AMERICAN",
+        },
+    )
+    .assign_ct(
+        "ETHNIC",
+        source="ethnic",
+        ct_codelist=ETHNIC,
+        ct_mapping={
+            "HISPANIC OR LATINO": "HISPANIC OR LATINO",
+            "NOT HISPANIC OR LATINO": "NOT HISPANIC OR LATINO",
+        },
+    )
     .assign_no_ct("ARM", source="arm_description")
     .assign_dtc("RFSTDTC", source="first_dose_date", mode="date")
     .assign_dtc("RFENDTC", source="last_dose_date", mode="date")
@@ -85,8 +102,7 @@ print(f"   {dm.shape[0]} subjects × {dm.shape[1]} variables")
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 3. SDTM AE ══════════════════════════════════════════════════════════")
 ae = (
-    ae_raw.sdtm
-    .hardcode_no_ct("STUDYID", value="CDISCPILOT01")
+    ae_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")
     .hardcode_no_ct("DOMAIN", value="AE")
     .assign_no_ct("USUBJID", source="patient_number")
     .assign_no_ct("AETERM", source="ae_term")
@@ -107,8 +123,7 @@ print(f"   {ae.shape[0]} records × {ae.shape[1]} variables")
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 4. ADSL (minimal) ═══════════════════════════════════════════════════")
 adsl = (
-    dm.adam.adsl
-    .source("STUDYID")
+    dm.adam.adsl.source("STUDYID")
     .source("USUBJID")
     .source("AGE")
     .source("SEX")
@@ -117,8 +132,10 @@ adsl = (
     .rename("TRT01P", source="ARM")
     .derive_dt("TRTSDT", source="RFSTDTC")
     .derive_dt("TRTEDT", source="RFENDTC")
-    .derivation("SAFFL",
-                expression='pl.when(pl.col("TRTSDT").is_not_null()).then(pl.lit("Y")).otherwise(pl.lit("N"))')
+    .derivation(
+        "SAFFL",
+        expression='pl.when(pl.col("TRTSDT").is_not_null()).then(pl.lit("Y")).otherwise(pl.lit("N"))',
+    )
     .to_frame()
 )
 # Use TRT01P as TRTA for summary tables
@@ -137,8 +154,7 @@ _adsl_trt = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "TRTA", "SAFFL
 ae_with_trt = ae.join(_adsl_trt, on="USUBJID", how="left")
 
 adae = (
-    ae_with_trt.adam
-    .source("STUDYID")
+    ae_with_trt.adam.source("STUDYID")
     .source("USUBJID")
     .source("AETERM")
     .source("AESTDTC")
@@ -154,9 +170,9 @@ adae = (
     .derive_dt("AENDT", source="AEENDTC")
     .study_day("ADY", analysis_date="ASTDT", reference_date="TRTSDT")
     .to_frame()
-    .adam.occds
-    .treatment_emergent("TRTEMFL", start_date="AESTDTC",
-                        trtsdt="TRTSDT", trtedt="TRTEDT")
+    .adam.occds.treatment_emergent(
+        "TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT"
+    )
     .seq("ASEQ", groups=["USUBJID"])
     .to_frame()
 )
@@ -214,13 +230,15 @@ custom_spec = AESummarySpec(
     columns=["TRTA"],
     statistics=[Statistic.N_SUBJECTS, Statistic.N_PCT, Statistic.N_EVENTS],
     pools=[
-        GroupPool(label="All Xanomeline",
-                  arms=["Xanomeline Low Dose", "Xanomeline High Dose"]),
+        GroupPool(label="All Xanomeline", arms=["Xanomeline Low Dose", "Xanomeline High Dose"]),
         GroupPool(label="Total", arms="*"),
     ],
     column_order=[
-        "Placebo", "Xanomeline Low Dose", "Xanomeline High Dose",
-        "All Xanomeline", "Total",
+        "Placebo",
+        "Xanomeline Low Dose",
+        "Xanomeline High Dose",
+        "All Xanomeline",
+        "Total",
     ],
 )
 
@@ -244,6 +262,48 @@ for row in big_n_rows.iter_rows(named=True):
 
 
 # ════════════════════════════════════════════════════════════════════════════
+# 7b. AE Summary — INLINE BUILDER with header rows
+# ════════════════════════════════════════════════════════════════════════════
+print("\n══ 7b. AE Summary — INLINE BUILDER (with header rows) ═════════════════")
+
+ard_builder = (
+    adae.tlg.ae.population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
+    .by("TRTA")
+    .header_rows(
+        [
+            OverallStat(label="Subjects with any AE"),
+            OverallStat(label="Subjects with ≥1 SAE", filter=pl.col("AESER") == "Y"),
+        ]
+    )
+    .rows(["AEBODSYS", "AEDECOD"])
+    .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
+    .pools(
+        [
+            GroupPool(label="All Xanomeline", arms=["Xanomeline Low Dose", "Xanomeline High Dose"]),
+            GroupPool(label="Total", arms="*"),
+        ]
+    )
+    .column_order(
+        [
+            "Placebo",
+            "Xanomeline Low Dose",
+            "Xanomeline High Dose",
+            "All Xanomeline",
+            "Total",
+        ]
+    )
+    .to_ard()
+)
+
+print(ard_builder)
+print(f"\n   ARD shape: {ard_builder.shape[0]} rows × {ard_builder.shape[1]} cols")
+
+# Show header rows
+hdr = ard_builder.filter((pl.col("variable") == "") & (pl.col("stat_name") != "N"))
+print(f"   Header rows: {hdr['variable_level'].unique().to_list()}")
+
+
+# ════════════════════════════════════════════════════════════════════════════
 # 8. AE Listing — CUSTOM spec
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 8. AE Listing — CUSTOM spec ═════════════════════════════════════════")
@@ -260,7 +320,7 @@ listing_spec = AEListingSpec(
         Column(field="AEACN", label="Action Taken"),
     ],
     sort_by=["USUBJID", "ASTDT"],
-    filter=pl.col("SAFFL") == "Y",
+    dataset_filter=pl.col("SAFFL") == "Y",
 )
 
 listing = adae.tlg.ae.l_listing(spec=listing_spec)
@@ -293,6 +353,107 @@ assert restored.rows == custom_spec.rows
 assert restored.statistics == custom_spec.statistics
 assert restored.pools == custom_spec.pools
 print("   ✓ Round-trip: to_yaml() → from_yaml() produces identical spec.")
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 11. HTML export — standalone render pipeline
+# ════════════════════════════════════════════════════════════════════════════
+print("\n══ 11. HTML export ═════════════════════════════════════════════════════")
+
+meta = RenderMetadata(
+    title="Table 14.3.1.1",
+    subtitle="Summary of Adverse Events by System Organ Class and Preferred Term",
+    footnotes=["Source: ADAE", "Population: Safety (SAFFL=Y)"],
+)
+model = ard_to_table_model(ard_custom, meta)
+html = render_html(model)
+html_path = Path("outputs/cdiscpilot01/ae_summary.html")
+html_path.write_text(html, encoding="utf-8")
+print(f"   Written {len(html):,} chars → {html_path}")
+print(f"   Model: {len(model.columns)} columns, {len(model.rows)} display rows")
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 12. HTML export — builder .to_html() shortcut
+# ════════════════════════════════════════════════════════════════════════════
+print("\n══ 12. Builder .to_html() shortcut ═════════════════════════════════════")
+
+builder_html = (
+    adae.tlg.ae.population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
+    .by("TRTA")
+    .header_rows(
+        [
+            OverallStat(label="Subjects with any AE"),
+            OverallStat(label="Subjects with ≥1 SAE", filter=pl.col("AESER") == "Y"),
+        ]
+    )
+    .rows(["AEBODSYS", "AEDECOD"])
+    .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
+    .pools(
+        [
+            GroupPool(label="Total", arms="*"),
+        ]
+    )
+    .column_order(["Placebo", "Xanomeline Low Dose", "Xanomeline High Dose", "Total"])
+    .to_html(
+        path="outputs/cdiscpilot01/ae_summary_builder.html",
+        metadata=RenderMetadata(
+            title="Table 14.3.1.1 (Builder)",
+            subtitle="AE Summary — Safety Population",
+        ),
+    )
+)
+print(f"   Written {len(builder_html):,} chars → outputs/cdiscpilot01/ae_summary_builder.html")
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 13. HTML injection — wrapper template
+# ════════════════════════════════════════════════════════════════════════════
+print("\n══ 13. HTML injection — wrapper template ═══════════════════════════════")
+
+wrapper = """<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Sponsor Portal</title></head>
+<body>
+<h1>Clinical Report</h1>
+{table}
+<footer>Confidential</footer>
+</body></html>"""
+
+injected = render_html(model, html_wrapper=wrapper)
+injected_path = Path("outputs/cdiscpilot01/ae_summary_injected.html")
+injected_path.write_text(injected, encoding="utf-8")
+print(f"   Written {len(injected):,} chars → {injected_path}")
+print("   HTML was injected at {{table}} placeholder in wrapper template.")
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 14. PPTX export — editable slide deck
+# ════════════════════════════════════════════════════════════════════════════
+print("\n══ 14. PPTX export — editable slide deck ═══════════════════════════════")
+
+pptx_path = (
+    adae.tlg.ae.population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
+    .by("TRTA")
+    .header_rows(
+        [
+            OverallStat(label="Subjects with any AE"),
+            OverallStat(label="Subjects with ≥1 SAE", filter=pl.col("AESER") == "Y"),
+        ]
+    )
+    .rows(["AEBODSYS", "AEDECOD"])
+    .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
+    .pools([GroupPool(label="Total", arms="*")])
+    .column_order(["Placebo", "Xanomeline Low Dose", "Xanomeline High Dose", "Total"])
+    .to_pptx(
+        "outputs/cdiscpilot01/ae_summary.pptx",
+        metadata=RenderMetadata(
+            title="Table 14.3.1.1",
+            subtitle="AE Summary — Safety Population",
+            footnotes=["Source: ADAE", "Population: Safety (SAFFL=Y)"],
+        ),
+    )
+)
+print(f"   Written → {pptx_path}")
 
 
 print("\n════════════════════════════════════════════════════════════════════════")

@@ -16,6 +16,7 @@ Fleet/
 │   ├── io/                 # Data loading / saving
 │   ├── sdtm/               # SDTM namespace (14 derivation verbs)
 │   ├── adam/               # ADaM namespace (9 derivation verbs)
+│   ├── tlg/                # TLG namespace — tables, listings, ARD generation
 │   ├── define_xml/         # Define-XML validation + generation
 │   └── validation/         # CDISC rules-engine integration
 │
@@ -42,11 +43,11 @@ Fleet/
 
 Importing `fleet` does two things automatically:
 
-1. **Registers namespace extensions** on all Polars DataFrames (`df.sdtm`, `df.adam`, `df.adsl`, `df.occds`)
+1. **Registers namespace extensions** on all Polars DataFrames (`df.sdtm`, `df.adam`, `df.adsl`, `df.occds`, `df.tlg`)
 2. **Re-exports the full public API** so everything is reachable from one import
 
 ```python
-import fleet  # registers df.sdtm, df.adam, df.adsl, df.occds everywhere
+import fleet  # registers df.sdtm, df.adam, df.adsl, df.occds, df.tlg everywhere
 ```
 
 ---
@@ -151,12 +152,12 @@ Every verb returns a _new_ `SDTMNamespace` instance (via `copy.copy(self)`) with
 
 Registers `df.adam` on every Polars DataFrame.
 
-| File           | Purpose                                                                                                                                                                                             |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `models.py`    | `ADAMAlgorithm` enum (11 verb names), `ADAMVariableSpec`, `ADAMDatasetSpec`                                                                                                                          |
-| `utils.py`     | Standard ADaM calculation functions — all return `pl.Expr`: `study_day`, `baseline`, `chg`, `pchg`, `bmi`, `bsa`, `mean_arterial_pressure`, `qtc`, `age_in_years`, `nrind`, `on_treatment`, `shift` |
+| File           | Purpose                                                                                                                                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `models.py`    | `ADAMAlgorithm` enum (11 verb names), `ADAMVariableSpec`, `ADAMDatasetSpec`                                                                                                                                   |
+| `utils.py`     | Standard ADaM calculation functions — all return `pl.Expr`: `study_day`, `baseline`, `chg`, `pchg`, `bmi`, `bsa`, `mean_arterial_pressure`, `qtc`, `age_in_years`, `nrind`, `on_treatment`, `shift`           |
 | `namespace.py` | `AdamNamespace` — the BDS namespace class with 24 verbs including record-generating verbs (`derive_summary_records`, `derive_locf_records`, `derive_param`) and toxicity grading (`atoxgr`, `combine_grades`) |
-| `grading/`     | CTCAE / DAIDS toxicity-grading sub-package (see below)                                                                                                                                               |
+| `grading/`     | CTCAE / DAIDS toxicity-grading sub-package (see below)                                                                                                                                                        |
 
 **The 9 ADaM derivation verbs:**
 
@@ -198,19 +199,52 @@ Registers `df.adam` on every Polars DataFrame.
 
 **Toxicity grading verbs (CTCAE / DAIDS):**
 
-| Verb             | Signature                                                                         | Purpose                                              |
-| ---------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `atoxgr`         | `(target, *, system, direction, term_var, unit_var=None, ...)`                    | Derive toxicity grades 0–4 using CTCAE or DAIDS      |
-| `combine_grades` | `(target="ATOXGR", *, low_var="ATOXGRL", high_var="ATOXGRH", ...)`               | Combine low (negative) and high (positive) grades     |
+| Verb             | Signature                                                          | Purpose                                           |
+| ---------------- | ------------------------------------------------------------------ | ------------------------------------------------- |
+| `atoxgr`         | `(target, *, system, direction, term_var, unit_var=None, ...)`     | Derive toxicity grades 0–4 using CTCAE or DAIDS   |
+| `combine_grades` | `(target="ATOXGR", *, low_var="ATOXGRL", high_var="ATOXGRH", ...)` | Combine low (negative) and high (positive) grades |
 
 **`grading/` sub-package:**
 
-| File             | Purpose                                                                                |
-| ---------------- | -------------------------------------------------------------------------------------- |
-| `_models.py`     | Pydantic models for the criteria DSL: `CriteriaFile`, `TermCriteria`, `GradeRule`, etc. |
-| `_compiler.py`   | Translates JSON criteria into Polars `when/then/otherwise` expression chains            |
-| `_registry.py`   | `GradingSystem` enum (8 systems) and `load_criteria()` with caching                    |
-| `criteria/*.json` | Bundled grading criteria (CTCAE v4/v5/v6 + DAIDS, each with SI and USCV units)         |
+| File              | Purpose                                                                                 |
+| ----------------- | --------------------------------------------------------------------------------------- |
+| `_models.py`      | Pydantic models for the criteria DSL: `CriteriaFile`, `TermCriteria`, `GradeRule`, etc. |
+| `_compiler.py`    | Translates JSON criteria into Polars `when/then/otherwise` expression chains            |
+| `_registry.py`    | `GradingSystem` enum (8 systems) and `load_criteria()` with caching                     |
+| `criteria/*.json` | Bundled grading criteria (CTCAE v4/v5/v6 + DAIDS, each with SI and USCV units)          |
+
+---
+
+### `tlg/` — Tables, Listings, and Graphs
+
+Registers `df.tlg` on every Polars DataFrame. Produces Analysis Results Datasets (ARDs) aligned with CDISC ARS / pharmaverse {cards}.
+
+| File              | Purpose                                                                                                     |
+| ----------------- | ----------------------------------------------------------------------------------------------------------- |
+| `namespace.py`    | `TLGNamespace` — root namespace with `.ae` and `.vs` sub-namespace properties                               |
+| `ae_namespace.py` | `AETLGNamespace` — AE summary tables (`t_summary`), listings (`l_listing`), and inline builder entry points |
+| `vs_namespace.py` | `VSTLGNamespace` — vital-signs summary tables (`t_summary`) and inline builder entry points                 |
+| `_builder.py`     | `TLGBuilder` — shared fluent builder base class with chainable verbs (`by`, `rows`, `stats`, `to_ard`, …)   |
+| `_specs.py`       | Pydantic spec models: `TLGSpec`, `AESummarySpec`, `AEListingSpec`, `VSSummarySpec`, `OverallStat`           |
+| `_ard.py`         | ARD schema, formatting, validation, pool expansion, big-N computation                                       |
+| `render/`         | **Render sub-module** — ARD in, artifact out (HTML, PDF, PPTX)                                              |
+
+#### `tlg/render/` — Rendering layer
+
+| File         | Purpose                                                                                                   |
+| ------------ | --------------------------------------------------------------------------------------------------------- |
+| `_models.py` | Display contract models (`RenderMetadata`, `TableModel`, `ListingModel`) + shaping (`ard_to_table_model`) |
+| `html.py`    | Pharma-style HTML table/listing renderer with CSS; supports `{table}` injection via wrapper               |
+| `pdf.py`     | HTML → PDF via WeasyPrint (optional dep: `fleet-cdisc[tlg-pdf]`)                                          |
+| `slides.py`  | TableModel/ListingModel → editable PPTX slides via python-pptx (optional dep: `fleet-cdisc[tlg-pptx]`)    |
+
+**Key concepts:**
+
+- **ARD (Analysis Results Dataset)**: long-format DataFrame with columns aligned to {cards}::tidy_ard_column_order(). Every summary method returns an ARD.
+- **Dual-mode API**: users can build ARDs via spec-driven `t_summary(spec=...)` or the inline fluent builder (`df.tlg.ae.by("TRTA").rows([...]).to_ard()`).
+- **`OverallStat` header rows**: whole-dataset aggregate rows (e.g. "Subjects with any AE", "Deaths") emitted before hierarchy rows in the ARD.
+- **`adsl_filter` / `dataset_filter`**: separate filter fields — `adsl_filter` affects denominators only; `dataset_filter` subsets the primary dataset.
+- **Pool expansion**: `GroupPool` definitions duplicate rows under pooled arm labels (e.g. "Total", "All Active").
 
 ---
 
@@ -303,6 +337,7 @@ tests/
     ├── test_adsl_namespace.py           # 14 tests — ADSL namespace
     ├── test_occds_namespace.py          # 12 tests — OCCDS namespace
     ├── test_ct_validation.py            #  9 tests — CT loader + validator
+    ├── test_tlg_namespace.py            # 74 tests — TLG namespace, builder, ARD
     └── test_define_xml.py               #  6 tests — validator + generator
 ```
 

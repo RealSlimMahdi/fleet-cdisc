@@ -692,7 +692,202 @@ Calling verbs out of order raises a `ValueError`.
 
 ---
 
-## Part 11 — CDISC Validation
+## Part 11 — TLG: Tables, Listings, and Graphs
+
+Fleet's `df.tlg` namespace produces **Analysis Results Datasets (ARDs)** from
+ADaM data. ARDs are long-format DataFrames aligned to CDISC ARS / pharmaverse
+{cards}, containing all the computed statistics needed for clinical tables.
+
+### Sub-namespaces
+
+| Sub-namespace | Access      | Domain                          |
+| ------------- | ----------- | ------------------------------- |
+| AE            | `df.tlg.ae` | Adverse-event summary & listing |
+| VS            | `df.tlg.vs` | Vital-signs summary             |
+
+### Spec-driven path
+
+Define a spec and call `t_summary()`:
+
+```python
+from fleet.tlg import AESummarySpec, GroupPool, Statistic
+
+spec = AESummarySpec(
+    adsl_filter=pl.col("SAFFL") == "Y",
+    statistics=[Statistic.N_SUBJECTS, Statistic.N_PCT, Statistic.N_EVENTS],
+    pools=[GroupPool(label="Total", arms="*")],
+    column_order=["Placebo", "Drug A", "Drug B", "Total"],
+)
+ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl, spec=spec)
+```
+
+### Inline fluent builder
+
+The builder produces the same ARD without constructing a spec object:
+
+```python
+ard = (
+    adae.tlg.ae
+    .population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
+    .by("TRTA")
+    .rows(["AEBODSYS", "AEDECOD"])
+    .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
+    .pools([GroupPool(label="Total", arms="*")])
+    .column_order(["Placebo", "Drug A", "Drug B", "Total"])
+    .to_ard()
+)
+```
+
+### Filters: `adsl_filter` vs `dataset_filter`
+
+Two filter fields keep denominators separate from analysis subsets:
+
+| Field            | Applied to      | Example                          |
+| ---------------- | --------------- | -------------------------------- |
+| `adsl_filter`    | ADSL only (N)   | `pl.col("SAFFL") == "Y"`         |
+| `dataset_filter` | Primary dataset | `pl.col("PARAMCD") == "ALBUMIN"` |
+
+Both default to `None` (no filter). Neither propagates to the other.
+
+### Header rows (`OverallStat`)
+
+Whole-dataset aggregate rows appear above the hierarchy in the ARD:
+
+```python
+from fleet.tlg import OverallStat
+
+ard = (
+    adae.tlg.ae
+    .population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
+    .by("TRTA")
+    .header_rows([
+        OverallStat(label="Subjects with any AE"),
+        OverallStat(label="Subjects with ≥1 SAE", filter=pl.col("AESER") == "Y"),
+    ])
+    .rows(["AEBODSYS", "AEDECOD"])
+    .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
+    .to_ard()
+)
+```
+
+Header rows emit `variable=""` and `variable_level=label` in the ARD.
+
+### Pre-merge stratification (C3 pattern)
+
+When a stratification column lives in another dataset (e.g. AGEGR1 from ADSL),
+pre-merge it before calling the namespace — no hidden joins:
+
+```python
+adae_strat = adae.join(
+    adsl.select(["USUBJID", "AGEGR1"]),
+    on="USUBJID", how="left",
+)
+ard = (
+    adae_strat.tlg.ae
+    .population(adsl)
+    .by("TRTA")
+    .by2("AGEGR1")
+    .rows(["AEBODSYS", "AEDECOD"])
+    .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
+    .to_ard()
+)
+```
+
+### AE listing
+
+```python
+from fleet.tlg import AEListingSpec, Column
+
+listing = adae.tlg.ae.l_listing(spec=AEListingSpec(
+    columns=[
+        Column(field="USUBJID", label="Subject"),
+        Column(field="AEDECOD", label="Preferred Term"),
+        Column(field="AESEV", label="Severity"),
+    ],
+    sort_by=["USUBJID", "AEDECOD"],
+))
+```
+
+### HTML & PDF export
+
+The `fleet.tlg.render` sub-module converts ARD DataFrames into pharma-style
+HTML tables and PDF documents.
+
+```python
+from fleet.tlg import RenderMetadata, ard_to_table_model, render_html
+
+meta = RenderMetadata(
+    title="Table 14.3.1.1",
+    subtitle="AE Summary — Safety Population",
+    footnotes=["Source: ADAE"],
+)
+model = ard_to_table_model(ard, meta)
+html = render_html(model)
+```
+
+Or use the builder shortcut:
+
+```python
+html = (
+    adae.tlg.ae
+    .population(adsl)
+    .by("TRTA")
+    .rows(["AEBODSYS", "AEDECOD"])
+    .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
+    .to_html(
+        path="ae_summary.html",
+        metadata=RenderMetadata(title="Table 14.3.1.1"),
+    )
+)
+```
+
+PDF export requires WeasyPrint (`uv add weasyprint` or `pip install fleet-cdisc[tlg-pdf]`):
+
+```python
+path = builder.to_pdf("ae_summary.pdf", metadata=meta)
+```
+
+PPTX slide export requires python-pptx (`uv add python-pptx` or `pip install fleet-cdisc[tlg-pptx]`).
+Slides are fully editable — modify text, tables, fonts, and colours in PowerPoint or
+LibreOffice Impress after export:
+
+```python
+path = builder.to_pptx("ae_summary.pptx", metadata=meta)
+```
+
+Custom themes override fonts, colours, and sizes:
+
+```python
+path = builder.to_pptx(
+    "ae_summary.pptx",
+    metadata=meta,
+    theme={"font_name": "Arial", "header_bg": "003366"},
+)
+```
+
+HTML injection embeds tables in custom templates:
+
+```python
+wrapper = '<div class="portal">{table}</div>'
+html = render_html(model, html_wrapper=wrapper)
+```
+
+### CLI export
+
+```bash
+fleet tlg export --domain ae --data adae.csv --adsl adsl.csv \
+    --title "Table 14.3.1.1" --footnote "Source: ADAE" --output ae.html
+
+fleet tlg export --domain ae --format pdf --data adae.csv --adsl adsl.csv \
+    --output ae.pdf
+
+fleet tlg export --domain ae --format pptx --data adae.csv --adsl adsl.csv \
+    --title "Table 14.3.1.1" --output ae.pptx
+```
+
+---
+
+## Part 12 — CDISC Validation
 
 Fleet integrates with the official CDISC Rules Engine for regulatory-grade validation.
 
@@ -785,7 +980,7 @@ uv run fleet uninstall-engine
 
 ---
 
-## Part 12 — Generate Define-XML
+## Part 13 — Generate Define-XML
 
 ### From the CLI
 
@@ -825,7 +1020,7 @@ DefineSpecGenerator(adam_spec).generate("outputs/define_adam.xml")
 
 ---
 
-## Part 13 — Export Datasets
+## Part 14 — Export Datasets
 
 ### Parquet (development)
 
@@ -857,7 +1052,7 @@ save_xpt(adae, "outputs/adam/adae.xpt")
 
 ---
 
-## Part 14 — Debugging Pipelines
+## Part 15 — Debugging Pipelines
 
 ### `.inspect()` — hard checkpoint
 
@@ -891,7 +1086,7 @@ Both verbs are available on `.sdtm` and all ADaM namespaces.
 
 ---
 
-## Part 15 — Complete End-to-End Summary
+## Part 16 — Complete End-to-End Summary
 
 Here is the full sequence for CDISCPILOT01:
 
@@ -990,9 +1185,31 @@ uv run fleet define-xml --spec metadata/adam/define.yaml  --output outputs/defin
 | `treatment_emergent` | TRTEMFL = "Y" on/after TRTSDT           |
 | `onset_recovery`     | Event started on-treatment and resolved |
 
+### TLG builder verbs (`df.tlg.ae`, `df.tlg.vs`)
+
+| Verb           | Purpose                                      |
+| -------------- | -------------------------------------------- |
+| `population`   | Set ADSL for big-N + optional `adsl_filter`  |
+| `filter`       | Dataset filter (primary dataset only)        |
+| `by`           | Primary grouping column (treatment arm)      |
+| `by2`          | Secondary grouping column (stratification)   |
+| `header_rows`  | Whole-dataset aggregate rows (`OverallStat`) |
+| `rows`         | Row hierarchy fields (1 or 2 levels)         |
+| `stats`        | Statistics to compute                        |
+| `pools`        | Pooled treatment group definitions           |
+| `column_order` | Display column ordering                      |
+| `fmt`          | Per-stat format overrides                    |
+| `to_ard`       | Materialise → ARD DataFrame                  |
+| `to_spec`      | Serialise builder state → spec YAML          |
+| `to_html`      | Render → pharma HTML (optional file write)   |
+| `to_pdf`       | Render → PDF via WeasyPrint (optional dep)   |
+| `to_pptx`      | Render → editable PPTX slides (optional dep) |
+| `t_summary`    | Spec-driven ARD computation                  |
+| `l_listing`    | AE listing (plain DataFrame)                 |
+
 ---
 
-## Part 16 — Maintaining `llms.txt`
+## Part 17 — Maintaining `llms.txt`
 
 `llms.txt` is **generated — never edit by hand**. Regenerate after API changes:
 

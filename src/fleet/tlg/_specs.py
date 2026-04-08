@@ -69,6 +69,27 @@ class GroupPool(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class OverallStat(BaseModel):
+    """A whole-dataset aggregate row for summary header sections.
+
+    Each ``OverallStat`` emits a flat ARD row with ``variable=""`` and
+    ``variable_level=label``, rendered as a header row above the hierarchy.
+
+    Args:
+        label: Display text for the header row (→ ``variable_level``).
+        filter: Optional Polars expression to subset the dataset before
+            counting.  ``None`` means count all subjects.
+        statistics: Per-row stat override.  ``None`` inherits from the
+            parent spec's ``statistics`` list.
+    """
+
+    label: str
+    filter: Any | None = None
+    statistics: list[Statistic] | None = None
+
+    model_config = {"extra": "forbid", "arbitrary_types_allowed": True}
+
+
 class TLGSpec(BaseModel):
     """Base specification for all TLG outputs.
 
@@ -76,7 +97,9 @@ class TLGSpec(BaseModel):
     """
 
     output_type: str = "base"
-    filter: Any | None = None
+    adsl_filter: Any | None = None
+    dataset_filter: Any | None = None
+    header_rows: list[OverallStat] = []
     required_columns: list[str] = []
     required_flags: dict[str, list[str]] = {}
 
@@ -153,8 +176,12 @@ class TLGSpec(BaseModel):
             str: YAML representation of the spec.
         """
         data = self.model_dump(exclude_none=True, exclude_defaults=False)
-        # Remove filter (not YAML-serializable as Polars Expr)
-        data.pop("filter", None)
+        # Remove filter fields (not YAML-serializable as Polars Expr)
+        data.pop("adsl_filter", None)
+        data.pop("dataset_filter", None)
+        # Remove header_rows filters (Polars Expr)
+        for hr in data.get("header_rows", []):
+            hr.pop("filter", None)
         # Convert enums to their values
         data = _enum_to_value(data)
         return yaml.dump(data, default_flow_style=False, sort_keys=False)

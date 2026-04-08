@@ -237,6 +237,66 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Check Fleet setup: engine, dependencies, environment.",
     )
 
+    # -- tlg export ----------------------------------------------------- #
+    tlg = sub.add_parser(
+        "tlg",
+        help="TLG rendering: ARD → HTML / PDF / slides.",
+    )
+    tlg_sub = tlg.add_subparsers(dest="tlg_command")
+    tlg_export = tlg_sub.add_parser(
+        "export",
+        help="Render an AE or VS summary to HTML, PDF, or slides.",
+    )
+    tlg_export.add_argument(
+        "--domain",
+        required=True,
+        choices=["ae", "vs"],
+        help="TLG domain (ae or vs).",
+    )
+    tlg_export.add_argument(
+        "--format",
+        dest="fmt",
+        default="html",
+        choices=["html", "pdf", "pptx"],
+        help="Output format (default: html).",
+    )
+    tlg_export.add_argument(
+        "--data",
+        required=True,
+        help="Path to the primary analysis dataset (CSV or Parquet).",
+    )
+    tlg_export.add_argument(
+        "--adsl",
+        required=True,
+        help="Path to the ADSL dataset (CSV or Parquet).",
+    )
+    tlg_export.add_argument(
+        "--output",
+        default=None,
+        help="Output file path.  Defaults to <domain>_summary.<format>.",
+    )
+    tlg_export.add_argument(
+        "--title",
+        default="",
+        help="Table title.",
+    )
+    tlg_export.add_argument(
+        "--subtitle",
+        default="",
+        help="Table subtitle.",
+    )
+    tlg_export.add_argument(
+        "--footnote",
+        action="append",
+        default=None,
+        help="Footnote (repeatable).",
+    )
+    tlg_export.add_argument(
+        "--wrap",
+        default=None,
+        help="Path to an HTML wrapper template with {table} placeholder.",
+    )
+
     return parser
 
 
@@ -516,6 +576,94 @@ def _run_define_xml(args: argparse.Namespace) -> None:
         print(f"HTML preview → {preview}")
 
 
+# ── TLG rendering ───────────────────────────────────────────────────── #
+
+
+def _load_dataset(path_str: str) -> pl.DataFrame:  # noqa: F821
+    """Load a CSV or Parquet file into a Polars DataFrame."""
+    import polars as pl  # noqa: F811
+
+    p = Path(path_str)
+    if not p.is_file():
+        print(f"Error: file not found: {p}")
+        sys.exit(1)
+    if p.suffix == ".parquet":
+        return pl.read_parquet(p)
+    return pl.read_csv(p)
+
+
+def _run_tlg_export(args: argparse.Namespace) -> None:
+
+    from fleet.tlg import RenderMetadata, ard_to_table_model, render_html
+    from fleet.tlg.render.pdf import render_pdf
+    from fleet.tlg.render.slides import render_pptx
+
+    domain: str = args.domain
+    fmt: str = args.fmt
+
+    # Load datasets
+    data_df = _load_dataset(args.data)
+    adsl_df = _load_dataset(args.adsl)
+
+    # Default output filename
+    output = args.output or f"{domain}_summary.{fmt}"
+    output_path = Path(output)
+
+    # Metadata
+    meta = RenderMetadata(
+        title=args.title or "",
+        subtitle=args.subtitle or "",
+        footnotes=args.footnote or [],
+    )
+
+    # HTML wrapper
+    html_wrapper: str | None = None
+    if args.wrap:
+        wp = Path(args.wrap)
+        if not wp.is_file():
+            print(f"Error: wrapper template not found: {wp}")
+            sys.exit(1)
+        html_wrapper = wp.read_text(encoding="utf-8")
+
+    # Compute ARD
+    print(f"Domain:   {domain}")
+    print(f"Format:   {fmt}")
+    print(f"Data:     {args.data} ({data_df.shape[0]} rows)")
+    print(f"ADSL:     {args.adsl} ({adsl_df.shape[0]} rows)")
+    print(f"Output:   {output_path}")
+    print()
+
+    # Auto-detect groupby column
+    group_col = "TRTA" if "TRTA" in adsl_df.columns else "TRT01P"
+
+    if domain == "ae":
+        ard = data_df.tlg.ae.t_summary(groupby=group_col, adsl=adsl_df)
+    elif domain == "vs":
+        ard = data_df.tlg.vs.t_summary(groupby=group_col, adsl=adsl_df)
+    else:
+        print(f"Error: unsupported domain '{domain}'")
+        sys.exit(1)
+
+    model = ard_to_table_model(ard, meta)
+    print(f"ARD:      {ard.shape[0]} rows × {ard.shape[1]} cols")
+    print(f"Model:    {len(model.columns)} columns, {len(model.rows)} display rows")
+
+    if fmt == "html":
+        html = render_html(model, html_wrapper=html_wrapper)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(html, encoding="utf-8")
+        print(f"\nHTML written → {output_path}")
+    elif fmt == "pdf":
+        render_pdf(model, output_path)
+        print(f"\nPDF written → {output_path}")
+    elif fmt == "pptx":
+        render_pptx(model, output_path)
+        print(f"\nPPTX written → {output_path}")
+    else:
+        print(f"Error: unsupported format '{fmt}'")
+        sys.exit(1)
+
+
 def main() -> None:
     """CLI entry point."""
     parser = _build_parser()
@@ -543,6 +691,11 @@ def main() -> None:
         _run_uninstall_engine()
     elif args.command == "doctor":
         _run_doctor()
+    elif args.command == "tlg":
+        if getattr(args, "tlg_command", None) == "export":
+            _run_tlg_export(args)
+        else:
+            parser.parse_args(["tlg", "--help"])
     else:
         parser.print_help()
         sys.exit(1)

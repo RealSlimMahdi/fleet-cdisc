@@ -120,6 +120,7 @@ nav:
       - OCCDS Namespace: api/occds.md
       - Therapeutic Areas: api/ta.md
       - Trial Design Domains: api/tdd.md
+      - TLG Namespace: api/tlg.md
       - Define-XML: api/define_xml.md
       - Controlled Terminology: api/ct.md
       - Core: api/core.md

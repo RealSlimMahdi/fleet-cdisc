@@ -32,6 +32,16 @@ io = [
     "pyreadstat>=1.2.0",
 ]
 
+# TLG-PDF: PDF export via WeasyPrint
+tlg-pdf = [
+    "weasyprint>=62.0",
+]
+
+# TLG-PPTX: slide deck export via python-pptx
+tlg-pptx = [
+    "python-pptx>=0.6.23",
+]
+
 # FULL: All extras
 all = [
     "fleet-cdisc[io]",

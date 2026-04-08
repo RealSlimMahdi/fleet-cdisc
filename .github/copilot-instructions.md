@@ -107,6 +107,26 @@ uv run fleet define-xml --spec specs/cdiscpilot01/sdtm/define.yaml --output outp
 uv run fleet define-xml --spec specs/cdiscpilot01/adam/define.yaml --output outputs/define_adam.xml --no-preview
 ```
 
+### TLG Export (HTML / PDF / PPTX)
+
+```bash
+# Export an AE summary as HTML
+uv run fleet tlg export --domain ae --data adae.csv --adsl adsl.csv --output ae_summary.html \
+    --title "Table 14.3.1.1" --subtitle "AE Summary" --footnote "Source: ADAE"
+
+# Export as PDF (requires weasyprint: uv add weasyprint)
+uv run fleet tlg export --domain ae --format pdf --data adae.csv --adsl adsl.csv --output ae.pdf
+
+# Export as editable PPTX slides (requires python-pptx: uv add python-pptx)
+uv run fleet tlg export --domain ae --format pptx --data adae.csv --adsl adsl.csv --output ae.pptx
+
+# VS summary
+uv run fleet tlg export --domain vs --data advs.csv --adsl adsl.csv --output vs_summary.html
+
+# Inject into a custom HTML wrapper template
+uv run fleet tlg export --domain ae --data adae.csv --adsl adsl.csv --wrap portal_template.html
+```
+
 ### CDISC Rules Engine (Validation)
 
 Fleet wraps the official CDISC Rules Engine for regulatory-grade validation. The engine is distributed as a PyInstaller bundle and must be installed before validation commands can run.

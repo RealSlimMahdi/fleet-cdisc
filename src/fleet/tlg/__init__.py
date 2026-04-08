@@ -25,11 +25,13 @@ from ._ard import (
     format_ard,
     validate_ard,
 )
+from ._builder import TLGBuilder
 from ._specs import (
     AEListingSpec,
     AESummarySpec,
     Column,
     GroupPool,
+    OverallStat,
     Row,
     Statistic,
     TLGSpec,
@@ -37,16 +39,33 @@ from ._specs import (
 )
 from .ae_namespace import AETLGNamespace
 from .namespace import TLGNamespace
+from .render import (
+    ListingModel,
+    RenderMetadata,
+    TableModel,
+    ard_to_table_model,
+    listing_to_model,
+    render_html,
+    render_listing_html,
+    render_listing_pdf,
+    render_listing_pptx,
+    render_pdf,
+    render_pptx,
+)
+from .vs_namespace import VSTLGNamespace
 
 __all__ = [
     # Namespace
     "TLGNamespace",
     "AETLGNamespace",
+    "VSTLGNamespace",
+    "TLGBuilder",
     # Specs
     "TLGSpec",
     "AESummarySpec",
     "AEListingSpec",
     "VSSummarySpec",
+    "OverallStat",
     # Building blocks
     "Row",
     "Column",
@@ -63,4 +82,16 @@ __all__ = [
     "format_ard",
     "apply_fmt_fn",
     "default_fmt_fn",
+    # Render
+    "RenderMetadata",
+    "TableModel",
+    "ListingModel",
+    "ard_to_table_model",
+    "listing_to_model",
+    "render_html",
+    "render_listing_html",
+    "render_pdf",
+    "render_listing_pdf",
+    "render_pptx",
+    "render_listing_pptx",
 ]

@@ -3,6 +3,7 @@ TLG root namespace — registered as ``df.tlg``.
 
 Provides sub-namespace properties for domain-specific TLG methods:
   - ``df.tlg.ae``  — AE tables and listings
+  - ``df.tlg.vs``  — vital-signs summary tables
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import polars as pl
 
 if TYPE_CHECKING:
     from .ae_namespace import AETLGNamespace
+    from .vs_namespace import VSTLGNamespace
 
 
 @pl.api.register_dataframe_namespace("tlg")
@@ -33,6 +35,13 @@ class TLGNamespace:
         from .ae_namespace import AETLGNamespace
 
         return AETLGNamespace(self._df)
+
+    @property
+    def vs(self) -> VSTLGNamespace:
+        """Vital-signs summary tables."""
+        from .vs_namespace import VSTLGNamespace
+
+        return VSTLGNamespace(self._df)
 
     def check(self) -> list[str]:
         """Run pre-validation diagnostics across all sub-namespaces.

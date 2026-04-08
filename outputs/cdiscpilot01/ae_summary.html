@@ -1,0 +1,188 @@
+<div class="fleet-table-container">
+<style>
+.fleet-table-container {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 9pt;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.fleet-table-title {
+  font-weight: bold;
+  font-size: 10pt;
+  margin-bottom: 2px;
+}
+.fleet-table-subtitle {
+  font-size: 9pt;
+  margin-bottom: 6px;
+}
+.fleet-table-footnotes {
+  font-size: 8pt;
+  margin-top: 4px;
+  color: #333;
+}
+.fleet-table-footnotes p {
+  margin: 1px 0;
+}
+table.fleet-summary {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 9pt;
+}
+table.fleet-summary thead th {
+  border-top: 2px solid #000;
+  border-bottom: 1px solid #000;
+  padding: 4px 8px;
+  text-align: center;
+  vertical-align: bottom;
+  white-space: pre-line;
+  font-weight: bold;
+}
+table.fleet-summary thead th.stub-header {
+  text-align: left;
+}
+table.fleet-summary tbody td {
+  padding: 2px 8px;
+  vertical-align: top;
+}
+table.fleet-summary tbody td.stub {
+  text-align: left;
+}
+table.fleet-summary tbody td.stat-cell {
+  text-align: center;
+}
+table.fleet-summary tbody tr.header-row td {
+  padding-top: 4px;
+}
+table.fleet-summary tbody tr.header-row td.stub {
+  font-weight: normal;
+}
+table.fleet-summary tbody tr.group-row td.stub {
+  font-weight: bold;
+  padding-top: 6px;
+}
+table.fleet-summary tbody tr.data-row td.stub {
+  padding-left: 24px;
+}
+table.fleet-summary tbody tr:last-child td {
+  border-bottom: 2px solid #000;
+}
+table.fleet-summary tbody tr.separator-row td {
+  border-top: 1px solid #000;
+  padding: 0;
+  height: 0;
+  line-height: 0;
+}
+/* Print-friendly */
+@media print {
+  .fleet-table-container { max-width: none; overflow: visible; }
+  table.fleet-summary { page-break-inside: auto; }
+  table.fleet-summary tr { page-break-inside: avoid; }
+}
+</style>
+<div class="fleet-table-title">Table 14.3.1.1</div>
+<div class="fleet-table-subtitle">Summary of Adverse Events by System Organ Class and Preferred Term</div>
+<table class="fleet-summary">
+<thead>
+<tr>
+<th class="stub-header"></th>
+<th>Placebo
+(N=2)</th>
+<th>Xanomeline Low Dose
+(N=2)</th>
+<th>Xanomeline High Dose
+(N=1)</th>
+<th>All Xanomeline
+(N=3)</th>
+<th>Total
+(N=5)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="group-row">
+<td class="stub">GASTROINTESTINAL DISORDERS</td>
+<td class="stat-cell"></td>
+<td class="stat-cell"></td>
+<td class="stat-cell"></td>
+<td class="stat-cell"></td>
+<td class="stat-cell"></td>
+</tr>
+<tr class="group-row">
+<td class="stub">GENERAL DISORDERS</td>
+<td class="stat-cell"></td>
+<td class="stat-cell"></td>
+<td class="stat-cell"></td>
+<td class="stat-cell"></td>
+<td class="stat-cell"></td>
+</tr>
+<tr class="group-row">
+<td class="stub">NERVOUS SYSTEM DISORDERS</td>
+<td class="stat-cell"></td>
+<td class="stat-cell"></td>
+<td class="stat-cell"></td>
+<td class="stat-cell"></td>
+<td class="stat-cell"></td>
+</tr>
+<tr class="group-row">
+<td class="stub">OTHER</td>
+<td class="stat-cell"></td>
+<td class="stat-cell"></td>
+<td class="stat-cell"></td>
+<td class="stat-cell"></td>
+<td class="stat-cell"></td>
+</tr>
+<tr class="data-row">
+<td class="stub">Application Site Erythema</td>
+<td class="stat-cell">1 (50.0%)</td>
+<td class="stat-cell">0</td>
+<td class="stat-cell">0</td>
+<td class="stat-cell">0</td>
+<td class="stat-cell">1 (20.0%)</td>
+</tr>
+<tr class="data-row">
+<td class="stub">Dizziness</td>
+<td class="stat-cell">0</td>
+<td class="stat-cell">1 (50.0%)</td>
+<td class="stat-cell">0</td>
+<td class="stat-cell">1 (33.3%)</td>
+<td class="stat-cell">1 (20.0%)</td>
+</tr>
+<tr class="data-row">
+<td class="stub">Fatigue</td>
+<td class="stat-cell">0</td>
+<td class="stat-cell">0</td>
+<td class="stat-cell">1 (100.0%)</td>
+<td class="stat-cell">1 (33.3%)</td>
+<td class="stat-cell">1 (20.0%)</td>
+</tr>
+<tr class="data-row">
+<td class="stub">Headache</td>
+<td class="stat-cell">1 (50.0%)</td>
+<td class="stat-cell">0</td>
+<td class="stat-cell">0</td>
+<td class="stat-cell">0</td>
+<td class="stat-cell">1 (20.0%)</td>
+</tr>
+<tr class="data-row">
+<td class="stub">Nausea</td>
+<td class="stat-cell">1 (50.0%)</td>
+<td class="stat-cell">0</td>
+<td class="stat-cell">0</td>
+<td class="stat-cell">0</td>
+<td class="stat-cell">1 (20.0%)</td>
+</tr>
+<tr class="data-row">
+<td class="stub">Y</td>
+<td class="stat-cell">1 (50.0%)</td>
+<td class="stat-cell">0</td>
+<td class="stat-cell">0</td>
+<td class="stat-cell">0</td>
+<td class="stat-cell">1 (20.0%)</td>
+</tr>
+</tbody>
+</table>
+<div class="fleet-table-footnotes">
+<p>Source: ADAE</p>
+<p>Population: Safety (SAFFL=Y)</p>
+</div>
+</div>
