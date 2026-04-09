@@ -182,11 +182,22 @@ filters: ["!^*"]
 
 ## ARD utilities
 
-::: fleet.tlg.\_ard
+<!-- mkdocstrings: reference public re-exports, not the private _ard module -->
+::: fleet.tlg
 options:
-show_root_heading: true
+show_root_heading: false
 heading_level: 3
-members: - ARD_SCHEMA - ARD_COLUMNS - ARD_COLUMN_ORDER - ARD_REQUIRED_COLUMNS - ARD_GROUP_COLUMNS - build_ard_row - validate_ard - format_ard - apply_fmt_fn - default_fmt_fn
+members:
+  - ARD_SCHEMA
+  - ARD_COLUMNS
+  - ARD_COLUMN_ORDER
+  - ARD_REQUIRED_COLUMNS
+  - ARD_GROUP_COLUMNS
+  - build_ard_row
+  - validate_ard
+  - format_ard
+  - apply_fmt_fn
+  - default_fmt_fn
 
 ---
 
