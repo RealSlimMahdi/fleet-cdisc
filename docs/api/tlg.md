@@ -149,7 +149,7 @@ filters: ["!^*"]
 
 ### Statistic
 
-::: fleet.tlg.\_specs.Statistic
+::: fleet.tlg.Statistic
 options:
 show_root_heading: true
 heading_level: 4
@@ -218,12 +218,12 @@ heading_level: 4
 
 ### Shaping functions
 
-::: fleet.tlg.render.\_models.ard_to_table_model
+::: fleet.tlg.render.ard_to_table_model
 options:
 show_root_heading: true
 heading_level: 4
 
-::: fleet.tlg.render.\_models.listing_to_model
+::: fleet.tlg.render.listing_to_model
 options:
 show_root_heading: true
 heading_level: 4

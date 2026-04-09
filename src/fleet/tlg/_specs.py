@@ -58,7 +58,7 @@ class Column(BaseModel):
 class GroupPool(BaseModel):
     """A composite treatment group (pooled arms).
 
-    Args:
+    Attributes:
         label: Display label for the pooled group.
         arms: List of arm labels to combine, or ``"*"`` for all arms.
     """
@@ -75,7 +75,7 @@ class OverallStat(BaseModel):
     Each ``OverallStat`` emits a flat ARD row with ``variable=""`` and
     ``variable_level=label``, rendered as a header row above the hierarchy.
 
-    Args:
+    Attributes:
         label: Display text for the header row (→ ``variable_level``).
         filter: Optional Polars expression to subset the dataset before
             counting.  ``None`` means count all subjects.
