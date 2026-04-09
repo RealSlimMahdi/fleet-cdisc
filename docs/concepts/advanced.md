@@ -93,25 +93,36 @@ class _CompanyAdamPolarsAccessor(CompanyAdamNamespace):
 
 ## Handing Non-CDISC Raw Sources
 
-If you are pulling in non-standard vendor files, use raw Polars filtering or renaming _before_ jumping into a Fleet pipeline:
+If you are pulling in non-standard vendor files, use Fleet verbs to rename and map columns directly inside the pipeline. The `.source()` verb (ADaM) and `.assign_no_ct()` verb (SDTM) both accept a `from_col` / `source` keyword to copy a raw column under a CDISC-compliant name — no intermediate Polars `.rename()` call needed:
 
 ```python
 import polars as pl
 from fleet import load_study_context
 
-# 1. Standard Polars data cleaning to get it into a reasonable shape
 raw_labs = pl.read_csv("vendor_labs.csv")
-cleaned_labs = raw_labs.rename({"Subject_ID": "USUBJID", "Lab_Result": "AVAL"})
 
-# 2. Transition into Fleet for formal CDISC derivation
+# Rename non-standard columns inline using Fleet verbs, then continue derivation
 adlb = (
-    cleaned_labs.adam
-    .source("USUBJID")
-    .source("AVAL")
+    raw_labs.adam
+    .source("USUBJID", from_col="Subject_ID")
+    .source("AVAL", from_col="Lab_Result")
     .baseline("BASE", aval="AVAL", baseline_flag="ABLFL")
     .to_frame()
 )
 ```
+
+For SDTM pipelines the equivalent verb is `.assign_no_ct()`:
+
+```python
+dm = (
+    raw_df.sdtm
+    .assign_no_ct("USUBJID", source="subject_id")
+    .assign_no_ct("SUBJID", source="subject_id")
+    .to_frame()
+)
+```
+
+Only fall back to raw Polars for pre-processing that genuinely cannot be expressed as a Fleet verb (e.g. pivoting wide vendor files, multi-file concatenation), and re-enter the Fleet pipeline immediately afterwards.
 
 ## Pipeline Debugging & Observability
 
