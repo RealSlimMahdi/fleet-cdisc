@@ -60,17 +60,18 @@ print(dm)
 vs_sdtm = pl.DataFrame({
     "USUBJID":  ["001-01", "001-01", "001-01"],
     "VISITNUM": [1,         2,         3       ],
-    "PARAMCD":  ["SYSBP",  "SYSBP",  "SYSBP" ],
-    "AVAL":     [120.0,    115.0,    118.0   ],
-    "ADT":      ["2024-01-10", "2024-02-10", "2024-03-10"],
+    "VSTESTCD": ["SYSBP",  "SYSBP",  "SYSBP" ],
+    "VSSTRESN": [120.0,    115.0,    118.0   ],
+    "VSDTC":    ["2024-01-10", "2024-02-10", "2024-03-10"],
     "TRTSDT":   ["2024-01-10", "2024-01-10", "2024-01-10"],
 })
 
 advs = (
     vs_sdtm.adam
     .source("USUBJID")
-    .source("PARAMCD")
-    .source("AVAL")
+    .source("PARAMCD", from_col="VSTESTCD")
+    .source("AVAL",    from_col="VSSTRESN")
+    .derive_dt("ADT", source="VSDTC")
     .study_day("ADY", analysis_date="ADT", reference_date="TRTSDT")
     .flag("ABLFL", criteria='pl.col("VISITNUM") == 1',
           groups=["USUBJID", "PARAMCD"])
