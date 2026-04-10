@@ -518,7 +518,81 @@ class SDTMNamespace(TrialDesignMixin):
         return self._chain(expr)
 
     # ------------------------------------------------------------------ #
-    # 9. merge — join another dataset                                      #
+    # 9. seq — --SEQ sequence number (aligned with sdtm.oak derive_seq)   #
+    # ------------------------------------------------------------------ #
+
+    def seq(
+        self,
+        target: str,
+        *,
+        order_by: list[str] | None = None,
+        groups: list[str] | None = None,
+        start_at: int = 1,
+        check_uniqueness: bool = False,
+    ) -> SDTMNamespace:
+        """Derive the ``--SEQ`` sequence number variable.
+
+        Generates a 1-based integer sequence that uniquely identifies each
+        record within the domain, per subject.  The dataset is sorted by
+        *order_by* columns within each *groups* partition before numbering
+        — this follows the sdtm.oak ``derive_seq()`` pattern and ensures
+        deterministic, reproducible sequence values.
+
+        Args:
+            target: Name of the output ``--SEQ`` variable (e.g. ``"AESEQ"``,
+                ``"VSSEQ"``).  A warning is emitted if the name does not end
+                in ``SEQ``.
+            order_by: Columns that define the sort order within each group.
+                When ``None``, the current row order is preserved.
+            groups: Subject-level grouping columns (default
+                ``["STUDYID", "USUBJID"]``).  The sequence restarts at
+                *start_at* for each unique combination.
+            start_at: First sequence value (default ``1``).
+            check_uniqueness: If ``True``, emit a warning when the
+                combination of *groups* + *order_by* does not uniquely
+                identify each row.
+
+        Returns:
+            SDTMNamespace: A fresh namespace with *target* appended.  Call
+                ``.to_frame()`` to materialise.
+
+        Examples:
+            Derive ``AESEQ`` ordered by start date within each subject::
+
+                ae = (
+                    raw_df.sdtm
+                    .hardcode_no_ct("DOMAIN", value="AE")
+                    .assign_no_ct("USUBJID", source="patient_number")
+                    .assign_no_ct("AETERM", source="ae_term")
+                    .assign_no_ct("AESTDTC", source="ae_start_date")
+                    .seq("AESEQ", order_by=["AESTDTC"])
+                    .to_frame()
+                )
+        """
+        import warnings
+
+        from fleet.core.seq import derive_seq
+
+        if not target.endswith("SEQ"):
+            warnings.warn(
+                f"Target variable '{target}' does not end in 'SEQ'. "
+                "SDTM --SEQ variables should follow the naming convention.",
+                stacklevel=2,
+            )
+
+        grps = groups or ["STUDYID", "USUBJID"]
+        df = derive_seq(
+            self._lazy.collect(),
+            target,
+            order_by=order_by,
+            groups=grps,
+            start_at=start_at,
+            check_uniqueness=check_uniqueness,
+        )
+        return self._materialise_then(df)
+
+    # ------------------------------------------------------------------ #
+    # 10. merge — join another dataset                                     #
     # ------------------------------------------------------------------ #
 
     def merge(

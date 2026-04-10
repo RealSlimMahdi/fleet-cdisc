@@ -109,6 +109,7 @@ nav:
       - Advanced Patterns: concepts/advanced.md
   - Examples:
       - Multi-Domain Pipeline: examples/full_pipeline.md
+      - "Raw-to-Render (R2R)": examples/r2r_strategy.md
       - Code-Driven Workflow: examples/01_code_driven_pipeline.ipynb
       - Spec-Driven Workflow: examples/02_spec_driven_pipeline.ipynb
   - API Reference:

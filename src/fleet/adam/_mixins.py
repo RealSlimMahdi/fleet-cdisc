@@ -688,30 +688,47 @@ class MultiRowMixin:
         self,
         target: str = "ASEQ",
         *,
+        order_by: list[str] | None = None,
         groups: list[str] | None = None,
+        check_uniqueness: bool = False,
     ) -> Self:
-        """Sequential 1-based record number within each group.
+        """Derive a 1-based observation sequence number within each group.
 
-        Preserves row order.  Materialises the current pipeline before
-        assigning sequence numbers.
+        Mirrors admiral's ``derive_var_obs_number()``.  When *order_by* is
+        provided the data is sorted within each *groups* partition before
+        numbering, ensuring deterministic and reproducible sequence values.
 
         Args:
             target: Name of the output sequence column (default ``"ASEQ"``).
+            order_by: Columns that define the sort order within each group.
+                When ``None``, the current row order is preserved.
             groups: Partition columns (default ``["USUBJID"]``).
+            check_uniqueness: If ``True``, emit a warning when the
+                combination of *groups* + *order_by* does not uniquely
+                identify each row (analogous to admiral's
+                ``check_type = "warning"``).
 
         Returns:
-            Self: A fresh namespace with the sequence column added.
+            Self: A fresh namespace with *target* appended; call
+                ``.to_frame()`` to materialise.
 
         Examples:
-            Add a per-subject sequence number::
+            Add a per-subject sequence number ordered by analysis date::
 
                 adae = (
                     ae_df.adam.occds
-                    .seq("ASEQ", groups=["USUBJID"])
+                    .seq("ASEQ", order_by=["ASTDT"], groups=["USUBJID"])
                     .to_frame()
                 )
         """
+        from fleet.core.seq import derive_seq
+
         grps = groups or ["USUBJID"]
-        df = self.to_frame()
-        df = df.with_columns((pl.int_range(pl.len()).over(grps) + 1).cast(pl.Int64).alias(target))
+        df = derive_seq(
+            self.to_frame(),
+            target,
+            order_by=order_by,
+            groups=grps,
+            check_uniqueness=check_uniqueness,
+        )
         return self._materialise_then(df)
