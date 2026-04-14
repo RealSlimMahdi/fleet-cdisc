@@ -26,3 +26,4 @@ outputs/.DS_Store
 
 # PowerPoint files
 $*.pptx
+*.pptx

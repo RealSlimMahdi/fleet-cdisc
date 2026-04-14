@@ -29,12 +29,12 @@ conventions to remember, and scattered data lineage — an R2R script keeps the
 In conventional clinical programming, the AE deliverable involves at least
 **four separate programs**, often written by different people:
 
-| Program      | Input          | Output           | Owner      |
-| ------------ | -------------- | ---------------- | ---------- |
-| `ae.sas`     | Raw AE extract | SDTM AE          | SDTM prog. |
-| `adae.sas`   | SDTM AE + ADSL | ADaM ADAE        | ADaM prog. |
-| `v_adae.sas` | ADAE           | Validation log   | QC prog.   |
-| `t_ae.sas`   | ADAE + ADSL    | AE summary table | TLG prog.  |
+| Program       | Input          | Output           | Owner      |
+| ------------- | -------------- | ---------------- | ---------- |
+| `ae.sas`      | Raw AE extract | SDTM AE          | SDTM prog. |
+| `adae.sas`    | SDTM AE + ADSL | ADaM ADAE        | ADaM prog. |
+| `adae_qc.sas` | ADAE           | Validation log   | QC prog.   |
+| `t_ae.sas`    | ADAE + ADSL    | AE summary table | TLG prog.  |
 
 Each program runs independently. Context about _why_ a particular derivation
 exists often lives only in the developer's head or in a Word document. When the
