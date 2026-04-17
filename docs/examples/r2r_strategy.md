@@ -169,32 +169,87 @@ adae = (
 
 ### Layer 3 — Validate
 
-Pre-flight checks ensure the data is ready for tabulation.
-If the CDISC Rules Engine is installed, conformance validation runs too:
+Call `.validate()` directly in the pipeline chain — it prints the conformance
+report and returns the namespace unchanged so derivations can continue:
 
 ```python
-from fleet.tlg import AESummarySpec, Row, Statistic
-
-spec = AESummarySpec(
-    rows=[
-        Row(field="AEBODSYS", label="System Organ Class"),
-        Row(field="AEDECOD",  label="Preferred Term"),
-    ],
-    statistics=[Statistic.N_SUBJECTS, Statistic.N_PCT],
+ae = (
+    ae_raw.sdtm
+    .hardcode_no_ct("STUDYID", value="CDISCPILOT01")
+    .hardcode_no_ct("DOMAIN",  value="AE")
+    .assign_no_ct("USUBJID",  source="patient_number")
+    .assign_no_ct("AETERM",   source="ae_term")
+    .assign_no_ct("AESTDTC",  source="ae_start_date")
+    .assign_no_ct("AEENDTC",  source="ae_end_date")
+    .assign_no_ct("AESEV",    source="ae_severity")
+    .assign_no_ct("AESER",    source="ae_serious")
+    .validate("AE")          # ← prints report, chain continues
+    .to_frame()
 )
 
-# Lightweight data-readiness check
-report = adae.tlg.ae.check(spec=spec)
-
-# Full CDISC conformance (optional, requires engine)
-try:
-    from fleet.validation.service import ValidationService
-    svc = ValidationService()
-    svc.validate_sdtm(ae, domain="AE").print_report()
-    svc.validate_adam(adae, dataset="ADAE").print_report()
-except (FileNotFoundError, ImportError):
-    print("Engine not installed — skipping conformance checks.")
+adae = (
+    ae_with_trt.adam
+    .source("STUDYID")
+    .source("USUBJID")
+    .source("AETERM")
+    .source("TRTA")
+    .source("SAFFL")
+    .derive_dt("ASTDT", source="AESTDTC")
+    .study_day("ADY", analysis_date="ASTDT", reference_date="TRTSDT")
+    .to_frame()
+    .adam.occds
+    .treatment_emergent(
+        "TRTEMFL", start_date="AESTDTC",
+        trtsdt="TRTSDT", trtedt="TRTEDT",
+    )
+    .worst_flag(
+        "ANL01FL", severity_col="AESEV",
+        severity_order=["MILD", "MODERATE", "SEVERE"],
+        groups=["USUBJID", "AETERM"],
+    )
+    .seq("ASEQ", groups=["USUBJID"])
+    .validate("ADAE")        # ← prints report, chain continues
+    .to_frame()
+)
 ```
+
+The report printed to stdout makes conformance issues immediately visible:
+
+```
+======================================================================
+CDISC Validation Report: AE
+======================================================================
+Dataset Type: SDTM 3.4
+Status: FAIL
+Total Issues: 2
+----------------------------------------------------------------------
+
+ERRORS (2):
+
+1. [Error] SDTM.AE.R0001: AESEQ is required but missing
+   Variable: AESEQ
+
+2. [Error] SDTM.AE.R0014: AEBODSYS must be populated when AEDECOD is present
+   Variable: AEBODSYS
+   Rows: 43
+   Producing verb: assign_no_ct (AETERM)
+   Suggested fix: Map AEBODSYS from MedDRA lookup or hardcode domain SOC
+
+======================================================================
+
+======================================================================
+CDISC Validation Report: ADAE
+======================================================================
+Dataset Type: ADaM 1.3
+Status: PASS
+Total Issues: 0
+----------------------------------------------------------------------
+
+======================================================================
+```
+
+The `Producing verb` field traces an error directly back to the Fleet verb that
+created the offending column — no manual variable hunting required.
 
 ### Layer 4 — Render (`.tlg.ae` namespace)
 
@@ -202,7 +257,16 @@ Compute the Analysis Results Dataset and render to HTML:
 
 ```python
 from fleet.tlg import (
+    AESummarySpec, Row, Statistic,
     RenderMetadata, ard_to_table_model, render_html,
+)
+
+spec = AESummarySpec(
+    rows=[
+        Row(field="AEBODSYS", label="System Organ Class"),
+        Row(field="AEDECOD",  label="Preferred Term"),
+    ],
+    statistics=[Statistic.N_SUBJECTS, Statistic.N_PCT],
 )
 
 ard = adae.tlg.ae.t_summary(spec=spec, adsl=adsl)
