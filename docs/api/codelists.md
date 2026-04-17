@@ -43,12 +43,12 @@ Each codelist class exposes:
 
 ::: specs.cdiscpilot01.sdtm.codelists
 options:
-show*root_heading: false
+show_root_heading: false
 show_root_toc_entry: false
 heading_level: 3
 members_order: source
 show_source: false
-filters: ["!^*"]
+filters: ["!^_"]
 show_bases: false
 show_if_no_docstring: true
 docstring_section_style: list

@@ -61,10 +61,10 @@ Fleet TLG supports two equivalent paths to the same ARD output:
 
 ::: fleet.tlg.TLGNamespace
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 3
 members_order: source
-filters: ["!^*"]
+filters: ["!^_"]
 
 ---
 
@@ -72,10 +72,10 @@ filters: ["!^*"]
 
 ::: fleet.tlg.AETLGNamespace
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 3
 members_order: source
-filters: ["!^*"]
+filters: ["!^_"]
 
 ---
 
@@ -83,10 +83,10 @@ filters: ["!^*"]
 
 ::: fleet.tlg.VSTLGNamespace
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 3
 members_order: source
-filters: ["!^*"]
+filters: ["!^_"]
 
 ---
 
@@ -94,10 +94,10 @@ filters: ["!^*"]
 
 ::: fleet.tlg.TLGBuilder
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 3
 members_order: source
-filters: ["!^*"]
+filters: ["!^_"]
 
 ---
 
@@ -119,41 +119,41 @@ move freely between the YAML and Python views without grepping.
 
 ::: fleet.tlg.TLGSpec
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 4
-filters: ["!^*"]
+filters: ["!^_"]
 
 ### AESummarySpec
 
 ::: fleet.tlg.AESummarySpec
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 4
-filters: ["!^*"]
+filters: ["!^_"]
 
 ### AEListingSpec
 
 ::: fleet.tlg.AEListingSpec
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 4
-filters: ["!^*"]
+filters: ["!^_"]
 
 ### VSSummarySpec
 
 ::: fleet.tlg.VSSummarySpec
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 4
-filters: ["!^*"]
+filters: ["!^_"]
 
 ### OverallStat
 
 ::: fleet.tlg.OverallStat
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 4
-filters: ["!^*"]
+filters: ["!^_"]
 
 ---
 
@@ -170,25 +170,25 @@ heading_level: 4
 
 ::: fleet.tlg.GroupPool
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 4
-filters: ["!^*"]
+filters: ["!^_"]
 
 ### Row
 
 ::: fleet.tlg.Row
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 4
-filters: ["!^*"]
+filters: ["!^_"]
 
 ### Column
 
 ::: fleet.tlg.Column
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 4
-filters: ["!^*"]
+filters: ["!^_"]
 
 ---
 
