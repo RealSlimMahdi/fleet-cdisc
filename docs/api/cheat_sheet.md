@@ -11,8 +11,8 @@ This cheat sheet summarises the most common verbs across Fleet namespaces. **Eve
 |------|-------------|---------|
 | [`.to_frame()`][fleet.sdtm.SDTMNamespace.to_frame] | Materialises the pipeline into a Polars DataFrame. Must be called at the end. | `.to_frame()` |
 | [`.derivation()`][fleet.sdtm.SDTMNamespace.derivation] | Injects an arbitrary Polars expression. | `.derivation("AGE", expression="pl.col('AGE_RAW').cast(pl.Int64)")` |
-| [`.source()`][fleet.adam._mixins.SharedADaMVerbsMixin.source] | Passes a column through (renaming if `from_col` is provided). | `.source("USUBJID")` |
-| [`.assigned()`][fleet.adam._mixins.SharedADaMVerbsMixin.assigned] | Hardcodes a constant literal for all rows. | `.assigned("DOMAIN", value="DM")` |
+| [`.source()`][fleet.adam.AdamNamespace.source] | Passes a column through (renaming if `from_col` is provided). | `.source("USUBJID")` |
+| [`.assigned()`][fleet.adam.AdamNamespace.assigned] | Hardcodes a constant literal for all rows. | `.assigned("DOMAIN", value="DM")` |
 | [`.inspect()`][fleet.sdtm.SDTMNamespace.inspect] | Hard checkpoint — materialises and prints schema/shape/head. | `.inspect("after rename")` |
 | [`.explain()`][fleet.sdtm.SDTMNamespace.explain] | Prints the Polars query plan without materialising. | `.explain()` |
 
@@ -39,13 +39,13 @@ This cheat sheet summarises the most common verbs across Fleet namespaces. **Eve
 
 | Verb | Description | Example |
 |------|-------------|---------|
-| [`.derivation()`][fleet.adam._mixins.SharedADaMVerbsMixin.derivation] | Arbitrary Polars expression. | `.derivation("AVAL", expression="pl.col('vsorres').cast(pl.Float64)")` |
-| [`.recode()`][fleet.adam._mixins.SharedADaMVerbsMixin.recode] | Value remapping with default. | `.recode("PARAM", source="vstest", recode_map={...})` |
-| [`.rename()`][fleet.adam._mixins.SharedADaMVerbsMixin.rename] | Rename a column from a parent dataset. | `.rename("PARAMCD", source="vstestcd")` |
-| [`.condderivation()`][fleet.adam._mixins.SharedADaMVerbsMixin.condderivation] | Multi-branch conditional derivation. | `.condderivation("EOSSTT", conditions=[...])` |
-| [`.derive_dt()`][fleet.adam._mixins.SharedADaMVerbsMixin.derive_dt] | Parse `--DTC` to analysis date. | `.derive_dt("ADT", source="VSDTC")` |
-| [`.derive_dtm()`][fleet.adam._mixins.SharedADaMVerbsMixin.derive_dtm] | Parse `--DTC` to analysis datetime. | `.derive_dtm("ADTM", source="VSDTC")` |
-| [`.merge_adsl()`][fleet.adam._mixins.SharedADaMVerbsMixin.merge_adsl] | Bring ADSL columns onto a BDS dataset. | `.merge_adsl(adsl, columns=["TRTSDT","SAFFL"])` |
+| [`.derivation()`][fleet.adam.AdamNamespace.derivation] | Arbitrary Polars expression. | `.derivation("AVAL", expression="pl.col('vsorres').cast(pl.Float64)")` |
+| [`.recode()`][fleet.adam.AdamNamespace.recode] | Value remapping with default. | `.recode("PARAM", source="vstest", recode_map={...})` |
+| [`.rename()`][fleet.adam.AdamNamespace.rename] | Rename a column from a parent dataset. | `.rename("PARAMCD", source="vstestcd")` |
+| [`.condderivation()`][fleet.adam.AdamNamespace.condderivation] | Multi-branch conditional derivation. | `.condderivation("EOSSTT", conditions=[...])` |
+| [`.derive_dt()`][fleet.adam.AdamNamespace.derive_dt] | Parse `--DTC` to analysis date. | `.derive_dt("ADT", source="VSDTC")` |
+| [`.derive_dtm()`][fleet.adam.AdamNamespace.derive_dtm] | Parse `--DTC` to analysis datetime. | `.derive_dtm("ADTM", source="VSDTC")` |
+| [`.merge_adsl()`][fleet.adam.AdamNamespace.merge_adsl] | Bring ADSL columns onto a BDS dataset. | `.merge_adsl(adsl, columns=["TRTSDT","SAFFL"])` |
 | [`.study_day()`][fleet.adam.AdamNamespace.study_day] | CDISC study day algorithm. | `.study_day("ADY", analysis_date="ADT", reference_date="TRTSDT")` |
 | [`.baseline()`][fleet.adam.AdamNamespace.baseline] | Find baseline record per group, broadcast to target. | `.baseline("BASE", aval="AVAL", baseline_flag="ABLFL")` |
 | [`.chg()`][fleet.adam.AdamNamespace.chg] | Change from baseline (`AVAL - BASE`). | `.chg("CHG", aval="AVAL", base="BASE")` |
