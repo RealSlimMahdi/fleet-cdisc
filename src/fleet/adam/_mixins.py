@@ -97,8 +97,11 @@ class SharedADaMVerbsMixin:
 
     def _chain(self, *exprs: pl.Expr) -> Self:
         """Append expressions to the lazy plan; return a *new* namespace."""
+        from fleet.core.lineage import record_lineage
+
         new = copy.copy(self)
         new._lazy = self._lazy.with_columns(list(exprs))
+        record_lineage(new, exprs)
         return new
 
     def _materialise_then(self, df: pl.DataFrame) -> Self:

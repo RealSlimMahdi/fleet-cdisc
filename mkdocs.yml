@@ -52,7 +52,7 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          paths: [src]
+          paths: [src, .]
           options:
             docstring_style: google
             show_source: true
@@ -124,6 +124,7 @@ nav:
       - TLG Namespace: api/tlg.md
       - Define-XML: api/define_xml.md
       - Controlled Terminology: api/ct.md
+      - Study Codelists (CDISCPILOT01): api/codelists.md
       - Core: api/core.md
   - Quality & Compliance:
       - Validation Strategy: validation-strategy.md

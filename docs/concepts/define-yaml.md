@@ -60,6 +60,24 @@ Each variable's `derivation.algorithm` maps directly to an `.adsl` (or `.adam`) 
 | `flag`       | `.eligibility_flag(target, criteria=...)`                        | `"Y"` / `null` flag             |
 | `count`      | `.count_events(target, from_dataset=..., where=...)`             | Integer event count             |
 
+### Study-specific callables (`callable:`)
+
+When no built-in verb fits, point `derivation:` at a fully qualified Python
+callable instead. The callable must be importable at generation time and
+takes the upstream DataFrame as its first argument:
+
+```yaml
+- name: AVAL
+  derivation:
+    callable: specs.cdiscpilot01.adam.derivations.derive_aval
+```
+
+Both `algorithm:` and `callable:` plug into Define-XML method enrichment:
+running `DefineSpecGenerator(spec, enrich_methods=True)` (or
+`fleet define-xml --enrich-methods`) emits a `<MethodDef>` whose
+`<Description>` is taken from the **docstring** of the verb or callable, so
+the regulatory description always matches the executable code.
+
 ### Example — TRTSDT (date of first dose)
 
 In `define.yaml`:

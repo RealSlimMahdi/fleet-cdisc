@@ -225,17 +225,16 @@ class OncoNamespace(SharedADaMVerbsMixin):
 
         # For each group, check whether there exist two response dates ≥ N days apart
         confirmed_subjs = (
-            resp_df
-            .with_columns(pl.col(date_col).cast(pl.Date))
+            resp_df.with_columns(pl.col(date_col).cast(pl.Date))
             .group_by(grps)
-            .agg([
-                pl.col(date_col).min().alias("_first_resp"),
-                pl.col(date_col).max().alias("_last_resp"),
-            ])
+            .agg(
+                [
+                    pl.col(date_col).min().alias("_first_resp"),
+                    pl.col(date_col).max().alias("_last_resp"),
+                ]
+            )
             .with_columns(
-                (pl.col("_last_resp") - pl.col("_first_resp"))
-                .dt.total_days()
-                .alias("_gap")
+                (pl.col("_last_resp") - pl.col("_first_resp")).dt.total_days().alias("_gap")
             )
             .filter(pl.col("_gap") >= confirmation_days)
             .select(grps)
@@ -244,10 +243,7 @@ class OncoNamespace(SharedADaMVerbsMixin):
         joined = df.join(confirmed_subjs, on=grps, how="left")
         # Mark as confirmed if subject has confirmed response AND current row is a response
         in_confirmed = joined.with_columns(
-            pl.when(
-                pl.col(source).is_in(rsp)
-                & pl.col(grps[0]).is_in(confirmed_subjs[grps[0]])
-            )
+            pl.when(pl.col(source).is_in(rsp) & pl.col(grps[0]).is_in(confirmed_subjs[grps[0]]))
             .then(pl.lit(flag_value))
             .otherwise(pl.lit(None))
             .alias(target)
@@ -302,9 +298,7 @@ class OncoNamespace(SharedADaMVerbsMixin):
 
         joined = df.join(pd_dates, on=grps, how="left")
         filtered = joined.filter(
-            pl.col("_first_pd").is_null()
-            | (pl.col(date_col).cast(pl.Date) <= pl.col("_first_pd"))
+            pl.col("_first_pd").is_null() | (pl.col(date_col).cast(pl.Date) <= pl.col("_first_pd"))
         ).drop("_first_pd")
 
         return self._materialise_then(filtered)
-

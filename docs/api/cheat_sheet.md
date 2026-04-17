@@ -1,82 +1,138 @@
 # Verb Cheat Sheet
 
-This cheat sheet summarises the most common verbs across Fleet namespaces. For full parameter signatures, see the respective API references.
+This cheat sheet summarises the most common verbs across Fleet namespaces. **Every verb name in this page is a clickable link to its docstring**, rendered directly from the source code in the corresponding namespace page.
 
-## Core Verbs (Available everywhere)
+!!! tip "Single source of truth"
+    Fleet's documentation is generated directly from Python docstrings via [mkdocstrings](https://mkdocstrings.github.io/) and cross-linked with [autorefs](https://mkdocstrings.github.io/autorefs/). The verb name you click here resolves to the exact method signature, parameters, and examples that the runtime executes — there is no separately maintained reference that can drift out of sync. Renaming a parameter in the source automatically updates this page on the next build.
 
-| Verb                              | Description                                                                   | Example                                                |
-| --------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `.to_frame()`                     | Materialises the pipeline into a Polars DataFrame. Must be called at the end. | `.to_frame()`                                          |
-| `.derivation(target, expression)` | Injects an arbitrary Polars expression.                                       | `.derivation("AGE", pl.col("AGE_RAW").cast(pl.Int64))` |
-| `.source(target, from_col)`       | Passes a column through (renaming if `from_col` is provided).                 | `.source("USUBJID")`                                   |
-| `.assigned(target, value)`        | Hardcodes a constant literal for all rows.                                    | `.assigned("DOMAIN", "DM")`                            |
+## Core verbs (available everywhere)
 
-## SDTM Namespace (`df.sdtm`)
+| Verb | Description | Example |
+|------|-------------|---------|
+| [`.to_frame()`][fleet.sdtm.SDTMNamespace.to_frame] | Materialises the pipeline into a Polars DataFrame. Must be called at the end. | `.to_frame()` |
+| [`.derivation()`][fleet.sdtm.SDTMNamespace.derivation] | Injects an arbitrary Polars expression. | `.derivation("AGE", expression="pl.col('AGE_RAW').cast(pl.Int64)")` |
+| [`.source()`][fleet.adam._mixins.SharedADaMVerbsMixin.source] | Passes a column through (renaming if `from_col` is provided). | `.source("USUBJID")` |
+| [`.assigned()`][fleet.adam._mixins.SharedADaMVerbsMixin.assigned] | Hardcodes a constant literal for all rows. | `.assigned("DOMAIN", value="DM")` |
+| [`.inspect()`][fleet.sdtm.SDTMNamespace.inspect] | Hard checkpoint — materialises and prints schema/shape/head. | `.inspect("after rename")` |
+| [`.explain()`][fleet.sdtm.SDTMNamespace.explain] | Prints the Polars query plan without materialising. | `.explain()` |
 
-| Verb                                                  | Description                                                                 | Example                                                      |
-| ----------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `.assign_no_ct(target, source)`                       | Map a column entirely without Controlled Terminology.                       | `.assign_no_ct("USUBJID", source="patient_id")`              |
-| `.hardcode_no_ct(target, value)`                      | Assign a constant literal.                                                  | `.hardcode_no_ct("DOMAIN", "DM")`                            |
-| `.assign_ct(target, source, ct_codelist, ct_mapping)` | Map values explicitly through a dictionary and validate against a codelist. | `.assign_ct("SEX", "sex_raw", "C66731", {"M":"M", "F":"F"})` |
-| `.assign_dtc(target, source)`                         | Normalise dates to ISO 8601 strings.                                        | `.assign_dtc("RFSTDTC", source="first_dose_dt")`             |
-| `.if_then_else(target, when, else_value)`             | Derive a value conditionally.                                               | `.if_then_else("AGEGR1", pl.col("AGE") < 18, "ADULT")`       |
+## SDTM namespace (`df.sdtm`)
 
-## ADaM BDS Namespace (`df.adam`)
+| Verb | Description | Example |
+|------|-------------|---------|
+| [`.assign_no_ct()`][fleet.sdtm.SDTMNamespace.assign_no_ct] | Map a column entirely without Controlled Terminology. | `.assign_no_ct("USUBJID", source="patient_id")` |
+| [`.hardcode_no_ct()`][fleet.sdtm.SDTMNamespace.hardcode_no_ct] | Assign a constant literal. | `.hardcode_no_ct("DOMAIN", value="DM")` |
+| [`.assign_ct()`][fleet.sdtm.SDTMNamespace.assign_ct] | Map values explicitly through a dictionary and validate against a codelist. | `.assign_ct("SEX", source="sex_raw", ct_codelist=SEX, ct_mapping={"M":"M"})` |
+| [`.hardcode_ct()`][fleet.sdtm.SDTMNamespace.hardcode_ct] | Assign a CT-validated literal. | `.hardcode_ct("AGEU", value="YEARS", ct_codelist=AGEU)` |
+| [`.assign_dtc()`][fleet.sdtm.SDTMNamespace.assign_dtc] | Normalise dates to ISO 8601 strings. | `.assign_dtc("RFSTDTC", source="first_dose_dt")` |
+| [`.if_then_else()`][fleet.sdtm.SDTMNamespace.if_then_else] | Derive a value conditionally over multiple branches. | `.if_then_else("AGEGR1", when=[...], else_value="OTHER")` |
+| [`.condition_add()`][fleet.sdtm.SDTMNamespace.condition_add] | Single-condition assignment. | `.condition_add("FLAG", condition=..., then_value="Y")` |
+| [`.ae_aerel()`][fleet.sdtm.SDTMNamespace.ae_aerel] | AE causality mapping. | `.ae_aerel("AEREL", source="rel_raw", aerel_map={...})` |
+| [`.merge()`][fleet.sdtm.SDTMNamespace.merge] | Join supplementary dataset on key columns. | `.merge(other, on="USUBJID")` |
+| [`.remove_dup()`][fleet.sdtm.SDTMNamespace.remove_dup] | Drop duplicates by subset. | `.remove_dup(subset_vars=["USUBJID","VISIT"])` |
+| [`.group_by()`][fleet.sdtm.SDTMNamespace.group_by] | Aggregate rows by group columns. | `.group_by(group_cols=["USUBJID"], agg_expr=...)` |
+| [`.seq()`][fleet.sdtm.SDTMNamespace.seq] | Generate sequence number per group. | `.seq("AESEQ", groups=["USUBJID"])` |
+| [`.from_spec()`][fleet.sdtm.SDTMNamespace.from_spec] | Build the entire pipeline from a `define.yaml` spec. | `df.sdtm.from_spec("define.yaml", dataset="DM")` |
+| [`.validate()`][fleet.sdtm.SDTMNamespace.validate] | Run CDISC Rules Engine on the resulting frame. | `.validate(domain="DM")` |
 
-| Verb                                                | Description                                                                | Example                                                                 |
-| --------------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `.study_day(target, analysis_date, reference_date)` | Calculate CDISC study day algorithm.                                       | `.study_day("ADY", "ADT", "TRTSDT")`                                    |
-| `.baseline(target, aval, baseline_flag)`            | Find the baseline record per USUBJID/PARAMCD, broadcast to `target`.       | `.baseline("BASE", "AVAL", "ABLFL")`                                    |
-| `.chg(target, aval, base)`                          | Change (`AVAL - BASE`)                                                     | `.chg("CHG", "AVAL", "BASE")`                                           |
-| `.pchg(target, aval, base)`                         | Percent change `(CHG / BASE) * 100`                                        | `.pchg("PCHG", "AVAL", "BASE")`                                         |
-| `.flag(target, criteria, groups)`                   | Assign boolean `"Y"` based on Polars criteria.                             | `.flag("CRIT1FL", pl.col("AVAL") > 10)`                                 |
-| `.bmi(target, weight, height)`                      | BMI = weight / (height / 100)²                                             | `.bmi("BMI", weight="WEIGHT", height="HEIGHT")`                         |
-| `.nrind(target, value, low, high)`                  | Normal range indicator: LOW / NORMAL / HIGH.                               | `.nrind("ANRIND", value="AVAL", low="LO", high="HI")`                   |
-| `.on_treatment(target, adt, trtsdt, trtedt)`        | On-treatment flag within [TRTSDT, TRTEDT].                                 | `.on_treatment("ONTRTFL", adt="ADT", trtsdt="TRTSDT", trtedt="TRTEDT")` |
-| `.shift(target, baseline_cat, post_cat)`            | Categorical shift string: "NORMAL to HIGH".                                | `.shift("SHIFT1", baseline_cat="BNRIND", post_cat="ANRIND")`            |
-| `.bsa(target, weight, height, method)`              | Body Surface Area (m²). Methods: Mosteller, DuBois, Haycock, Gehan-George. | `.bsa("BSA", weight="WEIGHT", height="HEIGHT")`                         |
-| `.map(target, systolic, diastolic)`                 | Mean Arterial Pressure: DBP + (SBP - DBP) / 3.                             | `.map("MAP", systolic="SYSBP", diastolic="DIABP")`                      |
-| `.qtc(target, qt, rr, method)`                      | Corrected QT interval (Fridericia or Bazett).                              | `.qtc("QTCF", qt="QT", rr="RR")`                                        |
-| `.derive_summary_records(by_vars, ...)`             | Aggregate by group and append summary rows.                                | `.derive_summary_records(by_vars=["USUBJID"], ...)`                     |
-| `.derive_locf_records(by_vars, ...)`                | Forward-fill (LOCF) within patient groups.                                 | `.derive_locf_records(by_vars=["USUBJID", "PARAMCD"])`                  |
-| `.derive_param(by_vars, ...)`                       | Derive a new parameter from existing records and append rows.              | `.derive_param(by_vars=["USUBJID"], ...)`                               |
+## ADaM BDS namespace (`df.adam`)
 
-## ADSL Namespace (`df.adam.adsl`)
+| Verb | Description | Example |
+|------|-------------|---------|
+| [`.derivation()`][fleet.adam._mixins.SharedADaMVerbsMixin.derivation] | Arbitrary Polars expression. | `.derivation("AVAL", expression="pl.col('vsorres').cast(pl.Float64)")` |
+| [`.recode()`][fleet.adam._mixins.SharedADaMVerbsMixin.recode] | Value remapping with default. | `.recode("PARAM", source="vstest", recode_map={...})` |
+| [`.rename()`][fleet.adam._mixins.SharedADaMVerbsMixin.rename] | Rename a column from a parent dataset. | `.rename("PARAMCD", source="vstestcd")` |
+| [`.condderivation()`][fleet.adam._mixins.SharedADaMVerbsMixin.condderivation] | Multi-branch conditional derivation. | `.condderivation("EOSSTT", conditions=[...])` |
+| [`.derive_dt()`][fleet.adam._mixins.SharedADaMVerbsMixin.derive_dt] | Parse `--DTC` to analysis date. | `.derive_dt("ADT", source="VSDTC")` |
+| [`.derive_dtm()`][fleet.adam._mixins.SharedADaMVerbsMixin.derive_dtm] | Parse `--DTC` to analysis datetime. | `.derive_dtm("ADTM", source="VSDTC")` |
+| [`.merge_adsl()`][fleet.adam._mixins.SharedADaMVerbsMixin.merge_adsl] | Bring ADSL columns onto a BDS dataset. | `.merge_adsl(adsl, columns=["TRTSDT","SAFFL"])` |
+| [`.study_day()`][fleet.adam.AdamNamespace.study_day] | CDISC study day algorithm. | `.study_day("ADY", analysis_date="ADT", reference_date="TRTSDT")` |
+| [`.baseline()`][fleet.adam.AdamNamespace.baseline] | Find baseline record per group, broadcast to target. | `.baseline("BASE", aval="AVAL", baseline_flag="ABLFL")` |
+| [`.chg()`][fleet.adam.AdamNamespace.chg] | Change from baseline (`AVAL - BASE`). | `.chg("CHG", aval="AVAL", base="BASE")` |
+| [`.pchg()`][fleet.adam.AdamNamespace.pchg] | Percent change `(CHG / BASE) * 100`. | `.pchg("PCHG", aval="AVAL", base="BASE")` |
+| [`.flag()`][fleet.adam.AdamNamespace.flag] | Assign `"Y"` per criteria (expression / `first` / `last`). | `.flag("ANL01FL", criteria="last", order_by="ADT")` |
+| [`.bmi()`][fleet.adam.AdamNamespace.bmi] | BMI = weight / (height/100)². | `.bmi("BMI", weight="WEIGHT", height="HEIGHT")` |
+| [`.bsa()`][fleet.adam.AdamNamespace.bsa] | Body Surface Area (Mosteller / DuBois / Haycock / Gehan-George). | `.bsa("BSA", weight="WEIGHT", height="HEIGHT")` |
+| [`.map()`][fleet.adam.AdamNamespace.map] | Mean Arterial Pressure: DBP + (SBP-DBP)/3. | `.map("MAP", systolic="SYSBP", diastolic="DIABP")` |
+| [`.qtc()`][fleet.adam.AdamNamespace.qtc] | Corrected QT (Fridericia / Bazett). | `.qtc("QTCF", qt="QT", rr="RR")` |
+| [`.nrind()`][fleet.adam.AdamNamespace.nrind] | Normal range indicator: LOW / NORMAL / HIGH. | `.nrind("ANRIND", value="AVAL", low="LO", high="HI")` |
+| [`.on_treatment()`][fleet.adam.AdamNamespace.on_treatment] | On-treatment flag within `[TRTSDT, TRTEDT]`. | `.on_treatment("ONTRTFL", adt="ADT", trtsdt="TRTSDT", trtedt="TRTEDT")` |
+| [`.shift()`][fleet.adam.AdamNamespace.shift] | Categorical shift string (`"NORMAL to HIGH"`). | `.shift("SHIFT1", baseline_cat="BNRIND", post_cat="ANRIND")` |
+| [`.lookup()`][fleet.adam.AdamNamespace.lookup] | Left-join an external dataset on key columns. | `.lookup(other_df, on="USUBJID")` |
+| [`.transform()`][fleet.adam.AdamNamespace.transform] | Apply an arbitrary frame-level transformation. | `.transform(lambda df: df.sort("USUBJID"))` |
+| [`.derive_summary_records()`][fleet.adam.AdamNamespace.derive_summary_records] | Aggregate by group and append summary rows. | `.derive_summary_records(by_vars=["USUBJID"], ...)` |
+| [`.derive_locf_records()`][fleet.adam.AdamNamespace.derive_locf_records] | LOCF forward-fill within patient groups. | `.derive_locf_records(by_vars=["USUBJID","PARAMCD"])` |
+| [`.derive_param()`][fleet.adam.AdamNamespace.derive_param] | Derive a new parameter and append rows. | `.derive_param(by_vars=["USUBJID"], ...)` |
+| [`.from_spec()`][fleet.adam.AdamNamespace.from_spec] | Build the entire pipeline from a `define.yaml` spec. | `df.adam.from_spec("define.yaml", dataset="ADVS")` |
+| [`.validate()`][fleet.adam.AdamNamespace.validate] | Run CDISC Rules Engine on the resulting frame. | `.validate(domain="ADVS")` |
 
-| Verb                                                 | Description                                                              | Example                                                         |
-| ---------------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------- |
-| `.first_date(target, from_dataset, date_col, where)` | Find earliest date per subject in a second dataset, e.g. TRTSDT from EX. | `.first_date("TRTSDT", ex_df, "EXSTDTC")`                       |
-| `.last_date(target, from_dataset, date_col, where)`  | Find latest date per subject.                                            | `.last_date("TRTEDT", ex_df, "EXENDTC")`                        |
-| `.duration(target, start_date, end_date)`            | Number of elapsed days (start to end + 1).                               | `.duration("TRTDUR", "TRTSDT", "TRTEDT")`                       |
-| `.eligibility_flag(target, criteria)`                | Single-row evaluation into a `"Y"` flag.                                 | `.eligibility_flag("ITTFL", pl.col("ARM") != "Screen Failure")` |
-| `.count_events(target, from_dataset, where)`         | Tally events for a subject.                                              | `.count_events("AECNT", ae_df)`                                 |
-| `.age_years(target, age_col, age_unit_col)`          | Unit-aware age conversion (YEARS, MONTHS, WEEKS, DAYS).                  | `.age_years("AAGE", age_col="AGE", age_unit_col="AGEU")`        |
-| `.derive_period(periods, start_date)`                | Create APxxSDT, APxxEDT, TRTxxP Subperiod/Phase variables.               | `.derive_period(periods=[{"number": 1, ...}])`                  |
+## ADSL namespace (`df.adam.adsl`)
 
-## OCCDS Namespace (`df.adam.occds`)
+| Verb | Description | Example |
+|------|-------------|---------|
+| [`.first_date()`][fleet.adam.ADSLNamespace.first_date] | Earliest date per subject from a second dataset. | `.first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")` |
+| [`.last_date()`][fleet.adam.ADSLNamespace.last_date] | Latest date per subject from a second dataset. | `.last_date("TRTEDT", from_dataset=ex, date_col="EXENDTC")` |
+| [`.duration()`][fleet.adam.ADSLNamespace.duration] | Number of elapsed days (start to end + 1). | `.duration("TRTDURD", start_date="TRTSDT", end_date="TRTEDT")` |
+| [`.eligibility_flag()`][fleet.adam.ADSLNamespace.eligibility_flag] | Single-row evaluation into a `"Y"` flag. | `.eligibility_flag("SAFFL", criteria='pl.col("EXDOSE") > 0')` |
+| [`.count_events()`][fleet.adam.ADSLNamespace.count_events] | Tally events for each subject. | `.count_events("NUMAE", from_dataset=ae)` |
+| [`.age_years()`][fleet.adam.ADSLNamespace.age_years] | Unit-aware age conversion (YEARS, MONTHS, WEEKS, DAYS). | `.age_years("AAGE", age_col="AGE", age_unit_col="AGEU")` |
+| [`.age_from_dates()`][fleet.adam.ADSLNamespace.age_from_dates] | Compute age between two dates. | `.age_from_dates("AGE", birth="BRTHDT", reference="RFSTDTC")` |
+| [`.derive_period()`][fleet.adam.ADSLNamespace.derive_period] | Create APxxSDT / APxxEDT / TRTxxP subperiod variables. | `.derive_period(periods=[{"number": 1, ...}])` |
 
-| Verb                                                   | Description                                              | Example                                                             |
-| ------------------------------------------------------ | -------------------------------------------------------- | ------------------------------------------------------------------- |
-| `.first_occ(target, date_col, groups)`                 | Flags the first chronological record per group.          | `.first_occ("AOCCFL", "ASTDT", ["USUBJID", "AEDECOD"])`             |
-| `.worst_severity(target, severity_col, order, groups)` | Flags worst event when multiple occur.                   | `.worst_severity("AOCCSFL", "AESEV", ["MILD","MODERATE","SEVERE"])` |
-| `.any_flag(target, col, value, groups)`                | Emits `"Y"` if _any_ record in the group meets criteria. | `.any_flag("ANYSEVERE", "AESEV", "SEVERE", ["USUBJID"])`            |
+## OCCDS namespace (`df.adam.occds`)
 
-## PK Namespace (`df.adam.pk`)
+| Verb | Description | Example |
+|------|-------------|---------|
+| [`.treatment_emergent()`][fleet.adam.OCCDSNamespace.treatment_emergent] | TRTEMFL flag for events within treatment window. | `.treatment_emergent("TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT")` |
+| [`.worst_flag()`][fleet.adam.OCCDSNamespace.worst_flag] | Worst-severity flag per subject × event term. | `.worst_flag("ANL01FL", severity_col="AESEV", severity_order=[...])` |
+| [`.onset_recovery()`][fleet.adam.OCCDSNamespace.onset_recovery] | Onset and recovery interval flags. | `.onset_recovery(...)` |
 
-| Verb                                                          | Description                                                                  | Example                                                         |
-| ------------------------------------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `.blq_flag(target, *, conc_col, lloq_col)`                    | Flag BLQ records: `"Y"` when `conc < LLOQ`, else null.                       | `.blq_flag("BLQFL", conc_col="PCSTRESN", lloq_col="PCLLOQ")`    |
-| `.blq_impute(target, *, conc_col, lloq_col, method)`          | Impute BLQ concentrations (`half_lloq`, `zero`, `lloq`, or `missing`).       | `.blq_impute("AVAL", conc_col="PCSTRESN", lloq_col="PCLLOQ")`   |
-| `.blqfn(target, *, conc_col, lloq_col)`                       | Numeric BLQ flag: `1` when BLQ, `0` otherwise.                               | `.blqfn("BLQFN", conc_col="PCSTRESN", lloq_col="PCLLOQ")`       |
-| `.nominal_time(target, *, from_col, input_unit, output_unit)` | Derive nominal elapsed time with unit conversion.                            | `.nominal_time("NTIME", from_col="PCTPTNUM")`                   |
-| `.actual_time(target, *, sample_dtm, dose_dtm, unit)`         | Derive actual elapsed time between two datetime columns.                     | `.actual_time("ATIME", sample_dtm="PCDTC", dose_dtm="EXSTDTC")` |
-| `.predose_flag(target, *, time_col, window_hrs)`              | Flag pre-dose samples within a window before dosing.                         | `.predose_flag("PREDFL", time_col="ATIME")`                     |
-| `.dose_normalized(target, *, conc_col, dose_col)`             | Dose-normalise concentration: `conc / dose`.                                 | `.dose_normalized("AVALDNM", conc_col="AVAL", dose_col="DOSE")` |
-| `.evid(target, *, from_col, dose_indicator, conc_indicator)`  | Derive `EVID` (event ID) for NONMEM-style datasets.                          | `.evid("EVID")`                                                 |
-| `.mrrlt(target, *, arrlt_col)`                                | Clip negative ARRLT to 0 for MRRLT (modified relative time).                 | `.mrrlt("MRRLT", arrlt_col="ARRLT")`                            |
-| `.log_conc(target, *, conc_col, base)`                        | Log-transform concentration (`"e"`, `"2"`, or `"10"`).                       | `.log_conc("DVL", conc_col="DV")`                               |
-| `.mdv(target, *, conc_col, evid_col)`                         | Derive `MDV` (Missing Dependent Variable) for PopPK datasets.                | `.mdv("MDV", conc_col="DV", evid_col="EVID")`                   |
-| `.amt(target, *, dose_col, evid_col)`                         | Derive `AMT`: dose amount on dosing records, null on observations.           | `.amt("AMT", dose_col="EXDOSE", evid_col="EVID")`               |
-| `.cmt(target, *, evid_col, dose_cmt, conc_cmt)`               | Derive `CMT` compartment number following NONMEM convention.                 | `.cmt("CMT", evid_col="EVID", dose_cmt=1, conc_cmt=2)`          |
-| `.avalcat(target, *, conc_col, lloq_col, blq_label, digits)`  | Listing-ready categorised analysis value (`AVALCAT1`).                       | `.avalcat("AVALCAT1", conc_col="PCSTRESC", lloq_col="PCLLOQ")`  |
-| `.anl_flag(target, *, exclude_dtype, dtype_col)`              | Derive analysis flag (`ANL01FL` for all records, `ANL02FL` excluding DTYPE). | `.anl_flag("ANL01FL")`                                          |
+## PK namespace (`df.adam.pk`)
+
+| Verb | Description | Example |
+|------|-------------|---------|
+| [`.blq_flag()`][fleet.adam.pk_namespace.PKNamespace.blq_flag] | Flag BLQ records: `"Y"` when `conc < LLOQ`. | `.blq_flag("BLQFL", conc_col="PCSTRESN", lloq_col="PCLLOQ")` |
+| [`.blq_impute()`][fleet.adam.pk_namespace.PKNamespace.blq_impute] | Impute BLQ concentrations (`half_lloq`, `zero`, `lloq`, `missing`). | `.blq_impute("AVAL", conc_col="PCSTRESN", lloq_col="PCLLOQ")` |
+| [`.blqfn()`][fleet.adam.pk_namespace.PKNamespace.blqfn] | Numeric BLQ flag: `1` when BLQ, `0` otherwise. | `.blqfn("BLQFN", conc_col="PCSTRESN", lloq_col="PCLLOQ")` |
+| [`.nominal_time()`][fleet.adam.pk_namespace.PKNamespace.nominal_time] | Nominal elapsed time with unit conversion. | `.nominal_time("NTIME", from_col="PCTPTNUM")` |
+| [`.actual_time()`][fleet.adam.pk_namespace.PKNamespace.actual_time] | Actual elapsed time between datetime columns. | `.actual_time("ATIME", sample_dtm="PCDTC", dose_dtm="EXSTDTC")` |
+| [`.predose_flag()`][fleet.adam.pk_namespace.PKNamespace.predose_flag] | Flag pre-dose samples within a window. | `.predose_flag("PREDFL", time_col="ATIME")` |
+| [`.dose_normalized()`][fleet.adam.pk_namespace.PKNamespace.dose_normalized] | Dose-normalise concentration: `conc / dose`. | `.dose_normalized("AVALDNM", conc_col="AVAL", dose_col="DOSE")` |
+| [`.evid()`][fleet.adam.pk_namespace.PKNamespace.evid] | Derive `EVID` for NONMEM-style datasets. | `.evid("EVID")` |
+| [`.mrrlt()`][fleet.adam.pk_namespace.PKNamespace.mrrlt] | Clip negative ARRLT to 0 for MRRLT. | `.mrrlt("MRRLT", arrlt_col="ARRLT")` |
+| [`.log_conc()`][fleet.adam.pk_namespace.PKNamespace.log_conc] | Log-transform concentration. | `.log_conc("DVL", conc_col="DV")` |
+| [`.mdv()`][fleet.adam.pk_namespace.PKNamespace.mdv] | Derive `MDV` for PopPK datasets. | `.mdv("MDV", conc_col="DV", evid_col="EVID")` |
+| [`.amt()`][fleet.adam.pk_namespace.PKNamespace.amt] | Derive `AMT`: dose amount on dosing records. | `.amt("AMT", dose_col="EXDOSE", evid_col="EVID")` |
+| [`.cmt()`][fleet.adam.pk_namespace.PKNamespace.cmt] | Derive `CMT` compartment number (NONMEM). | `.cmt("CMT", evid_col="EVID", dose_cmt=1, conc_cmt=2)` |
+| [`.avalcat()`][fleet.adam.pk_namespace.PKNamespace.avalcat] | Listing-ready categorised analysis value. | `.avalcat("AVALCAT1", conc_col="PCSTRESC", lloq_col="PCLLOQ")` |
+| [`.anl_flag()`][fleet.adam.pk_namespace.PKNamespace.anl_flag] | Analysis flag (`ANL01FL` / `ANL02FL`). | `.anl_flag("ANL01FL")` |
+
+## Trial Design (`df.sdtm.tdd`)
+
+| Verb | Description | Example |
+|------|-------------|---------|
+| [`.fetch_structure()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.fetch_structure] | Fetch TDD structure from CDISC Library. | `df.sdtm.tdd.fetch_structure(domain="TA")` |
+| [`.add_arms()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_arms] | Define study arms. | `.add_arms([...])` |
+| [`.add_elements()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_elements] | Define trial elements. | `.add_elements([...])` |
+| [`.add_visits()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_visits] | Define visits. | `.add_visits([...])` |
+| [`.add_criteria()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_criteria] | Define inclusion/exclusion criteria. | `.add_criteria([...])` |
+| [`.add_parameters()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_parameters] | Define trial summary parameters. | `.add_parameters([...])` |
+| [`.element_boundaries()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.element_boundaries] | Compute element start/end. | `.element_boundaries()` |
+| [`.epoch_assign()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.epoch_assign] | Assign epochs to events. | `.epoch_assign()` |
+| [`.visit_map()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.visit_map] | Map planned ↔ actual visits. | `.visit_map()` |
+| [`.study_day()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.study_day] | Derive study day from reference. | `.study_day(...)` |
+| [`.study_header()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.study_header] | Build the trial summary (TS) header. | `.study_header(...)` |
+
+---
+
+## How linking works
+
+Click any verb name in the tables above. Your browser navigates to the corresponding namespace API page and scrolls to the auto-generated heading anchor for that method — a heading rendered live from the Python docstring.
+
+This means:
+
+1. **Parameter accuracy** — the cheat sheet links never describe a parameter that doesn't exist in code.
+2. **Examples stay current** — code samples in docstrings are the same ones the test suite exercises.
+3. **Discoverability** — IDE hover, docs site, and `help()` in a REPL all read from the same docstring.
+
+If you find a verb missing from this cheat sheet, file an issue or add a row — the link target itself is generated automatically once the method exists in source.

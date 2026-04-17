@@ -68,7 +68,9 @@ class DefineXMLGenerator:
             attribs["SourceSystemVersion"] = hdr["source_system_version"]
 
         odm = etree.Element(_odm("ODM"), attrib=attribs, nsmap=_NSMAP)
-        odm.append(self._build_study(self.define_data["study"], self.define_data["metadata_version"]))
+        odm.append(
+            self._build_study(self.define_data["study"], self.define_data["metadata_version"])
+        )
         return odm
 
     def _build_study(self, study_data: dict[str, Any], metadata: dict[str, Any]) -> etree._Element:
@@ -146,9 +148,12 @@ class DefineXMLGenerator:
             "Domain": ig.get("domain", ig["name"]),
             _def("Structure"): ig["structure"],
         }
-        for k, a in [("purpose", "Purpose"), ("standard_oid", _def("StandardOID")),
-                     ("archive_location_id", _def("ArchiveLocationID")),
-                     ("comment_oid", _def("CommentOID"))]:
+        for k, a in [
+            ("purpose", "Purpose"),
+            ("standard_oid", _def("StandardOID")),
+            ("archive_location_id", _def("ArchiveLocationID")),
+            ("comment_oid", _def("CommentOID")),
+        ]:
             if ig.get(k):
                 attribs[a] = ig[k]
 
@@ -185,12 +190,17 @@ class DefineXMLGenerator:
 
     def _build_item_def(self, item: dict[str, Any]) -> etree._Element:
         attribs: dict[str, str] = {
-            "OID": item["oid"], "Name": item["name"], "DataType": item["data_type"],
+            "OID": item["oid"],
+            "Name": item["name"],
+            "DataType": item["data_type"],
         }
-        for k, a in [("length", "Length"), ("sas_field_name", "SASFieldName"),
-                     ("significant_digits", "SignificantDigits"),
-                     ("display_format", _def("DisplayFormat")),
-                     ("comment_oid", _def("CommentOID"))]:
+        for k, a in [
+            ("length", "Length"),
+            ("sas_field_name", "SASFieldName"),
+            ("significant_digits", "SignificantDigits"),
+            ("display_format", _def("DisplayFormat")),
+            ("comment_oid", _def("CommentOID")),
+        ]:
             if item.get(k) is not None:
                 attribs[a] = str(item[k])
 
@@ -209,8 +219,11 @@ class DefineXMLGenerator:
             orig_elem = etree.SubElement(elem, _def("Origin"), attrib=orig_attrs)
             if origin.get("description"):
                 d = etree.SubElement(orig_elem, _odm("Description"))
-                tt = etree.SubElement(d, _odm("TranslatedText"),
-                                      {"{http://www.w3.org/XML/1998/namespace}lang": origin.get("lang", "en")})
+                tt = etree.SubElement(
+                    d,
+                    _odm("TranslatedText"),
+                    {"{http://www.w3.org/XML/1998/namespace}lang": origin.get("lang", "en")},
+                )
                 tt.text = origin["description"]
             for doc_ref in origin.get("document_refs", []):
                 self._append_doc_ref(orig_elem, doc_ref)
@@ -222,7 +235,11 @@ class DefineXMLGenerator:
         return elem
 
     def _build_codelist(self, cl: dict[str, Any]) -> etree._Element:
-        attribs: dict[str, str] = {"OID": cl["oid"], "Name": cl["name"], "DataType": cl["data_type"]}
+        attribs: dict[str, str] = {
+            "OID": cl["oid"],
+            "Name": cl["name"],
+            "DataType": cl["data_type"],
+        }
         if cl.get("standard_oid"):
             attribs[_def("StandardOID")] = cl["standard_oid"]
         if cl.get("comment_oid"):
@@ -241,8 +258,11 @@ class DefineXMLGenerator:
             decode = item.get("decode", {})
             if decode and decode.get("text"):
                 d = etree.SubElement(item_elem, _odm("Decode"))
-                tt = etree.SubElement(d, _odm("TranslatedText"),
-                                      {"{http://www.w3.org/XML/1998/namespace}lang": decode.get("lang", "en")})
+                tt = etree.SubElement(
+                    d,
+                    _odm("TranslatedText"),
+                    {"{http://www.w3.org/XML/1998/namespace}lang": decode.get("lang", "en")},
+                )
                 tt.text = decode["text"]
             alias = item.get("alias", {})
             if alias and alias.get("name"):
@@ -266,13 +286,19 @@ class DefineXMLGenerator:
         return elem
 
     def _build_method_def(self, method: dict[str, Any]) -> etree._Element:
-        attribs: dict[str, str] = {"OID": method["oid"], "Name": method["name"], "Type": method["type"]}
+        attribs: dict[str, str] = {
+            "OID": method["oid"],
+            "Name": method["name"],
+            "Type": method["type"],
+        }
         if method.get("comment_oid"):
             attribs[_def("CommentOID")] = method["comment_oid"]
         elem = etree.Element(_odm("MethodDef"), attrib=attribs)
         self._append_description(elem, method.get("description", {}))
         for expr in method.get("formal_expressions", []):
-            expr_elem = etree.SubElement(elem, _odm("FormalExpression"), {"Context": expr["context"]})
+            expr_elem = etree.SubElement(
+                elem, _odm("FormalExpression"), {"Context": expr["context"]}
+            )
             expr_elem.text = expr["expression"]
         for doc_ref in method.get("document_refs", []):
             self._append_doc_ref(elem, doc_ref)
@@ -303,8 +329,11 @@ class DefineXMLGenerator:
     def _append_description(parent: etree._Element, desc: dict[str, Any]) -> None:
         if desc and desc.get("text"):
             d = etree.SubElement(parent, _odm("Description"))
-            tt = etree.SubElement(d, _odm("TranslatedText"),
-                                  {"{http://www.w3.org/XML/1998/namespace}lang": desc.get("lang", "en")})
+            tt = etree.SubElement(
+                d,
+                _odm("TranslatedText"),
+                {"{http://www.w3.org/XML/1998/namespace}lang": desc.get("lang", "en")},
+            )
             tt.text = desc["text"]
 
     @staticmethod
@@ -323,7 +352,10 @@ class DefineXMLGenerator:
     def _serialize(root: etree._Element) -> bytes:
         """Serialize the element tree to pretty-printed UTF-8 XML bytes."""
         xml_bytes = etree.tostring(
-            root, pretty_print=True, xml_declaration=True, encoding="utf-8",
+            root,
+            pretty_print=True,
+            xml_declaration=True,
+            encoding="utf-8",
         )
         # Insert XSL processing instruction after the XML declaration
         decl_end = xml_bytes.index(b"?>") + 2

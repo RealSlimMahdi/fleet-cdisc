@@ -15,7 +15,7 @@ from typing import Any, Literal
 
 import polars as pl
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from fleet.core.exceptions import SchemaError
 
@@ -36,21 +36,46 @@ class Statistic(str, Enum):  # noqa: UP042
 
 
 class Row(BaseModel):
-    """A row-level field mapping for a summary table."""
+    """A row-level field mapping for a summary table.
 
-    field: str
-    label: str | None = None
-    filter_value: str | None = None
+    Used as an entry in :attr:`TLGSpec.rows` (set inline via
+    [`TLGBuilder.rows()`][fleet.tlg.TLGBuilder.rows]).
+    """
+
+    field: str = Field(
+        ...,
+        description="Source column name in the analysis dataset (e.g. ``AEBODSYS``).",
+    )
+    label: str | None = Field(
+        default=None,
+        description="Display label for this row group.  Defaults to *field*.",
+    )
+    filter_value: str | None = Field(
+        default=None,
+        description="Optional value used to subset the row to a single category.",
+    )
 
     model_config = {"extra": "forbid"}
 
 
 class Column(BaseModel):
-    """A column specification for a listing."""
+    """A column specification for a listing.
 
-    field: str
-    label: str | None = None
-    format: str | None = None
+    Used as an entry in :attr:`AEListingSpec.columns`.
+    """
+
+    field: str = Field(
+        ...,
+        description="Source column name in the analysis dataset (e.g. ``USUBJID``).",
+    )
+    label: str | None = Field(
+        default=None,
+        description="Display label for this column.  Defaults to *field*.",
+    )
+    format: str | None = Field(
+        default=None,
+        description="Optional Polars/Python format string applied at render time.",
+    )
 
     model_config = {"extra": "forbid"}
 
@@ -58,13 +83,20 @@ class Column(BaseModel):
 class GroupPool(BaseModel):
     """A composite treatment group (pooled arms).
 
-    Attributes:
-        label: Display label for the pooled group.
-        arms: List of arm labels to combine, or ``"*"`` for all arms.
+    Used as an entry in :attr:`TLGSpec.pools` (set inline via
+    [`TLGBuilder.pools()`][fleet.tlg.TLGBuilder.pools]).
     """
 
-    label: str
-    arms: list[str] | Literal["*"]
+    label: str = Field(
+        ...,
+        description='Display label for the pooled treatment column (e.g. ``"Total"``).',
+    )
+    arms: list[str] | Literal["*"] = Field(
+        ...,
+        description=(
+            'List of arm labels to combine, or ``"*"`` to pool every arm present in the data.'
+        ),
+    )
 
     model_config = {"extra": "forbid"}
 
@@ -73,19 +105,29 @@ class OverallStat(BaseModel):
     """A whole-dataset aggregate row for summary header sections.
 
     Each ``OverallStat`` emits a flat ARD row with ``variable=""`` and
-    ``variable_level=label``, rendered as a header row above the hierarchy.
-
-    Attributes:
-        label: Display text for the header row (→ ``variable_level``).
-        filter: Optional Polars expression to subset the dataset before
-            counting.  ``None`` means count all subjects.
-        statistics: Per-row stat override.  ``None`` inherits from the
-            parent spec's ``statistics`` list.
+    ``variable_level=label``, rendered as a header row above the
+    hierarchy.  Used as an entry in :attr:`TLGSpec.header_rows` (set
+    inline via
+    [`TLGBuilder.header_rows()`][fleet.tlg.TLGBuilder.header_rows]).
     """
 
-    label: str
-    filter: Any | None = None
-    statistics: list[Statistic] | None = None
+    label: str = Field(
+        ...,
+        description="Display text for the header row (\u2192 ``variable_level``).",
+    )
+    filter: Any | None = Field(
+        default=None,
+        description=(
+            "Optional Polars expression to subset the dataset before "
+            "counting.  ``None`` means count all subjects."
+        ),
+    )
+    statistics: list[Statistic] | None = Field(
+        default=None,
+        description=(
+            "Per-row stat override.  ``None`` inherits from the parent spec's ``statistics`` list."
+        ),
+    )
 
     model_config = {"extra": "forbid", "arbitrary_types_allowed": True}
 
@@ -93,15 +135,55 @@ class OverallStat(BaseModel):
 class TLGSpec(BaseModel):
     """Base specification for all TLG outputs.
 
-    Subclasses define output-type-specific defaults and required columns.
+    Subclasses define output-type-specific defaults and required
+    columns.  Every field below is also settable inline through the
+    fluent [`TLGBuilder`][fleet.tlg.TLGBuilder] — the cross-references
+    in each field's description point to the matching builder method.
     """
 
-    output_type: str = "base"
-    adsl_filter: Any | None = None
-    dataset_filter: Any | None = None
-    header_rows: list[OverallStat] = []
-    required_columns: list[str] = []
-    required_flags: dict[str, list[str]] = {}
+    output_type: str = Field(
+        default="base",
+        description=(
+            "Discriminator distinguishing summary vs listing layouts. "
+            "Subclasses override this default."
+        ),
+    )
+    adsl_filter: Any | None = Field(
+        default=None,
+        description=(
+            "Polars expression filtering ADSL before subject counting. "
+            "Set inline via "
+            "[`TLGBuilder.population()`][fleet.tlg.TLGBuilder.population]."
+        ),
+    )
+    dataset_filter: Any | None = Field(
+        default=None,
+        description=(
+            "Polars expression filtering the analysis dataset (e.g. ADAE).  "
+            "Set inline via [`TLGBuilder.filter()`][fleet.tlg.TLGBuilder.filter]."
+        ),
+    )
+    header_rows: list[OverallStat] = Field(
+        default_factory=list,
+        description=(
+            "Whole-dataset aggregate rows rendered above the hierarchy.  "
+            "Set inline via "
+            "[`TLGBuilder.header_rows()`][fleet.tlg.TLGBuilder.header_rows]."
+        ),
+    )
+    required_columns: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Columns that must be present in the dataset; checked by :meth:`validate_dataframe`."
+        ),
+    )
+    required_flags: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description=(
+            "Per-column lists of values that must be present in the data "
+            "(content validation).  Empty by default."
+        ),
+    )
 
     model_config = {"extra": "forbid", "arbitrary_types_allowed": True}
 
@@ -203,59 +285,144 @@ class TLGSpec(BaseModel):
 class AESummarySpec(TLGSpec):
     """Spec for an AE summary table (t_ae_summary).
 
-    Defaults provide zero-config convenience for a standard SOC→PT table.
+    Defaults provide zero-config convenience for a standard SOC→PT
+    table.  Every field is also settable inline through
+    [`TLGBuilder`][fleet.tlg.TLGBuilder].
     """
 
     output_type: str = "summary"
-    rows: list[Row] = [
-        Row(field="AEBODSYS", label="System Organ Class"),
-        Row(field="AEDECOD", label="Preferred Term"),
-    ]
-    columns: list[str] = ["TRTA"]
-    statistics: list[Statistic] = [Statistic.N_SUBJECTS, Statistic.N_PCT]
-    pools: list[GroupPool] = []
-    column_order: list[str] = []
-    denominator: str = "TRTA"
-    required_columns: list[str] = ["USUBJID", "TRTA", "AEDECOD", "AEBODSYS"]
+    rows: list[Row] = Field(
+        default_factory=lambda: [
+            Row(field="AEBODSYS", label="System Organ Class"),
+            Row(field="AEDECOD", label="Preferred Term"),
+        ],
+        description=(
+            "Hierarchy of row groupings.  Set inline via "
+            "[`TLGBuilder.rows()`][fleet.tlg.TLGBuilder.rows]."
+        ),
+    )
+    columns: list[str] = Field(
+        default_factory=lambda: ["TRTA"],
+        description=(
+            "Column-grouping variables (typically a treatment column).  "
+            "Set inline via [`TLGBuilder.by()`][fleet.tlg.TLGBuilder.by]."
+        ),
+    )
+    statistics: list[Statistic] = Field(
+        default_factory=lambda: [Statistic.N_SUBJECTS, Statistic.N_PCT],
+        description=(
+            "Statistics computed for each row.  Set inline via "
+            "[`TLGBuilder.stats()`][fleet.tlg.TLGBuilder.stats]."
+        ),
+    )
+    pools: list[GroupPool] = Field(
+        default_factory=list,
+        description=(
+            "Composite (pooled) treatment groups.  Set inline via "
+            "[`TLGBuilder.pools()`][fleet.tlg.TLGBuilder.pools]."
+        ),
+    )
+    column_order: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Explicit ordering of column labels in the rendered output.  "
+            "Set inline via "
+            "[`TLGBuilder.column_order()`][fleet.tlg.TLGBuilder.column_order]."
+        ),
+    )
+    denominator: str = Field(
+        default="TRTA",
+        description="Column used as the denominator when computing percentages.",
+    )
+    required_columns: list[str] = Field(
+        default_factory=lambda: ["USUBJID", "TRTA", "AEDECOD", "AEBODSYS"],
+        description="Columns required in the analysis dataset for this spec.",
+    )
 
 
 class AEListingSpec(TLGSpec):
     """Spec for an AE listing (l_ae_listing)."""
 
     output_type: str = "listing"
-    columns: list[Column] = [
-        Column(field="USUBJID", label="Subject"),
-        Column(field="TRTA", label="Treatment"),
-        Column(field="AEBODSYS", label="SOC"),
-        Column(field="AEDECOD", label="Preferred Term"),
-        Column(field="AESEV", label="Severity"),
-        Column(field="AESER", label="Serious"),
-    ]
-    sort_by: list[str] = ["USUBJID", "AEBODSYS", "AEDECOD"]
-    required_columns: list[str] = ["USUBJID", "TRTA", "AEDECOD"]
+    columns: list[Column] = Field(
+        default_factory=lambda: [
+            Column(field="USUBJID", label="Subject"),
+            Column(field="TRTA", label="Treatment"),
+            Column(field="AEBODSYS", label="SOC"),
+            Column(field="AEDECOD", label="Preferred Term"),
+            Column(field="AESEV", label="Severity"),
+            Column(field="AESER", label="Serious"),
+        ],
+        description="Ordered list of columns to include in the listing.",
+    )
+    sort_by: list[str] = Field(
+        default_factory=lambda: ["USUBJID", "AEBODSYS", "AEDECOD"],
+        description="Sort order applied before rendering.",
+    )
+    required_columns: list[str] = Field(
+        default_factory=lambda: ["USUBJID", "TRTA", "AEDECOD"],
+        description="Columns required in the analysis dataset for this spec.",
+    )
 
 
 class VSSummarySpec(TLGSpec):
     """Spec for a vital-signs summary table."""
 
     output_type: str = "summary"
-    rows: list[Row] = [
-        Row(field="PARAMCD", label="Parameter"),
-    ]
-    columns: list[str] = ["TRTA"]
-    statistics: list[Statistic] = [
-        Statistic.N_SUBJECTS,
-        Statistic.MEAN,
-        Statistic.SD,
-        Statistic.MEDIAN,
-        Statistic.MIN,
-        Statistic.MAX,
-    ]
-    pools: list[GroupPool] = []
-    column_order: list[str] = []
-    denominator: str = "TRTA"
-    required_columns: list[str] = ["USUBJID", "TRTA", "PARAMCD", "AVAL"]
-    required_flags: dict[str, list[str]] = {}
+    rows: list[Row] = Field(
+        default_factory=lambda: [Row(field="PARAMCD", label="Parameter")],
+        description=(
+            "Hierarchy of row groupings.  Set inline via "
+            "[`TLGBuilder.rows()`][fleet.tlg.TLGBuilder.rows]."
+        ),
+    )
+    columns: list[str] = Field(
+        default_factory=lambda: ["TRTA"],
+        description=(
+            "Column-grouping variables.  Set inline via "
+            "[`TLGBuilder.by()`][fleet.tlg.TLGBuilder.by]."
+        ),
+    )
+    statistics: list[Statistic] = Field(
+        default_factory=lambda: [
+            Statistic.N_SUBJECTS,
+            Statistic.MEAN,
+            Statistic.SD,
+            Statistic.MEDIAN,
+            Statistic.MIN,
+            Statistic.MAX,
+        ],
+        description=(
+            "Statistics computed per row.  Set inline via "
+            "[`TLGBuilder.stats()`][fleet.tlg.TLGBuilder.stats]."
+        ),
+    )
+    pools: list[GroupPool] = Field(
+        default_factory=list,
+        description=(
+            "Composite (pooled) treatment groups.  Set inline via "
+            "[`TLGBuilder.pools()`][fleet.tlg.TLGBuilder.pools]."
+        ),
+    )
+    column_order: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Explicit ordering of column labels.  Set inline via "
+            "[`TLGBuilder.column_order()`][fleet.tlg.TLGBuilder.column_order]."
+        ),
+    )
+    denominator: str = Field(
+        default="TRTA",
+        description="Column used as the denominator when computing percentages.",
+    )
+    required_columns: list[str] = Field(
+        default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVAL"],
+        description="Columns required in the analysis dataset for this spec.",
+    )
+    required_flags: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="Per-column lists of required values (content validation).",
+    )
 
 
 def _enum_to_value(obj: Any) -> Any:

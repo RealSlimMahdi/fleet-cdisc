@@ -103,6 +103,18 @@ filters: ["!^*"]
 
 ## Spec models
 
+!!! tip "Inline builder ↔ YAML spec — same surface, two front doors"
+Every field on the spec models below is also settable via the fluent
+[`TLGBuilder`][fleet.tlg.TLGBuilder]. The cross-references in each
+field's description (e.g. _Set inline via [`TLGBuilder.rows()`]…_)
+link straight to the matching builder method, so reviewers can
+move freely between the YAML and Python views without grepping.
+
+    The descriptions are sourced from `pydantic.Field(description=...)`
+    in [`src/fleet/tlg/_specs.py`](https://github.com/RealSlimMahdi/fleet-cdisc/blob/main/src/fleet/tlg/_specs.py),
+    so docs, IDE tooltips, and JSON-schema exports stay in sync
+    automatically.
+
 ### TLGSpec (base)
 
 ::: fleet.tlg.TLGSpec

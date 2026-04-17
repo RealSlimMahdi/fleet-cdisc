@@ -15,7 +15,15 @@ class Severity(Enum):
 
 @dataclass
 class ValidationIssue:
-    """A single validation issue."""
+    """A single validation issue.
+
+    The optional ``producing_verb`` / ``verb_method`` / ``spec_ref`` fields
+    are populated by :func:`fleet.validation.lineage_join.enrich_with_lineage`
+    when variable-level lineage (see :class:`fleet.core.dag.VariableNode`)
+    is available.  They turn a bare "variable failed rule" message into a
+    direct cross-link back to the exact Python verb that produced the
+    column.
+    """
 
     severity: Severity
     rule_id: str
@@ -23,6 +31,9 @@ class ValidationIssue:
     variable: str | None = None
     rows_affected: int | None = None
     suggested_fix: str | None = None
+    producing_verb: str | None = None
+    verb_method: str | None = None
+    spec_ref: str | None = None
 
     def __str__(self) -> str:
         parts = [f"[{self.severity.value}] {self.rule_id}: {self.message}"]
@@ -30,6 +41,10 @@ class ValidationIssue:
             parts.append(f"Variable: {self.variable}")
         if self.rows_affected:
             parts.append(f"Rows: {self.rows_affected}")
+        if self.producing_verb:
+            parts.append(f"Producing verb: {self.producing_verb} ({self.verb_method})")
+        if self.spec_ref:
+            parts.append(f"Spec reference: {self.spec_ref}")
         if self.suggested_fix:
             parts.append(f"Suggested fix: {self.suggested_fix}")
         return "\n   ".join(parts)
@@ -105,6 +120,21 @@ class ValidationResult:
                     extra += f"<div class='issue-detail'><strong>Variable:</strong> {issue.variable}</div>\n"
                 if issue.rows_affected:
                     extra += f"<div class='issue-detail'><strong>Rows Affected:</strong> {issue.rows_affected}</div>\n"
+                if issue.producing_verb:
+                    verb_html = (
+                        f"<a href='#{issue.verb_method}' class='verb-link'>"
+                        f"{issue.producing_verb}</a>"
+                        if issue.verb_method
+                        else issue.producing_verb
+                    )
+                    extra += (
+                        f"<div class='issue-detail'><strong>Producing verb:</strong> "
+                        f"{verb_html}"
+                        f"{(' &middot; ' + issue.verb_method) if issue.verb_method else ''}"
+                        f"</div>\n"
+                    )
+                if issue.spec_ref:
+                    extra += f"<div class='issue-detail'><strong>Spec reference:</strong> {issue.spec_ref}</div>\n"
                 if issue.suggested_fix:
                     extra += f"<div class='suggested-fix'><strong>Suggested Fix:</strong> {issue.suggested_fix}</div>\n"
                 cards.append(

@@ -53,8 +53,11 @@ class SDTMNamespace(TrialDesignMixin):
     # ------------------------------------------------------------------ #
 
     def _chain(self, *exprs: pl.Expr) -> SDTMNamespace:
+        from fleet.core.lineage import record_lineage
+
         new = copy.copy(self)
         new._lazy = self._lazy.with_columns(list(exprs))
+        record_lineage(new, exprs)
         return new
 
     def _materialise_then(self, df: pl.DataFrame) -> SDTMNamespace:

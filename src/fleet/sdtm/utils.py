@@ -189,5 +189,3 @@ def parse_expression(expr_str: str) -> pl.Expr:
         return result
     except Exception as exc:
         raise ValueError(f"Cannot parse expression {expr_str!r}: {exc}") from exc
-
-

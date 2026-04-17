@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 class SDTMAlgorithm(str, Enum):
     """Derivation verbs for SDTM variable mappings."""
+
     ASSIGN_NO_CT = "assign_no_ct"
     ASSIGN_CT = "assign_ct"
     ASSIGN_DTC = "assign_dtc"
@@ -26,6 +27,7 @@ class SDTMAlgorithm(str, Enum):
 
 class SDTMVariableSpec(BaseModel):
     """Specification for a single SDTM variable derivation."""
+
     target: str
     algorithm: SDTMAlgorithm
 
@@ -68,7 +70,7 @@ class SDTMVariableSpec(BaseModel):
     delimiter: Optional[str] = None
 
     # assign_dtc
-    input_format: Optional[str] = None   # e.g. "%Y-%m-%d"
+    input_format: Optional[str] = None  # e.g. "%Y-%m-%d"
     output_format: Optional[str] = None  # e.g. "ISO8601"
 
     model_config = {"extra": "allow"}
@@ -76,6 +78,7 @@ class SDTMVariableSpec(BaseModel):
 
 class SDTMDomainSpec(BaseModel):
     """Full specification for an SDTM domain derivation."""
+
     domain: str
     description: Optional[str] = None
     variables: list[SDTMVariableSpec]

@@ -39,10 +39,10 @@ from fleet.adam._mixins import SharedADaMVerbsMixin
 # Centiloid calibration table (tracer + pipeline + ref_region → slope, intercept)
 # Source: Navitsky et al. (2018), Sims et al. (2024), Royse et al. (2021)
 _CENTILOID_CALIBRATIONS: dict[tuple[str, str, str], tuple[float, float]] = {
-    ("18F-Florbetapir",  "AVID FBP SUVR PIPELINE",     "Whole Cerebellum"): (183.07, -177.26),
-    ("18F-Florbetaben",  "AVID FBB SUVR PIPELINE",     "Whole Cerebellum"): (156.06, -148.13),
-    ("18F-Florbetapir",  "BERKELEY FBP SUVR PIPELINE",  "Whole Cerebellum"): (188.22, -189.16),
-    ("18F-Florbetaben",  "BERKELEY FBB SUVR PIPELINE",  "Whole Cerebellum"): (157.15, -151.87),
+    ("18F-Florbetapir", "AVID FBP SUVR PIPELINE", "Whole Cerebellum"): (183.07, -177.26),
+    ("18F-Florbetaben", "AVID FBB SUVR PIPELINE", "Whole Cerebellum"): (156.06, -148.13),
+    ("18F-Florbetapir", "BERKELEY FBP SUVR PIPELINE", "Whole Cerebellum"): (188.22, -189.16),
+    ("18F-Florbetaben", "BERKELEY FBB SUVR PIPELINE", "Whole Cerebellum"): (157.15, -151.87),
 }
 
 
@@ -110,9 +110,7 @@ class NeuroNamespace(SharedADaMVerbsMixin):
                 )
             s, i = _CENTILOID_CALIBRATIONS[key]
         else:
-            raise ValueError(
-                "Provide either (slope, intercept) or (tracer, pipeline)."
-            )
+            raise ValueError("Provide either (slope, intercept) or (tracer, pipeline).")
 
         expr = pl.lit(s) * pl.col(suvr_col) + pl.lit(i)
         if round_digits is not None:
@@ -151,10 +149,14 @@ class NeuroNamespace(SharedADaMVerbsMixin):
         """
         score = pl.col(score_col)
         return self._chain(
-            pl.when(score >= 27).then(pl.lit("Normal"))
-            .when(score >= 18).then(pl.lit("Mild"))
-            .when(score >= 10).then(pl.lit("Moderate"))
-            .when(score >= 0).then(pl.lit("Severe"))
+            pl.when(score >= 27)
+            .then(pl.lit("Normal"))
+            .when(score >= 18)
+            .then(pl.lit("Mild"))
+            .when(score >= 10)
+            .then(pl.lit("Moderate"))
+            .when(score >= 0)
+            .then(pl.lit("Severe"))
             .otherwise(pl.lit(None))
             .alias(target)
         )
@@ -235,9 +237,12 @@ class NeuroNamespace(SharedADaMVerbsMixin):
         """
         score = pl.col(score_col)
         return self._chain(
-            pl.when(score >= normal_threshold).then(pl.lit("Normal"))
-            .when(score >= mci_threshold).then(pl.lit("MCI"))
-            .when(score >= 0).then(pl.lit("Impaired"))
+            pl.when(score >= normal_threshold)
+            .then(pl.lit("Normal"))
+            .when(score >= mci_threshold)
+            .then(pl.lit("MCI"))
+            .when(score >= 0)
+            .then(pl.lit("Impaired"))
             .otherwise(pl.lit(None))
             .alias(target)
         )
@@ -277,7 +282,5 @@ class NeuroNamespace(SharedADaMVerbsMixin):
                 )
         """
         return self._chain(
-            (pl.col(positive_col) + pl.col(negative_col) + pl.col(general_col))
-            .alias(target)
+            (pl.col(positive_col) + pl.col(negative_col) + pl.col(general_col)).alias(target)
         )
-

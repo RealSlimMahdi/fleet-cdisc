@@ -69,16 +69,14 @@ def register_transform(
 ) -> Callable[
     [Callable[[pl.DataFrame], pl.DataFrame]],
     Callable[[pl.DataFrame], pl.DataFrame],
-]:
-    ...
+]: ...
 
 
 @overload
 def register_transform(
     name: str,
     fn: Callable[[pl.DataFrame], pl.DataFrame],
-) -> Callable[[pl.DataFrame], pl.DataFrame]:
-    ...
+) -> Callable[[pl.DataFrame], pl.DataFrame]: ...
 
 
 def register_transform(name, fn=None):

@@ -158,16 +158,9 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
                 )
         """
         sex_num = (
-            pl.when(pl.col(sex_col) == sex_male_value)
-            .then(pl.lit(1.0))
-            .otherwise(pl.lit(0.0))
+            pl.when(pl.col(sex_col) == sex_male_value).then(pl.lit(1.0)).otherwise(pl.lit(0.0))
         )
-        expr = (
-            1.2 * pl.col(bmi_col)
-            + 0.23 * pl.col(age_col)
-            - 10.8 * sex_num
-            - 5.4
-        )
+        expr = 1.2 * pl.col(bmi_col) + 0.23 * pl.col(age_col) - 10.8 * sex_num - 5.4
         if round_digits is not None:
             expr = expr.round(round_digits)
         return self._chain(expr.alias(target))
@@ -217,11 +210,9 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
         waist = pl.col(waist_col)
         return self._chain(
             pl.when(
-                (is_male & (waist >= male_threshold))
-                | (~is_male & (waist >= female_threshold))
+                (is_male & (waist >= male_threshold)) | (~is_male & (waist >= female_threshold))
             )
             .then(pl.lit(flag_value))
             .otherwise(pl.lit(None))
             .alias(target)
         )
-

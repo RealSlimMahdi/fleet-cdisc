@@ -994,8 +994,11 @@ for checker, df, ds in [
     checker.check(df, dataset=ds).print_report()
 
 # ── 10. Generate Define-XML 2.1 ───────────────────────────────────────────────
-DefineSpecGenerator(SDTM_SPEC).generate(OUT / "define_sdtm.xml")
-DefineSpecGenerator(ADAM_SPEC).generate(OUT / "define_adam.xml")
+# enrich_methods=True embeds Fleet verb docstrings into the Origin/MethodDef
+# elements so reviewers see the exact computational method (single source of
+# truth: docstring -> Define-XML).
+DefineSpecGenerator(SDTM_SPEC, enrich_methods=True).generate(OUT / "define_sdtm.xml")
+DefineSpecGenerator(ADAM_SPEC, enrich_methods=True).generate(OUT / "define_adam.xml")
 print(f"\nDefine-XML written to {OUT}/")
 print("  Serve with: python -m http.server 8080 --directory outputs/cdiscpilot01")
 
@@ -1363,22 +1366,22 @@ if __name__ == "__main__":
 
 ## SDTM verbs
 
-- `assign_no_ct(target, *, source)` — copy raw column, no CT validation
-- `hardcode_no_ct(target, *, value)` — constant literal for all rows
-- `hardcode_ct(target, *, value, ct_codelist=None)` — constant literal, CT-validated
-- `assign_ct(target, *, source, ct_codelist, ct_mapping=None)` — recode through CT codelist; accepts a generated codelist class (e.g. `SEX`) or a raw NCI concept ID string (e.g. `"C66731"`); `ct_mapping` is optional when raw data already matches CDISC submission values
-- `assign_dtc(target, *, source, mode="date", input_format=None)` — normalise to ISO 8601 date/datetime; preserves partial dates
-- `derivation(target, *, expression)` — arbitrary Polars expression
-- `condition_add(target, *, condition, then_value)` — `IF condition THEN value ELSE NULL`
-- `if_then_else(target, *, when, else_value=None)` — multi-branch conditional
-- `ae_aerel(target, *, source, aerel_map=None)` — standard AE relatedness mapping
-- `merge(target_cols=None, *, dataset, on, how="left")` — join another DataFrame
-- `remove_dup(*, subset=None, keep="first")` — deduplicate rows
-- `group_by(*, group_cols, agg)` — group-and-aggregate
-- `dataset_level(target, *, value)` — alias for `hardcode_no_ct`; marks dataset-level constants
-- `notsubmitted(*targets)` — set one or more columns to null (not for submission)
-- `multiple_responses(target, *, source, delimiter="|", id_cols=None)` — expand pipe-delimited fields
-- `to_frame()` — materialise
+- `assign_no_ct(target: str, *, source: str) -> SDTMNamespace` — Copy *source* column to *target* with no controlled-terminology validation.
+- `hardcode_no_ct(target: str, *, value: Any) -> SDTMNamespace` — Set *target* to a literal *value* for every row, with no CT validation.
+- `hardcode_ct(target: str, *, value: Any, ct_codelist: str | type | None = None) -> SDTMNamespace` — Set *target* to a constant *value*, validated against controlled terminology.
+- `assign_ct(target: str, *, source: str, ct_codelist: str | type, ct_mapping: dict[str, str] | None = None, ct_validator: CTValidator | None = None) -> SDTMNamespace` — Copy *source* to *target*, translating values via controlled terminology.
+- `assign_dtc(target: str, *, source: str, mode: str = 'date', input_format: str | None = None) -> SDTMNamespace` — Parse *source* date string and format as ISO 8601.
+- `derivation(target: str, *, expression: str | pl.Expr) -> SDTMNamespace` — Derive *target* using a Polars expression or expression string.
+- `condition_add(target: str, *, condition: str | pl.Expr, then_value: Any) -> SDTMNamespace` — Set *target* to *then_value* where *condition* is true, else null.
+- `if_then_else(target: str, *, when: list[dict[str, Any]], else_value: Any = None) -> SDTMNamespace` — Multi-branch conditional mapping.
+- `ae_aerel(target: str = 'AEREL', *, source: str = 'ae_relationship', aerel_map: dict[str, str] | None = None) -> SDTMNamespace` — Map free-text AE causality strings to controlled ``AEREL`` values.
+- `merge(target_cols: list[str] | None = None, *, dataset: pl.DataFrame, on: str | list[str], how: str = 'left') -> SDTMNamespace` — Join *dataset* into the pipeline using key column(s) *on*.
+- `remove_dup(*, subset: list[str] | None = None, keep: str = 'first') -> SDTMNamespace` — Remove duplicate rows, optionally on a *subset* of columns.
+- `group_by(*, group_cols: list[str], agg: list[pl.Expr]) -> SDTMNamespace` — Group by *group_cols* and apply *agg* aggregations.
+- `dataset_level(target: str, *, value: Any) -> SDTMNamespace` — Set a dataset-level constant on *target* (alias for ``hardcode_no_ct``).
+- `notsubmitted(*targets: str) -> SDTMNamespace` — Mark one or more variables as not submitted (set to null).
+- `multiple_responses(target: str, *, source: str, delimiter: str = '|', id_cols: list[str] | None = None) -> SDTMNamespace` — Explode a delimited multi-response field into separate rows.
+- `to_frame() -> pl.DataFrame` — Materialise the accumulated pipeline into a Polars DataFrame.
 
 ## Trial Design Domain (TDD) verbs
 
@@ -1386,20 +1389,20 @@ Fleet supports all 7 CDISC Trial Design Model domains through `df.sdtm`. Protoco
 
 ### Protocol-reference verbs
 
-- `fetch_structure(domain, *, ig_version="3-4", save_to=None)` — query CDISC Library for domain IG structure; caches YAML; performs schema reconciliation against static Pydantic models
-- `study_header(study_id, domain)` — hardcode STUDYID + DOMAIN columns
-- `add_elements(elements: TrialElements)` — materialise validated TE rows
-- `add_arms(arms: TrialArms, *, te=None)` — materialise TA rows; opt-in FK validation (ETCD ∈ TE.ETCD) when `te=` is provided
-- `add_visits(visits: TrialVisits)` — materialise TV rows
-- `add_parameters(params: TrialParameters)` — materialise TS rows
-- `add_criteria(criteria: TrialCriteria)` — materialise TI rows
+- `fetch_structure(domain: str, *, ig_version: str = '3-4', save_to: str | Path | None = None) -> Self` — Query the CDISC Library for *domain*'s IG structure.
+- `study_header(study_id: str, domain: str) -> Self` — Hardcode ``STUDYID`` and ``DOMAIN`` columns.
+- `add_elements(elements: TrialElements) -> Self` — Materialise a validated ``TrialElements`` collection into the pipeline.
+- `add_arms(arms: TrialArms, *, te: TrialElements | None = None) -> Self` — Materialise a validated ``TrialArms`` collection into the pipeline.
+- `add_visits(visits: TrialVisits) -> Self` — Materialise a validated ``TrialVisits`` collection into the pipeline.
+- `add_parameters(params: TrialParameters) -> Self` — Materialise a validated ``TrialParameters`` collection into the pipeline.
+- `add_criteria(criteria: TrialCriteria) -> Self` — Materialise a validated ``TrialCriteria`` collection into the pipeline.
 
 ### Subject-level verbs
 
-- `visit_map(target_num, target_name, *, date_col, planned_visits, ref_date=None, tolerance=None)` — map raw visit dates to planned visits from TV
-- `element_boundaries(target_start, target_end, *, milestones, element_col, subject_col)` — derive element start/end dates from milestone columns
-- `epoch_assign(target, *, date_col, epoch_ranges)` — assign EPOCH based on date ranges
-- `study_day(target, *, date_col, ref_date_col)` — CDISC study day (no day 0)
+- `visit_map(target_num: str, target_name: str, *, date_col: str, planned_visits: TrialVisits | pl.DataFrame, ref_date: str | None = None, tolerance: dict[str, int] | None = None) -> Self` — Map raw visit dates to planned visits from TV.
+- `element_boundaries(target_start: str, target_end: str, *, milestones: dict[str, str], element_col: str = 'ETCD', subject_col: str = 'USUBJID') -> Self` — Derive element start/end dates from milestone columns.
+- `epoch_assign(target: str, *, date_col: str, epoch_ranges: list[dict[str, str]] | pl.DataFrame) -> Self` — Assign ``EPOCH`` based on date ranges.
+- `study_day(target: str, *, date_col: str, ref_date_col: str) -> Self` — Compute CDISC study day (no day 0).
 
 ### Pydantic models
 
@@ -1417,66 +1420,58 @@ Row models: `TrialElement`, `TrialArm`, `TrialVisit`, `TrialParameter`, `TrialCr
 
 These verbs are defined once in `SharedADaMVerbsMixin` (`src/fleet/adam/_mixins.py`) and inherited by every ADaM sub-namespace: `adsl`, `occds`, `onco`, `ophtha`, `peds`, `vaccine`, `metabolic`, `neuro`. You can call them directly on any sub-namespace without switching back to the base `adam` namespace.
 
-- `source(target, *, from_col=None)` — pass-through column from prior dataset
-- `derivation(target, *, expression)` — arbitrary Polars expression string or `pl.Expr`
-- `assigned(target, *, value)` — constant literal for all rows
-- `recode(target, *, source, recode_map, default=None)` — map raw values to new values
-- `rename(target, *, source)` — rename a column (e.g. `VSDTC → ADT`)
-- `condderivation(target, *, conditions, else_value=None)` — multi-branch conditional derivation
-- `whereclauses(*, where)` — filter rows by expression (materialises internally)
-- `merge_adsl(adsl_dataset, *, on="USUBJID", vars=None)` — join ADSL columns onto current dataset
-- `seq(target, *, groups)` — sequential 1-based record number per group
-- `derive_dt(target, *, source, dtf=None, day_imputation="first", month_imputation="first")` — impute partial --DTC to `pl.Date`; optional DTF flag
-- `derive_dtm(target, *, source, dtf=None, tmf=None, day_imputation="first", month_imputation="first", time_imputation="first")` — impute partial --DTC to `pl.Datetime`; optional DTF/TMF flags
-- `format_iso(target, *, source)` — format `Date` or `Datetime` column as ISO 8601 string
+- `source(target: str, *, from_col: str | None = None) -> Self` — Copy a source column into the ADaM dataset.
+- `derivation(target: str, *, expression: str | pl.Expr) -> Self` — Derive *target* using an arbitrary Polars expression.
+- `assigned(target: str, *, value: Any) -> Self` — Set *target* to a constant *value* for every record.
+- `recode(target: str, *, source: str, recode_map: dict[Any, Any], default: Any = None) -> Self` — Map values in *source* to recoded values in *target*.
+- `rename(target: str, *, source: str) -> Self` — Create *target* as a copy of *source* (variable renaming).
+- `condderivation(target: str, *, conditions: list[dict[str, Any]], else_value: Any = None) -> Self` — Multi-branch conditional derivation (when/then/otherwise chain).
+- `whereclauses(*, where: str | pl.Expr) -> Self` — Filter records by a *where* expression.
+- `merge_adsl(adsl: pl.DataFrame, *, by: list[str] | None = None, keep_cols: list[str] | None = None) -> Self` — Left-join ADSL columns onto the current dataset.
+- `derive_dt(target: str, *, source: str, dtf: str | None = None, day_imputation: str = 'first', month_imputation: str = 'first') -> Self` — Derive an analysis date (``pl.Date``) from a ``--DTC`` string.
+- `derive_dtm(target: str, *, source: str, dtf: str | None = None, tmf: str | None = None, day_imputation: str = 'first', month_imputation: str = 'first', time_imputation: str = 'first') -> Self` — Derive an analysis datetime (``pl.Datetime``) from a ``--DTC`` string.
+- `format_iso(target: str, *, source: str) -> Self` — Format a ``pl.Date`` or ``pl.Datetime`` column as an ISO 8601 string.
 
 ## ADaM verbs
 
-Available on `df.adam` (BDS base namespace). Shared verbs (source, derivation, assigned, recode, rename, condderivation, whereclauses, merge_adsl, seq) are also available here via the shared mixin.
+Available on `df.adam` (BDS base namespace). Shared verbs (source, derivation, assigned, recode, rename, condderivation, whereclauses, merge_adsl, derive_dt, derive_dtm, format_iso) are also available here via the shared mixin.
 
-- `study_day(target, *, analysis_date, reference_date)` — CDISC study-day formula (`ADY = ADT − RFSTDTC + 1`, signed)
-- `flag(target, *, criteria, groups)` — per-group boolean flag (e.g. `ABLFL`)
-- `baseline(target, *, aval, baseline_flag, groups)` — carry `AVAL` at baseline row into `BASE`
-- `chg(target, *, aval, base)` — change from baseline (`CHG = AVAL − BASE`)
-- `pchg(target, *, aval, base)` — percent change from baseline
-- `bmi(target, *, weight, height)` — Body Mass Index (`weight / (height/100)²`)
-- `bsa(target, *, weight, height, method)` — Body Surface Area (Mosteller, DuBois, Haycock, Gehan)
-- `map(target, *, systolic, diastolic)` — Mean Arterial Pressure (`(SBP + 2×DBP) / 3`)
-- `qtc(target, *, qt, rr, method)` — Corrected QT interval (Fridericia or Bazett)
-- `nrind(target, *, value, low, high)` — normal range indicator (`LOW / NORMAL / HIGH`)
-- `on_treatment(target, *, adt, trtsdt, trtedt)` — on-treatment flag
-- `shift(target, *, baseline_cat, post_cat)` — categorical shift string
-- `derive_summary_records(*, by_vars, analysis_var, set_values_to, stat)` — aggregate and append summary rows
-- `derive_locf_records(*, by_vars, analysis_var, order_by)` — forward-fill (LOCF) within groups
-- `derive_param(*, by_vars, set_values_to, parameter_filter, analysis_value)` — derive new parameter rows
-- `lookup(target_cols=None, *, dataset, on, how="left", where=None)` — left-join a reference DataFrame
-- `derive_dt(target, *, source, dtf=None, day_imputation="first", month_imputation="first")` — impute partial --DTC to `pl.Date`; optional DTF flag
-- `derive_dtm(target, *, source, dtf=None, tmf=None, day_imputation="first", month_imputation="first", time_imputation="first")` — impute partial --DTC to `pl.Datetime`; optional DTF/TMF flags
-- `format_iso(target, *, source)` — format `pl.Date` or `pl.Datetime` column as ISO 8601 string
-- `from_spec(spec_path, *, dataset)` — execute all derivations defined in `define.yaml`
-- `to_frame()` — materialise
+- `study_day(target: str, *, analysis_date: str, reference_date: str) -> AdamNamespace` — Compute CDISC study day.
+- `flag(target: str, *, criteria: str | pl.Expr, groups: list[str] | None = None, order_by: str | None = None, value_col: str | None = None, where: str | pl.Expr | None = None, flag_value: str = 'Y') -> AdamNamespace` — Set *target* to *flag_value* for records matching *criteria*.
+- `baseline(target: str, *, aval: str = 'AVAL', baseline_flag: str = 'ABLFL', groups: list[str] | None = None) -> AdamNamespace` — Derive BASE as the AVAL where the baseline flag equals ``"Y"``.
+- `chg(target: str, *, aval: str = 'AVAL', base: str = 'BASE') -> AdamNamespace` — Compute change from baseline: ``CHG = AVAL - BASE``.
+- `pchg(target: str, *, aval: str = 'AVAL', base: str = 'BASE') -> AdamNamespace` — Compute percent change from baseline.
+- `bmi(target: str, *, weight: str, height: str) -> AdamNamespace` — Derive Body Mass Index: ``weight_kg / (height_cm / 100) ** 2``.
+- `bsa(target: str, *, weight: str, height: str, method: str = 'Mosteller') -> AdamNamespace` — Derive Body Surface Area in m².
+- `map(target: str = 'MAP', *, systolic: str = 'SYSBP', diastolic: str = 'DIABP') -> AdamNamespace` — Derive Mean Arterial Pressure: ``DBP + (SBP - DBP) / 3``.
+- `qtc(target: str = 'QTC', *, qt: str = 'QT', rr: str = 'RR', method: str = 'Fridericia') -> AdamNamespace` — Derive corrected QT interval.
+- `nrind(target: str, *, value: str, low: str, high: str) -> AdamNamespace` — Categorise *value* relative to normal range: LOW / NORMAL / HIGH.
+- `on_treatment(target: str = 'ONTRTFL', *, adt: str, trtsdt: str, trtedt: str, open_ended: bool = True) -> AdamNamespace` — Set *target* to ``"Y"`` when *adt* is within [trtsdt, trtedt].
+- `shift(target: str, *, baseline_cat: str, post_cat: str, sep: str = ' to ') -> AdamNamespace` — Derive a categorical shift label: ``"<baseline><sep><post>"``.
+- `derive_summary_records(*, by_vars: list[str], analysis_var: str = 'AVAL', set_values_to: dict[str, Any], stat: str = 'mean') -> AdamNamespace` — Compute a summary statistic per group and append the results as new records.
+- `derive_locf_records(*, by_vars: list[str] | None = None, analysis_var: str = 'AVAL', order_by: str = 'ADT') -> AdamNamespace` — Forward-fill *analysis_var* within each group (LOCF).
+- `derive_param(*, by_vars: list[str] | None = None, set_values_to: dict[str, Any], parameter_filter: dict[str, str], analysis_value: pl.Expr) -> AdamNamespace` — Derive a new parameter (e.g. BMI) from existing records and append
+- `lookup(target_cols: list[str] | None = None, *, dataset: pl.DataFrame, on: str | list[str], how: str = 'left', where: str | None = None) -> AdamNamespace` — SQL-style join against a lookup *dataset*.
+- `from_spec(spec_path: str | Path, *, dataset: str | None = None, only: list[str] | None = None, omit: list[str] | None = None) -> AdamNamespace` — Build an ADaM derivation pipeline from a YAML specification file.
 
 ## ADSL verbs
 
-- `source(target)` — pass-through column
-- `first_date(target, *, from_dataset, date_col, where=None)` — earliest event date per subject
-- `last_date(target, *, from_dataset, date_col, where=None)` — latest event date per subject
-- `duration(target, *, start_date, end_date)` — integer day count
-- `eligibility_flag(target, *, criteria)` — `"Y"` / null flag based on row condition
-- `count_events(target, *, from_dataset, where=None)` — integer event count per subject
-- `age_years(target, *, age_col, age_unit_col)` — unit-aware age conversion (YEARS, MONTHS, WEEKS, DAYS)
-- `derive_period(*, periods, start_date)` — create Subperiod/Phase variables (APxxSDT, APxxEDT, TRTxxP)
-- `to_frame()` — materialise
+- `first_date(target: str, *, from_dataset: pl.DataFrame, date_col: str, where: str | pl.Expr | None = None, groups: list[str] | None = None) -> Self` — Derive *target* as the earliest date in *date_col* from *from_dataset*.
+- `last_date(target: str, *, from_dataset: pl.DataFrame, date_col: str, where: str | pl.Expr | None = None, groups: list[str] | None = None) -> Self` — Derive *target* as the latest date in *date_col* from *from_dataset*.
+- `duration(target: str, *, start_date: str, end_date: str, unit: str = 'days', inclusive: bool = True) -> Self` — Derive *target* as the duration between two date columns.
+- `eligibility_flag(target: str, *, criteria: str | pl.Expr, false_value: str | None = None) -> Self` — Set *target* to ``"Y"`` where *criteria* is true.
+- `count_events(target: str, *, from_dataset: pl.DataFrame, where: str | pl.Expr | None = None, groups: list[str] | None = None) -> Self` — Derive *target* as the count of matching records in *from_dataset*.
+- `age_years(target: str = 'AAGE', *, age_col: str = 'AGE', age_unit_col: str = 'AGEU') -> Self` — Convert age to years, handling common unit strings.
+- `derive_period(*, periods: list[dict[str, Any]], start_date: str = 'TRTSDT') -> Self` — Create standard Subperiod / Phase variables.
 
 ## OCCDS verbs
 
-Available on `df.adam.occds` (and `df.adam.pk` for sequence). Shared verbs (source, derivation, assigned, recode, rename, condderivation, whereclauses, merge_adsl, seq) are also available here via the shared mixin.
+Available on `df.adam.occds` (and `df.adam.pk` for sequence). Shared verbs (source, derivation, assigned, recode, rename, condderivation, whereclauses, merge_adsl) are also available here via the shared mixin.
 
-- `treatment_emergent(target, *, start_date, trtsdt, trtedt)` — derive TRTEMFL using `TRTSDT ≤ event start ≤ TRTEDT` window
-- `worst_flag(target, *, severity_col, severity_order, groups)` — flag the row with the worst severity value per group (custom ordering)
-- `onset_recovery(*, onset_target, recovery_target, start_col, end_col)` — derive onset and recovery date columns
-- `seq(target, *, groups)` — sequential 1-based record number per group (ASEQ)
-- `to_frame()` — materialise
+- `treatment_emergent(target: str = 'TRTEMFL', *, start_date: str, trtsdt: str, trtedt: str | None = None, offset_days: int = 0) -> Self` — Set *target* to ``"Y"`` for treatment-emergent events.
+- `worst_flag(target: str, *, severity_col: str, groups: list[str] | None = None, severity_order: list[Any] | None = None, where: str | pl.Expr | None = None, mode: str = 'first') -> Self` — Flag the record with the worst severity per group.
+- `onset_recovery(target: str, *, start_date: str, end_date: str, ref_date: str) -> Self` — Flag events that started on/after the reference date and have recovered.
+- `seq(target: str = 'ASEQ', *, order_by: list[str] | None = None, groups: list[str] | None = None, check_uniqueness: bool = False) -> Self` — Derive a 1-based observation sequence number within each group.
 
 ## Operation → Fleet Verb Mapping
 

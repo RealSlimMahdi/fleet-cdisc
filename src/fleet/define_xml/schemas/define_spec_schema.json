@@ -308,6 +308,10 @@
           "type": "string",
           "description": "Polars column name or expression string (derivation, condderivation)."
         },
+        "callable": {
+          "type": "string",
+          "description": "Optional dotted Python path to a study-specific function (e.g. 'mycompany.grading.ctcae_grade'). When set and Define-XML is generated with --enrich-methods, Fleet imports the callable and embeds its docstring summary into the MethodDef Description so regulatory reviewers see the exact computational method."
+        },
         "ct_codelist": {
           "type": "string",
           "description": "CDISC controlled terminology codelist OID (assign_ct, hardcode_ct)."

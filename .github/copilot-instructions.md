@@ -103,6 +103,9 @@ The source of truth for which variables and codelists to generate is the **CDISC
 # Generate Define-XML 2.1 from a define.yaml specification
 uv run fleet define-xml --spec specs/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml
 
+# Same, but enrich every variable with a <MethodDef> built from the verb / callable docstring
+uv run fleet define-xml --spec specs/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml --enrich-methods
+
 # Without HTML preview
 uv run fleet define-xml --spec specs/cdiscpilot01/adam/define.yaml --output outputs/define_adam.xml --no-preview
 ```
@@ -469,12 +472,19 @@ After **every new feature implementation or bug fix**, the following checks MUST
 
 ### Conditional checks
 
-4. **LLM context file** — If the change affects any **user-facing API** (new verbs, renamed parameters, changed signatures, new CLI commands), regenerate and verify `llms.txt`:
+4. **LLM context file + README namespace catalog** — If the change affects any **user-facing API** (new verbs, renamed parameters, changed signatures, new CLI commands), regenerate and verify `llms.txt` **and** the auto-synced README namespace block:
 
    ```bash
    uv run python scripts/build_llms.py
    uv run python scripts/build_llms.py --check
    ```
+
+   The script regenerates `llms.txt` and rewrites the block between
+   `<!-- AUTO:NAMESPACES:BEGIN -->` and `<!-- AUTO:NAMESPACES:END -->`
+   in `README.md`. Verb counts and the "(N verbs: …)" labels are
+   derived from the curated `_README_*_VERBS` lists at the bottom of
+   `scripts/build_llms.py` — edit those lists to add/remove verbs from
+   the README catalog. Never edit the block by hand.
 
 5. **GUIDE.md and STRUCTURE.md updates** — If the change involves a **major architectural or API change** (new namespace, new module, restructured directory layout, new top-level workflow concept), the relevant file(s) MUST be updated:
    - `GUIDE.md` — for workflow, usage patterns, or API surface changes.

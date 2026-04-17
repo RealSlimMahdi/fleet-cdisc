@@ -59,16 +59,26 @@ with CDISCClient() as client:
 
 The generated `codelists.py` contains:
 
-- **One class per codelist** with `_concept_id` attribute and submission value constants:
+- **One class per codelist** with `_concept_id`, `_cdisc_url`, and submission-value constants:
 
   ```python
   class C66731:
-      """SEX (C66731)."""
+      """SEX (C66731).
+
+      The assemblage of physical properties or qualities by which male is
+      distinguished from female.
+
+      See: https://library.cdisc.org/browser/#/codelist/C66731
+      """
       _concept_id = "C66731"
+      _cdisc_url = "https://library.cdisc.org/browser/#/codelist/C66731"
       F = "F"
       M = "M"
       U = "U"
   ```
+
+  !!! tip "Direct line to the source of truth"
+  The `_cdisc_url` attribute and the `See:` line in each docstring point to the codelist's entry in the **CDISC Library Browser**. When a reviewer or auditor reads pipeline code, hovering `SEX` in an IDE shows the URL; clicking the link in the docs site takes them straight to the authoritative CDISC definition. There is no separate lookup table to maintain — the URL is constructed from the NCI concept ID at generation time.
 
 - **Human-readable aliases** derived from the CDISC submission value:
 

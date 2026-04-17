@@ -301,8 +301,11 @@ for checker, df, ds in [
     checker.check(df, dataset=ds).print_report()
 
 # ── 10. Generate Define-XML 2.1 ───────────────────────────────────────────────
-DefineSpecGenerator(SDTM_SPEC).generate(OUT / "define_sdtm.xml")
-DefineSpecGenerator(ADAM_SPEC).generate(OUT / "define_adam.xml")
+# enrich_methods=True embeds Fleet verb docstrings into the Origin/MethodDef
+# elements so reviewers see the exact computational method (single source of
+# truth: docstring -> Define-XML).
+DefineSpecGenerator(SDTM_SPEC, enrich_methods=True).generate(OUT / "define_sdtm.xml")
+DefineSpecGenerator(ADAM_SPEC, enrich_methods=True).generate(OUT / "define_adam.xml")
 print(f"\nDefine-XML written to {OUT}/")
 print("  Serve with: python -m http.server 8080 --directory outputs/cdiscpilot01")
 

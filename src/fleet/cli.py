@@ -208,6 +208,16 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Skip generating the HTML preview alongside the XML.",
     )
+    defxml.add_argument(
+        "--enrich-methods",
+        action="store_true",
+        help=(
+            "Embed Python verb / callable docstrings into Define-XML "
+            "Origin descriptions and emit MethodDef elements with "
+            "FormalExpression. Creates a verifiable link between the "
+            "regulatory submission and the exact code that produced the data."
+        ),
+    )
 
     # -- install-engine ------------------------------------------------- #
     inst = sub.add_parser(
@@ -568,7 +578,10 @@ def _run_define_xml(args: argparse.Namespace) -> None:
     print(f"Output:   {output}")
     print()
 
-    gen = DefineSpecGenerator(str(spec))
+    gen = DefineSpecGenerator(
+        str(spec),
+        enrich_methods=getattr(args, "enrich_methods", False),
+    )
     gen.generate(str(output), html_preview=not args.no_preview)
     print(f"Generated Define-XML → {output}")
     if not args.no_preview:

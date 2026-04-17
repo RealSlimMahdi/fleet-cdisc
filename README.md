@@ -161,6 +161,8 @@ python -c "import fleet; print(fleet.__version__)"
 
 ## Namespace Extensions
 
+<!-- AUTO:NAMESPACES:BEGIN -->
+
 Importing `fleet` registers chainable namespaces on **every** Polars DataFrame. All ADaM namespaces also inherit **11 shared verbs** from the common mixin: `source`, `derivation`, `assigned`, `recode`, `rename`, `condderivation`, `whereclauses`, `merge_adsl`, `derive_dt`, `derive_dtm`, `format_iso`.
 
 <details>
@@ -180,7 +182,7 @@ Importing `fleet` registers chainable namespaces on **every** Polars DataFrame. 
 </details>
 
 <details>
-<summary><b><code>df.adam.adsl</code></b> — ADSL (20 verbs: 9 specific + 11 shared)</summary>
+<summary><b><code>df.adam.adsl</code></b> — ADSL (19 verbs: 8 specific + 11 shared)</summary>
 
 **Specific:** `first_date` · `last_date` · `duration` · `count_events` · `eligibility_flag` · `age_years` · `age_from_dates` · `derive_period`
 
@@ -263,6 +265,8 @@ Importing `fleet` registers chainable namespaces on **every** Polars DataFrame. 
 **Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso`
 
 </details>
+
+<!-- AUTO:NAMESPACES:END -->
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -366,6 +370,9 @@ uv run fleet init ct
 
 ```bash
 uv run fleet define-xml --spec specs/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml
+
+# Add --enrich-methods to embed verb / callable docstrings as <MethodDef> elements
+uv run fleet define-xml --spec specs/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml --enrich-methods
 ```
 
 ### CDISC Rules Engine Validation

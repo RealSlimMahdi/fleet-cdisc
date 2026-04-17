@@ -6,6 +6,9 @@ Fleet's public API is reachable from a single import:
 import fleet
 ```
 
+!!! tip "Documentation generated from source — never out of sync"
+Every module page below is rendered live from the Python docstrings in the package. The [Verb Cheat Sheet](cheat_sheet.md) cross-links each verb name to its source-of-truth docstring via [autorefs](https://mkdocstrings.github.io/autorefs/). When a verb's signature, parameters, or examples change in code, the docs update automatically on the next build — there is no parallel reference to maintain or fall behind.
+
 ## Modules
 
 | Module                        | Description                                                                          |

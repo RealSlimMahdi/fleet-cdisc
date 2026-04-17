@@ -21,6 +21,7 @@ Usage
     dag.to_airflow()                 # → {task_id: [upstream_task_ids]}
     dag.to_dict()                    # → JSON-serializable adjacency dict
 """
+
 from __future__ import annotations
 
 from collections import deque
@@ -29,8 +30,30 @@ from pathlib import Path
 
 import yaml
 
-
 # ─────────────────────────────────────────────────────────── data model ── #
+
+
+@dataclass
+class VariableNode:
+    """A single derived variable inside a dataset node.
+
+    Captures variable-level lineage so the DAG is navigable down to the
+    individual column: each entry records the verb that produced the
+    column, the source columns it consumed, and a dotted Python path to
+    the verb method (suitable for IDE / MkDocs cross-linking).
+
+    Attributes:
+        name: Output column name (e.g. ``"TRTSDT"``).
+        verb: Fleet verb that produced the column (e.g. ``"first_date"``).
+        sources: Upstream column names consumed by the verb.
+        method: Fully-qualified Python path to the verb method
+            (e.g. ``"fleet.adam.adsl_namespace.ADSLNamespace.first_date"``).
+    """
+
+    name: str
+    verb: str
+    sources: list[str]
+    method: str
 
 
 @dataclass
@@ -50,12 +73,16 @@ class PipelineNode:
         ``None`` if neither the spec nor a convention can determine it.
     inputs:
         Ordered list of upstream node names this node depends on.
+    variables:
+        Optional variable-level lineage captured at runtime by the
+        SDTM/ADaM namespaces; empty for nodes built from spec only.
     """
 
     name: str
     node_type: str
     path: str | None
     inputs: list[str]
+    variables: dict[str, VariableNode] = field(default_factory=dict)
 
 
 @dataclass
@@ -126,10 +153,7 @@ class PipelineDAG:
             If *name* is not a node in this DAG.
         """
         if name not in self.nodes:
-            raise KeyError(
-                f"Node '{name}' not found in DAG. "
-                f"Available nodes: {sorted(self.nodes)}"
-            )
+            raise KeyError(f"Node '{name}' not found in DAG. Available nodes: {sorted(self.nodes)}")
 
         visited: set[str] = set()
         queue: deque[str] = deque([name])
@@ -165,6 +189,20 @@ class PipelineDAG:
                 "node_type": node.node_type,
                 "path": node.path,
                 "inputs": node.inputs,
+                **(
+                    {
+                        "variables": {
+                            v.name: {
+                                "verb": v.verb,
+                                "sources": v.sources,
+                                "method": v.method,
+                            }
+                            for v in node.variables.values()
+                        }
+                    }
+                    if node.variables
+                    else {}
+                ),
             }
             for name, node in self.nodes.items()
         }

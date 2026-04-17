@@ -87,12 +87,7 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
                 )
         """
         cond = pl.col(conc_col).cast(pl.Float64) < pl.col(lloq_col).cast(pl.Float64)
-        return self._chain(
-            pl.when(cond)
-            .then(pl.lit("Y"))
-            .otherwise(pl.lit(None))
-            .alias(target)
-        )
+        return self._chain(pl.when(cond).then(pl.lit("Y")).otherwise(pl.lit(None)).alias(target))
 
     def blq_impute(
         self,
@@ -144,9 +139,7 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         else:  # missing
             imputed = pl.lit(None).cast(pl.Float64)
 
-        return self._chain(
-            pl.when(is_blq).then(imputed).otherwise(conc).alias(target)
-        )
+        return self._chain(pl.when(is_blq).then(imputed).otherwise(conc).alias(target))
 
     def nominal_time(
         self,
@@ -223,8 +216,7 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         """
         if unit not in _UNIT_SCALE:
             raise ValueError(
-                f"actual_time unit={unit!r} is not supported. "
-                f"Choose one of: {sorted(_UNIT_SCALE)}"
+                f"actual_time unit={unit!r} is not supported. Choose one of: {sorted(_UNIT_SCALE)}"
             )
         seconds_per_unit = _UNIT_SCALE[unit]
 
@@ -236,9 +228,7 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
             )
 
         diff_s = (
-            (_to_datetime(sample_dtm) - _to_datetime(dose_dtm))
-            .dt.total_seconds()
-            .cast(pl.Float64)
+            (_to_datetime(sample_dtm) - _to_datetime(dose_dtm)).dt.total_seconds().cast(pl.Float64)
         )
         return self._chain((diff_s / seconds_per_unit).alias(target))
 
@@ -272,12 +262,7 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         """
         t = pl.col(time_col).cast(pl.Float64)
         cond = (t >= -window_hrs) & (t < 0.0)
-        return self._chain(
-            pl.when(cond)
-            .then(pl.lit("Y"))
-            .otherwise(pl.lit(None))
-            .alias(target)
-        )
+        return self._chain(pl.when(cond).then(pl.lit("Y")).otherwise(pl.lit(None)).alias(target))
 
     def dose_normalized(
         self,
@@ -378,9 +363,7 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
                 )
         """
         t = pl.col(arrlt_col).cast(pl.Float64)
-        return self._chain(
-            pl.when(t < 0.0).then(pl.lit(0.0)).otherwise(t).alias(target)
-        )
+        return self._chain(pl.when(t < 0.0).then(pl.lit(0.0)).otherwise(t).alias(target))
 
     def blqfn(
         self,
@@ -447,8 +430,7 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         valid_bases = {"e", "2", "10"}
         if base not in valid_bases:
             raise ValueError(
-                f"log_conc base={base!r} is not supported. "
-                f"Choose one of: {sorted(valid_bases)}"
+                f"log_conc base={base!r} is not supported. Choose one of: {sorted(valid_bases)}"
             )
         c = pl.col(conc_col).cast(pl.Float64)
         safe = pl.when(c.is_null() | (c <= 0.0)).then(pl.lit(None).cast(pl.Float64))
@@ -625,10 +607,7 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         conc_str = pl.col(conc_col).cast(pl.Float64, strict=False).cast(pl.String)
 
         return self._chain(
-            pl.when(is_blq)
-            .then(pl.lit(blq_label))
-            .otherwise(conc_str)
-            .alias(target)
+            pl.when(is_blq).then(pl.lit(blq_label)).otherwise(conc_str).alias(target)
         )
 
     def anl_flag(

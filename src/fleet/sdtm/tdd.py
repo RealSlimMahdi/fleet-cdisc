@@ -74,9 +74,7 @@ ArmCode = Annotated[
 ]
 ISODuration = Annotated[
     str,
-    Field(
-        pattern=r"^P(?:\d+Y)?(?:\d+M)?(?:\d+W)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+S)?)?$"
-    ),
+    Field(pattern=r"^P(?:\d+Y)?(?:\d+M)?(?:\d+W)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+S)?)?$"),
 ]
 RuleExpression = Annotated[str, Field(max_length=2000)]
 
@@ -223,8 +221,10 @@ class TrialElements(BaseModel):
                 df = te.to_polars()
         """
         rows = [
-            {v: getattr(e, k) if not isinstance(getattr(e, k), Enum) else getattr(e, k).value
-             for k, v in TrialElement._SDTM_MAP.items()}
+            {
+                v: getattr(e, k) if not isinstance(getattr(e, k), Enum) else getattr(e, k).value
+                for k, v in TrialElement._SDTM_MAP.items()
+            }
             for e in self.elements
         ]
         return pl.DataFrame(rows)
@@ -271,8 +271,10 @@ class TrialArms(BaseModel):
                 df = ta.to_polars()
         """
         rows = [
-            {v: getattr(a, k) if not isinstance(getattr(a, k), Enum) else getattr(a, k).value
-             for k, v in TrialArm._SDTM_MAP.items()}
+            {
+                v: getattr(a, k) if not isinstance(getattr(a, k), Enum) else getattr(a, k).value
+                for k, v in TrialArm._SDTM_MAP.items()
+            }
             for a in self.arms
         ]
         return pl.DataFrame(rows)
@@ -312,8 +314,7 @@ class TrialVisits(BaseModel):
                 df = tv.to_polars()
         """
         rows = [
-            {v: getattr(vis, k) for k, v in TrialVisit._SDTM_MAP.items()}
-            for vis in self.visits
+            {v: getattr(vis, k) for k, v in TrialVisit._SDTM_MAP.items()} for vis in self.visits
         ]
         return pl.DataFrame(rows)
 
@@ -344,8 +345,7 @@ class TrialParameters(BaseModel):
                 df = ts.to_polars()
         """
         rows = [
-            {v: getattr(p, k) for k, v in TrialParameter._SDTM_MAP.items()}
-            for p in self.parameters
+            {v: getattr(p, k) for k, v in TrialParameter._SDTM_MAP.items()} for p in self.parameters
         ]
         return pl.DataFrame(rows)
 
@@ -376,8 +376,7 @@ class TrialCriteria(BaseModel):
                 df = ti.to_polars()
         """
         rows = [
-            {v: getattr(c, k) for k, v in TrialCriterion._SDTM_MAP.items()}
-            for c in self.criteria
+            {v: getattr(c, k) for k, v in TrialCriterion._SDTM_MAP.items()} for c in self.criteria
         ]
         return pl.DataFrame(rows)
 
@@ -387,15 +386,9 @@ class TrialCriteria(BaseModel):
 # ------------------------------------------------------------------ #
 
 # Regex patterns for Mermaid flowchart parsing
-_SUBGRAPH_RE = re.compile(
-    r"subgraph\s+(\w+)\s*\[([^\]]+)\]", re.IGNORECASE
-)
-_NODE_RE = re.compile(
-    r"(\w+)\[\"([^\"]+?)(?:<br/>(\S+))?\"\]"
-)
-_EDGE_RE = re.compile(
-    r"(\w+)\s*-->(?:\|([^|]+)\|)?\s*(\w+)"
-)
+_SUBGRAPH_RE = re.compile(r"subgraph\s+(\w+)\s*\[([^\]]+)\]", re.IGNORECASE)
+_NODE_RE = re.compile(r"(\w+)\[\"([^\"]+?)(?:<br/>(\S+))?\"\]")
+_EDGE_RE = re.compile(r"(\w+)\s*-->(?:\|([^|]+)\|)?\s*(\w+)")
 _SUBGRAPH_END_RE = re.compile(r"^\s*end\s*$", re.IGNORECASE)
 
 

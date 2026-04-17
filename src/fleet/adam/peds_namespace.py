@@ -79,8 +79,11 @@ class PedsNamespace(SharedADaMVerbsMixin):
                 )
         """
         expr = (
-            pl.col(analysis_date).cast(pl.Date) - pl.col(birth_date).cast(pl.Date)
-        ).dt.total_days().cast(pl.Int64).alias(target)
+            (pl.col(analysis_date).cast(pl.Date) - pl.col(birth_date).cast(pl.Date))
+            .dt.total_days()
+            .cast(pl.Int64)
+            .alias(target)
+        )
         return self._chain(expr)
 
     # ------------------------------------------------------------------ #
@@ -203,9 +206,7 @@ class PedsNamespace(SharedADaMVerbsMixin):
             .otherwise(0.0)
         )
         chron_age_years = pl.col(age_days_col) / 365.25
-        return self._chain(
-            (chron_age_years - prematurity_years).round(4).alias(target)
-        )
+        return self._chain((chron_age_years - prematurity_years).round(4).alias(target))
 
     # ------------------------------------------------------------------ #
     # 5. prematurity_flag — flag infants born prematurely                 #
@@ -308,4 +309,3 @@ class PedsNamespace(SharedADaMVerbsMixin):
         last_label = thresholds[-1][0]
         expr = chain.otherwise(pl.lit(last_label)).alias(target)
         return self._chain(expr)
-

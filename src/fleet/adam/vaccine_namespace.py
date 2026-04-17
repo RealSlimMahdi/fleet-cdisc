@@ -109,9 +109,7 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         aval = pl.col(aval_col)
         base = pl.col(base_col)
         return self._chain(
-            pl.when(
-                base.is_not_null() & (base != 0) & (aval / base >= fold_rise)
-            )
+            pl.when(base.is_not_null() & (base != 0) & (aval / base >= fold_rise))
             .then(pl.lit(flag_value))
             .otherwise(pl.lit(None))
             .alias(target)
@@ -189,16 +187,20 @@ class VaccineNamespace(SharedADaMVerbsMixin):
             uloq = pl.col(uloq_col)
             # When STRESN is present: apply LLOQ/ULOQ capping
             stresn_rule = (
-                pl.when(stresn < lloq).then(lloq_val)
-                .when(stresn > uloq).then(uloq)
+                pl.when(stresn < lloq)
+                .then(lloq_val)
+                .when(stresn > uloq)
+                .then(uloq)
                 .otherwise(stresn)
             )
             # When STRESN is missing: use ORRES string to infer direction
             if orres_col:
                 orres_str = pl.col(orres_col).cast(pl.Utf8)
                 missing_rule = (
-                    pl.when(orres_str.str.starts_with(">")).then(uloq)
-                    .when(orres_str.str.starts_with("<")).then(lloq_val)
+                    pl.when(orres_str.str.starts_with(">"))
+                    .then(uloq)
+                    .when(orres_str.str.starts_with("<"))
+                    .then(lloq_val)
                     .otherwise(pl.lit(None))
                 )
             else:
@@ -211,8 +213,7 @@ class VaccineNamespace(SharedADaMVerbsMixin):
             if orres_col:
                 orres_str = pl.col(orres_col).cast(pl.Utf8)
                 missing_rule = (
-                    pl.when(orres_str.str.starts_with("<")).then(lloq_val)
-                    .otherwise(pl.lit(None))
+                    pl.when(orres_str.str.starts_with("<")).then(lloq_val).otherwise(pl.lit(None))
                 )
             else:
                 missing_rule = pl.lit(None)
@@ -280,4 +281,3 @@ class VaccineNamespace(SharedADaMVerbsMixin):
             .alias(target)
         )
         return self._materialise_then(result)
-

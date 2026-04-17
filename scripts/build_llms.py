@@ -15,16 +15,31 @@ Usage
 
 Editing guide
 -------------
+* Verb signatures + one-line summaries → **auto-generated** from the live
+  Python classes via :mod:`inspect`.  Just edit the verb's docstring or
+  signature in ``src/fleet/...`` and re-run this script — ``llms.txt``
+  will pick the change up automatically.  The curated lists in the
+  ``_*_verbs_section()`` functions act as the *editorial filter*: they
+  decide which verbs are worth advertising to AI agents.
 * Static section content  → edit the string-returning functions below.
 * Example code            → edit examples/cdiscpilot01_inline.py or
                             examples/cdiscpilot01_spec_driven.py.
 * Section order           → edit build().
-* Never edit llms.txt by hand — it is overwritten on every run.
+* README namespace catalog→ auto-synced between
+                            ``<!-- AUTO:NAMESPACES:BEGIN -->`` and
+                            ``<!-- AUTO:NAMESPACES:END -->`` in README.md.
+                            Edit the ``_README_*_VERBS`` lists below to
+                            change what verbs appear; counts and the
+                            "(N verbs: …)" labels are derived from list
+                            length.
+* Never edit llms.txt or the README namespace block by hand — both are
+  overwritten on every run.
 """
 
 from __future__ import annotations
 
 import argparse
+import inspect
 import sys
 from pathlib import Path
 
@@ -32,7 +47,7 @@ REPO_ROOT = Path(__file__).parent.parent
 
 
 # ---------------------------------------------------------------------------
-# Helper
+# Helpers
 # ---------------------------------------------------------------------------
 
 def _example(filename: str) -> str:
@@ -40,6 +55,58 @@ def _example(filename: str) -> str:
     path = REPO_ROOT / "examples" / filename
     source = path.read_text(encoding="utf-8")
     return f"```python\n{source}\n```"
+
+
+def _verb_signature(cls: type, verb: str) -> str:
+    """Return ``verb(arg1, arg2, ...)`` rendered from the live signature.
+
+    The leading ``self`` parameter is stripped.  Default values are kept
+    in the standard ``inspect`` form so that the output mirrors what an
+    IDE would show.
+    """
+    import re
+
+    method = getattr(cls, verb)
+    sig = inspect.signature(method)
+    params = [p for name, p in sig.parameters.items() if name != "self"]
+    new_sig = sig.replace(parameters=params)
+    rendered = f"{verb}{new_sig}"
+    # ``from __future__ import annotations`` makes annotations strings, so
+    # ``inspect`` renders them with surrounding quotes (e.g. ``: 'str'``).
+    # Strip those quotes only after ``:`` and ``->`` so that string
+    # defaults like ``mode='date'`` are left intact.
+    rendered = re.sub(r"(:\s*)'([^']+)'", r"\1\2", rendered)
+    rendered = re.sub(r"(->\s*)'([^']+)'", r"\1\2", rendered)
+    return rendered
+
+
+def _verb_summary(cls: type, verb: str) -> str:
+    """Return the first non-empty line of *verb*'s docstring on *cls*."""
+    method = getattr(cls, verb)
+    doc = inspect.getdoc(method) or ""
+    for line in doc.splitlines():
+        line = line.strip()
+        if line:
+            return line
+    return ""
+
+
+def _render_verb_bullets(cls: type, verbs: list[str]) -> str:
+    """Render a markdown bullet list of ``- ``verb(sig)`` — summary``.
+
+    Signatures and summaries are pulled live from the class via
+    :mod:`inspect`, so editing a verb's docstring or signature in the
+    source automatically refreshes ``llms.txt`` on the next build.
+    """
+    lines: list[str] = []
+    for verb in verbs:
+        sig = _verb_signature(cls, verb)
+        summary = _verb_summary(cls, verb)
+        if summary:
+            lines.append(f"- `{sig}` — {summary}")
+        else:
+            lines.append(f"- `{sig}`")
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -176,32 +243,52 @@ dates, sequence number)
 
 
 def _sdtm_verbs_section() -> str:
-    return """\
-## SDTM verbs
+    from fleet.sdtm import SDTMNamespace
 
-- `assign_no_ct(target, *, source)` — copy raw column, no CT validation
-- `hardcode_no_ct(target, *, value)` — constant literal for all rows
-- `hardcode_ct(target, *, value, ct_codelist=None)` — constant literal, CT-validated
-- `assign_ct(target, *, source, ct_codelist, ct_mapping=None)` — recode through CT codelist; \
-accepts a generated codelist class (e.g. `SEX`) or a raw NCI concept ID string (e.g. `"C66731"`); \
-`ct_mapping` is optional when raw data already matches CDISC submission values
-- `assign_dtc(target, *, source, mode="date", input_format=None)` — normalise to ISO 8601 date/datetime; preserves partial dates
-- `derivation(target, *, expression)` — arbitrary Polars expression
-- `condition_add(target, *, condition, then_value)` — `IF condition THEN value ELSE NULL`
-- `if_then_else(target, *, when, else_value=None)` — multi-branch conditional
-- `ae_aerel(target, *, source, aerel_map=None)` — standard AE relatedness mapping
-- `merge(target_cols=None, *, dataset, on, how="left")` — join another DataFrame
-- `remove_dup(*, subset=None, keep="first")` — deduplicate rows
-- `group_by(*, group_cols, agg)` — group-and-aggregate
-- `dataset_level(target, *, value)` — alias for `hardcode_no_ct`; marks dataset-level constants
-- `notsubmitted(*targets)` — set one or more columns to null (not for submission)
-- `multiple_responses(target, *, source, delimiter="|", id_cols=None)` — expand pipe-delimited fields
-- `to_frame()` — materialise\
-"""
+    verbs = [
+        "assign_no_ct",
+        "hardcode_no_ct",
+        "hardcode_ct",
+        "assign_ct",
+        "assign_dtc",
+        "derivation",
+        "condition_add",
+        "if_then_else",
+        "ae_aerel",
+        "merge",
+        "remove_dup",
+        "group_by",
+        "dataset_level",
+        "notsubmitted",
+        "multiple_responses",
+        "to_frame",
+    ]
+    bullets = _render_verb_bullets(SDTMNamespace, verbs)
+    return f"## SDTM verbs\n\n{bullets}"
 
 
 def _tdd_verbs_section() -> str:
-    return """\
+    from fleet.sdtm import SDTMNamespace
+
+    protocol_verbs = [
+        "fetch_structure",
+        "study_header",
+        "add_elements",
+        "add_arms",
+        "add_visits",
+        "add_parameters",
+        "add_criteria",
+    ]
+    subject_verbs = [
+        "visit_map",
+        "element_boundaries",
+        "epoch_assign",
+        "study_day",
+    ]
+    protocol_bullets = _render_verb_bullets(SDTMNamespace, protocol_verbs)
+    subject_bullets = _render_verb_bullets(SDTMNamespace, subject_verbs)
+
+    return f"""\
 ## Trial Design Domain (TDD) verbs
 
 Fleet supports all 7 CDISC Trial Design Model domains through `df.sdtm`. Protocol-reference \
@@ -210,24 +297,11 @@ add_*() → to_frame()`. Subject-level domains (SV, SE) mix freely with standard
 
 ### Protocol-reference verbs
 
-- `fetch_structure(domain, *, ig_version="3-4", save_to=None)` — query CDISC Library for \
-domain IG structure; caches YAML; performs schema reconciliation against static Pydantic models
-- `study_header(study_id, domain)` — hardcode STUDYID + DOMAIN columns
-- `add_elements(elements: TrialElements)` — materialise validated TE rows
-- `add_arms(arms: TrialArms, *, te=None)` — materialise TA rows; opt-in FK validation \
-(ETCD ∈ TE.ETCD) when `te=` is provided
-- `add_visits(visits: TrialVisits)` — materialise TV rows
-- `add_parameters(params: TrialParameters)` — materialise TS rows
-- `add_criteria(criteria: TrialCriteria)` — materialise TI rows
+{protocol_bullets}
 
 ### Subject-level verbs
 
-- `visit_map(target_num, target_name, *, date_col, planned_visits, ref_date=None, \
-tolerance=None)` — map raw visit dates to planned visits from TV
-- `element_boundaries(target_start, target_end, *, milestones, element_col, subject_col)` \
-— derive element start/end dates from milestone columns
-- `epoch_assign(target, *, date_col, epoch_ranges)` — assign EPOCH based on date ranges
-- `study_day(target, *, date_col, ref_date_col)` — CDISC study day (no day 0)
+{subject_bullets}
 
 ### Pydantic models
 
@@ -251,95 +325,98 @@ collections from a Mermaid flowchart. Subgraphs → epochs, nodes → elements, 
 
 
 def _shared_adam_verbs_section() -> str:
-    return """\
-## Shared ADaM verbs (available on all sub-namespaces)
+    from fleet.adam._mixins import SharedADaMVerbsMixin
 
-These verbs are defined once in `SharedADaMVerbsMixin` (`src/fleet/adam/_mixins.py`) and \
-inherited by every ADaM sub-namespace: `adsl`, `occds`, `onco`, `ophtha`, `peds`, `vaccine`, \
-`metabolic`, `neuro`. You can call them directly on any sub-namespace without switching \
-back to the base `adam` namespace.
-
-- `source(target, *, from_col=None)` — pass-through column from prior dataset
-- `derivation(target, *, expression)` — arbitrary Polars expression string or `pl.Expr`
-- `assigned(target, *, value)` — constant literal for all rows
-- `recode(target, *, source, recode_map, default=None)` — map raw values to new values
-- `rename(target, *, source)` — rename a column (e.g. `VSDTC → ADT`)
-- `condderivation(target, *, conditions, else_value=None)` — multi-branch conditional derivation
-- `whereclauses(*, where)` — filter rows by expression (materialises internally)
-- `merge_adsl(adsl_dataset, *, on="USUBJID", vars=None)` — join ADSL columns onto current dataset
-- `seq(target, *, groups)` — sequential 1-based record number per group
-- `derive_dt(target, *, source, dtf=None, day_imputation="first", month_imputation="first")` — impute partial --DTC to `pl.Date`; optional DTF flag
-- `derive_dtm(target, *, source, dtf=None, tmf=None, day_imputation="first", month_imputation="first", time_imputation="first")` — impute partial --DTC to `pl.Datetime`; optional DTF/TMF flags
-- `format_iso(target, *, source)` — format `Date` or `Datetime` column as ISO 8601 string\
-"""
+    verbs = [
+        "source",
+        "derivation",
+        "assigned",
+        "recode",
+        "rename",
+        "condderivation",
+        "whereclauses",
+        "merge_adsl",
+        "derive_dt",
+        "derive_dtm",
+        "format_iso",
+    ]
+    bullets = _render_verb_bullets(SharedADaMVerbsMixin, verbs)
+    return (
+        "## Shared ADaM verbs (available on all sub-namespaces)\n\n"
+        "These verbs are defined once in `SharedADaMVerbsMixin` "
+        "(`src/fleet/adam/_mixins.py`) and inherited by every ADaM "
+        "sub-namespace: `adsl`, `occds`, `onco`, `ophtha`, `peds`, "
+        "`vaccine`, `metabolic`, `neuro`. You can call them directly "
+        "on any sub-namespace without switching back to the base "
+        "`adam` namespace.\n\n" + bullets
+    )
 
 
 def _adam_verbs_section() -> str:
-    return """\
-## ADaM verbs
+    from fleet.adam import AdamNamespace
 
-Available on `df.adam` (BDS base namespace). Shared verbs (source, derivation, assigned, \
-recode, rename, condderivation, whereclauses, merge_adsl, seq) are also available here via \
-the shared mixin.
-
-- `study_day(target, *, analysis_date, reference_date)` — CDISC study-day formula \
-(`ADY = ADT − RFSTDTC + 1`, signed)
-- `flag(target, *, criteria, groups)` — per-group boolean flag (e.g. `ABLFL`)
-- `baseline(target, *, aval, baseline_flag, groups)` — carry `AVAL` at baseline row into `BASE`
-- `chg(target, *, aval, base)` — change from baseline (`CHG = AVAL − BASE`)
-- `pchg(target, *, aval, base)` — percent change from baseline
-- `bmi(target, *, weight, height)` — Body Mass Index (`weight / (height/100)²`)
-- `bsa(target, *, weight, height, method)` — Body Surface Area (Mosteller, DuBois, Haycock, Gehan)
-- `map(target, *, systolic, diastolic)` — Mean Arterial Pressure (`(SBP + 2×DBP) / 3`)
-- `qtc(target, *, qt, rr, method)` — Corrected QT interval (Fridericia or Bazett)
-- `nrind(target, *, value, low, high)` — normal range indicator (`LOW / NORMAL / HIGH`)
-- `on_treatment(target, *, adt, trtsdt, trtedt)` — on-treatment flag
-- `shift(target, *, baseline_cat, post_cat)` — categorical shift string
-- `derive_summary_records(*, by_vars, analysis_var, set_values_to, stat)` — aggregate and append summary rows
-- `derive_locf_records(*, by_vars, analysis_var, order_by)` — forward-fill (LOCF) within groups
-- `derive_param(*, by_vars, set_values_to, parameter_filter, analysis_value)` — derive new parameter rows
-- `lookup(target_cols=None, *, dataset, on, how="left", where=None)` — left-join a reference DataFrame
-- `derive_dt(target, *, source, dtf=None, day_imputation="first", month_imputation="first")` — impute partial --DTC to `pl.Date`; optional DTF flag
-- `derive_dtm(target, *, source, dtf=None, tmf=None, day_imputation="first", month_imputation="first", time_imputation="first")` — impute partial --DTC to `pl.Datetime`; optional DTF/TMF flags
-- `format_iso(target, *, source)` — format `pl.Date` or `pl.Datetime` column as ISO 8601 string
-- `from_spec(spec_path, *, dataset)` — execute all derivations defined in `define.yaml`
-- `to_frame()` — materialise\
-"""
+    verbs = [
+        "study_day",
+        "flag",
+        "baseline",
+        "chg",
+        "pchg",
+        "bmi",
+        "bsa",
+        "map",
+        "qtc",
+        "nrind",
+        "on_treatment",
+        "shift",
+        "derive_summary_records",
+        "derive_locf_records",
+        "derive_param",
+        "lookup",
+        "from_spec",
+    ]
+    bullets = _render_verb_bullets(AdamNamespace, verbs)
+    return (
+        "## ADaM verbs\n\n"
+        "Available on `df.adam` (BDS base namespace). Shared verbs "
+        "(source, derivation, assigned, recode, rename, condderivation, "
+        "whereclauses, merge_adsl, derive_dt, derive_dtm, format_iso) "
+        "are also available here via the shared mixin.\n\n" + bullets
+    )
 
 
 def _adsl_verbs_section() -> str:
-    return """\
-## ADSL verbs
+    from fleet.adam.adsl_namespace import ADSLNamespace
 
-- `source(target)` — pass-through column
-- `first_date(target, *, from_dataset, date_col, where=None)` — earliest event date per subject
-- `last_date(target, *, from_dataset, date_col, where=None)` — latest event date per subject
-- `duration(target, *, start_date, end_date)` — integer day count
-- `eligibility_flag(target, *, criteria)` — `"Y"` / null flag based on row condition
-- `count_events(target, *, from_dataset, where=None)` — integer event count per subject
-- `age_years(target, *, age_col, age_unit_col)` — unit-aware age conversion (YEARS, MONTHS, WEEKS, DAYS)
-- `derive_period(*, periods, start_date)` — create Subperiod/Phase variables (APxxSDT, APxxEDT, TRTxxP)
-- `to_frame()` — materialise\
-"""
+    verbs = [
+        "first_date",
+        "last_date",
+        "duration",
+        "eligibility_flag",
+        "count_events",
+        "age_years",
+        "derive_period",
+    ]
+    bullets = _render_verb_bullets(ADSLNamespace, verbs)
+    return f"## ADSL verbs\n\n{bullets}"
 
 
 def _occds_verbs_section() -> str:
-    return """\
-## OCCDS verbs
+    from fleet.adam.occds_namespace import OCCDSNamespace
 
-Available on `df.adam.occds` (and `df.adam.pk` for sequence). Shared verbs \
-(source, derivation, assigned, recode, rename, condderivation, whereclauses, merge_adsl, seq) \
-are also available here via the shared mixin.
-
-- `treatment_emergent(target, *, start_date, trtsdt, trtedt)` — derive TRTEMFL using \
-`TRTSDT ≤ event start ≤ TRTEDT` window
-- `worst_flag(target, *, severity_col, severity_order, groups)` — flag the row with the \
-worst severity value per group (custom ordering)
-- `onset_recovery(*, onset_target, recovery_target, start_col, end_col)` — derive onset \
-and recovery date columns
-- `seq(target, *, groups)` — sequential 1-based record number per group (ASEQ)
-- `to_frame()` — materialise\
-"""
+    verbs = [
+        "treatment_emergent",
+        "worst_flag",
+        "onset_recovery",
+        "seq",
+    ]
+    bullets = _render_verb_bullets(OCCDSNamespace, verbs)
+    return (
+        "## OCCDS verbs\n\n"
+        "Available on `df.adam.occds` (and `df.adam.pk` for sequence). "
+        "Shared verbs (source, derivation, assigned, recode, rename, "
+        "condderivation, whereclauses, merge_adsl) are also available "
+        "here via the shared mixin.\n\n" + bullets
+    )
 
 
 def _verb_mapping_section() -> str:
@@ -521,6 +598,216 @@ Full docs: https://realslimmahdi.github.io/fleet-cdisc/
 
 
 # ---------------------------------------------------------------------------
+# README namespace block (auto-synced between sentinel comments)
+# ---------------------------------------------------------------------------
+
+README_PATH = REPO_ROOT / "README.md"
+README_BEGIN = "<!-- AUTO:NAMESPACES:BEGIN -->"
+README_END = "<!-- AUTO:NAMESPACES:END -->"
+
+# Curated verb lists per README namespace block. Edit these to control what
+# the README advertises; counts and the "(N verbs: …)" summary line are
+# derived automatically.
+_SHARED_ADAM_VERBS = [
+    "source", "derivation", "assigned", "recode", "rename",
+    "condderivation", "whereclauses", "merge_adsl",
+    "derive_dt", "derive_dtm", "format_iso",
+]
+
+_README_SDTM_VERBS = [
+    "assign_no_ct", "assign_ct", "assign_dtc",
+    "hardcode_ct", "hardcode_no_ct",
+    "condition_add", "if_then_else", "ae_aerel",
+    "merge", "remove_dup", "group_by",
+    "dataset_level", "notsubmitted", "multiple_responses",
+]
+
+_README_ADAM_SPECIFIC = [
+    "lookup", "study_day", "baseline", "chg", "pchg", "flag",
+    "bmi", "nrind", "on_treatment", "shift", "bsa", "map", "qtc",
+    "derive_summary_records", "derive_locf_records", "derive_param", "transform",
+]
+
+_README_ADSL_SPECIFIC = [
+    "first_date", "last_date", "duration", "count_events",
+    "eligibility_flag", "age_years", "age_from_dates", "derive_period",
+]
+
+_README_OCCDS_SPECIFIC = ["worst_flag", "treatment_emergent", "onset_recovery"]
+_README_OCCDS_MULTI = ["seq"]
+
+_README_ONCO_SPECIFIC = [
+    "aval_resp", "tumor_response_flag", "best_overall_response",
+    "confirmed_response_flag", "filter_pd",
+]
+
+_README_OPHTHA_SPECIFIC = [
+    "etdrs_to_logmar", "logmar_to_etdrs",
+    "study_eye", "affected_eye", "bcva_criterion",
+]
+
+_README_PEDS_SPECIFIC = [
+    "age_days", "age_months", "age_years",
+    "corrected_age", "prematurity_flag", "bmi_category",
+]
+
+_README_VACCINE_SPECIFIC = [
+    "fever_flag", "seroconversion_flag", "seroresponse_flag",
+    "aval_adis", "event_flag",
+]
+
+_README_METABOLIC_SPECIFIC = [
+    "waist_hip_ratio", "waist_height_ratio", "body_fat_pct", "visceral_fat_flag",
+]
+
+_README_NEURO_SPECIFIC = [
+    "centiloid", "mmse_category", "cdrsob_total", "moca_category", "panss_total",
+]
+
+_README_PK_SPECIFIC = [
+    "blq_flag", "blq_impute", "nominal_time", "actual_time", "predose_flag",
+    "dose_normalized", "evid", "mrrlt", "blqfn", "log_conc", "mdv", "amt",
+    "cmt", "avalcat", "anl_flag",
+]
+_README_PK_MULTI = ["seq"]
+
+
+def _render_namespace_details(
+    *,
+    namespace: str,
+    title: str,
+    specific: list[str],
+    with_shared: bool,
+    multi_row: list[str] | None = None,
+) -> str:
+    """Render one ``<details>`` block for the README namespace catalog.
+
+    Counts in the summary line and the body breakdown are computed from
+    the verb lists, so adding/removing a curated verb updates both
+    automatically.
+    """
+    n_specific = len(specific)
+    n_multi = len(multi_row) if multi_row else 0
+    n_shared = len(_SHARED_ADAM_VERBS) if with_shared else 0
+    total = n_specific + n_shared + n_multi
+
+    if with_shared or n_multi:
+        breakdown_parts = [f"{n_specific} specific"]
+        if n_shared:
+            breakdown_parts.append(f"{n_shared} shared")
+        if n_multi:
+            breakdown_parts.append(f"{n_multi} multi-row")
+        count_label = f"{total} verbs: " + " + ".join(breakdown_parts)
+    else:
+        count_label = f"{total} verbs"
+
+    summary = (
+        f"<summary><b><code>{namespace}</code></b> — "
+        f"{title} ({count_label})</summary>"
+    )
+
+    def _join(verbs: list[str]) -> str:
+        return " · ".join(f"`{v}`" for v in verbs)
+
+    if with_shared or n_multi:
+        body_parts = [f"**Specific:** {_join(specific)}"]
+        if multi_row:
+            body_parts.append(f"**Multi-row:** {_join(multi_row)}")
+        if with_shared:
+            body_parts.append(f"**Shared:** {_join(_SHARED_ADAM_VERBS)}")
+        body = "\n\n".join(body_parts)
+    else:
+        body = _join(specific)
+
+    return f"<details>\n{summary}\n\n{body}\n\n</details>"
+
+
+def _readme_namespaces_block() -> str:
+    """Build the auto-synced README namespace catalog (between sentinels)."""
+    intro = (
+        "Importing `fleet` registers chainable namespaces on **every** "
+        "Polars DataFrame. All ADaM namespaces also inherit "
+        f"**{len(_SHARED_ADAM_VERBS)} shared verbs** from the common mixin: "
+        + ", ".join(f"`{v}`" for v in _SHARED_ADAM_VERBS) + "."
+    )
+
+    blocks: list[str] = [
+        _render_namespace_details(
+            namespace="df.sdtm", title="SDTM domains",
+            specific=_README_SDTM_VERBS, with_shared=False,
+        ),
+        _render_namespace_details(
+            namespace="df.adam", title="ADaM BDS",
+            specific=_README_ADAM_SPECIFIC, with_shared=True,
+        ),
+        _render_namespace_details(
+            namespace="df.adam.adsl", title="ADSL",
+            specific=_README_ADSL_SPECIFIC, with_shared=True,
+        ),
+        _render_namespace_details(
+            namespace="df.adam.occds", title="OCCDS / ADAE, ADCM…",
+            specific=_README_OCCDS_SPECIFIC, with_shared=True,
+            multi_row=_README_OCCDS_MULTI,
+        ),
+        _render_namespace_details(
+            namespace="df.adam.onco", title="Oncology",
+            specific=_README_ONCO_SPECIFIC, with_shared=True,
+        ),
+        _render_namespace_details(
+            namespace="df.adam.ophtha", title="Ophthalmology",
+            specific=_README_OPHTHA_SPECIFIC, with_shared=True,
+        ),
+        _render_namespace_details(
+            namespace="df.adam.peds", title="Pediatrics",
+            specific=_README_PEDS_SPECIFIC, with_shared=True,
+        ),
+        _render_namespace_details(
+            namespace="df.adam.vaccine", title="Vaccine",
+            specific=_README_VACCINE_SPECIFIC, with_shared=True,
+        ),
+        _render_namespace_details(
+            namespace="df.adam.metabolic", title="Metabolic",
+            specific=_README_METABOLIC_SPECIFIC, with_shared=True,
+        ),
+        _render_namespace_details(
+            namespace="df.adam.neuro", title="Neuroscience",
+            specific=_README_NEURO_SPECIFIC, with_shared=True,
+        ),
+        _render_namespace_details(
+            namespace="df.adam.pk", title="Pharmacokinetics",
+            specific=_README_PK_SPECIFIC, with_shared=True,
+            multi_row=_README_PK_MULTI,
+        ),
+    ]
+
+    return intro + "\n\n" + "\n\n".join(blocks)
+
+
+def _render_readme(existing: str) -> str:
+    """Return the README text with the namespace block re-synced.
+
+    Looks for ``README_BEGIN`` / ``README_END`` sentinel comments and
+    replaces everything between them with the freshly generated
+    namespace catalog. Raises ``RuntimeError`` if the sentinels are
+    missing or unbalanced.
+    """
+    begin_idx = existing.find(README_BEGIN)
+    end_idx = existing.find(README_END)
+    if begin_idx == -1 or end_idx == -1 or end_idx < begin_idx:
+        raise RuntimeError(
+            f"Sentinels {README_BEGIN!r} / {README_END!r} not found "
+            f"(or out of order) in {README_PATH}. Add them around the "
+            "namespace block before regenerating."
+        )
+
+    head = existing[: begin_idx + len(README_BEGIN)]
+    tail = existing[end_idx:]
+    block = _readme_namespaces_block()
+    return f"{head}\n\n{block}\n\n{tail}"
+
+
+
+# ---------------------------------------------------------------------------
 # Assembly
 # ---------------------------------------------------------------------------
 
@@ -570,21 +857,36 @@ def main() -> None:
     content = build()
     output_path = Path(args.output)
 
+    # README namespace catalog is synced from the same curated lists
+    # so the two artefacts can never drift out of sync.
+    readme_existing = README_PATH.read_text(encoding="utf-8")
+    readme_new = _render_readme(readme_existing)
+
     if args.check:
+        stale: list[str] = []
         if not output_path.exists():
             print(f"STALE: {output_path} does not exist. Run without --check to generate it.")
             sys.exit(1)
-        existing = output_path.read_text(encoding="utf-8")
-        if existing != content:
-            print(
-                f"STALE: {output_path} is out of date. "
-                "Run `uv run python scripts/build_llms.py` to regenerate."
-            )
+        if output_path.read_text(encoding="utf-8") != content:
+            stale.append(str(output_path))
+        if readme_existing != readme_new:
+            stale.append(str(README_PATH))
+        if stale:
+            for path in stale:
+                print(
+                    f"STALE: {path} is out of date. "
+                    "Run `uv run python scripts/build_llms.py` to regenerate."
+                )
             sys.exit(1)
-        print(f"OK: {output_path} is up to date.")
+        print(f"OK: {output_path} and {README_PATH} are up to date.")
     else:
         output_path.write_text(content, encoding="utf-8")
         print(f"Written: {output_path}")
+        if readme_existing != readme_new:
+            README_PATH.write_text(readme_new, encoding="utf-8")
+            print(f"Written: {README_PATH} (namespace block synced)")
+        else:
+            print(f"Unchanged: {README_PATH} (namespace block already in sync)")
 
 
 if __name__ == "__main__":

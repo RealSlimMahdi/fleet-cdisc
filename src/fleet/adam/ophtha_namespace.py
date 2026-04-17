@@ -72,7 +72,7 @@ class OphthaNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        expr = (-0.02 * pl.col(source) + 1.7)
+        expr = -0.02 * pl.col(source) + 1.7
         if round_digits is not None:
             expr = expr.round(round_digits)
         return self._chain(expr.alias(target))
@@ -207,11 +207,7 @@ class OphthaNamespace(SharedADaMVerbsMixin):
                 & loc_up.is_in(locs)
             )
             .then(pl.lit("Both Eyes"))
-            .when(
-                seye_up.eq(pl.lit("BILATERAL"))
-                & lat_up.is_in(valid_lat)
-                & loc_up.is_in(locs)
-            )
+            .when(seye_up.eq(pl.lit("BILATERAL")) & lat_up.is_in(valid_lat) & loc_up.is_in(locs))
             .then(pl.lit("Study Eye"))
             .when(
                 lat_up.eq(seye_up)
@@ -281,9 +277,5 @@ class OphthaNamespace(SharedADaMVerbsMixin):
             raise ValueError(f"direction must be one of ge/gt/le/lt, got '{direction}'.")
 
         return self._chain(
-            pl.when(cond)
-            .then(pl.lit(flag_value))
-            .otherwise(pl.lit(None))
-            .alias(target)
+            pl.when(cond).then(pl.lit(flag_value)).otherwise(pl.lit(None)).alias(target)
         )
-

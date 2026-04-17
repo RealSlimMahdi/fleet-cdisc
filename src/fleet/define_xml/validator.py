@@ -83,12 +83,14 @@ class DefineValidator:
         for ig in meta.get("item_group_defs", []):
             key_vars = [r for r in ig.get("item_refs", []) if r.get("key_sequence") is not None]
             if not key_vars:
-                self.issues.append(DefineIssue(
-                    "error",
-                    f"item_group_defs[oid={ig.get('oid', '?')}]",
-                    f"Dataset '{ig.get('name', '?')}' must have at least one key variable (key_sequence).",
-                    "BR01",
-                ))
+                self.issues.append(
+                    DefineIssue(
+                        "error",
+                        f"item_group_defs[oid={ig.get('oid', '?')}]",
+                        f"Dataset '{ig.get('name', '?')}' must have at least one key variable (key_sequence).",
+                        "BR01",
+                    )
+                )
 
         item_def_oids = {i["oid"] for i in meta.get("item_defs", [])}
         codelist_oids = {c["oid"] for c in meta.get("code_lists", [])}
@@ -99,17 +101,25 @@ class DefineValidator:
                 # BR02
                 oid = ref.get("item_oid")
                 if oid and oid not in item_def_oids:
-                    self.issues.append(DefineIssue(
-                        "error", f"item_group_defs[oid={ig.get('oid')}].item_refs",
-                        f"ItemRef '{oid}' not found in item_defs.", "BR02",
-                    ))
+                    self.issues.append(
+                        DefineIssue(
+                            "error",
+                            f"item_group_defs[oid={ig.get('oid')}].item_refs",
+                            f"ItemRef '{oid}' not found in item_defs.",
+                            "BR02",
+                        )
+                    )
                 # BR04
                 m_oid = ref.get("method_oid")
                 if m_oid and m_oid not in method_oids:
-                    self.issues.append(DefineIssue(
-                        "warning", f"item_group_defs[oid={ig.get('oid')}].item_refs[{oid}]",
-                        f"MethodDef '{m_oid}' not found in method_defs.", "BR04",
-                    ))
+                    self.issues.append(
+                        DefineIssue(
+                            "warning",
+                            f"item_group_defs[oid={ig.get('oid')}].item_refs[{oid}]",
+                            f"MethodDef '{m_oid}' not found in method_defs.",
+                            "BR04",
+                        )
+                    )
 
         # BR03
         for item in meta.get("item_defs", []):
@@ -117,10 +127,14 @@ class DefineValidator:
             if isinstance(cl_ref, dict):
                 cl_oid = cl_ref.get("codelist_oid")
                 if cl_oid and cl_oid not in codelist_oids:
-                    self.issues.append(DefineIssue(
-                        "error", f"item_defs[oid={item.get('oid')}].codelist_ref",
-                        f"CodeList '{cl_oid}' not found in code_lists.", "BR03",
-                    ))
+                    self.issues.append(
+                        DefineIssue(
+                            "error",
+                            f"item_defs[oid={item.get('oid')}].codelist_ref",
+                            f"CodeList '{cl_oid}' not found in code_lists.",
+                            "BR03",
+                        )
+                    )
 
     # ------------------------------------------------------------------ #
     # Cross references                                                     #
@@ -135,16 +149,24 @@ class DefineValidator:
             loc_base = f"item_group_defs[oid={ig.get('oid')}]"
             std_oid = ig.get("standard_oid")
             if std_oid and std_oid not in standard_oids:
-                self.issues.append(DefineIssue(
-                    "warning", f"{loc_base}.standard_oid",
-                    f"Standard '{std_oid}' not found in standards section.", "CR01",
-                ))
+                self.issues.append(
+                    DefineIssue(
+                        "warning",
+                        f"{loc_base}.standard_oid",
+                        f"Standard '{std_oid}' not found in standards section.",
+                        "CR01",
+                    )
+                )
             leaf_id = ig.get("archive_location_id")
             if leaf_id and leaf_id not in leaf_ids:
-                self.issues.append(DefineIssue(
-                    "error", f"{loc_base}.archive_location_id",
-                    f"Leaf '{leaf_id}' not found in leaf_defs.", "CR02",
-                ))
+                self.issues.append(
+                    DefineIssue(
+                        "error",
+                        f"{loc_base}.archive_location_id",
+                        f"Leaf '{leaf_id}' not found in leaf_defs.",
+                        "CR02",
+                    )
+                )
 
     # ------------------------------------------------------------------ #
     # Algorithm completeness                                               #
@@ -166,22 +188,46 @@ class DefineValidator:
             loc = f"item_defs[oid={oid}].{_ALGO_KEY}"
 
             if algo_type == "assign_no_ct" and not algo.get("source_variable"):
-                self.issues.append(DefineIssue("error", loc, f"'{name}': assign_no_ct requires source_variable.", "ALG01"))
+                self.issues.append(
+                    DefineIssue(
+                        "error", loc, f"'{name}': assign_no_ct requires source_variable.", "ALG01"
+                    )
+                )
 
             if algo_type == "assign_ct":
                 if not algo.get("source_variable"):
-                    self.issues.append(DefineIssue("error", loc, f"'{name}': assign_ct requires source_variable.", "ALG02A"))
+                    self.issues.append(
+                        DefineIssue(
+                            "error", loc, f"'{name}': assign_ct requires source_variable.", "ALG02A"
+                        )
+                    )
                 if not algo.get("ct_codelist"):
-                    self.issues.append(DefineIssue("error", loc, f"'{name}': assign_ct requires ct_codelist.", "ALG02B"))
+                    self.issues.append(
+                        DefineIssue(
+                            "error", loc, f"'{name}': assign_ct requires ct_codelist.", "ALG02B"
+                        )
+                    )
 
-            if algo_type in ("hardcode_no_ct", "hardcode_ct", "dataset_level") and not algo.get("constant_value"):
-                self.issues.append(DefineIssue("error", loc, f"'{name}': {algo_type} requires constant_value.", "ALG03"))
+            if algo_type in ("hardcode_no_ct", "hardcode_ct", "dataset_level") and not algo.get(
+                "constant_value"
+            ):
+                self.issues.append(
+                    DefineIssue(
+                        "error", loc, f"'{name}': {algo_type} requires constant_value.", "ALG03"
+                    )
+                )
 
             if algo_type == "merge":
                 if not algo.get("merge_dataset"):
-                    self.issues.append(DefineIssue("error", loc, f"'{name}': merge requires merge_dataset.", "ALG05A"))
+                    self.issues.append(
+                        DefineIssue(
+                            "error", loc, f"'{name}': merge requires merge_dataset.", "ALG05A"
+                        )
+                    )
                 if not algo.get("merge_key"):
-                    self.issues.append(DefineIssue("error", loc, f"'{name}': merge requires merge_key.", "ALG05B"))
+                    self.issues.append(
+                        DefineIssue("error", loc, f"'{name}': merge requires merge_key.", "ALG05B")
+                    )
 
     # ------------------------------------------------------------------ #
     # Consistency                                                         #
@@ -191,7 +237,14 @@ class DefineValidator:
         meta = data.get("metadata_version", {})
         all_oids: dict[str, list[str]] = {}
 
-        for section in ("item_group_defs", "item_defs", "code_lists", "method_defs", "comment_defs", "standards"):
+        for section in (
+            "item_group_defs",
+            "item_defs",
+            "code_lists",
+            "method_defs",
+            "comment_defs",
+            "standards",
+        ):
             for item in meta.get(section, []):
                 oid = item.get("oid")
                 if oid:
@@ -199,10 +252,14 @@ class DefineValidator:
 
         for oid, sections in all_oids.items():
             if len(sections) > 1:
-                self.issues.append(DefineIssue(
-                    "error", f"multiple sections: {', '.join(sections)}",
-                    f"Duplicate OID '{oid}' found in {len(sections)} sections.", "CONS01",
-                ))
+                self.issues.append(
+                    DefineIssue(
+                        "error",
+                        f"multiple sections: {', '.join(sections)}",
+                        f"Duplicate OID '{oid}' found in {len(sections)} sections.",
+                        "CONS01",
+                    )
+                )
 
     # ------------------------------------------------------------------ #
     # Reporting helpers                                                    #
@@ -224,9 +281,9 @@ class DefineValidator:
 
         errors = self.get_errors()
         warnings = self.get_warnings()
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print("Define-XML YAML Validation Report")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
         if errors:
             print(f"\n{len(errors)} ERROR(S):\n")
             for i in errors:
@@ -235,6 +292,6 @@ class DefineValidator:
             print(f"\n{len(warnings)} WARNING(S):\n")
             for i in warnings:
                 print(f"  [{i.rule}] {i.location}\n           {i.message}\n")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
         status = "FAILED" if errors else "PASSED"
         print(f"Result: {status} — {len(errors)} errors, {len(warnings)} warnings")

@@ -54,10 +54,13 @@ import fleet  # registers df.sdtm, df.adam, df.adsl, df.occds, df.tlg everywhere
 
 ### `core/` — Shared Foundation
 
-| File               | Purpose                                                                                                                                                                               |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `exceptions.py`    | All custom exception classes — `FleetError`, `SDTMError`, `ADAMError`, `CTError`, `FleetIOError`, `SpecError`, `ValidationError`                                                      |
-| `study_context.py` | `StudyContext` — wraps a study root directory and resolves configured paths (raw data, SDTM, ADaM, metadata, outputs). Loaded via `load_study_context(config_path)` from a YAML file. |
+| File                    | Purpose                                                                                                                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `exceptions.py`         | All custom exception classes — `FleetError`, `SDTMError`, `ADAMError`, `CTError`, `FleetIOError`, `SpecError`, `ValidationError`                                                      |
+| `study_context.py`      | `StudyContext` — wraps a study root directory and resolves configured paths (raw data, SDTM, ADaM, metadata, outputs). Loaded via `load_study_context(config_path)` from a YAML file. |
+| `dag.py`                | `PipelineDAG`, `PipelineNode`, `VariableNode` — pipeline + variable-level lineage graph (verb name, source columns, defining method)                                                  |
+| `algorithm_resolver.py` | Resolves a Fleet verb name (`algorithm:`) or dotted callable (`callable:`) to its docstring + qualified path; powers Define-XML method enrichment                                     |
+| `lineage.py`            | `record_lineage(owner, exprs)` / `lineage_of(namespace)` — invoked by `_chain()` in SDTM/ADaM namespaces to attach `VariableNode` records to every materialised column                |
 
 **`StudyContext`** is useful when your study files live in a standard directory layout and you want paths resolved automatically rather than hard-coded.
 
@@ -250,25 +253,29 @@ Registers `df.tlg` on every Polars DataFrame. Produces Analysis Results Datasets
 
 ### `define_xml/` — Define-XML Support
 
-| File                                 | Purpose                                                                                                |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `schemas/define_xml_2_1_schema.json` | JSON Schema for Define-XML 2.1 YAML representation                                                     |
-| `validator.py`                       | `DefineValidator` — validates a YAML Define-XML spec against the schema; reports `DefineIssue` objects |
-| `generator.py`                       | `DefineXMLGenerator` — converts a YAML spec into a Define-XML 2.1 ODM XML string                       |
+| File                                 | Purpose                                                                                                                                         |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schemas/define_xml_2_1_schema.json` | JSON Schema for Define-XML 2.1 YAML representation                                                                                              |
+| `schemas/define_spec_schema.json`    | JSON Schema for the higher-level `define.yaml` spec (datasets + derivations + `algorithm:` / `callable:`)                                       |
+| `validator.py`                       | `DefineValidator` — validates a YAML Define-XML spec against the schema; reports `DefineIssue` objects                                          |
+| `generator.py`                       | `DefineXMLGenerator` — converts a YAML spec into a Define-XML 2.1 ODM XML string                                                                |
+| `spec_generator.py`                  | `DefineSpecGenerator` — generates Define-XML from `define.yaml`; with `enrich_methods=True` emits `<MethodDef>` from verb / callable docstrings |
+| `checker.py`                         | `DatasetChecker` — runtime conformance check of a built dataset against its spec                                                                |
 
-The YAML key `fleet_algorithm` in a variable spec is used to record the derivation verb for traceability in the generated XML.
+The YAML key `fleet_algorithm` in a variable spec is used to record the derivation verb for traceability in the generated XML. Use `algorithm:` (Fleet verb) or `callable:` (study-specific dotted path) inside `derivation:` to drive `enrich_methods` enrichment.
 
 ---
 
 ### `validation/` — CDISC Rules Engine Integration
 
-| File           | Purpose                                                                                                                                              |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `engine.py`    | Engine installer and discovery — `install_engine()`, `uninstall_engine()`, `discover_engine()`, `doctor()`; manages `~/.fleet/cdisc-rules-engine/`   |
-| `models.py`    | `Severity` enum (`ERROR/WARNING/INFO`), `ValidationIssue` dataclass, `ValidationResult` (with `.is_valid`, `.print_report()`, `.save_html_report()`) |
-| `official.py`  | `OfficialCDISCValidator` — wraps the CDISC Rules Engine binary (or legacy `core.py`) via subprocess                                                  |
-| `providers.py` | `ValidationProvider` ABC, `OfficialRulesEngineProvider`, `ValidationProviderRegistry` (plugin registry)                                              |
-| `service.py`   | `ValidationService` — high-level `.validate_sdtm()` and `.validate_adam()` methods                                                                   |
+| File              | Purpose                                                                                                                                                                                                                                                  |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `engine.py`       | Engine installer and discovery — `install_engine()`, `uninstall_engine()`, `discover_engine()`, `doctor()`; manages `~/.fleet/cdisc-rules-engine/`                                                                                                       |
+| `models.py`       | `Severity` enum (`ERROR/WARNING/INFO`), `ValidationIssue` dataclass, `ValidationResult` (with `.is_valid`, `.print_report()`, `.save_html_report()`)                                                                                                     |
+| `official.py`     | `OfficialCDISCValidator` — wraps the CDISC Rules Engine binary (or legacy `core.py`) via subprocess                                                                                                                                                      |
+| `providers.py`    | `ValidationProvider` ABC, `OfficialRulesEngineProvider`, `ValidationProviderRegistry` (plugin registry)                                                                                                                                                  |
+| `service.py`      | `ValidationService` — high-level `.validate_sdtm()` and `.validate_adam()` methods                                                                                                                                                                       |
+| `lineage_join.py` | `enrich_with_lineage(result, lineage, *, spec_ref=None)` — joins `ValidationIssue.variable` with the pipeline `VariableNode` lineage so each issue carries `producing_verb`, `verb_method`, and `spec_ref` (cross-link from rule failure to source verb) |
 
 ---
 

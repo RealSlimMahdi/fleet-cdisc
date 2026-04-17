@@ -6,9 +6,12 @@ Do not edit manually — regenerate with ``fleet.ct.generator``.
 class C111110:
     """DEACNDEV (C111110).
     
-    A terminology codelist based on the action taken with respect to the device."""
+    A terminology codelist based on the action taken with respect to the device.
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C111110"""
 
     _concept_id = 'C111110'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C111110'
     _preferred_term = 'CDISC SDTM Device Events Action Taken with Device Terminology'
 
     CALIBRATION = 'CALIBRATION'
@@ -22,9 +25,12 @@ class C142179:
     """ARMNULRS (C142179).
     
     Terminology relevant to the reason for why an arm and/or an actual arm is
-null."""
+null.
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C142179"""
 
     _concept_id = 'C142179'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C142179'
     _preferred_term = 'CDISC SDTM Arm Null Reason Response Terminology'
 
     ASSIGNED__NOT_TREATED = 'ASSIGNED, NOT TREATED'
@@ -44,9 +50,12 @@ injection, elixir, suppository. Dosage form can have a significant effect on
 the onset, duration and intensity of the pharmacological action of a drug. A
 pharmaceutical dosage form controls the rate at which the drug is released
 into the biological fluids. This release rate affects its intrinsic
-absorption pattern and therefore, the bioavailability of the drug."""
+absorption pattern and therefore, the bioavailability of the drug.
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66726"""
 
     _concept_id = 'C66726'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66726'
     _preferred_term = 'CDISC SDTM Pharmaceutical Dosage Form Terminology'
 
     AEROSOL = 'AEROSOL'
@@ -431,9 +440,12 @@ absorption pattern and therefore, the bioavailability of the drug."""
 class C66728:
     """STENRF (C66728).
     
-    The relative relationship of a timepoint to a reference timepoint."""
+    The relative relationship of a timepoint to a reference timepoint.
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66728"""
 
     _concept_id = 'C66728'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66728'
     _preferred_term = 'CDISC SDTM Relation to Reference Period Terminology'
 
     AFTER = 'AFTER'
@@ -457,9 +469,12 @@ class C66729:
     """ROUTE (C66729).
     
     A terminology codelist relevant to the course by which a substance is
-administered in order to reach the site of action in the body."""
+administered in order to reach the site of action in the body.
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66729"""
 
     _concept_id = 'C66729'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66729'
     _preferred_term = 'CDISC SDTM Route of Administration Terminology'
 
     AURICULAR__OTIC_ = 'AURICULAR (OTIC)'
@@ -752,9 +767,12 @@ class C66731:
     
     The assemblage of physical properties or qualities by which male is
 distinguished from female; the physical difference between male and female;
-the distinguishing peculiarity of male or female. (NCI)"""
+the distinguishing peculiarity of male or female. (NCI)
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66731"""
 
     _concept_id = 'C66731'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66731'
     _preferred_term = 'CDISC SDTM Sex of Individual Terminology'
 
     F = 'F'
@@ -771,9 +789,12 @@ class C66741:
     
     The test code given to the test that analyzes a particular set of vital
 signs including temperature, respiratory rate, heart rate, and blood
-pressure."""
+pressure.
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66741"""
 
     _concept_id = 'C66741'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66741'
     _preferred_term = 'CDISC SDTM Vital Sign Test Code Terminology'
 
     ABI = 'ABI'
@@ -925,9 +946,12 @@ class C66742:
     """NY (C66742).
     
     A term that is used to indicate a question with permissible values of
-yes/no/unknown/not applicable."""
+yes/no/unknown/not applicable.
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66742"""
 
     _concept_id = 'C66742'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66742'
     _preferred_term = 'CDISC SDTM Yes No Unknown or Not Applicable Response Terminology'
 
     N = 'N'
@@ -943,9 +967,12 @@ class C66767:
     """ACN (C66767).
     
     Terminology specifying changes to the study treatment as a result of an
-adverse event."""
+adverse event.
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66767"""
 
     _concept_id = 'C66767'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66767'
     _preferred_term = 'CDISC SDTM Action Taken with Study Treatment Terminology'
 
     DOSE_INCREASED = 'DOSE INCREASED'
@@ -969,9 +996,12 @@ class C66768:
     """OUT (C66768).
     
     A condition or event that is attributed to the adverse event and is the
-result or conclusion of the adverse event. (NCI)"""
+result or conclusion of the adverse event. (NCI)
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66768"""
 
     _concept_id = 'C66768'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66768'
     _preferred_term = 'CDISC SDTM Adverse Event Outcome Terminology'
 
     FATAL = 'FATAL'
@@ -991,9 +1021,12 @@ class C66769:
     """AESEV (C66769).
     
     A scale that defines the degree or state of disease existing in a patient as
-a result of the occurrence of an adverse event. (NCI)"""
+a result of the occurrence of an adverse event. (NCI)
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66769"""
 
     _concept_id = 'C66769'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66769'
     _preferred_term = 'CDISC SDTM Severity Intensity Scale for Adverse Event Terminology'
 
     MILD = 'MILD'
@@ -1007,9 +1040,12 @@ class C66770:
     """VSRESU (C66770).
     
     The unit used to record and describe the result of a test investigating a
-vital sign. (NCI)"""
+vital sign. (NCI)
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66770"""
 
     _concept_id = 'C66770'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66770'
     _preferred_term = 'CDISC SDTM Unit for Vital Sign Result Terminology'
 
     __ = '%'
@@ -1062,9 +1098,12 @@ vital sign. (NCI)"""
 class C66781:
     """AGEU (C66781).
     
-    Those units of time that are routinely used to express the age of a subject."""
+    Those units of time that are routinely used to express the age of a subject.
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66781"""
 
     _concept_id = 'C66781'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66781'
     _preferred_term = 'CDISC SDTM Age Unit Terminology'
 
     DAYS = 'DAYS'
@@ -1082,9 +1121,12 @@ class C66789:
     """ND (C66789).
     
     Indicates a task, process or examination that has either not been initiated
-or completed. (NCI)"""
+or completed. (NCI)
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66789"""
 
     _concept_id = 'C66789'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66789'
     _preferred_term = 'CDISC SDTM Not Done Terminology'
 
     NOT_DONE = 'NOT DONE'
@@ -1098,9 +1140,12 @@ maintained from generation to generation, a common history and origin and a
 sense of identification with the group; members of the group have
 distinctive features in their way of life, shared experiences and often a
 common genetic heritage; these features may be reflected in their experience
-of health and disease. (NCI)"""
+of health and disease. (NCI)
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66790"""
 
     _concept_id = 'C66790'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66790'
     _preferred_term = 'CDISC SDTM Ethnic Group Terminology'
 
     HISPANIC_OR_LATINO = 'HISPANIC OR LATINO'
@@ -1117,9 +1162,12 @@ class C67153:
     
     The test name given to the test that analyzes a particular set of vital
 signs including temperature, respiratory rate, heart rate, and blood
-pressure."""
+pressure.
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C67153"""
 
     _concept_id = 'C67153'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C67153'
     _preferred_term = 'CDISC SDTM Vital Sign Test Name Terminology'
 
     Abdominal_Skinfold_Thickness = 'Abdominal Skinfold Thickness'
@@ -1270,9 +1318,12 @@ pressure."""
 class C71113:
     """FREQ (C71113).
     
-    The terminology that includes terms pertaining to frequency within CDISC."""
+    The terminology that includes terms pertaining to frequency within CDISC.
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C71113"""
 
     _concept_id = 'C71113'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C71113'
     _preferred_term = 'CDISC SDTM Frequency Terminology'
 
     _TIME_PER_WEEK = '1 TIME PER WEEK'
@@ -1483,9 +1534,12 @@ class C71113:
 class C71148:
     """POSITION (C71148).
     
-    Terminology codelist used with Body Position within CDISC."""
+    Terminology codelist used with Body Position within CDISC.
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C71148"""
 
     _concept_id = 'C71148'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C71148'
     _preferred_term = 'CDISC SDTM Body Position Terminology'
 
     DECUBITUS = 'DECUBITUS'
@@ -1526,9 +1580,12 @@ class C71148:
 class C71620:
     """UNIT (C71620).
     
-    Terminology codelist used for units within CDISC."""
+    Terminology codelist used for units within CDISC.
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C71620"""
 
     _concept_id = 'C71620'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C71620'
     _preferred_term = 'CDISC SDTM Unit of Measure Terminology'
 
     __ = '%'
@@ -3315,9 +3372,12 @@ class C71620:
 class C74456:
     """LOC (C74456).
     
-    Terminology codelist used for anatomical location within CDISC."""
+    Terminology codelist used for anatomical location within CDISC.
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C74456"""
 
     _concept_id = 'C74456'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C74456'
     _preferred_term = 'CDISC SDTM Anatomical Location Terminology'
 
     TH_LUMBAR_SPINOUS_PROCESS = '5TH LUMBAR SPINOUS PROCESS'
@@ -6057,9 +6117,12 @@ class C74457:
     """RACE (C74457).
     
     Terminology codelist used to identify the race of an individual within the
-Clinical Data Interchange Standards Consortium Study Data Tabulation Model."""
+Clinical Data Interchange Standards Consortium Study Data Tabulation Model.
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C74457"""
 
     _concept_id = 'C74457'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C74457'
     _preferred_term = 'CDISC SDTM Race Terminology'
 
     AMERICAN_INDIAN_OR_ALASKA_NATIVE = 'AMERICAN INDIAN OR ALASKA NATIVE'
@@ -6083,9 +6146,12 @@ class C99073:
     """LAT (C99073).
     
     CDISC terminology for anatomical location or specimen further detailing the
-side(s) of interest."""
+side(s) of interest.
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C99073"""
 
     _concept_id = 'C99073'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C99073'
     _preferred_term = 'CDISC SDTM Laterality Terminology'
 
     BILATERAL = 'BILATERAL'
@@ -6107,9 +6173,12 @@ class C99074:
     """DIR (C99074).
     
     CDISC terminology for anatomical location or specimen further detailing
-directionality."""
+directionality.
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C99074"""
 
     _concept_id = 'C99074'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C99074'
     _preferred_term = 'CDISC SDTM Directionality Terminology'
 
     ACRAL = 'ACRAL'
@@ -6226,9 +6295,12 @@ directionality."""
 class C99079:
     """EPOCH (C99079).
     
-    The name of the EPOCH."""
+    The name of the EPOCH.
+    
+    See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C99079"""
 
     _concept_id = 'C99079'
+    _cdisc_url = 'https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C99079'
     _preferred_term = 'CDISC SDTM Epoch Terminology'
 
     BASELINE = 'BASELINE'

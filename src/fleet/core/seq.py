@@ -63,7 +63,5 @@ def derive_seq(
             )
 
     return df.with_columns(
-        (pl.int_range(pl.len()).over(groups) + start_at)
-        .cast(pl.Int64)
-        .alias(target)
+        (pl.int_range(pl.len()).over(groups) + start_at).cast(pl.Int64).alias(target)
     )

@@ -20,14 +20,18 @@ from __future__ import annotations
 import json
 import xml.dom.minidom
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from lxml import etree as lxml_etree
-
 import jsonschema
 import yaml
+from lxml import etree as lxml_etree
+
+from fleet.core.algorithm_resolver import (
+    resolve_algorithm_docstring,
+    resolve_callable_docstring,
+)
 
 _SCHEMA_PATH = Path(__file__).parent / "schemas" / "define_spec_schema.json"
 
@@ -41,10 +45,10 @@ ET.register_namespace("xlink", _NS_XLINK)
 
 # Map simplified type → ODM DataType attribute
 _TYPE_TO_ODM: dict[str, str] = {
-    "text":     "text",
-    "integer":  "integer",
-    "float":    "float",
-    "date":     "date",
+    "text": "text",
+    "integer": "integer",
+    "float": "float",
+    "date": "date",
     "datetime": "datetime",
 }
 
@@ -70,9 +74,20 @@ class DefineSpecGenerator:
         before generating and raises ``ValueError`` on schema violations.
     """
 
-    def __init__(self, define_yaml_path: str | Path, *, validate_schema: bool = True) -> None:
+    def __init__(
+        self,
+        define_yaml_path: str | Path,
+        *,
+        validate_schema: bool = True,
+        enrich_methods: bool = False,
+    ) -> None:
         self._path = Path(define_yaml_path)
         self._data: dict[str, Any] = yaml.safe_load(self._path.read_text(encoding="utf-8"))
+        self._enrich_methods = enrich_methods
+        # Populated by _build_item_def via _register_method when
+        # enrich_methods is True; rendered into MethodDef elements at the
+        # end of MetaDataVersion.
+        self._method_defs: dict[str, dict[str, str]] = {}
         if validate_schema:
             self._validate()
 
@@ -161,22 +176,20 @@ class DefineSpecGenerator:
     def _build_odm(self) -> ET.Element:
         study = self._data["study"]
         std_oid = _STANDARD_OIDS.get(study["standard"], f"STD.{study['standard']}")
-        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
-        file_oid = (
-            f"CDISC.{study['id']}.1.Define-XML_2.1.0"
-        )
+        ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
+        file_oid = f"CDISC.{study['id']}.1.Define-XML_2.1.0"
         attribs: dict[str, str] = {
-            "xmlns":              _NS_ODM,
-            "xmlns:xlink":        _NS_XLINK,
-            "xmlns:def":          _NS_DEF,
-            "ODMVersion":         "1.3.2",
-            "FileOID":            file_oid,
-            "FileType":           "Snapshot",
-            "CreationDateTime":   ts,
-            "Originator":         study["originator"],
-            "SourceSystem":       study.get("source_system", "Fleet"),
+            "xmlns": _NS_ODM,
+            "xmlns:xlink": _NS_XLINK,
+            "xmlns:def": _NS_DEF,
+            "ODMVersion": "1.3.2",
+            "FileOID": file_oid,
+            "FileType": "Snapshot",
+            "CreationDateTime": ts,
+            "Originator": study["originator"],
+            "SourceSystem": study.get("source_system", "Fleet"),
             "SourceSystemVersion": study.get("source_system_version", "0.1.0"),
-            "def:Context":        "Submission",
+            "def:Context": "Submission",
         }
         odm = ET.Element("ODM", attrib=attribs)
         odm.append(self._build_study(study, std_oid))
@@ -199,19 +212,28 @@ class DefineSpecGenerator:
         ig = study["standard"]
         mdv_oid = f"MDV.{study['id']}.1.{ig}.{study['standard_version']}"
         attribs = {
-            "OID":                mdv_oid,
-            "Name":               f"{study['id']} {ig} Data Definitions",
-            "Description":        f"Dataset metadata for {study['id']} {ig} datasets",
-            "def:DefineVersion":  "2.1.0",
+            "OID": mdv_oid,
+            "Name": f"{study['id']} {ig} Data Definitions",
+            "Description": f"Dataset metadata for {study['id']} {ig} datasets",
+            "def:DefineVersion": "2.1.0",
         }
         mdv = ET.Element("MetaDataVersion", attrib=attribs)
 
         # Standards list — must be wrapped in def:Standards per Define-XML 2.1 spec
         stds_container = ET.SubElement(mdv, "def:Standards")
-        stds_container.append(self._build_standard(std_oid, study["standard"], "IG", study["standard_version"]))
+        stds_container.append(
+            self._build_standard(std_oid, study["standard"], "IG", study["standard_version"])
+        )
         if study.get("ct_version"):
-            stds_container.append(self._build_standard(_CT_OID, "CDISC/NCI", "CT", study["ct_version"],
-                                                       publishing_set=study["standard"]))
+            stds_container.append(
+                self._build_standard(
+                    _CT_OID,
+                    "CDISC/NCI",
+                    "CT",
+                    study["ct_version"],
+                    publishing_set=study["standard"],
+                )
+            )
 
         # ItemGroupDefs (one per dataset)
         datasets: list[dict[str, Any]] = self._data.get("datasets", [])
@@ -225,6 +247,11 @@ class DefineSpecGenerator:
         for cl in self._data.get("codelists", []):
             mdv.append(self._build_codelist(cl))
 
+        # MethodDefs (only populated when enrich_methods=True; lazily
+        # registered by _build_item_def via _register_method).
+        for method_oid in sorted(self._method_defs):
+            mdv.append(self._build_method_def(method_oid, self._method_defs[method_oid]))
+
         # LeafDefs (one per dataset)
         for ds in datasets:
             mdv.append(self._build_leaf(ds))
@@ -236,10 +263,15 @@ class DefineSpecGenerator:
     # ------------------------------------------------------------------ #
 
     @staticmethod
-    def _build_standard(oid: str, name: str, kind: str, version: str,
-                        publishing_set: str | None = None) -> ET.Element:
+    def _build_standard(
+        oid: str, name: str, kind: str, version: str, publishing_set: str | None = None
+    ) -> ET.Element:
         attribs: dict[str, str] = {
-            "OID": oid, "Name": name, "Type": kind, "Version": version, "Status": "Final",
+            "OID": oid,
+            "Name": name,
+            "Type": kind,
+            "Version": version,
+            "Status": "Final",
         }
         if publishing_set:
             attribs["PublishingSet"] = publishing_set
@@ -253,15 +285,15 @@ class DefineSpecGenerator:
         repeating = "Yes" if ds.get("repeating", True) else "No"
 
         attribs: dict[str, str] = {
-            "OID":                  ig_oid,
-            "Name":                 name,
-            "Repeating":            repeating,
-            "IsReferenceData":      "No",
-            "SASDatasetName":       name,
-            "Domain":               name,
-            "def:Structure":        ds["structure"],
-            "Purpose":              "Tabulation" if self._data["study"]["standard"] == "SDTMIG" else "Analysis",
-            "def:StandardOID":      std_oid,
+            "OID": ig_oid,
+            "Name": name,
+            "Repeating": repeating,
+            "IsReferenceData": "No",
+            "SASDatasetName": name,
+            "Domain": name,
+            "def:Structure": ds["structure"],
+            "Purpose": "Tabulation" if self._data["study"]["standard"] == "SDTMIG" else "Analysis",
+            "def:StandardOID": std_oid,
             "def:ArchiveLocationID": leaf_id,
         }
         elem = ET.Element("ItemGroupDef", attrib=attribs)
@@ -279,20 +311,24 @@ class DefineSpecGenerator:
             var_name = var["name"]
             item_oid = self._item_oid(name, var_name)
             ref_attrs: dict[str, str] = {
-                "ItemOID":    item_oid,
+                "ItemOID": item_oid,
                 "OrderNumber": str(order),
-                "Mandatory":  "Yes" if var.get("mandatory") else "No",
+                "Mandatory": "Yes" if var.get("mandatory") else "No",
             }
             if var_name in key_vars:
                 ref_attrs["KeySequence"] = str(key_order[var_name])
             ET.SubElement(elem, "ItemRef", attrib=ref_attrs)
 
         # Leaf reference
-        ET.SubElement(elem, "def:leaf", {
-            "ID": leaf_id,
-            "xlink:href": f"{name.lower()}.xpt",
-            "xlink:title": f"{name.lower()}.xpt",
-        })
+        ET.SubElement(
+            elem,
+            "def:leaf",
+            {
+                "ID": leaf_id,
+                "xlink:href": f"{name.lower()}.xpt",
+                "xlink:title": f"{name.lower()}.xpt",
+            },
+        )
 
         return elem
 
@@ -311,9 +347,9 @@ class DefineSpecGenerator:
 
     def _build_item_def(self, item_oid: str, var: dict[str, Any]) -> ET.Element:
         attribs: dict[str, str] = {
-            "OID":          item_oid,
-            "Name":         var["name"],
-            "DataType":     _TYPE_TO_ODM[var["type"]],
+            "OID": item_oid,
+            "Name": var["name"],
+            "DataType": _TYPE_TO_ODM[var["type"]],
             "SASFieldName": var["name"],
         }
         if var.get("length") is not None:
@@ -329,17 +365,101 @@ class DefineSpecGenerator:
 
         origin_type = var.get("origin", "Derived")
         orig_elem = ET.SubElement(elem, "def:Origin", {"Type": origin_type})
-        if var.get("comment"):
-            orig_desc = ET.SubElement(orig_elem, "Description")
-            ET.SubElement(orig_desc, "TranslatedText", {"xml:lang": "en"}).text = var["comment"]
 
+        # Build the human-readable origin description.  When
+        # enrich_methods is on we resolve the verb (or callable) docstring
+        # so reviewers see the exact computational method without leaving
+        # the Define-XML.
+        comment = var.get("comment") or ""
+        derivation = var.get("derivation") or {}
+        method_oid: str | None = None
+        if self._enrich_methods and derivation:
+            method_oid, summary = self._register_method(derivation)
+            if summary:
+                comment = f"{comment} {summary}".strip() if comment else summary
+        if comment:
+            orig_desc = ET.SubElement(orig_elem, "Description")
+            ET.SubElement(orig_desc, "TranslatedText", {"xml:lang": "en"}).text = comment
+
+        # MethodOID is an ItemDef attribute per Define-XML 2.1; emit only
+        # when enrichment produced one.
+        if method_oid:
+            elem.set("MethodOID", method_oid)
+
+        return elem
+
+    def _register_method(
+        self,
+        derivation: dict[str, Any],
+    ) -> tuple[str | None, str]:
+        """Resolve a derivation block to a MethodDef and return its OID + summary.
+
+        Looks up either the ``callable`` dotted path (UC-5) or the
+        ``algorithm`` verb name (UC-4) and registers a MethodDef entry on
+        ``self._method_defs`` keyed by a stable OID.  Returns the OID and
+        the docstring summary so the caller can also append the summary
+        to the Origin description.
+        """
+        callable_path = derivation.get("callable")
+        algorithm = derivation.get("algorithm") or ""
+        expression = derivation.get("expression") or ""
+
+        if callable_path:
+            summary, dotted = resolve_callable_docstring(str(callable_path))
+            if not dotted:
+                return (None, "")
+            method_name = dotted.rsplit(".", 1)[-1]
+            method_oid = f"MT.{method_name}"
+            self._method_defs.setdefault(
+                method_oid,
+                {
+                    "name": method_name,
+                    "description": summary or f"Custom callable: {dotted}",
+                    "expression": expression or dotted,
+                    "context": "Python",
+                },
+            )
+            return (method_oid, summary or "")
+
+        if not algorithm:
+            return (None, "")
+
+        summary, dotted = resolve_algorithm_docstring(str(algorithm))
+        if not dotted:
+            return (None, "")
+        method_oid = f"MT.{algorithm}"
+        self._method_defs.setdefault(
+            method_oid,
+            {
+                "name": algorithm,
+                "description": summary or f"Fleet verb: {algorithm}",
+                "expression": expression or f".{algorithm}(...)",
+                "context": "Python/Fleet",
+            },
+        )
+        return (method_oid, summary or "")
+
+    @staticmethod
+    def _build_method_def(method_oid: str, info: dict[str, str]) -> ET.Element:
+        """Render a Define-XML 2.1 ``MethodDef`` element.
+
+        See CDISC Define-XML 2.1 §4.2.2 for the FormalExpression contract.
+        """
+        elem = ET.Element(
+            "MethodDef",
+            {"OID": method_oid, "Name": info["name"], "Type": "Computation"},
+        )
+        desc = ET.SubElement(elem, "Description")
+        ET.SubElement(desc, "TranslatedText", {"xml:lang": "en"}).text = info["description"]
+        formal = ET.SubElement(elem, "FormalExpression", {"Context": info["context"]})
+        formal.text = info["expression"]
         return elem
 
     @staticmethod
     def _build_codelist(cl: dict[str, Any]) -> ET.Element:
         attribs: dict[str, str] = {
-            "OID":      cl["oid"],
-            "Name":     cl["name"],
+            "OID": cl["oid"],
+            "Name": cl["name"],
             "DataType": _TYPE_TO_ODM[cl["type"]],
         }
         elem = ET.Element("CodeList", attrib=attribs)
@@ -370,9 +490,20 @@ class DefineSpecGenerator:
         ItemDef element in the XML — matching CDISC best practice.
         """
         _SHARED = {
-            "STUDYID", "USUBJID", "DOMAIN", "SUBJID", "SITEID",
-            "AGE", "AGEU", "SEX", "RACE", "ETHNIC",
-            "ARMCD", "ARM", "ACTARMCD", "ACTARM",
+            "STUDYID",
+            "USUBJID",
+            "DOMAIN",
+            "SUBJID",
+            "SITEID",
+            "AGE",
+            "AGEU",
+            "SEX",
+            "RACE",
+            "ETHNIC",
+            "ARMCD",
+            "ARM",
+            "ACTARMCD",
+            "ACTARM",
         }
         if var_name in _SHARED:
             return f"IT.{var_name}"

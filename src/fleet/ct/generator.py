@@ -4,6 +4,10 @@ The generated module contains one class per codelist whose attributes are
 the permitted submission values.  This gives developers and AI agents
 statically typed, IDE-autocomplete-friendly access to CDISC CT.
 
+Each generated class also exposes ``_cdisc_url`` and embeds the CDISC
+Library Browser URL in its docstring so reviewers can navigate from
+pipeline code straight to the authoritative codelist definition.
+
 Example generated output::
 
     class C66731:
@@ -156,23 +160,45 @@ class CodelistGenerator:
         include_docs: If ``True`` (default), inject ``definition`` and
             ``preferredTerm`` from the CDISC JSON into class/attribute
             docstrings for richer AI context.
+        cdisc_url_template: URL template used to build the
+            ``_cdisc_url`` class attribute and the ``See:`` reference in
+            each codelist's docstring.  Substitution fields available:
+            ``{concept_id}``, ``{package}`` (e.g. ``sdtmct-2024-12-13``),
+            and ``{date}`` (the package date suffix).  Defaults to the
+            CDISC Library Browser deep link, which requires all three.
     """
 
     include_docs: bool = True
+    cdisc_url_template: str = (
+        "https://library.cdisc.org/browser/#/mdr/ct/{date}/packages/"
+        "{package}/codelists/{concept_id}"
+    )
     _codelists: list[dict[str, Any]] = field(default_factory=list, init=False)
 
-    def add_codelist(self, codelist_json: dict[str, Any]) -> None:
+    def add_codelist(
+        self,
+        codelist_json: dict[str, Any],
+        *,
+        package: str | None = None,
+    ) -> None:
         """Register a raw CDISC Library codelist JSON response.
 
         Args:
             codelist_json: Dict returned by ``CDISCClient.get_codelist``.
                 Must contain at least ``conceptId`` and ``terms``.
+            package: Optional CT package the codelist was fetched from
+                (e.g. ``"sdtmct-2024-12-13"``).  Stored on the codelist
+                dict as ``_package`` so the rendered ``_cdisc_url`` can
+                include the correct package + date context required by
+                the CDISC Library Browser.
 
         Raises:
             ValueError: If required keys are missing.
         """
         if "conceptId" not in codelist_json:
             raise ValueError("codelist JSON must contain 'conceptId'")
+        if package is not None:
+            codelist_json = {**codelist_json, "_package": package}
         self._codelists.append(codelist_json)
 
     @property
@@ -216,7 +242,10 @@ class CodelistGenerator:
         gen = cls(include_docs=include_docs)
         for cid in sorted(concept_ids):
             try:
-                gen.add_codelist(client.get_codelist(cid, package=package))
+                gen.add_codelist(
+                    client.get_codelist(cid, package=package),
+                    package=package,
+                )
             except Exception:
                 import logging
 
@@ -346,12 +375,18 @@ class CodelistGenerator:
         submission_value: str = cl.get("submissionValue", concept_id)
         preferred_term: str = cl.get("preferredTerm", "")
         definition: str = cl.get("definition", "")
+        cdisc_url: str | None = self._build_cdisc_url(cl)
 
         # Class docstring
         doc_parts = [f"{submission_value} ({concept_id})."]
         if self.include_docs and definition:
             doc_parts.append("")
             doc_parts.append(textwrap.fill(definition, width=76))
+        # Always add the CDISC Library reference so reviewers can jump from
+        # generated code to the authoritative source-of-truth definition.
+        if cdisc_url:
+            doc_parts.append("")
+            doc_parts.append(f"See: {cdisc_url}")
 
         class_doc = "\n    ".join(doc_parts)
         lines = [
@@ -360,6 +395,8 @@ class CodelistGenerator:
             "",
             f"    _concept_id = {concept_id!r}",
         ]
+        if cdisc_url:
+            lines.append(f"    _cdisc_url = {cdisc_url!r}")
 
         if self.include_docs and preferred_term:
             lines.append(f"    _preferred_term = {preferred_term!r}")
@@ -384,6 +421,34 @@ class CodelistGenerator:
                     lines.append(f"    # {comment}")
 
         return lines
+
+    def _build_cdisc_url(self, cl: dict[str, Any]) -> str | None:
+        """Format the CDISC Library Browser URL for *cl*.
+
+        Returns ``None`` when the template requires a ``{package}`` or
+        ``{date}`` field but no package was recorded for this codelist
+        (e.g. when ``add_codelist`` was called without ``package=``).
+        """
+        concept_id: str = cl["conceptId"]
+        package: str | None = cl.get("_package")
+        date: str | None = None
+        if package and "-" in package:
+            # e.g. "sdtmct-2024-12-13" -> "2024-12-13"
+            _, _, date = package.partition("-")
+        # If the template needs package/date context but none was
+        # recorded, skip the URL rather than emit a broken link.
+        needs_package = "{package}" in self.cdisc_url_template
+        needs_date = "{date}" in self.cdisc_url_template
+        if (needs_package and not package) or (needs_date and not date):
+            return None
+        try:
+            return self.cdisc_url_template.format(
+                concept_id=concept_id,
+                package=package or "",
+                date=date or "",
+            )
+        except KeyError:
+            return None
 
     @staticmethod
     def _alias_for(cl: dict[str, Any]) -> str | None:

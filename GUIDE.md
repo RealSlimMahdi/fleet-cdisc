@@ -988,14 +988,22 @@ uv run fleet uninstall-engine
 # SDTM Define-XML
 uv run fleet define-xml \
   --spec specs/cdiscpilot01/sdtm/define.yaml \
-  --output outputs/define_sdtm.xml
+  --output outputs/define_sdtm.xml \
+  --enrich-methods
 
 # ADaM Define-XML (without HTML preview)
 uv run fleet define-xml \
   --spec specs/cdiscpilot01/adam/define.yaml \
   --output outputs/define_adam.xml \
+  --enrich-methods \
   --no-preview
 ```
+
+`--enrich-methods` instructs Fleet to emit a `<MethodDef>` for every derivation
+in the spec, populated from the docstring of the referenced verb
+(`algorithm:`) or study callable (`callable:`). Each `<ItemDef>` gets a
+`MethodOID` attribute pointing at it, so reviewers see the exact computational
+method beside every variable.
 
 ### From Python
 
@@ -1013,9 +1021,9 @@ sdtm_checker.check(dm, dataset="DM").print_report()
 adam_checker.check(adsl, dataset="ADSL").print_report()
 adam_checker.check(advs, dataset="ADVS").print_report()
 
-# Generate Define-XML 2.1
-DefineSpecGenerator(sdtm_spec).generate("outputs/define_sdtm.xml")
-DefineSpecGenerator(adam_spec).generate("outputs/define_adam.xml")
+# Generate Define-XML 2.1 (enrich_methods=True embeds verb docstrings as <MethodDef>)
+DefineSpecGenerator(sdtm_spec, enrich_methods=True).generate("outputs/define_sdtm.xml")
+DefineSpecGenerator(adam_spec, enrich_methods=True).generate("outputs/define_adam.xml")
 ```
 
 ---

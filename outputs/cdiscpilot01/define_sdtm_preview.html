@@ -789,11 +789,30 @@ document.onclick = function(e)
 </ul>
 </li></ul>
 </li>
+<li class="hmenu-submenu">
+<span class="hmenu-bullet" onclick="toggle_submenu(this);">+</span><a class="tocItem" href="#compmethod">Methods</a><ul>
+<li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#MT.MT.ae_aerel">ae_aerel</a>
+</li>
+<li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#MT.MT.assign_ct">assign_ct</a>
+</li>
+<li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#MT.MT.assign_dtc">assign_dtc</a>
+</li>
+<li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#MT.MT.assign_no_ct">assign_no_ct</a>
+</li>
+<li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#MT.MT.hardcode_no_ct">hardcode_no_ct</a>
+</li>
+</ul>
+</li>
 </ul>
 </div>
 <div id="main">
 <div class="docinfo">
-<p class="documentinfo">Date/Time of Define-XML document generation: 2026-04-08T21:11:42</p>
+<p class="documentinfo">Date/Time of Define-XML document generation: 2026-04-17T21:26:32</p>
 <p class="documentinfo">Define-XML version: 2.1.0</p>
 <p class="documentinfo">Define-XML Context: Submission</p>
 <p class="stylesheetinfo">Stylesheet version: 2019-02-11</p>
@@ -919,7 +938,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">12</td>
 <td></td>
-<td><div class="linebreakcell">Assigned</div></td>
+<td><div class="linebreakcell">Assigned<p class="linebreakcell">Set *target* to a literal *value* for every row, with no CT validation.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -928,7 +948,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">2</td>
 <td></td>
-<td><div class="linebreakcell">Assigned</div></td>
+<td><div class="linebreakcell">Assigned<p class="linebreakcell">Set *target* to a literal *value* for every row, with no CT validation.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -937,7 +958,7 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">40</td>
 <td></td>
-<td><div class="linebreakcell">Derived<p class="linebreakcell">Concatenation of STUDYID, SITEID, and SUBJID</p>
+<td><div class="linebreakcell">Derived<p class="linebreakcell">Concatenation of STUDYID, SITEID, and SUBJID Copy *source* column to *target* with no controlled-terminology validation.</p>
 </div></td>
 </tr>
 <tr class="tableroweven">
@@ -947,7 +968,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">20</td>
 <td></td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -956,7 +978,8 @@ document.onclick = function(e)
 <td class="datatype">datetime</td>
 <td class="number"></td>
 <td>ISO 8601</td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Parse *source* date string and format as ISO 8601.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -965,7 +988,8 @@ document.onclick = function(e)
 <td class="datatype">datetime</td>
 <td class="number"></td>
 <td>ISO 8601</td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Parse *source* date string and format as ISO 8601.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -992,7 +1016,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">20</td>
 <td></td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -1001,7 +1026,8 @@ document.onclick = function(e)
 <td class="datatype">integer</td>
 <td class="number"></td>
 <td></td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -1010,7 +1036,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">10</td>
 <td></td>
-<td><div class="linebreakcell">Assigned</div></td>
+<td><div class="linebreakcell">Assigned<p class="linebreakcell">Set *target* to a literal *value* for every row, with no CT validation.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -1024,7 +1051,8 @@ document.onclick = function(e)
 <li class="codelist-item">&#8226;&#160;"F" = "FEMALE"</li>
 </ul>
 </td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Copy *source* to *target*, translating values via controlled terminology.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -1041,7 +1069,8 @@ document.onclick = function(e)
 <li class="codelist-item">&#8226;&#160;"NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER" = "NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER"</li>
 </ul>
 </td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Copy *source* to *target*, translating values via controlled terminology.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -1055,7 +1084,8 @@ document.onclick = function(e)
 <li class="codelist-item">&#8226;&#160;"NOT HISPANIC OR LATINO" = "NOT HISPANIC OR LATINO"</li>
 </ul>
 </td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Copy *source* to *target*, translating values via controlled terminology.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -1064,7 +1094,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">20</td>
 <td></td>
-<td><div class="linebreakcell">Protocol</div></td>
+<td><div class="linebreakcell">Protocol<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -1073,7 +1104,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">200</td>
 <td></td>
-<td><div class="linebreakcell">Protocol</div></td>
+<td><div class="linebreakcell">Protocol<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -1082,7 +1114,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">20</td>
 <td></td>
-<td><div class="linebreakcell">Assigned</div></td>
+<td><div class="linebreakcell">Assigned<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -1091,7 +1124,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">200</td>
 <td></td>
-<td><div class="linebreakcell">Assigned</div></td>
+<td><div class="linebreakcell">Assigned<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -1100,7 +1134,8 @@ document.onclick = function(e)
 <td class="datatype">datetime</td>
 <td class="number"></td>
 <td>ISO 8601</td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Parse *source* date string and format as ISO 8601.</p>
+</div></td>
 </tr>
 </table>
 </div>
@@ -1124,7 +1159,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">12</td>
 <td></td>
-<td><div class="linebreakcell">Assigned</div></td>
+<td><div class="linebreakcell">Assigned<p class="linebreakcell">Set *target* to a literal *value* for every row, with no CT validation.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -1133,7 +1169,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">2</td>
 <td></td>
-<td><div class="linebreakcell">Assigned</div></td>
+<td><div class="linebreakcell">Assigned<p class="linebreakcell">Set *target* to a literal *value* for every row, with no CT validation.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -1142,7 +1179,7 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">40</td>
 <td></td>
-<td><div class="linebreakcell">Derived<p class="linebreakcell">Concatenation of STUDYID, SITEID, and SUBJID</p>
+<td><div class="linebreakcell">Derived<p class="linebreakcell">Concatenation of STUDYID, SITEID, and SUBJID Copy *source* column to *target* with no controlled-terminology validation.</p>
 </div></td>
 </tr>
 <tr class="tableroweven">
@@ -1161,7 +1198,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">200</td>
 <td></td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -1170,7 +1208,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">200</td>
 <td></td>
-<td><div class="linebreakcell">Derived</div></td>
+<td><div class="linebreakcell">Derived<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -1179,7 +1218,8 @@ document.onclick = function(e)
 <td class="datatype">datetime</td>
 <td class="number"></td>
 <td>ISO 8601</td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Parse *source* date string and format as ISO 8601.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -1188,7 +1228,8 @@ document.onclick = function(e)
 <td class="datatype">datetime</td>
 <td class="number"></td>
 <td>ISO 8601</td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Parse *source* date string and format as ISO 8601.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -1197,7 +1238,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">20</td>
 <td></td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -1206,7 +1248,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">2</td>
 <td></td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -1215,7 +1258,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">60</td>
 <td></td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -1224,7 +1268,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">60</td>
 <td></td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -1233,7 +1278,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">60</td>
 <td></td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Map free-text AE causality strings to controlled ``AEREL`` values.</p>
+</div></td>
 </tr>
 </table>
 </div>
@@ -1257,7 +1303,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">12</td>
 <td></td>
-<td><div class="linebreakcell">Assigned</div></td>
+<td><div class="linebreakcell">Assigned<p class="linebreakcell">Set *target* to a literal *value* for every row, with no CT validation.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -1266,7 +1313,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">2</td>
 <td></td>
-<td><div class="linebreakcell">Assigned</div></td>
+<td><div class="linebreakcell">Assigned<p class="linebreakcell">Set *target* to a literal *value* for every row, with no CT validation.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -1275,7 +1323,7 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">40</td>
 <td></td>
-<td><div class="linebreakcell">Derived<p class="linebreakcell">Concatenation of STUDYID, SITEID, and SUBJID</p>
+<td><div class="linebreakcell">Derived<p class="linebreakcell">Concatenation of STUDYID, SITEID, and SUBJID Copy *source* column to *target* with no controlled-terminology validation.</p>
 </div></td>
 </tr>
 <tr class="tableroweven">
@@ -1289,7 +1337,8 @@ document.onclick = function(e)
                   [6 Terms]
                 </p>
 </td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -1298,7 +1347,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">40</td>
 <td></td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -1307,7 +1357,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">20</td>
 <td></td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -1316,7 +1367,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">20</td>
 <td></td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -1325,7 +1377,8 @@ document.onclick = function(e)
 <td class="datatype">float</td>
 <td class="number"></td>
 <td></td>
-<td><div class="linebreakcell">Derived</div></td>
+<td><div class="linebreakcell">Derived<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -1334,7 +1387,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">20</td>
 <td></td>
-<td><div class="linebreakcell">Derived</div></td>
+<td><div class="linebreakcell">Derived<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -1343,7 +1397,8 @@ document.onclick = function(e)
 <td class="datatype">float</td>
 <td class="number"></td>
 <td></td>
-<td><div class="linebreakcell">Protocol</div></td>
+<td><div class="linebreakcell">Protocol<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -1352,7 +1407,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">200</td>
 <td></td>
-<td><div class="linebreakcell">Protocol</div></td>
+<td><div class="linebreakcell">Protocol<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -1361,7 +1417,8 @@ document.onclick = function(e)
 <td class="datatype">datetime</td>
 <td class="number"></td>
 <td>ISO 8601</td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Parse *source* date string and format as ISO 8601.</p>
+</div></td>
 </tr>
 </table>
 </div>
@@ -1385,7 +1442,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">12</td>
 <td></td>
-<td><div class="linebreakcell">Assigned</div></td>
+<td><div class="linebreakcell">Assigned<p class="linebreakcell">Set *target* to a literal *value* for every row, with no CT validation.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -1394,7 +1452,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">2</td>
 <td></td>
-<td><div class="linebreakcell">Assigned</div></td>
+<td><div class="linebreakcell">Assigned<p class="linebreakcell">Set *target* to a literal *value* for every row, with no CT validation.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -1403,7 +1462,7 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">40</td>
 <td></td>
-<td><div class="linebreakcell">Derived<p class="linebreakcell">Concatenation of STUDYID, SITEID, and SUBJID</p>
+<td><div class="linebreakcell">Derived<p class="linebreakcell">Concatenation of STUDYID, SITEID, and SUBJID Copy *source* column to *target* with no controlled-terminology validation.</p>
 </div></td>
 </tr>
 <tr class="tableroweven">
@@ -1422,7 +1481,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">200</td>
 <td></td>
-<td><div class="linebreakcell">Protocol</div></td>
+<td><div class="linebreakcell">Protocol<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -1431,7 +1491,8 @@ document.onclick = function(e)
 <td class="datatype">float</td>
 <td class="number"></td>
 <td></td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Copy *source* column to *target* with no controlled-terminology validation.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -1440,7 +1501,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">20</td>
 <td></td>
-<td><div class="linebreakcell">Protocol</div></td>
+<td><div class="linebreakcell">Protocol<p class="linebreakcell">Set *target* to a literal *value* for every row, with no CT validation.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -1449,7 +1511,8 @@ document.onclick = function(e)
 <td class="datatype">datetime</td>
 <td class="number"></td>
 <td>ISO 8601</td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Parse *source* date string and format as ISO 8601.</p>
+</div></td>
 </tr>
 <tr class="tablerowodd">
 <td>
@@ -1458,7 +1521,8 @@ document.onclick = function(e)
 <td class="datatype">datetime</td>
 <td class="number"></td>
 <td>ISO 8601</td>
-<td><div class="linebreakcell">CRF</div></td>
+<td><div class="linebreakcell">CRF<p class="linebreakcell">Parse *source* date string and format as ISO 8601.</p>
+</div></td>
 </tr>
 </table>
 </div>
@@ -1564,6 +1628,69 @@ document.onclick = function(e)
 <p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p>
 <br>
 </div>
+<a id="compmethod"></a><div class="containerbox">
+<h1 class="invisible">Methods</h1>
+<table summary="Methods">
+<caption class="header">Methods</caption>
+<tr class="header">
+<th scope="col">Method</th>
+<th scope="col">Type</th>
+<th scope="col">Description</th>
+</tr>
+<tr id="MT.MT.ae_aerel" class="tablerowodd">
+<td>ae_aerel</td>
+<td>Computation</td>
+<td>
+<div class="method-code">Map free-text AE causality strings to controlled ``AEREL`` values.</div>
+<div class="formalexpression">
+<span class="label">Formal Expression</span> [Python/Fleet]:<span class="formalexpression-code">.ae_aerel(...)</span>
+</div>
+</td>
+</tr>
+<tr id="MT.MT.assign_ct" class="tableroweven">
+<td>assign_ct</td>
+<td>Computation</td>
+<td>
+<div class="method-code">Copy *source* to *target*, translating values via controlled terminology.</div>
+<div class="formalexpression">
+<span class="label">Formal Expression</span> [Python/Fleet]:<span class="formalexpression-code">.assign_ct(...)</span>
+</div>
+</td>
+</tr>
+<tr id="MT.MT.assign_dtc" class="tablerowodd">
+<td>assign_dtc</td>
+<td>Computation</td>
+<td>
+<div class="method-code">Parse *source* date string and format as ISO 8601.</div>
+<div class="formalexpression">
+<span class="label">Formal Expression</span> [Python/Fleet]:<span class="formalexpression-code">.assign_dtc(...)</span>
+</div>
+</td>
+</tr>
+<tr id="MT.MT.assign_no_ct" class="tableroweven">
+<td>assign_no_ct</td>
+<td>Computation</td>
+<td>
+<div class="method-code">Copy *source* column to *target* with no controlled-terminology validation.</div>
+<div class="formalexpression">
+<span class="label">Formal Expression</span> [Python/Fleet]:<span class="formalexpression-code">.assign_no_ct(...)</span>
+</div>
+</td>
+</tr>
+<tr id="MT.MT.hardcode_no_ct" class="tablerowodd">
+<td>hardcode_no_ct</td>
+<td>Computation</td>
+<td>
+<div class="method-code">Set *target* to a literal *value* for every row, with no CT validation.</div>
+<div class="formalexpression">
+<span class="label">Formal Expression</span> [Python/Fleet]:<span class="formalexpression-code">.hardcode_no_ct(...)</span>
+</div>
+</td>
+</tr>
+</table>
+</div>
+<p class="linktop">Go to the <a href="#main">top</a> of the Define-XML document</p>
+<br>
 </div>
 </body>
 </html>
