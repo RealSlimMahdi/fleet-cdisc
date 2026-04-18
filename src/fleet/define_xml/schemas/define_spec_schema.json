@@ -230,6 +230,12 @@
           "description": "Whether the variable is required in every record.",
           "default": false
         },
+        "core": {
+          "type": "string",
+          "description": "CDISC core designation for the variable. When present, the checker uses this for graduated severity (Req → error, Exp → warning, Perm → info). Users may override the IG value to downgrade Req variables.",
+          "enum": ["Req", "Exp", "Perm", "Conditionally Required"],
+          "default": "Perm"
+        },
         "origin": {
           "type": "string",
           "description": "How the value originates.",

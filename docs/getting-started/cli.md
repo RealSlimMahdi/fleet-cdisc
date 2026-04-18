@@ -18,6 +18,18 @@ fleet init define                      # reads study_config.yaml, queries CDISC 
 fleet init ct                          # reads define.yaml, downloads codelists
 ```
 
+!!! note "Using `--root`?"
+    If you pass `--root` to `init cfg` (e.g. `--root ./my_study`), the config is written
+    to `./my_study/study_config.yaml` instead of the current directory. You must then pass
+    `--config ./my_study/study_config.yaml` to every subsequent `init` command — or `cd`
+    into that directory before running them:
+
+    ```bash
+    fleet init cfg --study-id STUDY01 --domains DM,AE,VS,EX --root ./my_study
+    fleet init define --config ./my_study/study_config.yaml
+    fleet init ct     --config ./my_study/study_config.yaml
+    ```
+
 ### `fleet init cfg`
 
 Create `study_config.yaml` and the study directory structure.
@@ -38,6 +50,12 @@ fleet init cfg --study-id CDISCPILOT01 --company "CDISC" \
 | `--package`       | `sdtmct-2023-12-15` | CT package version            |
 | `--root` / `-r`   | `.`                 | Study root directory          |
 
+!!! warning "Non-default `--root` requires `--config` in subsequent commands"
+    When `--root` is set to anything other than `.`, the generated `study_config.yaml`
+    lives inside that folder. The next commands (`fleet init define`, `fleet init ct`)
+    default to looking for `study_config.yaml` in the **current working directory**.
+    Pass `--config <root>/study_config.yaml` explicitly, or `cd` into the root first.
+
 ### `fleet init define`
 
 Generate `define.yaml` files pre-populated with standard variables from the CDISC Library IG. Reads domains/datasets from `study_config.yaml`.
@@ -55,7 +73,7 @@ fleet init define --config path/to/config.yaml # custom config location
 | `--sdtm-only`     | _(off)_             | Generate SDTM define only |
 | `--adam-only`     | _(off)_             | Generate ADaM define only |
 
-The generated YAML includes variable names, labels, types, mandatory flags, codelist references, and origin hints — all sourced from the CDISC Library. Variables are created **without** derivation blocks (carry-through columns); add derivation blocks to drive the pipeline.
+The generated YAML includes variable names, labels, types, mandatory flags, **CDISC core designations** (`Req`, `Exp`, `Perm`, `Conditionally Required`), codelist references, and origin hints — all sourced from the CDISC Library. The `core` field enables graduated check severity (see [DatasetChecker](#datasetChecker) below). Variables are created **without** derivation blocks (carry-through columns); add derivation blocks to drive the pipeline.
 
 ### `fleet init ct`
 

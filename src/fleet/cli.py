@@ -466,6 +466,19 @@ def _run_init_ct_pipeline(args: argparse.Namespace) -> None:
 
     print(f"Generated {len(gen._codelists)} codelists → {dest}")
 
+    # Build a dotted import path relative to CWD for the hint
+    try:
+        rel = dest.resolve().relative_to(Path.cwd())
+        import_path = ".".join(rel.with_suffix("").parts)
+    except ValueError:
+        import_path = "codelists"
+
+    print()
+    print("Bootstrap complete! Next steps:")
+    print("  - Spec-driven:  codelists are already referenced in define.yaml — start writing derivations.")
+    print(f"  - Inline code:  from {import_path} import SEX, RACE, ...")
+    print("  - When ready:   fleet define-xml --spec <define.yaml>")
+
 
 # ── Standalone commands ─────────────────────────────────────────────── #
 

@@ -89,6 +89,11 @@ _TYPE_LABEL: dict[str, str] = {
     "datetime": "Datetime/Date",
 }
 
+# CDISC core values that are treated as "required" when strict=True.
+_REQ_CORES: frozenset[str] = frozenset({"Req", "Required"})
+# CDISC core values that are treated as "expected" (warning-level).
+_EXP_CORES: frozenset[str] = frozenset({"Exp", "Expected"})
+
 
 @dataclass
 class TypeMismatch:
@@ -117,11 +122,15 @@ class CheckResult:
         Variables that are present but whose Polars dtype is not compatible
         with the define's declared type.
     errors:
-        All issues classified as errors (missing mandatory columns, type
-        mismatches for mandatory columns).
+        All issues classified as errors. For ``core="Req"`` variables: missing
+        columns and type mismatches.  When ``strict=False`` these are
+        downgraded to warnings.
     warnings:
-        All issues classified as warnings (extra columns, optional missing,
-        type mismatches for optional columns).
+        All issues classified as warnings (``core="Exp"`` missing/mismatched,
+        extra columns, downgraded Req errors when ``strict=False``).
+    info:
+        Informational notes (``core="Perm"`` or ``"Conditionally Required"``
+        variables that are absent or have type mismatches).
     """
 
     dataset: str
@@ -131,6 +140,7 @@ class CheckResult:
     type_mismatches: list[TypeMismatch] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    info: list[str] = field(default_factory=list)
 
     @property
     def is_valid(self) -> bool:
@@ -151,7 +161,11 @@ class CheckResult:
             print(f"\n  WARNINGS ({len(self.warnings)}):")
             for w in self.warnings:
                 print(f"    ⚠  {w}")
-        if self.is_valid and not self.warnings:
+        if self.info:
+            print(f"\n  INFO ({len(self.info)}):")
+            for i in self.info:
+                print(f"    ℹ  {i}")
+        if self.is_valid and not self.warnings and not self.info:
             print("  All checks passed.")
         print()
 
@@ -160,6 +174,44 @@ class CheckResult:
         if not self.is_valid:
             summary = "; ".join(self.errors)
             raise ValueError(f"Dataset '{self.dataset}' failed define checks: {summary}")
+
+
+def _classify(
+    result: CheckResult,
+    msg: str,
+    *,
+    core: str,
+    mandatory: bool,
+    strict: bool,
+) -> None:
+    """Route *msg* to errors / warnings / info based on *core* and *strict*.
+
+    Severity logic:
+    - ``core`` in {Req, Required} → error (or warning if ``strict=False``).
+    - ``core`` in {Exp, Expected} → warning.
+    - ``core`` in {Perm, Permissible, Conditionally Required, ""} → info.
+    - Fallback for defines without ``core``: ``mandatory=True`` → error/warning.
+    """
+    if core:
+        if core in _REQ_CORES:
+            if strict:
+                result.errors.append(msg)
+            else:
+                result.warnings.append(msg + " [strict=False: downgraded from error]")
+        elif core in _EXP_CORES:
+            result.warnings.append(msg)
+        else:
+            # Perm, Permissible, Conditionally Required
+            result.info.append(msg)
+    else:
+        # No core field — fall back to mandatory boolean
+        if mandatory:
+            if strict:
+                result.errors.append(msg)
+            else:
+                result.warnings.append(msg + " [strict=False: downgraded from error]")
+        else:
+            result.warnings.append(msg)
 
 
 class DatasetChecker:
@@ -209,7 +261,13 @@ class DatasetChecker:
     # Public API                                                           #
     # ------------------------------------------------------------------ #
 
-    def check(self, df: pl.DataFrame, dataset: str) -> CheckResult:
+    def check(
+        self,
+        df: pl.DataFrame,
+        dataset: str,
+        *,
+        strict: bool = True,
+    ) -> CheckResult:
         """Check *df* against the define for *dataset*.
 
         Parameters
@@ -219,6 +277,11 @@ class DatasetChecker:
         dataset:
             Dataset name to look up in the define (e.g. ``"DM"``).
             Case-insensitive.
+        strict:
+            When ``True`` (default), ``core="Req"`` issues are errors.
+            When ``False``, ``Req`` issues are downgraded to warnings so
+            the pipeline can proceed despite missing required variables
+            (e.g. during development or when source data is incomplete).
 
         Returns
         -------
@@ -250,10 +313,10 @@ class DatasetChecker:
         actual_cols: set[str] = {c for c in df.columns if not c.startswith("_")}
 
         if self._check_columns:
-            self._run_column_checks(result, vars_by_name, actual_cols)
+            self._run_column_checks(result, vars_by_name, actual_cols, strict=strict)
 
         if self._check_types:
-            self._run_type_checks(result, df, vars_by_name, actual_cols)
+            self._run_type_checks(result, df, vars_by_name, actual_cols, strict=strict)
 
         return result
 
@@ -277,18 +340,20 @@ class DatasetChecker:
         result: CheckResult,
         vars_by_name: dict[str, dict[str, Any]],
         actual_cols: set[str],
+        *,
+        strict: bool = True,
     ) -> None:
         define_cols = set(vars_by_name)
 
         missing = define_cols - actual_cols
         for col in sorted(missing):
             var_def = vars_by_name[col]
+            core = var_def.get("core", "")
             msg = f"Column '{col}' declared in define is missing from the DataFrame."
             result.missing_columns.append(col)
-            if var_def.get("mandatory"):
-                result.errors.append(msg)
-            else:
-                result.warnings.append(msg)
+            _classify(
+                result, msg, core=core, mandatory=var_def.get("mandatory", False), strict=strict
+            )
 
         extra = actual_cols - define_cols
         for col in sorted(extra):
@@ -302,6 +367,8 @@ class DatasetChecker:
         df: pl.DataFrame,
         vars_by_name: dict[str, dict[str, Any]],
         actual_cols: set[str],
+        *,
+        strict: bool = True,
     ) -> None:
         schema = df.schema
         for col_name, var_def in vars_by_name.items():
@@ -324,10 +391,10 @@ class DatasetChecker:
                     f"Column '{col_name}': define type '{define_type}' "
                     f"(expects {expected_label}) but actual dtype is '{actual_dtype}'."
                 )
-                if var_def.get("mandatory"):
-                    result.errors.append(msg)
-                else:
-                    result.warnings.append(msg)
+                core = var_def.get("core", "")
+                _classify(
+                    result, msg, core=core, mandatory=var_def.get("mandatory", False), strict=strict
+                )
 
     # ------------------------------------------------------------------ #
     # CDISC Core validation                                                #

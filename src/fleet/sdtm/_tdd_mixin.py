@@ -99,8 +99,13 @@ class TrialDesignMixin:
         *,
         ig_version: str = "3-4",
         save_to: str | Path | None = None,
+        define_path: str | Path | None = None,
     ) -> Self:  # type: ignore[type-var]
         """Query the CDISC Library for *domain*'s IG structure.
+
+        When *define_path* is given the domain variables (including ``core``)
+        are read from the define.yaml first; if the domain is not found the
+        method falls back to the online CDISC Library.
 
         When *save_to* is given the fetched metadata is cached as YAML; on
         subsequent calls the cache is read instead of hitting the API.
@@ -112,6 +117,9 @@ class TrialDesignMixin:
             domain: SDTM domain code (e.g. ``"TE"``, ``"TA"``).
             ig_version: SDTM IG version slug (default ``"3-4"``).
             save_to: Optional path to cache the fetched YAML.
+            define_path: Optional path to a ``define.yaml``. When provided,
+                domain metadata is extracted from the spec (offline) before
+                falling back to the CDISC Library API.
 
         Returns:
             Self: The namespace at stage 1; call ``study_header()`` next.
@@ -131,11 +139,14 @@ class TrialDesignMixin:
         self._check_stage("fetch_structure", required=0)
         domain = domain.upper()
 
-        # Cache-first: try loading from YAML on disk
+        # Priority: define_path → save_to cache → online CDISC Library
         meta: dict[str, Any] | None = None
-        cache_path = Path(save_to) if save_to else None
 
-        if cache_path and cache_path.exists():
+        if define_path is not None:
+            meta = _extract_domain_from_define(domain, Path(define_path))
+
+        cache_path = Path(save_to) if save_to else None
+        if meta is None and cache_path and cache_path.exists():
             meta = yaml.safe_load(cache_path.read_text())
 
         if meta is None:
@@ -658,6 +669,61 @@ class TrialDesignMixin:
             "ig_version": ig_version,
             "variables": variables,
         }
+
+
+# Reverse map: define.yaml type → CDISC simpleDatatype for reconciliation
+_DEFINE_TO_IG_TYPE: dict[str, str] = {
+    "text": "Char",
+    "integer": "Integer",
+    "float": "Num",
+    "date": "Char",
+    "datetime": "Char",
+}
+
+# define.yaml mandatory+core → IG core string
+_DEFINE_CORE_TO_IG: dict[str, str] = {
+    "Req": "Req",
+    "Exp": "Exp",
+    "Perm": "Perm",
+    "Conditionally Required": "Perm",
+}
+
+
+def _extract_domain_from_define(domain: str, define_path: Path) -> dict[str, Any] | None:
+    """Try to extract domain metadata from a define.yaml.
+
+    Returns ``None`` when the file doesn't exist or the domain is not found,
+    so the caller can fall back to the online CDISC Library.
+    """
+    if not define_path.is_file():
+        return None
+
+    data = yaml.safe_load(define_path.read_text(encoding="utf-8"))
+    for ds in data.get("datasets", []):
+        if ds.get("name", "").upper() == domain:
+            variables: list[dict[str, str]] = []
+            for var in ds.get("variables", []):
+                core = var.get("core", "")
+                if not core:
+                    # Fall back to mandatory boolean
+                    core = "Req" if var.get("mandatory") else "Perm"
+                var_info: dict[str, str] = {
+                    "name": var.get("name", ""),
+                    "label": var.get("label", ""),
+                    "type": _DEFINE_TO_IG_TYPE.get(var.get("type", "text"), "Char"),
+                    "core": _DEFINE_CORE_TO_IG.get(core, "Perm"),
+                    "role": "",
+                }
+                if var.get("codelist"):
+                    var_info["codelist"] = var["codelist"]
+                variables.append(var_info)
+            return {
+                "domain": domain,
+                "label": ds.get("label", ""),
+                "ig_version": "",
+                "variables": variables,
+            }
+    return None
 
 
 # ------------------------------------------------------------------ #

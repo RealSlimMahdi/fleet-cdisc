@@ -104,6 +104,7 @@ def parse_ig_variable(var: dict[str, Any]) -> dict[str, Any]:
         result["length"] = 200
 
     result["mandatory"] = mandatory
+    result["core"] = core
 
     if name in ("STUDYID", "DOMAIN"):
         result["origin"] = "Assigned"

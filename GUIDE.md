@@ -1021,6 +1021,9 @@ sdtm_checker.check(dm, dataset="DM").print_report()
 adam_checker.check(adsl, dataset="ADSL").print_report()
 adam_checker.check(advs, dataset="ADVS").print_report()
 
+# Use strict=False during development to downgrade Req errors to warnings
+sdtm_checker.check(dm, dataset="DM", strict=False).print_report()
+
 # Generate Define-XML 2.1 (enrich_methods=True embeds verb docstrings as <MethodDef>)
 DefineSpecGenerator(sdtm_spec, enrich_methods=True).generate("outputs/define_sdtm.xml")
 DefineSpecGenerator(adam_spec, enrich_methods=True).generate("outputs/define_adam.xml")

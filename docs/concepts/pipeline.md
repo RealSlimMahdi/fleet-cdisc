@@ -173,9 +173,13 @@ the Fleet CLI:
 ```bash
 fleet init cfg --study-id STUDY01 --company "Acme Pharma" \
   --domains DM,AE,VS,EX --adam-datasets ADSL,ADVS --root ./studies/STUDY01
-fleet init define          # queries CDISC Library IG → define.yaml
-fleet init ct              # reads define.yaml → codelists.py
+fleet init define --config ./studies/STUDY01/study_config.yaml  # queries CDISC Library IG → define.yaml
+fleet init ct     --config ./studies/STUDY01/study_config.yaml  # reads define.yaml → codelists.py
 ```
+
+!!! note
+    When `--root` points to a non-current directory, pass `--config <root>/study_config.yaml`
+    to `init define` and `init ct`, or `cd` into the root directory before running them.
 
 See the [CLI Reference](../getting-started/cli.md) for full details.
 
