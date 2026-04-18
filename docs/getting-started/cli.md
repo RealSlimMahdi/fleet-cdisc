@@ -19,10 +19,10 @@ fleet init ct                          # reads define.yaml, downloads codelists
 ```
 
 !!! note "Using `--root`?"
-    If you pass `--root` to `init cfg` (e.g. `--root ./my_study`), the config is written
-    to `./my_study/study_config.yaml` instead of the current directory. You must then pass
-    `--config ./my_study/study_config.yaml` to every subsequent `init` command — or `cd`
-    into that directory before running them:
+If you pass `--root` to `init cfg` (e.g. `--root ./my_study`), the config is written
+to `./my_study/study_config.yaml` instead of the current directory. You must then pass
+`--config ./my_study/study_config.yaml` to every subsequent `init` command — or `cd`
+into that directory before running them:
 
     ```bash
     fleet init cfg --study-id STUDY01 --domains DM,AE,VS,EX --root ./my_study
@@ -51,10 +51,10 @@ fleet init cfg --study-id CDISCPILOT01 --company "CDISC" \
 | `--root` / `-r`   | `.`                 | Study root directory          |
 
 !!! warning "Non-default `--root` requires `--config` in subsequent commands"
-    When `--root` is set to anything other than `.`, the generated `study_config.yaml`
-    lives inside that folder. The next commands (`fleet init define`, `fleet init ct`)
-    default to looking for `study_config.yaml` in the **current working directory**.
-    Pass `--config <root>/study_config.yaml` explicitly, or `cd` into the root first.
+When `--root` is set to anything other than `.`, the generated `study_config.yaml`
+lives inside that folder. The next commands (`fleet init define`, `fleet init ct`)
+default to looking for `study_config.yaml` in the **current working directory**.
+Pass `--config <root>/study_config.yaml` explicitly, or `cd` into the root first.
 
 ### `fleet init define`
 

@@ -178,8 +178,8 @@ fleet init ct     --config ./studies/STUDY01/study_config.yaml  # reads define.y
 ```
 
 !!! note
-    When `--root` points to a non-current directory, pass `--config <root>/study_config.yaml`
-    to `init define` and `init ct`, or `cd` into the root directory before running them.
+When `--root` points to a non-current directory, pass `--config <root>/study_config.yaml`
+to `init define` and `init ct`, or `cd` into the root directory before running them.
 
 See the [CLI Reference](../getting-started/cli.md) for full details.
 
