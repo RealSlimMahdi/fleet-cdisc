@@ -55,6 +55,7 @@ _CORE_MAP: dict[str, bool] = {
     "Req": True,
     "Exp": False,
     "Perm": False,
+    "Cond": False,
     "Required": True,
     "Expected": False,
     "Permissible": False,

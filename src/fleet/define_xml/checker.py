@@ -129,8 +129,9 @@ class CheckResult:
         All issues classified as warnings (``core="Exp"`` missing/mismatched,
         extra columns, downgraded Req errors when ``strict=False``).
     info:
-        Informational notes (``core="Perm"`` or ``"Conditionally Required"``
-        variables that are absent or have type mismatches).
+        Informational notes (``core="Perm"``, ``"Cond"``, or
+        ``"Conditionally Required"`` variables that are absent or have
+        type mismatches).
     """
 
     dataset: str

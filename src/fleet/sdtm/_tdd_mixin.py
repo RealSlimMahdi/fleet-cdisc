@@ -685,6 +685,7 @@ _DEFINE_CORE_TO_IG: dict[str, str] = {
     "Req": "Req",
     "Exp": "Exp",
     "Perm": "Perm",
+    "Cond": "Perm",
     "Conditionally Required": "Perm",
 }
 
