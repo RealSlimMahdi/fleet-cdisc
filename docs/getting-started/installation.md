@@ -10,13 +10,13 @@
 === "uv (recommended)"
 
     ```bash
-    uv add fleet
+    uv add fleet-cdisc
     ```
 
 === "pip"
 
     ```bash
-    pip install fleet
+    pip install fleet-cdisc
     ```
 
 ### Optional extras
@@ -30,10 +30,10 @@
 
 ```bash
 # SAS XPT support
-uv add "fleet[io]"
+uv add "fleet-cdisc[io]"
 
 # Development
-uv add "fleet[dev]"
+uv add "fleet-cdisc[dev]"
 ```
 
 ## Verify the installation

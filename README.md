@@ -138,7 +138,7 @@ Nothing runs until `.to_frame()`. All intermediate verbs accumulate into a singl
 **From PyPI (stable)**
 
 ```bash
-uv pip install fleet-cdisc
+uv add fleet-cdisc
 ```
 
 **From source (development)**
