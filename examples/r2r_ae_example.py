@@ -21,6 +21,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from fleet.core.lineage import lineage_of
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import polars as pl
@@ -93,7 +95,7 @@ print("\n━━ Layer 2 · ADaM ADAE ━━━━━━━━━━━━━━�
 _adsl_trt = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "TRTA", "SAFFL"])
 ae_with_trt = ae.join(_adsl_trt, on="USUBJID", how="left")
 
-adae = (
+_adae_base_ns = (
     ae_with_trt.adam.source("STUDYID")
     .source("USUBJID")
     .source("AETERM")
@@ -109,7 +111,10 @@ adae = (
     .derive_dt("ASTDT", source="AESTDTC")
     .derive_dt("AENDT", source="AEENDTC")
     .study_day("ADY", analysis_date="ASTDT", reference_date="TRTSDT")
-    .to_frame()
+)
+
+_adae_occds_ns = (
+    _adae_base_ns.to_frame()
     .adam.occds.treatment_emergent(
         "TRTEMFL",
         start_date="AESTDTC",
@@ -123,8 +128,9 @@ adae = (
         groups=["USUBJID", "AETERM"],
     )
     .seq("ASEQ", groups=["USUBJID"])
-    .to_frame()
 )
+
+adae = _adae_occds_ns.to_frame()
 
 # Simulate MedDRA coding (in a real study these come from a dictionary)
 adae = adae.with_columns(
@@ -142,6 +148,15 @@ adae = adae.with_columns(
 print(f"  ADAE : {adae.shape[0]} records × {adae.shape[1]} variables")
 print(f"         TE AEs  : {(adae['TRTEMFL'] == 'Y').sum()}")
 print(f"         SAEs    : {(adae['AESER'] == 'Y').sum()}")
+
+# ── Variable-Level Lineage ─────────────────────────────────────────────
+print("\n━━ ADAE Variable Lineage ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+_all_lineage = lineage_of(_adae_base_ns) + lineage_of(_adae_occds_ns)
+print(f"  {'Variable':<12}  {'Verb':<22}  Sources")
+print(f"  {'─'*12}  {'─'*22}  {'─'*40}")
+for node in _all_lineage:
+    src = ", ".join(node.sources) if node.sources else "—"
+    print(f"  {node.name:<12}  {node.verb:<22}  {src}")
 
 
 # ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
