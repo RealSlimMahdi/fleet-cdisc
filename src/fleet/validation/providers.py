@@ -38,7 +38,7 @@ class OfficialRulesEngineProvider(ValidationProvider):
             data=df,
             standard="sdtmig",
             version=version.replace(".", "-"),
-            dataset_name=f"{domain.lower()}.xpt",
+            dataset_name=domain.upper(),
             domain=domain,
         )
 
@@ -49,7 +49,7 @@ class OfficialRulesEngineProvider(ValidationProvider):
             data=df,
             standard="adamig",
             version=version.replace(".", "-"),
-            dataset_name=f"{dataset.lower()}.xpt",
+            dataset_name=dataset.upper(),
             domain=dataset,
         )
 

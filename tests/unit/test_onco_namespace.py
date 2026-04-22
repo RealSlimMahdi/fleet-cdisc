@@ -1,7 +1,6 @@
 """Unit tests for the Oncology Polars namespace extension (df.adam.onco)."""
 
 import polars as pl
-import polars.testing as plt
 import pytest
 
 import fleet  # noqa: F401 — triggers namespace registration
@@ -10,25 +9,27 @@ import fleet  # noqa: F401 — triggers namespace registration
 # Reference RECIST mapping — mirrors admiralonco aval_resp() exactly
 # ---------------------------------------------------------------------------
 _RECIST_MAPPING = [
-    ("CR",            1.0),
-    ("PR",            2.0),
-    ("SD",            3.0),
+    ("CR", 1.0),
+    ("PR", 2.0),
+    ("SD", 3.0),
     ("NON-CR/NON-PD", 4.0),
-    ("PD",            5.0),
-    ("NE",            6.0),
-    ("MISSING",       7.0),
-    ("UNKNOWN",       None),
+    ("PD", 5.0),
+    ("NE", 6.0),
+    ("MISSING", 7.0),
+    ("UNKNOWN", None),
 ]
 
 
 @pytest.fixture
 def onco_frame():
     """Minimal frame for shared verb tests on the onco namespace."""
-    return pl.DataFrame({
-        "USUBJID": ["01-001", "01-002", "01-003"],
-        "RSSTRESC": ["CR", "PR", "PD"],
-        "AGE":      [55, 68, 42],
-    })
+    return pl.DataFrame(
+        {
+            "USUBJID": ["01-001", "01-002", "01-003"],
+            "RSSTRESC": ["CR", "PR", "PD"],
+            "AGE": [55, 68, 42],
+        }
+    )
 
 
 class TestBaseVerbs:
@@ -43,14 +44,13 @@ class TestBaseVerbs:
         assert result["STUDYID"].to_list() == ["ONC01"] * 3
 
     def test_derivation(self, onco_frame):
-        result = onco_frame.adam.onco.derivation(
-            "AGE2", expression='pl.col("AGE") * 2'
-        ).to_frame()
+        result = onco_frame.adam.onco.derivation("AGE2", expression='pl.col("AGE") * 2').to_frame()
         assert result["AGE2"].to_list() == [110, 136, 84]
 
     def test_recode(self, onco_frame):
         result = onco_frame.adam.onco.recode(
-            "RESP", source="RSSTRESC",
+            "RESP",
+            source="RSSTRESC",
             recode_map={"CR": "Complete", "PR": "Partial"},
             default="Other",
         ).to_frame()
@@ -69,9 +69,7 @@ class TestBaseVerbs:
         assert result["AGEGR"].to_list() == ["<60", ">=60", "<60"]
 
     def test_whereclauses(self, onco_frame):
-        result = onco_frame.adam.onco.whereclauses(
-            where='pl.col("RSSTRESC") == "CR"'
-        ).to_frame()
+        result = onco_frame.adam.onco.whereclauses(where='pl.col("RSSTRESC") == "CR"').to_frame()
         assert result.height == 1
 
 
@@ -136,9 +134,7 @@ class TestTumorResponseFlag:
 
     def test_custom_flag_value(self):
         df = pl.DataFrame({"RESP": ["CR"]})
-        result = df.adam.onco.tumor_response_flag(
-            "RSPFL", source="RESP", flag_value="1"
-        ).to_frame()
+        result = df.adam.onco.tumor_response_flag("RSPFL", source="RESP", flag_value="1").to_frame()
         assert result["RSPFL"][0] == "1"
 
 
@@ -152,10 +148,12 @@ class TestBestOverallResponse:
     """
 
     def test_best_response_is_pr(self):
-        df = pl.DataFrame({
-            "USUBJID": ["S01", "S01", "S01"],
-            "OVRLRESP": ["SD", "PR", "PD"],
-        })
+        df = pl.DataFrame(
+            {
+                "USUBJID": ["S01", "S01", "S01"],
+                "OVRLRESP": ["SD", "PR", "PD"],
+            }
+        )
         result = df.adam.onco.best_overall_response(
             "BOR", source="OVRLRESP", groups=["USUBJID"]
         ).to_frame()
@@ -163,10 +161,12 @@ class TestBestOverallResponse:
         assert all(r == "PR" for r in result["BOR"].to_list())
 
     def test_no_response_gives_ne(self):
-        df = pl.DataFrame({
-            "USUBJID": ["S02", "S02"],
-            "OVRLRESP": ["NE", "NE"],
-        })
+        df = pl.DataFrame(
+            {
+                "USUBJID": ["S02", "S02"],
+                "OVRLRESP": ["NE", "NE"],
+            }
+        )
         result = df.adam.onco.best_overall_response(
             "BOR", source="OVRLRESP", groups=["USUBJID"]
         ).to_frame()
@@ -174,23 +174,27 @@ class TestBestOverallResponse:
 
     def test_multi_subject_independent_bor(self):
         """BOR must be computed independently per subject — core admiral pattern."""
-        df = pl.DataFrame({
-            "STUDYID": ["CDISCPILOT01"] * 4,
-            "USUBJID": ["01-701-1015", "01-701-1015", "01-701-1023", "01-701-1023"],
-            "OVRLRESP": ["SD", "CR", "PD", "PR"],
-        })
+        df = pl.DataFrame(
+            {
+                "STUDYID": ["CDISCPILOT01"] * 4,
+                "USUBJID": ["01-701-1015", "01-701-1015", "01-701-1023", "01-701-1023"],
+                "OVRLRESP": ["SD", "CR", "PD", "PR"],
+            }
+        )
         result = df.adam.onco.best_overall_response(
             "BOR", source="OVRLRESP", groups=["USUBJID"]
         ).to_frame()
         bor = dict(zip(result["USUBJID"].to_list(), result["BOR"].to_list()))
-        assert bor["01-701-1015"] == "CR"   # CR beats SD
-        assert bor["01-701-1023"] == "PR"   # PR beats PD
+        assert bor["01-701-1015"] == "CR"  # CR beats SD
+        assert bor["01-701-1023"] == "PR"  # PR beats PD
 
     def test_subject_with_only_pd(self):
-        df = pl.DataFrame({
-            "USUBJID": ["S03", "S03"],
-            "OVRLRESP": ["PD", "PD"],
-        })
+        df = pl.DataFrame(
+            {
+                "USUBJID": ["S03", "S03"],
+                "OVRLRESP": ["PD", "PD"],
+            }
+        )
         result = df.adam.onco.best_overall_response(
             "BOR", source="OVRLRESP", groups=["USUBJID"]
         ).to_frame()
@@ -208,11 +212,13 @@ class TestFilterPD:
     """
 
     def test_records_after_pd_dropped(self):
-        df = pl.DataFrame({
-            "USUBJID": ["S01", "S01", "S01", "S01"],
-            "ADT":     ["2024-01-01", "2024-02-01", "2024-03-01", "2024-04-01"],
-            "OVRLRESP": ["SD", "PD", "PD", "NE"],
-        })
+        df = pl.DataFrame(
+            {
+                "USUBJID": ["S01", "S01", "S01", "S01"],
+                "ADT": ["2024-01-01", "2024-02-01", "2024-03-01", "2024-04-01"],
+                "OVRLRESP": ["SD", "PD", "PD", "NE"],
+            }
+        )
         result = df.adam.onco.filter_pd(
             response_col="OVRLRESP", date_col="ADT", groups=["USUBJID"]
         ).to_frame()
@@ -221,11 +227,13 @@ class TestFilterPD:
         assert result["ADT"].to_list() == ["2024-01-01", "2024-02-01"]
 
     def test_no_pd_retains_all(self):
-        df = pl.DataFrame({
-            "USUBJID": ["S02", "S02"],
-            "ADT":     ["2024-01-01", "2024-02-01"],
-            "OVRLRESP": ["SD", "PR"],
-        })
+        df = pl.DataFrame(
+            {
+                "USUBJID": ["S02", "S02"],
+                "ADT": ["2024-01-01", "2024-02-01"],
+                "OVRLRESP": ["SD", "PR"],
+            }
+        )
         result = df.adam.onco.filter_pd(
             response_col="OVRLRESP", date_col="ADT", groups=["USUBJID"]
         ).to_frame()
@@ -238,26 +246,33 @@ class TestFilterPD:
         01-701-1015: PD at 2024-02-01 → only 2 rows kept
         01-701-1023: no PD            → all 3 rows kept
         """
-        df = pl.DataFrame({
-            "STUDYID": ["CDISCPILOT01"] * 5,
-            "USUBJID": [
-                "01-701-1015", "01-701-1015", "01-701-1015",
-                "01-701-1023", "01-701-1023",
-            ],
-            "ADT": [
-                "2024-01-01", "2024-02-01", "2024-03-01",
-                "2024-01-01", "2024-02-01",
-            ],
-            "OVRLRESP": ["CR", "PD", "NE", "SD", "PR"],
-        })
+        df = pl.DataFrame(
+            {
+                "STUDYID": ["CDISCPILOT01"] * 5,
+                "USUBJID": [
+                    "01-701-1015",
+                    "01-701-1015",
+                    "01-701-1015",
+                    "01-701-1023",
+                    "01-701-1023",
+                ],
+                "ADT": [
+                    "2024-01-01",
+                    "2024-02-01",
+                    "2024-03-01",
+                    "2024-01-01",
+                    "2024-02-01",
+                ],
+                "OVRLRESP": ["CR", "PD", "NE", "SD", "PR"],
+            }
+        )
         result = df.adam.onco.filter_pd(
-            response_col="OVRLRESP", date_col="ADT",
-            groups=["USUBJID"]
+            response_col="OVRLRESP", date_col="ADT", groups=["USUBJID"]
         ).to_frame()
         subj1015 = result.filter(pl.col("USUBJID") == "01-701-1015")
         subj1023 = result.filter(pl.col("USUBJID") == "01-701-1023")
-        assert subj1015.height == 2   # row at PD date included, post-PD dropped
-        assert subj1023.height == 2   # no PD → all retained
+        assert subj1015.height == 2  # row at PD date included, post-PD dropped
+        assert subj1023.height == 2  # no PD → all retained
 
 
 class TestConfirmedResponseFlag:
@@ -271,40 +286,43 @@ class TestConfirmedResponseFlag:
     """
 
     def test_confirmed_with_sufficient_gap(self):
-        df = pl.DataFrame({
-            "USUBJID":  ["01-701-1015", "01-701-1015"],
-            "OVRLRESP": ["CR", "CR"],
-            "ADT":      ["2024-01-01", "2024-03-15"],   # 74 days apart
-        })
+        df = pl.DataFrame(
+            {
+                "USUBJID": ["01-701-1015", "01-701-1015"],
+                "OVRLRESP": ["CR", "CR"],
+                "ADT": ["2024-01-01", "2024-03-15"],  # 74 days apart
+            }
+        )
         result = df.adam.onco.confirmed_response_flag(
-            "CNFFL", source="OVRLRESP", date_col="ADT",
-            confirmation_days=28, groups=["USUBJID"]
+            "CNFFL", source="OVRLRESP", date_col="ADT", confirmation_days=28, groups=["USUBJID"]
         ).to_frame()
         # At least one "Y" in the group (≥28-day gap exists)
         assert "Y" in result["CNFFL"].to_list()
 
     def test_gap_too_short_gives_null(self):
-        df = pl.DataFrame({
-            "USUBJID":  ["S02", "S02"],
-            "OVRLRESP": ["PR", "PR"],
-            "ADT":      ["2024-01-01", "2024-01-20"],   # only 19 days
-        })
+        df = pl.DataFrame(
+            {
+                "USUBJID": ["S02", "S02"],
+                "OVRLRESP": ["PR", "PR"],
+                "ADT": ["2024-01-01", "2024-01-20"],  # only 19 days
+            }
+        )
         result = df.adam.onco.confirmed_response_flag(
-            "CNFFL", source="OVRLRESP", date_col="ADT",
-            confirmation_days=28, groups=["USUBJID"]
+            "CNFFL", source="OVRLRESP", date_col="ADT", confirmation_days=28, groups=["USUBJID"]
         ).to_frame()
         assert all(v is None for v in result["CNFFL"].to_list())
 
     def test_no_matching_response_gives_null(self):
         """PD records should not be considered for confirmation."""
-        df = pl.DataFrame({
-            "USUBJID":  ["S03", "S03"],
-            "OVRLRESP": ["PD", "PD"],
-            "ADT":      ["2024-01-01", "2024-03-01"],
-        })
+        df = pl.DataFrame(
+            {
+                "USUBJID": ["S03", "S03"],
+                "OVRLRESP": ["PD", "PD"],
+                "ADT": ["2024-01-01", "2024-03-01"],
+            }
+        )
         result = df.adam.onco.confirmed_response_flag(
-            "CNFFL", source="OVRLRESP", date_col="ADT",
-            groups=["USUBJID"]
+            "CNFFL", source="OVRLRESP", date_col="ADT", groups=["USUBJID"]
         ).to_frame()
         assert all(v is None for v in result["CNFFL"].to_list())
 
@@ -313,13 +331,14 @@ class TestChaining:
     """Test 6: multi-verb chaining produces all derived columns."""
 
     def test_full_onco_chain(self):
-        df = pl.DataFrame({
-            "USUBJID": ["S01", "S01", "S02"],
-            "OVRLRESP": ["CR", "PD", "PR"],
-        })
+        df = pl.DataFrame(
+            {
+                "USUBJID": ["S01", "S01", "S02"],
+                "OVRLRESP": ["CR", "PD", "PR"],
+            }
+        )
         result = (
-            df.adam.onco
-            .aval_resp("AVAL", source="OVRLRESP")
+            df.adam.onco.aval_resp("AVAL", source="OVRLRESP")
             .tumor_response_flag("RSPFL", source="OVRLRESP")
             .best_overall_response("BOR", source="OVRLRESP", groups=["USUBJID"])
             .to_frame()

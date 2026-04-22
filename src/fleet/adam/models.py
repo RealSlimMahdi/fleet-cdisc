@@ -1,11 +1,12 @@
 """ADaM data models: algorithm enum and YAML specification structures."""
 
-from enum import Enum
-from typing import Any, Optional
+from enum import StrEnum
+from typing import Any
+
 from pydantic import BaseModel
 
 
-class ADAMAlgorithm(str, Enum):
+class ADAMAlgorithm(StrEnum):
     """Derivation verbs for ADaM variable derivations."""
 
     # Base verbs
@@ -39,76 +40,76 @@ class ADAMVariableSpec(BaseModel):
     algorithm: ADAMAlgorithm
 
     # source / rename
-    source: Optional[str] = None
+    source: str | None = None
 
     # derivation / assigned
-    expression: Optional[str] = None
-    value: Optional[Any] = None
+    expression: str | None = None
+    value: Any | None = None
 
     # recode
-    recode_map: Optional[dict[str, Any]] = None
-    default: Optional[Any] = None
+    recode_map: dict[str, Any] | None = None
+    default: Any | None = None
 
     # condderivation
-    conditions: Optional[list[dict[str, Any]]] = None
-    else_value: Optional[Any] = None
+    conditions: list[dict[str, Any]] | None = None
+    else_value: Any | None = None
 
     # lookup
-    lookup_dataset: Optional[str] = None
-    lookup_key: Optional[str | list[str]] = None
-    lookup_columns: Optional[list[str]] = None
-    lookup_where: Optional[str] = None
+    lookup_dataset: str | None = None
+    lookup_key: str | list[str] | None = None
+    lookup_columns: list[str] | None = None
+    lookup_where: str | None = None
 
     # std_function / study_day
-    func: Optional[str] = None
-    analysis_date: Optional[str] = None
-    reference_date: Optional[str] = None
-    aval: Optional[str] = None
-    base: Optional[str] = None
-    height: Optional[str] = None
-    weight: Optional[str] = None
-    baseline_flag: Optional[str] = None
-    baseline_criteria: Optional[str] = None
-    groups: Optional[list[str]] = None  # shared partition columns
+    func: str | None = None
+    analysis_date: str | None = None
+    reference_date: str | None = None
+    aval: str | None = None
+    base: str | None = None
+    height: str | None = None
+    weight: str | None = None
+    baseline_flag: str | None = None
+    baseline_criteria: str | None = None
+    groups: list[str] | None = None  # shared partition columns
 
     # flag()
-    criteria: Optional[str] = None  # row expression or "first"/"last"/"max"/"min"
-    flag_order_by: Optional[str] = None  # column for first/last ordering
-    flag_value_col: Optional[str] = None  # column for max/min comparison
-    flag_where: Optional[str] = None  # candidate pre-filter expression
+    criteria: str | None = None  # row expression or "first"/"last"/"max"/"min"
+    flag_order_by: str | None = None  # column for first/last ordering
+    flag_value_col: str | None = None  # column for max/min comparison
+    flag_where: str | None = None  # candidate pre-filter expression
     flag_value: str = "Y"
 
     # nrind()
-    low: Optional[str] = None  # lower normal range column
-    high: Optional[str] = None  # upper normal range column
+    low: str | None = None  # lower normal range column
+    high: str | None = None  # upper normal range column
 
     # on_treatment()
-    trtedt: Optional[str] = None  # end-of-treatment date column
+    trtedt: str | None = None  # end-of-treatment date column
 
     # shift()
-    baseline_cat: Optional[str] = None  # baseline category column
-    post_cat: Optional[str] = None  # post-baseline category column
+    baseline_cat: str | None = None  # baseline category column
+    post_cat: str | None = None  # post-baseline category column
 
     # atoxgr()
-    system: Optional[str] = None  # grading system (e.g. "ctcae_v5")
-    direction: Optional[str] = None  # "L" or "H"
-    term_var: Optional[str] = None  # toxicity description variable
-    unit_var: Optional[str] = None  # unit of measure variable
-    high_indicator: Optional[list[str]] = None  # BNRIND values for high baseline
-    low_indicator: Optional[list[str]] = None  # BNRIND values for low baseline
+    system: str | None = None  # grading system (e.g. "ctcae_v5")
+    direction: str | None = None  # "L" or "H"
+    term_var: str | None = None  # toxicity description variable
+    unit_var: str | None = None  # unit of measure variable
+    high_indicator: list[str] | None = None  # BNRIND values for high baseline
+    low_indicator: list[str] | None = None  # BNRIND values for low baseline
     signif_dig: int = 5  # significant figures for comparison
 
     # combine_grades()
-    low_var: Optional[str] = None  # low-direction grade column
-    high_var: Optional[str] = None  # high-direction grade column
-    low_desc_var: Optional[str] = None  # low-direction description column
-    high_desc_var: Optional[str] = None  # high-direction description column
+    low_var: str | None = None  # low-direction grade column
+    high_var: str | None = None  # high-direction grade column
+    low_desc_var: str | None = None  # low-direction description column
+    high_desc_var: str | None = None  # high-direction description column
 
     # whereclauses
-    where: Optional[str] = None
+    where: str | None = None
 
     # auto-staging: columns that must be committed to the frame before this derivation runs
-    depends_on: Optional[list[str]] = None
+    depends_on: list[str] | None = None
 
     model_config = {"extra": "allow"}
 
@@ -117,7 +118,7 @@ class ADAMDatasetSpec(BaseModel):
     """Full specification for an ADaM dataset derivation."""
 
     dataset: str
-    description: Optional[str] = None
+    description: str | None = None
     variables: list[ADAMVariableSpec]
 
     model_config = {"extra": "allow"}

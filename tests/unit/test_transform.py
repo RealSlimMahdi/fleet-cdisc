@@ -5,10 +5,10 @@ import pytest
 
 import fleet  # noqa: F401 — triggers namespace registration
 from fleet.adam.transforms import (
-    register_transform,
+    clear_transforms,
     get_transform,
     list_transforms,
-    clear_transforms,
+    register_transform,
 )
 
 
@@ -22,14 +22,17 @@ def _clean_registry():
 @pytest.fixture
 def dm_frame():
     """Minimal DM-like frame."""
-    return pl.DataFrame({
-        "USUBJID": ["01-001", "01-002", "01-003"],
-        "AGE": [45, 72, 30],
-        "SEX": ["M", "F", "M"],
-    })
+    return pl.DataFrame(
+        {
+            "USUBJID": ["01-001", "01-002", "01-003"],
+            "AGE": [45, 72, 30],
+            "SEX": ["M", "F", "M"],
+        }
+    )
 
 
 # ── Registry tests ────────────────────────────────────────────────────────
+
 
 class TestRegistry:
     def test_decorator_form(self):
@@ -63,6 +66,7 @@ class TestRegistry:
 
 
 # ── Inline transform tests ────────────────────────────────────────────────
+
 
 class TestTransformInline:
     def test_direct_callable(self, dm_frame):
@@ -103,6 +107,7 @@ class TestTransformInline:
 
     def test_chaining_before_and_after(self, dm_frame):
         """Transform chains seamlessly with other verbs."""
+
         def add_elderly(df: pl.DataFrame) -> pl.DataFrame:
             return df.with_columns(
                 pl.when(pl.col("AGE") >= 65)
@@ -112,19 +117,19 @@ class TestTransformInline:
             )
 
         result = (
-            dm_frame.adam
-            .assigned("STUDYID", value="STUDY01")
+            dm_frame.adam.assigned("STUDYID", value="STUDY01")
             .transform(add_elderly, label="Elderly flag")
             .source("USUBJID")
             .to_frame()
         )
         assert "STUDYID" in result.columns
         assert "ELDERLYFL" in result.columns
-        assert result["ELDERLYFL"][1] == "Y"   # age 72
-        assert result["ELDERLYFL"][0] is None   # age 45
+        assert result["ELDERLYFL"][1] == "Y"  # age 72
+        assert result["ELDERLYFL"][0] is None  # age 45
 
     def test_pipeline_materialises_before_transform(self, dm_frame):
         """Pending expressions are committed before the transform runs."""
+
         def check_col_exists(df: pl.DataFrame) -> pl.DataFrame:
             assert "MY_COL" in df.columns, "Pipeline was not materialised"
             return df
@@ -179,25 +184,22 @@ class TestFromSpecOmit:
 
     @pytest.fixture
     def base_frame(self):
-        return pl.DataFrame({
-            "USUBJID": ["SUBJ-001", "SUBJ-002"],
-        })
+        return pl.DataFrame(
+            {
+                "USUBJID": ["SUBJ-001", "SUBJ-002"],
+            }
+        )
 
     def test_omit_skips_variable(self, base_frame, spec_path):
         """Omitted variables are not derived by from_spec."""
-        result = (
-            base_frame.adam
-            .from_spec(spec_path, dataset="TEST", omit=["MYVAR"])
-            .to_frame()
-        )
+        result = base_frame.adam.from_spec(spec_path, dataset="TEST", omit=["MYVAR"]).to_frame()
         assert "STUDYID" in result.columns
         assert "MYVAR" not in result.columns
 
     def test_omit_allows_inline_override(self, base_frame, spec_path):
         """Omit a variable from spec, then derive it with custom logic."""
         result = (
-            base_frame.adam
-            .from_spec(spec_path, dataset="TEST", omit=["MYVAR"])
+            base_frame.adam.from_spec(spec_path, dataset="TEST", omit=["MYVAR"])
             .assigned("MYVAR", value="FROM_INLINE")
             .to_frame()
         )
@@ -206,9 +208,7 @@ class TestFromSpecOmit:
     def test_only_and_omit_raises(self, base_frame, spec_path):
         """Specifying both only= and omit= is an error."""
         with pytest.raises(ValueError, match="Cannot specify both"):
-            base_frame.adam.from_spec(
-                spec_path, dataset="TEST", only=["STUDYID"], omit=["MYVAR"]
-            )
+            base_frame.adam.from_spec(spec_path, dataset="TEST", only=["STUDYID"], omit=["MYVAR"])
 
     def test_omit_empty_list_processes_all(self, base_frame, spec_path):
         """An empty omit list processes everything (no-op)."""

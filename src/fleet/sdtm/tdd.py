@@ -29,7 +29,7 @@ Usage::
 from __future__ import annotations
 
 import re
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Annotated, ClassVar, Literal
 
 import polars as pl
@@ -40,7 +40,7 @@ from pydantic import BaseModel, Field, model_validator
 # ------------------------------------------------------------------ #
 
 
-class Epoch(str, Enum):
+class Epoch(StrEnum):
     """EPOCH (C99079) — all 14 CDISC-standard trial epoch values."""
 
     SCREENING = "SCREENING"
@@ -250,7 +250,7 @@ class TrialArms(BaseModel):
 
     @model_validator(mode="after")
     def check_etcd_references(self) -> TrialArms:
-        ctx = self.model_config.get("_validation_context")
+        _ctx = self.model_config.get("_validation_context")  # noqa: F841
         # Pydantic v2 context is passed via model_validate(..., context=)
         # We access it from __pydantic_validator__ at runtime; for now,
         # the FK check is done at the verb level (add_arms) where we have

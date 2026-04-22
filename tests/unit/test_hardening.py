@@ -7,7 +7,6 @@ import pytest
 
 import fleet  # noqa: F401  — triggers namespace registration
 
-
 # ====================================================================
 # Phase 1 — copy.copy preserves subclass state
 # ====================================================================
@@ -81,8 +80,7 @@ class TestInspectExplain:
     def test_sdtm_inspect_creates_checkpoint(self):
         df = pl.DataFrame({"subject_id": ["S01", "S02"]})
         result = (
-            df.sdtm
-            .assign_no_ct("USUBJID", source="subject_id")
+            df.sdtm.assign_no_ct("USUBJID", source="subject_id")
             .inspect()
             .hardcode_no_ct("DOMAIN", value="DM")
             .to_frame()

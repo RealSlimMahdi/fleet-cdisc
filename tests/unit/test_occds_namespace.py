@@ -9,16 +9,18 @@ import fleet  # noqa: F401 — triggers namespace registration
 @pytest.fixture
 def ae_frame():
     """Minimal AE SDTM-like event frame."""
-    return pl.DataFrame({
-        "USUBJID":  ["01-001", "01-001", "01-001", "01-002"],
-        "AETERM":   ["Headache", "Nausea", "Fatigue", "Dizziness"],
-        "AEBODSYS": ["Nervous", "GI", "General", "Nervous"],
-        "AESEV":    ["MILD", "SEVERE", "MODERATE", "MILD"],
-        "AESTDTC":  ["2024-01-15", "2024-01-20", "2024-01-25", "2024-01-16"],
-        "AEENDTC":  ["2024-01-17", None,          "2024-01-26", "2024-01-18"],
-        "TRTSDT":   ["2024-01-10", "2024-01-10", "2024-01-10", "2024-01-11"],
-        "TRTEDT":   ["2024-03-10", "2024-03-10", "2024-03-10", "2024-03-11"],
-    })
+    return pl.DataFrame(
+        {
+            "USUBJID": ["01-001", "01-001", "01-001", "01-002"],
+            "AETERM": ["Headache", "Nausea", "Fatigue", "Dizziness"],
+            "AEBODSYS": ["Nervous", "GI", "General", "Nervous"],
+            "AESEV": ["MILD", "SEVERE", "MODERATE", "MILD"],
+            "AESTDTC": ["2024-01-15", "2024-01-20", "2024-01-25", "2024-01-16"],
+            "AEENDTC": ["2024-01-17", None, "2024-01-26", "2024-01-18"],
+            "TRTSDT": ["2024-01-10", "2024-01-10", "2024-01-10", "2024-01-11"],
+            "TRTEDT": ["2024-03-10", "2024-03-10", "2024-03-10", "2024-03-11"],
+        }
+    )
 
 
 class TestBaseVerbs:
@@ -37,18 +39,17 @@ class TestBaseVerbs:
         assert result["AETERM2"][0] == "HEADACHE"
 
     def test_whereclauses(self, ae_frame):
-        result = ae_frame.adam.occds.whereclauses(
-            where='pl.col("AESEV") == "MILD"'
-        ).to_frame()
+        result = ae_frame.adam.occds.whereclauses(where='pl.col("AESEV") == "MILD"').to_frame()
         assert result.height == 2
 
     def test_recode(self, ae_frame):
         result = ae_frame.adam.occds.recode(
-            "AESEVN", source="AESEV",
+            "AESEVN",
+            source="AESEV",
             recode_map={"MILD": "1", "MODERATE": "2", "SEVERE": "3"},
         ).to_frame()
-        assert result["AESEVN"][0] == "1"   # Headache=MILD
-        assert result["AESEVN"][1] == "3"   # Nausea=SEVERE
+        assert result["AESEVN"][0] == "1"  # Headache=MILD
+        assert result["AESEVN"][1] == "3"  # Nausea=SEVERE
 
     def test_rename(self, ae_frame):
         result = ae_frame.adam.occds.rename("AEDECOD", source="AETERM").to_frame()
@@ -102,9 +103,7 @@ class TestWorstFlag:
             severity_order=["MILD", "MODERATE", "SEVERE"],
         ).to_frame()
         # SEVERE is worst for 01-001; MILD rows should be null
-        mild_001 = result.filter(
-            (pl.col("USUBJID") == "01-001") & (pl.col("AESEV") == "MILD")
-        )
+        mild_001 = result.filter((pl.col("USUBJID") == "01-001") & (pl.col("AESEV") == "MILD"))
         assert mild_001["ANL01FL"][0] is None
 
 
@@ -117,11 +116,13 @@ class TestTreatmentEmergent:
         assert all(f == "Y" for f in result["TRTEMFL"].to_list())
 
     def test_pre_treatment_not_flagged(self):
-        df = pl.DataFrame({
-            "AESTDTC": ["2024-01-05"],
-            "TRTSDT":  ["2024-01-10"],
-            "TRTEDT":  ["2024-03-10"],
-        })
+        df = pl.DataFrame(
+            {
+                "AESTDTC": ["2024-01-05"],
+                "TRTSDT": ["2024-01-10"],
+                "TRTEDT": ["2024-03-10"],
+            }
+        )
         result = df.adam.occds.treatment_emergent(
             "TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT"
         ).to_frame()

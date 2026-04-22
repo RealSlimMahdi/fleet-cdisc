@@ -50,6 +50,7 @@ REPO_ROOT = Path(__file__).parent.parent
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _example(filename: str) -> str:
     """Read examples/<filename> and wrap it in a fenced python code block."""
     path = REPO_ROOT / "examples" / filename
@@ -112,6 +113,7 @@ def _render_verb_bullets(cls: type, verbs: list[str]) -> str:
 # ---------------------------------------------------------------------------
 # Section builders
 # ---------------------------------------------------------------------------
+
 
 def _header_section() -> str:
     return """\
@@ -609,65 +611,134 @@ README_END = "<!-- AUTO:NAMESPACES:END -->"
 # the README advertises; counts and the "(N verbs: …)" summary line are
 # derived automatically.
 _SHARED_ADAM_VERBS = [
-    "source", "derivation", "assigned", "recode", "rename",
-    "condderivation", "whereclauses", "merge_adsl",
-    "derive_dt", "derive_dtm", "format_iso",
+    "source",
+    "derivation",
+    "assigned",
+    "recode",
+    "rename",
+    "condderivation",
+    "whereclauses",
+    "merge_adsl",
+    "derive_dt",
+    "derive_dtm",
+    "format_iso",
 ]
 
 _README_SDTM_VERBS = [
-    "assign_no_ct", "assign_ct", "assign_dtc",
-    "hardcode_ct", "hardcode_no_ct",
-    "condition_add", "if_then_else", "ae_aerel",
-    "merge", "remove_dup", "group_by",
-    "dataset_level", "notsubmitted", "multiple_responses",
+    "assign_no_ct",
+    "assign_ct",
+    "assign_dtc",
+    "hardcode_ct",
+    "hardcode_no_ct",
+    "condition_add",
+    "if_then_else",
+    "ae_aerel",
+    "merge",
+    "remove_dup",
+    "group_by",
+    "dataset_level",
+    "notsubmitted",
+    "multiple_responses",
 ]
 
 _README_ADAM_SPECIFIC = [
-    "lookup", "study_day", "baseline", "chg", "pchg", "flag",
-    "bmi", "nrind", "on_treatment", "shift", "bsa", "map", "qtc",
-    "derive_summary_records", "derive_locf_records", "derive_param", "transform",
+    "lookup",
+    "study_day",
+    "baseline",
+    "chg",
+    "pchg",
+    "flag",
+    "bmi",
+    "nrind",
+    "on_treatment",
+    "shift",
+    "bsa",
+    "map",
+    "qtc",
+    "derive_summary_records",
+    "derive_locf_records",
+    "derive_param",
+    "transform",
 ]
 
 _README_ADSL_SPECIFIC = [
-    "first_date", "last_date", "duration", "count_events",
-    "eligibility_flag", "age_years", "age_from_dates", "derive_period",
+    "first_date",
+    "last_date",
+    "duration",
+    "count_events",
+    "eligibility_flag",
+    "age_years",
+    "age_from_dates",
+    "derive_period",
 ]
 
 _README_OCCDS_SPECIFIC = ["worst_flag", "treatment_emergent", "onset_recovery"]
 _README_OCCDS_MULTI = ["seq"]
 
 _README_ONCO_SPECIFIC = [
-    "aval_resp", "tumor_response_flag", "best_overall_response",
-    "confirmed_response_flag", "filter_pd",
+    "aval_resp",
+    "tumor_response_flag",
+    "best_overall_response",
+    "confirmed_response_flag",
+    "filter_pd",
 ]
 
 _README_OPHTHA_SPECIFIC = [
-    "etdrs_to_logmar", "logmar_to_etdrs",
-    "study_eye", "affected_eye", "bcva_criterion",
+    "etdrs_to_logmar",
+    "logmar_to_etdrs",
+    "study_eye",
+    "affected_eye",
+    "bcva_criterion",
 ]
 
 _README_PEDS_SPECIFIC = [
-    "age_days", "age_months", "age_years",
-    "corrected_age", "prematurity_flag", "bmi_category",
+    "age_days",
+    "age_months",
+    "age_years",
+    "corrected_age",
+    "prematurity_flag",
+    "bmi_category",
 ]
 
 _README_VACCINE_SPECIFIC = [
-    "fever_flag", "seroconversion_flag", "seroresponse_flag",
-    "aval_adis", "event_flag",
+    "fever_flag",
+    "seroconversion_flag",
+    "seroresponse_flag",
+    "aval_adis",
+    "event_flag",
 ]
 
 _README_METABOLIC_SPECIFIC = [
-    "waist_hip_ratio", "waist_height_ratio", "body_fat_pct", "visceral_fat_flag",
+    "waist_hip_ratio",
+    "waist_height_ratio",
+    "body_fat_pct",
+    "visceral_fat_flag",
 ]
 
 _README_NEURO_SPECIFIC = [
-    "centiloid", "mmse_category", "cdrsob_total", "moca_category", "panss_total",
+    "centiloid",
+    "mmse_category",
+    "cdrsob_total",
+    "moca_category",
+    "panss_total",
 ]
 
 _README_PK_SPECIFIC = [
-    "blq_flag", "blq_impute", "nominal_time", "actual_time", "predose_flag",
-    "dose_normalized", "evid", "mrrlt", "blqfn", "log_conc", "mdv", "amt",
-    "cmt", "avalcat", "anl_flag",
+    "blq_flag",
+    "blq_impute",
+    "nominal_time",
+    "actual_time",
+    "predose_flag",
+    "dose_normalized",
+    "evid",
+    "mrrlt",
+    "blqfn",
+    "log_conc",
+    "mdv",
+    "amt",
+    "cmt",
+    "avalcat",
+    "anl_flag",
 ]
 _README_PK_MULTI = ["seq"]
 
@@ -701,10 +772,7 @@ def _render_namespace_details(
     else:
         count_label = f"{total} verbs"
 
-    summary = (
-        f"<summary><b><code>{namespace}</code></b> — "
-        f"{title} ({count_label})</summary>"
-    )
+    summary = f"<summary><b><code>{namespace}</code></b> — {title} ({count_label})</summary>"
 
     def _join(verbs: list[str]) -> str:
         return " · ".join(f"`{v}`" for v in verbs)
@@ -728,54 +796,77 @@ def _readme_namespaces_block() -> str:
         "Importing `fleet` registers chainable namespaces on **every** "
         "Polars DataFrame. All ADaM namespaces also inherit "
         f"**{len(_SHARED_ADAM_VERBS)} shared verbs** from the common mixin: "
-        + ", ".join(f"`{v}`" for v in _SHARED_ADAM_VERBS) + "."
+        + ", ".join(f"`{v}`" for v in _SHARED_ADAM_VERBS)
+        + "."
     )
 
     blocks: list[str] = [
         _render_namespace_details(
-            namespace="df.sdtm", title="SDTM domains",
-            specific=_README_SDTM_VERBS, with_shared=False,
+            namespace="df.sdtm",
+            title="SDTM domains",
+            specific=_README_SDTM_VERBS,
+            with_shared=False,
         ),
         _render_namespace_details(
-            namespace="df.adam", title="ADaM BDS",
-            specific=_README_ADAM_SPECIFIC, with_shared=True,
+            namespace="df.adam",
+            title="ADaM BDS",
+            specific=_README_ADAM_SPECIFIC,
+            with_shared=True,
         ),
         _render_namespace_details(
-            namespace="df.adam.adsl", title="ADSL",
-            specific=_README_ADSL_SPECIFIC, with_shared=True,
+            namespace="df.adam.adsl",
+            title="ADSL",
+            specific=_README_ADSL_SPECIFIC,
+            with_shared=True,
         ),
         _render_namespace_details(
-            namespace="df.adam.occds", title="OCCDS / ADAE, ADCM…",
-            specific=_README_OCCDS_SPECIFIC, with_shared=True,
+            namespace="df.adam.occds",
+            title="OCCDS / ADAE, ADCM…",
+            specific=_README_OCCDS_SPECIFIC,
+            with_shared=True,
             multi_row=_README_OCCDS_MULTI,
         ),
         _render_namespace_details(
-            namespace="df.adam.onco", title="Oncology",
-            specific=_README_ONCO_SPECIFIC, with_shared=True,
+            namespace="df.adam.onco",
+            title="Oncology",
+            specific=_README_ONCO_SPECIFIC,
+            with_shared=True,
         ),
         _render_namespace_details(
-            namespace="df.adam.ophtha", title="Ophthalmology",
-            specific=_README_OPHTHA_SPECIFIC, with_shared=True,
+            namespace="df.adam.ophtha",
+            title="Ophthalmology",
+            specific=_README_OPHTHA_SPECIFIC,
+            with_shared=True,
         ),
         _render_namespace_details(
-            namespace="df.adam.peds", title="Pediatrics",
-            specific=_README_PEDS_SPECIFIC, with_shared=True,
+            namespace="df.adam.peds",
+            title="Pediatrics",
+            specific=_README_PEDS_SPECIFIC,
+            with_shared=True,
         ),
         _render_namespace_details(
-            namespace="df.adam.vaccine", title="Vaccine",
-            specific=_README_VACCINE_SPECIFIC, with_shared=True,
+            namespace="df.adam.vaccine",
+            title="Vaccine",
+            specific=_README_VACCINE_SPECIFIC,
+            with_shared=True,
         ),
         _render_namespace_details(
-            namespace="df.adam.metabolic", title="Metabolic",
-            specific=_README_METABOLIC_SPECIFIC, with_shared=True,
+            namespace="df.adam.metabolic",
+            title="Metabolic",
+            specific=_README_METABOLIC_SPECIFIC,
+            with_shared=True,
         ),
         _render_namespace_details(
-            namespace="df.adam.neuro", title="Neuroscience",
-            specific=_README_NEURO_SPECIFIC, with_shared=True,
+            namespace="df.adam.neuro",
+            title="Neuroscience",
+            specific=_README_NEURO_SPECIFIC,
+            with_shared=True,
         ),
         _render_namespace_details(
-            namespace="df.adam.pk", title="Pharmacokinetics",
-            specific=_README_PK_SPECIFIC, with_shared=True,
+            namespace="df.adam.pk",
+            title="Pharmacokinetics",
+            specific=_README_PK_SPECIFIC,
+            with_shared=True,
             multi_row=_README_PK_MULTI,
         ),
     ]
@@ -806,10 +897,10 @@ def _render_readme(existing: str) -> str:
     return f"{head}\n\n{block}\n\n{tail}"
 
 
-
 # ---------------------------------------------------------------------------
 # Assembly
 # ---------------------------------------------------------------------------
+
 
 def build() -> str:
     """Assemble all sections into the final llms.txt content."""
@@ -837,6 +928,7 @@ def build() -> str:
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(

@@ -381,38 +381,52 @@ class TestANL01FLAdmiralParity:
         - Null AVAL → excluded by restrict_derivation filter
         - Single-record group → trivially flagged "Y"
         """
-        return pl.DataFrame({
-            "USUBJID": [
-                "01", "01", "01",  # SYSBP: 3 records, one has null AVAL
-                "01",              # DIABP: 1 record
-                "02", "02",        # SYSBP: 2 records, both valid
-            ],
-            "PARAMCD": [
-                "SYSBP", "SYSBP", "SYSBP",
-                "DIABP",
-                "SYSBP", "SYSBP",
-            ],
-            "AVAL": [
-                120.0, 130.0, None,  # 01/SYSBP: null at latest date
-                80.0,                # 01/DIABP: single record
-                118.0, 125.0,        # 02/SYSBP: both valid
-            ],
-            "ADT": [
-                "2014-01-02", "2014-01-05", "2014-01-10",
-                "2014-01-02",
-                "2014-01-03", "2014-01-07",
-            ],
-        })
+        return pl.DataFrame(
+            {
+                "USUBJID": [
+                    "01",
+                    "01",
+                    "01",  # SYSBP: 3 records, one has null AVAL
+                    "01",  # DIABP: 1 record
+                    "02",
+                    "02",  # SYSBP: 2 records, both valid
+                ],
+                "PARAMCD": [
+                    "SYSBP",
+                    "SYSBP",
+                    "SYSBP",
+                    "DIABP",
+                    "SYSBP",
+                    "SYSBP",
+                ],
+                "AVAL": [
+                    120.0,
+                    130.0,
+                    None,  # 01/SYSBP: null at latest date
+                    80.0,  # 01/DIABP: single record
+                    118.0,
+                    125.0,  # 02/SYSBP: both valid
+                ],
+                "ADT": [
+                    "2014-01-02",
+                    "2014-01-05",
+                    "2014-01-10",
+                    "2014-01-02",
+                    "2014-01-03",
+                    "2014-01-07",
+                ],
+            }
+        )
 
     def test_last_valid_flagged(self, bds_multi_record):
         """Last non-null-AVAL record per group gets ANL01FL = 'Y'."""
-        result = (
-            bds_multi_record.adam
-            .flag("ANL01FL", criteria="last", order_by="ADT",
-                  groups=["USUBJID", "PARAMCD"],
-                  where='~pl.col("AVAL").is_null()')
-            .to_frame()
-        )
+        result = bds_multi_record.adam.flag(
+            "ANL01FL",
+            criteria="last",
+            order_by="ADT",
+            groups=["USUBJID", "PARAMCD"],
+            where='~pl.col("AVAL").is_null()',
+        ).to_frame()
 
         flags = result["ANL01FL"].to_list()
 
@@ -427,36 +441,40 @@ class TestANL01FLAdmiralParity:
 
     def test_all_valid_single_record_groups(self):
         """Every group has exactly one record → all get ANL01FL = 'Y'."""
-        df = pl.DataFrame({
-            "USUBJID": ["01", "02"],
-            "PARAMCD": ["SYSBP", "SYSBP"],
-            "AVAL": [120.0, 118.0],
-            "ADT": ["2014-01-02", "2014-01-03"],
-        })
-        result = (
-            df.adam
-            .flag("ANL01FL", criteria="last", order_by="ADT",
-                  groups=["USUBJID", "PARAMCD"],
-                  where='~pl.col("AVAL").is_null()')
-            .to_frame()
+        df = pl.DataFrame(
+            {
+                "USUBJID": ["01", "02"],
+                "PARAMCD": ["SYSBP", "SYSBP"],
+                "AVAL": [120.0, 118.0],
+                "ADT": ["2014-01-02", "2014-01-03"],
+            }
         )
+        result = df.adam.flag(
+            "ANL01FL",
+            criteria="last",
+            order_by="ADT",
+            groups=["USUBJID", "PARAMCD"],
+            where='~pl.col("AVAL").is_null()',
+        ).to_frame()
         assert result["ANL01FL"].to_list() == ["Y", "Y"]
 
     def test_all_null_aval_group(self):
         """Group where all AVAL are null → no records flagged."""
-        df = pl.DataFrame({
-            "USUBJID": ["01", "01"],
-            "PARAMCD": ["SYSBP", "SYSBP"],
-            "AVAL": [None, None],
-            "ADT": ["2014-01-02", "2014-01-05"],
-        })
-        result = (
-            df.adam
-            .flag("ANL01FL", criteria="last", order_by="ADT",
-                  groups=["USUBJID", "PARAMCD"],
-                  where='~pl.col("AVAL").is_null()')
-            .to_frame()
+        df = pl.DataFrame(
+            {
+                "USUBJID": ["01", "01"],
+                "PARAMCD": ["SYSBP", "SYSBP"],
+                "AVAL": [None, None],
+                "ADT": ["2014-01-02", "2014-01-05"],
+            }
         )
+        result = df.adam.flag(
+            "ANL01FL",
+            criteria="last",
+            order_by="ADT",
+            groups=["USUBJID", "PARAMCD"],
+            where='~pl.col("AVAL").is_null()',
+        ).to_frame()
         assert result["ANL01FL"].to_list() == [None, None]
 
     def test_with_avisit_grouping(self):
@@ -474,20 +492,22 @@ class TestANL01FLAdmiralParity:
               filter = !is.na(AVAL)
             )
         """
-        df = pl.DataFrame({
-            "USUBJID": ["01", "01", "01", "01"],
-            "PARAMCD": ["SYSBP", "SYSBP", "SYSBP", "SYSBP"],
-            "AVISIT":  ["Week 2", "Week 2", "Week 4", "Week 4"],
-            "AVAL":    [120.0, 125.0, 130.0, None],
-            "ADT":     ["2014-01-10", "2014-01-12", "2014-01-24", "2014-01-26"],
-        })
-        result = (
-            df.adam
-            .flag("ANL01FL", criteria="last", order_by="ADT",
-                  groups=["USUBJID", "PARAMCD", "AVISIT"],
-                  where='~pl.col("AVAL").is_null()')
-            .to_frame()
+        df = pl.DataFrame(
+            {
+                "USUBJID": ["01", "01", "01", "01"],
+                "PARAMCD": ["SYSBP", "SYSBP", "SYSBP", "SYSBP"],
+                "AVISIT": ["Week 2", "Week 2", "Week 4", "Week 4"],
+                "AVAL": [120.0, 125.0, 130.0, None],
+                "ADT": ["2014-01-10", "2014-01-12", "2014-01-24", "2014-01-26"],
+            }
         )
+        result = df.adam.flag(
+            "ANL01FL",
+            criteria="last",
+            order_by="ADT",
+            groups=["USUBJID", "PARAMCD", "AVISIT"],
+            where='~pl.col("AVAL").is_null()',
+        ).to_frame()
         flags = result["ANL01FL"].to_list()
         # Week 2: 01-10 (120) → null, 01-12 (125) → "Y" (last valid)
         # Week 4: 01-24 (130) → "Y" (last valid — 01-26 has null AVAL)

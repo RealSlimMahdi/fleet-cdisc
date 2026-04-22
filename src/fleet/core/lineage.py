@@ -43,9 +43,9 @@ def _expr_output_name(expr: pl.Expr) -> str | None:
 
 
 def _expr_sources(expr: pl.Expr) -> list[str]:
-    """Return the list of source columns referenced by *expr*."""
+    """Return the deduplicated list of source columns referenced by *expr*."""
     try:
-        return list(expr.meta.root_names())
+        return list(dict.fromkeys(expr.meta.root_names()))
     except Exception:
         return []
 

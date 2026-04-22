@@ -220,7 +220,7 @@ class SDTMNamespace(TrialDesignMixin):
 
         if ct_validator is not None:
             try:
-                mapping = {v: v for v in ct_validator.get_valid_values(ct_codelist)}
+                _ = {v: v for v in ct_validator.get_valid_values(ct_codelist)}
                 # Build decode map from CT (code → decode/preferred term)
                 all_ct = ct_validator._ct_cache.get(ct_codelist, {})
                 decode_map = {
@@ -1116,6 +1116,40 @@ class SDTMNamespace(TrialDesignMixin):
                 )
         """
         return self._lazy.collect()
+
+    def to_dataset_json(
+        self,
+        path: str | Path,
+        *,
+        domain: str,
+        label: str | None = None,
+    ) -> Path:
+        """Materialise the pipeline and write a CDISC Dataset-JSON v1.1 file.
+
+        This is a terminal verb — it collects the lazy plan and writes the
+        result.  No further chaining is possible after this call.
+
+        Args:
+            path: Destination file path (should end in ``.json``).
+            domain: Dataset / domain name (e.g. ``"DM"``, ``"AE"``).
+            label: Optional human-readable dataset label.
+
+        Returns:
+            Path: Path to the written file.
+
+        Examples:
+            Export an SDTM DM domain to Dataset-JSON::
+
+                path = (
+                    raw_df.sdtm
+                    .hardcode_no_ct("DOMAIN", value="DM")
+                    .assign_no_ct("USUBJID", source="subject_id")
+                    .to_dataset_json("outputs/dm.json", domain="DM")
+                )
+        """
+        from fleet.io.dataset_json import save_dataset_json
+
+        return save_dataset_json(self._lazy.collect(), path, domain=domain, label=label)
 
     # ------------------------------------------------------------------ #
     # Debugging & observability                                            #

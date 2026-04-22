@@ -9,26 +9,30 @@ import fleet  # noqa: F401 — triggers namespace registration
 @pytest.fixture
 def subject_frame():
     """Minimal ADSL-like subject-level frame."""
-    return pl.DataFrame({
-        "USUBJID": ["01-001", "01-002", "01-003"],
-        "AGE":     [45, 62, 38],
-        "TRTSDT":  ["2024-01-10", "2024-01-11", "2024-01-12"],
-        "TRTEDT":  ["2024-03-10", "2024-03-11", "2024-03-12"],
-        "RANDFL":  ["Y", "Y", "Y"],
-        "COMPLFL": ["Y", "N", "Y"],
-        "EXDOSE":  [54.0, 0.0, 81.0],
-        "RANDDT":  ["2024-01-09", "2024-01-10", None],
-    })
+    return pl.DataFrame(
+        {
+            "USUBJID": ["01-001", "01-002", "01-003"],
+            "AGE": [45, 62, 38],
+            "TRTSDT": ["2024-01-10", "2024-01-11", "2024-01-12"],
+            "TRTEDT": ["2024-03-10", "2024-03-11", "2024-03-12"],
+            "RANDFL": ["Y", "Y", "Y"],
+            "COMPLFL": ["Y", "N", "Y"],
+            "EXDOSE": [54.0, 0.0, 81.0],
+            "RANDDT": ["2024-01-09", "2024-01-10", None],
+        }
+    )
 
 
 @pytest.fixture
 def ae_dataset():
     """Minimal AE SDTM-like event frame."""
-    return pl.DataFrame({
-        "USUBJID": ["01-001", "01-001", "01-002"],
-        "AESTDTC": ["2024-01-15", "2024-01-20", "2024-01-18"],
-        "AESER":   ["N", "Y", "N"],
-    })
+    return pl.DataFrame(
+        {
+            "USUBJID": ["01-001", "01-001", "01-002"],
+            "AESTDTC": ["2024-01-15", "2024-01-20", "2024-01-18"],
+            "AESER": ["N", "Y", "N"],
+        }
+    )
 
 
 class TestBaseVerbs:
@@ -51,14 +55,13 @@ class TestBaseVerbs:
         assert "SUBJECTID" in result.columns
 
     def test_whereclauses(self, subject_frame):
-        result = subject_frame.adam.adsl.whereclauses(
-            where='pl.col("AGE") > 40'
-        ).to_frame()
+        result = subject_frame.adam.adsl.whereclauses(where='pl.col("AGE") > 40').to_frame()
         assert result.height == 2
 
     def test_recode(self, subject_frame):
         result = subject_frame.adam.adsl.recode(
-            "RANDFL_N", source="RANDFL",
+            "RANDFL_N",
+            source="RANDFL",
             recode_map={"Y": "1", "N": "0"},
         ).to_frame()
         assert result["RANDFL_N"].to_list() == ["1", "1", "1"]
@@ -87,8 +90,7 @@ class TestFirstDate:
 
     def test_first_date_with_where(self, subject_frame, ae_dataset):
         result = subject_frame.adam.adsl.first_date(
-            "SAESTDTC", from_dataset=ae_dataset, date_col="AESTDTC",
-            where='pl.col("AESER") == "Y"'
+            "SAESTDTC", from_dataset=ae_dataset, date_col="AESTDTC", where='pl.col("AESER") == "Y"'
         ).to_frame()
         # Only 01-001 has a serious AE
         row_001 = result.filter(pl.col("USUBJID") == "01-001")
@@ -135,23 +137,18 @@ class TestDuration:
 
 class TestCountEvents:
     def test_count_all(self, subject_frame, ae_dataset):
-        result = subject_frame.adam.adsl.count_events(
-            "NUMAE", from_dataset=ae_dataset
-        ).to_frame()
+        result = subject_frame.adam.adsl.count_events("NUMAE", from_dataset=ae_dataset).to_frame()
         row_001 = result.filter(pl.col("USUBJID") == "01-001")
         assert row_001["NUMAE"][0] == 2
 
     def test_count_zero_for_no_events(self, subject_frame, ae_dataset):
-        result = subject_frame.adam.adsl.count_events(
-            "NUMAE", from_dataset=ae_dataset
-        ).to_frame()
+        result = subject_frame.adam.adsl.count_events("NUMAE", from_dataset=ae_dataset).to_frame()
         row_003 = result.filter(pl.col("USUBJID") == "01-003")
         assert row_003["NUMAE"][0] == 0
 
     def test_count_with_where(self, subject_frame, ae_dataset):
         result = subject_frame.adam.adsl.count_events(
-            "NUMSAE", from_dataset=ae_dataset,
-            where='pl.col("AESER") == "Y"'
+            "NUMSAE", from_dataset=ae_dataset, where='pl.col("AESER") == "Y"'
         ).to_frame()
         row_001 = result.filter(pl.col("USUBJID") == "01-001")
         assert row_001["NUMSAE"][0] == 1
@@ -164,9 +161,9 @@ class TestEligibilityFlag:
             "SAFFL", criteria='pl.col("EXDOSE") > 0'
         ).to_frame()
         flags = result["SAFFL"].to_list()
-        assert flags[0] == "Y"   # 01-001: EXDOSE=54 → Y
-        assert flags[1] is None   # 01-002: EXDOSE=0  → null
-        assert flags[2] == "Y"   # 01-003: EXDOSE=81 → Y
+        assert flags[0] == "Y"  # 01-001: EXDOSE=54 → Y
+        assert flags[1] is None  # 01-002: EXDOSE=0  → null
+        assert flags[2] == "Y"  # 01-003: EXDOSE=81 → Y
 
     def test_ittfl_has_randomization_date(self, subject_frame):
         """ITTFL = 'Y' when patient has a randomization date."""
@@ -174,9 +171,9 @@ class TestEligibilityFlag:
             "ITTFL", criteria='pl.col("RANDDT").is_not_null()'
         ).to_frame()
         flags = result["ITTFL"].to_list()
-        assert flags[0] == "Y"   # 01-001: RANDDT present → Y
-        assert flags[1] == "Y"   # 01-002: RANDDT present → Y
-        assert flags[2] is None   # 01-003: RANDDT missing → null
+        assert flags[0] == "Y"  # 01-001: RANDDT present → Y
+        assert flags[1] == "Y"  # 01-002: RANDDT present → Y
+        assert flags[2] is None  # 01-003: RANDDT missing → null
 
     def test_partial_compliant(self, subject_frame):
         result = subject_frame.adam.adsl.eligibility_flag(

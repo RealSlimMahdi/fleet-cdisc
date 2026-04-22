@@ -10,10 +10,10 @@ import fleet  # noqa: F401 — triggers namespace registration
 # slope and intercept taken directly from _CENTILOID_CALIBRATIONS.
 # ---------------------------------------------------------------------------
 _CENTILOID_CALIBRATIONS = [
-    ("18F-Florbetapir",  "AVID FBP SUVR PIPELINE",     183.07,  -177.26),
-    ("18F-Florbetaben",  "AVID FBB SUVR PIPELINE",     156.06,  -148.13),
-    ("18F-Florbetapir",  "BERKELEY FBP SUVR PIPELINE",  188.22, -189.16),
-    ("18F-Florbetaben",  "BERKELEY FBB SUVR PIPELINE",  157.15, -151.87),
+    ("18F-Florbetapir", "AVID FBP SUVR PIPELINE", 183.07, -177.26),
+    ("18F-Florbetaben", "AVID FBB SUVR PIPELINE", 156.06, -148.13),
+    ("18F-Florbetapir", "BERKELEY FBP SUVR PIPELINE", 188.22, -189.16),
+    ("18F-Florbetaben", "BERKELEY FBB SUVR PIPELINE", 157.15, -151.87),
 ]
 
 # ---------------------------------------------------------------------------
@@ -21,13 +21,13 @@ _CENTILOID_CALIBRATIONS = [
 # ---------------------------------------------------------------------------
 _MMSE_CATEGORY_CASES = [
     (30, "Normal"),
-    (27, "Normal"),     # boundary: ≥27
+    (27, "Normal"),  # boundary: ≥27
     (26, "Mild"),
-    (18, "Mild"),       # boundary: ≥18
+    (18, "Mild"),  # boundary: ≥18
     (17, "Moderate"),
-    (10, "Moderate"),   # boundary: ≥10
-    (9,  "Severe"),
-    (0,  "Severe"),
+    (10, "Moderate"),  # boundary: ≥10
+    (9, "Severe"),
+    (0, "Severe"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -35,22 +35,24 @@ _MMSE_CATEGORY_CASES = [
 # ---------------------------------------------------------------------------
 _MOCA_CATEGORY_CASES = [
     (30, "Normal"),
-    (26, "Normal"),   # boundary: ≥26
+    (26, "Normal"),  # boundary: ≥26
     (25, "MCI"),
-    (18, "MCI"),      # boundary: ≥18
+    (18, "MCI"),  # boundary: ≥18
     (17, "Impaired"),
-    (0,  "Impaired"),
+    (0, "Impaired"),
 ]
 
 
 @pytest.fixture
 def neuro_frame():
     """Minimal frame for shared verb tests on the neuro namespace."""
-    return pl.DataFrame({
-        "USUBJID": ["01-001", "01-002"],
-        "MMSE":    [28, 15],
-        "ARM":     ["Active", "Placebo"],
-    })
+    return pl.DataFrame(
+        {
+            "USUBJID": ["01-001", "01-002"],
+            "MMSE": [28, 15],
+            "ARM": ["Active", "Placebo"],
+        }
+    )
 
 
 class TestBaseVerbs:
@@ -72,8 +74,7 @@ class TestBaseVerbs:
 
     def test_recode(self, neuro_frame):
         result = neuro_frame.adam.neuro.recode(
-            "ARMCD", source="ARM",
-            recode_map={"Active": "ACT", "Placebo": "PBO"}
+            "ARMCD", source="ARM", recode_map={"Active": "ACT", "Placebo": "PBO"}
         ).to_frame()
         assert result["ARMCD"].to_list() == ["ACT", "PBO"]
 
@@ -90,9 +91,7 @@ class TestBaseVerbs:
         assert result["SEVCAT"].to_list() == ["Normal", "Impaired"]
 
     def test_whereclauses(self, neuro_frame):
-        result = neuro_frame.adam.neuro.whereclauses(
-            where='pl.col("MMSE") >= 27'
-        ).to_frame()
+        result = neuro_frame.adam.neuro.whereclauses(where='pl.col("MMSE") >= 27').to_frame()
         assert result.height == 1
 
 
@@ -122,8 +121,7 @@ class TestCentiloid:
         df = pl.DataFrame({"SUVR": [1.0]})
         with pytest.raises(ValueError, match="No calibration found"):
             df.adam.neuro.centiloid(
-                "CLV", suvr_col="SUVR",
-                tracer="MyTracer", pipeline="MyPipeline"
+                "CLV", suvr_col="SUVR", tracer="MyTracer", pipeline="MyPipeline"
             ).to_frame()
 
     def test_no_params_raises(self):
@@ -160,14 +158,16 @@ class TestCdrsob:
     """Test 3: CDR Sum-of-Boxes = sum of 6 domain scores."""
 
     def test_sum_of_boxes(self):
-        df = pl.DataFrame({
-            "CDRMEM":  [2.0],
-            "CDRORNT": [1.0],
-            "CDRJDGM": [0.5],
-            "CDRCOMM": [1.0],
-            "CDRHOME": [0.0],
-            "CDRPERS": [0.0],
-        })
+        df = pl.DataFrame(
+            {
+                "CDRMEM": [2.0],
+                "CDRORNT": [1.0],
+                "CDRJDGM": [0.5],
+                "CDRCOMM": [1.0],
+                "CDRHOME": [0.0],
+                "CDRPERS": [0.0],
+            }
+        )
         result = df.adam.neuro.cdrsob_total(
             "CDRSOB",
             domain_cols=["CDRMEM", "CDRORNT", "CDRJDGM", "CDRCOMM", "CDRHOME", "CDRPERS"],
@@ -207,11 +207,13 @@ class TestPanssTotal:
     """Test 5: PANSS total = positive + negative + general subscales."""
 
     def test_sum_subscales(self):
-        df = pl.DataFrame({
-            "PANSSPOS": [14.0],
-            "PANSSNEG": [16.0],
-            "PANSSGEN": [30.0],
-        })
+        df = pl.DataFrame(
+            {
+                "PANSSPOS": [14.0],
+                "PANSSNEG": [16.0],
+                "PANSSGEN": [30.0],
+            }
+        )
         result = df.adam.neuro.panss_total(
             "PANSSTOT",
             positive_col="PANSSPOS",
@@ -222,11 +224,13 @@ class TestPanssTotal:
 
     def test_null_subscale_propagates(self):
         """Null in any subscale should yield null total."""
-        df = pl.DataFrame({
-            "PANSSPOS": [14.0],
-            "PANSSNEG": [None],
-            "PANSSGEN": [30.0],
-        })
+        df = pl.DataFrame(
+            {
+                "PANSSPOS": [14.0],
+                "PANSSNEG": [None],
+                "PANSSGEN": [30.0],
+            }
+        )
         result = df.adam.neuro.panss_total(
             "PANSSTOT",
             positive_col="PANSSPOS",
@@ -237,13 +241,15 @@ class TestPanssTotal:
 
     def test_multi_subject(self):
         """Multiple subjects evaluated independently."""
-        df = pl.DataFrame({
-            "STUDYID":  ["NEUROSTUDY"] * 2,
-            "USUBJID":  ["01-701-1015", "01-701-1023"],
-            "PANSSPOS": [14.0, 7.0],
-            "PANSSNEG": [16.0, 7.0],
-            "PANSSGEN": [30.0, 16.0],
-        })
+        df = pl.DataFrame(
+            {
+                "STUDYID": ["NEUROSTUDY"] * 2,
+                "USUBJID": ["01-701-1015", "01-701-1023"],
+                "PANSSPOS": [14.0, 7.0],
+                "PANSSNEG": [16.0, 7.0],
+                "PANSSGEN": [30.0, 16.0],
+            }
+        )
         result = df.adam.neuro.panss_total(
             "PANSSTOT",
             positive_col="PANSSPOS",

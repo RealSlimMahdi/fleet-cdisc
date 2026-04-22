@@ -66,11 +66,14 @@ class OfficialCDISCValidator:
         return [str(self._executable), *args]
 
     @property
-    def _cwd(self) -> str | None:
-        """Working directory for subprocess — only needed for legacy core.py."""
-        if self._is_legacy:
-            return str(self._executable.parent)
-        return None
+    def _cwd(self) -> str:
+        """Working directory for subprocess.
+
+        The CDISC Rules Engine binary resolves ``resources/templates/``
+        relative to its working directory, so we always ``cd`` into the
+        directory that contains the executable.
+        """
+        return str(self._executable.parent)
 
     def validate_dataset(
         self,
@@ -83,8 +86,8 @@ class OfficialCDISCValidator:
         """Run CDISC rules engine validation on a Polars DataFrame."""
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
-            dataset_path = tmpdir_path / dataset_name
-            self._save_as_xpt(data, dataset_path)
+            dataset_path = tmpdir_path / f"{dataset_name}.json"
+            self._write_dataset_json(data, dataset_path, domain=domain or dataset_name)
 
             output_file = tmpdir_path / "validation_result"
             cmd = self._build_cmd(
@@ -115,18 +118,33 @@ class OfficialCDISCValidator:
                     validation_data = json.loads(json_output.read_text())
                     return self._parse_validation_result(validation_data, data, domain)
 
-                # No output file — treat as clean
+                # No output file — engine may have crashed.
+                stderr_snippet = result.stderr.strip()[:500]
+                msg = f"Engine exited (rc={result.returncode}) but produced no report."
+                if stderr_snippet:
+                    msg += f" stderr: {stderr_snippet}"
                 return _build_result(
                     dataset_name=domain or "unknown",
                     dataset_type=standard,
                     model_version=version,
+                    errors=[
+                        ValidationIssue(
+                            severity=Severity.ERROR,
+                            rule_id="ENGINE-001",
+                            message=msg,
+                        )
+                    ]
+                    if result.returncode != 0
+                    else [],
                     infos=[
                         ValidationIssue(
                             severity=Severity.INFO,
                             rule_id="INFO-000",
-                            message=f"Validation completed. Output: {result.stdout.strip()}",
+                            message=f"Validation completed with no issues. {result.stdout.strip()}",
                         )
-                    ],
+                    ]
+                    if result.returncode == 0
+                    else [],
                 )
 
             except subprocess.TimeoutExpired:
@@ -158,17 +176,10 @@ class OfficialCDISCValidator:
                 )
 
     @staticmethod
-    def _save_as_xpt(df: pl.DataFrame, path: Path) -> None:
-        try:
-            import pandas  # noqa: F401
-            import pyreadstat  # noqa: F401
+    def _write_dataset_json(df: pl.DataFrame, path: Path, *, domain: str) -> None:
+        from fleet.io.dataset_json import save_dataset_json
 
-            pd_df = df.to_pandas()
-            pyreadstat.write_xport(pd_df, str(path))
-        except ImportError as exc:
-            raise ImportError(
-                "pyreadstat is required for XPT export. Install it with: uv add fleet[io]"
-            ) from exc
+        save_dataset_json(df, path, domain=domain)
 
     @staticmethod
     def _parse_validation_result(
@@ -176,13 +187,49 @@ class OfficialCDISCValidator:
         df: pl.DataFrame,
         domain: str | None,
     ) -> ValidationResult:
-        results = data.get("results", [])
+        """Parse the CDISC Rules Engine raw JSON report.
+
+        The engine ``-rr`` (raw report) JSON has these top-level keys:
+
+        * ``Conformance_Details`` — metadata (engine version, standard, …)
+        * ``Dataset_Details``     — file / dataset info
+        * ``Issue_Summary``       — one row per rule that reported issues
+        * ``Issue_Details``       — one row per individual finding
+        * ``Rules_Report``        — execution status of every rule
+        * ``results_data``        — raw results (legacy / internal)
+
+        Engine-internal noise (cross-domain "evaluation dataset failed to
+        build", missing-domain messages, rule execution errors) is
+        downgraded to INFO so it doesn't pollute the user-facing report.
+        """
+        conformance = data.get("Conformance_Details", {})
+        dataset_type = conformance.get("Standard", "unknown").lower()
+        model_version = conformance.get("Version", "unknown").lower()
+
         errors: list[ValidationIssue] = []
         warnings: list[ValidationIssue] = []
         infos: list[ValidationIssue] = []
 
-        for item in results:
-            severity_str = item.get("severity", "WARNING").upper()
+        # ── Issue_Details: one entry per individual finding ──────────
+        for item in data.get("Issue_Details", []):
+            rule_id = item.get("core_id", item.get("Rule", "UNKNOWN"))
+            message = item.get("message", item.get("Message", "No message"))
+            variable = item.get("variables", item.get("Variables")) or None
+            rows = _safe_int(item.get("row", item.get("Rows")))
+
+            # Downgrade engine-internal noise to INFO
+            if _is_engine_noise(message):
+                infos.append(
+                    ValidationIssue(
+                        severity=Severity.INFO,
+                        rule_id=rule_id,
+                        message=message,
+                        variable=variable,
+                    )
+                )
+                continue
+
+            severity_str = item.get("Severity", item.get("severity", "WARNING")).upper()
             try:
                 severity = Severity[severity_str]
             except KeyError:
@@ -190,10 +237,10 @@ class OfficialCDISCValidator:
 
             issue = ValidationIssue(
                 severity=severity,
-                rule_id=item.get("rule_id", "UNKNOWN"),
-                message=item.get("message", "No message"),
-                variable=item.get("variable"),
-                rows_affected=item.get("rows_affected"),
+                rule_id=rule_id,
+                message=message,
+                variable=variable,
+                rows_affected=rows,
             )
             if severity == Severity.ERROR:
                 errors.append(issue)
@@ -202,11 +249,56 @@ class OfficialCDISCValidator:
             else:
                 infos.append(issue)
 
+        # ── Issue_Summary: real findings aggregated per rule ─────────
+        for item in data.get("Issue_Summary", []):
+            rule_id = item.get("core_id", "UNKNOWN")
+            message = item.get("message", "")
+            if _is_engine_noise(message):
+                continue  # already captured from Issue_Details
+            # Deduplicate: Issue_Summary is a rollup of Issue_Details,
+            # only add if this rule_id wasn't already seen.
+            seen_ids = {i.rule_id for i in errors + warnings}
+            if rule_id not in seen_ids:
+                issue = ValidationIssue(
+                    severity=Severity.WARNING,
+                    rule_id=rule_id,
+                    message=message,
+                )
+                warnings.append(issue)
+
         return _build_result(
             dataset_name=domain or "unknown",
-            dataset_type=data.get("standard", "unknown"),
-            model_version=data.get("version", "unknown"),
+            dataset_type=dataset_type,
+            model_version=model_version,
             errors=errors,
             warnings=warnings,
             infos=infos,
         )
+
+
+def _safe_int(val: object) -> int | None:
+    """Coerce *val* to int, returning ``None`` on failure."""
+    if val is None:
+        return None
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return None
+
+
+# Patterns that indicate engine-internal noise rather than real data issues.
+_ENGINE_NOISE_PATTERNS = (
+    "evaluation dataset failed to build",
+    "rule evaluation error",
+    "rule execution error",
+    "does not exist",
+    "dataset is missing",
+    "is not present in study",
+    "An unknown exception has occurred",
+)
+
+
+def _is_engine_noise(message: str) -> bool:
+    """Return ``True`` if *message* is engine-internal noise."""
+    msg = message.lower()
+    return any(p.lower() in msg for p in _ENGINE_NOISE_PATTERNS)

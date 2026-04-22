@@ -91,19 +91,22 @@ The `assign_ct` SDTM verb and `recode` ADaM verb use the singleton automatically
 
 ### `io/` — Data Loading and Saving
 
-| File         | Purpose                                              |
-| ------------ | ---------------------------------------------------- |
-| `loaders.py` | Functions for loading raw data and optionally saving |
+| File              | Purpose                                                        |
+| ----------------- | -------------------------------------------------------------- |
+| `loaders.py`      | Functions for loading raw data and optionally saving           |
+| `dataset_json.py` | CDISC Dataset-JSON v1.1 writer & reader (pure Polars, no deps) |
 
 **Key functions:**
 
-| Function            | Signature                      | What it does                                                |
-| ------------------- | ------------------------------ | ----------------------------------------------------------- |
-| `load_raw_data`     | `(file_path, file_type=None)`  | Returns a `pl.LazyFrame` — auto-detects CSV, Excel, Parquet |
-| `load_datasets`     | `(directory, pattern="*.csv")` | Loads all matching files in a directory                     |
-| `download_raw_data` | `(url, destination)`           | Downloads a file from a URL                                 |
-| `save_parquet`      | `(df, path)`                   | Writes a Polars DataFrame to Parquet                        |
-| `save_xpt`          | `(df, path)`                   | Writes to SAS XPT (requires `pyreadstat`)                   |
+| Function            | Signature                          | What it does                                                |
+| ------------------- | ---------------------------------- | ----------------------------------------------------------- |
+| `load_raw_data`     | `(file_path, file_type=None)`      | Returns a `pl.LazyFrame` — auto-detects CSV, Excel, Parquet |
+| `load_datasets`     | `(directory, pattern="*.csv")`     | Loads all matching files in a directory                     |
+| `download_raw_data` | `(url, destination)`               | Downloads a file from a URL                                 |
+| `save_parquet`      | `(df, path)`                       | Writes a Polars DataFrame to Parquet                        |
+| `save_xpt`          | `(df, path)`                       | Writes to SAS XPT (requires `pyreadstat`)                   |
+| `save_dataset_json` | `(df, path, *, domain, label=...)` | Writes CDISC Dataset-JSON v1.1 (no external deps)           |
+| `read_dataset_json` | `(path)`                           | Reads a Dataset-JSON v1.1 file back into a Polars DataFrame |
 
 ---
 
@@ -271,8 +274,8 @@ The YAML key `fleet_algorithm` in a variable spec is used to record the derivati
 | File              | Purpose                                                                                                                                                                                                                                                  |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `engine.py`       | Engine installer and discovery — `install_engine()`, `uninstall_engine()`, `discover_engine()`, `doctor()`; manages `~/.fleet/cdisc-rules-engine/`                                                                                                       |
-| `models.py`       | `Severity` enum (`ERROR/WARNING/INFO`), `ValidationIssue` dataclass, `ValidationResult` (with `.is_valid`, `.print_report()`, `.save_html_report()`)                                                                                                     |
-| `official.py`     | `OfficialCDISCValidator` — wraps the CDISC Rules Engine binary (or legacy `core.py`) via subprocess                                                                                                                                                      |
+| `models.py`       | `Severity` enum (`ERROR/WARNING/INFO`), `ValidationIssue` dataclass, `ValidationResult` (with `.is_valid`, `.print_report(report_type="summary"/"full")`, `.save_html_report()`)                                                                         |
+| `official.py`     | `OfficialCDISCValidator` — wraps the CDISC Rules Engine binary (or legacy `core.py`) via subprocess; filters cross-domain engine noise to INFO                                                                                                           |
 | `providers.py`    | `ValidationProvider` ABC, `OfficialRulesEngineProvider`, `ValidationProviderRegistry` (plugin registry)                                                                                                                                                  |
 | `service.py`      | `ValidationService` — high-level `.validate_sdtm()` and `.validate_adam()` methods                                                                                                                                                                       |
 | `lineage_join.py` | `enrich_with_lineage(result, lineage, *, spec_ref=None)` — joins `ValidationIssue.variable` with the pipeline `VariableNode` lineage so each issue carries `producing_verb`, `verb_method`, and `spec_ref` (cross-link from rule failure to source verb) |
@@ -376,4 +379,5 @@ uv run pytest tests/ -v
 | `httpx ≥ 0.27.0`           | HTTP downloads (CT files, raw data)             |
 | `jsonschema ≥ 4.26.0`      | Define-XML YAML schema validation               |
 | `pyreadstat ≥ 1.2.0`       | SAS XPT I/O (optional, `uv sync --extra io`)    |
+| `dsjson ≥ 1.3`             | Dataset-JSON oracle for tests (dev only)        |
 | `pytest, pytest-cov, ruff` | Dev tooling (`uv sync --extra dev`)             |

@@ -967,7 +967,7 @@ advs_result.print_report()
 `ValidationResult` provides:
 
 - `.is_valid` — boolean
-- `.print_report()` — formatted console output
+- `.print_report(report_type="summary")` — formatted console output (`"summary"` = compact one-liner per issue, `"full"` = expanded with all fields including INFO)
 - `.save_html_report(path)` — HTML report for archiving
 
 ### 11.4 Remove the engine
@@ -1060,6 +1060,30 @@ save_xpt(adae, "outputs/adam/adae.xpt")
 ```
 
 > **Note:** XPT export requires `pyreadstat`. Install with `uv sync --extra io`. Column names are automatically upper-cased and truncated to 8 characters per SAS Transport format.
+
+### CDISC Dataset-JSON v1.1 (recommended)
+
+Dataset-JSON is the modern CDISC exchange format — no external dependencies required. It is the default format used by Fleet's validation subsystem and is accepted natively by the CDISC Rules Engine.
+
+```python
+from fleet.io import save_dataset_json
+
+save_dataset_json(dm,   "outputs/sdtm/dm.json",   domain="DM")
+save_dataset_json(ae,   "outputs/sdtm/ae.json",   domain="AE")
+save_dataset_json(adsl, "outputs/adam/adsl.json",  domain="ADSL")
+save_dataset_json(adae, "outputs/adam/adae.json",  domain="ADAE")
+```
+
+Or use the terminal verb directly on a pipeline (no `to_frame()` needed):
+
+```python
+path = (
+    raw_df.sdtm
+    .hardcode_no_ct("DOMAIN", value="DM")
+    .assign_no_ct("USUBJID", source="subject_id")
+    .to_dataset_json("outputs/sdtm/dm.json", domain="DM")
+)
+```
 
 ---
 

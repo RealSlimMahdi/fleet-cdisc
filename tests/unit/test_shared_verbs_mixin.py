@@ -17,15 +17,18 @@ import fleet  # noqa: F401 — triggers namespace registration
 
 # ── Shared fixture ────────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def base_frame():
     """Minimal DataFrame that every namespace can work with."""
-    return pl.DataFrame({
-        "USUBJID": ["01-001", "01-002", "01-003"],
-        "AGE":     [45, 62, 38],
-        "SEX":     ["F", "M", "F"],
-        "ARM":     ["Placebo", "Active", "Active"],
-    })
+    return pl.DataFrame(
+        {
+            "USUBJID": ["01-001", "01-002", "01-003"],
+            "AGE": [45, 62, 38],
+            "SEX": ["F", "M", "F"],
+            "ARM": ["Placebo", "Active", "Active"],
+        }
+    )
 
 
 # ── Namespace accessor helpers ────────────────────────────────────────────────
@@ -33,15 +36,15 @@ def base_frame():
 # namespace from df.adam.
 
 _NAMESPACES = [
-    ("adam",      "AdamNamespace (base)"),
-    ("adsl",      "ADSLNamespace"),
-    ("occds",     "OCCDSNamespace"),
-    ("onco",      "OncoNamespace"),
-    ("ophtha",    "OphthaNamespace"),
-    ("peds",      "PedsNamespace"),
-    ("vaccine",   "VaccineNamespace"),
+    ("adam", "AdamNamespace (base)"),
+    ("adsl", "ADSLNamespace"),
+    ("occds", "OCCDSNamespace"),
+    ("onco", "OncoNamespace"),
+    ("ophtha", "OphthaNamespace"),
+    ("peds", "PedsNamespace"),
+    ("vaccine", "VaccineNamespace"),
     ("metabolic", "MetabolicNamespace"),
-    ("neuro",     "NeuroNamespace"),
+    ("neuro", "NeuroNamespace"),
 ]
 
 
@@ -54,6 +57,7 @@ def _get_ns(df: pl.DataFrame, accessor: str):
 
 
 # ── Parametrised tests ────────────────────────────────────────────────────────
+
 
 @pytest.mark.parametrize("accessor, label", _NAMESPACES, ids=[n[1] for n in _NAMESPACES])
 class TestSourceOnAllNamespaces:
@@ -90,7 +94,8 @@ class TestRecodeOnAllNamespaces:
     def test_recode_values(self, base_frame, accessor, label):
         ns = _get_ns(base_frame, accessor)
         result = ns.recode(
-            "SEXN", source="SEX",
+            "SEXN",
+            source="SEX",
             recode_map={"F": "Female", "M": "Male"},
         ).to_frame()
         assert result["SEXN"].to_list() == ["Female", "Male", "Female"]
@@ -98,7 +103,8 @@ class TestRecodeOnAllNamespaces:
     def test_recode_unmapped_default(self, base_frame, accessor, label):
         ns = _get_ns(base_frame, accessor)
         result = ns.recode(
-            "ARMCD", source="ARM",
+            "ARMCD",
+            source="ARM",
             recode_map={"Placebo": "PBO"},
             default="ACTIVE",
         ).to_frame()
@@ -140,24 +146,25 @@ class TestWhereclausesOnAllNamespaces:
 
 # ── Chaining across shared verbs on each namespace ───────────────────────────
 
+
 @pytest.mark.parametrize("accessor, label", _NAMESPACES, ids=[n[1] for n in _NAMESPACES])
 class TestChainingSharedVerbs:
     def test_full_chain(self, base_frame, accessor, label):
         """Chain all shared verbs in one pipeline."""
         ns = _get_ns(base_frame, accessor)
         result = (
-            ns
-            .source("USUBJID")
+            ns.source("USUBJID")
             .assigned("STUDYID", value="S01")
             .rename("SUBJ", source="USUBJID")
             .derivation("AGE_DBL", expression='pl.col("AGE") * 2')
-            .recode("SEXN", source="SEX",
-                    recode_map={"F": "Female", "M": "Male"})
-            .condderivation("AGEGR",
-                            conditions=[
-                                {"condition": "pl.col('AGE') < 50", "value": "Young"},
-                            ],
-                            else_value="Old")
+            .recode("SEXN", source="SEX", recode_map={"F": "Female", "M": "Male"})
+            .condderivation(
+                "AGEGR",
+                conditions=[
+                    {"condition": "pl.col('AGE') < 50", "value": "Young"},
+                ],
+                else_value="Old",
+            )
             .to_frame()
         )
         assert result["STUDYID"].to_list() == ["S01"] * 3
@@ -169,11 +176,10 @@ class TestChainingSharedVerbs:
 
 # ── Edge cases ────────────────────────────────────────────────────────────────
 
+
 class TestSharedVerbEdgeCases:
     def test_whereclauses_empty_result(self, base_frame):
-        result = base_frame.adam.whereclauses(
-            where='pl.col("AGE") > 100'
-        ).to_frame()
+        result = base_frame.adam.whereclauses(where='pl.col("AGE") > 100').to_frame()
         assert result.height == 0
 
     def test_condderivation_empty_conditions(self, base_frame):
@@ -199,13 +205,9 @@ class TestSharedVerbEdgeCases:
         assert result["GRP"].to_list() == ["Old", "Old", "Young"]
 
     def test_derivation_with_polars_expr(self, base_frame):
-        result = base_frame.adam.derivation(
-            "AGE10", expression=pl.col("AGE") + 10
-        ).to_frame()
+        result = base_frame.adam.derivation("AGE10", expression=pl.col("AGE") + 10).to_frame()
         assert result["AGE10"].to_list() == [55, 72, 48]
 
     def test_whereclauses_with_polars_expr(self, base_frame):
-        result = base_frame.adam.whereclauses(
-            where=pl.col("ARM") == "Active"
-        ).to_frame()
+        result = base_frame.adam.whereclauses(where=pl.col("ARM") == "Active").to_frame()
         assert result.height == 2

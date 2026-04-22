@@ -143,7 +143,7 @@ class DefineValidator:
     def _validate_cross_references(self, data: dict[str, Any]) -> None:
         meta = data.get("metadata_version", {})
         standard_oids = {s["oid"] for s in meta.get("standards", [])}
-        leaf_ids = {l["id"] for l in meta.get("leaf_defs", [])}
+        leaf_ids = {leaf["id"] for leaf in meta.get("leaf_defs", [])}
 
         for ig in meta.get("item_group_defs", []):
             loc_base = f"item_group_defs[oid={ig.get('oid')}]"

@@ -54,10 +54,10 @@ Every transform function must satisfy:
 
 from __future__ import annotations
 
-from typing import Callable, overload
+from collections.abc import Callable
+from typing import overload
 
 import polars as pl
-
 
 # Module-level registry: name → callable
 _TRANSFORMS: dict[str, Callable[[pl.DataFrame], pl.DataFrame]] = {}

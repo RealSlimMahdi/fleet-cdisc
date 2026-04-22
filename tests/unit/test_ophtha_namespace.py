@@ -1,7 +1,6 @@
 """Unit tests for the Ophthalmology Polars namespace extension (df.adam.ophtha)."""
 
 import polars as pl
-import polars.testing as plt
 import pytest
 
 import fleet  # noqa: F401 — triggers namespace registration
@@ -11,7 +10,7 @@ import fleet  # noqa: F401 — triggers namespace registration
 # Formula: logmar = -0.02 * etdrs + 1.7
 # ---------------------------------------------------------------------------
 _ETDRS_LOGMAR_PAIRS = [
-    (5,  1.6),
+    (5, 1.6),
     (10, 1.5),
     (15, 1.4),
     (20, 1.3),
@@ -28,18 +27,20 @@ _EYE_CODE_MAPPING = [
     ("OS", "LEFT"),
     ("OD", "RIGHT"),
     ("OU", "BILATERAL"),
-    ("OP", None),      # unknown code → null
+    ("OP", None),  # unknown code → null
 ]
 
 
 @pytest.fixture
 def ophtha_frame():
     """Minimal frame for shared verb tests on the ophtha namespace."""
-    return pl.DataFrame({
-        "USUBJID": ["01-001", "01-002"],
-        "ETDRS":   [85.0, 30.0],
-        "FOCID":   ["OS", "OD"],
-    })
+    return pl.DataFrame(
+        {
+            "USUBJID": ["01-001", "01-002"],
+            "ETDRS": [85.0, 30.0],
+            "FOCID": ["OS", "OD"],
+        }
+    )
 
 
 class TestBaseVerbs:
@@ -78,9 +79,7 @@ class TestBaseVerbs:
         assert result["VACAT"].to_list() == ["GOOD", "POOR"]
 
     def test_whereclauses(self, ophtha_frame):
-        result = ophtha_frame.adam.ophtha.whereclauses(
-            where='pl.col("FOCID") == "OS"'
-        ).to_frame()
+        result = ophtha_frame.adam.ophtha.whereclauses(where='pl.col("FOCID") == "OS"').to_frame()
         assert result.height == 1
 
 
@@ -158,11 +157,13 @@ class TestStudyEye:
 
     def test_multi_subject_realistic(self):
         """Multi-subject frame matching admiral's test-derive_var_studyeye.R layout."""
-        df = pl.DataFrame({
-            "STUDYID": ["XXX001"] * 4,
-            "USUBJID": ["P01", "P02", "P04", "P05"],
-            "SCSTRESC": ["OS", "OD", "OU", "OD"],
-        })
+        df = pl.DataFrame(
+            {
+                "STUDYID": ["XXX001"] * 4,
+                "USUBJID": ["P01", "P02", "P04", "P05"],
+                "SCSTRESC": ["OS", "OD", "OU", "OD"],
+            }
+        )
         result = df.adam.ophtha.study_eye("STUDYEYE", source="SCSTRESC").to_frame()
         eyes = dict(zip(result["USUBJID"].to_list(), result["STUDYEYE"].to_list()))
         assert eyes["P01"] == "LEFT"
@@ -173,47 +174,47 @@ class TestStudyEye:
 
 class TestAffectedEye:
     def test_bilateral_lat_gives_both_eyes(self):
-        df = pl.DataFrame({
-            "STUDYEYE": ["RIGHT"],
-            "AELOC":    ["EYE"],
-            "AELAT":    ["BILATERAL"],
-        })
-        result = df.adam.ophtha.affected_eye(
-            "AFEYE", loc_col="AELOC", lat_col="AELAT"
-        ).to_frame()
+        df = pl.DataFrame(
+            {
+                "STUDYEYE": ["RIGHT"],
+                "AELOC": ["EYE"],
+                "AELAT": ["BILATERAL"],
+            }
+        )
+        result = df.adam.ophtha.affected_eye("AFEYE", loc_col="AELOC", lat_col="AELAT").to_frame()
         assert result["AFEYE"][0] == "Both Eyes"
 
     def test_matching_lat_gives_study_eye(self):
-        df = pl.DataFrame({
-            "STUDYEYE": ["RIGHT"],
-            "AELOC":    ["EYE"],
-            "AELAT":    ["RIGHT"],
-        })
-        result = df.adam.ophtha.affected_eye(
-            "AFEYE", loc_col="AELOC", lat_col="AELAT"
-        ).to_frame()
+        df = pl.DataFrame(
+            {
+                "STUDYEYE": ["RIGHT"],
+                "AELOC": ["EYE"],
+                "AELAT": ["RIGHT"],
+            }
+        )
+        result = df.adam.ophtha.affected_eye("AFEYE", loc_col="AELOC", lat_col="AELAT").to_frame()
         assert result["AFEYE"][0] == "Study Eye"
 
     def test_opposite_lat_gives_fellow_eye(self):
-        df = pl.DataFrame({
-            "STUDYEYE": ["RIGHT"],
-            "AELOC":    ["EYE"],
-            "AELAT":    ["LEFT"],
-        })
-        result = df.adam.ophtha.affected_eye(
-            "AFEYE", loc_col="AELOC", lat_col="AELAT"
-        ).to_frame()
+        df = pl.DataFrame(
+            {
+                "STUDYEYE": ["RIGHT"],
+                "AELOC": ["EYE"],
+                "AELAT": ["LEFT"],
+            }
+        )
+        result = df.adam.ophtha.affected_eye("AFEYE", loc_col="AELOC", lat_col="AELAT").to_frame()
         assert result["AFEYE"][0] == "Fellow Eye"
 
     def test_invalid_loc_gives_null(self):
-        df = pl.DataFrame({
-            "STUDYEYE": ["RIGHT"],
-            "AELOC":    ["NOSE"],
-            "AELAT":    ["RIGHT"],
-        })
-        result = df.adam.ophtha.affected_eye(
-            "AFEYE", loc_col="AELOC", lat_col="AELAT"
-        ).to_frame()
+        df = pl.DataFrame(
+            {
+                "STUDYEYE": ["RIGHT"],
+                "AELOC": ["NOSE"],
+                "AELAT": ["RIGHT"],
+            }
+        )
+        result = df.adam.ophtha.affected_eye("AFEYE", loc_col="AELOC", lat_col="AELAT").to_frame()
         assert result["AFEYE"][0] is None
 
 
@@ -224,12 +225,15 @@ class TestBcvaCriterion:
     Admiral explicitly tests all 4 directions separately.
     """
 
-    @pytest.mark.parametrize("direction,values,threshold,expected", [
-        ("ge", [50.0, 70.0, 69.0], 70.0, [None, "Y", None]),   # ≥ threshold
-        ("gt", [50.0, 70.0, 71.0], 70.0, [None, None, "Y"]),   # > threshold (exact = no flag)
-        ("le", [70.0, 35.0, 36.0], 35.0, [None, "Y", None]),   # ≤ threshold
-        ("lt", [30.0, 35.0, 34.0], 35.0, ["Y", None, "Y"]),    # < threshold
-    ])
+    @pytest.mark.parametrize(
+        "direction,values,threshold,expected",
+        [
+            ("ge", [50.0, 70.0, 69.0], 70.0, [None, "Y", None]),  # ≥ threshold
+            ("gt", [50.0, 70.0, 71.0], 70.0, [None, None, "Y"]),  # > threshold (exact = no flag)
+            ("le", [70.0, 35.0, 36.0], 35.0, [None, "Y", None]),  # ≤ threshold
+            ("lt", [30.0, 35.0, 34.0], 35.0, ["Y", None, "Y"]),  # < threshold
+        ],
+    )
     def test_direction_variants(self, direction, values, threshold, expected):
         df = pl.DataFrame({"ETDRS": values})
         result = df.adam.ophtha.bcva_criterion(

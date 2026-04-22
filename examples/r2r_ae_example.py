@@ -83,6 +83,10 @@ ae = (
     .seq("AESEQ", order_by=["AESTDTC"])
     .to_frame()
 )
+
+# Intentional corruption: AESER "Y" → "YES" violates CDISC CT (C66742).
+# The SDTM Rules Engine should flag this as a controlled-terminology error.
+ae = ae.with_columns(pl.col("AESER").replace("Y", "YES").alias("AESER"))
 print(f"  AE : {ae.shape[0]} records × {ae.shape[1]} variables")
 
 
@@ -149,11 +153,19 @@ print(f"  ADAE : {adae.shape[0]} records × {adae.shape[1]} variables")
 print(f"         TE AEs  : {(adae['TRTEMFL'] == 'Y').sum()}")
 print(f"         SAEs    : {(adae['AESER'] == 'Y').sum()}")
 
+# Export SDTM AE and ADaM ADAE as Dataset-JSON (CDISC v1.1)
+from fleet.io import save_dataset_json  # noqa: E402
+
+ae_json_path = save_dataset_json(ae, OUT / "ae.json", domain="AE", label="Adverse Events")
+adae_json_path = save_dataset_json(adae, OUT / "adae.json", domain="ADAE", label="ADAE Analysis")
+print(f"         AE   → {ae_json_path}")
+print(f"         ADAE → {adae_json_path}")
+
 # ── Variable-Level Lineage ─────────────────────────────────────────────
 print("\n━━ ADAE Variable Lineage ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 _all_lineage = lineage_of(_adae_base_ns) + lineage_of(_adae_occds_ns)
 print(f"  {'Variable':<12}  {'Verb':<22}  Sources")
-print(f"  {'─'*12}  {'─'*22}  {'─'*40}")
+print(f"  {'─' * 12}  {'─' * 22}  {'─' * 40}")
 for node in _all_lineage:
     src = ", ".join(node.sources) if node.sources else "—"
     print(f"  {node.name:<12}  {node.verb:<22}  {src}")
@@ -193,18 +205,18 @@ if report:
 else:
     print("  ✓ TLG pre-validation passed — data is ready for the AE summary.")
 
-# CDISC conformance validation (requires Rules Engine + pyreadstat — graceful skip)
+# CDISC conformance validation (requires Rules Engine — graceful skip)
 try:
     from fleet.validation.service import ValidationService
 
     svc = ValidationService()
     sdtm_result = svc.validate_sdtm(ae, domain="AE", version="3.4")
-    sdtm_result.print_report()
+    sdtm_result.print_report(report_type="summary")
     adam_result = svc.validate_adam(adae, dataset="ADAE", version="1.3")
-    adam_result.print_report()
+    adam_result.print_report(report_type="full")
 except (FileNotFoundError, ImportError) as exc:
     print(f"  ℹ CDISC conformance check skipped — {exc}")
-    print("    Install with: uv run fleet install-engine && uv add fleet[io]")
+    print("    Install with: uv run fleet install-engine")
 
 
 # ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓

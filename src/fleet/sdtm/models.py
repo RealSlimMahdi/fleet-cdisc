@@ -1,11 +1,12 @@
 """SDTM data models: algorithm enum and YAML specification structures."""
 
-from enum import Enum
-from typing import Any, Optional
+from enum import StrEnum
+from typing import Any
+
 from pydantic import BaseModel
 
 
-class SDTMAlgorithm(str, Enum):
+class SDTMAlgorithm(StrEnum):
     """Derivation verbs for SDTM variable mappings."""
 
     ASSIGN_NO_CT = "assign_no_ct"
@@ -32,46 +33,46 @@ class SDTMVariableSpec(BaseModel):
     algorithm: SDTMAlgorithm
 
     # assign_no_ct / assign_ct / assign_dtc
-    source: Optional[str] = None
+    source: str | None = None
 
     # assign_ct / hardcode_ct
-    ct_codelist: Optional[str] = None
-    ct_mapping: Optional[dict[str, str]] = None
+    ct_codelist: str | None = None
+    ct_mapping: dict[str, str] | None = None
 
     # hardcode_no_ct / hardcode_ct / dataset_level
-    value: Optional[Any] = None
+    value: Any | None = None
 
     # condition_add
-    condition: Optional[str] = None
-    then_value: Optional[str] = None
+    condition: str | None = None
+    then_value: str | None = None
 
     # if_then_else
-    when: Optional[list[dict[str, str]]] = None
-    else_value: Optional[str] = None
+    when: list[dict[str, str]] | None = None
+    else_value: str | None = None
 
     # ae_aerel
-    aerel_source: Optional[str] = None
-    aerel_map: Optional[dict[str, str]] = None
+    aerel_source: str | None = None
+    aerel_map: dict[str, str] | None = None
 
     # merge
-    merge_dataset: Optional[str] = None
-    merge_key: Optional[str | list[str]] = None
-    merge_columns: Optional[list[str]] = None
+    merge_dataset: str | None = None
+    merge_key: str | list[str] | None = None
+    merge_columns: list[str] | None = None
 
     # remove_dup
     keep: str = "first"
-    subset_vars: Optional[list[str]] = None
+    subset_vars: list[str] | None = None
 
     # group_by
-    group_cols: Optional[list[str]] = None
-    agg_expr: Optional[str] = None
+    group_cols: list[str] | None = None
+    agg_expr: str | None = None
 
     # multiple_responses
-    delimiter: Optional[str] = None
+    delimiter: str | None = None
 
     # assign_dtc
-    input_format: Optional[str] = None  # e.g. "%Y-%m-%d"
-    output_format: Optional[str] = None  # e.g. "ISO8601"
+    input_format: str | None = None  # e.g. "%Y-%m-%d"
+    output_format: str | None = None  # e.g. "ISO8601"
 
     model_config = {"extra": "allow"}
 
@@ -80,7 +81,7 @@ class SDTMDomainSpec(BaseModel):
     """Full specification for an SDTM domain derivation."""
 
     domain: str
-    description: Optional[str] = None
+    description: str | None = None
     variables: list[SDTMVariableSpec]
 
     model_config = {"extra": "allow"}

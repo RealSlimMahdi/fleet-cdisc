@@ -14,20 +14,18 @@ Covers:
 
 from __future__ import annotations
 
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import polars as pl
 import pytest
 
 import fleet  # noqa: F401 — triggers namespace registration
-
 from fleet.sdtm.tdd import (
     Epoch,
     TrialArm,
     TrialArms,
-    TrialCriterion,
     TrialCriteria,
+    TrialCriterion,
     TrialElement,
     TrialElements,
     TrialParameter,
@@ -37,7 +35,6 @@ from fleet.sdtm.tdd import (
     parse_trial_design,
 )
 
-
 # ================================================================== #
 # Helpers / fixtures                                                   #
 # ================================================================== #
@@ -45,47 +42,78 @@ from fleet.sdtm.tdd import (
 
 @pytest.fixture
 def te_rows() -> TrialElements:
-    return TrialElements(elements=[
-        TrialElement(etcd="SCRN", element="Screening", tedur="P14D", epoch=Epoch.SCREENING),
-        TrialElement(etcd="TRT", element="Treatment", tedur="P84D", epoch=Epoch.TREATMENT),
-        TrialElement(etcd="FU", element="Follow-up", tedur="P28D", epoch=Epoch.FOLLOW_UP),
-    ])
+    return TrialElements(
+        elements=[
+            TrialElement(etcd="SCRN", element="Screening", tedur="P14D", epoch=Epoch.SCREENING),
+            TrialElement(etcd="TRT", element="Treatment", tedur="P84D", epoch=Epoch.TREATMENT),
+            TrialElement(etcd="FU", element="Follow-up", tedur="P28D", epoch=Epoch.FOLLOW_UP),
+        ]
+    )
 
 
 @pytest.fixture
 def ta_rows() -> TrialArms:
-    return TrialArms(arms=[
-        TrialArm(armcd="PBO", arm="Placebo", taetord=1, etcd="SCRN", element="Screening", epoch=Epoch.SCREENING),
-        TrialArm(armcd="PBO", arm="Placebo", taetord=2, etcd="TRT", element="Treatment", epoch=Epoch.TREATMENT),
-        TrialArm(armcd="PBO", arm="Placebo", taetord=3, etcd="FU", element="Follow-up", epoch=Epoch.FOLLOW_UP),
-    ])
+    return TrialArms(
+        arms=[
+            TrialArm(
+                armcd="PBO",
+                arm="Placebo",
+                taetord=1,
+                etcd="SCRN",
+                element="Screening",
+                epoch=Epoch.SCREENING,
+            ),
+            TrialArm(
+                armcd="PBO",
+                arm="Placebo",
+                taetord=2,
+                etcd="TRT",
+                element="Treatment",
+                epoch=Epoch.TREATMENT,
+            ),
+            TrialArm(
+                armcd="PBO",
+                arm="Placebo",
+                taetord=3,
+                etcd="FU",
+                element="Follow-up",
+                epoch=Epoch.FOLLOW_UP,
+            ),
+        ]
+    )
 
 
 @pytest.fixture
 def tv_rows() -> TrialVisits:
-    return TrialVisits(visits=[
-        TrialVisit(visitnum=1, visit="Screening", visitdy=1),
-        TrialVisit(visitnum=2, visit="Baseline", visitdy=14),
-        TrialVisit(visitnum=3, visit="Week 4", visitdy=42),
-        TrialVisit(visitnum=4, visit="Week 12", visitdy=98),
-    ])
+    return TrialVisits(
+        visits=[
+            TrialVisit(visitnum=1, visit="Screening", visitdy=1),
+            TrialVisit(visitnum=2, visit="Baseline", visitdy=14),
+            TrialVisit(visitnum=3, visit="Week 4", visitdy=42),
+            TrialVisit(visitnum=4, visit="Week 12", visitdy=98),
+        ]
+    )
 
 
 @pytest.fixture
 def ts_rows() -> TrialParameters:
-    return TrialParameters(parameters=[
-        TrialParameter(tsparmcd="ADDON", tsparm="Added on to Existing Treatments", tsval="N"),
-        TrialParameter(tsparmcd="AGEMAX", tsparm="Planned Maximum Age of Subjects", tsval="80"),
-        TrialParameter(tsparmcd="AGEMIN", tsparm="Planned Minimum Age of Subjects", tsval="18"),
-    ])
+    return TrialParameters(
+        parameters=[
+            TrialParameter(tsparmcd="ADDON", tsparm="Added on to Existing Treatments", tsval="N"),
+            TrialParameter(tsparmcd="AGEMAX", tsparm="Planned Maximum Age of Subjects", tsval="80"),
+            TrialParameter(tsparmcd="AGEMIN", tsparm="Planned Minimum Age of Subjects", tsval="18"),
+        ]
+    )
 
 
 @pytest.fixture
 def ti_rows() -> TrialCriteria:
-    return TrialCriteria(criteria=[
-        TrialCriterion(ietestcd="INCL01", ietest="Age >= 18 years", iecat="INCLUSION"),
-        TrialCriterion(ietestcd="EXCL01", ietest="Pregnancy", iecat="EXCLUSION"),
-    ])
+    return TrialCriteria(
+        criteria=[
+            TrialCriterion(ietestcd="INCL01", ietest="Age >= 18 years", iecat="INCLUSION"),
+            TrialCriterion(ietestcd="EXCL01", ietest="Pregnancy", iecat="EXCLUSION"),
+        ]
+    )
 
 
 # Fake IG metadata for mocking fetch_structure
@@ -94,14 +122,51 @@ MOCK_TE_META = {
     "label": "Trial Elements",
     "ig_version": "3-4",
     "variables": [
-        {"name": "STUDYID", "label": "Study Identifier", "type": "Char", "core": "Req", "role": "Identifier"},
-        {"name": "DOMAIN", "label": "Domain Abbreviation", "type": "Char", "core": "Req", "role": "Identifier"},
+        {
+            "name": "STUDYID",
+            "label": "Study Identifier",
+            "type": "Char",
+            "core": "Req",
+            "role": "Identifier",
+        },
+        {
+            "name": "DOMAIN",
+            "label": "Domain Abbreviation",
+            "type": "Char",
+            "core": "Req",
+            "role": "Identifier",
+        },
         {"name": "ETCD", "label": "Element Code", "type": "Char", "core": "Req", "role": "Topic"},
-        {"name": "ELEMENT", "label": "Description of Element", "type": "Char", "core": "Req", "role": ""},
-        {"name": "TESTRL", "label": "Rule for Start of Element", "type": "Char", "core": "Perm", "role": ""},
-        {"name": "TEENRL", "label": "Rule for End of Element", "type": "Char", "core": "Perm", "role": ""},
+        {
+            "name": "ELEMENT",
+            "label": "Description of Element",
+            "type": "Char",
+            "core": "Req",
+            "role": "",
+        },
+        {
+            "name": "TESTRL",
+            "label": "Rule for Start of Element",
+            "type": "Char",
+            "core": "Perm",
+            "role": "",
+        },
+        {
+            "name": "TEENRL",
+            "label": "Rule for End of Element",
+            "type": "Char",
+            "core": "Perm",
+            "role": "",
+        },
         {"name": "TEDUR", "label": "Planned Duration", "type": "Char", "core": "Perm", "role": ""},
-        {"name": "EPOCH", "label": "Epoch", "type": "Char", "core": "Req", "role": "", "codelist": "C99079"},
+        {
+            "name": "EPOCH",
+            "label": "Epoch",
+            "type": "Char",
+            "core": "Req",
+            "role": "",
+            "codelist": "C99079",
+        },
     ],
 }
 
@@ -155,20 +220,38 @@ class TestTrialElementValidation:
 
 class TestTrialArmValidation:
     def test_valid_arm(self):
-        a = TrialArm(armcd="PBO", arm="Placebo", taetord=1, etcd="SCRN",
-                      element="Screening", epoch=Epoch.SCREENING)
+        a = TrialArm(
+            armcd="PBO",
+            arm="Placebo",
+            taetord=1,
+            etcd="SCRN",
+            element="Screening",
+            epoch=Epoch.SCREENING,
+        )
         assert a.armcd == "PBO"
         assert a.taetord == 1
 
     def test_reject_taetord_zero(self):
         with pytest.raises(Exception):
-            TrialArm(armcd="PBO", arm="Placebo", taetord=0, etcd="SCRN",
-                      element="Screening", epoch=Epoch.SCREENING)
+            TrialArm(
+                armcd="PBO",
+                arm="Placebo",
+                taetord=0,
+                etcd="SCRN",
+                element="Screening",
+                epoch=Epoch.SCREENING,
+            )
 
     def test_reject_taetord_negative(self):
         with pytest.raises(Exception):
-            TrialArm(armcd="PBO", arm="Placebo", taetord=-1, etcd="SCRN",
-                      element="Screening", epoch=Epoch.SCREENING)
+            TrialArm(
+                armcd="PBO",
+                arm="Placebo",
+                taetord=-1,
+                etcd="SCRN",
+                element="Screening",
+                epoch=Epoch.SCREENING,
+            )
 
 
 class TestTrialVisitValidation:
@@ -221,10 +304,12 @@ class TestTrialElementsCollection:
 
     def test_duplicate_etcd_rejected(self):
         with pytest.raises(ValueError, match="Duplicate ETCD"):
-            TrialElements(elements=[
-                TrialElement(etcd="SCRN", element="Screening", epoch=Epoch.SCREENING),
-                TrialElement(etcd="SCRN", element="Screening 2", epoch=Epoch.SCREENING),
-            ])
+            TrialElements(
+                elements=[
+                    TrialElement(etcd="SCRN", element="Screening", epoch=Epoch.SCREENING),
+                    TrialElement(etcd="SCRN", element="Screening 2", epoch=Epoch.SCREENING),
+                ]
+            )
 
     def test_to_polars(self, te_rows):
         df = te_rows.to_polars()
@@ -241,12 +326,26 @@ class TestTrialArmsCollection:
 
     def test_non_sequential_taetord_rejected(self):
         with pytest.raises(ValueError, match="TAETORD.*sequential"):
-            TrialArms(arms=[
-                TrialArm(armcd="PBO", arm="Placebo", taetord=1, etcd="SCRN",
-                          element="Screening", epoch=Epoch.SCREENING),
-                TrialArm(armcd="PBO", arm="Placebo", taetord=3, etcd="TRT",
-                          element="Treatment", epoch=Epoch.TREATMENT),
-            ])
+            TrialArms(
+                arms=[
+                    TrialArm(
+                        armcd="PBO",
+                        arm="Placebo",
+                        taetord=1,
+                        etcd="SCRN",
+                        element="Screening",
+                        epoch=Epoch.SCREENING,
+                    ),
+                    TrialArm(
+                        armcd="PBO",
+                        arm="Placebo",
+                        taetord=3,
+                        etcd="TRT",
+                        element="Treatment",
+                        epoch=Epoch.TREATMENT,
+                    ),
+                ]
+            )
 
     def test_to_polars(self, ta_rows):
         df = ta_rows.to_polars()
@@ -261,17 +360,21 @@ class TestTrialVisitsCollection:
 
     def test_duplicate_visitnum_rejected(self):
         with pytest.raises(ValueError, match="Duplicate VISITNUM"):
-            TrialVisits(visits=[
-                TrialVisit(visitnum=1, visit="V1", visitdy=1),
-                TrialVisit(visitnum=1, visit="V1b", visitdy=2),
-            ])
+            TrialVisits(
+                visits=[
+                    TrialVisit(visitnum=1, visit="V1", visitdy=1),
+                    TrialVisit(visitnum=1, visit="V1b", visitdy=2),
+                ]
+            )
 
     def test_visitdy_ordering_rejected(self):
         with pytest.raises(ValueError, match="VISITDY must increase"):
-            TrialVisits(visits=[
-                TrialVisit(visitnum=1, visit="V1", visitdy=10),
-                TrialVisit(visitnum=2, visit="V2", visitdy=5),
-            ])
+            TrialVisits(
+                visits=[
+                    TrialVisit(visitnum=1, visit="V1", visitdy=10),
+                    TrialVisit(visitnum=2, visit="V2", visitdy=5),
+                ]
+            )
 
     def test_to_polars(self, tv_rows):
         df = tv_rows.to_polars()
@@ -286,10 +389,12 @@ class TestTrialParametersCollection:
 
     def test_duplicate_tsparmcd_rejected(self):
         with pytest.raises(ValueError, match="Duplicate TSPARMCD"):
-            TrialParameters(parameters=[
-                TrialParameter(tsparmcd="ADDON", tsparm="Test 1"),
-                TrialParameter(tsparmcd="ADDON", tsparm="Test 2"),
-            ])
+            TrialParameters(
+                parameters=[
+                    TrialParameter(tsparmcd="ADDON", tsparm="Test 1"),
+                    TrialParameter(tsparmcd="ADDON", tsparm="Test 2"),
+                ]
+            )
 
     def test_to_polars(self, ts_rows):
         df = ts_rows.to_polars()
@@ -302,10 +407,12 @@ class TestTrialCriteriaCollection:
 
     def test_duplicate_ietestcd_rejected(self):
         with pytest.raises(ValueError, match="Duplicate IETESTCD"):
-            TrialCriteria(criteria=[
-                TrialCriterion(ietestcd="INCL01", ietest="T1", iecat="INCLUSION"),
-                TrialCriterion(ietestcd="INCL01", ietest="T2", iecat="INCLUSION"),
-            ])
+            TrialCriteria(
+                criteria=[
+                    TrialCriterion(ietestcd="INCL01", ietest="T1", iecat="INCLUSION"),
+                    TrialCriterion(ietestcd="INCL01", ietest="T2", iecat="INCLUSION"),
+                ]
+            )
 
     def test_to_polars(self, ti_rows):
         df = ti_rows.to_polars()
@@ -327,18 +434,25 @@ class TestCrossDomainFK:
 
     def test_add_arms_with_invalid_te_raises(self, te_rows):
         """FK check catches orphaned ETCD."""
-        bad_arms = TrialArms(arms=[
-            TrialArm(armcd="PBO", arm="Placebo", taetord=1, etcd="MISSING",
-                      element="Unknown", epoch=Epoch.SCREENING),
-        ])
+        bad_arms = TrialArms(
+            arms=[
+                TrialArm(
+                    armcd="PBO",
+                    arm="Placebo",
+                    taetord=1,
+                    etcd="MISSING",
+                    element="Unknown",
+                    epoch=Epoch.SCREENING,
+                ),
+            ]
+        )
         # Simulate the validation that add_arms performs
         valid_etcds = {e.etcd for e in te_rows.elements}
         with pytest.raises(ValueError, match="not found in TE"):
             for a in bad_arms.arms:
                 if a.etcd not in valid_etcds:
                     raise ValueError(
-                        f"TA.ETCD '{a.etcd}' not found in TE. "
-                        f"Valid: {sorted(valid_etcds)}"
+                        f"TA.ETCD '{a.etcd}' not found in TE. Valid: {sorted(valid_etcds)}"
                     )
 
     def test_add_arms_without_te_skips_fk(self, ta_rows):
@@ -377,8 +491,8 @@ class TestSequenceEnforcement:
     @patch("fleet.sdtm._tdd_mixin.TrialDesignMixin._fetch_ig_domain", return_value=MOCK_TE_META)
     def test_correct_sequence_succeeds(self, mock_fetch, te_rows):
         result = (
-            pl.DataFrame().sdtm
-            .fetch_structure("TE")
+            pl.DataFrame()
+            .sdtm.fetch_structure("TE")
             .study_header("CDISCPILOT01", "TE")
             .add_elements(te_rows)
             .to_frame()
@@ -414,6 +528,7 @@ class TestFetchStructure:
         """Pre-existing YAML file → no API call."""
         cache_file = tmp_path / "te_structure.yaml"
         import yaml
+
         cache_file.write_text(yaml.dump(MOCK_TE_META))
 
         ns = pl.DataFrame().sdtm.fetch_structure("TE", save_to=cache_file)
@@ -425,9 +540,15 @@ class TestFetchStructure:
         """IG with extra required variable → UserWarning."""
         meta_with_extra = {
             **MOCK_TE_META,
-            "variables": MOCK_TE_META["variables"] + [
-                {"name": "TESEQ", "label": "Sequence Number", "type": "Integer",
-                 "core": "Req", "role": ""},
+            "variables": MOCK_TE_META["variables"]
+            + [
+                {
+                    "name": "TESEQ",
+                    "label": "Sequence Number",
+                    "type": "Integer",
+                    "core": "Req",
+                    "role": "",
+                },
             ],
         }
         mock_fetch.return_value = meta_with_extra
@@ -444,8 +565,8 @@ class TestProtocolReferencePipelines:
     @patch("fleet.sdtm._tdd_mixin.TrialDesignMixin._fetch_ig_domain", return_value=MOCK_TE_META)
     def test_te_pipeline(self, mock_fetch, te_rows):
         result = (
-            pl.DataFrame().sdtm
-            .fetch_structure("TE")
+            pl.DataFrame()
+            .sdtm.fetch_structure("TE")
             .study_header("CDISCPILOT01", "TE")
             .add_elements(te_rows)
             .to_frame()
@@ -459,8 +580,8 @@ class TestProtocolReferencePipelines:
     @patch("fleet.sdtm._tdd_mixin.TrialDesignMixin._fetch_ig_domain", return_value=MOCK_TE_META)
     def test_ta_pipeline(self, mock_fetch, ta_rows, te_rows):
         result = (
-            pl.DataFrame().sdtm
-            .fetch_structure("TA")
+            pl.DataFrame()
+            .sdtm.fetch_structure("TA")
             .study_header("CDISCPILOT01", "TA")
             .add_arms(ta_rows, te=te_rows)
             .to_frame()
@@ -473,14 +594,22 @@ class TestProtocolReferencePipelines:
     @patch("fleet.sdtm._tdd_mixin.TrialDesignMixin._fetch_ig_domain", return_value=MOCK_TE_META)
     def test_ta_pipeline_fk_fails(self, mock_fetch, te_rows):
         """TA with bogus ETCD should raise when te= is provided."""
-        bad_arms = TrialArms(arms=[
-            TrialArm(armcd="PBO", arm="Placebo", taetord=1, etcd="NOPE",
-                      element="Bad", epoch=Epoch.SCREENING),
-        ])
+        bad_arms = TrialArms(
+            arms=[
+                TrialArm(
+                    armcd="PBO",
+                    arm="Placebo",
+                    taetord=1,
+                    etcd="NOPE",
+                    element="Bad",
+                    epoch=Epoch.SCREENING,
+                ),
+            ]
+        )
         with pytest.raises(ValueError, match="not found in TE"):
             (
-                pl.DataFrame().sdtm
-                .fetch_structure("TA")
+                pl.DataFrame()
+                .sdtm.fetch_structure("TA")
                 .study_header("CDISCPILOT01", "TA")
                 .add_arms(bad_arms, te=te_rows)
             )
@@ -488,8 +617,8 @@ class TestProtocolReferencePipelines:
     @patch("fleet.sdtm._tdd_mixin.TrialDesignMixin._fetch_ig_domain", return_value=MOCK_TE_META)
     def test_tv_pipeline(self, mock_fetch, tv_rows):
         result = (
-            pl.DataFrame().sdtm
-            .fetch_structure("TV")
+            pl.DataFrame()
+            .sdtm.fetch_structure("TV")
             .study_header("CDISCPILOT01", "TV")
             .add_visits(tv_rows)
             .to_frame()
@@ -500,8 +629,8 @@ class TestProtocolReferencePipelines:
     @patch("fleet.sdtm._tdd_mixin.TrialDesignMixin._fetch_ig_domain", return_value=MOCK_TE_META)
     def test_ts_pipeline(self, mock_fetch, ts_rows):
         result = (
-            pl.DataFrame().sdtm
-            .fetch_structure("TS")
+            pl.DataFrame()
+            .sdtm.fetch_structure("TS")
             .study_header("CDISCPILOT01", "TS")
             .add_parameters(ts_rows)
             .to_frame()
@@ -512,8 +641,8 @@ class TestProtocolReferencePipelines:
     @patch("fleet.sdtm._tdd_mixin.TrialDesignMixin._fetch_ig_domain", return_value=MOCK_TE_META)
     def test_ti_pipeline(self, mock_fetch, ti_rows):
         result = (
-            pl.DataFrame().sdtm
-            .fetch_structure("TI")
+            pl.DataFrame()
+            .sdtm.fetch_structure("TI")
             .study_header("CDISCPILOT01", "TI")
             .add_criteria(ti_rows)
             .to_frame()
@@ -529,15 +658,13 @@ class TestProtocolReferencePipelines:
 
 class TestStudyDay:
     def test_basic_study_day(self):
-        raw = pl.DataFrame({
-            "SVSTDTC": ["2014-01-05", "2014-01-01", "2013-12-30"],
-            "RFSTDTC": ["2014-01-02", "2014-01-02", "2014-01-02"],
-        })
-        result = (
-            raw.sdtm
-            .study_day("SVSTDY", date_col="SVSTDTC", ref_date_col="RFSTDTC")
-            .to_frame()
+        raw = pl.DataFrame(
+            {
+                "SVSTDTC": ["2014-01-05", "2014-01-01", "2013-12-30"],
+                "RFSTDTC": ["2014-01-02", "2014-01-02", "2014-01-02"],
+            }
         )
+        result = raw.sdtm.study_day("SVSTDY", date_col="SVSTDTC", ref_date_col="RFSTDTC").to_frame()
         assert "SVSTDY" in result.columns
         # 2014-01-05 - 2014-01-02 = 3 days, >= 0 so +1 = 4
         assert result["SVSTDY"][0] == 4
@@ -551,19 +678,23 @@ class TestStudyDayCDISC:
     """Verify CDISC study day convention: no day 0."""
 
     def test_ref_date_is_day_1(self):
-        raw = pl.DataFrame({
-            "DTC": ["2014-01-02"],
-            "REF": ["2014-01-02"],
-        })
+        raw = pl.DataFrame(
+            {
+                "DTC": ["2014-01-02"],
+                "REF": ["2014-01-02"],
+            }
+        )
         result = raw.sdtm.study_day("DY", date_col="DTC", ref_date_col="REF").to_frame()
         # Same day: diff=0, >=0 so +1 → day 1
         assert result["DY"][0] == 1
 
     def test_day_before_ref_is_minus_1(self):
-        raw = pl.DataFrame({
-            "DTC": ["2014-01-01"],
-            "REF": ["2014-01-02"],
-        })
+        raw = pl.DataFrame(
+            {
+                "DTC": ["2014-01-01"],
+                "REF": ["2014-01-02"],
+            }
+        )
         result = raw.sdtm.study_day("DY", date_col="DTC", ref_date_col="REF").to_frame()
         # Diff = -1, negative so no +1 → -1
         assert result["DY"][0] == -1
@@ -571,49 +702,54 @@ class TestStudyDayCDISC:
 
 class TestEpochAssign:
     def test_basic_epoch_assignment(self):
-        raw = pl.DataFrame({
-            "SVSTDTC": ["2014-01-05", "2014-02-01", "2014-05-01"],
-        })
-        result = (
-            raw.sdtm
-            .epoch_assign("EPOCH", date_col="SVSTDTC", epoch_ranges=[
+        raw = pl.DataFrame(
+            {
+                "SVSTDTC": ["2014-01-05", "2014-02-01", "2014-05-01"],
+            }
+        )
+        result = raw.sdtm.epoch_assign(
+            "EPOCH",
+            date_col="SVSTDTC",
+            epoch_ranges=[
                 {"start": "2014-01-01", "end": "2014-01-15", "epoch": "SCREENING"},
                 {"start": "2014-01-16", "end": "2014-04-15", "epoch": "TREATMENT"},
                 {"start": "2014-04-16", "end": "2014-12-31", "epoch": "FOLLOW-UP"},
-            ])
-            .to_frame()
-        )
+            ],
+        ).to_frame()
         assert result["EPOCH"].to_list() == ["SCREENING", "TREATMENT", "FOLLOW-UP"]
 
     def test_no_match_returns_null(self):
         raw = pl.DataFrame({"DTC": ["2020-01-01"]})
-        result = (
-            raw.sdtm
-            .epoch_assign("EPOCH", date_col="DTC", epoch_ranges=[
+        result = raw.sdtm.epoch_assign(
+            "EPOCH",
+            date_col="DTC",
+            epoch_ranges=[
                 {"start": "2014-01-01", "end": "2014-12-31", "epoch": "SCREENING"},
-            ])
-            .to_frame()
-        )
+            ],
+        ).to_frame()
         assert result["EPOCH"][0] is None
 
 
 class TestElementBoundaries:
     def test_basic_boundaries(self):
-        raw = pl.DataFrame({
-            "USUBJID": ["S01", "S01", "S01"],
-            "ETCD": ["SCRN", "TRT", "FU"],
-            "screening_date": ["2014-01-01", "2014-01-01", "2014-01-01"],
-            "first_dose_date": ["2014-01-15", "2014-01-15", "2014-01-15"],
-            "last_visit_date": ["2014-05-01", "2014-05-01", "2014-05-01"],
-        })
-        result = (
-            raw.sdtm
-            .element_boundaries("SESTDTC", "SEENDTC",
-                                milestones={"SCRN": "screening_date",
-                                             "TRT": "first_dose_date",
-                                             "FU": "last_visit_date"})
-            .to_frame()
+        raw = pl.DataFrame(
+            {
+                "USUBJID": ["S01", "S01", "S01"],
+                "ETCD": ["SCRN", "TRT", "FU"],
+                "screening_date": ["2014-01-01", "2014-01-01", "2014-01-01"],
+                "first_dose_date": ["2014-01-15", "2014-01-15", "2014-01-15"],
+                "last_visit_date": ["2014-05-01", "2014-05-01", "2014-05-01"],
+            }
         )
+        result = raw.sdtm.element_boundaries(
+            "SESTDTC",
+            "SEENDTC",
+            milestones={
+                "SCRN": "screening_date",
+                "TRT": "first_dose_date",
+                "FU": "last_visit_date",
+            },
+        ).to_frame()
         assert "SESTDTC" in result.columns
         assert "SEENDTC" in result.columns
         # SCRN start = screening_date, SCRN end = next element's start (TRT's first_dose_date)
@@ -623,18 +759,15 @@ class TestElementBoundaries:
 
 class TestVisitMap:
     def test_basic_visit_mapping(self, tv_rows):
-        raw = pl.DataFrame({
-            "SVSTDTC": ["2014-01-03", "2014-01-15"],
-            "RFSTDTC": ["2014-01-01", "2014-01-01"],
-        })
-        result = (
-            raw.sdtm
-            .visit_map("VISITNUM", "VISIT",
-                        date_col="SVSTDTC",
-                        planned_visits=tv_rows,
-                        ref_date="RFSTDTC")
-            .to_frame()
+        raw = pl.DataFrame(
+            {
+                "SVSTDTC": ["2014-01-03", "2014-01-15"],
+                "RFSTDTC": ["2014-01-01", "2014-01-01"],
+            }
         )
+        result = raw.sdtm.visit_map(
+            "VISITNUM", "VISIT", date_col="SVSTDTC", planned_visits=tv_rows, ref_date="RFSTDTC"
+        ).to_frame()
         assert "VISITNUM" in result.columns
         assert "VISIT" in result.columns
         # Day 3 should map to Visit 1 (VISITDY=1, diff=2) vs Visit 2 (VISITDY=14, diff=11)
@@ -741,13 +874,14 @@ class TestSDTMRegression:
         assert result["DOMAIN"].to_list() == ["DM", "DM", "DM"]
 
     def test_chain_multiple_verbs(self):
-        raw = pl.DataFrame({
-            "patient_number": ["01-001", "01-002"],
-            "site_id": ["701", "702"],
-        })
+        raw = pl.DataFrame(
+            {
+                "patient_number": ["01-001", "01-002"],
+                "site_id": ["701", "702"],
+            }
+        )
         result = (
-            raw.sdtm
-            .assign_no_ct("USUBJID", source="patient_number")
+            raw.sdtm.assign_no_ct("USUBJID", source="patient_number")
             .assign_no_ct("SITEID", source="site_id")
             .hardcode_no_ct("DOMAIN", value="DM")
             .to_frame()

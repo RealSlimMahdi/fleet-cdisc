@@ -74,31 +74,70 @@ class ValidationResult:
             f"  Errors: {len(self.errors)}, Warnings: {len(self.warnings)}, Info: {len(self.infos)}"
         )
 
-    def print_report(self, show_warnings: bool = True, show_info: bool = False) -> None:
+    def print_report(self, report_type: str = "summary") -> None:
+        """Print a formatted validation report to stdout.
+
+        Args:
+            report_type: ``"summary"`` for a compact one-line-per-issue view,
+                ``"full"`` for expanded details including variable names,
+                affected rows, producing verbs, and suggested fixes.
+        """
         print("\n" + "=" * 70)
         print(f"CDISC Validation Report: {self.dataset_name}")
         print("=" * 70)
         print(f"Dataset Type: {self.dataset_type} {self.model_version}")
         print(f"Status: {'PASS' if self.is_valid else 'FAIL'}")
         print(f"Total Issues: {self.total_issues}")
+        print(
+            f"  Errors: {len(self.errors)}, Warnings: {len(self.warnings)}, Info: {len(self.infos)}"
+        )
         print("-" * 70)
 
+        if report_type == "full":
+            self._print_full()
+        else:
+            self._print_summary()
+
+        print("\n" + "=" * 70)
+
+    def _print_summary(self) -> None:
+        """Compact view: one line per issue."""
+        if self.errors:
+            print(f"\nERRORS ({len(self.errors)}):")
+            for issue in self.errors:
+                label = f"  [{issue.rule_id}]"
+                if issue.variable:
+                    label += f" {issue.variable}:"
+                print(f"{label} {issue.message}")
+        if self.warnings:
+            print(f"\nWARNINGS ({len(self.warnings)}):")
+            for issue in self.warnings:
+                label = f"  [{issue.rule_id}]"
+                if issue.variable:
+                    label += f" {issue.variable}:"
+                print(f"{label} {issue.message}")
+        if not self.errors and not self.warnings:
+            print("\n  No errors or warnings.")
+
+    def _print_full(self) -> None:
+        """Expanded view: all fields per issue, including info."""
         if self.errors:
             print(f"\nERRORS ({len(self.errors)}):")
             for i, issue in enumerate(self.errors, 1):
                 print(f"\n{i}. {issue}")
 
-        if show_warnings and self.warnings:
+        if self.warnings:
             print(f"\nWARNINGS ({len(self.warnings)}):")
             for i, issue in enumerate(self.warnings, 1):
                 print(f"\n{i}. {issue}")
 
-        if show_info and self.infos:
+        if self.infos:
             print(f"\nINFO ({len(self.infos)}):")
             for i, issue in enumerate(self.infos, 1):
                 print(f"\n{i}. {issue}")
 
-        print("\n" + "=" * 70)
+        if not self.errors and not self.warnings and not self.infos:
+            print("\n  No issues found.")
 
     def save_html_report(self, output_path: str | Path) -> str:
         """Save validation report as HTML file."""

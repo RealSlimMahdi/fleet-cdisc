@@ -10,23 +10,25 @@ import fleet  # noqa: F401 — triggers namespace registration
 # Test exactly AT the boundary (included in the upper category by convention).
 # ---------------------------------------------------------------------------
 _BMI_CATEGORY_CASES = [
-    (17.0,  "Underweight"),
-    (18.4,  "Underweight"),
-    (18.5,  "Normal weight"),   # boundary: ≥18.5
-    (24.9,  "Normal weight"),
-    (25.0,  "Overweight"),      # boundary: ≥25.0
-    (29.9,  "Overweight"),
-    (30.0,  "Obese"),           # boundary: ≥30.0
-    (40.0,  "Obese"),
+    (17.0, "Underweight"),
+    (18.4, "Underweight"),
+    (18.5, "Normal weight"),  # boundary: ≥18.5
+    (24.9, "Normal weight"),
+    (25.0, "Overweight"),  # boundary: ≥25.0
+    (29.9, "Overweight"),
+    (30.0, "Obese"),  # boundary: ≥30.0
+    (40.0, "Obese"),
 ]
 
 
 @pytest.fixture
 def age_frame():
-    return pl.DataFrame({
-        "BRTHDT": ["2020-01-01", "2020-06-15"],
-        "RFSTDTC": ["2022-01-01", "2022-06-15"],
-    })
+    return pl.DataFrame(
+        {
+            "BRTHDT": ["2020-01-01", "2020-06-15"],
+            "RFSTDTC": ["2022-01-01", "2022-06-15"],
+        }
+    )
 
 
 class TestBaseVerbs:
@@ -41,9 +43,7 @@ class TestBaseVerbs:
         assert result["STUDYID"].to_list() == ["PED01"] * 2
 
     def test_derivation(self, age_frame):
-        result = age_frame.adam.peds.derivation(
-            "CONST", expression="pl.lit(1)"
-        ).to_frame()
+        result = age_frame.adam.peds.derivation("CONST", expression="pl.lit(1)").to_frame()
         assert result["CONST"].to_list() == [1, 1]
 
     def test_recode(self, age_frame):
@@ -68,9 +68,7 @@ class TestBaseVerbs:
 
     def test_whereclauses(self, age_frame):
         df = age_frame.with_columns(pl.Series("AGE", [5, 12]))
-        result = df.adam.peds.whereclauses(
-            where='pl.col("AGE") > 6'
-        ).to_frame()
+        result = df.adam.peds.whereclauses(where='pl.col("AGE") > 6').to_frame()
         assert result.height == 1
 
 
@@ -94,12 +92,14 @@ class TestAgeDays:
         Multi-subject test inspired by admiralpeds test-derive_params_growth_age.R.
         Two subjects with different birth and analysis dates.
         """
-        df = pl.DataFrame({
-            "STUDYID": ["CDISCPILOT01", "CDISCPILOT01"],
-            "USUBJID": ["01-701-1015", "01-701-1023"],
-            "BRTHDT":  ["2018-01-01", "2019-06-01"],
-            "RFSTDTC": ["2022-01-01", "2022-06-01"],
-        })
+        df = pl.DataFrame(
+            {
+                "STUDYID": ["CDISCPILOT01", "CDISCPILOT01"],
+                "USUBJID": ["01-701-1015", "01-701-1023"],
+                "BRTHDT": ["2018-01-01", "2019-06-01"],
+                "RFSTDTC": ["2022-01-01", "2022-06-01"],
+            }
+        )
         result = df.adam.peds.age_days(
             "AGEDAYS", birth_date="BRTHDT", analysis_date="RFSTDTC"
         ).to_frame()
@@ -141,10 +141,12 @@ class TestCorrectedAge:
 
     def test_preterm_correction(self):
         # Born at 32 weeks → 8 weeks premature → correction ≈ 8/52.18 ≈ 0.153 years
-        df = pl.DataFrame({
-            "AGEDAYS": [365.0],
-            "GESTAG":  [32],
-        })
+        df = pl.DataFrame(
+            {
+                "AGEDAYS": [365.0],
+                "GESTAG": [32],
+            }
+        )
         result = df.adam.peds.corrected_age(
             "CORAGE", age_days_col="AGEDAYS", gestational_weeks_col="GESTAG"
         ).to_frame()
@@ -153,10 +155,12 @@ class TestCorrectedAge:
 
     def test_term_infant_no_correction(self):
         """Infant born at exactly 40 weeks → no correction applied."""
-        df = pl.DataFrame({
-            "AGEDAYS": [365.0],
-            "GESTAG":  [40],
-        })
+        df = pl.DataFrame(
+            {
+                "AGEDAYS": [365.0],
+                "GESTAG": [40],
+            }
+        )
         result = df.adam.peds.corrected_age(
             "CORAGE", age_days_col="AGEDAYS", gestational_weeks_col="GESTAG"
         ).to_frame()
@@ -177,17 +181,13 @@ class TestPrematurityFlag:
 
     def test_premature_flagged(self):
         df = pl.DataFrame({"GESTAG": [28, 36, 37, 40]})
-        result = df.adam.peds.prematurity_flag(
-            "PREMFL", gestational_weeks_col="GESTAG"
-        ).to_frame()
+        result = df.adam.peds.prematurity_flag("PREMFL", gestational_weeks_col="GESTAG").to_frame()
         assert result["PREMFL"].to_list() == ["Y", "Y", None, None]
 
     def test_boundary_exactly_37_not_flagged(self):
         """Default threshold is 37 (strict <), so exactly 37 weeks is NOT preterm."""
         df = pl.DataFrame({"GESTAG": [37]})
-        result = df.adam.peds.prematurity_flag(
-            "PREMFL", gestational_weeks_col="GESTAG"
-        ).to_frame()
+        result = df.adam.peds.prematurity_flag("PREMFL", gestational_weeks_col="GESTAG").to_frame()
         assert result["PREMFL"][0] is None
 
     def test_custom_threshold(self):
@@ -216,17 +216,15 @@ class TestBmiCategory:
     def test_full_vector_all_categories(self):
         df = pl.DataFrame({"BMI": [17.0, 22.0, 27.0, 32.0]})
         result = df.adam.peds.bmi_category("BMICG", bmi_col="BMI").to_frame()
-        assert result["BMICG"].to_list() == [
-            "Underweight", "Normal weight", "Overweight", "Obese"
-        ]
+        assert result["BMICG"].to_list() == ["Underweight", "Normal weight", "Overweight", "Obese"]
 
     def test_custom_labels(self):
         """Custom labels dict {category_name: upper_bound} overrides defaults."""
         df = pl.DataFrame({"BMI": [17.0, 22.0, 27.0, 32.0]})
         custom = {
-            "Low":       18.5,
-            "Normal":    25.0,
-            "High":      30.0,
+            "Low": 18.5,
+            "Normal": 25.0,
+            "High": 30.0,
             "Very High": float("inf"),
         }
         result = df.adam.peds.bmi_category("BMICG", bmi_col="BMI", labels=custom).to_frame()

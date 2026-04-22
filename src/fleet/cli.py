@@ -475,7 +475,9 @@ def _run_init_ct_pipeline(args: argparse.Namespace) -> None:
 
     print()
     print("Bootstrap complete! Next steps:")
-    print("  - Spec-driven:  codelists are already referenced in define.yaml — start writing derivations.")
+    print(
+        "  - Spec-driven:  codelists are already referenced in define.yaml — start writing derivations."
+    )
     print(f"  - Inline code:  from {import_path} import SEX, RACE, ...")
     print("  - When ready:   fleet define-xml --spec <define.yaml>")
 

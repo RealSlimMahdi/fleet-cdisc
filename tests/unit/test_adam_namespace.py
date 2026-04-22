@@ -9,16 +9,18 @@ import fleet  # noqa: F401 — triggers namespace registration
 @pytest.fixture
 def vs_frame():
     """Minimal VS SDTM-like frame."""
-    return pl.DataFrame({
-        "USUBJID": ["01-701-1015", "01-701-1015", "01-701-1023"],
-        "PARAMCD": ["SYSBP", "DIABP", "SYSBP"],
-        "PARAM": ["Systolic BP", "Diastolic BP", "Systolic BP"],
-        "VSSTRESN": [120.0, 80.0, 118.0],
-        "vsorresu": ["mmHg", "mmHg", "mmHg"],
-        "vsdtc": ["2014-01-02", "2014-01-02", "2014-01-03"],
-        "TRTSDT": ["2014-01-02", "2014-01-02", "2014-01-03"],
-        "ABLFL": ["Y", "Y", "Y"],
-    })
+    return pl.DataFrame(
+        {
+            "USUBJID": ["01-701-1015", "01-701-1015", "01-701-1023"],
+            "PARAMCD": ["SYSBP", "DIABP", "SYSBP"],
+            "PARAM": ["Systolic BP", "Diastolic BP", "Systolic BP"],
+            "VSSTRESN": [120.0, 80.0, 118.0],
+            "vsorresu": ["mmHg", "mmHg", "mmHg"],
+            "vsdtc": ["2014-01-02", "2014-01-02", "2014-01-03"],
+            "TRTSDT": ["2014-01-02", "2014-01-02", "2014-01-03"],
+            "ABLFL": ["Y", "Y", "Y"],
+        }
+    )
 
 
 class TestSource:
@@ -37,9 +39,7 @@ class TestDerivation:
         assert result["AVAL"].to_list() == vs_frame["VSSTRESN"].to_list()
 
     def test_expression(self, vs_frame):
-        result = vs_frame.adam.derivation(
-            "AVAL2", expression='pl.col("VSSTRESN") * 2'
-        ).to_frame()
+        result = vs_frame.adam.derivation("AVAL2", expression='pl.col("VSSTRESN") * 2').to_frame()
         assert result["AVAL2"][0] == pytest.approx(240.0)
 
 
@@ -105,7 +105,9 @@ class TestBaseline:
     def test_baseline_aval(self, vs_frame):
         df = vs_frame.with_columns(pl.col("VSSTRESN").alias("AVAL"))
         result = df.adam.baseline(
-            "BASE", aval="AVAL", baseline_flag="ABLFL",
+            "BASE",
+            aval="AVAL",
+            baseline_flag="ABLFL",
             groups=["USUBJID", "PARAMCD"],
         ).to_frame()
         assert "BASE" in result.columns
@@ -130,7 +132,8 @@ class TestPchg:
 class TestFlag:
     def test_expression_criteria(self, vs_frame):
         result = vs_frame.adam.flag(
-            "ABLFL2", criteria='pl.col("ABLFL") == "Y"',
+            "ABLFL2",
+            criteria='pl.col("ABLFL") == "Y"',
             groups=["USUBJID", "PARAMCD"],
         ).to_frame()
         assert result["ABLFL2"][0] == "Y"
@@ -138,7 +141,9 @@ class TestFlag:
     def test_max_criteria(self, vs_frame):
         df = vs_frame.with_columns(pl.col("VSSTRESN").alias("AVAL"))
         result = df.adam.flag(
-            "AMXFL", criteria="max", value_col="AVAL",
+            "AMXFL",
+            criteria="max",
+            value_col="AVAL",
             groups=["USUBJID", "PARAMCD"],
         ).to_frame()
         assert "AMXFL" in result.columns
@@ -161,11 +166,13 @@ class TestBMI:
 
 class TestNrind:
     def test_low_normal_high(self):
-        df = pl.DataFrame({
-            "LBSTRESN": [3.0, 5.0, 9.0],
-            "LBSTNRLO": [4.0, 4.0, 4.0],
-            "LBSTNRHI": [8.0, 8.0, 8.0],
-        })
+        df = pl.DataFrame(
+            {
+                "LBSTRESN": [3.0, 5.0, 9.0],
+                "LBSTNRLO": [4.0, 4.0, 4.0],
+                "LBSTNRHI": [8.0, 8.0, 8.0],
+            }
+        )
         result = df.adam.nrind(
             "NRIND", value="LBSTRESN", low="LBSTNRLO", high="LBSTNRHI"
         ).to_frame()
@@ -174,26 +181,30 @@ class TestNrind:
 
 class TestOnTreatment:
     def test_on_treatment_flag(self):
-        df = pl.DataFrame({
-            "ADT":    ["2024-01-15", "2024-01-05", "2024-02-01"],
-            "TRTSDT": ["2024-01-10", "2024-01-10", "2024-01-10"],
-            "TRTEDT": ["2024-01-31", "2024-01-31", "2024-01-31"],
-        })
+        df = pl.DataFrame(
+            {
+                "ADT": ["2024-01-15", "2024-01-05", "2024-02-01"],
+                "TRTSDT": ["2024-01-10", "2024-01-10", "2024-01-10"],
+                "TRTEDT": ["2024-01-31", "2024-01-31", "2024-01-31"],
+            }
+        )
         result = df.adam.on_treatment(
             "ONTRTFL", adt="ADT", trtsdt="TRTSDT", trtedt="TRTEDT"
         ).to_frame()
         flags = result["ONTRTFL"].to_list()
-        assert flags[0] == "Y"    # on-treatment
-        assert flags[1] is None   # before treatment
-        assert flags[2] is None   # after treatment
+        assert flags[0] == "Y"  # on-treatment
+        assert flags[1] is None  # before treatment
+        assert flags[2] is None  # after treatment
 
 
 class TestShift:
     def test_shift_string(self):
-        df = pl.DataFrame({
-            "BNRIND": ["NORMAL", "LOW"],
-            "NRIND":  ["HIGH",   "NORMAL"],
-        })
+        df = pl.DataFrame(
+            {
+                "BNRIND": ["NORMAL", "LOW"],
+                "NRIND": ["HIGH", "NORMAL"],
+            }
+        )
         result = df.adam.shift("SHIFT1", baseline_cat="BNRIND", post_cat="NRIND").to_frame()
         assert result["SHIFT1"].to_list() == ["NORMAL to HIGH", "LOW to NORMAL"]
 
@@ -217,8 +228,7 @@ class TestWhereclauses:
 class TestChaining:
     def test_full_chain(self, vs_frame):
         result = (
-            vs_frame.adam
-            .source("USUBJID")
+            vs_frame.adam.source("USUBJID")
             .rename("ADT", source="vsdtc")
             .derivation("AVAL", expression="VSSTRESN")
             .assigned("STUDYID", value="CDISCPILOT01")

@@ -73,7 +73,7 @@ from .define_xml import (
     DefineXMLGenerator,
     TypeMismatch,
 )
-from .io import load_datasets, load_raw_data, save_parquet
+from .io import load_datasets, load_raw_data, save_dataset_json, save_parquet
 from .sdtm import SDTMAlgorithm, SDTMNamespace
 from .tlg import (
     AEListingSpec,
@@ -105,6 +105,7 @@ __all__ = [
     "load_raw_data",
     "load_datasets",
     "save_parquet",
+    "save_dataset_json",
     # SDTM
     "SDTMAlgorithm",
     "SDTMNamespace",

@@ -1,9 +1,5 @@
 """Unit tests for CT loading and validation."""
 
-from pathlib import Path
-
-import pytest
-
 import fleet  # noqa: F401
 
 

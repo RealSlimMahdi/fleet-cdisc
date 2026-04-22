@@ -14,8 +14,7 @@ class TestAssignNoCT:
 
     def test_chained(self, simple_raw):
         result = (
-            simple_raw.sdtm
-            .assign_no_ct("USUBJID", source="patient_number")
+            simple_raw.sdtm.assign_no_ct("USUBJID", source="patient_number")
             .assign_no_ct("SITEID", source="site_id")
             .to_frame()
         )
@@ -133,7 +132,9 @@ class TestAssignCT:
 
     def test_fallback_passthrough(self, simple_raw):
         # Without CT loaded, should pass through the raw value
-        result = simple_raw.sdtm.assign_ct("SEX", source="sex", ct_codelist="NONEXISTENT").to_frame()
+        result = simple_raw.sdtm.assign_ct(
+            "SEX", source="sex", ct_codelist="NONEXISTENT"
+        ).to_frame()
         assert "SEX" in result.columns
 
 
@@ -217,9 +218,7 @@ class TestRemoveDup:
 class TestMultipleResponses:
     def test_expands_rows(self):
         df = pl.DataFrame({"USUBJID": ["S01"], "ae_terms": ["fever|rash"]})
-        result = df.sdtm.multiple_responses(
-            "AETERM", source="ae_terms", delimiter="|"
-        ).to_frame()
+        result = df.sdtm.multiple_responses("AETERM", source="ae_terms", delimiter="|").to_frame()
         assert result.height == 2
         assert set(result["AETERM"].to_list()) == {"fever", "rash"}
 
@@ -233,7 +232,9 @@ class TestFromSpec:
         assert result["DOMAIN"][0] == "DM"
         assert result["STUDYID"][0] == "CDISCPILOT01"
 
-    def test_define_yaml_requires_dataset_arg_for_multi_dataset_file(self, dm_raw, sdtm_define_path):
+    def test_define_yaml_requires_dataset_arg_for_multi_dataset_file(
+        self, dm_raw, sdtm_define_path
+    ):
         """Calling from_spec() on a multi-dataset define.yaml without dataset= raises."""
         with pytest.raises(ValueError, match="dataset="):
             dm_raw.sdtm.from_spec(sdtm_define_path).to_frame()

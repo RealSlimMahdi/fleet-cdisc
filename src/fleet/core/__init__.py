@@ -11,7 +11,7 @@ from .exceptions import (
     TLGError,
     ValidationError,
 )
-from .scaffolder import parse_ig_dataset, parse_ig_variable
+from .scaffolder import parse_ig_dataset, parse_ig_variable  # noqa: F401 — public API
 from .study_context import (
     ADAMConfig,
     CTConfig,

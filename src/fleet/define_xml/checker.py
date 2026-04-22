@@ -483,7 +483,6 @@ class DatasetChecker:
             Resolved path of the written file.
         """
         try:
-            import pandas as pd
             import pyreadstat
         except ImportError as exc:
             raise ImportError(

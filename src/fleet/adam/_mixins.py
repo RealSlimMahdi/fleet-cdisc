@@ -65,6 +65,7 @@ methods.  No ``if TYPE_CHECKING`` stubs or protocol tricks are needed.
 from __future__ import annotations
 
 import copy
+from pathlib import Path
 from typing import Any, Self
 
 import polars as pl
@@ -128,6 +129,40 @@ class SharedADaMVerbsMixin:
                 )
         """
         return self._lazy.collect()
+
+    def to_dataset_json(
+        self,
+        path: str | Path,
+        *,
+        domain: str,
+        label: str | None = None,
+    ) -> Path:
+        """Materialise the pipeline and write a CDISC Dataset-JSON v1.1 file.
+
+        This is a terminal verb — it collects the lazy plan and writes the
+        result.  No further chaining is possible after this call.
+
+        Args:
+            path: Destination file path (should end in ``.json``).
+            domain: Dataset / domain name (e.g. ``"ADSL"``, ``"ADAE"``).
+            label: Optional human-readable dataset label.
+
+        Returns:
+            Path: Path to the written file.
+
+        Examples:
+            Export an ADaM ADSL dataset to Dataset-JSON::
+
+                path = (
+                    dm.adam.adsl
+                    .source("USUBJID")
+                    .first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")
+                    .to_dataset_json("outputs/adsl.json", domain="ADSL")
+                )
+        """
+        from fleet.io.dataset_json import save_dataset_json
+
+        return save_dataset_json(self._lazy.collect(), path, domain=domain, label=label)
 
     # ------------------------------------------------------------------ #
     # Debugging & observability                                            #
