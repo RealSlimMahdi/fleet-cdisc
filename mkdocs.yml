@@ -106,6 +106,7 @@ nav:
       - How define.yaml Works: concepts/define-yaml.md
       - Namespace Pipeline: concepts/pipeline.md
       - Trial Design Domains: concepts/tdd.md
+      - Custom Validation Rules: concepts/custom-rules.md
       - Advanced Patterns: concepts/advanced.md
   - Examples:
       - Multi-Domain Pipeline: examples/full_pipeline.md

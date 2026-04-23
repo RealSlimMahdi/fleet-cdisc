@@ -599,6 +599,33 @@ Full docs: https://realslimmahdi.github.io/fleet-cdisc/
 """
 
 
+def _rules_caching_section() -> str:
+    return """\
+## CDISC Conformance Rules Caching
+
+### CLI
+
+```bash
+# Cache all CDISC conformance rules for the IG versions in your define.yaml files
+uv run fleet init rules
+
+# SDTM rules only
+uv run fleet init rules --sdtm-only
+
+# Overwrite existing cached rules
+uv run fleet init rules --force
+```
+
+`fleet init rules` reads the IG version from each `define.yaml` (`study.standard_version`), \
+fetches all conformance rules from the CDISC Library API, groups them by domain, and writes \
+one YAML file per domain into `metadata/sdtm/rules/` and `metadata/adam/rules/`.
+
+Each YAML file contains the rule ID, description, check logic, scope, severity, and \
+references — providing a human-readable, version-controlled audit trail of the exact rules \
+applied to the study.\
+"""
+
+
 # ---------------------------------------------------------------------------
 # README namespace block (auto-synced between sentinel comments)
 # ---------------------------------------------------------------------------
@@ -920,6 +947,7 @@ def build() -> str:
         _verb_mapping_section(),
         _define_yaml_section(),
         _ct_section(),
+        _rules_caching_section(),
         _docs_section(),
     ]
     return "\n\n".join(sections) + "\n"

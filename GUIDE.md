@@ -978,6 +978,43 @@ uv run fleet uninstall-engine
 
 > **Note:** `pyreadstat` is also required for validation (XPT serialization). Install it with `uv sync --extra io`.
 
+### 11.5 Cache CDISC conformance rules
+
+```bash
+# After fleet init define has created your define.yaml files:
+uv run fleet init rules
+
+# SDTM only
+uv run fleet init rules --sdtm-only
+
+# Overwrite previously cached rules
+uv run fleet init rules --force
+```
+
+`fleet init rules` reads the IG version from each `define.yaml` (`study.standard_version`),
+fetches **all** conformance rules for that IG from the CDISC Library API, and writes one
+YAML file per domain into `metadata/sdtm/rules/` and `metadata/adam/rules/`.
+
+Each YAML file contains the rule's CORE ID, description, check logic, scope, severity, and
+citations. Commit these files to VCS — they serve as a **permanent, version-locked audit
+trail** of the exact rules that were in scope for the study at the time of validation.
+
+### 11.6 Custom validation rules
+
+When the CDISC CORE rule set does not cover a study-specific check (e.g. a sponsor SOP
+constraint, an FDA TCG requirement not yet in CORE, or a protocol-specific range check),
+you can author custom rules in the same YAML format used by the engine.
+
+**ID convention:** Use a company prefix (e.g. `SPONSOR-000001`) to avoid clashing with
+`CORE-XXXXXX` identifiers.
+
+**Storage:** Place custom rule files in `metadata/sdtm/custom_rules/` or
+`metadata/adam/custom_rules/` — separate from the CDISC-sourced `rules/` directory.
+
+**Loading at validation time:** Pass custom rules to the engine via the `-lr` flag
+(ephemeral, for ad-hoc testing) or `update-cache` (persistent, for team-wide use). See the
+CDISC Rules Engine documentation for details.
+
 ---
 
 ## Part 13 — Generate Define-XML

@@ -61,6 +61,8 @@ import fleet  # registers df.sdtm, df.adam, df.adsl, df.occds, df.tlg everywhere
 | `dag.py`                | `PipelineDAG`, `PipelineNode`, `VariableNode` — pipeline + variable-level lineage graph (verb name, source columns, defining method)                                                  |
 | `algorithm_resolver.py` | Resolves a Fleet verb name (`algorithm:`) or dotted callable (`callable:`) to its docstring + qualified path; powers Define-XML method enrichment                                     |
 | `lineage.py`            | `record_lineage(owner, exprs)` / `lineage_of(namespace)` — invoked by `_chain()` in SDTM/ADaM namespaces to attach `VariableNode` records to every materialised column                |
+| `rules_scaffolder.py`   | `RulesScaffolder` — fetches CDISC conformance rules from the Library API and writes per-domain YAML files into `metadata/sdtm/rules/` and `metadata/adam/rules/`                      |
+| `scaffolder.py`         | `DefineScaffolder` — generates `define.yaml` from the CDISC Library IG for SDTM and ADaM domains                                                                                      |
 
 **`StudyContext`** is useful when your study files live in a standard directory layout and you want paths resolved automatically rather than hard-coded.
 

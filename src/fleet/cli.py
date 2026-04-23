@@ -122,6 +122,33 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Omit definitions and preferred terms from generated code.",
     )
 
+    # -- init rules ----------------------------------------------------- #
+    rules = init_sub.add_parser(
+        "rules",
+        help="Cache CDISC conformance rules as YAML from the CDISC Library.",
+    )
+    rules.add_argument(
+        "--config",
+        "-c",
+        default="study_config.yaml",
+        help="Path to study_config.yaml (default: study_config.yaml).",
+    )
+    rules.add_argument(
+        "--sdtm-only",
+        action="store_true",
+        help="Fetch SDTM rules only (skip ADaM).",
+    )
+    rules.add_argument(
+        "--adam-only",
+        action="store_true",
+        help="Fetch ADaM rules only (skip SDTM).",
+    )
+    rules.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing rule files.",
+    )
+
     # -- init-ct (standalone, legacy) ----------------------------------- #
     init_ct = sub.add_parser(
         "init-ct",
@@ -418,6 +445,40 @@ def _run_init_define(args: argparse.Namespace) -> None:
     print("Next step: fleet init ct")
 
 
+def _run_init_rules(args: argparse.Namespace) -> None:
+    from fleet.core.rules_scaffolder import RulesScaffolder
+    from fleet.core.study_context import load_study_context
+    from fleet.ct.api import CDISCClient
+
+    config_path = Path(args.config)
+    if not config_path.is_file():
+        print(f"Error: config not found: {config_path}")
+        print("Run `fleet init cfg` first.")
+        sys.exit(1)
+
+    ctx = load_study_context(config_path)
+    do_sdtm = not args.adam_only
+    do_adam = not args.sdtm_only
+
+    with CDISCClient() as client:
+        scaffolder = RulesScaffolder(client)
+
+        if do_sdtm:
+            try:
+                scaffolder.scaffold_sdtm(ctx, force=args.force)
+            except FileNotFoundError as exc:
+                print(f"Warning: {exc}")
+
+        if do_adam:
+            try:
+                scaffolder.scaffold_adam(ctx, force=args.force)
+            except FileNotFoundError as exc:
+                print(f"Warning: {exc}")
+
+    print()
+    print("Rules cached. Commit to VCS for a permanent audit trail.")
+
+
 def _run_init_ct_pipeline(args: argparse.Namespace) -> None:
     from fleet.core.study_context import load_study_context
     from fleet.ct.api import CDISCClient
@@ -704,6 +765,8 @@ def main() -> None:
             _run_init_define(args)
         elif args.init_command == "ct":
             _run_init_ct_pipeline(args)
+        elif args.init_command == "rules":
+            _run_init_rules(args)
         else:
             # Show init subcommand help
             parser.parse_args(["init", "--help"])

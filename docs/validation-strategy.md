@@ -185,6 +185,27 @@ These scripts exercise the complete derivation pipeline end-to-end — from raw 
 
 ---
 
+### Pillar 5 — Local Rule Snapshot (`fleet init rules`)
+
+Fleet's `fleet init rules` command caches the exact CDISC conformance rules for the IG versions declared in the study's `define.yaml` files. Rules are fetched from the CDISC Library API, grouped by domain, and written as human-readable YAML into `metadata/sdtm/rules/` and `metadata/adam/rules/`.
+
+```bash
+# After fleet init define has created define.yaml files:
+uv run fleet init rules
+```
+
+Each YAML file records the rule's CORE ID, description, check logic, scope, severity, and regulatory citations. When committed to VCS, these files provide:
+
+- **Version lock:** The exact rule definitions in effect when the study was validated, immune to upstream CDISC updates.
+- **Audit trail:** Reviewers (including regulators) can inspect which rules were applied without re-querying the CDISC Library.
+- **Diff visibility:** Any change in the rule set between study milestones is visible in version control history.
+
+#### Custom rules
+
+When the standard CDISC CORE rule set does not cover a study-specific requirement, sponsors can author custom rules in the same YAML schema used by the engine. Store custom rules separately in `metadata/sdtm/custom_rules/` or `metadata/adam/custom_rules/` and load them via the engine's `-lr` or `update-cache` mechanisms. Use a company prefix (e.g. `SPONSOR-000001`) for custom rule IDs to avoid collisions with `CORE-XXXXXX`.
+
+---
+
 ## 4. Risk Assessment
 
 Applying the R Validation Hub risk-based framework to Fleet:
@@ -207,6 +228,7 @@ Applying the R Validation Hub risk-based framework to Fleet:
 | ---------------------------------- | ----------------------------------------------- | --------------------------------------------------------- | --------------------------- |
 | Standards metadata sourcing        | `fleet init define` → `define.yaml`             | SDTM IG + ADaM IG variable metadata from CDISC Library    | Automated at study setup    |
 | Controlled terminology generation  | `fleet init ct` → `codelists.py`                | NCI concept IDs for all study domains                     | Automated at study setup    |
+| Conformance rule snapshot          | `fleet init rules` → `metadata/*/rules/*.yaml`  | All CDISC CORE rules for IG version, version-locked       | Automated at study setup    |
 | Cross-language algorithm benchmark | `tests/unit/test_admiral_parity.py`             | BSA, MAP, QTc, LOCF, BMI, ANL01FL, age/period             | Runs in CI on every commit  |
 | SDTM conformance                   | `ValidationService.validate_sdtm()`             | All SDTM domains, SDTMIG 3.4                              | Run at study delivery       |
 | ADaM conformance                   | `ValidationService.validate_adam()`             | ADSL, BDS, OCCDS datasets, ADaMIG 1.3                     | Run at study delivery       |

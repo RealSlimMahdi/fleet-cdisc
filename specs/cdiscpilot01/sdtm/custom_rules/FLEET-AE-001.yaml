@@ -1,0 +1,72 @@
+# FLEET-AE-001: AESEV must be populated when AESER = 'Y'
+#
+# Rationale: If an adverse event is serious, the severity grade must
+# always be recorded. This is a sponsor SOP requirement that
+# supplements the standard CDISC CORE AE checks.
+
+Authorities:
+  - Organization: Fleet
+    Standards:
+      - Name: SDTMIG
+        References:
+          - Citations:
+              - Cited Guidance: >-
+                  Sponsor SOP requirement — When AESER is 'Y',
+                  AESEV must be non-empty to ensure complete
+                  severity documentation of serious adverse events.
+                Document: Fleet Sponsor SOP v1.0
+                Section: Section 4.2.1
+            Origin: Sponsor SOP
+            Rule Identifier:
+              Id: FLEET-AE-001
+              Version: "1"
+            Version: "1"
+        Version: "3.4"
+    Category:
+      Purpose: Sponsor SOP compliance
+      Keywords:
+        - AE
+        - severity
+        - serious
+
+Check:
+  all:
+    - name: AESER
+      operator: equal_to
+      value: "Y"
+      value_is_literal: true
+    - name: AESEV
+      operator: empty
+
+Core:
+  Id: FLEET-AE-001
+  Status: Draft
+  Version: "1"
+
+Description: >-
+  AESEV must be populated when AESER = 'Y'. Raises an error when a
+  serious adverse event record has an empty severity value.
+
+Executability: Fully Executable
+
+Outcome:
+  Message: >-
+    AESEV is empty for a record where AESER = 'Y'. Serious adverse events
+    must have severity documented.
+  Output Variables:
+    - USUBJID
+    - AETERM
+    - AESER
+    - AESEV
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include:
+      - EVENTS
+  Domains:
+    Include:
+      - AE
+
+Sensitivity: Record

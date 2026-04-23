@@ -71,6 +71,9 @@ uv run fleet init define
 
 # Step 3: Generate codelists.py from the define.yaml codelist references
 uv run fleet init ct
+
+# Step 4: Cache CDISC conformance rules as human-readable YAML
+uv run fleet init rules
 ```
 
 #### Standalone Commands

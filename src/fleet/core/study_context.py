@@ -19,6 +19,8 @@ class StudyPathConfig(BaseModel):
     metadata_adam: str = Field(default="metadata/adam")
     define_xml: str = Field(default="metadata")
     outputs: str = Field(default="outputs")
+    rules_sdtm: str = Field(default="metadata/sdtm/rules")
+    rules_adam: str = Field(default="metadata/adam/rules")
     programs_sdtm: str = Field(default="programs/sdtm")
     programs_adam: str = Field(default="programs/adam")
     programs_tlg: str = Field(default="programs/tlg")
@@ -137,6 +139,14 @@ class StudyContext:
         return self.resolve(self.config.paths.programs_tlg)
 
     @property
+    def rules_sdtm_dir(self) -> Path:
+        return self.resolve(self.config.paths.rules_sdtm)
+
+    @property
+    def rules_adam_dir(self) -> Path:
+        return self.resolve(self.config.paths.rules_adam)
+
+    @property
     def programs_misc_dir(self) -> Path:
         return self.resolve(self.config.paths.programs_misc)
 
@@ -231,6 +241,8 @@ class StudyContext:
             ctx.metadata_adam_dir,
             ctx.define_xml_dir,
             ctx.outputs_dir,
+            ctx.rules_sdtm_dir,
+            ctx.rules_adam_dir,
             ctx.programs_sdtm_dir,
             ctx.programs_adam_dir,
             ctx.programs_tlg_dir,
