@@ -46,23 +46,28 @@ def make_test_xpt(tmpdir: Path) -> Path:
     resolves domain from the filename (ae.xpt → AE), which is required
     for domain-scoped rules without a populated library cache.
     """
-    import numpy as np
-    import pandas as pd
+    import polars as pl
     import pyreadstat
 
-    ae_data = pd.DataFrame(
+    ae_data = pl.DataFrame(
         {
             "STUDYID": ["CDISCPILOT01", "CDISCPILOT01", "CDISCPILOT01"],
             "DOMAIN": ["AE", "AE", "AE"],
             "USUBJID": ["CDISC01.100001", "CDISC01.100002", "CDISC01.100003"],
-            "AESEQ": pd.array([1, 2, 3], dtype="float64"),
+            "AESEQ": [1.0, 2.0, 3.0],
             "AETERM": ["HEADACHE", "NAUSEA", "RASH"],
-            "AESEV": ["MODERATE", np.nan, "MILD"],  # Row 2: missing → should FAIL
+            "AESEV": ["MODERATE", None, "MILD"],  # Row 2: missing → should FAIL
             "AESER": ["Y", "Y", "N"],  # Row 3: not serious → should PASS
         }
     )
     out = tmpdir / "ae.xpt"
-    pyreadstat.write_xport(ae_data, str(out), file_format_version=5)
+    # pyreadstat requires a pandas DataFrame for XPT serialisation;
+    # build it from the polars dict representation to avoid a pyarrow dep.
+    import pandas as pd  # transitive dep of pyreadstat — not used elsewhere
+
+    pyreadstat.write_xport(
+        pd.DataFrame(ae_data.to_dict()), str(out), file_format_version=5
+    )
     return out
 
 
