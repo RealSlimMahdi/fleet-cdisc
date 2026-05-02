@@ -12,60 +12,60 @@ Fleet currently covers **~65%** of admiral's core derivation surface through 96 
 
 ## 1. Direct Equivalents (28 functions)
 
-| Admiral Function | Fleet Verb | Namespace |
-|---|---|---|
-| `derive_vars_dt` / `impute_dtc_dt` | `derive_dt` | SharedADaMVerbsMixin |
-| `derive_vars_dtm` / `impute_dtc_dtm` | `derive_dtm` | SharedADaMVerbsMixin |
-| `derive_vars_dy` | `study_day` | AdamNamespace |
-| `derive_var_base` | `baseline` | AdamNamespace |
-| `derive_var_chg` | `chg` | AdamNamespace |
-| `derive_var_pchg` | `pchg` | AdamNamespace |
-| `derive_var_obs_number` | `seq` | MultiRowMixin |
-| `derive_var_ontrtfl` | `on_treatment` | AdamNamespace |
-| `derive_var_shift` | `shift` | AdamNamespace |
-| `derive_var_anrind` | `nrind` | AdamNamespace |
-| `derive_var_extreme_flag` (first/last) | `flag(criteria="first"/"last")` | AdamNamespace |
-| `derive_var_extreme_flag` (max/min) | `flag(criteria="max"/"min")` | AdamNamespace |
-| `derive_param_bmi` / `compute_bmi` | `bmi` / `derive_param` | AdamNamespace |
-| `derive_param_bsa` / `compute_bsa` | `bsa` / `derive_param` | AdamNamespace |
-| `derive_param_map` / `compute_map` | `map` / `derive_param` | AdamNamespace |
-| `derive_param_qtc` / `compute_qtc` | `qtc` / `derive_param` | AdamNamespace |
-| `derive_summary_records` | `derive_summary_records` | AdamNamespace |
-| `derive_locf_records` | `derive_locf_records` | AdamNamespace |
-| `derive_param_computed` | `derive_param` | AdamNamespace |
-| `derive_vars_duration` / `compute_duration` | `duration` | ADSLNamespace |
-| `derive_var_age_years` / `compute_age_years` | `age_years` | ADSLNamespace / PedsNamespace |
-| `derive_vars_period` | `derive_period` | ADSLNamespace |
-| `derive_var_trtemfl` | `treatment_emergent` | OCCDSNamespace |
-| `derive_var_atoxgr` / `derive_var_atoxgr_dir` | `atoxgr` + `combine_grades` | AdamNamespace (grading) |
-| `derive_vars_merged` | `lookup` | AdamNamespace |
-| `derive_vars_merged_lookup` | `lookup` | AdamNamespace |
-| `derive_var_trtdurd` | `duration` (via ADSL) | ADSLNamespace |
-| `derive_var_nfrlt` | `nominal_time` | PKNamespace |
+| Admiral Function                              | Fleet Verb                      | Namespace                     |
+| --------------------------------------------- | ------------------------------- | ----------------------------- |
+| `derive_vars_dt` / `impute_dtc_dt`            | `derive_dt`                     | SharedADaMVerbsMixin          |
+| `derive_vars_dtm` / `impute_dtc_dtm`          | `derive_dtm`                    | SharedADaMVerbsMixin          |
+| `derive_vars_dy`                              | `study_day`                     | AdamNamespace                 |
+| `derive_var_base`                             | `baseline`                      | AdamNamespace                 |
+| `derive_var_chg`                              | `chg`                           | AdamNamespace                 |
+| `derive_var_pchg`                             | `pchg`                          | AdamNamespace                 |
+| `derive_var_obs_number`                       | `seq`                           | MultiRowMixin                 |
+| `derive_var_ontrtfl`                          | `on_treatment`                  | AdamNamespace                 |
+| `derive_var_shift`                            | `shift`                         | AdamNamespace                 |
+| `derive_var_anrind`                           | `nrind`                         | AdamNamespace                 |
+| `derive_var_extreme_flag` (first/last)        | `flag(criteria="first"/"last")` | AdamNamespace                 |
+| `derive_var_extreme_flag` (max/min)           | `flag(criteria="max"/"min")`    | AdamNamespace                 |
+| `derive_param_bmi` / `compute_bmi`            | `bmi` / `derive_param`          | AdamNamespace                 |
+| `derive_param_bsa` / `compute_bsa`            | `bsa` / `derive_param`          | AdamNamespace                 |
+| `derive_param_map` / `compute_map`            | `map` / `derive_param`          | AdamNamespace                 |
+| `derive_param_qtc` / `compute_qtc`            | `qtc` / `derive_param`          | AdamNamespace                 |
+| `derive_summary_records`                      | `derive_summary_records`        | AdamNamespace                 |
+| `derive_locf_records`                         | `derive_locf_records`           | AdamNamespace                 |
+| `derive_param_computed`                       | `derive_param`                  | AdamNamespace                 |
+| `derive_vars_duration` / `compute_duration`   | `duration`                      | ADSLNamespace                 |
+| `derive_var_age_years` / `compute_age_years`  | `age_years`                     | ADSLNamespace / PedsNamespace |
+| `derive_vars_period`                          | `derive_period`                 | ADSLNamespace                 |
+| `derive_var_trtemfl`                          | `treatment_emergent`            | OCCDSNamespace                |
+| `derive_var_atoxgr` / `derive_var_atoxgr_dir` | `atoxgr` + `combine_grades`     | AdamNamespace (grading)       |
+| `derive_vars_merged`                          | `lookup`                        | AdamNamespace                 |
+| `derive_vars_merged_lookup`                   | `lookup`                        | AdamNamespace                 |
+| `derive_var_trtdurd`                          | `duration` (via ADSL)           | ADSLNamespace                 |
+| `derive_var_nfrlt`                            | `nominal_time`                  | PKNamespace                   |
 
 ---
 
 ## 2. Near-Equivalents (Expressible via existing primitives)
 
-| Admiral Function | Fleet Approach | Notes |
-|---|---|---|
-| `derive_vars_merged_summary` | `lookup` + Polars `group_by().agg()` via `transform` | No single verb, but one-liner with `transform` |
-| `derive_vars_joined` | `lookup(how="left", on=..., where=...)` | Fleet's `lookup` supports conditional joins |
-| `derive_vars_joined_summary` | `lookup` + `derive_summary_records` | Combine two verbs |
-| `derive_var_analysis_ratio` | `derivation(target, expression=pl.col("AVAL") / pl.col("BASE"))` | Trivial expression |
-| `restrict_derivation` | `whereclauses` → verb → union back | Manual pattern, no built-in wrapper |
-| `slice_derivation` | Multiple `condderivation` or `whereclauses` chains | Manual pattern |
-| `call_derivation` | Python loop over verb calls | Inherent in Python's expressiveness |
-| `derive_vars_cat` | `condderivation` + `recode` | Pattern-based, not single-verb |
-| `derive_basetype_records` | `transform` + concat | Manual duplicate-and-tag pattern |
-| `derive_vars_crit_flag` | `flag` + `derivation` for CRITyFN | Needs 3 columns (CRITy, CRITyFL, CRITyFN) |
-| `compute_rr` | `derivation(target, expression=60000 / pl.col("HR"))` | Trivial expression |
-| `derive_param_rr` | `derive_param` + RR expression | Trivial combo |
-| `derive_vars_dtm_to_dt` | `derivation` with `.dt.date()` cast | One-liner Polars expression |
-| `derive_vars_dtm_to_tm` | `derivation` with `.dt.time()` cast | One-liner Polars expression |
-| `compute_dtf` / `compute_tmf` | Built into `derive_dt` / `derive_dtm` (auto-generates `*DTF`/`*TMF`) | Already handled internally |
-| `filter_extreme` | `whereclauses` with rank/sort expression | No single verb |
-| `filter_joined` | `whereclauses` + `lookup` | Combine two verbs |
+| Admiral Function              | Fleet Approach                                                       | Notes                                          |
+| ----------------------------- | -------------------------------------------------------------------- | ---------------------------------------------- |
+| `derive_vars_merged_summary`  | `lookup` + Polars `group_by().agg()` via `transform`                 | No single verb, but one-liner with `transform` |
+| `derive_vars_joined`          | `lookup(how="left", on=..., where=...)`                              | Fleet's `lookup` supports conditional joins    |
+| `derive_vars_joined_summary`  | `lookup` + `derive_summary_records`                                  | Combine two verbs                              |
+| `derive_var_analysis_ratio`   | `derivation(target, expression=pl.col("AVAL") / pl.col("BASE"))`     | Trivial expression                             |
+| `restrict_derivation`         | `whereclauses` → verb → union back                                   | Manual pattern, no built-in wrapper            |
+| `slice_derivation`            | Multiple `condderivation` or `whereclauses` chains                   | Manual pattern                                 |
+| `call_derivation`             | Python loop over verb calls                                          | Inherent in Python's expressiveness            |
+| `derive_vars_cat`             | `condderivation` + `recode`                                          | Pattern-based, not single-verb                 |
+| `derive_basetype_records`     | `transform` + concat                                                 | Manual duplicate-and-tag pattern               |
+| `derive_vars_crit_flag`       | `flag` + `derivation` for CRITyFN                                    | Needs 3 columns (CRITy, CRITyFL, CRITyFN)      |
+| `compute_rr`                  | `derivation(target, expression=60000 / pl.col("HR"))`                | Trivial expression                             |
+| `derive_param_rr`             | `derive_param` + RR expression                                       | Trivial combo                                  |
+| `derive_vars_dtm_to_dt`       | `derivation` with `.dt.date()` cast                                  | One-liner Polars expression                    |
+| `derive_vars_dtm_to_tm`       | `derivation` with `.dt.time()` cast                                  | One-liner Polars expression                    |
+| `compute_dtf` / `compute_tmf` | Built into `derive_dt` / `derive_dtm` (auto-generates `*DTF`/`*TMF`) | Already handled internally                     |
+| `filter_extreme`              | `whereclauses` with rank/sort expression                             | No single verb                                 |
+| `filter_joined`               | `whereclauses` + `lookup`                                            | Combine two verbs                              |
 
 ---
 
@@ -73,48 +73,48 @@ Fleet currently covers **~65%** of admiral's core derivation surface through 96 
 
 ### 🟢 Easy (1–2 day effort, reuses existing primitives)
 
-| # | Admiral Function | Description | Fleet Simplification Opportunity |
-|---|---|---|---|
-| 1 | `derive_var_merged_exist_flag` | "Y" if record exists in another dataset | Add `exist_flag` verb: `lookup` + `is_not_null` → flag. ~20 lines in `_mixins.py`. |
-| 2 | `derive_param_exist_flag` | Append parameter record flagging existence | `derive_param` + existence check. Wrap as `derive_param_exist_flag`. |
-| 3 | `derive_extreme_records` | Append first/last record per group | `derive_summary_records`-style with `filter_extreme` logic. Reuse `flag` internals. |
-| 4 | `derive_param_doseint` | Dose intensity: `DOSE / PLANNED_DOSE × 100` | Trivial `derive_param` + expression. Add as `dose_intensity` in OCCDS/BDS. |
-| 5 | `derive_param_wbc_abs` | `WBC × differential / 100` | Trivial `derive_param` + expression. Add as convenience. |
-| 6 | `compute_scale` | Compute questionnaire scale scores | `derivation` with sum/mean across items. Add `scale_score` verb. |
-| 7 | `yn_to_numeric` | "Y"→1, "N"→0 | One-liner `recode`. Not worth a dedicated verb. |
-| 8 | `convert_blanks_to_na` | Blank → null | Polars handles natively; add note in docs. |
-| 9 | `derive_var_merged_ef_msrc` | Exist flag from multiple source datasets | Chain multiple `exist_flag` calls with `condderivation`. |
-| 10 | `filter_exist` / `filter_not_exist` | Semi-join / anti-join filters | Add `filter_exist(dataset, on=...)` to SharedADaMVerbsMixin. ~15 lines. |
+| #   | Admiral Function                    | Description                                 | Fleet Simplification Opportunity                                                    |
+| --- | ----------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------- |
+| 1   | `derive_var_merged_exist_flag`      | "Y" if record exists in another dataset     | Add `exist_flag` verb: `lookup` + `is_not_null` → flag. ~20 lines in `_mixins.py`.  |
+| 2   | `derive_param_exist_flag`           | Append parameter record flagging existence  | `derive_param` + existence check. Wrap as `derive_param_exist_flag`.                |
+| 3   | `derive_extreme_records`            | Append first/last record per group          | `derive_summary_records`-style with `filter_extreme` logic. Reuse `flag` internals. |
+| 4   | `derive_param_doseint`              | Dose intensity: `DOSE / PLANNED_DOSE × 100` | Trivial `derive_param` + expression. Add as `dose_intensity` in OCCDS/BDS.          |
+| 5   | `derive_param_wbc_abs`              | `WBC × differential / 100`                  | Trivial `derive_param` + expression. Add as convenience.                            |
+| 6   | `compute_scale`                     | Compute questionnaire scale scores          | `derivation` with sum/mean across items. Add `scale_score` verb.                    |
+| 7   | `yn_to_numeric`                     | "Y"→1, "N"→0                                | One-liner `recode`. Not worth a dedicated verb.                                     |
+| 8   | `convert_blanks_to_na`              | Blank → null                                | Polars handles natively; add note in docs.                                          |
+| 9   | `derive_var_merged_ef_msrc`         | Exist flag from multiple source datasets    | Chain multiple `exist_flag` calls with `condderivation`.                            |
+| 10  | `filter_exist` / `filter_not_exist` | Semi-join / anti-join filters               | Add `filter_exist(dataset, on=...)` to SharedADaMVerbsMixin. ~15 lines.             |
 
 ### 🟡 Moderate (3–5 day effort, new algorithm or join pattern)
 
-| # | Admiral Function | Description | Fleet Implementation Strategy |
-|---|---|---|---|
-| 11 | `derive_var_joined_exist_flag` | Flag based on conditions spanning two datasets | Extend `flag` with `from_dataset` + join condition parameters. |
-| 12 | `derive_var_relative_flag` | Flag records before/after a condition | New `relative_flag` verb: partition → locate condition → flag before/after. Reuse `flag` infrastructure. |
-| 13 | `derive_vars_query` | Derive SMQ/CQ variables from query dataset | New `query_vars` verb in OCCDSNamespace. Needs query dataset schema. |
-| 14 | `create_query_data` | Build query dataset from MedDRA/SMQ | CLI utility + metadata lookup. Partially overlaps `fleet init` tooling. |
-| 15 | `derive_extreme_event` | Worst/best observation as new record | Generalise `derive_summary_records` with event-object pattern. |
-| 16 | `derive_vars_extreme_event` | Worst/best observation as new variables (ADSL) | `first_date`/`last_date` generalized: add `extreme_event` to ADSLNamespace. |
-| 17 | `derive_expected_records` | Insert expected but missing records | New `derive_expected_records` in BDS: cross-join expected visits × parameters, anti-join actual. |
-| 18 | `derive_vars_transposed` | Transpose + merge another dataset | `transform` with `.pivot()` + join. Add `transpose_merge` convenience verb. |
-| 19 | `derive_param_exposure` | Aggregate exposure with start/end dates | New `exposure` verb in OCCDS: group_by period, sum dose, derive dates. |
-| 20 | `create_single_dose_dataset` | Expand multi-dose to single-dose records | `transform` with date_range expansion. Moderate Polars logic. |
-| 21 | `derive_vars_atc` | ATC class variables from WHO Drug | Needs external ATC dictionary lookup. Add `atc_class` verb to OCCDSNamespace. |
-| 22 | `compute_qual_imputation` | Handle `<` / `>` qualifiers in lab results | New `qual_impute` verb: parse character result, apply factor. Moderate string parsing. |
-| 23 | `compute_egfr` | eGFR by CKD-EPI/MDRD/Cockcroft-Gault | New `egfr` in AdamNamespace. Multiple formulae, ~50 lines. |
+| #   | Admiral Function               | Description                                    | Fleet Implementation Strategy                                                                            |
+| --- | ------------------------------ | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 11  | `derive_var_joined_exist_flag` | Flag based on conditions spanning two datasets | Extend `flag` with `from_dataset` + join condition parameters.                                           |
+| 12  | `derive_var_relative_flag`     | Flag records before/after a condition          | New `relative_flag` verb: partition → locate condition → flag before/after. Reuse `flag` infrastructure. |
+| 13  | `derive_vars_query`            | Derive SMQ/CQ variables from query dataset     | New `query_vars` verb in OCCDSNamespace. Needs query dataset schema.                                     |
+| 14  | `create_query_data`            | Build query dataset from MedDRA/SMQ            | CLI utility + metadata lookup. Partially overlaps `fleet init` tooling.                                  |
+| 15  | `derive_extreme_event`         | Worst/best observation as new record           | Generalise `derive_summary_records` with event-object pattern.                                           |
+| 16  | `derive_vars_extreme_event`    | Worst/best observation as new variables (ADSL) | `first_date`/`last_date` generalized: add `extreme_event` to ADSLNamespace.                              |
+| 17  | `derive_expected_records`      | Insert expected but missing records            | New `derive_expected_records` in BDS: cross-join expected visits × parameters, anti-join actual.         |
+| 18  | `derive_vars_transposed`       | Transpose + merge another dataset              | `transform` with `.pivot()` + join. Add `transpose_merge` convenience verb.                              |
+| 19  | `derive_param_exposure`        | Aggregate exposure with start/end dates        | New `exposure` verb in OCCDS: group_by period, sum dose, derive dates.                                   |
+| 20  | `create_single_dose_dataset`   | Expand multi-dose to single-dose records       | `transform` with date_range expansion. Moderate Polars logic.                                            |
+| 21  | `derive_vars_atc`              | ATC class variables from WHO Drug              | Needs external ATC dictionary lookup. Add `atc_class` verb to OCCDSNamespace.                            |
+| 22  | `compute_qual_imputation`      | Handle `<` / `>` qualifiers in lab results     | New `qual_impute` verb: parse character result, apply factor. Moderate string parsing.                   |
+| 23  | `compute_egfr`                 | eGFR by CKD-EPI/MDRD/Cockcroft-Gault           | New `egfr` in AdamNamespace. Multiple formulae, ~50 lines.                                               |
 
 ### 🔴 Complex (1–2 week effort, new subsystem or external data)
 
-| # | Admiral Function | Description | Fleet Implementation Strategy |
-|---|---|---|---|
-| 24 | `derive_param_tte` | Time-to-event parameter with censoring | **New TTE subsystem.** Needs `event_source`, `censor_source` objects, multi-dataset scanning, CNSR/AVAL derivation. Recommend new `tte` sub-namespace. |
-| 25 | `derive_param_framingham` / `compute_framingham` | Framingham 10-year CVD risk | Complex multi-variable formula with sex-stratified coefficients. ~80 lines of validated logic. |
-| 26 | `create_period_dataset` (full) | Reference dataset for periods/subperiods | Fleet has `derive_period` for ADSL variables, but lacks the auxiliary dataset generator that other domains consume. |
-| 27 | `derive_vars_computed` (multi-param) | Derive variable from values of multiple parameters simultaneously | Requires pivot → compute → unpivot pattern. Extends `derive_param` semantics. |
-| 28 | Pediatric growth charts | WHO/CDC z-scores, percentiles by age/sex | Needs bundled reference tables (LMS parameters). New module in PedsNamespace. |
-| 29 | Oncology progression (admiralonco) | RECIST confirmation windows, duration of response | Partially covered by `OncoNamespace`, but confirmation logic is simpler than admiral's full `event_joined` pattern. |
-| 30 | Vaccine reactogenicity (admiralvaccines) | Multi-dose, multi-period reactogenicity summaries | Fleet's `VaccineNamespace` covers basics; full multi-period severity-over-time logic needs `create_period_dataset` integration. |
+| #   | Admiral Function                                 | Description                                                       | Fleet Implementation Strategy                                                                                                                          |
+| --- | ------------------------------------------------ | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 24  | `derive_param_tte`                               | Time-to-event parameter with censoring                            | **New TTE subsystem.** Needs `event_source`, `censor_source` objects, multi-dataset scanning, CNSR/AVAL derivation. Recommend new `tte` sub-namespace. |
+| 25  | `derive_param_framingham` / `compute_framingham` | Framingham 10-year CVD risk                                       | Complex multi-variable formula with sex-stratified coefficients. ~80 lines of validated logic.                                                         |
+| 26  | `create_period_dataset` (full)                   | Reference dataset for periods/subperiods                          | Fleet has `derive_period` for ADSL variables, but lacks the auxiliary dataset generator that other domains consume.                                    |
+| 27  | `derive_vars_computed` (multi-param)             | Derive variable from values of multiple parameters simultaneously | Requires pivot → compute → unpivot pattern. Extends `derive_param` semantics.                                                                          |
+| 28  | Pediatric growth charts                          | WHO/CDC z-scores, percentiles by age/sex                          | Needs bundled reference tables (LMS parameters). New module in PedsNamespace.                                                                          |
+| 29  | Oncology progression (admiralonco)               | RECIST confirmation windows, duration of response                 | Partially covered by `OncoNamespace`, but confirmation logic is simpler than admiral's full `event_joined` pattern.                                    |
+| 30  | Vaccine reactogenicity (admiralvaccines)         | Multi-dose, multi-period reactogenicity summaries                 | Fleet's `VaccineNamespace` covers basics; full multi-period severity-over-time logic needs `create_period_dataset` integration.                        |
 
 ---
 
@@ -122,18 +122,18 @@ Fleet currently covers **~65%** of admiral's core derivation surface through 96 
 
 ### 4.1 Mixin Strategy for New Verbs
 
-| Proposed Verb | Scope | Mixin / Class |
-|---|---|---|
-| `exist_flag` | All namespaces | `SharedADaMVerbsMixin` |
-| `filter_exist` / `filter_not_exist` | All namespaces | `SharedADaMVerbsMixin` |
-| `relative_flag` | BDS + OCCDS | New `FlagMixin` or extend `flag()` |
-| `extreme_records` | BDS | `MultiRowMixin` |
-| `expected_records` | BDS | `MultiRowMixin` |
-| `query_vars` | OCCDS only | `OCCDSNamespace` directly |
-| `exposure` | OCCDS only | `OCCDSNamespace` directly |
-| `egfr` | BDS (clinical measures) | `AdamNamespace` alongside `bmi`/`bsa` |
-| `qual_impute` | BDS labs | `AdamNamespace` or new `LabMixin` |
-| TTE subsystem | Dedicated | New `TTENamespace` (`.adam.tte`) |
+| Proposed Verb                       | Scope                   | Mixin / Class                         |
+| ----------------------------------- | ----------------------- | ------------------------------------- |
+| `exist_flag`                        | All namespaces          | `SharedADaMVerbsMixin`                |
+| `filter_exist` / `filter_not_exist` | All namespaces          | `SharedADaMVerbsMixin`                |
+| `relative_flag`                     | BDS + OCCDS             | New `FlagMixin` or extend `flag()`    |
+| `extreme_records`                   | BDS                     | `MultiRowMixin`                       |
+| `expected_records`                  | BDS                     | `MultiRowMixin`                       |
+| `query_vars`                        | OCCDS only              | `OCCDSNamespace` directly             |
+| `exposure`                          | OCCDS only              | `OCCDSNamespace` directly             |
+| `egfr`                              | BDS (clinical measures) | `AdamNamespace` alongside `bmi`/`bsa` |
+| `qual_impute`                       | BDS labs                | `AdamNamespace` or new `LabMixin`     |
+| TTE subsystem                       | Dedicated               | New `TTENamespace` (`.adam.tte`)      |
 
 ### 4.2 Simplification Opportunities
 
@@ -149,18 +149,18 @@ Fleet currently covers **~65%** of admiral's core derivation surface through 96 
 
 ### 4.3 Recommended Implementation Order (ROI-ranked)
 
-| Priority | Verb(s) | Rationale |
-|---|---|---|
-| P1 | `exist_flag` | Most-requested pattern; trivial to implement; covers 3 admiral fns |
-| P1 | `filter_exist` / `filter_not_exist` | Common data-quality filter; 15 lines each |
-| P2 | `relative_flag` | Unique pattern not easily expressed today |
-| P2 | `query_vars` + `create_query_data` CLI | Required for AE/CM SMQ/CQ derivations |
-| P2 | `egfr` | High-value clinical measure; no workaround |
-| P3 | `extreme_records` / `expected_records` | Multi-row operations for BDS completeness |
-| P3 | `qual_impute` | Lab-specific; niche but important for ADLB |
-| P4 | TTE subsystem | Large scope; consider phased delivery |
-| P4 | Framingham | Niche cardiovascular; low frequency |
-| P4 | Pediatric growth | Requires reference data bundling |
+| Priority | Verb(s)                                | Rationale                                                          |
+| -------- | -------------------------------------- | ------------------------------------------------------------------ |
+| P1       | `exist_flag`                           | Most-requested pattern; trivial to implement; covers 3 admiral fns |
+| P1       | `filter_exist` / `filter_not_exist`    | Common data-quality filter; 15 lines each                          |
+| P2       | `relative_flag`                        | Unique pattern not easily expressed today                          |
+| P2       | `query_vars` + `create_query_data` CLI | Required for AE/CM SMQ/CQ derivations                              |
+| P2       | `egfr`                                 | High-value clinical measure; no workaround                         |
+| P3       | `extreme_records` / `expected_records` | Multi-row operations for BDS completeness                          |
+| P3       | `qual_impute`                          | Lab-specific; niche but important for ADLB                         |
+| P4       | TTE subsystem                          | Large scope; consider phased delivery                              |
+| P4       | Framingham                             | Niche cardiovascular; low frequency                                |
+| P4       | Pediatric growth                       | Requires reference data bundling                                   |
 
 ---
 
@@ -170,15 +170,15 @@ Fleet currently covers **~65%** of admiral's core derivation surface through 96 
 
 Admiral uses **7 separate functions** to derive flag variables. Fleet replaces them with **2 verbs** by leveraging Polars' window functions and expression-based set operations:
 
-| Admiral Function (7) | Fleet Verb | `criteria` value |
-|---|---|---|
-| `derive_var_extreme_flag` (first/last) | `flag()` | `"first"` / `"last"` |
-| `derive_var_extreme_flag` (max/min) | `flag()` | `"max"` / `"min"` |
-| `derive_var_merged_exist_flag` | `flag()` | `"exists"` |
-| `derive_var_merged_ef_msrc` | `flag()` | `"exists"` (list of datasets) |
-| `derive_var_relative_flag` | `flag()` | `"before"` / `"after"` |
-| `derive_var_joined_exist_flag` | `flag()` | `"exists_after"` / `"exists_before"` |
-| `derive_vars_crit_flag` | `criterion()` | (separate verb, triple-output) |
+| Admiral Function (7)                   | Fleet Verb    | `criteria` value                     |
+| -------------------------------------- | ------------- | ------------------------------------ |
+| `derive_var_extreme_flag` (first/last) | `flag()`      | `"first"` / `"last"`                 |
+| `derive_var_extreme_flag` (max/min)    | `flag()`      | `"max"` / `"min"`                    |
+| `derive_var_merged_exist_flag`         | `flag()`      | `"exists"`                           |
+| `derive_var_merged_ef_msrc`            | `flag()`      | `"exists"` (list of datasets)        |
+| `derive_var_relative_flag`             | `flag()`      | `"before"` / `"after"`               |
+| `derive_var_joined_exist_flag`         | `flag()`      | `"exists_after"` / `"exists_before"` |
+| `derive_vars_crit_flag`                | `criterion()` | (separate verb, triple-output)       |
 
 ### 5.2 Proposed `flag()` Signature
 
@@ -207,14 +207,14 @@ def flag(
 
 **`criteria` dispatch:**
 
-| Value | Behavior | Required params |
-|---|---|---|
-| `pl.Expr` | Direct boolean → flag where True | — |
-| `"first"` / `"last"` | Rank-based edge detection | `order_by` |
-| `"max"` / `"min"` | Value-based extreme | `value_col` |
-| `"exists"` | Set-membership from external dataset | `from_dataset`, `on` |
-| `"before"` / `"after"` | Relative to landmark condition | `condition`, `order_by` |
-| `"exists_after"` / `"exists_before"` | Temporal join condition | `from_dataset`, `on`, `condition` |
+| Value                                | Behavior                             | Required params                   |
+| ------------------------------------ | ------------------------------------ | --------------------------------- |
+| `pl.Expr`                            | Direct boolean → flag where True     | —                                 |
+| `"first"` / `"last"`                 | Rank-based edge detection            | `order_by`                        |
+| `"max"` / `"min"`                    | Value-based extreme                  | `value_col`                       |
+| `"exists"`                           | Set-membership from external dataset | `from_dataset`, `on`              |
+| `"before"` / `"after"`               | Relative to landmark condition       | `condition`, `order_by`           |
+| `"exists_after"` / `"exists_before"` | Temporal join condition              | `from_dataset`, `on`, `condition` |
 
 ### 5.3 Proposed `criterion()` Signature
 
@@ -233,15 +233,15 @@ Produces three columns: `{prefix}{number}`, `{prefix}{number}FL`, `{prefix}{numb
 
 ### 5.4 Polars Compilation Strategy
 
-| Pattern | Polars primitive | Advantage over R/dplyr |
-|---|---|---|
-| Extreme (first/last) | `pl.col(order_by).rank("ordinal").over(groups) == 1` | No materialisation, pure lazy expr |
-| Extreme (max/min) | `pl.col(val) == pl.col(val).max().over(groups)` | Single-pass window |
-| Exist (another dataset) | `pl.col(key).is_in(other[key])` | Zero-join, set membership |
-| Multi-source exist | `pl.col(key).is_in(pl.concat([ds1, ds2, ...])[key])` | Union keys, single scan |
-| Relative (before/after) | `pl.col(cond).cum_max().over(groups)` | O(n) cumulative signal |
-| Joined exist (temporal) | `join_asof` with tolerance or window expression | Avoids full cross-join |
-| Criterion | `pl.when(cond).then(flag_value)` + `.cast(pl.Int8)` | Trivial expression |
+| Pattern                 | Polars primitive                                     | Advantage over R/dplyr             |
+| ----------------------- | ---------------------------------------------------- | ---------------------------------- |
+| Extreme (first/last)    | `pl.col(order_by).rank("ordinal").over(groups) == 1` | No materialisation, pure lazy expr |
+| Extreme (max/min)       | `pl.col(val) == pl.col(val).max().over(groups)`      | Single-pass window                 |
+| Exist (another dataset) | `pl.col(key).is_in(other[key])`                      | Zero-join, set membership          |
+| Multi-source exist      | `pl.col(key).is_in(pl.concat([ds1, ds2, ...])[key])` | Union keys, single scan            |
+| Relative (before/after) | `pl.col(cond).cum_max().over(groups)`                | O(n) cumulative signal             |
+| Joined exist (temporal) | `join_asof` with tolerance or window expression      | Avoids full cross-join             |
+| Criterion               | `pl.when(cond).then(flag_value)` + `.cast(pl.Int8)`  | Trivial expression                 |
 
 ### 5.5 Test Cases (Ported from Admiral)
 
@@ -577,16 +577,16 @@ assert result["CRIT2FN"].to_list() == [1, 0, 0]
 
 ### 5.6 Edge Cases to Handle (from Admiral Test Suite)
 
-| Edge Case | Admiral Source | Fleet Requirement |
-|---|---|---|
-| `None` in order column | `test-derive_var_extreme_flag.R` Test 7 | Rows with null order → never flagged (get `None`) |
-| Tied extreme values | Tests 3–6 (`flag_all`) | `flag_all=True` flags all tied extremes |
-| Custom true/false values | Test 9 | `flag_value` + `false_value` params |
-| No reference group (relative) | `test-derive_var_relative_flag.R` Test 2 | `flag_no_ref_groups=False` → all `None` |
-| Self-join (same dataset) | `test-derive_var_joined_exist_flag.R` | `from_dataset` can be the pipeline's own frame |
-| `source_filter` on external DS | `test-derive_merged.R` Test 19 | Pre-filter before key extraction |
-| `inclusive=True/False` (relative) | `test-derive_var_relative_flag.R` | Include/exclude the landmark row itself |
-| Multi-source key union | `test-derive_var_merged_ef_msrc.R` | `from_dataset` accepts `list[pl.DataFrame]` |
+| Edge Case                         | Admiral Source                           | Fleet Requirement                                 |
+| --------------------------------- | ---------------------------------------- | ------------------------------------------------- |
+| `None` in order column            | `test-derive_var_extreme_flag.R` Test 7  | Rows with null order → never flagged (get `None`) |
+| Tied extreme values               | Tests 3–6 (`flag_all`)                   | `flag_all=True` flags all tied extremes           |
+| Custom true/false values          | Test 9                                   | `flag_value` + `false_value` params               |
+| No reference group (relative)     | `test-derive_var_relative_flag.R` Test 2 | `flag_no_ref_groups=False` → all `None`           |
+| Self-join (same dataset)          | `test-derive_var_joined_exist_flag.R`    | `from_dataset` can be the pipeline's own frame    |
+| `source_filter` on external DS    | `test-derive_merged.R` Test 19           | Pre-filter before key extraction                  |
+| `inclusive=True/False` (relative) | `test-derive_var_relative_flag.R`        | Include/exclude the landmark row itself           |
+| Multi-source key union            | `test-derive_var_merged_ef_msrc.R`       | `from_dataset` accepts `list[pl.DataFrame]`       |
 
 ### 5.7 Implementation Placement
 
@@ -604,14 +604,14 @@ src/fleet/adam/_mixins.py
 
 ## 6. Coverage Summary
 
-| Category | Count | % of Admiral Derivation Surface |
-|---|---|---|
-| Direct equivalents | 28 | 38% |
-| Near-equivalents (expressible today) | 17 | 23% |
-| Missing — Easy | 10 | 14% |
-| Missing — Moderate | 13 | 18% |
-| Missing — Complex | 7 | 9% |
-| **Total admiral derivation functions** | **~75** | — |
+| Category                               | Count   | % of Admiral Derivation Surface |
+| -------------------------------------- | ------- | ------------------------------- |
+| Direct equivalents                     | 28      | 38%                             |
+| Near-equivalents (expressible today)   | 17      | 23%                             |
+| Missing — Easy                         | 10      | 14%                             |
+| Missing — Moderate                     | 13      | 18%                             |
+| Missing — Complex                      | 7       | 9%                              |
+| **Total admiral derivation functions** | **~75** | —                               |
 
 > **Note:** Admiral utility functions (template management, quosure helpers, dataset checking) are excluded as they are R-ecosystem-specific and have no meaningful clinical-programming equivalent in a Python/Polars pipeline.
 
@@ -619,13 +619,13 @@ src/fleet/adam/_mixins.py
 
 ## 7. Extension Package Gaps (admiralonco, admiralvaccines, admiralophtha, admiralpeds)
 
-| Extension | Fleet Coverage | Gap |
-|---|---|---|
-| **admiralonco** | `OncoNamespace` covers BOR, confirmed response, tumor_response_flag, filter_pd, aval_resp | Missing: `derive_param_confirmed_resp` full event_joined pattern, duration of response |
-| **admiralvaccines** | `VaccineNamespace` covers fever, seroconversion, seroresponse, event_flag, aval_adis | Missing: multi-period reactogenicity, booster-dose derivations |
-| **admiralophtha** | `OphthaNamespace` covers ETDRS/LogMAR, study_eye, affected_eye, bcva_criterion | Substantially complete; minor: `derive_var_aession` (study eye from AGSUB) |
-| **admiralpeds** | `PedsNamespace` covers age_days, age_months, corrected_age, prematurity_flag | Missing: WHO/CDC growth chart z-scores/percentiles |
+| Extension           | Fleet Coverage                                                                            | Gap                                                                                    |
+| ------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **admiralonco**     | `OncoNamespace` covers BOR, confirmed response, tumor_response_flag, filter_pd, aval_resp | Missing: `derive_param_confirmed_resp` full event_joined pattern, duration of response |
+| **admiralvaccines** | `VaccineNamespace` covers fever, seroconversion, seroresponse, event_flag, aval_adis      | Missing: multi-period reactogenicity, booster-dose derivations                         |
+| **admiralophtha**   | `OphthaNamespace` covers ETDRS/LogMAR, study_eye, affected_eye, bcva_criterion            | Substantially complete; minor: `derive_var_aession` (study eye from AGSUB)             |
+| **admiralpeds**     | `PedsNamespace` covers age_days, age_months, corrected_age, prematurity_flag              | Missing: WHO/CDC growth chart z-scores/percentiles                                     |
 
 ---
 
-*End of report.*
+_End of report._
