@@ -104,6 +104,11 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Generate ADaM define.yaml only (skip SDTM).",
     )
+    define.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing define.yaml files.",
+    )
 
     # -- init ct -------------------------------------------------------- #
     ct = init_sub.add_parser(
@@ -120,6 +125,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--no-docs",
         action="store_true",
         help="Omit definitions and preferred terms from generated code.",
+    )
+    ct.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing codelists.py.",
     )
 
     # -- init rules ----------------------------------------------------- #
@@ -411,10 +421,12 @@ def _run_init_define(args: argparse.Namespace) -> None:
     with CDISCClient() as client:
         scaffolder = DefineScaffolder(client)
 
+        force = getattr(args, "force", False)
+
         if do_sdtm:
             sdtm_path = ctx.metadata_sdtm_dir / "define.yaml"
-            if sdtm_path.exists():
-                print(f"Warning: {sdtm_path} already exists — skipping.")
+            if sdtm_path.exists() and not force:
+                print(f"Warning: {sdtm_path} already exists — skipping (use --force to overwrite).")
             else:
                 dest = scaffolder.scaffold_sdtm(
                     study_id=cfg.study_id,
@@ -428,8 +440,8 @@ def _run_init_define(args: argparse.Namespace) -> None:
 
         if do_adam:
             adam_path = ctx.metadata_adam_dir / "define.yaml"
-            if adam_path.exists():
-                print(f"Warning: {adam_path} already exists — skipping.")
+            if adam_path.exists() and not force:
+                print(f"Warning: {adam_path} already exists — skipping (use --force to overwrite).")
             else:
                 dest = scaffolder.scaffold_adam(
                     study_id=cfg.study_id,
@@ -516,6 +528,11 @@ def _run_init_ct_pipeline(args: argparse.Namespace) -> None:
     print()
 
     output = ctx.metadata_sdtm_dir / "codelists.py"
+    force = getattr(args, "force", False)
+    if output.exists() and not force:
+        print(f"Warning: {output} already exists — skipping (use --force to overwrite).")
+        return
+
     with CDISCClient() as client:
         gen = CodelistGenerator.from_concept_ids(
             client,
