@@ -15,8 +15,8 @@ Usage
                     where='pl.col("AESER") == "Y"')
         .duration("TRTDURD", start_date="TRTSDT", end_date="TRTEDT")
         .count_events("NUMAE",  from_dataset=ae_sdtm)
-        .eligibility_flag("SAFFL",   criteria='pl.col("RANDFL") == "Y"')
-        .eligibility_flag("PPROTFL", criteria='pl.col("COMPLFL") == "Y"')
+        .flag("SAFFL",   criteria='pl.col("RANDFL") == "Y"')
+        .flag("PPROTFL", criteria='pl.col("COMPLFL") == "Y"')
         .to_frame()
     )
 """
@@ -230,55 +230,6 @@ class ADSLNamespace(SharedADaMVerbsMixin):
         df = self.to_frame().join(agg_df, on=grps, how="left")
         df = df.with_columns(pl.col(target).fill_null(0))
         return self._materialise_then(df)
-
-    def eligibility_flag(
-        self,
-        target: str,
-        *,
-        criteria: str | pl.Expr,
-        false_value: str | None = None,
-    ) -> Self:
-        """Set *target* to ``"Y"`` where *criteria* is true.
-
-        By default non-matching records receive null.  Pass
-        ``false_value="N"`` to use ``"Y"``/``"N"`` convention instead.
-
-        Used for population flags: SAFFL, ITTFL, PPROTFL, ENRLFL, COMPLFL.
-
-        Args:
-            target: Name of the output flag column.
-            criteria: Boolean expression or expression string.
-            false_value: Value for non-matching records (default ``None``).
-                Set to ``"N"`` for Admiral-style Y/N flags.
-
-        Returns:
-            Self: The namespace with *target* appended.
-
-        Examples:
-            Derive the safety population flag (Y/null)::
-
-                adsl = (
-                    dm_raw.adam.adsl
-                    .eligibility_flag("SAFFL",
-                                     criteria='pl.col("RANDFL") == "Y"')
-                    .to_frame()
-                )
-
-            Derive with Y/N convention::
-
-                adsl = (
-                    dm_raw.adam.adsl
-                    .eligibility_flag("SAFFL",
-                                     criteria='pl.col("RANDFL") == "Y"',
-                                     false_value="N")
-                    .to_frame()
-                )
-        """
-        from fleet.sdtm.utils import parse_expression
-
-        crit_expr = criteria if isinstance(criteria, pl.Expr) else parse_expression(str(criteria))
-        else_val = pl.lit(false_value) if false_value is not None else pl.lit(None)
-        return self._chain(pl.when(crit_expr).then(pl.lit("Y")).otherwise(else_val).alias(target))
 
     # ------------------------------------------------------------------ #
     # ADSL: age_years — unit-aware age conversion                         #

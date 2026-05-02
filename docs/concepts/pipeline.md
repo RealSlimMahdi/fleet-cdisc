@@ -139,29 +139,29 @@ This means you pay no cost for columns you don't chain. Expression ordering mirr
 
 ## ADSL verbs at a glance
 
-| Verb                                                | Purpose                                   |
-| --------------------------------------------------- | ----------------------------------------- |
-| `source(target)`                                    | Pass-through column                       |
-| `first_date(target, from_dataset, date_col, where)` | Earliest event date per subject           |
-| `last_date(target, from_dataset, date_col, where)`  | Latest event date per subject             |
-| `duration(target, start_date, end_date)`            | Integer day count                         |
-| `eligibility_flag(target, criteria)`                | `"Y"` flag based on row condition         |
-| `count_events(target, from_dataset, where)`         | Event count per subject                   |
-| `age_years(target, age_col, age_unit_col)`          | Unit-aware age conversion to years        |
-| `derive_period(periods, start_date)`                | Subperiod/Phase variables (APxxSDT, etc.) |
-| `to_frame()`                                        | Materialise                               |
+| Verb                                                | Purpose                                            |
+| --------------------------------------------------- | -------------------------------------------------- |
+| `source(target)`                                    | Pass-through column                                |
+| `first_date(target, from_dataset, date_col, where)` | Earliest event date per subject                    |
+| `last_date(target, from_dataset, date_col, where)`  | Latest event date per subject                      |
+| `duration(target, start_date, end_date)`            | Integer day count                                  |
+| `flag(target, criteria)`                            | `"Y"` flag (expression, first/last/max/min/exists) |
+| `count_events(target, from_dataset, where)`         | Event count per subject                            |
+| `age_years(target, age_col, age_unit_col)`          | Unit-aware age conversion to years                 |
+| `derive_period(periods, start_date)`                | Subperiod/Phase variables (APxxSDT, etc.)          |
+| `to_frame()`                                        | Materialise                                        |
 
 ---
 
 ## OCCDS verbs at a glance
 
-| Verb                                                  | Purpose                            |
-| ----------------------------------------------------- | ---------------------------------- |
-| `source(target)`                                      | Pass-through column                |
-| `first_occ(target, date_col, groups)`                 | Flag first occurrence within group |
-| `worst_severity(target, severity_col, order, groups)` | Worst severity flag                |
-| `any_flag(target, col, value, groups)`                | `"Y"` if event exists in group     |
-| `to_frame()`                                          | Materialise                        |
+| Verb                                        | Purpose                                                       |
+| ------------------------------------------- | ------------------------------------------------------------- |
+| `source(target)`                            | Pass-through column                                           |
+| `first_occ(target, date_col, groups)`       | Flag first occurrence within group                            |
+| `flag(target, criteria, value_col, groups)` | Generalised \"Y\" flag (max/min/first/last/exists/expression) |
+| `any_flag(target, col, value, groups)`      | `"Y"` if event exists in group                                |
+| `to_frame()`                                | Materialise                                                   |
 
 ---
 

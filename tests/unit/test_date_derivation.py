@@ -237,11 +237,11 @@ class TestOnTreatmentOpenEnded:
 
 
 # ------------------------------------------------------------------ #
-# eligibility_flag false_value tests                                   #
+# flag false_value tests (formerly eligibility_flag)                    #
 # ------------------------------------------------------------------ #
 
 
-class TestEligibilityFlagFalseValue:
+class TestFlagFalseValue:
     def test_yn_convention(self):
         df = pl.DataFrame(
             {
@@ -249,7 +249,7 @@ class TestEligibilityFlagFalseValue:
                 "EXDOSE": [54, 0],
             }
         )
-        result = df.adam.adsl.eligibility_flag(
+        result = df.adam.adsl.flag(
             "SAFFL", criteria='pl.col("EXDOSE") > 0', false_value="N"
         ).to_frame()
         assert result["SAFFL"][0] == "Y"
@@ -262,50 +262,55 @@ class TestEligibilityFlagFalseValue:
                 "EXDOSE": [54, 0],
             }
         )
-        result = df.adam.adsl.eligibility_flag("SAFFL", criteria='pl.col("EXDOSE") > 0').to_frame()
+        result = df.adam.adsl.flag("SAFFL", criteria='pl.col("EXDOSE") > 0').to_frame()
         assert result["SAFFL"][0] == "Y"
         assert result["SAFFL"][1] is None
 
 
 # ------------------------------------------------------------------ #
-# worst_flag mode tests                                                #
+# flag max/min mode tests (formerly worst_flag)                        #
 # ------------------------------------------------------------------ #
 
 
-class TestWorstFlagMode:
-    def test_mode_first_breaks_ties(self):
+class TestFlagMaxSeverity:
+    def test_max_severity_flags_worst(self):
+        """Use flag(criteria='max') with numeric-encoded severity."""
         df = pl.DataFrame(
             {
                 "USUBJID": ["S01", "S01", "S01"],
                 "AESEV": ["SEVERE", "SEVERE", "MILD"],
+                "AESEVN": [3, 3, 1],
                 "AEBODSYS": ["Nervous", "Nervous", "Nervous"],
             }
         )
-        result = df.adam.occds.worst_flag(
+        result = df.adam.occds.flag(
             "AOCSFL",
-            severity_col="AESEV",
+            criteria="max",
+            value_col="AESEVN",
             groups=["USUBJID"],
-            mode="first",
         ).to_frame()
         flags = result["AOCSFL"].to_list()
-        assert flags.count("Y") == 1  # only first SEVERE flagged
+        # Both rows with AESEVN=3 are tied max → both flagged
+        assert flags.count("Y") == 2
+        assert flags[2] is None  # MILD not flagged
 
-    def test_mode_all_flags_ties(self):
+    def test_max_with_expression_filter(self):
+        """Flag worst severity using expression-based criteria."""
         df = pl.DataFrame(
             {
                 "USUBJID": ["S01", "S01", "S01"],
                 "AESEV": ["SEVERE", "SEVERE", "MILD"],
-                "AEBODSYS": ["Nervous", "Nervous", "Nervous"],
+                "AESEVN": [3, 3, 1],
             }
         )
-        result = df.adam.occds.worst_flag(
+        result = df.adam.occds.flag(
             "AOCSFL",
-            severity_col="AESEV",
+            criteria="max",
+            value_col="AESEVN",
             groups=["USUBJID"],
-            mode="all",
         ).to_frame()
-        flags = result["AOCSFL"].to_list()
-        assert flags.count("Y") == 2  # both SEVERE flagged
+        # Both SEVERE rows (max AESEVN=3) flagged
+        assert result["AOCSFL"].to_list().count("Y") == 2
 
 
 # ------------------------------------------------------------------ #

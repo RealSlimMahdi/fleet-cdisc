@@ -125,10 +125,11 @@ _adae_occds_ns = (
         trtsdt="TRTSDT",
         trtedt="TRTEDT",
     )
-    .worst_flag(
+    .recode("AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
+    .flag(
         "ANL01FL",
-        severity_col="AESEV",
-        severity_order=["MILD", "MODERATE", "SEVERE"],
+        criteria="max",
+        value_col="AESEVN",
         groups=["USUBJID", "AETERM"],
     )
     .seq("ASEQ", groups=["USUBJID"])

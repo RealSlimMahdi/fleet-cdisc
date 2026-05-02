@@ -415,7 +415,7 @@ print(f"   AGEGR1 distribution: {_agegr.to_dicts()}")
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── 8. Population flags ──────────────────────────────────────────────────")
 
-# Pre-compute max EXDOSE per subject so eligibility_flag can reference it
+# Pre-compute max EXDOSE per subject so flag can reference it
 _ex_max_dose = ex.group_by("USUBJID").agg(pl.col("EXDOSE").max().alias("_EXDOSE_MAX"))
 
 adsl = (
@@ -423,9 +423,9 @@ adsl = (
     .to_frame()
     .adam.adsl  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     # SAFFL: subjects with at least one dose > 0 (admiral: derive_var_merged_exist_flag)
-    .eligibility_flag("SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0')
+    .flag("SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0')
     # ITTFL: all randomised subjects (ARMCD not SCRNFAIL)
-    .eligibility_flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"')
+    .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"')
     .to_frame()
     .drop("_EXDOSE_MAX")
 )
@@ -706,10 +706,11 @@ adae = (
     # admiral: derive_var_trtemfl
     .treatment_emergent("TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT")
     # admiral: slice_derivation (worst severity per subject × AE term)
-    .worst_flag(
+    .recode("AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
+    .flag(
         "ANL01FL",
-        severity_col="AESEV",
-        severity_order=["MILD", "MODERATE", "SEVERE"],
+        criteria="max",
+        value_col="AESEVN",
         groups=["USUBJID", "AETERM"],
     )
     # admiral: derive_var_obs_number
@@ -834,7 +835,7 @@ End-to-end CDISCPILOT01 pipeline — spec-driven style.
 
 Every ADaM column derivation is defined in specs/cdiscpilot01/adam/define.yaml
 and executed via ``df.adam.from_spec()``.  OCCDS-specific verbs that the spec
-cannot yet express (treatment_emergent, worst_flag, seq) are applied inline
+cannot yet express (treatment_emergent, seq) are applied inline
 immediately after the spec phase.
 
 Shared-verb mixin architecture
@@ -1015,8 +1016,8 @@ dm_enriched = (
         else_value="Missing",
     )
     # Population flags (admiral: derive_var_merged_exist_flag)
-    .eligibility_flag("SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0')
-    .eligibility_flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"')
+    .flag("SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0')
+    .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"')
     .to_frame()
     .drop("_EXDOSE_MAX")
 )
@@ -1065,10 +1066,11 @@ adae = (
     adae_sourced.adam.occds.treatment_emergent(  # type: ignore[attr-defined]  # runtime namespace registered by fleet
         "TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT"
     )
-    .worst_flag(
+    .recode("AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
+    .flag(
         "ANL01FL",
-        severity_col="AESEV",
-        severity_order=["MILD", "MODERATE", "SEVERE"],
+        criteria="max",
+        value_col="AESEVN",
         groups=["USUBJID", "AETERM"],
     )
     .seq("ASEQ", groups=["USUBJID"])
@@ -1709,7 +1711,7 @@ These verbs are defined once in `SharedADaMVerbsMixin` (`src/fleet/adam/_mixins.
 Available on `df.adam` (BDS base namespace). Shared verbs (source, derivation, assigned, recode, rename, condderivation, whereclauses, merge_adsl, derive_dt, derive_dtm, format_iso) are also available here via the shared mixin.
 
 - `study_day(target: str, *, analysis_date: str, reference_date: str) -> AdamNamespace` — Compute CDISC study day.
-- `flag(target: str, *, criteria: str | pl.Expr, groups: list[str] | None = None, order_by: str | None = None, value_col: str | None = None, where: str | pl.Expr | None = None, flag_value: str = 'Y') -> AdamNamespace` — Set *target* to *flag_value* for records matching *criteria*.
+- `flag(target: str, *, criteria: str | pl.Expr, groups: list[str] | None = None, order_by: str | list[str] | None = None, value_col: str | None = None, where: str | pl.Expr | None = None, from_dataset: pl.DataFrame | list[pl.DataFrame] | None = None, on: list[str] | None = None, source_filter: pl.Expr | None = None, condition: pl.Expr | None = None, inclusive: bool = True, flag_no_ref_groups: bool = True, flag_all: bool = False, flag_value: str = 'Y', false_value: str | None = None) -> Self` — Set *target* to *flag_value* for records matching *criteria*.
 - `baseline(target: str, *, aval: str = 'AVAL', baseline_flag: str = 'ABLFL', groups: list[str] | None = None) -> AdamNamespace` — Derive BASE as the AVAL where the baseline flag equals ``"Y"``.
 - `chg(target: str, *, aval: str = 'AVAL', base: str = 'BASE') -> AdamNamespace` — Compute change from baseline: ``CHG = AVAL - BASE``.
 - `pchg(target: str, *, aval: str = 'AVAL', base: str = 'BASE') -> AdamNamespace` — Compute percent change from baseline.
@@ -1731,7 +1733,6 @@ Available on `df.adam` (BDS base namespace). Shared verbs (source, derivation, a
 - `first_date(target: str, *, from_dataset: pl.DataFrame, date_col: str, where: str | pl.Expr | None = None, groups: list[str] | None = None) -> Self` — Derive *target* as the earliest date in *date_col* from *from_dataset*.
 - `last_date(target: str, *, from_dataset: pl.DataFrame, date_col: str, where: str | pl.Expr | None = None, groups: list[str] | None = None) -> Self` — Derive *target* as the latest date in *date_col* from *from_dataset*.
 - `duration(target: str, *, start_date: str, end_date: str, unit: str = 'days', inclusive: bool = True) -> Self` — Derive *target* as the duration between two date columns.
-- `eligibility_flag(target: str, *, criteria: str | pl.Expr, false_value: str | None = None) -> Self` — Set *target* to ``"Y"`` where *criteria* is true.
 - `count_events(target: str, *, from_dataset: pl.DataFrame, where: str | pl.Expr | None = None, groups: list[str] | None = None) -> Self` — Derive *target* as the count of matching records in *from_dataset*.
 - `age_years(target: str = 'AAGE', *, age_col: str = 'AGE', age_unit_col: str = 'AGEU') -> Self` — Convert age to years, handling common unit strings.
 - `derive_period(*, periods: list[dict[str, Any]], start_date: str = 'TRTSDT') -> Self` — Create standard Subperiod / Phase variables.
@@ -1741,7 +1742,6 @@ Available on `df.adam` (BDS base namespace). Shared verbs (source, derivation, a
 Available on `df.adam.occds` (and `df.adam.pk` for sequence). Shared verbs (source, derivation, assigned, recode, rename, condderivation, whereclauses, merge_adsl) are also available here via the shared mixin.
 
 - `treatment_emergent(target: str = 'TRTEMFL', *, start_date: str, trtsdt: str, trtedt: str | None = None, offset_days: int = 0) -> Self` — Set *target* to ``"Y"`` for treatment-emergent events.
-- `worst_flag(target: str, *, severity_col: str, groups: list[str] | None = None, severity_order: list[Any] | None = None, where: str | pl.Expr | None = None, mode: str = 'first') -> Self` — Flag the record with the worst severity per group.
 - `onset_recovery(target: str, *, start_date: str, end_date: str, ref_date: str) -> Self` — Flag events that started on/after the reference date and have recovered.
 - `seq(target: str = 'ASEQ', *, order_by: list[str] | None = None, groups: list[str] | None = None, check_uniqueness: bool = False) -> Self` — Derive a 1-based observation sequence number within each group.
 
@@ -1783,12 +1783,12 @@ Available on `df.adam.occds` (and `df.adam.pk` for sequence). Shared verbs (sour
 | Filter rows | `whereclauses` | `adam` / all sub-ns | Filter by expression (materialises first) |
 | Treatment dates (ADSL) | `first_date` / `last_date` | `adam.adsl` | Earliest/latest event date per subject |
 | Treatment duration (TRTDURD) | `duration` | `adam.adsl` | Integer day count between two date columns |
-| Population flag (SAFFL, etc.) | `eligibility_flag` | `adam.adsl` | `"Y"` / null based on row condition |
+| Population flag (SAFFL, etc.) | `flag` | `adam` / all sub-ns | `"Y"` / null based on row condition |
 | Event count (NUMAE, NUMSAE) | `count_events` | `adam.adsl` | Integer event count per subject |
 | Age conversion | `age_years` | `adam.adsl` | Unit-aware: YEARS, MONTHS, WEEKS, DAYS |
 | Period variables | `derive_period` | `adam.adsl` | APxxSDT, APxxEDT, TRTxxP |
 | Sequence number (ASEQ) | `seq` | `adam.occds` / `adam.pk` | Sequential 1-based record number per group |
-| Worst severity | `worst_flag` | `adam.occds` | Worst value per group (custom ordering) |
+| Worst severity | `flag` | `adam` / all sub-ns | Use `criteria="max"` with numeric rank column |
 | Treatment-emergent flag | `treatment_emergent` | `adam.occds` | TRTEMFL using TRTSDT/TRTEDT window |
 | Onset/recovery dates | `onset_recovery` | `adam.occds` | Onset and recovery date derivation |
 | Run spec derivations | `from_spec` | `adam` | Execute all derivations defined in define.yaml |
@@ -1805,7 +1805,7 @@ A single YAML file is the source of truth for a study: it declares output variab
 - `first_date` → `.first_date(target, from_dataset=..., date_col=..., where=...)`
 - `last_date` → `.last_date(...)`
 - `duration` → `.duration(target, start_date=..., end_date=...)`
-- `flag` → `.eligibility_flag(target, criteria=...)`
+- `flag` → `.flag(target, criteria=...)`
 - `count` → `.count_events(target, from_dataset=..., where=...)`
 
 ### Spec-driven pipeline

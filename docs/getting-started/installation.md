@@ -114,7 +114,7 @@ adsl = (
     .last_date("TRTEDT",  from_dataset=ex_sdtm, date_col="EXENDTC",
                where='pl.col("EXDOSE") > 0')
     .duration("TRTDURD", start_date="TRTSDT", end_date="TRTEDT")
-    .eligibility_flag("SAFFL", criteria='pl.col("TRTSDT").is_not_null()')
+    .flag("SAFFL", criteria='pl.col("TRTSDT").is_not_null()')
     .count_events("NUMAE", from_dataset=ae_sdtm)
     .to_frame()
 )

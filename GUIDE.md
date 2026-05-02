@@ -445,8 +445,8 @@ adsl = (
     .lookup(dataset=_ex_max_dose, on="USUBJID", how="left")
     .to_frame()
     .adam.adsl
-    .eligibility_flag("SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0')
-    .eligibility_flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"')
+    .flag("SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0')
+    .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"')
     .to_frame()
     .drop("_EXDOSE_MAX")
 )
@@ -542,9 +542,9 @@ adae = (
     .adam.occds
     .treatment_emergent("TRTEMFL", start_date="AESTDTC",
                         trtsdt="TRTSDT", trtedt="TRTEDT")
-    .worst_flag("ANL01FL", severity_col="AESEV",
-                severity_order=["MILD", "MODERATE", "SEVERE"],
-                groups=["USUBJID", "AETERM"])
+    .recode("AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
+    .flag("ANL01FL", criteria="max", value_col="AESEVN",
+          groups=["USUBJID", "AETERM"])
     .seq("ASEQ", groups=["USUBJID"])
     .to_frame()
 )
@@ -1238,24 +1238,24 @@ uv run fleet define-xml --spec metadata/adam/define.yaml  --output outputs/defin
 
 ### ADSL verbs (`df.adam.adsl`)
 
-| Verb               | Purpose                             |
-| ------------------ | ----------------------------------- |
-| `first_date`       | Earliest date from event dataset    |
-| `last_date`        | Latest date from event dataset      |
-| `duration`         | Days between two dates              |
-| `count_events`     | Count matching records per subject  |
-| `eligibility_flag` | "Y" population flag (SAFFL, ITTFL…) |
-| `age_years`        | Unit-aware age → years              |
-| `derive_period`    | Subperiod/Phase variables           |
+| Verb            | Purpose                                                      |
+| --------------- | ------------------------------------------------------------ |
+| `first_date`    | Earliest date from event dataset                             |
+| `last_date`     | Latest date from event dataset                               |
+| `duration`      | Days between two dates                                       |
+| `count_events`  | Count matching records per subject                           |
+| `flag`          | Generalised "Y" flag (expression, first/last/max/min/exists) |
+| `age_years`     | Unit-aware age → years                                       |
+| `derive_period` | Subperiod/Phase variables                                    |
 
 ### OCCDS verbs (`df.adam.occds`)
 
-| Verb                 | Purpose                                 |
-| -------------------- | --------------------------------------- |
-| `seq`                | Sequential record number (ASEQ)         |
-| `worst_flag`         | Worst severity flag per group           |
-| `treatment_emergent` | TRTEMFL = "Y" on/after TRTSDT           |
-| `onset_recovery`     | Event started on-treatment and resolved |
+| Verb                 | Purpose                                     |
+| -------------------- | ------------------------------------------- |
+| `seq`                | Sequential record number (ASEQ)             |
+| `flag`               | Generalised "Y" flag (criteria="max", etc.) |
+| `treatment_emergent` | TRTEMFL = "Y" on/after TRTSDT               |
+| `onset_recovery`     | Event started on-treatment and resolved     |
 
 ### TLG builder verbs (`df.tlg.ae`, `df.tlg.vs`)
 

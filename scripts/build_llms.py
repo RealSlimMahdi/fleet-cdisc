@@ -393,7 +393,6 @@ def _adsl_verbs_section() -> str:
         "first_date",
         "last_date",
         "duration",
-        "eligibility_flag",
         "count_events",
         "age_years",
         "derive_period",
@@ -407,7 +406,6 @@ def _occds_verbs_section() -> str:
 
     verbs = [
         "treatment_emergent",
-        "worst_flag",
         "onset_recovery",
         "seq",
     ]
@@ -461,12 +459,12 @@ def _verb_mapping_section() -> str:
 | Filter rows | `whereclauses` | `adam` / all sub-ns | Filter by expression (materialises first) |
 | Treatment dates (ADSL) | `first_date` / `last_date` | `adam.adsl` | Earliest/latest event date per subject |
 | Treatment duration (TRTDURD) | `duration` | `adam.adsl` | Integer day count between two date columns |
-| Population flag (SAFFL, etc.) | `eligibility_flag` | `adam.adsl` | `"Y"` / null based on row condition |
+| Population flag (SAFFL, etc.) | `flag` | `adam` / all sub-ns | `"Y"` / null based on row condition |
 | Event count (NUMAE, NUMSAE) | `count_events` | `adam.adsl` | Integer event count per subject |
 | Age conversion | `age_years` | `adam.adsl` | Unit-aware: YEARS, MONTHS, WEEKS, DAYS |
 | Period variables | `derive_period` | `adam.adsl` | APxxSDT, APxxEDT, TRTxxP |
 | Sequence number (ASEQ) | `seq` | `adam.occds` / `adam.pk` | Sequential 1-based record number per group |
-| Worst severity | `worst_flag` | `adam.occds` | Worst value per group (custom ordering) |
+| Worst severity | `flag` | `adam` / all sub-ns | Use `criteria="max"` with numeric rank column |
 | Treatment-emergent flag | `treatment_emergent` | `adam.occds` | TRTEMFL using TRTSDT/TRTEDT window |
 | Onset/recovery dates | `onset_recovery` | `adam.occds` | Onset and recovery date derivation |
 | Run spec derivations | `from_spec` | `adam` | Execute all derivations defined in define.yaml |\
@@ -489,7 +487,7 @@ generation, pipeline execution, and post-dataset checks.
 - `first_date` → `.first_date(target, from_dataset=..., date_col=..., where=...)`
 - `last_date` → `.last_date(...)`
 - `duration` → `.duration(target, start_date=..., end_date=...)`
-- `flag` → `.eligibility_flag(target, criteria=...)`
+- `flag` → `.flag(target, criteria=...)`
 - `count` → `.count_events(target, from_dataset=..., where=...)`
 
 ### Spec-driven pipeline
@@ -649,6 +647,8 @@ _SHARED_ADAM_VERBS = [
     "derive_dt",
     "derive_dtm",
     "format_iso",
+    "flag",
+    "criterion",
 ]
 
 _README_SDTM_VERBS = [
@@ -674,7 +674,6 @@ _README_ADAM_SPECIFIC = [
     "baseline",
     "chg",
     "pchg",
-    "flag",
     "bmi",
     "nrind",
     "on_treatment",
@@ -693,13 +692,12 @@ _README_ADSL_SPECIFIC = [
     "last_date",
     "duration",
     "count_events",
-    "eligibility_flag",
     "age_years",
     "age_from_dates",
     "derive_period",
 ]
 
-_README_OCCDS_SPECIFIC = ["worst_flag", "treatment_emergent", "onset_recovery"]
+_README_OCCDS_SPECIFIC = ["treatment_emergent", "onset_recovery"]
 _README_OCCDS_MULTI = ["seq"]
 
 _README_ONCO_SPECIFIC = [

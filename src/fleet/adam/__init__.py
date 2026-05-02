@@ -1,6 +1,6 @@
 """ADaM module — imports trigger Polars namespace registration for df.adam."""
 
-from fleet.adam._mixins import MultiRowMixin, SharedADaMVerbsMixin
+from fleet.adam._mixins import FlagCriterionMixin, MultiRowMixin, SharedADaMVerbsMixin
 from fleet.adam.adsl_namespace import ADSLNamespace  # accessed via df.adam.adsl
 
 # Grading sub-package
@@ -26,6 +26,7 @@ from fleet.adam.vaccine_namespace import VaccineNamespace
 
 __all__ = [
     # Mixins
+    "FlagCriterionMixin",
     "SharedADaMVerbsMixin",
     "MultiRowMixin",
     # Spec models

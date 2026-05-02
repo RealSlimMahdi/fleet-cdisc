@@ -80,29 +80,38 @@ class TestSeq:
         assert rows_002["ASEQ"].to_list() == [1]
 
 
-class TestWorstFlag:
-    def test_worst_per_body_system(self, ae_frame):
-        result = ae_frame.adam.occds.worst_flag(
+class TestFlagMax:
+    def test_max_per_body_system(self, ae_frame):
+        # Encode severity as numeric to use flag(criteria="max")
+        sev_map = {"MILD": 1, "MODERATE": 2, "SEVERE": 3}
+        df = ae_frame.with_columns(
+            pl.col("AESEV").replace_strict(sev_map, default=0).alias("AESEVN")
+        )
+        result = df.adam.occds.flag(
             "ANL01FL",
-            severity_col="AESEV",
+            criteria="max",
+            value_col="AESEVN",
             groups=["USUBJID", "AEBODSYS"],
-            severity_order=["MILD", "MODERATE", "SEVERE"],
         ).to_frame()
         assert "ANL01FL" in result.columns
-        # For 01-001 / Nervous system: only MILD → flagged
+        # For 01-001 / Nervous system: only MILD (AESEVN=1) → flagged (it's the max for that group)
         nervous_001 = result.filter(
             (pl.col("USUBJID") == "01-001") & (pl.col("AEBODSYS") == "Nervous")
         )
         assert nervous_001["ANL01FL"][0] == "Y"
 
-    def test_worst_flag_non_worst_is_null(self, ae_frame):
-        result = ae_frame.adam.occds.worst_flag(
+    def test_flag_max_non_worst_is_null(self, ae_frame):
+        sev_map = {"MILD": 1, "MODERATE": 2, "SEVERE": 3}
+        df = ae_frame.with_columns(
+            pl.col("AESEV").replace_strict(sev_map, default=0).alias("AESEVN")
+        )
+        result = df.adam.occds.flag(
             "ANL01FL",
-            severity_col="AESEV",
+            criteria="max",
+            value_col="AESEVN",
             groups=["USUBJID"],
-            severity_order=["MILD", "MODERATE", "SEVERE"],
         ).to_frame()
-        # SEVERE is worst for 01-001; MILD rows should be null
+        # SEVERE (AESEVN=3) is worst for 01-001; MILD rows should be null
         mild_001 = result.filter((pl.col("USUBJID") == "01-001") & (pl.col("AESEV") == "MILD"))
         assert mild_001["ANL01FL"][0] is None
 

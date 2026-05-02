@@ -57,7 +57,7 @@ Each variable's `derivation.algorithm` maps directly to an `.adsl` (or `.adam`) 
 | `first_date` | `.first_date(target, from_dataset=..., date_col=..., where=...)` | Earliest event date per subject |
 | `last_date`  | `.last_date(...)`                                                | Latest event date per subject   |
 | `duration`   | `.duration(target, start_date=..., end_date=...)`                | Integer day count               |
-| `flag`       | `.eligibility_flag(target, criteria=...)`                        | `"Y"` / `null` flag             |
+| `flag`       | `.flag(target, criteria=...)`                                    | `"Y"` / `null` flag             |
 | `count`      | `.count_events(target, from_dataset=..., where=...)`             | Integer event count             |
 
 ### Study-specific callables (`callable:`)

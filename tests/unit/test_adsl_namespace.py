@@ -157,7 +157,7 @@ class TestCountEvents:
 class TestEligibilityFlag:
     def test_saffl_at_least_one_dose(self, subject_frame):
         """SAFFL = 'Y' when patient has at least one dose > 0."""
-        result = subject_frame.adam.adsl.eligibility_flag(
+        result = subject_frame.adam.adsl.flag(
             "SAFFL", criteria='pl.col("EXDOSE") > 0'
         ).to_frame()
         flags = result["SAFFL"].to_list()
@@ -167,7 +167,7 @@ class TestEligibilityFlag:
 
     def test_ittfl_has_randomization_date(self, subject_frame):
         """ITTFL = 'Y' when patient has a randomization date."""
-        result = subject_frame.adam.adsl.eligibility_flag(
+        result = subject_frame.adam.adsl.flag(
             "ITTFL", criteria='pl.col("RANDDT").is_not_null()'
         ).to_frame()
         flags = result["ITTFL"].to_list()
@@ -176,7 +176,7 @@ class TestEligibilityFlag:
         assert flags[2] is None  # 01-003: RANDDT missing → null
 
     def test_partial_compliant(self, subject_frame):
-        result = subject_frame.adam.adsl.eligibility_flag(
+        result = subject_frame.adam.adsl.flag(
             "PPROTFL", criteria='pl.col("COMPLFL") == "Y"'
         ).to_frame()
         flags = result["PPROTFL"].to_list()

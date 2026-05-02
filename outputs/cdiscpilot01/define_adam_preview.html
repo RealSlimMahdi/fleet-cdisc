@@ -795,6 +795,9 @@ document.onclick = function(e)
 <span class="hmenu-bullet">-</span><a class="tocItem" href="#MT.MT.derivation">derivation</a>
 </li>
 <li class="hmenu-item">
+<span class="hmenu-bullet">-</span><a class="tocItem" href="#MT.MT.flag">flag</a>
+</li>
+<li class="hmenu-item">
 <span class="hmenu-bullet">-</span><a class="tocItem" href="#MT.MT.rename">rename</a>
 </li>
 <li class="hmenu-item">
@@ -809,7 +812,7 @@ document.onclick = function(e)
 </div>
 <div id="main">
 <div class="docinfo">
-<p class="documentinfo">Date/Time of Define-XML document generation: 2026-04-23T21:14:39</p>
+<p class="documentinfo">Date/Time of Define-XML document generation: 2026-05-02T23:00:37</p>
 <p class="documentinfo">Define-XML version: 2.1.0</p>
 <p class="documentinfo">Define-XML Context: Submission</p>
 <p class="stylesheetinfo">Stylesheet version: 2019-02-11</p>
@@ -1262,7 +1265,8 @@ document.onclick = function(e)
 <td class="datatype">text</td>
 <td class="number">2</td>
 <td></td>
-<td><div class="linebreakcell">Derived</div></td>
+<td><div class="linebreakcell">Derived<p class="linebreakcell">Set *target* to *flag_value* for records matching *criteria*.</p>
+</div></td>
 </tr>
 <tr class="tableroweven">
 <td>
@@ -2005,7 +2009,17 @@ document.onclick = function(e)
 </div>
 </td>
 </tr>
-<tr id="MT.MT.rename" class="tablerowodd">
+<tr id="MT.MT.flag" class="tablerowodd">
+<td>flag</td>
+<td>Computation</td>
+<td>
+<div class="method-code">Set *target* to *flag_value* for records matching *criteria*.</div>
+<div class="formalexpression">
+<span class="label">Formal Expression</span> [Python/Fleet]:<span class="formalexpression-code">.flag(...)</span>
+</div>
+</td>
+</tr>
+<tr id="MT.MT.rename" class="tableroweven">
 <td>rename</td>
 <td>Computation</td>
 <td>
@@ -2015,7 +2029,7 @@ document.onclick = function(e)
 </div>
 </td>
 </tr>
-<tr id="MT.MT.source" class="tableroweven">
+<tr id="MT.MT.source" class="tablerowodd">
 <td>source</td>
 <td>Computation</td>
 <td>
@@ -2025,7 +2039,7 @@ document.onclick = function(e)
 </div>
 </td>
 </tr>
-<tr id="MT.MT.study_day" class="tablerowodd">
+<tr id="MT.MT.study_day" class="tableroweven">
 <td>study_day</td>
 <td>Computation</td>
 <td>

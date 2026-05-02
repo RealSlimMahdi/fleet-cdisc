@@ -3,7 +3,7 @@ End-to-end CDISCPILOT01 pipeline — spec-driven style.
 
 Every ADaM column derivation is defined in specs/cdiscpilot01/adam/define.yaml
 and executed via ``df.adam.from_spec()``.  OCCDS-specific verbs that the spec
-cannot yet express (treatment_emergent, worst_flag, seq) are applied inline
+cannot yet express (treatment_emergent, seq) are applied inline
 immediately after the spec phase.
 
 Shared-verb mixin architecture
@@ -184,8 +184,8 @@ dm_enriched = (
         else_value="Missing",
     )
     # Population flags (admiral: derive_var_merged_exist_flag)
-    .eligibility_flag("SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0')
-    .eligibility_flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"')
+    .flag("SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0')
+    .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"')
     .to_frame()
     .drop("_EXDOSE_MAX")
 )
@@ -234,10 +234,11 @@ adae = (
     adae_sourced.adam.occds.treatment_emergent(  # type: ignore[attr-defined]  # runtime namespace registered by fleet
         "TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT"
     )
-    .worst_flag(
+    .recode("AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
+    .flag(
         "ANL01FL",
-        severity_col="AESEV",
-        severity_order=["MILD", "MODERATE", "SEVERE"],
+        criteria="max",
+        value_col="AESEVN",
         groups=["USUBJID", "AETERM"],
     )
     .seq("ASEQ", groups=["USUBJID"])

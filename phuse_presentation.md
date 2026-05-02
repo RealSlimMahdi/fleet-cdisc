@@ -856,9 +856,10 @@ adae = (
     .adam.occds
     .treatment_emergent("TRTEMFL",
         start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT")
-    .worst_flag("ANL01FL",
-        severity_col="AESEV",
-        severity_order=["MILD", "MODERATE", "SEVERE"],
+    .recode("AESEVN", source="AESEV",
+        recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
+    .flag("ANL01FL", criteria="max",
+        value_col="AESEVN",
         groups=["USUBJID", "AETERM"])
     .seq("ASEQ", groups=["USUBJID"])
     .to_frame()

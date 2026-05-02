@@ -366,7 +366,7 @@ print(f"   AGEGR1 distribution: {_agegr.to_dicts()}")
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── 8. Population flags ──────────────────────────────────────────────────")
 
-# Pre-compute max EXDOSE per subject so eligibility_flag can reference it
+# Pre-compute max EXDOSE per subject so flag can reference it
 _ex_max_dose = ex.group_by("USUBJID").agg(pl.col("EXDOSE").max().alias("_EXDOSE_MAX"))
 
 adsl = (
@@ -374,9 +374,9 @@ adsl = (
     .to_frame()
     .adam.adsl  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     # SAFFL: subjects with at least one dose > 0 (admiral: derive_var_merged_exist_flag)
-    .eligibility_flag("SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0')
+    .flag("SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0')
     # ITTFL: all randomised subjects (ARMCD not SCRNFAIL)
-    .eligibility_flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"')
+    .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"')
     .to_frame()
     .drop("_EXDOSE_MAX")
 )
@@ -657,10 +657,11 @@ adae = (
     # admiral: derive_var_trtemfl
     .treatment_emergent("TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT")
     # admiral: slice_derivation (worst severity per subject × AE term)
-    .worst_flag(
+    .recode("AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
+    .flag(
         "ANL01FL",
-        severity_col="AESEV",
-        severity_order=["MILD", "MODERATE", "SEVERE"],
+        criteria="max",
+        value_col="AESEVN",
         groups=["USUBJID", "AETERM"],
     )
     # admiral: derive_var_obs_number
