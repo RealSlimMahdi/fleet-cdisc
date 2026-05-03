@@ -2,7 +2,7 @@
 
 ## TL;DR
 
-Replace 6 fragmented date verbs (`assign_dtc`, `derive_dt`, `derive_dtm`, `study_day`, `duration`, `actual_time`) with **2 unified verbs**: `.date()` (parse/convert/impute/flag) and `.duration()` (any two-dates→number/ISO operation including study day). Both verbs use CDISC target suffix conventions to auto-dispatch behavior. Available on both SDTM and ADaM namespaces.
+Replace 6 fragmented date verbs (`assign_dtc`, `derive_dt`, `derive_dtm`, `study_day`, `duration`, `actual_time`) with **2 unified verbs**: `.date()` (parse/convert/impute/flag) and `.duration()` (any two-dates→number/ISO operation including study day). Both verbs use CDISC target suffix conventions to auto-dispatch behavior by default, with an explicit `output=` override for non-standard variable names. `.date()` supports both column references (`source=`) and literal values (`value=`). `.duration()` accepts `str | pl.Expr` for `start`/`end`, enabling literal reference dates. Available on both SDTM and ADaM namespaces.
 
 ---
 
@@ -11,19 +11,33 @@ Replace 6 fragmented date verbs (`assign_dtc`, `derive_dt`, `derive_dtm`, `study
 ### `.date()` — parse / convert / impute / flag
 
 ```python
-def date(self, target: str, *, source: str,
+def date(self, target: str, *,
+         source: str | None = None,        # column name — mutually exclusive with value
+         value: str | date | datetime | None = None,  # literal — mutually exclusive with source
+         output: str | None = None,        # "dtc"|"dt"|"dtm" — explicit override for suffix dispatch
          time: str | None = None,          # time column or "HH:MM:SS" literal to combine with source
          impute: str = "first",            # "first"|"mid"|"last"|"none"|literal
          impute_time: str | None = None,   # override time-part: "first"|"last"|"HH:MM:SS"
          highest: str | None = None,       # ceiling: "D"|"M"|"Y"|"h"|"m"|"s"
-         flag: bool = True,                # auto DTF/TMF
+         flag: bool | str = True,          # auto DTF/TMF, or explicit flag name
          min_date: str | None = None,      # clamp lower bound (column or literal)
          max_date: str | None = None,      # clamp upper bound
          format: str | None = None,        # strptime format (SDTM raw only)
 ) -> Self
 ```
 
-**Suffix dispatch rules:**
+**`source=` vs `value=` — column reference or literal:**
+
+Exactly one of `source` or `value` must be provided. Supplying both (or neither) raises `ValueError`.
+
+| Parameter | Accepts                   | Behavior                                                   |
+| --------- | ------------------------- | ---------------------------------------------------------- |
+| `source=` | `str` (column name)       | Reads values from the named column (existing behavior)     |
+| `value=`  | `str`, `date`, `datetime` | Broadcasts a scalar literal across all rows via `pl.lit()` |
+
+When `value=` is used: imputation parameters are irrelevant (literal is already complete) and silently ignored. Flags default to `False` (no imputation occurred). `output=` is required unless the target suffix is recognizable.
+
+**Suffix dispatch rules (default when `output=None`):**
 
 | Target suffix       | Output type                 | Behavior                                                                                       |
 | ------------------- | --------------------------- | ---------------------------------------------------------------------------------------------- |
@@ -31,9 +45,33 @@ def date(self, target: str, *, source: str,
 | `*DT` (not DTM/DTC) | `pl.Date`                   | DTC → Date. Imputation applies. Auto-flag: `{prefix}DTF`.                                      |
 | `*DTM`              | `pl.Datetime`               | DTC → Datetime. Imputation + `impute_time` applies. Auto-flags: `{prefix}DTF` + `{prefix}TMF`. |
 
+**Explicit `output=` override (escapes suffix dispatch):**
+
+When `output=` is provided, it takes precedence over suffix inference. This enables arbitrary target names.
+
+| `output=` | Output type   | Equivalent suffix |
+| --------- | ------------- | ----------------- |
+| `"dtc"`   | `pl.Utf8`     | `*DTC`            |
+| `"dt"`    | `pl.Date`     | `*DT`             |
+| `"dtm"`   | `pl.Datetime` | `*DTM`            |
+
+When both a recognizable suffix and `output=` are provided, `output=` wins (explicit beats implicit).
+
 **Prefix extraction:** strip the matched suffix → `"ASTDT"` → prefix = `"AST"` → flag = `"ASTDTF"`.
 
-**Edge case:** target doesn't match any known suffix → `ValueError`.
+**Non-standard targets (no suffix, no `output=`):** → `ValueError("Cannot infer output type … use output= to specify explicitly")`.
+
+**`flag=` parameter — `bool | str`:**
+
+| `flag` value     | Behavior                                                                                                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `True` (default) | Auto-name from prefix: `{prefix}DTF` (+ `{prefix}TMF` for dtm). Requires recognizable suffix or `output=`.                                                                |
+| `False`          | No flag columns created.                                                                                                                                                  |
+| `str`            | Use the given string as the DTF flag name. For dtm output, TMF is derived by replacing `DTF` → `TMF` in the string; if no `DTF` substring exists, TMF flag is suppressed. |
+
+**Flag auto-naming when `output=` is used without a CDISC suffix:**
+
+If `flag=True` and the target has no recognizable suffix but `output=` is set, flag auto-naming cannot extract a prefix → raises `ValueError("Cannot auto-name flag for target 'XYZ'. Use flag='XYZDTF' or flag=False.")`. The user must supply an explicit flag name or disable flags.
 
 **`time` parameter — combining date + time sources into DTM:**
 
@@ -71,11 +109,29 @@ The `time` parameter lets you supply a separate time source (column name or `"HH
 ### `.duration()` — any two-dates → number or ISO string
 
 ```python
-def duration(self, target: str, *, start: str, end: str,
+def duration(self, target: str, *,
+             start: str | pl.Expr,         # column name or Polars expression (incl. pl.lit())
+             end: str | pl.Expr,           # column name or Polars expression (incl. pl.lit())
              unit: str = "days",           # seconds|minutes|hours|days|weeks|months|years
              add_one: bool | None = None,  # None=auto (DY→study_day, else True)
              out: str = "numeric",         # "numeric"|"iso8601"
 ) -> Self
+```
+
+**`start` / `end` — column reference or expression:**
+
+| Type      | Interpretation                                                                      |
+| --------- | ----------------------------------------------------------------------------------- |
+| `str`     | Column name (existing behavior) — internally wrapped as `pl.col(start)`             |
+| `pl.Expr` | Any Polars expression, e.g. `pl.lit(date(2024, 1, 1))`, `pl.col("X").cast(pl.Date)` |
+
+This lets users supply fixed reference dates without needing a column:
+
+```python
+# Fixed reference date as literal
+.duration("ELAPSED", start=pl.lit(date(2024, 1, 15)), end="ADT", unit="days", add_one=False)
+# Column reference (unchanged)
+.duration("ASTDY", start="TRTSDT", end="ASTDT")
 ```
 
 **Suffix-driven `add_one` auto-resolution:**
@@ -110,6 +166,8 @@ def duration(self, target: str, *, start: str, end: str,
 ## Usage Examples
 
 ```python
+from datetime import date, datetime
+
 # ── SDTM: raw → DTC ──────────────────────────────────────────
 ae = (
     raw.sdtm
@@ -128,6 +186,27 @@ adae = (
     .date("AENDT", source="AEENDTC", impute="last")
     #  → partial "2024-03" becomes 2024-03-31
     #  → creates AENDTF
+    .to_frame()
+)
+
+# ── Non-standard target with explicit output= ────────────────
+df = (
+    raw.adam
+    .date("XYZ", source="raw_date_col", output="dt", flag="XYZDTF")
+    #  → output="dt" overrides suffix dispatch → pl.Date
+    #  → flag="XYZDTF" names the flag explicitly
+    .date("CUTOFF", value="2024-06-30", output="dt", flag=False)
+    #  → literal broadcast, no imputation, no flag
+    .to_frame()
+)
+
+# ── Literal value= for fixed reference dates ─────────────────
+adsl = (
+    dm.adam.adsl
+    .date("RFSTDT", value="2024-01-15", output="dt", flag=False)
+    #  → every row gets 2024-01-15 as pl.Date
+    .date("RFENDTM", value=datetime(2024, 12, 31, 23, 59, 59), output="dtm", flag=False)
+    #  → every row gets the literal datetime
     .to_frame()
 )
 
@@ -222,6 +301,16 @@ adsl = (
     .to_frame()
 )
 
+# ── Duration with literal reference date (pl.Expr) ───────────
+adsl = (
+    dm.adam.adsl
+    .duration("ELAPSED", start=pl.lit(date(2024, 1, 15)), end="TRTEDT", unit="days", add_one=False)
+    #  → fixed start date as literal, end from column
+    .duration("RFSDY", start=pl.lit(date(2024, 1, 1)), end="RFSTDT")
+    #  → DY suffix → study day convention
+    .to_frame()
+)
+
 # ── PK elapsed time in hours ─────────────────────────────────
 adpc = (
     pc.adam.pk
@@ -261,39 +350,49 @@ def _resolve_impute(impute: str, component: str) -> str:
 
 ```python
 def impute_and_flag(
-    source: str,
+    source: str | None,
     target: str,
     *,
-    output_type: Literal["dtc", "date", "datetime"],
+    value: str | date | datetime | None = None,
+    output_type: Literal["dtc", "dt", "dtm"],
     time: str | None = None,
     impute: str = "first",
     impute_time: str | None = None,
     highest: str | None = None,
     min_date: str | None = None,
     max_date: str | None = None,
-    flag: bool = True,
+    flag: bool | str = True,
 ) -> list[pl.Expr]:
-    """Unified imputation engine. Returns list of expressions (target + flag columns)."""
+    """Unified imputation engine. Returns list of expressions (target + flag columns).
+
+    When value= is provided, broadcasts a literal and skips imputation.
+    When flag is a str, uses it as the explicit DTF flag name.
+    """
 ```
 
 **New helpers:**
 
 - `_apply_highest(source, highest)` → expression that nullifies when imputation exceeds ceiling
 - `_apply_clamp(target, min_date, max_date)` → clamp expression applied post-imputation
-- `_extract_prefix(target: str) -> str` — strip DTC/DTM/DT suffix
-- `_infer_output_type(target: str) -> Literal["dtc", "date", "datetime"]` — suffix dispatch
+- `_extract_prefix(target: str) -> str` — strip DTC/DTM/DT suffix (raises `ValueError` if no suffix)
+- `_infer_output_type(target: str) -> Literal["dtc", "dt", "dtm"]` — suffix dispatch
+- `_resolve_output_type(target: str, output: str | None) -> Literal["dtc", "dt", "dtm"]` — combines suffix inference with explicit `output=` override
+- `_resolve_flag_name(target: str, flag: bool | str, output_type: str) -> str | None` — resolves flag column name from `flag` parameter
 
 #### Step 1.2 — `.date()` on `SharedADaMVerbsMixin`
 
 **File:** `src/fleet/adam/_mixins.py`
 
-Add `.date()` method. Suffix dispatch logic:
+Add `.date()` method. Dispatch logic:
 
-1. `target.endswith("DTC")` → raise `ValueError` (DTC targets belong in SDTM)
-2. `target.endswith("DTM")` → datetime mode
-3. `target.endswith("DT")` → date mode
-4. Else → `ValueError`
-5. If `time` is provided and target is not `*DTM` → raise `ValueError`
+1. Validate `source` / `value` mutual exclusivity (exactly one must be provided)
+2. Resolve output type: `output=` if given, else infer from suffix (`_resolve_output_type`)
+3. `output_type == "dtc"` → raise `ValueError` (DTC targets belong in SDTM)
+4. `output_type == "dtm"` → datetime mode
+5. `output_type == "dt"` → date mode
+6. If `time` is provided and `output_type != "dtm"` → raise `ValueError`
+7. Resolve `flag`: if `True` + no extractable prefix → `ValueError` (suggest explicit name). If `str` → use as-is.
+8. If `value=` is provided → broadcast literal, skip imputation, flags default to `False` (user can override)
 
 Delegate to `impute_and_flag()`. Return `self._chain(*exprs)` or `self._materialise_then(...)` for partial-date DTM cases.
 
@@ -308,10 +407,12 @@ When `time` is provided (DTM targets):
 
 **File:** `src/fleet/sdtm/namespace.py`
 
-Add `.date()` method. Behavior by suffix:
+Add `.date()` method. Same `source`/`value` mutual exclusivity and `output=` override as ADaM.
 
-- `*DTC` → raw string parsing (delegates to `dtc_date_expr`/`dtc_datetime_expr`). Imputation params ignored. `format` active. When `time` is provided, concatenates date + time into a DTC string with `T` separator.
-- `*DT` / `*DTM` → delegates to same `impute_and_flag()` engine (allowed for edge cases).
+Behavior by resolved output type:
+
+- `"dtc"` → raw string parsing (delegates to `dtc_date_expr`/`dtc_datetime_expr`). Imputation params ignored. `format` active. When `time` is provided, concatenates date + time into a DTC string with `T` separator. When `value=` is provided, broadcasts the literal as a DTC string.
+- `"dt"` / `"dtm"` → delegates to same `impute_and_flag()` engine (allowed for edge cases).
 
 #### Step 1.4 — Flag auto-naming logic
 
@@ -321,6 +422,26 @@ def _extract_prefix(target: str) -> str:
     elif target.endswith("DTC"): return target[:-3]
     elif target.endswith("DT"):  return target[:-2]
     raise ValueError(f"Cannot extract prefix from '{target}'")
+
+def _resolve_flag_name(target: str, flag: bool | str, output_type: str) -> tuple[str | None, str | None]:
+    """Returns (dtf_name, tmf_name) or (None, None)."""
+    if flag is False:
+        return None, None
+    if isinstance(flag, str):
+        dtf = flag
+        tmf = flag.replace("DTF", "TMF") if "DTF" in flag and output_type == "dtm" else None
+        return dtf, tmf
+    # flag is True → auto-name
+    try:
+        prefix = _extract_prefix(target)
+    except ValueError:
+        raise ValueError(
+            f"Cannot auto-name flag for target '{target}'. "
+            f"Use flag='<name>DTF' or flag=False."
+        )
+    dtf = f"{prefix}DTF"
+    tmf = f"{prefix}TMF" if output_type == "dtm" else None
+    return dtf, tmf
 ```
 
 Flag columns: Date mode → `{prefix}DTF`. Datetime mode → `{prefix}DTF` + `{prefix}TMF`.
@@ -335,25 +456,26 @@ Deduplication: if flag column already in expression list, later call supersedes.
 
 **File:** `src/fleet/adam/_mixins.py`
 
-Move from `ADSLNamespace`-only to the shared mixin. New expanded signature with all units, `add_one` auto, `out="iso8601"`.
+Move from `ADSLNamespace`-only to the shared mixin. New expanded signature with all units, `add_one` auto, `out="iso8601"`, and `str | pl.Expr` for `start`/`end`.
 
 Implementation logic:
 
-1. Auto-detect column dtype: `pl.Utf8` → parse ISO string; `pl.Date`/`pl.Datetime` → use directly
-2. Compute difference using appropriate temporal method
-3. Apply unit scaling
-4. Apply `add_one`:
+1. Normalise `start`/`end`: if `str` → `pl.col(start)`; if `pl.Expr` → use directly
+2. Auto-detect column dtype: `pl.Utf8` → parse ISO string; `pl.Date`/`pl.Datetime` → use directly
+3. Compute difference using appropriate temporal method
+4. Apply unit scaling
+5. Apply `add_one`:
    - `True` → `diff + 1`
    - `False` → `diff`
    - `"study_day"` (auto from DY suffix) → `when(diff >= 0).then(diff + 1).otherwise(diff)`
-5. If `out="iso8601"` → format as ISO 8601 duration string
-6. Return `self._chain(expr)`
+6. If `out="iso8601"` → format as ISO 8601 duration string
+7. Return `self._chain(expr)`
 
 #### Step 2.2 — `.duration()` on `SDTMNamespace`
 
 **File:** `src/fleet/sdtm/namespace.py`
 
-Add same `duration()` method for SDTM `--DUR` variables.
+Add same `duration()` method for SDTM `--DUR` variables. Same `str | pl.Expr` support for `start`/`end`.
 
 #### Step 2.3 — Retire `actual_time()` from PK namespace
 
@@ -477,14 +599,25 @@ Add `"date"` and `"duration"` as valid algorithm values. Keep old values as depr
 #### Step 5.1 — New `tests/unit/test_date_api.py`
 
 - Suffix dispatch (DTC, DT, DTM, invalid)
+- Explicit `output=` override (dt, dtm, dtc)
+- `output=` with non-standard target name (e.g. `"XYZ"`)
+- `output=` + recognizable suffix (output wins)
+- No suffix + no output → `ValueError`
+- `source=` / `value=` mutual exclusivity (both → `ValueError`, neither → `ValueError`)
+- `value=` with string literal, `date` object, `datetime` object
+- `value=` skips imputation, flags default to `False`
+- `value=` with explicit `flag="XYZDTF"`
 - All impute strategies (first, mid, last, none, literal)
 - `impute_time` override (asymmetric)
 - `time` parameter: column name, literal, with DT source, with DTC source, null fallback
 - `time` + `impute_time` interaction (fallback for null time values)
 - `time` with non-DTM target → `ValueError`
 - `highest` ceiling (D, M, Y, h, m, s)
-- `flag=True` auto-naming
+- `flag=True` auto-naming (standard suffix)
+- `flag=True` + non-standard target → `ValueError`
 - `flag=False` suppression
+- `flag="MYCUSTOMDTF"` explicit naming
+- `flag=str` with DTM → TMF derived via replacement
 - Flag deduplication
 - `min_date` / `max_date` clamping (column + literal)
 - `format` parameter (SDTM)
@@ -496,6 +629,9 @@ Add `"date"` and `"duration"` as valid algorithm values. Keep old values as depr
 - All 7 units
 - `add_one=None/True/False`
 - `out="iso8601"` formatting
+- `start`/`end` as column names (str)
+- `start`/`end` as `pl.Expr` (e.g. `pl.lit(date(...))`)
+- Mixed: one `str`, one `pl.Expr`
 - String vs typed date columns
 - Datetime columns
 - Edge cases: null dates, same start/end
@@ -607,11 +743,14 @@ uv run --extra docs mkdocs build --clean
 4. **`format_iso` deprecated with no replacement** — typed dates don't need string formatting
 5. **Deprecation wrappers** — old verbs stay as warnings for one major version cycle
 6. **`impute_time` for asymmetric control** — overrides time-part separately from date-part
-7. **`flag=True|False` only** — no custom flag names
+7. **`flag=bool|str`** — `True` for auto-naming (requires CDISC suffix), `False` to suppress, `str` for explicit flag name. Replaces previous `bool`-only design.
 8. **Same verb name `.date()` on both SDTM and ADaM** — context determines behavior
 9. **`duration()` moves to shared mixin** — all ADaM namespaces get it
 10. **Units include months and years** — average-month (30.4375d), average-year (365.25d)
 11. **Spec-driven aliases preserved** — old algorithm names still work
+12. **`output=` kwarg (`"dtc"|"dt"|"dtm"`)** — explicit override for suffix dispatch, enabling non-standard target names like `XYZ`. Values use short CDISC suffixes for consistency.
+13. **`value=` kwarg (mutually exclusive with `source=`)** — broadcasts a literal scalar across all rows. Mirrors Fleet's existing `hardcode_no_ct(value=)` / `assign_no_ct(source=)` duality. When used, imputation is irrelevant and flags default to `False`.
+14. **`start`/`end` in `.duration()` accept `str | pl.Expr`** — string = column name (wrapped to `pl.col()`), expression = any Polars expr including `pl.lit(date(...))`. Simpler than adding `start_value`/`end_value` kwargs.
 
 ---
 
@@ -621,6 +760,10 @@ uv run --extra docs mkdocs build --clean
 
 - `.date()` verb (SDTM + ADaM)
 - `.duration()` verb (SDTM + ADaM, shared mixin)
+- `output=` suffix escape for non-standard variable names
+- `value=` literal broadcast (mutually exclusive with `source=`)
+- `start`/`end` as `str | pl.Expr` in `.duration()`
+- `flag=bool|str` for explicit flag naming
 - Deprecation of 7 old verbs
 - Imputation, flags, clamping, suffix dispatch
 - ISO 8601 duration output

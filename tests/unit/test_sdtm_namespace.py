@@ -95,27 +95,27 @@ class TestHardcodeCT:
 
 class TestAssignDtc:
     def test_date_iso(self, simple_raw):
-        result = simple_raw.sdtm.assign_dtc("RFSTDTC", source="first_dose_date").to_frame()
+        result = simple_raw.sdtm.date("RFSTDTC", source="first_dose_date").to_frame()
         assert "RFSTDTC" in result.columns
         assert result["RFSTDTC"][0] == "2014-01-02"
 
     def test_datetime_mode(self, simple_raw):
-        result = simple_raw.sdtm.assign_dtc(
-            "RFSTDTC", source="first_dose_date", mode="datetime"
+        result = simple_raw.sdtm.date(
+            "RFSTDTC", source="first_dose_date"
         ).to_frame()
         assert result["RFSTDTC"][0].startswith("2014-01-02")
 
     def test_partial_date_preserved(self):
         df = pl.DataFrame({"dtc": ["2014-01", "2014", "2014-01-02", None]})
-        result = df.sdtm.assign_dtc("OUT", source="dtc").to_frame()
+        result = df.sdtm.date("OUT", source="dtc", output="dtc").to_frame()
         assert result["OUT"][0] == "2014-01"  # partial preserved
         assert result["OUT"][1] == "2014"  # partial preserved
         assert result["OUT"][2] == "2014-01-02"  # complete parsed
         assert result["OUT"][3] is None
 
     def test_input_format_shortcut(self, simple_raw):
-        result = simple_raw.sdtm.assign_dtc(
-            "RFSTDTC", source="first_dose_date", input_format="%Y-%m-%d"
+        result = simple_raw.sdtm.date(
+            "RFSTDTC", source="first_dose_date", format="%Y-%m-%d"
         ).to_frame()
         assert result["RFSTDTC"][0] == "2014-01-02"
 

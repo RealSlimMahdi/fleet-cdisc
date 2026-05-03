@@ -90,8 +90,8 @@ dm = (
         },
     )
     .assign_no_ct("ARM", source="arm_description")
-    .assign_dtc("RFSTDTC", source="first_dose_date", mode="date")
-    .assign_dtc("RFENDTC", source="last_dose_date", mode="date")
+    .date("RFSTDTC", source="first_dose_date")
+    .date("RFENDTC", source="last_dose_date")
     .to_frame()
 )
 print(f"   {dm.shape[0]} subjects × {dm.shape[1]} variables")
@@ -130,8 +130,8 @@ adsl = (
     .source("RACE")
     .source("ARM")
     .rename("TRT01P", source="ARM")
-    .derive_dt("TRTSDT", source="RFSTDTC")
-    .derive_dt("TRTEDT", source="RFENDTC")
+    .date("TRTSDT", source="RFSTDTC")
+    .date("TRTEDT", source="RFENDTC")
     .derivation(
         "SAFFL",
         expression='pl.when(pl.col("TRTSDT").is_not_null()).then(pl.lit("Y")).otherwise(pl.lit("N"))',
@@ -166,9 +166,9 @@ adae = (
     .source("AEACN")
     .source("TRTA")
     .source("SAFFL")
-    .derive_dt("ASTDT", source="AESTDTC")
-    .derive_dt("AENDT", source="AEENDTC")
-    .study_day("ADY", analysis_date="ASTDT", reference_date="TRTSDT")
+    .date("ASTDT", source="AESTDTC")
+    .date("AENDT", source="AEENDTC")
+    .duration("ADY", start="TRTSDT", end="ASTDT")
     .to_frame()
     .adam.occds.treatment_emergent(
         "TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT"

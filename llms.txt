@@ -6,7 +6,7 @@ Fleet adds chainable verb pipelines directly onto every Polars DataFrame so you 
 
 ## Rules for AI Agents
 
-1. **Fleet-first verb priority** — Always reach for a named Fleet verb (`study_day`, `baseline`, `chg`, `treatment_emergent`, …) before falling back to a raw `derivation(expression=...)` call. Named verbs encode CDISC semantics, enforce correct argument names, and appear in Define-XML traceability. Use `derivation` only as a last resort for logic not yet covered by a typed verb.
+1. **Fleet-first verb priority** — Always reach for a named Fleet verb (`duration`, `baseline`, `chg`, `treatment_emergent`, …) before falling back to a raw `derivation(expression=...)` call. Named verbs encode CDISC semantics, enforce correct argument names, and appear in Define-XML traceability. Use `derivation` only as a last resort for logic not yet covered by a typed verb.
 
 2. **Polars-only** — Fleet pipelines are built on Polars. Never introduce Pandas, NumPy array operations, or any other DataFrame library. All expressions must be `pl.Expr` objects or expression strings that Fleet will evaluate with `eval()`.
 
@@ -156,9 +156,9 @@ dm = (
     .assign_no_ct("ARM", source="arm_description")
     .assign_no_ct("ACTARMCD", source="arm_code")
     .assign_no_ct("ACTARM", source="arm_description")
-    .assign_dtc("RFSTDTC", source="first_dose_date", mode="date")
-    .assign_dtc("RFENDTC", source="last_dose_date", mode="date")
-    .assign_dtc("RFICDTC", source="informed_consent_date", mode="date")
+    .date("RFSTDTC", source="first_dose_date")
+    .date("RFENDTC", source="last_dose_date")
+    .date("RFICDTC", source="informed_consent_date")
     .to_frame()
 )
 print(f"\n── 2a. SDTM DM : {dm.shape[0]} subjects × {dm.shape[1]} variables")
@@ -319,7 +319,7 @@ adsl = (
     # ── treatment end date from EX (admiral: derive_vars_merged, mode="last") ──
     .last_date("TRTEDT", from_dataset=ex, date_col="EXENDTC")
     # ── treatment duration (admiral: derive_var_trtdurd → TRTEDT - TRTSDT + 1) ──
-    .duration("TRTDURD", start_date="TRTSDT", end_date="TRTEDT")
+    .duration("TRTDURD", start="TRTSDT", end="TRTEDT")
     .to_frame()
 )
 
@@ -615,9 +615,9 @@ advs = (
     .rename("PARAM", source="vstest")
     .rename("AVALU", source="vsorresu")
     .derivation("AVAL", expression="pl.col('vsorres').cast(pl.Float64, strict=False)")
-    .derive_dt("ADT", source="vsdtc")
+    .date("ADT", source="vsdtc")
     .lookup(dataset=_trtsdt_map, on="USUBJID", how="left")
-    .study_day("ADY", analysis_date="ADT", reference_date="TRTSDT")
+    .duration("ADY", start="TRTSDT", end="ADT")
     # admiral: flag_variables — last pre-dose visit (vsdy ≤ 0)
     .flag("ABLFL", criteria='pl.col("vsdy") <= 0', groups=["USUBJID", "PARAMCD"])
     .to_frame()  # materialise — ABLFL must exist before baseline() window fn
@@ -697,10 +697,9 @@ adae = (
     .source("AEOUT")
     .source("AEACN")
     # admiral: derive_vars_dt
-    .derive_dt("ASTDT", source="AESTDTC")
-    .derive_dt("AENDT", source="AEENDTC")
-    # study_day uses _chain — ASTDT resolves from the lazy plan (no materialise needed)
-    .study_day("ADY", analysis_date="ASTDT", reference_date="TRTSDT")
+    .date("ASTDT", source="AESTDTC")
+    .date("AENDT", source="AEENDTC")
+    .duration("ADY", start="TRTSDT", end="ASTDT")
     .to_frame()
     .adam.occds  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     # admiral: derive_var_trtemfl
@@ -773,8 +772,8 @@ adex = (
     .source("EXDOSE")  # shared verb (mixin)
     .source("EXDOSU")  # shared verb (mixin)
     # admiral: derive_vars_dt
-    .derive_dt("ASTDT", source="EXSTDTC")  # shared verb (mixin)
-    .derive_dt("AENDT", source="EXENDTC")  # shared verb (mixin)
+    .date("ASTDT", source="EXSTDTC")
+    .date("AENDT", source="EXENDTC")
     # admiral: derive_var_dur (inclusive end-date convention)
     .derivation(
         "EXDURD",  # shared verb (mixin)
@@ -919,9 +918,9 @@ dm = (
     .assign_no_ct("ARM", source="arm_description")
     .assign_no_ct("ACTARMCD", source="arm_code")
     .assign_no_ct("ACTARM", source="arm_description")
-    .assign_dtc("RFSTDTC", source="first_dose_date", mode="date")
-    .assign_dtc("RFENDTC", source="last_dose_date", mode="date")
-    .assign_dtc("RFICDTC", source="informed_consent_date", mode="date")
+    .date("RFSTDTC", source="first_dose_date")
+    .date("RFENDTC", source="last_dose_date")
+    .date("RFICDTC", source="informed_consent_date")
     .select(spec=SDTM_SPEC, dataset="DM")
     .write_parquet(OUT / "dm.parquet")
 )
@@ -1512,7 +1511,7 @@ def main() -> None:
             ref_date="ref_date",
             tolerance={"before": 5, "after": 5},
         )
-        .study_day("SVSTDY", date_col="visit_date", ref_date_col="ref_date")
+        .duration("SVSTDY", start="ref_date", end="visit_date")
         .epoch_assign(
             "EPOCH",
             date_col="visit_date",
@@ -1558,7 +1557,7 @@ def main() -> None:
             element_col="ETCD",
             subject_col="USUBJID",
         )
-        .study_day("SESTDY", date_col="SESTDTC", ref_date_col="ref_date")
+        .duration("SESTDY", start="ref_date", end="SESTDTC")
         .epoch_assign(
             "EPOCH",
             date_col="SESTDTC",
@@ -1615,15 +1614,15 @@ if __name__ == "__main__":
 
 ## Namespaces
 
-- `df.sdtm` — 14 SDTM derivation verbs (domain mapping, CT lookup, datetime normalisation)
-- `df.adam` — ADaM BDS verbs (study day, baseline, change, flags, BSA, MAP, QTc, LOCF, summary records, derived parameters)
+- `df.sdtm` — 15 SDTM derivation verbs (domain mapping, CT lookup, date normalisation, study day)
+- `df.adam` — ADaM BDS verbs (date/datetime parsing, elapsed time, baseline, change, flags, BSA, MAP, QTc, LOCF, summary records, derived parameters)
 - `df.adam.adsl` — patient-level verbs (treatment dates, duration, population flags, AE counts, age conversion, periods)
 - `df.adam.occds` — occurrence verbs (treatment-emergent flag, worst severity, onset/recovery dates, sequence number)
 
 ### Trial Design Domain extensions (via `df.sdtm`)
 
 - Protocol-reference verbs: `fetch_structure`, `study_header`, `add_elements`, `add_arms`, `add_visits`, `add_parameters`, `add_criteria`
-- Subject-level verbs: `visit_map`, `element_boundaries`, `epoch_assign`, `study_day`
+- Subject-level verbs: `visit_map`, `element_boundaries`, `epoch_assign`
 - Pydantic models: `TrialElement`, `TrialArm`, `TrialVisit`, `TrialParameter`, `TrialCriterion`
 - Collection models: `TrialElements`, `TrialArms`, `TrialVisits`, `TrialParameters`, `TrialCriteria`
 - Enum: `Epoch` (NCI C99079 — 14 standard trial epoch values)
@@ -1644,7 +1643,8 @@ if __name__ == "__main__":
 - `hardcode_no_ct(target: str, *, value: Any) -> SDTMNamespace` — Set *target* to a literal *value* for every row, with no CT validation.
 - `hardcode_ct(target: str, *, value: Any, ct_codelist: str | type | None = None) -> SDTMNamespace` — Set *target* to a constant *value*, validated against controlled terminology.
 - `assign_ct(target: str, *, source: str, ct_codelist: str | type, ct_mapping: dict[str, str] | None = None, ct_validator: CTValidator | None = None) -> SDTMNamespace` — Copy *source* to *target*, translating values via controlled terminology.
-- `assign_dtc(target: str, *, source: str, mode: str = 'date', input_format: str | None = None) -> SDTMNamespace` — Parse *source* date string and format as ISO 8601.
+- `date(target: str, *, source: str | None = None, value: str | None = None, output: str | None = None, time: str | None = None, impute: str = 'first', impute_time: str | None = None, highest: str | None = None, flag: bool | str = True, min_date: str | None = None, max_date: str | None = None, format: str | None = None) -> SDTMNamespace` — Parse, convert, impute, and flag a date or datetime column.
+- `duration(target: str, *, start: str | pl.Expr, end: str | pl.Expr, unit: str = 'days', add_one: bool | None = None, out: str = 'numeric') -> SDTMNamespace` — Compute the duration between two date/datetime columns.
 - `derivation(target: str, *, expression: str | pl.Expr) -> SDTMNamespace` — Derive *target* using a Polars expression or expression string.
 - `condition_add(target: str, *, condition: str | pl.Expr, then_value: Any) -> SDTMNamespace` — Set *target* to *then_value* where *condition* is true, else null.
 - `if_then_else(target: str, *, when: list[dict[str, Any]], else_value: Any = None) -> SDTMNamespace` — Multi-branch conditional mapping.
@@ -1676,7 +1676,6 @@ Fleet supports all 7 CDISC Trial Design Model domains through `df.sdtm`. Protoco
 - `visit_map(target_num: str, target_name: str, *, date_col: str, planned_visits: TrialVisits | pl.DataFrame, ref_date: str | None = None, tolerance: dict[str, int] | None = None) -> Self` — Map raw visit dates to planned visits from TV.
 - `element_boundaries(target_start: str, target_end: str, *, milestones: dict[str, str], element_col: str = 'ETCD', subject_col: str = 'USUBJID') -> Self` — Derive element start/end dates from milestone columns.
 - `epoch_assign(target: str, *, date_col: str, epoch_ranges: list[dict[str, str]] | pl.DataFrame) -> Self` — Assign ``EPOCH`` based on date ranges.
-- `study_day(target: str, *, date_col: str, ref_date_col: str) -> Self` — Compute CDISC study day (no day 0).
 
 ### Pydantic models
 
@@ -1702,15 +1701,13 @@ These verbs are defined once in `SharedADaMVerbsMixin` (`src/fleet/adam/_mixins.
 - `condderivation(target: str, *, conditions: list[dict[str, Any]], else_value: Any = None) -> Self` — Multi-branch conditional derivation (when/then/otherwise chain).
 - `whereclauses(*, where: str | pl.Expr) -> Self` — Filter records by a *where* expression.
 - `merge_adsl(adsl: pl.DataFrame, *, by: list[str] | None = None, keep_cols: list[str] | None = None) -> Self` — Left-join ADSL columns onto the current dataset.
-- `derive_dt(target: str, *, source: str, dtf: str | None = None, day_imputation: str = 'first', month_imputation: str = 'first') -> Self` — Derive an analysis date (``pl.Date``) from a ``--DTC`` string.
-- `derive_dtm(target: str, *, source: str, dtf: str | None = None, tmf: str | None = None, day_imputation: str = 'first', month_imputation: str = 'first', time_imputation: str = 'first') -> Self` — Derive an analysis datetime (``pl.Datetime``) from a ``--DTC`` string.
-- `format_iso(target: str, *, source: str) -> Self` — Format a ``pl.Date`` or ``pl.Datetime`` column as an ISO 8601 string.
+- `date(target: str, *, source: str | None = None, value: str | None = None, output: str | None = None, time: str | None = None, impute: str = 'first', impute_time: str | None = None, highest: str | None = None, flag: bool | str = True, min_date: str | None = None, max_date: str | None = None) -> Self` — Parse, convert, impute, and flag a date or datetime column.
+- `duration(target: str, *, start: str | pl.Expr, end: str | pl.Expr, unit: str = 'days', add_one: bool | None = None, out: str = 'numeric') -> Self` — Compute the duration between two date/datetime columns.
 
 ## ADaM verbs
 
-Available on `df.adam` (BDS base namespace). Shared verbs (source, derivation, assigned, recode, rename, condderivation, whereclauses, merge_adsl, derive_dt, derive_dtm, format_iso) are also available here via the shared mixin.
+Available on `df.adam` (BDS base namespace). Shared verbs (source, derivation, assigned, recode, rename, condderivation, whereclauses, merge_adsl, date, duration) are also available here via the shared mixin.
 
-- `study_day(target: str, *, analysis_date: str, reference_date: str) -> AdamNamespace` — Compute CDISC study day.
 - `flag(target: str, *, criteria: str | pl.Expr, groups: list[str] | None = None, order_by: str | list[str] | None = None, value_col: str | None = None, where: str | pl.Expr | None = None, from_dataset: pl.DataFrame | list[pl.DataFrame] | None = None, on: list[str] | None = None, source_filter: pl.Expr | None = None, condition: pl.Expr | None = None, inclusive: bool = True, flag_no_ref_groups: bool = True, flag_all: bool = False, flag_value: str = 'Y', false_value: str | None = None) -> Self` — Set *target* to *flag_value* for records matching *criteria*.
 - `baseline(target: str, *, aval: str = 'AVAL', baseline_flag: str = 'ABLFL', groups: list[str] | None = None) -> AdamNamespace` — Derive BASE as the AVAL where the baseline flag equals ``"Y"``.
 - `chg(target: str, *, aval: str = 'AVAL', base: str = 'BASE') -> AdamNamespace` — Compute change from baseline: ``CHG = AVAL - BASE``.
@@ -1732,7 +1729,7 @@ Available on `df.adam` (BDS base namespace). Shared verbs (source, derivation, a
 
 - `first_date(target: str, *, from_dataset: pl.DataFrame, date_col: str, where: str | pl.Expr | None = None, groups: list[str] | None = None) -> Self` — Derive *target* as the earliest date in *date_col* from *from_dataset*.
 - `last_date(target: str, *, from_dataset: pl.DataFrame, date_col: str, where: str | pl.Expr | None = None, groups: list[str] | None = None) -> Self` — Derive *target* as the latest date in *date_col* from *from_dataset*.
-- `duration(target: str, *, start_date: str, end_date: str, unit: str = 'days', inclusive: bool = True) -> Self` — Derive *target* as the duration between two date columns.
+- `duration(target: str, *, start: str | pl.Expr, end: str | pl.Expr, unit: str = 'days', add_one: bool | None = None, out: str = 'numeric') -> Self` — Compute the duration between two date/datetime columns.
 - `count_events(target: str, *, from_dataset: pl.DataFrame, where: str | pl.Expr | None = None, groups: list[str] | None = None) -> Self` — Derive *target* as the count of matching records in *from_dataset*.
 - `age_years(target: str = 'AAGE', *, age_col: str = 'AGE', age_unit_col: str = 'AGEU') -> Self` — Convert age to years, handling common unit strings.
 - `derive_period(*, periods: list[dict[str, Any]], start_date: str = 'TRTSDT') -> Self` — Create standard Subperiod / Phase variables.
@@ -1759,11 +1756,10 @@ Available on `df.adam.occds` (and `df.adam.pk` for sequence). Shared verbs (sour
 | Multi-branch conditional | `if_then_else` | `sdtm` | List of `{condition, value}` branches |
 | Multi-branch conditional | `condderivation` | `adam` / all sub-ns | Same pattern as `if_then_else` |
 | Arbitrary expression | `derivation` | `sdtm` / `adam` | Last resort — use a Fleet verb first |
-| ISO 8601 parse (SDTM) | `assign_dtc` | `sdtm` | Normalises to `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`; preserves partial dates |
-| Date imputation (ADaM) | `derive_dt` | `adam` / all sub-ns | Imputes partial --DTC → `pl.Date` with optional DTF flag |
-| Datetime imputation (ADaM) | `derive_dtm` | `adam` / all sub-ns | Imputes partial --DTC → `pl.Datetime` with optional DTF/TMF flags |
-| ISO export | `format_iso` | `adam` / all sub-ns | Formats `Date`/`Datetime` column as ISO 8601 string |
-| Study day (ADY) | `study_day` | `adam` | `ADY = ADT − RFSTDTC + 1` (signed) |
+| ISO 8601 parse (SDTM) | `date` | `sdtm` | Normalises to `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`; preserves partial dates |
+| Date imputation (ADaM) | `date` | `adam` / all sub-ns | Imputes partial --DTC → `pl.Date` or `pl.Datetime` with optional DTF/TMF flags |
+| Study day (ADY) | `duration` | `adam` / `sdtm` | CDISC study-day: +1 if ≥ 0, no day 0 |
+| Elapsed time | `duration` | `adam` / all sub-ns | Supports days, hours, minutes, seconds, weeks, months, years |
 | Baseline flag (ABLFL) | `flag` | `adam` | Per-group boolean flag |
 | Baseline value (BASE) | `baseline` | `adam` | Carries AVAL at baseline row |
 | Change from baseline (CHG) | `chg` | `adam` | `CHG = AVAL − BASE` |
@@ -1782,7 +1778,7 @@ Available on `df.adam.occds` (and `df.adam.pk` for sequence). Shared verbs (sour
 | Merge ADSL columns | `merge_adsl` | `adam` / all sub-ns | Join ADSL onto current dataset |
 | Filter rows | `whereclauses` | `adam` / all sub-ns | Filter by expression (materialises first) |
 | Treatment dates (ADSL) | `first_date` / `last_date` | `adam.adsl` | Earliest/latest event date per subject |
-| Treatment duration (TRTDURD) | `duration` | `adam.adsl` | Integer day count between two date columns |
+| Treatment duration (TRTDURD) | `duration` | `adam` / all sub-ns | Elapsed time between two date/datetime columns |
 | Population flag (SAFFL, etc.) | `flag` | `adam` / all sub-ns | `"Y"` / null based on row condition |
 | Event count (NUMAE, NUMSAE) | `count_events` | `adam.adsl` | Integer event count per subject |
 | Age conversion | `age_years` | `adam.adsl` | Unit-aware: YEARS, MONTHS, WEEKS, DAYS |
@@ -1804,7 +1800,7 @@ A single YAML file is the source of truth for a study: it declares output variab
 - `derivation` → `.derivation(target, expression=...)`
 - `first_date` → `.first_date(target, from_dataset=..., date_col=..., where=...)`
 - `last_date` → `.last_date(...)`
-- `duration` → `.duration(target, start_date=..., end_date=...)`
+- `duration` → `.duration(target, start=..., end=...)`
 - `flag` → `.flag(target, criteria=...)`
 - `count` → `.count_events(target, from_dataset=..., where=...)`
 

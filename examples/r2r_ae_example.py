@@ -112,9 +112,9 @@ _adae_base_ns = (
     .source("AEACN")
     .source("TRTA")
     .source("SAFFL")
-    .derive_dt("ASTDT", source="AESTDTC")
-    .derive_dt("AENDT", source="AEENDTC")
-    .study_day("ADY", analysis_date="ASTDT", reference_date="TRTSDT")
+    .date("ASTDT", source="AESTDTC")
+    .date("AENDT", source="AEENDTC")
+    .duration("ADY", start="TRTSDT", end="ASTDT")
 )
 
 _adae_occds_ns = (

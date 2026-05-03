@@ -572,45 +572,6 @@ class TrialDesignMixin:
         final_expr = expr.otherwise(pl.lit(None)).alias(target)
         return self._chain(final_expr)  # type: ignore[attr-defined]
 
-    def study_day(
-        self,
-        target: str,
-        *,
-        date_col: str,
-        ref_date_col: str,
-    ) -> Self:  # type: ignore[type-var]
-        """Compute CDISC study day (no day 0).
-
-        ``study_day = date − ref_date`` in days, then +1 if ≥ 0 (CDISC
-        convention: day 1 is the reference date itself).
-
-        Args:
-            target: Name of the output study-day column (e.g. ``"SVSTDY"``).
-            date_col: Column with the target date (ISO 8601 string or Date).
-            ref_date_col: Column with the reference date.
-
-        Returns:
-            Self: The namespace with *target* appended.
-
-        Examples:
-            Compute study day for SV::
-
-                sv = (
-                    raw_df.sdtm
-                    .study_day("SVSTDY", date_col="SVSTDTC",
-                               ref_date_col="RFSTDTC")
-                    .to_frame()
-                )
-        """
-        diff_expr = (
-            pl.col(date_col).str.to_date(strict=False).cast(pl.Date)
-            - pl.col(ref_date_col).str.to_date(strict=False).cast(pl.Date)
-        ).dt.total_days()
-
-        day_expr = pl.when(diff_expr >= 0).then(diff_expr + 1).otherwise(diff_expr).alias(target)
-
-        return self._chain(day_expr)  # type: ignore[attr-defined]
-
     # ------------------------------------------------------------------ #
     # Internal helpers                                                     #
     # ------------------------------------------------------------------ #

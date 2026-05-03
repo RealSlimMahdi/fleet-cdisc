@@ -91,14 +91,14 @@ class TestCondDerivation:
 
 class TestStudyDay:
     def test_study_day_same_day(self, vs_frame):
-        result = vs_frame.adam.study_day(
-            "ADY", analysis_date="vsdtc", reference_date="TRTSDT"
+        result = vs_frame.adam.duration(
+            "ADY", start="TRTSDT", end="vsdtc"
         ).to_frame()
         assert result["ADY"][0] == 1
 
     def test_study_day_requires_dates(self, vs_frame):
-        with pytest.raises((ValueError, TypeError)):
-            vs_frame.adam.study_day("ADY", analysis_date="vsdtc")
+        with pytest.raises((ValueError, TypeError, AttributeError)):
+            vs_frame.adam.duration("ADY", start="vsdtc", end=None)
 
 
 class TestBaseline:

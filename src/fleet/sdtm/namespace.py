@@ -11,7 +11,7 @@ Usage
         raw_df.sdtm
         .assign_no_ct("USUBJID", source="patient_number")
         .assign_ct("SEX", source="sex", ct_codelist=SEX)
-        .assign_dtc("BRTHDTC", source="birth_date")
+        .date("BRTHDTC", source="birth_date")
         .hardcode_no_ct("DOMAIN", value="DM")
         .to_frame()
     )
@@ -23,6 +23,7 @@ Usage
 from __future__ import annotations
 
 import copy
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -235,49 +236,267 @@ class SDTMNamespace(TrialDesignMixin):
         return self._chain(pl.col(source).alias(target))
 
     # ------------------------------------------------------------------ #
-    # 3. assign_dtc — convert raw date/datetime to ISO 8601 string        #
+    # 3. date — unified date verb                                          #
     # ------------------------------------------------------------------ #
 
-    def assign_dtc(
+    def date(
         self,
         target: str,
         *,
-        source: str,
-        mode: str = "date",
-        input_format: str | None = None,
+        source: str | None = None,
+        value: str | None = None,
+        output: str | None = None,
+        time: str | None = None,
+        impute: str = "first",
+        impute_time: str | None = None,
+        highest: str | None = None,
+        flag: bool | str = True,
+        min_date: str | None = None,
+        max_date: str | None = None,
+        format: str | None = None,
     ) -> SDTMNamespace:
-        """Parse *source* date string and format as ISO 8601.
+        """Parse, convert, impute, and flag a date or datetime column.
 
-        Uses fully vectorised Polars date parsing (no row-by-row Python).
-        Partial dates (e.g. ``"2014-01"``, ``"2014"``) are preserved as-is.
+        Dispatches behavior based on the CDISC suffix of *target* (DTC, DT,
+        DTM) or an explicit *output* override.
+
+        For DTC targets: parses raw strings to ISO 8601, preserving partial
+        dates.  Imputation parameters are ignored.  ``format`` is active.
+
+        For DT/DTM targets: delegates to the shared imputation engine.
 
         Args:
-            target: Name of the output ``--DTC`` variable.
-            source: Name of the raw column containing date strings.
-            mode: ``"date"`` (default) for YYYY-MM-DD or ``"datetime"`` for
-                YYYY-MM-DDTHH:MM:SS.
-            input_format: Optional strptime format string.  When provided the
-                coalesce chain is skipped and a single ``str.to_date`` call is
-                used for maximum performance.
+            target: Name of the output column.
+            source: Column name to read values from.  Mutually exclusive
+                with *value*.
+            value: Literal date value to broadcast.  Mutually exclusive
+                with *source*.
+            output: Explicit output type: ``"dtc"``, ``"dt"``, or ``"dtm"``.
+            time: Time column or literal to combine with date (DTM/DTC).
+            impute: Imputation strategy (DT/DTM only).
+            impute_time: Time-part imputation override (DTM only).
+            highest: Imputation ceiling (DT/DTM only).
+            flag: DTF/TMF flag control.
+            min_date: Lower clamp bound (DT/DTM only).
+            max_date: Upper clamp bound (DT/DTM only).
+            format: ``strptime`` format string for raw parsing (DTC only).
 
         Returns:
             SDTMNamespace: The namespace with *target* appended; call
                 ``.to_frame()`` to materialise.
 
         Examples:
-            Parse a raw AE start date into ISO 8601 ``AESTDTC``::
+            Parse raw date to ISO 8601 DTC::
 
                 ae = (
                     raw_df.sdtm
-                    .assign_dtc("AESTDTC", source="ae_start_date")
+                    .date("AESTDTC", source="ae_start_date")
+                    .to_frame()
+                )
+
+            Custom input format::
+
+                ae = (
+                    raw_df.sdtm
+                    .date("AEENDTC", source="ae_end_date",
+                          format="%d/%m/%Y")
                     .to_frame()
                 )
         """
-        if mode == "datetime":
-            expr = dtc_datetime_expr(source, target, input_format=input_format)
+        from fleet.adam.utils import _resolve_output_type, impute_and_flag
+
+        # Validate source / value mutual exclusivity
+        if source is not None and value is not None:
+            raise ValueError(
+                "Cannot specify both source= and value=. Choose one."
+            )
+        if source is None and value is None:
+            raise ValueError(
+                "Must specify either source= or value=."
+            )
+
+        output_type = _resolve_output_type(target, output)
+
+        # value= path
+        if value is not None:
+            if flag is True:
+                flag = False
+            exprs = impute_and_flag(
+                None, target, value=value, output_type=output_type, flag=flag
+            )
+            return self._chain(*exprs)
+
+        # source= path
+        assert source is not None
+
+        if output_type == "dtc":
+            # DTC: parse raw → ISO 8601 string
+            if time is not None:
+                # Combine date + time into DTC string
+                date_part = dtc_date_expr(source, "__dtc_date_tmp__", input_format=format)
+                time_part = pl.col(time) if not re.match(r"^\d{2}:\d{2}", time) else pl.lit(time)
+                combined = (
+                    pl.col("__dtc_date_tmp__") + pl.lit("T") + time_part
+                ).alias(target)
+                df = self._lazy.with_columns(date_part).collect()
+                result = df.with_columns(combined)
+                if "__dtc_date_tmp__" in result.columns:
+                    result = result.drop("__dtc_date_tmp__")
+                return self._materialise_then(result)
+
+            if format is not None:
+                # Use dtc_datetime_expr for datetime format, dtc_date_expr otherwise
+                if any(c in format for c in ("H", "M", "S")):
+                    expr = dtc_datetime_expr(source, target, input_format=format)
+                else:
+                    expr = dtc_date_expr(source, target, input_format=format)
+            else:
+                expr = dtc_date_expr(source, target)
+            return self._chain(expr)
+
+        # DT/DTM: delegate to imputation engine
+        if time is not None and output_type != "dtm":
+            raise ValueError(
+                f"time= parameter is only valid for DTM targets, "
+                f"but target '{target}' resolves to output='{output_type}'."
+            )
+
+        exprs = impute_and_flag(
+            source,
+            target,
+            output_type=output_type,
+            impute=impute,
+            impute_time=impute_time,
+            highest=highest,
+            min_date=min_date,
+            max_date=max_date,
+            flag=flag,
+        )
+        return self._chain(*exprs)
+
+    # ------------------------------------------------------------------ #
+    # 3c. duration — unified duration verb                                 #
+    # ------------------------------------------------------------------ #
+
+    def duration(
+        self,
+        target: str,
+        *,
+        start: str | pl.Expr,
+        end: str | pl.Expr,
+        unit: str = "days",
+        add_one: bool | None = None,
+        out: str = "numeric",
+    ) -> SDTMNamespace:
+        """Compute the duration between two date/datetime columns.
+
+        Same interface as the ADaM ``.duration()`` verb.
+
+        Args:
+            target: Name of the output column (e.g. ``"EXDUR"``).
+            start: Start date column name or expression.
+            end: End date column name or expression.
+            unit: Duration unit.
+            add_one: Inclusive counting override.
+            out: Output format (``"numeric"`` or ``"iso8601"``).
+
+        Returns:
+            SDTMNamespace: The namespace with *target* appended.
+
+        Examples:
+            ISO 8601 duration for EX::
+
+                ex = (
+                    raw_df.sdtm
+                    .date("EXSTDTC", source="dose_start")
+                    .date("EXENDTC", source="dose_end")
+                    .duration("EXDUR", start="EXSTDTC", end="EXENDTC",
+                              out="iso8601")
+                    .to_frame()
+                )
+        """
+        df = self._lazy.collect()
+
+        def _to_date(col_or_expr: str | pl.Expr) -> pl.Expr:
+            if isinstance(col_or_expr, str):
+                col_name = col_or_expr
+                if col_name in df.columns:
+                    dtype = df[col_name].dtype
+                    if dtype == pl.Date:
+                        return pl.col(col_name)
+                    if dtype.is_(pl.Datetime) or str(dtype).startswith("Datetime"):
+                        return pl.col(col_name).cast(pl.Date)
+                    return pl.col(col_name).str.to_date(strict=False)
+                return pl.col(col_name)
+            return col_or_expr
+
+        s = _to_date(start)
+        e = _to_date(end)
+
+        valid_units = {
+            "seconds", "minutes", "hours", "days", "weeks", "months", "years",
+        }
+        if unit not in valid_units:
+            raise ValueError(
+                f"duration unit={unit!r} is not supported. "
+                f"Choose one of: {sorted(valid_units)}"
+            )
+
+        if unit in ("seconds", "minutes", "hours"):
+            s_dtm = s.cast(pl.Datetime("us")) if isinstance(start, str) else s
+            e_dtm = e.cast(pl.Datetime("us")) if isinstance(start, str) else e
+            diff_s = (e_dtm - s_dtm).dt.total_seconds().cast(pl.Float64)
+            if unit == "seconds":
+                diff = diff_s.cast(pl.Int64)
+            elif unit == "minutes":
+                diff = diff_s / 60.0
+            else:
+                diff = diff_s / 3600.0
         else:
-            expr = dtc_date_expr(source, target, input_format=input_format)
-        return self._chain(expr)
+            diff_days = (e - s).dt.total_days()
+            if unit == "days":
+                diff = diff_days
+            elif unit == "weeks":
+                diff = diff_days.cast(pl.Float64) / 7.0
+            elif unit == "months":
+                diff = diff_days.cast(pl.Float64) / 30.4375
+            else:
+                diff = diff_days.cast(pl.Float64) / 365.25
+
+        if add_one is None:
+            if target.endswith("DY"):
+                result_expr = (
+                    pl.when(diff >= 0).then(diff + 1).otherwise(diff)
+                ).cast(pl.Int64).alias(target)
+                return self._materialise_then(df.with_columns(result_expr))
+            else:
+                add_one = True
+
+        if add_one:
+            result_expr = (diff + 1).alias(target)
+        else:
+            result_expr = diff.alias(target)
+
+        if out == "iso8601":
+            abs_val = diff.abs()
+            unit_suffix_map = {
+                "days": ("P", "D"),
+                "hours": ("PT", "H"),
+                "weeks": ("P", "W"),
+                "months": ("P", "M"),
+                "years": ("P", "Y"),
+                "minutes": ("PT", "M"),
+                "seconds": ("PT", "S"),
+            }
+            prefix, suffix = unit_suffix_map[unit]
+            iso_expr = (
+                pl.lit(prefix)
+                + abs_val.cast(pl.Int64).cast(pl.String)
+                + pl.lit(suffix)
+            ).alias(target)
+            return self._materialise_then(df.with_columns(iso_expr))
+
+        return self._materialise_then(df.with_columns(result_expr))
 
     # ------------------------------------------------------------------ #
     # 4. hardcode_ct — literal constant with CT validation                #
@@ -864,12 +1083,25 @@ class SDTMNamespace(TrialDesignMixin):
                     ct_codelist=var.ct_codelist or "",
                     ct_mapping=var.ct_mapping,
                 )
-            elif alg in ("assign_dtc", "assign_datetime"):
-                ns = ns.assign_dtc(
+            elif alg in ("assign_dtc", "assign_datetime", "date"):
+                kwargs: dict[str, Any] = {}
+                if var.source:
+                    kwargs["source"] = var.source
+                elif getattr(var, "value", None):
+                    kwargs["value"] = var.value
+                else:
+                    kwargs["source"] = var.source or target
+                if getattr(var, "output", None):
+                    kwargs["output"] = var.output
+                if getattr(var, "format", None) or getattr(var, "input_format", None):
+                    kwargs["format"] = getattr(var, "format", None) or var.input_format
+                ns = ns.date(target, **kwargs)
+            elif alg == "duration":
+                ns = ns.duration(
                     target,
-                    source=var.source or target,
-                    mode="datetime" if "DT" in target and "C" in target else "date",
-                    input_format=var.input_format,
+                    start=getattr(var, "start", None) or var.source or "",
+                    end=getattr(var, "end", None) or "",
+                    unit=getattr(var, "unit", "days") or "days",
                 )
             elif alg == "hardcode_ct":
                 ns = ns.hardcode_ct(target, value=var.value, ct_codelist=var.ct_codelist)

@@ -22,7 +22,7 @@ You construct your pipelines entirely in Python by chaining namespace verbs on P
 adsl = (
     dm.adam.adsl
     .source("USUBJID")
-    .study_day("ADY", analysis_date="ADT", reference_date="TRTSDT")
+    .duration("ADY", start="TRTSDT", end="ADT")
     .to_frame()
 )
 ```
@@ -104,7 +104,7 @@ This means you pay no cost for columns you don't chain. Expression ordering mirr
 | `assign_no_ct(target, source)`                       | Copy raw column, no CT validation      |
 | `hardcode_no_ct(target, value)`                      | Constant literal for all rows          |
 | `assign_ct(target, source, ct_codelist, ct_mapping)` | Recode values through a CT codelist    |
-| `assign_dtc(target, source)`                         | Normalise to ISO 8601 date or datetime |
+| `date(target, source)`                               | Normalise to ISO 8601 date or datetime |
 | `derivation(target, expression)`                     | Arbitrary `pl.Expr`                    |
 | `if_then_else(target, when, else_value)`             | Multi-branch conditional               |
 | `to_frame()`                                         | Materialise                            |
@@ -118,7 +118,8 @@ This means you pay no cost for columns you don't chain. Expression ordering mirr
 | `source(target)`                                   | Pass-through column                       |
 | `derivation(target, expression)`                   | Arbitrary `pl.Expr`                       |
 | `assigned(target, value)`                          | Constant literal                          |
-| `study_day(target, analysis_date, reference_date)` | CDISC study-day formula                   |
+| `date(target, source)`                             | Parse DTC → Date/Datetime with imputation |
+| `duration(target, start, end)`                     | CDISC study day / elapsed time            |
 | `flag(target, criteria, groups)`                   | Per-group boolean flag                    |
 | `baseline(target, aval, baseline_flag)`            | Carry baseline AVAL within groups         |
 | `chg(target, aval, base)`                          | Change from baseline                      |
@@ -144,7 +145,7 @@ This means you pay no cost for columns you don't chain. Expression ordering mirr
 | `source(target)`                                    | Pass-through column                                |
 | `first_date(target, from_dataset, date_col, where)` | Earliest event date per subject                    |
 | `last_date(target, from_dataset, date_col, where)`  | Latest event date per subject                      |
-| `duration(target, start_date, end_date)`            | Integer day count                                  |
+| `duration(target, start, end)`                      | Elapsed days / duration                            |
 | `flag(target, criteria)`                            | `"Y"` flag (expression, first/last/max/min/exists) |
 | `count_events(target, from_dataset, where)`         | Event count per subject                            |
 | `age_years(target, age_col, age_unit_col)`          | Unit-aware age conversion to years                 |

@@ -31,6 +31,8 @@ class ADAMAlgorithm(StrEnum):
     SHIFT = "shift"
     ATOXGR = "atoxgr"
     COMBINE_GRADES = "combine_grades"
+    DATE = "date"
+    DURATION = "duration"
 
 
 class ADAMVariableSpec(BaseModel):

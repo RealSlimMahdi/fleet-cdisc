@@ -120,17 +120,17 @@ class TestLastDate:
 class TestDuration:
     def test_duration_days(self, subject_frame):
         result = subject_frame.adam.adsl.duration(
-            "TRTDURD", start_date="TRTSDT", end_date="TRTEDT"
+            "TRTDURD", start="TRTSDT", end="TRTEDT"
         ).to_frame()
         assert "TRTDURD" in result.columns
         assert result["TRTDURD"][0] > 0
 
     def test_duration_non_inclusive(self, subject_frame):
         result_inc = subject_frame.adam.adsl.duration(
-            "TRTDURD", start_date="TRTSDT", end_date="TRTEDT", inclusive=True
+            "TRTDURD", start="TRTSDT", end="TRTEDT", add_one=True
         ).to_frame()
         result_exc = subject_frame.adam.adsl.duration(
-            "TRTDURD", start_date="TRTSDT", end_date="TRTEDT", inclusive=False
+            "TRTDURD", start="TRTSDT", end="TRTEDT", add_one=False
         ).to_frame()
         assert result_inc["TRTDURD"][0] == result_exc["TRTDURD"][0] + 1
 

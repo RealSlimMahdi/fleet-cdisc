@@ -664,7 +664,7 @@ class TestStudyDay:
                 "RFSTDTC": ["2014-01-02", "2014-01-02", "2014-01-02"],
             }
         )
-        result = raw.sdtm.study_day("SVSTDY", date_col="SVSTDTC", ref_date_col="RFSTDTC").to_frame()
+        result = raw.sdtm.duration("SVSTDY", start="RFSTDTC", end="SVSTDTC").to_frame()
         assert "SVSTDY" in result.columns
         # 2014-01-05 - 2014-01-02 = 3 days, >= 0 so +1 = 4
         assert result["SVSTDY"][0] == 4
@@ -684,7 +684,7 @@ class TestStudyDayCDISC:
                 "REF": ["2014-01-02"],
             }
         )
-        result = raw.sdtm.study_day("DY", date_col="DTC", ref_date_col="REF").to_frame()
+        result = raw.sdtm.duration("DY", start="REF", end="DTC").to_frame()
         # Same day: diff=0, >=0 so +1 → day 1
         assert result["DY"][0] == 1
 
@@ -695,7 +695,7 @@ class TestStudyDayCDISC:
                 "REF": ["2014-01-02"],
             }
         )
-        result = raw.sdtm.study_day("DY", date_col="DTC", ref_date_col="REF").to_frame()
+        result = raw.sdtm.duration("DY", start="REF", end="DTC").to_frame()
         # Diff = -1, negative so no +1 → -1
         assert result["DY"][0] == -1
 

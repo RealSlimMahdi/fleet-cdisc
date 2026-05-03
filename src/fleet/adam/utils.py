@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+from datetime import date, datetime
+from typing import Literal
 
 import polars as pl
 
@@ -491,3 +493,252 @@ def impute_dtc_to_datetime(
         .otherwise(pl.lit(None, dtype=pl.Datetime("us")))
         .alias(target)
     )
+
+
+# ------------------------------------------------------------------ #
+# Unified date API helpers                                             #
+# ------------------------------------------------------------------ #
+
+
+def _infer_output_type(target: str) -> Literal["dtc", "dt", "dtm"] | None:
+    """Infer output type from the CDISC suffix of *target*.
+
+    Returns None if no recognizable suffix is found.
+    """
+    if target.endswith("DTC"):
+        return "dtc"
+    if target.endswith("DTM"):
+        return "dtm"
+    if target.endswith("DT"):
+        return "dt"
+    return None
+
+
+def _resolve_output_type(
+    target: str, output: str | None
+) -> Literal["dtc", "dt", "dtm"]:
+    """Combine explicit *output* override with suffix inference.
+
+    Raises ValueError when the output type cannot be determined.
+    """
+    if output is not None:
+        out = output.lower()
+        if out not in ("dtc", "dt", "dtm"):
+            raise ValueError(
+                f"output={output!r} is not valid. Choose 'dtc', 'dt', or 'dtm'."
+            )
+        return out  # type: ignore[return-value]
+    inferred = _infer_output_type(target)
+    if inferred is None:
+        raise ValueError(
+            f"Cannot infer output type from target '{target}'. "
+            "Use output='dt', 'dtm', or 'dtc' to specify explicitly."
+        )
+    return inferred
+
+
+def _extract_prefix(target: str) -> str:
+    """Strip the DTC/DTM/DT suffix from *target* and return the prefix.
+
+    Raises ValueError if no recognizable suffix is found.
+    """
+    if target.endswith("DTM"):
+        return target[:-3]
+    if target.endswith("DTC"):
+        return target[:-3]
+    if target.endswith("DT"):
+        return target[:-2]
+    raise ValueError(f"Cannot extract prefix from '{target}'")
+
+
+def _resolve_flag_names(
+    target: str,
+    flag: bool | str,
+    output_type: str,
+) -> tuple[str | None, str | None]:
+    """Resolve (dtf_name, tmf_name) from the *flag* parameter.
+
+    Returns ``(None, None)`` when flags are suppressed.
+    """
+    if flag is False:
+        return None, None
+    if isinstance(flag, str):
+        dtf = flag
+        tmf = (
+            flag.replace("DTF", "TMF")
+            if "DTF" in flag and output_type == "dtm"
+            else None
+        )
+        return dtf, tmf
+    # flag is True → auto-name from prefix
+    try:
+        prefix = _extract_prefix(target)
+    except ValueError:
+        raise ValueError(
+            f"Cannot auto-name flag for target '{target}'. "
+            f"Use flag='<name>DTF' or flag=False."
+        ) from None
+    dtf = f"{prefix}DTF"
+    tmf = f"{prefix}TMF" if output_type == "dtm" else None
+    return dtf, tmf
+
+
+def _apply_highest(
+    source_col: pl.Expr,
+    highest: str,
+) -> pl.Expr:
+    """Return a boolean mask that is True when the source has enough precision.
+
+    Used to nullify results where the imputation ceiling is exceeded.
+    """
+    # Map highest level to the minimum string length that satisfies it
+    # Y=4 (YYYY), M=7 (YYYY-MM), D=10 (YYYY-MM-DD)
+    # h=13 (YYYY-MM-DDThh), m=16 (YYYY-MM-DDThh:mm), s=19 (full)
+    level_map = {"Y": 4, "M": 7, "D": 10, "h": 13, "m": 16, "s": 19}
+    min_len = level_map.get(highest)
+    if min_len is None:
+        raise ValueError(
+            f"highest={highest!r} is not valid. Choose one of: {sorted(level_map)}"
+        )
+    length = source_col.str.len_chars()
+    return length >= min_len
+
+
+def _apply_clamp(
+    target_expr: pl.Expr,
+    min_date: str | None,
+    max_date: str | None,
+) -> pl.Expr:
+    """Clamp *target_expr* between optional lower and upper date bounds.
+
+    Bounds can be column names or date literals (YYYY-MM-DD).
+    """
+    expr = target_expr
+    if min_date is not None:
+        if _is_date_literal(min_date):
+            bound = pl.lit(min_date).str.to_date("%Y-%m-%d", strict=False)
+        else:
+            bound = pl.col(min_date).cast(pl.Date)
+        expr = pl.when(expr < bound).then(bound).otherwise(expr)
+    if max_date is not None:
+        if _is_date_literal(max_date):
+            bound = pl.lit(max_date).str.to_date("%Y-%m-%d", strict=False)
+        else:
+            bound = pl.col(max_date).cast(pl.Date)
+        expr = pl.when(expr > bound).then(bound).otherwise(expr)
+    return expr
+
+
+def impute_and_flag(
+    source: str | None,
+    target: str,
+    *,
+    value: str | date | datetime | None = None,
+    output_type: Literal["dtc", "dt", "dtm"],
+    time: str | None = None,
+    impute: str = "first",
+    impute_time: str | None = None,
+    highest: str | None = None,
+    min_date: str | None = None,
+    max_date: str | None = None,
+    flag: bool | str = True,
+) -> list[pl.Expr]:
+    """Unified imputation engine for the ``.date()`` verb.
+
+    Returns a list of expressions: the target column plus any flag columns.
+
+    When *value* is provided, broadcasts a literal and skips imputation.
+    When *flag* is a str, uses it as the explicit DTF flag name.
+    """
+    dtf_name, tmf_name = _resolve_flag_names(target, flag, output_type)
+
+    # ── value= path: literal broadcast, no imputation ──
+    if value is not None:
+        if isinstance(value, datetime):
+            if output_type == "dtm":
+                return [pl.lit(value).alias(target)]
+            elif output_type == "dt":
+                return [pl.lit(value.date()).alias(target)]
+            else:  # dtc
+                return [pl.lit(value.isoformat()).alias(target)]
+        elif isinstance(value, date):
+            if output_type == "dt":
+                return [pl.lit(value).alias(target)]
+            elif output_type == "dtm":
+                dt_val = datetime(value.year, value.month, value.day)
+                return [pl.lit(dt_val).alias(target)]
+            else:  # dtc
+                return [pl.lit(value.isoformat()).alias(target)]
+        else:
+            # String literal
+            if output_type == "dtc":
+                return [pl.lit(value).alias(target)]
+            elif output_type == "dt":
+                parsed = pl.lit(value).str.to_date("%Y-%m-%d", strict=False)
+                return [parsed.alias(target)]
+            else:  # dtm
+                parsed = pl.lit(value).str.to_datetime(
+                    "%Y-%m-%dT%H:%M:%S", strict=False
+                )
+                if parsed is None:
+                    parsed = (
+                        pl.lit(value)
+                        .str.to_date("%Y-%m-%d", strict=False)
+                        .cast(pl.Datetime("us"))
+                    )
+                return [parsed.alias(target)]
+
+    assert source is not None, "Either source or value must be provided"
+
+    exprs: list[pl.Expr] = []
+
+    if output_type == "dtc":
+        # DTC path is handled by the SDTM namespace directly
+        from fleet.sdtm.utils import dtc_date_expr
+
+        exprs.append(dtc_date_expr(source, target))
+        return exprs
+
+    if output_type == "dt":
+        # Date path: impute partial DTC → pl.Date
+        date_expr = impute_dtc_to_date(
+            source,
+            target,
+            day_imputation=impute,
+            month_imputation=impute,
+        )
+        # Apply highest ceiling
+        if highest is not None:
+            mask = _apply_highest(pl.col(source), highest)
+            date_expr = (
+                pl.when(mask)
+                .then(date_expr)
+                .otherwise(pl.lit(None, dtype=pl.Date))
+                .alias(target)
+            )
+        # Apply clamping
+        if min_date is not None or max_date is not None:
+            date_expr = _apply_clamp(date_expr, min_date, max_date).alias(target)
+        exprs.append(date_expr)
+        # Flags
+        if dtf_name is not None:
+            exprs.append(dtf_expr(source, dtf_name))
+        return exprs
+
+    # output_type == "dtm"
+    # Datetime path is complex due to partial dates requiring materialisation.
+    # Return the expressions for the non-partial case; the verb handles
+    # materialisation for partial dates.
+    dtm_expr = impute_dtc_to_datetime(
+        source,
+        target,
+        day_imputation=impute,
+        month_imputation=impute,
+        time_imputation=impute_time or impute,
+    )
+    exprs.append(dtm_expr)
+    if dtf_name is not None:
+        exprs.append(dtf_expr(source, dtf_name))
+    if tmf_name is not None:
+        exprs.append(tmf_expr(source, tmf_name))
+    return exprs

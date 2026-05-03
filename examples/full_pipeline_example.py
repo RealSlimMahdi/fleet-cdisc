@@ -7,6 +7,7 @@ and subsequently deriving ADSL and ADVS ADaM datasets from those SDTMs.
 
 import polars as pl
 
+import fleet  # noqa: F401  — register namespace extensions
 from specs.cdiscpilot01.sdtm.codelists import SEX, VSTESTCD
 
 
@@ -44,7 +45,7 @@ def main():
         .assign_no_ct("USUBJID", source="subject_id")
         .assign_no_ct("ARM", source="arm")
         .assign_ct("SEX", source="sex", ct_codelist=SEX, ct_mapping={"M": "M", "F": "F"})
-        .assign_dtc("BRTHDTC", source="dob", mode="date")
+        .date("BRTHDTC", source="dob")
         .to_frame()
     )
     print("\nDM Dataset:")
@@ -60,7 +61,7 @@ def main():
             ct_mapping={"Weight": "WEIGHT", "Heart Rate": "HR"},
         )
         .assign_no_ct("VSSTRESN", source="result")
-        .assign_dtc("VSDTC", source="date", mode="date")
+        .date("VSDTC", source="date")
         .to_frame()
     )
     print("\nVS Dataset:")
@@ -70,7 +71,7 @@ def main():
         raw_ae.sdtm.hardcode_no_ct("DOMAIN", value="AE")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
         .assign_no_ct("USUBJID", source="subject_id")
         .assign_no_ct("AEDECOD", source="ae_term")
-        .assign_dtc("AESTDTC", source="start_date", mode="date")
+        .date("AESTDTC", source="start_date")
         .to_frame()
     )
     print("\nAE Dataset:")

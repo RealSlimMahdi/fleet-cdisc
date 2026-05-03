@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <?xml-stylesheet type="text/xsl" href="define2-1.xsl"?>
-<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:def="http://www.cdisc.org/ns/def/v2.1" ODMVersion="1.3.2" FileOID="CDISC.CDISCPILOT01.1.Define-XML_2.1.0" FileType="Snapshot" CreationDateTime="2026-05-02T23:00:37" Originator="Fleet Team" SourceSystem="Fleet" SourceSystemVersion="0.1.0" def:Context="Submission">
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:def="http://www.cdisc.org/ns/def/v2.1" ODMVersion="1.3.2" FileOID="CDISC.CDISCPILOT01.1.Define-XML_2.1.0" FileType="Snapshot" CreationDateTime="2026-05-03T21:10:05" Originator="Fleet Team" SourceSystem="Fleet" SourceSystemVersion="0.1.0" def:Context="Submission">
   <Study OID="STDY.CDISCPILOT01">
     <GlobalVariables>
       <StudyName>CDISCPILOT01</StudyName>
@@ -405,15 +405,11 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADVS.ADY" Name="ADY" DataType="integer" SASFieldName="ADY" MethodOID="MT.study_day">
+      <ItemDef OID="IT.ADVS.ADY" Name="ADY" DataType="integer" SASFieldName="ADY">
         <Description>
           <TranslatedText xml:lang="en">Analysis Relative Day</TranslatedText>
         </Description>
-        <def:Origin Type="Derived">
-          <Description>
-            <TranslatedText xml:lang="en">Compute CDISC study day (no day 0).</TranslatedText>
-          </Description>
-        </def:Origin>
+        <def:Origin Type="Derived"/>
       </ItemDef>
       <ItemDef OID="IT.ADVS.ABLFL" Name="ABLFL" DataType="text" SASFieldName="ABLFL" Length="2" MethodOID="MT.flag">
         <Description>
@@ -629,15 +625,11 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADAE.ADY" Name="ADY" DataType="integer" SASFieldName="ADY" MethodOID="MT.study_day">
+      <ItemDef OID="IT.ADAE.ADY" Name="ADY" DataType="integer" SASFieldName="ADY">
         <Description>
           <TranslatedText xml:lang="en">Analysis Relative Day</TranslatedText>
         </Description>
-        <def:Origin Type="Derived">
-          <Description>
-            <TranslatedText xml:lang="en">Compute CDISC study day (no day 0).</TranslatedText>
-          </Description>
-        </def:Origin>
+        <def:Origin Type="Derived"/>
       </ItemDef>
       <ItemDef OID="IT.ADAE.TRTEMFL" Name="TRTEMFL" DataType="text" SASFieldName="TRTEMFL" Length="2">
         <Description>
@@ -827,12 +819,6 @@
           <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
         </Description>
         <FormalExpression Context="Python/Fleet">.source(...)</FormalExpression>
-      </MethodDef>
-      <MethodDef OID="MT.study_day" Name="study_day" Type="Computation">
-        <Description>
-          <TranslatedText xml:lang="en">Compute CDISC study day (no day 0).</TranslatedText>
-        </Description>
-        <FormalExpression Context="Python/Fleet">.study_day(...)</FormalExpression>
       </MethodDef>
       <def:leaf ID="LF.ADSL" xlink:href="adsl.xpt" xlink:title="adsl.xpt"/>
       <def:leaf ID="LF.ADVS" xlink:href="advs.xpt" xlink:title="advs.xpt"/>

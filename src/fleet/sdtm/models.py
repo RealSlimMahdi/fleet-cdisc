@@ -24,6 +24,8 @@ class SDTMAlgorithm(StrEnum):
     DATASET_LEVEL = "dataset_level"
     NOTSUBMITTED = "notsubmitted"
     MULTIPLE_RESPONSES = "multiple_responses"
+    DATE = "date"
+    DURATION = "duration"
 
 
 class SDTMVariableSpec(BaseModel):

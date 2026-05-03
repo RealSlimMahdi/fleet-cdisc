@@ -154,41 +154,6 @@ class ADSLNamespace(SharedADaMVerbsMixin):
         df = self.to_frame().join(agg_df, on=grps, how="left")
         return self._materialise_then(df)
 
-    def duration(
-        self,
-        target: str,
-        *,
-        start_date: str,
-        end_date: str,
-        unit: str = "days",
-        inclusive: bool = True,
-    ) -> Self:
-        """Derive *target* as the duration between two date columns.
-
-        Args:
-            target: Name of the output column (e.g. ``"TRTDURD"``).
-            start_date: Column containing the start date.
-            end_date: Column containing the end date.
-            unit: Duration unit (default ``"days"``; only unit supported).
-            inclusive: If True, adds 1 so both dates are counted.
-
-        Returns:
-            Self: The namespace with *target* appended.
-
-        Examples:
-            Derive treatment duration in days::
-
-                adsl = (
-                    dm_raw.adam.adsl
-                    .duration("TRTDURD", start_date="TRTSDT",
-                              end_date="TRTEDT")
-                    .to_frame()
-                )
-        """
-        diff = (pl.col(end_date).cast(pl.Date) - pl.col(start_date).cast(pl.Date)).dt.total_days()
-        expr = (diff + 1 if inclusive else diff).alias(target)
-        return self._chain(expr)
-
     def count_events(
         self,
         target: str,

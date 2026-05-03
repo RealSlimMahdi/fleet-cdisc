@@ -131,7 +131,7 @@ def _rules_section() -> str:
     return """\
 ## Rules for AI Agents
 
-1. **Fleet-first verb priority** — Always reach for a named Fleet verb (`study_day`, \
+1. **Fleet-first verb priority** — Always reach for a named Fleet verb (`duration`, \
 `baseline`, `chg`, `treatment_emergent`, …) before falling back to a raw \
 `derivation(expression=...)` call. Named verbs encode CDISC semantics, enforce correct \
 argument names, and appear in Define-XML traceability. Use `derivation` only as a last \
@@ -215,8 +215,8 @@ def _namespaces_section() -> str:
     return """\
 ## Namespaces
 
-- `df.sdtm` — 14 SDTM derivation verbs (domain mapping, CT lookup, datetime normalisation)
-- `df.adam` — ADaM BDS verbs (study day, baseline, change, flags, BSA, MAP, QTc, LOCF, \
+- `df.sdtm` — 15 SDTM derivation verbs (domain mapping, CT lookup, date normalisation, study day)
+- `df.adam` — ADaM BDS verbs (date/datetime parsing, elapsed time, baseline, change, flags, BSA, MAP, QTc, LOCF, \
 summary records, derived parameters)
 - `df.adam.adsl` — patient-level verbs (treatment dates, duration, population flags, AE \
 counts, age conversion, periods)
@@ -227,7 +227,7 @@ dates, sequence number)
 
 - Protocol-reference verbs: `fetch_structure`, `study_header`, `add_elements`, `add_arms`, \
 `add_visits`, `add_parameters`, `add_criteria`
-- Subject-level verbs: `visit_map`, `element_boundaries`, `epoch_assign`, `study_day`
+- Subject-level verbs: `visit_map`, `element_boundaries`, `epoch_assign`
 - Pydantic models: `TrialElement`, `TrialArm`, `TrialVisit`, `TrialParameter`, `TrialCriterion`
 - Collection models: `TrialElements`, `TrialArms`, `TrialVisits`, `TrialParameters`, `TrialCriteria`
 - Enum: `Epoch` (NCI C99079 — 14 standard trial epoch values)
@@ -252,7 +252,8 @@ def _sdtm_verbs_section() -> str:
         "hardcode_no_ct",
         "hardcode_ct",
         "assign_ct",
-        "assign_dtc",
+        "date",
+        "duration",
         "derivation",
         "condition_add",
         "if_then_else",
@@ -285,7 +286,6 @@ def _tdd_verbs_section() -> str:
         "visit_map",
         "element_boundaries",
         "epoch_assign",
-        "study_day",
     ]
     protocol_bullets = _render_verb_bullets(SDTMNamespace, protocol_verbs)
     subject_bullets = _render_verb_bullets(SDTMNamespace, subject_verbs)
@@ -338,9 +338,8 @@ def _shared_adam_verbs_section() -> str:
         "condderivation",
         "whereclauses",
         "merge_adsl",
-        "derive_dt",
-        "derive_dtm",
-        "format_iso",
+        "date",
+        "duration",
     ]
     bullets = _render_verb_bullets(SharedADaMVerbsMixin, verbs)
     return (
@@ -358,7 +357,6 @@ def _adam_verbs_section() -> str:
     from fleet.adam import AdamNamespace
 
     verbs = [
-        "study_day",
         "flag",
         "baseline",
         "chg",
@@ -381,7 +379,7 @@ def _adam_verbs_section() -> str:
         "## ADaM verbs\n\n"
         "Available on `df.adam` (BDS base namespace). Shared verbs "
         "(source, derivation, assigned, recode, rename, condderivation, "
-        "whereclauses, merge_adsl, derive_dt, derive_dtm, format_iso) "
+        "whereclauses, merge_adsl, date, duration) "
         "are also available here via the shared mixin.\n\n" + bullets
     )
 
@@ -435,11 +433,10 @@ def _verb_mapping_section() -> str:
 | Multi-branch conditional | `if_then_else` | `sdtm` | List of `{condition, value}` branches |
 | Multi-branch conditional | `condderivation` | `adam` / all sub-ns | Same pattern as `if_then_else` |
 | Arbitrary expression | `derivation` | `sdtm` / `adam` | Last resort — use a Fleet verb first |
-| ISO 8601 parse (SDTM) | `assign_dtc` | `sdtm` | Normalises to `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`; preserves partial dates |
-| Date imputation (ADaM) | `derive_dt` | `adam` / all sub-ns | Imputes partial --DTC → `pl.Date` with optional DTF flag |
-| Datetime imputation (ADaM) | `derive_dtm` | `adam` / all sub-ns | Imputes partial --DTC → `pl.Datetime` with optional DTF/TMF flags |
-| ISO export | `format_iso` | `adam` / all sub-ns | Formats `Date`/`Datetime` column as ISO 8601 string |
-| Study day (ADY) | `study_day` | `adam` | `ADY = ADT − RFSTDTC + 1` (signed) |
+| ISO 8601 parse (SDTM) | `date` | `sdtm` | Normalises to `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`; preserves partial dates |
+| Date imputation (ADaM) | `date` | `adam` / all sub-ns | Imputes partial --DTC → `pl.Date` or `pl.Datetime` with optional DTF/TMF flags |
+| Study day (ADY) | `duration` | `adam` / `sdtm` | CDISC study-day: +1 if ≥ 0, no day 0 |
+| Elapsed time | `duration` | `adam` / all sub-ns | Supports days, hours, minutes, seconds, weeks, months, years |
 | Baseline flag (ABLFL) | `flag` | `adam` | Per-group boolean flag |
 | Baseline value (BASE) | `baseline` | `adam` | Carries AVAL at baseline row |
 | Change from baseline (CHG) | `chg` | `adam` | `CHG = AVAL − BASE` |
@@ -458,7 +455,7 @@ def _verb_mapping_section() -> str:
 | Merge ADSL columns | `merge_adsl` | `adam` / all sub-ns | Join ADSL onto current dataset |
 | Filter rows | `whereclauses` | `adam` / all sub-ns | Filter by expression (materialises first) |
 | Treatment dates (ADSL) | `first_date` / `last_date` | `adam.adsl` | Earliest/latest event date per subject |
-| Treatment duration (TRTDURD) | `duration` | `adam.adsl` | Integer day count between two date columns |
+| Treatment duration (TRTDURD) | `duration` | `adam` / all sub-ns | Elapsed time between two date/datetime columns |
 | Population flag (SAFFL, etc.) | `flag` | `adam` / all sub-ns | `"Y"` / null based on row condition |
 | Event count (NUMAE, NUMSAE) | `count_events` | `adam.adsl` | Integer event count per subject |
 | Age conversion | `age_years` | `adam.adsl` | Unit-aware: YEARS, MONTHS, WEEKS, DAYS |
@@ -486,7 +483,7 @@ generation, pipeline execution, and post-dataset checks.
 - `derivation` → `.derivation(target, expression=...)`
 - `first_date` → `.first_date(target, from_dataset=..., date_col=..., where=...)`
 - `last_date` → `.last_date(...)`
-- `duration` → `.duration(target, start_date=..., end_date=...)`
+- `duration` → `.duration(target, start=..., end=...)`
 - `flag` → `.flag(target, criteria=...)`
 - `count` → `.count_events(target, from_dataset=..., where=...)`
 
@@ -644,9 +641,8 @@ _SHARED_ADAM_VERBS = [
     "condderivation",
     "whereclauses",
     "merge_adsl",
-    "derive_dt",
-    "derive_dtm",
-    "format_iso",
+    "date",
+    "duration",
     "flag",
     "criterion",
 ]
@@ -654,7 +650,8 @@ _SHARED_ADAM_VERBS = [
 _README_SDTM_VERBS = [
     "assign_no_ct",
     "assign_ct",
-    "assign_dtc",
+    "date",
+    "duration",
     "hardcode_ct",
     "hardcode_no_ct",
     "condition_add",
@@ -670,7 +667,6 @@ _README_SDTM_VERBS = [
 
 _README_ADAM_SPECIFIC = [
     "lookup",
-    "study_day",
     "baseline",
     "chg",
     "pchg",
@@ -752,7 +748,6 @@ _README_PK_SPECIFIC = [
     "blq_flag",
     "blq_impute",
     "nominal_time",
-    "actual_time",
     "predose_flag",
     "dose_normalized",
     "evid",

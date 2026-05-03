@@ -163,106 +163,106 @@ python -c "import fleet; print(fleet.__version__)"
 
 <!-- AUTO:NAMESPACES:BEGIN -->
 
-Importing `fleet` registers chainable namespaces on **every** Polars DataFrame. All ADaM namespaces also inherit **13 shared verbs** from the common mixin: `source`, `derivation`, `assigned`, `recode`, `rename`, `condderivation`, `whereclauses`, `merge_adsl`, `derive_dt`, `derive_dtm`, `format_iso`, `flag`, `criterion`.
+Importing `fleet` registers chainable namespaces on **every** Polars DataFrame. All ADaM namespaces also inherit **12 shared verbs** from the common mixin: `source`, `derivation`, `assigned`, `recode`, `rename`, `condderivation`, `whereclauses`, `merge_adsl`, `date`, `duration`, `flag`, `criterion`.
 
 <details>
-<summary><b><code>df.sdtm</code></b> — SDTM domains (14 verbs)</summary>
+<summary><b><code>df.sdtm</code></b> — SDTM domains (15 verbs)</summary>
 
-`assign_no_ct` · `assign_ct` · `assign_dtc` · `hardcode_ct` · `hardcode_no_ct` · `condition_add` · `if_then_else` · `ae_aerel` · `merge` · `remove_dup` · `group_by` · `dataset_level` · `notsubmitted` · `multiple_responses`
+`assign_no_ct` · `assign_ct` · `date` · `duration` · `hardcode_ct` · `hardcode_no_ct` · `condition_add` · `if_then_else` · `ae_aerel` · `merge` · `remove_dup` · `group_by` · `dataset_level` · `notsubmitted` · `multiple_responses`
 
 </details>
 
 <details>
-<summary><b><code>df.adam</code></b> — ADaM BDS (29 verbs: 16 specific + 13 shared)</summary>
+<summary><b><code>df.adam</code></b> — ADaM BDS (27 verbs: 15 specific + 12 shared)</summary>
 
-**Specific:** `lookup` · `study_day` · `baseline` · `chg` · `pchg` · `bmi` · `nrind` · `on_treatment` · `shift` · `bsa` · `map` · `qtc` · `derive_summary_records` · `derive_locf_records` · `derive_param` · `transform`
+**Specific:** `lookup` · `baseline` · `chg` · `pchg` · `bmi` · `nrind` · `on_treatment` · `shift` · `bsa` · `map` · `qtc` · `derive_summary_records` · `derive_locf_records` · `derive_param` · `transform`
 
-**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso` · `flag` · `criterion`
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion`
 
 </details>
 
 <details>
-<summary><b><code>df.adam.adsl</code></b> — ADSL (20 verbs: 7 specific + 13 shared)</summary>
+<summary><b><code>df.adam.adsl</code></b> — ADSL (19 verbs: 7 specific + 12 shared)</summary>
 
 **Specific:** `first_date` · `last_date` · `duration` · `count_events` · `age_years` · `age_from_dates` · `derive_period`
 
-**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso` · `flag` · `criterion`
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion`
 
 </details>
 
 <details>
-<summary><b><code>df.adam.occds</code></b> — OCCDS / ADAE, ADCM… (16 verbs: 2 specific + 13 shared + 1 multi-row)</summary>
+<summary><b><code>df.adam.occds</code></b> — OCCDS / ADAE, ADCM… (15 verbs: 2 specific + 12 shared + 1 multi-row)</summary>
 
 **Specific:** `treatment_emergent` · `onset_recovery`
 
 **Multi-row:** `seq`
 
-**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso` · `flag` · `criterion`
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion`
 
 </details>
 
 <details>
-<summary><b><code>df.adam.onco</code></b> — Oncology (18 verbs: 5 specific + 13 shared)</summary>
+<summary><b><code>df.adam.onco</code></b> — Oncology (17 verbs: 5 specific + 12 shared)</summary>
 
 **Specific:** `aval_resp` · `tumor_response_flag` · `best_overall_response` · `confirmed_response_flag` · `filter_pd`
 
-**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso` · `flag` · `criterion`
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion`
 
 </details>
 
 <details>
-<summary><b><code>df.adam.ophtha</code></b> — Ophthalmology (18 verbs: 5 specific + 13 shared)</summary>
+<summary><b><code>df.adam.ophtha</code></b> — Ophthalmology (17 verbs: 5 specific + 12 shared)</summary>
 
 **Specific:** `etdrs_to_logmar` · `logmar_to_etdrs` · `study_eye` · `affected_eye` · `bcva_criterion`
 
-**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso` · `flag` · `criterion`
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion`
 
 </details>
 
 <details>
-<summary><b><code>df.adam.peds</code></b> — Pediatrics (19 verbs: 6 specific + 13 shared)</summary>
+<summary><b><code>df.adam.peds</code></b> — Pediatrics (18 verbs: 6 specific + 12 shared)</summary>
 
 **Specific:** `age_days` · `age_months` · `age_years` · `corrected_age` · `prematurity_flag` · `bmi_category`
 
-**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso` · `flag` · `criterion`
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion`
 
 </details>
 
 <details>
-<summary><b><code>df.adam.vaccine</code></b> — Vaccine (18 verbs: 5 specific + 13 shared)</summary>
+<summary><b><code>df.adam.vaccine</code></b> — Vaccine (17 verbs: 5 specific + 12 shared)</summary>
 
 **Specific:** `fever_flag` · `seroconversion_flag` · `seroresponse_flag` · `aval_adis` · `event_flag`
 
-**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso` · `flag` · `criterion`
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion`
 
 </details>
 
 <details>
-<summary><b><code>df.adam.metabolic</code></b> — Metabolic (17 verbs: 4 specific + 13 shared)</summary>
+<summary><b><code>df.adam.metabolic</code></b> — Metabolic (16 verbs: 4 specific + 12 shared)</summary>
 
 **Specific:** `waist_hip_ratio` · `waist_height_ratio` · `body_fat_pct` · `visceral_fat_flag`
 
-**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso` · `flag` · `criterion`
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion`
 
 </details>
 
 <details>
-<summary><b><code>df.adam.neuro</code></b> — Neuroscience (18 verbs: 5 specific + 13 shared)</summary>
+<summary><b><code>df.adam.neuro</code></b> — Neuroscience (17 verbs: 5 specific + 12 shared)</summary>
 
 **Specific:** `centiloid` · `mmse_category` · `cdrsob_total` · `moca_category` · `panss_total`
 
-**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso` · `flag` · `criterion`
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion`
 
 </details>
 
 <details>
-<summary><b><code>df.adam.pk</code></b> — Pharmacokinetics (29 verbs: 15 specific + 13 shared + 1 multi-row)</summary>
+<summary><b><code>df.adam.pk</code></b> — Pharmacokinetics (27 verbs: 14 specific + 12 shared + 1 multi-row)</summary>
 
-**Specific:** `blq_flag` · `blq_impute` · `nominal_time` · `actual_time` · `predose_flag` · `dose_normalized` · `evid` · `mrrlt` · `blqfn` · `log_conc` · `mdv` · `amt` · `cmt` · `avalcat` · `anl_flag`
+**Specific:** `blq_flag` · `blq_impute` · `nominal_time` · `predose_flag` · `dose_normalized` · `evid` · `mrrlt` · `blqfn` · `log_conc` · `mdv` · `amt` · `cmt` · `avalcat` · `anl_flag`
 
 **Multi-row:** `seq`
 
-**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `derive_dt` · `derive_dtm` · `format_iso` · `flag` · `criterion`
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion`
 
 </details>
 

@@ -1,4 +1,4 @@
-"""Unit tests for date derivation verbs: derive_dt, derive_dtm, format_iso."""
+"""Unit tests for date derivation verbs: .date() unified API."""
 
 import polars as pl
 import pytest
@@ -43,83 +43,68 @@ def vs_dtc_frame():
 
 class TestDeriveDt:
     def test_complete_date(self, dtc_frame):
-        result = dtc_frame.adam.derive_dt("ADT", source="AESTDTC").to_frame()
+        result = dtc_frame.adam.date("ADT", source="AESTDTC").to_frame()
         assert result["ADT"].dtype == pl.Date
         assert str(result["ADT"][0]) == "2014-07-15"
 
     def test_partial_yyyymm_first(self, dtc_frame):
-        result = dtc_frame.adam.derive_dt(
-            "ADT", source="AESTDTC", day_imputation="first"
+        result = dtc_frame.adam.date(
+            "ADT", source="AESTDTC"
         ).to_frame()
         assert str(result["ADT"][1]) == "2014-07-01"
 
     def test_partial_yyyymm_last(self, dtc_frame):
-        result = dtc_frame.adam.derive_dt("ADT", source="AESTDTC", day_imputation="last").to_frame()
+        result = dtc_frame.adam.date("ADT", source="AESTDTC", impute="last").to_frame()
         assert str(result["ADT"][1]) == "2014-07-31"
 
     def test_partial_yyyymm_mid(self, dtc_frame):
-        result = dtc_frame.adam.derive_dt("ADT", source="AESTDTC", day_imputation="mid").to_frame()
+        result = dtc_frame.adam.date("ADT", source="AESTDTC", impute="mid").to_frame()
         assert str(result["ADT"][1]) == "2014-07-15"
 
     def test_partial_yyyy_first(self, dtc_frame):
-        result = dtc_frame.adam.derive_dt(
+        result = dtc_frame.adam.date(
             "ADT",
             source="AESTDTC",
-            day_imputation="first",
-            month_imputation="first",
         ).to_frame()
         assert str(result["ADT"][2]) == "2014-01-01"
 
     def test_partial_yyyy_last(self, dtc_frame):
-        result = dtc_frame.adam.derive_dt(
+        result = dtc_frame.adam.date(
             "ADT",
             source="AESTDTC",
-            day_imputation="last",
-            month_imputation="last",
+            impute="last",
         ).to_frame()
         assert str(result["ADT"][2]) == "2014-12-31"
 
     def test_partial_yyyy_mid(self, dtc_frame):
-        result = dtc_frame.adam.derive_dt(
+        result = dtc_frame.adam.date(
             "ADT",
             source="AESTDTC",
-            day_imputation="mid",
-            month_imputation="mid",
+            impute="mid",
         ).to_frame()
         assert str(result["ADT"][2]) == "2014-06-15"
 
     def test_null_input(self, dtc_frame):
-        result = dtc_frame.adam.derive_dt("ADT", source="AESTDTC").to_frame()
+        result = dtc_frame.adam.date("ADT", source="AESTDTC").to_frame()
         assert result["ADT"][4] is None
 
     def test_none_imputation_returns_null(self, dtc_frame):
-        result = dtc_frame.adam.derive_dt("ADT", source="AESTDTC", day_imputation="none").to_frame()
-        # YYYY-MM with day_imputation="none" → null
+        result = dtc_frame.adam.date("ADT", source="AESTDTC", impute="none").to_frame()
+        # YYYY-MM with impute="none" → null
         assert result["ADT"][1] is None
         # Complete date still parses
         assert str(result["ADT"][0]) == "2014-07-15"
 
     def test_dtf_flag_generated(self, dtc_frame):
-        result = dtc_frame.adam.derive_dt("ADT", source="AESTDTC", dtf="ADTF").to_frame()
+        result = dtc_frame.adam.date("ADT", source="AESTDTC", flag=True).to_frame()
         assert "ADTF" in result.columns
         assert result["ADTF"][0] is None  # complete → null
         assert result["ADTF"][1] == "D"  # YYYY-MM → day imputed
         assert result["ADTF"][2] == "M"  # YYYY → month imputed
         assert result["ADTF"][4] is None  # null input → null flag
 
-    def test_date_literal_imputation(self):
-        df = pl.DataFrame({"DTC": ["2014-07", "2014"]})
-        result = df.adam.derive_dt(
-            "ADT",
-            source="DTC",
-            day_imputation="2014-06-20",
-            month_imputation="2014-03-01",
-        ).to_frame()
-        assert str(result["ADT"][0]) == "2014-07-20"  # day=20 from literal
-        assert str(result["ADT"][1]) == "2014-03-20"  # month=03, day=20
-
     def test_strips_time_from_datetime_string(self, dtc_frame):
-        result = dtc_frame.adam.derive_dt("ADT", source="AESTDTC").to_frame()
+        result = dtc_frame.adam.date("ADT", source="AESTDTC").to_frame()
         # YYYY-MM-DDTHH:MM:SS → should still produce correct Date
         assert str(result["ADT"][3]) == "2014-07-15"
 
@@ -132,7 +117,7 @@ class TestDeriveDt:
 class TestDeriveDtm:
     def test_complete_datetime(self):
         df = pl.DataFrame({"DTC": ["2014-07-15T08:30:00"]})
-        result = df.adam.derive_dtm("ADTM", source="DTC").to_frame()
+        result = df.adam.date("ADTM", source="DTC").to_frame()
         assert result["ADTM"].dtype.is_(pl.Datetime) or str(result["ADTM"].dtype).startswith(
             "Datetime"
         )
@@ -142,14 +127,14 @@ class TestDeriveDtm:
 
     def test_date_only_time_imputed_first(self):
         df = pl.DataFrame({"DTC": ["2014-07-15"]})
-        result = df.adam.derive_dtm("ADTM", source="DTC", time_imputation="first").to_frame()
+        result = df.adam.date("ADTM", source="DTC", impute_time="first").to_frame()
         dtm = result["ADTM"][0]
         assert dtm.hour == 0
         assert dtm.minute == 0
 
     def test_date_only_time_imputed_last(self):
         df = pl.DataFrame({"DTC": ["2014-07-15"]})
-        result = df.adam.derive_dtm("ADTM", source="DTC", time_imputation="last").to_frame()
+        result = df.adam.date("ADTM", source="DTC", impute_time="last").to_frame()
         dtm = result["ADTM"][0]
         assert dtm.hour == 23
         assert dtm.minute == 59
@@ -157,20 +142,21 @@ class TestDeriveDtm:
 
     def test_date_only_time_imputed_mid(self):
         df = pl.DataFrame({"DTC": ["2014-07-15"]})
-        result = df.adam.derive_dtm("ADTM", source="DTC", time_imputation="mid").to_frame()
+        result = df.adam.date("ADTM", source="DTC", impute_time="mid").to_frame()
         dtm = result["ADTM"][0]
         assert dtm.hour == 12
 
     def test_tmf_flag_generated(self):
         df = pl.DataFrame({"DTC": ["2014-07-15T08:30:00", "2014-07-15", None]})
-        result = df.adam.derive_dtm("ADTM", source="DTC", tmf="ASTTMF").to_frame()
-        assert result["ASTTMF"][0] is None  # complete datetime → null
-        assert result["ASTTMF"][1] == "H"  # no time → hours imputed
-        assert result["ASTTMF"][2] is None  # null → null
+        result = df.adam.date("ADTM", source="DTC", flag=True).to_frame()
+        assert "ATMF" in result.columns
+        assert result["ATMF"][0] is None  # complete datetime → null
+        assert result["ATMF"][1] == "H"  # no time → hours imputed
+        assert result["ATMF"][2] is None  # null → null
 
     def test_null_input(self):
         df = pl.DataFrame({"DTC": pl.Series([None], dtype=pl.String)})
-        result = df.adam.derive_dtm("ADTM", source="DTC").to_frame()
+        result = df.adam.date("ADTM", source="DTC").to_frame()
         assert result["ADTM"][0] is None
 
 
@@ -182,14 +168,20 @@ class TestDeriveDtm:
 class TestFormatIso:
     def test_date_to_iso(self):
         df = pl.DataFrame({"DTC": ["2014-07-15"]})
-        result = df.adam.derive_dt("ADT", source="DTC").format_iso("ADTC", source="ADT").to_frame()
+        result = (
+            df.adam.date("ADT", source="DTC")
+            .derivation("ADTC", expression='pl.col("ADT").dt.to_string("%Y-%m-%d")')
+            .to_frame()
+        )
         assert result["ADTC"][0] == "2014-07-15"
         assert result["ADTC"].dtype == pl.String
 
     def test_datetime_to_iso(self):
         df = pl.DataFrame({"DTC": ["2014-07-15T08:30:00"]})
         result = (
-            df.adam.derive_dtm("ADTM", source="DTC").format_iso("ADTMC", source="ADTM").to_frame()
+            df.adam.date("ADTM", source="DTC")
+            .derivation("ADTMC", expression='pl.col("ADTM").dt.to_string("%Y-%m-%dT%H:%M:%S")')
+            .to_frame()
         )
         assert result["ADTMC"][0] == "2014-07-15T08:30:00"
         assert result["ADTMC"].dtype == pl.String

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <?xml-stylesheet type="text/xsl" href="define2-1.xsl"?>
-<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:def="http://www.cdisc.org/ns/def/v2.1" ODMVersion="1.3.2" FileOID="CDISC.CDISCPILOT01.1.Define-XML_2.1.0" FileType="Snapshot" CreationDateTime="2026-05-02T23:00:37" Originator="Fleet Team" SourceSystem="Fleet" SourceSystemVersion="0.1.0" def:Context="Submission">
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:def="http://www.cdisc.org/ns/def/v2.1" ODMVersion="1.3.2" FileOID="CDISC.CDISCPILOT01.1.Define-XML_2.1.0" FileType="Snapshot" CreationDateTime="2026-05-03T21:10:05" Originator="Fleet Team" SourceSystem="Fleet" SourceSystemVersion="0.1.0" def:Context="Submission">
   <Study OID="STDY.CDISCPILOT01">
     <GlobalVariables>
       <StudyName>CDISCPILOT01</StudyName>
@@ -133,25 +133,17 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.DM.RFSTDTC" Name="RFSTDTC" DataType="datetime" SASFieldName="RFSTDTC" MethodOID="MT.assign_dtc">
+      <ItemDef OID="IT.DM.RFSTDTC" Name="RFSTDTC" DataType="datetime" SASFieldName="RFSTDTC">
         <Description>
           <TranslatedText xml:lang="en">Subject Reference Start Date/Time</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
-          <Description>
-            <TranslatedText xml:lang="en">Parse *source* date string and format as ISO 8601.</TranslatedText>
-          </Description>
-        </def:Origin>
+        <def:Origin Type="CRF"/>
       </ItemDef>
-      <ItemDef OID="IT.DM.RFENDTC" Name="RFENDTC" DataType="datetime" SASFieldName="RFENDTC" MethodOID="MT.assign_dtc">
+      <ItemDef OID="IT.DM.RFENDTC" Name="RFENDTC" DataType="datetime" SASFieldName="RFENDTC">
         <Description>
           <TranslatedText xml:lang="en">Subject Reference End Date/Time</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
-          <Description>
-            <TranslatedText xml:lang="en">Parse *source* date string and format as ISO 8601.</TranslatedText>
-          </Description>
-        </def:Origin>
+        <def:Origin Type="CRF"/>
       </ItemDef>
       <ItemDef OID="IT.DM.RFXSTDTC" Name="RFXSTDTC" DataType="datetime" SASFieldName="RFXSTDTC">
         <Description>
@@ -268,15 +260,11 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.DM.RFICDTC" Name="RFICDTC" DataType="datetime" SASFieldName="RFICDTC" MethodOID="MT.assign_dtc">
+      <ItemDef OID="IT.DM.RFICDTC" Name="RFICDTC" DataType="datetime" SASFieldName="RFICDTC">
         <Description>
           <TranslatedText xml:lang="en">Date/Time of Informed Consent</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
-          <Description>
-            <TranslatedText xml:lang="en">Parse *source* date string and format as ISO 8601.</TranslatedText>
-          </Description>
-        </def:Origin>
+        <def:Origin Type="CRF"/>
       </ItemDef>
       <ItemDef OID="IT.AE.AESEQ" Name="AESEQ" DataType="integer" SASFieldName="AESEQ">
         <Description>
@@ -304,25 +292,17 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.AE.AESTDTC" Name="AESTDTC" DataType="datetime" SASFieldName="AESTDTC" MethodOID="MT.assign_dtc">
+      <ItemDef OID="IT.AE.AESTDTC" Name="AESTDTC" DataType="datetime" SASFieldName="AESTDTC">
         <Description>
           <TranslatedText xml:lang="en">Start Date/Time of Adverse Event</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
-          <Description>
-            <TranslatedText xml:lang="en">Parse *source* date string and format as ISO 8601.</TranslatedText>
-          </Description>
-        </def:Origin>
+        <def:Origin Type="CRF"/>
       </ItemDef>
-      <ItemDef OID="IT.AE.AEENDTC" Name="AEENDTC" DataType="datetime" SASFieldName="AEENDTC" MethodOID="MT.assign_dtc">
+      <ItemDef OID="IT.AE.AEENDTC" Name="AEENDTC" DataType="datetime" SASFieldName="AEENDTC">
         <Description>
           <TranslatedText xml:lang="en">End Date/Time of Adverse Event</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
-          <Description>
-            <TranslatedText xml:lang="en">Parse *source* date string and format as ISO 8601.</TranslatedText>
-          </Description>
-        </def:Origin>
+        <def:Origin Type="CRF"/>
       </ItemDef>
       <ItemDef OID="IT.AE.AESEV" Name="AESEV" DataType="text" SASFieldName="AESEV" Length="20" MethodOID="MT.assign_no_ct">
         <Description>
@@ -455,15 +435,11 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.VS.VSDTC" Name="VSDTC" DataType="datetime" SASFieldName="VSDTC" MethodOID="MT.assign_dtc">
+      <ItemDef OID="IT.VS.VSDTC" Name="VSDTC" DataType="datetime" SASFieldName="VSDTC">
         <Description>
           <TranslatedText xml:lang="en">Date/Time of Measurements</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
-          <Description>
-            <TranslatedText xml:lang="en">Parse *source* date string and format as ISO 8601.</TranslatedText>
-          </Description>
-        </def:Origin>
+        <def:Origin Type="CRF"/>
       </ItemDef>
       <ItemDef OID="IT.EX.EXSEQ" Name="EXSEQ" DataType="integer" SASFieldName="EXSEQ">
         <Description>
@@ -501,25 +477,17 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.EX.EXSTDTC" Name="EXSTDTC" DataType="datetime" SASFieldName="EXSTDTC" MethodOID="MT.assign_dtc">
+      <ItemDef OID="IT.EX.EXSTDTC" Name="EXSTDTC" DataType="datetime" SASFieldName="EXSTDTC">
         <Description>
           <TranslatedText xml:lang="en">Start Date/Time of Treatment</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
-          <Description>
-            <TranslatedText xml:lang="en">Parse *source* date string and format as ISO 8601.</TranslatedText>
-          </Description>
-        </def:Origin>
+        <def:Origin Type="CRF"/>
       </ItemDef>
-      <ItemDef OID="IT.EX.EXENDTC" Name="EXENDTC" DataType="datetime" SASFieldName="EXENDTC" MethodOID="MT.assign_dtc">
+      <ItemDef OID="IT.EX.EXENDTC" Name="EXENDTC" DataType="datetime" SASFieldName="EXENDTC">
         <Description>
           <TranslatedText xml:lang="en">End Date/Time of Treatment</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
-          <Description>
-            <TranslatedText xml:lang="en">Parse *source* date string and format as ISO 8601.</TranslatedText>
-          </Description>
-        </def:Origin>
+        <def:Origin Type="CRF"/>
       </ItemDef>
       <CodeList OID="C66731" Name="Sex" DataType="text">
         <CodeListItem CodedValue="M">
@@ -615,12 +583,6 @@
           <TranslatedText xml:lang="en">Copy *source* to *target*, translating values via controlled terminology.</TranslatedText>
         </Description>
         <FormalExpression Context="Python/Fleet">.assign_ct(...)</FormalExpression>
-      </MethodDef>
-      <MethodDef OID="MT.assign_dtc" Name="assign_dtc" Type="Computation">
-        <Description>
-          <TranslatedText xml:lang="en">Parse *source* date string and format as ISO 8601.</TranslatedText>
-        </Description>
-        <FormalExpression Context="Python/Fleet">.assign_dtc(...)</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.assign_no_ct" Name="assign_no_ct" Type="Computation">
         <Description>

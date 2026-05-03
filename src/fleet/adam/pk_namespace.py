@@ -182,56 +182,6 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         expr = (pl.col(from_col).cast(pl.Float64) * scale).alias(target)
         return self._chain(expr)
 
-    def actual_time(
-        self,
-        target: str,
-        *,
-        sample_dtm: str,
-        dose_dtm: str,
-        unit: str = "h",
-    ) -> Self:
-        """Derive actual elapsed time between sample and dose datetimes.
-
-        Parses *sample_dtm* and *dose_dtm* as ISO 8601 strings and returns
-        the elapsed duration in *unit*.
-
-        Args:
-            target: Name of the output column.
-            sample_dtm: Column containing the sample collection datetime.
-            dose_dtm: Column containing the reference dose datetime.
-            unit: Output unit — ``"s"``, ``"min"``, ``"h"``, or ``"d"``.
-
-        Returns:
-            Self: The namespace with *target* appended.
-
-        Examples:
-            Derive actual time in hours from PC and EX datetimes::
-
-                adpc = (
-                    pc_raw.adam.pk
-                    .actual_time("ATIME", sample_dtm="PCDTC",
-                                 dose_dtm="EXSTDTC")
-                    .to_frame()
-                )
-        """
-        if unit not in _UNIT_SCALE:
-            raise ValueError(
-                f"actual_time unit={unit!r} is not supported. Choose one of: {sorted(_UNIT_SCALE)}"
-            )
-        seconds_per_unit = _UNIT_SCALE[unit]
-
-        def _to_datetime(col: str) -> pl.Expr:
-            """Parse string or pass-through Datetime column."""
-            return pl.col(col).str.to_datetime(
-                format="%Y-%m-%dT%H:%M:%S",
-                strict=False,
-            )
-
-        diff_s = (
-            (_to_datetime(sample_dtm) - _to_datetime(dose_dtm)).dt.total_seconds().cast(pl.Float64)
-        )
-        return self._chain((diff_s / seconds_per_unit).alias(target))
-
     def predose_flag(
         self,
         target: str,

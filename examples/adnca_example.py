@@ -183,8 +183,8 @@ adpc = (
     # admiral: derive_vars_duration(new_var = AFRLT, start_date = FANLDTM,
     #                               end_date = ADTM, out_unit = "HOURS", add_one = FALSE)
     # EXSTDTC is embedded in the PC domain for this single-dose dataset.
-    .actual_time("AFRLT", sample_dtm="PCDTC", dose_dtm="EXSTDTC", unit="h")
-    .actual_time("ARRLT", sample_dtm="PCDTC", dose_dtm="EXSTDTC", unit="h")
+    .duration("AFRLT", start="EXSTDTC", end="PCDTC", unit="hours", add_one=False)
+    .duration("ARRLT", start="EXSTDTC", end="PCDTC", unit="hours", add_one=False)
     # (In multi-dose studies ARRLT uses the most-recent prior dose datetime;
     # for the pre-dose record ARRLT is set to AXRLT = time-to-next-dose)
     # ── Step 9. Modified relative time — clip pre-dose negative values to 0 ─
@@ -322,8 +322,8 @@ adppk = (
     # admiral: derive_vars_duration(new_var = AFRLT, add_one = FALSE)
     # admiral: derive_vars_duration(new_var = APRLT, add_one = FALSE)
     # For single-dose: AFRLT = APRLT = time since the single dose
-    .actual_time("AFRLT", sample_dtm="PCDTC", dose_dtm="EXSTDTC", unit="h")
-    .actual_time("APRLT", sample_dtm="PCDTC", dose_dtm="EXSTDTC", unit="h")
+    .duration("AFRLT", start="EXSTDTC", end="PCDTC", unit="hours", add_one=False)
+    .duration("APRLT", start="EXSTDTC", end="PCDTC", unit="hours", add_one=False)
     # ── NFRLT / NPRLT — Nominal Relative Times ───────────────────────────────
     # admiral: mutate(NFRLT = PCTPTNUM), NPRLT = NFRLT - NFRLT_prev
     .nominal_time("NFRLT", from_col="PCTPTNUM")

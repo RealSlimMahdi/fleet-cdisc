@@ -348,7 +348,7 @@ def main() -> None:
             ref_date="ref_date",
             tolerance={"before": 5, "after": 5},
         )
-        .study_day("SVSTDY", date_col="visit_date", ref_date_col="ref_date")
+        .duration("SVSTDY", start="ref_date", end="visit_date")
         .epoch_assign(
             "EPOCH",
             date_col="visit_date",
@@ -394,7 +394,7 @@ def main() -> None:
             element_col="ETCD",
             subject_col="USUBJID",
         )
-        .study_day("SESTDY", date_col="SESTDTC", ref_date_col="ref_date")
+        .duration("SESTDY", start="ref_date", end="SESTDTC")
         .epoch_assign(
             "EPOCH",
             date_col="SESTDTC",

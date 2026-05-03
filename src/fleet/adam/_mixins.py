@@ -1001,156 +1001,195 @@ class SharedADaMVerbsMixin(FlagCriterionMixin):
     # Date derivation verbs                                                #
     # ------------------------------------------------------------------ #
 
-    def derive_dt(
+    # ------------------------------------------------------------------ #
+    # Unified date / duration verbs                                        #
+    # ------------------------------------------------------------------ #
+
+    def date(
         self,
         target: str,
         *,
-        source: str,
-        dtf: str | None = None,
-        day_imputation: str = "first",
-        month_imputation: str = "first",
+        source: str | None = None,
+        value: str | None = None,
+        output: str | None = None,
+        time: str | None = None,
+        impute: str = "first",
+        impute_time: str | None = None,
+        highest: str | None = None,
+        flag: bool | str = True,
+        min_date: str | None = None,
+        max_date: str | None = None,
     ) -> Self:
-        """Derive an analysis date (``pl.Date``) from a ``--DTC`` string.
+        """Parse, convert, impute, and flag a date or datetime column.
 
-        Parses an ISO 8601 character date/time variable (e.g. ``AESTDTC``)
-        into a native ``pl.Date`` column, imputing partial dates according
-        to the chosen strategies.
+        Dispatches behavior based on the CDISC suffix of *target* (DT, DTM)
+        or an explicit *output* override.  Supports both column references
+        (``source=``) and literal values (``value=``).
 
         Args:
-            target: Name of the output ``pl.Date`` column (e.g. ``"ADT"``).
-            source: Name of the ``--DTC`` input column.
-            dtf: When set, also produces this Date Imputation Flag column
-                (``"M"`` = month imputed, ``"D"`` = day imputed, ``null`` =
-                complete).
-            day_imputation: ``"first"`` (01), ``"last"`` (end-of-month),
-                ``"mid"`` (15), ``"none"`` (null if missing), a column
-                name, or a date literal ``"YYYY-MM-DD"``.
-            month_imputation: ``"first"`` (01), ``"last"`` (12),
-                ``"mid"`` (06), ``"none"`` (null if missing), a column
-                name, or a date literal ``"YYYY-MM-DD"``.
+            target: Name of the output column.
+            source: Column name to read values from.  Mutually exclusive
+                with *value*.
+            value: Literal date value to broadcast.  Mutually exclusive
+                with *source*.
+            output: Explicit output type override: ``"dt"`` or ``"dtm"``.
+                When omitted, inferred from the *target* suffix.
+            time: Time column name or ``"HH:MM:SS"`` literal to combine
+                with the date from *source* (DTM targets only).
+            impute: Imputation strategy for missing date components:
+                ``"first"`` (default), ``"mid"``, ``"last"``, ``"none"``.
+            impute_time: Override for time-part imputation, separate from
+                *impute*.  Only relevant for DTM targets.
+            highest: Maximum imputation ceiling (``"D"``, ``"M"``, ``"Y"``,
+                ``"h"``, ``"m"``, ``"s"``).  Rows that exceed the ceiling
+                are set to null.
+            flag: ``True`` to auto-generate DTF/TMF flag columns,
+                ``False`` to suppress, or a string to name the DTF flag
+                explicitly.
+            min_date: Lower clamp bound (column name or date literal).
+            max_date: Upper clamp bound (column name or date literal).
 
         Returns:
-            Self: The namespace with *target* (and optionally *dtf*)
+            Self: The namespace with *target* (and optionally flag columns)
                 appended; call ``.to_frame()`` to materialise.
 
         Examples:
-            Derive ADT with default imputation (first)::
+            Derive ADT from a DTC source with default imputation::
 
                 advs = (
                     vs_df.adam
-                    .derive_dt("ADT", source="VSDTC")
+                    .date("ADT", source="VSDTC")
                     .to_frame()
                 )
 
-            Derive ASTDT with DTF flag and mid-month imputation::
+            Non-standard target with explicit output and flag::
 
-                adae = (
-                    ae_df.adam
-                    .derive_dt("ASTDT", source="AESTDTC", dtf="ASTDTF",
-                               day_imputation="mid", month_imputation="mid")
+                df = (
+                    raw.adam
+                    .date("XYZ", source="raw_date", output="dt",
+                          flag="XYZDTF")
+                    .to_frame()
+                )
+
+            Broadcast a literal date::
+
+                adsl = (
+                    dm.adam.adsl
+                    .date("RFSTDT", value="2024-01-15", output="dt",
+                          flag=False)
                     .to_frame()
                 )
         """
-        from fleet.adam.utils import dtf_expr, impute_dtc_to_date
+        from datetime import date as _date
+        from datetime import datetime as _datetime
 
-        exprs: list[pl.Expr] = [
-            impute_dtc_to_date(
+        from fleet.adam.utils import (
+            _resolve_output_type,
+            impute_and_flag,
+        )
+
+        # ── validate source / value mutual exclusivity ──
+        if source is not None and value is not None:
+            raise ValueError(
+                "Cannot specify both source= and value=. Choose one."
+            )
+        if source is None and value is None:
+            raise ValueError(
+                "Must specify either source= or value=."
+            )
+
+        output_type = _resolve_output_type(target, output)
+
+        # DTC targets belong in SDTM, not ADaM
+        if output_type == "dtc":
+            raise ValueError(
+                f"DTC output type is not supported on ADaM namespaces. "
+                f"Use the SDTM .date() verb for target '{target}'."
+            )
+
+        # time= only valid for DTM
+        if time is not None and output_type != "dtm":
+            raise ValueError(
+                f"time= parameter is only valid for DTM targets, "
+                f"but target '{target}' resolves to output='{output_type}'."
+            )
+
+        # value= path: broadcast literal, skip imputation
+        if value is not None:
+            # Default flags to False for value= (no imputation)
+            if flag is True:
+                flag = False
+            # Parse string values to appropriate Python types
+            val: str | _date | _datetime = value
+            if isinstance(value, str):
+                val = value
+            exprs = impute_and_flag(
+                None,
+                target,
+                value=val,
+                output_type=output_type,
+                flag=flag,
+            )
+            return self._chain(*exprs)
+
+        # source= path
+        assert source is not None
+
+        if output_type == "dt":
+            exprs = impute_and_flag(
                 source,
                 target,
-                day_imputation=day_imputation,
-                month_imputation=month_imputation,
+                output_type="dt",
+                impute=impute,
+                highest=highest,
+                min_date=min_date,
+                max_date=max_date,
+                flag=flag,
             )
-        ]
-        if dtf is not None:
-            exprs.append(dtf_expr(source, dtf))
-        return self._chain(*exprs)
+            return self._chain(*exprs)
 
-    def derive_dtm(
-        self,
-        target: str,
-        *,
-        source: str,
-        dtf: str | None = None,
-        tmf: str | None = None,
-        day_imputation: str = "first",
-        month_imputation: str = "first",
-        time_imputation: str = "first",
-    ) -> Self:
-        """Derive an analysis datetime (``pl.Datetime``) from a ``--DTC`` string.
-
-        Parses an ISO 8601 character date/time variable into a native
-        ``pl.Datetime`` column, imputing partial dates **and** times
-        according to the chosen strategies.
-
-        For partial dates (YYYY-MM or YYYY), the pipeline materialises
-        internally so that date imputation can feed into the datetime
-        construction.
-
-        Args:
-            target: Name of the output ``pl.Datetime`` column
-                (e.g. ``"ADTM"``).
-            source: Name of the ``--DTC`` input column.
-            dtf: Optional Date Imputation Flag column name.
-            tmf: Optional Time Imputation Flag column name.
-            day_imputation: Strategy for missing day component.
-            month_imputation: Strategy for missing month component.
-            time_imputation: ``"first"`` (00:00:00), ``"last"`` (23:59:59),
-                ``"mid"`` (12:00:00), ``"none"`` (null if missing), a column
-                name, or a datetime literal.
-
-        Returns:
-            Self: The namespace with *target* (and optionally *dtf*, *tmf*)
-                appended; call ``.to_frame()`` to materialise.
-
-        Examples:
-            Derive ADTM with end-of-day time imputation::
-
-                adae = (
-                    ae_df.adam
-                    .derive_dtm("ADTM", source="AESTDTC", tmf="ASTTMF",
-                                time_imputation="last")
-                    .to_frame()
-                )
-        """
+        # output_type == "dtm"
+        # DTM with partial dates requires materialisation (same as derive_dtm)
         from fleet.adam.utils import (
+            _resolve_flag_names,
+            _resolve_time,
             dtf_expr,
             impute_dtc_to_date,
             impute_dtc_to_datetime,
             tmf_expr,
         )
 
+        dtf_name, tmf_name = _resolve_flag_names(target, flag, output_type)
+        effective_time_impute = impute_time or impute
+
         col = pl.col(source)
         length = col.str.len_chars()
 
-        # For records with partial dates (len < 10) we need a two-step
-        # approach: first impute the date, then build the datetime.
-        # Materialise so we can reference the imputed date column.
+        # Materialise for partial date handling
         date_expr = impute_dtc_to_date(
             source,
             "__dtm_date_tmp__",
-            day_imputation=day_imputation,
-            month_imputation=month_imputation,
+            day_imputation=impute,
+            month_imputation=impute,
         )
         df = self._lazy.with_columns(date_expr).collect()
 
-        # Build the datetime expression using impute_dtc_to_datetime
+        # Build datetime expression
         dtm_expr = impute_dtc_to_datetime(
             source,
             target,
-            day_imputation=day_imputation,
-            month_imputation=month_imputation,
-            time_imputation=time_imputation,
+            day_imputation=impute,
+            month_imputation=impute,
+            time_imputation=effective_time_impute,
         )
 
-        # For partial dates, override with the imputed date + time
-        from fleet.adam.utils import _resolve_time
-
-        time_suffix = _resolve_time(time_imputation)
-        if time_imputation == "none":
+        time_suffix = _resolve_time(effective_time_impute)
+        if effective_time_impute == "none":
             partial_dtm = pl.lit(None, dtype=pl.Datetime("us"))
         elif isinstance(time_suffix, str) and time_suffix.startswith("T"):
             partial_dtm = (
-                pl.col("__dtm_date_tmp__").dt.to_string("%Y-%m-%d") + pl.lit(time_suffix)
+                pl.col("__dtm_date_tmp__").dt.to_string("%Y-%m-%d")
+                + pl.lit(time_suffix)
             ).str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
         else:
             partial_dtm = (
@@ -1168,56 +1207,203 @@ class SharedADaMVerbsMixin(FlagCriterionMixin):
             .alias(target)
         )
 
-        exprs: list[pl.Expr] = [dtm_full]
-        if dtf is not None:
-            exprs.append(dtf_expr(source, dtf))
-        if tmf is not None:
-            exprs.append(tmf_expr(source, tmf))
+        exprs_list: list[pl.Expr] = [dtm_full]
+        if dtf_name is not None:
+            exprs_list.append(dtf_expr(source, dtf_name))
+        if tmf_name is not None:
+            exprs_list.append(tmf_expr(source, tmf_name))
 
-        result = df.with_columns(exprs)
+        result = df.with_columns(exprs_list)
         if "__dtm_date_tmp__" in result.columns:
             result = result.drop("__dtm_date_tmp__")
         return self._materialise_then(result)
 
-    def format_iso(self, target: str, *, source: str) -> Self:
-        """Format a ``pl.Date`` or ``pl.Datetime`` column as an ISO 8601 string.
+    def duration(
+        self,
+        target: str,
+        *,
+        start: str | pl.Expr,
+        end: str | pl.Expr,
+        unit: str = "days",
+        add_one: bool | None = None,
+        out: str = "numeric",
+    ) -> Self:
+        """Compute the duration between two date/datetime columns.
 
-        Detects the source column type:
-        - ``pl.Date`` → ``"YYYY-MM-DD"``
-        - ``pl.Datetime`` → ``"YYYY-MM-DDTHH:MM:SS"``
+        Supports column references (``str``) and Polars expressions
+        (e.g. ``pl.lit(date(2024, 1, 1))``) for *start* and *end*.
+
+        The ``add_one`` parameter controls inclusive counting:
+        - ``None`` (default): auto-resolves from the target suffix.
+          ``*DY`` targets use CDISC study-day convention (no day 0);
+          all others add 1 for inclusive counting.
+        - ``True``: always add 1 (inclusive).
+        - ``False``: raw difference (e.g. PK elapsed time).
 
         Args:
-            target: Name of the output ``pl.String`` column.
-            source: Name of the input date/datetime column.
+            target: Name of the output column.
+            start: Start date column name or expression.
+            end: End date column name or expression.
+            unit: Duration unit — ``"seconds"``, ``"minutes"``, ``"hours"``,
+                ``"days"`` (default), ``"weeks"``, ``"months"``, ``"years"``.
+            add_one: Override for inclusive counting.  ``None`` auto-resolves
+                from the target suffix.
+            out: Output format — ``"numeric"`` (default) or ``"iso8601"``.
 
         Returns:
-            Self: The namespace with *target* appended.
+            Self: The namespace with *target* appended; call ``.to_frame()``
+                to materialise.
 
         Examples:
-            Export ADT as an ISO string for submission::
+            Study day (auto-detected from DY suffix)::
 
-                advs = (
-                    vs_df.adam
-                    .derive_dt("ADT", source="VSDTC")
-                    .format_iso("ADTC", source="ADT")
+                adae = (
+                    ae_df.adam
+                    .duration("ASTDY", start="TRTSDT", end="ASTDT")
+                    .to_frame()
+                )
+
+            Treatment duration in days::
+
+                adsl = (
+                    dm_df.adam.adsl
+                    .duration("TRTDURD", start="TRTSDT", end="TRTEDT")
+                    .to_frame()
+                )
+
+            PK elapsed time in hours::
+
+                adpc = (
+                    pc_df.adam.pk
+                    .duration("APTS", start="EXSTDTM", end="PCDTM",
+                              unit="hours", add_one=False)
                     .to_frame()
                 )
         """
-        # Materialise to inspect dtype
+        # Normalise start/end to expressions
+        start_expr = pl.col(start) if isinstance(start, str) else start
+        end_expr = pl.col(end) if isinstance(end, str) else end
+
+        # Auto-cast string columns to date/datetime
+        start_expr = start_expr.str.to_date(strict=False).cast(pl.Date).fill_null(
+            start_expr.str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
+        ) if isinstance(start, str) else start_expr
+        end_expr = end_expr.str.to_date(strict=False).cast(pl.Date).fill_null(
+            end_expr.str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
+        ) if isinstance(start, str) else end_expr
+
+        # For string columns, we need a safer approach: try to cast
+        # but the column may already be Date/Datetime. Use a materialise
+        # approach to inspect dtypes.
         df = self._lazy.collect()
-        dtype = df[source].dtype
-        if dtype == pl.Date:
-            fmt = "%Y-%m-%d"
-        elif dtype.is_(pl.Datetime) or str(dtype).startswith("Datetime"):
-            fmt = "%Y-%m-%dT%H:%M:%S"
-        else:
-            # Already a string or unknown type — pass through
-            return self._materialise_then(
-                df.with_columns(pl.col(source).cast(pl.String).alias(target))
+
+        def _to_date_expr(col_or_expr: str | pl.Expr) -> pl.Expr:
+            """Resolve a column reference or expression to a temporal expr."""
+            if isinstance(col_or_expr, str):
+                col_name = col_or_expr
+                if col_name in df.columns:
+                    dtype = df[col_name].dtype
+                    if dtype == pl.Date:
+                        return pl.col(col_name)
+                    if dtype.is_(pl.Datetime) or str(dtype).startswith("Datetime"):
+                        # For time-based units, keep Datetime precision
+                        if unit in ("seconds", "minutes", "hours"):
+                            return pl.col(col_name)
+                        return pl.col(col_name).cast(pl.Date)
+                    # String → try to parse
+                    if unit in ("seconds", "minutes", "hours"):
+                        return pl.col(col_name).str.to_datetime(strict=False)
+                    return pl.col(col_name).str.to_date(strict=False)
+                return pl.col(col_name)
+            # pl.Expr — use as-is
+            return col_or_expr
+
+        s_expr = _to_date_expr(start)
+        e_expr = _to_date_expr(end)
+
+        # Compute difference
+        valid_units = {
+            "seconds", "minutes", "hours", "days", "weeks", "months", "years",
+        }
+        if unit not in valid_units:
+            raise ValueError(
+                f"duration unit={unit!r} is not supported. "
+                f"Choose one of: {sorted(valid_units)}"
             )
-        return self._materialise_then(
-            df.with_columns(pl.col(source).dt.to_string(fmt).alias(target))
-        )
+
+        if unit in ("seconds", "minutes", "hours"):
+            # Need datetime precision — ensure both sides are Datetime
+            s_dtm = s_expr.cast(pl.Datetime("us"))
+            e_dtm = e_expr.cast(pl.Datetime("us"))
+            diff_s = (e_dtm - s_dtm).dt.total_seconds().cast(pl.Float64)
+            if unit == "seconds":
+                diff = diff_s.cast(pl.Int64)
+            elif unit == "minutes":
+                diff = diff_s / 60.0
+            else:  # hours
+                diff = diff_s / 3600.0
+        else:
+            diff_days = (e_expr - s_expr).dt.total_days()
+            if unit == "days":
+                diff = diff_days
+            elif unit == "weeks":
+                diff = diff_days.cast(pl.Float64) / 7.0
+            elif unit == "months":
+                diff = diff_days.cast(pl.Float64) / 30.4375
+            else:  # years
+                diff = diff_days.cast(pl.Float64) / 365.25
+
+        # Resolve add_one
+        if add_one is None:
+            if target.endswith("DY"):
+                # CDISC study day: +1 if >= 0, no day 0
+                result_expr = (
+                    pl.when(diff >= 0).then(diff + 1).otherwise(diff)
+                ).cast(pl.Int64).alias(target)
+                return self._materialise_then(df.with_columns(result_expr))
+            else:
+                add_one = True
+
+        if add_one:
+            result_expr = (diff + 1).alias(target)
+        else:
+            result_expr = diff.alias(target)
+
+        if out == "iso8601":
+            # ISO 8601 duration formatting
+            # For simplicity, output P{n}D for days, PT{n}H for hours, etc.
+            abs_val = diff.abs()
+            if unit == "days":
+                iso_expr = (
+                    pl.lit("P") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("D")
+                ).alias(target)
+            elif unit == "hours":
+                iso_expr = (
+                    pl.lit("PT") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("H")
+                ).alias(target)
+            elif unit == "weeks":
+                iso_expr = (
+                    pl.lit("P") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("W")
+                ).alias(target)
+            elif unit == "years":
+                iso_expr = (
+                    pl.lit("P") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("Y")
+                ).alias(target)
+            elif unit == "months":
+                iso_expr = (
+                    pl.lit("P") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("M")
+                ).alias(target)
+            elif unit == "minutes":
+                iso_expr = (
+                    pl.lit("PT") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("M")
+                ).alias(target)
+            else:  # seconds
+                iso_expr = (
+                    pl.lit("PT") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("S")
+                ).alias(target)
+            return self._materialise_then(df.with_columns(iso_expr))
+
+        return self._materialise_then(df.with_columns(result_expr))
 
 
 class MultiRowMixin:

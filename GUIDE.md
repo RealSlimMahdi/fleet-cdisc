@@ -234,9 +234,9 @@ dm = (
     .assign_no_ct(  "ARM",      source="arm_description")
     .assign_no_ct(  "ACTARMCD", source="arm_code")
     .assign_no_ct(  "ACTARM",   source="arm_description")
-    .assign_dtc("RFSTDTC", source="first_dose_date")
-    .assign_dtc("RFENDTC", source="last_dose_date")
-    .assign_dtc("RFICDTC", source="informed_consent_date")
+    .date("RFSTDTC", source="first_dose_date")
+    .date("RFENDTC", source="last_dose_date")
+    .date("RFICDTC", source="informed_consent_date")
     .to_frame()
 )
 
@@ -273,7 +273,7 @@ datasets:
             "M": "M"
       - name: RFSTDTC
         derivation:
-          algorithm: assign_dtc
+          algorithm: date
           source: first_dose_date
 ```
 
@@ -303,8 +303,8 @@ ae = (
     .hardcode_no_ct("DOMAIN",  value="AE")
     .assign_no_ct(  "USUBJID", source="patient_number")
     .assign_no_ct(  "AETERM",  source="ae_term")
-    .assign_dtc("AESTDTC", source="ae_start_date")
-    .assign_dtc("AEENDTC", source="ae_end_date")
+    .date("AESTDTC", source="ae_start_date")
+    .date("AEENDTC", source="ae_end_date")
     .assign_no_ct(  "AESEV",   source="ae_severity")
     .assign_no_ct(  "AESER",   source="ae_serious")
     .assign_no_ct(  "AEOUT",   source="ae_outcome")
@@ -338,7 +338,7 @@ vs = (
     .assign_no_ct(  "VSORRESU", source="vsorresu")
     .derivation(    "VSSTRESN", expression="pl.col('vsorres').cast(pl.Float64, strict=False)")
     .assign_no_ct(  "VSSTRESU", source="vsorresu")
-    .assign_dtc("VSDTC",  source="vsdtc")
+    .date("VSDTC",  source="vsdtc")
     .remove_dup(subset=["USUBJID", "VSTESTCD", "VSDTC"])
     .to_frame()
 )
@@ -481,10 +481,10 @@ advs = (
     .rename(  "PARAM",    source="vstest")
     .rename(  "AVALU",    source="vsorresu")
     .derivation("AVAL",   expression="pl.col('vsorres').cast(pl.Float64, strict=False)")
-    .derive_dt("ADT", source="vsdtc")
+    .date("ADT", source="vsdtc")
     # Join TRTSDT for study day calculation
     .lookup(dataset=_trtsdt_map, on="USUBJID", how="left")
-    .study_day("ADY", analysis_date="ADT", reference_date="TRTSDT")
+    .duration("ADY", start="TRTSDT", end="ADT")
     # Baseline flag: last pre-dose visit (vsdy ≤ 0)
     .flag("ABLFL", criteria='pl.col("vsdy") <= 0',
           groups=["USUBJID", "PARAMCD"])
@@ -534,9 +534,9 @@ adae = (
     .source("AEREL")
     .source("AEOUT")
     .source("AEACN")
-    .derive_dt("ASTDT", source="AESTDTC")
-    .derive_dt("AENDT", source="AEENDTC")
-    .study_day("ADY", analysis_date="ASTDT", reference_date="TRTSDT")
+    .date("ASTDT", source="AESTDTC")
+    .date("AENDT", source="AEENDTC")
+    .duration("ADY", start="TRTSDT", end="ASTDT")
     .to_frame()
     # OCCDS-specific verbs
     .adam.occds
@@ -1136,7 +1136,7 @@ dm = (
     .hardcode_no_ct("DOMAIN", value="DM")
     .assign_no_ct("USUBJID", source="patient_number")
     .inspect(prefix="After USUBJID")
-    .assign_dtc("RFSTDTC", source="first_dose_date")
+    .date("RFSTDTC", source="first_dose_date")
     .to_frame()
 )
 ```
@@ -1195,7 +1195,7 @@ uv run fleet define-xml --spec metadata/adam/define.yaml  --output outputs/defin
 | -------------------- | ------------------------------------------- |
 | `assign_no_ct`       | Raw column → SDTM variable, no decoding     |
 | `assign_ct`          | Raw column → SDTM variable with CT decoding |
-| `assign_dtc`         | Date string → ISO 8601                      |
+| `date`               | Date/datetime normalisation                 |
 | `hardcode_no_ct`     | Constant value (DOMAIN, STUDYID, AGEU…)     |
 | `hardcode_ct`        | Constant value, CT-validated                |
 | `condition_add`      | `IF X THEN Y ELSE NULL`                     |
@@ -1220,7 +1220,8 @@ uv run fleet define-xml --spec metadata/adam/define.yaml  --output outputs/defin
 | `condderivation`         | Multi-branch conditional          |
 | `lookup`                 | Join a reference dataset          |
 | `whereclauses`           | Filter rows                       |
-| `study_day`              | ADY = (ADT − TRTSDT) + 1          |
+| `date`                   | Parse DTC → Date/Datetime          |
+| `duration`               | ADY / elapsed time / ISO duration  |
 | `baseline`               | BASE = AVAL at baseline           |
 | `chg`                    | CHG = AVAL − BASE                 |
 | `pchg`                   | PCHG = (AVAL − BASE) / BASE × 100 |

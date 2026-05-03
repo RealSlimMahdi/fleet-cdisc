@@ -19,9 +19,9 @@ Usage
     result = (
         vs_sdtm.adam
         .source("USUBJID")
-        .derive_dt("ADT", source="VSDTC")
+        .date("ADT", source="VSDTC")
         .derivation("AVAL", expression="VSSTRESN")
-        .study_day("ADY", analysis_date="ADT", reference_date="TRTSDT")
+        .duration("ADY", start="TRTSDT", end="ADT")
         .flag("ABLFL", criteria='pl.col("VISITNUM") == 1',
               groups=["USUBJID", "PARAMCD"])
         .baseline("BASE", aval="AVAL", baseline_flag="ABLFL")
@@ -48,7 +48,6 @@ from .utils import (
     baseline,
     chg,
     pchg,
-    study_day,
 )
 from .utils import (
     bmi as _bmi_expr,
@@ -151,42 +150,6 @@ class AdamNamespace(SharedADaMVerbsMixin):
         if target_cols:
             ns._pipeline = [pl.col(c) for c in target_cols]
         return ns
-
-    # ------------------------------------------------------------------ #
-    # 8.  study_day — CDISC study day derivation                          #
-    # ------------------------------------------------------------------ #
-
-    def study_day(
-        self,
-        target: str,
-        *,
-        analysis_date: str,
-        reference_date: str,
-    ) -> AdamNamespace:
-        """Compute CDISC study day.
-
-        Day 1 = reference date; there is no day 0 (pre-reference days are
-        negative).
-
-        Args:
-            target: Name of the output column (e.g. ``"ADY"``).
-            analysis_date: Name of the analysis date column.
-            reference_date: Name of the reference date column.
-
-        Returns:
-            AdamNamespace: The namespace with *target* appended.
-
-        Examples:
-            Derive ADY from ADT and TRTSDT::
-
-                advs = (
-                    vs_raw.adam
-                    .study_day("ADY", analysis_date="ADT",
-                               reference_date="TRTSDT")
-                    .to_frame()
-                )
-        """
-        return self._chain(study_day(analysis_date, reference_date, target=target))
 
     # ------------------------------------------------------------------ #
     # 9.  baseline — propagate baseline value to all group records        #
@@ -764,8 +727,8 @@ class AdamNamespace(SharedADaMVerbsMixin):
         if func == "study_day":
             if not analysis_date or not reference_date:
                 raise ValueError("study_day requires analysis_date and reference_date.")
-            return self.study_day(
-                target, analysis_date=analysis_date, reference_date=reference_date
+            return self.duration(
+                target, start=reference_date, end=analysis_date
             )
         elif func == "baseline":
             return self.baseline(target, aval=aval, baseline_flag=baseline_flag, groups=groups)
@@ -1032,6 +995,28 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     order_by=getattr(var, "flag_order_by", None),
                     value_col=getattr(var, "flag_value_col", None),
                     where=getattr(var, "flag_where", None),
+                )
+            elif alg == "date":
+                kwargs: dict[str, Any] = {}
+                if var.source:
+                    kwargs["source"] = var.source
+                elif getattr(var, "value", None):
+                    kwargs["value"] = var.value
+                if getattr(var, "output", None):
+                    kwargs["output"] = var.output
+                if getattr(var, "impute", None):
+                    kwargs["impute"] = var.impute
+                if getattr(var, "impute_time", None):
+                    kwargs["impute_time"] = var.impute_time
+                if getattr(var, "flag", None) is not None:
+                    kwargs["flag"] = var.flag
+                ns = ns.date(target, **kwargs)
+            elif alg == "duration":
+                ns = ns.duration(
+                    target,
+                    start=getattr(var, "start", None) or var.analysis_date or "",
+                    end=getattr(var, "end", None) or var.reference_date or "",
+                    unit=getattr(var, "unit", "days") or "days",
                 )
             elif alg == "nrind":
                 ns = ns.nrind(

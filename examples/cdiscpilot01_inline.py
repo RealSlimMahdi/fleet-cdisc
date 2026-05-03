@@ -107,9 +107,9 @@ dm = (
     .assign_no_ct("ARM", source="arm_description")
     .assign_no_ct("ACTARMCD", source="arm_code")
     .assign_no_ct("ACTARM", source="arm_description")
-    .assign_dtc("RFSTDTC", source="first_dose_date", mode="date")
-    .assign_dtc("RFENDTC", source="last_dose_date", mode="date")
-    .assign_dtc("RFICDTC", source="informed_consent_date", mode="date")
+    .date("RFSTDTC", source="first_dose_date")
+    .date("RFENDTC", source="last_dose_date")
+    .date("RFICDTC", source="informed_consent_date")
     .to_frame()
 )
 print(f"\n── 2a. SDTM DM : {dm.shape[0]} subjects × {dm.shape[1]} variables")
@@ -270,7 +270,7 @@ adsl = (
     # ── treatment end date from EX (admiral: derive_vars_merged, mode="last") ──
     .last_date("TRTEDT", from_dataset=ex, date_col="EXENDTC")
     # ── treatment duration (admiral: derive_var_trtdurd → TRTEDT - TRTSDT + 1) ──
-    .duration("TRTDURD", start_date="TRTSDT", end_date="TRTEDT")
+    .duration("TRTDURD", start="TRTSDT", end="TRTEDT")
     .to_frame()
 )
 
@@ -566,9 +566,9 @@ advs = (
     .rename("PARAM", source="vstest")
     .rename("AVALU", source="vsorresu")
     .derivation("AVAL", expression="pl.col('vsorres').cast(pl.Float64, strict=False)")
-    .derive_dt("ADT", source="vsdtc")
+    .date("ADT", source="vsdtc")
     .lookup(dataset=_trtsdt_map, on="USUBJID", how="left")
-    .study_day("ADY", analysis_date="ADT", reference_date="TRTSDT")
+    .duration("ADY", start="TRTSDT", end="ADT")
     # admiral: flag_variables — last pre-dose visit (vsdy ≤ 0)
     .flag("ABLFL", criteria='pl.col("vsdy") <= 0', groups=["USUBJID", "PARAMCD"])
     .to_frame()  # materialise — ABLFL must exist before baseline() window fn
@@ -648,10 +648,9 @@ adae = (
     .source("AEOUT")
     .source("AEACN")
     # admiral: derive_vars_dt
-    .derive_dt("ASTDT", source="AESTDTC")
-    .derive_dt("AENDT", source="AEENDTC")
-    # study_day uses _chain — ASTDT resolves from the lazy plan (no materialise needed)
-    .study_day("ADY", analysis_date="ASTDT", reference_date="TRTSDT")
+    .date("ASTDT", source="AESTDTC")
+    .date("AENDT", source="AEENDTC")
+    .duration("ADY", start="TRTSDT", end="ASTDT")
     .to_frame()
     .adam.occds  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     # admiral: derive_var_trtemfl
@@ -724,8 +723,8 @@ adex = (
     .source("EXDOSE")  # shared verb (mixin)
     .source("EXDOSU")  # shared verb (mixin)
     # admiral: derive_vars_dt
-    .derive_dt("ASTDT", source="EXSTDTC")  # shared verb (mixin)
-    .derive_dt("AENDT", source="EXENDTC")  # shared verb (mixin)
+    .date("ASTDT", source="EXSTDTC")
+    .date("AENDT", source="EXENDTC")
     # admiral: derive_var_dur (inclusive end-date convention)
     .derivation(
         "EXDURD",  # shared verb (mixin)

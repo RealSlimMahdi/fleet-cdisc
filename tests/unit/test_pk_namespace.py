@@ -251,8 +251,8 @@ class TestNominalTime:
 
 class TestActualTime:
     def test_actual_time_hours(self, pc_frame):
-        result = pc_frame.adam.pk.actual_time(
-            "ATIME", sample_dtm="PCDTC", dose_dtm="EXSTDTC", unit="h"
+        result = pc_frame.adam.pk.duration(
+            "ATIME", start="EXSTDTC", end="PCDTC", unit="hours", add_one=False
         ).to_frame()
         # Subject 01-001 row 1: sample_dtm = 09:00, dose_dtm = 08:00 → 1.0 h
         row = result.filter((pl.col("USUBJID") == "01-001") & (pl.col("PCTPTNUM") == 1.0))
@@ -260,23 +260,23 @@ class TestActualTime:
 
     def test_actual_time_predose_negative(self, pc_frame):
         """Subject 01-002 pre-dose sample at 07:55 → actual time = -5 min = -1/12 h."""
-        result = pc_frame.adam.pk.actual_time(
-            "ATIME", sample_dtm="PCDTC", dose_dtm="EXSTDTC", unit="h"
+        result = pc_frame.adam.pk.duration(
+            "ATIME", start="EXSTDTC", end="PCDTC", unit="hours", add_one=False
         ).to_frame()
         row = result.filter((pl.col("USUBJID") == "01-002") & (pl.col("PCTPTNUM") == 0.0))
         assert row["ATIME"][0] == pytest.approx(-5 / 60)
 
     def test_actual_time_unit_minutes(self, pc_frame):
-        result = pc_frame.adam.pk.actual_time(
-            "ATIME", sample_dtm="PCDTC", dose_dtm="EXSTDTC", unit="min"
+        result = pc_frame.adam.pk.duration(
+            "ATIME", start="EXSTDTC", end="PCDTC", unit="minutes", add_one=False
         ).to_frame()
         row = result.filter((pl.col("USUBJID") == "01-001") & (pl.col("PCTPTNUM") == 1.0))
         assert row["ATIME"][0] == pytest.approx(60.0)
 
     def test_invalid_unit_raises(self, pc_frame):
-        with pytest.raises(ValueError, match="unit="):
-            pc_frame.adam.pk.actual_time(
-                "ATIME", sample_dtm="PCDTC", dose_dtm="EXSTDTC", unit="week"
+        with pytest.raises(ValueError, match="not supported"):
+            pc_frame.adam.pk.duration(
+                "ATIME", start="EXSTDTC", end="PCDTC", unit="fortnights", add_one=False
             )
 
 
