@@ -30,3 +30,17 @@ $*.pptx
 
 # JSON datasets
 outputs/**/*.json
+
+# Pytest cache
+.pytest_cache/
+
+# Ruff cache
+.ruff_cache/
+
+# Ignore parquet files and HTML files in the outputs directory and its subdirectories
+outputs/**/*.csv
+outputs/**/*.parquet
+outputs/**/*.json
+outputs/**/*.html
+
+
