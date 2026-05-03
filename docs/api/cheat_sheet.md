@@ -25,7 +25,7 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 | [`.assign_ct()`][fleet.sdtm.SDTMNamespace.assign_ct]           | Map values explicitly through a dictionary and validate against a codelist. | `.assign_ct("SEX", source="sex_raw", ct_codelist=SEX, ct_mapping={"M":"M"})` |
 | [`.hardcode_ct()`][fleet.sdtm.SDTMNamespace.hardcode_ct]       | Assign a CT-validated literal.                                              | `.hardcode_ct("AGEU", value="YEARS", ct_codelist=AGEU)`                      |
 | [`.date()`][fleet.sdtm.SDTMNamespace.date]                     | Normalise dates to ISO 8601 strings or parse to Date/Datetime.              | `.date("RFSTDTC", source="first_dose_dt")`                                   |
-| [`.duration()`][fleet.sdtm.SDTMNamespace.duration]             | Compute elapsed time or CDISC study day.                                    | `.duration("SVSTDY", start="RFSTDTC", end="SVSTDTC")`                       |
+| [`.duration()`][fleet.sdtm.SDTMNamespace.duration]             | Compute elapsed time or CDISC study day.                                    | `.duration("SVSTDY", start="RFSTDTC", end="SVSTDTC")`                        |
 | [`.if_then_else()`][fleet.sdtm.SDTMNamespace.if_then_else]     | Derive a value conditionally over multiple branches.                        | `.if_then_else("AGEGR1", when=[...], else_value="OTHER")`                    |
 | [`.condition_add()`][fleet.sdtm.SDTMNamespace.condition_add]   | Single-condition assignment.                                                | `.condition_add("FLAG", condition=..., then_value="Y")`                      |
 | [`.ae_aerel()`][fleet.sdtm.SDTMNamespace.ae_aerel]             | AE causality mapping.                                                       | `.ae_aerel("AEREL", source="rel_raw", aerel_map={...})`                      |
@@ -38,46 +38,46 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 
 ## ADaM BDS namespace (`df.adam`)
 
-| Verb                                                                           | Description                                                      | Example                                                                 |
-| ------------------------------------------------------------------------------ | ---------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| [`.derivation()`][fleet.adam.AdamNamespace.derivation]                         | Arbitrary Polars expression.                                     | `.derivation("AVAL", expression="pl.col('vsorres').cast(pl.Float64)")`  |
-| [`.recode()`][fleet.adam.AdamNamespace.recode]                                 | Value remapping with default.                                    | `.recode("PARAM", source="vstest", recode_map={...})`                   |
-| [`.rename()`][fleet.adam.AdamNamespace.rename]                                 | Rename a column from a parent dataset.                           | `.rename("PARAMCD", source="vstestcd")`                                 |
-| [`.condderivation()`][fleet.adam.AdamNamespace.condderivation]                 | Multi-branch conditional derivation.                             | `.condderivation("EOSSTT", conditions=[...])`                           |
-| [`.date()`][fleet.adam.AdamNamespace.date]                                     | Parse `--DTC` to analysis date or datetime with optional imputation.| `.date("ADT", source="VSDTC")`                                        |
-| [`.duration()`][fleet.adam.AdamNamespace.duration]                             | CDISC study day, elapsed time, or ISO 8601 duration.             | `.duration("ADY", start="TRTSDT", end="ADT")`                          |
-| [`.merge_adsl()`][fleet.adam.AdamNamespace.merge_adsl]                         | Bring ADSL columns onto a BDS dataset.                           | `.merge_adsl(adsl, columns=["TRTSDT","SAFFL"])`                         |
-| [`.baseline()`][fleet.adam.AdamNamespace.baseline]                             | Find baseline record per group, broadcast to target.             | `.baseline("BASE", aval="AVAL", baseline_flag="ABLFL")`                 |
-| [`.chg()`][fleet.adam.AdamNamespace.chg]                                       | Change from baseline (`AVAL - BASE`).                            | `.chg("CHG", aval="AVAL", base="BASE")`                                 |
-| [`.pchg()`][fleet.adam.AdamNamespace.pchg]                                     | Percent change `(CHG / BASE) * 100`.                             | `.pchg("PCHG", aval="AVAL", base="BASE")`                               |
-| [`.flag()`][fleet.adam.AdamNamespace.flag]                                     | Assign `"Y"` per criteria (expression / `first` / `last`).       | `.flag("ANL01FL", criteria="last", order_by="ADT")`                     |
-| [`.bmi()`][fleet.adam.AdamNamespace.bmi]                                       | BMI = weight / (height/100)².                                    | `.bmi("BMI", weight="WEIGHT", height="HEIGHT")`                         |
-| [`.bsa()`][fleet.adam.AdamNamespace.bsa]                                       | Body Surface Area (Mosteller / DuBois / Haycock / Gehan-George). | `.bsa("BSA", weight="WEIGHT", height="HEIGHT")`                         |
-| [`.map()`][fleet.adam.AdamNamespace.map]                                       | Mean Arterial Pressure: DBP + (SBP-DBP)/3.                       | `.map("MAP", systolic="SYSBP", diastolic="DIABP")`                      |
-| [`.qtc()`][fleet.adam.AdamNamespace.qtc]                                       | Corrected QT (Fridericia / Bazett).                              | `.qtc("QTCF", qt="QT", rr="RR")`                                        |
-| [`.nrind()`][fleet.adam.AdamNamespace.nrind]                                   | Normal range indicator: LOW / NORMAL / HIGH.                     | `.nrind("ANRIND", value="AVAL", low="LO", high="HI")`                   |
-| [`.on_treatment()`][fleet.adam.AdamNamespace.on_treatment]                     | On-treatment flag within `[TRTSDT, TRTEDT]`.                     | `.on_treatment("ONTRTFL", adt="ADT", trtsdt="TRTSDT", trtedt="TRTEDT")` |
-| [`.shift()`][fleet.adam.AdamNamespace.shift]                                   | Categorical shift string (`"NORMAL to HIGH"`).                   | `.shift("SHIFT1", baseline_cat="BNRIND", post_cat="ANRIND")`            |
-| [`.lookup()`][fleet.adam.AdamNamespace.lookup]                                 | Left-join an external dataset on key columns.                    | `.lookup(other_df, on="USUBJID")`                                       |
-| [`.transform()`][fleet.adam.AdamNamespace.transform]                           | Apply an arbitrary frame-level transformation.                   | `.transform(lambda df: df.sort("USUBJID"))`                             |
-| [`.derive_summary_records()`][fleet.adam.AdamNamespace.derive_summary_records] | Aggregate by group and append summary rows.                      | `.derive_summary_records(by_vars=["USUBJID"], ...)`                     |
-| [`.derive_locf_records()`][fleet.adam.AdamNamespace.derive_locf_records]       | LOCF forward-fill within patient groups.                         | `.derive_locf_records(by_vars=["USUBJID","PARAMCD"])`                   |
-| [`.derive_param()`][fleet.adam.AdamNamespace.derive_param]                     | Derive a new parameter and append rows.                          | `.derive_param(by_vars=["USUBJID"], ...)`                               |
-| [`.from_spec()`][fleet.adam.AdamNamespace.from_spec]                           | Build the entire pipeline from a `define.yaml` spec.             | `df.adam.from_spec("define.yaml", dataset="ADVS")`                      |
-| [`.validate()`][fleet.adam.AdamNamespace.validate]                             | Run CDISC Rules Engine on the resulting frame.                   | `.validate(domain="ADVS")`                                              |
+| Verb                                                                           | Description                                                          | Example                                                                 |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [`.derivation()`][fleet.adam.AdamNamespace.derivation]                         | Arbitrary Polars expression.                                         | `.derivation("AVAL", expression="pl.col('vsorres').cast(pl.Float64)")`  |
+| [`.recode()`][fleet.adam.AdamNamespace.recode]                                 | Value remapping with default.                                        | `.recode("PARAM", source="vstest", recode_map={...})`                   |
+| [`.rename()`][fleet.adam.AdamNamespace.rename]                                 | Rename a column from a parent dataset.                               | `.rename("PARAMCD", source="vstestcd")`                                 |
+| [`.condderivation()`][fleet.adam.AdamNamespace.condderivation]                 | Multi-branch conditional derivation.                                 | `.condderivation("EOSSTT", conditions=[...])`                           |
+| [`.date()`][fleet.adam.AdamNamespace.date]                                     | Parse `--DTC` to analysis date or datetime with optional imputation. | `.date("ADT", source="VSDTC")`                                          |
+| [`.duration()`][fleet.adam.AdamNamespace.duration]                             | CDISC study day, elapsed time, or ISO 8601 duration.                 | `.duration("ADY", start="TRTSDT", end="ADT")`                           |
+| [`.merge_adsl()`][fleet.adam.AdamNamespace.merge_adsl]                         | Bring ADSL columns onto a BDS dataset.                               | `.merge_adsl(adsl, columns=["TRTSDT","SAFFL"])`                         |
+| [`.baseline()`][fleet.adam.AdamNamespace.baseline]                             | Find baseline record per group, broadcast to target.                 | `.baseline("BASE", aval="AVAL", baseline_flag="ABLFL")`                 |
+| [`.chg()`][fleet.adam.AdamNamespace.chg]                                       | Change from baseline (`AVAL - BASE`).                                | `.chg("CHG", aval="AVAL", base="BASE")`                                 |
+| [`.pchg()`][fleet.adam.AdamNamespace.pchg]                                     | Percent change `(CHG / BASE) * 100`.                                 | `.pchg("PCHG", aval="AVAL", base="BASE")`                               |
+| [`.flag()`][fleet.adam.AdamNamespace.flag]                                     | Assign `"Y"` per criteria (expression / `first` / `last`).           | `.flag("ANL01FL", criteria="last", order_by="ADT")`                     |
+| [`.bmi()`][fleet.adam.AdamNamespace.bmi]                                       | BMI = weight / (height/100)².                                        | `.bmi("BMI", weight="WEIGHT", height="HEIGHT")`                         |
+| [`.bsa()`][fleet.adam.AdamNamespace.bsa]                                       | Body Surface Area (Mosteller / DuBois / Haycock / Gehan-George).     | `.bsa("BSA", weight="WEIGHT", height="HEIGHT")`                         |
+| [`.map()`][fleet.adam.AdamNamespace.map]                                       | Mean Arterial Pressure: DBP + (SBP-DBP)/3.                           | `.map("MAP", systolic="SYSBP", diastolic="DIABP")`                      |
+| [`.qtc()`][fleet.adam.AdamNamespace.qtc]                                       | Corrected QT (Fridericia / Bazett).                                  | `.qtc("QTCF", qt="QT", rr="RR")`                                        |
+| [`.nrind()`][fleet.adam.AdamNamespace.nrind]                                   | Normal range indicator: LOW / NORMAL / HIGH.                         | `.nrind("ANRIND", value="AVAL", low="LO", high="HI")`                   |
+| [`.on_treatment()`][fleet.adam.AdamNamespace.on_treatment]                     | On-treatment flag within `[TRTSDT, TRTEDT]`.                         | `.on_treatment("ONTRTFL", adt="ADT", trtsdt="TRTSDT", trtedt="TRTEDT")` |
+| [`.shift()`][fleet.adam.AdamNamespace.shift]                                   | Categorical shift string (`"NORMAL to HIGH"`).                       | `.shift("SHIFT1", baseline_cat="BNRIND", post_cat="ANRIND")`            |
+| [`.lookup()`][fleet.adam.AdamNamespace.lookup]                                 | Left-join an external dataset on key columns.                        | `.lookup(other_df, on="USUBJID")`                                       |
+| [`.transform()`][fleet.adam.AdamNamespace.transform]                           | Apply an arbitrary frame-level transformation.                       | `.transform(lambda df: df.sort("USUBJID"))`                             |
+| [`.derive_summary_records()`][fleet.adam.AdamNamespace.derive_summary_records] | Aggregate by group and append summary rows.                          | `.derive_summary_records(by_vars=["USUBJID"], ...)`                     |
+| [`.derive_locf_records()`][fleet.adam.AdamNamespace.derive_locf_records]       | LOCF forward-fill within patient groups.                             | `.derive_locf_records(by_vars=["USUBJID","PARAMCD"])`                   |
+| [`.derive_param()`][fleet.adam.AdamNamespace.derive_param]                     | Derive a new parameter and append rows.                              | `.derive_param(by_vars=["USUBJID"], ...)`                               |
+| [`.from_spec()`][fleet.adam.AdamNamespace.from_spec]                           | Build the entire pipeline from a `define.yaml` spec.                 | `df.adam.from_spec("define.yaml", dataset="ADVS")`                      |
+| [`.validate()`][fleet.adam.AdamNamespace.validate]                             | Run CDISC Rules Engine on the resulting frame.                       | `.validate(domain="ADVS")`                                              |
 
 ## ADSL namespace (`df.adam.adsl`)
 
-| Verb                                                           | Description                                                                 | Example                                                        |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| [`.first_date()`][fleet.adam.ADSLNamespace.first_date]         | Earliest date per subject from a second dataset.                            | `.first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")`   |
-| [`.last_date()`][fleet.adam.ADSLNamespace.last_date]           | Latest date per subject from a second dataset.                              | `.last_date("TRTEDT", from_dataset=ex, date_col="EXENDTC")`    |
-| [`.duration()`][fleet.adam.ADSLNamespace.duration]             | Number of elapsed days (start to end).                                      | `.duration("TRTDURD", start="TRTSDT", end="TRTEDT")`                   |
-| [`.flag()`][fleet.adam.FlagCriterionMixin.flag]                | Generalised `"Y"` flag (first/last/max/min/exists/before/after/expression). | `.flag("SAFFL", criteria='pl.col("EXDOSE") > 0')`              |
-| [`.count_events()`][fleet.adam.ADSLNamespace.count_events]     | Tally events for each subject.                                              | `.count_events("NUMAE", from_dataset=ae)`                      |
-| [`.age_years()`][fleet.adam.ADSLNamespace.age_years]           | Unit-aware age conversion (YEARS, MONTHS, WEEKS, DAYS).                     | `.age_years("AAGE", age_col="AGE", age_unit_col="AGEU")`       |
-| [`.age_from_dates()`][fleet.adam.ADSLNamespace.age_from_dates] | Compute age between two dates.                                              | `.age_from_dates("AGE", birth="BRTHDT", reference="RFSTDTC")`  |
-| [`.derive_period()`][fleet.adam.ADSLNamespace.derive_period]   | Create APxxSDT / APxxEDT / TRTxxP subperiod variables.                      | `.derive_period(periods=[{"number": 1, ...}])`                 |
+| Verb                                                           | Description                                                                 | Example                                                       |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| [`.first_date()`][fleet.adam.ADSLNamespace.first_date]         | Earliest date per subject from a second dataset.                            | `.first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")`  |
+| [`.last_date()`][fleet.adam.ADSLNamespace.last_date]           | Latest date per subject from a second dataset.                              | `.last_date("TRTEDT", from_dataset=ex, date_col="EXENDTC")`   |
+| [`.duration()`][fleet.adam.ADSLNamespace.duration]             | Number of elapsed days (start to end).                                      | `.duration("TRTDURD", start="TRTSDT", end="TRTEDT")`          |
+| [`.flag()`][fleet.adam.FlagCriterionMixin.flag]                | Generalised `"Y"` flag (first/last/max/min/exists/before/after/expression). | `.flag("SAFFL", criteria='pl.col("EXDOSE") > 0')`             |
+| [`.count_events()`][fleet.adam.ADSLNamespace.count_events]     | Tally events for each subject.                                              | `.count_events("NUMAE", from_dataset=ae)`                     |
+| [`.age_years()`][fleet.adam.ADSLNamespace.age_years]           | Unit-aware age conversion (YEARS, MONTHS, WEEKS, DAYS).                     | `.age_years("AAGE", age_col="AGE", age_unit_col="AGEU")`      |
+| [`.age_from_dates()`][fleet.adam.ADSLNamespace.age_from_dates] | Compute age between two dates.                                              | `.age_from_dates("AGE", birth="BRTHDT", reference="RFSTDTC")` |
+| [`.derive_period()`][fleet.adam.ADSLNamespace.derive_period]   | Create APxxSDT / APxxEDT / TRTxxP subperiod variables.                      | `.derive_period(periods=[{"number": 1, ...}])`                |
 
 ## OCCDS namespace (`df.adam.occds`)
 
@@ -88,39 +88,39 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 
 ## PK namespace (`df.adam.pk`)
 
-| Verb                                                                        | Description                                                         | Example                                                         |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------- |
-| [`.blq_flag()`][fleet.adam.pk_namespace.PKNamespace.blq_flag]               | Flag BLQ records: `"Y"` when `conc < LLOQ`.                         | `.blq_flag("BLQFL", conc_col="PCSTRESN", lloq_col="PCLLOQ")`    |
-| [`.blq_impute()`][fleet.adam.pk_namespace.PKNamespace.blq_impute]           | Impute BLQ concentrations (`half_lloq`, `zero`, `lloq`, `missing`). | `.blq_impute("AVAL", conc_col="PCSTRESN", lloq_col="PCLLOQ")`   |
-| [`.blqfn()`][fleet.adam.pk_namespace.PKNamespace.blqfn]                     | Numeric BLQ flag: `1` when BLQ, `0` otherwise.                      | `.blqfn("BLQFN", conc_col="PCSTRESN", lloq_col="PCLLOQ")`       |
-| [`.nominal_time()`][fleet.adam.pk_namespace.PKNamespace.nominal_time]       | Nominal elapsed time with unit conversion.                          | `.nominal_time("NTIME", from_col="PCTPTNUM")`                   |
-| [`.duration()`][fleet.adam.pk_namespace.PKNamespace.duration]                | Actual elapsed time between datetime columns.                       | `.duration("ATIME", start="EXSTDTC", end="PCDTC", unit="hours")`      |
-| [`.predose_flag()`][fleet.adam.pk_namespace.PKNamespace.predose_flag]       | Flag pre-dose samples within a window.                              | `.predose_flag("PREDFL", time_col="ATIME")`                     |
-| [`.dose_normalized()`][fleet.adam.pk_namespace.PKNamespace.dose_normalized] | Dose-normalise concentration: `conc / dose`.                        | `.dose_normalized("AVALDNM", conc_col="AVAL", dose_col="DOSE")` |
-| [`.evid()`][fleet.adam.pk_namespace.PKNamespace.evid]                       | Derive `EVID` for NONMEM-style datasets.                            | `.evid("EVID")`                                                 |
-| [`.mrrlt()`][fleet.adam.pk_namespace.PKNamespace.mrrlt]                     | Clip negative ARRLT to 0 for MRRLT.                                 | `.mrrlt("MRRLT", arrlt_col="ARRLT")`                            |
-| [`.log_conc()`][fleet.adam.pk_namespace.PKNamespace.log_conc]               | Log-transform concentration.                                        | `.log_conc("DVL", conc_col="DV")`                               |
-| [`.mdv()`][fleet.adam.pk_namespace.PKNamespace.mdv]                         | Derive `MDV` for PopPK datasets.                                    | `.mdv("MDV", conc_col="DV", evid_col="EVID")`                   |
-| [`.amt()`][fleet.adam.pk_namespace.PKNamespace.amt]                         | Derive `AMT`: dose amount on dosing records.                        | `.amt("AMT", dose_col="EXDOSE", evid_col="EVID")`               |
-| [`.cmt()`][fleet.adam.pk_namespace.PKNamespace.cmt]                         | Derive `CMT` compartment number (NONMEM).                           | `.cmt("CMT", evid_col="EVID", dose_cmt=1, conc_cmt=2)`          |
-| [`.avalcat()`][fleet.adam.pk_namespace.PKNamespace.avalcat]                 | Listing-ready categorised analysis value.                           | `.avalcat("AVALCAT1", conc_col="PCSTRESC", lloq_col="PCLLOQ")`  |
-| [`.anl_flag()`][fleet.adam.pk_namespace.PKNamespace.anl_flag]               | Analysis flag (`ANL01FL` / `ANL02FL`).                              | `.anl_flag("ANL01FL")`                                          |
+| Verb                                                                        | Description                                                         | Example                                                          |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [`.blq_flag()`][fleet.adam.pk_namespace.PKNamespace.blq_flag]               | Flag BLQ records: `"Y"` when `conc < LLOQ`.                         | `.blq_flag("BLQFL", conc_col="PCSTRESN", lloq_col="PCLLOQ")`     |
+| [`.blq_impute()`][fleet.adam.pk_namespace.PKNamespace.blq_impute]           | Impute BLQ concentrations (`half_lloq`, `zero`, `lloq`, `missing`). | `.blq_impute("AVAL", conc_col="PCSTRESN", lloq_col="PCLLOQ")`    |
+| [`.blqfn()`][fleet.adam.pk_namespace.PKNamespace.blqfn]                     | Numeric BLQ flag: `1` when BLQ, `0` otherwise.                      | `.blqfn("BLQFN", conc_col="PCSTRESN", lloq_col="PCLLOQ")`        |
+| [`.nominal_time()`][fleet.adam.pk_namespace.PKNamespace.nominal_time]       | Nominal elapsed time with unit conversion.                          | `.nominal_time("NTIME", from_col="PCTPTNUM")`                    |
+| [`.duration()`][fleet.adam.pk_namespace.PKNamespace.duration]               | Actual elapsed time between datetime columns.                       | `.duration("ATIME", start="EXSTDTC", end="PCDTC", unit="hours")` |
+| [`.predose_flag()`][fleet.adam.pk_namespace.PKNamespace.predose_flag]       | Flag pre-dose samples within a window.                              | `.predose_flag("PREDFL", time_col="ATIME")`                      |
+| [`.dose_normalized()`][fleet.adam.pk_namespace.PKNamespace.dose_normalized] | Dose-normalise concentration: `conc / dose`.                        | `.dose_normalized("AVALDNM", conc_col="AVAL", dose_col="DOSE")`  |
+| [`.evid()`][fleet.adam.pk_namespace.PKNamespace.evid]                       | Derive `EVID` for NONMEM-style datasets.                            | `.evid("EVID")`                                                  |
+| [`.mrrlt()`][fleet.adam.pk_namespace.PKNamespace.mrrlt]                     | Clip negative ARRLT to 0 for MRRLT.                                 | `.mrrlt("MRRLT", arrlt_col="ARRLT")`                             |
+| [`.log_conc()`][fleet.adam.pk_namespace.PKNamespace.log_conc]               | Log-transform concentration.                                        | `.log_conc("DVL", conc_col="DV")`                                |
+| [`.mdv()`][fleet.adam.pk_namespace.PKNamespace.mdv]                         | Derive `MDV` for PopPK datasets.                                    | `.mdv("MDV", conc_col="DV", evid_col="EVID")`                    |
+| [`.amt()`][fleet.adam.pk_namespace.PKNamespace.amt]                         | Derive `AMT`: dose amount on dosing records.                        | `.amt("AMT", dose_col="EXDOSE", evid_col="EVID")`                |
+| [`.cmt()`][fleet.adam.pk_namespace.PKNamespace.cmt]                         | Derive `CMT` compartment number (NONMEM).                           | `.cmt("CMT", evid_col="EVID", dose_cmt=1, conc_cmt=2)`           |
+| [`.avalcat()`][fleet.adam.pk_namespace.PKNamespace.avalcat]                 | Listing-ready categorised analysis value.                           | `.avalcat("AVALCAT1", conc_col="PCSTRESC", lloq_col="PCLLOQ")`   |
+| [`.anl_flag()`][fleet.adam.pk_namespace.PKNamespace.anl_flag]               | Analysis flag (`ANL01FL` / `ANL02FL`).                              | `.anl_flag("ANL01FL")`                                           |
 
 ## Trial Design (`df.sdtm.tdd`)
 
-| Verb                                                                                 | Description                             | Example                                    |
-| ------------------------------------------------------------------------------------ | --------------------------------------- | ------------------------------------------ |
-| [`.fetch_structure()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.fetch_structure]       | Fetch TDD structure from CDISC Library. | `df.sdtm.tdd.fetch_structure(domain="TA")` |
-| [`.add_arms()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_arms]                     | Define study arms.                      | `.add_arms([...])`                         |
-| [`.add_elements()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_elements]             | Define trial elements.                  | `.add_elements([...])`                     |
-| [`.add_visits()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_visits]                 | Define visits.                          | `.add_visits([...])`                       |
-| [`.add_criteria()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_criteria]             | Define inclusion/exclusion criteria.    | `.add_criteria([...])`                     |
-| [`.add_parameters()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_parameters]         | Define trial summary parameters.        | `.add_parameters([...])`                   |
-| [`.element_boundaries()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.element_boundaries] | Compute element start/end.              | `.element_boundaries()`                    |
-| [`.epoch_assign()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.epoch_assign]             | Assign epochs to events.                | `.epoch_assign()`                          |
-| [`.visit_map()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.visit_map]                   | Map planned ↔ actual visits.            | `.visit_map()`                             |
-| [`.duration()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.duration]             | Derive study day from reference.        | `.duration("SVSTDY", start="RFSTDTC", end="SVSTDTC")` |
-| [`.study_header()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.study_header]             | Build the trial summary (TS) header.    | `.study_header(...)`                       |
+| Verb                                                                                 | Description                             | Example                                               |
+| ------------------------------------------------------------------------------------ | --------------------------------------- | ----------------------------------------------------- |
+| [`.fetch_structure()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.fetch_structure]       | Fetch TDD structure from CDISC Library. | `df.sdtm.tdd.fetch_structure(domain="TA")`            |
+| [`.add_arms()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_arms]                     | Define study arms.                      | `.add_arms([...])`                                    |
+| [`.add_elements()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_elements]             | Define trial elements.                  | `.add_elements([...])`                                |
+| [`.add_visits()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_visits]                 | Define visits.                          | `.add_visits([...])`                                  |
+| [`.add_criteria()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_criteria]             | Define inclusion/exclusion criteria.    | `.add_criteria([...])`                                |
+| [`.add_parameters()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_parameters]         | Define trial summary parameters.        | `.add_parameters([...])`                              |
+| [`.element_boundaries()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.element_boundaries] | Compute element start/end.              | `.element_boundaries()`                               |
+| [`.epoch_assign()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.epoch_assign]             | Assign epochs to events.                | `.epoch_assign()`                                     |
+| [`.visit_map()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.visit_map]                   | Map planned ↔ actual visits.            | `.visit_map()`                                        |
+| [`.duration()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.duration]                     | Derive study day from reference.        | `.duration("SVSTDY", start="RFSTDTC", end="SVSTDTC")` |
+| [`.study_header()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.study_header]             | Build the trial summary (TS) header.    | `.study_header(...)`                                  |
 
 ---
 

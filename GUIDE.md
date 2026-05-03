@@ -1220,8 +1220,8 @@ uv run fleet define-xml --spec metadata/adam/define.yaml  --output outputs/defin
 | `condderivation`         | Multi-branch conditional          |
 | `lookup`                 | Join a reference dataset          |
 | `whereclauses`           | Filter rows                       |
-| `date`                   | Parse DTC → Date/Datetime          |
-| `duration`               | ADY / elapsed time / ISO duration  |
+| `date`                   | Parse DTC → Date/Datetime         |
+| `duration`               | ADY / elapsed time / ISO duration |
 | `baseline`               | BASE = AVAL at baseline           |
 | `chg`                    | CHG = AVAL − BASE                 |
 | `pchg`                   | PCHG = (AVAL − BASE) / BASE × 100 |

@@ -113,28 +113,28 @@ This means you pay no cost for columns you don't chain. Expression ordering mirr
 
 ## ADaM verbs at a glance
 
-| Verb                                               | Purpose                                   |
-| -------------------------------------------------- | ----------------------------------------- |
-| `source(target)`                                   | Pass-through column                       |
-| `derivation(target, expression)`                   | Arbitrary `pl.Expr`                       |
-| `assigned(target, value)`                          | Constant literal                          |
-| `date(target, source)`                             | Parse DTC → Date/Datetime with imputation |
-| `duration(target, start, end)`                     | CDISC study day / elapsed time            |
-| `flag(target, criteria, groups)`                   | Per-group boolean flag                    |
-| `baseline(target, aval, baseline_flag)`            | Carry baseline AVAL within groups         |
-| `chg(target, aval, base)`                          | Change from baseline                      |
-| `pchg(target, aval, base)`                         | Percent change from baseline              |
-| `bmi(target, weight, height)`                      | Body Mass Index                           |
-| `nrind(target, value, low, high)`                  | Normal range indicator (LOW/NORMAL/HIGH)  |
-| `on_treatment(target, adt, trtsdt, trtedt)`        | On-treatment flag                         |
-| `shift(target, baseline_cat, post_cat)`            | Categorical shift string                  |
-| `bsa(target, weight, height, method)`              | Body Surface Area (4 methods)             |
-| `map(target, systolic, diastolic)`                 | Mean Arterial Pressure                    |
-| `qtc(target, qt, rr, method)`                      | Corrected QT interval (Fridericia/Bazett) |
-| `derive_summary_records(by_vars, ...)`             | Aggregate by group, append summary rows   |
-| `derive_locf_records(by_vars, ...)`                | Forward-fill (LOCF) within patient groups |
-| `derive_param(by_vars, ...)`                       | Derive a new parameter and append as rows |
-| `to_frame()`                                       | Materialise                               |
+| Verb                                        | Purpose                                   |
+| ------------------------------------------- | ----------------------------------------- |
+| `source(target)`                            | Pass-through column                       |
+| `derivation(target, expression)`            | Arbitrary `pl.Expr`                       |
+| `assigned(target, value)`                   | Constant literal                          |
+| `date(target, source)`                      | Parse DTC → Date/Datetime with imputation |
+| `duration(target, start, end)`              | CDISC study day / elapsed time            |
+| `flag(target, criteria, groups)`            | Per-group boolean flag                    |
+| `baseline(target, aval, baseline_flag)`     | Carry baseline AVAL within groups         |
+| `chg(target, aval, base)`                   | Change from baseline                      |
+| `pchg(target, aval, base)`                  | Percent change from baseline              |
+| `bmi(target, weight, height)`               | Body Mass Index                           |
+| `nrind(target, value, low, high)`           | Normal range indicator (LOW/NORMAL/HIGH)  |
+| `on_treatment(target, adt, trtsdt, trtedt)` | On-treatment flag                         |
+| `shift(target, baseline_cat, post_cat)`     | Categorical shift string                  |
+| `bsa(target, weight, height, method)`       | Body Surface Area (4 methods)             |
+| `map(target, systolic, diastolic)`          | Mean Arterial Pressure                    |
+| `qtc(target, qt, rr, method)`               | Corrected QT interval (Fridericia/Bazett) |
+| `derive_summary_records(by_vars, ...)`      | Aggregate by group, append summary rows   |
+| `derive_locf_records(by_vars, ...)`         | Forward-fill (LOCF) within patient groups |
+| `derive_param(by_vars, ...)`                | Derive a new parameter and append as rows |
+| `to_frame()`                                | Materialise                               |
 
 ---
 
