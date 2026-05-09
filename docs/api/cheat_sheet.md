@@ -33,6 +33,8 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 | [`.remove_dup()`][fleet.sdtm.SDTMNamespace.remove_dup]         | Drop duplicates by subset.                                                  | `.remove_dup(subset_vars=["USUBJID","VISIT"])`                               |
 | [`.group_by()`][fleet.sdtm.SDTMNamespace.group_by]             | Aggregate rows by group columns.                                            | `.group_by(group_cols=["USUBJID"], agg_expr=...)`                            |
 | [`.seq()`][fleet.sdtm.SDTMNamespace.seq]                       | Generate sequence number per group.                                         | `.seq("AESEQ", groups=["USUBJID"])`                                          |
+| [`.nsv()`][fleet.sdtm.SDTMNamespace.nsv]                       | Derive a Non-Standard Variable with qualifier metadata.                     | `.nsv("SAFETY", source="safety_flag", label="Safety Population Flag")`       |
+| [`.export_supp()`][fleet.sdtm.SDTMNamespace.export_supp]       | Export NSV columns as vertical SUPPQUAL (IG ≤3.4).                          | `.export_supp(spec="define.yaml", dataset="DM")`                             |
 | [`.from_spec()`][fleet.sdtm.SDTMNamespace.from_spec]           | Build the entire pipeline from a `define.yaml` spec.                        | `df.sdtm.from_spec("define.yaml", dataset="DM")`                             |
 | [`.validate()`][fleet.sdtm.SDTMNamespace.validate]             | Run CDISC Rules Engine on the resulting frame.                              | `.validate(domain="DM")`                                                     |
 

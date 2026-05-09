@@ -1,7 +1,7 @@
 """SDTM module — imports trigger Polars namespace registration."""
 
 from fleet.sdtm._tdd_mixin import TrialDesignMixin
-from fleet.sdtm.models import SDTMAlgorithm, SDTMDomainSpec, SDTMVariableSpec
+from fleet.sdtm.models import NSVMeta, SDTMAlgorithm, SDTMDomainSpec, SDTMVariableSpec
 from fleet.sdtm.namespace import SDTMNamespace
 from fleet.sdtm.tdd import (
     Epoch,
@@ -19,6 +19,7 @@ from fleet.sdtm.tdd import (
 )
 
 __all__ = [
+    "NSVMeta",
     "SDTMAlgorithm",
     "SDTMDomainSpec",
     "SDTMVariableSpec",

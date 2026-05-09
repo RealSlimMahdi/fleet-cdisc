@@ -31,6 +31,7 @@ import polars as pl
 import yaml
 
 from fleet.sdtm._tdd_mixin import TrialDesignMixin
+from fleet.sdtm.models import NSVMeta
 from fleet.sdtm.utils import dtc_date_expr, dtc_datetime_expr, parse_expression
 
 if TYPE_CHECKING:
@@ -48,6 +49,7 @@ class SDTMNamespace(TrialDesignMixin):
 
     def __init__(self, df: pl.DataFrame) -> None:
         self._lazy = df.lazy()
+        self._nsv_meta: list[NSVMeta] = []
 
     # ------------------------------------------------------------------ #
     # Internal chaining helper                                             #
@@ -307,13 +309,9 @@ class SDTMNamespace(TrialDesignMixin):
 
         # Validate source / value mutual exclusivity
         if source is not None and value is not None:
-            raise ValueError(
-                "Cannot specify both source= and value=. Choose one."
-            )
+            raise ValueError("Cannot specify both source= and value=. Choose one.")
         if source is None and value is None:
-            raise ValueError(
-                "Must specify either source= or value=."
-            )
+            raise ValueError("Must specify either source= or value=.")
 
         output_type = _resolve_output_type(target, output)
 
@@ -321,9 +319,7 @@ class SDTMNamespace(TrialDesignMixin):
         if value is not None:
             if flag is True:
                 flag = False
-            exprs = impute_and_flag(
-                None, target, value=value, output_type=output_type, flag=flag
-            )
+            exprs = impute_and_flag(None, target, value=value, output_type=output_type, flag=flag)
             return self._chain(*exprs)
 
         # source= path
@@ -335,9 +331,7 @@ class SDTMNamespace(TrialDesignMixin):
                 # Combine date + time into DTC string
                 date_part = dtc_date_expr(source, "__dtc_date_tmp__", input_format=format)
                 time_part = pl.col(time) if not re.match(r"^\d{2}:\d{2}", time) else pl.lit(time)
-                combined = (
-                    pl.col("__dtc_date_tmp__") + pl.lit("T") + time_part
-                ).alias(target)
+                combined = (pl.col("__dtc_date_tmp__") + pl.lit("T") + time_part).alias(target)
                 df = self._lazy.with_columns(date_part).collect()
                 result = df.with_columns(combined)
                 if "__dtc_date_tmp__" in result.columns:
@@ -434,12 +428,17 @@ class SDTMNamespace(TrialDesignMixin):
         e = _to_date(end)
 
         valid_units = {
-            "seconds", "minutes", "hours", "days", "weeks", "months", "years",
+            "seconds",
+            "minutes",
+            "hours",
+            "days",
+            "weeks",
+            "months",
+            "years",
         }
         if unit not in valid_units:
             raise ValueError(
-                f"duration unit={unit!r} is not supported. "
-                f"Choose one of: {sorted(valid_units)}"
+                f"duration unit={unit!r} is not supported. Choose one of: {sorted(valid_units)}"
             )
 
         if unit in ("seconds", "minutes", "hours"):
@@ -466,8 +465,8 @@ class SDTMNamespace(TrialDesignMixin):
         if add_one is None:
             if target.endswith("DY"):
                 result_expr = (
-                    pl.when(diff >= 0).then(diff + 1).otherwise(diff)
-                ).cast(pl.Int64).alias(target)
+                    (pl.when(diff >= 0).then(diff + 1).otherwise(diff)).cast(pl.Int64).alias(target)
+                )
                 return self._materialise_then(df.with_columns(result_expr))
             else:
                 add_one = True
@@ -490,9 +489,7 @@ class SDTMNamespace(TrialDesignMixin):
             }
             prefix, suffix = unit_suffix_map[unit]
             iso_expr = (
-                pl.lit(prefix)
-                + abs_val.cast(pl.Int64).cast(pl.String)
-                + pl.lit(suffix)
+                pl.lit(prefix) + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit(suffix)
             ).alias(target)
             return self._materialise_then(df.with_columns(iso_expr))
 
@@ -584,6 +581,71 @@ class SDTMNamespace(TrialDesignMixin):
                 )
         """
         return self._chain(pl.lit(value).alias(target))
+
+    # ------------------------------------------------------------------ #
+    # 5b. nsv — Non-Standard Variable (qualifier) derivation               #
+    # ------------------------------------------------------------------ #
+
+    def nsv(
+        self,
+        target: str,
+        *,
+        source: str | None = None,
+        value: Any | None = None,
+        label: str,
+        origin: str = "DERIVED",
+        evaluator: str | None = None,
+    ) -> SDTMNamespace:
+        """Derive a Non-Standard Variable with qualifier metadata.
+
+        Behaves like ``assign_no_ct`` (when *source* is given) or
+        ``hardcode_no_ct`` (when *value* is given) but additionally
+        registers SUPPQUAL metadata (label, origin, evaluator) on the
+        pipeline.  Use ``export_supp()`` to produce the vertical SUPPQUAL
+        structure for SDTM IG ≤3.4.  For IG 3.5+, NSVs remain in the
+        parent domain via ``to_frame()`` unchanged.
+
+        Args:
+            target: Name of the qualifier variable (becomes QNAM in SUPP).
+            source: Name of the raw column to copy from.  Mutually
+                exclusive with *value*.
+            value: A literal value to broadcast.  Mutually exclusive with
+                *source*.
+            label: Human-readable label (becomes QLABEL in SUPP).
+            origin: Variable origin (becomes QORIG in SUPP).
+            evaluator: Optional evaluator (becomes QEVAL in SUPP).
+
+        Returns:
+            SDTMNamespace: The namespace with *target* appended; call
+                ``.to_frame()`` to materialise.
+
+        Examples:
+            Derive population flag NSVs for DM::
+
+                dm = (
+                    raw_df.sdtm
+                    .hardcode_no_ct("DOMAIN", value="DM")
+                    .assign_no_ct("USUBJID", source="patient_number")
+                    .nsv("SAFETY", source="safety_flag",
+                         label="Safety Population Flag")
+                    .nsv("ITT", source="itt_flag",
+                         label="Intent to Treat Population Flag")
+                    .to_frame()
+                )
+        """
+        if source is None and value is None:
+            raise ValueError("nsv() requires either 'source' or 'value'.")
+        if source is not None and value is not None:
+            raise ValueError("nsv() accepts 'source' or 'value', not both.")
+
+        expr = pl.col(source).alias(target) if source else pl.lit(value).alias(target)
+        new = self._chain(expr)
+        # Copy-on-write: avoid mutating shared list across copies
+        new._nsv_meta = [
+            *self._nsv_meta,
+            NSVMeta(target=target, label=label, origin=origin, evaluator=evaluator),
+        ]
+        return new
 
     # ------------------------------------------------------------------ #
     # 6. condition_add — if condition then value else null                 #
@@ -1123,6 +1185,15 @@ class SDTMNamespace(TrialDesignMixin):
                 )
             elif alg == "notsubmitted":
                 ns = ns.notsubmitted(target)
+            elif alg == "nsv":
+                ns = ns.nsv(
+                    target,
+                    source=var.source,
+                    value=var.value if var.source is None else None,
+                    label=var.label or "",
+                    origin=var.origin or "DERIVED",
+                    evaluator=var.evaluator,
+                )
             # merge, remove_dup, group_by, multiple_responses require extra data
             # — skip in spec-driven mode if not fully specified
 
@@ -1156,9 +1227,20 @@ class SDTMNamespace(TrialDesignMixin):
             drv = var.get("derivation")
             if not drv:
                 continue  # no derivation → carry-through / manual column
+            # Pass top-level variable attributes into the spec if relevant
+            extra: dict[str, Any] = {}
+            if var.get("label"):
+                extra["label"] = var["label"]
+            if var.get("origin"):
+                extra["origin"] = var["origin"]
+            if var.get("role"):
+                extra["role"] = var["role"]
+            if var.get("evaluator"):
+                extra["evaluator"] = var["evaluator"]
             spec = SDTMVariableSpec(
                 target=var["name"],
                 **drv,
+                **extra,
             )
             result.append(spec)
         return result
@@ -1329,6 +1411,239 @@ class SDTMNamespace(TrialDesignMixin):
     # ------------------------------------------------------------------ #
     # Terminal operations                                                  #
     # ------------------------------------------------------------------ #
+
+    def export_supp(
+        self,
+        *,
+        qualifiers: dict[str, dict[str, str]] | None = None,
+        spec: str | Path | None = None,
+        dataset: str | None = None,
+        idvar: str | None = None,
+        domain: str | None = None,
+    ) -> pl.DataFrame:
+        """Export Non-Standard Variables as a vertical SUPPQUAL DataFrame.
+
+        Produces the CDISC SUPPQUAL structure (STUDYID, RDOMAIN, USUBJID,
+        IDVAR, IDVARVAL, QNAM, QLABEL, QVAL, QORIG, QEVAL) for SDTM
+        IG ≤3.4 submissions.
+
+        Resolution order (first match wins):
+
+        1. **qualifiers** dict — explicit metadata per qualifier column.
+        2. **spec** + **dataset** — reads ``role: qualifier`` variables
+           from a ``define.yaml``.
+        3. **Pipeline metadata** — uses ``_nsv_meta`` populated by prior
+           ``nsv()`` calls in the chain.
+
+        Args:
+            qualifiers: Explicit qualifier metadata mapping.  Keys are
+                column names (QNAM), values are dicts with ``"label"``
+                and optionally ``"origin"`` and ``"evaluator"`` keys.
+            spec: Path to a ``define.yaml`` file.  Used with *dataset*
+                to discover ``role: qualifier`` variables.
+            dataset: Dataset name within the spec (e.g. ``"DM"``).
+            idvar: Name of the identifying variable column (e.g.
+                ``"DMSEQ"``).  When ``None``, IDVAR and IDVARVAL are
+                set to null (typical for DM).
+            domain: Explicit RDOMAIN value.  When ``None``, inferred
+                from the ``DOMAIN`` column in the frame.
+
+        Returns:
+            pl.DataFrame: Vertical SUPPQUAL frame with columns STUDYID,
+                RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL,
+                QORIG, QEVAL.
+
+        Examples:
+            Export from pipeline metadata (Pattern A)::
+
+                ns = (
+                    raw_df.sdtm
+                    .hardcode_no_ct("DOMAIN", value="DM")
+                    .assign_no_ct("USUBJID", source="patient_number")
+                    .nsv("SAFETY", source="safety_flag",
+                         label="Safety Population Flag")
+                )
+                suppdm = ns.export_supp()
+
+            Export from define.yaml spec (Pattern D)::
+
+                dm = raw_df.sdtm.from_spec("define.yaml", dataset="DM").to_frame()
+                suppdm = dm.sdtm.export_supp(
+                    spec="define.yaml", dataset="DM", idvar="DMSEQ"
+                )
+
+            Export with explicit qualifier dict (Pattern C)::
+
+                suppdm = dm.sdtm.export_supp(
+                    qualifiers={
+                        "COMPLT16": {"label": "Completers of Week 16",
+                                     "origin": "DERIVED"},
+                        "SAFETY": {"label": "Safety Population Flag",
+                                   "origin": "DERIVED"},
+                    },
+                    idvar="DMSEQ",
+                )
+        """
+        # Resolve qualifier metadata from one of three sources
+        meta: list[NSVMeta] = self._resolve_supp_meta(qualifiers, spec, dataset)
+
+        if not meta:
+            # Return empty frame with correct schema
+            return pl.DataFrame(
+                schema={
+                    "STUDYID": pl.String,
+                    "RDOMAIN": pl.String,
+                    "USUBJID": pl.String,
+                    "IDVAR": pl.String,
+                    "IDVARVAL": pl.String,
+                    "QNAM": pl.String,
+                    "QLABEL": pl.String,
+                    "QVAL": pl.String,
+                    "QORIG": pl.String,
+                    "QEVAL": pl.String,
+                }
+            )
+
+        df = self._lazy.collect()
+
+        # Determine RDOMAIN
+        rdomain = domain or (df["DOMAIN"][0] if "DOMAIN" in df.columns else None)
+
+        # Filter to only qualifier columns present in the frame
+        present_meta = [m for m in meta if m.target in df.columns]
+        if not present_meta:
+            raise ValueError(
+                f"No qualifier columns found in frame. "
+                f"Expected: {[m.target for m in meta]}. "
+                f"Available: {df.columns}"
+            )
+
+        # Build SUPP rows via unpivot
+        qual_cols = [m.target for m in present_meta]
+        label_map = {m.target: m.label for m in present_meta}
+        origin_map = {m.target: m.origin for m in present_meta}
+        eval_map = {m.target: m.evaluator for m in present_meta}
+
+        # Determine base columns needed
+        base_cols = []
+        if "STUDYID" in df.columns:
+            base_cols.append("STUDYID")
+        if "USUBJID" in df.columns:
+            base_cols.append("USUBJID")
+
+        # Unpivot qualifier columns
+        supp = df.select(
+            base_cols + ([idvar] if idvar and idvar in df.columns else []) + qual_cols
+        ).unpivot(
+            on=qual_cols,
+            index=base_cols + ([idvar] if idvar and idvar in df.columns else []),
+            variable_name="QNAM",
+            value_name="QVAL",
+        )
+
+        # Cast QVAL to string
+        supp = supp.with_columns(pl.col("QVAL").cast(pl.String))
+
+        # Drop null QVAL rows
+        supp = supp.filter(pl.col("QVAL").is_not_null())
+
+        # Add SUPPQUAL metadata columns
+        supp = supp.with_columns(
+            pl.lit(rdomain).cast(pl.String).alias("RDOMAIN"),
+            pl.col("QNAM").replace_strict(label_map, default=None).cast(pl.String).alias("QLABEL"),
+            pl.col("QNAM")
+            .replace_strict(origin_map, default="DERIVED")
+            .cast(pl.String)
+            .alias("QORIG"),
+            pl.col("QNAM").replace_strict(eval_map, default=None).cast(pl.String).alias("QEVAL"),
+        )
+
+        # Handle IDVAR / IDVARVAL
+        if idvar and idvar in supp.columns:
+            supp = supp.with_columns(
+                pl.lit(idvar).alias("IDVAR"),
+                pl.col(idvar).cast(pl.String).alias("IDVARVAL"),
+            ).drop(idvar)
+        else:
+            supp = supp.with_columns(
+                pl.lit(None, dtype=pl.String).alias("IDVAR"),
+                pl.lit(None, dtype=pl.String).alias("IDVARVAL"),
+            )
+
+        # Ensure STUDYID exists
+        if "STUDYID" not in supp.columns:
+            supp = supp.with_columns(pl.lit(None, dtype=pl.String).alias("STUDYID"))
+
+        # Ensure USUBJID exists
+        if "USUBJID" not in supp.columns:
+            supp = supp.with_columns(pl.lit(None, dtype=pl.String).alias("USUBJID"))
+
+        # Select final columns in CDISC order
+        return supp.select(
+            "STUDYID",
+            "RDOMAIN",
+            "USUBJID",
+            "IDVAR",
+            "IDVARVAL",
+            "QNAM",
+            "QLABEL",
+            "QVAL",
+            "QORIG",
+            "QEVAL",
+        )
+
+    def _resolve_supp_meta(
+        self,
+        qualifiers: dict[str, dict[str, str]] | None,
+        spec: str | Path | None,
+        dataset: str | None,
+    ) -> list[NSVMeta]:
+        """Resolve NSV metadata from qualifiers dict, spec file, or pipeline."""
+        # Priority 1: explicit qualifiers dict
+        if qualifiers is not None:
+            return [
+                NSVMeta(
+                    target=name,
+                    label=info.get("label", ""),
+                    origin=info.get("origin", "DERIVED"),
+                    evaluator=info.get("evaluator"),
+                )
+                for name, info in qualifiers.items()
+            ]
+
+        # Priority 2: spec file
+        if spec is not None:
+            spec_data = yaml.safe_load(Path(spec).read_text())
+            if "datasets" not in spec_data:
+                return []
+            datasets = spec_data["datasets"]
+            if dataset:
+                matches = [d for d in datasets if d["name"].upper() == dataset.upper()]
+                ds = matches[0] if matches else None
+            elif len(datasets) == 1:
+                ds = datasets[0]
+            else:
+                ds = None
+            if ds is None:
+                return []
+            meta = []
+            for var in ds.get("variables", []):
+                is_qual = var.get("role") == "qualifier" or (
+                    var.get("derivation", {}).get("algorithm") == "nsv"
+                )
+                if is_qual:
+                    meta.append(
+                        NSVMeta(
+                            target=var["name"],
+                            label=var.get("label", ""),
+                            origin=var.get("origin", "DERIVED"),
+                            evaluator=var.get("evaluator"),
+                        )
+                    )
+            return meta
+
+        # Priority 3: pipeline metadata
+        return list(self._nsv_meta)
 
     def to_frame(self) -> pl.DataFrame:
         """Materialise the accumulated pipeline into a Polars DataFrame.

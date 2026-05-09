@@ -663,6 +663,8 @@ _README_SDTM_VERBS = [
     "dataset_level",
     "notsubmitted",
     "multiple_responses",
+    "nsv",
+    "export_supp",
 ]
 
 _README_ADAM_SPECIFIC = [

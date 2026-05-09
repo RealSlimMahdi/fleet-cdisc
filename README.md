@@ -166,9 +166,9 @@ python -c "import fleet; print(fleet.__version__)"
 Importing `fleet` registers chainable namespaces on **every** Polars DataFrame. All ADaM namespaces also inherit **12 shared verbs** from the common mixin: `source`, `derivation`, `assigned`, `recode`, `rename`, `condderivation`, `whereclauses`, `merge_adsl`, `date`, `duration`, `flag`, `criterion`.
 
 <details>
-<summary><b><code>df.sdtm</code></b> — SDTM domains (15 verbs)</summary>
+<summary><b><code>df.sdtm</code></b> — SDTM domains (17 verbs)</summary>
 
-`assign_no_ct` · `assign_ct` · `date` · `duration` · `hardcode_ct` · `hardcode_no_ct` · `condition_add` · `if_then_else` · `ae_aerel` · `merge` · `remove_dup` · `group_by` · `dataset_level` · `notsubmitted` · `multiple_responses`
+`assign_no_ct` · `assign_ct` · `date` · `duration` · `hardcode_ct` · `hardcode_no_ct` · `condition_add` · `if_then_else` · `ae_aerel` · `merge` · `remove_dup` · `group_by` · `dataset_level` · `notsubmitted` · `multiple_responses` · `nsv` · `export_supp`
 
 </details>
 

@@ -1,5 +1,8 @@
 """SDTM data models: algorithm enum and YAML specification structures."""
 
+from __future__ import annotations
+
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
@@ -26,6 +29,17 @@ class SDTMAlgorithm(StrEnum):
     MULTIPLE_RESPONSES = "multiple_responses"
     DATE = "date"
     DURATION = "duration"
+    NSV = "nsv"
+
+
+@dataclass(frozen=True, slots=True)
+class NSVMeta:
+    """Metadata for a Non-Standard Variable (qualifier)."""
+
+    target: str
+    label: str
+    origin: str = "DERIVED"
+    evaluator: str | None = None
 
 
 class SDTMVariableSpec(BaseModel):
@@ -75,6 +89,12 @@ class SDTMVariableSpec(BaseModel):
     # assign_dtc
     input_format: str | None = None  # e.g. "%Y-%m-%d"
     output_format: str | None = None  # e.g. "ISO8601"
+
+    # nsv (non-standard variable / qualifier)
+    label: str | None = None
+    origin: str | None = None
+    role: str | None = None
+    evaluator: str | None = None
 
     model_config = {"extra": "allow"}
 
