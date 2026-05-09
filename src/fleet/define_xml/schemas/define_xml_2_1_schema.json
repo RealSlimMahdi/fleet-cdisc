@@ -1,0 +1,1635 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pharmaverse.org/schemas/define-xml-2.1-yaml.json",
+  "title": "Define-XML 2.1 YAML Specification",
+  "description": "JSON Schema for validating CDISC Define-XML 2.1 specifications in YAML format. Enables VS Code autocomplete and Pydantic validation.",
+  "type": "object",
+  "required": ["odm_header", "study", "metadata_version"],
+  "properties": {
+    "odm_header": {
+      "$ref": "#/$defs/odm_header"
+    },
+    "study": {
+      "$ref": "#/$defs/study"
+    },
+    "metadata_version": {
+      "$ref": "#/$defs/metadata_version"
+    },
+    "custom_algorithms": {
+      "type": "array",
+      "description": "Custom algorithm verb names for this study. Each verb must be registered via register_algorithm_handler() before running the engine.",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "default": [],
+      "examples": [["my_survival_model", "bayesian_imputation"]]
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "odm_header": {
+      "type": "object",
+      "title": "ODM Header",
+      "description": "Root ODM element containing metadata about the Define-XML file",
+      "required": [
+        "xmlns",
+        "xmlns_xlink",
+        "xmlns_def",
+        "odm_version",
+        "file_oid",
+        "file_type",
+        "creation_date_time",
+        "originator",
+        "def_context"
+      ],
+      "properties": {
+        "xmlns": {
+          "type": "string",
+          "description": "ODM namespace URI",
+          "const": "http://www.cdisc.org/ns/odm/v1.3"
+        },
+        "xmlns_xlink": {
+          "type": "string",
+          "description": "XLink namespace URI",
+          "const": "http://www.w3.org/1999/xlink"
+        },
+        "xmlns_def": {
+          "type": "string",
+          "description": "Define-XML namespace URI",
+          "const": "http://www.cdisc.org/ns/def/v2.1"
+        },
+        "odm_version": {
+          "type": "string",
+          "description": "ODM version number",
+          "pattern": "^\\d+\\.\\d+(?:\\.\\d+)?$",
+          "examples": ["1.3.2"]
+        },
+        "file_oid": {
+          "type": "string",
+          "description": "Unique file identifier (OID format)",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["www.cdisc.org/CDISCPILOT01/1/Define-XML_2.1.0"]
+        },
+        "file_type": {
+          "type": "string",
+          "description": "Type of ODM file",
+          "enum": ["Snapshot", "Transactional"]
+        },
+        "creation_date_time": {
+          "type": "string",
+          "description": "File creation timestamp (ISO 8601 format)",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$",
+          "examples": ["2026-02-13T10:30:00"]
+        },
+        "originator": {
+          "type": "string",
+          "description": "Organization creating the Define-XML file",
+          "minLength": 1,
+          "maxLength": 200,
+          "examples": ["Pharmaverse CDISCPILOT01 Team"]
+        },
+        "source_system": {
+          "type": "string",
+          "description": "System generating the Define-XML file",
+          "maxLength": 200,
+          "examples": ["PharmaversePy"]
+        },
+        "source_system_version": {
+          "type": "string",
+          "description": "Version of the generating system",
+          "maxLength": 50,
+          "examples": ["1.0.0"]
+        },
+        "def_context": {
+          "type": "string",
+          "description": "Context of the submission",
+          "enum": ["Submission", "Other"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "study": {
+      "type": "object",
+      "title": "Study",
+      "description": "Study element containing global metadata about the clinical study",
+      "required": ["oid", "global_variables"],
+      "properties": {
+        "oid": {
+          "type": "string",
+          "description": "Unique study identifier (OID format)",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["STDY.CDISCPILOT01"]
+        },
+        "global_variables": {
+          "$ref": "#/$defs/global_variables"
+        }
+      },
+      "additionalProperties": false
+    },
+    "global_variables": {
+      "type": "object",
+      "title": "Global Variables",
+      "description": "Global study metadata elements",
+      "required": ["study_name", "study_description", "protocol_name"],
+      "properties": {
+        "study_name": {
+          "type": "string",
+          "description": "Short study name",
+          "minLength": 1,
+          "maxLength": 200,
+          "examples": ["CDISCPILOT01"]
+        },
+        "study_description": {
+          "type": "string",
+          "description": "Full study description",
+          "minLength": 1,
+          "maxLength": 2000,
+          "examples": ["A Phase II, Randomized, Double-Blind, Placebo-Controlled Study"]
+        },
+        "protocol_name": {
+          "type": "string",
+          "description": "Protocol identifier",
+          "minLength": 1,
+          "maxLength": 200,
+          "examples": ["CDISCPILOT01"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "metadata_version": {
+      "type": "object",
+      "title": "MetaDataVersion",
+      "description": "Container for all study metadata including datasets, variables, codelists, etc.",
+      "required": ["oid", "name", "description", "define_version"],
+      "properties": {
+        "oid": {
+          "type": "string",
+          "description": "Unique metadata version identifier (OID format)",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["MDV.CDISCPILOT01.1.SDTMIG.3.1.2.SDTM.1.2"]
+        },
+        "name": {
+          "type": "string",
+          "description": "Metadata version name",
+          "minLength": 1,
+          "maxLength": 200,
+          "examples": ["CDISCPILOT01 SDTM Data Definitions"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Metadata version description",
+          "minLength": 1,
+          "maxLength": 2000,
+          "examples": ["Data Definitions for CDISCPILOT01 SDTM datasets"]
+        },
+        "define_version": {
+          "type": "string",
+          "description": "Define-XML specification version",
+          "pattern": "^\\d+\\.\\d+(?:\\.\\d+)?$",
+          "examples": ["2.1.0"]
+        },
+        "standards": {
+          "type": "array",
+          "description": "Standards used in the study (SDTM IG, CT, etc.)",
+          "items": {
+            "$ref": "#/$defs/standard"
+          },
+          "minItems": 1
+        },
+        "supporting_documents": {
+          "type": "array",
+          "description": "References to supporting documents (aCRF, Reviewer's Guide, etc.)",
+          "items": {
+            "$ref": "#/$defs/supporting_document"
+          }
+        },
+        "value_list_defs": {
+          "type": "array",
+          "description": "Value-level metadata definitions",
+          "items": {
+            "$ref": "#/$defs/value_list_def"
+          }
+        },
+        "where_clause_defs": {
+          "type": "array",
+          "description": "Conditional logic definitions for value-level metadata",
+          "items": {
+            "$ref": "#/$defs/where_clause_def"
+          }
+        },
+        "item_group_defs": {
+          "type": "array",
+          "description": "Dataset definitions",
+          "items": {
+            "$ref": "#/$defs/item_group_def"
+          },
+          "minItems": 1
+        },
+        "item_defs": {
+          "type": "array",
+          "description": "Variable definitions",
+          "items": {
+            "$ref": "#/$defs/item_def"
+          },
+          "minItems": 1
+        },
+        "code_lists": {
+          "type": "array",
+          "description": "Controlled terminology codelists",
+          "items": {
+            "$ref": "#/$defs/code_list"
+          }
+        },
+        "method_defs": {
+          "type": "array",
+          "description": "Derivation method definitions",
+          "items": {
+            "$ref": "#/$defs/method_def"
+          }
+        },
+        "comment_defs": {
+          "type": "array",
+          "description": "Comment definitions",
+          "items": {
+            "$ref": "#/$defs/comment_def"
+          }
+        },
+        "leaf_defs": {
+          "type": "array",
+          "description": "External document and dataset file references",
+          "items": {
+            "$ref": "#/$defs/leaf"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "standard": {
+      "type": "object",
+      "title": "Standard",
+      "description": "Standard used in the study (SDTMIG, CT, ADaM, etc.)",
+      "required": ["oid", "name", "type", "version"],
+      "properties": {
+        "oid": {
+          "type": "string",
+          "description": "Unique standard identifier (OID format)",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["STD.1", "STD.SDTMIG"]
+        },
+        "name": {
+          "type": "string",
+          "description": "Standard name",
+          "minLength": 1,
+          "maxLength": 100,
+          "examples": ["SDTMIG", "CDISC/NCI", "ADaM"]
+        },
+        "type": {
+          "type": "string",
+          "description": "Type of standard",
+          "enum": ["IG", "CT", "AD"],
+          "examples": ["IG"]
+        },
+        "version": {
+          "type": "string",
+          "description": "Version of the standard",
+          "minLength": 1,
+          "maxLength": 50,
+          "examples": ["3.1.2", "2023-12-15"]
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the standard",
+          "enum": ["Final", "Draft", "Provisional"],
+          "examples": ["Final"]
+        },
+        "publishing_set": {
+          "type": "string",
+          "description": "Publishing set (required for CT standards)",
+          "enum": ["SDTM", "ADaM", "CDASH", "SEND"],
+          "examples": ["SDTM"]
+        },
+        "comment_oid": {
+          "type": "string",
+          "description": "Reference to a comment definition",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["COM.STD1"]
+        }
+      },
+      "additionalProperties": false,
+      "if": {
+        "properties": {
+          "type": {
+            "const": "CT"
+          }
+        }
+      },
+      "then": {
+        "required": ["publishing_set"]
+      }
+    },
+    "supporting_document": {
+      "type": "object",
+      "title": "Supporting Document",
+      "description": "Reference to a supporting document",
+      "required": ["leaf_id"],
+      "properties": {
+        "leaf_id": {
+          "type": "string",
+          "description": "Reference to leaf definition ID",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["LF.acrf", "LF.csdrg"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "value_list_def": {
+      "type": "object",
+      "title": "ValueListDef",
+      "description": "Value-level metadata definition for conditional variable properties",
+      "required": ["oid", "item_refs"],
+      "properties": {
+        "oid": {
+          "type": "string",
+          "description": "Unique value list identifier (OID format)",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["VL.LB.LBORRES", "VL.SUPPDM.QVAL"]
+        },
+        "item_refs": {
+          "type": "array",
+          "description": "References to ItemDefs with where clause conditions",
+          "items": {
+            "$ref": "#/$defs/value_list_item_ref"
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "value_list_item_ref": {
+      "type": "object",
+      "title": "ValueList ItemRef",
+      "description": "Reference to an ItemDef in a ValueList with conditional criteria",
+      "required": ["item_oid", "order_number", "mandatory", "where_clause_oid"],
+      "properties": {
+        "item_oid": {
+          "type": "string",
+          "description": "Reference to ItemDef OID",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["IT.LB.LBORRES.SET1.LBSPEC.BLOOD"]
+        },
+        "order_number": {
+          "type": "integer",
+          "description": "Display order number",
+          "minimum": 1,
+          "examples": [1]
+        },
+        "mandatory": {
+          "type": "string",
+          "description": "Whether this value is mandatory",
+          "enum": ["Yes", "No"]
+        },
+        "role": {
+          "type": "string",
+          "description": "Variable role in dataset",
+          "maxLength": 100,
+          "examples": ["Record Qualifier"]
+        },
+        "method_oid": {
+          "type": "string",
+          "description": "Reference to derivation method",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["MT.RACE"]
+        },
+        "where_clause_oid": {
+          "type": "string",
+          "description": "Reference to where clause definition",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["WC.LB.LBTESTCD.SET1.LBSPEC.BLOOD"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "where_clause_def": {
+      "type": "object",
+      "title": "WhereClauseDef",
+      "description": "Conditional logic definition for value-level metadata",
+      "required": ["oid", "range_checks"],
+      "properties": {
+        "oid": {
+          "type": "string",
+          "description": "Unique where clause identifier (OID format)",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["WC.LB.LBTESTCD.SET1.LBSPEC.BLOOD"]
+        },
+        "comment_oid": {
+          "type": "string",
+          "description": "Reference to a comment definition",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["COM.SUBJECTDATA-JOIN-DM"]
+        },
+        "range_checks": {
+          "type": "array",
+          "description": "Conditional checks to evaluate",
+          "items": {
+            "$ref": "#/$defs/range_check"
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "range_check": {
+      "type": "object",
+      "title": "RangeCheck",
+      "description": "Conditional check specification",
+      "required": ["comparator", "soft_hard", "item_oid", "check_values"],
+      "properties": {
+        "comparator": {
+          "type": "string",
+          "description": "Comparison operator",
+          "enum": ["EQ", "NE", "IN", "LT", "GT", "LE", "GE"],
+          "examples": ["EQ"]
+        },
+        "soft_hard": {
+          "type": "string",
+          "description": "Type of check",
+          "enum": ["Soft", "Hard"]
+        },
+        "item_oid": {
+          "type": "string",
+          "description": "Reference to variable being checked",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["IT.LB.LBTESTCD"]
+        },
+        "check_values": {
+          "type": "array",
+          "description": "Values to check against",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "examples": [["BILI", "GLUC"]]
+        }
+      },
+      "additionalProperties": false
+    },
+    "item_group_def": {
+      "type": "object",
+      "title": "ItemGroupDef",
+      "description": "Dataset definition with structure and variable references",
+      "required": [
+        "oid",
+        "domain",
+        "name",
+        "repeating",
+        "is_reference_data",
+        "sas_dataset_name",
+        "purpose",
+        "structure",
+        "standard_oid",
+        "archive_location_id",
+        "description",
+        "class",
+        "leaf",
+        "item_refs"
+      ],
+      "properties": {
+        "oid": {
+          "type": "string",
+          "description": "Unique dataset identifier (OID format)",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["IG.DM", "IG.AE"]
+        },
+        "domain": {
+          "type": "string",
+          "description": "Domain code (max 2 characters for SDTM)",
+          "minLength": 1,
+          "maxLength": 8,
+          "pattern": "^[A-Z0-9]+$",
+          "examples": ["DM", "AE", "VS"]
+        },
+        "name": {
+          "type": "string",
+          "description": "Dataset name (max 8 characters)",
+          "minLength": 1,
+          "maxLength": 8,
+          "pattern": "^[A-Z0-9]+$",
+          "examples": ["DM", "AE"]
+        },
+        "repeating": {
+          "type": "string",
+          "description": "Whether dataset has multiple records per subject",
+          "enum": ["Yes", "No"]
+        },
+        "is_reference_data": {
+          "type": "string",
+          "description": "Whether dataset contains reference data vs subject data",
+          "enum": ["Yes", "No"]
+        },
+        "sas_dataset_name": {
+          "type": "string",
+          "description": "SAS dataset name (max 8 characters)",
+          "minLength": 1,
+          "maxLength": 8,
+          "examples": ["DM", "AE"]
+        },
+        "purpose": {
+          "type": "string",
+          "description": "Dataset purpose",
+          "enum": ["Tabulation", "Analysis"]
+        },
+        "structure": {
+          "type": "string",
+          "description": "Description of dataset structure",
+          "minLength": 1,
+          "maxLength": 200,
+          "examples": ["One record per subject", "One record per adverse event"]
+        },
+        "standard_oid": {
+          "type": "string",
+          "description": "Reference to standard definition",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["STD.1"]
+        },
+        "archive_location_id": {
+          "type": "string",
+          "description": "Reference to data file location (leaf ID)",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["LF.DM"]
+        },
+        "is_non_standard": {
+          "type": "string",
+          "description": "Indicator for non-standard dataset (omit if standard)",
+          "enum": ["Yes"]
+        },
+        "has_no_data": {
+          "type": "string",
+          "description": "Indicator that dataset has no data (omit if has data)",
+          "enum": ["Yes"]
+        },
+        "comment_oid": {
+          "type": "string",
+          "description": "Reference to comment definition",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["COM.DOMAIN.DM"]
+        },
+        "description": {
+          "$ref": "#/$defs/translated_text",
+          "description": "Dataset label/description"
+        },
+        "class": {
+          "type": "object",
+          "description": "SDTM class designation",
+          "required": ["name"],
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "SDTM class name",
+              "enum": [
+                "SPECIAL PURPOSE",
+                "EVENTS",
+                "INTERVENTIONS",
+                "FINDINGS",
+                "FINDINGS ABOUT",
+                "TRIAL DESIGN",
+                "RELATIONSHIP",
+                "SUBJECT LEVEL ANALYSIS DATASET",
+                "OCCURRENCE DATA STRUCTURE",
+                "BASIC DATA STRUCTURE"
+              ],
+              "examples": ["SPECIAL PURPOSE"]
+            }
+          },
+          "additionalProperties": false
+        },
+        "leaf": {
+          "type": "object",
+          "description": "Reference to data file",
+          "required": ["id", "href", "title"],
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Leaf identifier",
+              "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+              "examples": ["LF.DM"]
+            },
+            "href": {
+              "type": "string",
+              "description": "File path (relative)",
+              "minLength": 1,
+              "examples": ["dm.xpt"]
+            },
+            "title": {
+              "type": "string",
+              "description": "Display title",
+              "minLength": 1,
+              "examples": ["dm.xpt"]
+            }
+          },
+          "additionalProperties": false
+        },
+        "item_refs": {
+          "type": "array",
+          "description": "References to variables in dataset",
+          "items": {
+            "$ref": "#/$defs/item_ref"
+          },
+          "minItems": 1
+        },
+        "pharmaversepy_engine_config": {
+          "$ref": "#/$defs/pharmaversepy_engine_config",
+          "description": "Optional dataset-level engine configuration."
+        }
+      },
+      "additionalProperties": false
+    },
+    "item_ref": {
+      "type": "object",
+      "title": "ItemRef",
+      "description": "Reference to a variable in a dataset",
+      "required": ["item_oid", "order_number", "mandatory"],
+      "properties": {
+        "item_oid": {
+          "type": "string",
+          "description": "Reference to ItemDef OID",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["IT.STUDYID", "IT.DM.AGE"]
+        },
+        "order_number": {
+          "type": "integer",
+          "description": "Display order in dataset",
+          "minimum": 1,
+          "examples": [1]
+        },
+        "mandatory": {
+          "type": "string",
+          "description": "Whether variable is required",
+          "enum": ["Yes", "No"]
+        },
+        "key_sequence": {
+          "type": "integer",
+          "description": "Sort order for dataset uniqueness",
+          "minimum": 1,
+          "examples": [1]
+        },
+        "method_oid": {
+          "type": "string",
+          "description": "Reference to derivation method",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["MT.USUBJID"]
+        },
+        "role": {
+          "type": "string",
+          "description": "Variable role in dataset",
+          "maxLength": 100,
+          "examples": ["Record Qualifier"]
+        },
+        "comment_oid": {
+          "type": "string",
+          "description": "OID reference to a CommentDef for this variable"
+        }
+      },
+      "additionalProperties": false
+    },
+    "item_def": {
+      "type": "object",
+      "title": "ItemDef",
+      "description": "Variable definition with properties, codelist, and origin",
+      "required": ["oid", "name", "data_type", "sas_field_name", "description", "origin"],
+      "properties": {
+        "oid": {
+          "type": "string",
+          "description": "Unique variable identifier (OID format)",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["IT.STUDYID", "IT.DM.AGE"]
+        },
+        "name": {
+          "type": "string",
+          "description": "Variable name (max 8 characters, uppercase)",
+          "minLength": 1,
+          "maxLength": 8,
+          "pattern": "^[A-Z][A-Z0-9]*$",
+          "examples": ["STUDYID", "AGE", "SEX"]
+        },
+        "data_type": {
+          "type": "string",
+          "description": "Variable data type",
+          "enum": [
+            "text",
+            "integer",
+            "float",
+            "date",
+            "datetime",
+            "time",
+            "partialDate",
+            "partialTime",
+            "partialDatetime",
+            "durationDatetime",
+            "intervalDatetime",
+            "incompleteDatetime",
+            "incompleteDate",
+            "incompleteTime"
+          ],
+          "examples": ["text"]
+        },
+        "length": {
+          "type": "integer",
+          "description": "Variable length (required for text and integer)",
+          "minimum": 1,
+          "maximum": 2000,
+          "examples": [8]
+        },
+        "sas_field_name": {
+          "type": "string",
+          "description": "SAS variable name (max 8 characters)",
+          "minLength": 1,
+          "maxLength": 8,
+          "examples": ["STUDYID", "AGE"]
+        },
+        "significant_digits": {
+          "type": "integer",
+          "description": "Number of significant digits for float variables",
+          "minimum": 1,
+          "examples": [2]
+        },
+        "display_format": {
+          "type": "string",
+          "description": "Display format specification",
+          "maxLength": 50,
+          "examples": ["5.2", "DATE9."]
+        },
+        "comment_oid": {
+          "type": "string",
+          "description": "Reference to comment definition",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["COM.AGEU"]
+        },
+        "description": {
+          "$ref": "#/$defs/translated_text",
+          "description": "Variable label (max 40 chars for SDTM, 200 for ADaM)"
+        },
+        "codelist_ref": {
+          "type": "object",
+          "description": "Reference to controlled terminology codelist",
+          "required": ["codelist_oid"],
+          "properties": {
+            "codelist_oid": {
+              "type": "string",
+              "description": "Reference to CodeList OID",
+              "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+              "examples": ["CL.SEX", "CL.RACE"]
+            }
+          },
+          "additionalProperties": false
+        },
+        "value_list_ref": {
+          "type": "object",
+          "description": "Reference to value-level metadata",
+          "required": ["value_list_oid"],
+          "properties": {
+            "value_list_oid": {
+              "type": "string",
+              "description": "Reference to ValueListDef OID",
+              "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+              "examples": ["VL.LB.LBORRES"]
+            }
+          },
+          "additionalProperties": false
+        },
+        "origin": {
+          "$ref": "#/$defs/origin"
+        },
+        "pharmaversepy_algorithm": {
+          "$ref": "#/$defs/pharmaversepy_algorithm",
+          "description": "Optional pharmaversepy derivation algorithm for this variable."
+        }
+      },
+      "additionalProperties": false,
+      "if": {
+        "properties": {
+          "data_type": {
+            "enum": ["text", "integer"]
+          }
+        }
+      },
+      "then": {
+        "required": ["length"]
+      }
+    },
+    "origin": {
+      "type": "object",
+      "title": "Origin",
+      "description": "Variable origin specification",
+      "required": ["type", "source"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Origin type",
+          "enum": ["Collected", "Derived", "Assigned", "Protocol", "Predecessor"],
+          "examples": ["Collected"]
+        },
+        "source": {
+          "type": "string",
+          "description": "Origin source",
+          "enum": ["Investigator", "Sponsor", "Vendor", "Subject"],
+          "examples": ["Investigator"]
+        },
+        "description": {
+          "$ref": "#/$defs/translated_text",
+          "description": "Origin description (e.g., predecessor variable reference)"
+        },
+        "document_refs": {
+          "type": "array",
+          "description": "References to source documents (CRF pages)",
+          "items": {
+            "$ref": "#/$defs/document_ref"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "document_ref": {
+      "type": "object",
+      "title": "DocumentRef",
+      "description": "Reference to a source document with optional page references",
+      "required": ["leaf_id"],
+      "properties": {
+        "leaf_id": {
+          "type": "string",
+          "description": "Reference to leaf definition ID",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["LF.acrf"]
+        },
+        "pdf_page_refs": {
+          "type": "array",
+          "description": "Specific page references within document",
+          "items": {
+            "$ref": "#/$defs/pdf_page_ref"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "pdf_page_ref": {
+      "type": "object",
+      "title": "PDFPageRef",
+      "description": "PDF page reference (physical page number or named destination)",
+      "required": ["page_ref", "type"],
+      "properties": {
+        "page_ref": {
+          "type": "string",
+          "description": "Page number or named destination",
+          "minLength": 1,
+          "examples": ["6", "section2.1"]
+        },
+        "type": {
+          "type": "string",
+          "description": "Type of reference",
+          "enum": ["PhysicalRef", "NamedDestination"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "code_list": {
+      "type": "object",
+      "title": "CodeList",
+      "description": "Controlled terminology codelist definition",
+      "required": ["oid", "name", "data_type"],
+      "properties": {
+        "oid": {
+          "type": "string",
+          "description": "Unique codelist identifier (OID format)",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["CL.SEX", "CL.RACE"]
+        },
+        "name": {
+          "type": "string",
+          "description": "Codelist name",
+          "minLength": 1,
+          "maxLength": 200,
+          "examples": ["Sex", "Race"]
+        },
+        "data_type": {
+          "type": "string",
+          "description": "Data type of coded values",
+          "enum": ["text", "integer", "float"],
+          "examples": ["text"]
+        },
+        "standard_oid": {
+          "type": "string",
+          "description": "Reference to controlled terminology standard",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["STD.2"]
+        },
+        "sas_format_name": {
+          "type": "string",
+          "description": "SAS format name",
+          "maxLength": 32,
+          "examples": ["$SEX", "$RACE"]
+        },
+        "code_list_items": {
+          "type": "array",
+          "description": "Individual code items with decodes",
+          "items": {
+            "$ref": "#/$defs/code_list_item"
+          }
+        },
+        "enumerated_items": {
+          "type": "array",
+          "description": "Enumerated items (non-extensible list)",
+          "items": {
+            "$ref": "#/$defs/enumerated_item"
+          }
+        },
+        "alias": {
+          "$ref": "#/$defs/alias",
+          "description": "NCI code for the codelist itself"
+        },
+        "nci_codelist_code": {
+          "type": "string",
+          "description": "NCI Thesaurus code for this codelist (e.g. C66731)"
+        }
+      },
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": ["code_list_items"]
+        },
+        {
+          "required": ["enumerated_items"]
+        }
+      ]
+    },
+    "code_list_item": {
+      "type": "object",
+      "title": "CodeListItem",
+      "description": "Individual code item with decode and optional NCI code",
+      "required": ["coded_value", "decode"],
+      "properties": {
+        "coded_value": {
+          "type": "string",
+          "description": "Code value",
+          "minLength": 1,
+          "examples": ["M", "F", "SCREENING"]
+        },
+        "extended_value": {
+          "type": "string",
+          "description": "Indicates extensible code (allows other values)",
+          "enum": ["Yes"]
+        },
+        "decode": {
+          "$ref": "#/$defs/translated_text",
+          "description": "Human-readable decode text"
+        },
+        "alias": {
+          "$ref": "#/$defs/alias",
+          "description": "NCI code for this item"
+        }
+      },
+      "additionalProperties": false
+    },
+    "enumerated_item": {
+      "type": "object",
+      "title": "EnumeratedItem",
+      "description": "Enumerated item (non-extensible)",
+      "required": ["coded_value"],
+      "properties": {
+        "coded_value": {
+          "type": "string",
+          "description": "Enumerated value",
+          "minLength": 1,
+          "examples": ["SCREENING", "Body Mass Index"]
+        },
+        "alias": {
+          "$ref": "#/$defs/alias",
+          "description": "NCI code for this enumerated item"
+        }
+      },
+      "additionalProperties": false
+    },
+    "method_def": {
+      "type": "object",
+      "title": "MethodDef",
+      "description": "Computational method or algorithm definition",
+      "required": ["oid", "name", "type", "description"],
+      "properties": {
+        "oid": {
+          "type": "string",
+          "description": "Unique method identifier (OID format)",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["MT.AGE", "MT.USUBJID"]
+        },
+        "name": {
+          "type": "string",
+          "description": "Method name",
+          "minLength": 1,
+          "maxLength": 200,
+          "examples": ["Algorithm to derive AGE"]
+        },
+        "type": {
+          "type": "string",
+          "description": "Type of method",
+          "enum": ["Computation", "Imputation", "Transpose", "Other"],
+          "examples": ["Computation"]
+        },
+        "description": {
+          "$ref": "#/$defs/translated_text",
+          "description": "Algorithm description or pseudocode"
+        },
+        "formal_expressions": {
+          "type": "array",
+          "description": "Formal code expressions (SAS, Python, etc.)",
+          "items": {
+            "$ref": "#/$defs/formal_expression"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "formal_expression": {
+      "type": "object",
+      "title": "FormalExpression",
+      "description": "Formal code expression in specific language",
+      "required": ["context", "expression"],
+      "properties": {
+        "context": {
+          "type": "string",
+          "description": "Expression language or system",
+          "minLength": 1,
+          "examples": ["SAS 9.0 or later", "Python 3.8+"]
+        },
+        "expression": {
+          "type": "string",
+          "description": "The formal code or expression",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "comment_def": {
+      "type": "object",
+      "title": "CommentDef",
+      "description": "Comment or note definition",
+      "required": ["oid", "description"],
+      "properties": {
+        "oid": {
+          "type": "string",
+          "description": "Unique comment identifier (OID format)",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["COM.AGEU", "COM.DOMAIN.DM"]
+        },
+        "description": {
+          "$ref": "#/$defs/translated_text",
+          "description": "Comment text"
+        },
+        "document_ref": {
+          "$ref": "#/$defs/document_ref_with_page",
+          "description": "Reference to supporting document"
+        }
+      },
+      "additionalProperties": false
+    },
+    "document_ref_with_page": {
+      "type": "object",
+      "title": "DocumentRef with Page",
+      "description": "Document reference with optional page reference",
+      "required": ["leaf_id"],
+      "properties": {
+        "leaf_id": {
+          "type": "string",
+          "description": "Reference to leaf definition ID",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["LF.csdrg"]
+        },
+        "pdf_page_ref": {
+          "type": "object",
+          "description": "Specific page reference",
+          "required": ["page_refs", "type"],
+          "properties": {
+            "page_refs": {
+              "type": "string",
+              "description": "Page number or named destination",
+              "minLength": 1,
+              "examples": ["section2.1"]
+            },
+            "type": {
+              "type": "string",
+              "description": "Type of reference",
+              "enum": ["PhysicalRef", "NamedDestination"]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "leaf": {
+      "type": "object",
+      "title": "Leaf",
+      "description": "External document or dataset file definition",
+      "required": ["id", "href", "title"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique leaf identifier (OID format)",
+          "pattern": "^[A-Za-z][A-Za-z0-9._-]*$",
+          "examples": ["LF.acrf", "LF.DM"]
+        },
+        "href": {
+          "type": "string",
+          "description": "File path (relative to Define-XML location)",
+          "minLength": 1,
+          "examples": ["acrf.pdf", "dm.xpt"]
+        },
+        "title": {
+          "type": "string",
+          "description": "Display title for the document/file",
+          "minLength": 1,
+          "examples": ["Annotated CRF", "dm.xpt"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "translated_text": {
+      "type": "object",
+      "title": "TranslatedText",
+      "description": "Translatable text element with language specification",
+      "required": ["text", "lang"],
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Text content",
+          "minLength": 1,
+          "examples": ["Demographics", "Age"]
+        },
+        "lang": {
+          "type": "string",
+          "description": "Language code (ISO 639-1)",
+          "pattern": "^[a-z]{2}$",
+          "default": "en",
+          "examples": ["en", "ja", "de"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "alias": {
+      "type": "object",
+      "title": "Alias",
+      "description": "NCI code alias for controlled terminology",
+      "required": ["context", "name"],
+      "properties": {
+        "context": {
+          "type": "string",
+          "description": "Alias context",
+          "const": "nci:ExtCodeID"
+        },
+        "name": {
+          "type": "string",
+          "description": "NCI C-code",
+          "pattern": "^C\\d+$",
+          "examples": ["C20197", "C16576"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "pharmaversepy_algorithm": {
+      "type": "object",
+      "title": "PharmaversePy Algorithm",
+      "description": "Derivation algorithm block for pharmaversepy engines. Use 'custom_algorithms' at the define.yaml root to declare custom verbs.",
+      "oneOf": [
+        {
+          "description": "Copy raw source variable to SDTM column without CT validation.",
+          "required": ["algorithm", "source_variable"],
+          "properties": {
+            "algorithm": {
+              "const": "assign_no_ct"
+            },
+            "source_variable": {
+              "type": "string",
+              "description": "Raw input column name"
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "Copy raw source variable and validate against a CDISC CT codelist.",
+          "required": ["algorithm", "source_variable"],
+          "properties": {
+            "algorithm": {
+              "const": "assign_ct"
+            },
+            "source_variable": {
+              "type": "string",
+              "description": "Raw input column name"
+            },
+            "ct_codelist": {
+              "type": "string",
+              "description": "CDISC CT OID (e.g. C66731)"
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "Parse source column and format as ISO 8601 datetime string.",
+          "required": ["algorithm", "source_variable"],
+          "properties": {
+            "algorithm": {
+              "enum": ["assign_dtc", "assign_datetime"]
+            },
+            "source_variable": {
+              "type": "string",
+              "description": "Source datetime column name"
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "Set a constant value and validate it against a CDISC CT codelist.",
+          "required": ["algorithm", "constant_value"],
+          "properties": {
+            "algorithm": {
+              "const": "hardcode_ct"
+            },
+            "constant_value": {
+              "type": "string",
+              "description": "Constant to hardcode"
+            },
+            "ct_codelist": {
+              "type": "string",
+              "description": "CDISC CT OID to validate against"
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "Set a constant string value without CT validation.",
+          "required": ["algorithm", "constant_value"],
+          "properties": {
+            "algorithm": {
+              "const": "hardcode_no_ct"
+            },
+            "constant_value": {
+              "type": "string",
+              "description": "Constant value to hardcode"
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "if-then-else: assign condition_true_value when condition is met, else condition_false_value.",
+          "required": ["algorithm", "condition"],
+          "properties": {
+            "algorithm": {
+              "const": "condition_add"
+            },
+            "condition": {
+              "type": "string",
+              "description": "Polars boolean expression, e.g. 'AGE >= 65'"
+            },
+            "condition_true_value": {
+              "type": "string",
+              "description": "Value when condition is True"
+            },
+            "condition_false_value": {
+              "type": "string",
+              "description": "Value when condition is False (omit for null)"
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "Build a string by filling {column_name} placeholders in concat_pattern.",
+          "required": ["algorithm", "concat_pattern"],
+          "properties": {
+            "algorithm": {
+              "const": "concatenate"
+            },
+            "concat_pattern": {
+              "type": "string",
+              "description": "Pattern string with {column} placeholders, e.g. 'STUDY-{patient_number}'"
+            },
+            "separator": {
+              "type": "string",
+              "description": "Optional separator between parts"
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "Bring a variable in from another dataset via a key join.",
+          "required": ["algorithm", "merge_dataset", "merge_key", "source_variable"],
+          "properties": {
+            "algorithm": {
+              "const": "merge"
+            },
+            "merge_dataset": {
+              "type": "string",
+              "description": "Source dataset name (e.g. 'DM')"
+            },
+            "merge_key": {
+              "type": "string",
+              "description": "Join key column (e.g. 'USUBJID')"
+            },
+            "source_variable": {
+              "type": "string",
+              "description": "Column to pull from the merged dataset"
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "Dataset-level derivation (e.g. sequence number). No additional fields required.",
+          "required": ["algorithm"],
+          "properties": {
+            "algorithm": {
+              "const": "dataset_level"
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "Direct copy from a source SDTM or ADaM variable.",
+          "required": ["algorithm", "source_variable"],
+          "properties": {
+            "algorithm": {
+              "const": "source"
+            },
+            "source_variable": {
+              "type": "string",
+              "description": "Source column name"
+            },
+            "source_dataset": {
+              "type": "string",
+              "description": "Source dataset name (e.g. 'DM'). Defaults to primary_source."
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "Arbitrary Polars expression evaluated on the working dataset.",
+          "required": ["algorithm", "derivation_expression"],
+          "properties": {
+            "algorithm": {
+              "const": "derivation"
+            },
+            "derivation_expression": {
+              "type": "string",
+              "description": "Polars expression string, e.g. 'TRTEDT - TRTSDT + 1'"
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "Convert an ISO 8601 date/datetime string to a SAS-style numeric date.",
+          "required": ["algorithm", "source_variable"],
+          "properties": {
+            "algorithm": {
+              "const": "date_conversion"
+            },
+            "source_variable": {
+              "type": "string",
+              "description": "SDTM ISO 8601 date/datetime column"
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "CDISC study day: event_date - ref_date + 1 (positive) or event_date - ref_date (negative).",
+          "required": ["algorithm", "source_variable", "reference_date"],
+          "properties": {
+            "algorithm": {
+              "const": "study_day_calc"
+            },
+            "source_variable": {
+              "type": "string",
+              "description": "Event date column (SAS numeric)"
+            },
+            "reference_date": {
+              "type": "string",
+              "description": "Reference date column, e.g. TRTSDT"
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "Pull a variable from a dataset that was pre-merged via pharmaversepy_engine_config.",
+          "required": ["algorithm", "source_variable"],
+          "properties": {
+            "algorithm": {
+              "const": "merge_lookup"
+            },
+            "source_variable": {
+              "type": "string",
+              "description": "Column name from the merged dataset"
+            },
+            "source_dataset": {
+              "type": "string",
+              "description": "Optional: dataset name for documentation"
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "Y/null flag: returns 'Y' when the Polars boolean expression is True.",
+          "required": ["algorithm", "condition"],
+          "properties": {
+            "algorithm": {
+              "const": "flag_derivation"
+            },
+            "condition": {
+              "type": "string",
+              "description": "Polars boolean expression, e.g. 'TRTSDT.is_not_null()'"
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "Flag first event per group as 'Y', all others null.",
+          "required": ["algorithm", "grouping_variables"],
+          "properties": {
+            "algorithm": {
+              "const": "first_occurrence"
+            },
+            "grouping_variables": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "description": "Columns that define the group (e.g. ['USUBJID'])"
+            },
+            "order_by": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Columns to sort by before evaluating first occurrence"
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "Map Polars condition strings to output category values using when-then logic.",
+          "required": ["algorithm", "categories"],
+          "properties": {
+            "algorithm": {
+              "const": "categorization"
+            },
+            "categories": {
+              "type": "object",
+              "description": "Map of Polars condition \u2192 output value, e.g. {\"AGE < 65\": \"1\"}",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "minProperties": 1
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "Y/null treatment-emergent flag evaluated via a Polars expression.",
+          "required": ["algorithm", "derivation_expression"],
+          "properties": {
+            "algorithm": {
+              "const": "treatment_emergent"
+            },
+            "derivation_expression": {
+              "type": "string",
+              "description": "Polars boolean expression for treatment emergence"
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "Set a constant value (ADaM). Value may be string, number, or boolean.",
+          "required": ["algorithm", "constant_value"],
+          "properties": {
+            "algorithm": {
+              "const": "hardcode"
+            },
+            "constant_value": {
+              "description": "Constant to hardcode. May be string, integer, float, or boolean.",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "description": "Custom algorithm \u2014 declare the verb in the 'custom_algorithms' list at the define.yaml root and register a handler via SDTMEngine.register_algorithm_handler() or ADAMEngine.register_algorithm_handler() before running the engine. All additional fields are allowed.",
+          "required": ["algorithm"],
+          "properties": {
+            "algorithm": {
+              "type": "string",
+              "not": {
+                "enum": [
+                  "assign_no_ct",
+                  "assign_ct",
+                  "assign_dtc",
+                  "assign_datetime",
+                  "hardcode_ct",
+                  "hardcode_no_ct",
+                  "condition_add",
+                  "concatenate",
+                  "merge",
+                  "dataset_level",
+                  "source",
+                  "derivation",
+                  "date_conversion",
+                  "study_day_calc",
+                  "merge_lookup",
+                  "flag_derivation",
+                  "first_occurrence",
+                  "categorization",
+                  "treatment_emergent",
+                  "hardcode"
+                ]
+              },
+              "description": "Custom algorithm verb (must be declared in custom_algorithms)"
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
+    },
+    "pharmaversepy_engine_config": {
+      "type": "object",
+      "title": "PharmaversePy Engine Config",
+      "description": "Dataset-level configuration applied before column-level derivations.",
+      "properties": {
+        "primary_source": {
+          "type": "string",
+          "description": "Primary raw input dataset name (e.g. 'adsl_input')"
+        },
+        "merge_datasets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Additional datasets to join before derivation"
+        },
+        "filter": {
+          "type": "string",
+          "description": "Row-level filter expression applied before derivation"
+        },
+        "sort_by": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Columns to sort the dataset by before derivation"
+        },
+        "study_constants": {
+          "type": "object",
+          "description": "Key-value pairs injected as literal columns before derivation",
+          "additionalProperties": true
+        },
+        "merges": {
+          "type": "array",
+          "description": "Merge operations performed before column derivation",
+          "items": {
+            "type": "object",
+            "properties": {
+              "dataset": {
+                "type": "string",
+                "description": "Source dataset name"
+              },
+              "keys": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "List of join key column(s)"
+              },
+              "type": {
+                "type": "string",
+                "description": "Join type (left, inner, outer)",
+                "enum": ["left", "inner", "outer", "right"]
+              },
+              "columns": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Subset of columns to bring in (all if omitted)"
+              }
+            },
+            "required": ["dataset", "keys"],
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

@@ -1,0 +1,133 @@
+site_name: Fleet
+site_description: CDISC SDTM/ADaM derivation toolkit for Polars DataFrames
+site_url: https://realslimmahdi.github.io/fleet-cdisc/
+repo_url: https://github.com/RealSlimMahdi/fleet-cdisc
+repo_name: RealSlimMahdi/fleet-cdisc
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  favicon: img/favicon.png
+  logo: img/logo.png
+  palette:
+    - scheme: default
+      primary: grey
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: teal
+      accent: cyan
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+  icon:
+    repo: fontawesome/brands/github
+
+extra:
+  version:
+    provider: mike
+    default: dev
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/RealSlimMahdi/fleet-cdisc
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src, .]
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            members_order: source
+            separate_signature: true
+            filters: ["!^_"]
+  - mkdocs-jupyter:
+      execute: false # notebooks are pre-executed and committed with output
+      include_source: true
+  - git-revision-date-localized:
+      enable_creation_date: true
+      type: date
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Why Fleet?: why-fleet.md
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+      - CLI Reference: getting-started/cli.md
+      - Troubleshooting Guide: getting-started/troubleshooting.md
+  - Concepts:
+      - How define.yaml Works: concepts/define-yaml.md
+      - Namespace Pipeline: concepts/pipeline.md
+      - Trial Design Domains: concepts/tdd.md
+      - Custom Validation Rules: concepts/custom-rules.md
+      - Advanced Patterns: concepts/advanced.md
+  - Examples:
+      - Multi-Domain Pipeline: examples/full_pipeline.md
+      - "Raw-to-Render (R2R)": examples/r2r_strategy.md
+      - Code-Driven Workflow: examples/01_code_driven_pipeline.ipynb
+      - Spec-Driven Workflow: examples/02_spec_driven_pipeline.ipynb
+  - API Reference:
+      - Overview: api/index.md
+      - Verb Cheat Sheet: api/cheat_sheet.md
+      - SDTM Namespace: api/sdtm.md
+      - ADaM Namespace: api/adam.md
+      - ADSL Namespace: api/adsl.md
+      - OCCDS Namespace: api/occds.md
+      - Therapeutic Areas: api/ta.md
+      - Trial Design Domains: api/tdd.md
+      - TLG Namespace: api/tlg.md
+      - Define-XML: api/define_xml.md
+      - Controlled Terminology: api/ct.md
+      - Study Codelists (CDISCPILOT01): api/codelists.md
+      - Core: api/core.md
+  - Quality & Compliance:
+      - Validation Strategy: validation-strategy.md
+  - Test Status: test-status.md
+  - Changelog: changelog.md

@@ -1,0 +1,49 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Env variables
+.env
+
+# MkDocs build output
+site/
+
+# Coverage
+coverage.xml
+.coverage
+
+
+# MacOS files
+.DS_Store
+outputs/.DS_Store
+
+# PowerPoint files
+$*.pptx
+*.pptx
+
+# JSON datasets
+outputs/**/*.json
+
+# Pytest cache
+.pytest_cache/
+
+# Ruff cache
+.ruff_cache/
+
+# Ignore parquet files and HTML files in the outputs directory and its subdirectories
+outputs/**/*.csv
+outputs/**/*.parquet
+outputs/**/*.json
+outputs/**/*.html
+
+# Benchmark generated data (parquet, metrics JSON, sample parquet)
+benchmark/data/*.parquet
+benchmark/data/*.json
+

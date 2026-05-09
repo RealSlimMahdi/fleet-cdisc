@@ -1,0 +1,2812 @@
+{
+  "version": "ctcae_v6",
+  "unit_system": "USCV",
+  "criteria": [
+    {
+      "term": "Anemia",
+      "direction": "L",
+      "required_vars": [
+        "AVAL",
+        "ANRLO"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 8
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 10
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRLO"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_var": "ANRLO"
+            }
+          ]
+        }
+      ],
+      "unit": "g/dL"
+    },
+    {
+      "term": "Leukocytosis",
+      "direction": "H",
+      "required_vars": [
+        "AVAL"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 100
+            }
+          ]
+        }
+      ],
+      "unit": "10^3/uL"
+    },
+    {
+      "term": "Leukocytosis",
+      "direction": "H",
+      "required_vars": [
+        "AVAL"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 100000
+            }
+          ]
+        }
+      ],
+      "unit": "10^3/mL"
+    },
+    {
+      "term": "Thrombocytopenia",
+      "direction": "L",
+      "required_vars": [
+        "AVAL",
+        "ANRLO"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 10
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 50
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 75
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRLO"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_var": "ANRLO"
+            }
+          ]
+        }
+      ],
+      "unit": "10^3/uL"
+    },
+    {
+      "term": "Thrombocytopenia",
+      "direction": "L",
+      "required_vars": [
+        "AVAL",
+        "ANRLO"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 10000
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 50000
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 75000
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRLO"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_var": "ANRLO"
+            }
+          ]
+        }
+      ],
+      "unit": "10^3/mL"
+    },
+    {
+      "term": "Activated partial thromboplastin time prolonged",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "na_check": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "grades": [
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_expr": {
+                "multiply": [
+                  "ANRHI",
+                  2.5
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_expr": {
+                "multiply": [
+                  "ANRHI",
+                  1.5
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_var": "ANRHI"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "term": "Alanine aminotransferase increased",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI",
+        "BASE",
+        "BNRIND"
+      ],
+      "na_check": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "branches": [
+            {
+              "when": {
+                "var": "BNRIND",
+                "not_in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "ANRHI",
+                    20
+                  ]
+                }
+              }
+            },
+            {
+              "when": {
+                "var": "BNRIND",
+                "in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "BASE",
+                    4
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "branches": [
+            {
+              "when": {
+                "var": "BNRIND",
+                "not_in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "ANRHI",
+                    5
+                  ]
+                }
+              }
+            },
+            {
+              "when": {
+                "var": "BNRIND",
+                "in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "BASE",
+                    2
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "branches": [
+            {
+              "when": {
+                "var": "BNRIND",
+                "not_in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "ANRHI",
+                    3
+                  ]
+                }
+              }
+            },
+            {
+              "when": {
+                "var": "BNRIND",
+                "in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "BASE",
+                    1.5
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "branches": [
+            {
+              "when": {
+                "var": "BNRIND",
+                "not_in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_var": "ANRHI"
+              }
+            },
+            {
+              "when": {
+                "var": "BNRIND",
+                "in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "ge",
+                "right_var": "BASE"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "term": "Alkaline phosphatase increased",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI",
+        "BASE"
+      ],
+      "na_check": [
+        "AVAL",
+        "ANRHI",
+        "BASE"
+      ],
+      "grades": [
+        {
+          "grade": 1,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_var": "BASE"
+            },
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_var": "ANRHI"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "term": "Aspartate aminotransferase increased",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI",
+        "BASE",
+        "BNRIND"
+      ],
+      "na_check": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "branches": [
+            {
+              "when": {
+                "var": "BNRIND",
+                "not_in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "ANRHI",
+                    20
+                  ]
+                }
+              }
+            },
+            {
+              "when": {
+                "var": "BNRIND",
+                "in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "BASE",
+                    4
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "branches": [
+            {
+              "when": {
+                "var": "BNRIND",
+                "not_in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "ANRHI",
+                    5
+                  ]
+                }
+              }
+            },
+            {
+              "when": {
+                "var": "BNRIND",
+                "in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "BASE",
+                    2
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "branches": [
+            {
+              "when": {
+                "var": "BNRIND",
+                "not_in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "ANRHI",
+                    3
+                  ]
+                }
+              }
+            },
+            {
+              "when": {
+                "var": "BNRIND",
+                "in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "BASE",
+                    1.5
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "branches": [
+            {
+              "when": {
+                "var": "BNRIND",
+                "not_in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_var": "ANRHI"
+              }
+            },
+            {
+              "when": {
+                "var": "BNRIND",
+                "in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "ge",
+                "right_var": "BASE"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "term": "Blood bilirubin increased",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI",
+        "BASE",
+        "BNRIND"
+      ],
+      "na_check": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "branches": [
+            {
+              "when": {
+                "var": "BNRIND",
+                "not_in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "ANRHI",
+                    10
+                  ]
+                }
+              }
+            },
+            {
+              "when": {
+                "var": "BNRIND",
+                "in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "BASE",
+                    10
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "branches": [
+            {
+              "when": {
+                "var": "BNRIND",
+                "not_in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "ANRHI",
+                    3
+                  ]
+                }
+              }
+            },
+            {
+              "when": {
+                "var": "BNRIND",
+                "in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "BASE",
+                    2.5
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "branches": [
+            {
+              "when": {
+                "var": "BNRIND",
+                "not_in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "ANRHI",
+                    1.5
+                  ]
+                }
+              }
+            },
+            {
+              "when": {
+                "var": "BNRIND",
+                "in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "BASE",
+                    1.5
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "branches": [
+            {
+              "when": {
+                "var": "BNRIND",
+                "not_in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_var": "ANRHI"
+              }
+            },
+            {
+              "when": {
+                "var": "BNRIND",
+                "in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "ge",
+                "right_var": "BASE"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "term": "Blood lactate dehydrogenase increased",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "na_check": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "grades": [
+        {
+          "grade": 1,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_var": "ANRHI"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "term": "CD4 lymphocytes decreased",
+      "direction": "L",
+      "required_vars": [
+        "AVAL",
+        "ANRLO"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 50
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 200
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 500
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRLO"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_var": "ANRLO"
+            }
+          ]
+        }
+      ],
+      "unit": "1/uL"
+    },
+    {
+      "term": "Cholesterol high",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 500
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 400
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 300
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRHI"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_var": "ANRHI"
+            }
+          ]
+        }
+      ],
+      "unit": "mg/dL"
+    },
+    {
+      "term": "Creatinine clearance decreased",
+      "direction": "L",
+      "required_vars": [
+        "AVAL"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "le",
+              "right": 25
+            },
+            {
+              "left": "AVAL",
+              "op": "ge",
+              "right": 10
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "le",
+              "right": 49
+            },
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 25
+            }
+          ]
+        }
+      ],
+      "unit": "mL/min"
+    },
+    {
+      "term": "Creatinine increased",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI",
+        "BASE",
+        "BNRIND"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_expr": {
+                "multiply": [
+                  "ANRHI",
+                  6
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "branches": [
+            {
+              "when": {
+                "var": "BNRIND",
+                "not_in_values": "low_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "ANRHI",
+                    3
+                  ]
+                }
+              }
+            },
+            {
+              "when": {
+                "var": "BNRIND",
+                "in_values": "low_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "BASE",
+                    3
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "branches": [
+            {
+              "when": {
+                "var": "BNRIND",
+                "not_in_values": "low_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "ANRHI",
+                    1.5
+                  ]
+                }
+              }
+            },
+            {
+              "when": {
+                "var": "BNRIND",
+                "in_values": "low_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "BASE",
+                    1.5
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRHI"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_var": "ANRHI"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "term": "Fibrinogen decreased",
+      "direction": "L",
+      "required_vars": [
+        "AVAL",
+        "ANRLO",
+        "PCHG"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "na_guard": [
+            "ANRLO"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 50
+            },
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_expr": {
+                "multiply": [
+                  "ANRLO",
+                  0.25
+                ]
+              }
+            },
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_var": "ANRLO"
+            },
+            {
+              "left": "PCHG",
+              "op": "le",
+              "right": -75
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_expr": {
+                "multiply": [
+                  "ANRLO",
+                  0.5
+                ]
+              }
+            },
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_var": "ANRLO"
+            },
+            {
+              "left": "PCHG",
+              "op": "le",
+              "right": -50
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_expr": {
+                "multiply": [
+                  "ANRLO",
+                  0.75
+                ]
+              }
+            },
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_var": "ANRLO"
+            },
+            {
+              "left": "PCHG",
+              "op": "le",
+              "right": -25
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_var": "ANRLO"
+            }
+          ]
+        }
+      ],
+      "unit": "mg/dL"
+    },
+    {
+      "term": "GGT increased",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI",
+        "BASE",
+        "BNRIND"
+      ],
+      "na_check": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "branches": [
+            {
+              "when": {
+                "var": "BNRIND",
+                "not_in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "ANRHI",
+                    20
+                  ]
+                }
+              }
+            },
+            {
+              "when": {
+                "var": "BNRIND",
+                "in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "BASE",
+                    10
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "branches": [
+            {
+              "when": {
+                "var": "BNRIND",
+                "not_in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "ANRHI",
+                    5
+                  ]
+                }
+              }
+            },
+            {
+              "when": {
+                "var": "BNRIND",
+                "in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "BASE",
+                    3
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "branches": [
+            {
+              "when": {
+                "var": "BNRIND",
+                "not_in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "ANRHI",
+                    2.5
+                  ]
+                }
+              }
+            },
+            {
+              "when": {
+                "var": "BNRIND",
+                "in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_expr": {
+                  "multiply": [
+                    "BASE",
+                    1.5
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "branches": [
+            {
+              "when": {
+                "var": "BNRIND",
+                "not_in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "gt",
+                "right_var": "ANRHI"
+              }
+            },
+            {
+              "when": {
+                "var": "BNRIND",
+                "in_values": "high_indicator"
+              },
+              "then": {
+                "left": "AVAL",
+                "op": "ge",
+                "right_var": "BASE"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "term": "Haptoglobin decreased",
+      "direction": "L",
+      "required_vars": [
+        "AVAL",
+        "ANRLO"
+      ],
+      "na_check": [
+        "AVAL",
+        "ANRLO"
+      ],
+      "grades": [
+        {
+          "grade": 1,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_var": "ANRLO"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "term": "HDL decreased",
+      "direction": "L",
+      "required_vars": [
+        "AVAL",
+        "ANRLO"
+      ],
+      "na_check": [
+        "AVAL",
+        "ANRLO"
+      ],
+      "grades": [
+        {
+          "grade": 1,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_var": "ANRLO"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "term": "Hemoglobin increased",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "na_check": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "grades": [
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_expr": {
+                "add": [
+                  "ANRHI",
+                  4
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_expr": {
+                "add": [
+                  "ANRHI",
+                  2
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_var": "ANRHI"
+            }
+          ]
+        }
+      ],
+      "unit": "g/dL"
+    },
+    {
+      "term": "INR increased",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "BASE"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_expr": {
+                "multiply": [
+                  "BASE",
+                  2.5
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_expr": {
+                "multiply": [
+                  "BASE",
+                  1.5
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "BASE"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_var": "BASE"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "term": "LDL increased",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "na_check": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "grades": [
+        {
+          "grade": 1,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_var": "ANRHI"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "term": "Lipase increased",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "na_check": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_expr": {
+                "multiply": [
+                  "ANRHI",
+                  5
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_expr": {
+                "multiply": [
+                  "ANRHI",
+                  3
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_expr": {
+                "multiply": [
+                  "ANRHI",
+                  1.5
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_var": "ANRHI"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "term": "Lymphocyte count increased",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 20
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 4
+            }
+          ]
+        }
+      ],
+      "unit": "10^3/uL"
+    },
+    {
+      "term": "Lymphocyte count increased",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 20000
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 4000
+            }
+          ]
+        }
+      ],
+      "unit": "10^3/mL"
+    },
+    {
+      "term": "Neutrophil count decreased",
+      "direction": "L",
+      "required_vars": [
+        "AVAL"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 0.1
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 0.5
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 1
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 1.5
+            }
+          ]
+        }
+      ],
+      "unit": "10^3/uL"
+    },
+    {
+      "term": "Neutrophil count decreased",
+      "direction": "L",
+      "required_vars": [
+        "AVAL"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 100
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 500
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 1000
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 1500
+            }
+          ]
+        }
+      ],
+      "unit": "10^3/mL"
+    },
+    {
+      "term": "Serum amylase increased",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "na_check": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_expr": {
+                "multiply": [
+                  "ANRHI",
+                  5
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_expr": {
+                "multiply": [
+                  "ANRHI",
+                  2
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_expr": {
+                "multiply": [
+                  "ANRHI",
+                  1.5
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_var": "ANRHI"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "term": "White blood cell decreased",
+      "direction": "L",
+      "required_vars": [
+        "AVAL",
+        "ANRLO"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 1
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 2
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 3
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRLO"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_var": "ANRLO"
+            }
+          ]
+        }
+      ],
+      "unit": "10^3/uL"
+    },
+    {
+      "term": "White blood cell decreased",
+      "direction": "L",
+      "required_vars": [
+        "AVAL",
+        "ANRLO"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 1000
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 2000
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 3000
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRLO"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_var": "ANRLO"
+            }
+          ]
+        }
+      ],
+      "unit": "10^3/mL"
+    },
+    {
+      "term": "Acidosis",
+      "direction": "L",
+      "required_vars": [
+        "AVAL",
+        "ANRLO"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 7.3
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRLO"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_var": "ANRLO"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "term": "Alkalosis",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 7.5
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRHI"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_var": "ANRHI"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "term": "Hypercalcemia",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 13.5
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 12.5
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 11.5
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRHI"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_var": "ANRHI"
+            }
+          ]
+        }
+      ],
+      "unit": "mg/dL"
+    },
+    {
+      "term": "Hypercalcemia (Ionized)",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 7.2
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 6.4
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 6
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRHI"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_var": "ANRHI"
+            }
+          ]
+        }
+      ],
+      "unit": "mg/dL"
+    },
+    {
+      "term": "Hyperglycemia",
+      "direction": "H",
+      "required_vars": [
+        "AVAL"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 500
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 250
+            }
+          ]
+        }
+      ],
+      "unit": "mg/dL"
+    },
+    {
+      "term": "Hyperglycemia (Fasting)",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 500
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 250
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 160
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRHI"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_var": "ANRHI"
+            }
+          ]
+        }
+      ],
+      "unit": "mg/dL"
+    },
+    {
+      "term": "Hyperkalemia",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 7
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 6
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 5.5
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRHI"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_var": "ANRHI"
+            }
+          ]
+        }
+      ],
+      "unit": "MMOL/L"
+    },
+    {
+      "term": "Hypermagnesemia",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 8
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 3
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRHI"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_var": "ANRHI"
+            }
+          ]
+        }
+      ],
+      "unit": "mg/dL"
+    },
+    {
+      "term": "Hypernatremia",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 160
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 155
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 150
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRHI"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_var": "ANRHI"
+            }
+          ]
+        }
+      ],
+      "unit": "MMOL/L"
+    },
+    {
+      "term": "Hypertriglyceridemia",
+      "direction": "H",
+      "required_vars": [
+        "AVAL"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 1000
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 500
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 300
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right": 150
+            }
+          ]
+        }
+      ],
+      "unit": "mg/dL"
+    },
+    {
+      "term": "Hyperuricemia",
+      "direction": "H",
+      "required_vars": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "na_check": [
+        "AVAL",
+        "ANRHI"
+      ],
+      "grades": [
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "gt",
+              "right_var": "ANRHI"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "term": "Hypoalbuminemia",
+      "direction": "L",
+      "required_vars": [
+        "AVAL",
+        "ANRLO"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 2
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 3
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRLO"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_var": "ANRLO"
+            }
+          ]
+        }
+      ],
+      "unit": "g/dL"
+    },
+    {
+      "term": "Hypocalcemia",
+      "direction": "L",
+      "required_vars": [
+        "AVAL",
+        "ANRLO"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 6
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 7
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 8
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRLO"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_var": "ANRLO"
+            }
+          ]
+        }
+      ],
+      "unit": "mg/dL"
+    },
+    {
+      "term": "Hypocalcemia (Ionized)",
+      "direction": "L",
+      "required_vars": [
+        "AVAL",
+        "ANRLO"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 3.2
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 3.6
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 4
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRLO"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_var": "ANRLO"
+            }
+          ]
+        }
+      ],
+      "unit": "mg/dL"
+    },
+    {
+      "term": "Hypoglycemia",
+      "direction": "L",
+      "required_vars": [
+        "AVAL",
+        "ANRLO"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 30
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 40
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 55
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRLO"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_var": "ANRLO"
+            }
+          ]
+        }
+      ],
+      "unit": "mg/dL"
+    },
+    {
+      "term": "Hypokalemia",
+      "direction": "L",
+      "required_vars": [
+        "AVAL",
+        "ANRLO"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 2.5
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 3
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "na_guard": [
+            "ANRLO"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_var": "ANRLO"
+            }
+          ]
+        }
+      ],
+      "unit": "MMOL/L"
+    },
+    {
+      "term": "Hypomagnesemia",
+      "direction": "L",
+      "required_vars": [
+        "AVAL",
+        "ANRLO"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 0.7
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 0.9
+            }
+          ]
+        },
+        {
+          "grade": 2,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 1.2
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRLO"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_var": "ANRLO"
+            }
+          ]
+        }
+      ],
+      "unit": "mg/dL"
+    },
+    {
+      "term": "Hyponatremia",
+      "direction": "L",
+      "required_vars": [
+        "AVAL",
+        "ANRLO"
+      ],
+      "na_check": [
+        "AVAL"
+      ],
+      "grades": [
+        {
+          "grade": 4,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 120
+            }
+          ]
+        },
+        {
+          "grade": 3,
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right": 130
+            }
+          ]
+        },
+        {
+          "grade": 1,
+          "na_guard": [
+            "ANRLO"
+          ],
+          "rules": [
+            {
+              "left": "AVAL",
+              "op": "lt",
+              "right_var": "ANRLO"
+            }
+          ]
+        }
+      ],
+      "unit": "MMOL/L"
+    }
+  ]
+}

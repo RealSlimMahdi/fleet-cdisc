@@ -1,0 +1,104 @@
+# CDISC Controlled Terminology - Example Codelists
+# This is a sample CT file with common SDTM codelists for demonstration purposes
+# In production, use official CDISC CT from NCI EVS
+
+# Sex (C66731)
+C66731:
+  M: Male
+  F: Female
+  U: Unknown
+  UNDIFFERENTIATED: Undifferentiated
+
+# Race (C74457)
+C74457:
+  AMERICAN INDIAN OR ALASKA NATIVE: American Indian or Alaska Native
+  ASIAN: Asian
+  BLACK OR AFRICAN AMERICAN: Black or African American
+  NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER: Native Hawaiian or Other Pacific Islander
+  WHITE: White
+  OTHER: Other
+  MULTIPLE: Multiple
+
+# Ethnicity (C66790)
+C66790:
+  HISPANIC OR LATINO: Hispanic or Latino
+  NOT HISPANIC OR LATINO: Not Hispanic or Latino
+  NOT REPORTED: Not Reported
+  UNKNOWN: Unknown
+
+# Yes/No Response (C66742)
+C66742:
+  Y: Yes
+  N: No
+
+# Severity/Intensity (C66769)
+C66769:
+  MILD: Mild
+  MODERATE: Moderate
+  SEVERE: Severe
+
+# Outcome of Adverse Event (C66767)
+C66767:
+  FATAL: Fatal
+  NOT RECOVERED/NOT RESOLVED: Not Recovered/Not Resolved
+  RECOVERED/RESOLVED: Recovered/Resolved
+  RECOVERED/RESOLVED WITH SEQUELAE: Recovered/Resolved with Sequelae
+  RECOVERING/RESOLVING: Recovering/Resolving
+  UNKNOWN: Unknown
+
+# Action Taken with Study Treatment (C66768)
+C66768:
+  DOSE INCREASED: Dose Increased
+  DOSE NOT CHANGED: Dose Not Changed
+  DOSE REDUCED: Dose Reduced
+  DRUG INTERRUPTED: Drug Interrupted
+  DRUG WITHDRAWN: Drug Withdrawn
+  NOT APPLICABLE: Not Applicable
+  UNKNOWN: Unknown
+
+# Causality (C66773)
+C66773:
+  NOT RELATED: Not Related
+  UNLIKELY RELATED: Unlikely Related
+  POSSIBLY RELATED: Possibly Related
+  RELATED: Related
+
+# Trial Set (C99996)
+C99996:
+  SCREEN FAILURE: Screen Failure
+  INTENT-TO-TREAT: Intent-To-Treat
+  SAFETY: Safety
+  EFFICACY: Efficacy
+  MODIFIED INTENT-TO-TREAT: Modified Intent-To-Treat
+
+# Vital Signs Position (C71148)
+C71148:
+  STANDING: Standing
+  SITTING: Sitting
+  SUPINE: Supine
+  SEMI-RECUMBENT: Semi-Recumbent
+  PRONE: Prone
+  UNCONSTRAINED: Unconstrained
+
+# Visit Type (C170010)
+C170010:
+  SCHEDULED: Scheduled
+  UNSCHEDULED: Unscheduled
+  EMERGENCY: Emergency
+  EARLY TERMINATION: Early Termination
+  FOLLOW-UP: Follow-Up
+
+# Units (Example - Subset)
+# In production, use full UCUM/CT units codelists
+
+# Age Units (C66781)
+C66781:
+  YEARS: Years
+  MONTHS: Months
+  WEEKS: Weeks
+  DAYS: Days
+  HOURS: Hours
+
+# Note: This is a simplified example file.
+# Official CDISC CT contains thousands of terms and is maintained by NCI EVS.
+# Download official CT from: https://evs.nci.nih.gov/ftp1/CDISC/

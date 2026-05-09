@@ -1,0 +1,632 @@
+# yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json
+# SDTM Define Specification — CDISCPILOT01
+# Single source of truth: describes output structure AND drives from_spec() derivations.
+# Used for: (1) Define-XML 2.1 generation  (2) post-dataset structure checks  (3) pipeline execution.
+
+study:
+  id: CDISCPILOT01
+  name: CDISCPILOT01
+  description: >
+    A Phase II, Randomized, Double-Blind, Placebo-Controlled, Parallel Group Study
+    of the Efficacy, Safety, and Tolerability of Xanomeline in Patients with Mild
+    to Moderate Alzheimer's Disease
+  protocol_name: CDISCPILOT01
+  originator: Fleet Team
+  source_system: Fleet
+  source_system_version: "0.1.0"
+  standard: SDTMIG
+  standard_version: "3.4"
+  ct_version: "2023-12-15"
+
+codelists:
+  - oid: C66731
+    name: Sex
+    type: text
+    items:
+      - coded_value: "M"
+        decode: MALE
+      - coded_value: "F"
+        decode: FEMALE
+
+  - oid: C74457
+    name: Race
+    type: text
+    items:
+      - coded_value: "WHITE"
+        decode: WHITE
+      - coded_value: "BLACK OR AFRICAN AMERICAN"
+        decode: BLACK OR AFRICAN AMERICAN
+      - coded_value: "ASIAN"
+        decode: ASIAN
+      - coded_value: "AMERICAN INDIAN OR ALASKA NATIVE"
+        decode: AMERICAN INDIAN OR ALASKA NATIVE
+      - coded_value: "NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER"
+        decode: NATIVE HAWAIIAN OR OTHER PACIFIC ISLANDER
+
+  - oid: C66790
+    name: Ethnicity
+    type: text
+    items:
+      - coded_value: "HISPANIC OR LATINO"
+        decode: HISPANIC OR LATINO
+      - coded_value: "NOT HISPANIC OR LATINO"
+        decode: NOT HISPANIC OR LATINO
+
+  - oid: CL.VSTEST
+    name: Vital Signs Test Code
+    type: text
+    items:
+      - coded_value: SYSBP
+        decode: Systolic Blood Pressure
+      - coded_value: DIABP
+        decode: Diastolic Blood Pressure
+      - coded_value: PULSE
+        decode: Pulse Rate
+      - coded_value: TEMP
+        decode: Temperature
+      - coded_value: WEIGHT
+        decode: Weight
+      - coded_value: HEIGHT
+        decode: Height
+
+datasets:
+  # ─────────────────────────────────────────────────────────────── DM ─── #
+  - name: DM
+    label: Demographics
+    structure: One record per subject
+    repeating: false
+    class: SPECIAL PURPOSE
+    keys: [STUDYID, USUBJID]
+    inputs:
+      - name: dm_raw
+        type: raw
+        path: datasets/cdiscpilot01/raw/dm_raw.csv
+    variables:
+      - name: STUDYID
+        label: Study Identifier
+        type: text
+        length: 12
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: hardcode_no_ct
+          value: "CDISCPILOT01"
+
+      - name: DOMAIN
+        label: Domain Abbreviation
+        type: text
+        length: 2
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: hardcode_no_ct
+          value: "DM"
+
+      - name: USUBJID
+        label: Unique Subject Identifier
+        type: text
+        length: 40
+        mandatory: true
+        origin: Derived
+        comment: "Concatenation of STUDYID, SITEID, and SUBJID"
+        derivation:
+          algorithm: assign_no_ct
+          source: patient_number
+
+      - name: SUBJID
+        label: Subject Identifier for the Study
+        type: text
+        length: 20
+        mandatory: true
+        origin: CRF
+        derivation:
+          algorithm: assign_no_ct
+          source: patient_number
+
+      - name: RFSTDTC
+        label: Subject Reference Start Date/Time
+        type: datetime
+        mandatory: true
+        origin: CRF
+        derivation:
+          algorithm: assign_dtc
+          source: first_dose_date
+
+      - name: RFENDTC
+        label: Subject Reference End Date/Time
+        type: datetime
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: assign_dtc
+          source: last_dose_date
+
+      - name: RFXSTDTC
+        label: Date/Time of First Study Treatment
+        type: datetime
+        mandatory: false
+        origin: Derived
+
+      - name: RFXENDTC
+        label: Date/Time of Last Study Treatment
+        type: datetime
+        mandatory: false
+        origin: Derived
+
+      - name: SITEID
+        label: Study Site Identifier
+        type: text
+        length: 20
+        mandatory: true
+        origin: CRF
+        derivation:
+          algorithm: assign_no_ct
+          source: site_id
+
+      - name: AGE
+        label: Age
+        type: integer
+        mandatory: true
+        origin: CRF
+        derivation:
+          algorithm: assign_no_ct
+          source: age
+
+      - name: AGEU
+        label: Age Units
+        type: text
+        length: 10
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: hardcode_no_ct
+          value: "YEARS"
+
+      - name: SEX
+        label: Sex
+        type: text
+        length: 2
+        mandatory: true
+        origin: CRF
+        codelist: C66731
+        derivation:
+          algorithm: assign_ct
+          source: sex
+          ct_codelist: C66731
+          ct_mapping:
+            "F": "F"
+            "M": "M"
+
+      - name: RACE
+        label: Race
+        type: text
+        length: 60
+        mandatory: false
+        origin: CRF
+        codelist: C74457
+        derivation:
+          algorithm: assign_ct
+          source: race
+          ct_codelist: C74457
+
+      - name: ETHNIC
+        label: Ethnicity
+        type: text
+        length: 60
+        mandatory: false
+        origin: CRF
+        codelist: C66790
+        derivation:
+          algorithm: assign_ct
+          source: ethnic
+          ct_codelist: C66790
+
+      - name: ARMCD
+        label: Planned Arm Code
+        type: text
+        length: 20
+        mandatory: true
+        origin: Protocol
+        derivation:
+          algorithm: assign_no_ct
+          source: arm_code
+
+      - name: ARM
+        label: Description of Planned Arm
+        type: text
+        length: 200
+        mandatory: true
+        origin: Protocol
+        derivation:
+          algorithm: assign_no_ct
+          source: arm_description
+
+      - name: ACTARMCD
+        label: Actual Arm Code
+        type: text
+        length: 20
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: assign_no_ct
+          source: arm_code
+
+      - name: ACTARM
+        label: Description of Actual Arm
+        type: text
+        length: 200
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: assign_no_ct
+          source: arm_description
+
+      - name: RFICDTC
+        label: Date/Time of Informed Consent
+        type: datetime
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: assign_dtc
+          source: informed_consent_date
+
+  # ─────────────────────────────────────────────────────────────── AE ─── #
+  - name: AE
+    label: Adverse Events
+    structure: One record per adverse event per subject
+    repeating: true
+    class: EVENTS
+    keys: [STUDYID, USUBJID, AESEQ]
+    inputs:
+      - name: ae_raw
+        type: raw
+        path: datasets/cdiscpilot01/raw/ae_raw.csv
+    variables:
+      - name: STUDYID
+        label: Study Identifier
+        type: text
+        length: 12
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: hardcode_no_ct
+          value: "CDISCPILOT01"
+
+      - name: DOMAIN
+        label: Domain Abbreviation
+        type: text
+        length: 2
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: hardcode_no_ct
+          value: "AE"
+
+      - name: USUBJID
+        label: Unique Subject Identifier
+        type: text
+        length: 40
+        mandatory: true
+        origin: Derived
+        derivation:
+          algorithm: assign_no_ct
+          source: patient_number
+
+      - name: AESEQ
+        label: Sequence Number
+        type: integer
+        mandatory: true
+        origin: Assigned
+
+      - name: AETERM
+        label: Reported Term for the Adverse Event
+        type: text
+        length: 200
+        mandatory: true
+        origin: CRF
+        derivation:
+          algorithm: assign_no_ct
+          source: ae_term
+
+      - name: AEDECOD
+        label: Dictionary-Derived Term
+        type: text
+        length: 200
+        mandatory: true
+        origin: Derived
+        derivation:
+          algorithm: assign_no_ct
+          source: ae_decoded_term
+
+      - name: AESTDTC
+        label: Start Date/Time of Adverse Event
+        type: datetime
+        mandatory: true
+        origin: CRF
+        derivation:
+          algorithm: assign_dtc
+          source: ae_start_date
+
+      - name: AEENDTC
+        label: End Date/Time of Adverse Event
+        type: datetime
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: assign_dtc
+          source: ae_end_date
+
+      - name: AESEV
+        label: Severity/Intensity
+        type: text
+        length: 20
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: assign_no_ct
+          source: ae_severity
+
+      - name: AESER
+        label: Serious Event
+        type: text
+        length: 2
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: assign_no_ct
+          source: ae_serious
+
+      - name: AEOUT
+        label: Outcome of Adverse Event
+        type: text
+        length: 60
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: assign_no_ct
+          source: ae_outcome
+
+      - name: AEACN
+        label: Action Taken with Study Treatment
+        type: text
+        length: 60
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: assign_no_ct
+          source: ae_action
+
+      - name: AEREL
+        label: Causality
+        type: text
+        length: 60
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: ae_aerel
+          aerel_source: ae_relationship
+
+  # ─────────────────────────────────────────────────────────────── VS ─── #
+  - name: VS
+    label: Vital Signs
+    structure: One record per vital sign measurement per subject per visit
+    repeating: true
+    class: FINDINGS
+    keys: [STUDYID, USUBJID, VSTESTCD, VISITNUM]
+    inputs:
+      - name: vs_raw
+        type: raw
+        path: datasets/cdiscpilot01/raw/vs_raw.csv
+    variables:
+      - name: STUDYID
+        label: Study Identifier
+        type: text
+        length: 12
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: hardcode_no_ct
+          value: "CDISCPILOT01"
+
+      - name: DOMAIN
+        label: Domain Abbreviation
+        type: text
+        length: 2
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: hardcode_no_ct
+          value: "VS"
+
+      - name: USUBJID
+        label: Unique Subject Identifier
+        type: text
+        length: 40
+        mandatory: true
+        origin: Derived
+        derivation:
+          algorithm: assign_no_ct
+          source: patient_number
+
+      - name: VSTESTCD
+        label: Vital Signs Test Short Name
+        type: text
+        length: 8
+        mandatory: true
+        origin: CRF
+        codelist: CL.VSTEST
+        derivation:
+          algorithm: assign_no_ct
+          source: vstestcd
+
+      - name: VSTEST
+        label: Vital Signs Test Name
+        type: text
+        length: 40
+        mandatory: true
+        origin: CRF
+        derivation:
+          algorithm: assign_no_ct
+          source: vstest
+
+      - name: VSORRES
+        label: Result or Finding in Original Units
+        type: text
+        length: 20
+        mandatory: true
+        origin: CRF
+        derivation:
+          algorithm: assign_no_ct
+          source: vs_result
+
+      - name: VSORRESU
+        label: Original Units
+        type: text
+        length: 20
+        mandatory: true
+        origin: CRF
+        derivation:
+          algorithm: assign_no_ct
+          source: vsorresu
+
+      - name: VSSTRESN
+        label: Numeric Result/Finding in Standard Units
+        type: float
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: assign_no_ct
+          source: vsstresn
+
+      - name: VSSTRESU
+        label: Standard Units
+        type: text
+        length: 20
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: assign_no_ct
+          source: vsstresu
+
+      - name: VISITNUM
+        label: Visit Number
+        type: float
+        mandatory: false
+        origin: Protocol
+        derivation:
+          algorithm: assign_no_ct
+          source: visitnum
+
+      - name: VISIT
+        label: Visit Name
+        type: text
+        length: 200
+        mandatory: false
+        origin: Protocol
+        derivation:
+          algorithm: assign_no_ct
+          source: visit
+
+      - name: VSDTC
+        label: Date/Time of Measurements
+        type: datetime
+        mandatory: true
+        origin: CRF
+        derivation:
+          algorithm: assign_dtc
+          source: vs_date
+
+  # ─────────────────────────────────────────────────────────────── EX ─── #
+  - name: EX
+    label: Exposure
+    structure: One record per protocol-specified study treatment per subject
+    repeating: true
+    class: INTERVENTIONS
+    keys: [STUDYID, USUBJID, EXSEQ]
+    inputs:
+      - name: ex_raw
+        type: raw
+        path: datasets/cdiscpilot01/raw/ex_raw.csv
+    variables:
+      - name: STUDYID
+        label: Study Identifier
+        type: text
+        length: 12
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: hardcode_no_ct
+          value: "CDISCPILOT01"
+
+      - name: DOMAIN
+        label: Domain Abbreviation
+        type: text
+        length: 2
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: hardcode_no_ct
+          value: "EX"
+
+      - name: USUBJID
+        label: Unique Subject Identifier
+        type: text
+        length: 40
+        mandatory: true
+        origin: Derived
+        derivation:
+          algorithm: assign_no_ct
+          source: patient_number
+
+      - name: EXSEQ
+        label: Sequence Number
+        type: integer
+        mandatory: true
+        origin: Assigned
+
+      - name: EXTRT
+        label: Name of Actual Treatment
+        type: text
+        length: 200
+        mandatory: true
+        origin: Protocol
+        derivation:
+          algorithm: assign_no_ct
+          source: ex_treatment
+
+      - name: EXDOSE
+        label: Dose per Administration
+        type: float
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: assign_no_ct
+          source: ex_dose
+
+      - name: EXDOSU
+        label: Dose Units
+        type: text
+        length: 20
+        mandatory: false
+        origin: Protocol
+        derivation:
+          algorithm: hardcode_no_ct
+          value: "mg"
+
+      - name: EXSTDTC
+        label: Start Date/Time of Treatment
+        type: datetime
+        mandatory: true
+        origin: CRF
+        derivation:
+          algorithm: assign_dtc
+          source: ex_start_date
+
+      - name: EXENDTC
+        label: End Date/Time of Treatment
+        type: datetime
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: assign_dtc
+          source: ex_end_date

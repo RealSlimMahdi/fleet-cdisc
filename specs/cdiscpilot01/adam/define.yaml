@@ -1,0 +1,910 @@
+# yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json
+# ADaM Define Specification — CDISCPILOT01
+# Single source of truth: describes output structure AND drives from_spec() derivations.
+# Used for: (1) Define-XML 2.1 generation  (2) post-dataset structure checks  (3) pipeline execution.
+
+study:
+  id: CDISCPILOT01
+  name: CDISCPILOT01
+  description: >
+    A Phase II, Randomized, Double-Blind, Placebo-Controlled, Parallel Group Study
+    of the Efficacy, Safety, and Tolerability of Xanomeline in Patients with Mild
+    to Moderate Alzheimer's Disease
+  protocol_name: CDISCPILOT01
+  originator: Fleet Team
+  source_system: Fleet
+  source_system_version: "0.1.0"
+  standard: ADAMIG
+  standard_version: "1.1"
+  ct_version: "2023-12-15"
+
+codelists:
+  - oid: C66731
+    name: Sex
+    type: text
+    items:
+      - coded_value: "M"
+        decode: MALE
+      - coded_value: "F"
+        decode: FEMALE
+
+  - oid: CL.DTYPE
+    name: Derivation Type
+    type: text
+    items:
+      - coded_value: LOCF
+        decode: Last Observation Carried Forward
+      - coded_value: WOCF
+        decode: Worst Observation Carried Forward
+
+  - oid: CL.ANL01FL
+    name: Analysis Flag ANL01
+    type: text
+    items:
+      - coded_value: "Y"
+        decode: "Yes"
+
+datasets:
+  # ───────────────────────────────────────────────────────────── ADSL ─── #
+  - name: ADSL
+    label: Subject-Level Analysis Dataset
+    structure: One record per subject
+    repeating: false
+    class: SUBJECT LEVEL ANALYSIS DATASET
+    keys: [STUDYID, USUBJID]
+    inputs:
+      - name: DM
+        type: dataset
+    variables:
+      - name: STUDYID
+        label: Study Identifier
+        type: text
+        length: 12
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: assigned
+          value: "CDISCPILOT01"
+
+      - name: USUBJID
+        label: Unique Subject Identifier
+        type: text
+        length: 40
+        mandatory: true
+        origin: Derived
+        derivation:
+          algorithm: source
+          source: USUBJID
+
+      - name: SUBJID
+        label: Subject Identifier for the Study
+        type: text
+        length: 20
+        mandatory: true
+        origin: CRF
+        derivation:
+          algorithm: source
+          source: SUBJID
+
+      - name: SITEID
+        label: Study Site Identifier
+        type: text
+        length: 20
+        mandatory: true
+        origin: CRF
+        derivation:
+          algorithm: source
+          source: SITEID
+
+      - name: AGE
+        label: Age
+        type: integer
+        mandatory: true
+        origin: CRF
+        derivation:
+          algorithm: source
+          source: AGE
+
+      - name: AGEU
+        label: Age Units
+        type: text
+        length: 10
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: source
+          source: AGEU
+
+      - name: SEX
+        label: Sex
+        type: text
+        length: 2
+        mandatory: true
+        origin: CRF
+        codelist: C66731
+        derivation:
+          algorithm: source
+          source: SEX
+
+      - name: RACE
+        label: Race
+        type: text
+        length: 60
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: source
+          source: RACE
+
+      - name: ETHNIC
+        label: Ethnicity
+        type: text
+        length: 60
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: source
+          source: ETHNIC
+
+      - name: ARMCD
+        label: Planned Arm Code
+        type: text
+        length: 20
+        mandatory: true
+        origin: Protocol
+        derivation:
+          algorithm: source
+          source: ARMCD
+
+      - name: ARM
+        label: Description of Planned Arm
+        type: text
+        length: 200
+        mandatory: true
+        origin: Protocol
+        derivation:
+          algorithm: source
+          source: ARM
+
+      - name: ACTARMCD
+        label: Actual Arm Code
+        type: text
+        length: 20
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: source
+          source: ACTARMCD
+
+      - name: ACTARM
+        label: Description of Actual Arm
+        type: text
+        length: 200
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: source
+          source: ACTARM
+
+      - name: TRT01P
+        label: Planned Treatment for Period 01
+        type: text
+        length: 200
+        mandatory: false
+        origin: Protocol
+        derivation:
+          algorithm: source
+          source: ARM
+
+      - name: TRT01A
+        label: Actual Treatment for Period 01
+        type: text
+        length: 200
+        mandatory: false
+        origin: Assigned
+        derivation:
+          algorithm: source
+          source: ACTARM
+
+      - name: TRTSDT
+        label: Date of First Exposure to Treatment
+        type: date
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: derivation
+          expression: RFSTDTC
+
+      - name: TRTEDT
+        label: Date of Last Exposure to Treatment
+        type: date
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: derivation
+          expression: RFENDTC
+
+      - name: RFSTDTC
+        label: Subject Reference Start Date/Time
+        type: datetime
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: source
+          source: RFSTDTC
+
+      - name: RFENDTC
+        label: Subject Reference End Date/Time
+        type: datetime
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: source
+          source: RFENDTC
+
+      - name: RFICDTC
+        label: Date/Time of Informed Consent
+        type: datetime
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: source
+          source: RFICDTC
+
+      - name: DTHFL
+        label: Subject Death Flag
+        type: text
+        length: 2
+        mandatory: false
+        origin: Derived
+
+      - name: SAFFL
+        label: Safety Population Flag
+        type: text
+        length: 2
+        mandatory: false
+        origin: Derived
+
+      - name: ITTFL
+        label: Intent-To-Treat Population Flag
+        type: text
+        length: 2
+        mandatory: false
+        origin: Derived
+
+  # ───────────────────────────────────────────────────────────── ADVS ─── #
+  - name: ADVS
+    label: Analysis Dataset for Vital Signs
+    structure: One record per subject per parameter per analysis timepoint
+    repeating: true
+    class: BASIC DATA STRUCTURE
+    keys: [STUDYID, USUBJID, PARAMCD, VISITNUM]
+    inputs:
+      - name: VS
+        type: dataset
+      - name: ADSL
+        type: dataset
+    variables:
+      - name: STUDYID
+        label: Study Identifier
+        type: text
+        length: 12
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: assigned
+          value: "CDISCPILOT01"
+
+      - name: USUBJID
+        label: Unique Subject Identifier
+        type: text
+        length: 40
+        mandatory: true
+        origin: Derived
+        derivation:
+          algorithm: source
+          source: patient_number
+
+      - name: PARAMCD
+        label: Parameter Code
+        type: text
+        length: 8
+        mandatory: true
+        origin: Derived
+        derivation:
+          algorithm: source
+          source: vstestcd
+
+      - name: PARAM
+        label: Parameter
+        type: text
+        length: 200
+        mandatory: true
+        origin: Derived
+        derivation:
+          algorithm: source
+          source: vstest
+
+      - name: AVAL
+        label: Analysis Value
+        type: float
+        mandatory: false
+        origin: Derived
+        comment: "Numeric analysis value; cast from raw vsorres string"
+        derivation:
+          algorithm: derivation
+          expression: "pl.col('vsorres').cast(pl.Float64, strict=False)"
+
+      - name: AVALU
+        label: Analysis Value Units
+        type: text
+        length: 20
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: source
+          source: vsorresu
+
+      - name: ADT
+        label: Analysis Date
+        type: date
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: rename
+          source: vsdtc
+
+      - name: ADY
+        label: Analysis Relative Day
+        type: integer
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: study_day
+          analysis_date: ADT
+          reference_date: TRTSDT
+          depends_on: [ADT]
+
+      - name: ABLFL
+        label: Baseline Record Flag
+        type: text
+        length: 2
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: flag
+          criteria: "pl.col('vsdy') <= 0"
+          groups: [USUBJID, PARAMCD]
+
+      - name: BASE
+        label: Baseline Value
+        type: float
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: baseline
+          aval: AVAL
+          baseline_flag: ABLFL
+          groups: [USUBJID, PARAMCD]
+          depends_on: [ABLFL]
+
+      - name: CHG
+        label: Change from Baseline
+        type: float
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: chg
+          aval: AVAL
+          base: BASE
+          depends_on: [BASE]
+
+      - name: PCHG
+        label: Percent Change from Baseline
+        type: float
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: pchg
+          aval: AVAL
+          base: BASE
+          depends_on: [BASE]
+
+      - name: VISITNUM
+        label: Visit Number
+        type: float
+        mandatory: false
+        origin: Protocol
+
+      - name: VISIT
+        label: Visit Name
+        type: text
+        length: 200
+        mandatory: false
+        origin: Protocol
+
+      - name: DTYPE
+        label: Derivation Type
+        type: text
+        length: 8
+        mandatory: false
+        origin: Derived
+        codelist: CL.DTYPE
+
+      - name: ANL01FL
+        label: Analysis Flag 01
+        type: text
+        length: 2
+        mandatory: false
+        origin: Derived
+        codelist: CL.ANL01FL
+
+      - name: SUBJID
+        label: Subject Identifier for the Study
+        type: text
+        length: 20
+        mandatory: true
+        origin: CRF
+
+      - name: SITEID
+        label: Study Site Identifier
+        type: text
+        length: 20
+        mandatory: true
+        origin: CRF
+
+      - name: AGE
+        label: Age
+        type: integer
+        mandatory: true
+        origin: CRF
+
+      - name: AGEU
+        label: Age Units
+        type: text
+        length: 10
+        mandatory: true
+        origin: Assigned
+
+      - name: SEX
+        label: Sex
+        type: text
+        length: 2
+        mandatory: true
+        origin: CRF
+        codelist: C66731
+
+      - name: RACE
+        label: Race
+        type: text
+        length: 60
+        mandatory: false
+        origin: CRF
+
+      - name: ETHNIC
+        label: Ethnicity
+        type: text
+        length: 60
+        mandatory: false
+        origin: CRF
+
+      - name: ARMCD
+        label: Planned Arm Code
+        type: text
+        length: 20
+        mandatory: true
+        origin: Protocol
+
+      - name: ARM
+        label: Description of Planned Arm
+        type: text
+        length: 200
+        mandatory: true
+        origin: Protocol
+
+      - name: ACTARMCD
+        label: Actual Arm Code
+        type: text
+        length: 20
+        mandatory: true
+        origin: Assigned
+
+      - name: ACTARM
+        label: Description of Actual Arm
+        type: text
+        length: 200
+        mandatory: true
+        origin: Assigned
+
+      - name: TRT01P
+        label: Planned Treatment for Period 01
+        type: text
+        length: 200
+        mandatory: false
+        origin: Protocol
+
+      - name: TRT01A
+        label: Actual Treatment for Period 01
+        type: text
+        length: 200
+        mandatory: false
+        origin: Assigned
+
+      - name: TRTSDT
+        label: Date of First Exposure to Treatment
+        type: date
+        mandatory: false
+        origin: Derived
+
+      - name: TRTEDT
+        label: Date of Last Exposure to Treatment
+        type: date
+        mandatory: false
+        origin: Derived
+
+      - name: RFSTDTC
+        label: Subject Reference Start Date/Time
+        type: datetime
+        mandatory: false
+        origin: CRF
+
+      - name: RFENDTC
+        label: Subject Reference End Date/Time
+        type: datetime
+        mandatory: false
+        origin: CRF
+
+      - name: RFICDTC
+        label: Date/Time of Informed Consent
+        type: datetime
+        mandatory: false
+        origin: CRF
+
+      - name: DTHFL
+        label: Subject Death Flag
+        type: text
+        length: 2
+        mandatory: false
+        origin: Derived
+
+      - name: SAFFL
+        label: Safety Population Flag
+        type: text
+        length: 2
+        mandatory: false
+        origin: Derived
+
+      - name: ITTFL
+        label: Intent-To-Treat Population Flag
+        type: text
+        length: 2
+        mandatory: false
+        origin: Derived
+
+  # ───────────────────────────────────────────────────────────── ADAE ─── #
+  - name: ADAE
+    label: Adverse Event Analysis Dataset
+    structure: One record per subject per adverse event
+    repeating: true
+    class: OCCURRENCE DATA STRUCTURE
+    keys: [STUDYID, USUBJID, ASEQ]
+    inputs:
+      - name: AE
+        type: dataset
+      - name: ADSL
+        type: dataset
+    variables:
+      - name: STUDYID
+        label: Study Identifier
+        type: text
+        length: 12
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: assigned
+          value: "CDISCPILOT01"
+
+      - name: USUBJID
+        label: Unique Subject Identifier
+        type: text
+        length: 40
+        mandatory: true
+        origin: Derived
+        derivation:
+          algorithm: source
+          source: USUBJID
+
+      - name: AETERM
+        label: Reported Term for the Adverse Event
+        type: text
+        length: 200
+        mandatory: true
+        origin: CRF
+        derivation:
+          algorithm: source
+          source: AETERM
+
+      - name: AESTDTC
+        label: Start Date/Time of Adverse Event
+        type: datetime
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: source
+          source: AESTDTC
+
+      - name: AEENDTC
+        label: End Date/Time of Adverse Event
+        type: datetime
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: source
+          source: AEENDTC
+
+      - name: AESEV
+        label: Severity/Intensity
+        type: text
+        length: 20
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: source
+          source: AESEV
+
+      - name: AESER
+        label: Serious Event
+        type: text
+        length: 2
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: source
+          source: AESER
+
+      - name: AEREL
+        label: Causality
+        type: text
+        length: 60
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: source
+          source: AEREL
+
+      - name: AEOUT
+        label: Outcome of Adverse Event
+        type: text
+        length: 60
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: source
+          source: AEOUT
+
+      - name: AEACN
+        label: Action Taken with Study Treatment
+        type: text
+        length: 60
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: source
+          source: AEACN
+
+      - name: ASTDT
+        label: Analysis Start Date
+        type: date
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: rename
+          source: AESTDTC
+
+      - name: AENDT
+        label: Analysis End Date
+        type: date
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: rename
+          source: AEENDTC
+
+      - name: ADY
+        label: Analysis Relative Day
+        type: integer
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: study_day
+          analysis_date: ASTDT
+          reference_date: TRTSDT
+          depends_on: [ASTDT]
+
+      # TRTEMFL, ANL01FL, ASEQ use OCCDS verbs not expressible in from_spec;
+      # derived inline in the pipeline after the spec phase.
+      - name: TRTEMFL
+        label: Treatment Emergent Analysis Flag
+        type: text
+        length: 2
+        mandatory: false
+        origin: Derived
+
+      - name: ANL01FL
+        label: Analysis Flag 01 (worst severity)
+        type: text
+        length: 2
+        mandatory: false
+        origin: Derived
+
+      - name: ASEQ
+        label: Analysis Sequence Number
+        type: integer
+        mandatory: true
+        origin: Derived
+
+      # ── ADSL carry-through ────────────────────────────────────────────
+      - name: TRTSDT
+        label: Date of First Exposure to Treatment
+        type: date
+        mandatory: false
+        origin: Derived
+
+      - name: TRTEDT
+        label: Date of Last Exposure to Treatment
+        type: date
+        mandatory: false
+        origin: Derived
+
+      - name: TRT01P
+        label: Planned Treatment for Period 01
+        type: text
+        length: 200
+        mandatory: false
+        origin: Protocol
+
+      - name: AGE
+        label: Age
+        type: integer
+        mandatory: true
+        origin: CRF
+
+      - name: SEX
+        label: Sex
+        type: text
+        length: 2
+        mandatory: true
+        origin: CRF
+
+      - name: SAFFL
+        label: Safety Population Flag
+        type: text
+        length: 2
+        mandatory: false
+        origin: Derived
+
+  # ───────────────────────────────────────────────────────────── ADEX ─── #
+  - name: ADEX
+    label: Exposure Analysis Dataset
+    structure: One record per subject per exposure record
+    repeating: true
+    class: BASIC DATA STRUCTURE
+    keys: [STUDYID, USUBJID, ASEQ]
+    inputs:
+      - name: EX
+        type: dataset
+      - name: ADSL
+        type: dataset
+    variables:
+      - name: STUDYID
+        label: Study Identifier
+        type: text
+        length: 12
+        mandatory: true
+        origin: Assigned
+        derivation:
+          algorithm: assigned
+          value: "CDISCPILOT01"
+
+      - name: USUBJID
+        label: Unique Subject Identifier
+        type: text
+        length: 40
+        mandatory: true
+        origin: Derived
+        derivation:
+          algorithm: source
+          source: USUBJID
+
+      - name: EXTRT
+        label: Name of Actual Treatment
+        type: text
+        length: 200
+        mandatory: true
+        origin: CRF
+        derivation:
+          algorithm: source
+          source: EXTRT
+
+      - name: EXDOSE
+        label: Dose per Administration
+        type: float
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: source
+          source: EXDOSE
+
+      - name: EXDOSU
+        label: Dose Units
+        type: text
+        length: 20
+        mandatory: false
+        origin: CRF
+        derivation:
+          algorithm: source
+          source: EXDOSU
+
+      - name: ASTDT
+        label: Analysis Start Date
+        type: date
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: rename
+          source: EXSTDTC
+
+      - name: AENDT
+        label: Analysis End Date
+        type: date
+        mandatory: false
+        origin: Derived
+        derivation:
+          algorithm: rename
+          source: EXENDTC
+
+      # ASEQ and EXDURD derived inline (not yet expressible in from_spec)
+      - name: ASEQ
+        label: Analysis Sequence Number
+        type: integer
+        mandatory: true
+        origin: Derived
+
+      - name: EXDURD
+        label: Exposure Duration (days, inclusive)
+        type: integer
+        mandatory: false
+        origin: Derived
+
+      # ── ADSL carry-through ────────────────────────────────────────────
+      - name: TRTSDT
+        label: Date of First Exposure to Treatment
+        type: date
+        mandatory: false
+        origin: Derived
+
+      - name: TRTEDT
+        label: Date of Last Exposure to Treatment
+        type: date
+        mandatory: false
+        origin: Derived
+
+      - name: TRT01P
+        label: Planned Treatment for Period 01
+        type: text
+        length: 200
+        mandatory: false
+        origin: Protocol
+
+      - name: AGE
+        label: Age
+        type: integer
+        mandatory: true
+        origin: CRF
+
+      - name: SAFFL
+        label: Safety Population Flag
+        type: text
+        length: 2
+        mandatory: false
+        origin: Derived

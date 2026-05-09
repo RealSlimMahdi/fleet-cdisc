@@ -1,0 +1,105 @@
+name: Feature Request
+description: Propose a new Fleet feature that fits the project philosophy, API style, and quality bar.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form to propose a feature that keeps Fleet simple, Polars-first, lazy, explicit, and well documented.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the real workflow gap, study programming pain point, or missing capability.
+      placeholder: We need...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What should Fleet do?
+      description: Describe the feature in normal user language.
+      placeholder: I want Fleet to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: api_shape
+    attributes:
+      label: What should the user-facing shape look like?
+      description: If relevant, describe the namespace, verb, CLI command, or spec shape you expect.
+      placeholder: |
+        Example ideas:
+        - A new verb on df.sdtm or df.adam
+        - A CLI command
+        - A define.yaml capability
+
+  - type: checkboxes
+    id: philosophy_fit
+    attributes:
+      label: Philosophy fit
+      options:
+        - label: This keeps Fleet simpler, not more complicated.
+          required: true
+        - label: This fits the way Fleet already reads like a clinical specification.
+          required: true
+        - label: This feels native to Fleet's chaining style rather than introducing a foreign pattern.
+          required: true
+
+  - type: checkboxes
+    id: architecture_fit
+    attributes:
+      label: API and architecture fit
+      options:
+        - label: This should stay Polars-first.
+          required: true
+        - label: This should preserve lazy execution as much as possible.
+          required: true
+        - label: This should reuse existing namespaces or verbs where possible.
+          required: false
+        - label: If shared across ADaM namespaces, this should be implemented once rather than duplicated.
+          required: false
+        - label: If controlled terminology is involved, this should use generated codelist classes rather than raw concept IDs.
+          required: false
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: How should this be validated?
+      description: Describe the tests, example scripts, or end-to-end checks that should prove the feature works.
+      placeholder: Unit tests, regression test, example script updates, lint, full test run...
+
+  - type: textarea
+    id: docs
+    attributes:
+      label: What documentation would need to change?
+      description: Note docstrings, examples, README, generated AI context, guides, or architecture docs if relevant. If the feature changes verbs or public API surface, describe the source-of-truth update rather than only the rendered docs. In Fleet, verb API pages are derived from code via mkdocstrings, and the README namespace block plus llms.txt are generated, not edited by hand.
+      placeholder: Update docstrings, examples, generated README or llms source, guide, structure docs...
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What alternatives did you consider?
+      description: Explain why an existing verb, namespace, or workflow is not enough.
+      placeholder: I considered...
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: What is out of scope?
+      description: Keep the request focused.
+      placeholder: This feature should not...
+
+  - type: checkboxes
+    id: final_checks
+    attributes:
+      label: Final checks
+      options:
+        - label: I checked that this is not already covered by an existing Fleet verb, namespace, or workflow.
+          required: true
+        - label: I understand that any eventual implementation must include tests and documentation updates where needed.
+          required: true
