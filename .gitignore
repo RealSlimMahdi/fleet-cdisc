@@ -43,4 +43,7 @@ outputs/**/*.parquet
 outputs/**/*.json
 outputs/**/*.html
 
+# Benchmark generated data (parquet, metrics JSON, sample parquet)
+benchmark/data/*.parquet
+benchmark/data/*.json
 
