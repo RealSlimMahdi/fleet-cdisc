@@ -32,6 +32,9 @@ suppressPackageStartupMessages({
   library(jsonlite)
 })
 
+# Prevent scientific notation in output (e.g. 1e+05 → 100000)
+options(scipen = 999)
+
 # ── Parse CLI args ───────────────────────────────────────────────────────────
 args <- commandArgs(trailingOnly = TRUE)
 max_rows <- if (length(args) >= 1) as.integer(args[1]) else NULL

@@ -25,21 +25,23 @@ All tools read Parquet (via Arrow for R, native for Polars) to ensure I/O parity
 
 ### Fleet vs Oak + Admiral (native R)
 
-| Rows | Fleet (Polars) | Oak + Admiral (R) | Speedup |
-| ---: | -------------: | ----------------: | ------: |
-| 100K |       **0.18** |               3.0 |     17× |
-| 500K |       **0.36** |              16.0 |     44× |
-|   1M |       **0.73** |              32.4 |     44× |
-|   2M |       **1.48** |              58.6 |     40× |
+|  Rows | Fleet (Polars) | Oak + Admiral (R) | Speedup |
+| ----: | -------------: | ----------------: | ------: |
+|  100K |       **0.20** |               2.8 |     14× |
+|  500K |       **0.36** |              15.1 |     42× |
+|    1M |       **0.74** |              30.5 |     41× |
+|    2M |       **1.48** |              56.5 |     38× |
+|    5M |       **3.98** |             136.2 |     34× |
+| 11.5M |       **9.02** |             318.1 |     35× |
 
 ### Native R vs rpy2 (same R code called from Python)
 
 | Rows | Oak + Admiral (Rscript) | rpy2 → Oak + Admiral | rpy2 overhead |
 | ---: | ----------------------: | -------------------: | ------------: |
-| 100K |                     3.0 |                 10.6 |         +254% |
-| 500K |                    16.0 |                 22.1 |          +38% |
-|   1M |                    32.4 |                 41.6 |          +28% |
-|   2M |                    58.6 |                 76.7 |          +31% |
+| 100K |                     2.8 |                 10.6 |         +279% |
+| 500K |                    15.1 |                 22.1 |          +46% |
+|   1M |                    30.5 |                 41.6 |          +36% |
+|   2M |                    56.5 |                 76.7 |          +36% |
 
 ### SDTM + ADaM breakdown (rpy2, pipeline time only)
 
@@ -52,8 +54,8 @@ All tools read Parquet (via Arrow for R, native for Polars) to ensure I/O parity
 
 ### Scaling behaviour
 
-- **Fleet:** Near-linear. Doubling rows roughly doubles time. At 2M rows the pipeline finishes in **1.5 seconds**.
-- **Oak + Admiral:** Super-linear growth driven by oak's join-per-column SDTM architecture, admiral's `derive_vars_dt()` date parsing, and `derive_var_extreme_flag()` per-group operations. At 2M rows: **58.6 seconds** natively, **76.7 seconds** via rpy2.
+- **Fleet:** Near-linear. Doubling rows roughly doubles time. At 2M rows the pipeline finishes in **1.5 seconds**. At full scale (11.5M rows) it completes in **9.0 seconds** (SDTM 3.2s + ADaM 5.9s).
+- **Oak + Admiral:** Super-linear growth driven by oak's join-per-column SDTM architecture, admiral's `derive_vars_dt()` date parsing, and `derive_var_extreme_flag()` per-group operations. At 2M rows: **56.5 seconds**. At full scale (11.5M rows) it completes in **318.1 seconds** (SDTM 89.2s + ADaM 228.9s) — over 5 minutes.
 - **rpy2 overhead:** At small scale (100K), rpy2's fixed cost of data loading per iteration dominates (+254%). At larger scales (1M–2M), the overhead stabilises to ~28–31%, confirming that rpy2 adds a constant-ish marshalling cost on top of the R pipeline execution.
 
 ---
@@ -222,7 +224,8 @@ To ensure objectivity:
 
 | Dimension             | Fleet                     | Oak + Admiral          | Winner       |
 | --------------------- | ------------------------- | ---------------------- | ------------ |
-| Speed (2M rows)       | 1.5s                      | 58.6s (native R)       | Fleet (~40×) |
+| Speed (2M rows)       | 1.5s                      | 56.5s (native R)       | Fleet (~38×) |
+| Speed (11.5M rows)    | 9.0s                      | 318.1s (native R)      | Fleet (~35×) |
 | Speed via rpy2        | —                         | 76.7s (+31% vs native) | Native R     |
 | Scaling linearity     | Near-linear               | Super-linear           | Fleet        |
 | Pipeline LOC          | 37                        | 54                     | Fleet        |
