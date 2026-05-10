@@ -533,10 +533,12 @@ tlg-pptx = [
 ]
 
 [package.dev-dependencies]
+bench = [
+    { name = "rpy2" },
+]
 dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
-    { name = "rpy2" },
     { name = "ruff" },
 ]
 
@@ -567,10 +569,10 @@ requires-dist = [
 provides-extras = ["io", "tlg-pdf", "tlg-pptx", "all", "dev", "docs"]
 
 [package.metadata.requires-dev]
+bench = [{ name = "rpy2", specifier = ">=3.6.7" }]
 dev = [
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-cov", specifier = ">=7.0.0" },
-    { name = "rpy2", specifier = ">=3.6.7" },
     { name = "ruff", specifier = ">=0.15.6" },
 ]
 
