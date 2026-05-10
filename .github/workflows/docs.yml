@@ -13,6 +13,10 @@ on:
       - "examples/**"
       - "specs/**"
       - "src/**"
+      - "README.md"
+      - "GUIDE.md"
+      - "STRUCTURE.md"
+      - "llms.txt"
   pull_request:
     branches: [main, devel]
     paths:
