@@ -764,7 +764,128 @@ class AdamNamespace(SharedADaMVerbsMixin):
             )
 
     # ------------------------------------------------------------------ #
-    # 17. transform — arbitrary DataFrame → DataFrame function            #
+    # 17. atoxgr — toxicity grading via criteria files                     #
+    # ------------------------------------------------------------------ #
+
+    def atoxgr(
+        self,
+        target: str,
+        *,
+        system: str = "ctcae_v5",
+        direction: str,
+        term_var: str,
+        unit_var: str | None = None,
+        signif_dig: int = 5,
+        indicators: dict[str, list[str]] | None = None,
+    ) -> AdamNamespace:
+        """Derive a toxicity grade column using a criteria-file grading system.
+
+        Materialises the pipeline, applies the grading engine for every
+        matching lab term, and returns a fresh namespace with *target*
+        appended.
+
+        Args:
+            target: Name of the output grade column (e.g. ``"ATOXGRL"``).
+            system: Grading system name (e.g. ``"ctcae_v5"``, ``"daids"``)
+                or path to a custom JSON criteria file.
+            direction: ``"L"`` (low) or ``"H"`` (high).
+            term_var: Column holding the lab-test / term name.
+            unit_var: Optional column holding the unit of measure.
+            signif_dig: Significant figures for comparison (default 5).
+            indicators: Optional indicator parameter map for branch
+                conditions (e.g. ``{"H": ["HIGH"], "L": ["LOW"]}``).
+
+        Returns:
+            AdamNamespace: A fresh namespace wrapping the graded frame.
+
+        Examples:
+            Grade low-direction anemia using CTCAE v5::
+
+                adlb = (
+                    lb_raw.adam
+                    .atoxgr("ATOXGRL", system="ctcae_v5",
+                            direction="L", term_var="PARAMCD",
+                            unit_var="AVALU")
+                    .to_frame()
+                )
+        """
+        from .grading._compiler import grade_dataset
+        from .grading._registry import load_criteria
+
+        criteria = load_criteria(system)
+        df = self.to_frame()
+        # Provide standard BNRIND defaults when no indicators are given.
+        if indicators is None:
+            indicators = {
+                "high_indicator": ["HIGH", "H"],
+                "low_indicator": ["LOW", "L"],
+            }
+        graded = grade_dataset(
+            df,
+            criteria,
+            target=target,
+            direction=direction,
+            term_var=term_var,
+            unit_var=unit_var,
+            signif_dig=signif_dig,
+            indicators=indicators,
+        )
+        return self._materialise_then(graded)
+
+    # ------------------------------------------------------------------ #
+    # 18. combine_grades — merge low/high toxicity grades                  #
+    # ------------------------------------------------------------------ #
+
+    def combine_grades(
+        self,
+        target: str = "ATOXGR",
+        *,
+        low_var: str = "ATOXGRL",
+        high_var: str = "ATOXGRH",
+        low_desc_var: str | None = None,
+        high_desc_var: str | None = None,
+    ) -> AdamNamespace:
+        """Combine low and high toxicity grades into a signed grade.
+
+        Low grades are prefixed with ``"-"``; high grades are kept as-is.
+        Both null → null.
+
+        Args:
+            target: Name of the output column (default ``"ATOXGR"``).
+            low_var: Low-direction grade column (default ``"ATOXGRL"``).
+            high_var: High-direction grade column (default ``"ATOXGRH"``).
+            low_desc_var: Optional low-grade term description column.
+            high_desc_var: Optional high-grade term description column.
+
+        Returns:
+            AdamNamespace: The namespace with *target* appended.
+
+        Examples:
+            Combine low/high grades into ATOXGR::
+
+                adlb = (
+                    lb_raw.adam
+                    .atoxgr("ATOXGRL", system="ctcae_v5",
+                            direction="L", term_var="PARAMCD")
+                    .atoxgr("ATOXGRH", system="ctcae_v5",
+                            direction="H", term_var="PARAMCD")
+                    .combine_grades("ATOXGR")
+                    .to_frame()
+                )
+        """
+        from .grading._compiler import combine_grades_expr
+
+        return self._chain(
+            combine_grades_expr(
+                low_var,
+                high_var,
+                low_desc_var=low_desc_var,
+                high_desc_var=high_desc_var,
+            ).alias(target)
+        )
+
+    # ------------------------------------------------------------------ #
+    # 19. transform — arbitrary DataFrame → DataFrame function            #
     # ------------------------------------------------------------------ #
 
     def transform(
