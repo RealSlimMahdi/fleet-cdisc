@@ -46,6 +46,7 @@ jobs:
 
       - name: Publish to TestPyPI (devel branch)
         if: github.ref == 'refs/heads/devel'
+        continue-on-error: true
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.TEST_PYPI_API_TOKEN }}
