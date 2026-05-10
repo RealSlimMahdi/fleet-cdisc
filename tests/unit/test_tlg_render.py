@@ -603,7 +603,17 @@ class TestCLITlgExport:
 # PPTX renderer                                                        #
 # ================================================================== #
 
+_pptx_available = pytest.importorskip.__module__ is not None  # always True; used for the marker
 
+try:
+    import pptx  # noqa: F401
+
+    _has_pptx = True
+except ImportError:
+    _has_pptx = False
+
+
+@pytest.mark.skipif(not _has_pptx, reason="python-pptx not installed")
 class TestRenderPptx:
     """PPTX renderer via python-pptx."""
 
