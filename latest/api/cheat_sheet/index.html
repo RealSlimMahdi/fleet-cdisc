@@ -1,0 +1,2506 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="CDISC SDTM/ADaM derivation toolkit for Polars DataFrames">
+      
+      
+      
+        <link rel="canonical" href="https://realslimmahdi.github.io/fleet-cdisc/latest/api/cheat_sheet/">
+      
+      
+        <link rel="prev" href="../">
+      
+      
+        <link rel="next" href="../sdtm/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../img/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
+    
+    
+      
+        <title>Verb Cheat Sheet - Fleet</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="grey" data-md-color-accent="teal">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#verb-cheat-sheet" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Fleet" class="md-header__button md-logo" aria-label="Fleet" data-md-component="logo">
+      
+  <img src="../../img/logo.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Fleet
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Verb Cheat Sheet
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="grey" data-md-color-accent="teal"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="cyan"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/RealSlimMahdi/fleet-cdisc" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RealSlimMahdi/fleet-cdisc
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+    
+      
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../why-fleet/" class="md-tabs__link">
+          
+  
+  
+  Getting Started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../concepts/define-yaml/" class="md-tabs__link">
+          
+  
+  
+  Concepts
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../examples/full_pipeline/" class="md-tabs__link">
+          
+  
+  
+  Examples
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  API Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../validation-strategy/" class="md-tabs__link">
+          
+  
+  
+  Quality & Compliance
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../test-status/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Test Status
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+    
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Fleet" class="md-nav__button md-logo" aria-label="Fleet" data-md-component="logo">
+      
+  <img src="../../img/logo.png" alt="logo">
+
+    </a>
+    Fleet
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/RealSlimMahdi/fleet-cdisc" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RealSlimMahdi/fleet-cdisc
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../why-fleet/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why Fleet?
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/define-yaml/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How define.yaml Works
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Namespace Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/tdd/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trial Design Domains
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/custom-rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Custom Validation Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/advanced/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Advanced Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Examples
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Examples
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/full_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Domain Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/r2r_strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Raw-to-Render (R2R)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/01_code_driven_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code-Driven Pipeline (Inline)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/02_spec_driven_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spec-Driven Pipeline with Code Extensions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verb Cheat Sheet
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verb Cheat Sheet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#core-verbs-available-everywhere" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core verbs (available everywhere)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sdtm-namespace-dfsdtm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SDTM namespace (df.sdtm)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adam-bds-namespace-dfadam" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ADaM BDS namespace (df.adam)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adsl-namespace-dfadamadsl" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ADSL namespace (df.adam.adsl)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#occds-namespace-dfadamoccds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OCCDS namespace (df.adam.occds)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pk-namespace-dfadampk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PK namespace (df.adam.pk)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#trial-design-dfsdtmtdd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trial Design (df.sdtm.tdd)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-linking-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How linking works
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sdtm/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SDTM Namespace
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adam/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADaM Namespace
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adsl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ADSL Namespace
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../occds/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OCCDS Namespace
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ta/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Therapeutic Areas
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tdd/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trial Design Domains
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tlg/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TLG Namespace
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../define_xml/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Define-XML
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ct/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Controlled Terminology
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../codelists/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Study Codelists (CDISCPILOT01)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quality & Compliance
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Quality & Compliance
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../validation-strategy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Validation Strategy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../test-status/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Test Status
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#core-verbs-available-everywhere" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core verbs (available everywhere)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sdtm-namespace-dfsdtm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SDTM namespace (df.sdtm)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adam-bds-namespace-dfadam" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ADaM BDS namespace (df.adam)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adsl-namespace-dfadamadsl" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ADSL namespace (df.adam.adsl)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#occds-namespace-dfadamoccds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OCCDS namespace (df.adam.occds)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pk-namespace-dfadampk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PK namespace (df.adam.pk)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#trial-design-dfsdtmtdd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trial Design (df.sdtm.tdd)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-linking-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How linking works
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="verb-cheat-sheet">Verb Cheat Sheet<a class="headerlink" href="#verb-cheat-sheet" title="Permanent link">&para;</a></h1>
+<p>This cheat sheet summarises the most common verbs across Fleet namespaces. <strong>Every verb name in this page is a clickable link to its docstring</strong>, rendered directly from the source code in the corresponding namespace page.</p>
+<div class="admonition tip">
+<p class="admonition-title">Single source of truth</p>
+</div>
+<p>Fleet's documentation is generated directly from Python docstrings via <a href="https://mkdocstrings.github.io/">mkdocstrings</a> and cross-linked with <a href="https://mkdocstrings.github.io/autorefs/">autorefs</a>. The verb name you click here resolves to the exact method signature, parameters, and examples that the runtime executes — there is no separately maintained reference that can drift out of sync. Renaming a parameter in the source automatically updates this page on the next build.</p>
+<h2 id="core-verbs-available-everywhere">Core verbs (available everywhere)<a class="headerlink" href="#core-verbs-available-everywhere" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Verb</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            to_frame" href="../sdtm/#fleet.sdtm.SDTMNamespace.to_frame"><code>.to_frame()</code></a></td>
+<td>Materialises the pipeline into a Polars DataFrame. Must be called at the end.</td>
+<td><code>.to_frame()</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            derivation" href="../sdtm/#fleet.sdtm.SDTMNamespace.derivation"><code>.derivation()</code></a></td>
+<td>Injects an arbitrary Polars expression.</td>
+<td><code>.derivation("AGE", expression="pl.col('AGE_RAW').cast(pl.Int64)")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            source" href="../adam/#fleet.adam.SharedADaMVerbsMixin.source"><code>.source()</code></a></td>
+<td>Passes a column through (renaming if <code>from_col</code> is provided).</td>
+<td><code>.source("USUBJID")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            assigned" href="../adam/#fleet.adam.SharedADaMVerbsMixin.assigned"><code>.assigned()</code></a></td>
+<td>Hardcodes a constant literal for all rows.</td>
+<td><code>.assigned("DOMAIN", value="DM")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            inspect" href="../sdtm/#fleet.sdtm.SDTMNamespace.inspect"><code>.inspect()</code></a></td>
+<td>Hard checkpoint — materialises and prints schema/shape/head.</td>
+<td><code>.inspect("after rename")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            explain" href="../sdtm/#fleet.sdtm.SDTMNamespace.explain"><code>.explain()</code></a></td>
+<td>Prints the Polars query plan without materialising.</td>
+<td><code>.explain()</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="sdtm-namespace-dfsdtm">SDTM namespace (<code>df.sdtm</code>)<a class="headerlink" href="#sdtm-namespace-dfsdtm" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Verb</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            assign_no_ct" href="../sdtm/#fleet.sdtm.SDTMNamespace.assign_no_ct"><code>.assign_no_ct()</code></a></td>
+<td>Map a column entirely without Controlled Terminology.</td>
+<td><code>.assign_no_ct("USUBJID", source="patient_id")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            hardcode_no_ct" href="../sdtm/#fleet.sdtm.SDTMNamespace.hardcode_no_ct"><code>.hardcode_no_ct()</code></a></td>
+<td>Assign a constant literal.</td>
+<td><code>.hardcode_no_ct("DOMAIN", value="DM")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            assign_ct" href="../sdtm/#fleet.sdtm.SDTMNamespace.assign_ct"><code>.assign_ct()</code></a></td>
+<td>Map values explicitly through a dictionary and validate against a codelist.</td>
+<td><code>.assign_ct("SEX", source="sex_raw", ct_codelist=SEX, ct_mapping={"M":"M"})</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            hardcode_ct" href="../sdtm/#fleet.sdtm.SDTMNamespace.hardcode_ct"><code>.hardcode_ct()</code></a></td>
+<td>Assign a CT-validated literal.</td>
+<td><code>.hardcode_ct("AGEU", value="YEARS", ct_codelist=AGEU)</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            date" href="../sdtm/#fleet.sdtm.SDTMNamespace.date"><code>.date()</code></a></td>
+<td>Normalise dates to ISO 8601 strings or parse to Date/Datetime.</td>
+<td><code>.date("RFSTDTC", source="first_dose_dt")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            duration" href="../sdtm/#fleet.sdtm.SDTMNamespace.duration"><code>.duration()</code></a></td>
+<td>Compute elapsed time or CDISC study day.</td>
+<td><code>.duration("SVSTDY", start="RFSTDTC", end="SVSTDTC")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            if_then_else" href="../sdtm/#fleet.sdtm.SDTMNamespace.if_then_else"><code>.if_then_else()</code></a></td>
+<td>Derive a value conditionally over multiple branches.</td>
+<td><code>.if_then_else("AGEGR1", when=[...], else_value="OTHER")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            condition_add" href="../sdtm/#fleet.sdtm.SDTMNamespace.condition_add"><code>.condition_add()</code></a></td>
+<td>Single-condition assignment.</td>
+<td><code>.condition_add("FLAG", condition=..., then_value="Y")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            ae_aerel" href="../sdtm/#fleet.sdtm.SDTMNamespace.ae_aerel"><code>.ae_aerel()</code></a></td>
+<td>AE causality mapping.</td>
+<td><code>.ae_aerel("AEREL", source="rel_raw", aerel_map={...})</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            merge" href="../sdtm/#fleet.sdtm.SDTMNamespace.merge"><code>.merge()</code></a></td>
+<td>Join supplementary dataset on key columns.</td>
+<td><code>.merge(other, on="USUBJID")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            remove_dup" href="../sdtm/#fleet.sdtm.SDTMNamespace.remove_dup"><code>.remove_dup()</code></a></td>
+<td>Drop duplicates by subset.</td>
+<td><code>.remove_dup(subset_vars=["USUBJID","VISIT"])</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            group_by" href="../sdtm/#fleet.sdtm.SDTMNamespace.group_by"><code>.group_by()</code></a></td>
+<td>Aggregate rows by group columns.</td>
+<td><code>.group_by(group_cols=["USUBJID"], agg_expr=...)</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            seq" href="../sdtm/#fleet.sdtm.SDTMNamespace.seq"><code>.seq()</code></a></td>
+<td>Generate sequence number per group.</td>
+<td><code>.seq("AESEQ", groups=["USUBJID"])</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            nsv" href="../sdtm/#fleet.sdtm.SDTMNamespace.nsv"><code>.nsv()</code></a></td>
+<td>Derive a Non-Standard Variable with qualifier metadata.</td>
+<td><code>.nsv("SAFETY", source="safety_flag", label="Safety Population Flag")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            export_supp" href="../sdtm/#fleet.sdtm.SDTMNamespace.export_supp"><code>.export_supp()</code></a></td>
+<td>Export NSV columns as vertical SUPPQUAL (IG ≤3.4).</td>
+<td><code>.export_supp(spec="define.yaml", dataset="DM")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            from_spec" href="../sdtm/#fleet.sdtm.SDTMNamespace.from_spec"><code>.from_spec()</code></a></td>
+<td>Build the entire pipeline from a <code>define.yaml</code> spec.</td>
+<td><code>df.sdtm.from_spec("define.yaml", dataset="DM")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            validate" href="../sdtm/#fleet.sdtm.SDTMNamespace.validate"><code>.validate()</code></a></td>
+<td>Run CDISC Rules Engine on the resulting frame.</td>
+<td><code>.validate(domain="DM")</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="adam-bds-namespace-dfadam">ADaM BDS namespace (<code>df.adam</code>)<a class="headerlink" href="#adam-bds-namespace-dfadam" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Verb</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            derivation" href="../adam/#fleet.adam.SharedADaMVerbsMixin.derivation"><code>.derivation()</code></a></td>
+<td>Arbitrary Polars expression.</td>
+<td><code>.derivation("AVAL", expression="pl.col('vsorres').cast(pl.Float64)")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            recode" href="../adam/#fleet.adam.SharedADaMVerbsMixin.recode"><code>.recode()</code></a></td>
+<td>Value remapping with default.</td>
+<td><code>.recode("PARAM", source="vstest", recode_map={...})</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            rename" href="../adam/#fleet.adam.SharedADaMVerbsMixin.rename"><code>.rename()</code></a></td>
+<td>Rename a column from a parent dataset.</td>
+<td><code>.rename("PARAMCD", source="vstestcd")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            condderivation" href="../adam/#fleet.adam.SharedADaMVerbsMixin.condderivation"><code>.condderivation()</code></a></td>
+<td>Multi-branch conditional derivation.</td>
+<td><code>.condderivation("EOSSTT", conditions=[...])</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            date" href="../adam/#fleet.adam.SharedADaMVerbsMixin.date"><code>.date()</code></a></td>
+<td>Parse <code>--DTC</code> to analysis date or datetime with optional imputation.</td>
+<td><code>.date("ADT", source="VSDTC")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            duration" href="../adam/#fleet.adam.SharedADaMVerbsMixin.duration"><code>.duration()</code></a></td>
+<td>CDISC study day, elapsed time, or ISO 8601 duration.</td>
+<td><code>.duration("ADY", start="TRTSDT", end="ADT")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            merge_adsl" href="../adam/#fleet.adam.SharedADaMVerbsMixin.merge_adsl"><code>.merge_adsl()</code></a></td>
+<td>Bring ADSL columns onto a BDS dataset.</td>
+<td><code>.merge_adsl(adsl, columns=["TRTSDT","SAFFL"])</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            baseline" href="../adam/#fleet.adam.AdamNamespace.baseline"><code>.baseline()</code></a></td>
+<td>Find baseline record per group, broadcast to target.</td>
+<td><code>.baseline("BASE", aval="AVAL", baseline_flag="ABLFL")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            chg" href="../adam/#fleet.adam.AdamNamespace.chg"><code>.chg()</code></a></td>
+<td>Change from baseline (<code>AVAL - BASE</code>).</td>
+<td><code>.chg("CHG", aval="AVAL", base="BASE")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            pchg" href="../adam/#fleet.adam.AdamNamespace.pchg"><code>.pchg()</code></a></td>
+<td>Percent change <code>(CHG / BASE) * 100</code>.</td>
+<td><code>.pchg("PCHG", aval="AVAL", base="BASE")</code></td>
+</tr>
+<tr>
+<td>[<code>.flag()</code>][fleet.adam.AdamNamespace.flag]</td>
+<td>Assign <code>"Y"</code> per criteria (expression / <code>first</code> / <code>last</code>).</td>
+<td><code>.flag("ANL01FL", criteria="last", order_by="ADT")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            bmi" href="../adam/#fleet.adam.AdamNamespace.bmi"><code>.bmi()</code></a></td>
+<td>BMI = weight / (height/100)².</td>
+<td><code>.bmi("BMI", weight="WEIGHT", height="HEIGHT")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            bsa" href="../adam/#fleet.adam.AdamNamespace.bsa"><code>.bsa()</code></a></td>
+<td>Body Surface Area (Mosteller / DuBois / Haycock / Gehan-George).</td>
+<td><code>.bsa("BSA", weight="WEIGHT", height="HEIGHT")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            map" href="../adam/#fleet.adam.AdamNamespace.map"><code>.map()</code></a></td>
+<td>Mean Arterial Pressure: DBP + (SBP-DBP)/3.</td>
+<td><code>.map("MAP", systolic="SYSBP", diastolic="DIABP")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            qtc" href="../adam/#fleet.adam.AdamNamespace.qtc"><code>.qtc()</code></a></td>
+<td>Corrected QT (Fridericia / Bazett).</td>
+<td><code>.qtc("QTCF", qt="QT", rr="RR")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            nrind" href="../adam/#fleet.adam.AdamNamespace.nrind"><code>.nrind()</code></a></td>
+<td>Normal range indicator: LOW / NORMAL / HIGH.</td>
+<td><code>.nrind("ANRIND", value="AVAL", low="LO", high="HI")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            on_treatment" href="../adam/#fleet.adam.AdamNamespace.on_treatment"><code>.on_treatment()</code></a></td>
+<td>On-treatment flag within <code>[TRTSDT, TRTEDT]</code>.</td>
+<td><code>.on_treatment("ONTRTFL", adt="ADT", trtsdt="TRTSDT", trtedt="TRTEDT")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            shift" href="../adam/#fleet.adam.AdamNamespace.shift"><code>.shift()</code></a></td>
+<td>Categorical shift string (<code>"NORMAL to HIGH"</code>).</td>
+<td><code>.shift("SHIFT1", baseline_cat="BNRIND", post_cat="ANRIND")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            lookup" href="../adam/#fleet.adam.AdamNamespace.lookup"><code>.lookup()</code></a></td>
+<td>Left-join an external dataset on key columns.</td>
+<td><code>.lookup(other_df, on="USUBJID")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            transform" href="../adam/#fleet.adam.AdamNamespace.transform"><code>.transform()</code></a></td>
+<td>Apply an arbitrary frame-level transformation.</td>
+<td><code>.transform(lambda df: df.sort("USUBJID"))</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            derive_summary_records" href="../adam/#fleet.adam.AdamNamespace.derive_summary_records"><code>.derive_summary_records()</code></a></td>
+<td>Aggregate by group and append summary rows.</td>
+<td><code>.derive_summary_records(by_vars=["USUBJID"], ...)</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            derive_locf_records" href="../adam/#fleet.adam.AdamNamespace.derive_locf_records"><code>.derive_locf_records()</code></a></td>
+<td>LOCF forward-fill within patient groups.</td>
+<td><code>.derive_locf_records(by_vars=["USUBJID","PARAMCD"])</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            derive_param" href="../adam/#fleet.adam.AdamNamespace.derive_param"><code>.derive_param()</code></a></td>
+<td>Derive a new parameter and append rows.</td>
+<td><code>.derive_param(by_vars=["USUBJID"], ...)</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            from_spec" href="../adam/#fleet.adam.AdamNamespace.from_spec"><code>.from_spec()</code></a></td>
+<td>Build the entire pipeline from a <code>define.yaml</code> spec.</td>
+<td><code>df.adam.from_spec("define.yaml", dataset="ADVS")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            validate" href="../adam/#fleet.adam.AdamNamespace.validate"><code>.validate()</code></a></td>
+<td>Run CDISC Rules Engine on the resulting frame.</td>
+<td><code>.validate(domain="ADVS")</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="adsl-namespace-dfadamadsl">ADSL namespace (<code>df.adam.adsl</code>)<a class="headerlink" href="#adsl-namespace-dfadamadsl" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Verb</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            first_date" href="../adsl/#fleet.adam.ADSLNamespace.first_date"><code>.first_date()</code></a></td>
+<td>Earliest date per subject from a second dataset.</td>
+<td><code>.first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            last_date" href="../adsl/#fleet.adam.ADSLNamespace.last_date"><code>.last_date()</code></a></td>
+<td>Latest date per subject from a second dataset.</td>
+<td><code>.last_date("TRTEDT", from_dataset=ex, date_col="EXENDTC")</code></td>
+</tr>
+<tr>
+<td>[<code>.duration()</code>][fleet.adam.ADSLNamespace.duration]</td>
+<td>Number of elapsed days (start to end).</td>
+<td><code>.duration("TRTDURD", start="TRTSDT", end="TRTEDT")</code></td>
+</tr>
+<tr>
+<td>[<code>.flag()</code>][fleet.adam.FlagCriterionMixin.flag]</td>
+<td>Generalised <code>"Y"</code> flag (first/last/max/min/exists/before/after/expression).</td>
+<td><code>.flag("SAFFL", criteria='pl.col("EXDOSE") &gt; 0')</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            count_events" href="../adsl/#fleet.adam.ADSLNamespace.count_events"><code>.count_events()</code></a></td>
+<td>Tally events for each subject.</td>
+<td><code>.count_events("NUMAE", from_dataset=ae)</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            age_years" href="../adsl/#fleet.adam.ADSLNamespace.age_years"><code>.age_years()</code></a></td>
+<td>Unit-aware age conversion (YEARS, MONTHS, WEEKS, DAYS).</td>
+<td><code>.age_years("AAGE", age_col="AGE", age_unit_col="AGEU")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            age_from_dates" href="../adsl/#fleet.adam.ADSLNamespace.age_from_dates"><code>.age_from_dates()</code></a></td>
+<td>Compute age between two dates.</td>
+<td><code>.age_from_dates("AGE", birth="BRTHDT", reference="RFSTDTC")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            derive_period" href="../adsl/#fleet.adam.ADSLNamespace.derive_period"><code>.derive_period()</code></a></td>
+<td>Create APxxSDT / APxxEDT / TRTxxP subperiod variables.</td>
+<td><code>.derive_period(periods=[{"number": 1, ...}])</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="occds-namespace-dfadamoccds">OCCDS namespace (<code>df.adam.occds</code>)<a class="headerlink" href="#occds-namespace-dfadamoccds" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Verb</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            treatment_emergent" href="../occds/#fleet.adam.OCCDSNamespace.treatment_emergent"><code>.treatment_emergent()</code></a></td>
+<td>TRTEMFL flag for events within treatment window.</td>
+<td><code>.treatment_emergent("TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            onset_recovery" href="../occds/#fleet.adam.OCCDSNamespace.onset_recovery"><code>.onset_recovery()</code></a></td>
+<td>Onset and recovery interval flags.</td>
+<td><code>.onset_recovery(...)</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="pk-namespace-dfadampk">PK namespace (<code>df.adam.pk</code>)<a class="headerlink" href="#pk-namespace-dfadampk" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Verb</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            blq_flag" href="../ta/#fleet.adam.PKNamespace.blq_flag"><code>.blq_flag()</code></a></td>
+<td>Flag BLQ records: <code>"Y"</code> when <code>conc &lt; LLOQ</code>.</td>
+<td><code>.blq_flag("BLQFL", conc_col="PCSTRESN", lloq_col="PCLLOQ")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            blq_impute" href="../ta/#fleet.adam.PKNamespace.blq_impute"><code>.blq_impute()</code></a></td>
+<td>Impute BLQ concentrations (<code>half_lloq</code>, <code>zero</code>, <code>lloq</code>, <code>missing</code>).</td>
+<td><code>.blq_impute("AVAL", conc_col="PCSTRESN", lloq_col="PCLLOQ")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            blqfn" href="../ta/#fleet.adam.PKNamespace.blqfn"><code>.blqfn()</code></a></td>
+<td>Numeric BLQ flag: <code>1</code> when BLQ, <code>0</code> otherwise.</td>
+<td><code>.blqfn("BLQFN", conc_col="PCSTRESN", lloq_col="PCLLOQ")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            nominal_time" href="../ta/#fleet.adam.PKNamespace.nominal_time"><code>.nominal_time()</code></a></td>
+<td>Nominal elapsed time with unit conversion.</td>
+<td><code>.nominal_time("NTIME", from_col="PCTPTNUM")</code></td>
+</tr>
+<tr>
+<td>[<code>.duration()</code>][fleet.adam.pk_namespace.PKNamespace.duration]</td>
+<td>Actual elapsed time between datetime columns.</td>
+<td><code>.duration("ATIME", start="EXSTDTC", end="PCDTC", unit="hours")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            predose_flag" href="../ta/#fleet.adam.PKNamespace.predose_flag"><code>.predose_flag()</code></a></td>
+<td>Flag pre-dose samples within a window.</td>
+<td><code>.predose_flag("PREDFL", time_col="ATIME")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            dose_normalized" href="../ta/#fleet.adam.PKNamespace.dose_normalized"><code>.dose_normalized()</code></a></td>
+<td>Dose-normalise concentration: <code>conc / dose</code>.</td>
+<td><code>.dose_normalized("AVALDNM", conc_col="AVAL", dose_col="DOSE")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            evid" href="../ta/#fleet.adam.PKNamespace.evid"><code>.evid()</code></a></td>
+<td>Derive <code>EVID</code> for NONMEM-style datasets.</td>
+<td><code>.evid("EVID")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            mrrlt" href="../ta/#fleet.adam.PKNamespace.mrrlt"><code>.mrrlt()</code></a></td>
+<td>Clip negative ARRLT to 0 for MRRLT.</td>
+<td><code>.mrrlt("MRRLT", arrlt_col="ARRLT")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            log_conc" href="../ta/#fleet.adam.PKNamespace.log_conc"><code>.log_conc()</code></a></td>
+<td>Log-transform concentration.</td>
+<td><code>.log_conc("DVL", conc_col="DV")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            mdv" href="../ta/#fleet.adam.PKNamespace.mdv"><code>.mdv()</code></a></td>
+<td>Derive <code>MDV</code> for PopPK datasets.</td>
+<td><code>.mdv("MDV", conc_col="DV", evid_col="EVID")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            amt" href="../ta/#fleet.adam.PKNamespace.amt"><code>.amt()</code></a></td>
+<td>Derive <code>AMT</code>: dose amount on dosing records.</td>
+<td><code>.amt("AMT", dose_col="EXDOSE", evid_col="EVID")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            cmt" href="../ta/#fleet.adam.PKNamespace.cmt"><code>.cmt()</code></a></td>
+<td>Derive <code>CMT</code> compartment number (NONMEM).</td>
+<td><code>.cmt("CMT", evid_col="EVID", dose_cmt=1, conc_cmt=2)</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            avalcat" href="../ta/#fleet.adam.PKNamespace.avalcat"><code>.avalcat()</code></a></td>
+<td>Listing-ready categorised analysis value.</td>
+<td><code>.avalcat("AVALCAT1", conc_col="PCSTRESC", lloq_col="PCLLOQ")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            anl_flag" href="../ta/#fleet.adam.PKNamespace.anl_flag"><code>.anl_flag()</code></a></td>
+<td>Analysis flag (<code>ANL01FL</code> / <code>ANL02FL</code>).</td>
+<td><code>.anl_flag("ANL01FL")</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="trial-design-dfsdtmtdd">Trial Design (<code>df.sdtm.tdd</code>)<a class="headerlink" href="#trial-design-dfsdtmtdd" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Verb</th>
+<th>Description</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            fetch_structure" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.fetch_structure"><code>.fetch_structure()</code></a></td>
+<td>Fetch TDD structure from CDISC Library.</td>
+<td><code>df.sdtm.tdd.fetch_structure(domain="TA")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            add_arms" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.add_arms"><code>.add_arms()</code></a></td>
+<td>Define study arms.</td>
+<td><code>.add_arms([...])</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            add_elements" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.add_elements"><code>.add_elements()</code></a></td>
+<td>Define trial elements.</td>
+<td><code>.add_elements([...])</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            add_visits" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.add_visits"><code>.add_visits()</code></a></td>
+<td>Define visits.</td>
+<td><code>.add_visits([...])</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            add_criteria" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.add_criteria"><code>.add_criteria()</code></a></td>
+<td>Define inclusion/exclusion criteria.</td>
+<td><code>.add_criteria([...])</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            add_parameters" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.add_parameters"><code>.add_parameters()</code></a></td>
+<td>Define trial summary parameters.</td>
+<td><code>.add_parameters([...])</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            element_boundaries" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.element_boundaries"><code>.element_boundaries()</code></a></td>
+<td>Compute element start/end.</td>
+<td><code>.element_boundaries()</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            epoch_assign" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.epoch_assign"><code>.epoch_assign()</code></a></td>
+<td>Assign epochs to events.</td>
+<td><code>.epoch_assign()</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            visit_map" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.visit_map"><code>.visit_map()</code></a></td>
+<td>Map planned ↔ actual visits.</td>
+<td><code>.visit_map()</code></td>
+</tr>
+<tr>
+<td>[<code>.duration()</code>][fleet.sdtm._tdd_mixin.TrialDesignMixin.duration]</td>
+<td>Derive study day from reference.</td>
+<td><code>.duration("SVSTDY", start="RFSTDTC", end="SVSTDTC")</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            study_header" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.study_header"><code>.study_header()</code></a></td>
+<td>Build the trial summary (TS) header.</td>
+<td><code>.study_header(...)</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="how-linking-works">How linking works<a class="headerlink" href="#how-linking-works" title="Permanent link">&para;</a></h2>
+<p>Click any verb name in the tables above. Your browser navigates to the corresponding namespace API page and scrolls to the auto-generated heading anchor for that method — a heading rendered live from the Python docstring.</p>
+<p>This means:</p>
+<ol>
+<li><strong>Parameter accuracy</strong> — the cheat sheet links never describe a parameter that doesn't exist in code.</li>
+<li><strong>Examples stay current</strong> — code samples in docstrings are the same ones the test suite exercises.</li>
+<li><strong>Discoverability</strong> — IDE hover, docs site, and <code>help()</code> in a REPL all read from the same docstring.</li>
+</ol>
+<p>If you find a verb missing from this cheat sheet, file an issue or add a row — the link target itself is generated automatically once the method exists in source.</p>
+
+
+
+
+
+
+
+  
+    
+  
+  
+    
+  
+
+
+  <aside class="md-source-file">
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Last update">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 9, 2026 10:36:00 UTC">May 9, 2026</span>
+  </span>
+
+    
+    
+      
+  <span class="md-source-file__fact">
+    <span class="md-icon" title="Created">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M14.47 15.08 11 13V7h1.5v5.25l3.08 1.83c-.41.28-.79.62-1.11 1m-1.39 4.84c-.36.05-.71.08-1.08.08-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8c0 .37-.03.72-.08 1.08.69.1 1.33.32 1.92.64.1-.56.16-1.13.16-1.72 0-5.5-4.5-10-10-10S2 6.5 2 12s4.47 10 10 10c.59 0 1.16-.06 1.72-.16-.32-.59-.54-1.23-.64-1.92M18 15v3h-3v2h3v3h2v-3h3v-2h-3v-3z"/></svg>
+    </span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 9, 2026 10:36:00 UTC">May 9, 2026</span>
+  </span>
+
+    
+    
+    
+  </aside>
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/RealSlimMahdi/fleet-cdisc" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.expand", "navigation.top", "search.highlight", "search.suggest", "content.code.copy", "content.code.annotate", "content.tabs.link"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "dev", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
