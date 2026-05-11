@@ -88,6 +88,7 @@ def record_lineage(owner: Any, exprs: tuple[pl.Expr, ...]) -> None:
         verb = verb.lstrip("_")
 
     method_path = _resolve_method_path(owner, verb)
+    domain: str | None = getattr(owner, "_domain", None)
     lineage: list[VariableNode] = list(getattr(owner, "_lineage", []))
     for expr in exprs:
         name = _expr_output_name(expr)
@@ -99,6 +100,7 @@ def record_lineage(owner: Any, exprs: tuple[pl.Expr, ...]) -> None:
                 verb=verb,
                 sources=_expr_sources(expr),
                 method=method_path,
+                domain=domain,
             )
         )
     owner._lineage = lineage

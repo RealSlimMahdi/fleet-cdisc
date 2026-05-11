@@ -50,6 +50,7 @@ class SDTMNamespace(TrialDesignMixin):
     def __init__(self, df: pl.DataFrame) -> None:
         self._lazy = df.lazy()
         self._nsv_meta: list[NSVMeta] = []
+        self._domain: str | None = None
 
     # ------------------------------------------------------------------ #
     # Internal chaining helper                                             #
@@ -580,7 +581,10 @@ class SDTMNamespace(TrialDesignMixin):
                     .to_frame()
                 )
         """
-        return self._chain(pl.lit(value).alias(target))
+        ns = self._chain(pl.lit(value).alias(target))
+        if target == "DOMAIN":
+            ns._domain = str(value)
+        return ns
 
     # ------------------------------------------------------------------ #
     # 5b. nsv — Non-Standard Variable (qualifier) derivation               #

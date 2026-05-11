@@ -100,7 +100,7 @@ _adsl_trt = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "TRTA", "SAFFL
 ae_with_trt = ae.join(_adsl_trt, on="USUBJID", how="left")
 
 _adae_base_ns = (
-    ae_with_trt.adam.source("STUDYID")
+    ae_with_trt.adam("ADAE").source("STUDYID")
     .source("USUBJID")
     .source("AETERM")
     .source("AESTDTC")
@@ -119,7 +119,8 @@ _adae_base_ns = (
 
 _adae_occds_ns = (
     _adae_base_ns.to_frame()
-    .adam.occds.treatment_emergent(
+    .adam.occds("ADAE")
+    .treatment_emergent(
         "TRTEMFL",
         start_date="AESTDTC",
         trtsdt="TRTSDT",
@@ -165,11 +166,11 @@ print(f"         ADAE → {adae_json_path}")
 # ── Variable-Level Lineage ─────────────────────────────────────────────
 print("\n━━ ADAE Variable Lineage ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 _all_lineage = lineage_of(_adae_base_ns) + lineage_of(_adae_occds_ns)
-print(f"  {'Variable':<12}  {'Verb':<22}  Sources")
-print(f"  {'─' * 12}  {'─' * 22}  {'─' * 40}")
+print(f"  {'Variable':<12}  {'Verb':<22}  {'Sources':<30}  CDISC Ref")
+print(f"  {'─' * 12}  {'─' * 22}  {'─' * 30}  {'─' * 50}")
 for node in _all_lineage:
     src = ", ".join(node.sources) if node.sources else "—"
-    print(f"  {node.name:<12}  {node.verb:<22}  {src}")
+    print(f"  {node.name:<12}  {node.verb:<22}  {src:<30}  {node.cdisc_ref}")
 
 
 # ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓

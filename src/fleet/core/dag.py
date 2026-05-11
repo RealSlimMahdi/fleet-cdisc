@@ -48,12 +48,27 @@ class VariableNode:
         sources: Upstream column names consumed by the verb.
         method: Fully-qualified Python path to the verb method
             (e.g. ``"fleet.adam.adsl_namespace.ADSLNamespace.first_date"``).
+        domain: Optional CDISC domain code (e.g. ``"DM"``, ``"ADAE"``).
+            Set automatically when the producing namespace has domain
+            context; ``None`` otherwise.
     """
 
     name: str
     verb: str
     sources: list[str]
     method: str
+    domain: str | None = None
+
+    @property
+    def cdisc_ref(self) -> str:
+        """Full-derivation CDISC notation for this variable.
+
+        Format: ``[DOMAIN].VAR ← verb(src1, src2)`` when *domain* is set,
+        or ``VAR ← verb(src1, src2)`` otherwise.
+        """
+        prefix = f"[{self.domain}].{self.name}" if self.domain else self.name
+        args = ", ".join(self.sources) if self.sources else ""
+        return f"{prefix} ← {self.verb}({args})"
 
 
 @dataclass
@@ -196,6 +211,7 @@ class PipelineDAG:
                                 "verb": v.verb,
                                 "sources": v.sources,
                                 "method": v.method,
+                                "cdisc_ref": v.cdisc_ref,
                             }
                             for v in node.variables.values()
                         }
