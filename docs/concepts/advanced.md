@@ -126,7 +126,7 @@ Only fall back to raw Polars for pre-processing that genuinely cannot be express
 
 ## Cross-Domain Derivations with `.pin()`
 
-Many CDISC derivations require data from sibling domains — SDTM study day needs DM's `RFSTDTC`, ADaM datasets need ADSL columns like `TRTSDT` and population flags. Fleet's **Pipeline Passport** (`.pin()`) lets verbs *see* reference data without polluting the frame.
+Many CDISC derivations require data from sibling domains — SDTM study day needs DM's `RFSTDTC`, ADaM datasets need ADSL columns like `TRTSDT` and population flags. Fleet's **Pipeline Passport** (`.pin()`) lets verbs _see_ reference data without polluting the frame.
 
 ### Pinning a reference domain
 

@@ -1191,63 +1191,63 @@ uv run fleet define-xml --spec metadata/adam/define.yaml  --output outputs/defin
 
 ### SDTM verbs (`df.sdtm`)
 
-| Verb                 | Purpose                                     |
-| -------------------- | ------------------------------------------- |
-| `assign_no_ct`       | Raw column → SDTM variable, no decoding     |
-| `assign_ct`          | Raw column → SDTM variable with CT decoding |
-| `date`               | Date/datetime normalisation                 |
-| `hardcode_no_ct`     | Constant value (DOMAIN, STUDYID, AGEU…)     |
-| `hardcode_ct`        | Constant value, CT-validated                |
-| `condition_add`      | `IF X THEN Y ELSE NULL`                     |
-| `if_then_else`       | Multi-branch conditional                    |
-| `ae_aerel`           | AE relatedness mapping                      |
-| `merge`              | Join a reference dataset                    |
-| `remove_dup`         | Deduplicate rows                            |
-| `group_by`           | Aggregate to summary rows                   |
-| `dataset_level`      | Alias for `hardcode_no_ct`                  |
-| `notsubmitted`       | Set columns to null                         |
-| `multiple_responses` | Expand pipe-delimited fields into rows      |
+| Verb                 | Purpose                                          |
+| -------------------- | ------------------------------------------------ |
+| `assign_no_ct`       | Raw column → SDTM variable, no decoding          |
+| `assign_ct`          | Raw column → SDTM variable with CT decoding      |
+| `date`               | Date/datetime normalisation                      |
+| `hardcode_no_ct`     | Constant value (DOMAIN, STUDYID, AGEU…)          |
+| `hardcode_ct`        | Constant value, CT-validated                     |
+| `condition_add`      | `IF X THEN Y ELSE NULL`                          |
+| `if_then_else`       | Multi-branch conditional                         |
+| `ae_aerel`           | AE relatedness mapping                           |
+| `merge`              | Join a reference dataset                         |
+| `remove_dup`         | Deduplicate rows                                 |
+| `group_by`           | Aggregate to summary rows                        |
+| `dataset_level`      | Alias for `hardcode_no_ct`                       |
+| `notsubmitted`       | Set columns to null                              |
+| `multiple_responses` | Expand pipe-delimited fields into rows           |
 | `pin`                | Attach a reference domain for cross-domain verbs |
-| `repin`              | Replace a pin explicitly (no warning)        |
-| `study_day`          | CDISC study day (consumes pinned DM)         |
-| `baseline_flag`      | Last pre-reference-date observation flag     |
-| `fk_policy`          | Set FK-check severity (warn/error/off)       |
-| `pins`               | Inspect currently pinned domains             |
+| `repin`              | Replace a pin explicitly (no warning)            |
+| `study_day`          | CDISC study day (consumes pinned DM)             |
+| `baseline_flag`      | Last pre-reference-date observation flag         |
+| `fk_policy`          | Set FK-check severity (warn/error/off)           |
+| `pins`               | Inspect currently pinned domains                 |
 
 ### ADaM verbs (`df.adam`)
 
-| Verb                     | Purpose                           |
-| ------------------------ | --------------------------------- |
-| `source`                 | Carry over from SDTM              |
-| `derivation`             | Arbitrary Polars expression       |
-| `assigned`               | Global constant                   |
-| `recode`                 | Map values to new labels          |
-| `rename`                 | Rename column (VSDTC → ADT)       |
-| `condderivation`         | Multi-branch conditional          |
-| `lookup`                 | Join a reference dataset          |
-| `whereclauses`           | Filter rows                       |
-| `date`                   | Parse DTC → Date/Datetime         |
-| `duration`               | ADY / elapsed time / ISO duration |
-| `baseline`               | BASE = AVAL at baseline           |
-| `chg`                    | CHG = AVAL − BASE                 |
-| `pchg`                   | PCHG = (AVAL − BASE) / BASE × 100 |
-| `flag`                   | General "Y" flag                  |
-| `bmi`                    | BMI from weight and height        |
-| `nrind`                  | LOW / NORMAL / HIGH               |
-| `on_treatment`           | ONTRTFL = "Y" on-treatment        |
-| `shift`                  | Baseline-to-post shift string     |
-| `bsa`                    | Body Surface Area (4 methods)     |
-| `map`                    | Mean Arterial Pressure            |
-| `qtc`                    | Corrected QT interval             |
-| `derive_summary_records` | Append aggregate rows             |
-| `derive_locf_records`    | LOCF imputation                   |
-| `derive_param`           | Derive new parameter rows         |
-| `pin`                    | Attach reference domain (passport)|
-| `repin`                  | Replace a pin explicitly          |
-| `join_adsl`              | Carry columns from pinned ADSL    |
-| `study_day`              | CDISC study day (ADaM, from ADSL) |
-| `fk_policy`              | Set FK-check severity             |
-| `pins`                   | Inspect pinned domains            |
+| Verb                     | Purpose                            |
+| ------------------------ | ---------------------------------- |
+| `source`                 | Carry over from SDTM               |
+| `derivation`             | Arbitrary Polars expression        |
+| `assigned`               | Global constant                    |
+| `recode`                 | Map values to new labels           |
+| `rename`                 | Rename column (VSDTC → ADT)        |
+| `condderivation`         | Multi-branch conditional           |
+| `lookup`                 | Join a reference dataset           |
+| `whereclauses`           | Filter rows                        |
+| `date`                   | Parse DTC → Date/Datetime          |
+| `duration`               | ADY / elapsed time / ISO duration  |
+| `baseline`               | BASE = AVAL at baseline            |
+| `chg`                    | CHG = AVAL − BASE                  |
+| `pchg`                   | PCHG = (AVAL − BASE) / BASE × 100  |
+| `flag`                   | General "Y" flag                   |
+| `bmi`                    | BMI from weight and height         |
+| `nrind`                  | LOW / NORMAL / HIGH                |
+| `on_treatment`           | ONTRTFL = "Y" on-treatment         |
+| `shift`                  | Baseline-to-post shift string      |
+| `bsa`                    | Body Surface Area (4 methods)      |
+| `map`                    | Mean Arterial Pressure             |
+| `qtc`                    | Corrected QT interval              |
+| `derive_summary_records` | Append aggregate rows              |
+| `derive_locf_records`    | LOCF imputation                    |
+| `derive_param`           | Derive new parameter rows          |
+| `pin`                    | Attach reference domain (passport) |
+| `repin`                  | Replace a pin explicitly           |
+| `join_adsl`              | Carry columns from pinned ADSL     |
+| `study_day`              | CDISC study day (ADaM, from ADSL)  |
+| `fk_policy`              | Set FK-check severity              |
+| `pins`                   | Inspect pinned domains             |
 
 ### ADSL verbs (`df.adam.adsl`)
 
