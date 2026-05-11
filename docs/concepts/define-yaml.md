@@ -281,8 +281,8 @@ study:
   standard_version: "3.4"
   documents:
     annotated_crf:
-      href: blankcrf.pdf                    # path in the submission package
-      title: Annotated Case Report Form     # displayed in Define-XML
+      href: blankcrf.pdf # path in the submission package
+      title: Annotated Case Report Form # displayed in Define-XML
 ```
 
 This emits the top-level `<def:AnnotatedCRF>` container and the
@@ -298,7 +298,7 @@ variables:
     label: Sex
     type: text
     origin: CRF
-    crf_pages: "8"            # single page
+    crf_pages: "8" # single page
     derivation:
       algorithm: assign_ct
       source: sex
@@ -307,7 +307,7 @@ variables:
     label: Race
     type: text
     origin: CRF
-    crf_pages: "8 9"          # space-separated multiple pages
+    crf_pages: "8 9" # space-separated multiple pages
 ```
 
 The string value maps directly to the `PageRefs` attribute with
@@ -318,19 +318,19 @@ The string value maps directly to the `PageRefs` attribute with
 For PDF bookmarks or page ranges, use the dict form:
 
 ```yaml
-  - name: SEX
-    origin: CRF
-    crf_pages:
-      pages: "DM_SEX"                # PDF bookmark name
-      type: NamedDestination         # or PhysicalRef (default)
+- name: SEX
+  origin: CRF
+  crf_pages:
+    pages: "DM_SEX" # PDF bookmark name
+    type: NamedDestination # or PhysicalRef (default)
 
-  - name: RACE
-    origin: CRF
-    crf_pages:
-      pages: "8 9"
-      type: PhysicalRef
-      first_page: "8"               # optional range attributes
-      last_page: "9"
+- name: RACE
+  origin: CRF
+  crf_pages:
+    pages: "8 9"
+    type: PhysicalRef
+    first_page: "8" # optional range attributes
+    last_page: "9"
 ```
 
 ### Layer 3 — External page map (EDC-driven workflows)
@@ -343,7 +343,7 @@ study:
   documents:
     annotated_crf:
       href: blankcrf.pdf
-      page_map: acrf_pages.yaml       # relative to the define.yaml directory
+      page_map: acrf_pages.yaml # relative to the define.yaml directory
 ```
 
 The page map file uses `DOMAIN.VARIABLE` keys:
