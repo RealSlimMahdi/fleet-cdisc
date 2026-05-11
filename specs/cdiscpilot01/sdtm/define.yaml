@@ -17,6 +17,10 @@ study:
   standard: SDTMIG
   standard_version: "3.4"
   ct_version: "2023-12-15"
+  documents:
+    annotated_crf:
+      href: blankcrf.pdf
+      title: Annotated Case Report Form
 
 codelists:
   - oid: C66731
@@ -119,6 +123,7 @@ datasets:
         length: 20
         mandatory: true
         origin: CRF
+        crf_pages: "6"
         derivation:
           algorithm: assign_no_ct
           source: patient_number
@@ -128,6 +133,7 @@ datasets:
         type: datetime
         mandatory: true
         origin: CRF
+        crf_pages: "7"
         derivation:
           algorithm: assign_dtc
           source: first_dose_date
@@ -159,6 +165,7 @@ datasets:
         length: 20
         mandatory: true
         origin: CRF
+        crf_pages: "6"
         derivation:
           algorithm: assign_no_ct
           source: site_id
@@ -168,6 +175,7 @@ datasets:
         type: integer
         mandatory: true
         origin: CRF
+        crf_pages: "8"
         derivation:
           algorithm: assign_no_ct
           source: age
@@ -188,6 +196,7 @@ datasets:
         length: 2
         mandatory: true
         origin: CRF
+        crf_pages: "8"
         codelist: C66731
         derivation:
           algorithm: assign_ct
@@ -203,6 +212,7 @@ datasets:
         length: 60
         mandatory: false
         origin: CRF
+        crf_pages: "8 9"
         codelist: C74457
         derivation:
           algorithm: assign_ct

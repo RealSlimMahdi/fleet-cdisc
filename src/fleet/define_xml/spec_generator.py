@@ -88,6 +88,9 @@ class DefineSpecGenerator:
         # enrich_methods is True; rendered into MethodDef elements at the
         # end of MetaDataVersion.
         self._method_defs: dict[str, dict[str, str]] = {}
+        # Resolve the CRF page map once (merges external page_map with
+        # inline crf_pages; inline takes precedence).
+        self._page_map: dict[str, str | dict[str, Any]] = self._load_page_map()
         if validate_schema:
             self._validate()
 
@@ -156,6 +159,49 @@ class DefineSpecGenerator:
     def to_xml_string(self) -> str:
         """Return the Define-XML as a formatted string without writing a file."""
         return self._to_pretty_xml(self._build_odm())
+
+    # ------------------------------------------------------------------ #
+    # CRF page map                                                         #
+    # ------------------------------------------------------------------ #
+
+    def _load_page_map(self) -> dict[str, str | dict[str, Any]]:
+        """Build a merged CRF page map from external file and inline values.
+
+        Returns a dict keyed by ``"DOMAIN.VARIABLE"`` whose values are
+        either a plain page-number string (Layer 1) or a dict with rich
+        reference info (Layer 2).  Inline ``crf_pages`` on each variable
+        take precedence over entries in the external ``page_map`` file.
+        """
+        merged: dict[str, str | dict[str, Any]] = {}
+
+        # Layer 3: external page_map YAML
+        docs = self._data.get("study", {}).get("documents", {})
+        acrf = docs.get("annotated_crf", {})
+        page_map_path = acrf.get("page_map")
+        if page_map_path:
+            resolved = (self._path.parent / page_map_path).resolve()
+            if resolved.is_file():
+                raw = yaml.safe_load(resolved.read_text(encoding="utf-8"))
+                if isinstance(raw, dict):
+                    merged.update(raw)
+
+        # Layer 1 / 2: inline crf_pages on each variable (overrides external)
+        for ds in self._data.get("datasets", []):
+            ds_name = ds["name"]
+            for var in ds.get("variables", []):
+                crf = var.get("crf_pages")
+                if crf is not None:
+                    merged[f"{ds_name}.{var['name']}"] = crf
+
+        return merged
+
+    def _get_acrf_config(self) -> dict[str, str] | None:
+        """Return the annotated CRF document config, or None if absent."""
+        docs = self._data.get("study", {}).get("documents", {})
+        return docs.get("annotated_crf")
+
+    def _acrf_leaf_id(self) -> str:
+        return "LF.acrf"
 
     # ------------------------------------------------------------------ #
     # Schema validation                                                    #
@@ -235,6 +281,20 @@ class DefineSpecGenerator:
                 )
             )
 
+        # AnnotatedCRF — emitted when study.documents.annotated_crf is set
+        acrf_cfg = self._get_acrf_config()
+        if acrf_cfg:
+            acrf_elem = ET.SubElement(mdv, "def:AnnotatedCRF")
+            ET.SubElement(acrf_elem, "def:DocumentRef", {"leafID": self._acrf_leaf_id()})
+
+        # SupplementalDoc — additional supporting documents
+        docs = self._data.get("study", {}).get("documents", {})
+        supp_docs = docs.get("supplemental_docs", [])
+        if supp_docs:
+            supp_elem = ET.SubElement(mdv, "def:SupplementalDoc")
+            for sd in supp_docs:
+                ET.SubElement(supp_elem, "def:DocumentRef", {"leafID": sd["id"]})
+
         # ItemGroupDefs (one per dataset)
         datasets: list[dict[str, Any]] = self._data.get("datasets", [])
         for ds in datasets:
@@ -255,6 +315,26 @@ class DefineSpecGenerator:
         # LeafDefs (one per dataset)
         for ds in datasets:
             mdv.append(self._build_leaf(ds))
+
+        # Annotated CRF leaf
+        if acrf_cfg:
+            acrf_leaf = ET.Element(
+                "def:leaf",
+                {
+                    "ID": self._acrf_leaf_id(),
+                    "xlink:href": acrf_cfg["href"],
+                },
+            )
+            ET.SubElement(acrf_leaf, "def:title").text = acrf_cfg.get(
+                "title", "Annotated Case Report Form"
+            )
+            mdv.append(acrf_leaf)
+
+        # Supplemental document leaves
+        for sd in supp_docs:
+            sd_leaf = ET.Element("def:leaf", {"ID": sd["id"], "xlink:href": sd["href"]})
+            ET.SubElement(sd_leaf, "def:title").text = sd["title"]
+            mdv.append(sd_leaf)
 
         return mdv
 
@@ -340,12 +420,12 @@ class DefineSpecGenerator:
             for var in ds["variables"]:
                 item_oid = self._item_oid(ds["name"], var["name"])
                 if item_oid not in seen:
-                    elem = self._build_item_def(item_oid, var)
+                    elem = self._build_item_def(item_oid, var, ds["name"])
                     seen[item_oid] = elem
                     result.append(elem)
         return result
 
-    def _build_item_def(self, item_oid: str, var: dict[str, Any]) -> ET.Element:
+    def _build_item_def(self, item_oid: str, var: dict[str, Any], dataset_name: str) -> ET.Element:
         attribs: dict[str, str] = {
             "OID": item_oid,
             "Name": var["name"],
@@ -380,6 +460,9 @@ class DefineSpecGenerator:
         if comment:
             orig_desc = ET.SubElement(orig_elem, "Description")
             ET.SubElement(orig_desc, "TranslatedText", {"xml:lang": "en"}).text = comment
+
+        # CRF page references — emit DocumentRef/PDFPageRef inside Origin
+        self._append_crf_page_ref(orig_elem, dataset_name, var["name"])
 
         # MethodOID is an ItemDef attribute per Define-XML 2.1; emit only
         # when enrichment produced one.
@@ -476,6 +559,60 @@ class DefineSpecGenerator:
         leaf_id = f"LF.{name}"
         href = f"{name.lower()}.xpt"
         return ET.Element("def:leaf", {"ID": leaf_id, "xlink:href": href, "xlink:title": href})
+
+    def _append_crf_page_ref(
+        self, origin_elem: ET.Element, dataset_name: str, var_name: str
+    ) -> None:
+        """Append a ``def:DocumentRef`` with ``def:PDFPageRef`` to an Origin element.
+
+        Resolves CRF page info from the merged page map.  Supports both
+        the simple string form (Layer 1) and the rich dict form (Layer 2).
+        """
+        key = f"{dataset_name}.{var_name}"
+        crf_ref = self._page_map.get(key)
+        if crf_ref is None:
+            return
+
+        acrf_cfg = self._get_acrf_config()
+        default_leaf_id = self._acrf_leaf_id()
+
+        if isinstance(crf_ref, str):
+            # Layer 1: simple page string — "7" or "8 9"
+            if not acrf_cfg:
+                return  # no aCRF document configured; skip silently
+            doc_ref = ET.SubElement(origin_elem, "def:DocumentRef", {"leafID": default_leaf_id})
+            ET.SubElement(
+                doc_ref,
+                "def:PDFPageRef",
+                {"PageRefs": crf_ref, "Type": "PhysicalRef"},
+            )
+        elif isinstance(crf_ref, dict):
+            # Layer 2: rich reference with optional doc, type, ranges
+            doc_href = crf_ref.get("doc")
+            if doc_href and acrf_cfg and doc_href != acrf_cfg.get("href"):
+                # Reference to a non-default document — resolve leaf ID
+                leaf_id = f"LF.{Path(doc_href).stem}"
+            else:
+                leaf_id = default_leaf_id
+
+            if not acrf_cfg and leaf_id == default_leaf_id:
+                return
+
+            doc_ref = ET.SubElement(origin_elem, "def:DocumentRef", {"leafID": leaf_id})
+            pages = crf_ref.get("pages")
+            ref_type = crf_ref.get("type", "PhysicalRef")
+            first_page = crf_ref.get("first_page")
+            last_page = crf_ref.get("last_page")
+
+            if pages or first_page:
+                pr_attrs: dict[str, str] = {"Type": ref_type}
+                if pages:
+                    pr_attrs["PageRefs"] = pages
+                if first_page:
+                    pr_attrs["FirstPage"] = first_page
+                if last_page:
+                    pr_attrs["LastPage"] = last_page
+                ET.SubElement(doc_ref, "def:PDFPageRef", pr_attrs)
 
     # ------------------------------------------------------------------ #
     # Helpers                                                              #
