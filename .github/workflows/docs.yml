@@ -13,6 +13,10 @@ on:
       - "examples/**"
       - "specs/**"
       - "src/**"
+      - "README.md"
+      - "GUIDE.md"
+      - "STRUCTURE.md"
+      - "llms.txt"
   pull_request:
     branches: [main, devel]
     paths:
@@ -36,12 +40,12 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
 
@@ -60,12 +64,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v5
         with:
           version: "latest"
 
@@ -109,6 +113,4 @@ jobs:
 
       - name: Deploy docs (devel branch)
         if: github.ref == 'refs/heads/devel'
-        run: |
-          uv run mike deploy --push dev
-          uv run mike set-default --push latest
+        run: uv run mike deploy --push dev

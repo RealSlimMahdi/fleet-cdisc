@@ -7,7 +7,7 @@
 [![Stargazers][stars-shield]][stars-url]
 [![Issues][issues-shield]][issues-url]
 [![MIT License][license-shield]][license-url]
-[![Python 3.12+][python-shield]][python-url]
+[![Python 3.12 | 3.13 | 3.14][python-shield]][python-url]
 [![PyPI][pypi-shield]][pypi-url]
 
 <!-- PROJECT LOGO -->
@@ -522,7 +522,7 @@ Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
 [issues-url]: https://github.com/RealSlimMahdi/fleet-cdisc/issues
 [license-shield]: https://img.shields.io/github/license/RealSlimMahdi/fleet-cdisc.svg?style=for-the-badge
 [license-url]: https://github.com/RealSlimMahdi/fleet-cdisc/blob/main/LICENSE
-[python-shield]: https://img.shields.io/badge/python-3.12%2B-blue?style=for-the-badge&logo=python&logoColor=white
+[python-shield]: https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue?style=for-the-badge&logo=python&logoColor=white
 [python-url]: https://www.python.org/
 [pypi-shield]: https://img.shields.io/pypi/v/fleet-cdisc?style=for-the-badge&logo=pypi&logoColor=white
 [pypi-url]: https://pypi.org/project/fleet-cdisc/
