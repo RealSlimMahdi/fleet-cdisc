@@ -942,6 +942,78 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#crf-page-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CRF Page References
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CRF Page References">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#setup-declare-the-acrf-document" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup: declare the aCRF document
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-1-simple-page-strings-most-common" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 1 — Simple page strings (most common)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-2-rich-references-named-destinations-page-ranges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 2 — Rich references (named destinations, page ranges)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-3-external-page-map-edc-driven-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 3 — External page map (EDC-driven workflows)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#supplemental-documents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supplemental documents
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#tips" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2009,6 +2081,78 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#crf-page-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CRF Page References
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="CRF Page References">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#setup-declare-the-acrf-document" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup: declare the aCRF document
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-1-simple-page-strings-most-common" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 1 — Simple page strings (most common)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-2-rich-references-named-destinations-page-ranges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 2 — Rich references (named destinations, page ranges)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-3-external-page-map-edc-driven-workflows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 3 — External page map (EDC-driven workflows)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#supplemental-documents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supplemental documents
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#tips" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2337,6 +2481,92 @@ VS Code or any LSP-enabled editor:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json</span>
 </span></code></pre></div>
 <hr />
+<h2 id="crf-page-references">CRF Page References<a class="headerlink" href="#crf-page-references" title="Permanent link">&para;</a></h2>
+<p>Variables with <code>origin: CRF</code> can include page references to the annotated
+Case Report Form PDF. Fleet emits these as <code>&lt;def:DocumentRef&gt;</code> /
+<code>&lt;def:PDFPageRef&gt;</code> elements inside <code>&lt;def:Origin&gt;</code> in the Define-XML, and
+the standard <code>define2-1.xsl</code> stylesheet renders them as clickable links.</p>
+<h3 id="setup-declare-the-acrf-document">Setup: declare the aCRF document<a class="headerlink" href="#setup-declare-the-acrf-document" title="Permanent link">&para;</a></h3>
+<p>Add a <code>documents</code> block to the <code>study:</code> section:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nt">study</span><span class="p">:</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CDISCPILOT01</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">  </span><span class="nt">standard</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SDTMIG</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">  </span><span class="nt">standard_version</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;3.4&quot;</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">  </span><span class="nt">documents</span><span class="p">:</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">    </span><span class="nt">annotated_crf</span><span class="p">:</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">      </span><span class="nt">href</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">blankcrf.pdf</span><span class="w"> </span><span class="c1"># path in the submission package</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">      </span><span class="nt">title</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Annotated Case Report Form</span><span class="w"> </span><span class="c1"># displayed in Define-XML</span>
+</span></code></pre></div>
+<p>This emits the top-level <code>&lt;def:AnnotatedCRF&gt;</code> container and the
+<code>&lt;def:leaf&gt;</code> element that the XSLT needs to render document links.</p>
+<h3 id="layer-1-simple-page-strings-most-common">Layer 1 — Simple page strings (most common)<a class="headerlink" href="#layer-1-simple-page-strings-most-common" title="Permanent link">&para;</a></h3>
+<p>Add <code>crf_pages</code> to any CRF-origin variable:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">variables</span><span class="p">:</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SEX</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Sex</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">    </span><span class="nt">origin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CRF</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">    </span><span class="nt">crf_pages</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8&quot;</span><span class="w"> </span><span class="c1"># single page</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">    </span><span class="nt">derivation</span><span class="p">:</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">      </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign_ct</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="w">      </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sex</span>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a>
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RACE</span>
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="w">    </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Race</span>
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span>
+</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="w">    </span><span class="nt">origin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CRF</span>
+</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="w">    </span><span class="nt">crf_pages</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8</span><span class="nv"> </span><span class="s">9&quot;</span><span class="w"> </span><span class="c1"># space-separated multiple pages</span>
+</span></code></pre></div>
+<p>The string value maps directly to the <code>PageRefs</code> attribute with
+<code>Type="PhysicalRef"</code>.</p>
+<h3 id="layer-2-rich-references-named-destinations-page-ranges">Layer 2 — Rich references (named destinations, page ranges)<a class="headerlink" href="#layer-2-rich-references-named-destinations-page-ranges" title="Permanent link">&para;</a></h3>
+<p>For PDF bookmarks or page ranges, use the dict form:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SEX</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">origin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CRF</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="nt">crf_pages</span><span class="p">:</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">    </span><span class="nt">pages</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;DM_SEX&quot;</span><span class="w"> </span><span class="c1"># PDF bookmark name</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">NamedDestination</span><span class="w"> </span><span class="c1"># or PhysicalRef (default)</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RACE</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">  </span><span class="nt">origin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CRF</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">  </span><span class="nt">crf_pages</span><span class="p">:</span>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="w">    </span><span class="nt">pages</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8</span><span class="nv"> </span><span class="s">9&quot;</span>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PhysicalRef</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="w">    </span><span class="nt">first_page</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8&quot;</span><span class="w"> </span><span class="c1"># optional range attributes</span>
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="w">    </span><span class="nt">last_page</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;9&quot;</span>
+</span></code></pre></div>
+<h3 id="layer-3-external-page-map-edc-driven-workflows">Layer 3 — External page map (EDC-driven workflows)<a class="headerlink" href="#layer-3-external-page-map-edc-driven-workflows" title="Permanent link">&para;</a></h3>
+<p>For studies where CRF annotations are extracted from an EDC system, point
+to an external YAML file:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">study</span><span class="p">:</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">documents</span><span class="p">:</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="nt">annotated_crf</span><span class="p">:</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">      </span><span class="nt">href</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">blankcrf.pdf</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">      </span><span class="nt">page_map</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">acrf_pages.yaml</span><span class="w"> </span><span class="c1"># relative to the define.yaml directory</span>
+</span></code></pre></div>
+<p>The page map file uses <code>DOMAIN.VARIABLE</code> keys:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># acrf_pages.yaml — auto-generated from EDC export</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="nt">DM.SEX</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;7&quot;</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="nt">DM.BRTHDTC</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8&quot;</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="nt">AE.AETERM</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;12</span><span class="nv"> </span><span class="s">13&quot;</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="nt">VS.VSTESTCD</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;20&quot;</span>
+</span></code></pre></div>
+<p>Inline <code>crf_pages</code> on individual variables always take precedence over the
+external page map.</p>
+<h3 id="supplemental-documents">Supplemental documents<a class="headerlink" href="#supplemental-documents" title="Permanent link">&para;</a></h3>
+<p>Additional supporting documents (reviewer's guide, protocol, etc.) can be
+declared alongside the annotated CRF:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">study</span><span class="p">:</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">documents</span><span class="p">:</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">    </span><span class="nt">annotated_crf</span><span class="p">:</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">      </span><span class="nt">href</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">blankcrf.pdf</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">    </span><span class="nt">supplemental_docs</span><span class="p">:</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">LF.ReviewerGuide</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">        </span><span class="nt">href</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">reviewers-guide.pdf</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="w">        </span><span class="nt">title</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Reviewer&#39;s Guide</span>
+</span></code></pre></div>
+<p>These emit <code>&lt;def:SupplementalDoc&gt;</code> and corresponding <code>&lt;def:leaf&gt;</code> elements.</p>
+<hr />
 <h2 id="tips">Tips<a class="headerlink" href="#tips" title="Permanent link">&para;</a></h2>
 <ul>
 <li>The <code>inputs</code> block declares which upstream datasets the pipeline should join/merge.</li>
@@ -2365,7 +2595,7 @@ VS Code or any LSP-enabled editor:</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 9, 2026 10:36:00 UTC">May 9, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 11, 2026 12:57:31 UTC">May 11, 2026</span>
   </span>
 
     
