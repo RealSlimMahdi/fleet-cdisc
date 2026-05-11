@@ -124,6 +124,96 @@ dm = (
 
 Only fall back to raw Polars for pre-processing that genuinely cannot be expressed as a Fleet verb (e.g. pivoting wide vendor files, multi-file concatenation), and re-enter the Fleet pipeline immediately afterwards.
 
+## Cross-Domain Derivations with `.pin()`
+
+Many CDISC derivations require data from sibling domains — SDTM study day needs DM's `RFSTDTC`, ADaM datasets need ADSL columns like `TRTSDT` and population flags. Fleet's **Pipeline Passport** (`.pin()`) lets verbs *see* reference data without polluting the frame.
+
+### Pinning a reference domain
+
+```python
+# Build DM first
+dm = dm_raw.sdtm.hardcode_no_ct("DOMAIN", value="DM") ...  .to_frame()
+
+# Pin DM to the AE pipeline — verbs can now resolve RFSTDTC
+ae = (
+    ae_raw.sdtm
+    .hardcode_no_ct("DOMAIN", value="AE")
+    .assign_no_ct("USUBJID", source="patient_number")
+    .date("AESTDTC", source="ae_start_date")
+    .pin("DM", dm)                                      # ← attach reference
+    .study_day("AESTDY", date_col="AESTDTC")            # ← consumes the pin
+    .baseline_flag("AEBLFL", date_col="AESTDTC")        # ← also consumes it
+    .to_frame()
+)
+```
+
+The pinned DataFrame is **not** merged into the frame — it stays beside it. Verbs borrow what they need, compute, and drop temp columns. The output frame stays clean.
+
+### Multiple pins
+
+You can pin as many domains as you need:
+
+```python
+ae = (
+    ae_raw.sdtm
+    .pin("DM", dm_df)                                # join on USUBJID (default)
+    .pin("TV", tv_df, join_on="VISITNUM")            # different join key
+    .pin("EX", ex_df, join_on=["USUBJID", "EXTRT"]) # compound key
+    .study_day("AESTDY", date_col="AESTDTC")        # uses DM pin
+    .to_frame()
+)
+```
+
+### Inspecting pins
+
+```python
+ae_ns = ae_raw.sdtm.pin("DM", dm).pin("TV", tv, join_on="VISITNUM")
+ae_ns.pins()
+# {'DM': {'df': ..., 'join_on': ['USUBJID']},
+#  'TV': {'df': ..., 'join_on': ['VISITNUM']}}
+```
+
+### ADaM: `.join_adsl()` and `.study_day()`
+
+For ADaM datasets, pin ADSL and use `.join_adsl()` to carry forward columns, and `.study_day()` with the ADaM-standard default (`TRTSDT`):
+
+```python
+adae = (
+    ae_df.adam.occds("ADAE")
+    .pin("ADSL", adsl)
+    .source("USUBJID")
+    .join_adsl("TRTSDT", "TRTEDT", "SAFFL")             # carry forward from ADSL
+    .study_day("ASTDY", date_col="AESTDTC", ref_col="TRTSDT")
+    .to_frame()
+)
+```
+
+### FK validation
+
+When a pin exists, Fleet can automatically check foreign-key integrity. By default it emits warnings for orphan values; use `.fk_policy()` to make it strict or silent:
+
+```python
+ae = (
+    ae_raw.sdtm
+    .pin("DM", dm)
+    .fk_policy("error")                                  # raise on FK violations
+    .assign_no_ct("USUBJID", source="patient_number")   # FK auto-checked vs DM
+    .to_frame()
+)
+```
+
+### Lineage tracing
+
+Every pin access is recorded. After building a pipeline, inspect pin lineage:
+
+```python
+from fleet.core.lineage import pin_lineage_of
+
+for dep in pin_lineage_of(ae_ns):
+    print(f"{dep.target_col} ← {dep.source_domain}.{dep.source_cols} via {dep.verb}")
+# AESTDY ← DM.['RFSTDTC'] via study_day
+```
+
 ## Pipeline Debugging & Observability
 
 Fleet pipelines are lazy — all derivations accumulate until `.to_frame()` collects the result. This can make it hard to pinpoint which step introduced bad data or types. Two chainable verbs help:

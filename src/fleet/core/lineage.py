@@ -109,3 +109,50 @@ def record_lineage(owner: Any, exprs: tuple[pl.Expr, ...]) -> None:
 def lineage_of(namespace: Any) -> list[VariableNode]:
     """Return the accumulated lineage of *namespace* (empty list if none)."""
     return list(getattr(namespace, "_lineage", []))
+
+
+def record_pin_lineage(
+    owner: Any,
+    target_col: str,
+    verb: str,
+    source_domain: str,
+    source_cols: list[str],
+    join_key: list[str],
+    relationship: str = "derivation",
+) -> None:
+    """Append a ``PinDependency`` to ``owner._pin_lineage``.
+
+    Called from cross-domain verbs (e.g. ``study_day``, ``join_adsl``)
+    after consuming a pinned domain, so every pin access is automatically
+    traced.
+
+    Args:
+        owner: The namespace instance.
+        target_col: Output column being derived.
+        verb: Name of the consuming verb.
+        source_domain: Pinned domain that was consulted.
+        source_cols: Columns read from the pinned frame.
+        join_key: Join key(s) used to align frames.
+        relationship: Semantic tag — ``"derivation"``, ``"fk_check"``,
+            or ``"carry_forward"``.
+    """
+    from fleet.core.dag import PinDependency
+
+    pin_lineage: list[PinDependency] = list(getattr(owner, "_pin_lineage", []))
+    pin_lineage.append(
+        PinDependency(
+            target_col=target_col,
+            target_domain=getattr(owner, "_domain", None),
+            verb=verb,
+            source_domain=source_domain,
+            source_cols=source_cols,
+            join_key=join_key,
+            relationship=relationship,
+        )
+    )
+    owner._pin_lineage = pin_lineage
+
+
+def pin_lineage_of(namespace: Any) -> list:
+    """Return the accumulated pin lineage of *namespace* (empty list if none)."""
+    return list(getattr(namespace, "_pin_lineage", []))

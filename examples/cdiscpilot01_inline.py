@@ -235,6 +235,9 @@ ae = (
     .assign_no_ct("AEREL", source="ae_relationship")
     # AESEQ: running count within each subject
     .derivation("AESEQ", expression='pl.col("ae_term").cum_count().over("patient_number")')
+    # Pin DM for cross-domain study day derivation
+    .pin("DM", dm)
+    .study_day("AESTDY", date_col="AESTDTC")
     .to_frame()
     .select(
         [
@@ -245,6 +248,7 @@ ae = (
             "AETERM",
             "AESTDTC",
             "AEENDTC",
+            "AESTDY",
             "AESEV",
             "AESER",
             "AEOUT",
@@ -253,7 +257,7 @@ ae = (
         ]
     )
 )
-print(f"── 2d. SDTM AE : {ae.shape[0]} records  × {ae.shape[1]} variables")
+print(f"── 2d. SDTM AE : {ae.shape[0]} records  × {ae.shape[1]} variables (with AESTDY via .pin())")
 
 # ════════════════════════════════════════════════════════════════════════════
 # 3–5. Build ADSL base + Treatment Variables + Treatment Dates/Duration

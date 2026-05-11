@@ -27,10 +27,39 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import yaml
 
 # ─────────────────────────────────────────────────────────── data model ── #
+
+
+@dataclass
+class PinDependency:
+    """A cross-domain dependency recorded when a verb consumes a pinned domain.
+
+    Attributes:
+        target_col: Output column produced by the verb (e.g. ``"AESTDY"``).
+        target_domain: Domain of the pipeline that consumed the pin
+            (e.g. ``"AE"``).
+        verb: Fleet verb that triggered the pin access
+            (e.g. ``"study_day"``).
+        source_domain: Pinned domain that was consulted (e.g. ``"DM"``).
+        source_cols: Columns read from the pinned frame
+            (e.g. ``["RFSTDTC"]``).
+        join_key: Join key(s) used to align frames
+            (e.g. ``["USUBJID"]``).
+        relationship: Semantic tag — ``"derivation"``, ``"fk_check"``,
+            or ``"carry_forward"``.
+    """
+
+    target_col: str
+    target_domain: str | None
+    verb: str
+    source_domain: str
+    source_cols: list[str]
+    join_key: list[str]
+    relationship: str = "derivation"
 
 
 @dataclass
@@ -51,6 +80,8 @@ class VariableNode:
         domain: Optional CDISC domain code (e.g. ``"DM"``, ``"ADAE"``).
             Set automatically when the producing namespace has domain
             context; ``None`` otherwise.
+        pin_sources: Cross-domain dependencies recorded by pin-consuming
+            verbs.  Empty for purely intra-frame derivations.
     """
 
     name: str
@@ -58,6 +89,7 @@ class VariableNode:
     sources: list[str]
     method: str
     domain: str | None = None
+    pin_sources: list[PinDependency] = field(default_factory=list)
 
     @property
     def cdisc_ref(self) -> str:
@@ -185,6 +217,79 @@ class PipelineDAG:
         """Direct downstream dependents of *name* (nodes that list it in inputs)."""
         return [n.name for n in self.nodes.values() if name in n.inputs]
 
+    # ── lineage injection ───────────────────────────────────────────────── #
+
+    def inject_lineage(self, namespace: Any, dataset_name: str) -> None:
+        """Merge variable-level and pin lineage from *namespace* into the DAG.
+
+        Populates ``variables`` on the node named *dataset_name* and, for
+        each ``PinDependency``, adds the pinned source domain to the
+        node's ``inputs`` if it is not already present (creating the
+        cross-domain edge in the DAG).
+
+        Args:
+            namespace: A namespace instance with ``_lineage`` and
+                optionally ``_pin_lineage`` attributes.
+            dataset_name: The logical node name to attach lineage to.
+        """
+        node = self.nodes.get(dataset_name)
+        if node is None:
+            return
+
+        from fleet.core.lineage import lineage_of, pin_lineage_of
+
+        # Merge intra-frame variable lineage
+        for vnode in lineage_of(namespace):
+            node.variables[vnode.name] = vnode
+
+        # Merge pin lineage → enrich variable nodes + add DAG edges
+        for pdep in pin_lineage_of(namespace):
+            if pdep.target_col in node.variables:
+                vnode = node.variables[pdep.target_col]
+                vnode.pin_sources.append(pdep)
+            # Ensure the source domain is an input edge
+            if pdep.source_domain in self.nodes and pdep.source_domain not in node.inputs:
+                node.inputs.append(pdep.source_domain)
+
+    def trace(self, dataset: str, variable: str) -> list[dict[str, Any]]:
+        """Return full provenance chain for a single variable.
+
+        Follows both intra-frame sources and cross-domain pin sources.
+
+        Args:
+            dataset: Logical node name (e.g. ``"AE"``).
+            variable: Column name (e.g. ``"AESTDY"``).
+
+        Returns:
+            list[dict]: Ordered provenance entries from output back to
+                source, each with ``name``, ``verb``, ``sources``,
+                and optional ``pin_sources``.
+        """
+        node = self.nodes.get(dataset)
+        if node is None:
+            return []
+        vnode = node.variables.get(variable)
+        if vnode is None:
+            return []
+        chain: list[dict[str, Any]] = [
+            {
+                "name": vnode.name,
+                "verb": vnode.verb,
+                "sources": vnode.sources,
+                "domain": vnode.domain,
+                "pin_sources": [
+                    {
+                        "source_domain": p.source_domain,
+                        "source_cols": p.source_cols,
+                        "join_key": p.join_key,
+                        "relationship": p.relationship,
+                    }
+                    for p in vnode.pin_sources
+                ],
+            }
+        ]
+        return chain
+
     # ── export ──────────────────────────────────────────────────────────── #
 
     def to_dict(self) -> dict:
@@ -212,6 +317,21 @@ class PipelineDAG:
                                 "sources": v.sources,
                                 "method": v.method,
                                 "cdisc_ref": v.cdisc_ref,
+                                **(
+                                    {
+                                        "pin_sources": [
+                                            {
+                                                "source_domain": p.source_domain,
+                                                "source_cols": p.source_cols,
+                                                "join_key": p.join_key,
+                                                "relationship": p.relationship,
+                                            }
+                                            for p in v.pin_sources
+                                        ]
+                                    }
+                                    if v.pin_sources
+                                    else {}
+                                ),
                             }
                             for v in node.variables.values()
                         }

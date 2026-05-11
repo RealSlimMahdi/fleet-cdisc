@@ -1207,6 +1207,12 @@ uv run fleet define-xml --spec metadata/adam/define.yaml  --output outputs/defin
 | `dataset_level`      | Alias for `hardcode_no_ct`                  |
 | `notsubmitted`       | Set columns to null                         |
 | `multiple_responses` | Expand pipe-delimited fields into rows      |
+| `pin`                | Attach a reference domain for cross-domain verbs |
+| `repin`              | Replace a pin explicitly (no warning)        |
+| `study_day`          | CDISC study day (consumes pinned DM)         |
+| `baseline_flag`      | Last pre-reference-date observation flag     |
+| `fk_policy`          | Set FK-check severity (warn/error/off)       |
+| `pins`               | Inspect currently pinned domains             |
 
 ### ADaM verbs (`df.adam`)
 
@@ -1236,6 +1242,12 @@ uv run fleet define-xml --spec metadata/adam/define.yaml  --output outputs/defin
 | `derive_summary_records` | Append aggregate rows             |
 | `derive_locf_records`    | LOCF imputation                   |
 | `derive_param`           | Derive new parameter rows         |
+| `pin`                    | Attach reference domain (passport)|
+| `repin`                  | Replace a pin explicitly          |
+| `join_adsl`              | Carry columns from pinned ADSL    |
+| `study_day`              | CDISC study day (ADaM, from ADSL) |
+| `fk_policy`              | Set FK-check severity             |
+| `pins`                   | Inspect pinned domains            |
 
 ### ADSL verbs (`df.adam.adsl`)
 

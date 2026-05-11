@@ -163,106 +163,106 @@ python -c "import fleet; print(fleet.__version__)"
 
 <!-- AUTO:NAMESPACES:BEGIN -->
 
-Importing `fleet` registers chainable namespaces on **every** Polars DataFrame. All ADaM namespaces also inherit **12 shared verbs** from the common mixin: `source`, `derivation`, `assigned`, `recode`, `rename`, `condderivation`, `whereclauses`, `merge_adsl`, `date`, `duration`, `flag`, `criterion`.
+Importing `fleet` registers chainable namespaces on **every** Polars DataFrame. All ADaM namespaces also inherit **18 shared verbs** from the common mixin: `source`, `derivation`, `assigned`, `recode`, `rename`, `condderivation`, `whereclauses`, `merge_adsl`, `date`, `duration`, `flag`, `criterion`, `pin`, `repin`, `join_adsl`, `study_day`, `fk_policy`, `pins`.
 
 <details>
-<summary><b><code>df.sdtm</code></b> — SDTM domains (17 verbs)</summary>
+<summary><b><code>df.sdtm</code></b> — SDTM domains (23 verbs)</summary>
 
-`assign_no_ct` · `assign_ct` · `date` · `duration` · `hardcode_ct` · `hardcode_no_ct` · `condition_add` · `if_then_else` · `ae_aerel` · `merge` · `remove_dup` · `group_by` · `dataset_level` · `notsubmitted` · `multiple_responses` · `nsv` · `export_supp`
+`assign_no_ct` · `assign_ct` · `date` · `duration` · `hardcode_ct` · `hardcode_no_ct` · `condition_add` · `if_then_else` · `ae_aerel` · `merge` · `remove_dup` · `group_by` · `dataset_level` · `notsubmitted` · `multiple_responses` · `nsv` · `export_supp` · `pin` · `repin` · `study_day` · `baseline_flag` · `fk_policy` · `pins`
 
 </details>
 
 <details>
-<summary><b><code>df.adam</code></b> — ADaM BDS (27 verbs: 15 specific + 12 shared)</summary>
+<summary><b><code>df.adam</code></b> — ADaM BDS (33 verbs: 15 specific + 18 shared)</summary>
 
 **Specific:** `lookup` · `baseline` · `chg` · `pchg` · `bmi` · `nrind` · `on_treatment` · `shift` · `bsa` · `map` · `qtc` · `derive_summary_records` · `derive_locf_records` · `derive_param` · `transform`
 
-**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion`
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion` · `pin` · `repin` · `join_adsl` · `study_day` · `fk_policy` · `pins`
 
 </details>
 
 <details>
-<summary><b><code>df.adam.adsl</code></b> — ADSL (19 verbs: 7 specific + 12 shared)</summary>
+<summary><b><code>df.adam.adsl</code></b> — ADSL (25 verbs: 7 specific + 18 shared)</summary>
 
 **Specific:** `first_date` · `last_date` · `duration` · `count_events` · `age_years` · `age_from_dates` · `derive_period`
 
-**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion`
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion` · `pin` · `repin` · `join_adsl` · `study_day` · `fk_policy` · `pins`
 
 </details>
 
 <details>
-<summary><b><code>df.adam.occds</code></b> — OCCDS / ADAE, ADCM… (15 verbs: 2 specific + 12 shared + 1 multi-row)</summary>
+<summary><b><code>df.adam.occds</code></b> — OCCDS / ADAE, ADCM… (21 verbs: 2 specific + 18 shared + 1 multi-row)</summary>
 
 **Specific:** `treatment_emergent` · `onset_recovery`
 
 **Multi-row:** `seq`
 
-**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion`
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion` · `pin` · `repin` · `join_adsl` · `study_day` · `fk_policy` · `pins`
 
 </details>
 
 <details>
-<summary><b><code>df.adam.onco</code></b> — Oncology (17 verbs: 5 specific + 12 shared)</summary>
+<summary><b><code>df.adam.onco</code></b> — Oncology (23 verbs: 5 specific + 18 shared)</summary>
 
 **Specific:** `aval_resp` · `tumor_response_flag` · `best_overall_response` · `confirmed_response_flag` · `filter_pd`
 
-**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion`
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion` · `pin` · `repin` · `join_adsl` · `study_day` · `fk_policy` · `pins`
 
 </details>
 
 <details>
-<summary><b><code>df.adam.ophtha</code></b> — Ophthalmology (17 verbs: 5 specific + 12 shared)</summary>
+<summary><b><code>df.adam.ophtha</code></b> — Ophthalmology (23 verbs: 5 specific + 18 shared)</summary>
 
 **Specific:** `etdrs_to_logmar` · `logmar_to_etdrs` · `study_eye` · `affected_eye` · `bcva_criterion`
 
-**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion`
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion` · `pin` · `repin` · `join_adsl` · `study_day` · `fk_policy` · `pins`
 
 </details>
 
 <details>
-<summary><b><code>df.adam.peds</code></b> — Pediatrics (18 verbs: 6 specific + 12 shared)</summary>
+<summary><b><code>df.adam.peds</code></b> — Pediatrics (24 verbs: 6 specific + 18 shared)</summary>
 
 **Specific:** `age_days` · `age_months` · `age_years` · `corrected_age` · `prematurity_flag` · `bmi_category`
 
-**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion`
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion` · `pin` · `repin` · `join_adsl` · `study_day` · `fk_policy` · `pins`
 
 </details>
 
 <details>
-<summary><b><code>df.adam.vaccine</code></b> — Vaccine (17 verbs: 5 specific + 12 shared)</summary>
+<summary><b><code>df.adam.vaccine</code></b> — Vaccine (23 verbs: 5 specific + 18 shared)</summary>
 
 **Specific:** `fever_flag` · `seroconversion_flag` · `seroresponse_flag` · `aval_adis` · `event_flag`
 
-**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion`
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion` · `pin` · `repin` · `join_adsl` · `study_day` · `fk_policy` · `pins`
 
 </details>
 
 <details>
-<summary><b><code>df.adam.metabolic</code></b> — Metabolic (16 verbs: 4 specific + 12 shared)</summary>
+<summary><b><code>df.adam.metabolic</code></b> — Metabolic (22 verbs: 4 specific + 18 shared)</summary>
 
 **Specific:** `waist_hip_ratio` · `waist_height_ratio` · `body_fat_pct` · `visceral_fat_flag`
 
-**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion`
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion` · `pin` · `repin` · `join_adsl` · `study_day` · `fk_policy` · `pins`
 
 </details>
 
 <details>
-<summary><b><code>df.adam.neuro</code></b> — Neuroscience (17 verbs: 5 specific + 12 shared)</summary>
+<summary><b><code>df.adam.neuro</code></b> — Neuroscience (23 verbs: 5 specific + 18 shared)</summary>
 
 **Specific:** `centiloid` · `mmse_category` · `cdrsob_total` · `moca_category` · `panss_total`
 
-**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion`
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion` · `pin` · `repin` · `join_adsl` · `study_day` · `fk_policy` · `pins`
 
 </details>
 
 <details>
-<summary><b><code>df.adam.pk</code></b> — Pharmacokinetics (27 verbs: 14 specific + 12 shared + 1 multi-row)</summary>
+<summary><b><code>df.adam.pk</code></b> — Pharmacokinetics (33 verbs: 14 specific + 18 shared + 1 multi-row)</summary>
 
 **Specific:** `blq_flag` · `blq_impute` · `nominal_time` · `predose_flag` · `dose_normalized` · `evid` · `mrrlt` · `blqfn` · `log_conc` · `mdv` · `amt` · `cmt` · `avalcat` · `anl_flag`
 
 **Multi-row:** `seq`
 
-**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion`
+**Shared:** `source` · `derivation` · `assigned` · `recode` · `rename` · `condderivation` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `criterion` · `pin` · `repin` · `join_adsl` · `study_day` · `fk_policy` · `pins`
 
 </details>
 
