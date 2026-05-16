@@ -263,6 +263,122 @@ VS Code or any LSP-enabled editor:
 
 ---
 
+## CRF Page References
+
+Variables with `origin: CRF` can include page references to the annotated
+Case Report Form PDF. Fleet emits these as `<def:DocumentRef>` /
+`<def:PDFPageRef>` elements inside `<def:Origin>` in the Define-XML, and
+the standard `define2-1.xsl` stylesheet renders them as clickable links.
+
+### Setup: declare the aCRF document
+
+Add a `documents` block to the `study:` section:
+
+```yaml
+study:
+  id: CDISCPILOT01
+  standard: SDTMIG
+  standard_version: "3.4"
+  documents:
+    annotated_crf:
+      href: blankcrf.pdf # path in the submission package
+      title: Annotated Case Report Form # displayed in Define-XML
+```
+
+This emits the top-level `<def:AnnotatedCRF>` container and the
+`<def:leaf>` element that the XSLT needs to render document links.
+
+### Layer 1 — Simple page strings (most common)
+
+Add `crf_pages` to any CRF-origin variable:
+
+```yaml
+variables:
+  - name: SEX
+    label: Sex
+    type: text
+    origin: CRF
+    crf_pages: "8" # single page
+    derivation:
+      algorithm: assign_ct
+      source: sex
+
+  - name: RACE
+    label: Race
+    type: text
+    origin: CRF
+    crf_pages: "8 9" # space-separated multiple pages
+```
+
+The string value maps directly to the `PageRefs` attribute with
+`Type="PhysicalRef"`.
+
+### Layer 2 — Rich references (named destinations, page ranges)
+
+For PDF bookmarks or page ranges, use the dict form:
+
+```yaml
+- name: SEX
+  origin: CRF
+  crf_pages:
+    pages: "DM_SEX" # PDF bookmark name
+    type: NamedDestination # or PhysicalRef (default)
+
+- name: RACE
+  origin: CRF
+  crf_pages:
+    pages: "8 9"
+    type: PhysicalRef
+    first_page: "8" # optional range attributes
+    last_page: "9"
+```
+
+### Layer 3 — External page map (EDC-driven workflows)
+
+For studies where CRF annotations are extracted from an EDC system, point
+to an external YAML file:
+
+```yaml
+study:
+  documents:
+    annotated_crf:
+      href: blankcrf.pdf
+      page_map: acrf_pages.yaml # relative to the define.yaml directory
+```
+
+The page map file uses `DOMAIN.VARIABLE` keys:
+
+```yaml
+# acrf_pages.yaml — auto-generated from EDC export
+DM.SEX: "7"
+DM.BRTHDTC: "8"
+AE.AETERM: "12 13"
+VS.VSTESTCD: "20"
+```
+
+Inline `crf_pages` on individual variables always take precedence over the
+external page map.
+
+### Supplemental documents
+
+Additional supporting documents (reviewer's guide, protocol, etc.) can be
+declared alongside the annotated CRF:
+
+```yaml
+study:
+  documents:
+    annotated_crf:
+      href: blankcrf.pdf
+    supplemental_docs:
+      - id: LF.ReviewerGuide
+        href: reviewers-guide.pdf
+        title: Reviewer's Guide
+```
+
+These emit `<def:SupplementalDoc>` and corresponding `<def:leaf>` elements.
+
+---
+
 ## Tips
 
 - The `inputs` block declares which upstream datasets the pipeline should join/merge.

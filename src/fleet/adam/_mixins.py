@@ -77,6 +77,8 @@ from typing import Any, Self
 
 import polars as pl
 
+from fleet.core._pin_mixin import PinMixin
+
 
 class FlagCriterionMixin:
     """Mixin providing ``flag()`` and ``criterion()`` to any namespace.
@@ -581,7 +583,7 @@ class FlagCriterionMixin:
         return self._chain(desc_expr, fl_expr, fn_expr)
 
 
-class SharedADaMVerbsMixin(FlagCriterionMixin):
+class SharedADaMVerbsMixin(PinMixin, FlagCriterionMixin):
     """Base mixin providing the shared verbs and chaining infrastructure.
 
     Concrete namespace classes inherit from this mixin.  The ``_chain``
@@ -595,12 +597,43 @@ class SharedADaMVerbsMixin(FlagCriterionMixin):
 
     _lazy: pl.LazyFrame
 
+    _FK_RULES: dict[str, dict[str, str]] = {
+        "USUBJID": {"pin": "ADSL", "ref_col": "USUBJID"},
+    }
+
     # ------------------------------------------------------------------ #
     # Lifecycle                                                            #
     # ------------------------------------------------------------------ #
 
     def __init__(self, df: pl.DataFrame) -> None:
         self._lazy = df.lazy()
+        self._domain: str | None = None
+        self._pinned: dict[str, tuple[pl.DataFrame, list[str]]] = {}
+        self._pin_lineage: list = []
+
+    def __call__(self, domain: str) -> Self:
+        """Return a copy of this namespace with *domain* set for CDISC lineage.
+
+        Args:
+            domain: CDISC domain code (e.g. ``"ADAE"``, ``"ADVS"``).
+
+        Returns:
+            Self: A shallow copy whose lineage records will carry *domain*.
+
+        Examples:
+            Tag an OCCDS pipeline as ADAE::
+
+                adae = (
+                    ae_with_trt.adam.occds("ADAE")
+                    .source("USUBJID")
+                    .treatment_emergent("TRTEMFL", start_date="AESTDTC",
+                                        trtsdt="TRTSDT", trtedt="TRTEDT")
+                    .to_frame()
+                )
+        """
+        new = copy.copy(self)
+        new._domain = domain
+        return new
 
     # ------------------------------------------------------------------ #
     # Chaining infrastructure                                              #
@@ -673,6 +706,183 @@ class SharedADaMVerbsMixin(FlagCriterionMixin):
         from fleet.io.dataset_json import save_dataset_json
 
         return save_dataset_json(self._lazy.collect(), path, domain=domain, label=label)
+
+    # ------------------------------------------------------------------ #
+    # Cross-domain: pin-powered verbs                                      #
+    # ------------------------------------------------------------------ #
+
+    def join_adsl(self, *cols: str) -> Self:
+        """Pull columns from pinned ADSL into this pipeline.
+
+        Performs a left join on the pinned join key, keeps only the
+        requested columns, and records ``carry_forward`` lineage for
+        each column.
+
+        Args:
+            *cols: Column names to carry forward from ADSL
+                (e.g. ``"TRTSDT"``, ``"TRTEDT"``, ``"SAFFL"``).
+
+        Returns:
+            Self: The namespace with ADSL columns attached; call
+                ``.to_frame()`` to materialise.
+
+        Raises:
+            LookupError: If ADSL is not pinned.
+
+        Examples:
+            Carry TRTSDT and SAFFL from ADSL into an ADAE pipeline::
+
+                adae = (
+                    ae_df.adam.occds("ADAE")
+                    .pin("ADSL", adsl_df)
+                    .source("USUBJID")
+                    .join_adsl("TRTSDT", "TRTEDT", "SAFFL")
+                    .to_frame()
+                )
+        """
+        from fleet.core.lineage import record_pin_lineage
+
+        ref_df = self._require_pin("ADSL", "join_adsl", columns=list(cols))
+        join_key = self._pin_join_key("ADSL")
+
+        ref_slim = ref_df.select(
+            [c for c in dict.fromkeys(join_key + list(cols)) if c in ref_df.columns]
+        ).unique(subset=join_key)
+
+        df = self._lazy.collect().join(ref_slim, on=join_key, how="left")
+        new = self._materialise_then(df)
+
+        for col in cols:
+            record_pin_lineage(
+                new,
+                target_col=col,
+                verb="join_adsl",
+                source_domain="ADSL",
+                source_cols=[col],
+                join_key=join_key,
+                relationship="carry_forward",
+            )
+        return new
+
+    def study_day(
+        self,
+        target: str,
+        *,
+        date_col: str,
+        ref_col: str = "TRTSDT",
+        ref_pin: str = "ADSL",
+        adsl: pl.DataFrame | None = None,
+    ) -> Self:
+        """Derive a CDISC study day variable for ADaM datasets.
+
+        Uses the CDISC algorithm: ``date - ref_date + 1`` when
+        ``date >= ref_date``, else ``date - ref_date`` (no day 0).
+
+        The reference date is resolved in this order:
+
+        1. Explicit ``adsl=`` parameter (highest priority).
+        2. Pinned domain (via ``.pin("ADSL", adsl_df)``).
+        3. ``ref_col`` already present in the current frame.
+        4. Actionable ``LookupError``.
+
+        Args:
+            target: Name of the output study day variable
+                (e.g. ``"ASTDY"``).
+            date_col: Column containing the analysis date
+                (e.g. ``"ASTDT"``).
+            ref_col: Reference date column in the pinned domain
+                (default ``"TRTSDT"``).
+            ref_pin: Pinned domain name (default ``"ADSL"``).
+            adsl: Optional explicit DataFrame override.
+
+        Returns:
+            Self: The namespace with *target* appended; call
+                ``.to_frame()`` to materialise.
+
+        Examples:
+            Derive AE analysis study day from pinned ADSL::
+
+                adae = (
+                    ae_df.adam.occds("ADAE")
+                    .pin("ADSL", adsl_df)
+                    .source("USUBJID")
+                    .join_adsl("TRTSDT")
+                    .derivation("ASTDT", expression="pl.col('AESTDTC').str.to_date(format='%Y-%m-%d', strict=False)")
+                    .study_day("ASTDY", date_col="ASTDT")
+                    .to_frame()
+                )
+        """
+        from fleet.core.lineage import record_pin_lineage
+
+        df = self._lazy.collect()
+
+        # Resolve reference date
+        if adsl is not None:
+            ref_df = adsl
+            join_key = ["USUBJID"]
+        elif ref_col in df.columns:
+            # Already in frame — compute directly
+            date_expr = pl.col(date_col)
+            ref_expr = pl.col(ref_col)
+            # Handle both Date and String types
+            if df.schema.get(date_col) == pl.String:
+                date_expr = date_expr.str.to_date(format="%Y-%m-%d", strict=False)
+            if df.schema.get(ref_col) == pl.String:
+                ref_expr = ref_expr.str.to_date(format="%Y-%m-%d", strict=False)
+            diff = (date_expr - ref_expr).dt.total_days()
+            study_day_expr = pl.when(diff >= 0).then(diff + 1).otherwise(diff).alias(target)
+            return self._materialise_then(df.with_columns(study_day_expr))
+        else:
+            ref_df = self._require_pin(ref_pin.upper(), "study_day", columns=[ref_col])
+            join_key = self._pin_join_key(ref_pin.upper())
+
+        # Join, compute, drop temp
+        ref_slim = ref_df.select(
+            [c for c in dict.fromkeys(join_key + [ref_col]) if c in ref_df.columns]
+        ).unique(subset=join_key)
+
+        _ref_tmp = f"__pin_{ref_col}__"
+        ref_slim = ref_slim.rename({ref_col: _ref_tmp})
+        df = df.join(ref_slim, on=join_key, how="left")
+
+        date_expr = pl.col(date_col)
+        ref_expr = pl.col(_ref_tmp)
+        if df.schema.get(date_col) == pl.String:
+            date_expr = date_expr.str.to_date(format="%Y-%m-%d", strict=False)
+        if df.schema.get(_ref_tmp) == pl.String:
+            ref_expr = ref_expr.str.to_date(format="%Y-%m-%d", strict=False)
+
+        diff = (date_expr - ref_expr).dt.total_days()
+        study_day_expr = pl.when(diff >= 0).then(diff + 1).otherwise(diff).alias(target)
+        df = df.with_columns(study_day_expr).drop(_ref_tmp)
+
+        new = self._materialise_then(df)
+
+        # Record variable lineage (since _materialise_then bypasses _chain)
+        from fleet.core.dag import VariableNode as _VN
+
+        var_lineage: list = list(getattr(new, "_lineage", []))
+        var_lineage.append(
+            _VN(
+                name=target,
+                verb="study_day",
+                sources=[date_col, ref_col],
+                method=f"{self.__class__.__module__}.{self.__class__.__qualname__}.study_day",
+                domain=getattr(new, "_domain", None),
+            )
+        )
+        new._lineage = var_lineage
+
+        record_pin_lineage(
+            new,
+            target_col=target,
+            verb="study_day",
+            source_domain=ref_pin.upper(),
+            source_cols=[ref_col],
+            join_key=join_key,
+            relationship="derivation",
+        )
+        return new
 
     # ------------------------------------------------------------------ #
     # Debugging & observability                                            #
@@ -1090,13 +1300,9 @@ class SharedADaMVerbsMixin(FlagCriterionMixin):
 
         # ── validate source / value mutual exclusivity ──
         if source is not None and value is not None:
-            raise ValueError(
-                "Cannot specify both source= and value=. Choose one."
-            )
+            raise ValueError("Cannot specify both source= and value=. Choose one.")
         if source is None and value is None:
-            raise ValueError(
-                "Must specify either source= or value=."
-            )
+            raise ValueError("Must specify either source= or value=.")
 
         output_type = _resolve_output_type(target, output)
 
@@ -1188,8 +1394,7 @@ class SharedADaMVerbsMixin(FlagCriterionMixin):
             partial_dtm = pl.lit(None, dtype=pl.Datetime("us"))
         elif isinstance(time_suffix, str) and time_suffix.startswith("T"):
             partial_dtm = (
-                pl.col("__dtm_date_tmp__").dt.to_string("%Y-%m-%d")
-                + pl.lit(time_suffix)
+                pl.col("__dtm_date_tmp__").dt.to_string("%Y-%m-%d") + pl.lit(time_suffix)
             ).str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
         else:
             partial_dtm = (
@@ -1285,12 +1490,20 @@ class SharedADaMVerbsMixin(FlagCriterionMixin):
         end_expr = pl.col(end) if isinstance(end, str) else end
 
         # Auto-cast string columns to date/datetime
-        start_expr = start_expr.str.to_date(strict=False).cast(pl.Date).fill_null(
-            start_expr.str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
-        ) if isinstance(start, str) else start_expr
-        end_expr = end_expr.str.to_date(strict=False).cast(pl.Date).fill_null(
-            end_expr.str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
-        ) if isinstance(start, str) else end_expr
+        start_expr = (
+            start_expr.str.to_date(strict=False)
+            .cast(pl.Date)
+            .fill_null(start_expr.str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False))
+            if isinstance(start, str)
+            else start_expr
+        )
+        end_expr = (
+            end_expr.str.to_date(strict=False)
+            .cast(pl.Date)
+            .fill_null(end_expr.str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False))
+            if isinstance(start, str)
+            else end_expr
+        )
 
         # For string columns, we need a safer approach: try to cast
         # but the column may already be Date/Datetime. Use a materialise
@@ -1323,12 +1536,17 @@ class SharedADaMVerbsMixin(FlagCriterionMixin):
 
         # Compute difference
         valid_units = {
-            "seconds", "minutes", "hours", "days", "weeks", "months", "years",
+            "seconds",
+            "minutes",
+            "hours",
+            "days",
+            "weeks",
+            "months",
+            "years",
         }
         if unit not in valid_units:
             raise ValueError(
-                f"duration unit={unit!r} is not supported. "
-                f"Choose one of: {sorted(valid_units)}"
+                f"duration unit={unit!r} is not supported. Choose one of: {sorted(valid_units)}"
             )
 
         if unit in ("seconds", "minutes", "hours"):
@@ -1358,8 +1576,8 @@ class SharedADaMVerbsMixin(FlagCriterionMixin):
             if target.endswith("DY"):
                 # CDISC study day: +1 if >= 0, no day 0
                 result_expr = (
-                    pl.when(diff >= 0).then(diff + 1).otherwise(diff)
-                ).cast(pl.Int64).alias(target)
+                    (pl.when(diff >= 0).then(diff + 1).otherwise(diff)).cast(pl.Int64).alias(target)
+                )
                 return self._materialise_then(df.with_columns(result_expr))
             else:
                 add_one = True

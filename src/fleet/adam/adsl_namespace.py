@@ -40,6 +40,10 @@ class ADSLNamespace(SharedADaMVerbsMixin):
     statistics from event-level datasets (AE, CM, MH, EX…).
     """
 
+    def __init__(self, df: pl.DataFrame) -> None:
+        super().__init__(df)
+        self._domain = "ADSL"
+
     # ------------------------------------------------------------------ #
     # ADSL-specific verbs                                                  #
     # ------------------------------------------------------------------ #

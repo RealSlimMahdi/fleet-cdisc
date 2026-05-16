@@ -645,6 +645,12 @@ _SHARED_ADAM_VERBS = [
     "duration",
     "flag",
     "criterion",
+    "pin",
+    "repin",
+    "join_adsl",
+    "study_day",
+    "fk_policy",
+    "pins",
 ]
 
 _README_SDTM_VERBS = [
@@ -665,6 +671,12 @@ _README_SDTM_VERBS = [
     "multiple_responses",
     "nsv",
     "export_supp",
+    "pin",
+    "repin",
+    "study_day",
+    "baseline_flag",
+    "fk_policy",
+    "pins",
 ]
 
 _README_ADAM_SPECIFIC = [

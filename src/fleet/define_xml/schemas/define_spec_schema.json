@@ -77,6 +77,10 @@
           "type": "string",
           "description": "CDISC Controlled Terminology version used (e.g. '2023-12-15').",
           "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "documents": {
+          "$ref": "#/$defs/documents",
+          "description": "Supporting documents referenced from Define-XML (annotated CRF, reviewer guide, etc.)."
         }
       }
     },
@@ -248,6 +252,19 @@
         "comment": {
           "type": "string",
           "description": "Free-text comment or derivation note for this variable."
+        },
+        "crf_pages": {
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "Space-separated physical page numbers in the annotated CRF (e.g. '7' or '8 9')."
+            },
+            {
+              "$ref": "#/$defs/crf_page_ref",
+              "description": "Rich CRF page reference with explicit document, page type, and range."
+            }
+          ],
+          "description": "CRF page reference(s) for variables with origin=CRF. Simple string form uses PhysicalRef against the default annotated CRF. Dict form allows NamedDestination and multi-document references."
         },
         "derivation": {
           "$ref": "#/$defs/derivation",
@@ -445,6 +462,88 @@
         "where": {
           "type": "string",
           "description": "Filter expression for whereclauses algorithm (ADaM)."
+        }
+      }
+    },
+    "documents": {
+      "type": "object",
+      "title": "Documents",
+      "description": "Supporting document references for the Define-XML submission package.",
+      "additionalProperties": false,
+      "properties": {
+        "annotated_crf": {
+          "type": "object",
+          "description": "Annotated Case Report Form PDF referenced from CRF-origin variables.",
+          "required": ["href"],
+          "additionalProperties": false,
+          "properties": {
+            "href": {
+              "type": "string",
+              "description": "Relative path to the annotated CRF PDF file (e.g. 'blankcrf.pdf')."
+            },
+            "title": {
+              "type": "string",
+              "description": "Display title for the document.",
+              "default": "Annotated Case Report Form"
+            },
+            "page_map": {
+              "type": "string",
+              "description": "Path to an external YAML file mapping DOMAIN.VARIABLE keys to CRF page references. Merged with inline crf_pages; inline values take precedence."
+            }
+          }
+        },
+        "supplemental_docs": {
+          "type": "array",
+          "description": "Additional supporting documents (reviewer guide, protocol, etc.).",
+          "items": {
+            "type": "object",
+            "required": ["id", "href", "title"],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Unique leaf ID for this document (e.g. 'LF.ReviewerGuide')."
+              },
+              "href": {
+                "type": "string",
+                "description": "Relative path to the document file."
+              },
+              "title": {
+                "type": "string",
+                "description": "Display title for the document."
+              }
+            }
+          }
+        }
+      }
+    },
+    "crf_page_ref": {
+      "type": "object",
+      "title": "CRFPageRef",
+      "description": "Rich CRF page reference supporting multiple documents and page reference types.",
+      "additionalProperties": false,
+      "properties": {
+        "doc": {
+          "type": "string",
+          "description": "Document href to reference. Defaults to the annotated_crf href."
+        },
+        "pages": {
+          "type": "string",
+          "description": "Space-separated page numbers or named destinations."
+        },
+        "type": {
+          "type": "string",
+          "description": "Page reference type.",
+          "enum": ["PhysicalRef", "NamedDestination"],
+          "default": "PhysicalRef"
+        },
+        "first_page": {
+          "type": "string",
+          "description": "First page of a page range."
+        },
+        "last_page": {
+          "type": "string",
+          "description": "Last page of a page range."
         }
       }
     }

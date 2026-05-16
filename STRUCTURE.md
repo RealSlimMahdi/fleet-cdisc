@@ -54,15 +54,16 @@ import fleet  # registers df.sdtm, df.adam, df.adsl, df.occds, df.tlg everywhere
 
 ### `core/` — Shared Foundation
 
-| File                    | Purpose                                                                                                                                                                               |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `exceptions.py`         | All custom exception classes — `FleetError`, `SDTMError`, `ADAMError`, `CTError`, `FleetIOError`, `SpecError`, `ValidationError`                                                      |
-| `study_context.py`      | `StudyContext` — wraps a study root directory and resolves configured paths (raw data, SDTM, ADaM, metadata, outputs). Loaded via `load_study_context(config_path)` from a YAML file. |
-| `dag.py`                | `PipelineDAG`, `PipelineNode`, `VariableNode` — pipeline + variable-level lineage graph (verb name, source columns, defining method)                                                  |
-| `algorithm_resolver.py` | Resolves a Fleet verb name (`algorithm:`) or dotted callable (`callable:`) to its docstring + qualified path; powers Define-XML method enrichment                                     |
-| `lineage.py`            | `record_lineage(owner, exprs)` / `lineage_of(namespace)` — invoked by `_chain()` in SDTM/ADaM namespaces to attach `VariableNode` records to every materialised column                |
-| `rules_scaffolder.py`   | `RulesScaffolder` — fetches CDISC conformance rules from the Library API and writes per-domain YAML files into `metadata/sdtm/rules/` and `metadata/adam/rules/`                      |
-| `scaffolder.py`         | `DefineScaffolder` — generates `define.yaml` from the CDISC Library IG for SDTM and ADaM domains                                                                                      |
+| File                    | Purpose                                                                                                                                                                                            |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `exceptions.py`         | All custom exception classes — `FleetError`, `SDTMError`, `ADAMError`, `CTError`, `FleetIOError`, `SpecError`, `ValidationError`                                                                   |
+| `study_context.py`      | `StudyContext` — wraps a study root directory and resolves configured paths (raw data, SDTM, ADaM, metadata, outputs). Loaded via `load_study_context(config_path)` from a YAML file.              |
+| `dag.py`                | `PipelineDAG`, `PipelineNode`, `VariableNode`, `PinDependency` — pipeline + variable-level lineage graph (verb name, source columns, defining method, cross-domain pin edges)                      |
+| `algorithm_resolver.py` | Resolves a Fleet verb name (`algorithm:`) or dotted callable (`callable:`) to its docstring + qualified path; powers Define-XML method enrichment                                                  |
+| `lineage.py`            | `record_lineage(owner, exprs)` / `lineage_of(namespace)` / `record_pin_lineage()` / `pin_lineage_of()` — invoked by `_chain()` and pin-powered verbs to track intra-frame and cross-domain lineage |
+| `_pin_mixin.py`         | `PinMixin` — attaches reference-domain DataFrames to pipeline instances; provides `.pin()`, `.repin()`, FK validation, and `.pins()` introspection                                                 |
+| `rules_scaffolder.py`   | `RulesScaffolder` — fetches CDISC conformance rules from the Library API and writes per-domain YAML files into `metadata/sdtm/rules/` and `metadata/adam/rules/`                                   |
+| `scaffolder.py`         | `DefineScaffolder` — generates `define.yaml` from the CDISC Library IG for SDTM and ADaM domains                                                                                                   |
 
 **`StudyContext`** is useful when your study files live in a standard directory layout and you want paths resolved automatically rather than hard-coded.
 

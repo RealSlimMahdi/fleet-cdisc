@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 import yaml
 
+from fleet.core._pin_mixin import PinMixin
 from fleet.sdtm._tdd_mixin import TrialDesignMixin
 from fleet.sdtm.models import NSVMeta
 from fleet.sdtm.utils import dtc_date_expr, dtc_datetime_expr, parse_expression
@@ -39,7 +40,7 @@ if TYPE_CHECKING:
 
 
 @pl.api.register_dataframe_namespace("sdtm")
-class SDTMNamespace(TrialDesignMixin):
+class SDTMNamespace(PinMixin, TrialDesignMixin):
     """
     Immutable pipeline builder for SDTM derivations.
 
@@ -47,9 +48,20 @@ class SDTMNamespace(TrialDesignMixin):
     everything in one ``with_columns`` call.
     """
 
+    _FK_RULES: dict[str, dict[str, str]] = {
+        "USUBJID": {"pin": "DM", "ref_col": "USUBJID"},
+        "VISITNUM": {"pin": "TV", "ref_col": "VISITNUM"},
+        "VISIT": {"pin": "TV", "ref_col": "VISIT"},
+        "EPOCH": {"pin": "TE", "ref_col": "EPOCH"},
+        "ETCD": {"pin": "TE", "ref_col": "ETCD"},
+    }
+
     def __init__(self, df: pl.DataFrame) -> None:
         self._lazy = df.lazy()
         self._nsv_meta: list[NSVMeta] = []
+        self._domain: str | None = None
+        self._pinned: dict[str, tuple[pl.DataFrame, list[str]]] = {}
+        self._pin_lineage: list = []
 
     # ------------------------------------------------------------------ #
     # Internal chaining helper                                             #
@@ -93,7 +105,9 @@ class SDTMNamespace(TrialDesignMixin):
                     .to_frame()
                 )
         """
-        return self._chain(pl.col(source).alias(target))
+        ns = self._chain(pl.col(source).alias(target))
+        ns._auto_fk_check(target)
+        return ns
 
     # ------------------------------------------------------------------ #
     # 1b. derivation — expression-based derivation                        #
@@ -210,7 +224,9 @@ class SDTMNamespace(TrialDesignMixin):
 
         if ct_mapping:
             mapping_expr = pl.col(source).replace(ct_mapping).alias(target)
-            return self._chain(mapping_expr)
+            ns = self._chain(mapping_expr)
+            ns._auto_fk_check(target)
+            return ns
 
         # Try to auto-resolve from the singleton CTValidator
         if ct_validator is None:
@@ -230,12 +246,16 @@ class SDTMNamespace(TrialDesignMixin):
                     coded: info.get("preferred_term", coded) for coded, info in all_ct.items()
                 }
                 if decode_map:
-                    return self._chain(pl.col(source).replace(decode_map).alias(target))
+                    ns = self._chain(pl.col(source).replace(decode_map).alias(target))
+                    ns._auto_fk_check(target)
+                    return ns
             except Exception:
                 pass
 
         # Fallback: pass-through (CT not loaded)
-        return self._chain(pl.col(source).alias(target))
+        ns = self._chain(pl.col(source).alias(target))
+        ns._auto_fk_check(target)
+        return ns
 
     # ------------------------------------------------------------------ #
     # 3. date — unified date verb                                          #
@@ -554,7 +574,9 @@ class SDTMNamespace(TrialDesignMixin):
             except Exception:
                 pass  # CT not loaded — skip validation
 
-        return self._chain(pl.lit(value).alias(target))
+        ns = self._chain(pl.lit(value).alias(target))
+        ns._auto_fk_check(target)
+        return ns
 
     # ------------------------------------------------------------------ #
     # 5. hardcode_no_ct — literal constant, no CT                         #
@@ -580,7 +602,10 @@ class SDTMNamespace(TrialDesignMixin):
                     .to_frame()
                 )
         """
-        return self._chain(pl.lit(value).alias(target))
+        ns = self._chain(pl.lit(value).alias(target))
+        if target == "DOMAIN":
+            ns._domain = str(value)
+        return ns
 
     # ------------------------------------------------------------------ #
     # 5b. nsv — Non-Standard Variable (qualifier) derivation               #
@@ -645,6 +670,274 @@ class SDTMNamespace(TrialDesignMixin):
             *self._nsv_meta,
             NSVMeta(target=target, label=label, origin=origin, evaluator=evaluator),
         ]
+        return new
+
+    # ------------------------------------------------------------------ #
+    # 5c. study_day — CDISC study day derivation (pin-powered)            #
+    # ------------------------------------------------------------------ #
+
+    def study_day(
+        self,
+        target: str,
+        *,
+        date_col: str,
+        ref_col: str = "RFSTDTC",
+        ref_pin: str = "DM",
+        dm: pl.DataFrame | None = None,
+    ) -> SDTMNamespace:
+        """Derive a CDISC study day variable from a date column and a reference date.
+
+        Uses the CDISC algorithm: ``date - ref_date + 1`` when
+        ``date >= ref_date``, else ``date - ref_date`` (no day 0).
+
+        The reference date is resolved in this order:
+
+        1. Explicit ``dm=`` parameter (highest priority).
+        2. Pinned domain (via ``.pin("DM", dm_df)``).
+        3. ``ref_col`` already present in the current frame.
+        4. Actionable ``LookupError`` telling the user what to do.
+
+        Args:
+            target: Name of the output study day variable
+                (e.g. ``"AESTDY"``).
+            date_col: Column in the current frame containing the date
+                to measure from (e.g. ``"AESTDTC"``).
+            ref_col: Column name of the reference start date in the
+                pinned/explicit domain (default ``"RFSTDTC"``).
+            ref_pin: Pinned domain to look up (default ``"DM"``).
+            dm: Optional explicit DataFrame override — bypasses pinning.
+
+        Returns:
+            SDTMNamespace: The namespace with *target* appended; call
+                ``.to_frame()`` to materialise.
+
+        Raises:
+            LookupError: If the reference date cannot be resolved from
+                any source.
+
+        Examples:
+            Derive AE study day from pinned DM::
+
+                ae = (
+                    ae_raw.sdtm
+                    .hardcode_no_ct("DOMAIN", value="AE")
+                    .assign_no_ct("USUBJID", source="patient_number")
+                    .date("AESTDTC", source="ae_start_date")
+                    .pin("DM", dm_df)
+                    .study_day("AESTDY", date_col="AESTDTC")
+                    .to_frame()
+                )
+        """
+        from fleet.core.lineage import record_pin_lineage
+
+        df = self._lazy.collect()
+
+        # Resolve reference date source
+        if dm is not None:
+            ref_df = dm
+            join_key = ["USUBJID"]
+        elif ref_col in df.columns:
+            # ref_col already in frame — no join needed
+            date_expr = pl.col(date_col).str.to_date(format="%Y-%m-%d", strict=False)
+            ref_expr = pl.col(ref_col).str.to_date(format="%Y-%m-%d", strict=False)
+            diff = (date_expr - ref_expr).dt.total_days()
+            study_day_expr = pl.when(diff >= 0).then(diff + 1).otherwise(diff).alias(target)
+            return self._materialise_then(df.with_columns(study_day_expr))
+        else:
+            ref_df = self._require_pin(ref_pin.upper(), "study_day", columns=[ref_col])
+            join_key = self._pin_join_key(ref_pin.upper())
+
+        # Join, compute, drop temp column
+        ref_slim = ref_df.select(
+            [c for c in dict.fromkeys(join_key + [ref_col]) if c in ref_df.columns]
+        ).unique(subset=join_key)
+
+        _ref_tmp = f"__pin_{ref_col}__"
+        ref_slim = ref_slim.rename({ref_col: _ref_tmp})
+
+        df = df.join(ref_slim, on=join_key, how="left")
+
+        date_expr = pl.col(date_col).str.to_date(format="%Y-%m-%d", strict=False)
+        ref_expr = pl.col(_ref_tmp).str.to_date(format="%Y-%m-%d", strict=False)
+        diff = (date_expr - ref_expr).dt.total_days()
+        study_day_expr = pl.when(diff >= 0).then(diff + 1).otherwise(diff).alias(target)
+        df = df.with_columns(study_day_expr).drop(_ref_tmp)
+
+        new = self._materialise_then(df)
+
+        # Record variable lineage (since _materialise_then bypasses _chain)
+        from fleet.core.dag import VariableNode
+
+        var_lineage: list = list(getattr(new, "_lineage", []))
+        var_lineage.append(
+            VariableNode(
+                name=target,
+                verb="study_day",
+                sources=[date_col, ref_col],
+                method="fleet.sdtm.namespace.SDTMNamespace.study_day",
+                domain=getattr(new, "_domain", None),
+            )
+        )
+        new._lineage = var_lineage
+
+        # Record pin lineage
+        record_pin_lineage(
+            new,
+            target_col=target,
+            verb="study_day",
+            source_domain=ref_pin.upper(),
+            source_cols=[ref_col],
+            join_key=join_key,
+            relationship="derivation",
+        )
+        return new
+
+    # ------------------------------------------------------------------ #
+    # 5d. baseline_flag — last pre-reference-date observation flag        #
+    # ------------------------------------------------------------------ #
+
+    def baseline_flag(
+        self,
+        target: str,
+        *,
+        date_col: str,
+        testcd_col: str | None = None,
+        ref_col: str = "RFSTDTC",
+        ref_pin: str = "DM",
+        dm: pl.DataFrame | None = None,
+        group_by: list[str] | None = None,
+    ) -> SDTMNamespace:
+        """Flag the last observation before the reference date as baseline.
+
+        Sets *target* to ``"Y"`` for the last record (per subject and
+        optional grouping variables) that occurs on or before the
+        reference date, and ``null`` for all other records.
+
+        Args:
+            target: Name of the output flag variable
+                (e.g. ``"VSBLFL"``).
+            date_col: Column containing the observation date
+                (e.g. ``"VSDTC"``).
+            testcd_col: Optional test code column to group by
+                (e.g. ``"VSTESTCD"``).  When set, baseline is
+                computed independently for each test.
+            ref_col: Reference date column in DM (default ``"RFSTDTC"``).
+            ref_pin: Pinned domain for the reference date
+                (default ``"DM"``).
+            dm: Optional explicit DataFrame override.
+            group_by: Additional grouping columns beyond USUBJID
+                and *testcd_col*.
+
+        Returns:
+            SDTMNamespace: The namespace with *target* appended; call
+                ``.to_frame()`` to materialise.
+
+        Examples:
+            Flag baseline vital signs::
+
+                vs = (
+                    vs_raw.sdtm
+                    .hardcode_no_ct("DOMAIN", value="VS")
+                    .assign_no_ct("USUBJID", source="patient_number")
+                    .assign_no_ct("VSTESTCD", source="vstestcd")
+                    .date("VSDTC", source="vs_date")
+                    .pin("DM", dm_df)
+                    .baseline_flag("VSBLFL", date_col="VSDTC",
+                                   testcd_col="VSTESTCD")
+                    .to_frame()
+                )
+        """
+        from fleet.core.lineage import record_pin_lineage
+
+        df = self._lazy.collect()
+
+        # Resolve reference date
+        if dm is not None:
+            ref_df = dm
+            join_key = ["USUBJID"]
+        elif ref_col in df.columns:
+            ref_df = None
+            join_key = []
+        else:
+            ref_df = self._require_pin(ref_pin.upper(), "baseline_flag", columns=[ref_col])
+            join_key = self._pin_join_key(ref_pin.upper())
+
+        # Join reference if needed
+        _ref_tmp = f"__pin_{ref_col}__"
+        if ref_df is not None:
+            ref_slim = ref_df.select(
+                [c for c in dict.fromkeys(join_key + [ref_col]) if c in ref_df.columns]
+            ).unique(subset=join_key if join_key else None)
+            ref_slim = ref_slim.rename({ref_col: _ref_tmp})
+            df = df.join(ref_slim, on=join_key, how="left")
+            ref_col_name = _ref_tmp
+        else:
+            ref_col_name = ref_col
+
+        # Build grouping keys
+        grp_keys = ["USUBJID"]
+        if testcd_col is not None:
+            grp_keys.append(testcd_col)
+        if group_by:
+            grp_keys.extend(group_by)
+        grp_keys = list(dict.fromkeys(grp_keys))
+
+        # Parse dates, filter pre-reference, find last
+        date_parsed = pl.col(date_col).str.to_date(format="%Y-%m-%d", strict=False)
+        ref_parsed = pl.col(ref_col_name).str.to_date(format="%Y-%m-%d", strict=False)
+
+        df = df.with_columns(
+            date_parsed.alias("__bl_date__"),
+            ref_parsed.alias("__bl_ref__"),
+        )
+
+        # For each group, find the max date on or before the reference date
+        # Then flag rows where the date matches that max
+        pre_ref = pl.when(pl.col("__bl_date__") <= pl.col("__bl_ref__")).then(pl.col("__bl_date__"))
+        max_pre_ref = pre_ref.max().over(grp_keys).alias("__bl_max__")
+
+        df = df.with_columns(max_pre_ref)
+
+        df = df.with_columns(
+            pl.when(pl.col("__bl_date__") == pl.col("__bl_max__"))
+            .then(pl.lit("Y"))
+            .otherwise(pl.lit(None, dtype=pl.String))
+            .alias(target)
+        )
+
+        # Clean up temp columns
+        drop_cols = ["__bl_date__", "__bl_ref__", "__bl_max__"]
+        if ref_df is not None:
+            drop_cols.append(_ref_tmp)
+        df = df.drop([c for c in drop_cols if c in df.columns])
+
+        new = self._materialise_then(df)
+
+        # Record variable lineage
+        from fleet.core.dag import VariableNode as _VN
+
+        var_lineage: list = list(getattr(new, "_lineage", []))
+        var_lineage.append(
+            _VN(
+                name=target,
+                verb="baseline_flag",
+                sources=[date_col, ref_col],
+                method="fleet.sdtm.namespace.SDTMNamespace.baseline_flag",
+                domain=getattr(new, "_domain", None),
+            )
+        )
+        new._lineage = var_lineage
+
+        if ref_df is not None:
+            record_pin_lineage(
+                new,
+                target_col=target,
+                verb="baseline_flag",
+                source_domain=ref_pin.upper(),
+                source_cols=[ref_col],
+                join_key=join_key,
+                relationship="derivation",
+            )
         return new
 
     # ------------------------------------------------------------------ #
