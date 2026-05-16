@@ -344,6 +344,39 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Path to an HTML wrapper template with {table} placeholder.",
     )
 
+    # -- derivation ----------------------------------------------------- #
+    drv_parser = sub.add_parser(
+        "derivation",
+        help="Scaffold and manage study-specific derivations.",
+    )
+    drv_sub = drv_parser.add_subparsers(dest="derivation_command")
+
+    drv_add = drv_sub.add_parser(
+        "add",
+        help="Scaffold a new derivation file under specs/<study>/adam/derivations/.",
+    )
+    drv_add.add_argument(
+        "name",
+        help="Variable name to create (e.g. AGEGR1).",
+    )
+    drv_add.add_argument(
+        "--dataset",
+        default="ADSL",
+        help="Target dataset name (default: ADSL).",
+    )
+    drv_add.add_argument(
+        "--kind",
+        default="column",
+        choices=["column", "frame", "param"],
+        help="Derivation kind: column / frame / param (default: column).",
+    )
+    drv_add.add_argument(
+        "--config",
+        "-c",
+        default="study_config.yaml",
+        help="Path to study_config.yaml (default: study_config.yaml).",
+    )
+
     return parser
 
 
@@ -770,6 +803,139 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+def _run_derivation_add(args: argparse.Namespace) -> None:
+    """Scaffold a new derivation file under specs/<study_id>/adam/derivations/."""
+    name: str = args.name.strip()
+    dataset: str = args.dataset.strip().upper()
+    kind: str = args.kind
+    config_path = Path(args.config)
+
+    # Resolve derivations directory.
+    if config_path.is_file():
+        from fleet.core.study_context import load_study_context
+
+        ctx = load_study_context(config_path)
+        derivations_dir = ctx.programs_adam_dir.parent / "derivations"
+    else:
+        # Fallback: create under specs/<study_id>/adam/derivations relative to CWD.
+        derivations_dir = Path(".") / "derivations"
+
+    derivations_dir.mkdir(parents=True, exist_ok=True)
+    out_file = derivations_dir / f"{name}.py"
+
+    if out_file.exists():
+        print(f"File already exists: {out_file}")
+        print("Delete it manually if you want to regenerate.")
+        sys.exit(1)
+
+    if kind == "column":
+        template = f'''"""{name} — {dataset} custom derivation."""
+from fleet.core.derivation import derivation
+import polars as pl
+
+
+@derivation
+def {name}() -> pl.Expr:
+    """One-sentence summary of {name} derivation.
+
+    Args:
+        (none — column-kind derivations take no arguments)
+
+    Returns:
+        pl.Expr: Expression that produces the {name} column.
+
+    Examples:
+        Use in an inline pipeline::
+
+            adsl = (
+                dm.adam.adsl
+                .derivation({name})
+                .to_frame()
+            )
+    """
+    return pl.col("REPLACE_ME").cast(pl.String)  # TODO: replace with real logic
+'''
+    elif kind == "frame":
+        template = f'''"""{name} — {dataset} custom derivation (frame-level)."""
+from fleet.core.derivation import derivation
+import polars as pl
+
+
+@derivation(targets=["{name}"])
+def {name}(df: pl.DataFrame) -> pl.DataFrame:
+    """One-sentence summary of {name} derivation.
+
+    Args:
+        df: Upstream DataFrame.
+
+    Returns:
+        pl.DataFrame: Frame with {name} column added.
+
+    Examples:
+        Use in an inline pipeline::
+
+            {dataset.lower()} = (
+                dm.adam.adsl
+                .derivation({name})
+                .to_frame()
+            )
+    """
+    return df.with_columns(
+        pl.col("REPLACE_ME").cast(pl.String).alias("{name}")  # TODO: replace with real logic
+    )
+'''
+    else:  # param
+        template = f'''"""{name} — {dataset} custom derivation (param-level)."""
+from fleet.core.derivation import derivation
+import polars as pl
+
+
+@derivation(
+    by=["USUBJID"],  # TODO: set correct by-vars
+    set_values_to={{"PARAMCD": "{name}", "PARAM": "{name} description"}},
+)
+def {name}(df: pl.DataFrame) -> pl.DataFrame:
+    """One-sentence summary of {name} derivation.
+
+    Args:
+        df: Upstream DataFrame.
+
+    Returns:
+        pl.DataFrame: Frame with {name} parameter rows added.
+
+    Examples:
+        Use in an inline pipeline::
+
+            {dataset.lower()} = (
+                dm.adam
+                .derivation({name})
+                .to_frame()
+            )
+    """
+    return df.with_columns(
+        pl.col("REPLACE_ME").cast(pl.Float64).alias("AVAL")  # TODO: replace with real logic
+    )
+'''
+
+    out_file.write_text(template, encoding="utf-8")
+    print(f"Created {out_file}")
+
+    # Update __init__.py.
+    init_file = derivations_dir / "__init__.py"
+    import_line = f"from .{name} import {name}\n"
+    if init_file.exists():
+        existing = init_file.read_text(encoding="utf-8")
+        if import_line.strip() not in existing:
+            init_file.write_text(existing.rstrip("\n") + "\n" + import_line, encoding="utf-8")
+    else:
+        init_file.write_text(import_line, encoding="utf-8")
+
+    print(f"Updated {init_file}")
+    print()
+    print(f"Next: open {out_file} and implement the derivation logic.")
+    print(f"Then use it in your pipeline:  .derivation({name})")
+
+
 def main() -> None:
     """CLI entry point."""
     parser = _build_parser()
@@ -804,6 +970,11 @@ def main() -> None:
             _run_tlg_export(args)
         else:
             parser.parse_args(["tlg", "--help"])
+    elif args.command == "derivation":
+        if getattr(args, "derivation_command", None) == "add":
+            _run_derivation_add(args)
+        else:
+            parser.parse_args(["derivation", "--help"])
     else:
         parser.print_help()
         sys.exit(1)

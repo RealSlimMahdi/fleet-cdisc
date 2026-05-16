@@ -83,6 +83,47 @@ if TYPE_CHECKING:
     from .vaccine_namespace import VaccineNamespace
 
 
+def _resolve_callable(ref: str) -> Any:
+    """Resolve a callable reference by name or dotted import path.
+
+    Discovery order:
+
+    1. Look up *ref* in the Fleet transform registry
+       (:func:`~fleet.adam.transforms.get_transform`).
+    2. If *ref* contains a dot, treat it as a dotted import path
+       (``module.attr``).
+    3. Raise ``ValueError`` if neither lookup succeeds.
+
+    Args:
+        ref: Registry name (e.g. ``"AGEGR1"``) or dotted import path
+             (e.g. ``"specs.cdiscpilot01.adam.derivations.AGEGR1"``).
+
+    Returns:
+        The callable or :class:`~fleet.core.derivation.Derivation` object.
+
+    Raises:
+        ValueError: If *ref* cannot be resolved.
+    """
+    from fleet.adam.transforms import get_transform
+
+    try:
+        return get_transform(ref)
+    except KeyError:
+        pass
+
+    if "." in ref:
+        import importlib
+
+        module_path, _, attr = ref.rpartition(".")
+        mod = importlib.import_module(module_path)
+        return getattr(mod, attr)
+
+    raise ValueError(
+        f"Callable '{ref}' is not registered and is not a dotted import path. "
+        "Register it with @derivation or import the derivations module before from_spec()."
+    )
+
+
 @pl.api.register_dataframe_namespace("adam")
 class AdamNamespace(SharedADaMVerbsMixin):
     """
@@ -727,9 +768,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         if func == "study_day":
             if not analysis_date or not reference_date:
                 raise ValueError("study_day requires analysis_date and reference_date.")
-            return self.duration(
-                target, start=reference_date, end=analysis_date
-            )
+            return self.duration(target, start=reference_date, end=analysis_date)
         elif func == "baseline":
             return self.baseline(target, aval=aval, baseline_flag=baseline_flag, groups=groups)
         elif func == "chg":
@@ -1162,6 +1201,12 @@ class AdamNamespace(SharedADaMVerbsMixin):
             elif alg == "whereclauses":
                 if var.where:
                     ns = ns.whereclauses(where=var.where)
+            elif alg == "callable":
+                fn = _resolve_callable(var.callable_ref or "")
+                if hasattr(fn, "kind"):
+                    ns = ns.derivation(fn)
+                else:
+                    ns = ns._materialise_then(fn(ns.to_frame()))
             # lookup: skip in spec-driven (requires external dataset object)
 
         return ns
@@ -1194,6 +1239,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
             drv = var.get("derivation")
             if not drv:
                 continue  # no derivation → carry-through / manual column
+            # Backward compat: callable: without algorithm: → inject algorithm.
+            if "callable" in drv and "algorithm" not in drv:
+                drv = {**drv, "algorithm": "callable"}
             spec = ADAMVariableSpec(
                 target=var["name"],
                 **drv,

@@ -6,6 +6,8 @@ Fleet's `.derivation()` verb currently accepts only `str` (sandbox) or `pl.Expr`
 This plan extends it to be the **single unified entry point** for all custom derivation logic —
 no new verb name, zero migration cost, full backward compatibility.
 
+## Git branch: `feature/polymorphic-derivation-verb`, don't commit or push code, branch from main and bring uncommitted changes from main to this branch before starting work.
+
 ### The four-case API
 
 ```python

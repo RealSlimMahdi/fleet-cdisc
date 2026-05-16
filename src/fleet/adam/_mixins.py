@@ -73,11 +73,16 @@ from __future__ import annotations
 
 import copy
 from pathlib import Path
-from typing import Any, Self
+from typing import TYPE_CHECKING, Any, Self
 
 import polars as pl
 
 from fleet.core._pin_mixin import PinMixin
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from fleet.core.derivation import Derivation
 
 
 class FlagCriterionMixin:
@@ -975,31 +980,152 @@ class SharedADaMVerbsMixin(PinMixin, FlagCriterionMixin):
         src = from_col if from_col is not None else target
         return self._chain(pl.col(src).alias(target))
 
-    def derivation(self, target: str, *, expression: str | pl.Expr) -> Self:
-        """Derive *target* using an arbitrary Polars expression.
+    def derivation(
+        self,
+        target: str | Derivation | None = None,
+        *,
+        expression: str | pl.Expr | Callable[[], pl.Expr] | None = None,
+    ) -> Self:
+        """Derive a column using an expression, lambda, or ``Derivation`` object.
+
+        Four call forms are supported:
+
+        **Case 1 — string (AST-sandboxed, YAML-compatible)**::
+
+            .derivation("AVAL", expression="pl.col('VSSTRESN').cast(pl.Float64)")
+
+        **Case 2 — direct ``pl.Expr``**::
+
+            .derivation("AVAL", expression=pl.col("VSSTRESN").cast(pl.Float64))
+
+        **Case 3 — zero-arg lambda returning ``pl.Expr`` (full IDE support)**::
+
+            .derivation("AGEGR1", expression=lambda: (
+                pl.when(pl.col("AGE") < 65).then(pl.lit("<65 yrs"))
+                .otherwise(pl.lit(">=65 yrs"))
+            ))
+
+        **Case 4 — ``@derivation`` object (file-based, full lineage)**::
+
+            from specs.cdiscpilot01.adam.derivations import AGEGR1, BMI
+
+            .derivation(AGEGR1)   # target read from Derivation.targets[0]
+            .derivation(BMI)      # frame/param shape routed by Derivation.kind
 
         Args:
-            target: Name of the output ADaM variable.
-            expression: A Polars expression object or a string that evaluates
-                to one.
+            target: For Cases 1–3, the name of the output ADaM variable
+                (required).  For Case 4, the :class:`~fleet.core.derivation.Derivation`
+                object to dispatch (``expression=`` must be ``None``).
+            expression: A Polars expression, expression string, or zero-arg
+                callable returning ``pl.Expr``.  Required for Cases 1–3.
 
         Returns:
             Self: The namespace with *target* appended; call ``.to_frame()``
                 to materialise.
 
+        Raises:
+            ValueError: If *target* is a string but *expression* is not
+                provided, or vice-versa.
+            TypeError: If a lambda-style *expression* does not return
+                ``pl.Expr``.
+
         Examples:
-            Compute ``AVAL`` from a raw numeric column::
+            Case 1 — string expression::
 
                 advs = (
                     vs_df.adam
                     .derivation("AVAL", expression="pl.col('VSSTRESN').cast(pl.Float64)")
                     .to_frame()
                 )
+
+            Case 3 — lambda::
+
+                adsl = (
+                    dm.adam.adsl
+                    .derivation("AGEGR1", expression=lambda: (
+                        pl.when(pl.col("AGE") < 65).then(pl.lit("<65 yrs"))
+                        .otherwise(pl.lit(">=65 yrs"))
+                    ))
+                    .to_frame()
+                )
+
+            Case 4 — ``@derivation`` object::
+
+                from specs.cdiscpilot01.adam.derivations import AGEGR1
+
+                adsl = (
+                    dm.adam.adsl
+                    .derivation(AGEGR1)
+                    .to_frame()
+                )
         """
+
+        # Case 4: Derivation object passed as first positional arg.
+        if target is not None and not isinstance(target, str):
+            return self._apply_derivation(target)  # type: ignore[arg-type]
+
+        # Cases 1–3 require a string target.
+        if target is None:
+            raise ValueError("target is required when expression= is provided.")
+        if expression is None:
+            raise ValueError("expression is required when target is a string.")
+
+        # Case 2: direct pl.Expr.
+        if isinstance(expression, pl.Expr):
+            return self._chain(expression.alias(target))
+
+        # Case 3: lambda / zero-arg callable.
+        if callable(expression) and not isinstance(expression, str):
+            expr = expression()
+            if not isinstance(expr, pl.Expr):
+                raise TypeError(
+                    f"expression callable must return pl.Expr, got {type(expr).__name__}"
+                )
+            return self._chain(expr.alias(target))
+
+        # Case 1: string through AST sandbox.
         from fleet.sdtm.utils import parse_expression
 
-        expr = expression if isinstance(expression, pl.Expr) else parse_expression(str(expression))
-        return self._chain(expr.alias(target))
+        return self._chain(parse_expression(str(expression)).alias(target))
+
+    def _apply_derivation(self, drv: Derivation) -> Self:
+        """Dispatch a :class:`~fleet.core.derivation.Derivation` object.
+
+        Routing:
+
+        * ``kind="column"`` — expression is built lazily, stays in the lazy
+          plan.  Lineage captured by ``_chain()``.
+        * ``kind="frame"`` or ``kind="param"`` — the upstream frame is
+          materialised, the function is called, and the result is re-wrapped
+          in a fresh namespace.  Lineage is injected via
+          ``_append_lineage_nodes()``.
+
+        Args:
+            drv: The :class:`~fleet.core.derivation.Derivation` to execute.
+
+        Returns:
+            Self: Updated namespace.
+
+        Raises:
+            TypeError: If a frame/param derivation returns a non-DataFrame.
+        """
+        from fleet.core.lineage import _append_lineage_nodes
+
+        if drv.kind == "column":
+            # Pure expression builder — stays fully lazy; lineage via _chain.
+            expr: pl.Expr = drv()
+            return self._chain(expr.alias(drv.targets[0]))
+
+        # frame / param: requires eager materialisation.
+        df = self.to_frame()
+        result = drv(df)
+        if not isinstance(result, pl.DataFrame):
+            raise TypeError(
+                f"Derivation '{drv.name}' is kind={drv.kind!r} but fn() returned "
+                f"{type(result).__name__!r} — expected pl.DataFrame."
+            )
+        ns = self._materialise_then(result)
+        return _append_lineage_nodes(ns, drv)
 
     def assigned(self, target: str, *, value: Any) -> Self:
         """Set *target* to a constant *value* for every record.

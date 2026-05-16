@@ -1302,3 +1302,72 @@ uv run fleet define-xml --spec metadata/adam/define.yaml  --output outputs/defin
 uv run python scripts/build_llms.py
 uv run python scripts/build_llms.py --check   # CI stale-check
 ```
+
+## Part 18 — Study-Specific Derivations (`@derivation`)
+
+### When to use `@derivation` vs inline `.derivation(expression=...)`
+
+| Scenario                                   | Recommended form                                           |
+| ------------------------------------------ | ---------------------------------------------------------- |
+| One-liner row transform, no reuse needed   | `.derivation("VAR", expression=pl.col(...))`               |
+| Multi-line logic, reused across datasets   | `@derivation` object in `derivations/` folder              |
+| Logic needs version control / traceability | `@derivation` object — `dotted_path` ends up in Define-XML |
+| Referenced from `define.yaml` `callable:`  | `@derivation` object — auto-registered on import           |
+
+### The `derivations/` folder convention
+
+Fleet creates this structure on `fleet init cfg`:
+
+```
+specs/<study_id>/adam/derivations/
+    __init__.py    # import all derivations here for auto-registration
+    AGEGR1.py
+    BMI.py
+```
+
+Scaffold a new derivation with the CLI:
+
+```bash
+# Column-kind (zero-arg, returns pl.Expr):
+fleet derivation add AGEGR1 --dataset ADSL --kind column
+
+# Frame-kind (receives DataFrame, returns DataFrame):
+fleet derivation add add_pop_flags --dataset ADSL --kind frame
+
+# Param-kind (by-group reshape):
+fleet derivation add BMI --dataset ADVS --kind param
+```
+
+### How `callable:` in `define.yaml` links to runtime execution
+
+```yaml
+# specs/cdiscpilot01/adam/define.yaml
+- name: AGEGR1
+  label: Pooled Age Group 1
+  derivation:
+    algorithm: callable
+    callable: specs.cdiscpilot01.adam.derivations.AGEGR1
+```
+
+At runtime, `from_spec()` calls `_resolve_callable("specs.cdiscpilot01.adam.derivations.AGEGR1")`,
+which either:
+
+1. Looks up the name in the transform registry (if the derivations module was imported), or
+2. Imports the dotted path at execution time.
+
+The `Derivation` object's `kind` determines routing:
+
+- `kind="column"` → expression added to lazy plan (no materialisation)
+- `kind="frame"` / `kind="param"` → pipeline materialised, function called, result re-wrapped
+
+### How Define-XML MethodDef is enriched from the docstring
+
+When `fleet define-xml --enrich-methods` is run, the `callable:` key in the derivation block
+causes `DefineSpecGenerator` to:
+
+1. Look up the `Derivation` object in the transform registry.
+2. Read `obj.dotted_path` as the `<FormalExpression>` context.
+3. Extract the first line of `obj.fn.__doc__` as the `<Description>`.
+
+This creates a verifiable link between the regulatory submission and the exact code
+that produced the data.

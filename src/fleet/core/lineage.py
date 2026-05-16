@@ -156,3 +156,35 @@ def record_pin_lineage(
 def pin_lineage_of(namespace: Any) -> list:
     """Return the accumulated pin lineage of *namespace* (empty list if none)."""
     return list(getattr(namespace, "_pin_lineage", []))
+
+
+def _append_lineage_nodes(ns: Any, drv: Any) -> Any:
+    """Inject ``VariableNode`` entries for frame-level / param-level ``Derivation`` s.
+
+    Called from ``_apply_derivation()`` after ``_materialise_then()``, because
+    those code paths bypass ``_chain()`` and therefore miss ``record_lineage()``.
+
+    Args:
+        ns:  The namespace instance (already materialised).
+        drv: The :class:`~fleet.core.derivation.Derivation` whose ``targets``
+             and ``sources`` are to be recorded.
+
+    Returns:
+        The same namespace instance with ``_lineage`` extended in place.
+    """
+    from fleet.core.dag import VariableNode
+
+    lineage: list[VariableNode] = list(getattr(ns, "_lineage", []))
+    domain: str | None = getattr(ns, "_domain", None)
+    for t in drv.targets:
+        lineage.append(
+            VariableNode(
+                name=t,
+                verb="derivation",
+                sources=drv.sources,
+                method=drv.dotted_path,
+                domain=domain,
+            )
+        )
+    ns._lineage = lineage
+    return ns
