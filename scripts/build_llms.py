@@ -432,7 +432,7 @@ def _verb_mapping_section() -> str:
 | CT recode | `recode` | `adam` / all sub-ns | Map raw→decoded values |
 | Multi-branch conditional | `if_then_else` | `sdtm` | List of `{condition, value}` branches |
 | Multi-branch conditional | `condderivation` | `adam` / all sub-ns | Same pattern as `if_then_else` |
-| Arbitrary expression | `derivation` | `sdtm` / `adam` | Last resort — use a Fleet verb first |
+| Arbitrary expression | `derivation` | `sdtm` / `adam` | Polymorphic: `str`, `pl.Expr`, lambda `() -> pl.Expr`, or `@derivation` object |
 | ISO 8601 parse (SDTM) | `date` | `sdtm` | Normalises to `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`; preserves partial dates |
 | Date imputation (ADaM) | `date` | `adam` / all sub-ns | Imputes partial --DTC → `pl.Date` or `pl.Datetime` with optional DTF/TMF flags |
 | Study day (ADY) | `duration` | `adam` / `sdtm` | CDISC study-day: +1 if ≥ 0, no day 0 |
@@ -481,6 +481,7 @@ generation, pipeline execution, and post-dataset checks.
 - `assigned` → `.assigned(target, value=...)`
 - `source` → `.source(target, from_col=...)`
 - `derivation` → `.derivation(target, expression=...)`
+- `callable` → `.derivation(drv_obj)` (dispatches `@derivation`-decorated function by name or dotted path)
 - `first_date` → `.first_date(target, from_dataset=..., date_col=..., where=...)`
 - `last_date` → `.last_date(...)`
 - `duration` → `.duration(target, start=..., end=...)`

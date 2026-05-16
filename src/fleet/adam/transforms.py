@@ -55,12 +55,17 @@ Every transform function must satisfy:
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import overload
+from typing import Any, overload
 
 import polars as pl
 
-# Module-level registry: name → callable
-_TRANSFORMS: dict[str, Callable[[pl.DataFrame], pl.DataFrame]] = {}
+# Module-level registry: name → callable or Derivation object.
+# Values may be plain callables (df → df) or ``Derivation`` instances created
+# by the ``@derivation`` decorator.  Both are callable, so existing call-sites
+# that do ``fn(df)`` continue to work for frame/param kinds; the ADaM namespace
+# detects ``Derivation`` objects via ``hasattr(obj, "kind")`` and dispatches
+# appropriately for column-kind derivations (which take no df argument).
+_TRANSFORMS: dict[str, Callable | Any] = {}
 
 
 @overload

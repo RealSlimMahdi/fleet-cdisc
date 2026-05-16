@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SDTMAlgorithm(StrEnum):
@@ -30,6 +30,7 @@ class SDTMAlgorithm(StrEnum):
     DATE = "date"
     DURATION = "duration"
     NSV = "nsv"
+    CALLABLE = "callable"
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,7 +97,10 @@ class SDTMVariableSpec(BaseModel):
     role: str | None = None
     evaluator: str | None = None
 
-    model_config = {"extra": "allow"}
+    # callable: reference to a registered Derivation or dotted-import path
+    callable_ref: str | None = Field(None, alias="callable")
+
+    model_config = {"extra": "allow", "populate_by_name": True}
 
 
 class SDTMDomainSpec(BaseModel):

@@ -10,6 +10,7 @@ from fleet.adam.transforms import (
     list_transforms,
     register_transform,
 )
+from fleet.core.derivation import derivation
 
 
 @pytest.fixture(autouse=True)
@@ -215,3 +216,49 @@ class TestFromSpecOmit:
         result = base_frame.adam.from_spec(spec_path, dataset="TEST", omit=[]).to_frame()
         assert "STUDYID" in result.columns
         assert "MYVAR" in result.columns
+
+
+# ── Derivation objects in the registry ───────────────────────────────────
+
+
+class TestRegistryWithDerivationObjects:
+    """Registry must accept Derivation objects returned by @derivation."""
+
+    def test_derivation_stored_in_registry(self):
+        @derivation
+        def MY_DREG() -> pl.Expr:
+            return pl.col("AGE").alias("MY_DREG")
+
+        obj = get_transform("MY_DREG")
+        assert obj is MY_DREG
+        # Must be a Derivation instance
+        from fleet.core.derivation import Derivation
+
+        assert isinstance(obj, Derivation)
+
+    def test_list_transforms_includes_derivation(self):
+        @derivation
+        def LIST_TEST_VAR() -> pl.Expr:
+            return pl.col("X").alias("LIST_TEST_VAR")
+
+        assert "LIST_TEST_VAR" in list_transforms()
+
+    def test_derivation_object_has_kind(self):
+        @derivation
+        def HAS_KIND() -> pl.Expr:
+            return pl.col("X").alias("HAS_KIND")
+
+        obj = get_transform("HAS_KIND")
+        assert hasattr(obj, "kind")
+        assert obj.kind == "column"
+
+    def test_frame_derivation_in_registry(self):
+        @derivation(targets=["FRAMECOL"])
+        def frame_fn(df: pl.DataFrame) -> pl.DataFrame:
+            return df.with_columns(pl.lit("F").alias("FRAMECOL"))
+
+        obj = get_transform("frame_fn")
+        from fleet.core.derivation import Derivation
+
+        assert isinstance(obj, Derivation)
+        assert obj.kind == "frame"

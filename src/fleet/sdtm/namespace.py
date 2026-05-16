@@ -36,7 +36,48 @@ from fleet.sdtm.models import NSVMeta
 from fleet.sdtm.utils import dtc_date_expr, dtc_datetime_expr, parse_expression
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from fleet.core.derivation import Derivation
     from fleet.ct.validator import CTValidator
+
+
+def _resolve_callable(ref: str) -> Any:
+    """Resolve a callable reference by name or dotted import path.
+
+    Discovery order:
+
+    1. Look up *ref* in the Fleet transform registry.
+    2. If *ref* contains a dot, treat it as a dotted import path.
+    3. Raise ``ValueError`` if neither lookup succeeds.
+
+    Args:
+        ref: Registry name or dotted import path.
+
+    Returns:
+        The callable or :class:`~fleet.core.derivation.Derivation` object.
+
+    Raises:
+        ValueError: If *ref* cannot be resolved.
+    """
+    from fleet.adam.transforms import get_transform
+
+    try:
+        return get_transform(ref)
+    except KeyError:
+        pass
+
+    if "." in ref:
+        import importlib
+
+        module_path, _, attr = ref.rpartition(".")
+        mod = importlib.import_module(module_path)
+        return getattr(mod, attr)
+
+    raise ValueError(
+        f"Callable '{ref}' is not registered and is not a dotted import path. "
+        "Register it with @derivation or import the derivations module before from_spec()."
+    )
 
 
 @pl.api.register_dataframe_namespace("sdtm")
@@ -115,32 +156,135 @@ class SDTMNamespace(PinMixin, TrialDesignMixin):
 
     def derivation(
         self,
-        target: str,
+        target: str | Derivation | None = None,
         *,
-        expression: str | pl.Expr,
+        expression: str | pl.Expr | Callable[[], pl.Expr] | None = None,
     ) -> SDTMNamespace:
-        """Derive *target* using a Polars expression or expression string.
+        """Derive *target* using an expression, lambda, or ``Derivation`` object.
+
+        Four call forms are supported:
+
+        **Case 1 — string (AST-sandboxed, YAML-compatible)**::
+
+            .derivation("SITEID", expression="pl.col('site_id').cast(pl.String)")
+
+        **Case 2 — direct ``pl.Expr``**::
+
+            .derivation("SITEID", expression=pl.col("site_id").cast(pl.String))
+
+        **Case 3 — zero-arg lambda returning ``pl.Expr`` (full IDE support)**::
+
+            .derivation("VISITNUM", expression=lambda: pl.col("visit").cast(pl.Int32))
+
+        **Case 4 — ``@derivation`` object (file-based, full lineage)**::
+
+            from specs.cdiscpilot01.sdtm.derivations import MY_DRULE
+
+            .derivation(MY_DRULE)
 
         Args:
-            target: Name of the output SDTM variable to create.
-            expression: A Polars expression object or a string that evaluates
-                to one (e.g. ``"pl.col('site_id').cast(pl.String)"``).
+            target: For Cases 1–3, the name of the output SDTM variable
+                (required).  For Case 4, the
+                :class:`~fleet.core.derivation.Derivation` object to dispatch.
+            expression: A Polars expression, expression string, or zero-arg
+                callable returning ``pl.Expr``.  Required for Cases 1–3.
 
         Returns:
             SDTMNamespace: The namespace with *target* appended; call
                 ``.to_frame()`` to materialise.
 
+        Raises:
+            ValueError: If *target* is a string but *expression* is not
+                provided, or vice-versa.
+            TypeError: If a lambda-style *expression* does not return
+                ``pl.Expr``.
+
         Examples:
-            Cast a raw site column to string for ``SITEID``::
+            Case 1 — string expression::
 
                 dm = (
                     raw_df.sdtm
                     .derivation("SITEID", expression="pl.col('site_id').cast(pl.String)")
                     .to_frame()
                 )
+
+            Case 3 — lambda::
+
+                dm = (
+                    raw_df.sdtm
+                    .derivation("VISITNUM", expression=lambda: pl.col("visit").cast(pl.Int32))
+                    .to_frame()
+                )
+
+            Case 4 — ``@derivation`` object::
+
+                from specs.study01.sdtm.derivations import MY_DRULE
+
+                dm = (
+                    raw_df.sdtm
+                    .derivation(MY_DRULE)
+                    .to_frame()
+                )
         """
-        expr = expression if isinstance(expression, pl.Expr) else parse_expression(str(expression))
-        return self._chain(expr.alias(target))
+        # Case 4: Derivation object passed as first positional arg.
+        if target is not None and not isinstance(target, str):
+            return self._apply_derivation(target)  # type: ignore[arg-type]
+
+        # Cases 1–3 require a string target.
+        if target is None:
+            raise ValueError("target is required when expression= is provided.")
+        if expression is None:
+            raise ValueError("expression is required when target is a string.")
+
+        # Case 2: direct pl.Expr.
+        if isinstance(expression, pl.Expr):
+            return self._chain(expression.alias(target))
+
+        # Case 3: lambda / zero-arg callable.
+        if callable(expression) and not isinstance(expression, str):
+            expr = expression()
+            if not isinstance(expr, pl.Expr):
+                raise TypeError(
+                    f"expression callable must return pl.Expr, got {type(expr).__name__}"
+                )
+            return self._chain(expr.alias(target))
+
+        # Case 1: string through AST sandbox.
+        return self._chain(parse_expression(str(expression)).alias(target))
+
+    def _apply_derivation(self, drv: Derivation) -> SDTMNamespace:
+        """Dispatch a :class:`~fleet.core.derivation.Derivation` object.
+
+        Routing mirrors the ADaM namespace:
+
+        * ``kind="column"`` — expression stays lazy; lineage via ``_chain()``.
+        * ``kind="frame"`` or ``kind="param"`` — the frame is materialised,
+          the function called, and the result re-wrapped.
+
+        Args:
+            drv: The :class:`~fleet.core.derivation.Derivation` to execute.
+
+        Returns:
+            SDTMNamespace: Updated namespace.
+
+        Raises:
+            TypeError: If a frame/param derivation returns a non-DataFrame.
+        """
+        from fleet.core.lineage import _append_lineage_nodes
+
+        if drv.kind == "column":
+            expr: pl.Expr = drv()
+            return self._chain(expr.alias(drv.targets[0]))
+
+        df = self.to_frame()
+        result = drv(df)
+        if not isinstance(result, pl.DataFrame):
+            raise TypeError(
+                f"Derivation '{drv.name}' is kind={drv.kind!r} but fn() returned "
+                f"{type(result).__name__!r} — expected pl.DataFrame."
+            )
+        ns = self._materialise_then(result)
+        return _append_lineage_nodes(ns, drv)
 
     # ------------------------------------------------------------------ #
     # 2. assign_ct — 1:1 mapping with CT decode/validation                #
@@ -1487,6 +1631,12 @@ class SDTMNamespace(PinMixin, TrialDesignMixin):
                     origin=var.origin or "DERIVED",
                     evaluator=var.evaluator,
                 )
+            elif alg == "callable":
+                fn = _resolve_callable(var.callable_ref or "")
+                if hasattr(fn, "kind"):
+                    ns = ns.derivation(fn)
+                else:
+                    ns = ns._materialise_then(fn(ns.to_frame()))
             # merge, remove_dup, group_by, multiple_responses require extra data
             # — skip in spec-driven mode if not fully specified
 
@@ -1520,6 +1670,9 @@ class SDTMNamespace(PinMixin, TrialDesignMixin):
             drv = var.get("derivation")
             if not drv:
                 continue  # no derivation → carry-through / manual column
+            # Backward compat: callable: without algorithm: → inject algorithm.
+            if "callable" in drv and "algorithm" not in drv:
+                drv = {**drv, "algorithm": "callable"}
             # Pass top-level variable attributes into the spec if relevant
             extra: dict[str, Any] = {}
             if var.get("label"):

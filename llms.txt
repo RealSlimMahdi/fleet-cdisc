@@ -1671,7 +1671,7 @@ if __name__ == "__main__":
 - `assign_ct(target: str, *, source: str, ct_codelist: str | type, ct_mapping: dict[str, str] | None = None, ct_validator: CTValidator | None = None) -> SDTMNamespace` — Copy *source* to *target*, translating values via controlled terminology.
 - `date(target: str, *, source: str | None = None, value: str | None = None, output: str | None = None, time: str | None = None, impute: str = 'first', impute_time: str | None = None, highest: str | None = None, flag: bool | str = True, min_date: str | None = None, max_date: str | None = None, format: str | None = None) -> SDTMNamespace` — Parse, convert, impute, and flag a date or datetime column.
 - `duration(target: str, *, start: str | pl.Expr, end: str | pl.Expr, unit: str = 'days', add_one: bool | None = None, out: str = 'numeric') -> SDTMNamespace` — Compute the duration between two date/datetime columns.
-- `derivation(target: str, *, expression: str | pl.Expr) -> SDTMNamespace` — Derive *target* using a Polars expression or expression string.
+- `derivation(target: str | Derivation | None = None, *, expression: str | pl.Expr | Callable[[], pl.Expr] | None = None) -> SDTMNamespace` — Derive *target* using an expression, lambda, or ``Derivation`` object.
 - `condition_add(target: str, *, condition: str | pl.Expr, then_value: Any) -> SDTMNamespace` — Set *target* to *then_value* where *condition* is true, else null.
 - `if_then_else(target: str, *, when: list[dict[str, Any]], else_value: Any = None) -> SDTMNamespace` — Multi-branch conditional mapping.
 - `ae_aerel(target: str = 'AEREL', *, source: str = 'ae_relationship', aerel_map: dict[str, str] | None = None) -> SDTMNamespace` — Map free-text AE causality strings to controlled ``AEREL`` values.
@@ -1720,7 +1720,7 @@ Row models: `TrialElement`, `TrialArm`, `TrialVisit`, `TrialParameter`, `TrialCr
 These verbs are defined once in `SharedADaMVerbsMixin` (`src/fleet/adam/_mixins.py`) and inherited by every ADaM sub-namespace: `adsl`, `occds`, `onco`, `ophtha`, `peds`, `vaccine`, `metabolic`, `neuro`. You can call them directly on any sub-namespace without switching back to the base `adam` namespace.
 
 - `source(target: str, *, from_col: str | None = None) -> Self` — Copy a source column into the ADaM dataset.
-- `derivation(target: str, *, expression: str | pl.Expr) -> Self` — Derive *target* using an arbitrary Polars expression.
+- `derivation(target: str | Derivation | None = None, *, expression: str | pl.Expr | Callable[[], pl.Expr] | None = None) -> Self` — Derive a column using an expression, lambda, or ``Derivation`` object.
 - `assigned(target: str, *, value: Any) -> Self` — Set *target* to a constant *value* for every record.
 - `recode(target: str, *, source: str, recode_map: dict[Any, Any], default: Any = None) -> Self` — Map values in *source* to recoded values in *target*.
 - `rename(target: str, *, source: str) -> Self` — Create *target* as a copy of *source* (variable renaming).
@@ -1781,7 +1781,7 @@ Available on `df.adam.occds` (and `df.adam.pk` for sequence). Shared verbs (sour
 | CT recode | `recode` | `adam` / all sub-ns | Map raw→decoded values |
 | Multi-branch conditional | `if_then_else` | `sdtm` | List of `{condition, value}` branches |
 | Multi-branch conditional | `condderivation` | `adam` / all sub-ns | Same pattern as `if_then_else` |
-| Arbitrary expression | `derivation` | `sdtm` / `adam` | Last resort — use a Fleet verb first |
+| Arbitrary expression | `derivation` | `sdtm` / `adam` | Polymorphic: `str`, `pl.Expr`, lambda `() -> pl.Expr`, or `@derivation` object |
 | ISO 8601 parse (SDTM) | `date` | `sdtm` | Normalises to `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`; preserves partial dates |
 | Date imputation (ADaM) | `date` | `adam` / all sub-ns | Imputes partial --DTC → `pl.Date` or `pl.Datetime` with optional DTF/TMF flags |
 | Study day (ADY) | `duration` | `adam` / `sdtm` | CDISC study-day: +1 if ≥ 0, no day 0 |
@@ -1824,6 +1824,7 @@ A single YAML file is the source of truth for a study: it declares output variab
 - `assigned` → `.assigned(target, value=...)`
 - `source` → `.source(target, from_col=...)`
 - `derivation` → `.derivation(target, expression=...)`
+- `callable` → `.derivation(drv_obj)` (dispatches `@derivation`-decorated function by name or dotted path)
 - `first_date` → `.first_date(target, from_dataset=..., date_col=..., where=...)`
 - `last_date` → `.last_date(...)`
 - `duration` → `.duration(target, start=..., end=...)`
