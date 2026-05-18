@@ -890,3 +890,113 @@ class SharedVerbsMixin:
             v["name"]: v["type"] for v in ds["variables"] if v.get("type") in ("date", "datetime")
         }
         return columns, type_map
+
+    # ------------------------------------------------------------------ #
+    # nodup — detect and optionally remove duplicates                      #
+    # ------------------------------------------------------------------ #
+
+    def nodup(
+        self,
+        *,
+        subset: list[str],
+        sort_by: list[str] | None = None,
+        keep: str | None = None,
+        descending: bool | list[bool] = False,
+    ) -> Self:
+        """Detect duplicate rows and optionally deduplicate after sorting.
+
+        Materialises the pipeline, reports duplicate diagnostics to stdout,
+        and optionally removes duplicates.  When ``keep`` is ``None`` (default)
+        the verb operates in report-only mode — duplicates are printed but
+        the frame is returned unchanged, making it safe to insert anywhere
+        in a pipeline for auditing purposes.
+
+        Args:
+            subset: Column(s) that define the uniqueness key.
+            sort_by: Column(s) to sort by before deduplication.  Required
+                when ``keep`` is not ``None``.
+            keep: Which duplicate to retain after sorting:
+                ``"first"``, ``"last"``, or ``None`` (report only, no removal).
+            descending: Sort direction(s) for *sort_by*.  A single ``bool``
+                applies to all columns; a list must match *sort_by* length.
+
+        Returns:
+            Self: A fresh namespace wrapping the (optionally deduplicated)
+                frame; call ``.to_frame()`` to materialise.
+
+        Raises:
+            ValueError: If ``keep`` is set but ``sort_by`` is not provided.
+
+        Examples:
+            Report-only mode (audit duplicates without removing)::
+
+                ae = (
+                    raw_df.sdtm
+                    .assign_no_ct("USUBJID", source="subject_id")
+                    .nodup(subset=["USUBJID", "AEDECOD", "AESTDTC"])
+                    .to_frame()
+                )
+
+            Sort and deduplicate (keep latest record)::
+
+                adae = (
+                    ae_df.adam.occds
+                    .nodup(
+                        subset=["USUBJID", "AEDECOD"],
+                        sort_by=["ASTDT", "ASEQ"],
+                        keep="last",
+                        descending=True,
+                    )
+                    .to_frame()
+                )
+        """
+        if keep is not None and sort_by is None:
+            raise ValueError("sort_by is required when keep is set.")
+        if keep is not None and keep not in ("first", "last"):
+            raise ValueError(f"keep must be 'first', 'last', or None — got {keep!r}.")
+
+        df = self._lazy.collect()
+
+        # Detect duplicates
+        dup_mask = df.select(pl.struct(subset).is_duplicated()).to_series()
+        n_dup = dup_mask.sum()
+
+        if n_dup == 0:
+            print(f"[NODUP] No duplicates found (subset: {', '.join(subset)})")
+            return self._materialise_then(df)
+
+        # Summarise duplicate groups
+        dup_rows = df.filter(dup_mask)
+        dup_groups = (
+            dup_rows.group_by(subset)
+            .agg(pl.len().alias("__count"))
+            .sort("__count", descending=True)
+        )
+        n_groups = len(dup_groups)
+
+        print(
+            f"[NODUP] {n_dup} duplicate rows across {n_groups} key group(s) "
+            f"(subset: {', '.join(subset)})"
+        )
+        # Show top offending groups (up to 5)
+        top = dup_groups.head(5)
+        print("[NODUP] Top offenders:")
+        for row in top.iter_rows(named=True):
+            count = row.pop("__count")
+            key_str = ", ".join(f"{k}={v}" for k, v in row.items())
+            print(f"  {key_str}  ({count} rows)")
+
+        # Report-only mode
+        if keep is None:
+            print("[NODUP] Action: report only (keep=None)")
+            return self._materialise_then(df)
+
+        # Sort then deduplicate
+        df = df.sort(sort_by, descending=descending)
+        df = df.unique(subset=subset, keep=keep, maintain_order=True)
+
+        print(
+            f"[NODUP] Action: keeping '{keep}' after sorting by {sort_by} (descending={descending})"
+        )
+        print(f"[NODUP] Result: {len(df)} rows (removed {n_dup - n_groups})")
+        return self._materialise_then(df)

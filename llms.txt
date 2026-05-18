@@ -886,7 +886,10 @@ Run from the repo root:
     uv run python examples/cdiscpilot01_spec_driven.py
 """
 
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import polars as pl
 
@@ -1676,7 +1679,7 @@ if __name__ == "__main__":
 - `if_then_else(target: str, *, when: list[dict[str, Any]], else_value: Any = None) -> SDTMNamespace` — Multi-branch conditional mapping.
 - `ae_aerel(target: str = 'AEREL', *, source: str = 'ae_relationship', aerel_map: dict[str, str] | None = None) -> SDTMNamespace` — Map free-text AE causality strings to controlled ``AEREL`` values.
 - `merge(target_cols: list[str] | None = None, *, dataset: pl.DataFrame, on: str | list[str], how: str = 'left') -> SDTMNamespace` — Join *dataset* into the pipeline using key column(s) *on*.
-- `remove_dup(*, subset: list[str] | None = None, keep: str = 'first') -> SDTMNamespace` — Remove duplicate rows, optionally on a *subset* of columns.
+- `nodup(*, subset: list[str], sort_by: list[str] | None = None, keep: str | None = None, descending: bool | list[bool] = False) -> Self` — Detect duplicate rows and optionally deduplicate after sorting.
 - `group_by(*, group_cols: list[str], agg: list[pl.Expr]) -> SDTMNamespace` — Group by *group_cols* and apply *agg* aggregations.
 - `dataset_level(target: str, *, value: Any) -> SDTMNamespace` — Set a dataset-level constant on *target* (alias for ``hardcode_no_ct``).
 - `notsubmitted(*targets: str) -> SDTMNamespace` — Mark one or more variables as not submitted (set to null).
