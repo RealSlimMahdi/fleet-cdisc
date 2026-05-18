@@ -339,7 +339,7 @@ vs = (
     .derivation(    "VSSTRESN", expression="pl.col('vsorres').cast(pl.Float64, strict=False)")
     .assign_no_ct(  "VSSTRESU", source="vsorresu")
     .date("VSDTC",  source="vsdtc")
-    .remove_dup(subset=["USUBJID", "VSTESTCD", "VSDTC"])
+    .nodup(subset=["USUBJID", "VSTESTCD", "VSDTC"])
     .to_frame()
 )
 ```
@@ -1202,7 +1202,7 @@ uv run fleet define-xml --spec metadata/adam/define.yaml  --output outputs/defin
 | `if_then_else`       | Multi-branch conditional                         |
 | `ae_aerel`           | AE relatedness mapping                           |
 | `merge`              | Join a reference dataset                         |
-| `remove_dup`         | Deduplicate rows                                 |
+| `nodup`              | Detect/remove duplicates with diagnostics        |
 | `group_by`           | Aggregate to summary rows                        |
 | `dataset_level`      | Alias for `hardcode_no_ct`                       |
 | `notsubmitted`       | Set columns to null                              |
@@ -1242,6 +1242,7 @@ uv run fleet define-xml --spec metadata/adam/define.yaml  --output outputs/defin
 | `derive_summary_records` | Append aggregate rows              |
 | `derive_locf_records`    | LOCF imputation                    |
 | `derive_param`           | Derive new parameter rows          |
+| `nodup`                  | Detect/remove duplicates with diag |
 | `pin`                    | Attach reference domain (passport) |
 | `repin`                  | Replace a pin explicitly           |
 | `join_adsl`              | Carry columns from pinned ADSL     |
