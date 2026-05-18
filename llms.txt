@@ -1670,8 +1670,8 @@ if __name__ == "__main__":
 - `hardcode_ct(target: str, *, value: Any, ct_codelist: str | type | None = None) -> SDTMNamespace` — Set *target* to a constant *value*, validated against controlled terminology.
 - `assign_ct(target: str, *, source: str, ct_codelist: str | type, ct_mapping: dict[str, str] | None = None, ct_validator: CTValidator | None = None) -> SDTMNamespace` — Copy *source* to *target*, translating values via controlled terminology.
 - `date(target: str, *, source: str | None = None, value: str | None = None, output: str | None = None, time: str | None = None, impute: str = 'first', impute_time: str | None = None, highest: str | None = None, flag: bool | str = True, min_date: str | None = None, max_date: str | None = None, format: str | None = None) -> SDTMNamespace` — Parse, convert, impute, and flag a date or datetime column.
-- `duration(target: str, *, start: str | pl.Expr, end: str | pl.Expr, unit: str = 'days', add_one: bool | None = None, out: str = 'numeric') -> SDTMNamespace` — Compute the duration between two date/datetime columns.
-- `derivation(target: str | Derivation | None = None, *, expression: str | pl.Expr | Callable[[], pl.Expr] | None = None) -> SDTMNamespace` — Derive *target* using an expression, lambda, or ``Derivation`` object.
+- `duration(target: str, *, start: str | pl.Expr, end: str | pl.Expr, unit: str = 'days', add_one: bool | None = None, out: str = 'numeric') -> Self` — Compute the duration between two date/datetime columns.
+- `derivation(target: str | Derivation | None = None, *, expression: str | pl.Expr | Callable[[], pl.Expr] | None = None) -> Self` — Derive *target* using an expression, lambda, or ``Derivation`` object.
 - `condition_add(target: str, *, condition: str | pl.Expr, then_value: Any) -> SDTMNamespace` — Set *target* to *then_value* where *condition* is true, else null.
 - `if_then_else(target: str, *, when: list[dict[str, Any]], else_value: Any = None) -> SDTMNamespace` — Multi-branch conditional mapping.
 - `ae_aerel(target: str = 'AEREL', *, source: str = 'ae_relationship', aerel_map: dict[str, str] | None = None) -> SDTMNamespace` — Map free-text AE causality strings to controlled ``AEREL`` values.
@@ -1720,7 +1720,7 @@ Row models: `TrialElement`, `TrialArm`, `TrialVisit`, `TrialParameter`, `TrialCr
 These verbs are defined once in `SharedADaMVerbsMixin` (`src/fleet/adam/_mixins.py`) and inherited by every ADaM sub-namespace: `adsl`, `occds`, `onco`, `ophtha`, `peds`, `vaccine`, `metabolic`, `neuro`. You can call them directly on any sub-namespace without switching back to the base `adam` namespace.
 
 - `source(target: str, *, from_col: str | None = None) -> Self` — Copy a source column into the ADaM dataset.
-- `derivation(target: str | Derivation | None = None, *, expression: str | pl.Expr | Callable[[], pl.Expr] | None = None) -> Self` — Derive a column using an expression, lambda, or ``Derivation`` object.
+- `derivation(target: str | Derivation | None = None, *, expression: str | pl.Expr | Callable[[], pl.Expr] | None = None) -> Self` — Derive *target* using an expression, lambda, or ``Derivation`` object.
 - `assigned(target: str, *, value: Any) -> Self` — Set *target* to a constant *value* for every record.
 - `recode(target: str, *, source: str, recode_map: dict[Any, Any], default: Any = None) -> Self` — Map values in *source* to recoded values in *target*.
 - `rename(target: str, *, source: str) -> Self` — Create *target* as a copy of *source* (variable renaming).
@@ -1766,7 +1766,7 @@ Available on `df.adam.occds` (and `df.adam.pk` for sequence). Shared verbs (sour
 
 - `treatment_emergent(target: str = 'TRTEMFL', *, start_date: str, trtsdt: str, trtedt: str | None = None, offset_days: int = 0) -> Self` — Set *target* to ``"Y"`` for treatment-emergent events.
 - `onset_recovery(target: str, *, start_date: str, end_date: str, ref_date: str) -> Self` — Flag events that started on/after the reference date and have recovered.
-- `seq(target: str = 'ASEQ', *, order_by: list[str] | None = None, groups: list[str] | None = None, check_uniqueness: bool = False) -> Self` — Derive a 1-based observation sequence number within each group.
+- `seq(target: str = 'ASEQ', *, order_by: list[str] | None = None, groups: list[str] | None = None, start_at: int = 1, check_uniqueness: bool = False) -> Self` — Derive a 1-based sequence number within each group.
 
 ## Operation → Fleet Verb Mapping
 

@@ -5,6 +5,11 @@ This script demonstrates creating DM, VS, and AE SDTM datasets from raw mock dat
 and subsequently deriving ADSL and ADVS ADaM datasets from those SDTMs.
 """
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import polars as pl
 
 import fleet  # noqa: F401  — register namespace extensions

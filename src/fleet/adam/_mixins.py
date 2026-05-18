@@ -72,17 +72,15 @@ methods.  No ``if TYPE_CHECKING`` stubs or protocol tricks are needed.
 from __future__ import annotations
 
 import copy
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self
 
 import polars as pl
 
 from fleet.core._pin_mixin import PinMixin
+from fleet.core._verb_mixin import SharedVerbsMixin
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from fleet.core.derivation import Derivation
+    pass
 
 
 class FlagCriterionMixin:
@@ -588,12 +586,17 @@ class FlagCriterionMixin:
         return self._chain(desc_expr, fl_expr, fn_expr)
 
 
-class SharedADaMVerbsMixin(PinMixin, FlagCriterionMixin):
+class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
     """Base mixin providing the shared verbs and chaining infrastructure.
 
+    Inherits algorithmic and infrastructure verbs from ``SharedVerbsMixin``
+    (derivation, duration, study_day, seq, validate, select, inspect,
+    explain, to_frame, to_dataset_json, write_parquet, _chain,
+    _materialise_then).
+
     Concrete namespace classes inherit from this mixin.  The ``_chain``
-    and ``_materialise_then`` helpers use ``self.__class__`` so the returned
-    instance stays the correct sub-type for continued method chaining.
+    and ``_materialise_then`` helpers use ``copy.copy(self)`` so the
+    returned instance stays the correct sub-type for continued chaining.
 
     Required instance attribute
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -605,6 +608,13 @@ class SharedADaMVerbsMixin(PinMixin, FlagCriterionMixin):
     _FK_RULES: dict[str, dict[str, str]] = {
         "USUBJID": {"pin": "ADSL", "ref_col": "USUBJID"},
     }
+
+    # -- SharedVerbsMixin configuration for ADaM --
+    _STUDY_DAY_REF_COL: str = "TRTSDT"
+    _STUDY_DAY_REF_PIN: str = "ADSL"
+    _SEQ_DEFAULT_GROUPS: list[str] = ["USUBJID"]
+    _VALIDATE_STANDARD: str = "adam"
+    _VALIDATE_DEFAULT_VERSION: str = "1.3"
 
     # ------------------------------------------------------------------ #
     # Lifecycle                                                            #
@@ -639,78 +649,6 @@ class SharedADaMVerbsMixin(PinMixin, FlagCriterionMixin):
         new = copy.copy(self)
         new._domain = domain
         return new
-
-    # ------------------------------------------------------------------ #
-    # Chaining infrastructure                                              #
-    # ------------------------------------------------------------------ #
-
-    def _chain(self, *exprs: pl.Expr) -> Self:
-        """Append expressions to the lazy plan; return a *new* namespace."""
-        from fleet.core.lineage import record_lineage
-
-        new = copy.copy(self)
-        new._lazy = self._lazy.with_columns(list(exprs))
-        record_lineage(new, exprs)
-        return new
-
-    def _materialise_then(self, df: pl.DataFrame) -> Self:
-        """Return a fresh namespace wrapping *df* as a new lazy plan."""
-        new = copy.copy(self)
-        new._lazy = df.lazy()
-        return new
-
-    def to_frame(self) -> pl.DataFrame:
-        """Materialise the accumulated pipeline into a Polars DataFrame.
-
-        Returns:
-            pl.DataFrame: The fully materialised result of all chained
-                ADaM verbs.
-
-        Examples:
-            Collect the pipeline result::
-
-                advs = (
-                    vs_df.adam
-                    .source("USUBJID")
-                    .derivation("AVAL", expression="VSSTRESN")
-                    .to_frame()
-                )
-        """
-        return self._lazy.collect()
-
-    def to_dataset_json(
-        self,
-        path: str | Path,
-        *,
-        domain: str,
-        label: str | None = None,
-    ) -> Path:
-        """Materialise the pipeline and write a CDISC Dataset-JSON v1.1 file.
-
-        This is a terminal verb — it collects the lazy plan and writes the
-        result.  No further chaining is possible after this call.
-
-        Args:
-            path: Destination file path (should end in ``.json``).
-            domain: Dataset / domain name (e.g. ``"ADSL"``, ``"ADAE"``).
-            label: Optional human-readable dataset label.
-
-        Returns:
-            Path: Path to the written file.
-
-        Examples:
-            Export an ADaM ADSL dataset to Dataset-JSON::
-
-                path = (
-                    dm.adam.adsl
-                    .source("USUBJID")
-                    .first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")
-                    .to_dataset_json("outputs/adsl.json", domain="ADSL")
-                )
-        """
-        from fleet.io.dataset_json import save_dataset_json
-
-        return save_dataset_json(self._lazy.collect(), path, domain=domain, label=label)
 
     # ------------------------------------------------------------------ #
     # Cross-domain: pin-powered verbs                                      #
@@ -817,137 +755,9 @@ class SharedADaMVerbsMixin(PinMixin, FlagCriterionMixin):
                     .to_frame()
                 )
         """
-        from fleet.core.lineage import record_pin_lineage
-
-        df = self._lazy.collect()
-
-        # Resolve reference date
-        if adsl is not None:
-            ref_df = adsl
-            join_key = ["USUBJID"]
-        elif ref_col in df.columns:
-            # Already in frame — compute directly
-            date_expr = pl.col(date_col)
-            ref_expr = pl.col(ref_col)
-            # Handle both Date and String types
-            if df.schema.get(date_col) == pl.String:
-                date_expr = date_expr.str.to_date(format="%Y-%m-%d", strict=False)
-            if df.schema.get(ref_col) == pl.String:
-                ref_expr = ref_expr.str.to_date(format="%Y-%m-%d", strict=False)
-            diff = (date_expr - ref_expr).dt.total_days()
-            study_day_expr = pl.when(diff >= 0).then(diff + 1).otherwise(diff).alias(target)
-            return self._materialise_then(df.with_columns(study_day_expr))
-        else:
-            ref_df = self._require_pin(ref_pin.upper(), "study_day", columns=[ref_col])
-            join_key = self._pin_join_key(ref_pin.upper())
-
-        # Join, compute, drop temp
-        ref_slim = ref_df.select(
-            [c for c in dict.fromkeys(join_key + [ref_col]) if c in ref_df.columns]
-        ).unique(subset=join_key)
-
-        _ref_tmp = f"__pin_{ref_col}__"
-        ref_slim = ref_slim.rename({ref_col: _ref_tmp})
-        df = df.join(ref_slim, on=join_key, how="left")
-
-        date_expr = pl.col(date_col)
-        ref_expr = pl.col(_ref_tmp)
-        if df.schema.get(date_col) == pl.String:
-            date_expr = date_expr.str.to_date(format="%Y-%m-%d", strict=False)
-        if df.schema.get(_ref_tmp) == pl.String:
-            ref_expr = ref_expr.str.to_date(format="%Y-%m-%d", strict=False)
-
-        diff = (date_expr - ref_expr).dt.total_days()
-        study_day_expr = pl.when(diff >= 0).then(diff + 1).otherwise(diff).alias(target)
-        df = df.with_columns(study_day_expr).drop(_ref_tmp)
-
-        new = self._materialise_then(df)
-
-        # Record variable lineage (since _materialise_then bypasses _chain)
-        from fleet.core.dag import VariableNode as _VN
-
-        var_lineage: list = list(getattr(new, "_lineage", []))
-        var_lineage.append(
-            _VN(
-                name=target,
-                verb="study_day",
-                sources=[date_col, ref_col],
-                method=f"{self.__class__.__module__}.{self.__class__.__qualname__}.study_day",
-                domain=getattr(new, "_domain", None),
-            )
+        return super().study_day(
+            target, date_col=date_col, ref_col=ref_col, ref_pin=ref_pin, ref_df=adsl
         )
-        new._lineage = var_lineage
-
-        record_pin_lineage(
-            new,
-            target_col=target,
-            verb="study_day",
-            source_domain=ref_pin.upper(),
-            source_cols=[ref_col],
-            join_key=join_key,
-            relationship="derivation",
-        )
-        return new
-
-    # ------------------------------------------------------------------ #
-    # Debugging & observability                                            #
-    # ------------------------------------------------------------------ #
-
-    def inspect(self, prefix: str = "DEBUG") -> Self:
-        """Materialise the pipeline at this point and log its state.
-
-        Creates a hard checkpoint: the pipeline resumes from the
-        materialised frame, making it easy to isolate exactly where a
-        derivation goes wrong.
-
-        Args:
-            prefix: Label printed alongside the diagnostic output.
-
-        Returns:
-            Self: A fresh namespace wrapping the materialised frame; call
-                further verbs or ``.to_frame()`` to continue.
-
-        Examples:
-            Inspect the pipeline after baseline derivation::
-
-                advs = (
-                    vs_df.adam
-                    .source("USUBJID")
-                    .baseline("BASE", aval="AVAL", baseline_flag="ABLFL")
-                    .inspect(prefix="After BASE")
-                    .chg("CHG", aval="AVAL", base="BASE")
-                    .to_frame()
-                )
-        """
-        df = self._lazy.collect()
-        print(f"[{prefix}] Schema: {df.schema}")
-        print(f"[{prefix}] Shape:  {df.shape}")
-        print(df.head(5))
-        return self._materialise_then(df)
-
-    def explain(self) -> Self:
-        """Print the current Polars query plan without materialising.
-
-        Useful for understanding how Polars will optimise the accumulated
-        derivation pipeline.
-
-        Returns:
-            Self: The same namespace instance (unchanged); call further
-                verbs or ``.to_frame()`` to continue.
-
-        Examples:
-            Print the query plan before collecting::
-
-                advs = (
-                    vs_df.adam
-                    .source("USUBJID")
-                    .derivation("AVAL", expression="VSSTRESN")
-                    .explain()
-                    .to_frame()
-                )
-        """
-        print(self._lazy.explain())
-        return self
 
     # ------------------------------------------------------------------ #
     # Shared verbs                                                         #
@@ -979,153 +789,6 @@ class SharedADaMVerbsMixin(PinMixin, FlagCriterionMixin):
         """
         src = from_col if from_col is not None else target
         return self._chain(pl.col(src).alias(target))
-
-    def derivation(
-        self,
-        target: str | Derivation | None = None,
-        *,
-        expression: str | pl.Expr | Callable[[], pl.Expr] | None = None,
-    ) -> Self:
-        """Derive a column using an expression, lambda, or ``Derivation`` object.
-
-        Four call forms are supported:
-
-        **Case 1 — string (AST-sandboxed, YAML-compatible)**::
-
-            .derivation("AVAL", expression="pl.col('VSSTRESN').cast(pl.Float64)")
-
-        **Case 2 — direct ``pl.Expr``**::
-
-            .derivation("AVAL", expression=pl.col("VSSTRESN").cast(pl.Float64))
-
-        **Case 3 — zero-arg lambda returning ``pl.Expr`` (full IDE support)**::
-
-            .derivation("AGEGR1", expression=lambda: (
-                pl.when(pl.col("AGE") < 65).then(pl.lit("<65 yrs"))
-                .otherwise(pl.lit(">=65 yrs"))
-            ))
-
-        **Case 4 — ``@derivation`` object (file-based, full lineage)**::
-
-            from specs.cdiscpilot01.adam.derivations import AGEGR1, BMI
-
-            .derivation(AGEGR1)   # target read from Derivation.targets[0]
-            .derivation(BMI)      # frame/param shape routed by Derivation.kind
-
-        Args:
-            target: For Cases 1–3, the name of the output ADaM variable
-                (required).  For Case 4, the :class:`~fleet.core.derivation.Derivation`
-                object to dispatch (``expression=`` must be ``None``).
-            expression: A Polars expression, expression string, or zero-arg
-                callable returning ``pl.Expr``.  Required for Cases 1–3.
-
-        Returns:
-            Self: The namespace with *target* appended; call ``.to_frame()``
-                to materialise.
-
-        Raises:
-            ValueError: If *target* is a string but *expression* is not
-                provided, or vice-versa.
-            TypeError: If a lambda-style *expression* does not return
-                ``pl.Expr``.
-
-        Examples:
-            Case 1 — string expression::
-
-                advs = (
-                    vs_df.adam
-                    .derivation("AVAL", expression="pl.col('VSSTRESN').cast(pl.Float64)")
-                    .to_frame()
-                )
-
-            Case 3 — lambda::
-
-                adsl = (
-                    dm.adam.adsl
-                    .derivation("AGEGR1", expression=lambda: (
-                        pl.when(pl.col("AGE") < 65).then(pl.lit("<65 yrs"))
-                        .otherwise(pl.lit(">=65 yrs"))
-                    ))
-                    .to_frame()
-                )
-
-            Case 4 — ``@derivation`` object::
-
-                from specs.cdiscpilot01.adam.derivations import AGEGR1
-
-                adsl = (
-                    dm.adam.adsl
-                    .derivation(AGEGR1)
-                    .to_frame()
-                )
-        """
-
-        # Case 4: Derivation object passed as first positional arg.
-        if target is not None and not isinstance(target, str):
-            return self._apply_derivation(target)  # type: ignore[arg-type]
-
-        # Cases 1–3 require a string target.
-        if target is None:
-            raise ValueError("target is required when expression= is provided.")
-        if expression is None:
-            raise ValueError("expression is required when target is a string.")
-
-        # Case 2: direct pl.Expr.
-        if isinstance(expression, pl.Expr):
-            return self._chain(expression.alias(target))
-
-        # Case 3: lambda / zero-arg callable.
-        if callable(expression) and not isinstance(expression, str):
-            expr = expression()
-            if not isinstance(expr, pl.Expr):
-                raise TypeError(
-                    f"expression callable must return pl.Expr, got {type(expr).__name__}"
-                )
-            return self._chain(expr.alias(target))
-
-        # Case 1: string through AST sandbox.
-        from fleet.sdtm.utils import parse_expression
-
-        return self._chain(parse_expression(str(expression)).alias(target))
-
-    def _apply_derivation(self, drv: Derivation) -> Self:
-        """Dispatch a :class:`~fleet.core.derivation.Derivation` object.
-
-        Routing:
-
-        * ``kind="column"`` — expression is built lazily, stays in the lazy
-          plan.  Lineage captured by ``_chain()``.
-        * ``kind="frame"`` or ``kind="param"`` — the upstream frame is
-          materialised, the function is called, and the result is re-wrapped
-          in a fresh namespace.  Lineage is injected via
-          ``_append_lineage_nodes()``.
-
-        Args:
-            drv: The :class:`~fleet.core.derivation.Derivation` to execute.
-
-        Returns:
-            Self: Updated namespace.
-
-        Raises:
-            TypeError: If a frame/param derivation returns a non-DataFrame.
-        """
-        from fleet.core.lineage import _append_lineage_nodes
-
-        if drv.kind == "column":
-            # Pure expression builder — stays fully lazy; lineage via _chain.
-            expr: pl.Expr = drv()
-            return self._chain(expr.alias(drv.targets[0]))
-
-        # frame / param: requires eager materialisation.
-        df = self.to_frame()
-        result = drv(df)
-        if not isinstance(result, pl.DataFrame):
-            raise TypeError(
-                f"Derivation '{drv.name}' is kind={drv.kind!r} but fn() returned "
-                f"{type(result).__name__!r} — expected pl.DataFrame."
-            )
-        ns = self._materialise_then(result)
-        return _append_lineage_nodes(ns, drv)
 
     def assigned(self, target: str, *, value: Any) -> Self:
         """Set *target* to a constant *value* for every record.
@@ -1549,264 +1212,14 @@ class SharedADaMVerbsMixin(PinMixin, FlagCriterionMixin):
             result = result.drop("__dtm_date_tmp__")
         return self._materialise_then(result)
 
-    def duration(
-        self,
-        target: str,
-        *,
-        start: str | pl.Expr,
-        end: str | pl.Expr,
-        unit: str = "days",
-        add_one: bool | None = None,
-        out: str = "numeric",
-    ) -> Self:
-        """Compute the duration between two date/datetime columns.
-
-        Supports column references (``str``) and Polars expressions
-        (e.g. ``pl.lit(date(2024, 1, 1))``) for *start* and *end*.
-
-        The ``add_one`` parameter controls inclusive counting:
-        - ``None`` (default): auto-resolves from the target suffix.
-          ``*DY`` targets use CDISC study-day convention (no day 0);
-          all others add 1 for inclusive counting.
-        - ``True``: always add 1 (inclusive).
-        - ``False``: raw difference (e.g. PK elapsed time).
-
-        Args:
-            target: Name of the output column.
-            start: Start date column name or expression.
-            end: End date column name or expression.
-            unit: Duration unit — ``"seconds"``, ``"minutes"``, ``"hours"``,
-                ``"days"`` (default), ``"weeks"``, ``"months"``, ``"years"``.
-            add_one: Override for inclusive counting.  ``None`` auto-resolves
-                from the target suffix.
-            out: Output format — ``"numeric"`` (default) or ``"iso8601"``.
-
-        Returns:
-            Self: The namespace with *target* appended; call ``.to_frame()``
-                to materialise.
-
-        Examples:
-            Study day (auto-detected from DY suffix)::
-
-                adae = (
-                    ae_df.adam
-                    .duration("ASTDY", start="TRTSDT", end="ASTDT")
-                    .to_frame()
-                )
-
-            Treatment duration in days::
-
-                adsl = (
-                    dm_df.adam.adsl
-                    .duration("TRTDURD", start="TRTSDT", end="TRTEDT")
-                    .to_frame()
-                )
-
-            PK elapsed time in hours::
-
-                adpc = (
-                    pc_df.adam.pk
-                    .duration("APTS", start="EXSTDTM", end="PCDTM",
-                              unit="hours", add_one=False)
-                    .to_frame()
-                )
-        """
-        # Normalise start/end to expressions
-        start_expr = pl.col(start) if isinstance(start, str) else start
-        end_expr = pl.col(end) if isinstance(end, str) else end
-
-        # Auto-cast string columns to date/datetime
-        start_expr = (
-            start_expr.str.to_date(strict=False)
-            .cast(pl.Date)
-            .fill_null(start_expr.str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False))
-            if isinstance(start, str)
-            else start_expr
-        )
-        end_expr = (
-            end_expr.str.to_date(strict=False)
-            .cast(pl.Date)
-            .fill_null(end_expr.str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False))
-            if isinstance(start, str)
-            else end_expr
-        )
-
-        # For string columns, we need a safer approach: try to cast
-        # but the column may already be Date/Datetime. Use a materialise
-        # approach to inspect dtypes.
-        df = self._lazy.collect()
-
-        def _to_date_expr(col_or_expr: str | pl.Expr) -> pl.Expr:
-            """Resolve a column reference or expression to a temporal expr."""
-            if isinstance(col_or_expr, str):
-                col_name = col_or_expr
-                if col_name in df.columns:
-                    dtype = df[col_name].dtype
-                    if dtype == pl.Date:
-                        return pl.col(col_name)
-                    if dtype.is_(pl.Datetime) or str(dtype).startswith("Datetime"):
-                        # For time-based units, keep Datetime precision
-                        if unit in ("seconds", "minutes", "hours"):
-                            return pl.col(col_name)
-                        return pl.col(col_name).cast(pl.Date)
-                    # String → try to parse
-                    if unit in ("seconds", "minutes", "hours"):
-                        return pl.col(col_name).str.to_datetime(strict=False)
-                    return pl.col(col_name).str.to_date(strict=False)
-                return pl.col(col_name)
-            # pl.Expr — use as-is
-            return col_or_expr
-
-        s_expr = _to_date_expr(start)
-        e_expr = _to_date_expr(end)
-
-        # Compute difference
-        valid_units = {
-            "seconds",
-            "minutes",
-            "hours",
-            "days",
-            "weeks",
-            "months",
-            "years",
-        }
-        if unit not in valid_units:
-            raise ValueError(
-                f"duration unit={unit!r} is not supported. Choose one of: {sorted(valid_units)}"
-            )
-
-        if unit in ("seconds", "minutes", "hours"):
-            # Need datetime precision — ensure both sides are Datetime
-            s_dtm = s_expr.cast(pl.Datetime("us"))
-            e_dtm = e_expr.cast(pl.Datetime("us"))
-            diff_s = (e_dtm - s_dtm).dt.total_seconds().cast(pl.Float64)
-            if unit == "seconds":
-                diff = diff_s.cast(pl.Int64)
-            elif unit == "minutes":
-                diff = diff_s / 60.0
-            else:  # hours
-                diff = diff_s / 3600.0
-        else:
-            diff_days = (e_expr - s_expr).dt.total_days()
-            if unit == "days":
-                diff = diff_days
-            elif unit == "weeks":
-                diff = diff_days.cast(pl.Float64) / 7.0
-            elif unit == "months":
-                diff = diff_days.cast(pl.Float64) / 30.4375
-            else:  # years
-                diff = diff_days.cast(pl.Float64) / 365.25
-
-        # Resolve add_one
-        if add_one is None:
-            if target.endswith("DY"):
-                # CDISC study day: +1 if >= 0, no day 0
-                result_expr = (
-                    (pl.when(diff >= 0).then(diff + 1).otherwise(diff)).cast(pl.Int64).alias(target)
-                )
-                return self._materialise_then(df.with_columns(result_expr))
-            else:
-                add_one = True
-
-        if add_one:
-            result_expr = (diff + 1).alias(target)
-        else:
-            result_expr = diff.alias(target)
-
-        if out == "iso8601":
-            # ISO 8601 duration formatting
-            # For simplicity, output P{n}D for days, PT{n}H for hours, etc.
-            abs_val = diff.abs()
-            if unit == "days":
-                iso_expr = (
-                    pl.lit("P") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("D")
-                ).alias(target)
-            elif unit == "hours":
-                iso_expr = (
-                    pl.lit("PT") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("H")
-                ).alias(target)
-            elif unit == "weeks":
-                iso_expr = (
-                    pl.lit("P") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("W")
-                ).alias(target)
-            elif unit == "years":
-                iso_expr = (
-                    pl.lit("P") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("Y")
-                ).alias(target)
-            elif unit == "months":
-                iso_expr = (
-                    pl.lit("P") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("M")
-                ).alias(target)
-            elif unit == "minutes":
-                iso_expr = (
-                    pl.lit("PT") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("M")
-                ).alias(target)
-            else:  # seconds
-                iso_expr = (
-                    pl.lit("PT") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("S")
-                ).alias(target)
-            return self._materialise_then(df.with_columns(iso_expr))
-
-        return self._materialise_then(df.with_columns(result_expr))
-
 
 class MultiRowMixin:
     """
     Mixin for ADaM datasets with multiple rows per subject (OCCDS, PK, etc.).
 
-    Provides ``seq()`` — a sequential 1-based record-number verb.  Any
-    namespace class that needs this verb should inherit from this mixin in
-    *addition* to ``SharedADaMVerbsMixin``::
-
-        class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin): ...
-        class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin): ...
+    Previously provided ``seq()`` which has been moved to
+    ``SharedVerbsMixin``.  Retained as a marker interface for multi-row
+    namespace classes (OCCDS, PK, etc.).
     """
 
-    def seq(
-        self,
-        target: str = "ASEQ",
-        *,
-        order_by: list[str] | None = None,
-        groups: list[str] | None = None,
-        check_uniqueness: bool = False,
-    ) -> Self:
-        """Derive a 1-based observation sequence number within each group.
-
-        Mirrors admiral's ``derive_var_obs_number()``.  When *order_by* is
-        provided the data is sorted within each *groups* partition before
-        numbering, ensuring deterministic and reproducible sequence values.
-
-        Args:
-            target: Name of the output sequence column (default ``"ASEQ"``).
-            order_by: Columns that define the sort order within each group.
-                When ``None``, the current row order is preserved.
-            groups: Partition columns (default ``["USUBJID"]``).
-            check_uniqueness: If ``True``, emit a warning when the
-                combination of *groups* + *order_by* does not uniquely
-                identify each row (analogous to admiral's
-                ``check_type = "warning"``).
-
-        Returns:
-            Self: A fresh namespace with *target* appended; call
-                ``.to_frame()`` to materialise.
-
-        Examples:
-            Add a per-subject sequence number ordered by analysis date::
-
-                adae = (
-                    ae_df.adam.occds
-                    .seq("ASEQ", order_by=["ASTDT"], groups=["USUBJID"])
-                    .to_frame()
-                )
-        """
-        from fleet.core.seq import derive_seq
-
-        grps = groups or ["USUBJID"]
-        df = derive_seq(
-            self.to_frame(),
-            target,
-            order_by=order_by,
-            groups=grps,
-            check_uniqueness=check_uniqueness,
-        )
-        return self._materialise_then(df)
+    pass
