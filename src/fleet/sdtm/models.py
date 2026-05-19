@@ -22,7 +22,6 @@ class SDTMAlgorithm(StrEnum):
     IF_THEN_ELSE = "if_then_else"
     AE_AEREL = "ae_aerel"
     MERGE = "merge"
-    REMOVE_DUP = "remove_dup"
     GROUP_BY = "group_by"
     DATASET_LEVEL = "dataset_level"
     NOTSUBMITTED = "notsubmitted"
@@ -75,10 +74,6 @@ class SDTMVariableSpec(BaseModel):
     merge_dataset: str | None = None
     merge_key: str | list[str] | None = None
     merge_columns: list[str] | None = None
-
-    # remove_dup
-    keep: str = "first"
-    subset_vars: list[str] | None = None
 
     # group_by
     group_cols: list[str] | None = None

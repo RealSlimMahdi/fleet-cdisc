@@ -9,33 +9,34 @@ import fleet  # noqa: F401 — triggers namespace registration
 @pytest.fixture
 def df_with_dups():
     """DataFrame with known duplicates."""
-    return pl.DataFrame(
-        {
-            "USUBJID": ["01-001", "01-001", "01-001", "01-002", "01-002", "01-003"],
-            "AEDECOD": ["HEADACHE", "HEADACHE", "NAUSEA", "HEADACHE", "HEADACHE", "RASH"],
-            "AESTDTC": [
-                "2014-01-05",
-                "2014-01-05",
-                "2014-02-10",
-                "2014-03-01",
-                "2014-03-01",
-                "2014-04-15",
-            ],
-            "ASEQ": [1, 2, 3, 1, 2, 1],
-        }
-    )
+    return pl.from_repr("""┌─────────┬──────────┬────────────┬──────┐
+│ USUBJID ┆ AEDECOD  ┆ AESTDTC    ┆ ASEQ │
+│ ---     ┆ ---      ┆ ---        ┆ ---  │
+│ str     ┆ str      ┆ str        ┆ i64  │
+╞═════════╪══════════╪════════════╪══════╡
+│ 01-001  ┆ HEADACHE ┆ 2014-01-05 ┆ 1    │
+│ 01-001  ┆ HEADACHE ┆ 2014-01-05 ┆ 2    │
+│ 01-001  ┆ NAUSEA   ┆ 2014-02-10 ┆ 3    │
+│ 01-002  ┆ HEADACHE ┆ 2014-03-01 ┆ 1    │
+│ 01-002  ┆ HEADACHE ┆ 2014-03-01 ┆ 2    │
+│ 01-003  ┆ RASH     ┆ 2014-04-15 ┆ 1    │
+└─────────┴──────────┴────────────┴──────┘
+""")
 
 
 @pytest.fixture
 def df_no_dups():
     """DataFrame with no duplicates."""
-    return pl.DataFrame(
-        {
-            "USUBJID": ["01-001", "01-002", "01-003"],
-            "AEDECOD": ["HEADACHE", "NAUSEA", "RASH"],
-            "AESTDTC": ["2014-01-05", "2014-02-10", "2014-03-01"],
-        }
-    )
+    return pl.from_repr("""┌─────────┬──────────┬────────────┐
+│ USUBJID ┆ AEDECOD  ┆ AESTDTC    │
+│ ---     ┆ ---      ┆ ---        │
+│ str     ┆ str      ┆ str        │
+╞═════════╪══════════╪════════════╡
+│ 01-001  ┆ HEADACHE ┆ 2014-01-05 │
+│ 01-002  ┆ NAUSEA   ┆ 2014-02-10 │
+│ 01-003  ┆ RASH     ┆ 2014-03-01 │
+└─────────┴──────────┴────────────┘
+""")
 
 
 class TestNodupReportOnly:
@@ -141,15 +142,137 @@ class TestNodupAdam:
         assert len(result) == 4
 
     def test_nodup_on_adam_adsl(self, capsys):
-        adsl_df = pl.DataFrame(
-            {
-                "USUBJID": ["01-001", "01-001", "01-002"],
-                "AGE": [45, 45, 62],
-                "SEX": ["F", "F", "M"],
-            }
-        )
+        adsl_df = pl.from_repr("""┌─────────┬─────┬─────┐
+│ USUBJID ┆ AGE ┆ SEX │
+│ ---     ┆ --- ┆ --- │
+│ str     ┆ i64 ┆ str │
+╞═════════╪═════╪═════╡
+│ 01-001  ┆ 45  ┆ F   │
+│ 01-001  ┆ 45  ┆ F   │
+│ 01-002  ┆ 62  ┆ M   │
+└─────────┴─────┴─────┘
+""")
         result = adsl_df.adam.adsl.nodup(subset=["USUBJID"]).to_frame()
         # Report-only — unchanged
         assert len(result) == 3
         captured = capsys.readouterr()
         assert "2 duplicate rows" in captured.out
+
+
+# ------------------------------------------------------------------ #
+# Phase 7 hardening: realistic duplicate patterns                      #
+# ------------------------------------------------------------------ #
+
+
+class TestNodupRealisticDuplicates:
+    """Dedup behavior under EDC-realistic duplicate patterns."""
+
+    def test_adjacent_duplicates_same_subject_visit(self, capsys):
+        """Same subject, same event, same date — classic EDC double-entry."""
+        df = pl.from_repr("""┌─────────┬──────────┬────────────┬───────┐
+│ USUBJID ┆ AEDECOD  ┆ AESTDTC    ┆ AESEQ │
+│ ---     ┆ ---      ┆ ---        ┆ ---   │
+│ str     ┆ str      ┆ str        ┆ i64   │
+╞═════════╪══════════╪════════════╪═══════╡
+│ 01-001  ┆ HEADACHE ┆ 2014-01-05 ┆ 1     │
+│ 01-001  ┆ HEADACHE ┆ 2014-01-05 ┆ 2     │
+│ 01-001  ┆ NAUSEA   ┆ 2014-02-01 ┆ 3     │
+│ 01-002  ┆ RASH     ┆ 2014-03-01 ┆ 1     │
+└─────────┴──────────┴────────────┴───────┘
+""")
+        result = df.sdtm.nodup(
+            subset=["USUBJID", "AEDECOD", "AESTDTC"],
+            sort_by=["AESEQ"],
+            keep="first",
+        ).to_frame()
+        # Only the HEADACHE pair is a dup on (USUBJID, AEDECOD, AESTDTC)
+        assert result.height == 3
+        headaches = result.filter(
+            (pl.col("USUBJID") == "01-001") & (pl.col("AEDECOD") == "HEADACHE")
+        )
+        assert headaches.height == 1
+        assert headaches["AESEQ"][0] == 1  # kept first
+
+    def test_mixed_scheduled_unscheduled_duplicates(self, capsys):
+        """Scheduled + unscheduled visit for same test — keep scheduled."""
+        df = pl.from_repr("""┌─────────┬──────────┬──────────┬────────────┬──────────┐
+│ USUBJID ┆ VSTESTCD ┆ VISITNUM ┆ VSDTC      ┆ VSSTRESN │
+│ ---     ┆ ---      ┆ ---      ┆ ---        ┆ ---      │
+│ str     ┆ str      ┆ i64      ┆ str        ┆ f64      │
+╞═════════╪══════════╪══════════╪════════════╪══════════╡
+│ 01-001  ┆ SYSBP    ┆ 3        ┆ 2014-02-01 ┆ 120.0    │
+│ 01-001  ┆ SYSBP    ┆ 99       ┆ 2014-02-01 ┆ 125.0    │
+│ 01-001  ┆ DIABP    ┆ 3        ┆ 2014-02-01 ┆ 80.0     │
+└─────────┴──────────┴──────────┴────────────┴──────────┘
+""")
+        result = df.sdtm.nodup(
+            subset=["USUBJID", "VSTESTCD", "VSDTC"],
+            sort_by=["VISITNUM"],
+            keep="first",
+        ).to_frame()
+        assert result.height == 2
+        sysbp = result.filter(pl.col("VSTESTCD") == "SYSBP")
+        assert sysbp["VISITNUM"][0] == 3  # scheduled kept
+
+    def test_multi_key_ties_edc_correction(self, capsys):
+        """Two records identical on all dedup keys — EDC correction pattern."""
+        df = pl.from_repr("""┌─────────┬──────────┬────────────┬───────┬────────────┐
+│ USUBJID ┆ AEDECOD  ┆ AESTDTC    ┆ AESEQ ┆ AEENDTC    │
+│ ---     ┆ ---      ┆ ---        ┆ ---   ┆ ---        │
+│ str     ┆ str      ┆ str        ┆ i64   ┆ str        │
+╞═════════╪══════════╪════════════╪═══════╪════════════╡
+│ 01-001  ┆ HEADACHE ┆ 2014-01-05 ┆ 1     ┆ 2014-01-10 │
+│ 01-001  ┆ HEADACHE ┆ 2014-01-05 ┆ 1     ┆ 2014-01-12 │
+└─────────┴──────────┴────────────┴───────┴────────────┘
+""")
+        result = df.sdtm.nodup(
+            subset=["USUBJID", "AEDECOD", "AESTDTC", "AESEQ"],
+            sort_by=["AESEQ"],
+            keep="last",
+        ).to_frame()
+        # True tie on sort key — last physical row kept
+        assert result.height == 1
+
+    def test_dedup_with_null_in_subset_key(self, capsys):
+        """Null values in subset columns — two nulls should be treated as equal."""
+        df = pl.from_repr("""┌─────────┬─────────┬───────┐
+│ USUBJID ┆ AEDECOD ┆ AESEQ │
+│ ---     ┆ ---     ┆ ---   │
+│ str     ┆ str     ┆ i64   │
+╞═════════╪═════════╪═══════╡
+│ 01-001  ┆ null    ┆ 1     │
+│ 01-001  ┆ null    ┆ 2     │
+│ 01-002  ┆ RASH    ┆ 1     │
+└─────────┴─────────┴───────┘
+""")
+        result = df.sdtm.nodup(
+            subset=["USUBJID", "AEDECOD"],
+            sort_by=["AESEQ"],
+            keep="first",
+        ).to_frame()
+        # Two rows with null AEDECOD for 01-001 should be treated as dups
+        assert result.height == 2
+
+    def test_ae_with_duplicate_sequences(self, capsys):
+        """AE data with duplicate AESEQ — inline replacement for factory."""
+        df = pl.from_repr("""┌─────────────┬───────┬──────────┬──────────┬────────────┬────────────┬──────────┬───────┐
+│ USUBJID     ┆ AESEQ ┆ AETERM   ┆ AESEV    ┆ AESTDTC    ┆ AEENDTC    ┆ AEREL    ┆ AESER │
+│ ---         ┆ ---   ┆ ---      ┆ ---      ┆ ---        ┆ ---        ┆ ---      ┆ ---   │
+│ str         ┆ i64   ┆ str      ┆ str      ┆ str        ┆ str        ┆ str      ┆ str   │
+╞═════════════╪═══════╪══════════╪══════════╪════════════╪════════════╪══════════╪═══════╡
+│ 01-701-1015 ┆ 1     ┆ HEADACHE ┆ MILD     ┆ 2014-01-10 ┆ 2014-01-15 ┆ PROBABLE ┆ N     │
+│ 01-701-1015 ┆ 2     ┆ NAUSEA   ┆ MODERATE ┆ 2014-02-05 ┆ 2014-02-10 ┆ POSSIBLE ┆ N     │
+│ 01-701-1015 ┆ 1     ┆ DIARRHEA ┆ MILD     ┆ 2014-01-10 ┆ 2014-01-15 ┆ UNLIKELY ┆ N     │
+│ 01-701-1016 ┆ 1     ┆ HEADACHE ┆ MILD     ┆ 2014-01-11 ┆ 2014-01-16 ┆ PROBABLE ┆ N     │
+│ 01-701-1016 ┆ 2     ┆ NAUSEA   ┆ MODERATE ┆ 2014-02-06 ┆ 2014-02-11 ┆ POSSIBLE ┆ N     │
+│ 01-701-1017 ┆ 1     ┆ HEADACHE ┆ MILD     ┆ 2014-01-12 ┆ 2014-01-17 ┆ PROBABLE ┆ N     │
+│ 01-701-1017 ┆ 2     ┆ NAUSEA   ┆ SEVERE   ┆ 2014-02-07 ┆ 2014-02-12 ┆ POSSIBLE ┆ N     │
+└─────────────┴───────┴──────────┴──────────┴────────────┴────────────┴──────────┴───────┘
+""")
+        result = df.sdtm.nodup(
+            subset=["USUBJID", "AESEQ"],
+            sort_by=["AESEQ"],
+            keep="first",
+        ).to_frame()
+        # Should have fewer rows than input (01-701-1015 has dup AESEQ=1)
+        assert result.height < df.height

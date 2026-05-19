@@ -551,7 +551,7 @@ The real power is the **tight feedback cycle** between agent and toolkit:
 
 ### SDTM — 14 verbs + Trial Design Domains
 
-`assign_no_ct` · `assign_ct` · `assign_dtc` · `hardcode_ct` · `hardcode_no_ct` · `condition_add` · `if_then_else` · `ae_aerel` · `merge` · `remove_dup` · `group_by` · `dataset_level` · `notsubmitted` · `multiple_responses`
+`assign_no_ct` · `assign_ct` · `assign_dtc` · `hardcode_ct` · `hardcode_no_ct` · `condition_add` · `if_then_else` · `ae_aerel` · `merge` · `nodup` · `group_by` · `dataset_level` · `notsubmitted` · `multiple_responses`
 
 ### ADaM — 11 shared verbs inherited by ALL sub-namespaces
 
