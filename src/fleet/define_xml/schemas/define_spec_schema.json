@@ -295,7 +295,6 @@
             "if_then_else",
             "ae_aerel",
             "merge",
-            "remove_dup",
             "group_by",
             "dataset_level",
             "notsubmitted",

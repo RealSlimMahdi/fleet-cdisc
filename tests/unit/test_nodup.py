@@ -153,3 +153,96 @@ class TestNodupAdam:
         assert len(result) == 3
         captured = capsys.readouterr()
         assert "2 duplicate rows" in captured.out
+
+
+# ------------------------------------------------------------------ #
+# Phase 7 hardening: realistic duplicate patterns                      #
+# ------------------------------------------------------------------ #
+
+from tests.factories import build_ae_cohort  # noqa: E402
+
+
+class TestNodupRealisticDuplicates:
+    """Dedup behavior under EDC-realistic duplicate patterns."""
+
+    def test_adjacent_duplicates_same_subject_visit(self, capsys):
+        """Same subject, same event, same date — classic EDC double-entry."""
+        df = pl.DataFrame({
+            "USUBJID": ["01-001", "01-001", "01-001", "01-002"],
+            "AEDECOD": ["HEADACHE", "HEADACHE", "NAUSEA", "RASH"],
+            "AESTDTC": ["2014-01-05", "2014-01-05", "2014-02-01", "2014-03-01"],
+            "AESEQ": [1, 2, 3, 1],
+        })
+        result = df.sdtm.nodup(
+            subset=["USUBJID", "AEDECOD", "AESTDTC"],
+            sort_by=["AESEQ"],
+            keep="first",
+        ).to_frame()
+        # Only the HEADACHE pair is a dup on (USUBJID, AEDECOD, AESTDTC)
+        assert result.height == 3
+        headaches = result.filter(
+            (pl.col("USUBJID") == "01-001") & (pl.col("AEDECOD") == "HEADACHE")
+        )
+        assert headaches.height == 1
+        assert headaches["AESEQ"][0] == 1  # kept first
+
+    def test_mixed_scheduled_unscheduled_duplicates(self, capsys):
+        """Scheduled + unscheduled visit for same test — keep scheduled."""
+        df = pl.DataFrame({
+            "USUBJID": ["01-001", "01-001", "01-001"],
+            "VSTESTCD": ["SYSBP", "SYSBP", "DIABP"],
+            "VISITNUM": [3, 99, 3],  # 99 = unscheduled
+            "VSDTC": ["2014-02-01", "2014-02-01", "2014-02-01"],
+            "VSSTRESN": [120.0, 125.0, 80.0],
+        })
+        result = df.sdtm.nodup(
+            subset=["USUBJID", "VSTESTCD", "VSDTC"],
+            sort_by=["VISITNUM"],
+            keep="first",
+        ).to_frame()
+        assert result.height == 2
+        sysbp = result.filter(pl.col("VSTESTCD") == "SYSBP")
+        assert sysbp["VISITNUM"][0] == 3  # scheduled kept
+
+    def test_multi_key_ties_edc_correction(self, capsys):
+        """Two records identical on all dedup keys — EDC correction pattern."""
+        df = pl.DataFrame({
+            "USUBJID": ["01-001", "01-001"],
+            "AEDECOD": ["HEADACHE", "HEADACHE"],
+            "AESTDTC": ["2014-01-05", "2014-01-05"],
+            "AESEQ": [1, 1],  # same seq — true tie
+            "AEENDTC": ["2014-01-10", "2014-01-12"],  # correction changed end
+        })
+        result = df.sdtm.nodup(
+            subset=["USUBJID", "AEDECOD", "AESTDTC", "AESEQ"],
+            sort_by=["AESEQ"],
+            keep="last",
+        ).to_frame()
+        # True tie on sort key — last physical row kept
+        assert result.height == 1
+
+    def test_dedup_with_null_in_subset_key(self, capsys):
+        """Null values in subset columns — two nulls should be treated as equal."""
+        df = pl.DataFrame({
+            "USUBJID": ["01-001", "01-001", "01-002"],
+            "AEDECOD": [None, None, "RASH"],
+            "AESEQ": [1, 2, 1],
+        })
+        result = df.sdtm.nodup(
+            subset=["USUBJID", "AEDECOD"],
+            sort_by=["AESEQ"],
+            keep="first",
+        ).to_frame()
+        # Two rows with null AEDECOD for 01-001 should be treated as dups
+        assert result.height == 2
+
+    def test_factory_ae_with_duplicate_sequences(self, capsys):
+        """Factory-generated AE data with duplicate AESEQ."""
+        df = build_ae_cohort(duplicate_sequences=True)
+        result = df.sdtm.nodup(
+            subset=["USUBJID", "AESEQ"],
+            sort_by=["AESEQ"],
+            keep="first",
+        ).to_frame()
+        # Should have fewer rows than input
+        assert result.height < df.height

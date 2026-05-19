@@ -1013,44 +1013,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
         return self._materialise_then(joined.collect())
 
     # ------------------------------------------------------------------ #
-    # 10. remove_dup — deduplicate rows                                    #
-    # ------------------------------------------------------------------ #
-
-    def remove_dup(
-        self,
-        *,
-        subset: list[str] | None = None,
-        keep: str = "first",
-    ) -> SDTMNamespace:
-        """Remove duplicate rows, optionally on a *subset* of columns.
-
-        Materialises, deduplicates, and returns a fresh namespace.
-
-        Args:
-            subset: Column(s) to consider for duplicate detection.  When
-                ``None``, all columns are used.
-            keep: Which duplicate to keep: ``"first"`` (default), ``"last"``,
-                or ``"none"``.
-
-        Returns:
-            SDTMNamespace: A fresh namespace wrapping the deduplicated frame.
-
-        Examples:
-            Deduplicate VS records on subject and visit::
-
-                vs = (
-                    raw_df.sdtm
-                    .assign_no_ct("USUBJID", source="subject_id")
-                    .remove_dup(subset=["USUBJID", "VISIT"])
-                    .to_frame()
-                )
-        """
-        return self._materialise_then(
-            self._lazy.unique(subset=subset, keep=keep).collect()  # type: ignore[arg-type]
-        )
-
-    # ------------------------------------------------------------------ #
-    # 11. group_by — aggregate records                                     #
+    # 10. group_by — aggregate records                                     #
     # ------------------------------------------------------------------ #
 
     def group_by(
@@ -1295,7 +1258,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
                     ns = ns.derivation(fn)
                 else:
                     ns = ns._materialise_then(fn(ns.to_frame()))
-            # merge, remove_dup, group_by, multiple_responses require extra data
+            # merge, group_by, multiple_responses require extra data
             # — skip in spec-driven mode if not fully specified
 
         return ns

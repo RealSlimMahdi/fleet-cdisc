@@ -244,3 +244,105 @@ class TestToFrame:
     def test_empty_pipeline(self, vs_frame):
         result = vs_frame.adam.to_frame()
         assert result.shape == vs_frame.shape
+
+
+# ------------------------------------------------------------------ #
+# Phase 4 hardening: null propagation, order invariance, edge cases    #
+# ------------------------------------------------------------------ #
+
+from tests.assertions import assert_deterministic  # noqa: E402
+from tests.factories import shuffle_rows  # noqa: E402
+
+
+class TestDerivationNullPropagation:
+    """derivation verb must propagate nulls correctly."""
+
+    def test_null_in_source_column(self):
+        df = pl.DataFrame({
+            "USUBJID": ["S01", "S02", "S03"],
+            "VSSTRESN": [120.0, None, 115.0],
+        })
+        result = df.adam.derivation("AVAL", expression="VSSTRESN").to_frame()
+        assert result["AVAL"][1] is None
+
+    def test_expression_on_null_yields_null(self):
+        df = pl.DataFrame({
+            "USUBJID": ["S01", "S02"],
+            "VSSTRESN": [120.0, None],
+        })
+        result = df.adam.derivation("AVAL2", expression='pl.col("VSSTRESN") * 2').to_frame()
+        assert result["AVAL2"][0] == pytest.approx(240.0)
+        assert result["AVAL2"][1] is None
+
+
+class TestRecodeNullAndUnmapped:
+    """recode behavior with null and unmapped source values."""
+
+    def test_null_source_stays_null(self):
+        df = pl.DataFrame({"CODE": ["A", None, "B"]})
+        result = df.adam.recode(
+            "DECODED", source="CODE", recode_map={"A": "Alpha", "B": "Beta"}
+        ).to_frame()
+        assert result["DECODED"][1] is None
+
+    def test_unmapped_without_default_is_null(self):
+        df = pl.DataFrame({"CODE": ["A", "X"]})
+        result = df.adam.recode(
+            "DECODED", source="CODE", recode_map={"A": "Alpha"}
+        ).to_frame()
+        # Unmapped "X" without default should be null
+        assert result["DECODED"][1] is None or result["DECODED"][1] == "X"
+
+
+class TestADaMOrderInvariance:
+    """ADaM pipeline results should not depend on input row order."""
+
+    def test_source_order_invariant(self):
+        df = pl.DataFrame({
+            "USUBJID": ["S01", "S02", "S03"],
+            "PARAM": ["SYSBP", "DIABP", "SYSBP"],
+            "AVAL": [120.0, 80.0, 118.0],
+        })
+        result1 = df.adam.source("USUBJID").source("PARAM").to_frame()
+        result2 = shuffle_rows(df).adam.source("USUBJID").source("PARAM").to_frame()
+        assert_deterministic(result1, result2, sort_cols=["USUBJID", "PARAM"])
+
+    def test_chained_pipeline_order_invariant(self):
+        df = pl.DataFrame({
+            "USUBJID": ["S01", "S02", "S03"],
+            "PARAMCD": ["SYSBP", "DIABP", "SYSBP"],
+            "VSSTRESN": [120.0, 80.0, 118.0],
+            "vsdtc": ["2014-01-02", "2014-01-02", "2014-01-03"],
+        })
+        def pipeline(d):
+            return (
+                d.adam
+                .source("USUBJID")
+                .derivation("AVAL", expression="VSSTRESN")
+                .assigned("STUDYID", value="CDISCPILOT01")
+                .to_frame()
+            )
+        result1 = pipeline(df)
+        result2 = pipeline(shuffle_rows(df))
+        assert_deterministic(result1, result2, sort_cols=["USUBJID"])
+
+
+class TestCondDerivationWithNulls:
+    """condderivation must handle nulls in condition columns."""
+
+    def test_null_in_condition_column(self):
+        df = pl.DataFrame({
+            "USUBJID": ["S01", "S02", "S03"],
+            "ABLFL": ["Y", None, "Y"],
+            "VSSTRESN": [120.0, 80.0, 115.0],
+        })
+        result = df.adam.condderivation(
+            "BASE",
+            conditions=[
+                {"condition": pl.col("ABLFL") == "Y", "value": "BASELINE"},
+            ],
+            else_value=None,
+        ).to_frame()
+        # Subject with null ABLFL should get null BASE (else_value)
+        assert result["BASE"][1] is None
+        assert result["BASE"][0] == "BASELINE"

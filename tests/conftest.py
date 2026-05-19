@@ -198,3 +198,61 @@ def adis_frame() -> pl.DataFrame:
             "ISORRES": [None, None, "3", None, ">150", None],
         }
     )
+
+
+# ------------------------------------------------------------------ #
+# Factory-based messy cohorts (Phase 1 hardening)                      #
+# ------------------------------------------------------------------ #
+
+from tests.factories import (  # noqa: E402
+    build_adsl_cohort,
+    build_ae_cohort,
+    build_dm_cohort,
+    build_merge_mismatch_pair,
+    build_vs_cohort,
+)
+
+
+@pytest.fixture
+def messy_dm() -> pl.DataFrame:
+    """DM cohort with partial dates, duplicates, and terminology drift."""
+    return build_dm_cohort(
+        partial_dates=True,
+        duplicate_keys=True,
+        mixed_terminology=True,
+    )
+
+
+@pytest.fixture
+def messy_vs() -> pl.DataFrame:
+    """VS cohort with unscheduled visits, nulls, and tied timestamps."""
+    return build_vs_cohort(
+        unscheduled_visits=True,
+        null_results=True,
+        tied_timestamps=True,
+    )
+
+
+@pytest.fixture
+def messy_ae() -> pl.DataFrame:
+    """AE cohort with overlapping events, null end dates, and severity drift."""
+    return build_ae_cohort(
+        overlapping_events=True,
+        null_end_dates=True,
+        mixed_severity_terms=True,
+    )
+
+
+@pytest.fixture
+def adsl_with_null_dates() -> pl.DataFrame:
+    """ADSL cohort with missing treatment dates and same-day boundaries."""
+    return build_adsl_cohort(
+        null_treatment_dates=True,
+        same_day_start_end=True,
+    )
+
+
+@pytest.fixture
+def merge_mismatch_frames() -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Pair of frames with non-overlapping keys for join tests."""
+    return build_merge_mismatch_pair()
