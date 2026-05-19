@@ -37,7 +37,12 @@ filters: ["!^*"]
 options:
 show_root_heading: true
 heading_level: 3
+## to_repr
 
+::: fleet.core.repr_utils.to_repr
+    options:
+        show_root_heading: true
+        heading_level: 3
 ## Exceptions
 
 ::: fleet.core.exceptions

@@ -212,6 +212,52 @@ dm = (
 
 `assign_ct` accepts either a generated codelist class (e.g. `SEX`) or a raw NCI concept ID string (e.g. `"C66731"`). **Always prefer the class form.** When raw data already matches the standard (e.g. source is already `"M"`), `ct_mapping` can be omitted — the codelist is still recorded for validation.
 
+## 4b. Data Sample Construction (`pl.from_repr()`)
+
+When creating inline sample DataFrames for tests, examples, documentation, or reproducible snippets, **always prefer `pl.from_repr()`** over `pl.DataFrame({...})`.
+
+### Why
+
+- Column names, types, and data are immediately visible without execution.
+- Copy-pasteable from any Polars terminal output.
+- Eliminates subtle type mismatches (e.g. `int` vs `float`).
+
+### Pattern
+
+```python
+import polars as pl
+
+raw_dm = pl.from_repr("""\
+┌────────────┬─────┬─────┐
+│ subject_id ┆ sex ┆ age │
+│ ---        ┆ --- ┆ --- │
+│ str        ┆ str ┆ i64 │
+╞════════════╪═════╪═════╡
+│ S001       ┆ M   ┆ 35  │
+│ S002       ┆ F   ┆ 42  │
+└────────────┴─────┴─────┘
+""")
+```
+
+### Generating the repr string
+
+Fleet provides a `to_repr()` helper that renders any DataFrame with full-width, no-truncation settings so the output is directly pasteable:
+
+```python
+from fleet import to_repr
+
+# From an existing pl.DataFrame or LazyFrame:
+print(to_repr(my_df))
+
+# Then paste the output into pl.from_repr("""...""")
+```
+
+### When `pl.DataFrame()` is still acceptable
+
+- **Empty DataFrames** for TDD scaffolding: `pl.DataFrame().sdtm`
+- **Programmatic data** built with loops or random generators (e.g. benchmark scripts).
+- **API type annotations** referencing `pl.DataFrame` as a return/parameter type.
+
 ## 5. Spec Driven Development (`define.yaml`)
 
 Fleet supports reading schemas and standard standard version outputs from YAML specs. Always respect the `StudyContext.init()` initialization methods and Schema definitions when implementing CLI commands. Schema is managed via `pydantic`.

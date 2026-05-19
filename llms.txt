@@ -14,6 +14,8 @@ Fleet adds chainable verb pipelines directly onto every Polars DataFrame so you 
 
 4. **Google-style docstrings** — All public verbs use Google-style docstrings with `Args:`, `Returns:`, and `Examples:` sections. Every example must be a complete pipeline snippet ending with `.to_frame()`. Never use NumPy/Sphinx `Parameters ----------` style or bare `Example::` headers.
 
+5. **Prefer `pl.from_repr()` for small reproducible snippets** — When generating small inline DataFrames for tests, examples, or user-facing code snippets, prefer `pl.from_repr()` with a Unicode box-drawing table over `pl.DataFrame({...})`. This makes column names, types, and data immediately visible without execution. Use `pl.DataFrame()` (empty) only for TDD scaffolding and `pl.DataFrame(variable)` when data is built programmatically.
+
 ## Install
 
 ```
@@ -39,6 +41,68 @@ dm = (
 ```
 
 Nothing runs until `.to_frame()`. All verbs accumulate into a single `df.with_columns(...)` pass.
+
+## Data Sample Construction
+
+When creating inline sample DataFrames for tests, examples, or reproducible snippets, prefer `pl.from_repr()` over `pl.DataFrame({...})`. Column names, types, and data are immediately visible without execution.
+
+### Pattern
+
+```python
+import polars as pl
+
+raw_dm = pl.from_repr("""\
+┌────────────┬─────┬─────┐
+│ subject_id ┆ sex ┆ age │
+│ ---        ┆ --- ┆ --- │
+│ str        ┆ str ┆ i64 │
+╞════════════╪═════╪═════╡
+│ S001       ┆ M   ┆ 35  │
+│ S002       ┆ F   ┆ 42  │
+└────────────┴─────┴─────┘
+""")
+```
+
+### Generating the repr string
+
+Fleet ships a `to_repr()` helper that renders any DataFrame with full-width, no-truncation settings so the output is directly pasteable:
+
+```python
+from fleet import to_repr
+import polars as pl
+
+# From any existing DataFrame (CSV load, query result, dict, etc.)
+df = pl.DataFrame({"USUBJID": ["S001", "S002"], "AGE": [35, 42]})
+
+# Print the from_repr-ready string
+print(to_repr(df))
+# ┌─────────┬─────┐
+# │ USUBJID ┆ AGE │
+# │ ---     ┆ --- │
+# │ str     ┆ i64 │
+# ╞═════════╪═════╡
+# │ S001    ┆ 35  │
+# │ S002    ┆ 42  │
+# └─────────┴─────┘
+
+# Paste that output into your test/example:
+df = pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ AGE │
+│ ---     ┆ --- │
+│ str     ┆ i64 │
+╞═════════╪═════╡
+│ S001    ┆ 35  │
+│ S002    ┆ 42  │
+└─────────┴─────┘
+""")
+```
+
+### When `pl.DataFrame()` is still acceptable
+
+- Empty DataFrames for TDD scaffolding: `pl.DataFrame().sdtm`
+- Programmatic data built with loops or random generators (e.g. benchmark scripts)
+- API type annotations referencing `pl.DataFrame` as a return/parameter type
 
 ## Golden Master Examples
 
@@ -99,14 +163,38 @@ import polars as pl
 import fleet  # noqa: F401 — registers .sdtm / .adam namespace extensions
 from specs.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
 
-RAW = Path("datasets/cdiscpilot01/raw")
 OUT = Path("outputs/cdiscpilot01")
 
 # ════════════════════════════════════════════════════════════════════════════
-# 1. Read in Data
+# 1. Raw Data (inline — no external CSV dependencies)
 # ════════════════════════════════════════════════════════════════════════════
-dm_raw = pl.read_csv(RAW / "dm_raw.csv")
-ae_raw = pl.read_csv(RAW / "ae_raw.csv")
+dm_raw = pl.from_repr("""\
+┌────────────────┬─────────┬─────┬─────┬───────────────────────────┬────────────────────────┬──────────┬──────────────────────┬─────────────────┬────────────────┬───────────────────────┐
+│ patient_number ┆ site_id ┆ age ┆ sex ┆ race                      ┆ ethnic                 ┆ arm_code ┆ arm_description      ┆ first_dose_date ┆ last_dose_date ┆ informed_consent_date │
+│ ---            ┆ ---     ┆ --- ┆ --- ┆ ---                       ┆ ---                    ┆ ---      ┆ ---                  ┆ ---             ┆ ---            ┆ ---                   │
+│ str            ┆ i64     ┆ i64 ┆ str ┆ str                       ┆ str                    ┆ str      ┆ str                  ┆ str             ┆ str            ┆ str                   │
+╞════════════════╪═════════╪═════╪═════╪═══════════════════════════╪════════════════════════╪══════════╪══════════════════════╪═════════════════╪════════════════╪═══════════════════════╡
+│ 01-701-1015    ┆ 701     ┆ 63  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-02      ┆ 2014-07-02     ┆ 2014-01-01            │
+│ 01-701-1023    ┆ 701     ┆ 64  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-03      ┆ 2014-07-04     ┆ 2014-01-02            │
+│ 01-701-1028    ┆ 701     ┆ 71  ┆ M   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Hi   ┆ Xanomeline High Dose ┆ 2014-01-04      ┆ 2014-07-05     ┆ 2014-01-03            │
+│ 01-701-1034    ┆ 701     ┆ 74  ┆ M   ┆ BLACK OR AFRICAN AMERICAN ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-05      ┆ 2014-07-06     ┆ 2014-01-04            │
+│ 01-701-1047    ┆ 701     ┆ 56  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-06      ┆ 2014-07-07     ┆ 2014-01-05            │
+└────────────────┴─────────┴─────┴─────┴───────────────────────────┴────────────────────────┴──────────┴──────────────────────┴─────────────────┴────────────────┴───────────────────────┘
+""")
+
+ae_raw = pl.from_repr("""\
+┌────────────────┬───────────────────────────┬───────────────┬─────────────┬─────────────┬────────────┬────────────────────────────┬──────────────────┬──────────────────┐
+│ patient_number ┆ ae_term                   ┆ ae_start_date ┆ ae_end_date ┆ ae_severity ┆ ae_serious ┆ ae_outcome                 ┆ ae_action_taken  ┆ ae_relationship  │
+│ ---            ┆ ---                       ┆ ---           ┆ ---         ┆ ---         ┆ ---        ┆ ---                        ┆ ---              ┆ ---              │
+│ str            ┆ str                       ┆ str           ┆ str         ┆ str         ┆ str        ┆ str                        ┆ str              ┆ str              │
+╞════════════════╪═══════════════════════════╪═══════════════╪═════════════╪═════════════╪════════════╪════════════════════════════╪══════════════════╪══════════════════╡
+│ 01-701-1015    ┆ HEADACHE                  ┆ 2014-01-10    ┆ 2014-01-12  ┆ MILD        ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ POSSIBLY RELATED │
+│ 01-701-1015    ┆ NAUSEA                    ┆ 2014-02-05    ┆ 2014-02-06  ┆ MODERATE    ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ NOT RELATED      │
+│ 01-701-1023    ┆ DIZZINESS                 ┆ 2014-01-15    ┆ 2014-01-16  ┆ MILD        ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ POSSIBLY RELATED │
+│ 01-701-1028    ┆ FATIGUE                   ┆ 2014-02-20    ┆ null        ┆ MODERATE    ┆ N          ┆ NOT RECOVERED/NOT RESOLVED ┆ DOSE NOT CHANGED ┆ PROBABLY RELATED │
+│ 01-701-1034    ┆ APPLICATION SITE ERYTHEMA ┆ 2014-01-20    ┆ 2014-01-25  ┆ SEVERE      ┆ Y          ┆ RECOVERED/RESOLVED         ┆ DRUG WITHDRAWN   ┆ RELATED          │
+└────────────────┴───────────────────────────┴───────────────┴─────────────┴─────────────┴────────────┴────────────────────────────┴──────────────────┴──────────────────┘
+""")
 
 print("── 1. Raw data loaded ───────────────────────────────────────────────────")
 print(f"   dm_raw : {dm_raw.shape[0]:>3} rows   columns → {dm_raw.columns}")
@@ -168,8 +256,7 @@ print(f"\n── 2a. SDTM DM : {dm.shape[0]} subjects × {dm.shape[1]} variables
 # columns stay in DM unchanged. For IG ≤3.4, export_supp() unpivots them
 # to the vertical SUPPQUAL structure.
 dm_ns = (
-    dm_raw.sdtm
-    .hardcode_no_ct("STUDYID", value="CDISCPILOT01")
+    dm_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")
     .hardcode_no_ct("DOMAIN", value="DM")
     .assign_no_ct("USUBJID", source="patient_number")
     .nsv("SAFETY", value="Y", label="Safety Population Flag")
@@ -179,9 +266,13 @@ suppdm = dm_ns.export_supp()
 print(f"        → SUPPDM: {suppdm.shape[0]} qualifier rows × {suppdm.shape[1]} variables")
 
 # Post-hoc pattern: export_supp with explicit qualifiers dict on existing frame
-suppdm_alt = dm.sdtm.export_supp(
-    qualifiers={"ARM": {"label": "Description of Planned Arm", "origin": "PROTOCOL"}},
-) if "ARM" in dm.columns else None
+suppdm_alt = (
+    dm.sdtm.export_supp(
+        qualifiers={"ARM": {"label": "Description of Planned Arm", "origin": "PROTOCOL"}},
+    )
+    if "ARM" in dm.columns
+    else None
+)
 if suppdm_alt is not None:
     print(f"        → SUPPDM (post-hoc): {suppdm_alt.shape[0]} rows")
 
@@ -630,7 +721,19 @@ print(
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 13. ADaM ADVS (inline) ═══════════════════════════════════════════════")
 
-vs_raw = pl.read_csv(RAW / "vs_raw.csv")
+vs_raw = pl.from_repr("""\
+┌────────────────┬─────────────┬──────────┬────────┬─────────┬──────────┬────────────┬──────┐
+│ patient_number ┆ site_number ┆ vstestcd ┆ vstest ┆ vsorres ┆ vsorresu ┆ vsdtc      ┆ vsdy │
+│ ---            ┆ ---         ┆ ---      ┆ ---    ┆ ---     ┆ ---      ┆ ---        ┆ ---  │
+│ str            ┆ i64         ┆ str      ┆ str    ┆ f64     ┆ str      ┆ str        ┆ i64  │
+╞════════════════╪═════════════╪══════════╪════════╪═════════╪══════════╪════════════╪══════╡
+│ 01-701-1015    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 155.5   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1023    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 168.1   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1028    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 178.0   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1034    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 170.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1047    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 166.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+└────────────────┴─────────────┴──────────┴────────┴─────────┴──────────┴────────────┴──────┘
+""")
 
 _trtsdt_map = adsl_final.select(["USUBJID", "TRTSDT"])
 
@@ -897,7 +1000,6 @@ import fleet  # noqa: F401 — registers .sdtm / .adam namespace extensions
 from fleet import DatasetChecker, DefineSpecGenerator
 from specs.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
 
-RAW = Path("datasets/cdiscpilot01/raw")
 SPECS = Path("specs/cdiscpilot01")
 OUT = Path("outputs/cdiscpilot01")
 OUT.mkdir(parents=True, exist_ok=True)
@@ -905,10 +1007,48 @@ OUT.mkdir(parents=True, exist_ok=True)
 SDTM_SPEC = SPECS / "sdtm/define.yaml"
 ADAM_SPEC = SPECS / "adam/define.yaml"
 
-# ── 1. Load raw data ─────────────────────────────────────────────────────────
-dm_raw = pl.read_csv(RAW / "dm_raw.csv")
-ae_raw = pl.read_csv(RAW / "ae_raw.csv")
-vs_raw = pl.read_csv(RAW / "vs_raw.csv")
+# ── 1. Raw data (inline) ─────────────────────────────────────────────────────
+dm_raw = pl.from_repr("""\
+┌────────────────┬─────────┬─────┬─────┬───────────────────────────┬────────────────────────┬──────────┬──────────────────────┬─────────────────┬────────────────┬───────────────────────┐
+│ patient_number ┆ site_id ┆ age ┆ sex ┆ race                      ┆ ethnic                 ┆ arm_code ┆ arm_description      ┆ first_dose_date ┆ last_dose_date ┆ informed_consent_date │
+│ ---            ┆ ---     ┆ --- ┆ --- ┆ ---                       ┆ ---                    ┆ ---      ┆ ---                  ┆ ---             ┆ ---            ┆ ---                   │
+│ str            ┆ i64     ┆ i64 ┆ str ┆ str                       ┆ str                    ┆ str      ┆ str                  ┆ str             ┆ str            ┆ str                   │
+╞════════════════╪═════════╪═════╪═════╪═══════════════════════════╪════════════════════════╪══════════╪══════════════════════╪═════════════════╪════════════════╪═══════════════════════╡
+│ 01-701-1015    ┆ 701     ┆ 63  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-02      ┆ 2014-07-02     ┆ 2014-01-01            │
+│ 01-701-1023    ┆ 701     ┆ 64  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-03      ┆ 2014-07-04     ┆ 2014-01-02            │
+│ 01-701-1028    ┆ 701     ┆ 71  ┆ M   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Hi   ┆ Xanomeline High Dose ┆ 2014-01-04      ┆ 2014-07-05     ┆ 2014-01-03            │
+│ 01-701-1034    ┆ 701     ┆ 74  ┆ M   ┆ BLACK OR AFRICAN AMERICAN ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-05      ┆ 2014-07-06     ┆ 2014-01-04            │
+│ 01-701-1047    ┆ 701     ┆ 56  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-06      ┆ 2014-07-07     ┆ 2014-01-05            │
+└────────────────┴─────────┴─────┴─────┴───────────────────────────┴────────────────────────┴──────────┴──────────────────────┴─────────────────┴────────────────┴───────────────────────┘
+""")
+
+ae_raw = pl.from_repr("""\
+┌────────────────┬───────────────────────────┬───────────────┬─────────────┬─────────────┬────────────┬────────────────────────────┬──────────────────┬──────────────────┐
+│ patient_number ┆ ae_term                   ┆ ae_start_date ┆ ae_end_date ┆ ae_severity ┆ ae_serious ┆ ae_outcome                 ┆ ae_action_taken  ┆ ae_relationship  │
+│ ---            ┆ ---                       ┆ ---           ┆ ---         ┆ ---         ┆ ---        ┆ ---                        ┆ ---              ┆ ---              │
+│ str            ┆ str                       ┆ str           ┆ str         ┆ str         ┆ str        ┆ str                        ┆ str              ┆ str              │
+╞════════════════╪═══════════════════════════╪═══════════════╪═════════════╪═════════════╪════════════╪════════════════════════════╪══════════════════╪══════════════════╡
+│ 01-701-1015    ┆ HEADACHE                  ┆ 2014-01-10    ┆ 2014-01-12  ┆ MILD        ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ POSSIBLY RELATED │
+│ 01-701-1015    ┆ NAUSEA                    ┆ 2014-02-05    ┆ 2014-02-06  ┆ MODERATE    ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ NOT RELATED      │
+│ 01-701-1023    ┆ DIZZINESS                 ┆ 2014-01-15    ┆ 2014-01-16  ┆ MILD        ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ POSSIBLY RELATED │
+│ 01-701-1028    ┆ FATIGUE                   ┆ 2014-02-20    ┆ null        ┆ MODERATE    ┆ N          ┆ NOT RECOVERED/NOT RESOLVED ┆ DOSE NOT CHANGED ┆ PROBABLY RELATED │
+│ 01-701-1034    ┆ APPLICATION SITE ERYTHEMA ┆ 2014-01-20    ┆ 2014-01-25  ┆ SEVERE      ┆ Y          ┆ RECOVERED/RESOLVED         ┆ DRUG WITHDRAWN   ┆ RELATED          │
+└────────────────┴───────────────────────────┴───────────────┴─────────────┴─────────────┴────────────┴────────────────────────────┴──────────────────┴──────────────────┘
+""")
+
+vs_raw = pl.from_repr("""\
+┌────────────────┬─────────────┬──────────┬────────┬─────────┬──────────┬────────────┬──────┐
+│ patient_number ┆ site_number ┆ vstestcd ┆ vstest ┆ vsorres ┆ vsorresu ┆ vsdtc      ┆ vsdy │
+│ ---            ┆ ---         ┆ ---      ┆ ---    ┆ ---     ┆ ---      ┆ ---        ┆ ---  │
+│ str            ┆ i64         ┆ str      ┆ str    ┆ f64     ┆ str      ┆ str        ┆ i64  │
+╞════════════════╪═════════════╪══════════╪════════╪═════════╪══════════╪════════════╪══════╡
+│ 01-701-1015    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 155.5   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1023    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 168.1   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1028    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 178.0   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1034    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 170.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1047    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 166.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+└────────────────┴─────────────┴──────────┴────────┴─────────┴──────────┴────────────┴──────┘
+""")
 
 # ── 2. SDTM DM ───────────────────────────────────────────────────────────────
 dm = (
@@ -1498,34 +1638,20 @@ def main() -> None:
     # ════════════════════════════════════════════════════════════════════
     print("\n── 6. SV (Subject Visits) ──────────────────────────────────")
 
-    raw_visits = pl.DataFrame(
-        {
-            "subject_id": [
-                "01-701-1015",
-                "01-701-1015",
-                "01-701-1015",
-                "01-701-1023",
-                "01-701-1023",
-                "01-701-1023",
-            ],
-            "visit_date": [
-                "2014-01-02",
-                "2014-01-15",
-                "2014-02-13",
-                "2014-01-03",
-                "2014-01-17",
-                "2014-02-14",
-            ],
-            "ref_date": [
-                "2014-01-01",
-                "2014-01-01",
-                "2014-01-01",
-                "2014-01-01",
-                "2014-01-01",
-                "2014-01-01",
-            ],
-        }
-    )
+    raw_visits = pl.from_repr("""\
+┌─────────────┬────────────┬────────────┐
+│ subject_id  ┆ visit_date ┆ ref_date   │
+│ ---         ┆ ---        ┆ ---        │
+│ str         ┆ str        ┆ str        │
+╞═════════════╪════════════╪════════════╡
+│ 01-701-1015 ┆ 2014-01-02 ┆ 2014-01-01 │
+│ 01-701-1015 ┆ 2014-01-15 ┆ 2014-01-01 │
+│ 01-701-1015 ┆ 2014-02-13 ┆ 2014-01-01 │
+│ 01-701-1023 ┆ 2014-01-03 ┆ 2014-01-01 │
+│ 01-701-1023 ┆ 2014-01-17 ┆ 2014-01-01 │
+│ 01-701-1023 ┆ 2014-02-14 ┆ 2014-01-01 │
+└─────────────┴────────────┴────────────┘
+""")
 
     sv = (
         raw_visits.sdtm.hardcode_no_ct("DOMAIN", value="SV")  # type: ignore[attr-defined]
@@ -1559,16 +1685,17 @@ def main() -> None:
     # ════════════════════════════════════════════════════════════════════
     print("\n── 7. SE (Subject Elements) ────────────────────────────────")
 
-    disposition = pl.DataFrame(
-        {
-            "subject_id": ["01-701-1015", "01-701-1015", "01-701-1015"],
-            "ETCD": ["SCRN", "TRT", "FU"],
-            "screening_date": ["2014-01-01", "2014-01-01", "2014-01-01"],
-            "first_dose_date": ["2014-01-15", "2014-01-15", "2014-01-15"],
-            "last_visit_date": ["2014-05-01", "2014-05-01", "2014-05-01"],
-            "ref_date": ["2014-01-15", "2014-01-15", "2014-01-15"],
-        }
-    )
+    disposition = pl.from_repr("""\
+┌─────────────┬──────┬────────────────┬─────────────────┬─────────────────┬────────────┐
+│ subject_id  ┆ ETCD ┆ screening_date ┆ first_dose_date ┆ last_visit_date ┆ ref_date   │
+│ ---         ┆ ---  ┆ ---            ┆ ---             ┆ ---             ┆ ---        │
+│ str         ┆ str  ┆ str            ┆ str             ┆ str             ┆ str        │
+╞═════════════╪══════╪════════════════╪═════════════════╪═════════════════╪════════════╡
+│ 01-701-1015 ┆ SCRN ┆ 2014-01-01     ┆ 2014-01-15      ┆ 2014-05-01      ┆ 2014-01-15 │
+│ 01-701-1015 ┆ TRT  ┆ 2014-01-01     ┆ 2014-01-15      ┆ 2014-05-01      ┆ 2014-01-15 │
+│ 01-701-1015 ┆ FU   ┆ 2014-01-01     ┆ 2014-01-15      ┆ 2014-05-01      ┆ 2014-01-15 │
+└─────────────┴──────┴────────────────┴─────────────────┴─────────────────┴────────────┘
+""")
 
     se = (
         disposition.sdtm.hardcode_no_ct("DOMAIN", value="SE")  # type: ignore[attr-defined]

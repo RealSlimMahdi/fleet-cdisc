@@ -149,7 +149,13 @@ materialise first (`to_frame()`) when a result must exist before the next deriva
 4. **Google-style docstrings** — All public verbs use Google-style docstrings with `Args:`, \
 `Returns:`, and `Examples:` sections. Every example must be a complete pipeline snippet \
 ending with `.to_frame()`. Never use NumPy/Sphinx `Parameters ----------` style or bare \
-`Example::` headers.\
+`Example::` headers.
+
+5. **Prefer `pl.from_repr()` for small reproducible snippets** — When generating small \
+inline DataFrames for tests, examples, or user-facing code snippets, prefer `pl.from_repr()` \
+with a Unicode box-drawing table over `pl.DataFrame({...})`. This makes column names, types, \
+and data immediately visible without execution. Use `pl.DataFrame()` (empty) only for TDD \
+scaffolding and `pl.DataFrame(variable)` when data is built programmatically.\
 """
 
 
@@ -184,6 +190,75 @@ dm = (
 ```
 
 Nothing runs until `.to_frame()`. All verbs accumulate into a single `df.with_columns(...)` pass.\
+"""
+
+
+def _data_construction_section() -> str:
+    return """\
+## Data Sample Construction
+
+When creating inline sample DataFrames for tests, examples, or reproducible snippets, \
+prefer `pl.from_repr()` over `pl.DataFrame({...})`. Column names, types, and data are \
+immediately visible without execution.
+
+### Pattern
+
+```python
+import polars as pl
+
+raw_dm = pl.from_repr(\"\"\"\\
+┌────────────┬─────┬─────┐
+│ subject_id ┆ sex ┆ age │
+│ ---        ┆ --- ┆ --- │
+│ str        ┆ str ┆ i64 │
+╞════════════╪═════╪═════╡
+│ S001       ┆ M   ┆ 35  │
+│ S002       ┆ F   ┆ 42  │
+└────────────┴─────┴─────┘
+\"\"\")
+```
+
+### Generating the repr string
+
+Fleet ships a `to_repr()` helper that renders any DataFrame with full-width, \
+no-truncation settings so the output is directly pasteable:
+
+```python
+from fleet import to_repr
+import polars as pl
+
+# From any existing DataFrame (CSV load, query result, dict, etc.)
+df = pl.DataFrame({"USUBJID": ["S001", "S002"], "AGE": [35, 42]})
+
+# Print the from_repr-ready string
+print(to_repr(df))
+# ┌─────────┬─────┐
+# │ USUBJID ┆ AGE │
+# │ ---     ┆ --- │
+# │ str     ┆ i64 │
+# ╞═════════╪═════╡
+# │ S001    ┆ 35  │
+# │ S002    ┆ 42  │
+# └─────────┴─────┘
+
+# Paste that output into your test/example:
+df = pl.from_repr(\"\"\"\\
+┌─────────┬─────┐
+│ USUBJID ┆ AGE │
+│ ---     ┆ --- │
+│ str     ┆ i64 │
+╞═════════╪═════╡
+│ S001    ┆ 35  │
+│ S002    ┆ 42  │
+└─────────┴─────┘
+\"\"\")
+```
+
+### When `pl.DataFrame()` is still acceptable
+
+- Empty DataFrames for TDD scaffolding: `pl.DataFrame().sdtm`
+- Programmatic data built with loops or random generators (e.g. benchmark scripts)
+- API type annotations referencing `pl.DataFrame` as a return/parameter type\
 """
 
 
@@ -945,6 +1020,7 @@ def build() -> str:
         _rules_section(),
         _install_section(),
         _quickstart_section(),
+        _data_construction_section(),
         _golden_master_section(),
         _namespaces_section(),
         _sdtm_verbs_section(),

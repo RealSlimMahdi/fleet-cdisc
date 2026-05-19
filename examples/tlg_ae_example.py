@@ -48,15 +48,38 @@ from fleet.tlg import (  # noqa: E402
 )
 from specs.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX  # noqa: E402
 
-RAW = Path("datasets/cdiscpilot01/raw")
-
-
 # ════════════════════════════════════════════════════════════════════════════
-# 1. Load raw data
+# 1. Raw data (inline)
 # ════════════════════════════════════════════════════════════════════════════
 print("══ 1. Load raw data ═════════════════════════════════════════════════════")
-dm_raw = pl.read_csv(RAW / "dm_raw.csv")
-ae_raw = pl.read_csv(RAW / "ae_raw.csv")
+dm_raw = pl.from_repr("""\
+┌────────────────┬─────────┬─────┬─────┬───────────────────────────┬────────────────────────┬──────────┬──────────────────────┬─────────────────┬────────────────┬───────────────────────┐
+│ patient_number ┆ site_id ┆ age ┆ sex ┆ race                      ┆ ethnic                 ┆ arm_code ┆ arm_description      ┆ first_dose_date ┆ last_dose_date ┆ informed_consent_date │
+│ ---            ┆ ---     ┆ --- ┆ --- ┆ ---                       ┆ ---                    ┆ ---      ┆ ---                  ┆ ---             ┆ ---            ┆ ---                   │
+│ str            ┆ i64     ┆ i64 ┆ str ┆ str                       ┆ str                    ┆ str      ┆ str                  ┆ str             ┆ str            ┆ str                   │
+╞════════════════╪═════════╪═════╪═════╪═══════════════════════════╪════════════════════════╪══════════╪══════════════════════╪═════════════════╪════════════════╪═══════════════════════╡
+│ 01-701-1015    ┆ 701     ┆ 63  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-02      ┆ 2014-07-02     ┆ 2014-01-01            │
+│ 01-701-1023    ┆ 701     ┆ 64  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-03      ┆ 2014-07-04     ┆ 2014-01-02            │
+│ 01-701-1028    ┆ 701     ┆ 71  ┆ M   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Hi   ┆ Xanomeline High Dose ┆ 2014-01-04      ┆ 2014-07-05     ┆ 2014-01-03            │
+│ 01-701-1034    ┆ 701     ┆ 74  ┆ M   ┆ BLACK OR AFRICAN AMERICAN ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-05      ┆ 2014-07-06     ┆ 2014-01-04            │
+│ 01-701-1047    ┆ 701     ┆ 56  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-06      ┆ 2014-07-07     ┆ 2014-01-05            │
+└────────────────┴─────────┴─────┴─────┴───────────────────────────┴────────────────────────┴──────────┴──────────────────────┴─────────────────┴────────────────┴───────────────────────┘
+""")
+
+ae_raw = pl.from_repr("""\
+┌────────────────┬───────────────────────────┬───────────────┬─────────────┬─────────────┬────────────┬────────────────────────────┬──────────────────┬──────────────────┐
+│ patient_number ┆ ae_term                   ┆ ae_start_date ┆ ae_end_date ┆ ae_severity ┆ ae_serious ┆ ae_outcome                 ┆ ae_action_taken  ┆ ae_relationship  │
+│ ---            ┆ ---                       ┆ ---           ┆ ---         ┆ ---         ┆ ---        ┆ ---                        ┆ ---              ┆ ---              │
+│ str            ┆ str                       ┆ str           ┆ str         ┆ str         ┆ str        ┆ str                        ┆ str              ┆ str              │
+╞════════════════╪═══════════════════════════╪═══════════════╪═════════════╪═════════════╪════════════╪════════════════════════════╪══════════════════╪══════════════════╡
+│ 01-701-1015    ┆ HEADACHE                  ┆ 2014-01-10    ┆ 2014-01-12  ┆ MILD        ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ POSSIBLY RELATED │
+│ 01-701-1015    ┆ NAUSEA                    ┆ 2014-02-05    ┆ 2014-02-06  ┆ MODERATE    ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ NOT RELATED      │
+│ 01-701-1023    ┆ DIZZINESS                 ┆ 2014-01-15    ┆ 2014-01-16  ┆ MILD        ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ POSSIBLY RELATED │
+│ 01-701-1028    ┆ FATIGUE                   ┆ 2014-02-20    ┆ null        ┆ MODERATE    ┆ N          ┆ NOT RECOVERED/NOT RESOLVED ┆ DOSE NOT CHANGED ┆ PROBABLY RELATED │
+│ 01-701-1034    ┆ APPLICATION SITE ERYTHEMA ┆ 2014-01-20    ┆ 2014-01-25  ┆ SEVERE      ┆ Y          ┆ RECOVERED/RESOLVED         ┆ DRUG WITHDRAWN   ┆ RELATED          │
+└────────────────┴───────────────────────────┴───────────────┴─────────────┴─────────────┴────────────┴────────────────────────────┴──────────────────┴──────────────────┘
+""")
+
 print(f"   dm_raw : {dm_raw.shape[0]:>3} rows  ×  {dm_raw.shape[1]} cols")
 print(f"   ae_raw : {ae_raw.shape[0]:>3} rows  ×  {ae_raw.shape[1]} cols")
 
@@ -431,29 +454,32 @@ print("   HTML was injected at {{table}} placeholder in wrapper template.")
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 14. PPTX export — editable slide deck ═══════════════════════════════")
 
-pptx_path = (
-    adae.tlg.ae.population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
-    .by("TRTA")
-    .header_rows(
-        [
-            OverallStat(label="Subjects with any AE"),
-            OverallStat(label="Subjects with ≥1 SAE", filter=pl.col("AESER") == "Y"),
-        ]
+try:
+    pptx_path = (
+        adae.tlg.ae.population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
+        .by("TRTA")
+        .header_rows(
+            [
+                OverallStat(label="Subjects with any AE"),
+                OverallStat(label="Subjects with ≥1 SAE", filter=pl.col("AESER") == "Y"),
+            ]
+        )
+        .rows(["AEBODSYS", "AEDECOD"])
+        .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
+        .pools([GroupPool(label="Total", arms="*")])
+        .column_order(["Placebo", "Xanomeline Low Dose", "Xanomeline High Dose", "Total"])
+        .to_pptx(
+            "outputs/cdiscpilot01/ae_summary.pptx",
+            metadata=RenderMetadata(
+                title="Table 14.3.1.1",
+                subtitle="AE Summary — Safety Population",
+                footnotes=["Source: ADAE", "Population: Safety (SAFFL=Y)"],
+            ),
+        )
     )
-    .rows(["AEBODSYS", "AEDECOD"])
-    .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
-    .pools([GroupPool(label="Total", arms="*")])
-    .column_order(["Placebo", "Xanomeline Low Dose", "Xanomeline High Dose", "Total"])
-    .to_pptx(
-        "outputs/cdiscpilot01/ae_summary.pptx",
-        metadata=RenderMetadata(
-            title="Table 14.3.1.1",
-            subtitle="AE Summary — Safety Population",
-            footnotes=["Source: ADAE", "Population: Safety (SAFFL=Y)"],
-        ),
-    )
-)
-print(f"   Written → {pptx_path}")
+    print(f"   Written → {pptx_path}")
+except ImportError as e:
+    print(f"   Skipped (optional dependency missing): {e}")
 
 
 print("\n════════════════════════════════════════════════════════════════════════")
