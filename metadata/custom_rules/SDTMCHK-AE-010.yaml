@@ -1,0 +1,56 @@
+# SDTMCHK-AE-010: AEOUT=FATAL but AEENDTC does not match AEDTHDTC
+# Source: sdtmchecks::check_ae_aeout_aeendtc_aedthdtc
+
+Core:
+  Id: SDTMCHK-AE-010
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [AE]
+
+Check:
+  all:
+    - name: AEOUT
+      operator: equal_to
+      value: "FATAL"
+      value_is_literal: true
+    - name: AEDTHDTC
+      operator: non_empty
+    - name: AEENDTC
+      operator: non_empty
+    - name: AEENDTC
+      operator: not_equal_to
+      value: AEDTHDTC
+
+Outcome:
+  Message: >-
+    AEOUT is 'FATAL' and both AEENDTC and AEDTHDTC are populated but do not
+    match. For fatal AEs, the end date should equal the death date.
+  Output Variables: [USUBJID, AETERM, AEDECOD, AEOUT, AEENDTC, AEDTHDTC]
+
+Description: >-
+  When AEOUT is 'FATAL', AEENDTC and AEDTHDTC should be equal.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-AE-010
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_ae_aeout_aeendtc_aedthdtc
+                Document: Roche sdtmchecks
+                Section: AE Domain

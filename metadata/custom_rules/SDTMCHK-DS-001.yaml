@@ -1,0 +1,51 @@
+# SDTMCHK-DS-001: DSDECOD=DEATH but DSSTDTC missing (no death date in any DS record)
+# Source: sdtmchecks::check_ds_dsdecod_dsstdtc
+
+Core:
+  Id: SDTMCHK-DS-001
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [DS]
+
+Check:
+  all:
+    - name: DSDECOD
+      operator: equal_to
+      value: "DEATH"
+      value_is_literal: true
+    - name: DSSTDTC
+      operator: empty
+
+Outcome:
+  Message: >-
+    DSDECOD is 'DEATH' but DSSTDTC (disposition date) is missing.
+    Death records in DS should have a date populated.
+  Output Variables: [USUBJID, DSDECOD, DSTERM, DSSCAT, DSSTDTC]
+
+Description: >-
+  When DSDECOD is 'DEATH', DSSTDTC should be populated.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-DS-001
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_ds_dsdecod_dsstdtc
+                Document: Roche sdtmchecks
+                Section: DS Domain

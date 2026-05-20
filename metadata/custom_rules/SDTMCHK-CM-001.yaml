@@ -1,0 +1,50 @@
+# SDTMCHK-CM-001: CMDECOD missing for concomitant medications
+# Source: sdtmchecks::check_cm_cmdecod
+
+Core:
+  Id: SDTMCHK-CM-001
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [INTERVENTIONS]
+  Domains:
+    Include: [CM]
+
+Check:
+  all:
+    - name: CMCAT
+      operator: contains
+      value: "CONCOMITANT"
+    - name: CMDECOD
+      operator: empty
+
+Outcome:
+  Message: >-
+    CMDECOD is missing for a concomitant medication record. All concomitant
+    medications must have a coded/decoded term (WHODrug or equivalent).
+  Output Variables: [USUBJID, CMTRT, CMDECOD, CMCAT]
+
+Description: >-
+  CMDECOD must be populated for records where CMCAT contains 'CONCOMITANT'.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-CM-001
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_cm_cmdecod
+                Document: Roche sdtmchecks
+                Section: CM Domain

@@ -1,0 +1,51 @@
+# SDTMCHK-AE-009: AEOUT=NOT RECOVERED/NOT RESOLVED but AEENDTC populated
+# Source: sdtmchecks::check_ae_aeout_aeendtc_nonfatal (second condition)
+
+Core:
+  Id: SDTMCHK-AE-009
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [AE]
+
+Check:
+  all:
+    - name: AEOUT
+      operator: equal_to
+      value: "NOT RECOVERED/NOT RESOLVED"
+      value_is_literal: true
+    - name: AEENDTC
+      operator: non_empty
+
+Outcome:
+  Message: >-
+    AEOUT is 'NOT RECOVERED/NOT RESOLVED' but AEENDTC is populated.
+    Ongoing/unresolved AEs should not have an end date.
+  Output Variables: [USUBJID, AETERM, AEDECOD, AEOUT, AEENDTC]
+
+Description: >-
+  When AEOUT is 'NOT RECOVERED/NOT RESOLVED', AEENDTC should be empty.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-AE-009
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_ae_aeout_aeendtc_nonfatal
+                Document: Roche sdtmchecks
+                Section: AE Domain

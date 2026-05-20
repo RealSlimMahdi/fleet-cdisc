@@ -1,0 +1,54 @@
+# SDTMCHK-EX-004: EXTRT missing when exposure occurred
+# Source: sdtmchecks::check_ex_extrt_exoccur
+
+Core:
+  Id: SDTMCHK-EX-004
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [INTERVENTIONS]
+  Domains:
+    Include: [EX]
+
+Check:
+  all:
+    - any:
+        - name: EXOCCUR
+          operator: equal_to
+          value: "Y"
+          value_is_literal: true
+        - name: EXOCCUR
+          operator: not_exists
+    - name: EXTRT
+      operator: empty
+
+Outcome:
+  Message: >-
+    EXTRT (treatment name) is missing for a record where exposure occurred.
+    The treatment name must be recorded for all valid exposure records.
+  Output Variables: [USUBJID, EXTRT, EXSTDTC, EXDOSE, EXOCCUR]
+
+Description: >-
+  EXTRT must be populated when EXOCCUR is 'Y' or EXOCCUR does not exist.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-EX-004
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_ex_extrt_exoccur
+                Document: Roche sdtmchecks
+                Section: EX Domain

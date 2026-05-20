@@ -1,0 +1,54 @@
+# SDTMCHK-EX-005: VISIT missing when exposure occurred
+# Source: sdtmchecks::check_ex_visit
+
+Core:
+  Id: SDTMCHK-EX-005
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [INTERVENTIONS]
+  Domains:
+    Include: [EX]
+
+Check:
+  all:
+    - any:
+        - name: EXOCCUR
+          operator: equal_to
+          value: "Y"
+          value_is_literal: true
+        - name: EXOCCUR
+          operator: not_exists
+    - name: VISIT
+      operator: empty
+
+Outcome:
+  Message: >-
+    VISIT is missing for a record where exposure occurred.
+    Visit information should be recorded for exposure records.
+  Output Variables: [USUBJID, EXTRT, EXSTDTC, EXDOSE, VISIT, EXOCCUR]
+
+Description: >-
+  VISIT must be populated when EXOCCUR is 'Y' or EXOCCUR does not exist.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-EX-005
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_ex_visit
+                Document: Roche sdtmchecks
+                Section: EX Domain

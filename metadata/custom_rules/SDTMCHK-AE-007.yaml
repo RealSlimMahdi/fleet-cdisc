@@ -1,0 +1,56 @@
+# SDTMCHK-AE-007: AEOUT=FATAL with inconsistent death variables
+# Source: sdtmchecks::check_ae_fatal
+
+Core:
+  Id: SDTMCHK-AE-007
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [AE]
+
+Check:
+  all:
+    - name: AEOUT
+      operator: equal_to
+      value: "FATAL"
+      value_is_literal: true
+    - any:
+        - name: AESDTH
+          operator: not_equal_to
+          value: "Y"
+          value_is_literal: true
+        - name: AEDTHDTC
+          operator: empty
+
+Outcome:
+  Message: >-
+    AEOUT is 'FATAL' but AESDTH is not 'Y' or AEDTHDTC is missing.
+    Fatal AEs require consistent death indicators.
+  Output Variables: [USUBJID, AETERM, AEDECOD, AEOUT, AESDTH, AEDTHDTC]
+
+Description: >-
+  When AEOUT is 'FATAL', AESDTH must be 'Y' and AEDTHDTC must be populated.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-AE-007
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_ae_fatal
+                Document: Roche sdtmchecks
+                Section: AE Domain

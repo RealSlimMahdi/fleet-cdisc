@@ -1,0 +1,52 @@
+# SDTMCHK-LB-001: LBORRES populated but LBSTRESN and LBSTRESC both missing
+# Source: sdtmchecks::check_lb_lbstresn_missing
+
+Core:
+  Id: SDTMCHK-LB-001
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [FINDINGS]
+  Domains:
+    Include: [LB]
+
+Check:
+  all:
+    - name: LBORRES
+      operator: non_empty
+    - name: LBSTRESN
+      operator: empty
+    - name: LBSTRESC
+      operator: empty
+
+Outcome:
+  Message: >-
+    LBORRES is populated but both LBSTRESN and LBSTRESC are missing.
+    At least one standardized result must be derived from the original result.
+  Output Variables: [USUBJID, LBTESTCD, LBDTC, LBORRES, LBSTRESN, LBSTRESC]
+
+Description: >-
+  When LBORRES is populated, at least one of LBSTRESN or LBSTRESC must
+  also be populated.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-LB-001
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_lb_lbstresn_missing
+                Document: Roche sdtmchecks
+                Section: LB Domain

@@ -1,0 +1,57 @@
+# SDTMCHK-LB-002: LBSTRESU missing when result is populated
+# Source: sdtmchecks::check_lb_lbstresu
+
+Core:
+  Id: SDTMCHK-LB-002
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [FINDINGS]
+  Domains:
+    Include: [LB]
+
+Check:
+  all:
+    - name: LBORRES
+      operator: non_empty
+    - name: LBSTRESU
+      operator: empty
+    - name: LBTESTCD
+      operator: is_not_contained_by
+      value: ["PH", "SPGRAV"]
+    - name: LBORRES
+      operator: is_not_contained_by
+      value: ["NEGATIVE", "POSITIVE", "NOT DONE"]
+
+Outcome:
+  Message: >-
+    LBSTRESU (standard units) is missing when LBORRES is populated.
+    Lab units must be recorded for quantitative results (excluding PH,
+    SPGRAV, and qualitative results).
+  Output Variables: [USUBJID, LBTESTCD, LBDTC, LBORRES, LBSTRESN, LBSTRESU]
+
+Description: >-
+  LBSTRESU must be populated when LBORRES has a quantitative value,
+  excluding unitless tests (PH, SPGRAV) and qualitative results.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-LB-002
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_lb_lbstresu
+                Document: Roche sdtmchecks
+                Section: LB Domain

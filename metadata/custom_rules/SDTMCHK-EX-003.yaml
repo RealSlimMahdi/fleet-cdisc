@@ -1,0 +1,54 @@
+# SDTMCHK-EX-003: EXDOSU missing when exposure occurred
+# Source: sdtmchecks::check_ex_exdosu
+
+Core:
+  Id: SDTMCHK-EX-003
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [INTERVENTIONS]
+  Domains:
+    Include: [EX]
+
+Check:
+  all:
+    - any:
+        - name: EXOCCUR
+          operator: equal_to
+          value: "Y"
+          value_is_literal: true
+        - name: EXOCCUR
+          operator: not_exists
+    - name: EXDOSU
+      operator: empty
+
+Outcome:
+  Message: >-
+    EXDOSU (dose units) is missing for a record where exposure occurred.
+    Dose units must be recorded alongside dose values.
+  Output Variables: [USUBJID, EXTRT, EXSTDTC, EXDOSE, EXDOSU, EXOCCUR]
+
+Description: >-
+  EXDOSU must be populated when EXOCCUR is 'Y' or EXOCCUR does not exist.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-EX-003
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_ex_exdosu
+                Document: Roche sdtmchecks
+                Section: EX Domain

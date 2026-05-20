@@ -1,0 +1,52 @@
+# SDTMCHK-DM-002: ARM != ACTARM
+# Source: sdtmchecks::check_dm_actarm_arm
+
+Core:
+  Id: SDTMCHK-DM-002
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [DEMOGRAPHICS]
+  Domains:
+    Include: [DM]
+
+Check:
+  all:
+    - name: ARM
+      operator: non_empty
+    - name: ACTARM
+      operator: non_empty
+    - name: ARM
+      operator: not_equal_to
+      value: ACTARM
+
+Outcome:
+  Message: >-
+    ARM does not equal ACTARM. In most studies, planned and actual arms
+    should match. Mismatches require review.
+  Output Variables: [USUBJID, ARM, ACTARM]
+
+Description: >-
+  ARM and ACTARM should be equal unless there is a documented protocol deviation.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-DM-002
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_dm_actarm_arm
+                Document: Roche sdtmchecks
+                Section: DM Domain

@@ -1,0 +1,55 @@
+# SDTMCHK-EX-001: EXDOSE missing when exposure occurred
+# Source: sdtmchecks::check_ex_exdose_exoccur
+
+Core:
+  Id: SDTMCHK-EX-001
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [INTERVENTIONS]
+  Domains:
+    Include: [EX]
+
+Check:
+  all:
+    - any:
+        - name: EXOCCUR
+          operator: equal_to
+          value: "Y"
+          value_is_literal: true
+        - name: EXOCCUR
+          operator: not_exists
+    - name: EXDOSE
+      operator: empty
+
+Outcome:
+  Message: >-
+    EXDOSE is missing when exposure occurred (EXOCCUR='Y' or EXOCCUR not present).
+    Dose must be recorded for valid exposure records.
+  Output Variables: [USUBJID, EXTRT, EXSTDTC, EXDOSE, EXOCCUR]
+
+Description: >-
+  EXDOSE must be populated when EXOCCUR is 'Y' or when EXOCCUR does not exist
+  in the dataset.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-EX-001
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_ex_exdose_exoccur
+                Document: Roche sdtmchecks
+                Section: EX Domain

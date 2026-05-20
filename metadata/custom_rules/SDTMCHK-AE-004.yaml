@@ -1,0 +1,51 @@
+# SDTMCHK-AE-004: AEOUT inconsistent with AEDTHDTC (death date present but AEOUT not FATAL)
+# Source: sdtmchecks::check_ae_aeout
+
+Core:
+  Id: SDTMCHK-AE-004
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [AE]
+
+Check:
+  all:
+    - name: AEDTHDTC
+      operator: non_empty
+    - name: AEOUT
+      operator: not_equal_to
+      value: "FATAL"
+      value_is_literal: true
+
+Outcome:
+  Message: >-
+    AEDTHDTC is populated but AEOUT is not 'FATAL'. When a death date is
+    present, the outcome should indicate a fatal event.
+  Output Variables: [USUBJID, AETERM, AEDECOD, AEOUT, AEDTHDTC]
+
+Description: >-
+  When AEDTHDTC is populated, AEOUT must be 'FATAL'.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-AE-004
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_ae_aeout
+                Document: Roche sdtmchecks
+                Section: AE Domain

@@ -1,0 +1,51 @@
+# SDTMCHK-AE-008: AEOUT=RECOVERED/RESOLVED but AEENDTC missing
+# Source: sdtmchecks::check_ae_aeout_aeendtc_nonfatal
+
+Core:
+  Id: SDTMCHK-AE-008
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [AE]
+
+Check:
+  all:
+    - name: AEOUT
+      operator: is_contained_by
+      value: ["RECOVERED/RESOLVED", "RECOVERED/RESOLVED WITH SEQUELAE"]
+    - name: AEENDTC
+      operator: empty
+
+Outcome:
+  Message: >-
+    AEOUT indicates recovery but AEENDTC is missing. Resolved AEs
+    should have an end date recorded.
+  Output Variables: [USUBJID, AETERM, AEDECOD, AEOUT, AEENDTC]
+
+Description: >-
+  When AEOUT is 'RECOVERED/RESOLVED' or 'RECOVERED/RESOLVED WITH SEQUELAE',
+  AEENDTC should be populated.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-AE-008
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_ae_aeout_aeendtc_nonfatal
+                Document: Roche sdtmchecks
+                Section: AE Domain
