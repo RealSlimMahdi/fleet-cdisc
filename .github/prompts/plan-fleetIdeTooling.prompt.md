@@ -73,7 +73,7 @@ TRTSDT — derived by first_date
   [Click to open definition]
 ```
 
-**Edge case:** If pipeline_dag.json is stale (older than the define.yaml mtime), show a warning badge: _"Lineage data may be outdated — re-run pipeline to refresh."_
+**Edge case:** If pipeline*dag.json is stale (older than the define.yaml mtime), show a warning badge: *"Lineage data may be outdated — re-run pipeline to refresh."\_
 
 ### 1.8 CDISC Library variable hover
 

@@ -163,7 +163,7 @@ def main() -> None:
     row("Language / engine", "Python + Polars (Rust)", "R + dplyr (C++)")
 
     # ── Equivalence check ─────────────────────────────────────────────
-    print(f"\n  Output Equivalence Check")
+    print("\n  Output Equivalence Check")
     print(sep)
     try:
         import polars as pl

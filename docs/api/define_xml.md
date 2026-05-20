@@ -4,19 +4,19 @@ Fleet generates and validates CDISC Define-XML 2.1 documents from `define.yaml` 
 
 ## DefineXMLGenerator
 
-::: fleet.define_xml.DefineXMLGenerator
+::: fleet.define*xml.DefineXMLGenerator
 options:
 show_root_heading: true
 heading_level: 3
-filters: ["!^_"]
+filters: ["!^*"]
 
 ## DefineSpecGenerator
 
-::: fleet.define_xml.DefineSpecGenerator
+::: fleet.define*xml.DefineSpecGenerator
 options:
 show_root_heading: true
 heading_level: 3
-filters: ["!^_"]
+filters: ["!^*"]
 
 ### Method enrichment (`enrich_methods=True`)
 
@@ -64,16 +64,16 @@ derivation:
 
 ## DefineValidator
 
-::: fleet.define_xml.DefineValidator
+::: fleet.define*xml.DefineValidator
 options:
 show_root_heading: true
 heading_level: 3
-filters: ["!^_"]
+filters: ["!^*"]
 
 ## DatasetChecker
 
-::: fleet.define_xml.DatasetChecker
+::: fleet.define*xml.DatasetChecker
 options:
 show_root_heading: true
 heading_level: 3
-filters: ["!^_"]
+filters: ["!^*"]

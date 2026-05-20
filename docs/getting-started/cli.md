@@ -67,12 +67,12 @@ fleet init define --adam-only                  # ADaM only
 fleet init define --config path/to/config.yaml # custom config location
 ```
 
-| Option            | Default             | Description                             |
-| ----------------- | ------------------- | --------------------------------------- |
-| `--config` / `-c` | `study_config.yaml` | Path to config file                     |
-| `--sdtm-only`     | _(off)_             | Generate SDTM define only               |
-| `--adam-only`     | _(off)_             | Generate ADaM define only 
-| `--force`         | _(off)_             | Overwrite existing define.yaml files    |
+| Option            | Default             | Description                          |
+| ----------------- | ------------------- | ------------------------------------ |
+| `--config` / `-c` | `study_config.yaml` | Path to config file                  |
+| `--sdtm-only`     | _(off)_             | Generate SDTM define only            |
+| `--adam-only`     | _(off)_             | Generate ADaM define only            |
+| `--force`         | _(off)_             | Overwrite existing define.yaml files |
 
 The generated YAML includes variable names, labels, types, mandatory flags, **CDISC core designations** (`Req`, `Exp`, `Perm`, `Conditionally Required`), codelist references, and origin hints — all sourced from the CDISC Library. The `core` field enables graduated check severity (see [DatasetChecker](#datasetChecker) below). Variables are created **without** derivation blocks (carry-through columns); add derivation blocks to drive the pipeline.
 

@@ -14,9 +14,9 @@ The `CDISCClient` wraps `httpx` to authenticate against the CDISC Library REST A
 
 ::: fleet.ct.CDISCClient
 options:
-show_root_heading: true
+show*root_heading: true
 heading_level: 3
-filters: ["!^_"]
+filters: ["!^*"]
 
 ::: fleet.ct.CDISCClientConfig
 options:
@@ -112,9 +112,9 @@ dm = (
 
 ::: fleet.ct.CodelistGenerator
 options:
-show_root_heading: true
+show*root_heading: true
 heading_level: 3
-filters: ["!^_"]
+filters: ["!^*"]
 
 ---
 
@@ -193,9 +193,9 @@ rather than inline. CT validation at pipeline-build time is a feature of the SDT
 
 ::: fleet.ct.CTValidator
 options:
-show_root_heading: true
+show*root_heading: true
 heading_level: 3
-filters: ["!^_"]
+filters: ["!^*"]
 
 ## load_controlled_terminology
 
