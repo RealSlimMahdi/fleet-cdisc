@@ -1,0 +1,56 @@
+# SDTMCHK-EX-011: EXOCCUR missing/N but EXDOSE>0 or EXSTDTC populated
+# Source: sdtmchecks::check_ex_exoccur_exdose_exstdtc
+
+Core:
+  Id: SDTMCHK-EX-011
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [INTERVENTIONS]
+  Domains:
+    Include: [EX]
+
+Check:
+  all:
+    - name: EXOCCUR
+      operator: equal_to
+      value: "N"
+      value_is_literal: true
+    - any:
+        - name: EXDOSE
+          operator: greater_than
+          value: 0
+        - name: EXSTDTC
+          operator: non_empty
+
+Outcome:
+  Message: >-
+    EXOCCUR is 'N' (did not occur) but EXDOSE > 0 or EXSTDTC is populated.
+    Non-occurring exposure records should not have positive doses or dates.
+  Output Variables: [USUBJID, EXTRT, EXOCCUR, EXDOSE, EXSTDTC, VISIT]
+
+Description: >-
+  When EXOCCUR='N', EXDOSE should be 0 or missing and EXSTDTC should be empty.
+  Positive dose or populated start date with EXOCCUR='N' is contradictory.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-EX-011
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_ex_exoccur_exdose_exstdtc
+                Document: Roche sdtmchecks
+                Section: EX Domain

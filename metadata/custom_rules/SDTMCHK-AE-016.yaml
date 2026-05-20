@@ -1,0 +1,64 @@
+# SDTMCHK-AE-016: AEDTHDTC does not match DS death date
+# Source: sdtmchecks::check_dd_ae_aedthdtc_ds_dsstdtc
+
+Core:
+  Id: SDTMCHK-AE-016
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [AE]
+
+Check:
+  all:
+    - name: AEDTHDTC
+      operator: non_empty
+    - name: $ds_death_date
+      operator: non_empty
+    - name: AEDTHDTC
+      operator: date_not_equal_to
+      value: $ds_death_date
+      date_component: auto
+
+Operations:
+  - operator: max_date
+    domain: DS
+    name: DSSTDTC
+    id: $ds_death_date
+    group:
+      - USUBJID
+    filter:
+      DSDECOD: DEATH
+
+Outcome:
+  Message: >-
+    AEDTHDTC does not match the death date in DS (DSSTDTC where DSDECOD='DEATH').
+    The AE death date and disposition death date should be consistent.
+  Output Variables: [USUBJID, AETERM, AEDTHDTC, $ds_death_date]
+
+Description: >-
+  AEDTHDTC should match the DS death date (DSSTDTC for DSDECOD='DEATH').
+  Inconsistency between these two dates suggests a data quality issue.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-AE-016
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_dd_ae_aedthdtc_ds_dsstdtc
+                Document: Roche sdtmchecks
+                Section: Death Date Checks

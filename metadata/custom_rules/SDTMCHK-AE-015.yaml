@@ -1,0 +1,62 @@
+# SDTMCHK-AE-015: DS death record exists but no AEDTHDTC in AE
+# Source: sdtmchecks::check_ae_aedthdtc_ds_death
+
+Core:
+  Id: SDTMCHK-AE-015
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [DS]
+
+Check:
+  all:
+    - name: DSDECOD
+      operator: equal_to
+      value: "DEATH"
+      value_is_literal: true
+    - name: USUBJID
+      operator: is_not_contained_by
+      value: $ae_death_subjects
+
+Operations:
+  - operator: distinct
+    domain: AE
+    name: USUBJID
+    id: $ae_death_subjects
+    filter:
+      AEDTHDTC: ""
+
+Outcome:
+  Message: >-
+    Subject has a death record in DS (DSDECOD='DEATH') but no AEDTHDTC is
+    populated in the AE domain. When death is recorded in DS, there should
+    be a corresponding AE record with AEDTHDTC populated.
+  Output Variables: [USUBJID, DSDECOD, DSSTDTC, DSTERM]
+
+Description: >-
+  When a subject has DSDECOD='DEATH' in DS, at least one AE record should
+  have AEDTHDTC populated.
+
+Sensitivity: Record
+Executability: Partially Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-AE-015
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_ae_aedthdtc_ds_death
+                Document: Roche sdtmchecks
+                Section: AE Domain

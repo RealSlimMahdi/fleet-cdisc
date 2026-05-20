@@ -1,0 +1,53 @@
+# SDTMCHK-AE-014: Duplicate AE records
+# Source: sdtmchecks::check_ae_dup
+
+Core:
+  Id: SDTMCHK-AE-014
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [AE]
+
+Check:
+  all:
+    - name: AETERM
+      operator: is_not_unique_set
+      value:
+        - USUBJID
+        - AESTDTC
+        - AEENDTC
+        - AEDECOD
+
+Outcome:
+  Message: >-
+    Duplicate AE record detected. The combination of USUBJID, AETERM, AESTDTC,
+    AEENDTC, and AEDECOD is not unique — potential duplicate entry.
+  Output Variables: [USUBJID, AETERM, AEDECOD, AESTDTC, AEENDTC, AESEQ]
+
+Description: >-
+  Checks for duplicate AE records based on key identifying variables
+  (USUBJID, AETERM, AESTDTC, AEENDTC, AEDECOD).
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-AE-014
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_ae_dup
+                Document: Roche sdtmchecks
+                Section: AE Domain

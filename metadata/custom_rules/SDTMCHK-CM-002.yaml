@@ -1,0 +1,56 @@
+# SDTMCHK-CM-002: CM dates missing month (incomplete date)
+# Source: sdtmchecks::check_cm_missing_month
+
+Core:
+  Id: SDTMCHK-CM-002
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [INTERVENTIONS]
+  Domains:
+    Include: [CM]
+
+Check:
+  any:
+    - all:
+        - name: CMSTDTC
+          operator: non_empty
+        - name: CMSTDTC
+          operator: is_incomplete_date
+    - all:
+        - name: CMENDTC
+          operator: non_empty
+        - name: CMENDTC
+          operator: is_incomplete_date
+
+Outcome:
+  Message: >-
+    CM date (CMSTDTC or CMENDTC) is an incomplete (partial) date. Concomitant
+    medication dates should have at least month-level precision.
+  Output Variables: [USUBJID, CMTRT, CMDECOD, CMSTDTC, CMENDTC]
+
+Description: >-
+  CM start/end dates should include at minimum month precision (YYYY-MM).
+  Year-only dates indicate possible data quality issues.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-CM-002
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_cm_missing_month
+                Document: Roche sdtmchecks
+                Section: CM Domain

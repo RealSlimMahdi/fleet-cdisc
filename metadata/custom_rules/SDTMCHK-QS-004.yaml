@@ -1,0 +1,53 @@
+# SDTMCHK-QS-004: Duplicate QS records at same visit
+# Source: sdtmchecks::check_qs_dup
+
+Core:
+  Id: SDTMCHK-QS-004
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [FINDINGS]
+  Domains:
+    Include: [QS]
+
+Check:
+  all:
+    - name: QSTESTCD
+      operator: is_not_unique_set
+      value:
+        - USUBJID
+        - QSCAT
+        - QSDTC
+        - VISITNUM
+
+Outcome:
+  Message: >-
+    Duplicate QS record detected. The combination of USUBJID, QSTESTCD,
+    QSCAT, QSDTC, and VISITNUM is not unique.
+  Output Variables: [USUBJID, QSTESTCD, QSCAT, QSDTC, VISIT, VISITNUM, QSSEQ]
+
+Description: >-
+  QS records should be unique per subject, test, category, date, and visit.
+  Duplicate entries may indicate double data entry.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-QS-004
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_qs_dup
+                Document: Roche sdtmchecks
+                Section: QS Domain

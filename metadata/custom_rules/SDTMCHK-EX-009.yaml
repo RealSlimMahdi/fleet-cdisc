@@ -1,0 +1,57 @@
+# SDTMCHK-EX-009: EX visit date ordering error
+# Source: sdtmchecks::check_ex_exstdtc_visit_ordinal_error
+
+Core:
+  Id: SDTMCHK-EX-009
+  Status: Draft
+  Version: '1'
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [INTERVENTIONS]
+  Domains:
+    Include: [EX]
+
+Check:
+  all:
+    - name: EXSTDTC
+      operator: non_empty
+    - name: VISITNUM
+      operator: non_empty
+    - name: VISITNUM
+      operator: target_is_not_sorted_by
+      within:
+        - USUBJID
+      value:
+        - name: EXSTDTC
+          sort_order: asc
+
+Outcome:
+  Message: >-
+    EX visit ordering error: VISITNUM is not consistent with chronological
+    order of EXSTDTC within the subject. A later visit has an earlier date.
+  Output Variables: [USUBJID, VISIT, VISITNUM, EXSTDTC, EXTRT]
+
+Description: >-
+  Within each subject, records at later visits (higher VISITNUM) should have
+  later or equal EXSTDTC. An earlier date at a later visit suggests data error.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: '3.4'
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-EX-009
+              Version: '1'
+            Citations:
+              - Cited Guidance: check_ex_exstdtc_visit_ordinal_error
+                Document: Roche sdtmchecks
+                Section: EX Domain
