@@ -168,8 +168,7 @@ print(f"\n── 2a. SDTM DM : {dm.shape[0]} subjects × {dm.shape[1]} variables
 # columns stay in DM unchanged. For IG ≤3.4, export_supp() unpivots them
 # to the vertical SUPPQUAL structure.
 dm_ns = (
-    dm_raw.sdtm
-    .hardcode_no_ct("STUDYID", value="CDISCPILOT01")
+    dm_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")
     .hardcode_no_ct("DOMAIN", value="DM")
     .assign_no_ct("USUBJID", source="patient_number")
     .nsv("SAFETY", value="Y", label="Safety Population Flag")
@@ -179,9 +178,13 @@ suppdm = dm_ns.export_supp()
 print(f"        → SUPPDM: {suppdm.shape[0]} qualifier rows × {suppdm.shape[1]} variables")
 
 # Post-hoc pattern: export_supp with explicit qualifiers dict on existing frame
-suppdm_alt = dm.sdtm.export_supp(
-    qualifiers={"ARM": {"label": "Description of Planned Arm", "origin": "PROTOCOL"}},
-) if "ARM" in dm.columns else None
+suppdm_alt = (
+    dm.sdtm.export_supp(
+        qualifiers={"ARM": {"label": "Description of Planned Arm", "origin": "PROTOCOL"}},
+    )
+    if "ARM" in dm.columns
+    else None
+)
 if suppdm_alt is not None:
     print(f"        → SUPPDM (post-hoc): {suppdm_alt.shape[0]} rows")
 
@@ -1925,6 +1928,79 @@ uv run fleet init rules --force
 `fleet init rules` reads the IG version from each `define.yaml` (`study.standard_version`), fetches all conformance rules from the CDISC Library API, groups them by domain, and writes one YAML file per domain into `metadata/sdtm/rules/` and `metadata/adam/rules/`.
 
 Each YAML file contains the rule ID, description, check logic, scope, severity, and references — providing a human-readable, version-controlled audit trail of the exact rules applied to the study.
+
+For sponsor-specific checks not covered by CDISC CORE, see the **Custom Validation Rules** section below (`fleet add-rule`, `fleet check-rule`).
+
+## Custom Validation Rules
+
+Sponsors can author rules in the same YAML schema as CDISC CORE and run them alongside official rules via the `-lr` flag in the CDISC Rules Engine.
+
+### CLI
+
+```bash
+# Scaffold a schema-valid rule YAML (fills in all required fields automatically)
+uv run fleet add-rule --domain AE --description "AESEV must be populated when AESER = Y"
+
+# Custom company prefix (default: FLEET)
+uv run fleet add-rule --domain AE --prefix ROCHE --description "Severity required for serious AEs"
+
+# Explicit rule ID override (skips auto-increment)
+uv run fleet add-rule --domain AE --id ROCHE-AE-042 --description "Custom check"
+
+# Write to a specific directory (overrides study_config.yaml)
+uv run fleet add-rule --domain VS --description "VSORRES range check" --output ./my_rules/
+
+# Validate a rule YAML (YAML syntax + structure + JSON Schema)
+uv run fleet check-rule my_rules/FLEET-AE-001.yaml
+```
+
+`fleet add-rule` auto-increments the sequence number by scanning existing rules in the target directory, checks uniqueness of `Core.Id` across all files in that directory, and writes a fully schema-valid skeleton with a TODO `Check:` block the programmer fills in.
+
+`fleet check-rule` performs three levels of validation:
+1. YAML syntax — reports line and column on parse errors
+2. Structure — checks for required top-level keys, Core.Id, combinators, non-empty scope
+3. JSON Schema — full validation against the vendored CDISC rule schema
+
+### study_config.yaml
+
+Set a team-wide default rules directory:
+
+```yaml
+validation:
+  custom_rules: metadata/custom_rules  # all .yaml files here are loaded via -lr
+```
+
+`fleet init cfg` creates this directory and sets the config field automatically.
+
+### Python API
+
+```python
+# Per-call override: pass a directory path to .validate()
+ae = (
+    raw_df.sdtm
+    .hardcode_no_ct("DOMAIN", value="AE")
+    .validate("AE", custom_rules="metadata/custom_rules")
+    .to_frame()
+)
+
+# Via ValidationService
+from fleet.validation.service import ValidationService
+svc = ValidationService()
+result = svc.validate_sdtm(ae, domain="AE", custom_rules="metadata/custom_rules")
+result.print_report()
+```
+
+Resolution order: explicit `custom_rules=` param > `study_config.yaml` default > None.
+
+### Rule ID convention
+
+Use a company prefix to avoid clashing with official `CORE-XXXXXX` identifiers:
+`<COMPANY>-<DOMAIN>-<NNN>` e.g. `ROCHE-AE-001`, `FLEET-DM-003`
+
+### Reference
+
+CDISC Rules Engine rule types and operators:
+https://github.com/cdisc-org/cdisc-rules-engine/wiki/Rule-Types
 
 ## Documentation
 

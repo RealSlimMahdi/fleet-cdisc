@@ -15,12 +15,7 @@ import yaml
 # https://github.com/cdisc-org/cdisc-rules-engine/tree/main/resources/schema/rule)
 
 SCHEMA_PATH = (
-    Path(__file__).parent
-    / "src"
-    / "fleet"
-    / "validation"
-    / "schemas"
-    / "cdisc_rule_schema.json"
+    Path(__file__).parent / "src" / "fleet" / "validation" / "schemas" / "cdisc_rule_schema.json"
 )
 
 
@@ -38,6 +33,7 @@ def validate_rule_schema(rule: dict) -> list[str]:
 
 
 # ── 2. Engine execution test ──────────────────────────────────────────
+
 
 def make_test_xpt(tmpdir: Path) -> Path:
     """Create a minimal AE XPT with one passing and one failing record.
@@ -65,9 +61,7 @@ def make_test_xpt(tmpdir: Path) -> Path:
     # build it from the polars dict representation to avoid a pyarrow dep.
     import pandas as pd  # transitive dep of pyreadstat — not used elsewhere
 
-    pyreadstat.write_xport(
-        pd.DataFrame(ae_data.to_dict()), str(out), file_format_version=5
-    )
+    pyreadstat.write_xport(pd.DataFrame(ae_data.to_dict()), str(out), file_format_version=5)
     return out
 
 
@@ -88,12 +82,18 @@ def run_engine_test(rule_path: Path) -> bool:
         cmd = [
             str(engine),
             "validate",
-            "-s", "sdtmig",
-            "-v", "3-4",
-            "-dp", str(dataset_path),
-            "-lr", str(rule_path),
-            "-o", str(output_path),
-            "-of", "JSON",
+            "-s",
+            "sdtmig",
+            "-v",
+            "3-4",
+            "-dp",
+            str(dataset_path),
+            "-lr",
+            str(rule_path),
+            "-o",
+            str(output_path),
+            "-of",
+            "JSON",
             "-rr",
         ]
 
@@ -140,7 +140,9 @@ def run_engine_test(rule_path: Path) -> bool:
                 status = our_rule[0].get("status", "UNKNOWN")
                 print(f"\n  Rule status: {status}")
                 if status == "ISSUE_REPORTED":
-                    print("  [PASS] Engine found issues (expected — test data has a failing record)")
+                    print(
+                        "  [PASS] Engine found issues (expected — test data has a failing record)"
+                    )
                 elif status == "SUCCESS":
                     print("  [WARN] Engine reported SUCCESS — no issues found (unexpected)")
                 elif status == "SKIPPED":
@@ -173,8 +175,16 @@ def run_engine_test(rule_path: Path) -> bool:
 
 # ── 3. Main ───────────────────────────────────────────────────────────
 
+
 def main() -> int:
-    rule_file = Path(__file__).parent / "specs" / "cdiscpilot01" / "sdtm" / "custom_rules" / "FLEET-AE-001.yaml"
+    rule_file = (
+        Path(__file__).parent
+        / "specs"
+        / "cdiscpilot01"
+        / "sdtm"
+        / "custom_rules"
+        / "FLEET-AE-001.yaml"
+    )
     if not rule_file.exists():
         print(f"Rule file not found: {rule_file}")
         return 1

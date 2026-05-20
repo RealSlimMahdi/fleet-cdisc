@@ -91,9 +91,7 @@ class TestCondDerivation:
 
 class TestStudyDay:
     def test_study_day_same_day(self, vs_frame):
-        result = vs_frame.adam.duration(
-            "ADY", start="TRTSDT", end="vsdtc"
-        ).to_frame()
+        result = vs_frame.adam.duration("ADY", start="TRTSDT", end="vsdtc").to_frame()
         assert result["ADY"][0] == 1
 
     def test_study_day_requires_dates(self, vs_frame):

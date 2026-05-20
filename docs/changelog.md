@@ -22,6 +22,14 @@ All notable changes to Fleet are documented here.
   - `fleet init-ct` — standalone bootstrap of `codelists.py` from the SDTM IG for given domains
   - `fleet add-ct` — incrementally add domains to an existing `codelists.py` (preserves existing codelists)
   - `fleet define-xml` — generate Define-XML 2.1 from a `define.yaml` specification (with optional HTML preview)
+- **Custom Validation Rules** — sponsor-specific CDISC rule authoring and validation workflow:
+  - `fleet add-rule` — scaffold a schema-valid rule YAML skeleton (auto-increments ID, uniqueness check across directory)
+  - `fleet check-rule` — validate a rule file (YAML syntax + structure + JSON Schema); exits 1 on error for CI gates
+  - `custom_rules=` parameter on `.validate()`, `ValidationService.validate_sdtm()`, and `.validate_adam()` — load a directory of rules via the engine's `-lr` flag
+  - `validation.custom_rules` in `study_config.yaml` — team-wide default rules directory
+  - `fleet init cfg` scaffolds the `custom_rules/` directory and field automatically
+  - Header comments in generated rule files include CDISC operator reference link and rule type guide
+
 - **`assign_ct` now accepts codelist classes** — pass a generated class (e.g. `SEX`) instead of a raw NCI string; `ct_mapping` is optional when raw data already matches CDISC submission values
 
 - **Admiral-parity expansion** — new core computations and record-generating verbs:

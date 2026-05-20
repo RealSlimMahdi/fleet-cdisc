@@ -162,15 +162,117 @@ def scaffold_rule(
         f"# {rule_id}: {description}\n"
         "#\n"
         "# TODO: Edit the Check block below with your validation logic.\n"
-        "# See CDISC Rules Engine docs for available operators:\n"
+        "#\n"
+        "# Rule types and operators reference:\n"
+        "#   https://github.com/cdisc-org/cdisc-rules-engine/wiki/Rule-Types\n"
+        "#\n"
+        "# Available operators:\n"
         "#   equal_to, not_equal_to, empty, non_empty, less_than,\n"
         "#   greater_than, contains, does_not_contain, is_contained_by, etc.\n"
         "#\n"
-        "# After editing, validate with:\n"
-        f"#   uv run python test_custom_rule.py  (update path to this file)\n"
+        "# Rule types:\n"
+        "#   Record Data       — check within a single row\n"
+        "#   Record Data [VP]  — check across rows (value-level)\n"
+        "#   Dataset Data      — check across datasets\n"
+        "#\n"
+        "# Validate this rule:\n"
+        f"#   uv run fleet check-rule {rule_id}.yaml\n"
+        "#\n"
+        "# Run via pipeline:\n"
+        f'#   .validate("{domain.upper()}", custom_rules="{output_dir}")\n'
         "\n"
     )
     yaml_content = yaml.dump(rule, default_flow_style=False, allow_unicode=True, sort_keys=False)
     out_file.write_text(header + yaml_content, encoding="utf-8")
 
     return out_file
+
+
+# ── Rule validation ───────────────────────────────────────────────────
+
+
+_SCHEMA_PATH = Path(__file__).parent / "schemas" / "cdisc_rule_schema.json"
+
+
+def check_rule(rule_path: Path) -> list[str]:
+    """Validate a custom rule YAML file against the CDISC schema.
+
+    Performs three levels of checking:
+      1. YAML syntax — can the file be parsed?
+      2. Structure — does the parsed dict have required top-level keys?
+      3. Schema — full JSON Schema validation against the CDISC rule schema.
+
+    Args:
+        rule_path: Path to the rule YAML file.
+
+    Returns:
+        List of error messages. Empty list means the rule is valid.
+    """
+    import json
+
+    errors: list[str] = []
+
+    # ── 1. YAML parse ─────────────────────────────────────────────────
+    try:
+        with open(rule_path) as f:
+            rule = yaml.safe_load(f)
+    except yaml.YAMLError as exc:
+        mark = getattr(exc, "problem_mark", None)
+        if mark:
+            errors.append(
+                f"YAML syntax error at line {mark.line + 1}, column {mark.column + 1}: "
+                f"{getattr(exc, 'problem', str(exc))}"
+            )
+        else:
+            errors.append(f"YAML syntax error: {exc}")
+        return errors
+
+    if not isinstance(rule, dict):
+        errors.append(f"Expected a YAML mapping (dict) at top level, got {type(rule).__name__}")
+        return errors
+
+    # ── 2. Quick structure checks ─────────────────────────────────────
+    required_keys = {"Core", "Check", "Scope", "Rule Type"}
+    missing = required_keys - set(rule.keys())
+    if missing:
+        errors.append(f"Missing required top-level keys: {', '.join(sorted(missing))}")
+
+    core = rule.get("Core", {})
+    if isinstance(core, dict):
+        if not core.get("Id"):
+            errors.append("Core.Id is missing or empty")
+        if not core.get("Version"):
+            errors.append("Core.Version is missing or empty")
+
+    check = rule.get("Check")
+    if isinstance(check, dict):
+        if not any(k in check for k in ("all", "any", "not")):
+            errors.append(
+                "Check block must contain at least one combinator: 'all', 'any', or 'not'"
+            )
+
+    scope = rule.get("Scope", {})
+    if isinstance(scope, dict):
+        domains = scope.get("Domains", {})
+        if isinstance(domains, dict) and not domains.get("Include"):
+            errors.append("Scope.Domains.Include is empty — rule won't match any domain")
+
+    # ── 3. Full JSON Schema validation ────────────────────────────────
+    if _SCHEMA_PATH.exists():
+        try:
+            from jsonschema import Draft202012Validator
+
+            schema = json.loads(_SCHEMA_PATH.read_text())
+            validator = Draft202012Validator(schema)
+            for error in sorted(validator.iter_errors(rule), key=lambda e: list(e.path)):
+                path = ".".join(str(p) for p in error.absolute_path) or "(root)"
+                errors.append(f"Schema: {path}: {error.message}")
+        except ImportError:
+            errors.append(
+                "jsonschema not installed — install with: uv add jsonschema "
+                "(schema validation skipped)"
+            )
+    else:
+        errors.append(f"Schema file not found at {_SCHEMA_PATH} (schema validation skipped)")
+
+    return errors

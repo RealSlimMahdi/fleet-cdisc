@@ -119,8 +119,7 @@ print(f"\n── 2a. SDTM DM : {dm.shape[0]} subjects × {dm.shape[1]} variables
 # columns stay in DM unchanged. For IG ≤3.4, export_supp() unpivots them
 # to the vertical SUPPQUAL structure.
 dm_ns = (
-    dm_raw.sdtm
-    .hardcode_no_ct("STUDYID", value="CDISCPILOT01")
+    dm_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")
     .hardcode_no_ct("DOMAIN", value="DM")
     .assign_no_ct("USUBJID", source="patient_number")
     .nsv("SAFETY", value="Y", label="Safety Population Flag")
@@ -130,9 +129,13 @@ suppdm = dm_ns.export_supp()
 print(f"        → SUPPDM: {suppdm.shape[0]} qualifier rows × {suppdm.shape[1]} variables")
 
 # Post-hoc pattern: export_supp with explicit qualifiers dict on existing frame
-suppdm_alt = dm.sdtm.export_supp(
-    qualifiers={"ARM": {"label": "Description of Planned Arm", "origin": "PROTOCOL"}},
-) if "ARM" in dm.columns else None
+suppdm_alt = (
+    dm.sdtm.export_supp(
+        qualifiers={"ARM": {"label": "Description of Planned Arm", "origin": "PROTOCOL"}},
+    )
+    if "ARM" in dm.columns
+    else None
+)
 if suppdm_alt is not None:
     print(f"        → SUPPDM (post-hoc): {suppdm_alt.shape[0]} rows")
 

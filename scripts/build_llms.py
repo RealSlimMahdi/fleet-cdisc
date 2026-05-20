@@ -617,8 +617,83 @@ one YAML file per domain into `metadata/sdtm/rules/` and `metadata/adam/rules/`.
 
 Each YAML file contains the rule ID, description, check logic, scope, severity, and \
 references — providing a human-readable, version-controlled audit trail of the exact rules \
-applied to the study.\
-"""
+applied to the study.
+
+For sponsor-specific checks not covered by CDISC CORE, see the **Custom Validation Rules** \
+section below (`fleet add-rule`, `fleet check-rule`)."""
+
+
+def _custom_rules_section() -> str:
+    return """## Custom Validation Rules
+
+Sponsors can author rules in the same YAML schema as CDISC CORE and run them alongside official rules via the `-lr` flag in the CDISC Rules Engine.
+
+### CLI
+
+```bash
+# Scaffold a schema-valid rule YAML (fills in all required fields automatically)
+uv run fleet add-rule --domain AE --description "AESEV must be populated when AESER = Y"
+
+# Custom company prefix (default: FLEET)
+uv run fleet add-rule --domain AE --prefix ROCHE --description "Severity required for serious AEs"
+
+# Explicit rule ID override (skips auto-increment)
+uv run fleet add-rule --domain AE --id ROCHE-AE-042 --description "Custom check"
+
+# Write to a specific directory (overrides study_config.yaml)
+uv run fleet add-rule --domain VS --description "VSORRES range check" --output ./my_rules/
+
+# Validate a rule YAML (YAML syntax + structure + JSON Schema)
+uv run fleet check-rule my_rules/FLEET-AE-001.yaml
+```
+
+`fleet add-rule` auto-increments the sequence number by scanning existing rules in the target directory, checks uniqueness of `Core.Id` across all files in that directory, and writes a fully schema-valid skeleton with a TODO `Check:` block the programmer fills in.
+
+`fleet check-rule` performs three levels of validation:
+1. YAML syntax — reports line and column on parse errors
+2. Structure — checks for required top-level keys, Core.Id, combinators, non-empty scope
+3. JSON Schema — full validation against the vendored CDISC rule schema
+
+### study_config.yaml
+
+Set a team-wide default rules directory:
+
+```yaml
+validation:
+  custom_rules: metadata/custom_rules  # all .yaml files here are loaded via -lr
+```
+
+`fleet init cfg` creates this directory and sets the config field automatically.
+
+### Python API
+
+```python
+# Per-call override: pass a directory path to .validate()
+ae = (
+    raw_df.sdtm
+    .hardcode_no_ct("DOMAIN", value="AE")
+    .validate("AE", custom_rules="metadata/custom_rules")
+    .to_frame()
+)
+
+# Via ValidationService
+from fleet.validation.service import ValidationService
+svc = ValidationService()
+result = svc.validate_sdtm(ae, domain="AE", custom_rules="metadata/custom_rules")
+result.print_report()
+```
+
+Resolution order: explicit `custom_rules=` param > `study_config.yaml` default > None.
+
+### Rule ID convention
+
+Use a company prefix to avoid clashing with official `CORE-XXXXXX` identifiers:
+`<COMPANY>-<DOMAIN>-<NNN>` e.g. `ROCHE-AE-001`, `FLEET-DM-003`
+
+### Reference
+
+CDISC Rules Engine rule types and operators:
+https://github.com/cdisc-org/cdisc-rules-engine/wiki/Rule-Types"""
 
 
 # ---------------------------------------------------------------------------
@@ -943,6 +1018,7 @@ def build() -> str:
         _define_yaml_section(),
         _ct_section(),
         _rules_caching_section(),
+        _custom_rules_section(),
         _docs_section(),
     ]
     return "\n\n".join(sections) + "\n"

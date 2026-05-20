@@ -67,12 +67,12 @@ fleet init define --adam-only                  # ADaM only
 fleet init define --config path/to/config.yaml # custom config location
 ```
 
-| Option            | Default             | Description                             |
-| ----------------- | ------------------- | --------------------------------------- |
-| `--config` / `-c` | `study_config.yaml` | Path to config file                     |
-| `--sdtm-only`     | _(off)_             | Generate SDTM define only               |
-| `--adam-only`     | _(off)_             | Generate ADaM define only 
-| `--force`         | _(off)_             | Overwrite existing define.yaml files    |
+| Option            | Default             | Description                          |
+| ----------------- | ------------------- | ------------------------------------ |
+| `--config` / `-c` | `study_config.yaml` | Path to config file                  |
+| `--sdtm-only`     | _(off)_             | Generate SDTM define only            |
+| `--adam-only`     | _(off)_             | Generate ADaM define only            |
+| `--force`         | _(off)_             | Overwrite existing define.yaml files |
 
 The generated YAML includes variable names, labels, types, mandatory flags, **CDISC core designations** (`Req`, `Exp`, `Perm`, `Conditionally Required`), codelist references, and origin hints — all sourced from the CDISC Library. The `core` field enables graduated check severity (see [DatasetChecker](#datasetChecker) below). Variables are created **without** derivation blocks (carry-through columns); add derivation blocks to drive the pipeline.
 
@@ -172,6 +172,95 @@ Updated /path/to/codelists.py — 32 codelists
 
 ---
 
+## `fleet add-rule`
+
+Scaffold a new custom validation rule YAML skeleton.
+
+Generates a schema-valid CDISC rule file with all required sections pre-filled. Only the
+`Check:` block needs to be edited with your validation logic.
+
+```bash
+# Minimal — auto-increments ID (FLEET-AE-001, FLEET-AE-002, …)
+fleet add-rule --domain AE --description "AESEV must be populated when AESER = Y"
+
+# Custom company prefix
+fleet add-rule --domain AE --prefix ROCHE --description "Severity check"
+
+# Explicit rule ID (skips auto-increment)
+fleet add-rule --domain VS --id ROCHE-VS-010 --description "VSORRES range check"
+
+# Write to a specific directory (overrides study_config)
+fleet add-rule --domain DM --description "RFICDTC check" --output ./my_rules/
+```
+
+### Options
+
+| Option            | Default                                            | Description                                         |
+| ----------------- | -------------------------------------------------- | --------------------------------------------------- |
+| `--domain`        | _(required)_                                       | SDTM/ADaM domain code (e.g. `AE`, `DM`, `VS`)       |
+| `--description`   | _(required)_                                       | Human-readable rule description (used in `Outcome`) |
+| `--prefix`        | `FLEET`                                            | Rule ID prefix (e.g. your company name)             |
+| `--id`            | _(auto)_                                           | Explicit rule ID; skips auto-increment              |
+| `--output` / `-o` | `validation.custom_rules` from `study_config.yaml` | Output directory                                    |
+
+The auto-increment scans all existing `.yaml` files in the target directory and picks the next
+available sequence number for the given prefix/domain combination. A uniqueness check prevents
+overwriting an existing rule.
+
+### Generated file header
+
+Each scaffolded file includes a header comment with:
+
+- A link to the CDISC Rules Engine wiki for operator reference
+- A quick reference of rule types (Record, Value-level, Cross-dataset)
+- The exact `fleet check-rule` command to validate the file
+- The `.validate("DOMAIN", custom_rules="<dir>")` pipeline usage
+
+---
+
+## `fleet check-rule`
+
+Validate a custom rule YAML file before running it against datasets.
+
+Performs three levels of checking:
+
+1. **YAML syntax** — can the file be parsed? Reports line/column on error.
+2. **Structure** — required top-level keys, `Core.Id`, `Check` combinator, non-empty `Scope.Domains`.
+3. **JSON Schema** — full validation against the vendored CDISC rule schema.
+
+```bash
+fleet check-rule metadata/custom_rules/FLEET-AE-001.yaml
+```
+
+### Example output (passing)
+
+```
+Checking rule: metadata/custom_rules/FLEET-AE-001.yaml
+────────────────────────────────────────────────────────────
+  Rule ID:   FLEET-AE-001
+  Type:      Record Data
+  Domains:   AE
+
+  ✓ YAML syntax OK
+  ✓ Structure OK
+  ✓ Schema validation PASSED
+```
+
+### Example output (failing)
+
+```
+  ✗ Missing required top-level keys: Core, Rule Type, Scope
+  ✗ Core.Id is missing or empty
+  ✗ Schema: (root): 'Authorities' is a required property
+  ✗ Schema: (root): 'Outcome' is a required property
+
+  4 error(s) found.
+```
+
+Exits with code 1 if any errors are found — suitable for use as a CI gate.
+
+---
+
 ## Workflow
 
 The recommended bootstrapping workflow for a new study:
@@ -195,7 +284,70 @@ The source of truth for which variables and codelists to generate is the **CDISC
 
 ---
 
-## `fleet define-xml`
+## `fleet add-rule`
+
+Scaffold a schema-valid custom validation rule YAML skeleton. Auto-increments the rule ID
+by scanning the target directory; the programmer only needs to fill in the `Check:` block.
+
+```bash
+# Minimal — writes FLEET-AE-001.yaml to the configured custom_rules directory
+fleet add-rule --domain AE --description "AESEV must be populated when AESER = Y"
+
+# Custom prefix
+fleet add-rule --domain AE --prefix ROCHE --description "Severity check for serious AEs"
+
+# Explicit rule ID (skips auto-increment)
+fleet add-rule --domain AE --id ROCHE-AE-042 --description "Custom range check"
+
+# Write to a specific directory
+fleet add-rule --domain VS --description "VSORRES range check" --output ./my_rules/
+```
+
+| Option            | Default                                            | Description                                    |
+| ----------------- | -------------------------------------------------- | ---------------------------------------------- |
+| `--domain`        | _(required)_                                       | SDTM/ADaM domain code (e.g. `AE`, `DM`, `VS`)  |
+| `--description`   | _(required)_                                       | Human-readable rule description                |
+| `--prefix`        | `FLEET`                                            | Rule ID prefix (e.g. `ROCHE` → `ROCHE-AE-001`) |
+| `--id`            | _(auto-increment)_                                 | Explicit rule ID override                      |
+| `--output` / `-o` | `validation.custom_rules` from `study_config.yaml` | Output directory                               |
+
+The generated YAML includes all required CDISC schema sections. The `Check:` block contains
+a placeholder with a `# TODO` comment and a link to the CDISC Rules Engine operator reference.
+
+---
+
+## `fleet check-rule`
+
+Validate a custom rule YAML on the fly — before running the engine against real data.
+
+```bash
+fleet check-rule my_rules/FLEET-AE-001.yaml
+```
+
+Performs three validation levels:
+
+1. **YAML syntax** — reports exact line and column for parse errors
+2. **Structure** — checks required top-level keys, `Core.Id`, combinators in `Check:`,
+   non-empty `Scope.Domains`
+3. **JSON Schema** — full validation against the vendored CDISC rule schema
+
+Exits `0` on success, `1` on any error — scriptable in CI pipelines.
+
+```
+Checking rule: my_rules/FLEET-AE-001.yaml
+────────────────────────────────────────────────────────────
+  Rule ID:   FLEET-AE-001
+  Type:      Record Data
+  Domains:   AE
+
+  ✓ YAML syntax OK
+  ✓ Structure OK
+  ✓ Schema validation PASSED
+```
+
+| Option      | Description                    |
+| ----------- | ------------------------------ |
+| `rule_file` | Path to the rule YAML to check |
 
 Generate a CDISC Define-XML 2.1 document from a `define.yaml` specification.
 

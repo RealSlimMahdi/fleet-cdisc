@@ -229,6 +229,17 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Output directory for the rule YAML. Defaults to validation.custom_rules from study_config.yaml.",
     )
+
+    # -- check-rule ----------------------------------------------------- #
+    check_rule_parser = sub.add_parser(
+        "check-rule",
+        help="Validate a custom rule YAML (syntax, structure, schema).",
+    )
+    check_rule_parser.add_argument(
+        "rule_file",
+        help="Path to the custom rule YAML file to validate.",
+    )
+
     add.add_argument(
         "--domains",
         required=True,
@@ -722,7 +733,46 @@ def _run_add_rule(args: argparse.Namespace) -> None:
     print()
     print("Next steps:")
     print(f"  1. Edit the Check block in {out_file.name}")
-    print("  2. Run validation: .validate(..., custom_rules=\"<dir>\")")
+    print(f"  2. Validate:  uv run fleet check-rule {out_file}")
+    print('  3. Run in pipeline: .validate(..., custom_rules="<dir>")')
+
+
+def _run_check_rule(args: argparse.Namespace) -> None:
+    from fleet.validation.rule_scaffolder import check_rule
+
+    rule_path = Path(args.rule_file)
+    if not rule_path.exists():
+        print(f"Error: File not found: {rule_path}")
+        sys.exit(1)
+
+    print(f"Checking rule: {rule_path}")
+    print(f"{'─' * 60}")
+
+    errors = check_rule(rule_path)
+
+    if not errors:
+        # Also print a summary of what was found
+        import yaml as _yaml
+
+        with open(rule_path) as f:
+            rule = _yaml.safe_load(f)
+        core_id = rule.get("Core", {}).get("Id", "?")
+        rule_type = rule.get("Rule Type", "?")
+        domains = rule.get("Scope", {}).get("Domains", {}).get("Include", [])
+        print(f"  Rule ID:   {core_id}")
+        print(f"  Type:      {rule_type}")
+        print(f"  Domains:   {', '.join(domains)}")
+        print()
+        print("  ✓ YAML syntax OK")
+        print("  ✓ Structure OK")
+        print("  ✓ Schema validation PASSED")
+    else:
+        print()
+        for err in errors:
+            print(f"  ✗ {err}")
+        print()
+        print(f"  {len(errors)} error(s) found.")
+        sys.exit(1)
 
 
 def _run_install_engine(args: argparse.Namespace) -> None:
@@ -888,6 +938,8 @@ def main() -> None:
         _run_add_ct(args)
     elif args.command == "add-rule":
         _run_add_rule(args)
+    elif args.command == "check-rule":
+        _run_check_rule(args)
     elif args.command == "define-xml":
         _run_define_xml(args)
     elif args.command == "install-engine":

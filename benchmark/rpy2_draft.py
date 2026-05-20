@@ -13,6 +13,7 @@ Prerequisites:
 Usage:
     uv run python benchmark/rpy2_draft.py
 """
+
 from __future__ import annotations
 
 import json

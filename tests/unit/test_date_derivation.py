@@ -48,9 +48,7 @@ class TestDeriveDt:
         assert str(result["ADT"][0]) == "2014-07-15"
 
     def test_partial_yyyymm_first(self, dtc_frame):
-        result = dtc_frame.adam.date(
-            "ADT", source="AESTDTC"
-        ).to_frame()
+        result = dtc_frame.adam.date("ADT", source="AESTDTC").to_frame()
         assert str(result["ADT"][1]) == "2014-07-01"
 
     def test_partial_yyyymm_last(self, dtc_frame):

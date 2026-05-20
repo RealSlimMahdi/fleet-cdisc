@@ -100,9 +100,7 @@ class TestAssignDtc:
         assert result["RFSTDTC"][0] == "2014-01-02"
 
     def test_datetime_mode(self, simple_raw):
-        result = simple_raw.sdtm.date(
-            "RFSTDTC", source="first_dose_date"
-        ).to_frame()
+        result = simple_raw.sdtm.date("RFSTDTC", source="first_dose_date").to_frame()
         assert result["RFSTDTC"][0].startswith("2014-01-02")
 
     def test_partial_date_preserved(self):

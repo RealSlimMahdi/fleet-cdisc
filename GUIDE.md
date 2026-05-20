@@ -1005,15 +1005,128 @@ When the CDISC CORE rule set does not cover a study-specific check (e.g. a spons
 constraint, an FDA TCG requirement not yet in CORE, or a protocol-specific range check),
 you can author custom rules in the same YAML format used by the engine.
 
-**ID convention:** Use a company prefix (e.g. `SPONSOR-000001`) to avoid clashing with
-`CORE-XXXXXX` identifiers.
+#### Configuration
 
-**Storage:** Place custom rule files in `metadata/sdtm/custom_rules/` or
-`metadata/adam/custom_rules/` — separate from the CDISC-sourced `rules/` directory.
+Add a `custom_rules` path to your `study_config.yaml` to set a team-wide default:
 
-**Loading at validation time:** Pass custom rules to the engine via the `-lr` flag
-(ephemeral, for ad-hoc testing) or `update-cache` (persistent, for team-wide use). See the
-CDISC Rules Engine documentation for details.
+```yaml
+validation:
+  engine_path: null
+  custom_rules: metadata/custom_rules  # directory containing your .yaml rule files
+```
+
+`fleet init cfg` scaffolds this by default. The engine picks up **all `.yaml` files**
+in the configured directory.
+
+#### Scaffold a new rule with the CLI
+
+Use `fleet add-rule` to generate a schema-valid YAML skeleton — you only need to fill
+in the `Check:` block with your logic:
+
+```bash
+# Basic — auto-increments the rule ID (FLEET-AE-001, FLEET-AE-002, …)
+uv run fleet add-rule --domain AE --description "AESEV must be populated when AESER = Y"
+
+# Custom prefix (e.g. your company name)
+uv run fleet add-rule --domain AE --prefix ROCHE --description "AESEV required for serious AEs"
+
+# Explicit ID (skips auto-increment)
+uv run fleet add-rule --domain AE --id ROCHE-AE-042 --description "Custom check"
+
+# Write to a specific directory (overrides study_config)
+uv run fleet add-rule --domain VS --description "VSORRES range check" --output ./my_rules/
+```
+
+The generated file includes all required CDISC schema sections with a placeholder
+`Check:` block containing a `# TODO` comment. The uniqueness check ensures no two rules
+share the same `Core.Id` within the target directory.
+
+#### Run validation with custom rules
+
+**From a pipeline (inline):**
+
+```python
+ae = (
+    raw_df.sdtm
+    .hardcode_no_ct("DOMAIN", value="AE")
+    .assign_no_ct("USUBJID", source="subject_id")
+    .validate("AE", custom_rules="metadata/custom_rules")
+    .to_frame()
+)
+```
+
+**From the service (programmatic):**
+
+```python
+from fleet.validation.service import ValidationService
+
+svc = ValidationService()
+result = svc.validate_sdtm(ae, domain="AE", custom_rules="metadata/custom_rules")
+result.print_report()
+```
+
+**Resolution order:** The `custom_rules` parameter on `.validate()` takes precedence
+over the `validation.custom_rules` path in `study_config.yaml`. If neither is set,
+no custom rules are loaded.
+
+#### ID convention
+
+Use a prefix to avoid clashing with official `CORE-XXXXXX` identifiers:
+
+| Pattern | Example |
+|---------|---------|
+| `<COMPANY>-<DOMAIN>-<NNN>` | `ROCHE-AE-001` |
+| `FLEET-<DOMAIN>-<NNN>` | `FLEET-DM-003` |
+
+#### Rule YAML structure
+
+```yaml
+Core:
+  Id: FLEET-AE-001
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [AE]
+
+Check:                              # ← This is what you edit
+  all:
+    - name: AESER
+      operator: equal_to
+      value: "Y"
+      value_is_literal: true
+    - name: AESEV
+      operator: empty
+
+Outcome:
+  Message: "AESEV is empty for a record where AESER = 'Y'."
+  Output Variables: [USUBJID, AETERM, AESER, AESEV]
+
+Description: >-
+  AESEV must be populated when AESER = 'Y'.
+```
+
+Available operators in the `Check:` block: `equal_to`, `not_equal_to`, `empty`,
+`non_empty`, `less_than`, `greater_than`, `less_than_or_equal_to`,
+`greater_than_or_equal_to`, `contains`, `does_not_contain`, `is_contained_by`,
+`starts_with`, `ends_with`, `matches_regex`.
+
+#### Validate the rule schema
+
+The vendored JSON Schema at `src/fleet/validation/schemas/cdisc_rule_schema.json` can
+be used to validate your rule before running the engine:
+
+```python
+from fleet.validation.rule_scaffolder import scaffold_rule
+from test_custom_rule import validate_rule_schema
+
+errors = validate_rule_schema(rule_dict)
+```
 
 ---
 

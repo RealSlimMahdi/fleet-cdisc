@@ -11,6 +11,7 @@ Strategy:
 Usage:
     uv run python benchmark/inflate_data.py [--target-gb 2.0]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -94,24 +95,18 @@ def inflate(target_gb: float = 2.0) -> None:
     ex_big = pl.concat(ex_frames)
 
     # Derive TRTSDT / TRTEDT from EX (first and last administration_date)
-    trt_dates = (
-        ex_big.group_by("subject_id")
-        .agg(
-            pl.col("administration_date").min().alias("TRTSDT_str"),
-            pl.col("administration_date").max().alias("TRTEDT_str"),
-        )
+    trt_dates = ex_big.group_by("subject_id").agg(
+        pl.col("administration_date").min().alias("TRTSDT_str"),
+        pl.col("administration_date").max().alias("TRTEDT_str"),
     )
 
-    adsl = (
-        dm_big.join(trt_dates, on="subject_id", how="left")
-        .select(
-            pl.lit("STUDY001").alias("STUDYID"),
-            pl.col("subject_id").alias("USUBJID"),
-            pl.col("TRTSDT_str").str.to_date("%Y-%m-%d").alias("TRTSDT"),
-            pl.col("TRTEDT_str").str.to_date("%Y-%m-%d").alias("TRTEDT"),
-            pl.lit("Treatment A").alias("TRT01P"),
-            pl.lit("Y").alias("SAFFL"),
-        )
+    adsl = dm_big.join(trt_dates, on="subject_id", how="left").select(
+        pl.lit("STUDY001").alias("STUDYID"),
+        pl.col("subject_id").alias("USUBJID"),
+        pl.col("TRTSDT_str").str.to_date("%Y-%m-%d").alias("TRTSDT"),
+        pl.col("TRTEDT_str").str.to_date("%Y-%m-%d").alias("TRTEDT"),
+        pl.lit("Treatment A").alias("TRT01P"),
+        pl.lit("Y").alias("SAFFL"),
     )
 
     adsl_pq = OUT / "adsl_inflated.parquet"

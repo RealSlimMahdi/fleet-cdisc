@@ -1090,13 +1090,9 @@ class SharedADaMVerbsMixin(FlagCriterionMixin):
 
         # ── validate source / value mutual exclusivity ──
         if source is not None and value is not None:
-            raise ValueError(
-                "Cannot specify both source= and value=. Choose one."
-            )
+            raise ValueError("Cannot specify both source= and value=. Choose one.")
         if source is None and value is None:
-            raise ValueError(
-                "Must specify either source= or value=."
-            )
+            raise ValueError("Must specify either source= or value=.")
 
         output_type = _resolve_output_type(target, output)
 
@@ -1188,8 +1184,7 @@ class SharedADaMVerbsMixin(FlagCriterionMixin):
             partial_dtm = pl.lit(None, dtype=pl.Datetime("us"))
         elif isinstance(time_suffix, str) and time_suffix.startswith("T"):
             partial_dtm = (
-                pl.col("__dtm_date_tmp__").dt.to_string("%Y-%m-%d")
-                + pl.lit(time_suffix)
+                pl.col("__dtm_date_tmp__").dt.to_string("%Y-%m-%d") + pl.lit(time_suffix)
             ).str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
         else:
             partial_dtm = (
@@ -1285,12 +1280,20 @@ class SharedADaMVerbsMixin(FlagCriterionMixin):
         end_expr = pl.col(end) if isinstance(end, str) else end
 
         # Auto-cast string columns to date/datetime
-        start_expr = start_expr.str.to_date(strict=False).cast(pl.Date).fill_null(
-            start_expr.str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
-        ) if isinstance(start, str) else start_expr
-        end_expr = end_expr.str.to_date(strict=False).cast(pl.Date).fill_null(
-            end_expr.str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
-        ) if isinstance(start, str) else end_expr
+        start_expr = (
+            start_expr.str.to_date(strict=False)
+            .cast(pl.Date)
+            .fill_null(start_expr.str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False))
+            if isinstance(start, str)
+            else start_expr
+        )
+        end_expr = (
+            end_expr.str.to_date(strict=False)
+            .cast(pl.Date)
+            .fill_null(end_expr.str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False))
+            if isinstance(start, str)
+            else end_expr
+        )
 
         # For string columns, we need a safer approach: try to cast
         # but the column may already be Date/Datetime. Use a materialise
@@ -1323,12 +1326,17 @@ class SharedADaMVerbsMixin(FlagCriterionMixin):
 
         # Compute difference
         valid_units = {
-            "seconds", "minutes", "hours", "days", "weeks", "months", "years",
+            "seconds",
+            "minutes",
+            "hours",
+            "days",
+            "weeks",
+            "months",
+            "years",
         }
         if unit not in valid_units:
             raise ValueError(
-                f"duration unit={unit!r} is not supported. "
-                f"Choose one of: {sorted(valid_units)}"
+                f"duration unit={unit!r} is not supported. Choose one of: {sorted(valid_units)}"
             )
 
         if unit in ("seconds", "minutes", "hours"):
@@ -1358,8 +1366,8 @@ class SharedADaMVerbsMixin(FlagCriterionMixin):
             if target.endswith("DY"):
                 # CDISC study day: +1 if >= 0, no day 0
                 result_expr = (
-                    pl.when(diff >= 0).then(diff + 1).otherwise(diff)
-                ).cast(pl.Int64).alias(target)
+                    (pl.when(diff >= 0).then(diff + 1).otherwise(diff)).cast(pl.Int64).alias(target)
+                )
                 return self._materialise_then(df.with_columns(result_expr))
             else:
                 add_one = True

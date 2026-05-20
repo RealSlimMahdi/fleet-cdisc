@@ -109,13 +109,9 @@ class OfficialCDISCValidator:
             if custom_rules is not None:
                 rules_path = Path(custom_rules)
                 if not rules_path.exists():
-                    raise FileNotFoundError(
-                        f"Custom rules path does not exist: {rules_path}"
-                    )
+                    raise FileNotFoundError(f"Custom rules path does not exist: {rules_path}")
                 if not rules_path.is_dir():
-                    raise NotADirectoryError(
-                        f"Custom rules path must be a directory: {rules_path}"
-                    )
+                    raise NotADirectoryError(f"Custom rules path must be a directory: {rules_path}")
                 cmd.extend(["-lr", str(rules_path)])
 
             try:

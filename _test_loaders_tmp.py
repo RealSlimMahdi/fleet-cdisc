@@ -1,13 +1,14 @@
 """Temporary loader smoke test — safe to delete."""
+
 import tempfile
 from pathlib import Path
 
 import pandas as pd
-import pyreadstat
 import pyreadr
+import pyreadstat
 
-from fleet.io.loaders import load_raw_data
 from fleet.core.exceptions import IOError as FleetIOError
+from fleet.io.loaders import load_raw_data
 
 
 def main():

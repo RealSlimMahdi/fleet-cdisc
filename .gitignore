@@ -47,3 +47,6 @@ outputs/**/*.html
 benchmark/data/*.parquet
 benchmark/data/*.json
 
+
+# ignore custom rules
+my_rules

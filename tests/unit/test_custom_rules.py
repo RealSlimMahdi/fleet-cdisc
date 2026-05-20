@@ -17,6 +17,7 @@ from fleet.core.study_context import (
 from fleet.validation.rule_scaffolder import (
     _next_sequence,
     _scan_existing_ids,
+    check_rule,
     scaffold_rule,
 )
 
@@ -317,3 +318,64 @@ class TestAddRuleCLI:
             # Verify file was created
             rule_file = Path(tmpdir) / "TEST-AE-001.yaml"
             assert rule_file.exists()
+
+
+# ── check_rule tests ──────────────────────────────────────────────────
+
+
+class TestCheckRule:
+    def test_valid_rule_no_errors(self):
+        """Scaffolded rule should pass check_rule with no errors."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            rule_path = scaffold_rule(
+                domain="AE",
+                description="Test rule",
+                output_dir=Path(tmpdir),
+                prefix="TEST",
+            )
+            errors = check_rule(rule_path)
+            assert errors == []
+
+    def test_yaml_syntax_error(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bad_file = Path(tmpdir) / "bad.yaml"
+            bad_file.write_text("bad: yaml: {[broken")
+            errors = check_rule(bad_file)
+            assert len(errors) == 1
+            assert "YAML syntax error" in errors[0]
+
+    def test_missing_required_keys(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            rule_file = Path(tmpdir) / "incomplete.yaml"
+            rule_file.write_text(
+                yaml.dump({"Check": {"all": [{"name": "X", "operator": "empty"}]}})
+            )
+            errors = check_rule(rule_file)
+            assert any("Missing required top-level keys" in e for e in errors)
+            assert any("Core" in e for e in errors)
+
+    def test_empty_domains_warning(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            rule_file = Path(tmpdir) / "nodomain.yaml"
+            rule = {
+                "Core": {"Id": "TEST-001", "Version": "1"},
+                "Check": {"all": [{"name": "X", "operator": "empty"}]},
+                "Rule Type": "Record Data",
+                "Scope": {"Domains": {"Include": []}},
+            }
+            rule_file.write_text(yaml.dump(rule))
+            errors = check_rule(rule_file)
+            assert any("Scope.Domains.Include is empty" in e for e in errors)
+
+    def test_check_block_no_combinator(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            rule_file = Path(tmpdir) / "nocomb.yaml"
+            rule = {
+                "Core": {"Id": "TEST-001", "Version": "1"},
+                "Check": {"name": "X", "operator": "empty"},
+                "Rule Type": "Record Data",
+                "Scope": {"Domains": {"Include": ["AE"]}},
+            }
+            rule_file.write_text(yaml.dump(rule))
+            errors = check_rule(rule_file)
+            assert any("combinator" in e for e in errors)

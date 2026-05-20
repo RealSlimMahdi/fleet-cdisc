@@ -13,6 +13,7 @@ and neither benefits from warm caches of the other.
 Usage:
     uv run python benchmark/run_benchmark.py [--target-gb 2.0] [--skip-inflate]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -93,7 +94,9 @@ def main() -> None:
     print(f"{'=' * W}")
 
     # Version info
-    print(f"\n  Fleet   : {fm.get('fleet_version', '?')}  (Polars {fm.get('polars_version', '?')}, Python {fm.get('python_version', '?')})")
+    print(
+        f"\n  Fleet   : {fm.get('fleet_version', '?')}  (Polars {fm.get('polars_version', '?')}, Python {fm.get('python_version', '?')})"
+    )
     print(f"  Admiral : {am.get('admiral_version', '?')}  ({am.get('r_version', '?')})")
 
     # Table header
@@ -140,30 +143,45 @@ def main() -> None:
         av = am.get(key, 0)
         row(label, fmt_time(fv), fmt_time(av), winner_str(fv, av))
 
-    row("Total (wall, subprocess)", fmt_time(fleet_wall), fmt_time(admiral_wall),
-        winner_str(fleet_wall, admiral_wall))
+    row(
+        "Total (wall, subprocess)",
+        fmt_time(fleet_wall),
+        fmt_time(admiral_wall),
+        winner_str(fleet_wall, admiral_wall),
+    )
 
     # ── Memory ────────────────────────────────────────────────────────
     print(f"\n  {'Memory':<{C1}}  {'Fleet':>{C2}}  {'Admiral':>{C3}}")
     print(sep)
     f_rss = fm.get("peak_rss_mb", 0)
     a_gc = am.get("peak_memory_gc_mb", 0)
-    row("Peak RSS / GC (MB)", f"{f_rss:,.0f}", f"{a_gc:,.0f}",
-        winner_str(f_rss, a_gc))
+    row("Peak RSS / GC (MB)", f"{f_rss:,.0f}", f"{a_gc:,.0f}", winner_str(f_rss, a_gc))
     f_traced = fm.get("peak_memory_tracemalloc_mb", 0)
     row("Python tracemalloc (MB)", f"{f_traced:,.0f}", "n/a")
 
     # ── Code metrics ──────────────────────────────────────────────────
     print(f"\n  {'Code':<{C1}}  {'Fleet':>{C2}}  {'Admiral':>{C3}}")
     print(sep)
-    row("Pipeline LOC (SDTM)", str(fm.get("pipeline_loc_sdtm", "?")), str(am.get("pipeline_loc_sdtm", "?")))
-    row("Pipeline LOC (ADaM)", str(fm.get("pipeline_loc_adam", "?")), str(am.get("pipeline_loc_adam", "?")))
-    row("Pipeline LOC (total)", str(fm.get("pipeline_loc_total", "?")), str(am.get("pipeline_loc_total", "?")))
+    row(
+        "Pipeline LOC (SDTM)",
+        str(fm.get("pipeline_loc_sdtm", "?")),
+        str(am.get("pipeline_loc_sdtm", "?")),
+    )
+    row(
+        "Pipeline LOC (ADaM)",
+        str(fm.get("pipeline_loc_adam", "?")),
+        str(am.get("pipeline_loc_adam", "?")),
+    )
+    row(
+        "Pipeline LOC (total)",
+        str(fm.get("pipeline_loc_total", "?")),
+        str(am.get("pipeline_loc_total", "?")),
+    )
     row("Recursive dependencies", str(fm["n_total_dependencies"]), str(am["n_total_dependencies"]))
     row("Language / engine", "Python + Polars (Rust)", "R + dplyr (C++)")
 
     # ── Equivalence check ─────────────────────────────────────────────
-    print(f"\n  Output Equivalence Check")
+    print("\n  Output Equivalence Check")
     print(sep)
     try:
         import polars as pl

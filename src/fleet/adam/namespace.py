@@ -727,9 +727,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         if func == "study_day":
             if not analysis_date or not reference_date:
                 raise ValueError("study_day requires analysis_date and reference_date.")
-            return self.duration(
-                target, start=reference_date, end=analysis_date
-            )
+            return self.duration(target, start=reference_date, end=analysis_date)
         elif func == "baseline":
             return self.baseline(target, aval=aval, baseline_flag=baseline_flag, groups=groups)
         elif func == "chg":

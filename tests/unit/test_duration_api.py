@@ -43,6 +43,7 @@ def sdtm_date_df() -> pl.DataFrame:
 
 # ── ADaM .duration() ─────────────────────────────────────────────────
 
+
 class TestAdamDuration:
     def test_study_day(self, date_df: pl.DataFrame) -> None:
         result = date_df.adam.duration("ADY", start="TRTSDT", end="ADT").to_frame()
@@ -73,7 +74,9 @@ class TestAdamDuration:
             pl.col("START").str.to_datetime(),
             pl.col("END").str.to_datetime(),
         )
-        result = df.adam.duration("DUR", start="START", end="END", unit="hours", add_one=False).to_frame()
+        result = df.adam.duration(
+            "DUR", start="START", end="END", unit="hours", add_one=False
+        ).to_frame()
         assert result["DUR"][0] == pytest.approx(6.0)
 
     def test_invalid_unit(self, date_df: pl.DataFrame) -> None:
@@ -81,20 +84,17 @@ class TestAdamDuration:
             date_df.adam.duration("X", start="TRTSDT", end="ADT", unit="fortnights")
 
     def test_iso8601_output(self, date_df: pl.DataFrame) -> None:
-        result = date_df.adam.duration(
-            "DUR", start="TRTSDT", end="ADT", out="iso8601"
-        ).to_frame()
+        result = date_df.adam.duration("DUR", start="TRTSDT", end="ADT", out="iso8601").to_frame()
         assert "DUR" in result.columns
         assert result["DUR"][0].startswith("P")
 
 
 # ── SDTM .duration() ─────────────────────────────────────────────────
 
+
 class TestSdtmDuration:
     def test_study_day_from_strings(self, sdtm_date_df: pl.DataFrame) -> None:
-        result = sdtm_date_df.sdtm.duration(
-            "SVSTDY", start="RFSTDTC", end="SVSTDTC"
-        ).to_frame()
+        result = sdtm_date_df.sdtm.duration("SVSTDY", start="RFSTDTC", end="SVSTDTC").to_frame()
         assert "SVSTDY" in result.columns
         # DY suffix → auto add_one for >=0
         vals = result["SVSTDY"].to_list()

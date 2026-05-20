@@ -9,6 +9,7 @@ import fleet  # noqa: F401  — register namespaces
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 
+
 @pytest.fixture()
 def raw_df() -> pl.DataFrame:
     return pl.DataFrame(
@@ -32,6 +33,7 @@ def dtc_df() -> pl.DataFrame:
 
 
 # ── SDTM .date() tests ───────────────────────────────────────────────
+
 
 class TestSdtmDateDtc:
     """SDTM .date() with DTC target (raw parsing)."""
@@ -62,7 +64,9 @@ class TestSdtmDateDt:
         assert "AESTDT" in result.columns
 
     def test_dt_explicit_output(self, raw_df: pl.DataFrame) -> None:
-        result = raw_df.sdtm.date("MYSTARTDATE", source="ae_start", output="dt", flag=False).to_frame()
+        result = raw_df.sdtm.date(
+            "MYSTARTDATE", source="ae_start", output="dt", flag=False
+        ).to_frame()
         assert "MYSTARTDATE" in result.columns
 
 
@@ -76,6 +80,7 @@ class TestSdtmDateValue:
 
 
 # ── ADaM .date() tests ───────────────────────────────────────────────
+
 
 class TestAdamDateDt:
     """ADaM .date() with DT target."""
