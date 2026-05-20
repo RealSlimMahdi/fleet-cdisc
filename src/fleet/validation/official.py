@@ -82,6 +82,7 @@ class OfficialCDISCValidator:
         version: str,
         dataset_name: str = "dataset",
         domain: str | None = None,
+        custom_rules: Path | None = None,
     ) -> ValidationResult:
         """Run CDISC rules engine validation on a Polars DataFrame."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -104,6 +105,18 @@ class OfficialCDISCValidator:
                 "JSON",
                 "-rr",
             )
+
+            if custom_rules is not None:
+                rules_path = Path(custom_rules)
+                if not rules_path.exists():
+                    raise FileNotFoundError(
+                        f"Custom rules path does not exist: {rules_path}"
+                    )
+                if not rules_path.is_dir():
+                    raise NotADirectoryError(
+                        f"Custom rules path must be a directory: {rules_path}"
+                    )
+                cmd.extend(["-lr", str(rules_path)])
 
             try:
                 result = subprocess.run(

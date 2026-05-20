@@ -1254,6 +1254,7 @@ class SDTMNamespace(TrialDesignMixin):
         domain: str,
         version: str = "3.4",
         rules_engine_path: Path | None = None,
+        custom_rules: str | Path | None = None,
     ) -> SDTMNamespace:
         """Run CDISC SDTM conformance validation and print the report.
 
@@ -1263,6 +1264,8 @@ class SDTMNamespace(TrialDesignMixin):
             domain: SDTM domain code (e.g. ``"DM"``, ``"AE"``).
             version: SDTM IG version to validate against (default ``"3.4"``).
             rules_engine_path: Optional path to a custom rules engine.
+            custom_rules: Optional path to a directory containing custom
+                validation rule YAML files. Passed to the engine via ``-lr``.
 
         Returns:
             SDTMNamespace: The same namespace instance (for continued
@@ -1278,11 +1281,22 @@ class SDTMNamespace(TrialDesignMixin):
                     .validate("DM", version="3.4")
                     .to_frame()
                 )
+
+            Validate with custom sponsor rules::
+
+                ae = (
+                    raw_df.sdtm
+                    .hardcode_no_ct("DOMAIN", value="AE")
+                    .validate("AE", custom_rules="specs/custom_rules")
+                    .to_frame()
+                )
         """
         from fleet.validation.service import ValidationService
 
         svc = ValidationService(rules_engine_path=rules_engine_path)
-        result = svc.validate_sdtm(self.to_frame(), domain=domain, version=version)
+        result = svc.validate_sdtm(
+            self.to_frame(), domain=domain, version=version, custom_rules=custom_rules
+        )
         result.print_report()
         return self
 

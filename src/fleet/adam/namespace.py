@@ -1210,6 +1210,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         dataset: str,
         version: str = "1.3",
         rules_engine_path: Path | None = None,
+        custom_rules: str | Path | None = None,
     ) -> AdamNamespace:
         """Run CDISC ADaM validation and print the report.
 
@@ -1219,6 +1220,8 @@ class AdamNamespace(SharedADaMVerbsMixin):
             dataset: ADaM dataset name (e.g. ``"ADSL"``, ``"ADVS"``).
             version: ADaM IG version to validate against (default ``"1.3"``).
             rules_engine_path: Optional path to a custom rules engine.
+            custom_rules: Optional path to a directory containing custom
+                validation rule YAML files. Passed to the engine via ``-lr``.
 
         Returns:
             AdamNamespace: The same namespace instance (for continued
@@ -1233,11 +1236,22 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .validate("ADSL", version="1.3")
                     .to_frame()
                 )
+
+            Validate with custom sponsor rules::
+
+                adae = (
+                    ae_df.adam.occds
+                    .source("USUBJID")
+                    .validate("ADAE", custom_rules="specs/custom_rules")
+                    .to_frame()
+                )
         """
         from ..validation.service import ValidationService
 
         svc = ValidationService(rules_engine_path=rules_engine_path)
-        result = svc.validate_adam(self.to_frame(), dataset=dataset, version=version)
+        result = svc.validate_adam(
+            self.to_frame(), dataset=dataset, version=version, custom_rules=custom_rules
+        )
         result.print_report()
         return self
 

@@ -196,6 +196,39 @@ def _build_parser() -> argparse.ArgumentParser:
         "add-ct",
         help="Add domains to an existing codelists.py (preserves existing).",
     )
+
+    # -- add-rule ------------------------------------------------------- #
+    add_rule = sub.add_parser(
+        "add-rule",
+        help="Scaffold a new custom validation rule YAML.",
+    )
+    add_rule.add_argument(
+        "--domain",
+        required=True,
+        help="SDTM/ADaM domain code (e.g. AE, DM, VS).",
+    )
+    add_rule.add_argument(
+        "--description",
+        required=True,
+        help="Human-readable description of the rule.",
+    )
+    add_rule.add_argument(
+        "--prefix",
+        default="FLEET",
+        help="Rule ID prefix (default: FLEET).",
+    )
+    add_rule.add_argument(
+        "--id",
+        default=None,
+        dest="rule_id",
+        help="Explicit rule ID (e.g. ROCHE-AE-042). Skips auto-increment.",
+    )
+    add_rule.add_argument(
+        "--output",
+        "-o",
+        default=None,
+        help="Output directory for the rule YAML. Defaults to validation.custom_rules from study_config.yaml.",
+    )
     add.add_argument(
         "--domains",
         required=True,
@@ -360,6 +393,7 @@ def _run_init_cfg(args: argparse.Namespace) -> None:
         CTConfig,
         SDTMConfig,
         StudyContext,
+        ValidationConfig,
     )
 
     study_root = Path(args.root).resolve()
@@ -381,6 +415,7 @@ def _run_init_cfg(args: argparse.Namespace) -> None:
         sdtm=SDTMConfig(ig_version=args.ig, domains=domains),
         adam=ADAMConfig(ig_version=args.adam_ig, datasets=adam_datasets),
         ct=CTConfig(package=args.package),
+        validation=ValidationConfig(custom_rules="metadata/custom_rules"),
     )
     print(f"Created study workspace → {ctx.study_root}")
     print(f"Config  → {ctx.study_root / 'study_config.yaml'}")
@@ -630,6 +665,66 @@ def _run_add_ct(args: argparse.Namespace) -> None:
     print(f"Updated {dest} — {len(gen._codelists)} codelists")
 
 
+def _run_add_rule(args: argparse.Namespace) -> None:
+    from fleet.validation.rule_scaffolder import scaffold_rule
+
+    # Resolve output directory
+    output_dir: Path | None = None
+    if args.output:
+        output_dir = Path(args.output)
+    else:
+        # Try loading study_config.yaml from cwd
+        config_path = Path.cwd() / "study_config.yaml"
+        if config_path.exists():
+            from fleet.core.study_context import load_study_context
+
+            ctx = load_study_context(config_path)
+            if ctx.custom_rules_dir is not None:
+                output_dir = ctx.custom_rules_dir
+            else:
+                print(
+                    "Error: No 'validation.custom_rules' configured in study_config.yaml.\n"
+                    "Either add it to your config or pass --output <dir>."
+                )
+                sys.exit(1)
+        else:
+            print(
+                "Error: No study_config.yaml found in current directory.\n"
+                "Either run from a study root or pass --output <dir>."
+            )
+            sys.exit(1)
+
+    # Resolve organization from study_config if available
+    organization: str | None = None
+    config_path = Path.cwd() / "study_config.yaml"
+    if config_path.exists():
+        from fleet.core.study_context import load_study_context
+
+        ctx = load_study_context(config_path)
+        organization = ctx.config.company
+
+    try:
+        out_file = scaffold_rule(
+            domain=args.domain,
+            description=args.description,
+            output_dir=output_dir,
+            prefix=args.prefix,
+            rule_id=args.rule_id,
+            organization=organization,
+        )
+    except FileExistsError as exc:
+        print(f"Error: {exc}")
+        sys.exit(1)
+
+    print(f"Created custom rule: {out_file}")
+    print(f"  Rule ID: {out_file.stem}")
+    print(f"  Domain:  {args.domain.upper()}")
+    print()
+    print("Next steps:")
+    print(f"  1. Edit the Check block in {out_file.name}")
+    print("  2. Run validation: .validate(..., custom_rules=\"<dir>\")")
+
+
 def _run_install_engine(args: argparse.Namespace) -> None:
     from fleet.validation.engine import install_engine
 
@@ -791,6 +886,8 @@ def main() -> None:
         _run_init_ct(args)
     elif args.command == "add-ct":
         _run_add_ct(args)
+    elif args.command == "add-rule":
+        _run_add_rule(args)
     elif args.command == "define-xml":
         _run_define_xml(args)
     elif args.command == "install-engine":

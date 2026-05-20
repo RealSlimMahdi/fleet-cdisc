@@ -59,6 +59,13 @@ class ValidationConfig(BaseModel):
         default=None,
         description="Path to the CDISC Rules Engine executable (absolute or relative to study root).",
     )
+    custom_rules: str | None = Field(
+        default=None,
+        description=(
+            "Directory containing custom validation rule YAML files. "
+            "Passed to the engine via -lr flag. Absolute or relative to study root."
+        ),
+    )
 
 
 class StudyConfig(BaseModel):
@@ -150,6 +157,13 @@ class StudyContext:
     def programs_misc_dir(self) -> Path:
         return self.resolve(self.config.paths.programs_misc)
 
+    @property
+    def custom_rules_dir(self) -> Path | None:
+        """Resolve the custom validation rules directory, or None if not configured."""
+        if self.config.validation.custom_rules is None:
+            return None
+        return self.resolve(self.config.validation.custom_rules)
+
     def raw_file(self, file_name: str) -> Path:
         return self.raw_data_dir / file_name
 
@@ -183,6 +197,7 @@ class StudyContext:
         sdtm: "SDTMConfig | None" = None,
         adam: "ADAMConfig | None" = None,
         ct: "CTConfig | None" = None,
+        validation: "ValidationConfig | None" = None,
     ) -> "StudyContext":
         """Scaffold a new study workspace and return a ready-to-use StudyContext.
 
@@ -204,6 +219,7 @@ class StudyContext:
             sdtm:       SDTM IG configuration (version, domains).
             adam:        ADaM IG configuration (version, datasets).
             ct:         CT package configuration.
+            validation: Validation engine configuration (engine path, custom rules).
 
         Returns:
             Initialized ``StudyContext`` pointing at the new workspace.
@@ -221,6 +237,7 @@ class StudyContext:
             sdtm=sdtm or SDTMConfig(),
             adam=adam or ADAMConfig(),
             ct=ct or CTConfig(),
+            validation=validation or ValidationConfig(),
         )
         ctx = cls(study_root=study_root, config=config)
 
@@ -249,6 +266,10 @@ class StudyContext:
             ctx.programs_misc_dir,
         ):
             dir_path.mkdir(parents=True, exist_ok=True)
+
+        # Create custom_rules dir if configured
+        if ctx.custom_rules_dir is not None:
+            ctx.custom_rules_dir.mkdir(parents=True, exist_ok=True)
 
         # ── Write study_config.yaml ───────────────────────────────────────
         config_data = config.model_dump(exclude_none=True)
