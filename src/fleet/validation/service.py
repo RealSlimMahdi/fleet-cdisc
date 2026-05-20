@@ -30,17 +30,25 @@ class ValidationService:
         df: pl.DataFrame | pl.LazyFrame,
         domain: str,
         version: str = "3.4",
+        custom_rules: Path | str | None = None,
     ) -> ValidationResult:
         if isinstance(df, pl.LazyFrame):
             df = df.collect()
-        return self.provider.validate_sdtm(df=df, domain=domain, version=version)
+        resolved = Path(custom_rules) if custom_rules is not None else None
+        return self.provider.validate_sdtm(
+            df=df, domain=domain, version=version, custom_rules=resolved
+        )
 
     def validate_adam(
         self,
         df: pl.DataFrame | pl.LazyFrame,
         dataset: str,
         version: str = "1.3",
+        custom_rules: Path | str | None = None,
     ) -> ValidationResult:
         if isinstance(df, pl.LazyFrame):
             df = df.collect()
-        return self.provider.validate_adam(df=df, dataset=dataset, version=version)
+        resolved = Path(custom_rules) if custom_rules is not None else None
+        return self.provider.validate_adam(
+            df=df, dataset=dataset, version=version, custom_rules=resolved
+        )

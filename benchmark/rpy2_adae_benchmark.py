@@ -11,6 +11,7 @@ Usage:
     uv run python benchmark/rpy2_adae_benchmark.py           # default: 2M cap
     uv run python benchmark/rpy2_adae_benchmark.py 500000    # cap at 500K
 """
+
 from __future__ import annotations
 
 import json
@@ -204,6 +205,7 @@ def main():
 
     # Versions
     import importlib.metadata
+
     rpy2_ver = importlib.metadata.version("rpy2")
     oak_ver = str(R('as.character(packageVersion("sdtm.oak"))')[0])
     admiral_ver = str(R('as.character(packageVersion("admiral"))')[0])
@@ -224,12 +226,14 @@ def main():
             f"Total: {result['total_sec']:.1f}s  "
             f"Out: {result['out_rows']}×{result['out_cols']}"
         )
-        scaling.append({
-            "rows": result["n_rows"],
-            "sdtm_sec": result["sdtm_sec"],
-            "adam_sec": result["adam_sec"],
-            "total_sec": result["total_sec"],
-        })
+        scaling.append(
+            {
+                "rows": result["n_rows"],
+                "sdtm_sec": result["sdtm_sec"],
+                "adam_sec": result["adam_sec"],
+                "total_sec": result["total_sec"],
+            }
+        )
         last_result = result
 
         # Clean up R memory between runs

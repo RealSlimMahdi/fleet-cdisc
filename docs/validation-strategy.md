@@ -202,7 +202,27 @@ Each YAML file records the rule's CORE ID, description, check logic, scope, seve
 
 #### Custom rules
 
-When the standard CDISC CORE rule set does not cover a study-specific requirement, sponsors can author custom rules in the same YAML schema used by the engine. Store custom rules separately in `metadata/sdtm/custom_rules/` or `metadata/adam/custom_rules/` and load them via the engine's `-lr` or `update-cache` mechanisms. Use a company prefix (e.g. `SPONSOR-000001`) for custom rule IDs to avoid collisions with `CORE-XXXXXX`.
+When the standard CDISC CORE rule set does not cover a study-specific requirement, sponsors can author custom rules in the same YAML schema used by the engine.
+
+Fleet provides first-class support for custom rules through:
+
+- **`validation.custom_rules`** in `study_config.yaml` — sets a team-wide default directory
+- **`fleet add-rule`** — scaffolds a schema-valid YAML skeleton with a `# TODO` `Check:` block
+- **`fleet check-rule`** — validates a rule file (YAML syntax, structure, full JSON Schema)
+- **`custom_rules=` parameter** on `.validate()` — loads rules per-pipeline
+
+```bash
+# Scaffold a new rule (auto-increments ID)
+uv run fleet add-rule --domain AE --description "AESEV required when AESER = Y"
+
+# Validate the rule file before running against datasets
+uv run fleet check-rule metadata/custom_rules/FLEET-AE-001.yaml
+
+# Use in pipeline
+# .validate("AE", custom_rules="metadata/custom_rules")
+```
+
+Use a company prefix (e.g. `ROCHE-AE-001`) to avoid collisions with `CORE-XXXXXX`.
 
 ---
 
@@ -229,6 +249,8 @@ Applying the R Validation Hub risk-based framework to Fleet:
 | Standards metadata sourcing        | `fleet init define` → `define.yaml`             | SDTM IG + ADaM IG variable metadata from CDISC Library    | Automated at study setup    |
 | Controlled terminology generation  | `fleet init ct` → `codelists.py`                | NCI concept IDs for all study domains                     | Automated at study setup    |
 | Conformance rule snapshot          | `fleet init rules` → `metadata/*/rules/*.yaml`  | All CDISC CORE rules for IG version, version-locked       | Automated at study setup    |
+| Custom rule scaffolding            | `fleet add-rule` → `metadata/custom_rules/`     | Sponsor SOP / TCG gap rules, schema-validated             | On demand                   |
+| Custom rule schema check           | `fleet check-rule <file>`                       | YAML syntax + structure + JSON Schema validation          | On demand / CI gate         |
 | Cross-language algorithm benchmark | `tests/unit/test_admiral_parity.py`             | BSA, MAP, QTc, LOCF, BMI, ANL01FL, age/period             | Runs in CI on every commit  |
 | SDTM conformance                   | `ValidationService.validate_sdtm()`             | All SDTM domains, SDTMIG 3.4                              | Run at study delivery       |
 | ADaM conformance                   | `ValidationService.validate_adam()`             | ADSL, BDS, OCCDS datasets, ADaMIG 1.3                     | Run at study delivery       |

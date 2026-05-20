@@ -1212,6 +1212,206 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             result = result.drop("__dtm_date_tmp__")
         return self._materialise_then(result)
 
+    def duration(
+        self,
+        target: str,
+        *,
+        start: str | pl.Expr,
+        end: str | pl.Expr,
+        unit: str = "days",
+        add_one: bool | None = None,
+        out: str = "numeric",
+    ) -> Self:
+        """Compute the duration between two date/datetime columns.
+
+        Supports column references (``str``) and Polars expressions
+        (e.g. ``pl.lit(date(2024, 1, 1))``) for *start* and *end*.
+
+        The ``add_one`` parameter controls inclusive counting:
+        - ``None`` (default): auto-resolves from the target suffix.
+          ``*DY`` targets use CDISC study-day convention (no day 0);
+          all others add 1 for inclusive counting.
+        - ``True``: always add 1 (inclusive).
+        - ``False``: raw difference (e.g. PK elapsed time).
+
+        Args:
+            target: Name of the output column.
+            start: Start date column name or expression.
+            end: End date column name or expression.
+            unit: Duration unit — ``"seconds"``, ``"minutes"``, ``"hours"``,
+                ``"days"`` (default), ``"weeks"``, ``"months"``, ``"years"``.
+            add_one: Override for inclusive counting.  ``None`` auto-resolves
+                from the target suffix.
+            out: Output format — ``"numeric"`` (default) or ``"iso8601"``.
+
+        Returns:
+            Self: The namespace with *target* appended; call ``.to_frame()``
+                to materialise.
+
+        Examples:
+            Study day (auto-detected from DY suffix)::
+
+                adae = (
+                    ae_df.adam
+                    .duration("ASTDY", start="TRTSDT", end="ASTDT")
+                    .to_frame()
+                )
+
+            Treatment duration in days::
+
+                adsl = (
+                    dm_df.adam.adsl
+                    .duration("TRTDURD", start="TRTSDT", end="TRTEDT")
+                    .to_frame()
+                )
+
+            PK elapsed time in hours::
+
+                adpc = (
+                    pc_df.adam.pk
+                    .duration("APTS", start="EXSTDTM", end="PCDTM",
+                              unit="hours", add_one=False)
+                    .to_frame()
+                )
+        """
+        # Normalise start/end to expressions
+        start_expr = pl.col(start) if isinstance(start, str) else start
+        end_expr = pl.col(end) if isinstance(end, str) else end
+
+        # Auto-cast string columns to date/datetime
+        start_expr = (
+            start_expr.str.to_date(strict=False)
+            .cast(pl.Date)
+            .fill_null(start_expr.str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False))
+            if isinstance(start, str)
+            else start_expr
+        )
+        end_expr = (
+            end_expr.str.to_date(strict=False)
+            .cast(pl.Date)
+            .fill_null(end_expr.str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False))
+            if isinstance(start, str)
+            else end_expr
+        )
+
+        # For string columns, we need a safer approach: try to cast
+        # but the column may already be Date/Datetime. Use a materialise
+        # approach to inspect dtypes.
+        df = self._lazy.collect()
+
+        def _to_date_expr(col_or_expr: str | pl.Expr) -> pl.Expr:
+            """Resolve a column reference or expression to a temporal expr."""
+            if isinstance(col_or_expr, str):
+                col_name = col_or_expr
+                if col_name in df.columns:
+                    dtype = df[col_name].dtype
+                    if dtype == pl.Date:
+                        return pl.col(col_name)
+                    if dtype.is_(pl.Datetime) or str(dtype).startswith("Datetime"):
+                        # For time-based units, keep Datetime precision
+                        if unit in ("seconds", "minutes", "hours"):
+                            return pl.col(col_name)
+                        return pl.col(col_name).cast(pl.Date)
+                    # String → try to parse
+                    if unit in ("seconds", "minutes", "hours"):
+                        return pl.col(col_name).str.to_datetime(strict=False)
+                    return pl.col(col_name).str.to_date(strict=False)
+                return pl.col(col_name)
+            # pl.Expr — use as-is
+            return col_or_expr
+
+        s_expr = _to_date_expr(start)
+        e_expr = _to_date_expr(end)
+
+        # Compute difference
+        valid_units = {
+            "seconds",
+            "minutes",
+            "hours",
+            "days",
+            "weeks",
+            "months",
+            "years",
+        }
+        if unit not in valid_units:
+            raise ValueError(
+                f"duration unit={unit!r} is not supported. Choose one of: {sorted(valid_units)}"
+            )
+
+        if unit in ("seconds", "minutes", "hours"):
+            # Need datetime precision — ensure both sides are Datetime
+            s_dtm = s_expr.cast(pl.Datetime("us"))
+            e_dtm = e_expr.cast(pl.Datetime("us"))
+            diff_s = (e_dtm - s_dtm).dt.total_seconds().cast(pl.Float64)
+            if unit == "seconds":
+                diff = diff_s.cast(pl.Int64)
+            elif unit == "minutes":
+                diff = diff_s / 60.0
+            else:  # hours
+                diff = diff_s / 3600.0
+        else:
+            diff_days = (e_expr - s_expr).dt.total_days()
+            if unit == "days":
+                diff = diff_days
+            elif unit == "weeks":
+                diff = diff_days.cast(pl.Float64) / 7.0
+            elif unit == "months":
+                diff = diff_days.cast(pl.Float64) / 30.4375
+            else:  # years
+                diff = diff_days.cast(pl.Float64) / 365.25
+
+        # Resolve add_one
+        if add_one is None:
+            if target.endswith("DY"):
+                # CDISC study day: +1 if >= 0, no day 0
+                result_expr = (
+                    (pl.when(diff >= 0).then(diff + 1).otherwise(diff)).cast(pl.Int64).alias(target)
+                )
+                return self._materialise_then(df.with_columns(result_expr))
+            else:
+                add_one = True
+
+        if add_one:
+            result_expr = (diff + 1).alias(target)
+        else:
+            result_expr = diff.alias(target)
+
+        if out == "iso8601":
+            # ISO 8601 duration formatting
+            # For simplicity, output P{n}D for days, PT{n}H for hours, etc.
+            abs_val = diff.abs()
+            if unit == "days":
+                iso_expr = (
+                    pl.lit("P") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("D")
+                ).alias(target)
+            elif unit == "hours":
+                iso_expr = (
+                    pl.lit("PT") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("H")
+                ).alias(target)
+            elif unit == "weeks":
+                iso_expr = (
+                    pl.lit("P") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("W")
+                ).alias(target)
+            elif unit == "years":
+                iso_expr = (
+                    pl.lit("P") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("Y")
+                ).alias(target)
+            elif unit == "months":
+                iso_expr = (
+                    pl.lit("P") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("M")
+                ).alias(target)
+            elif unit == "minutes":
+                iso_expr = (
+                    pl.lit("PT") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("M")
+                ).alias(target)
+            else:  # seconds
+                iso_expr = (
+                    pl.lit("PT") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("S")
+                ).alias(target)
+            return self._materialise_then(df.with_columns(iso_expr))
+
+        return self._materialise_then(df.with_columns(result_expr))
+
 
 class MultiRowMixin:
     """

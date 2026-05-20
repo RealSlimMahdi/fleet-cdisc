@@ -4,9 +4,9 @@
 
 ::: fleet.core.StudyContext
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 3
-filters: ["!^*"]
+filters: ["!^_"]
 
 ## load_study_context
 
@@ -19,17 +19,17 @@ heading_level: 3
 
 ::: fleet.core.PipelineDAG
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 3
-filters: ["!^*"]
+filters: ["!^_"]
 
 ## Derivation
 
 ::: fleet.core.derivation.Derivation
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 3
-filters: ["!^*"]
+filters: ["!^_"]
 
 ## derivation (decorator)
 
@@ -49,6 +49,6 @@ heading_level: 3
 
 ::: fleet.core.exceptions
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 3
-filters: ["!^*"]
+filters: ["!^_"]

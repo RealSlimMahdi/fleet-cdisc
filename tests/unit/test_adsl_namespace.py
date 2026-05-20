@@ -157,9 +157,7 @@ class TestCountEvents:
 class TestEligibilityFlag:
     def test_saffl_at_least_one_dose(self, subject_frame):
         """SAFFL = 'Y' when patient has at least one dose > 0."""
-        result = subject_frame.adam.adsl.flag(
-            "SAFFL", criteria='pl.col("EXDOSE") > 0'
-        ).to_frame()
+        result = subject_frame.adam.adsl.flag("SAFFL", criteria='pl.col("EXDOSE") > 0').to_frame()
         flags = result["SAFFL"].to_list()
         assert flags[0] == "Y"  # 01-001: EXDOSE=54 → Y
         assert flags[1] is None  # 01-002: EXDOSE=0  → null

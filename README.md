@@ -390,6 +390,19 @@ uv run fleet init-ct --domains DM,AE,VS,EX --output codelists.py
 uv run fleet add-ct  --domains LB,CM --output codelists.py   # incremental
 ```
 
+### Custom Validation Rules
+
+```bash
+# Scaffold a new custom rule YAML (auto-increments ID)
+uv run fleet add-rule --domain AE --description "AESEV must be populated when AESER = Y"
+
+# With custom prefix
+uv run fleet add-rule --domain AE --prefix ROCHE --description "Severity check"
+
+# Run validation with custom rules in a pipeline
+# .validate("AE", custom_rules="metadata/custom_rules")
+```
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ---

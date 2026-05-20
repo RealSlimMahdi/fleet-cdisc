@@ -14,13 +14,21 @@ class ValidationProvider(ABC):
 
     @abstractmethod
     def validate_sdtm(
-        self, df: pl.DataFrame, domain: str, version: str = "3.4"
+        self,
+        df: pl.DataFrame,
+        domain: str,
+        version: str = "3.4",
+        custom_rules: Path | None = None,
     ) -> ValidationResult:
         pass
 
     @abstractmethod
     def validate_adam(
-        self, df: pl.DataFrame, dataset: str, version: str = "1.3"
+        self,
+        df: pl.DataFrame,
+        dataset: str,
+        version: str = "1.3",
+        custom_rules: Path | None = None,
     ) -> ValidationResult:
         pass
 
@@ -32,7 +40,11 @@ class OfficialRulesEngineProvider(ValidationProvider):
         self.validator = OfficialCDISCValidator(rules_engine_path=rules_engine_path)
 
     def validate_sdtm(
-        self, df: pl.DataFrame, domain: str, version: str = "3.4"
+        self,
+        df: pl.DataFrame,
+        domain: str,
+        version: str = "3.4",
+        custom_rules: Path | None = None,
     ) -> ValidationResult:
         return self.validator.validate_dataset(
             data=df,
@@ -40,10 +52,15 @@ class OfficialRulesEngineProvider(ValidationProvider):
             version=version.replace(".", "-"),
             dataset_name=domain.upper(),
             domain=domain,
+            custom_rules=custom_rules,
         )
 
     def validate_adam(
-        self, df: pl.DataFrame, dataset: str, version: str = "1.3"
+        self,
+        df: pl.DataFrame,
+        dataset: str,
+        version: str = "1.3",
+        custom_rules: Path | None = None,
     ) -> ValidationResult:
         return self.validator.validate_dataset(
             data=df,
@@ -51,6 +68,7 @@ class OfficialRulesEngineProvider(ValidationProvider):
             version=version.replace(".", "-"),
             dataset_name=dataset.upper(),
             domain=dataset,
+            custom_rules=custom_rules,
         )
 
 

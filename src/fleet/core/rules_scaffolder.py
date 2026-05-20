@@ -267,8 +267,13 @@ class RulesScaffolder:
     ) -> Path:
         """Fetch ADaM conformance rules and write per-dataset YAML files.
 
-        The IG version is read from the ADaM ``define.yaml``
-        (``study.standard_version``).
+        Tries two CDISC Library API endpoints in order:
+
+        1. Legacy standalone: ``/mdr/rules/adam/adamig-{version}``
+        2. TIG (integrated): ``/mdr/rules/tig/1-0`` filtered to ADaM substandard
+
+        The TIG endpoint was introduced in CORE v0.16 and is where CDISC now
+        publishes ADaM rules.
 
         Args:
             context: Resolved study context.
@@ -285,22 +290,70 @@ class RulesScaffolder:
 
         version_dotted = _read_define_version(define_path)
         version_api = _normalise_ig_version(version_dotted)
-        api_path = f"/mdr/rules/adam/adamig-{version_api}"
 
+        rules: dict[str, Any] = {}
+
+        # Strategy 1: Legacy standalone endpoint
+        api_path = f"/mdr/rules/adam/adamig-{version_api}"
         logger.info("Fetching ADaM rules from %s", api_path)
         try:
             data = self._client._get(api_path)
+            rules = data.get("rules", {})
         except Exception as exc:
-            logger.warning("ADaM rules fetch failed: %s", exc)
-            print(f"Warning: Could not fetch ADaM rules for ADAMIG {version_api}: {exc}")
-            print("  ADaM rules may not be available for this IG version.")
-            return context.rules_adam_dir
+            logger.info("Legacy ADaM endpoint failed: %s", exc)
 
-        rules = data.get("rules", {})
+        # Strategy 2: TIG endpoint with ADaM substandard (CORE v0.16+)
+        if not rules:
+            tig_path = "/mdr/rules/tig/1-0"
+            logger.info(
+                "Legacy endpoint returned no rules; trying TIG endpoint: %s (substandard=ADaM)",
+                tig_path,
+            )
+            try:
+                data = self._client._get(tig_path)
+                all_rules = data.get("rules", {})
+                # Filter to ADaM-scoped rules: look for ANALYSIS use-case
+                # or ADaM-specific class markers
+                for rule_id, rule in all_rules.items():
+                    scope = rule.get("Scope", {})
+                    use_case = str(scope.get("Use_Case", "")).upper()
+                    classes = [
+                        c.upper()
+                        for c in scope.get("Classes", {}).get("Include", [])
+                    ]
+                    if "ANALYSIS" in use_case or any(
+                        c in ("ADAM", "BDS", "OCCDS", "ADSL")
+                        for c in classes
+                    ):
+                        rules[rule_id] = rule
+                if rules:
+                    logger.info(
+                        "Found %d ADaM rules via TIG endpoint", len(rules)
+                    )
+                else:
+                    logger.info(
+                        "TIG endpoint returned %d rules but none matched ADaM filters",
+                        len(all_rules),
+                    )
+            except Exception as exc:
+                logger.warning("TIG endpoint also failed: %s", exc)
+                print(
+                    f"Warning: Could not fetch ADaM rules from ADAMIG {version_api} "
+                    f"or TIG endpoint: {exc}"
+                )
+                print("  ADaM rules may not be available for this IG version.")
+                return context.rules_adam_dir
 
         if not rules:
             logger.warning("No ADaM rules returned for IG version %s", version_api)
-            print(f"Warning: No ADaM rules found for ADAMIG {version_api}.")
+            print(f"No ADaM rules found for ADAMIG {version_api}.")
+            print(
+                "  Note: CDISC has not yet published machine-executable ADaM conformance"
+            )
+            print(
+                "  rules in the Library API. Consider writing custom rules for ADaM"
+            )
+            print("  validation (see `fleet add-rule`).")
             return context.rules_adam_dir
 
         grouped = _group_rules_by_domain(rules)

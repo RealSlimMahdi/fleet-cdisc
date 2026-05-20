@@ -514,9 +514,7 @@ def _infer_output_type(target: str) -> Literal["dtc", "dt", "dtm"] | None:
     return None
 
 
-def _resolve_output_type(
-    target: str, output: str | None
-) -> Literal["dtc", "dt", "dtm"]:
+def _resolve_output_type(target: str, output: str | None) -> Literal["dtc", "dt", "dtm"]:
     """Combine explicit *output* override with suffix inference.
 
     Raises ValueError when the output type cannot be determined.
@@ -524,9 +522,7 @@ def _resolve_output_type(
     if output is not None:
         out = output.lower()
         if out not in ("dtc", "dt", "dtm"):
-            raise ValueError(
-                f"output={output!r} is not valid. Choose 'dtc', 'dt', or 'dtm'."
-            )
+            raise ValueError(f"output={output!r} is not valid. Choose 'dtc', 'dt', or 'dtm'.")
         return out  # type: ignore[return-value]
     inferred = _infer_output_type(target)
     if inferred is None:
@@ -564,19 +560,14 @@ def _resolve_flag_names(
         return None, None
     if isinstance(flag, str):
         dtf = flag
-        tmf = (
-            flag.replace("DTF", "TMF")
-            if "DTF" in flag and output_type == "dtm"
-            else None
-        )
+        tmf = flag.replace("DTF", "TMF") if "DTF" in flag and output_type == "dtm" else None
         return dtf, tmf
     # flag is True → auto-name from prefix
     try:
         prefix = _extract_prefix(target)
     except ValueError:
         raise ValueError(
-            f"Cannot auto-name flag for target '{target}'. "
-            f"Use flag='<name>DTF' or flag=False."
+            f"Cannot auto-name flag for target '{target}'. Use flag='<name>DTF' or flag=False."
         ) from None
     dtf = f"{prefix}DTF"
     tmf = f"{prefix}TMF" if output_type == "dtm" else None
@@ -597,9 +588,7 @@ def _apply_highest(
     level_map = {"Y": 4, "M": 7, "D": 10, "h": 13, "m": 16, "s": 19}
     min_len = level_map.get(highest)
     if min_len is None:
-        raise ValueError(
-            f"highest={highest!r} is not valid. Choose one of: {sorted(level_map)}"
-        )
+        raise ValueError(f"highest={highest!r} is not valid. Choose one of: {sorted(level_map)}")
     length = source_col.str.len_chars()
     return length >= min_len
 
@@ -677,14 +666,10 @@ def impute_and_flag(
                 parsed = pl.lit(value).str.to_date("%Y-%m-%d", strict=False)
                 return [parsed.alias(target)]
             else:  # dtm
-                parsed = pl.lit(value).str.to_datetime(
-                    "%Y-%m-%dT%H:%M:%S", strict=False
-                )
+                parsed = pl.lit(value).str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
                 if parsed is None:
                     parsed = (
-                        pl.lit(value)
-                        .str.to_date("%Y-%m-%d", strict=False)
-                        .cast(pl.Datetime("us"))
+                        pl.lit(value).str.to_date("%Y-%m-%d", strict=False).cast(pl.Datetime("us"))
                     )
                 return [parsed.alias(target)]
 
@@ -711,10 +696,7 @@ def impute_and_flag(
         if highest is not None:
             mask = _apply_highest(pl.col(source), highest)
             date_expr = (
-                pl.when(mask)
-                .then(date_expr)
-                .otherwise(pl.lit(None, dtype=pl.Date))
-                .alias(target)
+                pl.when(mask).then(date_expr).otherwise(pl.lit(None, dtype=pl.Date)).alias(target)
             )
         # Apply clamping
         if min_date is not None or max_date is not None:

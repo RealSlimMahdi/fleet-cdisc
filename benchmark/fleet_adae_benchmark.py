@@ -13,6 +13,7 @@ Usage:
     uv run python benchmark/fleet_adae_benchmark.py            # all rows
     uv run python benchmark/fleet_adae_benchmark.py 500000     # cap at 500K
 """
+
 from __future__ import annotations
 
 import json
@@ -45,8 +46,7 @@ def run_pipeline(ae_raw: pl.DataFrame, adsl: pl.DataFrame) -> dict:
     # ── SDTM AE ───────────────────────────────────────────────────────
     t_sdtm = time.perf_counter()
     ae = (
-        ae_raw.sdtm
-        .hardcode_no_ct("STUDYID", value="STUDY001")
+        ae_raw.sdtm.hardcode_no_ct("STUDYID", value="STUDY001")
         .hardcode_no_ct("DOMAIN", value="AE")
         .assign_no_ct("USUBJID", source="subject_id")
         .assign_no_ct("AETERM", source="event_term")
@@ -55,9 +55,7 @@ def run_pipeline(ae_raw: pl.DataFrame, adsl: pl.DataFrame) -> dict:
         .assign_no_ct("AESEV", source="severity")
         .derivation(
             "AESER",
-            expression=pl.when(pl.col("serious") == "Yes")
-            .then(pl.lit("Y"))
-            .otherwise(pl.lit("N")),
+            expression=pl.when(pl.col("serious") == "Yes").then(pl.lit("Y")).otherwise(pl.lit("N")),
         )
         .assign_no_ct("AEREL", source="relationship_to_study_drug")
         .assign_no_ct("AEOUT", source="outcome")
@@ -73,8 +71,7 @@ def run_pipeline(ae_raw: pl.DataFrame, adsl: pl.DataFrame) -> dict:
     ae_merged = ae.join(_adsl_cols, on="USUBJID", how="left")
 
     adae = (
-        ae_merged.adam
-        .assigned("STUDYID", value="STUDY001")
+        ae_merged.adam.assigned("STUDYID", value="STUDY001")
         .source("USUBJID")
         .source("AETERM")
         .source("AESTDTC")
@@ -88,8 +85,7 @@ def run_pipeline(ae_raw: pl.DataFrame, adsl: pl.DataFrame) -> dict:
         .date("AENDT", source="AEENDTC")
         .duration("ADY", start="TRTSDT", end="ASTDT")
         .to_frame()
-        .adam.occds
-        .treatment_emergent(
+        .adam.occds.treatment_emergent(
             "TRTEMFL",
             start_date="AESTDTC",
             trtsdt="TRTSDT",
@@ -169,13 +165,15 @@ def run() -> dict:
             f"RSS: {result['peak_rss_mb']:.0f} MB  "
             f"Out: {result['out_rows']}×{result['out_cols']}"
         )
-        scaling.append({
-            "rows": result["n_rows"],
-            "sdtm_sec": result["sdtm_sec"],
-            "adam_sec": result["adam_sec"],
-            "total_sec": result["total_sec"],
-            "peak_rss_mb": result["peak_rss_mb"],
-        })
+        scaling.append(
+            {
+                "rows": result["n_rows"],
+                "sdtm_sec": result["sdtm_sec"],
+                "adam_sec": result["adam_sec"],
+                "total_sec": result["total_sec"],
+                "peak_rss_mb": result["peak_rss_mb"],
+            }
+        )
         last_result = result
 
     # ── Dependency count ──────────────────────────────────────────────
@@ -197,8 +195,14 @@ def run() -> dict:
                 if "extra ==" in r:
                     continue
                 name = (
-                    r.split()[0].split(";")[0].split("[")[0].split("<")[0]
-                    .split(">")[0].split("=")[0].split("!")[0].strip()
+                    r.split()[0]
+                    .split(";")[0]
+                    .split("[")[0]
+                    .split("<")[0]
+                    .split(">")[0]
+                    .split("=")[0]
+                    .split("!")[0]
+                    .strip()
                 )
                 stack.append(name)
         return seen
@@ -237,6 +241,4 @@ def run() -> dict:
 if __name__ == "__main__":
     metrics = run()
     print(json.dumps(metrics, indent=2, default=str))
-    (DATA / "fleet_metrics.json").write_text(
-        json.dumps(metrics, indent=2, default=str)
-    )
+    (DATA / "fleet_metrics.json").write_text(json.dumps(metrics, indent=2, default=str))

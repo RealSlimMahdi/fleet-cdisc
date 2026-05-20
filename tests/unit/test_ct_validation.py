@@ -159,6 +159,7 @@ class TestCTMalformedCodelistClass:
 
         # Implementation logs a warning and skips validation — no crash
         import warnings
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             result = simple_raw.sdtm.hardcode_ct(
@@ -174,9 +175,7 @@ class TestCTMalformedCodelistClass:
 
         # Should either raise or fall back — not crash with cryptic error
         try:
-            simple_raw.sdtm.hardcode_ct(
-                "AGEU", value="YEARS", ct_codelist=NoneCodelist
-            ).to_frame()
+            simple_raw.sdtm.hardcode_ct("AGEU", value="YEARS", ct_codelist=NoneCodelist).to_frame()
         except (ValueError, TypeError, AttributeError):
             pass  # acceptable: explicit rejection
 

@@ -149,7 +149,7 @@ The core of Fleet for SDTM work. Registers `df.sdtm` on every Polars DataFrame.
 | Method                      | Purpose                                                                  |
 | --------------------------- | ------------------------------------------------------------------------ |
 | `from_spec(spec_path)`      | Load a YAML spec file and replay all its variable mappings automatically |
-| `validate(domain, version)` | Run CDISC rules-engine validation on the result                          |
+| `validate(domain, version, *, custom_rules=None)` | Run CDISC rules-engine validation on the result (optionally with custom rules dir) |
 | `inspect(prefix)`           | Materialise pipeline, log schema/shape/head, return checkpoint           |
 | `explain()`                 | Print the Polars query plan without materialising                        |
 | `to_frame()`                | **Materialise** — execute the whole pipeline and return a `pl.DataFrame` |
@@ -203,7 +203,7 @@ Registers `df.adam` on every Polars DataFrame.
 | Method                       | Purpose                                            |
 | ---------------------------- | -------------------------------------------------- |
 | `from_spec(spec_path)`       | YAML-driven derivation                             |
-| `validate(dataset, version)` | CDISC rules-engine validation                      |
+| `validate(dataset, version, *, custom_rules=None)` | CDISC rules-engine validation (optionally with custom rules dir) |
 | `inspect(prefix)`            | Materialise pipeline, log state, return checkpoint |
 | `explain()`                  | Print query plan without materialising             |
 | `to_frame()`                 | Materialise and return `pl.DataFrame`              |
@@ -276,14 +276,16 @@ The YAML key `fleet_algorithm` in a variable spec is used to record the derivati
 
 ### `validation/` — CDISC Rules Engine Integration
 
-| File              | Purpose                                                                                                                                                                                                                                                  |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `engine.py`       | Engine installer and discovery — `install_engine()`, `uninstall_engine()`, `discover_engine()`, `doctor()`; manages `~/.fleet/cdisc-rules-engine/`                                                                                                       |
-| `models.py`       | `Severity` enum (`ERROR/WARNING/INFO`), `ValidationIssue` dataclass, `ValidationResult` (with `.is_valid`, `.print_report(report_type="summary"/"full")`, `.save_html_report()`)                                                                         |
-| `official.py`     | `OfficialCDISCValidator` — wraps the CDISC Rules Engine binary (or legacy `core.py`) via subprocess; filters cross-domain engine noise to INFO                                                                                                           |
-| `providers.py`    | `ValidationProvider` ABC, `OfficialRulesEngineProvider`, `ValidationProviderRegistry` (plugin registry)                                                                                                                                                  |
-| `service.py`      | `ValidationService` — high-level `.validate_sdtm()` and `.validate_adam()` methods                                                                                                                                                                       |
-| `lineage_join.py` | `enrich_with_lineage(result, lineage, *, spec_ref=None)` — joins `ValidationIssue.variable` with the pipeline `VariableNode` lineage so each issue carries `producing_verb`, `verb_method`, and `spec_ref` (cross-link from rule failure to source verb) |
+| File                | Purpose                                                                                                                                                                                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `engine.py`         | Engine installer and discovery — `install_engine()`, `uninstall_engine()`, `discover_engine()`, `doctor()`; manages `~/.fleet/cdisc-rules-engine/`                                                                                                       |
+| `models.py`         | `Severity` enum (`ERROR/WARNING/INFO`), `ValidationIssue` dataclass, `ValidationResult` (with `.is_valid`, `.print_report(report_type="summary"/"full")`, `.save_html_report()`)                                                                         |
+| `official.py`       | `OfficialCDISCValidator` — wraps the CDISC Rules Engine binary (or legacy `core.py`) via subprocess; filters cross-domain engine noise to INFO; supports `custom_rules` via `-lr`                                                                        |
+| `providers.py`      | `ValidationProvider` ABC, `OfficialRulesEngineProvider`, `ValidationProviderRegistry` (plugin registry)                                                                                                                                                  |
+| `service.py`        | `ValidationService` — high-level `.validate_sdtm()` and `.validate_adam()` methods with optional `custom_rules` parameter                                                                                                                                |
+| `rule_scaffolder.py`| `scaffold_rule()` — generates schema-valid custom rule YAML skeletons; `_scan_existing_ids()` / `_next_sequence()` for ID uniqueness and auto-increment                                                                                                  |
+| `lineage_join.py`   | `enrich_with_lineage(result, lineage, *, spec_ref=None)` — joins `ValidationIssue.variable` with the pipeline `VariableNode` lineage so each issue carries `producing_verb`, `verb_method`, and `spec_ref` (cross-link from rule failure to source verb) |
+| `schemas/`          | Vendored CDISC rule JSON Schema (`cdisc_rule_schema.json`) for validating custom rule YAML before engine execution                                                                                                                                       |
 
 ---
 

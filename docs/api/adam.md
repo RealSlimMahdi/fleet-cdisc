@@ -4,11 +4,11 @@ The `df.adam` namespace builds ADaM BDS datasets (ADVS, ADLB, …).
 
 ::: fleet.adam.AdamNamespace
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 2
 members_order: source
 inherited_members: true
-filters: ["!^*"]
+filters: ["!^_"]
 
 ## Shared verbs (all ADaM namespaces)
 
@@ -16,7 +16,7 @@ These verbs are available on every ADaM namespace (`df.adam`, `df.adam.adsl`, `d
 
 ::: fleet.adam.SharedADaMVerbsMixin
 options:
-show*root_heading: false
+show_root_heading: false
 heading_level: 3
 members_order: source
-filters: ["!^*"]
+filters: ["!^_"]
