@@ -34,7 +34,7 @@ the regulatory description in Define-XML — no duplicated prose.
 from fleet import DefineSpecGenerator
 
 DefineSpecGenerator(
-    "specs/cdiscpilot01/sdtm/define.yaml",
+    "examples/cdiscpilot01/sdtm/define.yaml",
     enrich_methods=True,
 ).generate("outputs/define_sdtm.xml")
 ```
@@ -43,7 +43,7 @@ CLI equivalent:
 
 ```bash
 uv run fleet define-xml \
-  --spec specs/cdiscpilot01/sdtm/define.yaml \
+  --spec examples/cdiscpilot01/sdtm/define.yaml \
   --output outputs/define_sdtm.xml \
   --enrich-methods
 ```
@@ -59,7 +59,7 @@ derivation:
 
 # Study-specific callable — full dotted path importable at generation time
 derivation:
-  callable: specs.cdiscpilot01.adam.derivations.derive_aval
+  callable: examples.cdiscpilot01.adam.derivations.derive_aval
 ```
 
 ## DefineValidator

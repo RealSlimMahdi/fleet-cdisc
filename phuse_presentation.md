@@ -288,7 +288,7 @@ df.sdtm
 Best for: exploration, ad-hoc analysis, smaller studies, rapid prototyping.
 
 ```python
-from specs.cdiscpilot01.sdtm.codelists import SEX, RACE, ETHNIC
+from examples.cdiscpilot01.sdtm.codelists import SEX, RACE, ETHNIC
 
 dm = (
     dm_raw.sdtm

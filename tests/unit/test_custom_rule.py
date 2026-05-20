@@ -19,7 +19,7 @@ SCHEMA_PATH = (
 
 RULE_FILE = (
     Path(__file__).parents[2]
-    / "specs"
+    / "examples"
     / "cdiscpilot01"
     / "sdtm"
     / "custom_rules"

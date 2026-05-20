@@ -98,7 +98,7 @@ The generated `codelists.py` contains:
 ### Using generated codelists in pipelines
 
 ```python
-from specs.cdiscpilot01.sdtm.codelists import SEX, RACE
+from examples.cdiscpilot01.sdtm.codelists import SEX, RACE
 
 dm = (
     raw_df.sdtm
@@ -146,10 +146,10 @@ from fleet import load_controlled_terminology, get_validator
 
 # 1. Load the CT package once, at script/session start.
 #    The file is a YAML or CSV produced by `fleet init ct` or `fleet init-ct`.
-load_controlled_terminology("specs/cdiscpilot01/sdtm/ct_package.yaml")
+load_controlled_terminology("examples/cdiscpilot01/sdtm/ct_package.yaml")
 
 # 2. Import the generated codelist classes.
-from specs.cdiscpilot01.sdtm.codelists import AGEU, SEX
+from examples.cdiscpilot01.sdtm.codelists import AGEU, SEX
 
 # 3. Build your pipeline — validation fires here on each verb call.
 import warnings

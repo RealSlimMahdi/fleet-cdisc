@@ -34,6 +34,7 @@ pl.Config.set_tbl_rows(200)
 pl.Config.set_tbl_width_chars(220)
 
 import fleet  # noqa: E402, F401 — registers .sdtm / .adam / .tlg namespaces
+from examples.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX  # noqa: E402
 from fleet.tlg import (  # noqa: E402
     AEListingSpec,
     AESummarySpec,
@@ -46,7 +47,6 @@ from fleet.tlg import (  # noqa: E402
     ard_to_table_model,
     render_html,
 )
-from specs.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX  # noqa: E402
 
 # ════════════════════════════════════════════════════════════════════════════
 # 1. Raw data (inline)

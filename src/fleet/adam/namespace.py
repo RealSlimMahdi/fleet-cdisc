@@ -31,7 +31,7 @@ Usage
     )
 
     # Or spec-driven:
-    result = vs_sdtm.adam.from_spec("specs/cdiscpilot01/adam/define.yaml", dataset="ADVS").to_frame()
+    result = vs_sdtm.adam.from_spec("examples/cdiscpilot01/adam/define.yaml", dataset="ADVS").to_frame()
 """
 
 from __future__ import annotations
@@ -96,7 +96,7 @@ def _resolve_callable(ref: str) -> Any:
 
     Args:
         ref: Registry name (e.g. ``"AGEGR1"``) or dotted import path
-             (e.g. ``"specs.cdiscpilot01.adam.derivations.AGEGR1"``).
+             (e.g. ``"examples.cdiscpilot01.adam.derivations.AGEGR1"``).
 
     Returns:
         The callable or :class:`~fleet.core.derivation.Derivation` object.
@@ -1044,7 +1044,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
 
                 advs = (
                     vs_raw.adam
-                    .from_spec("specs/cdiscpilot01/adam/define.yaml",
+                    .from_spec("examples/cdiscpilot01/adam/define.yaml",
                                dataset="ADVS")
                     .to_frame()
                 )

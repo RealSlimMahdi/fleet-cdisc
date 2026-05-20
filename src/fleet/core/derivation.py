@@ -52,7 +52,7 @@ Examples:
 
     Use in a pipeline::
 
-        from specs.cdiscpilot01.adam.derivations import AGEGR1, add_pop_flags
+        from examples.cdiscpilot01.adam.derivations import AGEGR1, add_pop_flags
 
         adsl = (
             dm.adam.adsl
@@ -92,7 +92,7 @@ class Derivation:
         set_values_to: Constant column assignments for ``kind="param"``
                        (e.g. ``{"PARAMCD": "BMI"}``).
         dotted_path:   Fully qualified import path for Define-XML MethodDef
-                       (e.g. ``"specs.cdiscpilot01.adam.derivations.AGEGR1"``).
+                       (e.g. ``"examples.cdiscpilot01.adam.derivations.AGEGR1"``).
     """
 
     fn: Callable

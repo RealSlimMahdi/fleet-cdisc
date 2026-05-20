@@ -17,7 +17,7 @@ Usage
     )
 
     # Or spec-driven:
-    result = raw_df.sdtm.from_spec("specs/cdiscpilot01/sdtm/define.yaml", dataset="DM").to_frame()
+    result = raw_df.sdtm.from_spec("examples/cdiscpilot01/sdtm/define.yaml", dataset="DM").to_frame()
 """
 
 from __future__ import annotations
@@ -1174,7 +1174,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
 
                 dm = (
                     raw_df.sdtm
-                    .from_spec("specs/cdiscpilot01/sdtm/define.yaml", dataset="DM")
+                    .from_spec("examples/cdiscpilot01/sdtm/define.yaml", dataset="DM")
                     .to_frame()
                 )
         """

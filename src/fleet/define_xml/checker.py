@@ -27,7 +27,7 @@ Typical usage::
 
     from fleet import DatasetChecker
 
-    checker = DatasetChecker("specs/cdiscpilot01/sdtm/define.yaml")
+    checker = DatasetChecker("examples/cdiscpilot01/sdtm/define.yaml")
     dm = dm_raw.sdtm.from_spec(..., dataset="DM").to_frame()
 
     # 1. Lightweight define checks (always fast, no external deps)

@@ -80,10 +80,10 @@ uv run fleet init rules
 
 ```bash
 # Bootstrap codelists.py directly from the SDTM IG (without config/define pipeline)
-uv run fleet init-ct --domains DM,AE,VS,EX --output specs/cdiscpilot01/sdtm/codelists.py
+uv run fleet init-ct --domains DM,AE,VS,EX --output examples/cdiscpilot01/sdtm/codelists.py
 
 # Add more domains incrementally (preserves existing codelists)
-uv run fleet add-ct --domains LB,CM --output specs/cdiscpilot01/sdtm/codelists.py
+uv run fleet add-ct --domains LB,CM --output examples/cdiscpilot01/sdtm/codelists.py
 
 # Pin to a specific IG version and CT package
 uv run fleet init-ct --domains DM,AE --ig 3-4 --package sdtmct-2025-09-26 --output codelists.py
@@ -104,13 +104,13 @@ The source of truth for which variables and codelists to generate is the **CDISC
 
 ```bash
 # Generate Define-XML 2.1 from a define.yaml specification
-uv run fleet define-xml --spec specs/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml
+uv run fleet define-xml --spec examples/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml
 
 # Same, but enrich every variable with a <MethodDef> built from the verb / callable docstring
-uv run fleet define-xml --spec specs/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml --enrich-methods
+uv run fleet define-xml --spec examples/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml --enrich-methods
 
 # Without HTML preview
-uv run fleet define-xml --spec specs/cdiscpilot01/adam/define.yaml --output outputs/define_adam.xml --no-preview
+uv run fleet define-xml --spec examples/cdiscpilot01/adam/define.yaml --output outputs/define_adam.xml --no-preview
 ```
 
 ### TLG Export (HTML / PDF / PPTX)
@@ -198,7 +198,7 @@ _Prerequisites:_ The `codelists.py` file must exist before pipelines can use cod
 _Example pattern:_
 
 ```python
-from specs.cdiscpilot01.sdtm.codelists import SEX, RACE
+from examples.cdiscpilot01.sdtm.codelists import SEX, RACE
 
 dm = (
     raw_df.sdtm

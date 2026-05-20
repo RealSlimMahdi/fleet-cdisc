@@ -240,7 +240,7 @@ ARD is the **computation** layer. Rendering (HTML, RTF, LaTeX) is a separate fut
 - `src/fleet/sdtm/tdd.py` — `@model_validator` for complex Pydantic validation
 - `src/fleet/core/exceptions.py` — Exception hierarchy to extend
 - `src/fleet/__init__.py` — Where to register `.tlg` namespace
-- `specs/cdiscpilot01/adam/define.yaml` — Reference for spec-driven approach
+- `examples/cdiscpilot01/adam/define.yaml` — Reference for spec-driven approach
 - `docs/concepts/advanced.md` — Custom namespace registration pattern reference
 
 ---

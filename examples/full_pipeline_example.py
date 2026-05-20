@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import polars as pl
 
 import fleet  # noqa: F401  — register namespace extensions
-from specs.cdiscpilot01.sdtm.codelists import SEX, VSTESTCD
+from examples.cdiscpilot01.sdtm.codelists import SEX, VSTESTCD
 
 
 def main():

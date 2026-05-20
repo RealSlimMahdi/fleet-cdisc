@@ -11,7 +11,7 @@ Usage::
     from fleet import DefineSpecGenerator
     from pathlib import Path
 
-    gen = DefineSpecGenerator("specs/cdiscpilot01/sdtm/define.yaml")
+    gen = DefineSpecGenerator("examples/cdiscpilot01/sdtm/define.yaml")
     gen.generate("outputs/define_sdtm.xml")
 """
 

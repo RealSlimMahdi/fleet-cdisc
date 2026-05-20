@@ -67,7 +67,7 @@ For study-specific logic that should be versioned, reused, and automatically doc
 ### `kind="column"` example
 
 ```python
-# specs/cdiscpilot01/adam/derivations/AGEGR1.py
+# examples/cdiscpilot01/adam/derivations/AGEGR1.py
 from fleet.core.derivation import derivation
 import polars as pl
 
@@ -84,7 +84,7 @@ def AGEGR1() -> pl.Expr:
 Use it directly in a pipeline:
 
 ```python
-from specs.cdiscpilot01.adam.derivations import AGEGR1
+from examples.cdiscpilot01.adam.derivations import AGEGR1
 
 adsl = (
     dm.adam.adsl

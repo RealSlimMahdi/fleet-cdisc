@@ -48,7 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import polars as pl
 
 import fleet  # noqa: F401 — registers .sdtm / .adam namespace extensions
-from specs.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
+from examples.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
 
 OUT = Path("outputs/cdiscpilot01")
 

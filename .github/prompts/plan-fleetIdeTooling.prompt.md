@@ -32,7 +32,7 @@ The define.yaml `depends_on:` field is ADVS-critical: `ADT → ADY → BASE → 
 Datasets like ADVS have `inputs: [VS, ADSL]`. The LSP must:
 
 - Validate that all `inputs[].name` values are defined elsewhere in the file (same define.yaml) or in a sibling define.yaml (SDTM domains referenced from ADaM)
-- Support cross-file resolution: parse sibling YAML files in the same `specs/` subtree
+- Support cross-file resolution: parse sibling YAML files in the same `examples/` subtree
 - For `source:` values referencing upstream columns, offer completions from the union of all input datasets' known variables (read from their define.yaml `variables:` blocks)
 
 **Edge case:** Raw inputs (`type: raw`) have no variable list — the LSP cannot offer completions for raw column names since they're in the CSV. It should show a fallback note: _"Source column from raw file — no schema available."_
@@ -152,7 +152,7 @@ Read a define.yaml dataset block and generate a Python pipeline skeleton:
 - `algorithm: source` → `.assign_no_ct(...)` (SDTM) or `.source(...)` (ADaM)
 - Variables with `# TODO` comments → emitted as stub comments in the Python chain
 
-Imports are auto-generated: `from specs.{study}.{standard}.codelists import SEX, RACE` based on `ct_codelist:` references found in the YAML.
+Imports are auto-generated: `from examples.{study}.{standard}.codelists import SEX, RACE` based on `ct_codelist:` references found in the YAML.
 
 ### 2d. Live Validation Panel
 
@@ -313,7 +313,7 @@ The MCP server runs as `fleet mcp --stdio` — a new CLI subcommand. It imports 
 
 1. **`fleet lsp --stdio` CLI command** — the foundation everything else builds on. Ships with `pygls` in the `lsp` extra. Provides: define.yaml schema validation, algorithm autocomplete, codelist hover, depends_on cycle detection. Scope: ~500 LOC.
 
-2. **VS Code extension shell** — TypeScript wrapper that launches `fleet lsp`, registers the extension on `.yaml` files in `specs/` directories, and provides the DAG Webview panel. Scope: ~300 LOC TypeScript + LSP launch code.
+2. **VS Code extension shell** — TypeScript wrapper that launches `fleet lsp`, registers the extension on `.yaml` files in `examples/` directories, and provides the DAG Webview panel. Scope: ~300 LOC TypeScript + LSP launch code.
 
 3. **`fleet mcp --stdio` CLI command** — expose the 8 tools above. Ships in Fleet core (no extra deps). Immediately amplifies every MCP-compatible AI. Scope: ~200 LOC.
 
