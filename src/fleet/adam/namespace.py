@@ -31,7 +31,7 @@ Usage
     )
 
     # Or spec-driven:
-    result = vs_sdtm.adam.from_spec("specs/cdiscpilot01/adam/define.yaml", dataset="ADVS").to_frame()
+    result = vs_sdtm.adam.from_spec("examples/cdiscpilot01/adam/define.yaml", dataset="ADVS").to_frame()
 """
 
 from __future__ import annotations
@@ -81,6 +81,47 @@ if TYPE_CHECKING:
     from .peds_namespace import PedsNamespace
     from .pk_namespace import PKNamespace
     from .vaccine_namespace import VaccineNamespace
+
+
+def _resolve_callable(ref: str) -> Any:
+    """Resolve a callable reference by name or dotted import path.
+
+    Discovery order:
+
+    1. Look up *ref* in the Fleet transform registry
+       (:func:`~fleet.adam.transforms.get_transform`).
+    2. If *ref* contains a dot, treat it as a dotted import path
+       (``module.attr``).
+    3. Raise ``ValueError`` if neither lookup succeeds.
+
+    Args:
+        ref: Registry name (e.g. ``"AGEGR1"``) or dotted import path
+             (e.g. ``"examples.cdiscpilot01.adam.derivations.AGEGR1"``).
+
+    Returns:
+        The callable or :class:`~fleet.core.derivation.Derivation` object.
+
+    Raises:
+        ValueError: If *ref* cannot be resolved.
+    """
+    from fleet.adam.transforms import get_transform
+
+    try:
+        return get_transform(ref)
+    except KeyError:
+        pass
+
+    if "." in ref:
+        import importlib
+
+        module_path, _, attr = ref.rpartition(".")
+        mod = importlib.import_module(module_path)
+        return getattr(mod, attr)
+
+    raise ValueError(
+        f"Callable '{ref}' is not registered and is not a dotted import path. "
+        "Register it with @derivation or import the derivations module before from_spec()."
+    )
 
 
 @pl.api.register_dataframe_namespace("adam")
@@ -1003,7 +1044,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
 
                 advs = (
                     vs_raw.adam
-                    .from_spec("specs/cdiscpilot01/adam/define.yaml",
+                    .from_spec("examples/cdiscpilot01/adam/define.yaml",
                                dataset="ADVS")
                     .to_frame()
                 )
@@ -1160,6 +1201,12 @@ class AdamNamespace(SharedADaMVerbsMixin):
             elif alg == "whereclauses":
                 if var.where:
                     ns = ns.whereclauses(where=var.where)
+            elif alg == "callable":
+                fn = _resolve_callable(var.callable_ref or "")
+                if hasattr(fn, "kind"):
+                    ns = ns.derivation(fn)
+                else:
+                    ns = ns._materialise_then(fn(ns.to_frame()))
             # lookup: skip in spec-driven (requires external dataset object)
 
         return ns
@@ -1192,6 +1239,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
             drv = var.get("derivation")
             if not drv:
                 continue  # no derivation → carry-through / manual column
+            # Backward compat: callable: without algorithm: → inject algorithm.
+            if "callable" in drv and "algorithm" not in drv:
+                drv = {**drv, "algorithm": "callable"}
             spec = ADAMVariableSpec(
                 target=var["name"],
                 **drv,
@@ -1454,40 +1504,3 @@ class AdamNamespace(SharedADaMVerbsMixin):
         from .pk_namespace import PKNamespace
 
         return PKNamespace(self.to_frame())
-
-    # ------------------------------------------------------------------ #
-    # Terminal operations                                                  #
-    # ------------------------------------------------------------------ #
-
-    def write_parquet(
-        self,
-        path: str | Path,
-        *,
-        mkdir: bool = True,
-    ) -> pl.DataFrame:
-        """
-        Materialise the pipeline, write the result to *path* as Parquet,
-        and return the DataFrame.
-
-        This is a drop-in alternative to ``to_frame()`` when you want to
-        persist the dataset as part of the chain.
-
-        *mkdir*: when ``True`` (default) any missing parent directories are
-        created automatically.
-
-        Examples:
-            Materialise and write ADVS to Parquet::
-
-                advs = (
-                    vs_raw.adam
-                    .rename("USUBJID", source="patient_number")
-                    .select(spec="specs/adam/define.yaml", dataset="ADVS")
-                    .write_parquet("outputs/cdiscpilot01/advs.parquet")
-                )
-        """
-        df = self.to_frame()
-        dest = Path(path)
-        if mkdir:
-            dest.parent.mkdir(parents=True, exist_ok=True)
-        df.write_parquet(dest)
-        return df

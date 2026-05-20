@@ -39,7 +39,6 @@ from fleet.tlg import (
     render_html,
 )
 
-RAW = Path("datasets/cdiscpilot01/raw")
 OUT = Path("outputs/cdiscpilot01")
 OUT.mkdir(parents=True, exist_ok=True)
 
@@ -53,13 +52,37 @@ OUT.mkdir(parents=True, exist_ok=True)
 print("━━ Layer 0 · Inputs ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 # Pre-existing ADSL (subject-level reference for Big-N, treatment arms, dates)
-adsl = pl.read_csv(OUT / "adsl_admiral.csv", try_parse_dates=True)
+adsl = pl.from_repr("""\
+┌─────────────┬─────┬─────┬───────────────────────────┬──────────────────────┬────────────┬────────────┬───────┐
+│ USUBJID     ┆ AGE ┆ SEX ┆ RACE                      ┆ TRT01P               ┆ TRTSDT     ┆ TRTEDT     ┆ SAFFL │
+│ ---         ┆ --- ┆ --- ┆ ---                       ┆ ---                  ┆ ---        ┆ ---        ┆ ---   │
+│ str         ┆ i64 ┆ str ┆ str                       ┆ str                  ┆ str        ┆ str        ┆ str   │
+╞═════════════╪═════╪═════╪═══════════════════════════╪══════════════════════╪════════════╪════════════╪═══════╡
+│ 01-701-1015 ┆ 63  ┆ F   ┆ WHITE                     ┆ Placebo              ┆ 2014-01-02 ┆ 2014-07-02 ┆ Y     │
+│ 01-701-1023 ┆ 64  ┆ F   ┆ WHITE                     ┆ Xanomeline Low Dose  ┆ 2014-01-03 ┆ 2014-07-03 ┆ Y     │
+│ 01-701-1028 ┆ 71  ┆ M   ┆ WHITE                     ┆ Xanomeline High Dose ┆ 2014-01-04 ┆ 2014-07-04 ┆ Y     │
+│ 01-701-1034 ┆ 74  ┆ M   ┆ BLACK OR AFRICAN AMERICAN ┆ Placebo              ┆ 2014-01-05 ┆ 2014-07-05 ┆ Y     │
+│ 01-701-1047 ┆ 56  ┆ F   ┆ WHITE                     ┆ Xanomeline Low Dose  ┆ 2014-01-06 ┆ 2014-07-06 ┆ Y     │
+└─────────────┴─────┴─────┴───────────────────────────┴──────────────────────┴────────────┴────────────┴───────┘
+""")
 adsl = adsl.with_columns(pl.col("TRT01P").alias("TRTA"))
-print(f"  ADSL (pre-built) : {adsl.shape[0]} subjects × {adsl.shape[1]} variables")
+print(f"  ADSL (inline)    : {adsl.shape[0]} subjects × {adsl.shape[1]} variables")
 print(f"         Arms: {sorted(adsl['TRTA'].unique().to_list())}")
 
 # Raw AE extract — the only raw data this script owns
-ae_raw = pl.read_csv(RAW / "ae_raw.csv")
+ae_raw = pl.from_repr("""\
+┌────────────────┬───────────────────────────┬───────────────┬─────────────┬─────────────┬────────────┬────────────────────────────┬──────────────────┬──────────────────┐
+│ patient_number ┆ ae_term                   ┆ ae_start_date ┆ ae_end_date ┆ ae_severity ┆ ae_serious ┆ ae_outcome                 ┆ ae_action_taken  ┆ ae_relationship  │
+│ ---            ┆ ---                       ┆ ---           ┆ ---         ┆ ---         ┆ ---        ┆ ---                        ┆ ---              ┆ ---              │
+│ str            ┆ str                       ┆ str           ┆ str         ┆ str         ┆ str        ┆ str                        ┆ str              ┆ str              │
+╞════════════════╪═══════════════════════════╪═══════════════╪═════════════╪═════════════╪════════════╪════════════════════════════╪══════════════════╪══════════════════╡
+│ 01-701-1015    ┆ HEADACHE                  ┆ 2014-01-10    ┆ 2014-01-12  ┆ MILD        ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ POSSIBLY RELATED │
+│ 01-701-1015    ┆ NAUSEA                    ┆ 2014-02-05    ┆ 2014-02-06  ┆ MODERATE    ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ NOT RELATED      │
+│ 01-701-1023    ┆ DIZZINESS                 ┆ 2014-01-15    ┆ 2014-01-16  ┆ MILD        ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ POSSIBLY RELATED │
+│ 01-701-1028    ┆ FATIGUE                   ┆ 2014-02-20    ┆ null        ┆ MODERATE    ┆ N          ┆ NOT RECOVERED/NOT RESOLVED ┆ DOSE NOT CHANGED ┆ PROBABLY RELATED │
+│ 01-701-1034    ┆ APPLICATION SITE ERYTHEMA ┆ 2014-01-20    ┆ 2014-01-25  ┆ SEVERE      ┆ Y          ┆ RECOVERED/RESOLVED         ┆ DRUG WITHDRAWN   ┆ RELATED          │
+└────────────────┴───────────────────────────┴───────────────┴─────────────┴─────────────┴────────────┴────────────────────────────┴──────────────────┴──────────────────┘
+""")
 print(f"  ae_raw           : {ae_raw.shape[0]:>3} rows × {ae_raw.shape[1]} cols")
 
 
@@ -100,7 +123,8 @@ _adsl_trt = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "TRTA", "SAFFL
 ae_with_trt = ae.join(_adsl_trt, on="USUBJID", how="left")
 
 _adae_base_ns = (
-    ae_with_trt.adam.source("STUDYID")
+    ae_with_trt.adam("ADAE")
+    .source("STUDYID")
     .source("USUBJID")
     .source("AETERM")
     .source("AESTDTC")
@@ -119,7 +143,8 @@ _adae_base_ns = (
 
 _adae_occds_ns = (
     _adae_base_ns.to_frame()
-    .adam.occds.treatment_emergent(
+    .adam.occds("ADAE")
+    .treatment_emergent(
         "TRTEMFL",
         start_date="AESTDTC",
         trtsdt="TRTSDT",
@@ -165,11 +190,11 @@ print(f"         ADAE → {adae_json_path}")
 # ── Variable-Level Lineage ─────────────────────────────────────────────
 print("\n━━ ADAE Variable Lineage ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 _all_lineage = lineage_of(_adae_base_ns) + lineage_of(_adae_occds_ns)
-print(f"  {'Variable':<12}  {'Verb':<22}  Sources")
-print(f"  {'─' * 12}  {'─' * 22}  {'─' * 40}")
+print(f"  {'Variable':<12}  {'Verb':<22}  {'Sources':<30}  CDISC Ref")
+print(f"  {'─' * 12}  {'─' * 22}  {'─' * 30}  {'─' * 50}")
 for node in _all_lineage:
     src = ", ".join(node.sources) if node.sources else "—"
-    print(f"  {node.name:<12}  {node.verb:<22}  {src}")
+    print(f"  {node.name:<12}  {node.verb:<22}  {src:<30}  {node.cdisc_ref}")
 
 
 # ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓

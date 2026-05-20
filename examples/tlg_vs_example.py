@@ -22,22 +22,31 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import polars as pl
 
 import fleet  # noqa: F401 — registers namespaces
+from examples.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
 from fleet.tlg import (
     GroupPool,
     OverallStat,
     Statistic,
     VSSummarySpec,
 )
-from specs.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
-
-RAW = Path("datasets/cdiscpilot01/raw")
-
 
 # ════════════════════════════════════════════════════════════════════════════
 # 1. Load raw data & build ADSL (reuse pattern from tlg_ae_example.py)
 # ════════════════════════════════════════════════════════════════════════════
 print("══ 1. Load raw data & build ADSL ═══════════════════════════════════════")
-dm_raw = pl.read_csv(RAW / "dm_raw.csv")
+dm_raw = pl.from_repr("""\
+┌────────────────┬─────────┬─────┬─────┬───────────────────────────┬────────────────────────┬──────────┬──────────────────────┬─────────────────┬────────────────┬───────────────────────┐
+│ patient_number ┆ site_id ┆ age ┆ sex ┆ race                      ┆ ethnic                 ┆ arm_code ┆ arm_description      ┆ first_dose_date ┆ last_dose_date ┆ informed_consent_date │
+│ ---            ┆ ---     ┆ --- ┆ --- ┆ ---                       ┆ ---                    ┆ ---      ┆ ---                  ┆ ---             ┆ ---            ┆ ---                   │
+│ str            ┆ i64     ┆ i64 ┆ str ┆ str                       ┆ str                    ┆ str      ┆ str                  ┆ str             ┆ str            ┆ str                   │
+╞════════════════╪═════════╪═════╪═════╪═══════════════════════════╪════════════════════════╪══════════╪══════════════════════╪═════════════════╪════════════════╪═══════════════════════╡
+│ 01-701-1015    ┆ 701     ┆ 63  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-02      ┆ 2014-07-02     ┆ 2014-01-01            │
+│ 01-701-1023    ┆ 701     ┆ 64  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-03      ┆ 2014-07-04     ┆ 2014-01-02            │
+│ 01-701-1028    ┆ 701     ┆ 71  ┆ M   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Hi   ┆ Xanomeline High Dose ┆ 2014-01-04      ┆ 2014-07-05     ┆ 2014-01-03            │
+│ 01-701-1034    ┆ 701     ┆ 74  ┆ M   ┆ BLACK OR AFRICAN AMERICAN ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-05      ┆ 2014-07-06     ┆ 2014-01-04            │
+│ 01-701-1047    ┆ 701     ┆ 56  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-06      ┆ 2014-07-07     ┆ 2014-01-05            │
+└────────────────┴─────────┴─────┴─────┴───────────────────────────┴────────────────────────┴──────────┴──────────────────────┴─────────────────┴────────────────┴───────────────────────┘
+""")
 
 dm = (
     dm_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")

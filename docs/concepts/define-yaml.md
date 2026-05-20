@@ -62,21 +62,53 @@ Each variable's `derivation.algorithm` maps directly to an `.adsl` (or `.adam`) 
 
 ### Study-specific callables (`callable:`)
 
-When no built-in verb fits, point `derivation:` at a fully qualified Python
-callable instead. The callable must be importable at generation time and
-takes the upstream DataFrame as its first argument:
+When no built-in verb fits, point `derivation:` at a registered derivation
+name or a fully qualified Python dotted path. The runtime dispatch depends
+on the callable's `kind`:
+
+- **`kind="column"`** (zero-arg, returns `pl.Expr`) — stays fully lazy,
+  no DataFrame materialisation.
+- **`kind="frame"` or `kind="param"`** (receives upstream DataFrame, returns
+  `pl.DataFrame`) — the pipeline is materialised at that point, the function
+  is called, and the result is wrapped back into the namespace.
 
 ```yaml
-- name: AVAL
+- name: AGEGR1
   derivation:
-    callable: specs.cdiscpilot01.adam.derivations.derive_aval
+    algorithm: callable
+    callable: examples.cdiscpilot01.adam.derivations.AGEGR1
 ```
+
+Or use the registered short name (if the derivations module was imported):
+
+```yaml
+- name: AGEGR1
+  derivation:
+    callable: AGEGR1 # algorithm: callable injected automatically
+```
+
+### Derivations folder convention
+
+Study derivations live under:
+
+```
+specs/<study_id>/adam/derivations/
+    __init__.py        # auto-updated by `fleet derivation add`
+    AGEGR1.py
+    BMI.py
+```
+
+`fleet init cfg` creates the empty `derivations/__init__.py` automatically.
+`fleet derivation add AGEGR1 --dataset ADSL` scaffolds a new derivation file
+and appends the import to `__init__.py`.
 
 Both `algorithm:` and `callable:` plug into Define-XML method enrichment:
 running `DefineSpecGenerator(spec, enrich_methods=True)` (or
 `fleet define-xml --enrich-methods`) emits a `<MethodDef>` whose
-`<Description>` is taken from the **docstring** of the verb or callable, so
-the regulatory description always matches the executable code.
+`<Description>` is taken from the **docstring** of the callable. When the
+callable is a `@derivation`-decorated object, its `dotted_path` is used as
+the `<FormalExpression>` context, giving a verifiable link between the
+regulatory submission and the exact code that produced the data.
 
 ### Example — TRTSDT (date of first dose)
 
@@ -129,7 +161,7 @@ graph TD
 ```python
 from fleet import load_study_context
 
-ctx = load_study_context("specs/cdiscpilot01/adam/define.yaml")
+ctx = load_study_context("examples/cdiscpilot01/adam/define.yaml")
 
 # Build every dataset declared in the spec
 adsl = ctx.build("ADSL")   # returns a polars.DataFrame
@@ -141,7 +173,7 @@ advs = ctx.build("ADVS")
 ```python
 from fleet import DefineXMLGenerator
 
-gen = DefineXMLGenerator("specs/cdiscpilot01/adam/define.yaml")
+gen = DefineXMLGenerator("examples/cdiscpilot01/adam/define.yaml")
 gen.write("outputs/cdiscpilot01/define_adam.xml")
 ```
 
@@ -209,7 +241,7 @@ from fleet.define_xml import DefineValidator
 from pathlib import Path
 
 validator = DefineValidator()
-is_valid = validator.validate(Path("specs/cdiscpilot01/sdtm/define.yaml"))
+is_valid = validator.validate(Path("examples/cdiscpilot01/sdtm/define.yaml"))
 
 for issue in validator.issues:
     print(f"[{issue.severity.upper()}] {issue.rule} @ {issue.location}: {issue.message}")

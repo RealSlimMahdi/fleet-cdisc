@@ -1,7 +1,7 @@
 """
 End-to-end CDISCPILOT01 pipeline — spec-driven style.
 
-Every ADaM column derivation is defined in specs/cdiscpilot01/adam/define.yaml
+Every ADaM column derivation is defined in examples/cdiscpilot01/adam/define.yaml
 and executed via ``df.adam.from_spec()``.  OCCDS-specific verbs that the spec
 cannot yet express (treatment_emergent, seq) are applied inline
 immediately after the spec phase.
@@ -29,26 +29,66 @@ Run from the repo root:
     uv run python examples/cdiscpilot01_spec_driven.py
 """
 
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import polars as pl
 
 import fleet  # noqa: F401 — registers .sdtm / .adam namespace extensions
+from examples.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
 from fleet import DatasetChecker, DefineSpecGenerator
-from specs.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
 
-RAW = Path("datasets/cdiscpilot01/raw")
-SPECS = Path("specs/cdiscpilot01")
+SPECS = Path("examples/cdiscpilot01")
 OUT = Path("outputs/cdiscpilot01")
 OUT.mkdir(parents=True, exist_ok=True)
 
 SDTM_SPEC = SPECS / "sdtm/define.yaml"
 ADAM_SPEC = SPECS / "adam/define.yaml"
 
-# ── 1. Load raw data ─────────────────────────────────────────────────────────
-dm_raw = pl.read_csv(RAW / "dm_raw.csv")
-ae_raw = pl.read_csv(RAW / "ae_raw.csv")
-vs_raw = pl.read_csv(RAW / "vs_raw.csv")
+# ── 1. Raw data (inline) ─────────────────────────────────────────────────────
+dm_raw = pl.from_repr("""\
+┌────────────────┬─────────┬─────┬─────┬───────────────────────────┬────────────────────────┬──────────┬──────────────────────┬─────────────────┬────────────────┬───────────────────────┐
+│ patient_number ┆ site_id ┆ age ┆ sex ┆ race                      ┆ ethnic                 ┆ arm_code ┆ arm_description      ┆ first_dose_date ┆ last_dose_date ┆ informed_consent_date │
+│ ---            ┆ ---     ┆ --- ┆ --- ┆ ---                       ┆ ---                    ┆ ---      ┆ ---                  ┆ ---             ┆ ---            ┆ ---                   │
+│ str            ┆ i64     ┆ i64 ┆ str ┆ str                       ┆ str                    ┆ str      ┆ str                  ┆ str             ┆ str            ┆ str                   │
+╞════════════════╪═════════╪═════╪═════╪═══════════════════════════╪════════════════════════╪══════════╪══════════════════════╪═════════════════╪════════════════╪═══════════════════════╡
+│ 01-701-1015    ┆ 701     ┆ 63  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-02      ┆ 2014-07-02     ┆ 2014-01-01            │
+│ 01-701-1023    ┆ 701     ┆ 64  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-03      ┆ 2014-07-04     ┆ 2014-01-02            │
+│ 01-701-1028    ┆ 701     ┆ 71  ┆ M   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Hi   ┆ Xanomeline High Dose ┆ 2014-01-04      ┆ 2014-07-05     ┆ 2014-01-03            │
+│ 01-701-1034    ┆ 701     ┆ 74  ┆ M   ┆ BLACK OR AFRICAN AMERICAN ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-05      ┆ 2014-07-06     ┆ 2014-01-04            │
+│ 01-701-1047    ┆ 701     ┆ 56  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-06      ┆ 2014-07-07     ┆ 2014-01-05            │
+└────────────────┴─────────┴─────┴─────┴───────────────────────────┴────────────────────────┴──────────┴──────────────────────┴─────────────────┴────────────────┴───────────────────────┘
+""")
+
+ae_raw = pl.from_repr("""\
+┌────────────────┬───────────────────────────┬───────────────┬─────────────┬─────────────┬────────────┬────────────────────────────┬──────────────────┬──────────────────┐
+│ patient_number ┆ ae_term                   ┆ ae_start_date ┆ ae_end_date ┆ ae_severity ┆ ae_serious ┆ ae_outcome                 ┆ ae_action_taken  ┆ ae_relationship  │
+│ ---            ┆ ---                       ┆ ---           ┆ ---         ┆ ---         ┆ ---        ┆ ---                        ┆ ---              ┆ ---              │
+│ str            ┆ str                       ┆ str           ┆ str         ┆ str         ┆ str        ┆ str                        ┆ str              ┆ str              │
+╞════════════════╪═══════════════════════════╪═══════════════╪═════════════╪═════════════╪════════════╪════════════════════════════╪══════════════════╪══════════════════╡
+│ 01-701-1015    ┆ HEADACHE                  ┆ 2014-01-10    ┆ 2014-01-12  ┆ MILD        ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ POSSIBLY RELATED │
+│ 01-701-1015    ┆ NAUSEA                    ┆ 2014-02-05    ┆ 2014-02-06  ┆ MODERATE    ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ NOT RELATED      │
+│ 01-701-1023    ┆ DIZZINESS                 ┆ 2014-01-15    ┆ 2014-01-16  ┆ MILD        ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ POSSIBLY RELATED │
+│ 01-701-1028    ┆ FATIGUE                   ┆ 2014-02-20    ┆ null        ┆ MODERATE    ┆ N          ┆ NOT RECOVERED/NOT RESOLVED ┆ DOSE NOT CHANGED ┆ PROBABLY RELATED │
+│ 01-701-1034    ┆ APPLICATION SITE ERYTHEMA ┆ 2014-01-20    ┆ 2014-01-25  ┆ SEVERE      ┆ Y          ┆ RECOVERED/RESOLVED         ┆ DRUG WITHDRAWN   ┆ RELATED          │
+└────────────────┴───────────────────────────┴───────────────┴─────────────┴─────────────┴────────────┴────────────────────────────┴──────────────────┴──────────────────┘
+""")
+
+vs_raw = pl.from_repr("""\
+┌────────────────┬─────────────┬──────────┬────────┬─────────┬──────────┬────────────┬──────┐
+│ patient_number ┆ site_number ┆ vstestcd ┆ vstest ┆ vsorres ┆ vsorresu ┆ vsdtc      ┆ vsdy │
+│ ---            ┆ ---         ┆ ---      ┆ ---    ┆ ---     ┆ ---      ┆ ---        ┆ ---  │
+│ str            ┆ i64         ┆ str      ┆ str    ┆ f64     ┆ str      ┆ str        ┆ i64  │
+╞════════════════╪═════════════╪══════════╪════════╪═════════╪══════════╪════════════╪══════╡
+│ 01-701-1015    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 155.5   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1023    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 168.1   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1028    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 178.0   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1034    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 170.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1047    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 166.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+└────────────────┴─────────────┴──────────┴────────┴─────────┴──────────┴────────────┴──────┘
+""")
 
 # ── 2. SDTM DM ───────────────────────────────────────────────────────────────
 dm = (

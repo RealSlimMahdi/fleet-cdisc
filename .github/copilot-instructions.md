@@ -80,10 +80,10 @@ uv run fleet init rules
 
 ```bash
 # Bootstrap codelists.py directly from the SDTM IG (without config/define pipeline)
-uv run fleet init-ct --domains DM,AE,VS,EX --output specs/cdiscpilot01/sdtm/codelists.py
+uv run fleet init-ct --domains DM,AE,VS,EX --output examples/cdiscpilot01/sdtm/codelists.py
 
 # Add more domains incrementally (preserves existing codelists)
-uv run fleet add-ct --domains LB,CM --output specs/cdiscpilot01/sdtm/codelists.py
+uv run fleet add-ct --domains LB,CM --output examples/cdiscpilot01/sdtm/codelists.py
 
 # Pin to a specific IG version and CT package
 uv run fleet init-ct --domains DM,AE --ig 3-4 --package sdtmct-2025-09-26 --output codelists.py
@@ -104,13 +104,13 @@ The source of truth for which variables and codelists to generate is the **CDISC
 
 ```bash
 # Generate Define-XML 2.1 from a define.yaml specification
-uv run fleet define-xml --spec specs/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml
+uv run fleet define-xml --spec examples/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml
 
 # Same, but enrich every variable with a <MethodDef> built from the verb / callable docstring
-uv run fleet define-xml --spec specs/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml --enrich-methods
+uv run fleet define-xml --spec examples/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml --enrich-methods
 
 # Without HTML preview
-uv run fleet define-xml --spec specs/cdiscpilot01/adam/define.yaml --output outputs/define_adam.xml --no-preview
+uv run fleet define-xml --spec examples/cdiscpilot01/adam/define.yaml --output outputs/define_adam.xml --no-preview
 ```
 
 ### TLG Export (HTML / PDF / PPTX)
@@ -198,7 +198,7 @@ _Prerequisites:_ The `codelists.py` file must exist before pipelines can use cod
 _Example pattern:_
 
 ```python
-from specs.cdiscpilot01.sdtm.codelists import SEX, RACE
+from examples.cdiscpilot01.sdtm.codelists import SEX, RACE
 
 dm = (
     raw_df.sdtm
@@ -211,6 +211,52 @@ dm = (
 ```
 
 `assign_ct` accepts either a generated codelist class (e.g. `SEX`) or a raw NCI concept ID string (e.g. `"C66731"`). **Always prefer the class form.** When raw data already matches the standard (e.g. source is already `"M"`), `ct_mapping` can be omitted — the codelist is still recorded for validation.
+
+## 4b. Data Sample Construction (`pl.from_repr()`)
+
+When creating inline sample DataFrames for tests, examples, documentation, or reproducible snippets, **always prefer `pl.from_repr()`** over `pl.DataFrame({...})`.
+
+### Why
+
+- Column names, types, and data are immediately visible without execution.
+- Copy-pasteable from any Polars terminal output.
+- Eliminates subtle type mismatches (e.g. `int` vs `float`).
+
+### Pattern
+
+```python
+import polars as pl
+
+raw_dm = pl.from_repr("""\
+┌────────────┬─────┬─────┐
+│ subject_id ┆ sex ┆ age │
+│ ---        ┆ --- ┆ --- │
+│ str        ┆ str ┆ i64 │
+╞════════════╪═════╪═════╡
+│ S001       ┆ M   ┆ 35  │
+│ S002       ┆ F   ┆ 42  │
+└────────────┴─────┴─────┘
+""")
+```
+
+### Generating the repr string
+
+Fleet provides a `to_repr()` helper that renders any DataFrame with full-width, no-truncation settings so the output is directly pasteable:
+
+```python
+from fleet import to_repr
+
+# From an existing pl.DataFrame or LazyFrame:
+print(to_repr(my_df))
+
+# Then paste the output into pl.from_repr("""...""")
+```
+
+### When `pl.DataFrame()` is still acceptable
+
+- **Empty DataFrames** for TDD scaffolding: `pl.DataFrame().sdtm`
+- **Programmatic data** built with loops or random generators (e.g. benchmark scripts).
+- **API type annotations** referencing `pl.DataFrame` as a return/parameter type.
 
 ## 5. Spec Driven Development (`define.yaml`)
 

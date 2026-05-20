@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SDTMAlgorithm(StrEnum):
@@ -22,7 +22,6 @@ class SDTMAlgorithm(StrEnum):
     IF_THEN_ELSE = "if_then_else"
     AE_AEREL = "ae_aerel"
     MERGE = "merge"
-    REMOVE_DUP = "remove_dup"
     GROUP_BY = "group_by"
     DATASET_LEVEL = "dataset_level"
     NOTSUBMITTED = "notsubmitted"
@@ -30,6 +29,7 @@ class SDTMAlgorithm(StrEnum):
     DATE = "date"
     DURATION = "duration"
     NSV = "nsv"
+    CALLABLE = "callable"
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,10 +75,6 @@ class SDTMVariableSpec(BaseModel):
     merge_key: str | list[str] | None = None
     merge_columns: list[str] | None = None
 
-    # remove_dup
-    keep: str = "first"
-    subset_vars: list[str] | None = None
-
     # group_by
     group_cols: list[str] | None = None
     agg_expr: str | None = None
@@ -96,7 +92,10 @@ class SDTMVariableSpec(BaseModel):
     role: str | None = None
     evaluator: str | None = None
 
-    model_config = {"extra": "allow"}
+    # callable: reference to a registered Derivation or dotted-import path
+    callable_ref: str | None = Field(None, alias="callable")
+
+    model_config = {"extra": "allow", "populate_by_name": True}
 
 
 class SDTMDomainSpec(BaseModel):

@@ -54,15 +54,17 @@ import fleet  # registers df.sdtm, df.adam, df.adsl, df.occds, df.tlg everywhere
 
 ### `core/` — Shared Foundation
 
-| File                    | Purpose                                                                                                                                                                               |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `exceptions.py`         | All custom exception classes — `FleetError`, `SDTMError`, `ADAMError`, `CTError`, `FleetIOError`, `SpecError`, `ValidationError`                                                      |
-| `study_context.py`      | `StudyContext` — wraps a study root directory and resolves configured paths (raw data, SDTM, ADaM, metadata, outputs). Loaded via `load_study_context(config_path)` from a YAML file. |
-| `dag.py`                | `PipelineDAG`, `PipelineNode`, `VariableNode` — pipeline + variable-level lineage graph (verb name, source columns, defining method)                                                  |
-| `algorithm_resolver.py` | Resolves a Fleet verb name (`algorithm:`) or dotted callable (`callable:`) to its docstring + qualified path; powers Define-XML method enrichment                                     |
-| `lineage.py`            | `record_lineage(owner, exprs)` / `lineage_of(namespace)` — invoked by `_chain()` in SDTM/ADaM namespaces to attach `VariableNode` records to every materialised column                |
-| `rules_scaffolder.py`   | `RulesScaffolder` — fetches CDISC conformance rules from the Library API and writes per-domain YAML files into `metadata/sdtm/rules/` and `metadata/adam/rules/`                      |
-| `scaffolder.py`         | `DefineScaffolder` — generates `define.yaml` from the CDISC Library IG for SDTM and ADaM domains                                                                                      |
+| File                    | Purpose                                                                                                                                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `exceptions.py`         | All custom exception classes — `FleetError`, `SDTMError`, `ADAMError`, `CTError`, `FleetIOError`, `SpecError`, `ValidationError`                                                                                               |
+| `study_context.py`      | `StudyContext` — wraps a study root directory and resolves configured paths (raw data, SDTM, ADaM, metadata, outputs). Loaded via `load_study_context(config_path)` from a YAML file.                                          |
+| `dag.py`                | `PipelineDAG`, `PipelineNode`, `VariableNode`, `PinDependency` — pipeline + variable-level lineage graph (verb name, source columns, defining method, cross-domain pin edges)                                                  |
+| `algorithm_resolver.py` | Resolves a Fleet verb name (`algorithm:`) or dotted callable (`callable:`) to its docstring + qualified path; powers Define-XML method enrichment                                                                              |
+| `derivation.py`         | `Derivation` protocol dataclass and `@derivation` decorator — wraps study-specific Python functions as typed, auto-registered derivation objects with `kind`, `targets`, `sources`, and `dotted_path`                          |
+| `lineage.py`            | `record_lineage(owner, exprs)` / `lineage_of(namespace)` / `record_pin_lineage()` / `pin_lineage_of()` / `_append_lineage_nodes()` — invoked by `_chain()` and pin-powered verbs to track intra-frame and cross-domain lineage |
+| `_pin_mixin.py`         | `PinMixin` — attaches reference-domain DataFrames to pipeline instances; provides `.pin()`, `.repin()`, FK validation, and `.pins()` introspection                                                                             |
+| `rules_scaffolder.py`   | `RulesScaffolder` — fetches CDISC conformance rules from the Library API and writes per-domain YAML files into `metadata/sdtm/rules/` and `metadata/adam/rules/`                                                               |
+| `scaffolder.py`         | `DefineScaffolder` — generates `define.yaml` from the CDISC Library IG for SDTM and ADaM domains                                                                                                                               |
 
 **`StudyContext`** is useful when your study files live in a standard directory layout and you want paths resolved automatically rather than hard-coded.
 
@@ -124,22 +126,23 @@ The core of Fleet for SDTM work. Registers `df.sdtm` on every Polars DataFrame.
 
 **The 14 SDTM derivation verbs:**
 
-| Verb                 | Signature                                             | Purpose                                                      |
-| -------------------- | ----------------------------------------------------- | ------------------------------------------------------------ |
-| `assign_no_ct`       | `(target, *, source)`                                 | Direct 1:1 column copy/rename, no CT lookup                  |
-| `assign_ct`          | `(target, *, source, ct_codelist, ct_mapping=None)`   | Copy column and decode values via CT codelist                |
-| `assign_dtc`         | `(target, *, source, mode="date", input_format=None)` | Parse date string → ISO 8601; preserves partial dates        |
-| `hardcode_ct`        | `(target, *, value, ct_codelist=None)`                | Set every row to a literal constant (CT-validated)           |
-| `hardcode_no_ct`     | `(target, *, value)`                                  | Set every row to a literal constant, no CT                   |
-| `condition_add`      | `(target, *, condition, then_value)`                  | `IF condition THEN value ELSE NULL`                          |
-| `if_then_else`       | `(target, *, when, else_value=None)`                  | Multi-branch conditional (list of `{condition, value}`)      |
-| `ae_aerel`           | `(target="AEREL", *, source, aerel_map=None)`         | Standard adverse-event relatedness mapping                   |
-| `merge`              | `(target_cols=None, *, dataset, on, how="left")`      | Join another DataFrame into the pipeline                     |
-| `remove_dup`         | `(*, subset=None, keep="first")`                      | Deduplicate rows by subset of columns                        |
-| `group_by`           | `(*, group_cols, agg)`                                | Group-and-aggregate to produce a summary row                 |
-| `dataset_level`      | `(target, *, value)`                                  | Alias for `hardcode_no_ct` — marks dataset-level constants   |
-| `notsubmitted`       | `(*targets)`                                          | Set one or more columns to null (not for submission)         |
-| `multiple_responses` | `(target, *, source, delimiter="\|", id_cols=None)`   | Expand pipe-delimited multi-answer fields into separate rows |
+| Verb             | Signature                                             | Purpose                                                 |
+| ---------------- | ----------------------------------------------------- | ------------------------------------------------------- |
+| `assign_no_ct`   | `(target, *, source)`                                 | Direct 1:1 column copy/rename, no CT lookup             |
+| `assign_ct`      | `(target, *, source, ct_codelist, ct_mapping=None)`   | Copy column and decode values via CT codelist           |
+| `assign_dtc`     | `(target, *, source, mode="date", input_format=None)` | Parse date string → ISO 8601; preserves partial dates   |
+| `hardcode_ct`    | `(target, *, value, ct_codelist=None)`                | Set every row to a literal constant (CT-validated)      |
+| `hardcode_no_ct` | `(target, *, value)`                                  | Set every row to a literal constant, no CT              |
+| `condition_add`  | `(target, *, condition, then_value)`                  | `IF condition THEN value ELSE NULL`                     |
+| `if_then_else`   | `(target, *, when, else_value=None)`                  | Multi-branch conditional (list of `{condition, value}`) |
+| `ae_aerel`       | `(target="AEREL", *, source, aerel_map=None)`         | Standard adverse-event relatedness mapping              |
+| `merge`          | `(target_cols=None, *, dataset, on, how="left")`      | Join another DataFrame into the pipeline                |
+| `nodup`          | `(*, subset, sort_by=None, keep=None)`                | Report or deduplicate rows by subset keys               |
+
+| `group_by` | `(*, group_cols, agg)` | Group-and-aggregate to produce a summary row |
+| `dataset_level` | `(target, *, value)` | Alias for `hardcode_no_ct` — marks dataset-level constants |
+| `notsubmitted` | `(*targets)` | Set one or more columns to null (not for submission) |
+| `multiple_responses` | `(target, *, source, delimiter="\|", id_cols=None)` | Expand pipe-delimited multi-answer fields into separate rows |
 
 **Special methods:**
 

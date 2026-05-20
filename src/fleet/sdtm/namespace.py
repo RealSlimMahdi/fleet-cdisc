@@ -17,12 +17,11 @@ Usage
     )
 
     # Or spec-driven:
-    result = raw_df.sdtm.from_spec("specs/cdiscpilot01/sdtm/define.yaml", dataset="DM").to_frame()
+    result = raw_df.sdtm.from_spec("examples/cdiscpilot01/sdtm/define.yaml", dataset="DM").to_frame()
 """
 
 from __future__ import annotations
 
-import copy
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -30,6 +29,8 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 import yaml
 
+from fleet.core._pin_mixin import PinMixin
+from fleet.core._verb_mixin import SharedVerbsMixin
 from fleet.sdtm._tdd_mixin import TrialDesignMixin
 from fleet.sdtm.models import NSVMeta
 from fleet.sdtm.utils import dtc_date_expr, dtc_datetime_expr, parse_expression
@@ -38,8 +39,46 @@ if TYPE_CHECKING:
     from fleet.ct.validator import CTValidator
 
 
+def _resolve_callable(ref: str) -> Any:
+    """Resolve a callable reference by name or dotted import path.
+
+    Discovery order:
+
+    1. Look up *ref* in the Fleet transform registry.
+    2. If *ref* contains a dot, treat it as a dotted import path.
+    3. Raise ``ValueError`` if neither lookup succeeds.
+
+    Args:
+        ref: Registry name or dotted import path.
+
+    Returns:
+        The callable or :class:`~fleet.core.derivation.Derivation` object.
+
+    Raises:
+        ValueError: If *ref* cannot be resolved.
+    """
+    from fleet.adam.transforms import get_transform
+
+    try:
+        return get_transform(ref)
+    except KeyError:
+        pass
+
+    if "." in ref:
+        import importlib
+
+        module_path, _, attr = ref.rpartition(".")
+        mod = importlib.import_module(module_path)
+        return getattr(mod, attr)
+
+    raise ValueError(
+        f"Callable '{ref}' is not registered and is not a dotted import path. "
+        "Register it with @derivation or import the derivations module before from_spec()."
+    )
+
+
 @pl.api.register_dataframe_namespace("sdtm")
-class SDTMNamespace(TrialDesignMixin):
+class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
     """
     Immutable pipeline builder for SDTM derivations.
 
@@ -47,27 +86,27 @@ class SDTMNamespace(TrialDesignMixin):
     everything in one ``with_columns`` call.
     """
 
+    # -- SharedVerbsMixin configuration --
+    _STUDY_DAY_REF_COL: str = "RFSTDTC"
+    _STUDY_DAY_REF_PIN: str = "DM"
+    _SEQ_DEFAULT_GROUPS: list[str] = ["STUDYID", "USUBJID"]
+    _VALIDATE_STANDARD: str = "sdtm"
+    _VALIDATE_DEFAULT_VERSION: str = "3.4"
+
+    _FK_RULES: dict[str, dict[str, str]] = {
+        "USUBJID": {"pin": "DM", "ref_col": "USUBJID"},
+        "VISITNUM": {"pin": "TV", "ref_col": "VISITNUM"},
+        "VISIT": {"pin": "TV", "ref_col": "VISIT"},
+        "EPOCH": {"pin": "TE", "ref_col": "EPOCH"},
+        "ETCD": {"pin": "TE", "ref_col": "ETCD"},
+    }
+
     def __init__(self, df: pl.DataFrame) -> None:
         self._lazy = df.lazy()
         self._nsv_meta: list[NSVMeta] = []
-
-    # ------------------------------------------------------------------ #
-    # Internal chaining helper                                             #
-    # ------------------------------------------------------------------ #
-
-    def _chain(self, *exprs: pl.Expr) -> SDTMNamespace:
-        from fleet.core.lineage import record_lineage
-
-        new = copy.copy(self)
-        new._lazy = self._lazy.with_columns(list(exprs))
-        record_lineage(new, exprs)
-        return new
-
-    def _materialise_then(self, df: pl.DataFrame) -> SDTMNamespace:
-        """Return a fresh namespace wrapping *df* as a new lazy plan."""
-        new = copy.copy(self)
-        new._lazy = df.lazy()
-        return new
+        self._domain: str | None = None
+        self._pinned: dict[str, tuple[pl.DataFrame, list[str]]] = {}
+        self._pin_lineage: list = []
 
     # ------------------------------------------------------------------ #
     # 1. assign_no_ct — direct 1:1 column rename                          #
@@ -93,40 +132,9 @@ class SDTMNamespace(TrialDesignMixin):
                     .to_frame()
                 )
         """
-        return self._chain(pl.col(source).alias(target))
-
-    # ------------------------------------------------------------------ #
-    # 1b. derivation — expression-based derivation                        #
-    # ------------------------------------------------------------------ #
-
-    def derivation(
-        self,
-        target: str,
-        *,
-        expression: str | pl.Expr,
-    ) -> SDTMNamespace:
-        """Derive *target* using a Polars expression or expression string.
-
-        Args:
-            target: Name of the output SDTM variable to create.
-            expression: A Polars expression object or a string that evaluates
-                to one (e.g. ``"pl.col('site_id').cast(pl.String)"``).
-
-        Returns:
-            SDTMNamespace: The namespace with *target* appended; call
-                ``.to_frame()`` to materialise.
-
-        Examples:
-            Cast a raw site column to string for ``SITEID``::
-
-                dm = (
-                    raw_df.sdtm
-                    .derivation("SITEID", expression="pl.col('site_id').cast(pl.String)")
-                    .to_frame()
-                )
-        """
-        expr = expression if isinstance(expression, pl.Expr) else parse_expression(str(expression))
-        return self._chain(expr.alias(target))
+        ns = self._chain(pl.col(source).alias(target))
+        ns._auto_fk_check(target)
+        return ns
 
     # ------------------------------------------------------------------ #
     # 2. assign_ct — 1:1 mapping with CT decode/validation                #
@@ -210,7 +218,9 @@ class SDTMNamespace(TrialDesignMixin):
 
         if ct_mapping:
             mapping_expr = pl.col(source).replace(ct_mapping).alias(target)
-            return self._chain(mapping_expr)
+            ns = self._chain(mapping_expr)
+            ns._auto_fk_check(target)
+            return ns
 
         # Try to auto-resolve from the singleton CTValidator
         if ct_validator is None:
@@ -230,12 +240,16 @@ class SDTMNamespace(TrialDesignMixin):
                     coded: info.get("preferred_term", coded) for coded, info in all_ct.items()
                 }
                 if decode_map:
-                    return self._chain(pl.col(source).replace(decode_map).alias(target))
+                    ns = self._chain(pl.col(source).replace(decode_map).alias(target))
+                    ns._auto_fk_check(target)
+                    return ns
             except Exception:
                 pass
 
         # Fallback: pass-through (CT not loaded)
-        return self._chain(pl.col(source).alias(target))
+        ns = self._chain(pl.col(source).alias(target))
+        ns._auto_fk_check(target)
+        return ns
 
     # ------------------------------------------------------------------ #
     # 3. date — unified date verb                                          #
@@ -369,133 +383,6 @@ class SDTMNamespace(TrialDesignMixin):
         return self._chain(*exprs)
 
     # ------------------------------------------------------------------ #
-    # 3c. duration — unified duration verb                                 #
-    # ------------------------------------------------------------------ #
-
-    def duration(
-        self,
-        target: str,
-        *,
-        start: str | pl.Expr,
-        end: str | pl.Expr,
-        unit: str = "days",
-        add_one: bool | None = None,
-        out: str = "numeric",
-    ) -> SDTMNamespace:
-        """Compute the duration between two date/datetime columns.
-
-        Same interface as the ADaM ``.duration()`` verb.
-
-        Args:
-            target: Name of the output column (e.g. ``"EXDUR"``).
-            start: Start date column name or expression.
-            end: End date column name or expression.
-            unit: Duration unit.
-            add_one: Inclusive counting override.
-            out: Output format (``"numeric"`` or ``"iso8601"``).
-
-        Returns:
-            SDTMNamespace: The namespace with *target* appended.
-
-        Examples:
-            ISO 8601 duration for EX::
-
-                ex = (
-                    raw_df.sdtm
-                    .date("EXSTDTC", source="dose_start")
-                    .date("EXENDTC", source="dose_end")
-                    .duration("EXDUR", start="EXSTDTC", end="EXENDTC",
-                              out="iso8601")
-                    .to_frame()
-                )
-        """
-        df = self._lazy.collect()
-
-        def _to_date(col_or_expr: str | pl.Expr) -> pl.Expr:
-            if isinstance(col_or_expr, str):
-                col_name = col_or_expr
-                if col_name in df.columns:
-                    dtype = df[col_name].dtype
-                    if dtype == pl.Date:
-                        return pl.col(col_name)
-                    if dtype.is_(pl.Datetime) or str(dtype).startswith("Datetime"):
-                        return pl.col(col_name).cast(pl.Date)
-                    return pl.col(col_name).str.to_date(strict=False)
-                return pl.col(col_name)
-            return col_or_expr
-
-        s = _to_date(start)
-        e = _to_date(end)
-
-        valid_units = {
-            "seconds",
-            "minutes",
-            "hours",
-            "days",
-            "weeks",
-            "months",
-            "years",
-        }
-        if unit not in valid_units:
-            raise ValueError(
-                f"duration unit={unit!r} is not supported. Choose one of: {sorted(valid_units)}"
-            )
-
-        if unit in ("seconds", "minutes", "hours"):
-            s_dtm = s.cast(pl.Datetime("us")) if isinstance(start, str) else s
-            e_dtm = e.cast(pl.Datetime("us")) if isinstance(start, str) else e
-            diff_s = (e_dtm - s_dtm).dt.total_seconds().cast(pl.Float64)
-            if unit == "seconds":
-                diff = diff_s.cast(pl.Int64)
-            elif unit == "minutes":
-                diff = diff_s / 60.0
-            else:
-                diff = diff_s / 3600.0
-        else:
-            diff_days = (e - s).dt.total_days()
-            if unit == "days":
-                diff = diff_days
-            elif unit == "weeks":
-                diff = diff_days.cast(pl.Float64) / 7.0
-            elif unit == "months":
-                diff = diff_days.cast(pl.Float64) / 30.4375
-            else:
-                diff = diff_days.cast(pl.Float64) / 365.25
-
-        if add_one is None:
-            if target.endswith("DY"):
-                result_expr = (
-                    (pl.when(diff >= 0).then(diff + 1).otherwise(diff)).cast(pl.Int64).alias(target)
-                )
-                return self._materialise_then(df.with_columns(result_expr))
-            else:
-                add_one = True
-
-        if add_one:
-            result_expr = (diff + 1).alias(target)
-        else:
-            result_expr = diff.alias(target)
-
-        if out == "iso8601":
-            abs_val = diff.abs()
-            unit_suffix_map = {
-                "days": ("P", "D"),
-                "hours": ("PT", "H"),
-                "weeks": ("P", "W"),
-                "months": ("P", "M"),
-                "years": ("P", "Y"),
-                "minutes": ("PT", "M"),
-                "seconds": ("PT", "S"),
-            }
-            prefix, suffix = unit_suffix_map[unit]
-            iso_expr = (
-                pl.lit(prefix) + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit(suffix)
-            ).alias(target)
-            return self._materialise_then(df.with_columns(iso_expr))
-
-        return self._materialise_then(df.with_columns(result_expr))
-
-    # ------------------------------------------------------------------ #
     # 4. hardcode_ct — literal constant with CT validation                #
     # ------------------------------------------------------------------ #
 
@@ -554,7 +441,9 @@ class SDTMNamespace(TrialDesignMixin):
             except Exception:
                 pass  # CT not loaded — skip validation
 
-        return self._chain(pl.lit(value).alias(target))
+        ns = self._chain(pl.lit(value).alias(target))
+        ns._auto_fk_check(target)
+        return ns
 
     # ------------------------------------------------------------------ #
     # 5. hardcode_no_ct — literal constant, no CT                         #
@@ -580,7 +469,10 @@ class SDTMNamespace(TrialDesignMixin):
                     .to_frame()
                 )
         """
-        return self._chain(pl.lit(value).alias(target))
+        ns = self._chain(pl.lit(value).alias(target))
+        if target == "DOMAIN":
+            ns._domain = str(value)
+        return ns
 
     # ------------------------------------------------------------------ #
     # 5b. nsv — Non-Standard Variable (qualifier) derivation               #
@@ -645,6 +537,214 @@ class SDTMNamespace(TrialDesignMixin):
             *self._nsv_meta,
             NSVMeta(target=target, label=label, origin=origin, evaluator=evaluator),
         ]
+        return new
+
+    # ------------------------------------------------------------------ #
+    # 5c. study_day — thin override for backward-compat `dm=` kwarg       #
+    # ------------------------------------------------------------------ #
+
+    def study_day(
+        self,
+        target: str,
+        *,
+        date_col: str,
+        ref_col: str = "RFSTDTC",
+        ref_pin: str = "DM",
+        dm: pl.DataFrame | None = None,
+    ) -> SDTMNamespace:
+        """Derive a CDISC study day variable from a date column and a reference date.
+
+        Uses the CDISC algorithm: ``date - ref_date + 1`` when
+        ``date >= ref_date``, else ``date - ref_date`` (no day 0).
+
+        The reference date is resolved in this order:
+
+        1. Explicit ``dm=`` parameter (highest priority).
+        2. Pinned domain (via ``.pin("DM", dm_df)``).
+        3. ``ref_col`` already present in the current frame.
+        4. Actionable ``LookupError`` telling the user what to do.
+
+        Args:
+            target: Name of the output study day variable
+                (e.g. ``"AESTDY"``).
+            date_col: Column in the current frame containing the date
+                to measure from (e.g. ``"AESTDTC"``).
+            ref_col: Column name of the reference start date in the
+                pinned/explicit domain (default ``"RFSTDTC"``).
+            ref_pin: Pinned domain to look up (default ``"DM"``).
+            dm: Optional explicit DataFrame override — bypasses pinning.
+
+        Returns:
+            SDTMNamespace: The namespace with *target* appended; call
+                ``.to_frame()`` to materialise.
+
+        Raises:
+            LookupError: If the reference date cannot be resolved from
+                any source.
+
+        Examples:
+            Derive AE study day from pinned DM::
+
+                ae = (
+                    ae_raw.sdtm
+                    .hardcode_no_ct("DOMAIN", value="AE")
+                    .assign_no_ct("USUBJID", source="patient_number")
+                    .date("AESTDTC", source="ae_start_date")
+                    .pin("DM", dm_df)
+                    .study_day("AESTDY", date_col="AESTDTC")
+                    .to_frame()
+                )
+        """
+        return super().study_day(
+            target, date_col=date_col, ref_col=ref_col, ref_pin=ref_pin, ref_df=dm
+        )
+
+    # ------------------------------------------------------------------ #
+    # 5d. baseline_flag — last pre-reference-date observation flag        #
+    # ------------------------------------------------------------------ #
+
+    def baseline_flag(
+        self,
+        target: str,
+        *,
+        date_col: str,
+        testcd_col: str | None = None,
+        ref_col: str = "RFSTDTC",
+        ref_pin: str = "DM",
+        dm: pl.DataFrame | None = None,
+        group_by: list[str] | None = None,
+    ) -> SDTMNamespace:
+        """Flag the last observation before the reference date as baseline.
+
+        Sets *target* to ``"Y"`` for the last record (per subject and
+        optional grouping variables) that occurs on or before the
+        reference date, and ``null`` for all other records.
+
+        Args:
+            target: Name of the output flag variable
+                (e.g. ``"VSBLFL"``).
+            date_col: Column containing the observation date
+                (e.g. ``"VSDTC"``).
+            testcd_col: Optional test code column to group by
+                (e.g. ``"VSTESTCD"``).  When set, baseline is
+                computed independently for each test.
+            ref_col: Reference date column in DM (default ``"RFSTDTC"``).
+            ref_pin: Pinned domain for the reference date
+                (default ``"DM"``).
+            dm: Optional explicit DataFrame override.
+            group_by: Additional grouping columns beyond USUBJID
+                and *testcd_col*.
+
+        Returns:
+            SDTMNamespace: The namespace with *target* appended; call
+                ``.to_frame()`` to materialise.
+
+        Examples:
+            Flag baseline vital signs::
+
+                vs = (
+                    vs_raw.sdtm
+                    .hardcode_no_ct("DOMAIN", value="VS")
+                    .assign_no_ct("USUBJID", source="patient_number")
+                    .assign_no_ct("VSTESTCD", source="vstestcd")
+                    .date("VSDTC", source="vs_date")
+                    .pin("DM", dm_df)
+                    .baseline_flag("VSBLFL", date_col="VSDTC",
+                                   testcd_col="VSTESTCD")
+                    .to_frame()
+                )
+        """
+        from fleet.core.lineage import record_pin_lineage
+
+        df = self._lazy.collect()
+
+        # Resolve reference date
+        if dm is not None:
+            ref_df = dm
+            join_key = ["USUBJID"]
+        elif ref_col in df.columns:
+            ref_df = None
+            join_key = []
+        else:
+            ref_df = self._require_pin(ref_pin.upper(), "baseline_flag", columns=[ref_col])
+            join_key = self._pin_join_key(ref_pin.upper())
+
+        # Join reference if needed
+        _ref_tmp = f"__pin_{ref_col}__"
+        if ref_df is not None:
+            ref_slim = ref_df.select(
+                [c for c in dict.fromkeys(join_key + [ref_col]) if c in ref_df.columns]
+            ).unique(subset=join_key if join_key else None)
+            ref_slim = ref_slim.rename({ref_col: _ref_tmp})
+            df = df.join(ref_slim, on=join_key, how="left")
+            ref_col_name = _ref_tmp
+        else:
+            ref_col_name = ref_col
+
+        # Build grouping keys
+        grp_keys = ["USUBJID"]
+        if testcd_col is not None:
+            grp_keys.append(testcd_col)
+        if group_by:
+            grp_keys.extend(group_by)
+        grp_keys = list(dict.fromkeys(grp_keys))
+
+        # Parse dates, filter pre-reference, find last
+        date_parsed = pl.col(date_col).str.to_date(format="%Y-%m-%d", strict=False)
+        ref_parsed = pl.col(ref_col_name).str.to_date(format="%Y-%m-%d", strict=False)
+
+        df = df.with_columns(
+            date_parsed.alias("__bl_date__"),
+            ref_parsed.alias("__bl_ref__"),
+        )
+
+        # For each group, find the max date on or before the reference date
+        # Then flag rows where the date matches that max
+        pre_ref = pl.when(pl.col("__bl_date__") <= pl.col("__bl_ref__")).then(pl.col("__bl_date__"))
+        max_pre_ref = pre_ref.max().over(grp_keys).alias("__bl_max__")
+
+        df = df.with_columns(max_pre_ref)
+
+        df = df.with_columns(
+            pl.when(pl.col("__bl_date__") == pl.col("__bl_max__"))
+            .then(pl.lit("Y"))
+            .otherwise(pl.lit(None, dtype=pl.String))
+            .alias(target)
+        )
+
+        # Clean up temp columns
+        drop_cols = ["__bl_date__", "__bl_ref__", "__bl_max__"]
+        if ref_df is not None:
+            drop_cols.append(_ref_tmp)
+        df = df.drop([c for c in drop_cols if c in df.columns])
+
+        new = self._materialise_then(df)
+
+        # Record variable lineage
+        from fleet.core.dag import VariableNode as _VN
+
+        var_lineage: list = list(getattr(new, "_lineage", []))
+        var_lineage.append(
+            _VN(
+                name=target,
+                verb="baseline_flag",
+                sources=[date_col, ref_col],
+                method="fleet.sdtm.namespace.SDTMNamespace.baseline_flag",
+                domain=getattr(new, "_domain", None),
+            )
+        )
+        new._lineage = var_lineage
+
+        if ref_df is not None:
+            record_pin_lineage(
+                new,
+                target_col=target,
+                verb="baseline_flag",
+                source_domain=ref_pin.upper(),
+                source_cols=[ref_col],
+                join_key=join_key,
+                relationship="derivation",
+            )
         return new
 
     # ------------------------------------------------------------------ #
@@ -802,7 +902,7 @@ class SDTMNamespace(TrialDesignMixin):
         return self._chain(expr)
 
     # ------------------------------------------------------------------ #
-    # 9. seq — --SEQ sequence number (aligned with sdtm.oak derive_seq)   #
+    # 9. seq — --SEQ sequence number (with SDTM naming convention check)  #
     # ------------------------------------------------------------------ #
 
     def seq(
@@ -855,8 +955,6 @@ class SDTMNamespace(TrialDesignMixin):
         """
         import warnings
 
-        from fleet.core.seq import derive_seq
-
         if not target.endswith("SEQ"):
             warnings.warn(
                 f"Target variable '{target}' does not end in 'SEQ'. "
@@ -864,16 +962,13 @@ class SDTMNamespace(TrialDesignMixin):
                 stacklevel=2,
             )
 
-        grps = groups or ["STUDYID", "USUBJID"]
-        df = derive_seq(
-            self._lazy.collect(),
+        return super().seq(
             target,
             order_by=order_by,
-            groups=grps,
+            groups=groups,
             start_at=start_at,
             check_uniqueness=check_uniqueness,
         )
-        return self._materialise_then(df)
 
     # ------------------------------------------------------------------ #
     # 10. merge — join another dataset                                     #
@@ -918,44 +1013,7 @@ class SDTMNamespace(TrialDesignMixin):
         return self._materialise_then(joined.collect())
 
     # ------------------------------------------------------------------ #
-    # 10. remove_dup — deduplicate rows                                    #
-    # ------------------------------------------------------------------ #
-
-    def remove_dup(
-        self,
-        *,
-        subset: list[str] | None = None,
-        keep: str = "first",
-    ) -> SDTMNamespace:
-        """Remove duplicate rows, optionally on a *subset* of columns.
-
-        Materialises, deduplicates, and returns a fresh namespace.
-
-        Args:
-            subset: Column(s) to consider for duplicate detection.  When
-                ``None``, all columns are used.
-            keep: Which duplicate to keep: ``"first"`` (default), ``"last"``,
-                or ``"none"``.
-
-        Returns:
-            SDTMNamespace: A fresh namespace wrapping the deduplicated frame.
-
-        Examples:
-            Deduplicate VS records on subject and visit::
-
-                vs = (
-                    raw_df.sdtm
-                    .assign_no_ct("USUBJID", source="subject_id")
-                    .remove_dup(subset=["USUBJID", "VISIT"])
-                    .to_frame()
-                )
-        """
-        return self._materialise_then(
-            self._lazy.unique(subset=subset, keep=keep).collect()  # type: ignore[arg-type]
-        )
-
-    # ------------------------------------------------------------------ #
-    # 11. group_by — aggregate records                                     #
+    # 10. group_by — aggregate records                                     #
     # ------------------------------------------------------------------ #
 
     def group_by(
@@ -1116,7 +1174,7 @@ class SDTMNamespace(TrialDesignMixin):
 
                 dm = (
                     raw_df.sdtm
-                    .from_spec("specs/cdiscpilot01/sdtm/define.yaml", dataset="DM")
+                    .from_spec("examples/cdiscpilot01/sdtm/define.yaml", dataset="DM")
                     .to_frame()
                 )
         """
@@ -1194,7 +1252,13 @@ class SDTMNamespace(TrialDesignMixin):
                     origin=var.origin or "DERIVED",
                     evaluator=var.evaluator,
                 )
-            # merge, remove_dup, group_by, multiple_responses require extra data
+            elif alg == "callable":
+                fn = _resolve_callable(var.callable_ref or "")
+                if hasattr(fn, "kind"):
+                    ns = ns.derivation(fn)
+                else:
+                    ns = ns._materialise_then(fn(ns.to_frame()))
+            # merge, group_by, multiple_responses require extra data
             # — skip in spec-driven mode if not fully specified
 
         return ns
@@ -1227,6 +1291,9 @@ class SDTMNamespace(TrialDesignMixin):
             drv = var.get("derivation")
             if not drv:
                 continue  # no derivation → carry-through / manual column
+            # Backward compat: callable: without algorithm: → inject algorithm.
+            if "callable" in drv and "algorithm" not in drv:
+                drv = {**drv, "algorithm": "callable"}
             # Pass top-level variable attributes into the spec if relevant
             extra: dict[str, Any] = {}
             if var.get("label"):
@@ -1658,149 +1725,3 @@ class SDTMNamespace(TrialDesignMixin):
 
         # Priority 3: pipeline metadata
         return list(self._nsv_meta)
-
-    def to_frame(self) -> pl.DataFrame:
-        """Materialise the accumulated pipeline into a Polars DataFrame.
-
-        Returns:
-            pl.DataFrame: The fully materialised result of all chained
-                SDTM verbs.
-
-        Examples:
-            Collect the pipeline result::
-
-                dm = (
-                    raw_df.sdtm
-                    .hardcode_no_ct("DOMAIN", value="DM")
-                    .assign_no_ct("USUBJID", source="subject_id")
-                    .to_frame()
-                )
-        """
-        return self._lazy.collect()
-
-    def to_dataset_json(
-        self,
-        path: str | Path,
-        *,
-        domain: str,
-        label: str | None = None,
-    ) -> Path:
-        """Materialise the pipeline and write a CDISC Dataset-JSON v1.1 file.
-
-        This is a terminal verb — it collects the lazy plan and writes the
-        result.  No further chaining is possible after this call.
-
-        Args:
-            path: Destination file path (should end in ``.json``).
-            domain: Dataset / domain name (e.g. ``"DM"``, ``"AE"``).
-            label: Optional human-readable dataset label.
-
-        Returns:
-            Path: Path to the written file.
-
-        Examples:
-            Export an SDTM DM domain to Dataset-JSON::
-
-                path = (
-                    raw_df.sdtm
-                    .hardcode_no_ct("DOMAIN", value="DM")
-                    .assign_no_ct("USUBJID", source="subject_id")
-                    .to_dataset_json("outputs/dm.json", domain="DM")
-                )
-        """
-        from fleet.io.dataset_json import save_dataset_json
-
-        return save_dataset_json(self._lazy.collect(), path, domain=domain, label=label)
-
-    # ------------------------------------------------------------------ #
-    # Debugging & observability                                            #
-    # ------------------------------------------------------------------ #
-
-    def inspect(self, prefix: str = "DEBUG") -> SDTMNamespace:
-        """Materialise the pipeline at this point and log its state.
-
-        Creates a hard checkpoint: the pipeline resumes from the
-        materialised frame, making it easy to isolate exactly where a
-        derivation goes wrong.
-
-        Args:
-            prefix: Label printed alongside the diagnostic output.
-
-        Returns:
-            SDTMNamespace: A fresh namespace wrapping the materialised
-                frame; call further verbs or ``.to_frame()`` to continue.
-
-        Examples:
-            Inspect the pipeline after assigning key variables::
-
-                dm = (
-                    raw_df.sdtm
-                    .hardcode_no_ct("DOMAIN", value="DM")
-                    .assign_no_ct("USUBJID", source="subject_id")
-                    .inspect(prefix="After USUBJID")
-                    .assign_no_ct("SITEID", source="site_number")
-                    .to_frame()
-                )
-        """
-        df = self._lazy.collect()
-        print(f"[{prefix}] Schema: {df.schema}")
-        print(f"[{prefix}] Shape:  {df.shape}")
-        print(df.head(5))
-        return self._materialise_then(df)
-
-    def explain(self) -> SDTMNamespace:
-        """Print the current Polars query plan without materialising.
-
-        Useful for understanding how Polars will optimise the accumulated
-        derivation pipeline.
-
-        Returns:
-            SDTMNamespace: The same namespace instance (unchanged); call
-                further verbs or ``.to_frame()`` to continue.
-
-        Examples:
-            Print the query plan before collecting::
-
-                dm = (
-                    raw_df.sdtm
-                    .hardcode_no_ct("DOMAIN", value="DM")
-                    .assign_no_ct("USUBJID", source="subject_id")
-                    .explain()
-                    .to_frame()
-                )
-        """
-        print(self._lazy.explain())
-        return self
-
-    def write_parquet(
-        self,
-        path: str | Path,
-        *,
-        mkdir: bool = True,
-    ) -> pl.DataFrame:
-        """
-        Materialise the pipeline, write the result to *path* as Parquet,
-        and return the DataFrame.
-
-        This is a drop-in alternative to ``to_frame()`` when you want to
-        persist the dataset as part of the chain.
-
-        *mkdir*: when ``True`` (default) any missing parent directories are
-        created automatically.
-
-        Examples:
-            Write the DM domain to Parquet::
-
-                dm = (
-                    raw_df.sdtm
-                    .assign_no_ct("USUBJID", source="patient_number")
-                    .select(spec="specs/sdtm/define.yaml", dataset="DM")
-                    .write_parquet("outputs/cdiscpilot01/dm.parquet")
-                )
-        """
-        df = self.to_frame()
-        dest = Path(path)
-        if mkdir:
-            dest.parent.mkdir(parents=True, exist_ok=True)
-        df.write_parquet(dest)
-        return df

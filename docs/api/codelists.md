@@ -1,7 +1,7 @@
 # Study Codelists (CDISCPILOT01)
 
 This page documents the **auto-generated** codelist module that ships with the
-CDISCPILOT01 example study (`specs/cdiscpilot01/sdtm/codelists.py`). It is
+CDISCPILOT01 example study (`examples/cdiscpilot01/sdtm/codelists.py`). It is
 generated from the CDISC Library by [`CodelistGenerator`][fleet.ct.CodelistGenerator]
 and is regenerated whenever a new domain is added.
 
@@ -19,7 +19,7 @@ The same Python module powers:
 ## How to use
 
 ```python
-from specs.cdiscpilot01.sdtm.codelists import SEX, RACE, AGEU
+from examples.cdiscpilot01.sdtm.codelists import SEX, RACE, AGEU
 
 dm = (
     raw_df.sdtm
@@ -41,14 +41,14 @@ Each codelist class exposes:
 
 ## Generated module
 
-::: specs.cdiscpilot01.sdtm.codelists
+::: examples.cdiscpilot01.sdtm.codelists
 options:
-show_root_heading: false
+show*root_heading: false
 show_root_toc_entry: false
 heading_level: 3
 members_order: source
 show_source: false
-filters: ["!^_"]
+filters: ["!^*"]
 show_bases: false
 show_if_no_docstring: true
 docstring_section_style: list

@@ -1,6 +1,6 @@
 """Core module: shared utilities and study context."""
 
-from .dag import PipelineDAG, PipelineNode, build_dag
+from .dag import PinDependency, PipelineDAG, PipelineNode, build_dag
 from .exceptions import (
     ADAMError,
     CTError,
@@ -11,6 +11,7 @@ from .exceptions import (
     TLGError,
     ValidationError,
 )
+from .repr_utils import to_repr
 from .scaffolder import parse_ig_dataset, parse_ig_variable  # noqa: F401 — public API
 from .study_context import (
     ADAMConfig,
@@ -43,6 +44,8 @@ __all__ = [
     "StudyContextError",
     "load_study_context",
     "build_dag",
+    "PinDependency",
     "PipelineDAG",
     "PipelineNode",
+    "to_repr",
 ]

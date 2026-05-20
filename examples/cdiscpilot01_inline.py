@@ -48,16 +48,40 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import polars as pl
 
 import fleet  # noqa: F401 — registers .sdtm / .adam namespace extensions
-from specs.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
+from examples.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
 
-RAW = Path("datasets/cdiscpilot01/raw")
 OUT = Path("outputs/cdiscpilot01")
 
 # ════════════════════════════════════════════════════════════════════════════
-# 1. Read in Data
+# 1. Raw Data (inline — no external CSV dependencies)
 # ════════════════════════════════════════════════════════════════════════════
-dm_raw = pl.read_csv(RAW / "dm_raw.csv")
-ae_raw = pl.read_csv(RAW / "ae_raw.csv")
+dm_raw = pl.from_repr("""\
+┌────────────────┬─────────┬─────┬─────┬───────────────────────────┬────────────────────────┬──────────┬──────────────────────┬─────────────────┬────────────────┬───────────────────────┐
+│ patient_number ┆ site_id ┆ age ┆ sex ┆ race                      ┆ ethnic                 ┆ arm_code ┆ arm_description      ┆ first_dose_date ┆ last_dose_date ┆ informed_consent_date │
+│ ---            ┆ ---     ┆ --- ┆ --- ┆ ---                       ┆ ---                    ┆ ---      ┆ ---                  ┆ ---             ┆ ---            ┆ ---                   │
+│ str            ┆ i64     ┆ i64 ┆ str ┆ str                       ┆ str                    ┆ str      ┆ str                  ┆ str             ┆ str            ┆ str                   │
+╞════════════════╪═════════╪═════╪═════╪═══════════════════════════╪════════════════════════╪══════════╪══════════════════════╪═════════════════╪════════════════╪═══════════════════════╡
+│ 01-701-1015    ┆ 701     ┆ 63  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-02      ┆ 2014-07-02     ┆ 2014-01-01            │
+│ 01-701-1023    ┆ 701     ┆ 64  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-03      ┆ 2014-07-04     ┆ 2014-01-02            │
+│ 01-701-1028    ┆ 701     ┆ 71  ┆ M   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Hi   ┆ Xanomeline High Dose ┆ 2014-01-04      ┆ 2014-07-05     ┆ 2014-01-03            │
+│ 01-701-1034    ┆ 701     ┆ 74  ┆ M   ┆ BLACK OR AFRICAN AMERICAN ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-05      ┆ 2014-07-06     ┆ 2014-01-04            │
+│ 01-701-1047    ┆ 701     ┆ 56  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-06      ┆ 2014-07-07     ┆ 2014-01-05            │
+└────────────────┴─────────┴─────┴─────┴───────────────────────────┴────────────────────────┴──────────┴──────────────────────┴─────────────────┴────────────────┴───────────────────────┘
+""")
+
+ae_raw = pl.from_repr("""\
+┌────────────────┬───────────────────────────┬───────────────┬─────────────┬─────────────┬────────────┬────────────────────────────┬──────────────────┬──────────────────┐
+│ patient_number ┆ ae_term                   ┆ ae_start_date ┆ ae_end_date ┆ ae_severity ┆ ae_serious ┆ ae_outcome                 ┆ ae_action_taken  ┆ ae_relationship  │
+│ ---            ┆ ---                       ┆ ---           ┆ ---         ┆ ---         ┆ ---        ┆ ---                        ┆ ---              ┆ ---              │
+│ str            ┆ str                       ┆ str           ┆ str         ┆ str         ┆ str        ┆ str                        ┆ str              ┆ str              │
+╞════════════════╪═══════════════════════════╪═══════════════╪═════════════╪═════════════╪════════════╪════════════════════════════╪══════════════════╪══════════════════╡
+│ 01-701-1015    ┆ HEADACHE                  ┆ 2014-01-10    ┆ 2014-01-12  ┆ MILD        ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ POSSIBLY RELATED │
+│ 01-701-1015    ┆ NAUSEA                    ┆ 2014-02-05    ┆ 2014-02-06  ┆ MODERATE    ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ NOT RELATED      │
+│ 01-701-1023    ┆ DIZZINESS                 ┆ 2014-01-15    ┆ 2014-01-16  ┆ MILD        ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ POSSIBLY RELATED │
+│ 01-701-1028    ┆ FATIGUE                   ┆ 2014-02-20    ┆ null        ┆ MODERATE    ┆ N          ┆ NOT RECOVERED/NOT RESOLVED ┆ DOSE NOT CHANGED ┆ PROBABLY RELATED │
+│ 01-701-1034    ┆ APPLICATION SITE ERYTHEMA ┆ 2014-01-20    ┆ 2014-01-25  ┆ SEVERE      ┆ Y          ┆ RECOVERED/RESOLVED         ┆ DRUG WITHDRAWN   ┆ RELATED          │
+└────────────────┴───────────────────────────┴───────────────┴─────────────┴─────────────┴────────────┴────────────────────────────┴──────────────────┴──────────────────┘
+""")
 
 print("── 1. Raw data loaded ───────────────────────────────────────────────────")
 print(f"   dm_raw : {dm_raw.shape[0]:>3} rows   columns → {dm_raw.columns}")
@@ -238,6 +262,9 @@ ae = (
     .assign_no_ct("AEREL", source="ae_relationship")
     # AESEQ: running count within each subject
     .derivation("AESEQ", expression='pl.col("ae_term").cum_count().over("patient_number")')
+    # Pin DM for cross-domain study day derivation
+    .pin("DM", dm)
+    .study_day("AESTDY", date_col="AESTDTC")
     .to_frame()
     .select(
         [
@@ -248,6 +275,7 @@ ae = (
             "AETERM",
             "AESTDTC",
             "AEENDTC",
+            "AESTDY",
             "AESEV",
             "AESER",
             "AEOUT",
@@ -256,7 +284,7 @@ ae = (
         ]
     )
 )
-print(f"── 2d. SDTM AE : {ae.shape[0]} records  × {ae.shape[1]} variables")
+print(f"── 2d. SDTM AE : {ae.shape[0]} records  × {ae.shape[1]} variables (with AESTDY via .pin())")
 
 # ════════════════════════════════════════════════════════════════════════════
 # 3–5. Build ADSL base + Treatment Variables + Treatment Dates/Duration
@@ -580,7 +608,19 @@ print(
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 13. ADaM ADVS (inline) ═══════════════════════════════════════════════")
 
-vs_raw = pl.read_csv(RAW / "vs_raw.csv")
+vs_raw = pl.from_repr("""\
+┌────────────────┬─────────────┬──────────┬────────┬─────────┬──────────┬────────────┬──────┐
+│ patient_number ┆ site_number ┆ vstestcd ┆ vstest ┆ vsorres ┆ vsorresu ┆ vsdtc      ┆ vsdy │
+│ ---            ┆ ---         ┆ ---      ┆ ---    ┆ ---     ┆ ---      ┆ ---        ┆ ---  │
+│ str            ┆ i64         ┆ str      ┆ str    ┆ f64     ┆ str      ┆ str        ┆ i64  │
+╞════════════════╪═════════════╪══════════╪════════╪═════════╪══════════╪════════════╪══════╡
+│ 01-701-1015    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 155.5   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1023    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 168.1   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1028    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 178.0   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1034    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 170.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1047    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 166.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+└────────────────┴─────────────┴──────────┴────────┴─────────┴──────────┴────────────┴──────┘
+""")
 
 _trtsdt_map = adsl_final.select(["USUBJID", "TRTSDT"])
 

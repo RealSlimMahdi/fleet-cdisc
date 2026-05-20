@@ -119,10 +119,10 @@ If you prefer to skip the full bootstrap pipeline:
 
 ```bash
 # Generate codelists.py directly from the SDTM IG
-uv run fleet init-ct --domains DM,AE,VS,EX --output specs/cdiscpilot01/sdtm/codelists.py
+uv run fleet init-ct --domains DM,AE,VS,EX --output examples/cdiscpilot01/sdtm/codelists.py
 
 # Add more domains incrementally (preserves existing codelists)
-uv run fleet add-ct --domains LB,CM --output specs/cdiscpilot01/sdtm/codelists.py
+uv run fleet add-ct --domains LB,CM --output examples/cdiscpilot01/sdtm/codelists.py
 
 # Pin to a specific IG version and CT package
 uv run fleet init-ct --domains DM,AE --ig 3-4 --package sdtmct-2025-09-26 --output codelists.py
@@ -199,7 +199,7 @@ arm_code, arm_description, first_dose_date, last_dose_date, informed_consent_dat
 import fleet
 import polars as pl
 from fleet import load_raw_data
-from specs.cdiscpilot01.sdtm.codelists import SEX, RACE, ETHNIC
+from examples.cdiscpilot01.sdtm.codelists import SEX, RACE, ETHNIC
 
 dm_raw = load_raw_data("datasets/cdiscpilot01/raw/dm_raw.csv").collect()
 
@@ -280,7 +280,7 @@ datasets:
 Then execute in one line:
 
 ```python
-dm = dm_raw.sdtm.from_spec("specs/cdiscpilot01/sdtm/define.yaml", dataset="DM").to_frame()
+dm = dm_raw.sdtm.from_spec("examples/cdiscpilot01/sdtm/define.yaml", dataset="DM").to_frame()
 ```
 
 ---
@@ -339,7 +339,7 @@ vs = (
     .derivation(    "VSSTRESN", expression="pl.col('vsorres').cast(pl.Float64, strict=False)")
     .assign_no_ct(  "VSSTRESU", source="vsorresu")
     .date("VSDTC",  source="vsdtc")
-    .remove_dup(subset=["USUBJID", "VSTESTCD", "VSDTC"])
+    .nodup(subset=["USUBJID", "VSTESTCD", "VSDTC"])
     .to_frame()
 )
 ```
@@ -1137,13 +1137,13 @@ errors = validate_rule_schema(rule_dict)
 ```bash
 # SDTM Define-XML
 uv run fleet define-xml \
-  --spec specs/cdiscpilot01/sdtm/define.yaml \
+  --spec examples/cdiscpilot01/sdtm/define.yaml \
   --output outputs/define_sdtm.xml \
   --enrich-methods
 
 # ADaM Define-XML (without HTML preview)
 uv run fleet define-xml \
-  --spec specs/cdiscpilot01/adam/define.yaml \
+  --spec examples/cdiscpilot01/adam/define.yaml \
   --output outputs/define_adam.xml \
   --enrich-methods \
   --no-preview
@@ -1161,8 +1161,8 @@ method beside every variable.
 from fleet import DefineSpecGenerator, DatasetChecker
 
 # Check datasets against the spec before generating
-sdtm_spec = "specs/cdiscpilot01/sdtm/define.yaml"
-adam_spec  = "specs/cdiscpilot01/adam/define.yaml"
+sdtm_spec = "examples/cdiscpilot01/sdtm/define.yaml"
+adam_spec  = "examples/cdiscpilot01/adam/define.yaml"
 
 sdtm_checker = DatasetChecker(sdtm_spec)
 adam_checker  = DatasetChecker(adam_spec)
@@ -1304,51 +1304,64 @@ uv run fleet define-xml --spec metadata/adam/define.yaml  --output outputs/defin
 
 ### SDTM verbs (`df.sdtm`)
 
-| Verb                 | Purpose                                     |
-| -------------------- | ------------------------------------------- |
-| `assign_no_ct`       | Raw column → SDTM variable, no decoding     |
-| `assign_ct`          | Raw column → SDTM variable with CT decoding |
-| `date`               | Date/datetime normalisation                 |
-| `hardcode_no_ct`     | Constant value (DOMAIN, STUDYID, AGEU…)     |
-| `hardcode_ct`        | Constant value, CT-validated                |
-| `condition_add`      | `IF X THEN Y ELSE NULL`                     |
-| `if_then_else`       | Multi-branch conditional                    |
-| `ae_aerel`           | AE relatedness mapping                      |
-| `merge`              | Join a reference dataset                    |
-| `remove_dup`         | Deduplicate rows                            |
-| `group_by`           | Aggregate to summary rows                   |
-| `dataset_level`      | Alias for `hardcode_no_ct`                  |
-| `notsubmitted`       | Set columns to null                         |
-| `multiple_responses` | Expand pipe-delimited fields into rows      |
+| Verb                 | Purpose                                          |
+| -------------------- | ------------------------------------------------ |
+| `assign_no_ct`       | Raw column → SDTM variable, no decoding          |
+| `assign_ct`          | Raw column → SDTM variable with CT decoding      |
+| `date`               | Date/datetime normalisation                      |
+| `hardcode_no_ct`     | Constant value (DOMAIN, STUDYID, AGEU…)          |
+| `hardcode_ct`        | Constant value, CT-validated                     |
+| `condition_add`      | `IF X THEN Y ELSE NULL`                          |
+| `if_then_else`       | Multi-branch conditional                         |
+| `ae_aerel`           | AE relatedness mapping                           |
+| `merge`              | Join a reference dataset                         |
+| `nodup`              | Detect/remove duplicates with diagnostics        |
+| `group_by`           | Aggregate to summary rows                        |
+| `dataset_level`      | Alias for `hardcode_no_ct`                       |
+| `notsubmitted`       | Set columns to null                              |
+| `multiple_responses` | Expand pipe-delimited fields into rows           |
+| `pin`                | Attach a reference domain for cross-domain verbs |
+| `repin`              | Replace a pin explicitly (no warning)            |
+| `study_day`          | CDISC study day (consumes pinned DM)             |
+| `baseline_flag`      | Last pre-reference-date observation flag         |
+| `fk_policy`          | Set FK-check severity (warn/error/off)           |
+| `pins`               | Inspect currently pinned domains                 |
 
 ### ADaM verbs (`df.adam`)
 
-| Verb                     | Purpose                           |
-| ------------------------ | --------------------------------- |
-| `source`                 | Carry over from SDTM              |
-| `derivation`             | Arbitrary Polars expression       |
-| `assigned`               | Global constant                   |
-| `recode`                 | Map values to new labels          |
-| `rename`                 | Rename column (VSDTC → ADT)       |
-| `condderivation`         | Multi-branch conditional          |
-| `lookup`                 | Join a reference dataset          |
-| `whereclauses`           | Filter rows                       |
-| `date`                   | Parse DTC → Date/Datetime         |
-| `duration`               | ADY / elapsed time / ISO duration |
-| `baseline`               | BASE = AVAL at baseline           |
-| `chg`                    | CHG = AVAL − BASE                 |
-| `pchg`                   | PCHG = (AVAL − BASE) / BASE × 100 |
-| `flag`                   | General "Y" flag                  |
-| `bmi`                    | BMI from weight and height        |
-| `nrind`                  | LOW / NORMAL / HIGH               |
-| `on_treatment`           | ONTRTFL = "Y" on-treatment        |
-| `shift`                  | Baseline-to-post shift string     |
-| `bsa`                    | Body Surface Area (4 methods)     |
-| `map`                    | Mean Arterial Pressure            |
-| `qtc`                    | Corrected QT interval             |
-| `derive_summary_records` | Append aggregate rows             |
-| `derive_locf_records`    | LOCF imputation                   |
-| `derive_param`           | Derive new parameter rows         |
+| Verb                     | Purpose                            |
+| ------------------------ | ---------------------------------- |
+| `source`                 | Carry over from SDTM               |
+| `derivation`             | Arbitrary Polars expression        |
+| `assigned`               | Global constant                    |
+| `recode`                 | Map values to new labels           |
+| `rename`                 | Rename column (VSDTC → ADT)        |
+| `condderivation`         | Multi-branch conditional           |
+| `lookup`                 | Join a reference dataset           |
+| `whereclauses`           | Filter rows                        |
+| `date`                   | Parse DTC → Date/Datetime          |
+| `duration`               | ADY / elapsed time / ISO duration  |
+| `baseline`               | BASE = AVAL at baseline            |
+| `chg`                    | CHG = AVAL − BASE                  |
+| `pchg`                   | PCHG = (AVAL − BASE) / BASE × 100  |
+| `flag`                   | General "Y" flag                   |
+| `bmi`                    | BMI from weight and height         |
+| `nrind`                  | LOW / NORMAL / HIGH                |
+| `on_treatment`           | ONTRTFL = "Y" on-treatment         |
+| `shift`                  | Baseline-to-post shift string      |
+| `bsa`                    | Body Surface Area (4 methods)      |
+| `map`                    | Mean Arterial Pressure             |
+| `qtc`                    | Corrected QT interval              |
+| `derive_summary_records` | Append aggregate rows              |
+| `derive_locf_records`    | LOCF imputation                    |
+| `derive_param`           | Derive new parameter rows          |
+| `nodup`                  | Detect/remove duplicates with diag |
+| `pin`                    | Attach reference domain (passport) |
+| `repin`                  | Replace a pin explicitly           |
+| `join_adsl`              | Carry columns from pinned ADSL     |
+| `study_day`              | CDISC study day (ADaM, from ADSL)  |
+| `fk_policy`              | Set FK-check severity              |
+| `pins`                   | Inspect pinned domains             |
 
 ### ADSL verbs (`df.adam.adsl`)
 
@@ -1403,3 +1416,72 @@ uv run fleet define-xml --spec metadata/adam/define.yaml  --output outputs/defin
 uv run python scripts/build_llms.py
 uv run python scripts/build_llms.py --check   # CI stale-check
 ```
+
+## Part 18 — Study-Specific Derivations (`@derivation`)
+
+### When to use `@derivation` vs inline `.derivation(expression=...)`
+
+| Scenario                                   | Recommended form                                           |
+| ------------------------------------------ | ---------------------------------------------------------- |
+| One-liner row transform, no reuse needed   | `.derivation("VAR", expression=pl.col(...))`               |
+| Multi-line logic, reused across datasets   | `@derivation` object in `derivations/` folder              |
+| Logic needs version control / traceability | `@derivation` object — `dotted_path` ends up in Define-XML |
+| Referenced from `define.yaml` `callable:`  | `@derivation` object — auto-registered on import           |
+
+### The `derivations/` folder convention
+
+Fleet creates this structure on `fleet init cfg`:
+
+```
+specs/<study_id>/adam/derivations/
+    __init__.py    # import all derivations here for auto-registration
+    AGEGR1.py
+    BMI.py
+```
+
+Scaffold a new derivation with the CLI:
+
+```bash
+# Column-kind (zero-arg, returns pl.Expr):
+fleet derivation add AGEGR1 --dataset ADSL --kind column
+
+# Frame-kind (receives DataFrame, returns DataFrame):
+fleet derivation add add_pop_flags --dataset ADSL --kind frame
+
+# Param-kind (by-group reshape):
+fleet derivation add BMI --dataset ADVS --kind param
+```
+
+### How `callable:` in `define.yaml` links to runtime execution
+
+```yaml
+# examples/cdiscpilot01/adam/define.yaml
+- name: AGEGR1
+  label: Pooled Age Group 1
+  derivation:
+    algorithm: callable
+    callable: examples.cdiscpilot01.adam.derivations.AGEGR1
+```
+
+At runtime, `from_spec()` calls `_resolve_callable("examples.cdiscpilot01.adam.derivations.AGEGR1")`,
+which either:
+
+1. Looks up the name in the transform registry (if the derivations module was imported), or
+2. Imports the dotted path at execution time.
+
+The `Derivation` object's `kind` determines routing:
+
+- `kind="column"` → expression added to lazy plan (no materialisation)
+- `kind="frame"` / `kind="param"` → pipeline materialised, function called, result re-wrapped
+
+### How Define-XML MethodDef is enriched from the docstring
+
+When `fleet define-xml --enrich-methods` is run, the `callable:` key in the derivation block
+causes `DefineSpecGenerator` to:
+
+1. Look up the `Derivation` object in the transform registry.
+2. Read `obj.dotted_path` as the `<FormalExpression>` context.
+3. Extract the first line of `obj.fn.__doc__` as the `<Description>`.
+
+This creates a verifiable link between the regulatory submission and the exact code
+that produced the data.

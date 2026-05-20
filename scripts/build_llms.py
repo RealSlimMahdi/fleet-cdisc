@@ -149,7 +149,13 @@ materialise first (`to_frame()`) when a result must exist before the next deriva
 4. **Google-style docstrings** — All public verbs use Google-style docstrings with `Args:`, \
 `Returns:`, and `Examples:` sections. Every example must be a complete pipeline snippet \
 ending with `.to_frame()`. Never use NumPy/Sphinx `Parameters ----------` style or bare \
-`Example::` headers.\
+`Example::` headers.
+
+5. **Prefer `pl.from_repr()` for small reproducible snippets** — When generating small \
+inline DataFrames for tests, examples, or user-facing code snippets, prefer `pl.from_repr()` \
+with a Unicode box-drawing table over `pl.DataFrame({...})`. This makes column names, types, \
+and data immediately visible without execution. Use `pl.DataFrame()` (empty) only for TDD \
+scaffolding and `pl.DataFrame(variable)` when data is built programmatically.\
 """
 
 
@@ -184,6 +190,75 @@ dm = (
 ```
 
 Nothing runs until `.to_frame()`. All verbs accumulate into a single `df.with_columns(...)` pass.\
+"""
+
+
+def _data_construction_section() -> str:
+    return """\
+## Data Sample Construction
+
+When creating inline sample DataFrames for tests, examples, or reproducible snippets, \
+prefer `pl.from_repr()` over `pl.DataFrame({...})`. Column names, types, and data are \
+immediately visible without execution.
+
+### Pattern
+
+```python
+import polars as pl
+
+raw_dm = pl.from_repr(\"\"\"\\
+┌────────────┬─────┬─────┐
+│ subject_id ┆ sex ┆ age │
+│ ---        ┆ --- ┆ --- │
+│ str        ┆ str ┆ i64 │
+╞════════════╪═════╪═════╡
+│ S001       ┆ M   ┆ 35  │
+│ S002       ┆ F   ┆ 42  │
+└────────────┴─────┴─────┘
+\"\"\")
+```
+
+### Generating the repr string
+
+Fleet ships a `to_repr()` helper that renders any DataFrame with full-width, \
+no-truncation settings so the output is directly pasteable:
+
+```python
+from fleet import to_repr
+import polars as pl
+
+# From any existing DataFrame (CSV load, query result, dict, etc.)
+df = pl.DataFrame({"USUBJID": ["S001", "S002"], "AGE": [35, 42]})
+
+# Print the from_repr-ready string
+print(to_repr(df))
+# ┌─────────┬─────┐
+# │ USUBJID ┆ AGE │
+# │ ---     ┆ --- │
+# │ str     ┆ i64 │
+# ╞═════════╪═════╡
+# │ S001    ┆ 35  │
+# │ S002    ┆ 42  │
+# └─────────┴─────┘
+
+# Paste that output into your test/example:
+df = pl.from_repr(\"\"\"\\
+┌─────────┬─────┐
+│ USUBJID ┆ AGE │
+│ ---     ┆ --- │
+│ str     ┆ i64 │
+╞═════════╪═════╡
+│ S001    ┆ 35  │
+│ S002    ┆ 42  │
+└─────────┴─────┘
+\"\"\")
+```
+
+### When `pl.DataFrame()` is still acceptable
+
+- Empty DataFrames for TDD scaffolding: `pl.DataFrame().sdtm`
+- Programmatic data built with loops or random generators (e.g. benchmark scripts)
+- API type annotations referencing `pl.DataFrame` as a return/parameter type\
 """
 
 
@@ -259,7 +334,7 @@ def _sdtm_verbs_section() -> str:
         "if_then_else",
         "ae_aerel",
         "merge",
-        "remove_dup",
+        "nodup",
         "group_by",
         "dataset_level",
         "notsubmitted",
@@ -432,7 +507,7 @@ def _verb_mapping_section() -> str:
 | CT recode | `recode` | `adam` / all sub-ns | Map raw→decoded values |
 | Multi-branch conditional | `if_then_else` | `sdtm` | List of `{condition, value}` branches |
 | Multi-branch conditional | `condderivation` | `adam` / all sub-ns | Same pattern as `if_then_else` |
-| Arbitrary expression | `derivation` | `sdtm` / `adam` | Last resort — use a Fleet verb first |
+| Arbitrary expression | `derivation` | `sdtm` / `adam` | Polymorphic: `str`, `pl.Expr`, lambda `() -> pl.Expr`, or `@derivation` object |
 | ISO 8601 parse (SDTM) | `date` | `sdtm` | Normalises to `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`; preserves partial dates |
 | Date imputation (ADaM) | `date` | `adam` / all sub-ns | Imputes partial --DTC → `pl.Date` or `pl.Datetime` with optional DTF/TMF flags |
 | Study day (ADY) | `duration` | `adam` / `sdtm` | CDISC study-day: +1 if ≥ 0, no day 0 |
@@ -481,6 +556,7 @@ generation, pipeline execution, and post-dataset checks.
 - `assigned` → `.assigned(target, value=...)`
 - `source` → `.source(target, from_col=...)`
 - `derivation` → `.derivation(target, expression=...)`
+- `callable` → `.derivation(drv_obj)` (dispatches `@derivation`-decorated function by name or dotted path)
 - `first_date` → `.first_date(target, from_dataset=..., date_col=..., where=...)`
 - `last_date` → `.last_date(...)`
 - `duration` → `.duration(target, start=..., end=...)`
@@ -492,7 +568,7 @@ generation, pipeline execution, and post-dataset checks.
 ```python
 from fleet import load_study_context
 
-ctx = load_study_context("specs/cdiscpilot01/adam/define.yaml")
+ctx = load_study_context("examples/cdiscpilot01/adam/define.yaml")
 adsl = ctx.build("ADSL")
 ```
 
@@ -501,7 +577,7 @@ adsl = ctx.build("ADSL")
 ```python
 from fleet import DefineXMLGenerator
 
-gen = DefineXMLGenerator("specs/cdiscpilot01/adam/define.yaml")
+gen = DefineXMLGenerator("examples/cdiscpilot01/adam/define.yaml")
 gen.write("outputs/cdiscpilot01/define_adam.xml")
 ```\
 """
@@ -720,6 +796,13 @@ _SHARED_ADAM_VERBS = [
     "duration",
     "flag",
     "criterion",
+    "pin",
+    "repin",
+    "join_adsl",
+    "study_day",
+    "nodup",
+    "fk_policy",
+    "pins",
 ]
 
 _README_SDTM_VERBS = [
@@ -733,13 +816,19 @@ _README_SDTM_VERBS = [
     "if_then_else",
     "ae_aerel",
     "merge",
-    "remove_dup",
+    "nodup",
     "group_by",
     "dataset_level",
     "notsubmitted",
     "multiple_responses",
     "nsv",
     "export_supp",
+    "pin",
+    "repin",
+    "study_day",
+    "baseline_flag",
+    "fk_policy",
+    "pins",
 ]
 
 _README_ADAM_SPECIFIC = [
@@ -1006,6 +1095,7 @@ def build() -> str:
         _rules_section(),
         _install_section(),
         _quickstart_section(),
+        _data_construction_section(),
         _golden_master_section(),
         _namespaces_section(),
         _sdtm_verbs_section(),

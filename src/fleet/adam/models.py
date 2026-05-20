@@ -3,7 +3,7 @@
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ADAMAlgorithm(StrEnum):
@@ -33,6 +33,7 @@ class ADAMAlgorithm(StrEnum):
     COMBINE_GRADES = "combine_grades"
     DATE = "date"
     DURATION = "duration"
+    CALLABLE = "callable"
 
 
 class ADAMVariableSpec(BaseModel):
@@ -110,10 +111,13 @@ class ADAMVariableSpec(BaseModel):
     # whereclauses
     where: str | None = None
 
+    # callable: reference to a registered Derivation or dotted-import path
+    callable_ref: str | None = Field(None, alias="callable")
+
     # auto-staging: columns that must be committed to the frame before this derivation runs
     depends_on: list[str] | None = None
 
-    model_config = {"extra": "allow"}
+    model_config = {"extra": "allow", "populate_by_name": True}
 
 
 class ADAMDatasetSpec(BaseModel):

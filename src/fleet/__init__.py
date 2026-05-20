@@ -61,6 +61,7 @@ from .core import (
     StudyContext,
     build_dag,
     load_study_context,
+    to_repr,
 )
 from .ct import CTValidator, get_validator, load_controlled_terminology
 
@@ -143,4 +144,6 @@ __all__ = [
     # Validation
     "ValidationResult",
     "ValidationService",
+    # Utilities
+    "to_repr",
 ]

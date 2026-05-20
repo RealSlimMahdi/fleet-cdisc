@@ -88,6 +88,7 @@ def record_lineage(owner: Any, exprs: tuple[pl.Expr, ...]) -> None:
         verb = verb.lstrip("_")
 
     method_path = _resolve_method_path(owner, verb)
+    domain: str | None = getattr(owner, "_domain", None)
     lineage: list[VariableNode] = list(getattr(owner, "_lineage", []))
     for expr in exprs:
         name = _expr_output_name(expr)
@@ -99,6 +100,7 @@ def record_lineage(owner: Any, exprs: tuple[pl.Expr, ...]) -> None:
                 verb=verb,
                 sources=_expr_sources(expr),
                 method=method_path,
+                domain=domain,
             )
         )
     owner._lineage = lineage
@@ -107,3 +109,82 @@ def record_lineage(owner: Any, exprs: tuple[pl.Expr, ...]) -> None:
 def lineage_of(namespace: Any) -> list[VariableNode]:
     """Return the accumulated lineage of *namespace* (empty list if none)."""
     return list(getattr(namespace, "_lineage", []))
+
+
+def record_pin_lineage(
+    owner: Any,
+    target_col: str,
+    verb: str,
+    source_domain: str,
+    source_cols: list[str],
+    join_key: list[str],
+    relationship: str = "derivation",
+) -> None:
+    """Append a ``PinDependency`` to ``owner._pin_lineage``.
+
+    Called from cross-domain verbs (e.g. ``study_day``, ``join_adsl``)
+    after consuming a pinned domain, so every pin access is automatically
+    traced.
+
+    Args:
+        owner: The namespace instance.
+        target_col: Output column being derived.
+        verb: Name of the consuming verb.
+        source_domain: Pinned domain that was consulted.
+        source_cols: Columns read from the pinned frame.
+        join_key: Join key(s) used to align frames.
+        relationship: Semantic tag — ``"derivation"``, ``"fk_check"``,
+            or ``"carry_forward"``.
+    """
+    from fleet.core.dag import PinDependency
+
+    pin_lineage: list[PinDependency] = list(getattr(owner, "_pin_lineage", []))
+    pin_lineage.append(
+        PinDependency(
+            target_col=target_col,
+            target_domain=getattr(owner, "_domain", None),
+            verb=verb,
+            source_domain=source_domain,
+            source_cols=source_cols,
+            join_key=join_key,
+            relationship=relationship,
+        )
+    )
+    owner._pin_lineage = pin_lineage
+
+
+def pin_lineage_of(namespace: Any) -> list:
+    """Return the accumulated pin lineage of *namespace* (empty list if none)."""
+    return list(getattr(namespace, "_pin_lineage", []))
+
+
+def _append_lineage_nodes(ns: Any, drv: Any) -> Any:
+    """Inject ``VariableNode`` entries for frame-level / param-level ``Derivation`` s.
+
+    Called from ``_apply_derivation()`` after ``_materialise_then()``, because
+    those code paths bypass ``_chain()`` and therefore miss ``record_lineage()``.
+
+    Args:
+        ns:  The namespace instance (already materialised).
+        drv: The :class:`~fleet.core.derivation.Derivation` whose ``targets``
+             and ``sources`` are to be recorded.
+
+    Returns:
+        The same namespace instance with ``_lineage`` extended in place.
+    """
+    from fleet.core.dag import VariableNode
+
+    lineage: list[VariableNode] = list(getattr(ns, "_lineage", []))
+    domain: str | None = getattr(ns, "_domain", None)
+    for t in drv.targets:
+        lineage.append(
+            VariableNode(
+                name=t,
+                verb="derivation",
+                sources=drv.sources,
+                method=drv.dotted_path,
+                domain=domain,
+            )
+        )
+    ns._lineage = lineage
+    return ns

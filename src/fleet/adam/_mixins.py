@@ -72,10 +72,15 @@ methods.  No ``if TYPE_CHECKING`` stubs or protocol tricks are needed.
 from __future__ import annotations
 
 import copy
-from pathlib import Path
-from typing import Any, Self
+from typing import TYPE_CHECKING, Any, Self
 
 import polars as pl
+
+from fleet.core._pin_mixin import PinMixin
+from fleet.core._verb_mixin import SharedVerbsMixin
+
+if TYPE_CHECKING:
+    pass
 
 
 class FlagCriterionMixin:
@@ -581,12 +586,17 @@ class FlagCriterionMixin:
         return self._chain(desc_expr, fl_expr, fn_expr)
 
 
-class SharedADaMVerbsMixin(FlagCriterionMixin):
+class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
     """Base mixin providing the shared verbs and chaining infrastructure.
 
+    Inherits algorithmic and infrastructure verbs from ``SharedVerbsMixin``
+    (derivation, duration, study_day, seq, validate, select, inspect,
+    explain, to_frame, to_dataset_json, write_parquet, _chain,
+    _materialise_then).
+
     Concrete namespace classes inherit from this mixin.  The ``_chain``
-    and ``_materialise_then`` helpers use ``self.__class__`` so the returned
-    instance stays the correct sub-type for continued method chaining.
+    and ``_materialise_then`` helpers use ``copy.copy(self)`` so the
+    returned instance stays the correct sub-type for continued chaining.
 
     Required instance attribute
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -595,144 +605,159 @@ class SharedADaMVerbsMixin(FlagCriterionMixin):
 
     _lazy: pl.LazyFrame
 
+    _FK_RULES: dict[str, dict[str, str]] = {
+        "USUBJID": {"pin": "ADSL", "ref_col": "USUBJID"},
+    }
+
+    # -- SharedVerbsMixin configuration for ADaM --
+    _STUDY_DAY_REF_COL: str = "TRTSDT"
+    _STUDY_DAY_REF_PIN: str = "ADSL"
+    _SEQ_DEFAULT_GROUPS: list[str] = ["USUBJID"]
+    _VALIDATE_STANDARD: str = "adam"
+    _VALIDATE_DEFAULT_VERSION: str = "1.3"
+
     # ------------------------------------------------------------------ #
     # Lifecycle                                                            #
     # ------------------------------------------------------------------ #
 
     def __init__(self, df: pl.DataFrame) -> None:
         self._lazy = df.lazy()
+        self._domain: str | None = None
+        self._pinned: dict[str, tuple[pl.DataFrame, list[str]]] = {}
+        self._pin_lineage: list = []
 
-    # ------------------------------------------------------------------ #
-    # Chaining infrastructure                                              #
-    # ------------------------------------------------------------------ #
+    def __call__(self, domain: str) -> Self:
+        """Return a copy of this namespace with *domain* set for CDISC lineage.
 
-    def _chain(self, *exprs: pl.Expr) -> Self:
-        """Append expressions to the lazy plan; return a *new* namespace."""
-        from fleet.core.lineage import record_lineage
-
-        new = copy.copy(self)
-        new._lazy = self._lazy.with_columns(list(exprs))
-        record_lineage(new, exprs)
-        return new
-
-    def _materialise_then(self, df: pl.DataFrame) -> Self:
-        """Return a fresh namespace wrapping *df* as a new lazy plan."""
-        new = copy.copy(self)
-        new._lazy = df.lazy()
-        return new
-
-    def to_frame(self) -> pl.DataFrame:
-        """Materialise the accumulated pipeline into a Polars DataFrame.
+        Args:
+            domain: CDISC domain code (e.g. ``"ADAE"``, ``"ADVS"``).
 
         Returns:
-            pl.DataFrame: The fully materialised result of all chained
-                ADaM verbs.
+            Self: A shallow copy whose lineage records will carry *domain*.
 
         Examples:
-            Collect the pipeline result::
+            Tag an OCCDS pipeline as ADAE::
 
-                advs = (
-                    vs_df.adam
+                adae = (
+                    ae_with_trt.adam.occds("ADAE")
                     .source("USUBJID")
-                    .derivation("AVAL", expression="VSSTRESN")
+                    .treatment_emergent("TRTEMFL", start_date="AESTDTC",
+                                        trtsdt="TRTSDT", trtedt="TRTEDT")
                     .to_frame()
                 )
         """
-        return self._lazy.collect()
+        new = copy.copy(self)
+        new._domain = domain
+        return new
 
-    def to_dataset_json(
+    # ------------------------------------------------------------------ #
+    # Cross-domain: pin-powered verbs                                      #
+    # ------------------------------------------------------------------ #
+
+    def join_adsl(self, *cols: str) -> Self:
+        """Pull columns from pinned ADSL into this pipeline.
+
+        Performs a left join on the pinned join key, keeps only the
+        requested columns, and records ``carry_forward`` lineage for
+        each column.
+
+        Args:
+            *cols: Column names to carry forward from ADSL
+                (e.g. ``"TRTSDT"``, ``"TRTEDT"``, ``"SAFFL"``).
+
+        Returns:
+            Self: The namespace with ADSL columns attached; call
+                ``.to_frame()`` to materialise.
+
+        Raises:
+            LookupError: If ADSL is not pinned.
+
+        Examples:
+            Carry TRTSDT and SAFFL from ADSL into an ADAE pipeline::
+
+                adae = (
+                    ae_df.adam.occds("ADAE")
+                    .pin("ADSL", adsl_df)
+                    .source("USUBJID")
+                    .join_adsl("TRTSDT", "TRTEDT", "SAFFL")
+                    .to_frame()
+                )
+        """
+        from fleet.core.lineage import record_pin_lineage
+
+        ref_df = self._require_pin("ADSL", "join_adsl", columns=list(cols))
+        join_key = self._pin_join_key("ADSL")
+
+        ref_slim = ref_df.select(
+            [c for c in dict.fromkeys(join_key + list(cols)) if c in ref_df.columns]
+        ).unique(subset=join_key)
+
+        df = self._lazy.collect().join(ref_slim, on=join_key, how="left")
+        new = self._materialise_then(df)
+
+        for col in cols:
+            record_pin_lineage(
+                new,
+                target_col=col,
+                verb="join_adsl",
+                source_domain="ADSL",
+                source_cols=[col],
+                join_key=join_key,
+                relationship="carry_forward",
+            )
+        return new
+
+    def study_day(
         self,
-        path: str | Path,
+        target: str,
         *,
-        domain: str,
-        label: str | None = None,
-    ) -> Path:
-        """Materialise the pipeline and write a CDISC Dataset-JSON v1.1 file.
+        date_col: str,
+        ref_col: str = "TRTSDT",
+        ref_pin: str = "ADSL",
+        adsl: pl.DataFrame | None = None,
+    ) -> Self:
+        """Derive a CDISC study day variable for ADaM datasets.
 
-        This is a terminal verb — it collects the lazy plan and writes the
-        result.  No further chaining is possible after this call.
+        Uses the CDISC algorithm: ``date - ref_date + 1`` when
+        ``date >= ref_date``, else ``date - ref_date`` (no day 0).
 
-        Args:
-            path: Destination file path (should end in ``.json``).
-            domain: Dataset / domain name (e.g. ``"ADSL"``, ``"ADAE"``).
-            label: Optional human-readable dataset label.
+        The reference date is resolved in this order:
 
-        Returns:
-            Path: Path to the written file.
-
-        Examples:
-            Export an ADaM ADSL dataset to Dataset-JSON::
-
-                path = (
-                    dm.adam.adsl
-                    .source("USUBJID")
-                    .first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")
-                    .to_dataset_json("outputs/adsl.json", domain="ADSL")
-                )
-        """
-        from fleet.io.dataset_json import save_dataset_json
-
-        return save_dataset_json(self._lazy.collect(), path, domain=domain, label=label)
-
-    # ------------------------------------------------------------------ #
-    # Debugging & observability                                            #
-    # ------------------------------------------------------------------ #
-
-    def inspect(self, prefix: str = "DEBUG") -> Self:
-        """Materialise the pipeline at this point and log its state.
-
-        Creates a hard checkpoint: the pipeline resumes from the
-        materialised frame, making it easy to isolate exactly where a
-        derivation goes wrong.
+        1. Explicit ``adsl=`` parameter (highest priority).
+        2. Pinned domain (via ``.pin("ADSL", adsl_df)``).
+        3. ``ref_col`` already present in the current frame.
+        4. Actionable ``LookupError``.
 
         Args:
-            prefix: Label printed alongside the diagnostic output.
+            target: Name of the output study day variable
+                (e.g. ``"ASTDY"``).
+            date_col: Column containing the analysis date
+                (e.g. ``"ASTDT"``).
+            ref_col: Reference date column in the pinned domain
+                (default ``"TRTSDT"``).
+            ref_pin: Pinned domain name (default ``"ADSL"``).
+            adsl: Optional explicit DataFrame override.
 
         Returns:
-            Self: A fresh namespace wrapping the materialised frame; call
-                further verbs or ``.to_frame()`` to continue.
+            Self: The namespace with *target* appended; call
+                ``.to_frame()`` to materialise.
 
         Examples:
-            Inspect the pipeline after baseline derivation::
+            Derive AE analysis study day from pinned ADSL::
 
-                advs = (
-                    vs_df.adam
+                adae = (
+                    ae_df.adam.occds("ADAE")
+                    .pin("ADSL", adsl_df)
                     .source("USUBJID")
-                    .baseline("BASE", aval="AVAL", baseline_flag="ABLFL")
-                    .inspect(prefix="After BASE")
-                    .chg("CHG", aval="AVAL", base="BASE")
+                    .join_adsl("TRTSDT")
+                    .derivation("ASTDT", expression="pl.col('AESTDTC').str.to_date(format='%Y-%m-%d', strict=False)")
+                    .study_day("ASTDY", date_col="ASTDT")
                     .to_frame()
                 )
         """
-        df = self._lazy.collect()
-        print(f"[{prefix}] Schema: {df.schema}")
-        print(f"[{prefix}] Shape:  {df.shape}")
-        print(df.head(5))
-        return self._materialise_then(df)
-
-    def explain(self) -> Self:
-        """Print the current Polars query plan without materialising.
-
-        Useful for understanding how Polars will optimise the accumulated
-        derivation pipeline.
-
-        Returns:
-            Self: The same namespace instance (unchanged); call further
-                verbs or ``.to_frame()`` to continue.
-
-        Examples:
-            Print the query plan before collecting::
-
-                advs = (
-                    vs_df.adam
-                    .source("USUBJID")
-                    .derivation("AVAL", expression="VSSTRESN")
-                    .explain()
-                    .to_frame()
-                )
-        """
-        print(self._lazy.explain())
-        return self
+        return super().study_day(
+            target, date_col=date_col, ref_col=ref_col, ref_pin=ref_pin, ref_df=adsl
+        )
 
     # ------------------------------------------------------------------ #
     # Shared verbs                                                         #
@@ -764,32 +789,6 @@ class SharedADaMVerbsMixin(FlagCriterionMixin):
         """
         src = from_col if from_col is not None else target
         return self._chain(pl.col(src).alias(target))
-
-    def derivation(self, target: str, *, expression: str | pl.Expr) -> Self:
-        """Derive *target* using an arbitrary Polars expression.
-
-        Args:
-            target: Name of the output ADaM variable.
-            expression: A Polars expression object or a string that evaluates
-                to one.
-
-        Returns:
-            Self: The namespace with *target* appended; call ``.to_frame()``
-                to materialise.
-
-        Examples:
-            Compute ``AVAL`` from a raw numeric column::
-
-                advs = (
-                    vs_df.adam
-                    .derivation("AVAL", expression="pl.col('VSSTRESN').cast(pl.Float64)")
-                    .to_frame()
-                )
-        """
-        from fleet.sdtm.utils import parse_expression
-
-        expr = expression if isinstance(expression, pl.Expr) else parse_expression(str(expression))
-        return self._chain(expr.alias(target))
 
     def assigned(self, target: str, *, value: Any) -> Self:
         """Set *target* to a constant *value* for every record.
@@ -1418,59 +1417,9 @@ class MultiRowMixin:
     """
     Mixin for ADaM datasets with multiple rows per subject (OCCDS, PK, etc.).
 
-    Provides ``seq()`` — a sequential 1-based record-number verb.  Any
-    namespace class that needs this verb should inherit from this mixin in
-    *addition* to ``SharedADaMVerbsMixin``::
-
-        class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin): ...
-        class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin): ...
+    Previously provided ``seq()`` which has been moved to
+    ``SharedVerbsMixin``.  Retained as a marker interface for multi-row
+    namespace classes (OCCDS, PK, etc.).
     """
 
-    def seq(
-        self,
-        target: str = "ASEQ",
-        *,
-        order_by: list[str] | None = None,
-        groups: list[str] | None = None,
-        check_uniqueness: bool = False,
-    ) -> Self:
-        """Derive a 1-based observation sequence number within each group.
-
-        Mirrors admiral's ``derive_var_obs_number()``.  When *order_by* is
-        provided the data is sorted within each *groups* partition before
-        numbering, ensuring deterministic and reproducible sequence values.
-
-        Args:
-            target: Name of the output sequence column (default ``"ASEQ"``).
-            order_by: Columns that define the sort order within each group.
-                When ``None``, the current row order is preserved.
-            groups: Partition columns (default ``["USUBJID"]``).
-            check_uniqueness: If ``True``, emit a warning when the
-                combination of *groups* + *order_by* does not uniquely
-                identify each row (analogous to admiral's
-                ``check_type = "warning"``).
-
-        Returns:
-            Self: A fresh namespace with *target* appended; call
-                ``.to_frame()`` to materialise.
-
-        Examples:
-            Add a per-subject sequence number ordered by analysis date::
-
-                adae = (
-                    ae_df.adam.occds
-                    .seq("ASEQ", order_by=["ASTDT"], groups=["USUBJID"])
-                    .to_frame()
-                )
-        """
-        from fleet.core.seq import derive_seq
-
-        grps = groups or ["USUBJID"]
-        df = derive_seq(
-            self.to_frame(),
-            target,
-            order_by=order_by,
-            groups=grps,
-            check_uniqueness=check_uniqueness,
-        )
-        return self._materialise_then(df)
+    pass

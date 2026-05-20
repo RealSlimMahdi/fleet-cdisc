@@ -104,7 +104,17 @@ class TestAssignDtc:
         assert result["RFSTDTC"][0].startswith("2014-01-02")
 
     def test_partial_date_preserved(self):
-        df = pl.DataFrame({"dtc": ["2014-01", "2014", "2014-01-02", None]})
+        df = pl.from_repr("""┌────────────┐
+│ dtc        │
+│ ---        │
+│ str        │
+╞════════════╡
+│ 2014-01    │
+│ 2014       │
+│ 2014-01-02 │
+│ null       │
+└────────────┘
+""")
         result = df.sdtm.date("OUT", source="dtc", output="dtc").to_frame()
         assert result["OUT"][0] == "2014-01"  # partial preserved
         assert result["OUT"][1] == "2014"  # partial preserved
@@ -175,7 +185,17 @@ class TestIfThenElse:
 
 class TestAEAerel:
     def test_default_mapping(self):
-        df = pl.DataFrame({"ae_relationship": ["yes", "no", "possibly related", None]})
+        df = pl.from_repr("""┌──────────────────┐
+│ ae_relationship  │
+│ ---              │
+│ str              │
+╞══════════════════╡
+│ yes              │
+│ no               │
+│ possibly related │
+│ null             │
+└──────────────────┘
+""")
         result = df.sdtm.ae_aerel(target="AEREL", source="ae_relationship").to_frame()
         vals = result["AEREL"].to_list()
         assert vals[0] == "RELATED"
@@ -184,7 +204,15 @@ class TestAEAerel:
         assert vals[3] is None
 
     def test_custom_mapping(self):
-        df = pl.DataFrame({"rel": ["yes", "no"]})
+        df = pl.from_repr("""┌─────┐
+│ rel │
+│ --- │
+│ str │
+╞═════╡
+│ yes │
+│ no  │
+└─────┘
+""")
         result = df.sdtm.ae_aerel(
             target="AEREL",
             source="rel",
@@ -206,16 +234,32 @@ class TestDatasetLevel:
         assert result["STUDYID"].to_list() == ["STUDY01", "STUDY01", "STUDY01"]
 
 
-class TestRemoveDup:
-    def test_removes_duplicates(self):
-        df = pl.DataFrame({"id": [1, 1, 2], "val": ["a", "a", "b"]})
-        result = df.sdtm.remove_dup(subset=["id"]).to_frame()
+class TestNodupSDTM:
+    def test_removes_duplicates(self, capsys):
+        df = pl.from_repr("""┌─────┬─────┐
+│ id  ┆ val │
+│ --- ┆ --- │
+│ i64 ┆ str │
+╞═════╪═════╡
+│ 1   ┆ a   │
+│ 1   ┆ a   │
+│ 2   ┆ b   │
+└─────┴─────┘
+""")
+        result = df.sdtm.nodup(subset=["id"], sort_by=["id"], keep="first").to_frame()
         assert result.height == 2
 
 
 class TestMultipleResponses:
     def test_expands_rows(self):
-        df = pl.DataFrame({"USUBJID": ["S01"], "ae_terms": ["fever|rash"]})
+        df = pl.from_repr("""┌─────────┬────────────┐
+│ USUBJID ┆ ae_terms   │
+│ ---     ┆ ---        │
+│ str     ┆ str        │
+╞═════════╪════════════╡
+│ S01     ┆ fever|rash │
+└─────────┴────────────┘
+""")
         result = df.sdtm.multiple_responses("AETERM", source="ae_terms", delimiter="|").to_frame()
         assert result.height == 2
         assert set(result["AETERM"].to_list()) == {"fever", "rash"}
@@ -242,3 +286,166 @@ class TestToFrame:
     def test_empty_pipeline_returns_original(self, simple_raw):
         result = simple_raw.sdtm.to_frame()
         assert result.shape == simple_raw.shape
+
+
+# ------------------------------------------------------------------ #
+# Phase 3 hardening: partial dates, nulls, order invariance            #
+# ------------------------------------------------------------------ #
+
+from tests.assertions import (  # noqa: E402
+    assert_column_values_in,
+    assert_deterministic,
+)
+from tests.helpers import shuffle_rows  # noqa: E402
+
+
+class TestPartialDatePreservation:
+    """SDTM date verb must preserve partial ISO 8601 values."""
+
+    def test_year_only_preserved(self):
+        df = pl.from_repr("""┌──────┐
+│ dtc  │
+│ ---  │
+│ str  │
+╞══════╡
+│ 2014 │
+└──────┘
+""")
+        result = df.sdtm.date("OUT", source="dtc", output="dtc").to_frame()
+        assert result["OUT"][0] == "2014"
+
+    def test_year_month_preserved(self):
+        df = pl.from_repr("""┌─────────┐
+│ dtc     │
+│ ---     │
+│ str     │
+╞═════════╡
+│ 2014-03 │
+└─────────┘
+""")
+        result = df.sdtm.date("OUT", source="dtc", output="dtc").to_frame()
+        assert result["OUT"][0] == "2014-03"
+
+    def test_null_date_preserved(self):
+        df = pl.from_repr("""┌──────┐
+│ dtc  │
+│ ---  │
+│ str  │
+╞══════╡
+│ null │
+└──────┘
+""")
+        result = df.sdtm.date("OUT", source="dtc", output="dtc").to_frame()
+        assert result["OUT"][0] is None
+
+    def test_mixed_partial_and_complete(self):
+        df = pl.from_repr("""┌────────────┐
+│ dtc        │
+│ ---        │
+│ str        │
+╞════════════╡
+│ 2014       │
+│ 2014-01    │
+│ 2014-01-15 │
+│ null       │
+└────────────┘
+""")
+        result = df.sdtm.date("OUT", source="dtc", output="dtc").to_frame()
+        assert result["OUT"][0] == "2014"
+        assert result["OUT"][1] == "2014-01"
+        assert result["OUT"][2] == "2014-01-15"
+        assert result["OUT"][3] is None
+
+
+class TestAssignNoCTWithNulls:
+    """assign_no_ct behavior when source has nulls."""
+
+    def test_null_source_propagates(self):
+        df = pl.from_repr("""┌──────┐
+│ src  │
+│ ---  │
+│ str  │
+╞══════╡
+│ A    │
+│ null │
+│ C    │
+└──────┘
+""")
+        result = df.sdtm.assign_no_ct("TARGET", source="src").to_frame()
+        assert result["TARGET"][1] is None
+
+    def test_all_null_source(self):
+        df = pl.from_repr("""┌──────┐
+│ src  │
+│ ---  │
+│ str  │
+╞══════╡
+│ null │
+│ null │
+│ null │
+└──────┘
+""")
+        result = df.sdtm.assign_no_ct("TARGET", source="src").to_frame()
+        assert result["TARGET"].null_count() == 3
+
+
+class TestSDTMOrderInvariance:
+    """Pipeline results should not depend on input row order."""
+
+    def test_assign_no_ct_order_invariant(self):
+        df = pl.from_repr("""\
+┌────────────────┬─────────┬─────┬─────┐
+│ patient_number ┆ site_id ┆ age ┆ sex │
+│ ---            ┆ ---     ┆ --- ┆ --- │
+│ str            ┆ str     ┆ i64 ┆ str │
+╞════════════════╪═════════╪═════╪═════╡
+│ 01-701-1015    ┆ 701     ┆ 63  ┆ F   │
+│ 01-701-1016    ┆ 701     ┆ 64  ┆ M   │
+│ 01-701-1017    ┆ 701     ┆ 71  ┆ F   │
+│ 01-701-1018    ┆ 701     ┆ 55  ┆ M   │
+│ 01-701-1019    ┆ 701     ┆ 48  ┆ F   │
+└────────────────┴─────────┴─────┴─────┘
+""")
+        result1 = df.sdtm.assign_no_ct("USUBJID", source="patient_number").to_frame()
+        result2 = shuffle_rows(df).sdtm.assign_no_ct("USUBJID", source="patient_number").to_frame()
+        assert_deterministic(result1, result2, sort_cols=["USUBJID"])
+
+    def test_hardcode_no_ct_order_invariant(self):
+        df = pl.from_repr("""\
+┌────────────────┬─────────┬─────┬─────┐
+│ patient_number ┆ site_id ┆ age ┆ sex │
+│ ---            ┆ ---     ┆ --- ┆ --- │
+│ str            ┆ str     ┆ i64 ┆ str │
+╞════════════════╪═════════╪═════╪═════╡
+│ 01-701-1015    ┆ 701     ┆ 63  ┆ F   │
+│ 01-701-1016    ┆ 701     ┆ 64  ┆ M   │
+│ 01-701-1017    ┆ 701     ┆ 71  ┆ F   │
+│ 01-701-1018    ┆ 701     ┆ 55  ┆ M   │
+│ 01-701-1019    ┆ 701     ┆ 48  ┆ F   │
+└────────────────┴─────────┴─────┴─────┘
+""")
+        result1 = df.sdtm.hardcode_no_ct("DOMAIN", value="DM").to_frame()
+        result2 = shuffle_rows(df).sdtm.hardcode_no_ct("DOMAIN", value="DM").to_frame()
+        # All rows get same value so just check count
+        assert result1.height == result2.height
+        assert_column_values_in(result1, "DOMAIN", {"DM"})
+
+
+class TestNodupWithTies:
+    """nodup behavior when tie-breaking is ambiguous."""
+
+    def test_tied_keys_produce_deterministic_output(self, capsys):
+        df = pl.from_repr("""┌─────────┬──────────┬──────────┐
+│ USUBJID ┆ VISITNUM ┆ VSSTRESN │
+│ ---     ┆ ---      ┆ ---      │
+│ str     ┆ i64      ┆ f64      │
+╞═════════╪══════════╪══════════╡
+│ S01     ┆ 1        ┆ 120.0    │
+│ S01     ┆ 1        ┆ 121.0    │
+│ S01     ┆ 1        ┆ 119.0    │
+└─────────┴──────────┴──────────┘
+""")
+        result = df.sdtm.nodup(
+            subset=["USUBJID", "VISITNUM"], sort_by=["VSSTRESN"], keep="first"
+        ).to_frame()
+        assert result.height == 1  # deduplication happened

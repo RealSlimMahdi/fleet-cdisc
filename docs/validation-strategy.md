@@ -50,7 +50,7 @@ uv run fleet init ct
 This produces codelist classes — for example `SEX` (C66731), `RACE` (C74457) — that are used in pipeline code by class name, never raw string ID:
 
 ```python
-from specs.cdiscpilot01.sdtm.codelists import SEX, RACE
+from examples.cdiscpilot01.sdtm.codelists import SEX, RACE
 
 dm = (
     raw_df.sdtm

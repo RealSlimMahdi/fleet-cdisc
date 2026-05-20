@@ -349,3 +349,71 @@ class TestChaining:
         # Original columns must still be present
         assert "USUBJID" in result.columns
         assert "OVRLRESP" in result.columns
+
+
+# ------------------------------------------------------------------ #
+# Phase 5 hardening: progression ambiguity and null responses          #
+# ------------------------------------------------------------------ #
+
+
+class TestOncoProgressionAmbiguity:
+    """Edge cases for progression timing and response ordering."""
+
+    def test_all_ne_responses_bor_is_ne(self):
+        """Subject with only NE responses should get BOR = NE."""
+        df = pl.DataFrame({
+            "USUBJID": ["S01", "S01", "S01"],
+            "OVRLRESP": ["NE", "NE", "NE"],
+            "ADT": ["2020-01-01", "2020-02-01", "2020-03-01"],
+        })
+        result = df.adam.onco.best_overall_response(
+            "BOR", source="OVRLRESP", groups=["USUBJID"]
+        ).to_frame()
+        assert all(v == "NE" for v in result["BOR"].to_list())
+
+    def test_null_response_excluded_from_bor(self):
+        """Null responses should not count toward BOR."""
+        df = pl.DataFrame({
+            "USUBJID": ["S01", "S01", "S01"],
+            "OVRLRESP": ["CR", None, "SD"],
+            "ADT": ["2020-01-01", "2020-02-01", "2020-03-01"],
+        })
+        result = df.adam.onco.best_overall_response(
+            "BOR", source="OVRLRESP", groups=["USUBJID"]
+        ).to_frame()
+        # BOR should be CR (best non-null response)
+        bor_vals = result["BOR"].drop_nulls().unique().to_list()
+        assert "CR" in bor_vals
+
+    def test_pd_after_cr_still_yields_cr_bor(self):
+        """CR followed by PD — BOR should still be CR."""
+        df = pl.DataFrame({
+            "USUBJID": ["S01", "S01"],
+            "OVRLRESP": ["CR", "PD"],
+            "ADT": ["2020-01-01", "2020-02-01"],
+        })
+        result = df.adam.onco.best_overall_response(
+            "BOR", source="OVRLRESP", groups=["USUBJID"]
+        ).to_frame()
+        bor_vals = result["BOR"].unique().to_list()
+        assert "CR" in bor_vals
+
+    def test_aval_resp_unknown_maps_to_none(self):
+        """UNKNOWN response should map to None in AVAL."""
+        df = pl.DataFrame({
+            "USUBJID": ["S01"],
+            "RSSTRESC": ["UNKNOWN"],
+        })
+        result = df.adam.onco.aval_resp("AVAL", source="RSSTRESC").to_frame()
+        assert result["AVAL"][0] is None
+
+    def test_tumor_response_flag_with_nulls(self):
+        """Null responses should not be flagged as responders."""
+        df = pl.DataFrame({
+            "USUBJID": ["S01", "S02", "S03"],
+            "RSSTRESC": ["CR", None, "PD"],
+        })
+        result = df.adam.onco.tumor_response_flag(
+            "RSPFL", source="RSSTRESC"
+        ).to_frame()
+        assert result["RSPFL"][1] is None or result["RSPFL"][1] != "Y"

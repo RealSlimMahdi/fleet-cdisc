@@ -11,7 +11,7 @@ Usage::
     from fleet import DefineSpecGenerator
     from pathlib import Path
 
-    gen = DefineSpecGenerator("specs/cdiscpilot01/sdtm/define.yaml")
+    gen = DefineSpecGenerator("examples/cdiscpilot01/sdtm/define.yaml")
     gen.generate("outputs/define_sdtm.xml")
 """
 
@@ -488,7 +488,19 @@ class DefineSpecGenerator:
         expression = derivation.get("expression") or ""
 
         if callable_path:
-            summary, dotted = resolve_callable_docstring(str(callable_path))
+            # Prefer Derivation.dotted_path when the object is registered.
+            try:
+                from fleet.adam.transforms import get_transform
+
+                obj = get_transform(str(callable_path))
+                if hasattr(obj, "dotted_path"):
+                    # Derivation object — use its dotted_path and fn docstring.
+                    summary = (obj.fn.__doc__ or "").splitlines()[0].strip()
+                    dotted = obj.dotted_path
+                else:
+                    summary, dotted = resolve_callable_docstring(str(callable_path))
+            except (KeyError, Exception):
+                summary, dotted = resolve_callable_docstring(str(callable_path))
             if not dotted:
                 return (None, "")
             method_name = dotted.rsplit(".", 1)[-1]

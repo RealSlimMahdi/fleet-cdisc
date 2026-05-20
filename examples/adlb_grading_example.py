@@ -28,38 +28,24 @@ def main() -> None:
     #   Anemia:     G3 <80 g/L · G2 <100 g/L · G1 <LLN
     #   ALT incr:   G4 >20×ULN · G3 >5×ULN · G2 >3×ULN · G1 >ULN
     #   Creat incr: G4 >6×ULN · G3 >3×ULN & >3×BASE · G2 >1.5×ULN & >1.5×BASE · G1 >ULN
-    adlb = pl.DataFrame(
-        {
-            "USUBJID": ["01-001"] * 5 + ["01-002"] * 5,
-            "PARAMCD": ["HGB", "HGB", "ALT", "ALT", "CREAT"] * 2,
-            "ATOXDSCL": ["Anemia", "Anemia", None, None, None] * 2,
-            "ATOXDSCH": [
-                None,
-                None,
-                "Alanine aminotransferase increased",
-                "Alanine aminotransferase increased",
-                "Creatinine increased",
-            ]
-            * 2,
-            "AVAL": [
-                75.0,  # 01-001 HGB: <80 → Anemia G3
-                130.0,  # 01-001 HGB: <LLN(140) → Anemia G1
-                250.0,  # 01-001 ALT: >5×ULN(200) → ALT G3
-                35.0,  # 01-001 ALT: ≤ULN(40) → G0
-                300.0,  # 01-001 CREAT: >3×BASE(240) → G3
-                90.0,  # 01-002 HGB: <100 → Anemia G2
-                145.0,  # 01-002 HGB: ≥LLN(140) → G0
-                900.0,  # 01-002 ALT: >20×ULN(800) → ALT G4
-                42.0,  # 01-002 ALT: >ULN(40) → ALT G1
-                50.0,  # 01-002 CREAT: ≤ULN(100) → G0
-            ],
-            "ANRLO": [140.0, 140.0, None, None, None] * 2,
-            "ANRHI": [None, None, 40.0, 40.0, 100.0] * 2,
-            "BASE": [None, None, 35.0, 35.0, 80.0] * 2,
-            "BNRIND": [None, None, "NORMAL", "NORMAL", "NORMAL"] * 2,
-            "AVALU": ["g/L", "g/L", None, None, None] * 2,
-        }
-    )
+    adlb = pl.from_repr("""\
+┌─────────┬─────────┬──────────┬────────────────────────────────────┬───────┬───────┬───────┬──────┬────────┬───────┐
+│ USUBJID ┆ PARAMCD ┆ ATOXDSCL ┆ ATOXDSCH                           ┆ AVAL  ┆ ANRLO ┆ ANRHI ┆ BASE ┆ BNRIND ┆ AVALU │
+│ ---     ┆ ---     ┆ ---      ┆ ---                                ┆ ---   ┆ ---   ┆ ---   ┆ ---  ┆ ---    ┆ ---   │
+│ str     ┆ str     ┆ str      ┆ str                                ┆ f64   ┆ f64   ┆ f64   ┆ f64  ┆ str    ┆ str   │
+╞═════════╪═════════╪══════════╪════════════════════════════════════╪═══════╪═══════╪═══════╪══════╪════════╪═══════╡
+│ 01-001  ┆ HGB     ┆ Anemia   ┆ null                               ┆ 75.0  ┆ 140.0 ┆ null  ┆ null ┆ null   ┆ g/L   │
+│ 01-001  ┆ HGB     ┆ Anemia   ┆ null                               ┆ 130.0 ┆ 140.0 ┆ null  ┆ null ┆ null   ┆ g/L   │
+│ 01-001  ┆ ALT     ┆ null     ┆ Alanine aminotransferase increased ┆ 250.0 ┆ null  ┆ 40.0  ┆ 35.0 ┆ NORMAL ┆ null  │
+│ 01-001  ┆ ALT     ┆ null     ┆ Alanine aminotransferase increased ┆ 35.0  ┆ null  ┆ 40.0  ┆ 35.0 ┆ NORMAL ┆ null  │
+│ 01-001  ┆ CREAT   ┆ null     ┆ Creatinine increased               ┆ 300.0 ┆ null  ┆ 100.0 ┆ 80.0 ┆ NORMAL ┆ null  │
+│ 01-002  ┆ HGB     ┆ Anemia   ┆ null                               ┆ 90.0  ┆ 140.0 ┆ null  ┆ null ┆ null   ┆ g/L   │
+│ 01-002  ┆ HGB     ┆ Anemia   ┆ null                               ┆ 145.0 ┆ 140.0 ┆ null  ┆ null ┆ null   ┆ g/L   │
+│ 01-002  ┆ ALT     ┆ null     ┆ Alanine aminotransferase increased ┆ 900.0 ┆ null  ┆ 40.0  ┆ 35.0 ┆ NORMAL ┆ null  │
+│ 01-002  ┆ ALT     ┆ null     ┆ Alanine aminotransferase increased ┆ 42.0  ┆ null  ┆ 40.0  ┆ 35.0 ┆ NORMAL ┆ null  │
+│ 01-002  ┆ CREAT   ┆ null     ┆ Creatinine increased               ┆ 50.0  ┆ null  ┆ 100.0 ┆ 80.0 ┆ NORMAL ┆ null  │
+└─────────┴─────────┴──────────┴────────────────────────────────────┴───────┴───────┴───────┴──────┴────────┴───────┘
+""")
 
     print("── Input ADLB data ──")
     print(adlb.select("USUBJID", "PARAMCD", "AVAL", "ANRLO", "ANRHI"))
@@ -99,22 +85,18 @@ def main() -> None:
     # DAIDS uses different term names and thresholds.
     #   ALT, High:        G4 ≥10×ULN · G3 ≥5×ULN · G2 ≥2.5×ULN · G1 ≥1.25×ULN
     #   Creatinine, High: G4 ≥3.5×ULN & ≥2×BASE · G3 >1.8×ULN & ≥1.5×BASE · …
-    daids_df = pl.DataFrame(
-        {
-            "USUBJID": ["01-001", "01-001", "01-002", "01-002"],
-            "PARAMCD": ["ALT", "CREAT", "ALT", "CREAT"],
-            "ATOXDSCH": [
-                "ALT, High",
-                "Creatinine, High",
-                "ALT, High",
-                "Creatinine, High",
-            ],
-            "AVAL": [250.0, 200.0, 50.0, 95.0],
-            "ANRHI": [40.0, 100.0, 40.0, 100.0],
-            "BASE": [35.0, 80.0, 35.0, 80.0],
-            "BNRIND": ["NORMAL", "NORMAL", "NORMAL", "NORMAL"],
-        }
-    )
+    daids_df = pl.from_repr("""\
+┌─────────┬─────────┬──────────────────┬───────┬───────┬──────┬────────┐
+│ USUBJID ┆ PARAMCD ┆ ATOXDSCH         ┆ AVAL  ┆ ANRHI ┆ BASE ┆ BNRIND │
+│ ---     ┆ ---     ┆ ---              ┆ ---   ┆ ---   ┆ ---  ┆ ---    │
+│ str     ┆ str     ┆ str              ┆ f64   ┆ f64   ┆ f64  ┆ str    │
+╞═════════╪═════════╪══════════════════╪═══════╪═══════╪══════╪════════╡
+│ 01-001  ┆ ALT     ┆ ALT, High        ┆ 250.0 ┆ 40.0  ┆ 35.0 ┆ NORMAL │
+│ 01-001  ┆ CREAT   ┆ Creatinine, High ┆ 200.0 ┆ 100.0 ┆ 80.0 ┆ NORMAL │
+│ 01-002  ┆ ALT     ┆ ALT, High        ┆ 50.0  ┆ 40.0  ┆ 35.0 ┆ NORMAL │
+│ 01-002  ┆ CREAT   ┆ Creatinine, High ┆ 95.0  ┆ 100.0 ┆ 80.0 ┆ NORMAL │
+└─────────┴─────────┴──────────────────┴───────┴───────┴──────┴────────┘
+""")
 
     daids_result = daids_df.adam.atoxgr(  # type: ignore[attr-defined]
         "ATOXGRH",

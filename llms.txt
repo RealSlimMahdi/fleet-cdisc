@@ -14,6 +14,8 @@ Fleet adds chainable verb pipelines directly onto every Polars DataFrame so you 
 
 4. **Google-style docstrings** — All public verbs use Google-style docstrings with `Args:`, `Returns:`, and `Examples:` sections. Every example must be a complete pipeline snippet ending with `.to_frame()`. Never use NumPy/Sphinx `Parameters ----------` style or bare `Example::` headers.
 
+5. **Prefer `pl.from_repr()` for small reproducible snippets** — When generating small inline DataFrames for tests, examples, or user-facing code snippets, prefer `pl.from_repr()` with a Unicode box-drawing table over `pl.DataFrame({...})`. This makes column names, types, and data immediately visible without execution. Use `pl.DataFrame()` (empty) only for TDD scaffolding and `pl.DataFrame(variable)` when data is built programmatically.
+
 ## Install
 
 ```
@@ -39,6 +41,68 @@ dm = (
 ```
 
 Nothing runs until `.to_frame()`. All verbs accumulate into a single `df.with_columns(...)` pass.
+
+## Data Sample Construction
+
+When creating inline sample DataFrames for tests, examples, or reproducible snippets, prefer `pl.from_repr()` over `pl.DataFrame({...})`. Column names, types, and data are immediately visible without execution.
+
+### Pattern
+
+```python
+import polars as pl
+
+raw_dm = pl.from_repr("""\
+┌────────────┬─────┬─────┐
+│ subject_id ┆ sex ┆ age │
+│ ---        ┆ --- ┆ --- │
+│ str        ┆ str ┆ i64 │
+╞════════════╪═════╪═════╡
+│ S001       ┆ M   ┆ 35  │
+│ S002       ┆ F   ┆ 42  │
+└────────────┴─────┴─────┘
+""")
+```
+
+### Generating the repr string
+
+Fleet ships a `to_repr()` helper that renders any DataFrame with full-width, no-truncation settings so the output is directly pasteable:
+
+```python
+from fleet import to_repr
+import polars as pl
+
+# From any existing DataFrame (CSV load, query result, dict, etc.)
+df = pl.DataFrame({"USUBJID": ["S001", "S002"], "AGE": [35, 42]})
+
+# Print the from_repr-ready string
+print(to_repr(df))
+# ┌─────────┬─────┐
+# │ USUBJID ┆ AGE │
+# │ ---     ┆ --- │
+# │ str     ┆ i64 │
+# ╞═════════╪═════╡
+# │ S001    ┆ 35  │
+# │ S002    ┆ 42  │
+# └─────────┴─────┘
+
+# Paste that output into your test/example:
+df = pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ AGE │
+│ ---     ┆ --- │
+│ str     ┆ i64 │
+╞═════════╪═════╡
+│ S001    ┆ 35  │
+│ S002    ┆ 42  │
+└─────────┴─────┘
+""")
+```
+
+### When `pl.DataFrame()` is still acceptable
+
+- Empty DataFrames for TDD scaffolding: `pl.DataFrame().sdtm`
+- Programmatic data built with loops or random generators (e.g. benchmark scripts)
+- API type annotations referencing `pl.DataFrame` as a return/parameter type
 
 ## Golden Master Examples
 
@@ -97,16 +161,40 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import polars as pl
 
 import fleet  # noqa: F401 — registers .sdtm / .adam namespace extensions
-from specs.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
+from examples.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
 
-RAW = Path("datasets/cdiscpilot01/raw")
 OUT = Path("outputs/cdiscpilot01")
 
 # ════════════════════════════════════════════════════════════════════════════
-# 1. Read in Data
+# 1. Raw Data (inline — no external CSV dependencies)
 # ════════════════════════════════════════════════════════════════════════════
-dm_raw = pl.read_csv(RAW / "dm_raw.csv")
-ae_raw = pl.read_csv(RAW / "ae_raw.csv")
+dm_raw = pl.from_repr("""\
+┌────────────────┬─────────┬─────┬─────┬───────────────────────────┬────────────────────────┬──────────┬──────────────────────┬─────────────────┬────────────────┬───────────────────────┐
+│ patient_number ┆ site_id ┆ age ┆ sex ┆ race                      ┆ ethnic                 ┆ arm_code ┆ arm_description      ┆ first_dose_date ┆ last_dose_date ┆ informed_consent_date │
+│ ---            ┆ ---     ┆ --- ┆ --- ┆ ---                       ┆ ---                    ┆ ---      ┆ ---                  ┆ ---             ┆ ---            ┆ ---                   │
+│ str            ┆ i64     ┆ i64 ┆ str ┆ str                       ┆ str                    ┆ str      ┆ str                  ┆ str             ┆ str            ┆ str                   │
+╞════════════════╪═════════╪═════╪═════╪═══════════════════════════╪════════════════════════╪══════════╪══════════════════════╪═════════════════╪════════════════╪═══════════════════════╡
+│ 01-701-1015    ┆ 701     ┆ 63  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-02      ┆ 2014-07-02     ┆ 2014-01-01            │
+│ 01-701-1023    ┆ 701     ┆ 64  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-03      ┆ 2014-07-04     ┆ 2014-01-02            │
+│ 01-701-1028    ┆ 701     ┆ 71  ┆ M   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Hi   ┆ Xanomeline High Dose ┆ 2014-01-04      ┆ 2014-07-05     ┆ 2014-01-03            │
+│ 01-701-1034    ┆ 701     ┆ 74  ┆ M   ┆ BLACK OR AFRICAN AMERICAN ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-05      ┆ 2014-07-06     ┆ 2014-01-04            │
+│ 01-701-1047    ┆ 701     ┆ 56  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-06      ┆ 2014-07-07     ┆ 2014-01-05            │
+└────────────────┴─────────┴─────┴─────┴───────────────────────────┴────────────────────────┴──────────┴──────────────────────┴─────────────────┴────────────────┴───────────────────────┘
+""")
+
+ae_raw = pl.from_repr("""\
+┌────────────────┬───────────────────────────┬───────────────┬─────────────┬─────────────┬────────────┬────────────────────────────┬──────────────────┬──────────────────┐
+│ patient_number ┆ ae_term                   ┆ ae_start_date ┆ ae_end_date ┆ ae_severity ┆ ae_serious ┆ ae_outcome                 ┆ ae_action_taken  ┆ ae_relationship  │
+│ ---            ┆ ---                       ┆ ---           ┆ ---         ┆ ---         ┆ ---        ┆ ---                        ┆ ---              ┆ ---              │
+│ str            ┆ str                       ┆ str           ┆ str         ┆ str         ┆ str        ┆ str                        ┆ str              ┆ str              │
+╞════════════════╪═══════════════════════════╪═══════════════╪═════════════╪═════════════╪════════════╪════════════════════════════╪══════════════════╪══════════════════╡
+│ 01-701-1015    ┆ HEADACHE                  ┆ 2014-01-10    ┆ 2014-01-12  ┆ MILD        ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ POSSIBLY RELATED │
+│ 01-701-1015    ┆ NAUSEA                    ┆ 2014-02-05    ┆ 2014-02-06  ┆ MODERATE    ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ NOT RELATED      │
+│ 01-701-1023    ┆ DIZZINESS                 ┆ 2014-01-15    ┆ 2014-01-16  ┆ MILD        ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ POSSIBLY RELATED │
+│ 01-701-1028    ┆ FATIGUE                   ┆ 2014-02-20    ┆ null        ┆ MODERATE    ┆ N          ┆ NOT RECOVERED/NOT RESOLVED ┆ DOSE NOT CHANGED ┆ PROBABLY RELATED │
+│ 01-701-1034    ┆ APPLICATION SITE ERYTHEMA ┆ 2014-01-20    ┆ 2014-01-25  ┆ SEVERE      ┆ Y          ┆ RECOVERED/RESOLVED         ┆ DRUG WITHDRAWN   ┆ RELATED          │
+└────────────────┴───────────────────────────┴───────────────┴─────────────┴─────────────┴────────────┴────────────────────────────┴──────────────────┴──────────────────┘
+""")
 
 print("── 1. Raw data loaded ───────────────────────────────────────────────────")
 print(f"   dm_raw : {dm_raw.shape[0]:>3} rows   columns → {dm_raw.columns}")
@@ -287,6 +375,9 @@ ae = (
     .assign_no_ct("AEREL", source="ae_relationship")
     # AESEQ: running count within each subject
     .derivation("AESEQ", expression='pl.col("ae_term").cum_count().over("patient_number")')
+    # Pin DM for cross-domain study day derivation
+    .pin("DM", dm)
+    .study_day("AESTDY", date_col="AESTDTC")
     .to_frame()
     .select(
         [
@@ -297,6 +388,7 @@ ae = (
             "AETERM",
             "AESTDTC",
             "AEENDTC",
+            "AESTDY",
             "AESEV",
             "AESER",
             "AEOUT",
@@ -305,7 +397,7 @@ ae = (
         ]
     )
 )
-print(f"── 2d. SDTM AE : {ae.shape[0]} records  × {ae.shape[1]} variables")
+print(f"── 2d. SDTM AE : {ae.shape[0]} records  × {ae.shape[1]} variables (with AESTDY via .pin())")
 
 # ════════════════════════════════════════════════════════════════════════════
 # 3–5. Build ADSL base + Treatment Variables + Treatment Dates/Duration
@@ -629,7 +721,19 @@ print(
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 13. ADaM ADVS (inline) ═══════════════════════════════════════════════")
 
-vs_raw = pl.read_csv(RAW / "vs_raw.csv")
+vs_raw = pl.from_repr("""\
+┌────────────────┬─────────────┬──────────┬────────┬─────────┬──────────┬────────────┬──────┐
+│ patient_number ┆ site_number ┆ vstestcd ┆ vstest ┆ vsorres ┆ vsorresu ┆ vsdtc      ┆ vsdy │
+│ ---            ┆ ---         ┆ ---      ┆ ---    ┆ ---     ┆ ---      ┆ ---        ┆ ---  │
+│ str            ┆ i64         ┆ str      ┆ str    ┆ f64     ┆ str      ┆ str        ┆ i64  │
+╞════════════════╪═════════════╪══════════╪════════╪═════════╪══════════╪════════════╪══════╡
+│ 01-701-1015    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 155.5   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1023    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 168.1   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1028    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 178.0   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1034    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 170.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1047    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 166.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+└────────────────┴─────────────┴──────────┴────────┴─────────┴──────────┴────────────┴──────┘
+""")
 
 _trtsdt_map = adsl_final.select(["USUBJID", "TRTSDT"])
 
@@ -857,7 +961,7 @@ print(f"\n   All outputs in {OUT}/")
 """
 End-to-end CDISCPILOT01 pipeline — spec-driven style.
 
-Every ADaM column derivation is defined in specs/cdiscpilot01/adam/define.yaml
+Every ADaM column derivation is defined in examples/cdiscpilot01/adam/define.yaml
 and executed via ``df.adam.from_spec()``.  OCCDS-specific verbs that the spec
 cannot yet express (treatment_emergent, seq) are applied inline
 immediately after the spec phase.
@@ -885,26 +989,66 @@ Run from the repo root:
     uv run python examples/cdiscpilot01_spec_driven.py
 """
 
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import polars as pl
 
 import fleet  # noqa: F401 — registers .sdtm / .adam namespace extensions
 from fleet import DatasetChecker, DefineSpecGenerator
-from specs.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
+from examples.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
 
-RAW = Path("datasets/cdiscpilot01/raw")
-SPECS = Path("specs/cdiscpilot01")
+SPECS = Path("examples/cdiscpilot01")
 OUT = Path("outputs/cdiscpilot01")
 OUT.mkdir(parents=True, exist_ok=True)
 
 SDTM_SPEC = SPECS / "sdtm/define.yaml"
 ADAM_SPEC = SPECS / "adam/define.yaml"
 
-# ── 1. Load raw data ─────────────────────────────────────────────────────────
-dm_raw = pl.read_csv(RAW / "dm_raw.csv")
-ae_raw = pl.read_csv(RAW / "ae_raw.csv")
-vs_raw = pl.read_csv(RAW / "vs_raw.csv")
+# ── 1. Raw data (inline) ─────────────────────────────────────────────────────
+dm_raw = pl.from_repr("""\
+┌────────────────┬─────────┬─────┬─────┬───────────────────────────┬────────────────────────┬──────────┬──────────────────────┬─────────────────┬────────────────┬───────────────────────┐
+│ patient_number ┆ site_id ┆ age ┆ sex ┆ race                      ┆ ethnic                 ┆ arm_code ┆ arm_description      ┆ first_dose_date ┆ last_dose_date ┆ informed_consent_date │
+│ ---            ┆ ---     ┆ --- ┆ --- ┆ ---                       ┆ ---                    ┆ ---      ┆ ---                  ┆ ---             ┆ ---            ┆ ---                   │
+│ str            ┆ i64     ┆ i64 ┆ str ┆ str                       ┆ str                    ┆ str      ┆ str                  ┆ str             ┆ str            ┆ str                   │
+╞════════════════╪═════════╪═════╪═════╪═══════════════════════════╪════════════════════════╪══════════╪══════════════════════╪═════════════════╪════════════════╪═══════════════════════╡
+│ 01-701-1015    ┆ 701     ┆ 63  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-02      ┆ 2014-07-02     ┆ 2014-01-01            │
+│ 01-701-1023    ┆ 701     ┆ 64  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-03      ┆ 2014-07-04     ┆ 2014-01-02            │
+│ 01-701-1028    ┆ 701     ┆ 71  ┆ M   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Hi   ┆ Xanomeline High Dose ┆ 2014-01-04      ┆ 2014-07-05     ┆ 2014-01-03            │
+│ 01-701-1034    ┆ 701     ┆ 74  ┆ M   ┆ BLACK OR AFRICAN AMERICAN ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-05      ┆ 2014-07-06     ┆ 2014-01-04            │
+│ 01-701-1047    ┆ 701     ┆ 56  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-06      ┆ 2014-07-07     ┆ 2014-01-05            │
+└────────────────┴─────────┴─────┴─────┴───────────────────────────┴────────────────────────┴──────────┴──────────────────────┴─────────────────┴────────────────┴───────────────────────┘
+""")
+
+ae_raw = pl.from_repr("""\
+┌────────────────┬───────────────────────────┬───────────────┬─────────────┬─────────────┬────────────┬────────────────────────────┬──────────────────┬──────────────────┐
+│ patient_number ┆ ae_term                   ┆ ae_start_date ┆ ae_end_date ┆ ae_severity ┆ ae_serious ┆ ae_outcome                 ┆ ae_action_taken  ┆ ae_relationship  │
+│ ---            ┆ ---                       ┆ ---           ┆ ---         ┆ ---         ┆ ---        ┆ ---                        ┆ ---              ┆ ---              │
+│ str            ┆ str                       ┆ str           ┆ str         ┆ str         ┆ str        ┆ str                        ┆ str              ┆ str              │
+╞════════════════╪═══════════════════════════╪═══════════════╪═════════════╪═════════════╪════════════╪════════════════════════════╪══════════════════╪══════════════════╡
+│ 01-701-1015    ┆ HEADACHE                  ┆ 2014-01-10    ┆ 2014-01-12  ┆ MILD        ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ POSSIBLY RELATED │
+│ 01-701-1015    ┆ NAUSEA                    ┆ 2014-02-05    ┆ 2014-02-06  ┆ MODERATE    ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ NOT RELATED      │
+│ 01-701-1023    ┆ DIZZINESS                 ┆ 2014-01-15    ┆ 2014-01-16  ┆ MILD        ┆ N          ┆ RECOVERED/RESOLVED         ┆ DOSE NOT CHANGED ┆ POSSIBLY RELATED │
+│ 01-701-1028    ┆ FATIGUE                   ┆ 2014-02-20    ┆ null        ┆ MODERATE    ┆ N          ┆ NOT RECOVERED/NOT RESOLVED ┆ DOSE NOT CHANGED ┆ PROBABLY RELATED │
+│ 01-701-1034    ┆ APPLICATION SITE ERYTHEMA ┆ 2014-01-20    ┆ 2014-01-25  ┆ SEVERE      ┆ Y          ┆ RECOVERED/RESOLVED         ┆ DRUG WITHDRAWN   ┆ RELATED          │
+└────────────────┴───────────────────────────┴───────────────┴─────────────┴─────────────┴────────────┴────────────────────────────┴──────────────────┴──────────────────┘
+""")
+
+vs_raw = pl.from_repr("""\
+┌────────────────┬─────────────┬──────────┬────────┬─────────┬──────────┬────────────┬──────┐
+│ patient_number ┆ site_number ┆ vstestcd ┆ vstest ┆ vsorres ┆ vsorresu ┆ vsdtc      ┆ vsdy │
+│ ---            ┆ ---         ┆ ---      ┆ ---    ┆ ---     ┆ ---      ┆ ---        ┆ ---  │
+│ str            ┆ i64         ┆ str      ┆ str    ┆ f64     ┆ str      ┆ str        ┆ i64  │
+╞════════════════╪═════════════╪══════════╪════════╪═════════╪══════════╪════════════╪══════╡
+│ 01-701-1015    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 155.5   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1023    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 168.1   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1028    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 178.0   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1034    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 170.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1047    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 166.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
+└────────────────┴─────────────┴──────────┴────────┴─────────┴──────────┴────────────┴──────┘
+""")
 
 # ── 2. SDTM DM ───────────────────────────────────────────────────────────────
 dm = (
@@ -1494,34 +1638,20 @@ def main() -> None:
     # ════════════════════════════════════════════════════════════════════
     print("\n── 6. SV (Subject Visits) ──────────────────────────────────")
 
-    raw_visits = pl.DataFrame(
-        {
-            "subject_id": [
-                "01-701-1015",
-                "01-701-1015",
-                "01-701-1015",
-                "01-701-1023",
-                "01-701-1023",
-                "01-701-1023",
-            ],
-            "visit_date": [
-                "2014-01-02",
-                "2014-01-15",
-                "2014-02-13",
-                "2014-01-03",
-                "2014-01-17",
-                "2014-02-14",
-            ],
-            "ref_date": [
-                "2014-01-01",
-                "2014-01-01",
-                "2014-01-01",
-                "2014-01-01",
-                "2014-01-01",
-                "2014-01-01",
-            ],
-        }
-    )
+    raw_visits = pl.from_repr("""\
+┌─────────────┬────────────┬────────────┐
+│ subject_id  ┆ visit_date ┆ ref_date   │
+│ ---         ┆ ---        ┆ ---        │
+│ str         ┆ str        ┆ str        │
+╞═════════════╪════════════╪════════════╡
+│ 01-701-1015 ┆ 2014-01-02 ┆ 2014-01-01 │
+│ 01-701-1015 ┆ 2014-01-15 ┆ 2014-01-01 │
+│ 01-701-1015 ┆ 2014-02-13 ┆ 2014-01-01 │
+│ 01-701-1023 ┆ 2014-01-03 ┆ 2014-01-01 │
+│ 01-701-1023 ┆ 2014-01-17 ┆ 2014-01-01 │
+│ 01-701-1023 ┆ 2014-02-14 ┆ 2014-01-01 │
+└─────────────┴────────────┴────────────┘
+""")
 
     sv = (
         raw_visits.sdtm.hardcode_no_ct("DOMAIN", value="SV")  # type: ignore[attr-defined]
@@ -1555,16 +1685,17 @@ def main() -> None:
     # ════════════════════════════════════════════════════════════════════
     print("\n── 7. SE (Subject Elements) ────────────────────────────────")
 
-    disposition = pl.DataFrame(
-        {
-            "subject_id": ["01-701-1015", "01-701-1015", "01-701-1015"],
-            "ETCD": ["SCRN", "TRT", "FU"],
-            "screening_date": ["2014-01-01", "2014-01-01", "2014-01-01"],
-            "first_dose_date": ["2014-01-15", "2014-01-15", "2014-01-15"],
-            "last_visit_date": ["2014-05-01", "2014-05-01", "2014-05-01"],
-            "ref_date": ["2014-01-15", "2014-01-15", "2014-01-15"],
-        }
-    )
+    disposition = pl.from_repr("""\
+┌─────────────┬──────┬────────────────┬─────────────────┬─────────────────┬────────────┐
+│ subject_id  ┆ ETCD ┆ screening_date ┆ first_dose_date ┆ last_visit_date ┆ ref_date   │
+│ ---         ┆ ---  ┆ ---            ┆ ---             ┆ ---             ┆ ---        │
+│ str         ┆ str  ┆ str            ┆ str             ┆ str             ┆ str        │
+╞═════════════╪══════╪════════════════╪═════════════════╪═════════════════╪════════════╡
+│ 01-701-1015 ┆ SCRN ┆ 2014-01-01     ┆ 2014-01-15      ┆ 2014-05-01      ┆ 2014-01-15 │
+│ 01-701-1015 ┆ TRT  ┆ 2014-01-01     ┆ 2014-01-15      ┆ 2014-05-01      ┆ 2014-01-15 │
+│ 01-701-1015 ┆ FU   ┆ 2014-01-01     ┆ 2014-01-15      ┆ 2014-05-01      ┆ 2014-01-15 │
+└─────────────┴──────┴────────────────┴─────────────────┴─────────────────┴────────────┘
+""")
 
     se = (
         disposition.sdtm.hardcode_no_ct("DOMAIN", value="SE")  # type: ignore[attr-defined]
@@ -1669,13 +1800,13 @@ if __name__ == "__main__":
 - `hardcode_ct(target: str, *, value: Any, ct_codelist: str | type | None = None) -> SDTMNamespace` — Set *target* to a constant *value*, validated against controlled terminology.
 - `assign_ct(target: str, *, source: str, ct_codelist: str | type, ct_mapping: dict[str, str] | None = None, ct_validator: CTValidator | None = None) -> SDTMNamespace` — Copy *source* to *target*, translating values via controlled terminology.
 - `date(target: str, *, source: str | None = None, value: str | None = None, output: str | None = None, time: str | None = None, impute: str = 'first', impute_time: str | None = None, highest: str | None = None, flag: bool | str = True, min_date: str | None = None, max_date: str | None = None, format: str | None = None) -> SDTMNamespace` — Parse, convert, impute, and flag a date or datetime column.
-- `duration(target: str, *, start: str | pl.Expr, end: str | pl.Expr, unit: str = 'days', add_one: bool | None = None, out: str = 'numeric') -> SDTMNamespace` — Compute the duration between two date/datetime columns.
-- `derivation(target: str, *, expression: str | pl.Expr) -> SDTMNamespace` — Derive *target* using a Polars expression or expression string.
+- `duration(target: str, *, start: str | pl.Expr, end: str | pl.Expr, unit: str = 'days', add_one: bool | None = None, out: str = 'numeric') -> Self` — Compute the duration between two date/datetime columns.
+- `derivation(target: str | Derivation | None = None, *, expression: str | pl.Expr | Callable[[], pl.Expr] | None = None) -> Self` — Derive *target* using an expression, lambda, or ``Derivation`` object.
 - `condition_add(target: str, *, condition: str | pl.Expr, then_value: Any) -> SDTMNamespace` — Set *target* to *then_value* where *condition* is true, else null.
 - `if_then_else(target: str, *, when: list[dict[str, Any]], else_value: Any = None) -> SDTMNamespace` — Multi-branch conditional mapping.
 - `ae_aerel(target: str = 'AEREL', *, source: str = 'ae_relationship', aerel_map: dict[str, str] | None = None) -> SDTMNamespace` — Map free-text AE causality strings to controlled ``AEREL`` values.
 - `merge(target_cols: list[str] | None = None, *, dataset: pl.DataFrame, on: str | list[str], how: str = 'left') -> SDTMNamespace` — Join *dataset* into the pipeline using key column(s) *on*.
-- `remove_dup(*, subset: list[str] | None = None, keep: str = 'first') -> SDTMNamespace` — Remove duplicate rows, optionally on a *subset* of columns.
+- `nodup(*, subset: list[str], sort_by: list[str] | None = None, keep: str | None = None, descending: bool | list[bool] = False) -> Self` — Detect duplicate rows and optionally deduplicate after sorting.
 - `group_by(*, group_cols: list[str], agg: list[pl.Expr]) -> SDTMNamespace` — Group by *group_cols* and apply *agg* aggregations.
 - `dataset_level(target: str, *, value: Any) -> SDTMNamespace` — Set a dataset-level constant on *target* (alias for ``hardcode_no_ct``).
 - `notsubmitted(*targets: str) -> SDTMNamespace` — Mark one or more variables as not submitted (set to null).
@@ -1719,7 +1850,7 @@ Row models: `TrialElement`, `TrialArm`, `TrialVisit`, `TrialParameter`, `TrialCr
 These verbs are defined once in `SharedADaMVerbsMixin` (`src/fleet/adam/_mixins.py`) and inherited by every ADaM sub-namespace: `adsl`, `occds`, `onco`, `ophtha`, `peds`, `vaccine`, `metabolic`, `neuro`. You can call them directly on any sub-namespace without switching back to the base `adam` namespace.
 
 - `source(target: str, *, from_col: str | None = None) -> Self` — Copy a source column into the ADaM dataset.
-- `derivation(target: str, *, expression: str | pl.Expr) -> Self` — Derive *target* using an arbitrary Polars expression.
+- `derivation(target: str | Derivation | None = None, *, expression: str | pl.Expr | Callable[[], pl.Expr] | None = None) -> Self` — Derive *target* using an expression, lambda, or ``Derivation`` object.
 - `assigned(target: str, *, value: Any) -> Self` — Set *target* to a constant *value* for every record.
 - `recode(target: str, *, source: str, recode_map: dict[Any, Any], default: Any = None) -> Self` — Map values in *source* to recoded values in *target*.
 - `rename(target: str, *, source: str) -> Self` — Create *target* as a copy of *source* (variable renaming).
@@ -1765,7 +1896,7 @@ Available on `df.adam.occds` (and `df.adam.pk` for sequence). Shared verbs (sour
 
 - `treatment_emergent(target: str = 'TRTEMFL', *, start_date: str, trtsdt: str, trtedt: str | None = None, offset_days: int = 0) -> Self` — Set *target* to ``"Y"`` for treatment-emergent events.
 - `onset_recovery(target: str, *, start_date: str, end_date: str, ref_date: str) -> Self` — Flag events that started on/after the reference date and have recovered.
-- `seq(target: str = 'ASEQ', *, order_by: list[str] | None = None, groups: list[str] | None = None, check_uniqueness: bool = False) -> Self` — Derive a 1-based observation sequence number within each group.
+- `seq(target: str = 'ASEQ', *, order_by: list[str] | None = None, groups: list[str] | None = None, start_at: int = 1, check_uniqueness: bool = False) -> Self` — Derive a 1-based sequence number within each group.
 
 ## Operation → Fleet Verb Mapping
 
@@ -1780,7 +1911,7 @@ Available on `df.adam.occds` (and `df.adam.pk` for sequence). Shared verbs (sour
 | CT recode | `recode` | `adam` / all sub-ns | Map raw→decoded values |
 | Multi-branch conditional | `if_then_else` | `sdtm` | List of `{condition, value}` branches |
 | Multi-branch conditional | `condderivation` | `adam` / all sub-ns | Same pattern as `if_then_else` |
-| Arbitrary expression | `derivation` | `sdtm` / `adam` | Last resort — use a Fleet verb first |
+| Arbitrary expression | `derivation` | `sdtm` / `adam` | Polymorphic: `str`, `pl.Expr`, lambda `() -> pl.Expr`, or `@derivation` object |
 | ISO 8601 parse (SDTM) | `date` | `sdtm` | Normalises to `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`; preserves partial dates |
 | Date imputation (ADaM) | `date` | `adam` / all sub-ns | Imputes partial --DTC → `pl.Date` or `pl.Datetime` with optional DTF/TMF flags |
 | Study day (ADY) | `duration` | `adam` / `sdtm` | CDISC study-day: +1 if ≥ 0, no day 0 |
@@ -1823,6 +1954,7 @@ A single YAML file is the source of truth for a study: it declares output variab
 - `assigned` → `.assigned(target, value=...)`
 - `source` → `.source(target, from_col=...)`
 - `derivation` → `.derivation(target, expression=...)`
+- `callable` → `.derivation(drv_obj)` (dispatches `@derivation`-decorated function by name or dotted path)
 - `first_date` → `.first_date(target, from_dataset=..., date_col=..., where=...)`
 - `last_date` → `.last_date(...)`
 - `duration` → `.duration(target, start=..., end=...)`
@@ -1834,7 +1966,7 @@ A single YAML file is the source of truth for a study: it declares output variab
 ```python
 from fleet import load_study_context
 
-ctx = load_study_context("specs/cdiscpilot01/adam/define.yaml")
+ctx = load_study_context("examples/cdiscpilot01/adam/define.yaml")
 adsl = ctx.build("ADSL")
 ```
 
@@ -1843,7 +1975,7 @@ adsl = ctx.build("ADSL")
 ```python
 from fleet import DefineXMLGenerator
 
-gen = DefineXMLGenerator("specs/cdiscpilot01/adam/define.yaml")
+gen = DefineXMLGenerator("examples/cdiscpilot01/adam/define.yaml")
 gen.write("outputs/cdiscpilot01/define_adam.xml")
 ```
 

@@ -123,7 +123,7 @@ fleet init-ct --domains DM,AE,VS,EX --output specs/my_study/sdtm/codelists.py
 
 ```bash
 # Standard bootstrap for a typical study
-fleet init-ct --domains DM,AE,VS,EX --output specs/cdiscpilot01/sdtm/codelists.py
+fleet init-ct --domains DM,AE,VS,EX --output examples/cdiscpilot01/sdtm/codelists.py
 
 # Pin to a specific CT version
 fleet init-ct --domains DM,AE --ig 3-4 --package sdtmct-2025-09-26 --output codelists.py
@@ -152,17 +152,17 @@ Same as `init-ct`. The `--output` path must point to an existing `codelists.py` 
 
 ```bash
 # Add lab and conmed domains to an existing file
-fleet add-ct --domains LB,CM --output specs/cdiscpilot01/sdtm/codelists.py
+fleet add-ct --domains LB,CM --output examples/cdiscpilot01/sdtm/codelists.py
 
 # If all codelists are already present, the command reports "Nothing to add"
-fleet add-ct --domains DM --output specs/cdiscpilot01/sdtm/codelists.py
+fleet add-ct --domains DM --output examples/cdiscpilot01/sdtm/codelists.py
 ```
 
 ### Typical output
 
 ```
 Adding domains: LB, CM
-Existing file:  specs/cdiscpilot01/sdtm/codelists.py (24 codelists)
+Existing file:  examples/cdiscpilot01/sdtm/codelists.py (24 codelists)
 
 New codelists to add: 8
 Total after merge:    32
@@ -352,7 +352,7 @@ Checking rule: my_rules/FLEET-AE-001.yaml
 Generate a CDISC Define-XML 2.1 document from a `define.yaml` specification.
 
 ```bash
-fleet define-xml --spec specs/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml
+fleet define-xml --spec examples/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml
 ```
 
 ### Options
@@ -369,8 +369,8 @@ By default, an HTML preview is generated alongside the XML (e.g. `define_sdtm.xm
 
 ```bash
 # Generate SDTM Define-XML with HTML preview
-fleet define-xml --spec specs/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml
+fleet define-xml --spec examples/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml
 
 # Generate ADaM Define-XML without preview
-fleet define-xml --spec specs/cdiscpilot01/adam/define.yaml --output outputs/define_adam.xml --no-preview
+fleet define-xml --spec examples/cdiscpilot01/adam/define.yaml --output outputs/define_adam.xml --no-preview
 ```
