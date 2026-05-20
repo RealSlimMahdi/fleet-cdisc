@@ -104,9 +104,7 @@ class TestCustomRuleEngine:
 └──────────────┴────────┴────────────────┴───────┴──────────┴──────────┴───────┘
 """)
         out = tmp_path / "ae.xpt"
-        pyreadstat.write_xport(
-            pd.DataFrame(ae_data.to_dict()), str(out), file_format_version=5
-        )
+        pyreadstat.write_xport(pd.DataFrame(ae_data.to_dict()), str(out), file_format_version=5)
         return out
 
     def test_engine_runs_rule(self, engine: Path, test_xpt: Path, tmp_path: Path) -> None:
@@ -117,12 +115,18 @@ class TestCustomRuleEngine:
         cmd = [
             str(engine),
             "validate",
-            "-s", "sdtmig",
-            "-v", "3-4",
-            "-dp", str(test_xpt),
-            "-lr", str(RULE_FILE),
-            "-o", str(output_path),
-            "-of", "JSON",
+            "-s",
+            "sdtmig",
+            "-v",
+            "3-4",
+            "-dp",
+            str(test_xpt),
+            "-lr",
+            str(RULE_FILE),
+            "-o",
+            str(output_path),
+            "-of",
+            "JSON",
             "-rr",
         ]
 
@@ -136,8 +140,7 @@ class TestCustomRuleEngine:
 
         json_result = output_path.with_suffix(".json")
         assert json_result.exists(), (
-            f"Engine produced no output (exit={result.returncode})\n"
-            f"stderr: {result.stderr[:500]}"
+            f"Engine produced no output (exit={result.returncode})\nstderr: {result.stderr[:500]}"
         )
 
         report = json.loads(json_result.read_text())

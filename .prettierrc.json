@@ -1,0 +1,11 @@
+{
+  "overrides": [
+    {
+      "files": "docs/api/**",
+      "options": {
+        "proseWrap": "preserve",
+        "parser": "markdown"
+      }
+    }
+  ]
+}

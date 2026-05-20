@@ -1,0 +1,3 @@
+# mkdocstrings directives use Python dotted paths and YAML options
+# that Markdown formatters corrupt (_→* substitution, backslash escaping).
+docs/api/
