@@ -1845,6 +1845,15 @@
 <li><code>fleet init-ct</code> — standalone bootstrap of <code>codelists.py</code> from the SDTM IG for given domains</li>
 <li><code>fleet add-ct</code> — incrementally add domains to an existing <code>codelists.py</code> (preserves existing codelists)</li>
 <li><code>fleet define-xml</code> — generate Define-XML 2.1 from a <code>define.yaml</code> specification (with optional HTML preview)</li>
+<li><strong>Custom Validation Rules</strong> — sponsor-specific CDISC rule authoring and validation workflow:</li>
+<li><code>fleet add-rule</code> — scaffold a schema-valid rule YAML skeleton (auto-increments ID, uniqueness check across directory)</li>
+<li><code>fleet check-rule</code> — validate a rule file (YAML syntax + structure + JSON Schema); exits 1 on error for CI gates</li>
+<li><code>custom_rules=</code> parameter on <code>.validate()</code>, <code>ValidationService.validate_sdtm()</code>, and <code>.validate_adam()</code> — load a directory of rules via the engine's <code>-lr</code> flag</li>
+<li><code>validation.custom_rules</code> in <code>study_config.yaml</code> — team-wide default rules directory</li>
+<li><code>fleet init cfg</code> scaffolds the <code>custom_rules/</code> directory and field automatically</li>
+<li>
+<p>Header comments in generated rule files include CDISC operator reference link and rule type guide</p>
+</li>
 <li>
 <p><strong><code>assign_ct</code> now accepts codelist classes</strong> — pass a generated class (e.g. <code>SEX</code>) instead of a raw NCI string; <code>ct_mapping</code> is optional when raw data already matches CDISC submission values</p>
 </li>
@@ -1905,7 +1914,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 9, 2026 10:36:00 UTC">May 9, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 20, 2026 12:49:53 UTC">May 20, 2026</span>
   </span>
 
     
