@@ -161,7 +161,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import polars as pl
 
 import fleet  # noqa: F401 — registers .sdtm / .adam namespace extensions
-from specs.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
+from examples.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
 
 OUT = Path("outputs/cdiscpilot01")
 
@@ -961,7 +961,7 @@ print(f"\n   All outputs in {OUT}/")
 """
 End-to-end CDISCPILOT01 pipeline — spec-driven style.
 
-Every ADaM column derivation is defined in specs/cdiscpilot01/adam/define.yaml
+Every ADaM column derivation is defined in examples/cdiscpilot01/adam/define.yaml
 and executed via ``df.adam.from_spec()``.  OCCDS-specific verbs that the spec
 cannot yet express (treatment_emergent, seq) are applied inline
 immediately after the spec phase.
@@ -998,9 +998,9 @@ import polars as pl
 
 import fleet  # noqa: F401 — registers .sdtm / .adam namespace extensions
 from fleet import DatasetChecker, DefineSpecGenerator
-from specs.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
+from examples.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
 
-SPECS = Path("specs/cdiscpilot01")
+SPECS = Path("examples/cdiscpilot01")
 OUT = Path("outputs/cdiscpilot01")
 OUT.mkdir(parents=True, exist_ok=True)
 
@@ -1966,7 +1966,7 @@ A single YAML file is the source of truth for a study: it declares output variab
 ```python
 from fleet import load_study_context
 
-ctx = load_study_context("specs/cdiscpilot01/adam/define.yaml")
+ctx = load_study_context("examples/cdiscpilot01/adam/define.yaml")
 adsl = ctx.build("ADSL")
 ```
 
@@ -1975,7 +1975,7 @@ adsl = ctx.build("ADSL")
 ```python
 from fleet import DefineXMLGenerator
 
-gen = DefineXMLGenerator("specs/cdiscpilot01/adam/define.yaml")
+gen = DefineXMLGenerator("examples/cdiscpilot01/adam/define.yaml")
 gen.write("outputs/cdiscpilot01/define_adam.xml")
 ```
 

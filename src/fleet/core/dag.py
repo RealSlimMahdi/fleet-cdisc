@@ -5,8 +5,8 @@ Usage
     from fleet.core import build_dag
 
     dag = build_dag(
-        "specs/cdiscpilot01/sdtm/define.yaml",
-        "specs/cdiscpilot01/adam/define.yaml",
+        "examples/cdiscpilot01/sdtm/define.yaml",
+        "examples/cdiscpilot01/adam/define.yaml",
         output_dir="outputs/cdiscpilot01",
     )
 
@@ -410,8 +410,8 @@ class PipelineDAG:
         ::
 
             dag = build_dag(
-                "specs/cdiscpilot01/sdtm/define.yaml",
-                "specs/cdiscpilot01/adam/define.yaml",
+                "examples/cdiscpilot01/sdtm/define.yaml",
+                "examples/cdiscpilot01/adam/define.yaml",
                 output_dir="outputs/cdiscpilot01",
             )
             dag.generate("outputs/cdiscpilot01/pipeline_dag.json")
@@ -466,8 +466,8 @@ def build_dag(
     Examples
     --------
     >>> dag = build_dag(
-    ...     "specs/cdiscpilot01/sdtm/define.yaml",
-    ...     "specs/cdiscpilot01/adam/define.yaml",
+    ...     "examples/cdiscpilot01/sdtm/define.yaml",
+    ...     "examples/cdiscpilot01/adam/define.yaml",
     ...     output_dir="outputs/cdiscpilot01",
     ... )
     >>> dag.impacted_by("ae_raw")

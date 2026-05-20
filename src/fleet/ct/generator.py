@@ -30,7 +30,7 @@ Usage::
     client = CDISCClient()
     generator = CodelistGenerator()
     generator.add_codelist(client.get_codelist("C66731"))
-    generator.write("specs/cdiscpilot01/sdtm/codelists.py")
+    generator.write("examples/cdiscpilot01/sdtm/codelists.py")
 """
 
 from __future__ import annotations
@@ -294,7 +294,7 @@ class CodelistGenerator:
                         client,
                         domains=["DM", "AE", "VS", "EX"],
                     )
-                    gen.write("specs/cdiscpilot01/sdtm/codelists.py")
+                    gen.write("examples/cdiscpilot01/sdtm/codelists.py")
         """
         concept_ids = extract_ig_concept_ids(client, ig_version, domains)
         return cls.from_concept_ids(

@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 import platform
-import resource
 import sys
 import time
 from pathlib import Path
@@ -23,7 +22,6 @@ from pathlib import Path
 # ── rpy2 setup ───────────────────────────────────────────────────────────────
 import rpy2.robjects as ro
 from rpy2.robjects import r as R
-from rpy2.robjects.packages import importr
 
 # Suppress R startup messages
 ro.r("suppressPackageStartupMessages(library(sdtm.oak))")

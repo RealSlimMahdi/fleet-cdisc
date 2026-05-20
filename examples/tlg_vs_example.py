@@ -22,13 +22,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import polars as pl
 
 import fleet  # noqa: F401 — registers namespaces
+from examples.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
 from fleet.tlg import (
     GroupPool,
     OverallStat,
     Statistic,
     VSSummarySpec,
 )
-from specs.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
 
 # ════════════════════════════════════════════════════════════════════════════
 # 1. Load raw data & build ADSL (reuse pattern from tlg_ae_example.py)

@@ -284,7 +284,7 @@ Build SDTM and ADaM datasets with explicit Python chaining:
 import fleet
 import polars as pl
 from fleet import load_raw_data
-from specs.cdiscpilot01.sdtm.codelists import SEX, RACE, ETHNIC
+from examples.cdiscpilot01.sdtm.codelists import SEX, RACE, ETHNIC
 
 dm_raw = load_raw_data("datasets/cdiscpilot01/raw/dm_raw.csv").collect()
 
@@ -339,7 +339,7 @@ datasets:
 ```
 
 ```python
-dm = dm_raw.sdtm.from_spec("specs/cdiscpilot01/sdtm/define.yaml", dataset="DM").to_frame()
+dm = dm_raw.sdtm.from_spec("examples/cdiscpilot01/sdtm/define.yaml", dataset="DM").to_frame()
 ```
 
 _For complete end-to-end examples, see the [examples/](examples/) directory and the [full Guide](GUIDE.md)._
@@ -369,10 +369,10 @@ uv run fleet init ct
 ### Generate Define-XML 2.1
 
 ```bash
-uv run fleet define-xml --spec specs/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml
+uv run fleet define-xml --spec examples/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml
 
 # Add --enrich-methods to embed verb / callable docstrings as <MethodDef> elements
-uv run fleet define-xml --spec specs/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml --enrich-methods
+uv run fleet define-xml --spec examples/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml --enrich-methods
 ```
 
 ### CDISC Rules Engine Validation

@@ -119,10 +119,10 @@ If you prefer to skip the full bootstrap pipeline:
 
 ```bash
 # Generate codelists.py directly from the SDTM IG
-uv run fleet init-ct --domains DM,AE,VS,EX --output specs/cdiscpilot01/sdtm/codelists.py
+uv run fleet init-ct --domains DM,AE,VS,EX --output examples/cdiscpilot01/sdtm/codelists.py
 
 # Add more domains incrementally (preserves existing codelists)
-uv run fleet add-ct --domains LB,CM --output specs/cdiscpilot01/sdtm/codelists.py
+uv run fleet add-ct --domains LB,CM --output examples/cdiscpilot01/sdtm/codelists.py
 
 # Pin to a specific IG version and CT package
 uv run fleet init-ct --domains DM,AE --ig 3-4 --package sdtmct-2025-09-26 --output codelists.py
@@ -199,7 +199,7 @@ arm_code, arm_description, first_dose_date, last_dose_date, informed_consent_dat
 import fleet
 import polars as pl
 from fleet import load_raw_data
-from specs.cdiscpilot01.sdtm.codelists import SEX, RACE, ETHNIC
+from examples.cdiscpilot01.sdtm.codelists import SEX, RACE, ETHNIC
 
 dm_raw = load_raw_data("datasets/cdiscpilot01/raw/dm_raw.csv").collect()
 
@@ -280,7 +280,7 @@ datasets:
 Then execute in one line:
 
 ```python
-dm = dm_raw.sdtm.from_spec("specs/cdiscpilot01/sdtm/define.yaml", dataset="DM").to_frame()
+dm = dm_raw.sdtm.from_spec("examples/cdiscpilot01/sdtm/define.yaml", dataset="DM").to_frame()
 ```
 
 ---
@@ -1024,13 +1024,13 @@ CDISC Rules Engine documentation for details.
 ```bash
 # SDTM Define-XML
 uv run fleet define-xml \
-  --spec specs/cdiscpilot01/sdtm/define.yaml \
+  --spec examples/cdiscpilot01/sdtm/define.yaml \
   --output outputs/define_sdtm.xml \
   --enrich-methods
 
 # ADaM Define-XML (without HTML preview)
 uv run fleet define-xml \
-  --spec specs/cdiscpilot01/adam/define.yaml \
+  --spec examples/cdiscpilot01/adam/define.yaml \
   --output outputs/define_adam.xml \
   --enrich-methods \
   --no-preview
@@ -1048,8 +1048,8 @@ method beside every variable.
 from fleet import DefineSpecGenerator, DatasetChecker
 
 # Check datasets against the spec before generating
-sdtm_spec = "specs/cdiscpilot01/sdtm/define.yaml"
-adam_spec  = "specs/cdiscpilot01/adam/define.yaml"
+sdtm_spec = "examples/cdiscpilot01/sdtm/define.yaml"
+adam_spec  = "examples/cdiscpilot01/adam/define.yaml"
 
 sdtm_checker = DatasetChecker(sdtm_spec)
 adam_checker  = DatasetChecker(adam_spec)
@@ -1342,15 +1342,15 @@ fleet derivation add BMI --dataset ADVS --kind param
 ### How `callable:` in `define.yaml` links to runtime execution
 
 ```yaml
-# specs/cdiscpilot01/adam/define.yaml
+# examples/cdiscpilot01/adam/define.yaml
 - name: AGEGR1
   label: Pooled Age Group 1
   derivation:
     algorithm: callable
-    callable: specs.cdiscpilot01.adam.derivations.AGEGR1
+    callable: examples.cdiscpilot01.adam.derivations.AGEGR1
 ```
 
-At runtime, `from_spec()` calls `_resolve_callable("specs.cdiscpilot01.adam.derivations.AGEGR1")`,
+At runtime, `from_spec()` calls `_resolve_callable("examples.cdiscpilot01.adam.derivations.AGEGR1")`,
 which either:
 
 1. Looks up the name in the transform registry (if the derivations module was imported), or

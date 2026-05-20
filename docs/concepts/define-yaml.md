@@ -76,7 +76,7 @@ on the callable's `kind`:
 - name: AGEGR1
   derivation:
     algorithm: callable
-    callable: specs.cdiscpilot01.adam.derivations.AGEGR1
+    callable: examples.cdiscpilot01.adam.derivations.AGEGR1
 ```
 
 Or use the registered short name (if the derivations module was imported):
@@ -161,7 +161,7 @@ graph TD
 ```python
 from fleet import load_study_context
 
-ctx = load_study_context("specs/cdiscpilot01/adam/define.yaml")
+ctx = load_study_context("examples/cdiscpilot01/adam/define.yaml")
 
 # Build every dataset declared in the spec
 adsl = ctx.build("ADSL")   # returns a polars.DataFrame
@@ -173,7 +173,7 @@ advs = ctx.build("ADVS")
 ```python
 from fleet import DefineXMLGenerator
 
-gen = DefineXMLGenerator("specs/cdiscpilot01/adam/define.yaml")
+gen = DefineXMLGenerator("examples/cdiscpilot01/adam/define.yaml")
 gen.write("outputs/cdiscpilot01/define_adam.xml")
 ```
 
@@ -241,7 +241,7 @@ from fleet.define_xml import DefineValidator
 from pathlib import Path
 
 validator = DefineValidator()
-is_valid = validator.validate(Path("specs/cdiscpilot01/sdtm/define.yaml"))
+is_valid = validator.validate(Path("examples/cdiscpilot01/sdtm/define.yaml"))
 
 for issue in validator.issues:
     print(f"[{issue.severity.upper()}] {issue.rule} @ {issue.location}: {issue.message}")

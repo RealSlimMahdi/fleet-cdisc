@@ -1,7 +1,7 @@
 """
 End-to-end CDISCPILOT01 pipeline — spec-driven style.
 
-Every ADaM column derivation is defined in specs/cdiscpilot01/adam/define.yaml
+Every ADaM column derivation is defined in examples/cdiscpilot01/adam/define.yaml
 and executed via ``df.adam.from_spec()``.  OCCDS-specific verbs that the spec
 cannot yet express (treatment_emergent, seq) are applied inline
 immediately after the spec phase.
@@ -37,10 +37,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import polars as pl
 
 import fleet  # noqa: F401 — registers .sdtm / .adam namespace extensions
+from examples.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
 from fleet import DatasetChecker, DefineSpecGenerator
-from specs.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
 
-SPECS = Path("specs/cdiscpilot01")
+SPECS = Path("examples/cdiscpilot01")
 OUT = Path("outputs/cdiscpilot01")
 OUT.mkdir(parents=True, exist_ok=True)
 

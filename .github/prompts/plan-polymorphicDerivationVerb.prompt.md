@@ -50,7 +50,7 @@ class Derivation:
     sources:       list[str]
     by_vars:       list[str] | None
     set_values_to: dict[str, Any] | None
-    dotted_path:   str         # "specs.cdiscpilot01.adam.derivations.AGEGR1"
+    dotted_path:   str         # "examples.cdiscpilot01.adam.derivations.AGEGR1"
 
     def __call__(self, df: pl.DataFrame | None = None) -> pl.Expr | pl.DataFrame:
         if self.kind == "column":
@@ -414,7 +414,7 @@ scaffolding a new study.
    ```yaml
    - name: AGEGR1
      derivation:
-       callable: specs.cdiscpilot01.adam.derivations.AGEGR1
+       callable: examples.cdiscpilot01.adam.derivations.AGEGR1
    ```
 
 ### `docs/api/core.md` — ADD entries
