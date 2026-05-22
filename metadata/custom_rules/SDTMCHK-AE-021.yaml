@@ -1,10 +1,11 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-AE-021: AEREL array check — unexpected relationship values
 # Source: sdtmchecks::check_ae_aerel
 
 Core:
   Id: SDTMCHK-AE-021
   Status: Draft
-  Version: '1'
+  Version: "1"
 
 Rule Type: Record Data
 
@@ -45,12 +46,13 @@ Authorities:
   - Organization: sdtmchecks
     Standards:
       - Name: SDTMIG
-        Version: '3.4'
+        Version: "3.4"
         References:
           - Origin: sdtmchecks R package
             Rule Identifier:
               Id: SDTMCHK-AE-021
-              Version: '1'
+              Version: "1"
+            Version: "1"
             Citations:
               - Cited Guidance: check_ae_aerel
                 Document: Roche sdtmchecks

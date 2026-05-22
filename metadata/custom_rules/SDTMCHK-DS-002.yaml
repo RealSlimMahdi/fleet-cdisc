@@ -1,10 +1,11 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-DS-002: DSTERM contains "DEATH DUE TO" with blank cause
 # Source: sdtmchecks::check_ds_dsterm_death_due_to
 
 Core:
   Id: SDTMCHK-DS-002
   Status: Draft
-  Version: '1'
+  Version: "1"
 
 Rule Type: Record Data
 
@@ -36,12 +37,13 @@ Authorities:
   - Organization: sdtmchecks
     Standards:
       - Name: SDTMIG
-        Version: '3.4'
+        Version: "3.4"
         References:
           - Origin: sdtmchecks R package
             Rule Identifier:
               Id: SDTMCHK-DS-002
-              Version: '1'
+              Version: "1"
+            Version: "1"
             Citations:
               - Cited Guidance: check_ds_dsterm_death_due_to
                 Document: Roche sdtmchecks

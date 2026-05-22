@@ -1,16 +1,17 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-DM-001: AGE missing or suspicious values
 # Source: sdtmchecks::check_dm_age_missing
 
 Core:
   Id: SDTMCHK-DM-001
   Status: Draft
-  Version: '1'
+  Version: "1"
 
 Rule Type: Record Data
 
 Scope:
   Classes:
-    Include: [DEMOGRAPHICS]
+    Include: [SPECIAL PURPOSE]
   Domains:
     Include: [DM]
 
@@ -42,12 +43,13 @@ Authorities:
   - Organization: sdtmchecks
     Standards:
       - Name: SDTMIG
-        Version: '3.4'
+        Version: "3.4"
         References:
           - Origin: sdtmchecks R package
             Rule Identifier:
               Id: SDTMCHK-DM-001
-              Version: '1'
+              Version: "1"
+            Version: "1"
             Citations:
               - Cited Guidance: check_dm_age_missing
                 Document: Roche sdtmchecks

@@ -1,10 +1,11 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-LB-005: LB date missing month (incomplete date)
 # Source: sdtmchecks::check_lb_missing_month
 
 Core:
   Id: SDTMCHK-LB-005
   Status: Draft
-  Version: '1'
+  Version: "1"
 
 Rule Type: Record Data
 
@@ -38,12 +39,13 @@ Authorities:
   - Organization: sdtmchecks
     Standards:
       - Name: SDTMIG
-        Version: '3.4'
+        Version: "3.4"
         References:
           - Origin: sdtmchecks R package
             Rule Identifier:
               Id: SDTMCHK-LB-005
-              Version: '1'
+              Version: "1"
+            Version: "1"
             Citations:
               - Cited Guidance: check_lb_missing_month
                 Document: Roche sdtmchecks

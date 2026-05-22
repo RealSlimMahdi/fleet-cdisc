@@ -1,0 +1,23 @@
+study_id: CDISCPILOT01
+company: CDISC
+description: "Phase II Randomized Double-Blind Placebo-Controlled Study"
+
+paths:
+  metadata_sdtm: examples/cdiscpilot01/sdtm
+  metadata_adam: examples/cdiscpilot01/adam
+  rules_sdtm: metadata/sdtm/rules
+  rules_adam: metadata/adam/rules
+
+sdtm:
+  ig_version: "3-4"
+  domains: [DM, AE, VS, EX]
+
+adam:
+  ig_version: "1-1"
+  datasets: [ADSL, ADVS, ADAE]
+
+ct:
+  package: sdtmct-2023-12-15
+
+validation:
+  custom_rules: my_rules

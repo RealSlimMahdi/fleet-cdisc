@@ -1,10 +1,11 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-AE-020: AEACNOTH mentions study discontinuation but no DS record
 # Source: sdtmchecks::check_ae_aeacnoth_ds_disctx
 
 Core:
   Id: SDTMCHK-AE-020
   Status: Draft
-  Version: '1'
+  Version: "1"
 
 Rule Type: Record Data
 
@@ -50,12 +51,13 @@ Authorities:
   - Organization: sdtmchecks
     Standards:
       - Name: SDTMIG
-        Version: '3.4'
+        Version: "3.4"
         References:
           - Origin: sdtmchecks R package
             Rule Identifier:
               Id: SDTMCHK-AE-020
-              Version: '1'
+              Version: "1"
+            Version: "1"
             Citations:
               - Cited Guidance: check_ae_aeacnoth_ds_disctx
                 Document: Roche sdtmchecks

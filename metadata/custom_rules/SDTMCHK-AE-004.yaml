@@ -1,10 +1,11 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-AE-004: AEOUT inconsistent with AEDTHDTC (death date present but AEOUT not FATAL)
 # Source: sdtmchecks::check_ae_aeout
 
 Core:
   Id: SDTMCHK-AE-004
   Status: Draft
-  Version: '1'
+  Version: "1"
 
 Rule Type: Record Data
 
@@ -39,12 +40,13 @@ Authorities:
   - Organization: sdtmchecks
     Standards:
       - Name: SDTMIG
-        Version: '3.4'
+        Version: "3.4"
         References:
-          - Origin: sdtmchecks R package
+          - Origin: SDTM and SDTMIG Conformance Rules
             Rule Identifier:
-              Id: SDTMCHK-AE-004
-              Version: '1'
+              Id: CG0001
+              Version: "1"
+            Version: "1"
             Citations:
               - Cited Guidance: check_ae_aeout
                 Document: Roche sdtmchecks

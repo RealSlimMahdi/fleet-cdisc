@@ -3586,7 +3586,12 @@
             "additionalProperties": true
           }
         },
-        "oneOf": [
+        "required": [
+          "Organization",
+          "Standards"
+        ],
+        "type": "object",
+        "anyOf": [
           {
             "$ref": "#/$defs/Organization_CDISC"
           },
@@ -3596,12 +3601,7 @@
           {
             "$ref": "#/$defs/Organization_Custom"
           }
-        ],
-        "required": [
-          "Organization",
-          "Standards"
-        ],
-        "type": "object"
+        ]
       },
       "minItems": 1,
       "type": "array"

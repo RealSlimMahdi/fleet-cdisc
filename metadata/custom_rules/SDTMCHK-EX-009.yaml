@@ -1,10 +1,11 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-EX-009: EX visit date ordering error
 # Source: sdtmchecks::check_ex_exstdtc_visit_ordinal_error
 
 Core:
   Id: SDTMCHK-EX-009
   Status: Draft
-  Version: '1'
+  Version: "1"
 
 Rule Type: Record Data
 
@@ -45,12 +46,13 @@ Authorities:
   - Organization: sdtmchecks
     Standards:
       - Name: SDTMIG
-        Version: '3.4'
+        Version: "3.4"
         References:
           - Origin: sdtmchecks R package
             Rule Identifier:
               Id: SDTMCHK-EX-009
-              Version: '1'
+              Version: "1"
+            Version: "1"
             Citations:
               - Cited Guidance: check_ex_exstdtc_visit_ordinal_error
                 Document: Roche sdtmchecks

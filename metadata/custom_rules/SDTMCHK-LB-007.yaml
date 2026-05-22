@@ -1,10 +1,11 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-LB-007: LB reference ranges missing for numeric results
 # Source: sdtmchecks::check_lb_lbstnrlo_lbstnrhi
 
 Core:
   Id: SDTMCHK-LB-007
   Status: Draft
-  Version: '1'
+  Version: "1"
 
 Rule Type: Record Data
 
@@ -28,7 +29,8 @@ Outcome:
   Message: >-
     LBSTRESN is populated but LBSTNRLO and/or LBSTNRHI (standard reference
     ranges) are missing. Numeric lab results should have reference ranges.
-  Output Variables: [USUBJID, LBTESTCD, LBTEST, LBSTRESN, LBSTRESU, LBSTNRLO, LBSTNRHI]
+  Output Variables:
+    [USUBJID, LBTESTCD, LBTEST, LBSTRESN, LBSTRESU, LBSTNRLO, LBSTNRHI]
 
 Description: >-
   When LBSTRESN is populated, both LBSTNRLO and LBSTNRHI should ideally be
@@ -41,12 +43,13 @@ Authorities:
   - Organization: sdtmchecks
     Standards:
       - Name: SDTMIG
-        Version: '3.4'
+        Version: "3.4"
         References:
           - Origin: sdtmchecks R package
             Rule Identifier:
               Id: SDTMCHK-LB-007
-              Version: '1'
+              Version: "1"
+            Version: "1"
             Citations:
               - Cited Guidance: check_lb_lbstnrlo_lbstnrhi
                 Document: Roche sdtmchecks

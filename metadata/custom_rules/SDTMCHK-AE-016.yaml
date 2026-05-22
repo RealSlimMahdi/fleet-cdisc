@@ -1,10 +1,11 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-AE-016: AEDTHDTC does not match DS death date
 # Source: sdtmchecks::check_dd_ae_aedthdtc_ds_dsstdtc
 
 Core:
   Id: SDTMCHK-AE-016
   Status: Draft
-  Version: '1'
+  Version: "1"
 
 Rule Type: Record Data
 
@@ -52,12 +53,13 @@ Authorities:
   - Organization: sdtmchecks
     Standards:
       - Name: SDTMIG
-        Version: '3.4'
+        Version: "3.4"
         References:
           - Origin: sdtmchecks R package
             Rule Identifier:
               Id: SDTMCHK-AE-016
-              Version: '1'
+              Version: "1"
+            Version: "1"
             Citations:
               - Cited Guidance: check_dd_ae_aedthdtc_ds_dsstdtc
                 Document: Roche sdtmchecks

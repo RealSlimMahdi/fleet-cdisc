@@ -1,10 +1,11 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-QS-001: QSSTAT=NOT DONE but QSREASND missing
 # Source: sdtmchecks::check_qs_qsstat_qsreasnd
 
 Core:
   Id: SDTMCHK-QS-001
   Status: Draft
-  Version: '1'
+  Version: "1"
 
 Rule Type: Record Data
 
@@ -39,12 +40,13 @@ Authorities:
   - Organization: sdtmchecks
     Standards:
       - Name: SDTMIG
-        Version: '3.4'
+        Version: "3.4"
         References:
           - Origin: sdtmchecks R package
             Rule Identifier:
               Id: SDTMCHK-QS-001
-              Version: '1'
+              Version: "1"
+            Version: "1"
             Citations:
               - Cited Guidance: check_qs_qsstat_qsreasnd
                 Document: Roche sdtmchecks

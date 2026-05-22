@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=../../../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # FLEET-AE-001: AESEV must be populated when AESER = 'Y'
 #
 # Rationale: If an adverse event is serious, the severity grade must
