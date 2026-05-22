@@ -36,6 +36,7 @@ Usage::
 from __future__ import annotations
 
 import keyword
+import logging
 import re
 import textwrap
 from dataclasses import dataclass, field
@@ -43,6 +44,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from fleet.ct.api import CDISCClient
@@ -123,17 +126,29 @@ def extract_ig_concept_ids(
     ds_links = ig.get("_links", {}).get("datasets", [])
     domains_upper = {d.upper() for d in domains}
 
+    found: set[str] = set()
     ids: set[str] = set()
     for ds in ds_links:
         domain = ds["href"].split("/")[-1]
         if domain not in domains_upper:
             continue
+        found.add(domain)
         detail = client._get(ds["href"])
         for var in detail.get("datasetVariables", []):
             for cl in var.get("_links", {}).get("codelist", []):
                 m = re.search(r"codelists/(C\d+)", cl.get("href", ""))
                 if m:
                     ids.add(m.group(1))
+
+    # Warn about non-standard domains that were not found in the IG
+    missing = domains_upper - found
+    for d in sorted(missing):
+        logger.warning(
+            "Domain '%s' not found in SDTM IG %s — no codelists extracted. "
+            "If this is a company-specific domain, add codelists manually.",
+            d,
+            ig_version,
+        )
     return ids
 
 
@@ -247,9 +262,7 @@ class CodelistGenerator:
                     package=package,
                 )
             except Exception:
-                import logging
-
-                logging.getLogger(__name__).warning(
+                logger.warning(
                     "Codelist %s not found in package %s — skipping.",
                     cid,
                     package,

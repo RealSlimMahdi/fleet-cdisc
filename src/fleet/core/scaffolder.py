@@ -25,12 +25,15 @@ Usage::
 from __future__ import annotations
 
 import importlib.resources
+import logging
 import os
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from fleet.ct.api import CDISCClient
@@ -258,13 +261,26 @@ class DefineScaffolder:
         ds_links = ig.get("_links", {}).get("datasets", [])
         domains_upper = {d.upper() for d in domains}
 
+        # Track which requested domains were found in the IG
+        found: set[str] = set()
         result: list[dict[str, Any]] = []
         for ds in ds_links:
             domain = ds["href"].split("/")[-1]
             if domain not in domains_upper:
                 continue
+            found.add(domain)
             detail = self._client._get(ds["href"])
             result.append(self._parse_ig_dataset(detail))
+
+        # Warn about non-standard domains that were not found in the IG
+        missing = domains_upper - found
+        for d in sorted(missing):
+            logger.warning(
+                "Domain '%s' not found in SDTM IG %s — skipped. "
+                "If this is a company-specific domain, define it manually in define.yaml.",
+                d,
+                ig_version,
+            )
         return result
 
     def _fetch_adam_datasets(
