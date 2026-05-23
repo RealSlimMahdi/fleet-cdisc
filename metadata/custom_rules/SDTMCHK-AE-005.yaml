@@ -51,3 +51,4 @@ Authorities:
               - Cited Guidance: check_ae_aeout
                 Document: Roche sdtmchecks
                 Section: AE Domain
+    Category: { SDTM Validation }
