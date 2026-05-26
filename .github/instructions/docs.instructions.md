@@ -2,6 +2,7 @@
 description: "Use when editing documentation files under docs/, especially mkdocstrings API pages"
 applyTo: "docs/**/*.md"
 ---
+
 # Documentation Files — Formatting Rules
 
 Files under `docs/api/` contain **mkdocstrings directives** — special YAML blocks that reference Python module paths. These are NOT regular Markdown.
@@ -37,10 +38,10 @@ Files under `docs/api/` contain **mkdocstrings directives** — special YAML blo
 
 ```markdown
 ::: fleet.<module>.<ClassName>
-    options:
-      show_root_heading: true
-      heading_level: 3
-      filters: ["!^_"]
+options:
+show*root_heading: true
+heading_level: 3
+filters: ["!^*"]
 ```
 
 ## Known Corruption

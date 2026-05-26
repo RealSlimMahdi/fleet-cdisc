@@ -2,6 +2,7 @@
 description: "Use when writing new code, refactoring, or reviewing code quality patterns in Fleet"
 applyTo: "src/**"
 ---
+
 # Code Hygiene — Avoiding Common Debt Patterns
 
 ## No private attribute access across modules
@@ -44,6 +45,7 @@ If >5 top-level if/elif branches with >10 lines each, extract into private helpe
 ## No duplicated logic across namespace subclasses
 
 Same method body in 2+ namespace classes → extract into:
+
 - Mixin in `_mixins.py` (ADaM namespaces)
 - `SharedVerbsMixin` in `src/fleet/core/_verb_mixin.py` (cross-namespace)
 - Shared module function (stateless utilities)

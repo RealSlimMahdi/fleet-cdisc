@@ -2,6 +2,7 @@
 description: "Use when writing or reviewing docstrings in Python source files under src/"
 applyTo: "src/**/*.py"
 ---
+
 # Docstring Convention (Google-style)
 
 All public functions and methods MUST use Google-style docstrings.

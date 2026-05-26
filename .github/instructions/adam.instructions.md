@@ -2,18 +2,19 @@
 description: "Use when writing or modifying ADaM namespace code, mixins, ADSL/OCCDS/Onco verbs, or any file under src/fleet/adam/"
 applyTo: "src/fleet/adam/**"
 ---
+
 # ADaM Namespace Mixin Discipline
 
 **Duplicating verb implementations across namespace classes is strictly forbidden.**
 
 ## Decision Tree
 
-| Scope | Action |
-|-------|--------|
-| Verb in **1** namespace only | Implement directly in that class |
-| Verb in **2+** namespaces | Extract into mixin in `_mixins.py`; all namespaces inherit |
-| Verb in **all** namespaces | Add to `SharedADaMVerbsMixin` |
-| Verb in a **subset** | Create focused mixin, inherit selectively |
+| Scope                        | Action                                                     |
+| ---------------------------- | ---------------------------------------------------------- |
+| Verb in **1** namespace only | Implement directly in that class                           |
+| Verb in **2+** namespaces    | Extract into mixin in `_mixins.py`; all namespaces inherit |
+| Verb in **all** namespaces   | Add to `SharedADaMVerbsMixin`                              |
+| Verb in a **subset**         | Create focused mixin, inherit selectively                  |
 
 ## Adding a Shared Verb
 

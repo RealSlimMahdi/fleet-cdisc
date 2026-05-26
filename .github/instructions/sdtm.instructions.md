@@ -2,6 +2,7 @@
 description: "Use when writing or modifying SDTM pipeline code, namespace verbs, codelist mappings, or any file under src/fleet/sdtm/"
 applyTo: "src/fleet/sdtm/**"
 ---
+
 # SDTM Coding Style
 
 ## Namespace API
