@@ -1235,7 +1235,7 @@
           "required": ["algorithm", "source_variable"],
           "properties": {
             "algorithm": {
-              "enum": ["assign_dtc", "assign_datetime"]
+              "enum": ["assign_dtc"]
             },
             "source_variable": {
               "type": "string",
@@ -1536,7 +1536,6 @@
                   "assign_no_ct",
                   "assign_ct",
                   "assign_dtc",
-                  "assign_datetime",
                   "hardcode_ct",
                   "hardcode_no_ct",
                   "condition_add",

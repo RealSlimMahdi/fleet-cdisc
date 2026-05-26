@@ -248,15 +248,6 @@ class TrialArms(BaseModel):
                 )
         return self
 
-    @model_validator(mode="after")
-    def check_etcd_references(self) -> TrialArms:
-        _ctx = self.model_config.get("_validation_context")  # noqa: F841
-        # Pydantic v2 context is passed via model_validate(..., context=)
-        # We access it from __pydantic_validator__ at runtime; for now,
-        # the FK check is done at the verb level (add_arms) where we have
-        # the TrialElements reference.
-        return self
-
     def to_polars(self) -> pl.DataFrame:
         """Convert validated arms to a Polars DataFrame with SDTM names.
 

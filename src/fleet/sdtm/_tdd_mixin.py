@@ -84,11 +84,6 @@ class TrialDesignMixin:
                 f"Expected sequence: {' → '.join(_STAGE_SEQUENCE)}"
             )
 
-    def _advance_stage(self, target: int) -> None:
-        stage = getattr(self, "_tdd_stage", None)
-        if stage is None or target > stage:
-            self._tdd_stage = target
-
     # ------------------------------------------------------------------ #
     # Shared TDD verbs                                                     #
     # ------------------------------------------------------------------ #

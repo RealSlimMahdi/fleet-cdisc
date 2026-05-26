@@ -39,42 +39,7 @@ if TYPE_CHECKING:
     from fleet.ct.validator import CTValidator
 
 
-def _resolve_callable(ref: str) -> Any:
-    """Resolve a callable reference by name or dotted import path.
-
-    Discovery order:
-
-    1. Look up *ref* in the Fleet transform registry.
-    2. If *ref* contains a dot, treat it as a dotted import path.
-    3. Raise ``ValueError`` if neither lookup succeeds.
-
-    Args:
-        ref: Registry name or dotted import path.
-
-    Returns:
-        The callable or :class:`~fleet.core.derivation.Derivation` object.
-
-    Raises:
-        ValueError: If *ref* cannot be resolved.
-    """
-    from fleet.adam.transforms import get_transform
-
-    try:
-        return get_transform(ref)
-    except KeyError:
-        pass
-
-    if "." in ref:
-        import importlib
-
-        module_path, _, attr = ref.rpartition(".")
-        mod = importlib.import_module(module_path)
-        return getattr(mod, attr)
-
-    raise ValueError(
-        f"Callable '{ref}' is not registered and is not a dotted import path. "
-        "Register it with @derivation or import the derivations module before from_spec()."
-    )
+from fleet.core._resolve_callable import resolve_callable as _resolve_callable
 
 
 @pl.api.register_dataframe_namespace("sdtm")
@@ -1113,18 +1078,16 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
         *,
         source: str,
         delimiter: str = "|",
-        id_cols: list[str] | None = None,
     ) -> SDTMNamespace:
         """Explode a delimited multi-response field into separate rows.
 
         Materialises the current pipeline, then splits *source* on
-        *delimiter* and explodes, keeping *id_cols* intact.
+        *delimiter* and explodes.
 
         Args:
             target: Name of the output column for the split values.
             source: Name of the raw column containing delimited responses.
             delimiter: Separator between responses (default ``"|"``).
-            id_cols: Columns to carry through unchanged.
 
         Returns:
             SDTMNamespace: A fresh namespace with one row per response.
@@ -1136,7 +1099,6 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
                     raw_df.sdtm
                     .multiple_responses(
                         "AETERM", source="ae_terms", delimiter="|",
-                        id_cols=["USUBJID"],
                     )
                     .to_frame()
                 )
@@ -1203,7 +1165,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
                     ct_codelist=var.ct_codelist or "",
                     ct_mapping=var.ct_mapping,
                 )
-            elif alg in ("assign_dtc", "assign_datetime", "date"):
+            elif alg in ("assign_dtc", "date"):
                 kwargs: dict[str, Any] = {}
                 if var.source:
                     kwargs["source"] = var.source
@@ -1258,8 +1220,14 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
                     ns = ns.derivation(fn)
                 else:
                     ns = ns._materialise_then(fn(ns.to_frame()))
-            # merge, group_by, multiple_responses require extra data
-            # — skip in spec-driven mode if not fully specified
+            else:
+                import warnings
+
+                warnings.warn(
+                    f"from_spec: skipping variable '{target}' — "
+                    f"algorithm '{alg}' is not supported in spec-driven mode.",
+                    stacklevel=2,
+                )
 
         return ns
 
@@ -1311,183 +1279,6 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
             )
             result.append(spec)
         return result
-
-    # ------------------------------------------------------------------ #
-    # Validation integration                                               #
-    # ------------------------------------------------------------------ #
-
-    def validate(
-        self,
-        domain: str,
-        version: str = "3.4",
-        rules_engine_path: Path | None = None,
-        custom_rules: str | Path | None = None,
-    ) -> SDTMNamespace:
-        """Run CDISC SDTM conformance validation and print the report.
-
-        Returns *self* so the chain can continue after validation.
-
-        Args:
-            domain: SDTM domain code (e.g. ``"DM"``, ``"AE"``).
-            version: SDTM IG version to validate against (default ``"3.4"``).
-            rules_engine_path: Optional path to a custom rules engine.
-            custom_rules: Optional path to a directory containing custom
-                validation rule YAML files. Passed to the engine via ``-lr``.
-
-        Returns:
-            SDTMNamespace: The same namespace instance (for continued
-                chaining).
-
-        Examples:
-            Validate a DM domain against SDTM 3.4::
-
-                dm = (
-                    raw_df.sdtm
-                    .hardcode_no_ct("DOMAIN", value="DM")
-                    .assign_no_ct("USUBJID", source="subject_id")
-                    .validate("DM", version="3.4")
-                    .to_frame()
-                )
-
-            Validate with custom sponsor rules::
-
-                ae = (
-                    raw_df.sdtm
-                    .hardcode_no_ct("DOMAIN", value="AE")
-                    .validate("AE", custom_rules="specs/custom_rules")
-                    .to_frame()
-                )
-        """
-        from fleet.validation.service import ValidationService
-
-        svc = ValidationService(rules_engine_path=rules_engine_path)
-        result = svc.validate_sdtm(
-            self.to_frame(), domain=domain, version=version, custom_rules=custom_rules
-        )
-        result.print_report()
-        return self
-
-    # ------------------------------------------------------------------ #
-    # select — column selection / variable-leakage guard                  #
-    # ------------------------------------------------------------------ #
-
-    def select(
-        self,
-        columns: list[str] | None = None,
-        *,
-        spec: str | Path | None = None,
-        dataset: str | None = None,
-        drop_pattern: str | None = r"^_",
-    ) -> SDTMNamespace:
-        """
-        Materialise the pipeline then select and reorder columns.
-
-        Resolution order:
-
-        1. ``spec`` + ``dataset``: derive the ordered column list from a
-           ``define.yaml``.  Only columns present in the frame are kept.
-        2. ``columns``: explicit list to keep (in that order).
-        3. Neither: keep all current columns (subject to ``drop_pattern``).
-
-        ``drop_pattern`` (default ``r"^_"``): regex applied *before* the
-        explicit selection — columns whose names match are removed.  This
-        enforces the convention that ``_``-prefixed columns are scratch
-        variables.  Set to ``None`` to disable (e.g. during debugging).
-
-        Examples:
-            Keep only spec columns, drop scratch ``_`` variables (default)::
-
-                dm = (
-                    raw_df.sdtm
-                    .select(spec="specs/sdtm/define.yaml", dataset="DM")
-                    .to_frame()
-                )
-
-            Disable auto-drop for debugging::
-
-                dm = (
-                    raw_df.sdtm
-                    .select(spec="specs/sdtm/define.yaml", dataset="DM",
-                            drop_pattern=None)
-                    .to_frame()
-                )
-        """
-        import re
-
-        df = self.to_frame()
-
-        # Step 1: drop scratch variables matching the pattern
-        if drop_pattern is not None:
-            pat = re.compile(drop_pattern)
-            df = df.select([c for c in df.columns if not pat.search(c)])
-
-        # Step 2: resolve explicit column list (spec takes priority over columns)
-        col_list = columns
-        type_map: dict[str, str] = {}
-        if spec is not None:
-            spec_path = Path(spec)
-            col_list, type_map = self._spec_dataset_meta(spec_path, dataset)
-
-        # Step 3: intersect with existing columns (preserving spec order)
-        if col_list is not None:
-            existing = [c for c in col_list if c in df.columns]
-            df = df.select(existing)
-
-        # Step 4: cast date/datetime columns declared in the spec
-        if type_map:
-            casts = []
-            for col_name, spec_type in type_map.items():
-                if col_name not in df.columns:
-                    continue
-                dtype = df[col_name].dtype
-                if spec_type == "date":
-                    if dtype == pl.String:
-                        casts.append(pl.col(col_name).str.to_date("%Y-%m-%d", strict=False))
-                    elif dtype.is_(pl.Datetime) or str(dtype).startswith("Datetime"):
-                        casts.append(pl.col(col_name).cast(pl.Date))
-                elif spec_type == "datetime":
-                    if dtype == pl.String:
-                        casts.append(pl.col(col_name).str.to_datetime(strict=False))
-            if casts:
-                df = df.with_columns(casts)
-
-        return self._new_from(df)
-
-    @staticmethod
-    def _spec_dataset_meta(
-        spec_path: Path, dataset: str | None
-    ) -> tuple[list[str], dict[str, str]]:
-        """Return ``(column_names, date_type_map)`` for *dataset* from a define.yaml.
-
-        Parses the YAML once and resolves the dataset, avoiding duplicate I/O.
-        """
-        spec_data = yaml.safe_load(spec_path.read_text())
-        datasets = spec_data.get("datasets", [])
-        if dataset is None:
-            if len(datasets) != 1:
-                names = [d["name"] for d in datasets]
-                raise ValueError(
-                    f"define.yaml contains {len(datasets)} datasets {names}; "
-                    "pass dataset= to select one."
-                )
-            ds = datasets[0]
-        else:
-            matches = [d for d in datasets if d["name"].upper() == dataset.upper()]
-            if not matches:
-                names = [d["name"] for d in datasets]
-                raise ValueError(
-                    f"Dataset '{dataset}' not found in define.yaml. Available: {names}"
-                )
-            ds = matches[0]
-        columns = [v["name"] for v in ds["variables"]]
-        type_map = {
-            v["name"]: v["type"] for v in ds["variables"] if v.get("type") in ("date", "datetime")
-        }
-        return columns, type_map
-
-    def _new_from(self, df: pl.DataFrame) -> SDTMNamespace:
-        """Return a fresh SDTMNamespace wrapping *df* as a lazy plan."""
-        return self._materialise_then(df)
 
     # ------------------------------------------------------------------ #
     # Terminal operations                                                  #

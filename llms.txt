@@ -1810,7 +1810,7 @@ if __name__ == "__main__":
 - `group_by(*, group_cols: list[str], agg: list[pl.Expr]) -> SDTMNamespace` — Group by *group_cols* and apply *agg* aggregations.
 - `dataset_level(target: str, *, value: Any) -> SDTMNamespace` — Set a dataset-level constant on *target* (alias for ``hardcode_no_ct``).
 - `notsubmitted(*targets: str) -> SDTMNamespace` — Mark one or more variables as not submitted (set to null).
-- `multiple_responses(target: str, *, source: str, delimiter: str = '|', id_cols: list[str] | None = None) -> SDTMNamespace` — Explode a delimited multi-response field into separate rows.
+- `multiple_responses(target: str, *, source: str, delimiter: str = '|') -> SDTMNamespace` — Explode a delimited multi-response field into separate rows.
 - `to_frame() -> pl.DataFrame` — Materialise the accumulated pipeline into a Polars DataFrame.
 
 ## Trial Design Domain (TDD) verbs
@@ -1888,7 +1888,7 @@ Available on `df.adam` (BDS base namespace). Shared verbs (source, derivation, a
 - `duration(target: str, *, start: str | pl.Expr, end: str | pl.Expr, unit: str = 'days', add_one: bool | None = None, out: str = 'numeric') -> Self` — Compute the duration between two date/datetime columns.
 - `count_events(target: str, *, from_dataset: pl.DataFrame, where: str | pl.Expr | None = None, groups: list[str] | None = None) -> Self` — Derive *target* as the count of matching records in *from_dataset*.
 - `age_years(target: str = 'AAGE', *, age_col: str = 'AGE', age_unit_col: str = 'AGEU') -> Self` — Convert age to years, handling common unit strings.
-- `derive_period(*, periods: list[dict[str, Any]], start_date: str = 'TRTSDT') -> Self` — Create standard Subperiod / Phase variables.
+- `derive_period(*, periods: list[dict[str, Any]]) -> Self` — Create standard Subperiod / Phase variables.
 
 ## OCCDS verbs
 

@@ -253,7 +253,6 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         target: str = "EVID",
         *,
         from_col: str | None = None,
-        dose_indicator: int = 1,
         conc_indicator: int = 0,
     ) -> Self:
         """Derive Event ID (EVID) for Population PK datasets.
@@ -264,7 +263,6 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         Args:
             target: Name of the output column (default ``"EVID"``).
             from_col: Existing integer column encoding EVID.
-            dose_indicator: Value for dosing records (default ``1``).
             conc_indicator: Value for concentration records (default ``0``).
 
         Returns:
@@ -518,19 +516,17 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         conc_col: str,
         lloq_col: str | None = None,
         blq_label: str = "BLQ",
-        digits: int = 3,
     ) -> Self:
         """Derive a listing-ready categorised analysis value (AVALCAT1).
 
         Encodes BLQ records as *blq_label* and formats numeric concentrations
-        to *digits* significant digits as a string.
+        as strings.
 
         Args:
             target: Name of the output column.
             conc_col: Column containing the concentration value.
             lloq_col: Optional LLOQ column for numeric BLQ check.
             blq_label: Label for BLQ records (default ``"BLQ"``).
-            digits: Significant digits for numeric formatting (default ``3``).
 
         Returns:
             Self: The namespace with *target* appended.
@@ -552,8 +548,6 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         else:
             is_blq = pl.col(conc_col).cast(pl.String) == "<BLQ"
 
-        # Format numeric value to `digits` significant digits (string)
-        # Polars doesn't have signif() natively; we approximate via round_sig helper
         conc_str = pl.col(conc_col).cast(pl.Float64, strict=False).cast(pl.String)
 
         return self._chain(

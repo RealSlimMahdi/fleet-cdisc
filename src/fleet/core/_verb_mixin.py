@@ -730,6 +730,7 @@ class SharedVerbsMixin:
         dataset_or_domain: str,
         version: str | None = None,
         rules_engine_path: Path | None = None,
+        custom_rules: str | Path | None = None,
     ) -> Self:
         """Run CDISC conformance validation and print the report.
 
@@ -744,6 +745,8 @@ class SharedVerbsMixin:
             version: IG version to validate against.  Defaults to
                 ``_VALIDATE_DEFAULT_VERSION``.
             rules_engine_path: Optional path to a custom rules engine.
+            custom_rules: Optional path to a directory containing custom
+                validation rule YAML files. Passed to the engine via ``-lr``.
 
         Returns:
             Self: The same namespace instance (for continued chaining).
@@ -772,9 +775,13 @@ class SharedVerbsMixin:
         svc = ValidationService(rules_engine_path=rules_engine_path)
 
         if self._VALIDATE_STANDARD == "adam":
-            result = svc.validate_adam(self.to_frame(), dataset=dataset_or_domain, version=ver)
+            result = svc.validate_adam(
+                self.to_frame(), dataset=dataset_or_domain, version=ver, custom_rules=custom_rules
+            )
         else:
-            result = svc.validate_sdtm(self.to_frame(), domain=dataset_or_domain, version=ver)
+            result = svc.validate_sdtm(
+                self.to_frame(), domain=dataset_or_domain, version=ver, custom_rules=custom_rules
+            )
 
         result.print_report()
         return self

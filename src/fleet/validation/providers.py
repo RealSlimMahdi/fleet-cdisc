@@ -1,4 +1,4 @@
-"""Validation provider abstractions and registry."""
+"""Validation provider abstractions."""
 
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -70,21 +70,3 @@ class OfficialRulesEngineProvider(ValidationProvider):
             domain=dataset,
             custom_rules=custom_rules,
         )
-
-
-class ValidationProviderRegistry:
-    """Registry for selecting validation providers by name."""
-
-    _providers: dict[str, type[ValidationProvider]] = {
-        "official": OfficialRulesEngineProvider,
-    }
-
-    @classmethod
-    def create(cls, provider_name: str = "official", **kwargs) -> ValidationProvider:
-        provider_cls = cls._providers.get(provider_name)
-        if provider_cls is None:
-            available = ", ".join(sorted(cls._providers.keys()))
-            raise ValueError(
-                f"Unknown validation provider '{provider_name}'. Available: {available}"
-            )
-        return provider_cls(**kwargs)

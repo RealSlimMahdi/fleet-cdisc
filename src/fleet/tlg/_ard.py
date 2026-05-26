@@ -22,10 +22,11 @@ Polars adaptation notes vs. R {cards}:
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import polars as pl
 
-from ._specs import GroupPool, SchemaError
+from ._specs import GroupPool, SchemaError, Statistic
 
 # ------------------------------------------------------------------ #
 # Canonical ARD schema (aligned with {cards})                          #
@@ -377,3 +378,182 @@ def compute_big_n(
     df = expand_pools(df, pools, group_col)
     counts = df.group_by(group_col).agg(pl.col("USUBJID").n_unique().alias("N")).sort(group_col)
     return dict(zip(counts[group_col].to_list(), counts["N"].to_list()))
+
+
+# ------------------------------------------------------------------ #
+# Shared TLG computation helpers                                       #
+# ------------------------------------------------------------------ #
+
+
+def validate_pools(
+    df: pl.DataFrame,
+    pools: list[GroupPool],
+    group_col: str,
+) -> None:
+    """Validate pool arm references against actual data.
+
+    Args:
+        df: The analysis DataFrame.
+        pools: Pool definitions to validate.
+        group_col: Column containing treatment arm labels.
+
+    Raises:
+        SchemaError: If a pool references arms not present in the data.
+    """
+    if not pools:
+        return
+    actual = set(df[group_col].drop_nulls().unique().to_list())
+    for pool in pools:
+        if pool.arms == "*":
+            continue
+        missing = [a for a in pool.arms if a not in actual]
+        if missing:
+            raise SchemaError(
+                f"Pool '{pool.label}' references arm(s) {missing} but "
+                f"{group_col} contains only {sorted(actual)}"
+            )
+
+
+def compute_stat(
+    stat_type: Statistic,
+    level_df: pl.DataFrame,
+    arm_n: int,
+) -> tuple[str, str, float | int | str | None]:
+    """Compute a single statistic for a subset of data.
+
+    Args:
+        stat_type: The statistic to compute.
+        level_df: Filtered DataFrame for this analysis level.
+        arm_n: Big-N denominator for the arm.
+
+    Returns:
+        Tuple of (stat_name, stat_label, stat_value).
+    """
+    if stat_type == Statistic.N_SUBJECTS:
+        n = level_df["USUBJID"].n_unique() if len(level_df) > 0 else 0
+        return ("n", "n", n)
+    elif stat_type == Statistic.N_EVENTS:
+        return ("n_events", "Events", len(level_df))
+    elif stat_type == Statistic.N_PCT:
+        n = level_df["USUBJID"].n_unique() if len(level_df) > 0 else 0
+        pct = round(n / arm_n * 100, 1) if arm_n > 0 else 0.0
+        return ("pct", "n (%)", pct)
+    elif stat_type == Statistic.MEAN:
+        val = level_df["AVAL"].mean() if "AVAL" in level_df.columns and len(level_df) > 0 else None
+        return ("mean", "Mean", val)
+    elif stat_type == Statistic.SD:
+        val = level_df["AVAL"].std() if "AVAL" in level_df.columns and len(level_df) > 0 else None
+        return ("sd", "SD", val)
+    elif stat_type == Statistic.MEDIAN:
+        val = (
+            level_df["AVAL"].median() if "AVAL" in level_df.columns and len(level_df) > 0 else None
+        )
+        return ("median", "Median", val)
+    elif stat_type == Statistic.MIN:
+        val = level_df["AVAL"].min() if "AVAL" in level_df.columns and len(level_df) > 0 else None
+        return ("min", "Min", val)
+    elif stat_type == Statistic.MAX:
+        val = level_df["AVAL"].max() if "AVAL" in level_df.columns and len(level_df) > 0 else None
+        return ("max", "Max", val)
+    elif stat_type == Statistic.Q1:
+        val = (
+            level_df["AVAL"].quantile(0.25)
+            if "AVAL" in level_df.columns and len(level_df) > 0
+            else None
+        )
+        return ("q1", "Q1", val)
+    elif stat_type == Statistic.Q3:
+        val = (
+            level_df["AVAL"].quantile(0.75)
+            if "AVAL" in level_df.columns and len(level_df) > 0
+            else None
+        )
+        return ("q3", "Q3", val)
+    else:
+        return (stat_type.value, stat_type.value, None)
+
+
+def ard_row(
+    group1: str,
+    group1_level: str,
+    variable: str,
+    variable_level: str,
+    stat_name: str,
+    stat_label: str,
+    stat: float | int | str | None,
+    context: str,
+    *,
+    group2: str = "",
+    group2_level: str = "",
+    fmt_fn: str | None = None,
+    warning: str | None = None,
+    error: str | None = None,
+) -> dict[str, Any]:
+    """Build a single ARD row dict ({cards}-compatible).
+
+    Args:
+        group1: Primary grouping variable name.
+        group1_level: Level within group1.
+        variable: Analysis variable name.
+        variable_level: Level of the analysis variable.
+        stat_name: Short stat identifier.
+        stat_label: Human-readable label.
+        stat: The computed statistic value.
+        context: TLG context identifier.
+        group2: Secondary grouping variable name.
+        group2_level: Level within group2.
+        fmt_fn: Format specifier; uses default if None.
+        warning: Warning message from computation.
+        error: Error message from computation.
+
+    Returns:
+        dict: A single ARD row.
+    """
+    return {
+        "group1": group1,
+        "group1_level": group1_level,
+        "group2": group2,
+        "group2_level": group2_level,
+        "variable": variable,
+        "variable_level": variable_level,
+        "stat_name": stat_name,
+        "stat_label": stat_label,
+        "stat": stat,
+        "fmt_fn": fmt_fn if fmt_fn is not None else default_fmt_fn(stat_name),
+        "stat_fmt": None,
+        "warning": warning,
+        "error": error,
+        "context": context,
+    }
+
+
+def rows_to_ard(rows: list[dict[str, Any]]) -> pl.DataFrame:
+    """Convert a list of ARD row dicts to a {cards}-compatible Polars DataFrame.
+
+    Args:
+        rows: List of dicts (from ``ard_row()``).
+
+    Returns:
+        pl.DataFrame: Formatted ARD DataFrame.
+    """
+    if not rows:
+        return pl.DataFrame(schema=ARD_SCHEMA)
+
+    for row in rows:
+        v = row["stat"]
+        if v is None:
+            row["stat"] = None
+        elif isinstance(v, (int, float)):
+            row["stat"] = float(v)
+        else:
+            row["stat"] = float(v) if str(v).replace(".", "", 1).isdigit() else None
+
+    df = pl.DataFrame(rows).cast({"stat": pl.Float64}, strict=False)
+
+    for col in ("warning", "error", "stat_fmt"):
+        if col in df.columns and df[col].dtype == pl.Null:
+            df = df.with_columns(pl.lit(None, dtype=pl.Utf8).alias(col))
+
+    df = format_ard(df)
+
+    return df

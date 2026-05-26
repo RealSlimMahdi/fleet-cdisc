@@ -317,19 +317,13 @@ class RulesScaffolder:
                 for rule_id, rule in all_rules.items():
                     scope = rule.get("Scope", {})
                     use_case = str(scope.get("Use_Case", "")).upper()
-                    classes = [
-                        c.upper()
-                        for c in scope.get("Classes", {}).get("Include", [])
-                    ]
+                    classes = [c.upper() for c in scope.get("Classes", {}).get("Include", [])]
                     if "ANALYSIS" in use_case or any(
-                        c in ("ADAM", "BDS", "OCCDS", "ADSL")
-                        for c in classes
+                        c in ("ADAM", "BDS", "OCCDS", "ADSL") for c in classes
                     ):
                         rules[rule_id] = rule
                 if rules:
-                    logger.info(
-                        "Found %d ADaM rules via TIG endpoint", len(rules)
-                    )
+                    logger.info("Found %d ADaM rules via TIG endpoint", len(rules))
                 else:
                     logger.info(
                         "TIG endpoint returned %d rules but none matched ADaM filters",
@@ -347,12 +341,8 @@ class RulesScaffolder:
         if not rules:
             logger.warning("No ADaM rules returned for IG version %s", version_api)
             print(f"No ADaM rules found for ADAMIG {version_api}.")
-            print(
-                "  Note: CDISC has not yet published machine-executable ADaM conformance"
-            )
-            print(
-                "  rules in the Library API. Consider writing custom rules for ADaM"
-            )
+            print("  Note: CDISC has not yet published machine-executable ADaM conformance")
+            print("  rules in the Library API. Consider writing custom rules for ADaM")
             print("  validation (see `fleet add-rule`).")
             return context.rules_adam_dir
 

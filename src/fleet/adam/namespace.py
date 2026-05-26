@@ -83,45 +83,7 @@ if TYPE_CHECKING:
     from .vaccine_namespace import VaccineNamespace
 
 
-def _resolve_callable(ref: str) -> Any:
-    """Resolve a callable reference by name or dotted import path.
-
-    Discovery order:
-
-    1. Look up *ref* in the Fleet transform registry
-       (:func:`~fleet.adam.transforms.get_transform`).
-    2. If *ref* contains a dot, treat it as a dotted import path
-       (``module.attr``).
-    3. Raise ``ValueError`` if neither lookup succeeds.
-
-    Args:
-        ref: Registry name (e.g. ``"AGEGR1"``) or dotted import path
-             (e.g. ``"examples.cdiscpilot01.adam.derivations.AGEGR1"``).
-
-    Returns:
-        The callable or :class:`~fleet.core.derivation.Derivation` object.
-
-    Raises:
-        ValueError: If *ref* cannot be resolved.
-    """
-    from fleet.adam.transforms import get_transform
-
-    try:
-        return get_transform(ref)
-    except KeyError:
-        pass
-
-    if "." in ref:
-        import importlib
-
-        module_path, _, attr = ref.rpartition(".")
-        mod = importlib.import_module(module_path)
-        return getattr(mod, attr)
-
-    raise ValueError(
-        f"Callable '{ref}' is not registered and is not a dotted import path. "
-        "Register it with @derivation or import the derivations module before from_spec()."
-    )
+from fleet.core._resolve_callable import resolve_callable as _resolve_callable
 
 
 @pl.api.register_dataframe_namespace("adam")
@@ -1099,26 +1061,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 ns = ns.condderivation(
                     target, conditions=var.conditions or [], else_value=var.else_value
                 )
-            elif alg == "std_function":
-                ns = ns._std_function_dispatch(
-                    target,
-                    func=var.func or "chg",
-                    analysis_date=var.analysis_date,
-                    reference_date=var.reference_date,
-                    aval=var.aval or "AVAL",
-                    base=var.base or "BASE",
-                    weight=var.weight,
-                    height=var.height,
-                    systolic=getattr(var, "systolic", None),
-                    diastolic=getattr(var, "diastolic", None),
-                    qt=getattr(var, "qt", None),
-                    rr=getattr(var, "rr", None),
-                    method=getattr(var, "method", None),
-                    baseline_flag=var.baseline_flag or "ABLFL",
-                    baseline_criteria=var.baseline_criteria,
-                    groups=getattr(var, "groups", None),
-                )
-            # New first-class BDS algorithm names usable directly in YAML specs
+            # First-class BDS algorithm names usable directly in YAML specs
             elif alg in (
                 "study_day",
                 "baseline",
@@ -1207,7 +1150,14 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     ns = ns.derivation(fn)
                 else:
                     ns = ns._materialise_then(fn(ns.to_frame()))
-            # lookup: skip in spec-driven (requires external dataset object)
+            else:
+                import warnings
+
+                warnings.warn(
+                    f"from_spec: skipping variable '{target}' — "
+                    f"algorithm '{alg}' is not supported in spec-driven mode.",
+                    stacklevel=2,
+                )
 
         return ns
 
@@ -1248,191 +1198,6 @@ class AdamNamespace(SharedADaMVerbsMixin):
             )
             result.append(spec)
         return result
-
-    # ------------------------------------------------------------------ #
-    # Validation integration                                               #
-    # ------------------------------------------------------------------ #
-
-    def validate(
-        self,
-        dataset: str,
-        version: str = "1.3",
-        rules_engine_path: Path | None = None,
-        custom_rules: str | Path | None = None,
-    ) -> AdamNamespace:
-        """Run CDISC ADaM validation and print the report.
-
-        Returns *self* so the chain can continue after validation.
-
-        Args:
-            dataset: ADaM dataset name (e.g. ``"ADSL"``, ``"ADVS"``).
-            version: ADaM IG version to validate against (default ``"1.3"``).
-            rules_engine_path: Optional path to a custom rules engine.
-            custom_rules: Optional path to a directory containing custom
-                validation rule YAML files. Passed to the engine via ``-lr``.
-
-        Returns:
-            AdamNamespace: The same namespace instance (for continued
-                chaining).
-
-        Examples:
-            Validate an ADSL dataset against ADaM 1.3::
-
-                adsl = (
-                    dm_df.adam.adsl
-                    .source("USUBJID")
-                    .validate("ADSL", version="1.3")
-                    .to_frame()
-                )
-
-            Validate with custom sponsor rules::
-
-                adae = (
-                    ae_df.adam.occds
-                    .source("USUBJID")
-                    .validate("ADAE", custom_rules="specs/custom_rules")
-                    .to_frame()
-                )
-        """
-        from ..validation.service import ValidationService
-
-        svc = ValidationService(rules_engine_path=rules_engine_path)
-        result = svc.validate_adam(
-            self.to_frame(), dataset=dataset, version=version, custom_rules=custom_rules
-        )
-        result.print_report()
-        return self
-
-    # ------------------------------------------------------------------ #
-    # Terminal operation                                                   #
-    # ------------------------------------------------------------------ #
-
-    # ------------------------------------------------------------------ #
-    # select — column selection / variable-leakage guard                  #
-    # ------------------------------------------------------------------ #
-
-    def select(
-        self,
-        columns: list[str] | None = None,
-        *,
-        spec: str | Path | None = None,
-        dataset: str | None = None,
-        drop_pattern: str | None = r"^_",
-    ) -> AdamNamespace:
-        """
-        Materialise the pipeline then select and reorder columns.
-
-        Resolution order:
-
-        1. ``spec`` + ``dataset``: derive the ordered column list from a
-           ``define.yaml``.  Only columns present in the frame are kept.
-        2. ``columns``: explicit list to keep (in that order).
-        3. Neither: keep all current columns (subject to ``drop_pattern``).
-
-        ``drop_pattern`` (default ``r"^_"``): regex applied *before* the
-        explicit selection — columns whose names match are removed.  This
-        enforces the convention that ``_``-prefixed columns are scratch
-        variables.  Set to ``None`` to disable (e.g. during debugging).
-
-        Examples:
-
-            Keep only spec columns, drop scratch ``_`` variables (default)::
-
-                advs = (
-                    vs_raw.adam
-                    .select(spec="specs/adam/define.yaml", dataset="ADVS")
-                    .to_frame()
-                )
-
-            Disable auto-drop for debugging::
-
-                advs = (
-                    vs_raw.adam
-                    .select(spec="specs/adam/define.yaml", dataset="ADVS",
-                            drop_pattern=None)
-                    .to_frame()
-                )
-
-            Drop ``_`` variables only, keep everything else::
-
-                advs = (
-                    vs_raw.adam
-                    .select()
-                    .to_frame()
-                )
-        """
-        import re
-
-        df = self.to_frame()
-
-        # Step 1: drop scratch variables matching the pattern
-        if drop_pattern is not None:
-            pat = re.compile(drop_pattern)
-            df = df.select([c for c in df.columns if not pat.search(c)])
-
-        # Step 2: resolve explicit column list (spec takes priority over columns)
-        col_list = columns
-        type_map: dict[str, str] = {}
-        if spec is not None:
-            spec_path = Path(spec)
-            col_list, type_map = self._spec_dataset_meta(spec_path, dataset)
-
-        # Step 3: intersect with existing columns (preserving spec order)
-        if col_list is not None:
-            existing = [c for c in col_list if c in df.columns]
-            df = df.select(existing)
-
-        # Step 4: cast date/datetime columns declared in the spec
-        if type_map:
-            casts = []
-            for col_name, spec_type in type_map.items():
-                if col_name not in df.columns:
-                    continue
-                dtype = df[col_name].dtype
-                if spec_type == "date":
-                    if dtype == pl.String:
-                        casts.append(pl.col(col_name).str.to_date("%Y-%m-%d", strict=False))
-                    elif dtype.is_(pl.Datetime) or str(dtype).startswith("Datetime"):
-                        casts.append(pl.col(col_name).cast(pl.Date))
-                elif spec_type == "datetime":
-                    if dtype == pl.String:
-                        casts.append(pl.col(col_name).str.to_datetime(strict=False))
-            if casts:
-                df = df.with_columns(casts)
-
-        return self._materialise_then(df)
-
-    @staticmethod
-    def _spec_dataset_meta(
-        spec_path: Path, dataset: str | None
-    ) -> tuple[list[str], dict[str, str]]:
-        """Return ``(column_names, date_type_map)`` for *dataset* from a define.yaml.
-
-        Parses the YAML once and resolves the dataset, avoiding duplicate I/O.
-        """
-        spec_data = yaml.safe_load(spec_path.read_text())
-        datasets = spec_data.get("datasets", [])
-        if dataset is None:
-            if len(datasets) != 1:
-                names = [d["name"] for d in datasets]
-                raise ValueError(
-                    f"define.yaml contains {len(datasets)} datasets {names}; "
-                    "pass dataset= to select one."
-                )
-            ds = datasets[0]
-        else:
-            matches = [d for d in datasets if d["name"].upper() == dataset.upper()]
-            if not matches:
-                names = [d["name"] for d in datasets]
-                raise ValueError(
-                    f"Dataset '{dataset}' not found in define.yaml. Available: {names}"
-                )
-            ds = matches[0]
-        columns = [v["name"] for v in ds["variables"]]
-        type_map = {
-            v["name"]: v["type"] for v in ds["variables"] if v.get("type") in ("date", "datetime")
-        }
-        return columns, type_map
 
     # ------------------------------------------------------------------ #
     # ADaM sub-structures (accessed as df.adam.adsl / df.adam.occds)       #

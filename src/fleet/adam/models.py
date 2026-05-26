@@ -17,7 +17,6 @@ class ADAMAlgorithm(StrEnum):
     RENAME = "rename"
     CONDDERIVATION = "condderivation"
     LOOKUP = "lookup"
-    STD_FUNCTION = "std_function"  # YAML backward compat; dispatches to typed methods
     WHERECLAUSES = "whereclauses"
     # BDS first-class methods (also valid as direct YAML algorithm keys)
     STUDY_DAY = "study_day"

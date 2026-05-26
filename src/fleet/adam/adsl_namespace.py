@@ -292,7 +292,6 @@ class ADSLNamespace(SharedADaMVerbsMixin):
         self,
         *,
         periods: list[dict[str, Any]],
-        start_date: str = "TRTSDT",
     ) -> Self:
         """Create standard Subperiod / Phase variables.
 
@@ -302,7 +301,6 @@ class ADSLNamespace(SharedADaMVerbsMixin):
         Args:
             periods: List of dicts each with ``"number"``, ``"start"``,
                 ``"end"``, and optionally ``"treatment"``.
-            start_date: Reference start date column (default ``"TRTSDT"``).
 
         Returns:
             Self: The namespace with period columns appended.
