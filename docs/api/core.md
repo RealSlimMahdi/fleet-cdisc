@@ -45,6 +45,17 @@ options:
 show_root_heading: true
 heading_level: 3
 
+## SharedVerbsMixin
+
+Verbs available on every namespace (`df.sdtm`, `df.adam`, `df.adam.adsl`, …).
+
+::: fleet.core._verb_mixin.SharedVerbsMixin
+options:
+show_root_heading: false
+heading_level: 3
+members_order: source
+filters: ["!^_"]
+
 ## Exceptions
 
 ::: fleet.core.exceptions
