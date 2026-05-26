@@ -2,126 +2,126 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/changelog/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/test-status/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/validation-strategy/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/why-fleet/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/adam/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/adsl/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/cheat_sheet/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/codelists/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/core/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/ct/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/define_xml/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/occds/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/sdtm/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/ta/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/tdd/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/api/tlg/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/concepts/advanced/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/concepts/custom-rules/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/concepts/define-yaml/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/concepts/pipeline/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/concepts/tdd/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/examples/01_code_driven_pipeline/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/examples/02_spec_driven_pipeline/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/examples/full_pipeline/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/examples/r2r_strategy/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/getting-started/cli/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/getting-started/installation/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/getting-started/quickstart/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/getting-started/troubleshooting/</loc>
-         <lastmod>2026-05-20</lastmod>
+         <lastmod>2026-05-26</lastmod>
     </url>
 </urlset>
