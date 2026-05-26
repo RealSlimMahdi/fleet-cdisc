@@ -29,15 +29,15 @@ Importing `fleet` registers two core namespace extensions on every `polars.DataF
 All ADaM sub-structures and TA extensions are accessed as nested properties of `df.adam`:
 
 ```python
-import fleet          # registers df.sdtm, df.adam, df.tlg
+import fleet  # registers df.sdtm, df.adam, df.tlg
 import polars as pl
 
-pl.DataFrame({"x": [1]}).sdtm         # SDTM verbs
-pl.DataFrame({"x": [1]}).adam         # ADaM BDS verbs
-pl.DataFrame({"x": [1]}).adam.adsl    # ADSL verbs
-pl.DataFrame({"x": [1]}).adam.occds   # OCCDS verbs
-pl.DataFrame({"x": [1]}).adam.onco    # TA extensions via df.adam.<ta>
-pl.DataFrame({"x": [1]}).adam.pk      # PK (pharmacokinetics) verbs
-pl.DataFrame({"x": [1]}).tlg.ae       # AE summary tables and listings
-pl.DataFrame({"x": [1]}).tlg.vs       # Vital-signs summary tables
+pl.DataFrame({"x": [1]}).sdtm  # SDTM verbs
+pl.DataFrame({"x": [1]}).adam  # ADaM BDS verbs
+pl.DataFrame({"x": [1]}).adam.adsl  # ADSL verbs
+pl.DataFrame({"x": [1]}).adam.occds  # OCCDS verbs
+pl.DataFrame({"x": [1]}).adam.onco  # TA extensions via df.adam.<ta>
+pl.DataFrame({"x": [1]}).adam.pk  # PK (pharmacokinetics) verbs
+pl.DataFrame({"x": [1]}).tlg.ae  # AE summary tables and listings
+pl.DataFrame({"x": [1]}).tlg.vs  # Vital-signs summary tables
 ```

@@ -1144,6 +1144,19 @@ class AdamNamespace(SharedADaMVerbsMixin):
             elif alg == "whereclauses":
                 if var.where:
                     ns = ns.whereclauses(where=var.where)
+            elif alg == "pick":
+                pick_targets = getattr(var, "targets", None) or [target]
+                pick_events = getattr(var, "events", None) or []
+                pick_by = getattr(var, "by", None)
+                pick_order = getattr(var, "order", None)
+                pick_mode = getattr(var, "mode", "first") or "first"
+                ns = ns.pick(
+                    pick_targets,
+                    events=pick_events,
+                    by=pick_by,
+                    order=pick_order,
+                    mode=pick_mode,
+                )
             elif alg == "callable":
                 fn = _resolve_callable(var.callable_ref or "")
                 if hasattr(fn, "kind"):

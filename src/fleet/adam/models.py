@@ -32,6 +32,7 @@ class ADAMAlgorithm(StrEnum):
     COMBINE_GRADES = "combine_grades"
     DATE = "date"
     DURATION = "duration"
+    PICK = "pick"
     CALLABLE = "callable"
 
 
@@ -106,6 +107,13 @@ class ADAMVariableSpec(BaseModel):
     high_var: str | None = None  # high-direction grade column
     low_desc_var: str | None = None  # low-direction description column
     high_desc_var: str | None = None  # high-direction description column
+
+    # pick()
+    events: list[dict[str, Any]] | None = None  # ordered event dicts for pick()
+    by: list[str] | None = None  # grouping columns for pick()
+    order: str | list[str] | None = None  # sort order for pick()
+    mode: str | None = None  # "first" or "last" for pick()
+    targets: list[str] | None = None  # multi-target list for pick()
 
     # whereclauses
     where: str | None = None

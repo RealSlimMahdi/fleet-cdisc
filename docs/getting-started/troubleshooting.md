@@ -46,8 +46,7 @@ You can also comment out `.to_frame()` and print intermediate outputs to verify 
 ```python
 # To debug an intermediate state, truncate the pipeline:
 debug_df = (
-    dm.sdtm
-    .hardcode_no_ct("DOMAIN", value="DM")
+    dm.sdtm.hardcode_no_ct("DOMAIN", value="DM")
     # .assign_ct("SEX", source="sex_raw", ...)  <-- Commented out to isolate the bug
     .to_frame()
 )

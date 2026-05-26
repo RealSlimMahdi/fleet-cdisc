@@ -105,6 +105,7 @@ nav:
   - Concepts:
       - How define.yaml Works: concepts/define-yaml.md
       - Namespace Pipeline: concepts/pipeline.md
+      - "Event-Priority Derivation (pick)": concepts/pick.md
       - Trial Design Domains: concepts/tdd.md
       - Custom Validation Rules: concepts/custom-rules.md
       - Advanced Patterns: concepts/advanced.md
