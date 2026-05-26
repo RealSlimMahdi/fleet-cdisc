@@ -1,0 +1,63 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-AE-018: AE with AEACN=DRUG WITHDRAWN but no DS treatment discontinuation
+# Source: sdtmchecks::check_ae_withdr_ds_discon
+
+Core:
+  Id: SDTMCHK-AE-018
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [AE]
+
+Check:
+  all:
+    - name: AEACN
+      operator: equal_to
+      value: "DRUG WITHDRAWN"
+      value_is_literal: true
+    - name: USUBJID
+      operator: is_not_contained_by
+      value: $ds_trt_discon_subjects
+
+Operations:
+  - operator: distinct
+    domain: DS
+    name: USUBJID
+    id: $ds_trt_discon_subjects
+    filter:
+      DSSCAT: "TREATMENT"
+
+Outcome:
+  Message: >-
+    AE has AEACN='DRUG WITHDRAWN' but subject has no treatment discontinuation
+    record in DS (DSSCAT='TREATMENT'). Drug withdrawal should have a DS record.
+  Output Variables: [USUBJID, AETERM, AEDECOD, AEACN, AESTDTC]
+
+Description: >-
+  When AEACN='DRUG WITHDRAWN', there should be a corresponding treatment
+  discontinuation record in DS (DSSCAT='TREATMENT') for the subject.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-AE-018
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_ae_withdr_ds_discon
+                Document: Roche sdtmchecks
+                Section: AE Domain

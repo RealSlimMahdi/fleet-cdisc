@@ -1,0 +1,61 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-EX-010: IV infusion with same start and end time
+# Source: sdtmchecks::check_ex_infusion_exstdtc_exendtc
+
+Core:
+  Id: SDTMCHK-EX-010
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [INTERVENTIONS]
+  Domains:
+    Include: [EX]
+
+Check:
+  all:
+    - name: EXROUTE
+      operator: equal_to_case_insensitive
+      value: "INTRAVENOUS"
+    - name: EXSTDTC
+      operator: non_empty
+    - name: EXENDTC
+      operator: non_empty
+    - name: EXSTDTC
+      operator: longer_than
+      value: 10
+    - name: EXSTDTC
+      operator: date_equal_to
+      value: EXENDTC
+
+Outcome:
+  Message: >-
+    IV infusion (EXROUTE=INTRAVENOUS) has identical EXSTDTC and EXENDTC
+    including time component. Infusions should have different start and end times.
+  Output Variables: [USUBJID, EXTRT, EXROUTE, EXSTDTC, EXENDTC, EXDOSE, VISIT]
+
+Description: >-
+  For IV infusions, EXSTDTC and EXENDTC (with time) should differ.
+  Identical start/end datetimes for infusions suggest missing time data.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-EX-010
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_ex_infusion_exstdtc_exendtc
+                Document: Roche sdtmchecks
+                Section: EX Domain

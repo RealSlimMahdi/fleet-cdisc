@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-EX-007: Duplicate EX records
+# Source: sdtmchecks::check_ex_dup
+
+Core:
+  Id: SDTMCHK-EX-007
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [INTERVENTIONS]
+  Domains:
+    Include: [EX]
+
+Check:
+  all:
+    - name: EXTRT
+      operator: is_not_unique_set
+      value:
+        - USUBJID
+        - EXSTDTC
+        - EXENDTC
+        - EXDOSE
+        - VISIT
+
+Outcome:
+  Message: >-
+    Duplicate EX record detected. The combination of USUBJID, EXTRT, EXSTDTC,
+    EXENDTC, EXDOSE, and VISIT is not unique — potential duplicate entry.
+  Output Variables: [USUBJID, EXTRT, EXSTDTC, EXENDTC, EXDOSE, VISIT, EXSEQ]
+
+Description: >-
+  Checks for duplicate EX records based on key identifying variables
+  (USUBJID, EXTRT, EXSTDTC, EXENDTC, EXDOSE, VISIT).
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-EX-007
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_ex_dup
+                Document: Roche sdtmchecks
+                Section: EX Domain

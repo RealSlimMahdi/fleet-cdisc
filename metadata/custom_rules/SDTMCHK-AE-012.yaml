@@ -1,0 +1,53 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-AE-012: AE laterality missing for eye-related AEs
+# Source: sdtmchecks::check_ae_aelat
+
+Core:
+  Id: SDTMCHK-AE-012
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [AE]
+
+Check:
+  all:
+    - name: AEBODSYS
+      operator: equal_to
+      value: "EYE DISORDERS"
+      value_is_literal: true
+    - name: AELAT
+      operator: empty
+
+Outcome:
+  Message: >-
+    AEBODSYS indicates an eye disorder but AELAT (laterality) is missing.
+    Eye-related AEs should specify LEFT, RIGHT, or BILATERAL.
+  Output Variables: [USUBJID, AETERM, AEDECOD, AEBODSYS, AELAT]
+
+Description: >-
+  Eye-related AEs (AEBODSYS='EYE DISORDERS') must have AELAT populated.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-AE-012
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_ae_aelat
+                Document: Roche sdtmchecks
+                Section: AE Domain (OPHTH)

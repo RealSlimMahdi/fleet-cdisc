@@ -1,0 +1,67 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-DS-005: EX records after disposition discontinuation date
+# Source: sdtmchecks::check_ds_ex_after_discon
+
+Core:
+  Id: SDTMCHK-DS-005
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [INTERVENTIONS]
+  Domains:
+    Include: [EX]
+
+Check:
+  all:
+    - name: EXSTDTC
+      operator: non_empty
+    - name: $ds_discon_date
+      operator: non_empty
+    - name: EXSTDTC
+      operator: date_greater_than
+      value: $ds_discon_date
+      date_component: auto
+
+Operations:
+  - operator: max_date
+    domain: DS
+    name: DSSTDTC
+    id: $ds_discon_date
+    group:
+      - USUBJID
+    filter:
+      DSCAT: "DISPOSITION EVENT"
+      DSSCAT: "TREATMENT"
+
+Outcome:
+  Message: >-
+    Exposure start date (EXSTDTC) is after the treatment discontinuation date
+    from DS. Subjects should not have exposure records after discontinuing treatment.
+  Output Variables: [USUBJID, EXTRT, EXSTDTC, $ds_discon_date]
+
+Description: >-
+  EXSTDTC should not be after the treatment discontinuation date in DS.
+  Exposure after treatment discontinuation is a data integrity issue.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-DS-005
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_ds_ex_after_discon
+                Document: Roche sdtmchecks
+                Section: DS Domain

@@ -1,0 +1,55 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-TR-004: Same TR date across different visits
+# Source: sdtmchecks::check_tr_trdtc_across_visit
+
+Core:
+  Id: SDTMCHK-TR-004
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [FINDINGS]
+  Domains:
+    Include: [TR]
+
+Check:
+  all:
+    - name: TRDTC
+      operator: non_empty
+    - name: TRDTC
+      operator: is_inconsistent_across_dataset
+      value:
+        - USUBJID
+        - VISITNUM
+
+Outcome:
+  Message: >-
+    Same TRDTC date appears across different visits for the subject.
+    Each tumor response assessment visit should have a unique date.
+  Output Variables: [USUBJID, TRLINKID, TRTESTCD, TRDTC, VISIT, VISITNUM]
+
+Description: >-
+  TR assessment dates should differ across visits. The same date at multiple
+  visits suggests date transcription errors or improper visit assignment.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-TR-004
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_tr_trdtc_across_visit
+                Document: Roche sdtmchecks
+                Section: TR Domain

@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-EG-001: EG visit date ordering error
+# Source: sdtmchecks::check_eg_egdtc_visit_ordinal_error
+
+Core:
+  Id: SDTMCHK-EG-001
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [FINDINGS]
+  Domains:
+    Include: [EG]
+
+Check:
+  all:
+    - name: EGDTC
+      operator: non_empty
+    - name: VISITNUM
+      operator: non_empty
+    - name: VISITNUM
+      operator: target_is_not_sorted_by
+      within:
+        - USUBJID
+      value:
+        - name: EGDTC
+          sort_order: asc
+
+Outcome:
+  Message: >-
+    EG visit ordering error: VISITNUM is not consistent with chronological
+    order of EGDTC within the subject. A later visit has an earlier date.
+  Output Variables: [USUBJID, EGTESTCD, VISIT, VISITNUM, EGDTC]
+
+Description: >-
+  Within each subject, records at later visits (higher VISITNUM) should have
+  later or equal EGDTC. An earlier date at a later visit suggests data error.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-EG-001
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_eg_egdtc_visit_ordinal_error
+                Document: Roche sdtmchecks
+                Section: EG Domain

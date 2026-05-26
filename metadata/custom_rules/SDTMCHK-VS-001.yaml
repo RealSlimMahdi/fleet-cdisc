@@ -1,0 +1,65 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-VS-001: Diastolic BP greater than Systolic BP
+# Source: sdtmchecks::check_vs_sbp_lt_dbp
+#
+# NOTE: This check requires cross-record comparison within VS (SYSBP vs DIABP).
+# The CDISC rules engine supports cross-record checks via "Record Data [VP]"
+# rule type, but this specific check compares two different test codes within
+# the same subject/visit/timepoint. This may require Dataset Data rule type
+# or may not be fully expressible in the engine DSL.
+
+Core:
+  Id: SDTMCHK-VS-001
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [FINDINGS]
+  Domains:
+    Include: [VS]
+
+Check:
+  all:
+    - name: VSTESTCD
+      operator: equal_to
+      value: "DIABP"
+      value_is_literal: true
+    - name: VSSTRESN
+      operator: greater_than
+      value: 0
+    - name: VSSTRESN
+      operator: greater_than
+      value: "$SYSBP_VALUE"
+
+Outcome:
+  Message: >-
+    Diastolic blood pressure (DIABP) is greater than Systolic blood pressure
+    (SYSBP) for the same subject/visit. This is physiologically implausible.
+  Output Variables: [USUBJID, VISIT, VSDTC, VSTESTCD, VSSTRESN]
+
+Description: >-
+  Diastolic BP (DIABP) should not exceed Systolic BP (SYSBP) for the same
+  subject at the same timepoint. NOTE: This cross-record check may require
+  manual validation or a Dataset Data rule type in the engine.
+
+Sensitivity: Record
+Executability: Partially Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-VS-001
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_vs_sbp_lt_dbp
+                Document: Roche sdtmchecks
+                Section: VS Domain

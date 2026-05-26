@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-RS-001: RSSCAT populated but RSCAT missing
+# Source: sdtmchecks::check_rs_rscat_rsscat
+
+Core:
+  Id: SDTMCHK-RS-001
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [FINDINGS]
+  Domains:
+    Include: [RS]
+
+Check:
+  all:
+    - name: RSSCAT
+      operator: non_empty
+    - name: RSCAT
+      operator: empty
+
+Outcome:
+  Message: >-
+    RSSCAT is populated but RSCAT is missing. When a subcategory is specified,
+    the parent category must also be provided.
+  Output Variables: [USUBJID, RSTESTCD, RSDTC, RSCAT, RSSCAT]
+
+Description: >-
+  RSCAT must be populated when RSSCAT has a value.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-RS-001
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_rs_rscat_rsscat
+                Document: Roche sdtmchecks
+                Section: RS Domain (ONC)

@@ -1,0 +1,53 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-AE-022: AEACNOTH=MULTIPLE but AEACNOT1/AEACNOT2 missing
+# Source: sdtmchecks::check_ae_aeacnoth
+
+Core:
+  Id: SDTMCHK-AE-022
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [AE]
+
+Check:
+  all:
+    - name: AEACNOTH
+      operator: equal_to_case_insensitive
+      value: "MULTIPLE"
+    - name: AEACNOT1
+      operator: empty
+
+Outcome:
+  Message: >-
+    AEACNOTH is 'MULTIPLE' indicating multiple other actions but AEACNOT1 is
+    missing. When multiple actions are indicated, the detail fields should be populated.
+  Output Variables: [USUBJID, AETERM, AEACNOTH, AEACNOT1]
+
+Description: >-
+  When AEACNOTH='MULTIPLE', at least AEACNOT1 should be populated to describe
+  the specific other actions taken.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-AE-022
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_ae_aeacnoth
+                Document: Roche sdtmchecks
+                Section: AE Domain

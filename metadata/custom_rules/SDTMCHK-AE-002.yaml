@@ -1,0 +1,54 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-AE-002: AEDTHDTC populated but AESDTH not "Y"
+# Source: sdtmchecks::check_ae_aedthdtc_aesdth
+
+Core:
+  Id: SDTMCHK-AE-002
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [AE]
+
+Check:
+  all:
+    - name: AEDTHDTC
+      operator: non_empty
+    - name: AESDTH
+      operator: not_equal_to
+      value: "Y"
+      value_is_literal: true
+
+Outcome:
+  Message: >-
+    AEDTHDTC is populated but AESDTH is not 'Y'. When a death date is recorded,
+    the death seriousness criterion must be flagged.
+  Output Variables: [USUBJID, AETERM, AEDECOD, AESTDTC, AEDTHDTC, AESDTH]
+
+Description: >-
+  When AEDTHDTC (death date) is populated, AESDTH must equal 'Y'.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-AE-002
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_ae_aedthdtc_aesdth
+                Document: Roche sdtmchecks
+                Section: AE Domain
+    Category: { SDTM Checks }

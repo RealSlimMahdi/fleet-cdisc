@@ -1,0 +1,52 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-LB-005: LB date missing month (incomplete date)
+# Source: sdtmchecks::check_lb_missing_month
+
+Core:
+  Id: SDTMCHK-LB-005
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [FINDINGS]
+  Domains:
+    Include: [LB]
+
+Check:
+  all:
+    - name: LBDTC
+      operator: non_empty
+    - name: LBDTC
+      operator: is_incomplete_date
+
+Outcome:
+  Message: >-
+    LBDTC is an incomplete (partial) date. Lab collection dates should
+    have at least month-level precision (YYYY-MM-DD preferred).
+  Output Variables: [USUBJID, LBTESTCD, LBTEST, LBDTC, VISIT]
+
+Description: >-
+  LBDTC should be a complete date. Partial dates for lab results
+  indicate data quality issues with specimen collection dates.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-LB-005
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_lb_missing_month
+                Document: Roche sdtmchecks
+                Section: LB Domain

@@ -1,0 +1,50 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-DS-002: DSTERM contains "DEATH DUE TO" with blank cause
+# Source: sdtmchecks::check_ds_dsterm_death_due_to
+
+Core:
+  Id: SDTMCHK-DS-002
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [DS]
+
+Check:
+  all:
+    - name: DSTERM
+      operator: matches_regex
+      value: "^DEATH DUE TO\\s*$"
+
+Outcome:
+  Message: >-
+    DSTERM is 'DEATH DUE TO' without a specified cause. The death reason
+    must be completed (e.g., 'DEATH DUE TO ADVERSE EVENT').
+  Output Variables: [USUBJID, DSTERM, DSDECOD, DSSCAT, DSSTDTC]
+
+Description: >-
+  DSTERM must not be 'DEATH DUE TO' with a blank cause of death.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-DS-002
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_ds_dsterm_death_due_to
+                Document: Roche sdtmchecks
+                Section: DS Domain

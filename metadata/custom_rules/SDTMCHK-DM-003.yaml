@@ -1,0 +1,63 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-DM-003: DM death (DTHFL=Y) without corresponding AE or DS death record
+# Source: sdtmchecks::check_dm_ae_ds_death
+
+Core:
+  Id: SDTMCHK-DM-003
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [SPECIAL PURPOSE]
+  Domains:
+    Include: [DM]
+
+Check:
+  all:
+    - name: DTHFL
+      operator: equal_to
+      value: "Y"
+      value_is_literal: true
+    - name: USUBJID
+      operator: is_not_contained_by
+      value: $ds_death_subjects
+
+Operations:
+  - operator: distinct
+    domain: DS
+    name: USUBJID
+    id: $ds_death_subjects
+    filter:
+      DSDECOD: DEATH
+
+Outcome:
+  Message: >-
+    Subject has DTHFL='Y' in DM but no corresponding DSDECOD='DEATH' record
+    in DS domain. Death flag in DM should have matching DS disposition.
+  Output Variables: [USUBJID, DTHFL, DTHDTC]
+
+Description: >-
+  When DTHFL='Y' in DM, there should be a corresponding death record in DS
+  (DSDECOD='DEATH'). Missing DS death record is a data consistency issue.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-DM-003
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_dm_ae_ds_death
+                Document: Roche sdtmchecks
+                Section: DM Domain

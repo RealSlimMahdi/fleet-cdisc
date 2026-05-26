@@ -1,0 +1,51 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-AE-011: Both AETOXGR and AESEV are missing
+# Source: sdtmchecks::check_ae_aetoxgr
+
+Core:
+  Id: SDTMCHK-AE-011
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [AE]
+
+Check:
+  all:
+    - name: AETOXGR
+      operator: empty
+    - name: AESEV
+      operator: empty
+
+Outcome:
+  Message: >-
+    Both AETOXGR and AESEV are missing. At least one severity/grade
+    variable must be populated for every AE record.
+  Output Variables: [USUBJID, AETERM, AEDECOD, AESTDTC, AETOXGR, AESEV]
+
+Description: >-
+  Every AE record must have either AETOXGR or AESEV populated.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-AE-011
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_ae_aetoxgr
+                Document: Roche sdtmchecks
+                Section: AE Domain

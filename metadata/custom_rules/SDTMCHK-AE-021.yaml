@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-AE-021: AEREL array check — unexpected relationship values
+# Source: sdtmchecks::check_ae_aerel
+
+Core:
+  Id: SDTMCHK-AE-021
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [AE]
+
+Check:
+  all:
+    - name: AEREL
+      operator: non_empty
+    - name: AEREL
+      operator: is_not_contained_by
+      value:
+        - "RELATED"
+        - "NOT RELATED"
+        - "POSSIBLY RELATED"
+        - "PROBABLY RELATED"
+        - "UNLIKELY RELATED"
+        - "DEFINITELY RELATED"
+
+Outcome:
+  Message: >-
+    AEREL contains an unexpected value. Acceptable values include standard
+    causality terms (RELATED, NOT RELATED, POSSIBLY/PROBABLY/UNLIKELY/DEFINITELY RELATED).
+  Output Variables: [USUBJID, AETERM, AEDECOD, AEREL]
+
+Description: >-
+  AEREL should contain a valid causality assessment term. Non-standard
+  values may indicate data entry issues or unmapped source data.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-AE-021
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_ae_aerel
+                Document: Roche sdtmchecks
+                Section: AE Domain

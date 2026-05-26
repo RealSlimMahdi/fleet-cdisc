@@ -1,0 +1,49 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-TU-001: TUDTC missing for tumor identification records
+# Source: sdtmchecks::check_tu_tudtc
+
+Core:
+  Id: SDTMCHK-TU-001
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [FINDINGS]
+  Domains:
+    Include: [TU]
+
+Check:
+  all:
+    - name: TUDTC
+      operator: empty
+
+Outcome:
+  Message: >-
+    TUDTC is missing for a tumor identification record. All tumor
+    assessments must have a date recorded.
+  Output Variables: [USUBJID, TUTESTCD, TULOC, VISIT, TUDTC]
+
+Description: >-
+  TUDTC must be populated for all TU records.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-TU-001
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_tu_tudtc
+                Document: Roche sdtmchecks
+                Section: TU Domain (ONC)

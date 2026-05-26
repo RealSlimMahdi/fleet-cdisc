@@ -1,0 +1,63 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-AE-006: Grade 5 AE with inconsistent death variables
+# Source: sdtmchecks::check_ae_death
+
+Core:
+  Id: SDTMCHK-AE-006
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [AE]
+
+Check:
+  all:
+    - name: AETOXGR
+      operator: equal_to
+      value: "5"
+      value_is_literal: true
+    - any:
+        - name: AEOUT
+          operator: not_equal_to
+          value: "FATAL"
+          value_is_literal: true
+        - name: AEDTHDTC
+          operator: empty
+        - name: AESDTH
+          operator: not_equal_to
+          value: "Y"
+          value_is_literal: true
+
+Outcome:
+  Message: >-
+    AETOXGR is '5' (fatal) but death variables are inconsistent.
+    Grade 5 AEs require AEOUT='FATAL', AEDTHDTC populated, and AESDTH='Y'.
+  Output Variables: [USUBJID, AETERM, AEDECOD, AETOXGR, AEOUT, AEDTHDTC, AESDTH]
+
+Description: >-
+  When AETOXGR is '5', AEOUT must be 'FATAL', AEDTHDTC must be populated,
+  and AESDTH must be 'Y'.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-AE-006
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_ae_death
+                Document: Roche sdtmchecks
+                Section: AE Domain

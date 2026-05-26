@@ -1,0 +1,64 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-AE-020: AEACNOTH mentions study discontinuation but no DS record
+# Source: sdtmchecks::check_ae_aeacnoth_ds_disctx
+
+Core:
+  Id: SDTMCHK-AE-020
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [AE]
+
+Check:
+  all:
+    - name: AEACNOTH
+      operator: non_empty
+    - name: AEACNOTH
+      operator: contains_case_insensitive
+      value: "DISCONTINU"
+    - name: USUBJID
+      operator: is_not_contained_by
+      value: $ds_discon_subjects
+
+Operations:
+  - operator: distinct
+    domain: DS
+    name: USUBJID
+    id: $ds_discon_subjects
+    filter:
+      DSCAT: "DISPOSITION EVENT"
+
+Outcome:
+  Message: >-
+    AEACNOTH mentions discontinuation but subject has no disposition event
+    record in DS. Actions leading to discontinuation should be reflected in DS.
+  Output Variables: [USUBJID, AETERM, AEACNOTH, AESTDTC]
+
+Description: >-
+  When AEACNOTH text indicates discontinuation, there should be a corresponding
+  disposition event record in DS for the subject.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-AE-020
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_ae_aeacnoth_ds_disctx
+                Document: Roche sdtmchecks
+                Section: AE Domain

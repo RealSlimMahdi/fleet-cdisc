@@ -1,0 +1,63 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-AE-019: Death in AE (AEOUT=FATAL) without DS discontinuation
+# Source: sdtmchecks::check_ae_death_ds_discon
+
+Core:
+  Id: SDTMCHK-AE-019
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [AE]
+
+Check:
+  all:
+    - name: AEOUT
+      operator: equal_to
+      value: "FATAL"
+      value_is_literal: true
+    - name: USUBJID
+      operator: is_not_contained_by
+      value: $ds_death_subjects
+
+Operations:
+  - operator: distinct
+    domain: DS
+    name: USUBJID
+    id: $ds_death_subjects
+    filter:
+      DSDECOD: DEATH
+
+Outcome:
+  Message: >-
+    AE has AEOUT='FATAL' but subject has no death record in DS
+    (DSDECOD='DEATH'). Fatal AE outcome should correspond to DS death disposition.
+  Output Variables: [USUBJID, AETERM, AEDECOD, AEOUT, AEDTHDTC]
+
+Description: >-
+  When an AE is FATAL, there should be a corresponding DSDECOD='DEATH'
+  record in DS. Missing DS death record is a data integrity issue.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-AE-019
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_ae_death_ds_discon
+                Document: Roche sdtmchecks
+                Section: AE Domain

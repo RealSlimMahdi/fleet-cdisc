@@ -1,0 +1,58 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-PR-001: PR date missing month (incomplete date)
+# Source: sdtmchecks::check_pr_missing_month
+
+Core:
+  Id: SDTMCHK-PR-001
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [PR]
+
+Check:
+  any:
+    - all:
+        - name: PRSTDTC
+          operator: non_empty
+        - name: PRSTDTC
+          operator: is_incomplete_date
+    - all:
+        - name: PRENDTC
+          operator: non_empty
+        - name: PRENDTC
+          operator: is_incomplete_date
+
+Outcome:
+  Message: >-
+    PR date (PRSTDTC or PRENDTC) is an incomplete (partial) date. Procedure
+    dates should have at least month-level precision (YYYY-MM-DD preferred).
+  Output Variables: [USUBJID, PRTERM, PRDECOD, PRSTDTC, PRENDTC]
+
+Description: >-
+  Procedure start/end dates should include at minimum month precision.
+  Year-only dates indicate possible data quality issues.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-PR-001
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_pr_missing_month
+                Document: Roche sdtmchecks
+                Section: PR Domain

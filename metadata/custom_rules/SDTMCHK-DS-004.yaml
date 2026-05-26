@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-DS-004: Multiple death records with different dates
+# Source: sdtmchecks::check_ds_multdeath_dsstdtc
+
+Core:
+  Id: SDTMCHK-DS-004
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [DS]
+
+Check:
+  all:
+    - name: DSDECOD
+      operator: equal_to
+      value: "DEATH"
+      value_is_literal: true
+    - name: DSSTDTC
+      operator: non_empty
+    - name: DSSTDTC
+      operator: is_inconsistent_across_dataset
+      value: USUBJID
+
+Outcome:
+  Message: >-
+    Subject has multiple death records in DS with inconsistent dates (DSSTDTC).
+    When multiple DSDECOD='DEATH' records exist, they should have the same date.
+  Output Variables: [USUBJID, DSDECOD, DSSCAT, DSSTDTC, DSTERM, DSSEQ]
+
+Description: >-
+  If a subject has multiple DSDECOD='DEATH' records, DSSTDTC should be consistent.
+  Differing death dates across death records is a data integrity issue.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-DS-004
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_ds_multdeath_dsstdtc
+                Document: Roche sdtmchecks
+                Section: DS Domain

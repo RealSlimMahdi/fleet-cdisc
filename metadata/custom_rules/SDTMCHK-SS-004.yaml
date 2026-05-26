@@ -1,0 +1,63 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-SS-004: DEAD status without DS death record
+# Source: sdtmchecks::check_ss_ssdtc_dead_ds
+
+Core:
+  Id: SDTMCHK-SS-004
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [SS]
+
+Check:
+  all:
+    - name: SSSTRESC
+      operator: equal_to
+      value: "DEAD"
+      value_is_literal: true
+    - name: USUBJID
+      operator: is_not_contained_by
+      value: $ds_death_subjects
+
+Operations:
+  - operator: distinct
+    domain: DS
+    name: USUBJID
+    id: $ds_death_subjects
+    filter:
+      DSDECOD: DEATH
+
+Outcome:
+  Message: >-
+    Subject has SSSTRESC='DEAD' but no death record (DSDECOD='DEATH') in DS.
+    Subject survival status of dead should have corresponding DS disposition.
+  Output Variables: [USUBJID, SSSTRESC, SSDTC, VISIT]
+
+Description: >-
+  When SSSTRESC='DEAD', there should be a corresponding DSDECOD='DEATH'
+  record in DS. Missing death disposition is a data consistency issue.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-SS-004
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_ss_ssdtc_dead_ds
+                Document: Roche sdtmchecks
+                Section: SS Domain

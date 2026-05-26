@@ -1,0 +1,65 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-VS-002: VS date after death date
+# Source: sdtmchecks::check_vs_vsdtc_after_dd
+
+Core:
+  Id: SDTMCHK-VS-002
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [FINDINGS]
+  Domains:
+    Include: [VS]
+
+Check:
+  all:
+    - name: VSDTC
+      operator: non_empty
+    - name: $ds_death_date
+      operator: non_empty
+    - name: VSDTC
+      operator: date_greater_than
+      value: $ds_death_date
+      date_component: auto
+
+Operations:
+  - operator: max_date
+    domain: DS
+    name: DSSTDTC
+    id: $ds_death_date
+    group:
+      - USUBJID
+    filter:
+      DSDECOD: DEATH
+
+Outcome:
+  Message: >-
+    Vital signs date (VSDTC) is after the death date from DS.
+    Subjects should not have VS records after death.
+  Output Variables: [USUBJID, VSTESTCD, VSTEST, VSDTC, $ds_death_date]
+
+Description: >-
+  VSDTC should not be after the death date (DSSTDTC where DSDECOD='DEATH').
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-VS-002
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_vs_vsdtc_after_dd
+                Document: Roche sdtmchecks
+                Section: VS Domain

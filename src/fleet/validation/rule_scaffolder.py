@@ -156,9 +156,19 @@ def scaffold_rule(
     if organization:
         rule["Authorities"][0]["Organization"] = organization
 
-    # Write YAML with a helpful header comment
+    # Write YAML with schema directive and a helpful header comment
     out_file = output_dir / f"{rule_id}.yaml"
+
+    # Resolve schema path relative to output file (works with installed package)
+    import importlib.resources
+    import os
+
+    schema_ref = importlib.resources.files("fleet") / "validation" / "schemas" / "cdisc_rule_schema.json"
+    with importlib.resources.as_file(schema_ref) as schema_abs:
+        schema_rel_path = os.path.relpath(schema_abs, output_dir.resolve())
+
     header = (
+        f"# yaml-language-server: $schema={schema_rel_path}\n"
         f"# {rule_id}: {description}\n"
         "#\n"
         "# TODO: Edit the Check block below with your validation logic.\n"

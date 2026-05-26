@@ -1,0 +1,65 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-QS-003: QS date after death date
+# Source: sdtmchecks::check_qs_qsdtc_after_dd
+
+Core:
+  Id: SDTMCHK-QS-003
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [FINDINGS]
+  Domains:
+    Include: [QS]
+
+Check:
+  all:
+    - name: QSDTC
+      operator: non_empty
+    - name: $ds_death_date
+      operator: non_empty
+    - name: QSDTC
+      operator: date_greater_than
+      value: $ds_death_date
+      date_component: auto
+
+Operations:
+  - operator: max_date
+    domain: DS
+    name: DSSTDTC
+    id: $ds_death_date
+    group:
+      - USUBJID
+    filter:
+      DSDECOD: DEATH
+
+Outcome:
+  Message: >-
+    Questionnaire date (QSDTC) is after the death date from DS.
+    Subjects should not have QS records after death.
+  Output Variables: [USUBJID, QSTESTCD, QSCAT, QSDTC, $ds_death_date]
+
+Description: >-
+  QSDTC should not be after the death date (DSSTDTC where DSDECOD='DEATH').
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-QS-003
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_qs_qsdtc_after_dd
+                Document: Roche sdtmchecks
+                Section: QS Domain

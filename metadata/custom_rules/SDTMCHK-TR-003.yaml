@@ -1,0 +1,55 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-TR-003: Duplicate TR records (same date across visits)
+# Source: sdtmchecks::check_tr_dup / check_tr_trdtc_across_visit
+
+Core:
+  Id: SDTMCHK-TR-003
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [FINDINGS]
+  Domains:
+    Include: [TR]
+
+Check:
+  all:
+    - name: TRTESTCD
+      operator: is_not_unique_set
+      value:
+        - USUBJID
+        - TRLINKID
+        - TRDTC
+        - VISITNUM
+
+Outcome:
+  Message: >-
+    Duplicate TR record detected. The combination of USUBJID, TRLINKID,
+    TRTESTCD, TRDTC, and VISITNUM is not unique.
+  Output Variables: [USUBJID, TRLINKID, TRTESTCD, TRDTC, VISIT, VISITNUM, TRSEQ]
+
+Description: >-
+  TR records should be unique per subject, lesion link, test, date, and visit.
+  Duplicates suggest data entry errors or improper lesion tracking.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-TR-003
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_tr_dup
+                Document: Roche sdtmchecks
+                Section: TR Domain

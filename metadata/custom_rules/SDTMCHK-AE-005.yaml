@@ -1,0 +1,54 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-AE-005: AEOUT is FATAL but AEDTHDTC missing
+# Source: sdtmchecks::check_ae_aeout (second condition)
+
+Core:
+  Id: SDTMCHK-AE-005
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [AE]
+
+Check:
+  all:
+    - name: AEOUT
+      operator: equal_to
+      value: "FATAL"
+      value_is_literal: true
+    - name: AEDTHDTC
+      operator: empty
+
+Outcome:
+  Message: >-
+    AEOUT is 'FATAL' but AEDTHDTC is missing. Fatal AEs must have
+    a death date recorded.
+  Output Variables: [USUBJID, AETERM, AEDECOD, AEOUT, AEDTHDTC]
+
+Description: >-
+  When AEOUT is 'FATAL', AEDTHDTC must be populated.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-AE-005
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_ae_aeout
+                Document: Roche sdtmchecks
+                Section: AE Domain
+    Category: { SDTM Validation }

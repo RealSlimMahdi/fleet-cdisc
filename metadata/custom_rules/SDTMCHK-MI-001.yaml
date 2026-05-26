@@ -1,0 +1,49 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-MI-001: MISPEC missing
+# Source: sdtmchecks::check_mi_mispec
+
+Core:
+  Id: SDTMCHK-MI-001
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [FINDINGS]
+  Domains:
+    Include: [MI]
+
+Check:
+  all:
+    - name: MISPEC
+      operator: empty
+
+Outcome:
+  Message: >-
+    MISPEC (specimen) is missing. Microscopic findings must specify
+    the specimen examined.
+  Output Variables: [USUBJID, MITESTCD, MIDTC, MISPEC]
+
+Description: >-
+  MISPEC must be populated for all MI records.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-MI-001
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_mi_mispec
+                Document: Roche sdtmchecks
+                Section: MI Domain

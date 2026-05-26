@@ -1,0 +1,63 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-LB-003: LBORRES/LBSTRESC contains < or > prefix
+# Source: sdtmchecks::check_lb_lbstresc_char
+
+Core:
+  Id: SDTMCHK-LB-003
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [FINDINGS]
+  Domains:
+    Include: [LB]
+
+Check:
+  all:
+    - any:
+        - name: LBSTRESC
+          operator: starts_with
+          value: "<"
+        - name: LBSTRESC
+          operator: starts_with
+          value: ">"
+        - name: LBORRES
+          operator: starts_with
+          value: "<"
+        - name: LBORRES
+          operator: starts_with
+          value: ">"
+    - name: LBSTRESN
+      operator: empty
+
+Outcome:
+  Message: >-
+    LBORRES or LBSTRESC contains a '<' or '>' prefix and LBSTRESN is missing.
+    These values may cause missing AVAL in ADaM derivation.
+  Output Variables: [USUBJID, LBTESTCD, LBDTC, LBORRES, LBSTRESC, LBSTRESN]
+
+Description: >-
+  Flags lab records where LBORRES or LBSTRESC starts with '<' or '>' and
+  LBSTRESN is empty, indicating potential ADaM derivation issues.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-LB-003
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_lb_lbstresc_char
+                Document: Roche sdtmchecks
+                Section: LB Domain

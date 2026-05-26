@@ -1,0 +1,53 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-SS-001: SSSTAT=NOT DONE but SSORRES populated
+# Source: sdtmchecks::check_ss_ssstat_ssorres
+
+Core:
+  Id: SDTMCHK-SS-001
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [EVENTS]
+  Domains:
+    Include: [SS]
+
+Check:
+  all:
+    - name: SSSTAT
+      operator: equal_to
+      value: "NOT DONE"
+      value_is_literal: true
+    - name: SSORRES
+      operator: non_empty
+
+Outcome:
+  Message: >-
+    SSSTAT is 'NOT DONE' but SSORRES is populated. When status indicates
+    not done, the result field should be empty.
+  Output Variables: [USUBJID, SSCAT, SSDTC, SSSTAT, SSORRES]
+
+Description: >-
+  When SSSTAT is 'NOT DONE', SSORRES should be empty.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-SS-001
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_ss_ssstat_ssorres
+                Document: Roche sdtmchecks
+                Section: SS Domain

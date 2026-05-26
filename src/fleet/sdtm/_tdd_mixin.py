@@ -150,7 +150,14 @@ class TrialDesignMixin:
             meta = yaml.safe_load(cache_path.read_text())
 
         if meta is None:
-            meta = self._fetch_ig_domain(domain, ig_version)
+            try:
+                meta = self._fetch_ig_domain(domain, ig_version)
+            except Exception as exc:
+                raise type(exc)(
+                    f"Domain '{domain}' not found in SDTM IG {ig_version}. "
+                    f"If this is a company-specific domain, provide its structure "
+                    f"via define_path= or a cached YAML via save_to=."
+                ) from exc
             if cache_path:
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
                 cache_path.write_text(yaml.dump(meta, default_flow_style=False, sort_keys=False))

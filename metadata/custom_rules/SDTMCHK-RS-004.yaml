@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-RS-004: RSDTC or VISIT missing for INV assessments
+# Source: sdtmchecks::check_rs_rsdtc_visit
+
+Core:
+  Id: SDTMCHK-RS-004
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [FINDINGS]
+  Domains:
+    Include: [RS]
+
+Check:
+  all:
+    - name: RSCAT
+      operator: equal_to
+      value: "INVESTIGATOR"
+      value_is_literal: true
+    - any:
+        - name: RSDTC
+          operator: empty
+        - name: VISIT
+          operator: empty
+
+Outcome:
+  Message: >-
+    Investigator RS assessment has missing RSDTC or VISIT.
+    All investigator-assessed response records need both a date and visit.
+  Output Variables: [USUBJID, RSCAT, RSTESTCD, RSDTC, VISIT, VISITNUM]
+
+Description: >-
+  For RSCAT='INVESTIGATOR' assessments, both RSDTC and VISIT must be populated.
+  Missing date or visit for investigator assessments is a data quality issue.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-RS-004
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_rs_rsdtc_visit
+                Document: Roche sdtmchecks
+                Section: RS Domain

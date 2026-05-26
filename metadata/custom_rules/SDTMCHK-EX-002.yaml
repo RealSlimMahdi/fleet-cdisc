@@ -1,0 +1,54 @@
+# yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
+# SDTMCHK-EX-002: EXDOSE > 0 but EXOCCUR is not Y
+# Source: sdtmchecks::check_ex_exdose_pos_exoccur_no
+
+Core:
+  Id: SDTMCHK-EX-002
+  Status: Draft
+  Version: "1"
+
+Rule Type: Record Data
+
+Scope:
+  Classes:
+    Include: [INTERVENTIONS]
+  Domains:
+    Include: [EX]
+
+Check:
+  all:
+    - name: EXDOSE
+      operator: greater_than
+      value: 0
+    - name: EXOCCUR
+      operator: not_equal_to
+      value: "Y"
+      value_is_literal: true
+
+Outcome:
+  Message: >-
+    EXDOSE is positive but EXOCCUR is not 'Y'. Positive dose values
+    should only appear when exposure occurred.
+  Output Variables: [USUBJID, EXTRT, EXSTDTC, EXDOSE, EXOCCUR]
+
+Description: >-
+  When EXDOSE > 0, EXOCCUR should be 'Y'.
+
+Sensitivity: Record
+Executability: Fully Executable
+
+Authorities:
+  - Organization: sdtmchecks
+    Standards:
+      - Name: SDTMIG
+        Version: "3.4"
+        References:
+          - Origin: sdtmchecks R package
+            Rule Identifier:
+              Id: SDTMCHK-EX-002
+              Version: "1"
+            Version: "1"
+            Citations:
+              - Cited Guidance: check_ex_exdose_pos_exoccur_no
+                Document: Roche sdtmchecks
+                Section: EX Domain

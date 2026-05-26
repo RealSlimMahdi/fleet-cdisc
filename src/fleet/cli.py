@@ -745,7 +745,10 @@ def _run_add_rule(args: argparse.Namespace) -> None:
         from fleet.core.study_context import load_study_context
 
         ctx = load_study_context(config_path)
-        organization = ctx.config.company
+        company = ctx.config.company
+        # "CDISC" and "FDA" are reserved by the schema — use prefix instead
+        if company and company.upper() not in ("CDISC", "FDA"):
+            organization = company
 
     try:
         out_file = scaffold_rule(
