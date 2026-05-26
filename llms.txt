@@ -119,9 +119,9 @@ Reproduces the admiral "Creating ADSL" programming flow in Python/Fleet:
 
 Shared-verb mixin architecture
 -------------------------------
-Fleet's ``SharedADaMVerbsMixin`` provides seven verbs — ``source``,
+Fleet's ``SharedADaMVerbsMixin`` provides eight verbs — ``source``,
 ``assigned``, ``derivation``, ``recode``, ``rename``, ``condderivation``,
-``whereclauses`` — to **every** ADaM sub-namespace (``adsl``, ``occds``,
+``whereclauses``, ``pick`` — to **every** ADaM sub-namespace (``adsl``, ``occds``,
 ``onco``, ``ophtha``, ``peds``, ``vaccine``, ``metabolic``, ``neuro``).
 
 This means the pipeline can stay in a single sub-namespace without
@@ -144,7 +144,7 @@ Admiral programming-flow steps reproduced
 6.  Disposition             EOSDT, EOSSTT, DCSREAS, RANDDT    (admiral: derive_vars_merged)
 7.  Age grouping            AGEGR1                            (admiral: derive_vars_cat)
 8.  Safety population flag  SAFFL                             (admiral: derive_var_merged_exist_flag)
-9.  Last date known alive   LSTALVDT from AE / TRTEDT         (admiral: derive_vars_extreme_event)
+9.  Last date known alive   LSTALVDT from AE / TRTEDT         (admiral: derive_vars_extreme_event → Fleet: pick())
 10. AE counts               NUMAE, NUMSAE                     (admiral: count_vals / custom)
 
 Run from repo root:
@@ -553,28 +553,42 @@ print(f"   ITTFL : {adsl['ITTFL'].value_counts().to_dicts()}")
 # ════════════════════════════════════════════════════════════════════════════
 # 9. Last Date Known Alive (LSTALVDT)
 #    Admiral: derive_vars_extreme_event(ae, lb, adsl; order=last)
-#    Sources (in priority order, latest date wins):
-#      a) AE end dates   (AEENDTC)
-#      b) AE start dates (AESTDTC)
-#      c) Treatment end  (TRTEDT)  ← fallback if no AE records
+#    Fleet: pick() — event-priority cascade selecting the latest date across
+#    multiple sources.  Events are checked in priority order; within each
+#    event the latest record (mode="last", order by date) wins.
+#
+#    Sources (in priority order):
+#      a) AE end dates   (AEENDTC)  — most clinically recent contact
+#      b) AE start dates (AESTDTC)  — if AE end is missing
+#      c) Treatment end  (TRTEDT)   — fallback from ADSL itself
 # ════════════════════════════════════════════════════════════════════════════
-print("\n── 9. Last date known alive (LSTALVDT) ──────────────────────────────────")
+print("\n── 9. Last date known alive (LSTALVDT) — via pick() ─────────────────────")
 
-adsl = (
-    adsl.adam.adsl  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-    # Latest AE end date per subject (admiral: derive_vars_extreme_event source)
-    .last_date("_ae_end", from_dataset=ae, date_col="AEENDTC")
-    # Latest AE start date per subject
-    .last_date("_ae_start", from_dataset=ae, date_col="AESTDTC")
-    # LSTALVDT: max across AE end, AE start, and treatment end (admiral: derive_vars_extreme_event)
-    # derivation is a shared verb on adsl via the mixin — no namespace switch needed
-    .derivation(
-        "LSTALVDT",
-        expression='pl.max_horizontal(pl.col("_ae_end"), pl.col("_ae_start"), pl.col("TRTEDT"))',
-    )
-    .to_frame()
-    .drop(["_ae_end", "_ae_start"])
-)
+adsl = adsl.adam.adsl.pick(  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    "LSTALVDT",
+    events=[
+        {
+            "when": pl.col("AEENDTC").is_not_null(),
+            "set": {"LSTALVDT": "AEENDTC"},
+            "source": ae,
+            "label": "AE end date (latest contact)",
+        },
+        {
+            "when": pl.col("AESTDTC").is_not_null(),
+            "set": {"LSTALVDT": "AESTDTC"},
+            "source": ae,
+            "label": "AE start date (fallback)",
+        },
+        {
+            "when": pl.col("TRTEDT").is_not_null(),
+            "set": {"LSTALVDT": "TRTEDT"},
+            "label": "Treatment end (last resort)",
+        },
+    ],
+    by=["USUBJID"],
+    order=["LSTALVDT"],
+    mode="last",
+).to_frame()
 
 print(f"   {adsl.shape[0]} subjects × {adsl.shape[1]} variables")
 print(f"   LSTALVDT range: {adsl['LSTALVDT'].min()} → {adsl['LSTALVDT'].max()}")
