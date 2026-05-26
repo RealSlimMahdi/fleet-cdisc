@@ -182,6 +182,26 @@ class CTValidator:
         codelist = self._ct_cache.get(actual_cl, {})
         return codelist.get(value, value)
 
+    def get_decode_map(self, codelist_name: str) -> dict[str, str]:
+        """Return a code-to-preferred-term mapping for a codelist.
+
+        Each key is the submission value (e.g. ``"M"``) and the value is
+        the preferred term / decode (e.g. ``"Male"``).  Returns an empty
+        dict if the codelist is not loaded.
+
+        Args:
+            codelist_name: Codelist name, alias, or NCI concept ID.
+
+        Returns:
+            Dictionary mapping coded values to their preferred terms.
+        """
+        actual_cl = self._codelist_aliases.get(codelist_name, codelist_name)
+        codelist = self._ct_cache.get(actual_cl, {})
+        return {
+            coded: info.get("preferred_term", coded) if isinstance(info, dict) else coded
+            for coded, info in codelist.items()
+        }
+
 
 # Module-level singleton — created once when the module is first imported.
 _validator = CTValidator()

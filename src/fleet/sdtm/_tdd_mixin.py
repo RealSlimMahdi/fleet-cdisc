@@ -715,13 +715,21 @@ _DOMAIN_FIELDS: dict[str, set[str]] = {
     },
 }
 
-# Type mapping from CDISC simpleDatatype to expected Python/Polars types
-_CDISC_TYPE_MAP: dict[str, str] = {
-    "Char": "str",
-    "Num": "int/float",
-    "Integer": "int",
-    "Float": "float",
-}
+# Variables that are always Char in Fleet's Pydantic models, even if the IG
+# metadata reports them as Num/Integer (known IG metadata quirks).
+_ALWAYS_CHAR_VARS: frozenset[str] = frozenset(
+    {
+        "ETCD",
+        "ARMCD",
+        "ELEMENT",
+        "ARM",
+        "VISIT",
+        "TSPARMCD",
+        "TSPARM",
+        "IETESTCD",
+        "IETEST",
+    }
+)
 
 
 def _reconcile_schema(domain: str, meta: dict[str, Any]) -> list[str]:
@@ -746,22 +754,11 @@ def _reconcile_schema(domain: str, meta: dict[str, Any]) -> list[str]:
                 f"(core={core}) but no Pydantic field exists"
             )
 
-    # Check for type mismatches
-    # (simplified: just flag Num vs str where we expect string)
+    # Check for type mismatches — flag IG Num/Integer on known-string variables
     for vname in static_fields:
         if vname in ig_vars:
             ig_type = ig_vars[vname].get("type", "Char")
-            if ig_type in ("Num", "Integer") and vname in (
-                "ETCD",
-                "ARMCD",
-                "ELEMENT",
-                "ARM",
-                "VISIT",
-                "TSPARMCD",
-                "TSPARM",
-                "IETESTCD",
-                "IETEST",
-            ):
+            if ig_type in ("Num", "Integer") and vname in _ALWAYS_CHAR_VARS:
                 report.append(
                     f"TDD reconciliation [{domain}]: IG type '{ig_type}' for "
                     f"'{vname}' but Pydantic model uses 'str'"

@@ -145,7 +145,9 @@
           "description": "Full study description",
           "minLength": 1,
           "maxLength": 2000,
-          "examples": ["A Phase II, Randomized, Double-Blind, Placebo-Controlled Study"]
+          "examples": [
+            "A Phase II, Randomized, Double-Blind, Placebo-Controlled Study"
+          ]
         },
         "protocol_name": {
           "type": "string",
@@ -696,7 +698,14 @@
       "type": "object",
       "title": "ItemDef",
       "description": "Variable definition with properties, codelist, and origin",
-      "required": ["oid", "name", "data_type", "sas_field_name", "description", "origin"],
+      "required": [
+        "oid",
+        "name",
+        "data_type",
+        "sas_field_name",
+        "description",
+        "origin"
+      ],
       "properties": {
         "oid": {
           "type": "string",
@@ -826,7 +835,13 @@
         "type": {
           "type": "string",
           "description": "Origin type",
-          "enum": ["Collected", "Derived", "Assigned", "Protocol", "Predecessor"],
+          "enum": [
+            "Collected",
+            "Derived",
+            "Assigned",
+            "Protocol",
+            "Predecessor"
+          ],
           "examples": ["Collected"]
         },
         "source": {
@@ -1318,7 +1333,12 @@
         },
         {
           "description": "Bring a variable in from another dataset via a key join.",
-          "required": ["algorithm", "merge_dataset", "merge_key", "source_variable"],
+          "required": [
+            "algorithm",
+            "merge_dataset",
+            "merge_key",
+            "source_variable"
+          ],
           "properties": {
             "algorithm": {
               "const": "merge"

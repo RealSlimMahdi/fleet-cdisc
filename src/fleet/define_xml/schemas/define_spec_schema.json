@@ -26,7 +26,15 @@
       "type": "object",
       "title": "Study",
       "description": "Study-level metadata shared across all datasets in this define.",
-      "required": ["id", "name", "description", "protocol_name", "originator", "standard", "standard_version"],
+      "required": [
+        "id",
+        "name",
+        "description",
+        "protocol_name",
+        "originator",
+        "standard",
+        "standard_version"
+      ],
       "additionalProperties": false,
       "properties": {
         "id": {

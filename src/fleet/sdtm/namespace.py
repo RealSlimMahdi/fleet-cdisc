@@ -198,12 +198,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
 
         if ct_validator is not None:
             try:
-                _ = {v: v for v in ct_validator.get_valid_values(ct_codelist)}
-                # Build decode map from CT (code → decode/preferred term)
-                all_ct = ct_validator._ct_cache.get(ct_codelist, {})
-                decode_map = {
-                    coded: info.get("preferred_term", coded) for coded, info in all_ct.items()
-                }
+                decode_map = ct_validator.get_decode_map(ct_codelist)
                 if decode_map:
                     ns = self._chain(pl.col(source).replace(decode_map).alias(target))
                     ns._auto_fk_check(target)
