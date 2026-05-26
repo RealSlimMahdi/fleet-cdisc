@@ -37,23 +37,39 @@ Each step validates that the previous step was completed. Calling verbs out of o
 from fleet.sdtm.tdd import TrialElement, TrialElements, Epoch
 
 # 1. Define your trial elements using rich Pydantic models
-te_rows = TrialElements(elements=[
-    TrialElement(etcd="SCRN", element="Screening",
-                 testrl="INFORMED CONSENT", teenrl="RANDOMIZATION - 1",
-                 tedur="P14D", epoch=Epoch.SCREENING),
-    TrialElement(etcd="TRT", element="Treatment",
-                 testrl="RANDOMIZATION", teenrl="END OF TREATMENT",
-                 tedur="P84D", epoch=Epoch.TREATMENT),
-    TrialElement(etcd="FU", element="Follow-up",
-                 testrl="END OF TREATMENT + 1", teenrl="END OF FOLLOW-UP",
-                 tedur="P28D", epoch=Epoch.FOLLOW_UP),
-])
+te_rows = TrialElements(
+    elements=[
+        TrialElement(
+            etcd="SCRN",
+            element="Screening",
+            testrl="INFORMED CONSENT",
+            teenrl="RANDOMIZATION - 1",
+            tedur="P14D",
+            epoch=Epoch.SCREENING,
+        ),
+        TrialElement(
+            etcd="TRT",
+            element="Treatment",
+            testrl="RANDOMIZATION",
+            teenrl="END OF TREATMENT",
+            tedur="P84D",
+            epoch=Epoch.TREATMENT,
+        ),
+        TrialElement(
+            etcd="FU",
+            element="Follow-up",
+            testrl="END OF TREATMENT + 1",
+            teenrl="END OF FOLLOW-UP",
+            tedur="P28D",
+            epoch=Epoch.FOLLOW_UP,
+        ),
+    ]
+)
 
 # 2. Build the pipeline
 te = (
-    pl.DataFrame().sdtm
-    .fetch_structure("TE", ig_version="3-4",
-                     save_to="metadata/sdtm/te_structure.yaml")
+    pl.DataFrame()
+    .sdtm.fetch_structure("TE", ig_version="3-4", save_to="metadata/sdtm/te_structure.yaml")
     .study_header(study_id="CDISCPILOT01", domain="TE")
     .add_elements(te_rows)
     .to_frame()
@@ -66,13 +82,17 @@ Subject-level domains (SV, SE) use derivation verbs that **freely mix** with exi
 
 ```python
 sv = (
-    raw_visits.sdtm
-    .hardcode_no_ct("DOMAIN", value="SV")
+    raw_visits.sdtm.hardcode_no_ct("DOMAIN", value="SV")
     .assign_no_ct("USUBJID", source="subject_id")
     .assign_dtc("SVSTDTC", source="visit_date")
-    .visit_map("VISITNUM", "VISIT", date_col="SVSTDTC",
-               planned_visits=tv_rows, ref_date="RFSTDTC",
-               tolerance={"before": 3, "after": 3})
+    .visit_map(
+        "VISITNUM",
+        "VISIT",
+        date_col="SVSTDTC",
+        planned_visits=tv_rows,
+        ref_date="RFSTDTC",
+        tolerance={"before": 3, "after": 3},
+    )
     .study_day("SVSTDY", date_col="SVSTDTC", ref_date_col="RFSTDTC")
     .epoch_assign("EPOCH", date_col="SVSTDTC", epoch_ranges=epoch_map)
     .to_frame()
@@ -95,10 +115,12 @@ Every `add_*()` verb requires a **collection model** (not a bare list). Collecti
 
 ```python
 # This raises ValueError — duplicate ETCD
-TrialElements(elements=[
-    TrialElement(etcd="SCRN", element="Screening", epoch=Epoch.SCREENING),
-    TrialElement(etcd="SCRN", element="Screening 2", epoch=Epoch.SCREENING),
-])
+TrialElements(
+    elements=[
+        TrialElement(etcd="SCRN", element="Screening", epoch=Epoch.SCREENING),
+        TrialElement(etcd="SCRN", element="Screening 2", epoch=Epoch.SCREENING),
+    ]
+)
 # ValueError: Duplicate ETCD: {'SCRN'}
 ```
 
@@ -111,14 +133,34 @@ First, define the arm rows using the `TrialArms` / `TrialArm` models
 ```python
 from fleet.sdtm.tdd import TrialArm, TrialArms
 
-ta_rows = TrialArms(arms=[
-    TrialArm(armcd="PBO", arm="Placebo", taetord=1,
-             etcd="SCRN", element="Screening", epoch=Epoch.SCREENING),
-    TrialArm(armcd="PBO", arm="Placebo", taetord=2,
-             etcd="TRT", element="Treatment", epoch=Epoch.TREATMENT),
-    TrialArm(armcd="PBO", arm="Placebo", taetord=3,
-             etcd="FU", element="Follow-up", epoch=Epoch.FOLLOW_UP),
-])
+ta_rows = TrialArms(
+    arms=[
+        TrialArm(
+            armcd="PBO",
+            arm="Placebo",
+            taetord=1,
+            etcd="SCRN",
+            element="Screening",
+            epoch=Epoch.SCREENING,
+        ),
+        TrialArm(
+            armcd="PBO",
+            arm="Placebo",
+            taetord=2,
+            etcd="TRT",
+            element="Treatment",
+            epoch=Epoch.TREATMENT,
+        ),
+        TrialArm(
+            armcd="PBO",
+            arm="Placebo",
+            taetord=3,
+            etcd="FU",
+            element="Follow-up",
+            epoch=Epoch.FOLLOW_UP,
+        ),
+    ]
+)
 ```
 
 Then build TA with or without FK validation:
@@ -126,8 +168,8 @@ Then build TA with or without FK validation:
 ```python
 # Validates TA.ETCD ∈ TE.ETCD
 ta = (
-    pl.DataFrame().sdtm
-    .fetch_structure("TA")
+    pl.DataFrame()
+    .sdtm.fetch_structure("TA")
     .study_header("CDISCPILOT01", "TA")
     .add_arms(ta_rows, te=te_rows)  # FK check
     .to_frame()
@@ -135,10 +177,10 @@ ta = (
 
 # Omit te= to skip FK check (iterative development)
 ta_draft = (
-    pl.DataFrame().sdtm
-    .fetch_structure("TA")
+    pl.DataFrame()
+    .sdtm.fetch_structure("TA")
     .study_header("CDISCPILOT01", "TA")
-    .add_arms(ta_rows)              # no FK check
+    .add_arms(ta_rows)  # no FK check
     .to_frame()
 )
 ```
@@ -160,10 +202,10 @@ The `Epoch` enum is bound to NCI C99079 with all 14 standard values:
 ```python
 from fleet.sdtm.tdd import Epoch
 
-Epoch.SCREENING        # "SCREENING"
-Epoch.TREATMENT        # "TREATMENT"
-Epoch.FOLLOW_UP        # "FOLLOW-UP"
-Epoch.BASELINE         # "BASELINE"
+Epoch.SCREENING  # "SCREENING"
+Epoch.TREATMENT  # "TREATMENT"
+Epoch.FOLLOW_UP  # "FOLLOW-UP"
+Epoch.BASELINE  # "BASELINE"
 # ... plus 10 more
 ```
 

@@ -12,11 +12,11 @@ documents.
 ## Registration
 
 ```python
-import fleet          # registers df.tlg alongside df.sdtm and df.adam
+import fleet  # registers df.tlg alongside df.sdtm and df.adam
 import polars as pl
 
-df.tlg.ae             # AE summary tables and listings
-df.tlg.vs             # Vital-signs summary tables
+df.tlg.ae  # AE summary tables and listings
+df.tlg.vs  # Vital-signs summary tables
 ```
 
 ## Dual-mode API
@@ -27,13 +27,14 @@ Fleet TLG supports two equivalent paths to the same ARD output:
 
     ```python
     ard = (
-        adae.tlg.ae
-        .population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
+        adae.tlg.ae.population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
         .by("TRTA")
-        .header_rows([
-            OverallStat(label="Subjects with any AE"),
-            OverallStat(label="Serious AEs", filter=pl.col("AESER") == "Y"),
-        ])
+        .header_rows(
+            [
+                OverallStat(label="Subjects with any AE"),
+                OverallStat(label="Serious AEs", filter=pl.col("AESER") == "Y"),
+            ]
+        )
         .rows(["AEBODSYS", "AEDECOD"])
         .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
         .pools([GroupPool(label="Total", arms="*")])

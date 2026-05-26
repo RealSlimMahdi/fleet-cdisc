@@ -70,6 +70,7 @@ The generated `codelists.py` contains:
 
       See: https://library.cdisc.org/browser/#/codelist/C66731
       """
+
       _concept_id = "C66731"
       _cdisc_url = "https://library.cdisc.org/browser/#/codelist/C66731"
       F = "F"
@@ -91,6 +92,7 @@ The generated `codelists.py` contains:
 
   ```python
   from codelists import SEX, RACE
+
   # or
   from codelists import *
   ```
@@ -101,8 +103,7 @@ The generated `codelists.py` contains:
 from examples.cdiscpilot01.sdtm.codelists import SEX, RACE
 
 dm = (
-    raw_df.sdtm
-    .assign_ct("SEX", source="sex", ct_codelist=SEX)
+    raw_df.sdtm.assign_ct("SEX", source="sex", ct_codelist=SEX)
     .assign_ct("RACE", source="race", ct_codelist=RACE)
     .to_frame()
 )
@@ -153,12 +154,12 @@ from examples.cdiscpilot01.sdtm.codelists import AGEU, SEX
 
 # 3. Build your pipeline — validation fires here on each verb call.
 import warnings
+
 with warnings.catch_warnings(record=True) as caught:
     warnings.simplefilter("always")
     dm = (
-        raw_df.sdtm
-        .hardcode_ct("AGEU", value="YEARS", ct_codelist=AGEU)   # OK — valid term
-        .hardcode_ct("AGEU", value="YRS",   ct_codelist=AGEU)   # Warns immediately
+        raw_df.sdtm.hardcode_ct("AGEU", value="YEARS", ct_codelist=AGEU)  # OK — valid term
+        .hardcode_ct("AGEU", value="YRS", ct_codelist=AGEU)  # Warns immediately
         .to_frame()
     )
 

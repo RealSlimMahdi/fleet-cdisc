@@ -19,12 +19,7 @@ You construct your pipelines entirely in Python by chaining namespace verbs on P
 **Example:**
 
 ```python
-adsl = (
-    dm.adam.adsl
-    .source("USUBJID")
-    .duration("ADY", start="TRTSDT", end="ADT")
-    .to_frame()
-)
+adsl = dm.adam.adsl.source("USUBJID").duration("ADY", start="TRTSDT", end="ADT").to_frame()
 ```
 
 ### 2. Spec-Driven (`define.yaml`)
@@ -44,11 +39,9 @@ ctx = load_study_context("specs/study01/adam/define.yaml")
 base_adsl = ctx.build("ADSL")
 
 # Add custom logic for the 10% of edge-case scenarios not covered by the spec:
-final_adsl = (
-    base_adsl.adam.adsl
-    .derivation("CUSTOM_FLAG", expression=pl.when(pl.col("AGE") > 80).then(pl.lit("Y")).otherwise(pl.lit("N")))
-    .to_frame()
-)
+final_adsl = base_adsl.adam.adsl.derivation(
+    "CUSTOM_FLAG", expression=pl.when(pl.col("AGE") > 80).then(pl.lit("Y")).otherwise(pl.lit("N"))
+).to_frame()
 ```
 
 ---
@@ -63,12 +56,10 @@ Every Fleet namespace (`sdtm`, `adam`, `adsl`, `occds`) follows the same pattern
 
 ```python
 result = (
-    raw_df.sdtm                  # 1. access
-    .assign_no_ct("USUBJID", source="patient_id")   # 2. chain
+    raw_df.sdtm.assign_no_ct("USUBJID", source="patient_id")  # 1. access  # 2. chain
     .hardcode_no_ct("DOMAIN", value="DM")
-    .assign_ct("SEX", source="sex_raw",
-               ct_codelist=SEX, ct_mapping={"M": "M", "F": "F"})
-    .to_frame()                  # 3. materialise
+    .assign_ct("SEX", source="sex_raw", ct_codelist=SEX, ct_mapping={"M": "M", "F": "F"})
+    .to_frame()  # 3. materialise
 )
 ```
 

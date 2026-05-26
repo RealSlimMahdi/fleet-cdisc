@@ -63,8 +63,7 @@ We map the raw datasets to SDTM variables using `df.sdtm`.
 
 ```python
 dm = (
-    raw_dm.sdtm
-    .hardcode_no_ct("DOMAIN", value="DM")
+    raw_dm.sdtm.hardcode_no_ct("DOMAIN", value="DM")
     .assign_no_ct("USUBJID", source="subject_id")
     .assign_no_ct("ARM", source="arm")
     .assign_ct("SEX", source="sex", ct_codelist=SEX, ct_mapping={"M": "M", "F": "F"})
@@ -77,13 +76,13 @@ dm = (
 
 ```python
 vs = (
-    raw_vs.sdtm
-    .hardcode_no_ct("DOMAIN", value="VS")
+    raw_vs.sdtm.hardcode_no_ct("DOMAIN", value="VS")
     .assign_no_ct("USUBJID", source="subject_id")
     .assign_ct(
-        "VSTESTCD", source="test_name",
+        "VSTESTCD",
+        source="test_name",
         ct_codelist=VSTESTCD,
-        ct_mapping={"Weight": "WEIGHT", "Heart Rate": "HR"}
+        ct_mapping={"Weight": "WEIGHT", "Heart Rate": "HR"},
     )
     .assign_no_ct("VSSTRESN", source="result")
     .assign_dtc("VSDTC", source="date")
@@ -95,8 +94,7 @@ vs = (
 
 ```python
 ae = (
-    raw_ae.sdtm
-    .hardcode_no_ct("DOMAIN", value="AE")
+    raw_ae.sdtm.hardcode_no_ct("DOMAIN", value="AE")
     .assign_no_ct("USUBJID", source="subject_id")
     .assign_no_ct("AEDECOD", source="ae_term")
     .assign_dtc("AESTDTC", source="start_date")
@@ -112,11 +110,12 @@ ADSL aggregates information per subject. We source core demographics from `dm`, 
 
 ```python
 adsl = (
-    dm.adam.adsl
-    .source("USUBJID")
+    dm.adam.adsl.source("USUBJID")
     .source("ARM")
     .source("SEX")
-    .first_date("TRTSDT", from_dataset=ae, date_col="AESTDTC") # For demonstration, using AE start date as proxy
+    .first_date(
+        "TRTSDT", from_dataset=ae, date_col="AESTDTC"
+    )  # For demonstration, using AE start date as proxy
     .to_frame()
 )
 ```
@@ -130,8 +129,7 @@ ADVS provides BDS-structured derivations like Day and Baseline. We join our deri
 vs_with_adsl = vs.join(adsl.select(["USUBJID", "TRTSDT"]), on="USUBJID", how="left")
 
 advs = (
-    vs_with_adsl.adam
-    .source("USUBJID")
+    vs_with_adsl.adam.source("USUBJID")
     .source("VSTESTCD")
     .source("VSSTRESN")
     # Identify Baseline logic (Dummy logic: first record is baseline)

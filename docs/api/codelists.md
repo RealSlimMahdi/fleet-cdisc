@@ -22,8 +22,7 @@ The same Python module powers:
 from examples.cdiscpilot01.sdtm.codelists import SEX, RACE, AGEU
 
 dm = (
-    raw_df.sdtm
-    .assign_ct("SEX", source="sex", ct_codelist=SEX)
+    raw_df.sdtm.assign_ct("SEX", source="sex", ct_codelist=SEX)
     .assign_ct("RACE", source="race", ct_codelist=RACE)
     .hardcode_ct("AGEU", value="YEARS", ct_codelist=AGEU)
     .to_frame()

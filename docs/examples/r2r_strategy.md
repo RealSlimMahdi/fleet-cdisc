@@ -119,15 +119,14 @@ Standardise raw columns into CDISC-compliant SDTM variables:
 
 ```python
 ae = (
-    ae_raw.sdtm
-    .hardcode_no_ct("STUDYID", value="CDISCPILOT01")
-    .hardcode_no_ct("DOMAIN",  value="AE")
-    .assign_no_ct("USUBJID",  source="patient_number")
-    .assign_no_ct("AETERM",   source="ae_term")
-    .assign_no_ct("AESTDTC",  source="ae_start_date")
-    .assign_no_ct("AEENDTC",  source="ae_end_date")
-    .assign_no_ct("AESEV",    source="ae_severity")
-    .assign_no_ct("AESER",    source="ae_serious")
+    ae_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")
+    .hardcode_no_ct("DOMAIN", value="AE")
+    .assign_no_ct("USUBJID", source="patient_number")
+    .assign_no_ct("AETERM", source="ae_term")
+    .assign_no_ct("AESTDTC", source="ae_start_date")
+    .assign_no_ct("AEENDTC", source="ae_end_date")
+    .assign_no_ct("AESEV", source="ae_severity")
+    .assign_no_ct("AESER", source="ae_serious")
     .to_frame()
 )
 ```
@@ -143,8 +142,7 @@ _adsl_trt = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "TRTA", "SAFFL
 ae_with_trt = ae.join(_adsl_trt, on="USUBJID", how="left")
 
 adae = (
-    ae_with_trt.adam
-    .source("STUDYID")
+    ae_with_trt.adam.source("STUDYID")
     .source("USUBJID")
     .source("AETERM")
     .source("TRTA")
@@ -152,14 +150,16 @@ adae = (
     .derive_dt("ASTDT", source="AESTDTC")
     .study_day("ADY", analysis_date="ASTDT", reference_date="TRTSDT")
     .to_frame()
-    .adam.occds
-    .treatment_emergent(
-        "TRTEMFL", start_date="AESTDTC",
-        trtsdt="TRTSDT", trtedt="TRTEDT",
+    .adam.occds.treatment_emergent(
+        "TRTEMFL",
+        start_date="AESTDTC",
+        trtsdt="TRTSDT",
+        trtedt="TRTEDT",
     )
     .recode("AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
     .flag(
-        "ANL01FL", criteria="max",
+        "ANL01FL",
+        criteria="max",
         value_col="AESEVN",
         groups=["USUBJID", "AETERM"],
     )
@@ -175,22 +175,20 @@ report and returns the namespace unchanged so derivations can continue:
 
 ```python
 ae = (
-    ae_raw.sdtm
-    .hardcode_no_ct("STUDYID", value="CDISCPILOT01")
-    .hardcode_no_ct("DOMAIN",  value="AE")
-    .assign_no_ct("USUBJID",  source="patient_number")
-    .assign_no_ct("AETERM",   source="ae_term")
-    .assign_no_ct("AESTDTC",  source="ae_start_date")
-    .assign_no_ct("AEENDTC",  source="ae_end_date")
-    .assign_no_ct("AESEV",    source="ae_severity")
-    .assign_no_ct("AESER",    source="ae_serious")
-    .validate("AE")          # ← prints report, chain continues
+    ae_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")
+    .hardcode_no_ct("DOMAIN", value="AE")
+    .assign_no_ct("USUBJID", source="patient_number")
+    .assign_no_ct("AETERM", source="ae_term")
+    .assign_no_ct("AESTDTC", source="ae_start_date")
+    .assign_no_ct("AEENDTC", source="ae_end_date")
+    .assign_no_ct("AESEV", source="ae_severity")
+    .assign_no_ct("AESER", source="ae_serious")
+    .validate("AE")  # ← prints report, chain continues
     .to_frame()
 )
 
 adae = (
-    ae_with_trt.adam
-    .source("STUDYID")
+    ae_with_trt.adam.source("STUDYID")
     .source("USUBJID")
     .source("AETERM")
     .source("TRTA")
@@ -198,19 +196,21 @@ adae = (
     .derive_dt("ASTDT", source="AESTDTC")
     .study_day("ADY", analysis_date="ASTDT", reference_date="TRTSDT")
     .to_frame()
-    .adam.occds
-    .treatment_emergent(
-        "TRTEMFL", start_date="AESTDTC",
-        trtsdt="TRTSDT", trtedt="TRTEDT",
+    .adam.occds.treatment_emergent(
+        "TRTEMFL",
+        start_date="AESTDTC",
+        trtsdt="TRTSDT",
+        trtedt="TRTEDT",
     )
     .recode("AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
     .flag(
-        "ANL01FL", criteria="max",
+        "ANL01FL",
+        criteria="max",
         value_col="AESEVN",
         groups=["USUBJID", "AETERM"],
     )
     .seq("ASEQ", groups=["USUBJID"])
-    .validate("ADAE")        # ← prints report, chain continues
+    .validate("ADAE")  # ← prints report, chain continues
     .to_frame()
 )
 ```
@@ -259,14 +259,18 @@ Compute the Analysis Results Dataset and render to HTML:
 
 ```python
 from fleet.tlg import (
-    AESummarySpec, Row, Statistic,
-    RenderMetadata, ard_to_table_model, render_html,
+    AESummarySpec,
+    Row,
+    Statistic,
+    RenderMetadata,
+    ard_to_table_model,
+    render_html,
 )
 
 spec = AESummarySpec(
     rows=[
         Row(field="AEBODSYS", label="System Organ Class"),
-        Row(field="AEDECOD",  label="Preferred Term"),
+        Row(field="AEDECOD", label="Preferred Term"),
     ],
     statistics=[Statistic.N_SUBJECTS, Statistic.N_PCT],
 )

@@ -28,6 +28,13 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev
 
+      - name: Lint (ruff + blacken-docs)
+        run: |
+          uv run ruff check
+          uv run ruff format --check
+          rc=0; uv run blacken-docs --check --line-length 100 docs/**/*.md || rc=$?
+          if [ "$rc" -eq 1 ]; then echo "Code blocks need formatting"; exit 1; fi
+
       - name: Check llms.txt is up to date
         run: uv run python scripts/build_llms.py --check
 

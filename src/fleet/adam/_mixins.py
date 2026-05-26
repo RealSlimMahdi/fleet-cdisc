@@ -963,6 +963,224 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             chain = chain.when(c).then(pl.lit(branch["value"]))
         return self._chain(chain.otherwise(pl.lit(else_value)).alias(target))
 
+    # ------------------------------------------------------------------ #
+    # pick — priority-ordered event selection across sources               #
+    # ------------------------------------------------------------------ #
+
+    def pick(
+        self,
+        targets: str | list[str],
+        *,
+        events: list[dict[str, Any]],
+        by: list[str] | None = None,
+        order: str | list[str] | None = None,
+        mode: str = "first",
+    ) -> Self:
+        """Derive targets from the highest-priority matching event per group.
+
+        Each event in the ordered list defines a candidate source, a filter
+        condition, and values to set when that event is selected.  Events are
+        evaluated in list order (first = highest priority).  Within each
+        event's matching records, *mode* and *order* select which record
+        provides the final values.
+
+        This is Fleet's answer to multi-source cascading derivations such as
+        last-date-known-alive (LSTALVDT), death cause (DTHCAUS), or any
+        variable that requires "try source A first, else B, else C" logic.
+
+        Event dict keys:
+
+        - ``"when"`` (required): Boolean expression (``str | pl.Expr``)
+          filtering which records qualify.
+        - ``"set"`` (required): ``dict[str, str | pl.Expr | Any]`` mapping
+          each target name to a column reference, expression, or literal.
+          Column references use bare names (``"DTHDT"``); literals must be
+          wrapped in ``pl.lit()``.
+        - ``"source"`` (optional): External ``pl.DataFrame`` to scan for
+          this event.  When omitted, the current pipeline frame is used.
+        - ``"mode"`` (optional): Override the top-level *mode* for this
+          event only (``"first"`` | ``"last"``).
+        - ``"order"`` (optional): Override the top-level *order* for this
+          event only.
+        - ``"label"`` (optional): Documentation-only description.
+
+        Args:
+            targets: Target column name(s) to derive.
+            events: Ordered list of event dicts (highest priority first).
+            by: Grouping columns (default ``["USUBJID"]``).
+            order: Sort column(s) for selecting within an event's matches.
+                Required when multiple records may match a single event.
+            mode: ``"first"`` or ``"last"`` — which record to select
+                after sorting by *order* (default ``"first"``).
+
+        Returns:
+            Self: A fresh namespace with *targets* added; call
+                ``.to_frame()`` to materialise.
+
+        Raises:
+            ValueError: If *events* is empty or a required key is missing.
+
+        Examples:
+            Derive last date known alive from death, AE, and treatment::
+
+                adsl = (
+                    dm.adam.adsl
+                    .source("USUBJID")
+                    .pick(
+                        ["LSTALVDT", "DTHFL"],
+                        events=[
+                            {"when": pl.col("DTHDT").is_not_null(),
+                             "set": {"LSTALVDT": "DTHDT", "DTHFL": pl.lit("Y")},
+                             "source": adsl_df, "label": "Death date"},
+                            {"when": pl.col("AEENDTC").is_not_null(),
+                             "set": {"LSTALVDT": "AEENDTC", "DTHFL": pl.lit("N")},
+                             "source": ae, "mode": "last", "order": ["AEENDTC"]},
+                            {"when": pl.col("TRTEDT").is_not_null(),
+                             "set": {"LSTALVDT": "TRTEDT", "DTHFL": pl.lit("N")},
+                             "source": adsl_df},
+                        ],
+                        by=["USUBJID"],
+                        order=["LSTALVDT"],
+                        mode="last",
+                    )
+                    .to_frame()
+                )
+
+            Simple single-target with string conditions (YAML-friendly)::
+
+                adsl = (
+                    dm.adam.adsl
+                    .pick(
+                        "DTHCAUS",
+                        events=[
+                            {"when": 'pl.col("AEOUT") == "FATAL"',
+                             "set": {"DTHCAUS": "AEDECOD"},
+                             "source": ae},
+                            {"when": 'pl.col("DSDECOD") == "DEATH"',
+                             "set": {"DTHCAUS": "DSTERM"},
+                             "source": ds},
+                        ],
+                        by=["USUBJID"],
+                    )
+                    .to_frame()
+                )
+        """
+        from fleet.sdtm.utils import parse_expression
+
+        if not events:
+            raise ValueError("pick() requires at least one event.")
+
+        target_list = [targets] if isinstance(targets, str) else list(targets)
+        by_vars = by or ["USUBJID"]
+        global_order: list[str] | None = (
+            [order] if isinstance(order, str) else list(order) if order else None
+        )
+
+        df = self.to_frame()
+
+        # Collect one candidate row per event per group.
+        candidate_frames: list[pl.DataFrame] = []
+
+        for event_nr, event in enumerate(events):
+            if "when" not in event or "set" not in event:
+                raise ValueError(
+                    f"Event #{event_nr} must contain 'when' and 'set' keys. "
+                    f"Got keys: {list(event.keys())}"
+                )
+
+            # Resolve source frame
+            source_df: pl.DataFrame = event.get("source", df)
+
+            # Resolve condition
+            when_raw = event["when"]
+            when_expr: pl.Expr = (
+                when_raw if isinstance(when_raw, pl.Expr) else parse_expression(str(when_raw))
+            )
+
+            # Filter candidates
+            candidates = source_df.filter(when_expr)
+            if candidates.is_empty():
+                continue
+
+            # Build set-values expressions
+            set_exprs: list[pl.Expr] = []
+            set_spec: dict[str, Any] = event["set"]
+            for tgt in target_list:
+                if tgt not in set_spec:
+                    # Target not produced by this event → null placeholder
+                    set_exprs.append(pl.lit(None).alias(tgt))
+                    continue
+                val = set_spec[tgt]
+                if isinstance(val, pl.Expr):
+                    set_exprs.append(val.alias(tgt))
+                elif isinstance(val, str):
+                    # String → parse as expression or column reference.
+                    # parse_expression handles both: bare names ("AEENDTC")
+                    # become pl.col("AEENDTC"); expression strings like
+                    # 'pl.lit("Y")' are evaluated via sandboxed AST.
+                    set_exprs.append(parse_expression(val).alias(tgt))
+                else:
+                    # Literal value
+                    set_exprs.append(pl.lit(val).alias(tgt))
+
+            # Apply set expressions + add event priority marker
+            candidates = candidates.with_columns(
+                *set_exprs,
+                pl.lit(event_nr).cast(pl.UInt32).alias("__pick_event_nr__"),
+            )
+
+            # Resolve per-event mode/order
+            evt_mode = event.get("mode", mode)
+            evt_order_raw = event.get("order", global_order)
+            evt_order: list[str] | None = (
+                [evt_order_raw] if isinstance(evt_order_raw, str) else evt_order_raw
+            )
+
+            # Within-event selection: pick one record per group
+            if evt_order:
+                descending = evt_mode == "last"
+                candidates = candidates.sort(
+                    evt_order,
+                    descending=[descending] * len(evt_order),
+                    nulls_last=True,
+                )
+            candidates = candidates.group_by(by_vars, maintain_order=True).first()
+
+            # Keep only by_vars + targets + event_nr
+            keep = by_vars + target_list + ["__pick_event_nr__"]
+            available = [c for c in keep if c in candidates.columns]
+            candidates = candidates.select(available)
+
+            candidate_frames.append(candidates)
+
+        # No events matched at all — set all targets to null
+        if not candidate_frames:
+            null_exprs = [pl.lit(None).alias(t) for t in target_list]
+            return self._materialise_then(df.with_columns(null_exprs))
+
+        # Stack all candidates and pick the winning event per group
+        all_candidates = pl.concat(candidate_frames, how="diagonal_relaxed")
+
+        # Sort by event priority (lowest nr = highest priority), then order
+        sort_cols = ["__pick_event_nr__"]
+        sort_desc = [False]
+        if global_order:
+            sort_cols.extend(global_order)
+            global_mode_desc = mode == "last"
+            sort_desc.extend([global_mode_desc] * len(global_order))
+
+        all_candidates = all_candidates.sort(sort_cols, descending=sort_desc, nulls_last=True)
+        winners = all_candidates.group_by(by_vars, maintain_order=True).first()
+        winners = winners.select(by_vars + target_list)
+
+        # Drop pre-existing target columns from base frame before join
+        drop_existing = [t for t in target_list if t in df.columns]
+        if drop_existing:
+            df = df.drop(drop_existing)
+
+        result = df.join(winners, on=by_vars, how="left")
+        return self._materialise_then(result)
+
     def whereclauses(self, *, where: str | pl.Expr) -> Self:
         """Filter records by a *where* expression.
 
