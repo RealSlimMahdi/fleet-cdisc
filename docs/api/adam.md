@@ -20,3 +20,12 @@ show_root_heading: false
 heading_level: 3
 members_order: source
 filters: ["!^_"]
+
+## Flag Criterion Mixin
+
+::: fleet.adam.FlagCriterionMixin
+options:
+show_root_heading: false
+heading_level: 3
+members_order: source
+filters: ["!^_"]
