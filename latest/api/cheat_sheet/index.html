@@ -1916,12 +1916,12 @@
 </thead>
 <tbody>
 <tr>
-<td>[<code>.to_frame()</code>][fleet.sdtm.SDTMNamespace.to_frame]</td>
+<td><a class="autorefs autorefs-internal" title="            to_frame" href="../core/#fleet.core._verb_mixin.SharedVerbsMixin.to_frame"><code>.to_frame()</code></a></td>
 <td>Materialises the pipeline into a Polars DataFrame. Must be called at the end.</td>
 <td><code>.to_frame()</code></td>
 </tr>
 <tr>
-<td>[<code>.derivation()</code>][fleet.sdtm.SDTMNamespace.derivation]</td>
+<td><a class="autorefs autorefs-internal" title="            derivation" href="../core/#fleet.core._verb_mixin.SharedVerbsMixin.derivation"><code>.derivation()</code></a></td>
 <td>Injects an arbitrary Polars expression.</td>
 <td><code>.derivation("AGE", expression="pl.col('AGE_RAW').cast(pl.Int64)")</code></td>
 </tr>
@@ -1936,12 +1936,12 @@
 <td><code>.assigned("DOMAIN", value="DM")</code></td>
 </tr>
 <tr>
-<td>[<code>.inspect()</code>][fleet.sdtm.SDTMNamespace.inspect]</td>
+<td><a class="autorefs autorefs-internal" title="            inspect" href="../core/#fleet.core._verb_mixin.SharedVerbsMixin.inspect"><code>.inspect()</code></a></td>
 <td>Hard checkpoint — materialises and prints schema/shape/head.</td>
 <td><code>.inspect("after rename")</code></td>
 </tr>
 <tr>
-<td>[<code>.explain()</code>][fleet.sdtm.SDTMNamespace.explain]</td>
+<td><a class="autorefs autorefs-internal" title="            explain" href="../core/#fleet.core._verb_mixin.SharedVerbsMixin.explain"><code>.explain()</code></a></td>
 <td>Prints the Polars query plan without materialising.</td>
 <td><code>.explain()</code></td>
 </tr>
@@ -1983,7 +1983,7 @@
 <td><code>.date("RFSTDTC", source="first_dose_dt")</code></td>
 </tr>
 <tr>
-<td>[<code>.duration()</code>][fleet.sdtm.SDTMNamespace.duration]</td>
+<td><a class="autorefs autorefs-internal" title="            duration" href="../core/#fleet.core._verb_mixin.SharedVerbsMixin.duration"><code>.duration()</code></a></td>
 <td>Compute elapsed time or CDISC study day.</td>
 <td><code>.duration("SVSTDY", start="RFSTDTC", end="SVSTDTC")</code></td>
 </tr>
@@ -2008,7 +2008,7 @@
 <td><code>.merge(other, on="USUBJID")</code></td>
 </tr>
 <tr>
-<td>[<code>.nodup()</code>][fleet.core._verb_mixin.SharedVerbsMixin.nodup]</td>
+<td><a class="autorefs autorefs-internal" title="            nodup" href="../core/#fleet.core._verb_mixin.SharedVerbsMixin.nodup"><code>.nodup()</code></a></td>
 <td>Detect/remove duplicates with diagnostics.</td>
 <td><code>.nodup(subset=["USUBJID","VISIT"])</code></td>
 </tr>
@@ -2038,7 +2038,7 @@
 <td><code>df.sdtm.from_spec("define.yaml", dataset="DM")</code></td>
 </tr>
 <tr>
-<td>[<code>.validate()</code>][fleet.sdtm.SDTMNamespace.validate]</td>
+<td><a class="autorefs autorefs-internal" title="            validate" href="../core/#fleet.core._verb_mixin.SharedVerbsMixin.validate"><code>.validate()</code></a></td>
 <td>Run CDISC Rules Engine on the resulting frame.</td>
 <td><code>.validate(domain="DM")</code></td>
 </tr>
@@ -2055,7 +2055,7 @@
 </thead>
 <tbody>
 <tr>
-<td>[<code>.derivation()</code>][fleet.adam.AdamNamespace.derivation]</td>
+<td><a class="autorefs autorefs-internal" title="            derivation" href="../core/#fleet.core._verb_mixin.SharedVerbsMixin.derivation"><code>.derivation()</code></a></td>
 <td>Arbitrary Polars expression.</td>
 <td><code>.derivation("AVAL", expression="pl.col('vsorres').cast(pl.Float64)")</code></td>
 </tr>
@@ -2085,7 +2085,7 @@
 <td><code>.date("ADT", source="VSDTC")</code></td>
 </tr>
 <tr>
-<td>[<code>.duration()</code>][fleet.adam.AdamNamespace.duration]</td>
+<td><a class="autorefs autorefs-internal" title="            duration" href="../core/#fleet.core._verb_mixin.SharedVerbsMixin.duration"><code>.duration()</code></a></td>
 <td>CDISC study day, elapsed time, or ISO 8601 duration.</td>
 <td><code>.duration("ADY", start="TRTSDT", end="ADT")</code></td>
 </tr>
@@ -2110,7 +2110,7 @@
 <td><code>.pchg("PCHG", aval="AVAL", base="BASE")</code></td>
 </tr>
 <tr>
-<td>[<code>.flag()</code>][fleet.adam.AdamNamespace.flag]</td>
+<td><a class="autorefs autorefs-internal" title="            flag" href="../adam/#fleet.adam.FlagCriterionMixin.flag"><code>.flag()</code></a></td>
 <td>Assign <code>"Y"</code> per criteria (expression / <code>first</code> / <code>last</code>).</td>
 <td><code>.flag("ANL01FL", criteria="last", order_by="ADT")</code></td>
 </tr>
@@ -2180,7 +2180,7 @@
 <td><code>df.adam.from_spec("define.yaml", dataset="ADVS")</code></td>
 </tr>
 <tr>
-<td>[<code>.validate()</code>][fleet.adam.AdamNamespace.validate]</td>
+<td><a class="autorefs autorefs-internal" title="            validate" href="../core/#fleet.core._verb_mixin.SharedVerbsMixin.validate"><code>.validate()</code></a></td>
 <td>Run CDISC Rules Engine on the resulting frame.</td>
 <td><code>.validate(domain="ADVS")</code></td>
 </tr>
@@ -2207,12 +2207,12 @@
 <td><code>.last_date("TRTEDT", from_dataset=ex, date_col="EXENDTC")</code></td>
 </tr>
 <tr>
-<td>[<code>.duration()</code>][fleet.adam.ADSLNamespace.duration]</td>
+<td><a class="autorefs autorefs-internal" title="            duration" href="../core/#fleet.core._verb_mixin.SharedVerbsMixin.duration"><code>.duration()</code></a></td>
 <td>Number of elapsed days (start to end).</td>
 <td><code>.duration("TRTDURD", start="TRTSDT", end="TRTEDT")</code></td>
 </tr>
 <tr>
-<td>[<code>.flag()</code>][fleet.adam.FlagCriterionMixin.flag]</td>
+<td><a class="autorefs autorefs-internal" title="            flag" href="../adam/#fleet.adam.FlagCriterionMixin.flag"><code>.flag()</code></a></td>
 <td>Generalised <code>"Y"</code> flag (first/last/max/min/exists/before/after/expression).</td>
 <td><code>.flag("SAFFL", criteria='pl.col("EXDOSE") &gt; 0')</code></td>
 </tr>
@@ -2291,7 +2291,7 @@
 <td><code>.nominal_time("NTIME", from_col="PCTPTNUM")</code></td>
 </tr>
 <tr>
-<td>[<code>.duration()</code>][fleet.adam.pk_namespace.PKNamespace.duration]</td>
+<td><a class="autorefs autorefs-internal" title="            duration" href="../core/#fleet.core._verb_mixin.SharedVerbsMixin.duration"><code>.duration()</code></a></td>
 <td>Actual elapsed time between datetime columns.</td>
 <td><code>.duration("ATIME", start="EXSTDTC", end="PCDTC", unit="hours")</code></td>
 </tr>
@@ -2403,7 +2403,7 @@
 <td><code>.visit_map()</code></td>
 </tr>
 <tr>
-<td>[<code>.duration()</code>][fleet.sdtm._tdd_mixin.TrialDesignMixin.duration]</td>
+<td><a class="autorefs autorefs-internal" title="            duration" href="../core/#fleet.core._verb_mixin.SharedVerbsMixin.duration"><code>.duration()</code></a></td>
 <td>Derive study day from reference.</td>
 <td><code>.duration("SVSTDY", start="RFSTDTC", end="SVSTDTC")</code></td>
 </tr>
@@ -2446,7 +2446,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 26, 2026 21:09:41 UTC">May 26, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 26, 2026 22:02:24 UTC">May 26, 2026</span>
   </span>
 
     
