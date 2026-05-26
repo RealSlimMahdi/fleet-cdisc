@@ -923,32 +923,37 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
     # Auto-detect groupby column
     group_col = "TRTA" if "TRTA" in adsl_df.columns else "TRT01P"
 
-    if domain == "ae":
-        ard = data_df.tlg.ae.t_summary(groupby=group_col, adsl=adsl_df)
-    elif domain == "vs":
-        ard = data_df.tlg.vs.t_summary(groupby=group_col, adsl=adsl_df)
-    else:
+    # Domain → ARD computation dispatch
+    _domain_dispatch = {
+        "ae": lambda df: df.tlg.ae.t_summary(groupby=group_col, adsl=adsl_df),
+        "vs": lambda df: df.tlg.vs.t_summary(groupby=group_col, adsl=adsl_df),
+    }
+    if domain not in _domain_dispatch:
         print(f"Error: unsupported domain '{domain}'")
         sys.exit(1)
+    ard = _domain_dispatch[domain](data_df)
 
     model = ard_to_table_model(ard, meta)
     print(f"ARD:      {ard.shape[0]} rows × {ard.shape[1]} cols")
     print(f"Model:    {len(model.columns)} columns, {len(model.rows)} display rows")
 
-    if fmt == "html":
-        html = render_html(model, html_wrapper=html_wrapper)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(html, encoding="utf-8")
-        print(f"\nHTML written → {output_path}")
-    elif fmt == "pdf":
-        render_pdf(model, output_path)
-        print(f"\nPDF written → {output_path}")
-    elif fmt == "pptx":
-        render_pptx(model, output_path)
-        print(f"\nPPTX written → {output_path}")
-    else:
+    # Format → render dispatch
+    _format_dispatch = {
+        "html": lambda: (
+            output_path.parent.mkdir(parents=True, exist_ok=True),
+            output_path.write_text(render_html(model, html_wrapper=html_wrapper), encoding="utf-8"),
+            print(f"\nHTML written → {output_path}"),
+        ),
+        "pdf": lambda: (render_pdf(model, output_path), print(f"\nPDF written → {output_path}")),
+        "pptx": lambda: (
+            render_pptx(model, output_path),
+            print(f"\nPPTX written → {output_path}"),
+        ),
+    }
+    if fmt not in _format_dispatch:
         print(f"Error: unsupported format '{fmt}'")
         sys.exit(1)
+    _format_dispatch[fmt]()
 
 
 def _run_derivation_add(args: argparse.Namespace) -> None:

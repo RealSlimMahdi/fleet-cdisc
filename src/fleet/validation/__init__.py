@@ -5,7 +5,6 @@ from fleet.validation.models import Severity, ValidationIssue, ValidationResult
 from fleet.validation.providers import (
     OfficialRulesEngineProvider,
     ValidationProvider,
-    ValidationProviderRegistry,
 )
 from fleet.validation.service import ValidationService
 
@@ -15,7 +14,6 @@ __all__ = [
     "ValidationResult",
     "ValidationProvider",
     "OfficialRulesEngineProvider",
-    "ValidationProviderRegistry",
     "ValidationService",
     "discover_engine",
     "install_engine",

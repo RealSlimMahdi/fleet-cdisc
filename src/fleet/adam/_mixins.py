@@ -208,325 +208,358 @@ class FlagCriterionMixin:
         from fleet.sdtm.utils import parse_expression
 
         grps = groups or ["USUBJID"]
-
-        # Normalise order_by to list
         order_cols: list[str] | None = None
         if order_by is not None:
             order_cols = [order_by] if isinstance(order_by, str) else list(order_by)
 
-        # Parse where clause
         where_expr: pl.Expr | None = None
         if where is not None:
             where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
 
-        # Determine false literal
         false_lit = pl.lit(false_value) if false_value is not None else pl.lit(None)
 
-        # ── Criteria dispatch ──
-        if isinstance(criteria, str):
-            criteria_lower = criteria.lower()
-        else:
-            criteria_lower = None
+        criteria_lower = criteria.lower() if isinstance(criteria, str) else None
 
-        # ── first / last ──
         if criteria_lower in ("first", "last"):
-            if not order_cols:
-                raise ValueError(f"flag criteria='{criteria}' requires order_by.")
-            descending = criteria_lower == "last"
+            return self._flag_ranked(
+                target,
+                criteria_lower=criteria_lower,
+                grps=grps,
+                order_cols=order_cols,
+                where_expr=where_expr,
+                flag_all=flag_all,
+                flag_value=flag_value,
+                false_value=false_value,
+                false_lit=false_lit,
+            )
+        elif criteria_lower in ("max", "min"):
+            return self._flag_extreme(
+                target,
+                criteria_lower=criteria_lower,
+                grps=grps,
+                value_col=value_col,
+                where_expr=where_expr,
+                flag_value=flag_value,
+                false_lit=false_lit,
+            )
+        elif criteria_lower == "exists":
+            return self._flag_exists(
+                target,
+                grps=grps,
+                from_dataset=from_dataset,
+                on=on,
+                source_filter=source_filter,
+                flag_value=flag_value,
+                false_value=false_value,
+                false_lit=false_lit,
+            )
+        elif criteria_lower in ("before", "after"):
+            return self._flag_relative(
+                target,
+                criteria_lower=criteria_lower,
+                grps=grps,
+                order_cols=order_cols,
+                condition=condition,
+                inclusive=inclusive,
+                flag_no_ref_groups=flag_no_ref_groups,
+                flag_value=flag_value,
+                false_value=false_value,
+            )
+        elif criteria_lower in ("exists_after", "exists_before"):
+            return self._flag_temporal_exists(
+                target,
+                criteria_lower=criteria_lower,
+                from_dataset=from_dataset,
+                on=on,
+                order_cols=order_cols,
+                condition=condition,
+                source_filter=source_filter,
+                flag_value=flag_value,
+            )
+        else:
+            return self._flag_expression(
+                target,
+                criteria=criteria,
+                where_expr=where_expr,
+                flag_value=flag_value,
+                false_lit=false_lit,
+            )
 
-            # Materialise to sort properly — handles nulls and multi-column
-            df = self._lazy.collect()
-            df = df.with_row_index("__flag_orig_idx__")
+    def _flag_ranked(
+        self,
+        target,
+        *,
+        criteria_lower,
+        grps,
+        order_cols,
+        where_expr,
+        flag_all,
+        flag_value,
+        false_value,
+        false_lit,
+    ) -> Self:
+        """Handle first/last rank-based flag criteria."""
+        if not order_cols:
+            raise ValueError(f"flag criteria='{criteria_lower}' requires order_by.")
+        descending = criteria_lower == "last"
 
-            # Null check: rows with null in any order col are never flagged
-            null_mask = pl.all_horizontal([pl.col(c).is_not_null() for c in order_cols])
+        df = self._lazy.collect()
+        df = df.with_row_index("__flag_orig_idx__")
+        null_mask = pl.all_horizontal([pl.col(c).is_not_null() for c in order_cols])
 
-            if flag_all:
-                # flag_all: all rows sharing the extreme value get flagged
-                # Build struct for comparison
-                if len(order_cols) == 1:
-                    val_expr = pl.col(order_cols[0])
-                else:
-                    val_expr = pl.struct(order_cols)
-                if descending:
-                    extreme = val_expr.max().over(grps)
-                else:
-                    extreme = val_expr.min().over(grps)
-                row_cond = null_mask & (val_expr == extreme)
-                if where_expr is not None:
-                    row_cond = where_expr & row_cond
-                expr = pl.when(row_cond).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
-                result_df = (
-                    df.with_columns(expr).sort("__flag_orig_idx__").drop("__flag_orig_idx__")
-                )
-                return self._materialise_then(result_df)
-
-            # Standard: ordinal rank within each group
-            # Sort and pick first per group
-            sort_descending = [descending] * len(order_cols)
-            null_last = [True] * len(order_cols)
-
-            eligible = df.filter(null_mask)
+        if flag_all:
+            if len(order_cols) == 1:
+                val_expr = pl.col(order_cols[0])
+            else:
+                val_expr = pl.struct(order_cols)
+            extreme = val_expr.max().over(grps) if descending else val_expr.min().over(grps)
+            row_cond = null_mask & (val_expr == extreme)
             if where_expr is not None:
-                eligible = eligible.filter(where_expr)
-
-            # Sort eligible rows by order_cols, then take first per group
-            eligible_sorted = eligible.sort(
-                order_cols, descending=sort_descending, nulls_last=null_last
-            )
-            first_per_group = eligible_sorted.group_by(grps, maintain_order=True).first()
-            flagged_indices = set(first_per_group["__flag_orig_idx__"].to_list())
-
-            # Build result
-            flags = [
-                flag_value if idx in flagged_indices else (false_value if false_value else None)
-                for idx in df["__flag_orig_idx__"].to_list()
-            ]
-            result_df = (
-                df.with_columns(pl.Series(target, flags))
-                .sort("__flag_orig_idx__")
-                .drop("__flag_orig_idx__")
-            )
+                row_cond = where_expr & row_cond
+            expr = pl.when(row_cond).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
+            result_df = df.with_columns(expr).sort("__flag_orig_idx__").drop("__flag_orig_idx__")
             return self._materialise_then(result_df)
 
-        # ── max / min ──
-        elif criteria_lower in ("max", "min"):
-            if not value_col:
-                raise ValueError(f"flag criteria='{criteria}' requires value_col.")
-            if where_expr is not None:
-                masked_val = pl.when(where_expr).then(pl.col(value_col)).otherwise(pl.lit(None))
-                agg_val = (
-                    masked_val.max().over(grps)
-                    if criteria_lower == "max"
-                    else masked_val.min().over(grps)
-                )
-                row_cond = where_expr & (pl.col(value_col) == agg_val)
-            else:
-                agg_val = (
-                    pl.col(value_col).max().over(grps)
-                    if criteria_lower == "max"
-                    else pl.col(value_col).min().over(grps)
-                )
-                row_cond = pl.col(value_col) == agg_val
-            final_cond = row_cond
+        sort_descending = [descending] * len(order_cols)
+        null_last = [True] * len(order_cols)
 
-        # ── exists ──
-        elif criteria_lower == "exists":
-            if from_dataset is None or on is None:
-                raise ValueError("flag criteria='exists' requires from_dataset and on.")
-            # Collect unique keys from source dataset(s)
-            datasets = from_dataset if isinstance(from_dataset, list) else [from_dataset]
-            key_frames: list[pl.DataFrame] = []
-            for ds in datasets:
-                filtered = ds
-                if source_filter is not None:
-                    filtered = ds.filter(source_filter)
-                key_frames.append(filtered.select(on).unique())
-            all_keys = pl.concat(key_frames).unique()
+        eligible = df.filter(null_mask)
+        if where_expr is not None:
+            eligible = eligible.filter(where_expr)
 
-            # Materialise current frame to perform semi-join logic
-            df = self._lazy.collect()
+        eligible_sorted = eligible.sort(
+            order_cols, descending=sort_descending, nulls_last=null_last
+        )
+        first_per_group = eligible_sorted.group_by(grps, maintain_order=True).first()
+        flagged_indices = set(first_per_group["__flag_orig_idx__"].to_list())
 
-            # Build struct key for multi-column join
-            if len(on) == 1:
-                is_member = pl.col(on[0]).is_in(all_keys[on[0]].to_list())
-            else:
-                # For multi-column: join approach
-                df = df.with_columns(pl.lit(None).cast(pl.String).alias(target))
-                member_df = df.join(all_keys, on=on, how="semi").with_columns(
-                    pl.lit(flag_value).alias(target)
-                )
-                non_member_df = df.join(all_keys, on=on, how="anti").with_columns(
-                    false_lit.cast(pl.String).alias(target)
-                )
-                result = pl.concat([member_df, non_member_df], how="diagonal").sort(df.columns[0])
+        flags = [
+            flag_value if idx in flagged_indices else (false_value if false_value else None)
+            for idx in df["__flag_orig_idx__"].to_list()
+        ]
+        result_df = (
+            df.with_columns(pl.Series(target, flags))
+            .sort("__flag_orig_idx__")
+            .drop("__flag_orig_idx__")
+        )
+        return self._materialise_then(result_df)
 
-                # Preserve original row order
-                df_with_idx = df.with_row_index("__flag_idx__")
-                result = (
-                    df_with_idx.drop(target)
-                    .join(
-                        df_with_idx.select(on + ["__flag_idx__"])
-                        .unique()
-                        .join(all_keys, on=on, how="semi")
-                        .with_columns(pl.lit(flag_value).alias(target)),
-                        on="__flag_idx__",
-                        how="left",
-                    )
-                    .with_columns(
-                        pl.col(target).fill_null(
-                            pl.lit(false_value) if false_value else pl.lit(None)
-                        )
-                    )
-                    .drop("__flag_idx__")
-                )
-                return self._materialise_then(result)
+    def _flag_extreme(
+        self,
+        target,
+        *,
+        criteria_lower,
+        grps,
+        value_col,
+        where_expr,
+        flag_value,
+        false_lit,
+    ) -> Self:
+        """Handle max/min value-based extreme flag criteria."""
+        if not value_col:
+            raise ValueError(f"flag criteria='{criteria_lower}' requires value_col.")
+        if where_expr is not None:
+            masked_val = pl.when(where_expr).then(pl.col(value_col)).otherwise(pl.lit(None))
+            agg_val = (
+                masked_val.max().over(grps)
+                if criteria_lower == "max"
+                else masked_val.min().over(grps)
+            )
+            row_cond = where_expr & (pl.col(value_col) == agg_val)
+        else:
+            agg_val = (
+                pl.col(value_col).max().over(grps)
+                if criteria_lower == "max"
+                else pl.col(value_col).min().over(grps)
+            )
+            row_cond = pl.col(value_col) == agg_val
+        expr = pl.when(row_cond).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
+        return self._chain(expr)
 
-            # Single-key path
-            final_cond = is_member
-            expr = pl.when(final_cond).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
+    def _flag_exists(
+        self,
+        target,
+        *,
+        grps,
+        from_dataset,
+        on,
+        source_filter,
+        flag_value,
+        false_value,
+        false_lit,
+    ) -> Self:
+        """Handle exists set-membership flag criteria."""
+        if from_dataset is None or on is None:
+            raise ValueError("flag criteria='exists' requires from_dataset and on.")
+        datasets = from_dataset if isinstance(from_dataset, list) else [from_dataset]
+        key_frames: list[pl.DataFrame] = []
+        for ds in datasets:
+            filtered = ds
+            if source_filter is not None:
+                filtered = ds.filter(source_filter)
+            key_frames.append(filtered.select(on).unique())
+        all_keys = pl.concat(key_frames).unique()
+
+        df = self._lazy.collect()
+
+        if len(on) == 1:
+            is_member = pl.col(on[0]).is_in(all_keys[on[0]].to_list())
+            expr = pl.when(is_member).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
             return self._chain(expr)
 
-        # ── before / after ──
-        elif criteria_lower in ("before", "after"):
-            if condition is None:
-                raise ValueError(f"flag criteria='{criteria}' requires condition.")
-            if not order_cols:
-                raise ValueError(f"flag criteria='{criteria}' requires order_by.")
-            # Materialise for ordered window operations
-            df = self._lazy.collect()
-
-            # Sort within groups
-            df = df.with_row_index("__orig_idx__")
-            df_sorted = df.sort(order_cols)
-
-            # Evaluate condition to boolean
-            cond_col = "__flag_cond__"
-            df_sorted = df_sorted.with_columns(condition.cast(pl.Boolean).alias(cond_col))
-
-            # For each group, find the position of the first condition match
-            # "before" = flag rows up to (and optionally including) landmark
-            # "after" = flag rows after (and optionally including) landmark
-            result_parts: list[pl.DataFrame] = []
-            for _, grp_df in df_sorted.group_by(grps, maintain_order=True):
-                cond_mask = grp_df[cond_col].to_list()
-
-                # Find first True in condition
-                first_cond_idx: int | None = None
-                for i, v in enumerate(cond_mask):
-                    if v is True:
-                        first_cond_idx = i
-                        break
-
-                n = len(grp_df)
-                if first_cond_idx is None:
-                    # No landmark found
-                    if flag_no_ref_groups:
-                        if criteria_lower == "before":
-                            # All rows flagged (nothing to be "after")
-                            flags = [flag_value] * n
-                        else:
-                            # "after" with no ref → nothing flagged
-                            flags = [false_value] * n
-                    else:
-                        flags = [false_value if false_value else None] * n
-                else:
-                    flags = []
-                    for i in range(n):
-                        if criteria_lower == "before":
-                            if inclusive:
-                                flagged = i <= first_cond_idx
-                            else:
-                                flagged = i < first_cond_idx
-                        else:  # "after"
-                            if inclusive:
-                                flagged = i >= first_cond_idx
-                            else:
-                                flagged = i > first_cond_idx
-                        flags.append(
-                            flag_value if flagged else (false_value if false_value else None)
-                        )
-
-                result_parts.append(grp_df.with_columns(pl.Series(target, flags)))
-
-            result_df = pl.concat(result_parts)
-            result_df = result_df.sort("__orig_idx__").drop(["__orig_idx__", cond_col])
-            return self._materialise_then(result_df)
-
-        # ── exists_after / exists_before ──
-        elif criteria_lower in ("exists_after", "exists_before"):
-            if from_dataset is None or condition is None:
-                raise ValueError(f"flag criteria='{criteria}' requires from_dataset and condition.")
-            if on is None:
-                raise ValueError(f"flag criteria='{criteria}' requires on.")
-            # Materialise
-            df = self._lazy.collect()
-
-            # Filter source dataset
-            src = (
-                from_dataset if isinstance(from_dataset, pl.DataFrame) else pl.concat(from_dataset)
+        # Multi-column join path
+        df_with_idx = df.with_row_index("__flag_idx__")
+        result = (
+            (df_with_idx.drop(target) if target in df_with_idx.columns else df_with_idx)
+            .join(
+                df_with_idx.select(on + ["__flag_idx__"])
+                .unique()
+                .join(all_keys, on=on, how="semi")
+                .with_columns(pl.lit(flag_value).alias(target)),
+                on="__flag_idx__",
+                how="left",
             )
-            if source_filter is not None:
-                src = src.filter(source_filter)
+            .with_columns(
+                pl.col(target).fill_null(pl.lit(false_value) if false_value else pl.lit(None))
+            )
+            .drop("__flag_idx__")
+        )
+        return self._materialise_then(result)
 
-            # Determine order column for temporal comparison
-            # Use the first order_by column or infer from frame
-            if order_cols:
-                time_col = order_cols[0]
-            else:
-                # Try to find a common time-like column
-                common_time = [
-                    c
-                    for c in ["AVISITN", "ADY", "ADT", "ADTM"]
-                    if c in df.columns and c in src.columns
-                ]
-                if not common_time:
-                    raise ValueError(
-                        f"flag criteria='{criteria}' requires order_by or a "
-                        "common temporal column (AVISITN, ADY, ADT, ADTM)."
-                    )
-                time_col = common_time[0]
+    def _flag_relative(
+        self,
+        target,
+        *,
+        criteria_lower,
+        grps,
+        order_cols,
+        condition,
+        inclusive,
+        flag_no_ref_groups,
+        flag_value,
+        false_value,
+    ) -> Self:
+        """Handle before/after relative-to-landmark flag criteria."""
+        if condition is None:
+            raise ValueError(f"flag criteria='{criteria_lower}' requires condition.")
+        if not order_cols:
+            raise ValueError(f"flag criteria='{criteria_lower}' requires order_by.")
 
-            # For each row meeting `condition` in df, check if there exists
-            # a row in src (joined on `on`) that comes after/before it
-            df = df.with_row_index("__flag_idx__")
+        df = self._lazy.collect()
+        df = df.with_row_index("__orig_idx__")
+        df_sorted = df.sort(order_cols)
 
-            # Get candidate rows from current df that satisfy condition
-            cond_df = df.filter(condition)
+        cond_col = "__flag_cond__"
+        df_sorted = df_sorted.with_columns(condition.cast(pl.Boolean).alias(cond_col))
 
-            flags = [None] * len(df)
+        result_parts: list[pl.DataFrame] = []
+        for _, grp_df in df_sorted.group_by(grps, maintain_order=True):
+            cond_mask = grp_df[cond_col].to_list()
+            first_cond_idx: int | None = None
+            for i, v in enumerate(cond_mask):
+                if v is True:
+                    first_cond_idx = i
+                    break
 
-            for row in cond_df.iter_rows(named=True):
-                # Find matching source rows
-                src_filtered = src
-                for key in on:
-                    src_filtered = src_filtered.filter(pl.col(key) == row[key])
-
-                if len(src_filtered) == 0:
-                    continue
-
-                # Check temporal condition
-                row_time = row[time_col]
-                if criteria_lower == "exists_after":
-                    matches = src_filtered.filter(pl.col(time_col) > row_time)
+            n = len(grp_df)
+            if first_cond_idx is None:
+                if flag_no_ref_groups:
+                    if criteria_lower == "before":
+                        flags = [flag_value] * n
+                    else:
+                        flags = [false_value] * n
                 else:
-                    matches = src_filtered.filter(pl.col(time_col) < row_time)
-
-                if len(matches) > 0:
-                    idx = row["__flag_idx__"]
-                    flags[idx] = flag_value
-
-            result_df = df.drop("__flag_idx__").with_columns(pl.Series(target, flags))
-            return self._materialise_then(result_df)
-
-        # ── Direct expression criteria ──
-        else:
-            _known = {
-                "first",
-                "last",
-                "max",
-                "min",
-                "exists",
-                "before",
-                "after",
-                "exists_after",
-                "exists_before",
-            }
-            if criteria_lower is not None and criteria_lower in _known:
-                # Should not reach here — handled above
-                raise ValueError(
-                    f"Unknown flag criteria: '{criteria}'. Supported: "
-                    "'first', 'last', 'max', 'min', 'exists', 'before', "
-                    "'after', 'exists_after', 'exists_before'."
-                )
-            # criteria is a pl.Expr or a parseable string expression
-            if isinstance(criteria, pl.Expr):
-                row_cond = criteria
+                    flags = [false_value if false_value else None] * n
             else:
-                row_cond = parse_expression(str(criteria))
-            final_cond = (where_expr & row_cond) if where_expr is not None else row_cond
+                flags = []
+                for i in range(n):
+                    if criteria_lower == "before":
+                        flagged = i <= first_cond_idx if inclusive else i < first_cond_idx
+                    else:
+                        flagged = i >= first_cond_idx if inclusive else i > first_cond_idx
+                    flags.append(flag_value if flagged else (false_value if false_value else None))
+            result_parts.append(grp_df.with_columns(pl.Series(target, flags)))
 
-        # Standard expression-based path
+        result_df = pl.concat(result_parts)
+        result_df = result_df.sort("__orig_idx__").drop(["__orig_idx__", cond_col])
+        return self._materialise_then(result_df)
+
+    def _flag_temporal_exists(
+        self,
+        target,
+        *,
+        criteria_lower,
+        from_dataset,
+        on,
+        order_cols,
+        condition,
+        source_filter,
+        flag_value,
+    ) -> Self:
+        """Handle exists_after/exists_before temporal join flag criteria."""
+        if from_dataset is None or condition is None:
+            raise ValueError(
+                f"flag criteria='{criteria_lower}' requires from_dataset and condition."
+            )
+        if on is None:
+            raise ValueError(f"flag criteria='{criteria_lower}' requires on.")
+
+        df = self._lazy.collect()
+        src = from_dataset if isinstance(from_dataset, pl.DataFrame) else pl.concat(from_dataset)
+        if source_filter is not None:
+            src = src.filter(source_filter)
+
+        if order_cols:
+            time_col = order_cols[0]
+        else:
+            common_time = [
+                c for c in ["AVISITN", "ADY", "ADT", "ADTM"] if c in df.columns and c in src.columns
+            ]
+            if not common_time:
+                raise ValueError(
+                    f"flag criteria='{criteria_lower}' requires order_by or a "
+                    "common temporal column (AVISITN, ADY, ADT, ADTM)."
+                )
+            time_col = common_time[0]
+
+        df = df.with_row_index("__flag_idx__")
+        cond_df = df.filter(condition)
+
+        flags = [None] * len(df)
+        for row in cond_df.iter_rows(named=True):
+            src_filtered = src
+            for key in on:
+                src_filtered = src_filtered.filter(pl.col(key) == row[key])
+            if len(src_filtered) == 0:
+                continue
+            row_time = row[time_col]
+            if criteria_lower == "exists_after":
+                matches = src_filtered.filter(pl.col(time_col) > row_time)
+            else:
+                matches = src_filtered.filter(pl.col(time_col) < row_time)
+            if len(matches) > 0:
+                flags[row["__flag_idx__"]] = flag_value
+
+        result_df = df.drop("__flag_idx__").with_columns(pl.Series(target, flags))
+        return self._materialise_then(result_df)
+
+    def _flag_expression(
+        self,
+        target,
+        *,
+        criteria,
+        where_expr,
+        flag_value,
+        false_lit,
+    ) -> Self:
+        """Handle direct expression-based flag criteria."""
+        from fleet.sdtm.utils import parse_expression
+
+        if isinstance(criteria, pl.Expr):
+            row_cond = criteria
+        else:
+            row_cond = parse_expression(str(criteria))
+        final_cond = (where_expr & row_cond) if where_expr is not None else row_cond
         expr = pl.when(final_cond).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
         return self._chain(expr)
 
@@ -1211,206 +1244,6 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         if "__dtm_date_tmp__" in result.columns:
             result = result.drop("__dtm_date_tmp__")
         return self._materialise_then(result)
-
-    def duration(
-        self,
-        target: str,
-        *,
-        start: str | pl.Expr,
-        end: str | pl.Expr,
-        unit: str = "days",
-        add_one: bool | None = None,
-        out: str = "numeric",
-    ) -> Self:
-        """Compute the duration between two date/datetime columns.
-
-        Supports column references (``str``) and Polars expressions
-        (e.g. ``pl.lit(date(2024, 1, 1))``) for *start* and *end*.
-
-        The ``add_one`` parameter controls inclusive counting:
-        - ``None`` (default): auto-resolves from the target suffix.
-          ``*DY`` targets use CDISC study-day convention (no day 0);
-          all others add 1 for inclusive counting.
-        - ``True``: always add 1 (inclusive).
-        - ``False``: raw difference (e.g. PK elapsed time).
-
-        Args:
-            target: Name of the output column.
-            start: Start date column name or expression.
-            end: End date column name or expression.
-            unit: Duration unit — ``"seconds"``, ``"minutes"``, ``"hours"``,
-                ``"days"`` (default), ``"weeks"``, ``"months"``, ``"years"``.
-            add_one: Override for inclusive counting.  ``None`` auto-resolves
-                from the target suffix.
-            out: Output format — ``"numeric"`` (default) or ``"iso8601"``.
-
-        Returns:
-            Self: The namespace with *target* appended; call ``.to_frame()``
-                to materialise.
-
-        Examples:
-            Study day (auto-detected from DY suffix)::
-
-                adae = (
-                    ae_df.adam
-                    .duration("ASTDY", start="TRTSDT", end="ASTDT")
-                    .to_frame()
-                )
-
-            Treatment duration in days::
-
-                adsl = (
-                    dm_df.adam.adsl
-                    .duration("TRTDURD", start="TRTSDT", end="TRTEDT")
-                    .to_frame()
-                )
-
-            PK elapsed time in hours::
-
-                adpc = (
-                    pc_df.adam.pk
-                    .duration("APTS", start="EXSTDTM", end="PCDTM",
-                              unit="hours", add_one=False)
-                    .to_frame()
-                )
-        """
-        # Normalise start/end to expressions
-        start_expr = pl.col(start) if isinstance(start, str) else start
-        end_expr = pl.col(end) if isinstance(end, str) else end
-
-        # Auto-cast string columns to date/datetime
-        start_expr = (
-            start_expr.str.to_date(strict=False)
-            .cast(pl.Date)
-            .fill_null(start_expr.str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False))
-            if isinstance(start, str)
-            else start_expr
-        )
-        end_expr = (
-            end_expr.str.to_date(strict=False)
-            .cast(pl.Date)
-            .fill_null(end_expr.str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False))
-            if isinstance(start, str)
-            else end_expr
-        )
-
-        # For string columns, we need a safer approach: try to cast
-        # but the column may already be Date/Datetime. Use a materialise
-        # approach to inspect dtypes.
-        df = self._lazy.collect()
-
-        def _to_date_expr(col_or_expr: str | pl.Expr) -> pl.Expr:
-            """Resolve a column reference or expression to a temporal expr."""
-            if isinstance(col_or_expr, str):
-                col_name = col_or_expr
-                if col_name in df.columns:
-                    dtype = df[col_name].dtype
-                    if dtype == pl.Date:
-                        return pl.col(col_name)
-                    if dtype.is_(pl.Datetime) or str(dtype).startswith("Datetime"):
-                        # For time-based units, keep Datetime precision
-                        if unit in ("seconds", "minutes", "hours"):
-                            return pl.col(col_name)
-                        return pl.col(col_name).cast(pl.Date)
-                    # String → try to parse
-                    if unit in ("seconds", "minutes", "hours"):
-                        return pl.col(col_name).str.to_datetime(strict=False)
-                    return pl.col(col_name).str.to_date(strict=False)
-                return pl.col(col_name)
-            # pl.Expr — use as-is
-            return col_or_expr
-
-        s_expr = _to_date_expr(start)
-        e_expr = _to_date_expr(end)
-
-        # Compute difference
-        valid_units = {
-            "seconds",
-            "minutes",
-            "hours",
-            "days",
-            "weeks",
-            "months",
-            "years",
-        }
-        if unit not in valid_units:
-            raise ValueError(
-                f"duration unit={unit!r} is not supported. Choose one of: {sorted(valid_units)}"
-            )
-
-        if unit in ("seconds", "minutes", "hours"):
-            # Need datetime precision — ensure both sides are Datetime
-            s_dtm = s_expr.cast(pl.Datetime("us"))
-            e_dtm = e_expr.cast(pl.Datetime("us"))
-            diff_s = (e_dtm - s_dtm).dt.total_seconds().cast(pl.Float64)
-            if unit == "seconds":
-                diff = diff_s.cast(pl.Int64)
-            elif unit == "minutes":
-                diff = diff_s / 60.0
-            else:  # hours
-                diff = diff_s / 3600.0
-        else:
-            diff_days = (e_expr - s_expr).dt.total_days()
-            if unit == "days":
-                diff = diff_days
-            elif unit == "weeks":
-                diff = diff_days.cast(pl.Float64) / 7.0
-            elif unit == "months":
-                diff = diff_days.cast(pl.Float64) / 30.4375
-            else:  # years
-                diff = diff_days.cast(pl.Float64) / 365.25
-
-        # Resolve add_one
-        if add_one is None:
-            if target.endswith("DY"):
-                # CDISC study day: +1 if >= 0, no day 0
-                result_expr = (
-                    (pl.when(diff >= 0).then(diff + 1).otherwise(diff)).cast(pl.Int64).alias(target)
-                )
-                return self._materialise_then(df.with_columns(result_expr))
-            else:
-                add_one = True
-
-        if add_one:
-            result_expr = (diff + 1).alias(target)
-        else:
-            result_expr = diff.alias(target)
-
-        if out == "iso8601":
-            # ISO 8601 duration formatting
-            # For simplicity, output P{n}D for days, PT{n}H for hours, etc.
-            abs_val = diff.abs()
-            if unit == "days":
-                iso_expr = (
-                    pl.lit("P") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("D")
-                ).alias(target)
-            elif unit == "hours":
-                iso_expr = (
-                    pl.lit("PT") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("H")
-                ).alias(target)
-            elif unit == "weeks":
-                iso_expr = (
-                    pl.lit("P") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("W")
-                ).alias(target)
-            elif unit == "years":
-                iso_expr = (
-                    pl.lit("P") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("Y")
-                ).alias(target)
-            elif unit == "months":
-                iso_expr = (
-                    pl.lit("P") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("M")
-                ).alias(target)
-            elif unit == "minutes":
-                iso_expr = (
-                    pl.lit("PT") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("M")
-                ).alias(target)
-            else:  # seconds
-                iso_expr = (
-                    pl.lit("PT") + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit("S")
-                ).alias(target)
-            return self._materialise_then(df.with_columns(iso_expr))
-
-        return self._materialise_then(df.with_columns(result_expr))
 
 
 class MultiRowMixin:

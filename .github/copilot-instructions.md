@@ -490,7 +490,65 @@ heading_level: 3
 filters: ["!^*"]
 ```
 
-## 10. Validation & Verification Requirements
+## 10. Code Hygiene — Avoiding Common Debt Patterns
+
+These rules prevent the patterns that required the simplification pass. Follow them when writing new code.
+
+### No private attribute access across modules
+
+Never access `obj._private_attr` from outside the owning class. If external code needs data from it, expose a public method.
+
+```python
+# WRONG — reaches into _ct_cache from namespace code
+all_ct = ct_validator._ct_cache.get(ct_codelist, {})
+decode_map = {coded: info.get("preferred_term", coded) for coded, info in all_ct.items()}
+
+# CORRECT — use the public API
+decode_map = ct_validator.get_decode_map(ct_codelist)
+```
+
+### Prefer dispatch dicts over if/elif chains
+
+When routing to handlers based on a string key (domain names, format names, criteria types), use a dictionary lookup. This makes adding new options a one-line change and avoids growing branch complexity.
+
+```python
+# WRONG — grows linearly with each new domain
+if domain == "ae":
+    ard = data_df.tlg.ae.t_summary(...)
+elif domain == "vs":
+    ard = data_df.tlg.vs.t_summary(...)
+
+# CORRECT — O(1) lookup, easy to extend
+_domain_dispatch = {
+    "ae": lambda df: df.tlg.ae.t_summary(...),
+    "vs": lambda df: df.tlg.vs.t_summary(...),
+}
+ard = _domain_dispatch[domain](data_df)
+```
+
+### No dead constants or unused maps
+
+If a constant (dict, list, frozenset) is defined but never referenced in any code path, remove it. Do not leave "aspirational" data structures that are meant for future use — add them when they are actually wired in.
+
+### Large methods: extract when branches are independent
+
+If a method has more than 5 top-level if/elif branches that each implement substantial independent logic (>10 lines each), extract each branch into a private helper. The dispatcher method should fit on one screen.
+
+### Do not duplicate logic across namespace subclasses
+
+If the same method body exists in 2+ namespace classes (SDTM, ADaM, ADSL, OCCDS, TLG domains), extract it into:
+
+- A mixin in `_mixins.py` (for ADaM namespaces), or
+- `SharedVerbsMixin` in `src/fleet/core/_verb_mixin.py` (for cross-namespace verbs), or
+- A shared module function (for stateless utilities like `_resolve_callable`).
+
+See §7 (ADaM Namespace Mixin Discipline) for the full decision tree.
+
+### CLI and config: argparse `choices` replaces validation code
+
+When argparse already constrains a value via `choices=["ae", "vs"]`, do not re-validate the same set in the handler with if/elif + error exit. Use a dispatch dict and let argparse handle invalid inputs.
+
+## 11. Validation & Verification Requirements
 
 After **every new feature implementation or bug fix**, the following checks MUST all pass before the change is considered complete:
 

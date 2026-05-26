@@ -163,7 +163,9 @@ def scaffold_rule(
     import importlib.resources
     import os
 
-    schema_ref = importlib.resources.files("fleet") / "validation" / "schemas" / "cdisc_rule_schema.json"
+    schema_ref = (
+        importlib.resources.files("fleet") / "validation" / "schemas" / "cdisc_rule_schema.json"
+    )
     with importlib.resources.as_file(schema_ref) as schema_abs:
         schema_rel_path = os.path.relpath(schema_abs, output_dir.resolve())
 

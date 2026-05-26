@@ -5,7 +5,7 @@ from pathlib import Path
 import polars as pl
 
 from fleet.validation.models import ValidationResult
-from fleet.validation.providers import ValidationProvider, ValidationProviderRegistry
+from fleet.validation.providers import OfficialRulesEngineProvider, ValidationProvider
 
 
 class ValidationService:
@@ -14,16 +14,12 @@ class ValidationService:
     def __init__(
         self,
         provider: ValidationProvider | None = None,
-        provider_name: str = "official",
         rules_engine_path: Path | None = None,
     ) -> None:
         if provider is not None:
             self.provider = provider
         else:
-            self.provider = ValidationProviderRegistry.create(
-                provider_name=provider_name,
-                rules_engine_path=rules_engine_path,
-            )
+            self.provider = OfficialRulesEngineProvider(rules_engine_path=rules_engine_path)
 
     def validate_sdtm(
         self,

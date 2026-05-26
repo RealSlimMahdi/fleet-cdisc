@@ -15,7 +15,6 @@ class SDTMAlgorithm(StrEnum):
     ASSIGN_NO_CT = "assign_no_ct"
     ASSIGN_CT = "assign_ct"
     ASSIGN_DTC = "assign_dtc"
-    ASSIGN_DATETIME = "assign_datetime"  # legacy alias
     HARDCODE_CT = "hardcode_ct"
     HARDCODE_NO_CT = "hardcode_no_ct"
     CONDITION_ADD = "condition_add"
