@@ -37,11 +37,30 @@ Usage
 """
 
 # Importing sdtm/adam triggers the @pl.api.register_dataframe_namespace decorators
+from typing import TYPE_CHECKING
+
 from . import (
     adam,  # noqa: F401  (registers df.adam)
     sdtm,  # noqa: F401  (registers df.sdtm)
     tlg,  # noqa: F401  (registers df.tlg)
 )
+
+# ---------------------------------------------------------------------------
+# TYPE_CHECKING augmentation: teach Pylance about .sdtm / .adam / .tlg
+# ---------------------------------------------------------------------------
+if TYPE_CHECKING:
+    import polars as pl
+
+    from fleet.adam.namespace import AdamNamespace as _AdamNS
+    from fleet.sdtm.namespace import SDTMNamespace as _SDTMNS
+    from fleet.tlg.namespace import TLGNamespace as _TLGNS
+
+    class DataFrame(pl.DataFrame):
+        sdtm: _SDTMNS
+        adam: _AdamNS
+        tlg: _TLGNS
+
+
 from ._version import __version__
 from .adam import (
     ADAMAlgorithm,
