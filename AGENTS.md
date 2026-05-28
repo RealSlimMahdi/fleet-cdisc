@@ -69,6 +69,15 @@ Exception: empty DataFrames for TDD scaffolding, programmatic/random data.
 
 Distribution name: `fleet-cdisc` (import: `fleet`). Version comes from git tags — never edit version strings manually.
 
+## Polars Stubs (Pylance Autocomplete)
+
+`src/polars-stubs/dataframe/frame.pyi` declares `.sdtm`, `.adam`, `.tlg` properties on `pl.DataFrame` so Pylance can offer code completion. Update this file when:
+
+1. **New top-level namespace** added (e.g. `df.safety`) — add a `@property` entry.
+2. **Namespace class renamed or moved** — update the import path.
+
+Do NOT update for new verbs or changed signatures — those are resolved from the real `.py` source.
+
 ## CLI Reference
 
 See `.github/instructions/cli.instructions.md` for full CLI command reference.

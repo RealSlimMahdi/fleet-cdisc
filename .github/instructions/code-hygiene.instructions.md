@@ -53,3 +53,12 @@ Same method body in 2+ namespace classes → extract into:
 ## CLI: argparse `choices` replaces validation
 
 When argparse constrains via `choices=`, don't re-validate in the handler. Use dispatch dict + let argparse handle errors.
+
+## Polars stubs must stay in sync
+
+The file `src/polars-stubs/dataframe/frame.pyi` teaches Pylance about Fleet's namespace accessors on `pl.DataFrame`. When you:
+
+- **Add a new top-level namespace** (a new `@pl.api.register_dataframe_namespace`): add a matching `@property` entry in the stub.
+- **Rename or move a namespace class**: update the import path in the stub.
+
+Do NOT duplicate method signatures — Pylance reads those from the real source files.
