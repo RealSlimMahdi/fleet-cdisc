@@ -50,3 +50,6 @@ benchmark/data/*.json
 
 # ignore custom rules
 my_rules
+
+# ignore presentation folder
+presentation/
