@@ -207,9 +207,10 @@ class OfficialCDISCValidator:
         * ``Rules_Report``        — execution status of every rule
         * ``results_data``        — raw results (legacy / internal)
 
-        Engine-internal noise (cross-domain "evaluation dataset failed to
-        build", missing-domain messages, rule execution errors) is
-        downgraded to INFO so it doesn't pollute the user-facing report.
+        Engine-internal noise (cross-domain failures when only a single
+        dataset is being validated) is downgraded to INFO.  Legitimate
+        findings — including missing required variables — are preserved
+        at their original severity.
         """
         conformance = data.get("Conformance_Details", {})
         dataset_type = conformance.get("Standard", "unknown").lower()
@@ -226,8 +227,8 @@ class OfficialCDISCValidator:
             variable = item.get("variables", item.get("Variables")) or None
             rows = _safe_int(item.get("row", item.get("Rows")))
 
-            # Downgrade engine-internal noise to INFO
-            if _is_engine_noise(message):
+            # Downgrade only true engine-internal noise to INFO
+            if _is_engine_noise(message, domain=domain):
                 infos.append(
                     ValidationIssue(
                         severity=Severity.INFO,
@@ -262,7 +263,7 @@ class OfficialCDISCValidator:
         for item in data.get("Issue_Summary", []):
             rule_id = item.get("core_id", "UNKNOWN")
             message = item.get("message", "")
-            if _is_engine_noise(message):
+            if _is_engine_noise(message, domain=domain):
                 continue  # already captured from Issue_Details
             # Deduplicate: Issue_Summary is a rollup of Issue_Details,
             # only add if this rule_id wasn't already seen.
@@ -274,6 +275,25 @@ class OfficialCDISCValidator:
                     message=message,
                 )
                 warnings.append(issue)
+
+        # ── Rules_Report: surface SKIPPED rules as warnings ─────────
+        for item in data.get("Rules_Report", []):
+            status = (item.get("Status") or item.get("status") or "").upper()
+            if status == "SKIPPED":
+                rule_id = item.get("core_id", item.get("Rule", "UNKNOWN"))
+                message = item.get("message", item.get("Message", ""))
+                if not message:
+                    message = f"Rule {rule_id} skipped (required variable/domain not found)."
+                # Only add if not already reported in Issue_Details
+                seen_ids = {i.rule_id for i in errors + warnings + infos}
+                if rule_id not in seen_ids:
+                    warnings.append(
+                        ValidationIssue(
+                            severity=Severity.WARNING,
+                            rule_id=rule_id,
+                            message=message,
+                        )
+                    )
 
         return _build_result(
             dataset_name=domain or "unknown",
@@ -296,18 +316,41 @@ def _safe_int(val: object) -> int | None:
 
 
 # Patterns that indicate engine-internal noise rather than real data issues.
+# These are narrowly scoped to avoid suppressing legitimate findings.
 _ENGINE_NOISE_PATTERNS = (
     "evaluation dataset failed to build",
-    "rule evaluation error",
-    "rule execution error",
-    "does not exist",
-    "dataset is missing",
-    "is not present in study",
     "An unknown exception has occurred",
 )
 
+# Patterns that are only noise when they refer to a *different* dataset
+# than the one being validated (cross-domain reference errors).
+_CROSS_DOMAIN_NOISE_PATTERNS = (
+    "dataset is missing",
+    "is not present in study",
+    "rule evaluation error",
+    "rule execution error",
+)
 
-def _is_engine_noise(message: str) -> bool:
-    """Return ``True`` if *message* is engine-internal noise."""
+
+def _is_engine_noise(message: str, *, domain: str | None = None) -> bool:
+    """Return ``True`` if *message* is engine-internal noise.
+
+    Cross-domain noise patterns are only treated as noise when the
+    message does NOT reference the domain currently being validated.
+    This prevents suppressing legitimate findings like
+    "Variable EXSEQ does not exist in dataset EX" when validating EX.
+    """
     msg = message.lower()
-    return any(p.lower() in msg for p in _ENGINE_NOISE_PATTERNS)
+
+    # Always-noise patterns (engine crashes, build failures)
+    if any(p.lower() in msg for p in _ENGINE_NOISE_PATTERNS):
+        return True
+
+    # Cross-domain patterns: only noise if they DON'T mention our domain
+    if any(p.lower() in msg for p in _CROSS_DOMAIN_NOISE_PATTERNS):
+        if domain and domain.lower() in msg:
+            # Message references our own domain — this is a real finding
+            return False
+        return True
+
+    return False
