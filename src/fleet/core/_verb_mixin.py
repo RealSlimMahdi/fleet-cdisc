@@ -50,8 +50,7 @@ def _check_ig_version(version: str, *, standard: str) -> None:
     if version not in valid:
         sorted_versions = sorted(valid, key=lambda v: [int(x) for x in v.split(".")])
         raise ValueError(
-            f"Invalid {label} version '{version}'. "
-            f"Supported versions: {', '.join(sorted_versions)}"
+            f"Invalid {label} version '{version}'. Supported versions: {', '.join(sorted_versions)}"
         )
 
 
