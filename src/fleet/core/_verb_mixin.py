@@ -750,6 +750,7 @@ class SharedVerbsMixin:
         version: str | None = None,
         rules_engine_path: Path | None = None,
         custom_rules: str | Path | None = None,
+        report: str = "full",
     ) -> Self:
         """Run CDISC conformance validation and print the report.
 
@@ -766,6 +767,9 @@ class SharedVerbsMixin:
             rules_engine_path: Optional path to a custom rules engine.
             custom_rules: Optional path to a directory containing custom
                 validation rule YAML files. Passed to the engine via ``-lr``.
+            report: Report detail level — ``"summary"`` for one line per
+                issue, ``"full"`` for expanded details including variables,
+                affected rows, and suggested fixes.
 
         Returns:
             Self: The same namespace instance (for continued chaining).
@@ -803,7 +807,7 @@ class SharedVerbsMixin:
                 self.to_frame(), domain=dataset_or_domain, version=ver, custom_rules=custom_rules
             )
 
-        result.print_report()
+        result.print_report(report_type=report)
         return self
 
     # ------------------------------------------------------------------ #
