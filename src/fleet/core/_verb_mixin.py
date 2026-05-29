@@ -34,6 +34,26 @@ if TYPE_CHECKING:
 
     from fleet.core.derivation import Derivation
 
+# Valid Implementation Guide versions supported by the CDISC Rules Engine.
+_VALID_SDTM_VERSIONS = {"3.1.2", "3.1.3", "3.2", "3.3", "3.4"}
+_VALID_ADAM_VERSIONS = {"1.0", "1.1", "1.2", "1.3"}
+
+
+def _check_ig_version(version: str, *, standard: str) -> None:
+    """Raise ``ValueError`` if *version* is not a valid IG version for *standard*."""
+    if standard == "adam":
+        valid = _VALID_ADAM_VERSIONS
+        label = "ADaM IG"
+    else:
+        valid = _VALID_SDTM_VERSIONS
+        label = "SDTM IG"
+    if version not in valid:
+        sorted_versions = sorted(valid, key=lambda v: [int(x) for x in v.split(".")])
+        raise ValueError(
+            f"Invalid {label} version '{version}'. "
+            f"Supported versions: {', '.join(sorted_versions)}"
+        )
+
 
 class SharedVerbsMixin:
     """Base mixin providing verbs shared across SDTM and ADaM namespaces.
@@ -772,6 +792,7 @@ class SharedVerbsMixin:
         from fleet.validation.service import ValidationService
 
         ver = version if version is not None else self._VALIDATE_DEFAULT_VERSION
+        _check_ig_version(ver, standard=self._VALIDATE_STANDARD)
         svc = ValidationService(rules_engine_path=rules_engine_path)
 
         if self._VALIDATE_STANDARD == "adam":
