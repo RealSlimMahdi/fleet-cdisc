@@ -74,11 +74,13 @@ class ValidationResult:
             f"  Errors: {len(self.errors)}, Warnings: {len(self.warnings)}, Info: {len(self.infos)}"
         )
 
-    def print_report(self, report_type: str = "summary") -> None:
+    def print_report(self, report_type: str = "smart") -> None:
         """Print a formatted validation report to stdout.
 
         Args:
-            report_type: ``"summary"`` for a compact one-line-per-issue view,
+            report_type: ``"smart"`` (default) for a deduplicated view that
+                groups identical findings and shows compact row ranges,
+                ``"summary"`` for a compact one-line-per-issue view,
                 ``"full"`` for expanded details including variable names,
                 affected rows, producing verbs, and suggested fixes.
         """
@@ -95,6 +97,8 @@ class ValidationResult:
 
         if report_type == "full":
             self._print_full()
+        elif report_type == "smart":
+            self._print_smart()
         else:
             self._print_summary()
 
@@ -135,6 +139,71 @@ class ValidationResult:
             print(f"\nINFO ({len(self.infos)}):")
             for i, issue in enumerate(self.infos, 1):
                 print(f"\n{i}. {issue}")
+
+        if not self.errors and not self.warnings and not self.infos:
+            print("\n  No issues found.")
+
+    def _print_smart(self) -> None:
+        """Deduplicated view: groups identical findings and shows row ranges."""
+
+        def _group_issues(issues: list[ValidationIssue]) -> list[dict]:
+            """Group issues by (rule_id, message, variable) and consolidate rows."""
+            groups: dict[tuple, dict] = {}
+            for issue in issues:
+                key = (issue.rule_id, issue.message, issue.variable or "")
+                if key not in groups:
+                    groups[key] = {
+                        "issue": issue,
+                        "rows": [],
+                        "count": 0,
+                    }
+                groups[key]["count"] += 1
+                if issue.rows_affected is not None:
+                    groups[key]["rows"].append(issue.rows_affected)
+            return list(groups.values())
+
+        def _format_rows(rows: list[int]) -> str:
+            """Format row numbers into compact ranges (e.g. '1-5, 8, 10-12')."""
+            if not rows:
+                return ""
+            sorted_rows = sorted(set(rows))
+            ranges: list[str] = []
+            start = prev = sorted_rows[0]
+            for r in sorted_rows[1:]:
+                if r == prev + 1:
+                    prev = r
+                else:
+                    ranges.append(f"{start}" if start == prev else f"{start}-{prev}")
+                    start = prev = r
+            ranges.append(f"{start}" if start == prev else f"{start}-{prev}")
+            return ", ".join(ranges)
+
+        def _print_grouped(label: str, issues: list[ValidationIssue]) -> None:
+            if not issues:
+                return
+            grouped = _group_issues(issues)
+            unique_count = len(grouped)
+            total_count = len(issues)
+            print(f"\n{label} ({unique_count} unique, {total_count} total):")
+            for i, grp in enumerate(grouped, 1):
+                issue = grp["issue"]
+                count = grp["count"]
+                rows = grp["rows"]
+                print(f"\n{i}. [{issue.rule_id}] {issue.message}")
+                if issue.variable:
+                    print(f"   Variable: {issue.variable}")
+                if rows:
+                    print(f"   Rows affected: {_format_rows(rows)} ({count} occurrences)")
+                elif count > 1:
+                    print(f"   Occurrences: {count}")
+                if issue.producing_verb:
+                    print(f"   Producing verb: {issue.producing_verb} ({issue.verb_method})")
+                if issue.suggested_fix:
+                    print(f"   Suggested fix: {issue.suggested_fix}")
+
+        _print_grouped("ERRORS", self.errors)
+        _print_grouped("WARNINGS", self.warnings)
+        _print_grouped("INFO", self.infos)
 
         if not self.errors and not self.warnings and not self.infos:
             print("\n  No issues found.")
