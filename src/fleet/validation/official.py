@@ -228,7 +228,10 @@ class OfficialCDISCValidator:
         for item in data.get("Issue_Details", []):
             rule_id = item.get("core_id", item.get("Rule", "UNKNOWN"))
             message = item.get("message", item.get("Message", "No message"))
-            variable = item.get("variables", item.get("Variables")) or None
+            raw_var = item.get("variables", item.get("Variables"))
+            variable: str | None = (
+                ", ".join(raw_var) if isinstance(raw_var, list) else raw_var
+            ) or None
             rows = _safe_int(item.get("row", item.get("Rows")))
 
             # Suppress engine-internal noise
