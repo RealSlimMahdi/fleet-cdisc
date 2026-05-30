@@ -1,5 +1,6 @@
 """Official CDISC Rules Engine integration via subprocess."""
 
+import ast
 import json
 import subprocess
 import tempfile
@@ -9,6 +10,78 @@ import polars as pl
 
 from fleet.validation.engine import discover_engine
 from fleet.validation.models import Severity, ValidationIssue, ValidationResult
+
+
+def _resolve_variable_field(item: dict) -> str | None:
+    """Resolve the engine's variables/values pair into a human-readable string.
+
+    The engine returns template parameter names (e.g. ``$dataset_variables``)
+    in ``variables`` and actual values in a parallel ``values`` list.
+    For missing-variable rules (CORE-000334, CORE-000355) we compute the
+    set difference. For everything else, we join the resolved values.
+    """
+    raw_vars = item.get("variables", item.get("Variables"))
+    raw_vals = item.get("values", item.get("Values"))
+
+    # Simple case: variables is a plain string (not a template)
+    if isinstance(raw_vars, str):
+        return raw_vars or None
+
+    # Not a list or empty → nothing to show
+    if not isinstance(raw_vars, list) or not raw_vars:
+        return None
+
+    # If all entries are $-prefixed templates, resolve from values
+    all_templates = all(isinstance(v, str) and v.startswith("$") for v in raw_vars)
+    if not all_templates:
+        # Non-template list — just join as-is
+        return ", ".join(str(v) for v in raw_vars) or None
+
+    # We have template variables — use values for resolution
+    if not isinstance(raw_vals, list) or len(raw_vals) != len(raw_vars):
+        # Can't resolve — show template names without $
+        return ", ".join(v.lstrip("$") for v in raw_vars)
+
+    # Build a name→value map
+    resolved = dict(zip(raw_vars, raw_vals))
+
+    # Special handling for missing-variable rules
+    rule_id = item.get("core_id", "")
+    if rule_id in ("CORE-000334", "CORE-000355"):
+        # Compute which variables are missing
+        dataset_vars = _parse_list_string(resolved.get("$dataset_variables", ""))
+        expected_key = (
+            "$expected_variables" if "$expected_variables" in resolved else "$required_variables"
+        )
+        expected_vars = _parse_list_string(resolved.get(expected_key, ""))
+        missing = sorted(set(expected_vars) - set(dataset_vars))
+        if missing:
+            return ", ".join(missing)
+        # Fallback: show expected vars
+        return ", ".join(expected_vars) if expected_vars else None
+
+    # Generic: show the resolved values joined
+    parts = []
+    for val in raw_vals:
+        parsed = _parse_list_string(val)
+        if parsed:
+            parts.extend(parsed)
+        elif val:
+            parts.append(str(val))
+    return ", ".join(parts) or None
+
+
+def _parse_list_string(s: str) -> list[str]:
+    """Safely parse a string like "['VAR1', 'VAR2']" into a list."""
+    if not s:
+        return []
+    try:
+        result = ast.literal_eval(s)
+        if isinstance(result, list):
+            return [str(x) for x in result]
+    except (ValueError, SyntaxError):
+        pass
+    return [s]
 
 
 def _build_result(
@@ -228,22 +301,11 @@ class OfficialCDISCValidator:
         for item in data.get("Issue_Details", []):
             rule_id = item.get("core_id", item.get("Rule", "UNKNOWN"))
             message = item.get("message", item.get("Message", "No message"))
-            raw_var = item.get("variables", item.get("Variables"))
-            variable: str | None = (
-                ", ".join(raw_var) if isinstance(raw_var, list) else raw_var
-            ) or None
+            variable = _resolve_variable_field(item)
             rows = _safe_int(item.get("row", item.get("Rows")))
 
-            # Suppress engine-internal noise
+            # Suppress engine-internal noise entirely
             if _is_engine_noise(message):
-                infos.append(
-                    ValidationIssue(
-                        severity=Severity.INFO,
-                        rule_id=rule_id,
-                        message=message,
-                        variable=variable,
-                    )
-                )
                 continue
 
             severity_str = item.get("Severity", item.get("severity", "WARNING")).upper()
