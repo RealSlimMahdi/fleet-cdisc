@@ -113,6 +113,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
         ct_codelist: str | type,
         ct_mapping: dict[str, str] | None = None,
         ct_validator: CTValidator | None = None,
+        validate_values: bool = False,
     ) -> SDTMNamespace:
         """Copy *source* to *target*, translating values via controlled terminology.
 
@@ -145,6 +146,9 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
                 raw data already matches the CDISC submission values — the
                 codelist is still recorded for validation.
             ct_validator: Optional pre-built validator instance.
+            validate_values: When ``True``, eagerly collect unique values
+                from *source* and warn if any are not valid submission
+                terms for the codelist.  Requires CT data to be loaded.
 
         Returns:
             SDTMNamespace: The namespace with *target* appended; call
@@ -176,6 +180,21 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
                     .assign_ct("SEX", source="sex", ct_codelist=SEX)
                     .to_frame()
                 )
+
+            Validate that source values match the codelist (warns on mismatch)::
+
+                from codelists import ROUTE
+
+                ex = (
+                    raw_df.sdtm
+                    .assign_ct(
+                        "EXROUT",
+                        source="route",
+                        ct_codelist=ROUTE,
+                        validate_values=True,
+                    )
+                    .to_frame()
+                )
         """
         # Resolve codelist class to its concept ID string.
         if not isinstance(ct_codelist, str):
@@ -202,6 +221,8 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
                 if decode_map:
                     ns = self._chain(pl.col(source).replace(decode_map).alias(target))
                     ns._auto_fk_check(target)
+                    if validate_values:
+                        self._warn_invalid_values(source, ct_codelist, ct_validator)
                     return ns
             except Exception:
                 pass
@@ -209,7 +230,48 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
         # Fallback: pass-through (CT not loaded)
         ns = self._chain(pl.col(source).alias(target))
         ns._auto_fk_check(target)
+        if validate_values and ct_validator is not None:
+            self._warn_invalid_values(source, ct_codelist, ct_validator)
         return ns
+
+    # ------------------------------------------------------------------ #
+    # 2b. _warn_invalid_values — eager CT check for assign_ct             #
+    # ------------------------------------------------------------------ #
+
+    def _warn_invalid_values(
+        self,
+        source: str,
+        ct_codelist: str,
+        ct_validator: CTValidator,
+    ) -> None:
+        """Eagerly check unique *source* values against the loaded codelist.
+
+        Emits a UserWarning for any values not in the valid submission terms.
+        Silently returns if the codelist is not loaded or collection fails.
+        """
+        valid_values = set(ct_validator.get_valid_values(ct_codelist))
+        if not valid_values:
+            return
+        try:
+            unique_vals = (
+                self._lazy.select(pl.col(source).drop_nulls().unique())
+                .collect()
+                .to_series()
+                .to_list()
+            )
+            invalid = [v for v in unique_vals if v not in valid_values]
+            if invalid:
+                import warnings
+
+                warnings.warn(
+                    f"Column '{source}' contains values not in codelist "
+                    f"'{ct_codelist}': {invalid}. "
+                    f"Valid values: {sorted(valid_values)}. "
+                    f"Consider providing a ct_mapping parameter.",
+                    stacklevel=3,
+                )
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------ #
     # 3. date — unified date verb                                          #

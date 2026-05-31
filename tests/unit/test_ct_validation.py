@@ -209,3 +209,100 @@ class TestAssignCTWithMessyData:
         # Whitespace-drifted values should NOT silently match
         assert result["SEX"][0] is None or result["SEX"][0] == " M"
         assert result["SEX"][1] is None or result["SEX"][1] == "F "
+
+
+class TestAssignCTValidateValues:
+    """assign_ct with validate_values=True checks source data against codelist."""
+
+    def test_warns_on_invalid_values(self, ct_sample_path):
+        """Source values not in codelist emit a UserWarning."""
+        import warnings
+
+        from fleet.ct import CTValidator
+
+        validator = CTValidator.get_instance()
+        validator.load_ct_file(ct_sample_path)
+
+        df = pl.DataFrame({"sex": ["M", "Female", "f"]})
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = df.sdtm.assign_ct(
+                "SEX",
+                source="sex",
+                ct_codelist="C66731",
+                validate_values=True,
+            ).to_frame()
+
+        # Pipeline still completes
+        assert result.shape[0] == 3
+        # At least one warning for invalid values
+        ct_warnings = [w for w in caught if "not in codelist" in str(w.message)]
+        assert len(ct_warnings) == 1
+        msg = str(ct_warnings[0].message)
+        assert "Female" in msg or "f" in msg
+
+    def test_no_warning_when_values_are_valid(self, ct_sample_path):
+        """All valid values produce no warning."""
+        import warnings
+
+        from fleet.ct import CTValidator
+
+        validator = CTValidator.get_instance()
+        validator.load_ct_file(ct_sample_path)
+
+        df = pl.DataFrame({"sex": ["M", "F", "U"]})
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            df.sdtm.assign_ct(
+                "SEX",
+                source="sex",
+                ct_codelist="C66731",
+                validate_values=True,
+            ).to_frame()
+
+        ct_warnings = [w for w in caught if "not in codelist" in str(w.message)]
+        assert len(ct_warnings) == 0
+
+    def test_no_warning_when_flag_is_false(self, ct_sample_path):
+        """Default validate_values=False does not warn even with invalid data."""
+        import warnings
+
+        from fleet.ct import CTValidator
+
+        validator = CTValidator.get_instance()
+        validator.load_ct_file(ct_sample_path)
+
+        df = pl.DataFrame({"sex": ["Invalid"]})
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            df.sdtm.assign_ct(
+                "SEX",
+                source="sex",
+                ct_codelist="C66731",
+                validate_values=False,
+            ).to_frame()
+
+        ct_warnings = [w for w in caught if "not in codelist" in str(w.message)]
+        assert len(ct_warnings) == 0
+
+    def test_nulls_are_not_flagged(self, ct_sample_path):
+        """Null values in source should not trigger a warning."""
+        import warnings
+
+        from fleet.ct import CTValidator
+
+        validator = CTValidator.get_instance()
+        validator.load_ct_file(ct_sample_path)
+
+        df = pl.DataFrame({"sex": ["M", None, "F"]})
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            df.sdtm.assign_ct(
+                "SEX",
+                source="sex",
+                ct_codelist="C66731",
+                validate_values=True,
+            ).to_frame()
+
+        ct_warnings = [w for w in caught if "not in codelist" in str(w.message)]
+        assert len(ct_warnings) == 0
