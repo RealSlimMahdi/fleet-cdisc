@@ -196,6 +196,9 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
                     .to_frame()
                 )
         """
+        # Keep the original class for introspection (validate_values fallback).
+        ct_codelist_cls = ct_codelist if not isinstance(ct_codelist, str) else None
+
         # Resolve codelist class to its concept ID string.
         if not isinstance(ct_codelist, str):
             ct_codelist = getattr(ct_codelist, "_concept_id", None) or ct_codelist.__name__
@@ -222,7 +225,9 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
                     ns = self._chain(pl.col(source).replace(decode_map).alias(target))
                     ns._auto_fk_check(target)
                     if validate_values:
-                        self._warn_invalid_values(source, ct_codelist, ct_validator)
+                        self._warn_invalid_values(
+                            source, ct_codelist, ct_validator, ct_codelist_cls
+                        )
                     return ns
             except Exception:
                 pass
@@ -230,8 +235,8 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
         # Fallback: pass-through (CT not loaded)
         ns = self._chain(pl.col(source).alias(target))
         ns._auto_fk_check(target)
-        if validate_values and ct_validator is not None:
-            self._warn_invalid_values(source, ct_codelist, ct_validator)
+        if validate_values:
+            self._warn_invalid_values(source, ct_codelist, ct_validator, ct_codelist_cls)
         return ns
 
     # ------------------------------------------------------------------ #
@@ -242,16 +247,32 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
         self,
         source: str,
         ct_codelist: str,
-        ct_validator: CTValidator,
+        ct_validator: CTValidator | None,
+        ct_codelist_cls: type | None = None,
     ) -> None:
         """Eagerly check unique *source* values against the loaded codelist.
 
         Emits a UserWarning for any values not in the valid submission terms.
-        Silently returns if the codelist is not loaded or collection fails.
+        Derives valid values from the validator cache first, falling back to
+        introspecting the codelist class attributes when CT is not loaded.
         """
-        valid_values = set(ct_validator.get_valid_values(ct_codelist))
+        valid_values: set[str] = set()
+
+        # Strategy 1: from the validator cache
+        if ct_validator is not None:
+            valid_values = set(ct_validator.get_valid_values(ct_codelist))
+
+        # Strategy 2: introspect the codelist class (works without CT loaded)
+        if not valid_values and ct_codelist_cls is not None:
+            valid_values = {
+                v
+                for k, v in vars(ct_codelist_cls).items()
+                if not k.startswith("_") and isinstance(v, str)
+            }
+
         if not valid_values:
             return
+
         try:
             unique_vals = (
                 self._lazy.select(pl.col(source).drop_nulls().unique())
