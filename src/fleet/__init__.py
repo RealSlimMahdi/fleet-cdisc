@@ -82,7 +82,7 @@ from .core import (
     load_study_context,
     to_repr,
 )
-from .ct import CTValidator, get_validator, load_controlled_terminology
+from .ct import CTValidator, get_validator, import_codelists, load_controlled_terminology
 
 # TA namespace classes are also importable directly for type hints / isinstance
 from .define_xml import (
@@ -120,6 +120,7 @@ __all__ = [
     # CT
     "CTValidator",
     "get_validator",
+    "import_codelists",
     "load_controlled_terminology",
     # IO
     "load_raw_data",

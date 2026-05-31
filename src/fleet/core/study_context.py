@@ -158,6 +158,11 @@ class StudyContext:
         return self.resolve(self.config.paths.programs_misc)
 
     @property
+    def codelists_file(self) -> Path:
+        """Resolve the generated codelists.py path (inside SDTM metadata dir)."""
+        return self.metadata_sdtm_dir / "codelists.py"
+
+    @property
     def custom_rules_dir(self) -> Path | None:
         """Resolve the custom validation rules directory, or None if not configured."""
         if self.config.validation.custom_rules is None:

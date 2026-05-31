@@ -97,14 +97,45 @@ The generated `codelists.py` contains:
   from codelists import *
   ```
 
+### Importing codelists in standalone study projects
+
+When your study lives in its own directory (not inside the Fleet repo), the
+generated `codelists.py` isn't on the Python path by default.
+Use [`import_codelists()`][fleet.ct.import_codelists] to load it dynamically:
+
+```python
+from fleet.ct import import_codelists
+
+# Strategy 1: auto-discover via study_config.yaml in CWD
+ct = import_codelists()
+SEX = ct.SEX
+
+# Strategy 2: register in sys.modules so bare imports work
+import_codelists()  # one-time call
+from codelists import SEX, RACE  # works for the rest of the session
+
+# Strategy 3: explicit path (non-standard locations)
+ct = import_codelists("/absolute/path/to/codelists.py")
+```
+
+!!! info "Resolution order"
+    When called without arguments, `import_codelists()` resolves the file as follows:
+
+    1. `study_config.yaml` in CWD → reads `paths.metadata_sdtm` → appends `/codelists.py`
+    2. Falls back to `<CWD>/metadata/sdtm/codelists.py`
+
+    This means `cd`-ing into your study root before running a script is all you need.
+
 ### Using generated codelists in pipelines
 
 ```python
-from examples.cdiscpilot01.sdtm.codelists import SEX, RACE
+from fleet.ct import import_codelists
+
+ct = import_codelists()
 
 dm = (
-    raw_df.sdtm.assign_ct("SEX", source="sex", ct_codelist=SEX)
-    .assign_ct("RACE", source="race", ct_codelist=RACE)
+    raw_df.sdtm.assign_ct("SEX", source="sex", ct_codelist=ct.SEX)
+    .assign_ct("RACE", source="race", ct_codelist=ct.RACE)
     .to_frame()
 )
 ```
@@ -116,6 +147,19 @@ options:
 show_root_heading: true
 heading_level: 3
 filters: ["!^_"]
+
+---
+
+## Codelist Importer
+
+The [`import_codelists()`][fleet.ct.import_codelists] function dynamically loads a
+generated `codelists.py` from your study workspace, removing the need for `sys.path`
+manipulation or package-relative imports.
+
+::: fleet.ct.import_codelists
+options:
+show_root_heading: true
+heading_level: 3
 
 ---
 
@@ -150,7 +194,11 @@ from fleet import load_controlled_terminology, get_validator
 load_controlled_terminology("examples/cdiscpilot01/sdtm/ct_package.yaml")
 
 # 2. Import the generated codelist classes.
-from examples.cdiscpilot01.sdtm.codelists import AGEU, SEX
+from fleet.ct import import_codelists
+
+ct = import_codelists()
+AGEU = ct.AGEU
+SEX = ct.SEX
 
 # 3. Build your pipeline — validation fires here on each verb call.
 import warnings

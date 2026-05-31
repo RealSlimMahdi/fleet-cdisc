@@ -18,6 +18,49 @@ The same Python module powers:
 
 ## How to use
 
+### In a standalone study project (recommended)
+
+When your study lives in its own directory with a `study_config.yaml`,
+use `import_codelists()` to load the generated module without `sys.path` hacks:
+
+```python
+from fleet.ct import import_codelists
+
+# Auto-discovers codelists.py via study_config.yaml in CWD
+ct = import_codelists()
+
+dm = (
+    raw_df.sdtm.assign_ct("SEX", source="sex", ct_codelist=ct.SEX)
+    .assign_ct("RACE", source="race", ct_codelist=ct.RACE)
+    .hardcode_ct("AGEU", value="YEARS", ct_codelist=ct.AGEU)
+    .to_frame()
+)
+```
+
+Or register the module so bare `from codelists import ...` works:
+
+```python
+from fleet.ct import import_codelists
+
+import_codelists()  # registers 'codelists' in sys.modules
+from codelists import SEX, RACE, AGEU  # now works everywhere in the session
+
+dm = (
+    raw_df.sdtm.assign_ct("SEX", source="sex", ct_codelist=SEX)
+    .assign_ct("RACE", source="race", ct_codelist=RACE)
+    .hardcode_ct("AGEU", value="YEARS", ct_codelist=AGEU)
+    .to_frame()
+)
+```
+
+You can also pass an explicit path if your codelists file lives somewhere non-standard:
+
+```python
+ct = import_codelists("path/to/my_codelists.py")
+```
+
+### Within the Fleet repo (example studies)
+
 ```python
 from examples.cdiscpilot01.sdtm.codelists import SEX, RACE, AGEU
 
