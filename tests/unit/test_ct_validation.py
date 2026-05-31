@@ -306,3 +306,44 @@ class TestAssignCTValidateValues:
 
         ct_warnings = [w for w in caught if "not in codelist" in str(w.message)]
         assert len(ct_warnings) == 0
+
+    def test_warns_using_codelist_class_without_ct_loaded(self):
+        """validate_values works via class introspection even without CT loaded."""
+        import warnings
+
+        from fleet.ct import CTValidator
+
+        # Reset the validator to simulate CT not loaded
+        validator = CTValidator.get_instance()
+        old_cache = validator._ct_cache.copy()
+        old_init = validator._initialized
+        validator._ct_cache = {}
+        validator._initialized = False
+
+        try:
+
+            class FakeRoute:
+                _concept_id = "C66729"
+                ORAL = "ORAL"
+                INTRAVENOUS = "INTRAVENOUS"
+                SUBCUTANEOUS = "SUBCUTANEOUS"
+
+            df = pl.DataFrame({"route": ["Oral", "ORAL", "IV"]})
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                result = df.sdtm.assign_ct(
+                    "EXROUT",
+                    source="route",
+                    ct_codelist=FakeRoute,
+                    validate_values=True,
+                ).to_frame()
+
+            assert result.shape[0] == 3
+            ct_warnings = [w for w in caught if "not in codelist" in str(w.message)]
+            assert len(ct_warnings) == 1
+            msg = str(ct_warnings[0].message)
+            assert "Oral" in msg or "IV" in msg
+        finally:
+            # Restore validator state
+            validator._ct_cache = old_cache
+            validator._initialized = old_init
