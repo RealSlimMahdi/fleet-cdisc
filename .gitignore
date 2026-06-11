@@ -53,3 +53,5 @@ my_rules
 
 # ignore presentation folder
 presentation/
+.claude/
+claude/
