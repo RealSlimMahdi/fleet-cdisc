@@ -641,6 +641,20 @@ class EventSource:
     consider_end_dates: bool = True
     censor: int = field(default=0, init=False)      # admiral: events are ALWAYS CNSR=0
 
+    def _to_pick_event(self) -> dict[str, Any]:
+        """Coerce to the event-dict shape pick()'s engine already consumes.
+
+        pick() events are {"when", "set", "source", "mode", "order"} dicts
+        (adam/_mixins.py:991-1005). The dataclass exists only for CNSR
+        validation and IDE discoverability — the engine sees a pick event.
+        """
+        return {
+            "when": self.filter if self.filter is not None else pl.lit(True),
+            "set": {**self.set, "ADT": self.date, "CNSR": pl.lit(self.censor)},
+            "source": self.source,
+            "order": [self.date, *(self.order or [])],
+        }
+
 @dataclass(frozen=True)
 class CensorSource(EventSource):
     censor: int = 1
@@ -677,29 +691,107 @@ adtte = (
 )
 ```
 
-The selection core — each admiral rule maps to one readable block:
+#### Step 0 — extract `pick()`'s engine into a shared helper (no behavior change)
+
+The selection machinery **already exists** in `pick()` (`adam/_mixins.py:970-1182`): per-source filter → apply `set` expressions → stamp a list-position priority marker `__pick_event_nr__` (line 1129) → within-source first/last by `order` (lines 1140-1147) → stack with `pl.concat(how="diagonal_relaxed")` (line 1162) → priority-sorted winner per group (lines 1165-1173). That is exactly admiral's "tie-break by source-list position" rule. Pull pick()'s steps 1-3 into a private helper both verbs call:
 
 ```python
-def _select_tte_record(self, events, censors, end_dates, event_type):
-    first_end = _stack(end_dates).group_by(KEYS).agg(pl.col("ADT").min())   # earliest boundary
+# adam/_mixins.py — pick()'s lines 1084-1173 extracted; pick() behaviour unchanged.
+def _stack_and_select(
+    self,
+    events: list[dict[str, Any]],        # pick()'s event-dict shape: when/set/source/mode/order
+    *,
+    by: list[str],
+    targets: list[str],
+    mode: str = "first",
+    order: list[str] | None = None,
+    tie_break: Literal["first", "last"] = "first",   # NEW — censorings need "last in list wins"
+    clip_to: pl.DataFrame | None = None,             # NEW — per-group date ceiling (TTE end_dates)
+    date_col: str | None = None,                     # NEW — column the ceiling applies to
+) -> pl.DataFrame | None:
+    candidate_frames: list[pl.DataFrame] = []
+    for event_nr, event in enumerate(events):
+        source_df = event.get("source", ...)          # ← unchanged: pick() lines 1092-1101
+        candidates = source_df.filter(_resolve_expr(event["when"]))
 
-    ev = _stack(events, mode="first", clip_to=first_end)      # per source: FIRST by (date, order)
-    cn = _stack(censors + (end_dates if event_type == "positive" else []),
-                mode="last", clip_to=first_end)               # per source: LAST
+        if clip_to is not None:                       # NEW — drop records after the subject's
+            candidates = (                            #       observation-period end (NA dates kept)
+                candidates.join(clip_to, on=by, how="left")
+                .filter((pl.col(date_col) <= pl.col("__end__")) | pl.col("__end__").is_null())
+                .drop("__end__")
+            )
 
-    # tie-breaks by list position: events → earlier in list wins; censorings → later wins
-    ev = ev.sort(["ADT", "__src_nr__"]).group_by(KEYS).first()
-    cn = cn.sort(["ADT", "__src_nr__"]).group_by(KEYS).last()
-    if end_dates:                                              # boundary description wins
-        cn = cn.with_columns(pl.coalesce([pl.col("CNSR_end"), pl.col("CNSR")]).alias("CNSR"))
+        ...                                           # ← unchanged: set-exprs, __pick_event_nr__
+                                                      #   stamp, per-event first/last selection —
+                                                      #   pick() lines 1106-1154
+        candidate_frames.append(candidates)
 
-    # an event ALWAYS beats a censoring, regardless of dates
-    winner = pl.concat([ev.with_columns(__ev__=1), cn.with_columns(__ev__=0)]) \
-               .sort("__ev__").group_by(KEYS).last()
-
-    return (adsl_pop.join(winner, on=KEYS, how="inner")        # ADSL controls the population
-            .with_columns(pl.max_horizontal("ADT", "STARTDT").alias("ADT")))  # clamp to origin
+    if not candidate_frames:
+        return None
+    stacked = pl.concat(candidate_frames, how="diagonal_relaxed")   # ← line 1162
+    stacked = stacked.sort(sort_cols, descending=sort_desc, nulls_last=True)  # ← lines 1165-1172
+    grouped = stacked.group_by(by, maintain_order=True)
+    return grouped.first() if tie_break == "first" else grouped.last()  # ← line 1173 + tie_break
 ```
+
+`pick()` becomes a thin wrapper (its existing tests are the regression net for the extraction):
+
+```python
+def pick(self, targets, *, events, by=None, order=None, mode="first"):
+    df = self.to_frame()
+    winners = self._stack_and_select(events, by=by or ["USUBJID"],
+                                     targets=target_list, mode=mode, order=global_order)
+    if winners is None:                               # pick() lines 1156-1159, unchanged
+        return self._materialise_then(df.with_columns([pl.lit(None).alias(t) for t in target_list]))
+    return self._materialise_then(
+        df.drop(drop_existing).join(winners.select(by_vars + target_list), on=by_vars, how="left")
+    )
+```
+
+#### The TTE core — three calls to the same engine + TTE-specific resolution
+
+```python
+# adam/tte_namespace.py — everything below the comments marked NEW is pick()'s engine
+def _select_tte_record(self, events, censors, end_dates, event_type, adsl_pop, by):
+    # earliest observation-period boundary per subject (admiral: filter_date_sources mode="first")
+    first_end = self._stack_and_select(
+        [e._to_pick_event() for e in end_dates],
+        by=by, targets=TTE_COLS, mode="first",
+    ) if end_dates else None
+    clip = (first_end.select(by + [pl.col("ADT").alias("__end__")])
+            if first_end is not None else None)
+
+    ev = self._stack_and_select(                      # events: FIRST per source, earlier in list wins
+        [e._to_pick_event() for e in events],
+        by=by, targets=TTE_COLS, mode="first", tie_break="first",
+        clip_to=clip, date_col="ADT",
+    )
+    cn_sources = censors + (list(end_dates) if event_type == "positive" else [])
+    cn = self._stack_and_select(                      # censorings: LAST per source, later in list wins
+        [c._to_pick_event() for c in cn_sources],
+        by=by, targets=TTE_COLS, mode="last", tie_break="last",
+        clip_to=clip, date_col="ADT",
+    )
+
+    if first_end is not None and cn is not None:      # NEW — boundary description wins (CNSR coalesce)
+        cn = (cn.join(first_end.select(by + ["CNSR", "CNSDTDSC"]), on=by, how="left", suffix="_end")
+                .with_columns(pl.coalesce([pl.col("CNSR_end"), pl.col("CNSR")]).alias("CNSR")))
+
+    # NEW — an event ALWAYS beats a censoring, regardless of dates
+    winner = (
+        pl.concat([f for f in (ev, cn) if f is not None], how="diagonal_relaxed")
+        .with_columns((pl.col("CNSR") == 0).cast(pl.Int8).alias("__ev__"))
+        .sort("__ev__").group_by(by, maintain_order=True).last()
+    )
+
+    # NEW — ADSL controls the population (inner join) + origin clamp; result is APPENDED as
+    # new PARAMCD rows (derive_param-style), not joined as columns — the one structural
+    # difference from pick()
+    return (adsl_pop.join(winner, on=by, how="inner")
+            .with_columns(pl.max_horizontal("ADT", "STARTDT").alias("ADT")))
+```
+
+So the genuinely **new** logic is exactly four blocks: the `clip_to` filter, the `tie_break="last"` direction, the CNSR coalesce, and event-beats-censor + row-append output. Everything else is `pick()` running three times.
 
 Where Fleet beats admiral — the same endpoint as pure metadata:
 
@@ -725,11 +817,69 @@ from fleet.adam.tte_sources import DEATH_EVENT, LASTALIVE_CENSOR, AE_SER_EVENT
 # IDE autocomplete shows the filter and date each constant encodes — codelist-class philosophy
 ```
 
+### Testing — reuse admiral's own TTE test suite
+
+admiral's `tests/testthat/test-derive_param_tte.R` is a ready-made behavioral specification: every test is a `tribble()`-built input plus a **literal expected frame**, compared via keyed `expect_dfs_equal` — which transcribes 1:1 to Polars + `assert_dfs_equal` (Axis 3.1) with no R runtime. admiral is Apache-2.0, so porting test data/cases with attribution is fine. Keep their test numbering so upstream diffs map directly onto Fleet failures:
+
+```python
+# tests/unit/test_tte_admiral_suite.py
+# Transcribed from admiral tests/testthat/test-derive_param_tte.R
+# (pharmaverse/admiral@main, Apache-2.0). Test numbers kept 1:1 with upstream —
+# when admiral adds/changes a numbered test, the diff tells us exactly what to re-port.
+
+class TestDeriveParamTTEAdmiralSuite:
+    def test_01_one_event_one_censor_source(self):
+        adsl = pl.DataFrame({
+            "USUBJID": ["01", "02", "03"],
+            "TRTSDT": [date(2020, 12, 6), date(2021, 1, 16), date(2021, 1, 9)],
+            "EOSDT":  [date(2021, 3, 6),  date(2021, 2, 3),  date(2021, 2, 24)],
+        })
+        death = pl.DataFrame({"USUBJID": ["01"], "DTHDT": [date(2021, 2, 25)]})
+
+        expected = pl.DataFrame({          # literal — copied from the upstream tribble,
+            "USUBJID": ["01", "02", "03"], # NEVER re-derived with the logic under test
+            "PARAMCD": ["OS", "OS", "OS"],
+            "STARTDT": [date(2020, 12, 6), date(2021, 1, 16), date(2021, 1, 9)],
+            "ADT":     [date(2021, 2, 25), date(2021, 2, 3),  date(2021, 2, 24)],
+            "CNSR":    [0, 1, 1],
+        })
+
+        out = (
+            adsl.adam.tte
+            .param(
+                "OS", start_date="TRTSDT",
+                events=[EventSource(source=death, date="DTHDT",
+                                    set={"EVNTDESC": "DEATH"})],
+                censors=[CensorSource(source=adsl, date="EOSDT", censor=1,
+                                      set={"EVNTDESC": "END OF STUDY"})],
+                set={"PARAM": "Overall Survival"},
+            )
+            .to_frame()
+        )
+        assert_dfs_equal(out.select(expected.columns), expected, keys=["USUBJID", "PARAMCD"])
+```
+
+Porting priority (the tests that pin the semantics Fleet must not get wrong):
+
+| Upstream test | Pins |
+|---|---|
+| *"order for resolving ties"* | date ties broken by `order`, then source-list position |
+| *"ensuring ADT is not NA because of missing start_date"* | NA-date handling + origin clamp |
+| *"by_vars: one parameter per event group"* | cartesian source extension + 1:1 PARAMCD check |
+| *"events take precedence over censorings"* | the `__ev__` resolution rule |
+| *"consistent results regardless of input sort order"* | order-invariance (pairs with `test_robustness.py`'s existing shuffle helper) |
+| **Test 17: end dates** (dev) | `end_dates` clipping + CNSR coalesce precedence |
+| **Test 18: positive events** (dev) | `event_type="positive"` → censor at earliest boundary |
+| error/snapshot tests (PARAMCD exists, bad censor value) | typed `ADAMError` messages, via syrupy (Axis 3.5) |
+
+Two layers, complementary (both from Axis 3): the **transcribed suite** above is R-free and runs in every CI; the **golden fixtures** (Axis 3.2, parquet pairs generated once per admiral release) catch transcription mistakes and upstream drift. A numbered upstream test that changes ⇒ re-port; a golden fixture that changes ⇒ admiral's behavior moved.
+
 **Phasing:**
-- **Phase 1**: single-param `param()`, end_dates, clamping, precedence rules — validated against admiral-dev's new `Test 17: end dates` / `Test 18: positive events` cases via golden fixtures (Axis 3.2).
+- **Phase 0**: extract `_stack_and_select()` from `pick()` (`adam/_mixins.py:1084-1173`) with `tie_break`/`clip_to`/`date_col` parameters defaulted to today's behavior — `pick()`'s existing tests (`test_pick_verb.py`) are the regression net; zero functional change.
+- **Phase 1**: single-param `param()` on top of the shared engine: end_dates, clamping, precedence rules — validated by the transcribed admiral suite (above) plus golden fixtures (Axis 3.2), with admiral-dev's `Test 17: end dates` / `Test 18: positive events` as the acceptance gate.
 - **Phase 2**: `by_vars=` (per-AEDECOD parameters, cartesian source extension + 1:1 PARAMCD assertion), `event_type="positive"`, ADTTE template example + docs.
 
-Machinery reuse: structurally this is `pick()` (stack candidate frames, per-group extreme selection, priority by list order) plus the existing pin/join layer. `param()` is a materialising verb like `pick`, which the docs already sanction for multi-frame logic.
+Machinery reuse: `param()` is a materialising verb like `pick` (which the docs already sanction for multi-frame logic), and after Phase 0 both verbs share one selection engine — no duplicated stack/priority/tie-break logic to drift apart. Lesser relatives for reference: `flag(criteria="exists"/"exists_before")` (`_mixins.py:245-278`) scans source datasets but only returns Y/null; `vaccine.event_flag` is a thin condition wrapper — neither has the priority-stacking engine, which is why `pick()` is the extraction point.
 
 ---
 
@@ -792,7 +942,7 @@ Lower priority: ADPC dataset structure (PK verbs exist; the BDS-PC assembly temp
 | **P0** | Golden parity fixtures + `assert_dfs_equal` | 3.1–3.2 | M — would have caught the above |
 | P1 | `nrind` null, `_apply_clamp`, `baseline` dup check, `study_day` multi-ref | 1.2–1.5 | S each |
 | P1 | `assign_ct` loud fallback + oak matching | 1.7 | S |
-| P1 | ADTTE `param()` phase 1 | 4 | L |
+| P1 | ADTTE `param()` phases 0-1 | 4 | M — selection engine extracted from `pick()` (`_mixins.py:1084-1173`), not rewritten |
 | P2 | `baseline_flag` eligibility/LOBXFL, date problems report | 1.8–1.9 | M |
 | P2 | `derive_se` + `epoch_from_se` | 2.A–B | M |
 | P2 | Edge-case matrices + hypothesis tests | 3.3–3.4 | M |
