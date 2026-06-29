@@ -156,6 +156,7 @@ class OfficialCDISCValidator:
         dataset_name: str = "dataset",
         domain: str | None = None,
         custom_rules: Path | None = None,
+        timeout: float = 300,
     ) -> ValidationResult:
         """Run CDISC rules engine validation on a Polars DataFrame."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -193,7 +194,7 @@ class OfficialCDISCValidator:
                     capture_output=True,
                     text=True,
                     cwd=self._cwd,
-                    timeout=300,
+                    timeout=timeout,
                 )
                 json_output = output_file.with_suffix(".json")
                 if json_output.exists():
@@ -238,7 +239,7 @@ class OfficialCDISCValidator:
                         ValidationIssue(
                             severity=Severity.ERROR,
                             rule_id="TIMEOUT-001",
-                            message="Validation timed out after 5 minutes.",
+                            message=f"Validation timed out after {timeout:.0f}s.",
                             suggested_fix="Try a smaller dataset or increase the timeout.",
                         )
                     ],

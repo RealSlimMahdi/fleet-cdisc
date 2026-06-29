@@ -27,6 +27,7 @@ class SDTMAlgorithm(StrEnum):
     MULTIPLE_RESPONSES = "multiple_responses"
     DATE = "date"
     DURATION = "duration"
+    SEQ = "seq"
     NSV = "nsv"
     CALLABLE = "callable"
 

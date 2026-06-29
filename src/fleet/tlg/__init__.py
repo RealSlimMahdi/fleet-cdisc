@@ -38,6 +38,13 @@ from ._specs import (
     VSSummarySpec,
 )
 from .ae_namespace import AETLGNamespace
+from .cm_namespace import CMTLGNamespace
+from .dm_namespace import DMTLGNamespace
+from .ds_namespace import DSTLGNamespace
+from .eg_namespace import EGTLGNamespace
+from .ex_namespace import EXTLGNamespace
+from .lb_namespace import LBTLGNamespace
+from .mh_namespace import MHTLGNamespace
 from .namespace import TLGNamespace
 from .render import (
     ListingModel,
@@ -59,6 +66,13 @@ __all__ = [
     "TLGNamespace",
     "AETLGNamespace",
     "VSTLGNamespace",
+    "CMTLGNamespace",
+    "EXTLGNamespace",
+    "DMTLGNamespace",
+    "DSTLGNamespace",
+    "EGTLGNamespace",
+    "LBTLGNamespace",
+    "MHTLGNamespace",
     "TLGBuilder",
     # Specs
     "TLGSpec",

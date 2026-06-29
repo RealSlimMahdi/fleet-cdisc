@@ -557,3 +557,77 @@ def rows_to_ard(rows: list[dict[str, Any]]) -> pl.DataFrame:
     df = format_ard(df)
 
     return df
+
+
+def summarize_ard(
+    df: pl.DataFrame,
+    *,
+    rows: list[str],
+    stats: list[Statistic],
+    context: str,
+    group_col: str = "TRTA",
+    pools: list[GroupPool] | None = None,
+    column_order: list[str] | None = None,
+    adsl: pl.DataFrame | None = None,
+    adsl_filter: Any | None = None,
+    dataset_filter: Any | None = None,
+    prefilter: Any | None = None,
+) -> pl.DataFrame:
+    """Build a {cards}-compatible ARD: big-N row + stats per row-level × arm.
+
+    Shared engine for every count/continuous summary table. Categorical
+    tables pass count stats; continuous tables pass mean/sd/etc — the loop
+    is identical, only the *stats* differ.
+
+    Args:
+        df: Analysis dataset.
+        rows: Row hierarchy field names (e.g. ``["AEBODSYS", "AEDECOD"]``).
+        stats: Statistics computed per arm × level.
+        context: ARD context tag written to every row.
+        group_col: Treatment-arm column.
+        pools: Composite arms; ``None`` for none.
+        column_order: Explicit arm ordering; remaining arms keep sort order.
+        adsl: Big-N source; falls back to *df* when ``None``.
+        adsl_filter: Filter applied to *adsl* before counting.
+        dataset_filter: Filter applied to *df* before counting.
+        prefilter: Extra *df* filter (e.g. ``DTHFL == "Y"``).
+
+    Returns:
+        pl.DataFrame: Validated {cards}-compatible ARD.
+
+    Raises:
+        SchemaError: If the resulting ARD fails schema validation.
+    """
+    pools = pools or []
+    if dataset_filter is not None:
+        df = df.filter(dataset_filter)
+    if prefilter is not None:
+        df = df.filter(prefilter)
+
+    big_n = compute_big_n(
+        adsl if adsl is not None else df, group_col, pools, filter_expr=adsl_filter
+    )
+    df = expand_pools(df, pools, group_col)
+
+    arms = sorted(df[group_col].drop_nulls().unique().to_list())
+    if column_order:
+        arms = [a for a in column_order if a in arms] + [a for a in arms if a not in column_order]
+
+    ard_rows: list[dict[str, Any]] = [
+        ard_row(group_col, arm, "", "", "N", "N", big_n.get(arm), context) for arm in arms
+    ]
+    for field in (f for f in rows if f in df.columns):
+        for arm in arms:
+            arm_df = df.filter(pl.col(group_col) == arm)
+            arm_n = big_n.get(arm, 0)
+            for level in sorted(arm_df[field].drop_nulls().unique().to_list()):
+                level_df = arm_df.filter(pl.col(field) == level)
+                for stat_type in stats:
+                    sn, sl, sv = compute_stat(stat_type, level_df, arm_n)
+                    ard_rows.append(ard_row(group_col, arm, field, str(level), sn, sl, sv, context))
+
+    ard = rows_to_ard(ard_rows)
+    issues = validate_ard(ard)
+    if issues:
+        raise SchemaError("ARD output failed schema validation:\n  " + "\n  ".join(issues))
+    return ard

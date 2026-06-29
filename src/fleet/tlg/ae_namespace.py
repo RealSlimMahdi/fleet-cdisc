@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 import polars as pl
+from pydantic import Field
 
 from ._ard import (
     ard_row as _ard_row,
@@ -16,6 +17,7 @@ from ._ard import (
 from ._ard import (
     compute_big_n,
     expand_pools,
+    summarize_ard,
     validate_ard,
 )
 from ._ard import (
@@ -31,8 +33,50 @@ from ._builder import TLGBuilder
 from ._specs import (
     AEListingSpec,
     AESummarySpec,
+    Row,
     SchemaError,
 )
+
+
+class AESocPtSpec(AESummarySpec):
+    """Spec for AE by SOC → PT (AET02): n / % subjects by SOC → PT."""
+
+    rows: list[Row] = Field(
+        default_factory=lambda: [
+            Row(field="AEBODSYS", label="MedDRA System Organ Class"),
+            Row(field="AEDECOD", label="MedDRA Preferred Term"),
+        ]
+    )
+
+
+class AESeveritySpec(AESummarySpec):
+    """Spec for AE by greatest severity (AET03): n / % by SOC → PT → severity."""
+
+    rows: list[Row] = Field(
+        default_factory=lambda: [
+            Row(field="AEBODSYS", label="MedDRA System Organ Class"),
+            Row(field="AEDECOD", label="MedDRA Preferred Term"),
+            Row(field="AESEV", label="Intensity"),
+        ]
+    )
+    required_columns: list[str] = Field(
+        default_factory=lambda: ["USUBJID", "TRTA", "AEDECOD", "AEBODSYS", "AESEV"]
+    )
+
+
+class AERelationshipSpec(AESummarySpec):
+    """Spec for AE by relationship (AET04): n / % by SOC → PT → relationship."""
+
+    rows: list[Row] = Field(
+        default_factory=lambda: [
+            Row(field="AEBODSYS", label="MedDRA System Organ Class"),
+            Row(field="AEDECOD", label="MedDRA Preferred Term"),
+            Row(field="AEREL", label="Relationship"),
+        ]
+    )
+    required_columns: list[str] = Field(
+        default_factory=lambda: ["USUBJID", "TRTA", "AEDECOD", "AEBODSYS", "AEREL"]
+    )
 
 
 class AETLGNamespace:
@@ -257,6 +301,121 @@ class AETLGNamespace:
         if issues:
             raise SchemaError("ARD output failed schema validation:\n  " + "\n  ".join(issues))
         return ard
+
+    # ------------------------------------------------------------------ #
+    # Hierarchical variants (AET02 / AET03 / AET04)                        #
+    # ------------------------------------------------------------------ #
+
+    def t_soc_pt(
+        self,
+        *,
+        groupby: str | None = None,
+        adsl: pl.DataFrame | None = None,
+        spec: AESocPtSpec | None = None,
+    ) -> pl.DataFrame:
+        """AE by SOC → PT (AET02): n / % subjects per arm × SOC → PT.
+
+        Args:
+            groupby: Treatment-arm column; overrides ``spec.columns[0]``.
+            adsl: ADSL for big-N denominators (percentages).
+            spec: Optional ``AESocPtSpec`` override.
+
+        Returns:
+            pl.DataFrame: {cards}-compatible ARD.
+
+        Examples:
+            ``ard = adae.tlg.ae.t_soc_pt(groupby="TRTA", adsl=adsl)``
+        """
+        spec = spec or AESocPtSpec()
+        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
+        spec.validate_dataframe(self._df)
+        _validate_pools(self._df, spec.pools, group_col)
+        return summarize_ard(
+            self._df,
+            rows=[r.field for r in spec.rows],
+            stats=spec.statistics,
+            context="t_ae_soc_pt",
+            group_col=group_col,
+            pools=spec.pools,
+            column_order=spec.column_order,
+            adsl=adsl,
+            adsl_filter=spec.adsl_filter,
+            dataset_filter=spec.dataset_filter,
+        )
+
+    def t_severity(
+        self,
+        *,
+        groupby: str | None = None,
+        adsl: pl.DataFrame | None = None,
+        spec: AESeveritySpec | None = None,
+    ) -> pl.DataFrame:
+        """AE by greatest severity (AET03): n / % by SOC → PT → intensity.
+
+        Args:
+            groupby: Treatment-arm column; overrides ``spec.columns[0]``.
+            adsl: ADSL for big-N denominators (percentages).
+            spec: Optional ``AESeveritySpec`` override.
+
+        Returns:
+            pl.DataFrame: {cards}-compatible ARD.
+
+        Examples:
+            ``ard = adae.tlg.ae.t_severity(groupby="TRTA", adsl=adsl)``
+        """
+        spec = spec or AESeveritySpec()
+        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
+        spec.validate_dataframe(self._df)
+        _validate_pools(self._df, spec.pools, group_col)
+        return summarize_ard(
+            self._df,
+            rows=[r.field for r in spec.rows],
+            stats=spec.statistics,
+            context="t_ae_severity",
+            group_col=group_col,
+            pools=spec.pools,
+            column_order=spec.column_order,
+            adsl=adsl,
+            adsl_filter=spec.adsl_filter,
+            dataset_filter=spec.dataset_filter,
+        )
+
+    def t_relationship(
+        self,
+        *,
+        groupby: str | None = None,
+        adsl: pl.DataFrame | None = None,
+        spec: AERelationshipSpec | None = None,
+    ) -> pl.DataFrame:
+        """AE by relationship (AET04): n / % by SOC → PT → relationship.
+
+        Args:
+            groupby: Treatment-arm column; overrides ``spec.columns[0]``.
+            adsl: ADSL for big-N denominators (percentages).
+            spec: Optional ``AERelationshipSpec`` override.
+
+        Returns:
+            pl.DataFrame: {cards}-compatible ARD.
+
+        Examples:
+            ``ard = adae.tlg.ae.t_relationship(groupby="TRTA", adsl=adsl)``
+        """
+        spec = spec or AERelationshipSpec()
+        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
+        spec.validate_dataframe(self._df)
+        _validate_pools(self._df, spec.pools, group_col)
+        return summarize_ard(
+            self._df,
+            rows=[r.field for r in spec.rows],
+            stats=spec.statistics,
+            context="t_ae_relationship",
+            group_col=group_col,
+            pools=spec.pools,
+            column_order=spec.column_order,
+            adsl=adsl,
+            adsl_filter=spec.adsl_filter,
+            dataset_filter=spec.dataset_filter,
+        )
 
     # ------------------------------------------------------------------ #
     # Listing                                                              #
