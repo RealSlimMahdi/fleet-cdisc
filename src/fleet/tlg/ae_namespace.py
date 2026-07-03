@@ -10,7 +10,7 @@ import polars as pl
 from pydantic import Field
 
 from ._ard import fill_uncoded, summarize_ard, worst_case
-from ._builder import TLGBuilder
+from ._builder import BuilderVerbsMixin
 from ._specs import (
     AEListingSpec,
     AESummarySpec,
@@ -102,7 +102,7 @@ class AERelationshipSpec(AESummarySpec):
     )
 
 
-class AETLGNamespace:
+class AETLGNamespace(BuilderVerbsMixin):
     """AE tables, listings, and diagnostics.
 
     Accessed as ``df.tlg.ae``.  Supports both spec-driven
@@ -113,70 +113,17 @@ class AETLGNamespace:
         df: A Polars DataFrame containing ADaM AE-level data.
     """
 
+    _builder_context = "t_ae_summary"
+    _builder_specs = {
+        "t_summary": AESummarySpec,
+        "t_soc_pt": AESocPtSpec,
+        "t_severity": AESeveritySpec,
+        "t_grade": AEGradeSpec,
+        "t_relationship": AERelationshipSpec,
+    }
+
     def __init__(self, df: pl.DataFrame) -> None:
         self._df = df
-
-    def _builder(self) -> TLGBuilder:
-        """Return a ``TLGBuilder`` pre-configured with AE defaults."""
-        return TLGBuilder(
-            self._df,
-            context="t_ae_summary",
-            spec_cls=AESummarySpec,
-            namespace_cls=AETLGNamespace,
-        )
-
-    # -- Builder entry-point verbs delegated to TLGBuilder --
-
-    def population(
-        self,
-        adsl: pl.DataFrame,
-        *,
-        adsl_filter: pl.Expr | None = None,
-    ) -> TLGBuilder:
-        """Start the inline builder with an ADSL population.
-
-        Args:
-            adsl: ADSL DataFrame for big-N denominators.
-            adsl_filter: Optional filter applied to ADSL only.
-
-        Returns:
-            TLGBuilder: A new builder with population set.
-
-        Examples:
-            Inline AE summary::
-
-                ard = (
-                    adae.tlg.ae
-                    .population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
-                    .by("TRTA")
-                    .rows(["AEBODSYS", "AEDECOD"])
-                    .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
-                    .to_ard()
-                )
-        """
-        return self._builder().population(adsl, adsl_filter=adsl_filter)
-
-    def filter(self, expr: pl.Expr) -> TLGBuilder:
-        """Start the inline builder with a dataset filter.
-
-        Args:
-            expr: Polars expression to filter the primary dataset.
-
-        Returns:
-            TLGBuilder: A new builder with dataset filter set.
-        """
-        return self._builder().filter(expr)
-
-    def by(self, col: str) -> TLGBuilder:
-        """Start the inline builder with a primary grouping column.
-
-        Args:
-            col: Column name for group1 (e.g. ``"TRTA"``).
-
-        Returns:
-            TLGBuilder: A new builder with group1 set.
-        """
-        return self._builder().by(col)
 
     # ------------------------------------------------------------------ #
     # Summary table                                                        #
@@ -225,7 +172,7 @@ class AETLGNamespace:
         """
         spec = spec or AESummarySpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df)
+        spec.validate_dataframe(self._df, group_col=group_col)
         return summarize_ard(
             fill_uncoded(self._df, ["AEBODSYS", "AEDECOD"]),
             rows=spec.rows,
@@ -267,7 +214,7 @@ class AETLGNamespace:
         """
         spec = spec or AESocPtSpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df)
+        spec.validate_dataframe(self._df, group_col=group_col)
         return summarize_ard(
             fill_uncoded(self._df, ["AEBODSYS", "AEDECOD"]),
             rows=spec.rows,
@@ -310,8 +257,13 @@ class AETLGNamespace:
         """
         spec = spec or AESeveritySpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df)
+        spec.validate_dataframe(self._df, group_col=group_col)
         df = fill_uncoded(self._df, ["AEBODSYS", "AEDECOD"])
+        # The dataset filter must bite before the worst-case reduction:
+        # a filtered-out record must not decide a subject's worst level.
+        dataset_filter = resolve_filter(spec.dataset_filter)
+        if dataset_filter is not None:
+            df = df.filter(dataset_filter)
         df = worst_case(
             df,
             by=["USUBJID", group_col, "AEBODSYS"],
@@ -328,7 +280,6 @@ class AETLGNamespace:
             column_order=spec.column_order,
             adsl=adsl,
             adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
             header_rows=spec.header_rows,
             nested=True,
         )
@@ -358,9 +309,12 @@ class AETLGNamespace:
         """
         spec = spec or AEGradeSpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df)
+        spec.validate_dataframe(self._df, group_col=group_col)
         df = fill_uncoded(self._df, ["AEBODSYS", "AEDECOD"])
-        df = df.with_columns(pl.col("AETOXGR").cast(pl.Utf8))
+        dataset_filter = resolve_filter(spec.dataset_filter)
+        if dataset_filter is not None:
+            df = df.filter(dataset_filter)
+        df = df.with_columns(pl.col("AETOXGR").cast(pl.Utf8).str.replace(r"\.0$", ""))
         df = worst_case(
             df,
             by=["USUBJID", group_col, "AEBODSYS"],
@@ -377,7 +331,6 @@ class AETLGNamespace:
             column_order=spec.column_order,
             adsl=adsl,
             adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
             header_rows=spec.header_rows,
             nested=True,
         )
@@ -407,8 +360,11 @@ class AETLGNamespace:
         """
         spec = spec or AERelationshipSpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df)
+        spec.validate_dataframe(self._df, group_col=group_col)
         df = fill_uncoded(self._df, ["AEBODSYS", "AEDECOD"])
+        dataset_filter = resolve_filter(spec.dataset_filter)
+        if dataset_filter is not None:
+            df = df.filter(dataset_filter)
         df = worst_case(
             df,
             by=["USUBJID", group_col, "AEBODSYS"],
@@ -425,7 +381,6 @@ class AETLGNamespace:
             column_order=spec.column_order,
             adsl=adsl,
             adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
             header_rows=spec.header_rows,
             nested=True,
         )

@@ -12,16 +12,15 @@ import polars as pl
 from pydantic import Field
 
 from ._ard import summarize_ard
-from ._builder import TLGBuilder
+from ._builder import BuilderVerbsMixin
 from ._specs import (
-    GroupPool,
     Row,
     Statistic,
-    TLGSpec,
+    SummarySpecBase,
 )
 
 
-class EXSummarySpec(TLGSpec):
+class EXSummarySpec(SummarySpecBase):
     """Spec for an exposure (ADEX) summary table.
 
     Defaults provide zero-config continuous statistics (mean, sd,
@@ -30,19 +29,11 @@ class EXSummarySpec(TLGSpec):
     [`TLGBuilder`][fleet.tlg.TLGBuilder].
     """
 
-    output_type: str = "summary"
     rows: list[Row] = Field(
         default_factory=lambda: [Row(field="PARAMCD", label="Parameter")],
         description=(
             "Hierarchy of row groupings.  Set inline via "
             "[`TLGBuilder.rows()`][fleet.tlg.TLGBuilder.rows]."
-        ),
-    )
-    columns: list[str] = Field(
-        default_factory=lambda: ["TRTA"],
-        description=(
-            "Column-grouping variables.  Set inline via "
-            "[`TLGBuilder.by()`][fleet.tlg.TLGBuilder.by]."
         ),
     )
     statistics: list[Statistic] = Field(
@@ -59,35 +50,13 @@ class EXSummarySpec(TLGSpec):
             "inline via [`TLGBuilder.stats()`][fleet.tlg.TLGBuilder.stats]."
         ),
     )
-    pools: list[GroupPool] = Field(
-        default_factory=list,
-        description=(
-            "Composite (pooled) treatment groups.  Set inline via "
-            "[`TLGBuilder.pools()`][fleet.tlg.TLGBuilder.pools]."
-        ),
-    )
-    column_order: list[str] = Field(
-        default_factory=list,
-        description=(
-            "Explicit ordering of column labels.  Set inline via "
-            "[`TLGBuilder.column_order()`][fleet.tlg.TLGBuilder.column_order]."
-        ),
-    )
-    denominator: str = Field(
-        default="TRTA",
-        description="Column used as the denominator when computing percentages.",
-    )
     required_columns: list[str] = Field(
         default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVAL"],
         description="Columns required in the analysis dataset for this spec.",
     )
-    required_flags: dict[str, list[str]] = Field(
-        default_factory=dict,
-        description="Per-column lists of required values (content validation).",
-    )
 
 
-class EXTLGNamespace:
+class EXTLGNamespace(BuilderVerbsMixin):
     """Exposure tables and diagnostics.
 
     Accessed as ``df.tlg.ex``.  Supports both spec-driven
@@ -98,70 +67,11 @@ class EXTLGNamespace:
         df: A Polars DataFrame containing ADaM ADEX-level data.
     """
 
+    _builder_context = "t_ex_summary"
+    _builder_specs = {"t_summary": EXSummarySpec}
+
     def __init__(self, df: pl.DataFrame) -> None:
         self._df = df
-
-    def _builder(self) -> TLGBuilder:
-        """Return a ``TLGBuilder`` pre-configured with EX defaults."""
-        return TLGBuilder(
-            self._df,
-            context="t_ex_summary",
-            spec_cls=EXSummarySpec,
-            namespace_cls=EXTLGNamespace,
-        )
-
-    # -- Builder entry-point verbs delegated to TLGBuilder --
-
-    def population(
-        self,
-        adsl: pl.DataFrame,
-        *,
-        adsl_filter: pl.Expr | None = None,
-    ) -> TLGBuilder:
-        """Start the inline builder with an ADSL population.
-
-        Args:
-            adsl: ADSL DataFrame for big-N denominators.
-            adsl_filter: Optional filter applied to ADSL only.
-
-        Returns:
-            TLGBuilder: A new builder with population set.
-
-        Examples:
-            Inline EX summary::
-
-                ard = (
-                    adex.tlg.ex
-                    .population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
-                    .by("TRTA")
-                    .rows(["PARAMCD"])
-                    .stats([Statistic.MEAN, Statistic.SD, Statistic.MEDIAN])
-                    .to_ard()
-                )
-        """
-        return self._builder().population(adsl, adsl_filter=adsl_filter)
-
-    def filter(self, expr: pl.Expr) -> TLGBuilder:
-        """Start the inline builder with a dataset filter.
-
-        Args:
-            expr: Polars expression to filter the primary dataset.
-
-        Returns:
-            TLGBuilder: A new builder with dataset filter set.
-        """
-        return self._builder().filter(expr)
-
-    def by(self, col: str) -> TLGBuilder:
-        """Start the inline builder with a primary grouping column.
-
-        Args:
-            col: Column name for group1 (e.g. ``"TRTA"``).
-
-        Returns:
-            TLGBuilder: A new builder with group1 set.
-        """
-        return self._builder().by(col)
 
     # ------------------------------------------------------------------ #
     # Summary table                                                        #
@@ -205,7 +115,7 @@ class EXTLGNamespace:
         """
         spec = spec or EXSummarySpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df)
+        spec.validate_dataframe(self._df, group_col=group_col)
         # GDSR EXT01 summarizes the overall-exposure block: restrict to
         # PARCAT1 == "OVERALL" when the column exists so per-interval
         # dose records are not averaged into subject-level statistics.

@@ -1,0 +1,16 @@
+group1,group1_level,group2,group2_level,variable,variable_level,stat_name,stat_label,stat,fmt_fn,stat_fmt,warning,error,context
+TRTA,Drug A,"","","","",N,N,4.0,xx,4,,,t_ds_enrollment
+TRTA,Drug B,"","","","",N,N,2.0,xx,2,,,t_ds_enrollment
+TRTA,Placebo,"","","","",N,N,4.0,xx,4,,,t_ds_enrollment
+TRTA,Drug A,"","",SITEID,701,n,n,2.0,xx,2,,,t_ds_enrollment
+TRTA,Drug A,"","",SITEID,701,pct,n (%),50.0,xx.x,50.0,,,t_ds_enrollment
+TRTA,Drug A,"","",SITEID,702,n,n,2.0,xx,2,,,t_ds_enrollment
+TRTA,Drug A,"","",SITEID,702,pct,n (%),50.0,xx.x,50.0,,,t_ds_enrollment
+TRTA,Drug B,"","",SITEID,701,n,n,1.0,xx,1,,,t_ds_enrollment
+TRTA,Drug B,"","",SITEID,701,pct,n (%),50.0,xx.x,50.0,,,t_ds_enrollment
+TRTA,Drug B,"","",SITEID,702,n,n,1.0,xx,1,,,t_ds_enrollment
+TRTA,Drug B,"","",SITEID,702,pct,n (%),50.0,xx.x,50.0,,,t_ds_enrollment
+TRTA,Placebo,"","",SITEID,701,n,n,2.0,xx,2,,,t_ds_enrollment
+TRTA,Placebo,"","",SITEID,701,pct,n (%),50.0,xx.x,50.0,,,t_ds_enrollment
+TRTA,Placebo,"","",SITEID,702,n,n,2.0,xx,2,,,t_ds_enrollment
+TRTA,Placebo,"","",SITEID,702,pct,n (%),50.0,xx.x,50.0,,,t_ds_enrollment

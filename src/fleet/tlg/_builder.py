@@ -56,17 +56,16 @@ class TLGBuilder:
         self._spec_cls = spec_cls
         self._namespace_cls = namespace_cls
         self._defaults: dict[str, Any] = defaults or {}
+        self._method = "t_summary"
         self._adsl: pl.DataFrame | None = None
         self._adsl_filter: pl.Expr | None = None
         self._dataset_filter: pl.Expr | None = None
         self._group_col: str | None = None
-        self._group2_col: str | None = None
         self._header_rows_list: list[OverallStat] = []
         self._rows_fields: list[str] = []
         self._statistics: list[Statistic] | None = None
         self._pools: list[GroupPool] = []
         self._column_order: list[str] = []
-        self._fmt_overrides: dict[str, str] = {}
 
     def _clone(self) -> TLGBuilder:
         return copy.copy(self)
@@ -125,20 +124,46 @@ class TLGBuilder:
         new._group_col = col
         return new
 
-    def by2(self, col: str) -> TLGBuilder:
-        """Set a secondary grouping column (stratification).
+    def template(self, template_id: str) -> TLGBuilder:
+        """Target a registered template so ``to_ard()`` runs its method.
 
-        The column must already exist in the DataFrame (pre-merge from
-        ADSL or another dataset before calling the namespace).
+        Resolves *template_id* through the template registry: the builder
+        will materialise via that template's namespace method (e.g.
+        ``lbt02`` → ``t_chg``) with the template's spec class, so
+        non-``t_summary`` templates are reachable inline.
 
         Args:
-            col: Column name for group2 (e.g. ``"AGEGR1"``).
+            template_id: Registry id (e.g. ``"aet02"``, ``"lbt02"``).
 
         Returns:
-            TLGBuilder: Builder with group2 set.
+            TLGBuilder: Builder targeting the template's method and spec.
+
+        Raises:
+            SchemaError: If the id is unknown, belongs to a different
+                namespace, or is not a table template.
         """
+        from ._registry import TEMPLATES, OutputType
+        from ._specs import SchemaError
+
+        meta = TEMPLATES.get(template_id)
+        if meta is None:
+            raise SchemaError(
+                f"Unknown template id {template_id!r}. Known ids: {sorted(TEMPLATES)}"
+            )
+        if meta.output_type is not OutputType.TABLE:
+            raise SchemaError(
+                f"Template {template_id!r} is a {meta.output_type.value}, "
+                "which the inline builder cannot materialise."
+            )
+        spec_classes = getattr(self._namespace_cls, "_builder_specs", {})
+        if meta.method not in spec_classes:
+            raise SchemaError(
+                f"Template {template_id!r} ({meta.namespace}.{meta.method}) does "
+                f"not belong to this namespace ({self._context})."
+            )
         new = self._clone()
-        new._group2_col = col
+        new._method = meta.method
+        new._spec_cls = spec_classes[meta.method]
         return new
 
     # ------------------------------------------------------------------ #
@@ -213,20 +238,6 @@ class TLGBuilder:
         new._column_order = list(order)
         return new
 
-    def fmt(self, mapping: dict[str, str]) -> TLGBuilder:
-        """Override per-stat format specifiers.
-
-        Args:
-            mapping: Dict mapping stat_name to format string
-                (e.g. ``{"mean": "xx.xx"}``).
-
-        Returns:
-            TLGBuilder: Builder with format overrides set.
-        """
-        new = self._clone()
-        new._fmt_overrides = dict(mapping)
-        return new
-
     # ------------------------------------------------------------------ #
     # Materialisation                                                      #
     # ------------------------------------------------------------------ #
@@ -247,8 +258,15 @@ class TLGBuilder:
             kwargs["dataset_filter"] = self._dataset_filter
         if self._header_rows_list:
             kwargs["header_rows"] = self._header_rows_list
+        if self._group_col and "columns" in self._spec_cls.model_fields:
+            kwargs["columns"] = [self._group_col]
         if self._rows_fields:
-            kwargs["rows"] = [Row(field=f) for f in self._rows_fields]
+            # DM summarises independent categorical variables, not a row
+            # hierarchy — map the builder's rows() onto that field.
+            if "categorical_vars" in self._spec_cls.model_fields:
+                kwargs["categorical_vars"] = list(self._rows_fields)
+            else:
+                kwargs["rows"] = [Row(field=f) for f in self._rows_fields]
         if self._statistics is not None:
             kwargs["statistics"] = self._statistics
         if self._pools:
@@ -261,8 +279,9 @@ class TLGBuilder:
     def to_ard(self) -> pl.DataFrame:
         """Materialise the builder to an ARD DataFrame.
 
-        Constructs the equivalent spec and delegates to the domain
-        namespace's ``t_summary()`` method.
+        Constructs the equivalent spec and delegates to the targeted
+        namespace method — ``t_summary()`` by default, or the method
+        selected via :meth:`template`.
 
         Returns:
             pl.DataFrame: Long-format {cards}-compatible ARD.
@@ -281,11 +300,10 @@ class TLGBuilder:
         """
         spec = self.to_spec()
         ns = self._namespace_cls(self._df)
-        return ns.t_summary(
-            groupby=self._group_col,
-            adsl=self._adsl,
-            spec=spec,
-        )
+        kwargs: dict[str, Any] = {"adsl": self._adsl, "spec": spec}
+        if self._group_col is not None:
+            kwargs["groupby"] = self._group_col
+        return getattr(ns, self._method)(**kwargs)
 
     def to_html(
         self,
@@ -424,3 +442,69 @@ class TLGBuilder:
         meta = metadata or _RM()
         model = ard_to_table_model(ard, meta)
         return render_pptx(model, path, theme=theme)
+
+
+class BuilderVerbsMixin:
+    """Inline-builder entry verbs shared by every TLG sub-namespace.
+
+    A namespace declares ``_builder_context`` (its default context label),
+    ``_builder_specs`` (method name → spec class; must include
+    ``"t_summary"``), and inherits ``population()`` / ``filter()`` /
+    ``by()`` — so no domain can ship without the inline path.
+    """
+
+    _df: pl.DataFrame
+    _builder_context: str
+    _builder_specs: dict[str, type[TLGSpec]]
+
+    def _builder(self) -> TLGBuilder:
+        """Return a ``TLGBuilder`` pre-configured for this namespace."""
+        return TLGBuilder(
+            self._df,
+            context=self._builder_context,
+            spec_cls=self._builder_specs["t_summary"],
+            namespace_cls=type(self),
+        )
+
+    def population(
+        self,
+        adsl: pl.DataFrame,
+        *,
+        adsl_filter: pl.Expr | str | None = None,
+    ) -> TLGBuilder:
+        """Start the inline builder with an ADSL population.
+
+        Args:
+            adsl: ADSL DataFrame for big-N denominators.
+            adsl_filter: Optional filter applied to ADSL only — a
+                ``pl.Expr`` or a string expression.
+
+        Returns:
+            TLGBuilder: A new builder with population set.
+
+        Examples:
+            ``df.tlg.ae.population(adsl).by("TRTA").to_ard()``
+        """
+        return self._builder().population(adsl, adsl_filter=adsl_filter)
+
+    def filter(self, expr: pl.Expr) -> TLGBuilder:
+        """Start the inline builder with a dataset filter.
+
+        Args:
+            expr: Polars expression filtering the primary dataset.
+
+        Returns:
+            TLGBuilder: A new builder with dataset filter set.
+        """
+        return self._builder().filter(expr)
+
+    def by(self, col: str) -> TLGBuilder:
+        """Start the inline builder with a primary grouping column.
+
+        Args:
+            col: Column name for group1 (e.g. ``"TRTA"``).
+
+        Returns:
+            TLGBuilder: A new builder with group1 set.
+        """
+        return self._builder().by(col)

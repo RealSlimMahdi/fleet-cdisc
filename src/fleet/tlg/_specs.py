@@ -222,23 +222,34 @@ class TLGSpec(BaseModel):
 
     model_config = {"extra": "forbid", "arbitrary_types_allowed": True}
 
-    def validate_dataframe(self, df: pl.DataFrame) -> None:
+    def validate_dataframe(self, df: pl.DataFrame, *, group_col: str | None = None) -> None:
         """Run structural + content validation against *df*.
+
+        Args:
+            df: The analysis DataFrame.
+            group_col: Effective treatment-arm column.  When it overrides
+                the spec's default arm column (``columns[0]``), the
+                default is substituted in the required-columns check so
+                ``groupby="TRT01A"`` works on data without ``TRTA``.
 
         Raises:
             SchemaError: If required columns are missing, required flag
                 values are absent, or other data constraints are violated.
         """
-        self._validate_structural(df)
+        self._validate_structural(df, group_col=group_col)
         self._validate_content(df)
 
-    def _validate_structural(self, df: pl.DataFrame) -> None:
+    def _validate_structural(self, df: pl.DataFrame, *, group_col: str | None = None) -> None:
         """Tier 1: check required columns exist."""
+        required = list(self.required_columns)
+        default_group = getattr(self, "columns", None)
+        if group_col and default_group and isinstance(default_group[0], str):
+            required = [group_col if c == default_group[0] else c for c in required]
         available = set(df.columns)
-        missing = [c for c in self.required_columns if c not in available]
+        missing = [c for c in required if c not in available]
         if missing:
             raise SchemaError(
-                f"{self.__class__.__name__} requires columns {self.required_columns} "
+                f"{self.__class__.__name__} requires columns {required} "
                 f"but DataFrame is missing {missing}. "
                 f"Available: {sorted(available)}"
             )
@@ -336,23 +347,21 @@ class TLGSpec(BaseModel):
         return cls.model_validate(data)
 
 
-class AESummarySpec(TLGSpec):
-    """Spec for an AE summary table (t_ae_summary).
+class SummarySpecBase(TLGSpec):
+    """Shared fields for every summary-table spec.
 
-    Defaults provide zero-config convenience for a standard SOC→PT
-    table.  Every field is also settable inline through
-    [`TLGBuilder`][fleet.tlg.TLGBuilder].
+    Domain specs subclass this and override only their defaults (rows,
+    statistics, required columns) — one declaration of the shared shape
+    instead of nine divergent copies.  Every field is also settable
+    inline through [`TLGBuilder`][fleet.tlg.TLGBuilder].
     """
 
     output_type: str = "summary"
     rows: list[Row] = Field(
-        default_factory=lambda: [
-            Row(field="AEBODSYS", label="System Organ Class"),
-            Row(field="AEDECOD", label="Preferred Term"),
-        ],
+        default_factory=list,
         description=(
-            "Hierarchy of row groupings.  Set inline via "
-            "[`TLGBuilder.rows()`][fleet.tlg.TLGBuilder.rows]."
+            "Row groupings (hierarchy for nested templates).  Set inline "
+            "via [`TLGBuilder.rows()`][fleet.tlg.TLGBuilder.rows]."
         ),
     )
     columns: list[str] = Field(
@@ -384,13 +393,23 @@ class AESummarySpec(TLGSpec):
             "[`TLGBuilder.column_order()`][fleet.tlg.TLGBuilder.column_order]."
         ),
     )
-    denominator: str = Field(
-        default="TRTA",
-        description="Column used as the denominator when computing percentages.",
+
+
+class AESummarySpec(SummarySpecBase):
+    """Spec for an AE summary table (t_ae_summary).
+
+    Defaults provide zero-config convenience for a standard SOC→PT
+    table.
+    """
+
+    rows: list[Row] = Field(
+        default_factory=lambda: [
+            Row(field="AEBODSYS", label="System Organ Class"),
+            Row(field="AEDECOD", label="Preferred Term"),
+        ],
     )
     required_columns: list[str] = Field(
         default_factory=lambda: ["USUBJID", "TRTA", "AEDECOD", "AEBODSYS"],
-        description="Columns required in the analysis dataset for this spec.",
     )
 
 
@@ -419,23 +438,11 @@ class AEListingSpec(TLGSpec):
     )
 
 
-class VSSummarySpec(TLGSpec):
+class VSSummarySpec(SummarySpecBase):
     """Spec for a vital-signs summary table."""
 
-    output_type: str = "summary"
     rows: list[Row] = Field(
         default_factory=lambda: [Row(field="PARAMCD", label="Parameter")],
-        description=(
-            "Hierarchy of row groupings.  Set inline via "
-            "[`TLGBuilder.rows()`][fleet.tlg.TLGBuilder.rows]."
-        ),
-    )
-    columns: list[str] = Field(
-        default_factory=lambda: ["TRTA"],
-        description=(
-            "Column-grouping variables.  Set inline via "
-            "[`TLGBuilder.by()`][fleet.tlg.TLGBuilder.by]."
-        ),
     )
     statistics: list[Statistic] = Field(
         default_factory=lambda: [
@@ -446,36 +453,9 @@ class VSSummarySpec(TLGSpec):
             Statistic.MIN,
             Statistic.MAX,
         ],
-        description=(
-            "Statistics computed per row.  Set inline via "
-            "[`TLGBuilder.stats()`][fleet.tlg.TLGBuilder.stats]."
-        ),
-    )
-    pools: list[GroupPool] = Field(
-        default_factory=list,
-        description=(
-            "Composite (pooled) treatment groups.  Set inline via "
-            "[`TLGBuilder.pools()`][fleet.tlg.TLGBuilder.pools]."
-        ),
-    )
-    column_order: list[str] = Field(
-        default_factory=list,
-        description=(
-            "Explicit ordering of column labels.  Set inline via "
-            "[`TLGBuilder.column_order()`][fleet.tlg.TLGBuilder.column_order]."
-        ),
-    )
-    denominator: str = Field(
-        default="TRTA",
-        description="Column used as the denominator when computing percentages.",
     )
     required_columns: list[str] = Field(
         default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVAL"],
-        description="Columns required in the analysis dataset for this spec.",
-    )
-    required_flags: dict[str, list[str]] = Field(
-        default_factory=dict,
-        description="Per-column lists of required values (content validation).",
     )
 
 

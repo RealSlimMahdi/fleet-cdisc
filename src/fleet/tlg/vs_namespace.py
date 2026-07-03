@@ -9,11 +9,11 @@ from __future__ import annotations
 import polars as pl
 
 from ._ard import summarize_ard
-from ._builder import TLGBuilder
+from ._builder import BuilderVerbsMixin
 from ._specs import VSSummarySpec
 
 
-class VSTLGNamespace:
+class VSTLGNamespace(BuilderVerbsMixin):
     """Vital-signs tables and diagnostics.
 
     Accessed as ``df.tlg.vs``.  Supports both spec-driven
@@ -24,70 +24,11 @@ class VSTLGNamespace:
         df: A Polars DataFrame containing ADaM VS-level data.
     """
 
+    _builder_context = "t_vs_summary"
+    _builder_specs = {"t_summary": VSSummarySpec}
+
     def __init__(self, df: pl.DataFrame) -> None:
         self._df = df
-
-    def _builder(self) -> TLGBuilder:
-        """Return a ``TLGBuilder`` pre-configured with VS defaults."""
-        return TLGBuilder(
-            self._df,
-            context="t_vs_summary",
-            spec_cls=VSSummarySpec,
-            namespace_cls=VSTLGNamespace,
-        )
-
-    # -- Builder entry-point verbs delegated to TLGBuilder --
-
-    def population(
-        self,
-        adsl: pl.DataFrame,
-        *,
-        adsl_filter: pl.Expr | None = None,
-    ) -> TLGBuilder:
-        """Start the inline builder with an ADSL population.
-
-        Args:
-            adsl: ADSL DataFrame for big-N denominators.
-            adsl_filter: Optional filter applied to ADSL only.
-
-        Returns:
-            TLGBuilder: A new builder with population set.
-
-        Examples:
-            Inline VS summary::
-
-                ard = (
-                    advs.tlg.vs
-                    .population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
-                    .by("TRTA")
-                    .rows(["PARAMCD", "AVISIT"])
-                    .stats([Statistic.MEAN, Statistic.SD, Statistic.MEDIAN])
-                    .to_ard()
-                )
-        """
-        return self._builder().population(adsl, adsl_filter=adsl_filter)
-
-    def filter(self, expr: pl.Expr) -> TLGBuilder:
-        """Start the inline builder with a dataset filter.
-
-        Args:
-            expr: Polars expression to filter the primary dataset.
-
-        Returns:
-            TLGBuilder: A new builder with dataset filter set.
-        """
-        return self._builder().filter(expr)
-
-    def by(self, col: str) -> TLGBuilder:
-        """Start the inline builder with a primary grouping column.
-
-        Args:
-            col: Column name for group1 (e.g. ``"TRTA"``).
-
-        Returns:
-            TLGBuilder: A new builder with group1 set.
-        """
-        return self._builder().by(col)
 
     # ------------------------------------------------------------------ #
     # Summary table                                                        #
@@ -131,7 +72,7 @@ class VSTLGNamespace:
         """
         spec = spec or VSSummarySpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df)
+        spec.validate_dataframe(self._df, group_col=group_col)
         return summarize_ard(
             self._df,
             rows=spec.rows,

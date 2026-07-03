@@ -19,18 +19,19 @@ from ._ard import (
     validate_ard,
     worst_case,
 )
+from ._builder import BuilderVerbsMixin
 from ._specs import (
     Column,
-    GroupPool,
     Row,
     SchemaError,
     Statistic,
+    SummarySpecBase,
     TLGSpec,
     resolve_filter,
 )
 
 
-class LBSummarySpec(TLGSpec):
+class LBSummarySpec(SummarySpecBase):
     """Spec for a laboratory summary table (LBT01).
 
     Defaults provide zero-config continuous statistics for each
@@ -38,7 +39,6 @@ class LBSummarySpec(TLGSpec):
     mirroring the GDSR ``LBT01`` baseline/change layout.
     """
 
-    output_type: str = "summary"
     rows: list[Row] = Field(
         default_factory=lambda: [
             Row(field="PARAMCD", label="Parameter"),
@@ -47,13 +47,6 @@ class LBSummarySpec(TLGSpec):
         description=(
             "Hierarchy of row groupings (PARAM \u2192 AVISIT).  Set inline via "
             "[`TLGBuilder.rows()`][fleet.tlg.TLGBuilder.rows]."
-        ),
-    )
-    columns: list[str] = Field(
-        default_factory=lambda: ["TRTA"],
-        description=(
-            "Column-grouping variables.  Set inline via "
-            "[`TLGBuilder.by()`][fleet.tlg.TLGBuilder.by]."
         ),
     )
     statistics: list[Statistic] = Field(
@@ -69,24 +62,6 @@ class LBSummarySpec(TLGSpec):
             "Continuous statistics computed per row.  Set inline via "
             "[`TLGBuilder.stats()`][fleet.tlg.TLGBuilder.stats]."
         ),
-    )
-    pools: list[GroupPool] = Field(
-        default_factory=list,
-        description=(
-            "Composite (pooled) treatment groups.  Set inline via "
-            "[`TLGBuilder.pools()`][fleet.tlg.TLGBuilder.pools]."
-        ),
-    )
-    column_order: list[str] = Field(
-        default_factory=list,
-        description=(
-            "Explicit ordering of column labels.  Set inline via "
-            "[`TLGBuilder.column_order()`][fleet.tlg.TLGBuilder.column_order]."
-        ),
-    )
-    denominator: str = Field(
-        default="TRTA",
-        description="Column used as the denominator when computing percentages.",
     )
     required_columns: list[str] = Field(
         default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVAL", "AVISIT"],
@@ -126,7 +101,51 @@ class LBListingSpec(TLGSpec):
     )
 
 
-class LBTLGNamespace:
+class LBChgSpec(LBSummarySpec):
+    """Spec for lab change from baseline (lbt02): CHG stats per PARAM × visit."""
+
+    required_columns: list[str] = Field(
+        default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVISIT", "CHG"],
+    )
+
+
+class LBShiftSpec(SummarySpecBase):
+    """Spec for the lab shift table (lbt03).
+
+    The row hierarchy is fixed (PARAMCD → baseline-to-worst shift cell);
+    the spec drives validation, pooling, ordering and the worst-case
+    rank (``anrind_order``).
+    """
+
+    statistics: list[Statistic] = Field(
+        default_factory=lambda: [Statistic.N_SUBJECTS],
+    )
+    anrind_order: list[str] = Field(
+        default_factory=lambda: ["NORMAL", "LOW", "HIGH", "LOW LOW", "HIGH HIGH"],
+        description="Range indicators from least to most abnormal (worst-case rank).",
+    )
+    required_columns: list[str] = Field(
+        default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "BNRIND", "ANRIND"],
+    )
+
+
+class LBAbnormalSpec(SummarySpecBase):
+    """Spec for laboratory abnormalities not present at baseline (lbt04)."""
+
+    low_values: list[str] = Field(
+        default_factory=lambda: ["LOW", "LOW LOW"],
+        description="ANRIND values counted as the Low direction.",
+    )
+    high_values: list[str] = Field(
+        default_factory=lambda: ["HIGH", "HIGH HIGH"],
+        description="ANRIND values counted as the High direction.",
+    )
+    required_columns: list[str] = Field(
+        default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "ANRIND"],
+    )
+
+
+class LBTLGNamespace(BuilderVerbsMixin):
     """Laboratory tables, listings, and diagnostics.
 
     Accessed as ``df.tlg.lb``.  Provides the LBT01 continuous lab
@@ -135,6 +154,14 @@ class LBTLGNamespace:
     Args:
         df: A Polars DataFrame containing ADaM ADLB-level data.
     """
+
+    _builder_context = "t_lb_summary"
+    _builder_specs = {
+        "t_summary": LBSummarySpec,
+        "t_chg": LBChgSpec,
+        "t_shift": LBShiftSpec,
+        "t_abnormal": LBAbnormalSpec,
+    }
 
     def __init__(self, df: pl.DataFrame) -> None:
         self._df = df
@@ -186,7 +213,7 @@ class LBTLGNamespace:
         """
         spec = spec or LBSummarySpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df)
+        spec.validate_dataframe(self._df, group_col=group_col)
         return summarize_ard(
             self._df,
             rows=spec.rows,
@@ -209,8 +236,9 @@ class LBTLGNamespace:
     def t_chg(
         self,
         *,
-        groupby: str = "TRTA",
+        groupby: str | None = None,
         adsl: pl.DataFrame | None = None,
+        spec: LBChgSpec | None = None,
     ) -> pl.DataFrame:
         """Mean change-from-baseline ARD per parameter and visit (LBT02).
 
@@ -229,30 +257,26 @@ class LBTLGNamespace:
         Examples:
             ``ard = adlb.tlg.lb.t_chg(groupby="TRTA", adsl=adsl)``
         """
-        if "CHG" not in self._df.columns:
-            raise SchemaError(
-                "t_chg summarizes change from baseline and requires a CHG "
-                f"column. Available: {sorted(self._df.columns)}"
-            )
+        spec = spec or LBChgSpec()
+        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
+        spec.validate_dataframe(self._df, group_col=group_col)
         df = self._df.with_columns(pl.col("CHG").alias("AVAL"))
         prefilter = pl.col("CHG").is_not_null()
         if "ABLFL" in df.columns:
             prefilter = prefilter & pl.col("ABLFL").ne_missing("Y")
         return summarize_ard(
             df,
-            rows=["PARAMCD", "AVISIT"],
-            stats=[
-                Statistic.N_SUBJECTS,
-                Statistic.MEAN,
-                Statistic.SD,
-                Statistic.MEDIAN,
-                Statistic.MIN,
-                Statistic.MAX,
-            ],
+            rows=spec.rows,
+            stats=spec.statistics,
             context="t_lb_chg",
-            group_col=groupby,
+            group_col=group_col,
+            pools=spec.pools,
+            column_order=spec.column_order,
             adsl=adsl,
+            adsl_filter=spec.adsl_filter,
+            dataset_filter=spec.dataset_filter,
             prefilter=prefilter,
+            header_rows=spec.header_rows,
             nested=True,
         )
 
@@ -263,8 +287,9 @@ class LBTLGNamespace:
     def t_shift(
         self,
         *,
-        groupby: str = "TRTA",
+        groupby: str | None = None,
         adsl: pl.DataFrame | None = None,
+        spec: LBShiftSpec | None = None,
     ) -> pl.DataFrame:
         """Baseline → worst post-baseline shift table per parameter (LBT03).
 
@@ -292,12 +317,9 @@ class LBTLGNamespace:
         Examples:
             ``ard = adlb.tlg.lb.t_shift(groupby="TRTA", adsl=adsl)``
         """
-        missing = [c for c in ("PARAMCD", "BNRIND", "ANRIND") if c not in self._df.columns]
-        if missing:
-            raise SchemaError(
-                f"t_shift requires columns ['PARAMCD', 'BNRIND', 'ANRIND'] "
-                f"but DataFrame is missing {missing}."
-            )
+        spec = spec or LBShiftSpec()
+        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
+        spec.validate_dataframe(self._df, group_col=group_col)
         post = self._df.filter(pl.col("ANRIND").is_not_null())
         if "ONTRTFL" in post.columns:
             post = post.filter(pl.col("ONTRTFL") == "Y")
@@ -305,9 +327,9 @@ class LBTLGNamespace:
             post = post.filter(pl.col("ABLFL").ne_missing("Y"))
         worst = worst_case(
             post,
-            by=["USUBJID", groupby, "PARAMCD"],
+            by=["USUBJID", group_col, "PARAMCD"],
             order_col="ANRIND",
-            order=["NORMAL", "LOW", "HIGH", "LOW LOW", "HIGH HIGH"],
+            order=spec.anrind_order,
         )
         shift = worst.filter(pl.col("BNRIND").is_not_null()).with_columns(
             (pl.col("BNRIND").cast(pl.Utf8) + " to " + pl.col("ANRIND").cast(pl.Utf8)).alias(
@@ -317,10 +339,14 @@ class LBTLGNamespace:
         return summarize_ard(
             shift,
             rows=["PARAMCD", "SHIFT"],
-            stats=[Statistic.N_SUBJECTS],
+            stats=spec.statistics,
             context="t_lb_shift",
-            group_col=groupby,
+            group_col=group_col,
+            pools=spec.pools,
+            column_order=spec.column_order,
             adsl=adsl,
+            adsl_filter=spec.adsl_filter,
+            dataset_filter=spec.dataset_filter,
             nested=True,
         )
 
@@ -331,8 +357,9 @@ class LBTLGNamespace:
     def t_abnormal(
         self,
         *,
-        groupby: str = "TRTA",
+        groupby: str | None = None,
         adsl: pl.DataFrame | None = None,
+        spec: LBAbnormalSpec | None = None,
     ) -> pl.DataFrame:
         """Laboratory abnormalities not present at baseline (LBT04).
 
@@ -357,15 +384,26 @@ class LBTLGNamespace:
             pl.DataFrame: {cards}-compatible ARD.
 
         Examples:
-            ``ard = adlb.tlg.lb.t_abnormal(groupby="TRTA", adsl=adsl)``
+            ``ard = adlb.tlg.lb.t_abnormal(group_col="TRTA", adsl=adsl)``
         """
-        missing = [c for c in ("PARAMCD", "ANRIND") if c not in self._df.columns]
-        if missing:
+        spec = spec or LBAbnormalSpec()
+        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
+        spec.validate_dataframe(self._df, group_col=group_col)
+        if spec.pools or spec.header_rows:
             raise SchemaError(
-                f"t_abnormal requires columns ['PARAMCD', 'ANRIND'] "
-                f"but DataFrame is missing {missing}."
+                "t_abnormal does not support pools or header_rows yet — "
+                "its per-cell denominators need dedicated engine support."
             )
-        post = self._df.filter(pl.col("ANRIND").is_not_null())
+        source = self._df
+        if group_col not in source.columns:
+            raise SchemaError(
+                f"Group column '{group_col}' not found in the analysis dataset. "
+                f"Available: {sorted(source.columns)}"
+            )
+        dataset_filter = resolve_filter(spec.dataset_filter)
+        if dataset_filter is not None:
+            source = source.filter(dataset_filter)
+        post = source.filter(pl.col("ANRIND").is_not_null())
         if "ONTRTFL" in post.columns:
             post = post.filter(pl.col("ONTRTFL") == "Y")
         elif "ABLFL" in post.columns:
@@ -374,10 +412,10 @@ class LBTLGNamespace:
 
         context = "t_lb_abnormal"
         if adsl is not None:
-            if groupby not in adsl.columns:
-                raise SchemaError(f"Group column '{groupby}' not found in adsl.")
-            big_n = compute_big_n(adsl, groupby, [])
-            data_arms = set(post[groupby].drop_nulls().unique().to_list())
+            if group_col not in adsl.columns:
+                raise SchemaError(f"Group column '{group_col}' not found in adsl.")
+            big_n = compute_big_n(adsl, group_col, [], filter_expr=resolve_filter(spec.adsl_filter))
+            data_arms = set(post[group_col].drop_nulls().unique().to_list())
             unknown = sorted(data_arms - set(big_n))
             if unknown:
                 raise SchemaError(
@@ -386,18 +424,22 @@ class LBTLGNamespace:
             arms = sorted(big_n)
         else:
             big_n = {}
-            arms = sorted(post[groupby].drop_nulls().unique().to_list())
+            arms = sorted(post[group_col].drop_nulls().unique().to_list())
+        if spec.column_order:
+            arms = [a for a in spec.column_order if a in arms] + [
+                a for a in arms if a not in spec.column_order
+            ]
 
         rows_out: list[dict[str, object]] = []
         if adsl is not None:
             rows_out += [
-                ard_row(groupby, arm, "", "", "N", "N", big_n.get(arm), context) for arm in arms
+                ard_row(group_col, arm, "", "", "N", "N", big_n.get(arm), context) for arm in arms
             ]
 
-        directions = {"Low": ["LOW", "LOW LOW"], "High": ["HIGH", "HIGH HIGH"]}
-        has_baseline = "BNRIND" in self._df.columns
+        directions = {"Low": spec.low_values, "High": spec.high_values}
+        has_baseline = "BNRIND" in source.columns
         baseline = (
-            self._df.with_columns(pl.col("BNRIND").str.to_uppercase().alias("__bnrind"))
+            source.with_columns(pl.col("BNRIND").str.to_uppercase().alias("__bnrind"))
             if has_baseline
             else None
         )
@@ -412,7 +454,7 @@ class LBTLGNamespace:
                         )["USUBJID"].to_list()
                     )
                 for arm in arms:
-                    a_post = p_post.filter(pl.col(groupby) == arm)
+                    a_post = p_post.filter(pl.col(group_col) == arm)
                     eligible = set(a_post["USUBJID"].to_list()) - base_abnormal
                     abnormal = set(
                         a_post.filter(pl.col("__anrind").is_in(levels))["USUBJID"].to_list()
@@ -423,10 +465,10 @@ class LBTLGNamespace:
                     lineage = {"group2": "PARAMCD", "group2_level": str(param)}
                     rows_out += [
                         ard_row(
-                            groupby, arm, "ABNORMAL", direction, "n", "n", n, context, **lineage
+                            group_col, arm, "ABNORMAL", direction, "n", "n", n, context, **lineage
                         ),
                         ard_row(
-                            groupby,
+                            group_col,
                             arm,
                             "ABNORMAL",
                             direction,
@@ -437,7 +479,7 @@ class LBTLGNamespace:
                             **lineage,
                         ),
                         ard_row(
-                            groupby,
+                            group_col,
                             arm,
                             "ABNORMAL",
                             direction,

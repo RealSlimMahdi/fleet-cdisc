@@ -7,10 +7,10 @@ classification, and namespace placement live here as *metadata* so that
 renaming, re-classifying, or moving a template between namespaces is a
 data edit — never a code move.
 
-Implementation methods are thin wrappers; they reference their template by
-``id`` and inherit display/title/class from this registry.  Renders and
-the catalog read titles from here, so changing a title in one place
-updates everywhere.
+The registry is load-bearing: ``TLGBuilder.template(id)`` resolves inline
+targets through it, ``fleet.tlg.catalog()`` exposes it as a DataFrame, and
+the registry-driven test suite asserts every DONE entry resolves to a
+working namespace method.
 
 CDISC general-observation-class grouping (the proposed generalist scheme):
   - ``EVENTS``        — AE, MH, DS, deaths, deviations  (was: ae, mh, ds)
@@ -25,6 +25,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+
+import polars as pl
 
 
 class CDISCClass(str, Enum):  # noqa: UP042
@@ -129,6 +131,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         output_type=OutputType.TABLE,
         domains=("ADSL", "ADCM"),
         source_ref="template_gdsr_cmt01a.R",
+        status=Status.DONE,
     ),
     "ext01": TemplateMeta(
         id="ext01",
@@ -139,6 +142,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         output_type=OutputType.TABLE,
         domains=("ADSL", "ADEX"),
         source_ref="template_gdsr_ext01.R",
+        status=Status.DONE,
     ),
     "dmt01": TemplateMeta(
         id="dmt01",
@@ -147,8 +151,9 @@ TEMPLATES: dict[str, TemplateMeta] = {
         namespace="dm",
         method="t_summary",
         output_type=OutputType.TABLE,
-        domains=("ADSL", "ADVS"),
+        domains=("ADSL",),
         source_ref="template_gdsr_dmt01.R",
+        status=Status.DONE,
     ),
     "dst01": TemplateMeta(
         id="dst01",
@@ -159,6 +164,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         output_type=OutputType.TABLE,
         domains=("ADSL",),
         source_ref="template_gdsr_dst01.R",
+        status=Status.DONE,
     ),
     "dtht01": TemplateMeta(
         id="dtht01",
@@ -169,6 +175,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         output_type=OutputType.TABLE,
         domains=("ADSL",),
         source_ref="template_gdsr_dtht01.R",
+        status=Status.DONE,
     ),
     "egt01": TemplateMeta(
         id="egt01",
@@ -179,6 +186,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         output_type=OutputType.TABLE,
         domains=("ADSL", "ADEG"),
         source_ref="template_gdsr_egt01.R",
+        status=Status.DONE,
     ),
     "ent01": TemplateMeta(
         id="ent01",
@@ -189,6 +197,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         output_type=OutputType.TABLE,
         domains=("ADSL",),
         source_ref="template_gdsr_ent01.R",
+        status=Status.DONE,
     ),
     "lbt01": TemplateMeta(
         id="lbt01",
@@ -199,6 +208,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         output_type=OutputType.TABLE,
         domains=("ADSL", "ADLB"),
         source_ref="template_gdsr_lbt01.R",
+        status=Status.DONE,
     ),
     "lbl01": TemplateMeta(
         id="lbl01",
@@ -209,6 +219,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         output_type=OutputType.LISTING,
         domains=("ADLB",),
         source_ref="template_gdsr_lbl01.R",
+        status=Status.DONE,
     ),
     "mht01": TemplateMeta(
         id="mht01",
@@ -219,6 +230,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         output_type=OutputType.TABLE,
         domains=("ADSL", "ADMH"),
         source_ref="template_gdsr_mht01.R",
+        status=Status.DONE,
     ),
     "pdt01": TemplateMeta(
         id="pdt01",
@@ -227,8 +239,9 @@ TEMPLATES: dict[str, TemplateMeta] = {
         namespace="ds",
         method="t_deviations",
         output_type=OutputType.TABLE,
-        domains=("ADSL",),
+        domains=("ADSL", "ADDV"),
         source_ref="template_gdsr_pdt01.R",
+        status=Status.DONE,
     ),
     "aet02": TemplateMeta(
         "aet02",
@@ -355,3 +368,32 @@ def by_class(cdisc_class: CDISCClass) -> list[TemplateMeta]:
 def by_namespace(namespace: str) -> list[TemplateMeta]:
     """Return all registered templates for a ``df.tlg`` sub-namespace."""
     return [t for t in TEMPLATES.values() if t.namespace == namespace]
+
+
+def catalog() -> pl.DataFrame:
+    """Return the template catalog as a DataFrame (one row per template).
+
+    Returns:
+        pl.DataFrame: Columns ``id``, ``title``, ``cdisc_class``,
+            ``namespace``, ``method``, ``output_type``, ``domains``,
+            ``source_ref``, ``status``.
+
+    Examples:
+        ``fleet.tlg.catalog().filter(pl.col("status") == "done")``
+    """
+    return pl.DataFrame(
+        [
+            {
+                "id": m.id,
+                "title": m.title,
+                "cdisc_class": m.cdisc_class.value,
+                "namespace": m.namespace,
+                "method": m.method,
+                "output_type": m.output_type.value,
+                "domains": list(m.domains),
+                "source_ref": m.source_ref,
+                "status": m.status.value,
+            }
+            for m in TEMPLATES.values()
+        ]
+    )

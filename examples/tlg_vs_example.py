@@ -188,7 +188,7 @@ print(f"\n   ARD shape: {ard_spec.shape[0]} rows × {ard_spec.shape[1]} cols")
 
 
 # ════════════════════════════════════════════════════════════════════════════
-# 6. Pre-merge stratification pattern (C3: .by2())
+# 6. Pre-merge stratification pattern (C3)
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 6. Pre-merge stratification (C3 pattern) ════════════════════════════")
 
@@ -204,9 +204,10 @@ advs_strat = advs.join(
 print(f"   ADVS with AGEGR1: {advs_strat.shape[0]} rows × {advs_strat.shape[1]} cols")
 print(f"   Age groups: {sorted(advs_strat['AGEGR1'].unique().to_list())}")
 
-# Use .by2() for second-dimension stratification
-# Note: by2 is accumulated but current t_summary doesn't use group2 from builder yet.
-# This demonstrates the API surface — full group2 computation is a future enhancement.
+# Nested stratification: pass the merged column as a second row field —
+# the engine computes per-(AGEGR1, PARAMCD) cells with group2 lineage.
+ard_strat = advs_strat.tlg.vs.population(adsl_age).by("TRTA").rows(["AGEGR1", "PARAMCD"]).to_ard()
+print(f"   Stratified ARD: {ard_strat.shape[0]} rows (AGEGR1 → PARAMCD nesting)")
 print("   ✓ C3 pre-merge pattern demonstrated: AGEGR1 joined from ADSL onto ADVS.")
 
 

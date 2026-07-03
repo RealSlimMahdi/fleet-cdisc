@@ -19,70 +19,51 @@ import polars as pl
 from pydantic import Field
 
 from ._ard import summarize_ard
-from ._specs import GroupPool, OverallStat, Statistic, TLGSpec
+from ._builder import BuilderVerbsMixin
+from ._specs import (
+    GroupPool,
+    OverallStat,
+    Row,
+    Statistic,
+    SummarySpecBase,
+    TLGSpec,
+    resolve_filter,
+)
 
 
-class DSDispositionSpec(TLGSpec):
+class DSDispositionSpec(SummarySpecBase):
     """Spec for subject disposition (DST01: EOSSTT → DCSREAS)."""
 
-    output_type: str = "summary"
-    columns: list[str] = Field(default_factory=lambda: ["TRTA"])
-    rows: list[str] = Field(default_factory=lambda: ["EOSSTT", "DCSREAS"])
-    statistics: list[Statistic] = Field(
-        default_factory=lambda: [Statistic.N_SUBJECTS, Statistic.N_PCT]
-    )
-    pools: list[GroupPool] = Field(default_factory=list)
-    column_order: list[str] = Field(default_factory=list)
+    rows: list[Row] = Field(default_factory=lambda: [Row(field="EOSSTT"), Row(field="DCSREAS")])
     required_columns: list[str] = Field(
         default_factory=lambda: ["USUBJID", "TRTA", "EOSSTT", "DCSREAS"]
     )
 
 
-class DSDeathsSpec(TLGSpec):
+class DSDeathsSpec(SummarySpecBase):
     """Spec for deaths and primary cause of death (DTHT01)."""
 
-    output_type: str = "summary"
-    columns: list[str] = Field(default_factory=lambda: ["TRTA"])
-    rows: list[str] = Field(default_factory=lambda: ["DTHCAT"])
-    statistics: list[Statistic] = Field(
-        default_factory=lambda: [Statistic.N_SUBJECTS, Statistic.N_PCT]
-    )
-    pools: list[GroupPool] = Field(default_factory=list)
-    column_order: list[str] = Field(default_factory=list)
+    rows: list[Row] = Field(default_factory=lambda: [Row(field="DTHCAT")])
     required_columns: list[str] = Field(
         default_factory=lambda: ["USUBJID", "TRTA", "DTHFL", "DTHCAT"]
     )
 
 
-class DSEnrollmentSpec(TLGSpec):
+class DSEnrollmentSpec(SummarySpecBase):
     """Spec for enrollment by site (ENT01: REGION1 → COUNTRY → SITEID)."""
 
-    output_type: str = "summary"
-    columns: list[str] = Field(default_factory=lambda: ["TRTA"])
-    rows: list[str] = Field(default_factory=lambda: ["SITEID"])
-    statistics: list[Statistic] = Field(
-        default_factory=lambda: [Statistic.N_SUBJECTS, Statistic.N_PCT]
-    )
-    pools: list[GroupPool] = Field(default_factory=list)
-    column_order: list[str] = Field(default_factory=list)
+    rows: list[Row] = Field(default_factory=lambda: [Row(field="SITEID")])
     required_columns: list[str] = Field(default_factory=lambda: ["USUBJID", "TRTA", "SITEID"])
 
 
-class DSDeviationsSpec(TLGSpec):
+class DSDeviationsSpec(SummarySpecBase):
     """Spec for major protocol deviations (PDT01: DVDECOD)."""
 
-    output_type: str = "summary"
-    columns: list[str] = Field(default_factory=lambda: ["TRTA"])
-    rows: list[str] = Field(default_factory=lambda: ["DVDECOD"])
-    statistics: list[Statistic] = Field(
-        default_factory=lambda: [Statistic.N_SUBJECTS, Statistic.N_PCT]
-    )
-    pools: list[GroupPool] = Field(default_factory=list)
-    column_order: list[str] = Field(default_factory=list)
+    rows: list[Row] = Field(default_factory=lambda: [Row(field="DVDECOD")])
     required_columns: list[str] = Field(default_factory=lambda: ["USUBJID", "TRTA", "DVDECOD"])
 
 
-class DSTLGNamespace:
+class DSTLGNamespace(BuilderVerbsMixin):
     """Disposition tables and diagnostics.
 
     Accessed as ``df.tlg.ds``.  Covers the four Roche disposition
@@ -94,6 +75,14 @@ class DSTLGNamespace:
         df: A Polars DataFrame containing ADaM ADSL (or ADDV for
             deviations) subject-level data.
     """
+
+    _builder_context = "t_ds_disposition"
+    _builder_specs = {
+        "t_summary": DSDispositionSpec,
+        "t_deaths": DSDeathsSpec,
+        "t_enrollment": DSEnrollmentSpec,
+        "t_deviations": DSDeviationsSpec,
+    }
 
     def __init__(self, df: pl.DataFrame) -> None:
         self._df = df
@@ -137,7 +126,7 @@ class DSTLGNamespace:
         order: list[str] = getattr(spec, "column_order", [])
         group_col = groupby or (spec.columns[0] if getattr(spec, "columns", None) else "TRTA")
 
-        spec.validate_dataframe(self._df)
+        spec.validate_dataframe(self._df, group_col=group_col)
 
         return summarize_ard(
             self._df,
@@ -229,14 +218,20 @@ class DSTLGNamespace:
         """
         spec = spec or DSDeathsSpec()
         group_col = groupby or (spec.columns[0] if getattr(spec, "columns", None) else "TRTA")
-        spec.validate_dataframe(self._df)
+        spec.validate_dataframe(self._df, group_col=group_col)
         population = adsl if adsl is not None else self._df
-        deaths_filter = pl.col("DTHFL") == "Y" if "DTHFL" in self._df.columns else None
-        deaths = self._df.filter(deaths_filter) if deaths_filter is not None else self._df
+        # The dataset filter must bite before deaths are identified, so the
+        # numerators, the deaths denominator, and the cause rows agree.
+        analysis = self._df
+        dataset_filter = resolve_filter(spec.dataset_filter)
+        if dataset_filter is not None:
+            analysis = analysis.filter(dataset_filter)
+        deaths_filter = pl.col("DTHFL") == "Y" if "DTHFL" in analysis.columns else None
+        deaths = analysis.filter(deaths_filter) if deaths_filter is not None else analysis
 
         # Headline block: total deaths against the population denominator.
         total = summarize_ard(
-            self._df,
+            analysis,
             rows=[],
             stats=spec.statistics,
             context="t_ds_deaths",
@@ -245,7 +240,6 @@ class DSTLGNamespace:
             column_order=spec.column_order,
             adsl=population,
             adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
             prefilter=deaths_filter,
             header_rows=[OverallStat(label="Total Number of Deaths"), *spec.header_rows],
         )
@@ -255,8 +249,14 @@ class DSTLGNamespace:
             return total
 
         # Cause block: percentages among deaths, not the full population.
+        # Explicit-arm pools survive only when all their arms have deaths —
+        # a pool cannot be validated against a population it has no members in.
         deaths_population = population.filter(pl.col("USUBJID").is_in(death_ids))
-        cause_df = self._df
+        death_arms = set(deaths[group_col].drop_nulls().unique().to_list())
+        cause_pools = [
+            pool for pool in spec.pools if pool.arms == "*" or set(pool.arms) <= death_arms
+        ]
+        cause_df = analysis
         if "DTHCAT" in cause_df.columns:
             cause_df = cause_df.with_columns(pl.col("DTHCAT").fill_null("Unknown"))
         causes = summarize_ard(
@@ -265,11 +265,10 @@ class DSTLGNamespace:
             stats=spec.statistics,
             context="t_ds_deaths",
             group_col=group_col,
-            pools=spec.pools,
+            pools=cause_pools,
             column_order=spec.column_order,
             adsl=deaths_population,
             adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
             prefilter=deaths_filter,
         )
         # The headline block already carries the population N rows; drop
@@ -381,7 +380,8 @@ class DSTLGNamespace:
         diagnostics = spec.check(self._df)
 
         available = set(self._df.columns)
-        for field in getattr(spec, "rows", []):
+        row_fields = [getattr(r, "field", r) for r in getattr(spec, "rows", [])]
+        for field in row_fields:
             if field not in available:
                 diagnostics.append(
                     f"WARNING: Column '{field}' not present — its sub-analysis will be skipped."

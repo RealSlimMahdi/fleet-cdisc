@@ -12,32 +12,29 @@ import polars as pl
 from pydantic import Field
 
 from ._ard import fill_uncoded, summarize_ard
-from ._specs import GroupPool, Row, Statistic, TLGSpec
+from ._builder import BuilderVerbsMixin
+from ._specs import Row, SummarySpecBase
 
 
-class MHSummarySpec(TLGSpec):
+class MHSummarySpec(SummarySpecBase):
     """Spec for a medical-history summary table (MHT01): n / % by SOC → PT."""
 
-    output_type: str = "summary"
     rows: list[Row] = Field(
         default_factory=lambda: [
             Row(field="MHBODSYS", label="MedDRA System Organ Class"),
             Row(field="MHDECOD", label="MedDRA Preferred Term"),
         ]
     )
-    columns: list[str] = Field(default_factory=lambda: ["TRTA"])
-    statistics: list[Statistic] = Field(
-        default_factory=lambda: [Statistic.N_SUBJECTS, Statistic.N_PCT]
-    )
-    pools: list[GroupPool] = Field(default_factory=list)
-    column_order: list[str] = Field(default_factory=list)
     required_columns: list[str] = Field(
         default_factory=lambda: ["USUBJID", "TRTA", "MHDECOD", "MHBODSYS"]
     )
 
 
-class MHTLGNamespace:
+class MHTLGNamespace(BuilderVerbsMixin):
     """Medical-history tables, accessed as ``df.tlg.mh``."""
+
+    _builder_context = "t_mh_summary"
+    _builder_specs = {"t_summary": MHSummarySpec}
 
     def __init__(self, df: pl.DataFrame) -> None:
         self._df = df
@@ -64,7 +61,7 @@ class MHTLGNamespace:
         """
         spec = spec or MHSummarySpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df)
+        spec.validate_dataframe(self._df, group_col=group_col)
         return summarize_ard(
             fill_uncoded(self._df, ["MHBODSYS", "MHDECOD"]),
             rows=spec.rows,

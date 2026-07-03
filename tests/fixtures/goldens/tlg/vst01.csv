@@ -1,0 +1,22 @@
+group1,group1_level,group2,group2_level,variable,variable_level,stat_name,stat_label,stat,fmt_fn,stat_fmt,warning,error,context
+TRTA,Drug A,"","","","",N,N,4.0,xx,4,,,t_vs_summary
+TRTA,Drug B,"","","","",N,N,2.0,xx,2,,,t_vs_summary
+TRTA,Placebo,"","","","",N,N,4.0,xx,4,,,t_vs_summary
+TRTA,Drug A,"","",PARAMCD,ALT,n,n,1.0,xx,1,,,t_vs_summary
+TRTA,Drug A,"","",PARAMCD,ALT,mean,Mean,19.0,xx.x,19.0,,,t_vs_summary
+TRTA,Drug A,"","",PARAMCD,ALT,sd,SD,1.4142135623730951,xx.xx,1.41,,,t_vs_summary
+TRTA,Drug A,"","",PARAMCD,ALT,median,Median,19.0,xx.x,19.0,,,t_vs_summary
+TRTA,Drug A,"","",PARAMCD,ALT,min,Min,18.0,xx.x,18.0,,,t_vs_summary
+TRTA,Drug A,"","",PARAMCD,ALT,max,Max,20.0,xx.x,20.0,,,t_vs_summary
+TRTA,Drug B,"","",PARAMCD,ALT,n,n,0.0,xx,0,,,t_vs_summary
+TRTA,Drug B,"","",PARAMCD,ALT,mean,Mean,,xx.x,"",,,t_vs_summary
+TRTA,Drug B,"","",PARAMCD,ALT,sd,SD,,xx.xx,"",,,t_vs_summary
+TRTA,Drug B,"","",PARAMCD,ALT,median,Median,,xx.x,"",,,t_vs_summary
+TRTA,Drug B,"","",PARAMCD,ALT,min,Min,,xx.x,"",,,t_vs_summary
+TRTA,Drug B,"","",PARAMCD,ALT,max,Max,,xx.x,"",,,t_vs_summary
+TRTA,Placebo,"","",PARAMCD,ALT,n,n,2.0,xx,2,,,t_vs_summary
+TRTA,Placebo,"","",PARAMCD,ALT,mean,Mean,27.5,xx.x,27.5,,,t_vs_summary
+TRTA,Placebo,"","",PARAMCD,ALT,sd,SD,17.0,xx.xx,17.00,,,t_vs_summary
+TRTA,Placebo,"","",PARAMCD,ALT,median,Median,28.0,xx.x,28.0,,,t_vs_summary
+TRTA,Placebo,"","",PARAMCD,ALT,min,Min,10.0,xx.x,10.0,,,t_vs_summary
+TRTA,Placebo,"","",PARAMCD,ALT,max,Max,44.0,xx.x,44.0,,,t_vs_summary

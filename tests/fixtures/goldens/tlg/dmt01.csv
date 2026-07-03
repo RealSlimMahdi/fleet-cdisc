@@ -1,0 +1,67 @@
+group1,group1_level,group2,group2_level,variable,variable_level,stat_name,stat_label,stat,fmt_fn,stat_fmt,warning,error,context
+TRTA,Drug A,"","","","",N,N,4.0,xx,4,,,t_dm_summary
+TRTA,Drug B,"","","","",N,N,2.0,xx,2,,,t_dm_summary
+TRTA,Placebo,"","","","",N,N,4.0,xx,4,,,t_dm_summary
+TRTA,Drug A,"","",SEX,F,n,n,2.0,xx,2,,,t_dm_summary
+TRTA,Drug A,"","",SEX,F,pct,n (%),50.0,xx.x,50.0,,,t_dm_summary
+TRTA,Drug A,"","",SEX,M,n,n,2.0,xx,2,,,t_dm_summary
+TRTA,Drug A,"","",SEX,M,pct,n (%),50.0,xx.x,50.0,,,t_dm_summary
+TRTA,Drug B,"","",SEX,F,n,n,1.0,xx,1,,,t_dm_summary
+TRTA,Drug B,"","",SEX,F,pct,n (%),50.0,xx.x,50.0,,,t_dm_summary
+TRTA,Drug B,"","",SEX,M,n,n,1.0,xx,1,,,t_dm_summary
+TRTA,Drug B,"","",SEX,M,pct,n (%),50.0,xx.x,50.0,,,t_dm_summary
+TRTA,Placebo,"","",SEX,F,n,n,2.0,xx,2,,,t_dm_summary
+TRTA,Placebo,"","",SEX,F,pct,n (%),50.0,xx.x,50.0,,,t_dm_summary
+TRTA,Placebo,"","",SEX,M,n,n,2.0,xx,2,,,t_dm_summary
+TRTA,Placebo,"","",SEX,M,pct,n (%),50.0,xx.x,50.0,,,t_dm_summary
+TRTA,Drug A,"","",AGEGR1,<65,n,n,2.0,xx,2,,,t_dm_summary
+TRTA,Drug A,"","",AGEGR1,<65,pct,n (%),50.0,xx.x,50.0,,,t_dm_summary
+TRTA,Drug A,"","",AGEGR1,>=65,n,n,2.0,xx,2,,,t_dm_summary
+TRTA,Drug A,"","",AGEGR1,>=65,pct,n (%),50.0,xx.x,50.0,,,t_dm_summary
+TRTA,Drug B,"","",AGEGR1,<65,n,n,1.0,xx,1,,,t_dm_summary
+TRTA,Drug B,"","",AGEGR1,<65,pct,n (%),50.0,xx.x,50.0,,,t_dm_summary
+TRTA,Drug B,"","",AGEGR1,>=65,n,n,1.0,xx,1,,,t_dm_summary
+TRTA,Drug B,"","",AGEGR1,>=65,pct,n (%),50.0,xx.x,50.0,,,t_dm_summary
+TRTA,Placebo,"","",AGEGR1,<65,n,n,1.0,xx,1,,,t_dm_summary
+TRTA,Placebo,"","",AGEGR1,<65,pct,n (%),25.0,xx.x,25.0,,,t_dm_summary
+TRTA,Placebo,"","",AGEGR1,>=65,n,n,3.0,xx,3,,,t_dm_summary
+TRTA,Placebo,"","",AGEGR1,>=65,pct,n (%),75.0,xx.x,75.0,,,t_dm_summary
+TRTA,Drug A,"","",RACE,ASIAN,n,n,1.0,xx,1,,,t_dm_summary
+TRTA,Drug A,"","",RACE,ASIAN,pct,n (%),25.0,xx.x,25.0,,,t_dm_summary
+TRTA,Drug A,"","",RACE,BLACK,n,n,1.0,xx,1,,,t_dm_summary
+TRTA,Drug A,"","",RACE,BLACK,pct,n (%),25.0,xx.x,25.0,,,t_dm_summary
+TRTA,Drug A,"","",RACE,WHITE,n,n,2.0,xx,2,,,t_dm_summary
+TRTA,Drug A,"","",RACE,WHITE,pct,n (%),50.0,xx.x,50.0,,,t_dm_summary
+TRTA,Drug B,"","",RACE,ASIAN,n,n,0.0,xx,0,,,t_dm_summary
+TRTA,Drug B,"","",RACE,ASIAN,pct,n (%),0.0,xx.x,0.0,,,t_dm_summary
+TRTA,Drug B,"","",RACE,BLACK,n,n,1.0,xx,1,,,t_dm_summary
+TRTA,Drug B,"","",RACE,BLACK,pct,n (%),50.0,xx.x,50.0,,,t_dm_summary
+TRTA,Drug B,"","",RACE,WHITE,n,n,1.0,xx,1,,,t_dm_summary
+TRTA,Drug B,"","",RACE,WHITE,pct,n (%),50.0,xx.x,50.0,,,t_dm_summary
+TRTA,Placebo,"","",RACE,ASIAN,n,n,1.0,xx,1,,,t_dm_summary
+TRTA,Placebo,"","",RACE,ASIAN,pct,n (%),25.0,xx.x,25.0,,,t_dm_summary
+TRTA,Placebo,"","",RACE,BLACK,n,n,0.0,xx,0,,,t_dm_summary
+TRTA,Placebo,"","",RACE,BLACK,pct,n (%),0.0,xx.x,0.0,,,t_dm_summary
+TRTA,Placebo,"","",RACE,WHITE,n,n,3.0,xx,3,,,t_dm_summary
+TRTA,Placebo,"","",RACE,WHITE,pct,n (%),75.0,xx.x,75.0,,,t_dm_summary
+TRTA,Drug A,"","",ETHNIC,NOT HISPANIC,n,n,4.0,xx,4,,,t_dm_summary
+TRTA,Drug A,"","",ETHNIC,NOT HISPANIC,pct,n (%),100.0,xx.x,100.0,,,t_dm_summary
+TRTA,Drug B,"","",ETHNIC,NOT HISPANIC,n,n,2.0,xx,2,,,t_dm_summary
+TRTA,Drug B,"","",ETHNIC,NOT HISPANIC,pct,n (%),100.0,xx.x,100.0,,,t_dm_summary
+TRTA,Placebo,"","",ETHNIC,NOT HISPANIC,n,n,4.0,xx,4,,,t_dm_summary
+TRTA,Placebo,"","",ETHNIC,NOT HISPANIC,pct,n (%),100.0,xx.x,100.0,,,t_dm_summary
+TRTA,Drug A,"","",AGE,Age (yr),mean,Mean,65.0,xx.x,65.0,,,t_dm_summary
+TRTA,Drug A,"","",AGE,Age (yr),sd,SD,8.524474568362947,xx.xx,8.52,,,t_dm_summary
+TRTA,Drug A,"","",AGE,Age (yr),median,Median,65.0,xx.x,65.0,,,t_dm_summary
+TRTA,Drug A,"","",AGE,Age (yr),min,Min,55.0,xx.x,55.0,,,t_dm_summary
+TRTA,Drug A,"","",AGE,Age (yr),max,Max,75.0,xx.x,75.0,,,t_dm_summary
+TRTA,Drug B,"","",AGE,Age (yr),mean,Mean,65.0,xx.x,65.0,,,t_dm_summary
+TRTA,Drug B,"","",AGE,Age (yr),sd,SD,8.48528137423857,xx.xx,8.49,,,t_dm_summary
+TRTA,Drug B,"","",AGE,Age (yr),median,Median,65.0,xx.x,65.0,,,t_dm_summary
+TRTA,Drug B,"","",AGE,Age (yr),min,Min,59.0,xx.x,59.0,,,t_dm_summary
+TRTA,Drug B,"","",AGE,Age (yr),max,Max,71.0,xx.x,71.0,,,t_dm_summary
+TRTA,Placebo,"","",AGE,Age (yr),mean,Mean,68.75,xx.x,68.8,,,t_dm_summary
+TRTA,Placebo,"","",AGE,Age (yr),sd,SD,8.539125638299666,xx.xx,8.54,,,t_dm_summary
+TRTA,Placebo,"","",AGE,Age (yr),median,Median,67.5,xx.x,67.5,,,t_dm_summary
+TRTA,Placebo,"","",AGE,Age (yr),min,Min,60.0,xx.x,60.0,,,t_dm_summary
+TRTA,Placebo,"","",AGE,Age (yr),max,Max,80.0,xx.x,80.0,,,t_dm_summary

@@ -23,10 +23,10 @@ from ._ard import (
 from ._ard import (
     rows_to_ard as _rows_to_ard,
 )
+from ._builder import BuilderVerbsMixin
 from ._specs import (
-    GroupPool,
     Statistic,
-    TLGSpec,
+    SummarySpecBase,
     resolve_filter,
 )
 
@@ -40,7 +40,7 @@ _CONTINUOUS_STATS: list[Statistic] = [
 ]
 
 
-class DMSummarySpec(TLGSpec):
+class DMSummarySpec(SummarySpecBase):
     """Spec for a demographic summary table (t_dm_summary).
 
     Defaults provide zero-config convenience for a standard ADSL
@@ -53,11 +53,6 @@ class DMSummarySpec(TLGSpec):
         category_labels: Display labels keyed by categorical column.
     """
 
-    output_type: str = "summary"
-    columns: list[str] = Field(
-        default_factory=lambda: ["TRTA"],
-        description="Column-grouping variables (typically a treatment column).",
-    )
     age_var: str = Field(
         default="AGE",
         description="Continuous age column to summarise (``AGE`` or ``AAGE``).",
@@ -75,29 +70,13 @@ class DMSummarySpec(TLGSpec):
         },
         description="Display labels for categorical variables.",
     )
-    statistics: list[Statistic] = Field(
-        default_factory=lambda: [Statistic.N_SUBJECTS, Statistic.N_PCT],
-        description="Statistics computed for each categorical level.",
-    )
-    pools: list[GroupPool] = Field(
-        default_factory=list,
-        description="Composite (pooled) treatment groups.",
-    )
-    column_order: list[str] = Field(
-        default_factory=list,
-        description="Explicit ordering of column labels in the rendered output.",
-    )
-    denominator: str = Field(
-        default="TRTA",
-        description="Column used as the denominator when computing percentages.",
-    )
     required_columns: list[str] = Field(
         default_factory=lambda: ["USUBJID", "TRTA", "AGE", "SEX"],
         description="Columns required in the analysis dataset for this spec.",
     )
 
 
-class DMTLGNamespace:
+class DMTLGNamespace(BuilderVerbsMixin):
     """Demographic summary tables and diagnostics.
 
     Accessed as ``df.tlg.dm``.  Produces a {cards}-aligned ARD combining
@@ -107,6 +86,9 @@ class DMTLGNamespace:
     Args:
         df: A Polars DataFrame containing ADSL-level demographic data.
     """
+
+    _builder_context = "t_dm_summary"
+    _builder_specs = {"t_summary": DMSummarySpec}
 
     def __init__(self, df: pl.DataFrame) -> None:
         self._df = df
@@ -149,7 +131,7 @@ class DMTLGNamespace:
         denom_src = adsl if adsl is not None else self._df
 
         # --- Validation ---
-        spec.validate_dataframe(self._df)
+        spec.validate_dataframe(self._df, group_col=group_col)
 
         # For demographics the analysis dataset IS the population, so the
         # population filter applies to numerators and continuous stats

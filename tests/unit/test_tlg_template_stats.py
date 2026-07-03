@@ -378,3 +378,80 @@ class TestDeaths:
         ard = self.ADSL_DTH.tlg.ds.t_deaths(groupby="TRTA")
         n_rows = ard.filter((pl.col("stat_name") == "N") & (pl.col("variable") == ""))
         assert n_rows["stat"].to_list() == [4.0]  # one N per arm, population
+
+
+class TestReviewRoundTwo:
+    """Regressions for findings on the point-5 commit (unverified finder
+    reports, confirmed by hand before fixing)."""
+
+    def test_dataset_filter_bites_before_worst_case(self) -> None:
+        from fleet.tlg import AESeveritySpec
+
+        # Excluding S01's SEVERE record must leave S01 counted at MILD —
+        # not dropped because dedup already picked the filtered record.
+        spec = AESeveritySpec(dataset_filter='pl.col("AEDECOD") != "MIGRAINE"')
+        ard = ADAE.tlg.ae.t_severity(groupby="TRTA", adsl=ADSL, spec=spec)
+        sev = ard.filter(
+            (pl.col("variable") == "AESEV")
+            & (pl.col("group1_level") == "Placebo")
+            & (pl.col("group2_level") == "NERVOUS")
+            & (pl.col("stat_name") == "n")
+        )
+        by_level = dict(zip(sev["variable_level"].to_list(), sev["stat"].to_list()))
+        assert by_level.get("MILD") == 2.0
+        assert "SEVERE" not in by_level
+
+    def test_grade_matches_numeric_aetoxgr(self) -> None:
+        adae = ADAE.with_columns(pl.col("AETOXGR").cast(pl.Float64))
+        ard = adae.tlg.ae.t_grade(groupby="TRTA", adsl=ADSL)
+        grades = set(ard.filter(pl.col("variable") == "AETOXGR")["variable_level"].to_list())
+        assert grades == {"1", "2", "3"}  # not "1.0"/"3.0"
+
+    def test_deaths_dataset_filter_applies_to_death_ids(self) -> None:
+        adsl = pl.DataFrame(
+            {
+                "USUBJID": ["S01", "S02", "S03", "S04"],
+                "TRTA": ["Placebo"] * 4,
+                "DTHFL": ["Y", "Y", "N", "N"],
+                "DTHCAT": ["ADVERSE EVENT", "OTHER", None, None],
+                "ANL01FL": ["Y", "N", "Y", "Y"],
+            }
+        )
+        from fleet.tlg import DSDeathsSpec
+
+        spec = DSDeathsSpec(dataset_filter='pl.col("ANL01FL") == "Y"')
+        ard = adsl.tlg.ds.t_deaths(groupby="TRTA", spec=spec)
+        total = ard.filter(pl.col("variable_level") == "Total Number of Deaths")
+        stats = dict(zip(total["stat_name"].to_list(), total["stat"].to_list()))
+        assert stats["n"] == 1.0  # S02 excluded by the analysis flag
+        causes = ard.filter(pl.col("variable") == "DTHCAT")
+        assert set(causes["variable_level"].to_list()) == {"ADVERSE EVENT"}
+        pct = causes.filter(pl.col("stat_name") == "pct")["stat"].to_list()
+        assert pct == [100.0]  # 1 of 1 death after filtering
+
+    def test_deaths_pool_with_zero_death_arm_does_not_crash(self) -> None:
+        from fleet.tlg import DSDeathsSpec, GroupPool
+
+        adsl = pl.DataFrame(
+            {
+                "USUBJID": ["S01", "S02", "S03", "S04"],
+                "TRTA": ["Placebo", "Placebo", "Drug A", "Drug A"],
+                "DTHFL": ["Y", "N", "N", "N"],
+                "DTHCAT": ["ADVERSE EVENT", None, None, None],
+            }
+        )
+        spec = DSDeathsSpec(pools=[GroupPool(label="Both", arms=["Placebo", "Drug A"])])
+        ard = adsl.tlg.ds.t_deaths(groupby="TRTA", spec=spec)
+        # Headline carries the pool; the cause block drops it (no deaths in
+        # Drug A) instead of crashing.
+        total = ard.filter(
+            (pl.col("variable_level") == "Total Number of Deaths")
+            & (pl.col("group1_level") == "Both")
+            & (pl.col("stat_name") == "n")
+        )
+        assert total["stat"].to_list() == [1.0]
+
+    def test_abnormal_missing_group_column_raises_schema_error(self) -> None:
+        adlb = TestLabAbnormal.ADLB
+        with pytest.raises(SchemaError, match="TRT01A"):
+            adlb.tlg.lb.t_abnormal(groupby="TRT01A", adsl=TestLabAbnormal.ADSL3)

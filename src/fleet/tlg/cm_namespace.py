@@ -13,15 +13,14 @@ import polars as pl
 from pydantic import Field
 
 from ._ard import fill_uncoded, summarize_ard
+from ._builder import BuilderVerbsMixin
 from ._specs import (
-    GroupPool,
     Row,
-    Statistic,
-    TLGSpec,
+    SummarySpecBase,
 )
 
 
-class CMSummarySpec(TLGSpec):
+class CMSummarySpec(SummarySpecBase):
     """Spec for a concomitant-medication summary table (t_cm_summary).
 
     Defaults provide zero-config convenience for a standard CMCLAS→CMDECOD
@@ -30,7 +29,6 @@ class CMSummarySpec(TLGSpec):
     :class:`AESummarySpec`.
     """
 
-    output_type: str = "summary"
     rows: list[Row] = Field(
         default_factory=lambda: [
             Row(field="CMCLAS", label="ATC Class Level 2"),
@@ -38,33 +36,24 @@ class CMSummarySpec(TLGSpec):
         ],
         description="Hierarchy of row groupings (ATC class → preferred term).",
     )
-    columns: list[str] = Field(
-        default_factory=lambda: ["TRTA"],
-        description="Column-grouping variables (typically a treatment column).",
-    )
-    statistics: list[Statistic] = Field(
-        default_factory=lambda: [Statistic.N_SUBJECTS, Statistic.N_PCT],
-        description="Statistics computed for each row.",
-    )
-    pools: list[GroupPool] = Field(
-        default_factory=list,
-        description="Composite (pooled) treatment groups.",
-    )
-    column_order: list[str] = Field(
-        default_factory=list,
-        description="Explicit ordering of column labels in the rendered output.",
-    )
-    denominator: str = Field(
-        default="TRTA",
-        description="Column used as the denominator when computing percentages.",
-    )
     required_columns: list[str] = Field(
         default_factory=lambda: ["USUBJID", "TRTA", "CMDECOD", "CMCLAS"],
         description="Columns required in the analysis dataset for this spec.",
     )
 
 
-class CMTLGNamespace:
+class CMByPTSpec(CMSummarySpec):
+    """Spec for CM by preferred term only (cmt02): flat CMDECOD counts."""
+
+    rows: list[Row] = Field(
+        default_factory=lambda: [Row(field="CMDECOD", label="Other Treatment")],
+    )
+    required_columns: list[str] = Field(
+        default_factory=lambda: ["USUBJID", "TRTA", "CMDECOD"],
+    )
+
+
+class CMTLGNamespace(BuilderVerbsMixin):
     """Concomitant-medication tables and diagnostics.
 
     Accessed as ``df.tlg.cm``.  Produces a CDISC-aligned ARD summarising
@@ -74,6 +63,9 @@ class CMTLGNamespace:
     Args:
         df: A Polars DataFrame containing ADaM CM-level data.
     """
+
+    _builder_context = "t_cm_summary"
+    _builder_specs = {"t_summary": CMSummarySpec, "t_by_pt": CMByPTSpec}
 
     def __init__(self, df: pl.DataFrame) -> None:
         self._df = df
@@ -125,7 +117,7 @@ class CMTLGNamespace:
         """
         spec = spec or CMSummarySpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df)
+        spec.validate_dataframe(self._df, group_col=group_col)
         return summarize_ard(
             fill_uncoded(self._df, ["CMCLAS", "CMDECOD"]),
             rows=spec.rows,
@@ -150,6 +142,7 @@ class CMTLGNamespace:
         *,
         groupby: str | None = None,
         adsl: pl.DataFrame | None = None,
+        spec: CMByPTSpec | None = None,
     ) -> pl.DataFrame:
         """Produce a CM-by-preferred-term ARD (CMDECOD only).
 
@@ -169,13 +162,9 @@ class CMTLGNamespace:
         Examples:
             ``ard = adcm.tlg.cm.t_by_pt(groupby="TRTA", adsl=adsl)``
         """
-        group_col = groupby or "TRTA"
-        spec = CMSummarySpec(
-            rows=[Row(field="CMDECOD", label="Other Treatment")],
-            columns=[group_col],
-            required_columns=["USUBJID", group_col, "CMDECOD"],
-        )
-        spec.validate_dataframe(self._df)
+        spec = spec or CMByPTSpec()
+        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
+        spec.validate_dataframe(self._df, group_col=group_col)
         return summarize_ard(
             fill_uncoded(self._df, ["CMCLAS", "CMDECOD"]),
             rows=spec.rows,
