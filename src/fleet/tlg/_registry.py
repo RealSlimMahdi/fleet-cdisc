@@ -254,10 +254,10 @@ TEMPLATES: dict[str, TemplateMeta] = {
     ),
     "aet04": TemplateMeta(
         "aet04",
-        "AEs by Relationship",
+        "Adverse Events by Highest NCI CTCAE Grade",
         CDISCClass.EVENTS,
         "ae",
-        "t_relationship",
+        "t_grade",
         OutputType.TABLE,
         ("ADSL", "ADAE"),
         "template_gdsr_aet04.R",

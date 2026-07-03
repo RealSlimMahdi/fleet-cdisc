@@ -151,9 +151,18 @@ class DMTLGNamespace:
         # --- Validation ---
         spec.validate_dataframe(self._df)
 
+        # For demographics the analysis dataset IS the population, so the
+        # population filter applies to numerators and continuous stats
+        # too — filtering only the denominators would let out-of-population
+        # subjects into the counts (pct > 100%).
+        analysis_df = self._df
+        population_filter = resolve_filter(spec.adsl_filter)
+        if population_filter is not None:
+            analysis_df = analysis_df.filter(population_filter)
+
         # --- Categorical breakdowns (big-N + n / %) via shared engine ---
         cat_ard = summarize_ard(
-            self._df,
+            analysis_df,
             rows=spec.categorical_vars,
             stats=spec.statistics,
             context="t_dm_summary",
@@ -167,7 +176,7 @@ class DMTLGNamespace:
         )
 
         # --- Continuous age statistics ---
-        df = self._df
+        df = analysis_df
         dataset_filter = resolve_filter(spec.dataset_filter)
         if dataset_filter is not None:
             df = df.filter(dataset_filter)

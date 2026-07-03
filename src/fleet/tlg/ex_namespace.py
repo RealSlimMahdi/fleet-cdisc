@@ -206,6 +206,10 @@ class EXTLGNamespace:
         spec = spec or EXSummarySpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
         spec.validate_dataframe(self._df)
+        # GDSR EXT01 summarizes the overall-exposure block: restrict to
+        # PARCAT1 == "OVERALL" when the column exists so per-interval
+        # dose records are not averaged into subject-level statistics.
+        prefilter = pl.col("PARCAT1") == "OVERALL" if "PARCAT1" in self._df.columns else None
         return summarize_ard(
             self._df,
             rows=spec.rows,
@@ -217,6 +221,7 @@ class EXTLGNamespace:
             adsl=adsl,
             adsl_filter=spec.adsl_filter,
             dataset_filter=spec.dataset_filter,
+            prefilter=prefilter,
             header_rows=spec.header_rows,
             nested=True,
         )
@@ -252,6 +257,20 @@ class EXTLGNamespace:
                 diagnostics.append(
                     f"WARNING: Column '{row_def.field}' not present — "
                     f"'{row_def.label or row_def.field}' sub-analysis will be skipped."
+                )
+
+        # Continuous stats assume one record per subject × parameter; with
+        # duplicates the mean is record-weighted while n counts subjects.
+        if {"USUBJID", "PARAMCD"} <= available:
+            df = self._df
+            if "PARCAT1" in available:
+                df = df.filter(pl.col("PARCAT1") == "OVERALL")
+            dup = df.group_by(["USUBJID", "PARAMCD"]).len().filter(pl.col("len") > 1)
+            if dup.height > 0:
+                diagnostics.append(
+                    f"WARNING: {dup.height} subject×parameter group(s) have "
+                    "multiple records — continuous statistics will be "
+                    "record-weighted, not subject-level."
                 )
 
         return diagnostics

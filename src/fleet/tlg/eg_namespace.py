@@ -14,6 +14,7 @@ from ._builder import TLGBuilder
 from ._specs import (
     GroupPool,
     Row,
+    SchemaError,
     Statistic,
     TLGSpec,
 )
@@ -238,7 +239,15 @@ class EGTLGNamespace:
         Examples:
             ``ard = adeg.tlg.eg.t_chg(groupby="TRTA", adsl=adsl)``
         """
+        if "CHG" not in self._df.columns:
+            raise SchemaError(
+                "t_chg summarizes change from baseline and requires a CHG "
+                f"column. Available: {sorted(self._df.columns)}"
+            )
         df = self._df.with_columns(pl.col("CHG").alias("AVAL"))
+        prefilter = pl.col("CHG").is_not_null()
+        if "ABLFL" in df.columns:
+            prefilter = prefilter & pl.col("ABLFL").ne_missing("Y")
         return summarize_ard(
             df,
             rows=["PARAMCD", "AVISIT"],
@@ -253,6 +262,8 @@ class EGTLGNamespace:
             context="t_eg_chg",
             group_col=groupby,
             adsl=adsl,
+            prefilter=prefilter,
+            nested=True,
         )
 
     # ------------------------------------------------------------------ #

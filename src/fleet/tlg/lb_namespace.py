@@ -11,11 +11,19 @@ from __future__ import annotations
 import polars as pl
 from pydantic import Field
 
-from ._ard import summarize_ard
+from ._ard import (
+    ard_row,
+    compute_big_n,
+    rows_to_ard,
+    summarize_ard,
+    validate_ard,
+    worst_case,
+)
 from ._specs import (
     Column,
     GroupPool,
     Row,
+    SchemaError,
     Statistic,
     TLGSpec,
     resolve_filter,
@@ -204,10 +212,12 @@ class LBTLGNamespace:
         groupby: str = "TRTA",
         adsl: pl.DataFrame | None = None,
     ) -> pl.DataFrame:
-        """Mean change-from-baseline ARD per parameter and visit (LBT02/03).
+        """Mean change-from-baseline ARD per parameter and visit (LBT02).
 
-        Computes continuous statistics for post-baseline visits, grouped by
-        parameter (``PARAMCD``) and analysis visit (``AVISIT``).
+        Summarizes ``CHG`` (not raw ``AVAL``) for post-baseline records,
+        nested per parameter × visit.  The paired n counts only subjects
+        with a non-missing change value at the visit; baseline records
+        are excluded null-safely (ADaM codes ``ABLFL`` as Y / null).
 
         Args:
             groupby: Treatment-arm column.
@@ -219,8 +229,17 @@ class LBTLGNamespace:
         Examples:
             ``ard = adlb.tlg.lb.t_chg(groupby="TRTA", adsl=adsl)``
         """
+        if "CHG" not in self._df.columns:
+            raise SchemaError(
+                "t_chg summarizes change from baseline and requires a CHG "
+                f"column. Available: {sorted(self._df.columns)}"
+            )
+        df = self._df.with_columns(pl.col("CHG").alias("AVAL"))
+        prefilter = pl.col("CHG").is_not_null()
+        if "ABLFL" in df.columns:
+            prefilter = prefilter & pl.col("ABLFL").ne_missing("Y")
         return summarize_ard(
-            self._df,
+            df,
             rows=["PARAMCD", "AVISIT"],
             stats=[
                 Statistic.N_SUBJECTS,
@@ -233,7 +252,8 @@ class LBTLGNamespace:
             context="t_lb_chg",
             group_col=groupby,
             adsl=adsl,
-            prefilter=pl.col("ABLFL") != "Y" if "ABLFL" in self._df.columns else None,
+            prefilter=prefilter,
+            nested=True,
         )
 
     # ------------------------------------------------------------------ #
@@ -246,28 +266,62 @@ class LBTLGNamespace:
         groupby: str = "TRTA",
         adsl: pl.DataFrame | None = None,
     ) -> pl.DataFrame:
-        """Shift n / % ARD from baseline range to analysis range (LBT03).
+        """Baseline → worst post-baseline shift table per parameter (LBT03).
 
-        Counts subjects by parameter, baseline range indicator (``BNRIND``)
-        and analysis range indicator (``ANRIND``).
+        A true cross-tabulation: per parameter, each subject contributes
+        one ``"<BNRIND> to <ANRIND>"`` shift cell, where ANRIND is their
+        worst post-baseline range indicator (NORMAL < LOW < HIGH <
+        LOW LOW < HIGH HIGH — deterministic clinical rank, HIGH breaking
+        the LOW/HIGH tie).  Baseline records are excluded (``ONTRTFL``
+        preferred, else null-safe ``ABLFL``); subjects without a
+        baseline indicator are excluded.
+
+        Percentages are intentionally not emitted: the correct
+        denominator is subjects with both a baseline and a post-baseline
+        result per parameter, which needs per-cell denominator support
+        in the engine (next round) — a percentage against the arm big-N
+        would be wrong.
 
         Args:
             groupby: Treatment-arm column.
-            adsl: ADSL DataFrame for big-N denominators.
+            adsl: ADSL DataFrame for the arm universe and big-N rows.
 
         Returns:
-            pl.DataFrame: {cards}-compatible ARD.
+            pl.DataFrame: {cards}-compatible ARD (subject counts).
 
         Examples:
             ``ard = adlb.tlg.lb.t_shift(groupby="TRTA", adsl=adsl)``
         """
+        missing = [c for c in ("PARAMCD", "BNRIND", "ANRIND") if c not in self._df.columns]
+        if missing:
+            raise SchemaError(
+                f"t_shift requires columns ['PARAMCD', 'BNRIND', 'ANRIND'] "
+                f"but DataFrame is missing {missing}."
+            )
+        post = self._df.filter(pl.col("ANRIND").is_not_null())
+        if "ONTRTFL" in post.columns:
+            post = post.filter(pl.col("ONTRTFL") == "Y")
+        elif "ABLFL" in post.columns:
+            post = post.filter(pl.col("ABLFL").ne_missing("Y"))
+        worst = worst_case(
+            post,
+            by=["USUBJID", groupby, "PARAMCD"],
+            order_col="ANRIND",
+            order=["NORMAL", "LOW", "HIGH", "LOW LOW", "HIGH HIGH"],
+        )
+        shift = worst.filter(pl.col("BNRIND").is_not_null()).with_columns(
+            (pl.col("BNRIND").cast(pl.Utf8) + " to " + pl.col("ANRIND").cast(pl.Utf8)).alias(
+                "SHIFT"
+            )
+        )
         return summarize_ard(
-            self._df,
-            rows=["PARAMCD", "BNRIND", "ANRIND"],
-            stats=[Statistic.N_SUBJECTS, Statistic.N_PCT],
+            shift,
+            rows=["PARAMCD", "SHIFT"],
+            stats=[Statistic.N_SUBJECTS],
             context="t_lb_shift",
             group_col=groupby,
             adsl=adsl,
+            nested=True,
         )
 
     # ------------------------------------------------------------------ #
@@ -280,14 +334,24 @@ class LBTLGNamespace:
         groupby: str = "TRTA",
         adsl: pl.DataFrame | None = None,
     ) -> pl.DataFrame:
-        """Abnormal-result n / % ARD per parameter and direction (LBT04).
+        """Laboratory abnormalities not present at baseline (LBT04).
 
-        Counts subjects with abnormal post-baseline range indicators
-        (``ANRIND``) by parameter, restricted to on-treatment records.
+        Per parameter and direction (Low = LOW / LOW LOW, High = HIGH /
+        HIGH HIGH), following ``crane::ard_tabulate_abnormal``:
+
+        - denominator ``N`` = subjects with ≥1 post-baseline assessment
+          whose baseline is **not** abnormal in that direction;
+        - numerator ``n`` = those with any post-baseline value in the
+          direction;
+        - ``pct`` = n / N (null when N = 0 — never fabricated).
+
+        Post-baseline means ``ONTRTFL == "Y"`` when present, else
+        non-baseline via null-safe ``ABLFL``.  Without a ``BNRIND``
+        column no baseline exclusion is applied.
 
         Args:
             groupby: Treatment-arm column.
-            adsl: ADSL DataFrame for big-N denominators.
+            adsl: ADSL DataFrame for the arm universe and big-N rows.
 
         Returns:
             pl.DataFrame: {cards}-compatible ARD.
@@ -295,20 +359,101 @@ class LBTLGNamespace:
         Examples:
             ``ard = adlb.tlg.lb.t_abnormal(groupby="TRTA", adsl=adsl)``
         """
-        prefilter = (
-            pl.col("ANRIND").str.to_uppercase().is_in(["LOW", "LOW LOW", "HIGH", "HIGH HIGH"])
+        missing = [c for c in ("PARAMCD", "ANRIND") if c not in self._df.columns]
+        if missing:
+            raise SchemaError(
+                f"t_abnormal requires columns ['PARAMCD', 'ANRIND'] "
+                f"but DataFrame is missing {missing}."
+            )
+        post = self._df.filter(pl.col("ANRIND").is_not_null())
+        if "ONTRTFL" in post.columns:
+            post = post.filter(pl.col("ONTRTFL") == "Y")
+        elif "ABLFL" in post.columns:
+            post = post.filter(pl.col("ABLFL").ne_missing("Y"))
+        post = post.with_columns(pl.col("ANRIND").str.to_uppercase().alias("__anrind"))
+
+        context = "t_lb_abnormal"
+        if adsl is not None:
+            if groupby not in adsl.columns:
+                raise SchemaError(f"Group column '{groupby}' not found in adsl.")
+            big_n = compute_big_n(adsl, groupby, [])
+            data_arms = set(post[groupby].drop_nulls().unique().to_list())
+            unknown = sorted(data_arms - set(big_n))
+            if unknown:
+                raise SchemaError(
+                    f"Arm(s) {unknown} in the analysis dataset have no denominator in ADSL."
+                )
+            arms = sorted(big_n)
+        else:
+            big_n = {}
+            arms = sorted(post[groupby].drop_nulls().unique().to_list())
+
+        rows_out: list[dict[str, object]] = []
+        if adsl is not None:
+            rows_out += [
+                ard_row(groupby, arm, "", "", "N", "N", big_n.get(arm), context) for arm in arms
+            ]
+
+        directions = {"Low": ["LOW", "LOW LOW"], "High": ["HIGH", "HIGH HIGH"]}
+        has_baseline = "BNRIND" in self._df.columns
+        baseline = (
+            self._df.with_columns(pl.col("BNRIND").str.to_uppercase().alias("__bnrind"))
+            if has_baseline
+            else None
         )
-        if "ONTRTFL" in self._df.columns:
-            prefilter = prefilter & (pl.col("ONTRTFL") == "Y")
-        return summarize_ard(
-            self._df,
-            rows=["PARAMCD", "ANRIND"],
-            stats=[Statistic.N_SUBJECTS, Statistic.N_PCT],
-            context="t_lb_abnormal",
-            group_col=groupby,
-            adsl=adsl,
-            prefilter=prefilter if "ANRIND" in self._df.columns else None,
-        )
+        for param in sorted(post["PARAMCD"].drop_nulls().unique().to_list()):
+            p_post = post.filter(pl.col("PARAMCD") == param)
+            for direction, levels in directions.items():
+                base_abnormal: set[str] = set()
+                if baseline is not None:
+                    base_abnormal = set(
+                        baseline.filter(
+                            (pl.col("PARAMCD") == param) & pl.col("__bnrind").is_in(levels)
+                        )["USUBJID"].to_list()
+                    )
+                for arm in arms:
+                    a_post = p_post.filter(pl.col(groupby) == arm)
+                    eligible = set(a_post["USUBJID"].to_list()) - base_abnormal
+                    abnormal = set(
+                        a_post.filter(pl.col("__anrind").is_in(levels))["USUBJID"].to_list()
+                    )
+                    n = len(abnormal & eligible)
+                    denom = len(eligible)
+                    pct = round(n / denom * 100, 1) if denom > 0 else None
+                    lineage = {"group2": "PARAMCD", "group2_level": str(param)}
+                    rows_out += [
+                        ard_row(
+                            groupby, arm, "ABNORMAL", direction, "n", "n", n, context, **lineage
+                        ),
+                        ard_row(
+                            groupby,
+                            arm,
+                            "ABNORMAL",
+                            direction,
+                            "N",
+                            "N assessed",
+                            denom,
+                            context,
+                            **lineage,
+                        ),
+                        ard_row(
+                            groupby,
+                            arm,
+                            "ABNORMAL",
+                            direction,
+                            "pct",
+                            "n / N (%)",
+                            pct,
+                            context,
+                            **lineage,
+                        ),
+                    ]
+
+        ard = rows_to_ard(rows_out)
+        issues = validate_ard(ard)
+        if issues:
+            raise SchemaError("ARD output failed schema validation:\n  " + "\n  ".join(issues))
+        return ard
 
     # ------------------------------------------------------------------ #
     # Listing (LBL01)                                                      #

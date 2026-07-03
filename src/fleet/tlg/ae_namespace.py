@@ -9,7 +9,7 @@ from __future__ import annotations
 import polars as pl
 from pydantic import Field
 
-from ._ard import summarize_ard
+from ._ard import fill_uncoded, summarize_ard, worst_case
 from ._builder import TLGBuilder
 from ._specs import (
     AEListingSpec,
@@ -31,32 +31,74 @@ class AESocPtSpec(AESummarySpec):
 
 
 class AESeveritySpec(AESummarySpec):
-    """Spec for AE by greatest severity (AET03): n / % by SOC → PT → severity."""
+    """Spec for AE by greatest severity (AET03): n / % by SOC → worst intensity.
+
+    Each subject is counted once per SOC at their greatest intensity
+    (``severity_order`` rank, never alphabetical), so the intensity rows
+    partition the SOC's any-AE count.  PT-level intensity nesting needs
+    a third lineage slot (group3) and is deferred until the ARD schema
+    grows one.
+    """
 
     rows: list[Row] = Field(
         default_factory=lambda: [
             Row(field="AEBODSYS", label="MedDRA System Organ Class"),
-            Row(field="AEDECOD", label="MedDRA Preferred Term"),
             Row(field="AESEV", label="Intensity"),
         ]
     )
+    severity_order: list[str] = Field(
+        default_factory=lambda: ["MILD", "MODERATE", "SEVERE"],
+        description=(
+            "Intensity values from least to most severe — the explicit "
+            "clinical rank used for the worst-case reduction."
+        ),
+    )
     required_columns: list[str] = Field(
-        default_factory=lambda: ["USUBJID", "TRTA", "AEDECOD", "AEBODSYS", "AESEV"]
+        default_factory=lambda: ["USUBJID", "TRTA", "AEBODSYS", "AESEV"]
+    )
+
+
+class AEGradeSpec(AESummarySpec):
+    """Spec for AE by highest NCI CTCAE grade (AET04): n / % by SOC → worst grade.
+
+    Each subject is counted once per SOC at their highest toxicity grade
+    (``grade_order`` rank).
+    """
+
+    rows: list[Row] = Field(
+        default_factory=lambda: [
+            Row(field="AEBODSYS", label="MedDRA System Organ Class"),
+            Row(field="AETOXGR", label="Grade"),
+        ]
+    )
+    grade_order: list[str] = Field(
+        default_factory=lambda: ["1", "2", "3", "4", "5"],
+        description="Toxicity grades from lowest to highest.",
+    )
+    required_columns: list[str] = Field(
+        default_factory=lambda: ["USUBJID", "TRTA", "AEBODSYS", "AETOXGR"]
     )
 
 
 class AERelationshipSpec(AESummarySpec):
-    """Spec for AE by relationship (AET04): n / % by SOC → PT → relationship."""
+    """Spec for AE by relationship (n / % by SOC → relationship).
+
+    Each subject is counted once per SOC — related if any of their
+    events in the SOC is related (``relationship_order`` rank).
+    """
 
     rows: list[Row] = Field(
         default_factory=lambda: [
             Row(field="AEBODSYS", label="MedDRA System Organ Class"),
-            Row(field="AEDECOD", label="MedDRA Preferred Term"),
             Row(field="AEREL", label="Relationship"),
         ]
     )
+    relationship_order: list[str] = Field(
+        default_factory=lambda: ["N", "Y"],
+        description="Relationship values from least to most related.",
+    )
     required_columns: list[str] = Field(
-        default_factory=lambda: ["USUBJID", "TRTA", "AEDECOD", "AEBODSYS", "AEREL"]
+        default_factory=lambda: ["USUBJID", "TRTA", "AEBODSYS", "AEREL"]
     )
 
 
@@ -185,7 +227,7 @@ class AETLGNamespace:
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
         spec.validate_dataframe(self._df)
         return summarize_ard(
-            self._df,
+            fill_uncoded(self._df, ["AEBODSYS", "AEDECOD"]),
             rows=spec.rows,
             stats=spec.statistics,
             context="t_ae_summary",
@@ -227,7 +269,7 @@ class AETLGNamespace:
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
         spec.validate_dataframe(self._df)
         return summarize_ard(
-            self._df,
+            fill_uncoded(self._df, ["AEBODSYS", "AEDECOD"]),
             rows=spec.rows,
             stats=spec.statistics,
             context="t_ae_soc_pt",
@@ -248,7 +290,12 @@ class AETLGNamespace:
         adsl: pl.DataFrame | None = None,
         spec: AESeveritySpec | None = None,
     ) -> pl.DataFrame:
-        """AE by greatest severity (AET03): n / % by SOC → PT → intensity.
+        """AE by greatest severity (AET03): n / % by SOC → worst intensity.
+
+        Each subject is counted once per SOC at their greatest intensity
+        (``spec.severity_order`` rank), so intensity rows partition the
+        SOC's subject count instead of double-counting a subject at
+        every intensity they reported.
 
         Args:
             groupby: Treatment-arm column; overrides ``spec.columns[0]``.
@@ -264,8 +311,15 @@ class AETLGNamespace:
         spec = spec or AESeveritySpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
         spec.validate_dataframe(self._df)
+        df = fill_uncoded(self._df, ["AEBODSYS", "AEDECOD"])
+        df = worst_case(
+            df,
+            by=["USUBJID", group_col, "AEBODSYS"],
+            order_col="AESEV",
+            order=spec.severity_order,
+        )
         return summarize_ard(
-            self._df,
+            df,
             rows=spec.rows,
             stats=spec.statistics,
             context="t_ae_severity",
@@ -276,6 +330,56 @@ class AETLGNamespace:
             adsl_filter=spec.adsl_filter,
             dataset_filter=spec.dataset_filter,
             header_rows=spec.header_rows,
+            nested=True,
+        )
+
+    def t_grade(
+        self,
+        *,
+        groupby: str | None = None,
+        adsl: pl.DataFrame | None = None,
+        spec: AEGradeSpec | None = None,
+    ) -> pl.DataFrame:
+        """AE by highest NCI CTCAE grade (AET04): n / % by SOC → worst grade.
+
+        Each subject is counted once per SOC at their highest toxicity
+        grade (``spec.grade_order`` rank).
+
+        Args:
+            groupby: Treatment-arm column; overrides ``spec.columns[0]``.
+            adsl: ADSL for big-N denominators (percentages).
+            spec: Optional ``AEGradeSpec`` override.
+
+        Returns:
+            pl.DataFrame: {cards}-compatible ARD.
+
+        Examples:
+            ``ard = adae.tlg.ae.t_grade(groupby="TRTA", adsl=adsl)``
+        """
+        spec = spec or AEGradeSpec()
+        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
+        spec.validate_dataframe(self._df)
+        df = fill_uncoded(self._df, ["AEBODSYS", "AEDECOD"])
+        df = df.with_columns(pl.col("AETOXGR").cast(pl.Utf8))
+        df = worst_case(
+            df,
+            by=["USUBJID", group_col, "AEBODSYS"],
+            order_col="AETOXGR",
+            order=spec.grade_order,
+        )
+        return summarize_ard(
+            df,
+            rows=spec.rows,
+            stats=spec.statistics,
+            context="t_ae_grade",
+            group_col=group_col,
+            pools=spec.pools,
+            column_order=spec.column_order,
+            adsl=adsl,
+            adsl_filter=spec.adsl_filter,
+            dataset_filter=spec.dataset_filter,
+            header_rows=spec.header_rows,
+            nested=True,
         )
 
     def t_relationship(
@@ -285,7 +389,10 @@ class AETLGNamespace:
         adsl: pl.DataFrame | None = None,
         spec: AERelationshipSpec | None = None,
     ) -> pl.DataFrame:
-        """AE by relationship (AET04): n / % by SOC → PT → relationship.
+        """AE by relationship: n / % by SOC → relationship.
+
+        Each subject is counted once per SOC — related if any of their
+        events in the SOC is related (``spec.relationship_order`` rank).
 
         Args:
             groupby: Treatment-arm column; overrides ``spec.columns[0]``.
@@ -301,8 +408,15 @@ class AETLGNamespace:
         spec = spec or AERelationshipSpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
         spec.validate_dataframe(self._df)
+        df = fill_uncoded(self._df, ["AEBODSYS", "AEDECOD"])
+        df = worst_case(
+            df,
+            by=["USUBJID", group_col, "AEBODSYS"],
+            order_col="AEREL",
+            order=spec.relationship_order,
+        )
         return summarize_ard(
-            self._df,
+            df,
             rows=spec.rows,
             stats=spec.statistics,
             context="t_ae_relationship",
@@ -313,6 +427,7 @@ class AETLGNamespace:
             adsl_filter=spec.adsl_filter,
             dataset_filter=spec.dataset_filter,
             header_rows=spec.header_rows,
+            nested=True,
         )
 
     # ------------------------------------------------------------------ #

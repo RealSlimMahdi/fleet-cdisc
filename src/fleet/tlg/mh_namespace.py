@@ -11,7 +11,7 @@ from __future__ import annotations
 import polars as pl
 from pydantic import Field
 
-from ._ard import summarize_ard
+from ._ard import fill_uncoded, summarize_ard
 from ._specs import GroupPool, Row, Statistic, TLGSpec
 
 
@@ -66,7 +66,7 @@ class MHTLGNamespace:
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
         spec.validate_dataframe(self._df)
         return summarize_ard(
-            self._df,
+            fill_uncoded(self._df, ["MHBODSYS", "MHDECOD"]),
             rows=spec.rows,
             stats=spec.statistics,
             context="t_mh_summary",

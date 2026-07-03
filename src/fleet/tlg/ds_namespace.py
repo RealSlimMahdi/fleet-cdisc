@@ -19,7 +19,7 @@ import polars as pl
 from pydantic import Field
 
 from ._ard import summarize_ard
-from ._specs import GroupPool, Statistic, TLGSpec
+from ._specs import GroupPool, OverallStat, Statistic, TLGSpec
 
 
 class DSDispositionSpec(TLGSpec):
@@ -204,8 +204,14 @@ class DSTLGNamespace:
     ) -> pl.DataFrame:
         """Produce a deaths ARD (DTHT01).
 
-        Counts deaths (``DTHFL == "Y"``) and primary cause of death
-        (``DTHCAT``) per treatment arm.
+        Emits a ``"Total Number of Deaths"`` headline row (n / % of the
+        arm population) followed by primary cause of death (``DTHCAT``)
+        rows whose percentages use the **deaths** denominator, matching
+        the NEST template.  Deaths with a missing cause appear as an
+        explicit ``"Unknown"`` level instead of vanishing.
+
+        Arms without any death get the headline zeros but no cause
+        breakdown (there are no deaths to break down).
 
         Args:
             groupby: Treatment arm column.  Overrides ``spec.columns[0]``.
@@ -222,13 +228,55 @@ class DSTLGNamespace:
                 ard = adsl.tlg.ds.t_deaths(groupby="TRTA", adsl=adsl)
         """
         spec = spec or DSDeathsSpec()
-        return self._count_summary(
-            groupby=groupby,
-            adsl=adsl if adsl is not None else self._df,
-            spec=spec,
+        group_col = groupby or (spec.columns[0] if getattr(spec, "columns", None) else "TRTA")
+        spec.validate_dataframe(self._df)
+        population = adsl if adsl is not None else self._df
+        deaths_filter = pl.col("DTHFL") == "Y" if "DTHFL" in self._df.columns else None
+        deaths = self._df.filter(deaths_filter) if deaths_filter is not None else self._df
+
+        # Headline block: total deaths against the population denominator.
+        total = summarize_ard(
+            self._df,
+            rows=[],
+            stats=spec.statistics,
             context="t_ds_deaths",
-            prefilter=pl.col("DTHFL") == "Y" if "DTHFL" in self._df.columns else None,
+            group_col=group_col,
+            pools=spec.pools,
+            column_order=spec.column_order,
+            adsl=population,
+            adsl_filter=spec.adsl_filter,
+            dataset_filter=spec.dataset_filter,
+            prefilter=deaths_filter,
+            header_rows=[OverallStat(label="Total Number of Deaths"), *spec.header_rows],
         )
+
+        death_ids = deaths["USUBJID"].unique().to_list()
+        if not death_ids:
+            return total
+
+        # Cause block: percentages among deaths, not the full population.
+        deaths_population = population.filter(pl.col("USUBJID").is_in(death_ids))
+        cause_df = self._df
+        if "DTHCAT" in cause_df.columns:
+            cause_df = cause_df.with_columns(pl.col("DTHCAT").fill_null("Unknown"))
+        causes = summarize_ard(
+            cause_df,
+            rows=getattr(spec, "rows", []),
+            stats=spec.statistics,
+            context="t_ds_deaths",
+            group_col=group_col,
+            pools=spec.pools,
+            column_order=spec.column_order,
+            adsl=deaths_population,
+            adsl_filter=spec.adsl_filter,
+            dataset_filter=spec.dataset_filter,
+            prefilter=deaths_filter,
+        )
+        # The headline block already carries the population N rows; drop
+        # the cause block's deaths-denominator N rows to avoid two
+        # conflicting "N" definitions in one ARD.
+        causes = causes.filter(~((pl.col("variable") == "") & (pl.col("stat_name") == "N")))
+        return pl.concat([total, causes], how="vertical_relaxed")
 
     # ------------------------------------------------------------------ #
     # ENT01 — enrollment by site                                           #

@@ -395,6 +395,75 @@ def compute_big_n(
 # ------------------------------------------------------------------ #
 
 
+#: Label used for uncoded terms, mirroring the GDSR templates' NA level.
+NO_CODING_LABEL = "No Coding Available"
+
+
+def fill_uncoded(
+    df: pl.DataFrame,
+    columns: Sequence[str],
+    label: str = NO_CODING_LABEL,
+) -> pl.DataFrame:
+    """Fill null coding columns with an explicit level.
+
+    GDSR templates recode missing MedDRA/ATC terms to a visible
+    ``"No Coding Available"`` row instead of dropping the records — a
+    subject whose only events are uncoded must still be counted.
+
+    Args:
+        df: The analysis DataFrame.
+        columns: Coding columns to fill; names absent from *df* are skipped.
+        label: Replacement level for nulls.
+
+    Returns:
+        pl.DataFrame: *df* with nulls in the given columns filled.
+    """
+    present = [c for c in columns if c in df.columns]
+    if not present:
+        return df
+    return df.with_columns(pl.col(c).fill_null(label) for c in present)
+
+
+def worst_case(
+    df: pl.DataFrame,
+    *,
+    by: Sequence[str],
+    order_col: str,
+    order: Sequence[str],
+) -> pl.DataFrame:
+    """Reduce to one record per *by* group, keeping the worst *order_col*.
+
+    Implements the GDSR "counted once at greatest intensity / highest
+    grade" rule: within each group the record whose *order_col* value
+    ranks highest in *order* survives.  Values not present in *order*
+    rank below everything (they survive only when the group has no
+    ranked value); ties break deterministically on *order_col* then the
+    original sort.
+
+    Args:
+        df: The analysis DataFrame.
+        by: Grouping columns (e.g. ``["USUBJID", "AEBODSYS"]``).
+        order_col: Column holding the severity/grade value.
+        order: Values from least to most severe (explicit clinical rank —
+            never alphabetical).
+
+    Returns:
+        pl.DataFrame: One row per group at the worst level.
+    """
+    rank_map = {value: idx for idx, value in enumerate(order)}
+    ranked = df.with_columns(
+        pl.col(order_col)
+        .cast(pl.Utf8)
+        .replace_strict(rank_map, default=-1, return_dtype=pl.Int32)
+        .alias("__worst_rank")
+    )
+    return (
+        ranked.sort(["__worst_rank", order_col], descending=[True, False])
+        .unique(subset=list(by), keep="first", maintain_order=True)
+        .drop("__worst_rank")
+    )
+
+
 def compute_stat(
     stat_type: Statistic,
     level_df: pl.DataFrame,
