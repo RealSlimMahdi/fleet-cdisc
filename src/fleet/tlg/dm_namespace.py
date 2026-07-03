@@ -23,12 +23,11 @@ from ._ard import (
 from ._ard import (
     rows_to_ard as _rows_to_ard,
 )
-from ._ard import (
-    validate_pools as _validate_pools,
-)
 from ._specs import (
+    GroupPool,
     Statistic,
     TLGSpec,
+    resolve_filter,
 )
 
 #: Statistics describing a continuous variable (e.g. age).
@@ -80,7 +79,7 @@ class DMSummarySpec(TLGSpec):
         default_factory=lambda: [Statistic.N_SUBJECTS, Statistic.N_PCT],
         description="Statistics computed for each categorical level.",
     )
-    pools: list[Any] = Field(
+    pools: list[GroupPool] = Field(
         default_factory=list,
         description="Composite (pooled) treatment groups.",
     )
@@ -151,7 +150,6 @@ class DMTLGNamespace:
 
         # --- Validation ---
         spec.validate_dataframe(self._df)
-        _validate_pools(self._df, spec.pools, group_col)
 
         # --- Categorical breakdowns (big-N + n / %) via shared engine ---
         cat_ard = summarize_ard(
@@ -165,12 +163,14 @@ class DMTLGNamespace:
             adsl=denom_src,
             adsl_filter=spec.adsl_filter,
             dataset_filter=spec.dataset_filter,
+            header_rows=spec.header_rows,
         )
 
         # --- Continuous age statistics ---
         df = self._df
-        if spec.dataset_filter is not None:
-            df = df.filter(spec.dataset_filter)
+        dataset_filter = resolve_filter(spec.dataset_filter)
+        if dataset_filter is not None:
+            df = df.filter(dataset_filter)
         df = expand_pools(df, spec.pools, group_col)
 
         arms = sorted(df[group_col].drop_nulls().unique().to_list())

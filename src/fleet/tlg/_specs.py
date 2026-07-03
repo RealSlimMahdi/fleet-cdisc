@@ -18,6 +18,36 @@ import yaml
 from pydantic import BaseModel, Field
 
 from fleet.core.exceptions import SchemaError
+from fleet.sdtm.utils import parse_expression
+
+
+def resolve_filter(value: Any) -> pl.Expr | None:
+    """Resolve a spec filter field to a Polars expression.
+
+    Filters may be given as a ``pl.Expr`` (inline use) or as a string
+    expression such as ``'pl.col("SAFFL") == "Y"'`` — the string form is
+    the YAML-serializable one, parsed through the same AST-whitelisted
+    ``parse_expression`` used by the SDTM/ADaM YAML specs.
+
+    Args:
+        value: ``None``, a ``pl.Expr``, or an expression string.
+
+    Returns:
+        pl.Expr | None: The resolved expression.
+
+    Raises:
+        ValueError: If a string expression cannot be parsed.
+        TypeError: If the value is neither ``None``, ``str`` nor ``pl.Expr``.
+    """
+    if value is None:
+        return None
+    if isinstance(value, pl.Expr):
+        return value
+    if isinstance(value, str):
+        return parse_expression(value)
+    raise TypeError(
+        f"Filter must be a pl.Expr or an expression string, got {type(value).__name__!r}"
+    )
 
 
 class Statistic(str, Enum):  # noqa: UP042
@@ -118,8 +148,9 @@ class OverallStat(BaseModel):
     filter: Any | None = Field(
         default=None,
         description=(
-            "Optional Polars expression to subset the dataset before "
-            "counting.  ``None`` means count all subjects."
+            "Optional filter to subset the dataset before counting — a "
+            "``pl.Expr`` or a string expression (the YAML-serializable "
+            "form).  ``None`` means count all subjects."
         ),
     )
     statistics: list[Statistic] | None = Field(
@@ -151,7 +182,9 @@ class TLGSpec(BaseModel):
     adsl_filter: Any | None = Field(
         default=None,
         description=(
-            "Polars expression filtering ADSL before subject counting. "
+            "Filter applied to ADSL before subject counting — a "
+            "``pl.Expr`` or a string expression such as "
+            '``\'pl.col("SAFFL") == "Y"\'`` (the YAML-serializable form). '
             "Set inline via "
             "[`TLGBuilder.population()`][fleet.tlg.TLGBuilder.population]."
         ),
@@ -159,8 +192,10 @@ class TLGSpec(BaseModel):
     dataset_filter: Any | None = Field(
         default=None,
         description=(
-            "Polars expression filtering the analysis dataset (e.g. ADAE).  "
-            "Set inline via [`TLGBuilder.filter()`][fleet.tlg.TLGBuilder.filter]."
+            "Filter applied to the analysis dataset (e.g. ADAE) — a "
+            "``pl.Expr`` or a string expression (the YAML-serializable "
+            "form).  Set inline via "
+            "[`TLGBuilder.filter()`][fleet.tlg.TLGBuilder.filter]."
         ),
     )
     header_rows: list[OverallStat] = Field(
@@ -254,16 +289,35 @@ class TLGSpec(BaseModel):
     def to_yaml(self) -> str:
         """Serialize this spec to a YAML string.
 
+        Filters (``adsl_filter``, ``dataset_filter``, header-row
+        ``filter``) serialize only in their string-expression form.  A
+        live ``pl.Expr`` cannot be serialized faithfully, and silently
+        dropping it would change the numbers a reloaded spec computes —
+        so it raises instead.
+
         Returns:
             str: YAML representation of the spec.
+
+        Raises:
+            ValueError: If any filter field holds a ``pl.Expr``.  Pass
+                the filter as a string, e.g. ``'pl.col("SAFFL") == "Y"'``.
         """
+        for field_name in ("adsl_filter", "dataset_filter"):
+            value = getattr(self, field_name, None)
+            if value is not None and not isinstance(value, str):
+                raise ValueError(
+                    f"{field_name} holds a {type(value).__name__} and cannot be "
+                    "YAML-serialized. Use a string expression instead, e.g. "
+                    'adsl_filter=\'pl.col("SAFFL") == "Y"\'.'
+                )
+        for hr in getattr(self, "header_rows", []):
+            if hr.filter is not None and not isinstance(hr.filter, str):
+                raise ValueError(
+                    f"header_rows[{hr.label!r}].filter holds a "
+                    f"{type(hr.filter).__name__} and cannot be YAML-serialized. "
+                    "Use a string expression instead."
+                )
         data = self.model_dump(exclude_none=True, exclude_defaults=False)
-        # Remove filter fields (not YAML-serializable as Polars Expr)
-        data.pop("adsl_filter", None)
-        data.pop("dataset_filter", None)
-        # Remove header_rows filters (Polars Expr)
-        for hr in data.get("header_rows", []):
-            hr.pop("filter", None)
         # Convert enums to their values
         data = _enum_to_value(data)
         return yaml.dump(data, default_flow_style=False, sort_keys=False)

@@ -6,32 +6,11 @@ Accessed via ``df.tlg.vs`` on any Polars DataFrame containing ADaM VS data.
 
 from __future__ import annotations
 
-from typing import Any
-
 import polars as pl
 
-from ._ard import (
-    ard_row as _ard_row,
-)
-from ._ard import (
-    compute_big_n,
-    expand_pools,
-    validate_ard,
-)
-from ._ard import (
-    compute_stat as _compute_stat,
-)
-from ._ard import (
-    rows_to_ard as _rows_to_ard,
-)
-from ._ard import (
-    validate_pools as _validate_pools,
-)
+from ._ard import summarize_ard
 from ._builder import TLGBuilder
-from ._specs import (
-    SchemaError,
-    VSSummarySpec,
-)
+from ._specs import VSSummarySpec
 
 
 class VSTLGNamespace:
@@ -152,105 +131,21 @@ class VSTLGNamespace:
         """
         spec = spec or VSSummarySpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-
-        # --- Validation ---
         spec.validate_dataframe(self._df)
-        _validate_pools(self._df, spec.pools, group_col)
-
-        # --- Apply dataset_filter ---
-        df = self._df
-        if spec.dataset_filter is not None:
-            df = df.filter(spec.dataset_filter)
-
-        # --- Big-N denominators from ADSL ---
-        big_n: dict[str, int] = {}
-        if adsl is not None:
-            big_n = compute_big_n(adsl, group_col, spec.pools, filter_expr=spec.adsl_filter)
-
-        # --- Expand pools ---
-        df = expand_pools(df, spec.pools, group_col)
-
-        # --- Compute statistics ---
-        ard_rows: list[dict[str, Any]] = []
-        arms = sorted(df[group_col].drop_nulls().unique().to_list())
-
-        # Re-order arms if column_order specified
-        if spec.column_order:
-            ordered = [a for a in spec.column_order if a in arms]
-            remaining = [a for a in arms if a not in ordered]
-            arms = ordered + remaining
-
-        # Big-N row
-        for arm in arms:
-            n_val = big_n.get(arm)
-            ard_rows.append(_ard_row(group_col, arm, "", "", "N", "N", n_val, "t_vs_summary"))
-
-        # --- Header rows (OverallStat) ---
-        for hdr in spec.header_rows:
-            hdr_df = df
-            if hdr.filter is not None:
-                hdr_df = hdr_df.filter(hdr.filter)
-            effective_stats = hdr.statistics or spec.statistics
-            for arm in arms:
-                arm_hdr = hdr_df.filter(pl.col(group_col) == arm)
-                arm_n = big_n.get(arm, 0)
-                for stat_type in effective_stats:
-                    stat_name, stat_label, stat_val = _compute_stat(stat_type, arm_hdr, arm_n)
-                    ard_rows.append(
-                        _ard_row(
-                            group_col,
-                            arm,
-                            "",
-                            hdr.label,
-                            stat_name,
-                            stat_label,
-                            stat_val,
-                            "t_vs_summary",
-                        )
-                    )
-
-        # Per-row-field statistics (hierarchical: PARAMCD → AVISIT, etc.)
-        for row_def in spec.rows:
-            field = row_def.field
-            if field not in df.columns:
-                continue
-
-            analysis_df = df
-            if row_def.filter_value is not None:
-                if field not in analysis_df.columns:
-                    continue
-                analysis_df = analysis_df.filter(pl.col(field) == row_def.filter_value)
-
-            # Compute per arm × level
-            levels = sorted(analysis_df[field].drop_nulls().unique().to_list())
-
-            for arm in arms:
-                arm_df = analysis_df.filter(pl.col(group_col) == arm)
-                arm_n = big_n.get(arm, 0)
-
-                for level in levels:
-                    level_df = arm_df.filter(pl.col(field) == level)
-
-                    for stat_type in spec.statistics:
-                        stat_name, stat_label, stat_val = _compute_stat(stat_type, level_df, arm_n)
-                        ard_rows.append(
-                            _ard_row(
-                                group_col,
-                                arm,
-                                field,
-                                str(level),
-                                stat_name,
-                                stat_label,
-                                stat_val,
-                                "t_vs_summary",
-                            )
-                        )
-
-        ard = _rows_to_ard(ard_rows)
-        issues = validate_ard(ard)
-        if issues:
-            raise SchemaError("ARD output failed schema validation:\n  " + "\n  ".join(issues))
-        return ard
+        return summarize_ard(
+            self._df,
+            rows=spec.rows,
+            stats=spec.statistics,
+            context="t_vs_summary",
+            group_col=group_col,
+            pools=spec.pools,
+            column_order=spec.column_order,
+            adsl=adsl,
+            adsl_filter=spec.adsl_filter,
+            dataset_filter=spec.dataset_filter,
+            header_rows=spec.header_rows,
+            nested=True,
+        )
 
     # ------------------------------------------------------------------ #
     # Pre-validation diagnostic                                            #

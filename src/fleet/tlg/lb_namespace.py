@@ -12,13 +12,13 @@ import polars as pl
 from pydantic import Field
 
 from ._ard import summarize_ard
-from ._ard import validate_pools as _validate_pools
 from ._specs import (
     Column,
     GroupPool,
     Row,
     Statistic,
     TLGSpec,
+    resolve_filter,
 )
 
 
@@ -178,14 +178,10 @@ class LBTLGNamespace:
         """
         spec = spec or LBSummarySpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-
-        # --- Validation ---
         spec.validate_dataframe(self._df)
-        _validate_pools(self._df, spec.pools, group_col)
-
         return summarize_ard(
             self._df,
-            rows=[r.field for r in spec.rows],
+            rows=spec.rows,
             stats=spec.statistics,
             context="t_lb_summary",
             group_col=group_col,
@@ -194,6 +190,8 @@ class LBTLGNamespace:
             adsl=adsl,
             adsl_filter=spec.adsl_filter,
             dataset_filter=spec.dataset_filter,
+            header_rows=spec.header_rows,
+            nested=True,
         )
 
     # ------------------------------------------------------------------ #
@@ -359,8 +357,9 @@ class LBTLGNamespace:
         spec.validate_dataframe(self._df)
 
         df = self._df
-        if spec.dataset_filter is not None:
-            df = df.filter(spec.dataset_filter)
+        dataset_filter = resolve_filter(spec.dataset_filter)
+        if dataset_filter is not None:
+            df = df.filter(dataset_filter)
         elif "ANRIND" in df.columns:
             # Default: abnormalities only (exclude normal / missing indicators).
             df = df.filter(

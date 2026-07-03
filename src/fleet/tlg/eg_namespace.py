@@ -10,7 +10,6 @@ import polars as pl
 from pydantic import Field
 
 from ._ard import summarize_ard
-from ._ard import validate_pools as _validate_pools
 from ._builder import TLGBuilder
 from ._specs import (
     GroupPool,
@@ -199,14 +198,10 @@ class EGTLGNamespace:
         """
         spec = spec or EGSummarySpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-
-        # --- Validation ---
         spec.validate_dataframe(self._df)
-        _validate_pools(self._df, spec.pools, group_col)
-
         return summarize_ard(
             self._df,
-            rows=[r.field for r in spec.rows],
+            rows=spec.rows,
             stats=spec.statistics,
             context="t_eg_summary",
             group_col=group_col,
@@ -215,6 +210,8 @@ class EGTLGNamespace:
             adsl=adsl,
             adsl_filter=spec.adsl_filter,
             dataset_filter=spec.dataset_filter,
+            header_rows=spec.header_rows,
+            nested=True,
         )
 
     # ------------------------------------------------------------------ #

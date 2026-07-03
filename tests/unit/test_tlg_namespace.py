@@ -132,9 +132,15 @@ class TestStructuralValidation:
             df.tlg.ae.t_summary(groupby="TRTA")
 
     def test_all_columns_present_passes(self, adae: pl.DataFrame) -> None:
-        # Should not raise (no adsl → no pct, but computation works)
-        ard = adae.tlg.ae.t_summary(groupby="TRTA")
+        # No adsl → allowed only without percentage statistics
+        spec = AESummarySpec(statistics=[Statistic.N_SUBJECTS])
+        ard = adae.tlg.ae.t_summary(groupby="TRTA", spec=spec)
         assert len(ard) > 0
+
+    def test_pct_without_adsl_raises(self, adae: pl.DataFrame) -> None:
+        # Default spec requests n_pct → a missing population must be loud
+        with pytest.raises(SchemaError, match="adsl"):
+            adae.tlg.ae.t_summary(groupby="TRTA")
 
     def test_listing_missing_columns_raises(self) -> None:
         df = pl.DataFrame({"USUBJID": ["A"]})
@@ -185,25 +191,25 @@ class TestContentValidation:
 class TestPoolArmValidation:
     """Referenced pool arms must exist in data."""
 
-    def test_bad_arm_reference_raises(self, adae: pl.DataFrame) -> None:
+    def test_bad_arm_reference_raises(self, adae: pl.DataFrame, adsl: pl.DataFrame) -> None:
         spec = AESummarySpec(
             pools=[GroupPool(label="Bad Pool", arms=["Drug A", "NONEXISTENT"])],
         )
         with pytest.raises(SchemaError, match="NONEXISTENT"):
-            adae.tlg.ae.t_summary(spec=spec, groupby="TRTA")
+            adae.tlg.ae.t_summary(spec=spec, groupby="TRTA", adsl=adsl)
 
-    def test_wildcard_pool_passes(self, adae: pl.DataFrame) -> None:
+    def test_wildcard_pool_passes(self, adae: pl.DataFrame, adsl: pl.DataFrame) -> None:
         spec = AESummarySpec(
             pools=[GroupPool(label="Total", arms="*")],
         )
-        ard = adae.tlg.ae.t_summary(spec=spec, groupby="TRTA")
+        ard = adae.tlg.ae.t_summary(spec=spec, groupby="TRTA", adsl=adsl)
         assert "Total" in ard["group1_level"].to_list()
 
-    def test_valid_pool_passes(self, adae: pl.DataFrame) -> None:
+    def test_valid_pool_passes(self, adae: pl.DataFrame, adsl: pl.DataFrame) -> None:
         spec = AESummarySpec(
             pools=[GroupPool(label="All Active", arms=["Drug A", "Drug B"])],
         )
-        ard = adae.tlg.ae.t_summary(spec=spec, groupby="TRTA")
+        ard = adae.tlg.ae.t_summary(spec=spec, groupby="TRTA", adsl=adsl)
         assert "All Active" in ard["group1_level"].to_list()
 
 
@@ -342,7 +348,7 @@ class TestARDStructure:
                 "AEDECOD": ["PT"],
             }
         )
-        ard = df.tlg.ae.t_summary(groupby="TRTA")
+        ard = df.tlg.ae.t_summary(groupby="TRTA", adsl=df)
         assert set(ard.columns) == self.EXPECTED_COLUMNS
 
 

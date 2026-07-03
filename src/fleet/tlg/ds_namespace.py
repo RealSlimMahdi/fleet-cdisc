@@ -19,7 +19,6 @@ import polars as pl
 from pydantic import Field
 
 from ._ard import summarize_ard
-from ._ard import validate_pools as _validate_pools
 from ._specs import GroupPool, Statistic, TLGSpec
 
 
@@ -116,8 +115,9 @@ class DSTLGNamespace:
 
         Args:
             groupby: Treatment arm column; overrides ``spec.columns[0]``.
-            adsl: ADSL DataFrame supplying big-N denominators.  When
-                ``None``, the primary DataFrame is used.
+            adsl: ADSL DataFrame supplying big-N denominators.  ``None``
+                is passed through — the engine raises when percentages
+                are requested without a population.
             spec: A disposition spec carrying ``rows``, ``statistics``,
                 ``pools``, and ``column_order``.
             context: TLG context tag written to every ARD row.
@@ -138,7 +138,6 @@ class DSTLGNamespace:
         group_col = groupby or (spec.columns[0] if getattr(spec, "columns", None) else "TRTA")
 
         spec.validate_dataframe(self._df)
-        _validate_pools(self._df, pools, group_col)
 
         return summarize_ard(
             self._df,
@@ -148,10 +147,11 @@ class DSTLGNamespace:
             group_col=group_col,
             pools=pools,
             column_order=order,
-            adsl=adsl if adsl is not None else self._df,
+            adsl=adsl,
             adsl_filter=spec.adsl_filter,
             dataset_filter=spec.dataset_filter,
             prefilter=prefilter,
+            header_rows=spec.header_rows,
         )
 
     # ------------------------------------------------------------------ #
@@ -186,7 +186,7 @@ class DSTLGNamespace:
         """
         return self._count_summary(
             groupby=groupby,
-            adsl=adsl,
+            adsl=adsl if adsl is not None else self._df,
             spec=spec or DSDispositionSpec(),
             context="t_ds_disposition",
         )
@@ -224,7 +224,7 @@ class DSTLGNamespace:
         spec = spec or DSDeathsSpec()
         return self._count_summary(
             groupby=groupby,
-            adsl=adsl,
+            adsl=adsl if adsl is not None else self._df,
             spec=spec,
             context="t_ds_deaths",
             prefilter=pl.col("DTHFL") == "Y" if "DTHFL" in self._df.columns else None,
@@ -262,7 +262,7 @@ class DSTLGNamespace:
         """
         return self._count_summary(
             groupby=groupby,
-            adsl=adsl,
+            adsl=adsl if adsl is not None else self._df,
             spec=spec or DSEnrollmentSpec(),
             context="t_ds_enrollment",
         )
@@ -281,13 +281,14 @@ class DSTLGNamespace:
         """Produce a protocol-deviations ARD (PDT01).
 
         Counts subjects with major protocol deviations by category
-        (``DVDECOD``) per treatment arm.  The primary DataFrame is ADDV;
-        pass ADSL via *adsl* for big-N denominators.
+        (``DVDECOD``) per treatment arm.  The primary DataFrame is ADDV —
+        it is record-level, so it is never used as its own denominator;
+        percentages require the ADSL population.
 
         Args:
             groupby: Treatment arm column.  Overrides ``spec.columns[0]``.
-            adsl: ADSL DataFrame for big-N denominators.  Defaults to the
-                primary DataFrame.
+            adsl: ADSL DataFrame for big-N denominators.  Required when
+                percentage statistics are requested.
             spec: Optional ``DSDeviationsSpec`` override.
 
         Returns:
