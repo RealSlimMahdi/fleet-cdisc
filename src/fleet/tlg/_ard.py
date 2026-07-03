@@ -395,35 +395,6 @@ def compute_big_n(
 # ------------------------------------------------------------------ #
 
 
-def validate_pools(
-    df: pl.DataFrame,
-    pools: list[GroupPool],
-    group_col: str,
-) -> None:
-    """Validate pool arm references against actual data.
-
-    Args:
-        df: The analysis DataFrame.
-        pools: Pool definitions to validate.
-        group_col: Column containing treatment arm labels.
-
-    Raises:
-        SchemaError: If a pool references arms not present in the data.
-    """
-    if not pools:
-        return
-    actual = set(df[group_col].drop_nulls().unique().to_list())
-    for pool in pools:
-        if pool.arms == "*":
-            continue
-        missing = [a for a in pool.arms if a not in actual]
-        if missing:
-            raise SchemaError(
-                f"Pool '{pool.label}' references arm(s) {missing} but "
-                f"{group_col} contains only {sorted(actual)}"
-            )
-
-
 def compute_stat(
     stat_type: Statistic,
     level_df: pl.DataFrame,
@@ -655,7 +626,11 @@ def _level_rows(
     field is the ``variable`` and its immediate parent goes to
     ``group2`` / ``group2_level``.
     """
-    combos = frame.select(fields).drop_nulls().unique().sort(fields)
+    # Deduplicate for select/group_by: a row field may repeat or equal
+    # group_col (e.g. a per-arm breakdown) — the lookup tuples below are
+    # built from named rows, so duplicates stay consistent either way.
+    select_fields = list(dict.fromkeys(fields))
+    combos = frame.select(select_fields).drop_nulls().unique().sort(select_fields)
     if combos.height == 0:
         return []
 
@@ -663,9 +638,10 @@ def _level_rows(
     aggs = [pl.col("USUBJID").n_unique().alias("__n"), pl.len().alias("__n_events")]
     if has_aval:
         aggs += [_CONT_STAT_EXPRS[s].alias(f"__{s.value}") for s in stats if s in _CONT_STAT_EXPRS]
-    grouped = frame.drop_nulls(subset=fields).group_by([group_col, *fields]).agg(aggs)
+    group_keys = list(dict.fromkeys([group_col, *fields]))
+    grouped = frame.drop_nulls(subset=select_fields).group_by(group_keys).agg(aggs)
     cells = {
-        tuple(row[c] for c in (group_col, *fields)): row for row in grouped.iter_rows(named=True)
+        (row[group_col], *(row[f] for f in fields)): row for row in grouped.iter_rows(named=True)
     }
 
     variable = fields[-1]
@@ -797,7 +773,11 @@ def summarize_ard(
                 f"in ADSL (after adsl_filter). Align {group_col} between the "
                 "datasets or filter the analysis dataset to the population."
             )
-        arms = sorted(big_n)
+        # An arm or pool emptied by adsl_filter keeps its column with N=0
+        # (and null percentages) rather than silently vanishing.
+        universe = set(big_n) | adsl_arms | {p.label for p in pools}
+        big_n = {arm: big_n.get(arm, 0) for arm in universe}
+        arms = sorted(universe)
     else:
         big_n = {}
         _validate_pool_arms(pools, data_arms, group_col, source="the analysis dataset")
@@ -832,19 +812,29 @@ def summarize_ard(
 
     present = [r for r in row_defs if r.field in df.columns]
     if nested:
-        frame = df
-        for row_def in present:
-            if row_def.filter_value is not None:
-                frame = frame.filter(pl.col(row_def.field) == row_def.filter_value)
         fields = [r.field for r in present]
+        if len(fields) > 2:
+            raise SchemaError(
+                f"Nested row hierarchies support at most 2 levels — the ARD "
+                f"schema carries one parent (group2/group2_level) per row, so "
+                f"deeper lineages would emit indistinguishable duplicate rows. "
+                f"Got {fields}. Reduce the hierarchy or pass nested=False."
+            )
         for depth in range(len(fields)):
             depth_stats = (
                 stats if depth == len(fields) - 1 else [s for s in stats if s in COUNT_STATS]
             )
-            if depth_stats:
-                ard_rows += _level_rows(
-                    frame, fields[: depth + 1], depth_stats, arms, big_n, group_col, context
-                )
+            if not depth_stats:
+                continue
+            # A row's filter_value scopes that row's own depth and its
+            # descendants — never its ancestors' counts.
+            frame = df
+            for row_def in present[: depth + 1]:
+                if row_def.filter_value is not None:
+                    frame = frame.filter(pl.col(row_def.field) == row_def.filter_value)
+            ard_rows += _level_rows(
+                frame, fields[: depth + 1], depth_stats, arms, big_n, group_col, context
+            )
     else:
         for row_def in present:
             frame = df

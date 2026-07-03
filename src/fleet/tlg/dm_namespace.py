@@ -171,12 +171,11 @@ class DMTLGNamespace:
         dataset_filter = resolve_filter(spec.dataset_filter)
         if dataset_filter is not None:
             df = df.filter(dataset_filter)
-        df = expand_pools(df, spec.pools, group_col)
+        df = expand_pools(df, spec.pools, group_col, strict=False)
 
-        arms = sorted(df[group_col].drop_nulls().unique().to_list())
-        if spec.column_order:
-            ordered = [a for a in spec.column_order if a in arms]
-            arms = ordered + [a for a in arms if a not in ordered]
+        # Same arm universe (and order) as the engine's big-N rows, so an
+        # arm without analysis records keeps its column in the age block.
+        arms = cat_ard.filter(pl.col("stat_name") == "N")["group1_level"].to_list()
 
         age_var = spec.age_var if spec.age_var in df.columns else None
         if age_var is None:
@@ -255,17 +254,25 @@ def _continuous_stat(
     Returns:
         Tuple of (stat_name, stat_label, value).
     """
+    names: dict[Statistic, tuple[str, str]] = {
+        Statistic.MEAN: ("mean", "Mean"),
+        Statistic.SD: ("sd", "SD"),
+        Statistic.MEDIAN: ("median", "Median"),
+        Statistic.MIN: ("min", "Min"),
+        Statistic.MAX: ("max", "Max"),
+    }
+    name, label = names.get(stat_type, (stat_type.value, stat_type.value))
     clean = values.drop_nulls()
     if len(clean) == 0:
-        return (stat_type.value, stat_type.value, None)
+        return (name, label, None)
     if stat_type == Statistic.MEAN:
-        return ("mean", "Mean", clean.mean())
+        return (name, label, clean.mean())
     if stat_type == Statistic.SD:
-        return ("sd", "SD", clean.std())
+        return (name, label, clean.std())
     if stat_type == Statistic.MEDIAN:
-        return ("median", "Median", clean.median())
+        return (name, label, clean.median())
     if stat_type == Statistic.MIN:
-        return ("min", "Min", clean.min())
+        return (name, label, clean.min())
     if stat_type == Statistic.MAX:
-        return ("max", "Max", clean.max())
-    return (stat_type.value, stat_type.value, None)
+        return (name, label, clean.max())
+    return (name, label, None)

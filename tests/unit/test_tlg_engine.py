@@ -316,3 +316,100 @@ class TestSerializableFilters:
         adsl = ADSL.with_columns(pl.lit(64).alias("AGE"), pl.lit("F").alias("SEX"))
         ard = adsl.tlg.dm.t_summary(groupby="TRTA", spec=restored)
         assert "Total" in ard["group1_level"].to_list()
+
+
+# ================================================================== #
+# Review-round regressions                                             #
+# ================================================================== #
+
+
+class TestReviewRegressions:
+    """Fixes from the adversarial review of the unification diff."""
+
+    def test_leaf_filter_value_does_not_rewrite_parent_counts(self) -> None:
+        from fleet.tlg import Row
+
+        spec = AESummarySpec(
+            rows=[Row(field="AEBODSYS"), Row(field="AESER", filter_value="Y")],
+            required_columns=["USUBJID", "TRTA", "AEBODSYS", "AESER"],
+        )
+        ard = ADAE.tlg.ae.t_summary(groupby="TRTA", adsl=ADSL, spec=spec)
+        # Parent SOC counts stay unfiltered: Placebo NERVOUS n=2 even though
+        # no Placebo AE is serious.
+        assert _stat(
+            ard,
+            variable="AEBODSYS",
+            variable_level="NERVOUS",
+            group1_level="Placebo",
+            stat_name="n",
+        ) == [2.0]
+        # Leaf rows are restricted to the filtered category.
+        leaf = ard.filter(pl.col("variable") == "AESER")
+        assert set(leaf["variable_level"].to_list()) == {"Y"}
+
+    def test_row_field_equal_to_group_col(self) -> None:
+        from fleet.tlg import Row
+
+        spec = AESummarySpec(
+            rows=[Row(field="TRTA")],
+            required_columns=["USUBJID", "TRTA"],
+        )
+        ard = ADAE.tlg.ae.t_summary(groupby="TRTA", adsl=ADSL, spec=spec)
+        assert _stat(
+            ard,
+            variable="TRTA",
+            variable_level="Placebo",
+            group1_level="Placebo",
+            stat_name="n",
+        ) == [2.0]
+
+    def test_nested_depth_three_raises(self) -> None:
+        from fleet.tlg import Row
+
+        spec = AESummarySpec(
+            rows=[Row(field="AEBODSYS"), Row(field="AEDECOD"), Row(field="AESER")],
+            required_columns=["USUBJID", "TRTA", "AEBODSYS", "AEDECOD", "AESER"],
+        )
+        with pytest.raises(SchemaError, match="2 levels"):
+            ADAE.tlg.ae.t_summary(groupby="TRTA", adsl=ADSL, spec=spec)
+
+    def test_arm_emptied_by_adsl_filter_keeps_n_zero_column(self) -> None:
+        adsl = pl.concat(
+            [ADSL, pl.DataFrame({"USUBJID": ["S07"], "TRTA": ["Drug C"], "SAFFL": ["N"]})]
+        )
+        spec = AESummarySpec(adsl_filter='pl.col("SAFFL") == "Y"')
+        ard = ADAE.tlg.ae.t_summary(groupby="TRTA", adsl=adsl, spec=spec)
+        assert _stat(ard, stat_name="N", group1_level="Drug C") == [0.0]
+        # Undefined percentage (0 of 0) is null, never a fabricated number
+        pct = _stat(
+            ard,
+            variable="AEDECOD",
+            variable_level="HEADACHE",
+            group1_level="Drug C",
+            stat_name="pct",
+        )
+        assert pct == [None]
+
+    def test_render_keeps_nested_rows_distinct(self) -> None:
+        from fleet.tlg.render._models import ard_to_table_model
+
+        ard = ADAE.tlg.ae.t_summary(groupby="TRTA", adsl=ADSL)
+        model = ard_to_table_model(ard)
+        nausea_rows = [r for r in model.rows if r.label == "NAUSEA"]
+        # NAUSEA sits under two SOCs → two distinct display rows,
+        # each with its own Drug A cell (not last-write-wins).
+        assert len(nausea_rows) == 2
+        assert all("1 (50.0%)" in r.cells["Drug A"] for r in nausea_rows)
+
+    def test_dm_zero_record_arm_gets_age_rows(self) -> None:
+        adsl_full = ADSL.with_columns(pl.lit(64).alias("AGE"), pl.lit("F").alias("SEX"))
+        dm_df = adsl_full.filter(pl.col("TRTA") != "Drug B")
+        ard = dm_df.tlg.dm.t_summary(groupby="TRTA", adsl=adsl_full)
+        age_arms = set(ard.filter(pl.col("variable") == "AGE")["group1_level"].to_list())
+        assert "Drug B" in age_arms
+        drug_b_mean = ard.filter(
+            (pl.col("variable") == "AGE")
+            & (pl.col("group1_level") == "Drug B")
+            & (pl.col("stat_name") == "mean")
+        )["stat"].to_list()
+        assert drug_b_mean == [None]

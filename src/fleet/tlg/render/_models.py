@@ -245,17 +245,20 @@ def ard_to_table_model(
     data_rows = ard.filter(~((pl.col("stat_name") == "N") & (pl.col("variable") == "")))
 
     # ── 4. Determine row hierarchy structure ──
-    # Unique (variable, variable_level) pairs in order
-    row_keys: list[tuple[str, str]] = []
-    row_keys_seen: set[tuple[str, str]] = set()
+    # Unique (group2_level, variable, variable_level) triples in order —
+    # nested ARDs emit the same child level once per parent, so the
+    # parent lineage must be part of the display-row identity or cells
+    # from different parents collapse into one row (last-write-wins).
+    row_keys: list[tuple[str, str, str]] = []
+    row_keys_seen: set[tuple[str, str, str]] = set()
     for row in data_rows.iter_rows(named=True):
-        key = (row["variable"], row["variable_level"])
+        key = (row.get("group2_level") or "", row["variable"], row["variable_level"])
         if key not in row_keys_seen:
             row_keys.append(key)
             row_keys_seen.add(key)
 
     # Determine which variables are "groups" (have children)
-    all_variables = [k[0] for k in row_keys if k[0]]
+    all_variables = [k[1] for k in row_keys if k[1]]
     unique_variables = list(dict.fromkeys(all_variables))
     # If there are 2+ distinct non-empty variables, the first is group level
     has_hierarchy = len(unique_variables) >= 2
@@ -263,7 +266,7 @@ def ard_to_table_model(
     # ── 5. Build display rows ──
     table_rows: list[TableRow] = []
 
-    for variable, variable_level in row_keys:
+    for group2_level, variable, variable_level in row_keys:
         # Determine row type
         if variable == "":
             # Header row (OverallStat)
@@ -294,9 +297,11 @@ def ard_to_table_model(
         # ── Collect cell values per arm ──
         cells: dict[str, str] = {}
 
-        # Filter ARD to this (variable, variable_level)
+        # Filter ARD to this (group2_level, variable, variable_level)
         vl_rows = data_rows.filter(
-            (pl.col("variable") == variable) & (pl.col("variable_level") == variable_level)
+            (pl.col("group2_level").fill_null("") == group2_level)
+            & (pl.col("variable") == variable)
+            & (pl.col("variable_level") == variable_level)
         )
 
         for arm in arm_order:
