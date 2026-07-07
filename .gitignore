@@ -60,3 +60,6 @@ claude/
 
 # benchmark/outputs folder
 benchmark/outputs/
+
+# ignore paper and presentation files
+papers/

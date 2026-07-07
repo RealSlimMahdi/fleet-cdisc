@@ -152,6 +152,7 @@ The core of Fleet for SDTM work. Registers `df.sdtm` on every Polars DataFrame.
 | `validate(domain, version, *, custom_rules=None)` | Run CDISC rules-engine validation on the result (optionally with custom rules dir) |
 | `inspect(prefix)`           | Materialise pipeline, log schema/shape/head, return checkpoint           |
 | `explain()`                 | Print the Polars query plan without materialising                        |
+| `trail()`                   | Print a table of each derived variable's origin (verb + source columns)  |
 | `to_frame()`                | **Materialise** — execute the whole pipeline and return a `pl.DataFrame` |
 
 **How the pipeline works:**  
@@ -206,6 +207,7 @@ Registers `df.adam` on every Polars DataFrame.
 | `validate(dataset, version, *, custom_rules=None)` | CDISC rules-engine validation (optionally with custom rules dir) |
 | `inspect(prefix)`            | Materialise pipeline, log state, return checkpoint |
 | `explain()`                  | Print query plan without materialising             |
+| `trail()`                    | Print each derived variable's origin (verb + sources) |
 | `to_frame()`                 | Materialise and return `pl.DataFrame`              |
 
 **Toxicity grading verbs (CTCAE / DAIDS):**

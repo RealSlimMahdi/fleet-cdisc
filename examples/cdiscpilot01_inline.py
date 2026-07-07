@@ -265,6 +265,7 @@ ae = (
     # Pin DM for cross-domain study day derivation
     .pin("DM", dm)
     .study_day("AESTDY", date_col="AESTDTC")
+    .trail()  # print the origin of every derived variable before materialising
     .to_frame()
     .select(
         [
