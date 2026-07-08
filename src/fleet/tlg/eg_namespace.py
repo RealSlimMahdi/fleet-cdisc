@@ -60,6 +60,10 @@ class EGSummarySpec(SummarySpecBase):
 class EGChgSpec(EGSummarySpec):
     """Spec for ECG change from baseline (egt03): CHG stats per PARAM × visit."""
 
+    value_col: str = Field(
+        default="CHG",
+        description="Analysis-value column summarized (change from baseline).",
+    )
     required_columns: list[str] = Field(
         default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVISIT", "CHG"],
     )
@@ -153,6 +157,9 @@ class EGTLGNamespace(BuilderVerbsMixin):
             dataset_filter=spec.dataset_filter,
             header_rows=spec.header_rows,
             nested=True,
+            value_col=spec.value_col,
+            label_col=spec.label_col,
+            decimals=spec.decimals,
         )
 
     # ------------------------------------------------------------------ #
@@ -168,8 +175,9 @@ class EGTLGNamespace(BuilderVerbsMixin):
     ) -> pl.DataFrame:
         """ECG change-from-baseline ARD (continuous, egt03).
 
-        Summarizes ``CHG`` (mean/SD/median/min/max) per PARAMCD × AVISIT
-        for post-baseline records with a non-missing change value.
+        Summarizes ``spec.value_col`` (``CHG`` by default) with
+        mean/SD/median/min/max per PARAMCD × AVISIT for post-baseline
+        records with a non-missing change value.
 
         Args:
             groupby: Treatment-arm column; overrides ``spec.columns[0]``.
@@ -185,17 +193,16 @@ class EGTLGNamespace(BuilderVerbsMixin):
         spec = spec or EGChgSpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
         spec.validate_dataframe(self._df, group_col=group_col)
-        if "CHG" not in self._df.columns:
+        if spec.value_col not in self._df.columns:
             raise SchemaError(
-                "t_chg summarizes change from baseline and requires a CHG "
-                f"column. Available: {sorted(self._df.columns)}"
+                "t_chg summarizes change from baseline and requires a "
+                f"{spec.value_col} column. Available: {sorted(self._df.columns)}"
             )
-        df = self._df.with_columns(pl.col("CHG").alias("AVAL"))
-        prefilter = pl.col("CHG").is_not_null()
-        if "ABLFL" in df.columns:
+        prefilter = pl.col(spec.value_col).is_not_null()
+        if "ABLFL" in self._df.columns:
             prefilter = prefilter & pl.col("ABLFL").ne_missing("Y")
         return summarize_ard(
-            df,
+            self._df,
             rows=spec.rows,
             stats=spec.statistics,
             context="t_eg_chg",
@@ -208,6 +215,9 @@ class EGTLGNamespace(BuilderVerbsMixin):
             prefilter=prefilter,
             header_rows=spec.header_rows,
             nested=True,
+            value_col=spec.value_col,
+            label_col=spec.label_col,
+            decimals=spec.decimals,
         )
 
     # ------------------------------------------------------------------ #
@@ -251,6 +261,9 @@ class EGTLGNamespace(BuilderVerbsMixin):
             adsl_filter=spec.adsl_filter,
             dataset_filter=spec.dataset_filter,
             header_rows=spec.header_rows,
+            value_col=spec.value_col,
+            label_col=spec.label_col,
+            decimals=spec.decimals,
         )
 
     # ------------------------------------------------------------------ #

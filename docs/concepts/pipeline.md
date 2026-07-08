@@ -32,11 +32,11 @@ You define metadata, controlled terminology, and derivations in a central `defin
 
 ```python
 # The standard derivations live in define.yaml.
-from fleet import load_study_context
 import polars as pl
+import fleet  # noqa: F401
 
-ctx = load_study_context("specs/study01/adam/define.yaml")
-base_adsl = ctx.build("ADSL")
+dm = pl.read_parquet("outputs/sdtm/dm.parquet")
+base_adsl = dm.adam.from_spec("specs/study01/adam/define.yaml", dataset="ADSL").to_frame()
 
 # Add custom logic for the 10% of edge-case scenarios not covered by the spec:
 final_adsl = base_adsl.adam.adsl.derivation(
@@ -56,14 +56,18 @@ Every Fleet namespace (`sdtm`, `adam`, `adsl`, `occds`) follows the same pattern
 
 ```python
 result = (
-    raw_df.sdtm.assign_no_ct("USUBJID", source="patient_id")  # 1. access  # 2. chain
-    .hardcode_no_ct("DOMAIN", value="DM")
-    .assign_ct("SEX", source="sex_raw", ct_codelist=SEX, ct_mapping={"M": "M", "F": "F"})
+    raw_df.sdtm.assign("USUBJID", source="patient_id")  # 1. access  # 2. chain
+    .assign("DOMAIN", value="DM")
+    .assign("SEX", source="sex_raw", ct=SEX, ct_map={"M": "M", "F": "F"})
     .to_frame()  # 3. materialise
 )
 ```
 
-Nothing runs at step 2 — verbs only build an internal expression list.
+`assign` is the one canonical assignment verb (`source=` copies, `value=`
+hardcodes, `ct=`/`ct_map=` add CT). Most verbs only build an internal expression
+list at step 2; a few window/cross-domain verbs checkpoint internally but keep
+the chain going. Legacy spellings (`assign_no_ct`, `hardcode_no_ct`, `assign_ct`)
+still work as deprecated aliases.
 
 To inspect intermediate state or the query plan during development, use the
 chainable debug verbs `.inspect()` (hard checkpoint with diagnostic output)
@@ -77,8 +81,8 @@ and `.explain()` (print the Polars query plan). See
 ```
 df.sdtm
   │
-  ├─ .assign_no_ct("USUBJID", ...)  →  [Expr("patient_id".alias("USUBJID"))]
-  ├─ .assign_ct("SEX", ...)         →  [..., Expr(when/then.alias("SEX"))]
+  ├─ .assign("USUBJID", source=...)  →  [Expr("patient_id".alias("USUBJID"))]
+  ├─ .assign("SEX", ct=...)          →  [..., Expr(when/then.alias("SEX"))]
   └─ .to_frame()
        │
        └─ df.with_columns(*exprs)   ← single Polars pass
@@ -90,15 +94,19 @@ This means you pay no cost for columns you don't chain. Expression ordering mirr
 
 ## SDTM verbs at a glance
 
-| Verb                                                 | Purpose                                |
-| ---------------------------------------------------- | -------------------------------------- |
-| `assign_no_ct(target, source)`                       | Copy raw column, no CT validation      |
-| `hardcode_no_ct(target, value)`                      | Constant literal for all rows          |
-| `assign_ct(target, source, ct_codelist, ct_mapping)` | Recode values through a CT codelist    |
-| `date(target, source)`                               | Normalise to ISO 8601 date or datetime |
-| `derivation(target, expression)`                     | Arbitrary `pl.Expr`                    |
-| `if_then_else(target, when, else_value)`             | Multi-branch conditional               |
-| `to_frame()`                                         | Materialise                            |
+| Verb                                       | Purpose                                |
+| ------------------------------------------ | -------------------------------------- |
+| `assign(target, source=)`                  | Copy raw column                        |
+| `assign(target, value=)`                   | Constant literal for all rows          |
+| `assign(target, source=, ct=, ct_map=)`    | Copy + validate/recode through a codelist |
+| `case_when(target, when=, else_=)`         | Multi-branch conditional               |
+| `date(target, source=)`                    | Normalise to ISO 8601 date or datetime |
+| `derivation(target, expression=)`          | Arbitrary `pl.Expr`                    |
+| `merge(dataset, on=, keep=)`               | Join a reference dataset               |
+| `to_frame()`                               | Materialise                            |
+
+(Legacy `assign_no_ct` / `hardcode_no_ct` / `assign_ct` / `if_then_else` still
+work as deprecated aliases.)
 
 ---
 
@@ -106,13 +114,13 @@ This means you pay no cost for columns you don't chain. Expression ordering mirr
 
 | Verb                                        | Purpose                                   |
 | ------------------------------------------- | ----------------------------------------- |
-| `source(target)`                            | Pass-through column                       |
-| `derivation(target, expression)`            | Arbitrary `pl.Expr`                       |
-| `assigned(target, value)`                   | Constant literal                          |
-| `date(target, source)`                      | Parse DTC → Date/Datetime with imputation |
-| `duration(target, start, end)`              | CDISC study day / elapsed time            |
-| `flag(target, criteria, groups)`            | Per-group boolean flag                    |
-| `baseline(target, aval, baseline_flag)`     | Carry baseline AVAL within groups         |
+| `source(*targets)`                          | Variadic pass-through column(s)           |
+| `derivation(target, expression=)`           | Arbitrary `pl.Expr`                       |
+| `assign(target, value=)`                    | Constant literal                          |
+| `date(target, source=)`                     | Parse DTC → Date/Datetime with imputation |
+| `duration(target, start=, end=)`            | CDISC study day / elapsed time            |
+| `flag(target, criteria=, by=)`              | Per-group boolean flag                    |
+| `baseline(target, aval=, baseline_flag=, by=)` | Carry baseline AVAL within groups      |
 | `chg(target, aval, base)`                   | Change from baseline                      |
 | `pchg(target, aval, base)`                  | Percent change from baseline              |
 | `bmi(target, weight, height)`               | Body Mass Index                           |

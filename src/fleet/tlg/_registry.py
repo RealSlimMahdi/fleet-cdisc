@@ -23,10 +23,23 @@ CDISC general-observation-class grouping (the proposed generalist scheme):
 
 from __future__ import annotations
 
+import dataclasses
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING
 
 import polars as pl
+
+from fleet.core.exceptions import SchemaError
+
+if TYPE_CHECKING:
+    from ._specs import TLGSpec
+
+#: Signature every user-registered template function must implement:
+#: ``fn(df, *, adsl, spec, groupby) -> ARD`` (a {cards}-compatible
+#: long-format DataFrame).
+TemplateFunc = Callable[..., pl.DataFrame]
 
 
 class CDISCClass(str, Enum):  # noqa: UP042
@@ -73,6 +86,15 @@ class TemplateMeta:
         domains: ADaM domains required (for fixtures + validation).
         source_ref: Original cards template file (reference only).
         status: Port status.
+        func: Standalone template function for user-registered
+            templates (``fn(df, *, adsl, spec, groupby) -> ARD``).
+            ``None`` for built-ins, which dispatch through
+            *namespace*/*method* instead.  Set by
+            [`register_template()`][fleet.tlg.register_template].
+        spec_cls: Spec model class validating YAML files for this
+            template.  ``None`` resolves through the namespace's
+            builder spec table (built-ins) or falls back to
+            ``SummarySpecBase`` (user templates).
     """
 
     id: str
@@ -84,6 +106,8 @@ class TemplateMeta:
     domains: tuple[str, ...]
     source_ref: str
     status: Status = Status.PLANNED
+    func: TemplateFunc | None = dataclasses.field(default=None, repr=False, compare=False)
+    spec_cls: type[TLGSpec] | None = dataclasses.field(default=None, repr=False, compare=False)
 
 
 #: The proof-set registry (one core template per domain).  Expand by
@@ -94,7 +118,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         title="Overview of Adverse Events",
         cdisc_class=CDISCClass.EVENTS,
         namespace="ae",
-        method="t_summary",
+        method="t_overview",
         output_type=OutputType.TABLE,
         domains=("ADSL", "ADAE"),
         source_ref="template_gdsr_aet01.R",
@@ -342,6 +366,17 @@ TEMPLATES: dict[str, TemplateMeta] = {
         "template_gdsr_cmt02_pt.R",
         Status.DONE,
     ),
+    "aet05": TemplateMeta(
+        "aet05",
+        "AEs by SOC and Relationship to Study Drug",
+        CDISCClass.EVENTS,
+        "ae",
+        "t_relationship",
+        OutputType.TABLE,
+        ("ADSL", "ADAE"),
+        "template_gdsr_aet05.R",
+        Status.DONE,
+    ),
 }
 
 
@@ -358,6 +393,83 @@ def get(template_id: str) -> TemplateMeta:
         KeyError: If *template_id* is not registered.
     """
     return TEMPLATES[template_id]
+
+
+def register_template(meta: TemplateMeta, fn: TemplateFunc) -> TemplateMeta:
+    """Register a user-defined TLG template without touching Fleet source.
+
+    The template becomes a first-class citizen: it appears in
+    :func:`catalog`, resolves through :func:`get`, is reachable from the
+    inline builder via ``.template(meta.id)``, and executes from a YAML
+    spec through [`run_spec()`][fleet.tlg.run_spec].
+
+    Args:
+        meta: Catalog metadata for the template.  Set ``meta.spec_cls``
+            to a custom spec model to control which YAML fields the
+            template accepts (defaults to ``SummarySpecBase``).
+        fn: Template function with signature
+            ``fn(df, *, adsl, spec, groupby) -> ARD`` returning a
+            {cards}-compatible long-format DataFrame.
+
+    Returns:
+        TemplateMeta: The stored registry entry (*meta* with ``func``
+            attached).
+
+    Raises:
+        SchemaError: If ``meta.id`` is already registered or *fn* is not
+            callable.
+
+    Examples:
+        Register and run a sponsor shell::
+
+            import fleet.tlg as tlg
+
+            def my_shell(df, *, adsl, spec, groupby):
+                return df.tlg.ae.t_summary(groupby=groupby, adsl=adsl, spec=spec)
+
+            tlg.register_template(
+                tlg.TemplateMeta(
+                    id="spon01", title="Sponsor AE Shell",
+                    cdisc_class=tlg.CDISCClass.EVENTS, namespace="ae",
+                    method="my_shell", output_type=tlg.OutputType.TABLE,
+                    domains=("ADSL", "ADAE"), source_ref="sponsor",
+                    status=tlg.Status.DONE,
+                ),
+                my_shell,
+            )
+            ard = adae.tlg.ae.population(adsl).by("TRTA").template("spon01").to_ard()
+    """
+    if meta.id in TEMPLATES:
+        raise SchemaError(
+            f"Template id {meta.id!r} is already registered "
+            f"({TEMPLATES[meta.id].title!r}). Template ids are stable "
+            "identifiers — pick a new id or unregister_template() first."
+        )
+    if not callable(fn):
+        raise SchemaError(f"Template function for {meta.id!r} must be callable, got {fn!r}.")
+    entry = dataclasses.replace(meta, func=fn)
+    TEMPLATES[meta.id] = entry
+    return entry
+
+
+def unregister_template(template_id: str) -> None:
+    """Remove a user-registered template from the registry.
+
+    Only templates added via :func:`register_template` can be removed —
+    built-ins are load-bearing (goldens, tests, docs) and stay.
+
+    Args:
+        template_id: Id of the user-registered template.
+
+    Raises:
+        SchemaError: If the id is unknown or belongs to a built-in.
+    """
+    meta = TEMPLATES.get(template_id)
+    if meta is None:
+        raise SchemaError(f"Unknown template id {template_id!r}. Known ids: {sorted(TEMPLATES)}")
+    if meta.func is None:
+        raise SchemaError(f"Template {template_id!r} is a Fleet built-in and cannot be removed.")
+    del TEMPLATES[template_id]
 
 
 def by_class(cdisc_class: CDISCClass) -> list[TemplateMeta]:

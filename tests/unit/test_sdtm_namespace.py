@@ -67,8 +67,10 @@ class TestHardcodeCT:
 
             with warnings.catch_warnings():
                 warnings.simplefilter("error")
-                result = simple_raw.sdtm.hardcode_ct(
-                    "AGEU", value="YEARS", ct_codelist="C_TEST2"
+                # Canonical assign() spelling: hardcode_ct is a deprecated
+                # alias whose FutureWarning would trip simplefilter("error").
+                result = simple_raw.sdtm.assign(
+                    "AGEU", value="YEARS", ct="C_TEST2"
                 ).to_frame()
             assert result["AGEU"].to_list() == ["YEARS", "YEARS", "YEARS"]
         finally:

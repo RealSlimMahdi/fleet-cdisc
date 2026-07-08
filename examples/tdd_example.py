@@ -322,10 +322,10 @@ def main() -> None:
 """)
 
     sv = (
-        raw_visits.sdtm.hardcode_no_ct("DOMAIN", value="SV")  # type: ignore[attr-defined]
-        .hardcode_no_ct("STUDYID", value="CDISCPILOT01")
-        .assign_no_ct("USUBJID", source="subject_id")
-        .assign_no_ct("SVSTDTC", source="visit_date")
+        raw_visits.sdtm.assign("DOMAIN", value="SV")  # type: ignore[attr-defined]
+        .assign("STUDYID", value="CDISCPILOT01")
+        .assign("USUBJID", source="subject_id")
+        .assign("SVSTDTC", source="visit_date")
         .visit_map(
             "VISITNUM",
             "VISIT",
@@ -366,10 +366,10 @@ def main() -> None:
 """)
 
     se = (
-        disposition.sdtm.hardcode_no_ct("DOMAIN", value="SE")  # type: ignore[attr-defined]
-        .hardcode_no_ct("STUDYID", value="CDISCPILOT01")
-        .assign_no_ct("USUBJID", source="subject_id")
-        .assign_no_ct("ETCD", source="ETCD")
+        disposition.sdtm.assign("DOMAIN", value="SE")  # type: ignore[attr-defined]
+        .assign("STUDYID", value="CDISCPILOT01")
+        .assign("USUBJID", source="subject_id")
+        .assign("ETCD", source="ETCD")
         .element_boundaries(
             "SESTDTC",
             "SEENDTC",

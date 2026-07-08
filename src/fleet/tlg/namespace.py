@@ -99,15 +99,59 @@ class TLGNamespace:
 
         return MHTLGNamespace(self._df)
 
-    def check(self) -> list[str]:
-        """Run pre-validation diagnostics across all sub-namespaces.
+    def catalog(self) -> pl.DataFrame:
+        """Return the TLG template catalog (built-ins + user templates).
+
+        Passthrough to [`fleet.tlg.catalog()`][fleet.tlg.catalog] so the
+        catalog is discoverable from any DataFrame.
 
         Returns:
-            list[str]: Diagnostic messages from all sub-namespace specs.
-        """
-        from .ae_namespace import AETLGNamespace
+            pl.DataFrame: One row per registered template — ``id``,
+                ``title``, ``cdisc_class``, ``namespace``, ``method``,
+                ``output_type``, ``domains``, ``source_ref``, ``status``.
 
+        Examples:
+            ``adae.tlg.catalog().filter(pl.col("namespace") == "ae")``
+        """
+        from ._registry import catalog as _catalog
+
+        return _catalog()
+
+    def check(self) -> list[str]:
+        """Run pre-validation diagnostics on every applicable sub-namespace.
+
+        A sub-namespace is *applicable* when its default summary spec's
+        required columns are all present in the DataFrame — e.g. a frame
+        with ``AEBODSYS``/``AEDECOD`` triggers the AE checks, one with
+        ``PARAMCD``/``AVAL`` the findings checks.  Namespaces whose
+        required columns are absent are skipped (they would only report
+        that this isn't their dataset).
+
+        Returns:
+            list[str]: Diagnostic messages prefixed with the namespace
+                name, or a single message when no sub-namespace applies.
+
+        Examples:
+            ``report = adae.tlg.check()``
+        """
+        from ._runner import NAMESPACE_CLASSES
+
+        available = set(self._df.columns)
         diagnostics: list[str] = []
-        ae_ns = AETLGNamespace(self._df)
-        diagnostics.extend(ae_ns.check())
+        applicable = 0
+        for name, ns_cls in NAMESPACE_CLASSES.items():
+            spec_cls = getattr(ns_cls, "_builder_specs", {}).get("t_summary")
+            if spec_cls is None:
+                continue
+            spec = spec_cls()
+            if not set(spec.required_columns) <= available:
+                continue
+            applicable += 1
+            diagnostics.extend(f"[{name}] {msg}" for msg in ns_cls(self._df).check())
+        if applicable == 0:
+            diagnostics.append(
+                "NO APPLICABLE NAMESPACE: no sub-namespace's required columns "
+                f"are all present (available: {sorted(available)}). Run "
+                "df.tlg.<ns>.check() directly for a specific diagnosis."
+            )
         return diagnostics

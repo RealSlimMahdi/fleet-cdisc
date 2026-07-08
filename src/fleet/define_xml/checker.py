@@ -9,11 +9,16 @@ caller can optionally pass the resulting ``pl.DataFrame`` to a
    both directions).
 2. **Type consistency** — each column's Polars dtype is compatible with the
    define's declared type.
-3. **Labels** — a mapping of ``column → label`` is built from the define so it
+3. **Controlled terminology** — variables declaring a ``codelist:`` are
+   verified against the spec's own inline ``codelists:`` items; values
+   outside the declared submission values are **errors** (with a decode /
+   ``ct_mapping`` hint when the offending value looks like an unapplied
+   mapping).
+4. **Labels** — a mapping of ``column → label`` is built from the define so it
    can be attached as report metadata or written to a SAS transport file.
 
 All checks are **deactivatable** per-instance (``enabled=False``) or
-per-check-category (``check_columns``, ``check_types``).
+per-check-category (``check_columns``, ``check_types``, ``check_ct``).
 
 Two additional methods complete the post-pipeline workflow:
 
@@ -121,6 +126,9 @@ class CheckResult:
     type_mismatches:
         Variables that are present but whose Polars dtype is not compatible
         with the define's declared type.
+    ct_violations:
+        Messages for values found outside the inline codelist declared for
+        a variable (always also present in ``errors``).
     errors:
         All issues classified as errors. For ``core="Req"`` variables: missing
         columns and type mismatches.  When ``strict=False`` these are
@@ -139,6 +147,7 @@ class CheckResult:
     missing_columns: list[str] = field(default_factory=list)
     extra_columns: list[str] = field(default_factory=list)
     type_mismatches: list[TypeMismatch] = field(default_factory=list)
+    ct_violations: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     info: list[str] = field(default_factory=list)
@@ -229,6 +238,10 @@ class DatasetChecker:
         When *True* (default), verify column completeness (missing / extra).
     check_types:
         When *True* (default), verify Polars dtype compatibility.
+    check_ct:
+        When *True* (default), verify values of variables declaring a
+        ``codelist:`` against the spec's inline ``codelists:`` items.
+        Out-of-codelist values are errors.
     validate_schema:
         When *True* (default), validate the YAML against the JSON schema on
         load.  Set to *False* to skip during tight inner loops.
@@ -241,11 +254,13 @@ class DatasetChecker:
         enabled: bool = True,
         check_columns: bool = True,
         check_types: bool = True,
+        check_ct: bool = True,
         validate_schema: bool = True,
     ) -> None:
         self._enabled = enabled
         self._check_columns = check_columns
         self._check_types = check_types
+        self._check_ct = check_ct
 
         path = Path(define_yaml_path)
         self._data: dict[str, Any] = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -256,6 +271,10 @@ class DatasetChecker:
         # Build a lookup: dataset_name (upper) → dataset dict
         self._datasets: dict[str, dict[str, Any]] = {
             ds["name"].upper(): ds for ds in self._data.get("datasets", [])
+        }
+        # Inline codelists: oid → codelist dict (used by the CT check)
+        self._codelists: dict[str, dict[str, Any]] = {
+            cl["oid"]: cl for cl in self._data.get("codelists", [])
         }
 
     # ------------------------------------------------------------------ #
@@ -318,6 +337,9 @@ class DatasetChecker:
 
         if self._check_types:
             self._run_type_checks(result, df, vars_by_name, actual_cols, strict=strict)
+
+        if self._check_ct:
+            self._run_ct_checks(result, df, vars_by_name, actual_cols)
 
         return result
 
@@ -396,6 +418,65 @@ class DatasetChecker:
                 _classify(
                     result, msg, core=core, mandatory=var_def.get("mandatory", False), strict=strict
                 )
+
+    def _run_ct_checks(
+        self,
+        result: CheckResult,
+        df: pl.DataFrame,
+        vars_by_name: dict[str, dict[str, Any]],
+        actual_cols: set[str],
+    ) -> None:
+        """Verify variable values against the spec's inline codelists.
+
+        The define.yaml already declares each codelist's submission values
+        (``codelists[].items[].coded_value``) — a dataset asserting
+        conformance to them must actually contain them.  Out-of-codelist
+        values are **errors**.  When an offending value matches a decode
+        (or a raw ``ct_mapping`` key from the variable's derivation), the
+        message says so — those are almost always unapplied mappings.
+        """
+        for col_name, var_def in vars_by_name.items():
+            oid = var_def.get("codelist")
+            if not oid or col_name not in actual_cols:
+                continue
+            codelist = self._codelists.get(oid)
+            if codelist is None:
+                result.warnings.append(
+                    f"Column '{col_name}' references codelist '{oid}' which is not "
+                    f"declared in this define. Declared codelist OIDs: "
+                    f"{sorted(self._codelists)}"
+                )
+                continue
+            items = codelist.get("items") or []
+            if not items:
+                continue  # declared without items — nothing to verify against
+            coded: set[str] = {str(item["coded_value"]) for item in items}
+            decode_of: dict[str, str] = {
+                str(item["decode"]): str(item["coded_value"])
+                for item in items
+                if item.get("decode")
+            }
+            ct_mapping: dict[str, Any] = (var_def.get("derivation") or {}).get("ct_mapping") or {}
+
+            values = [str(v) for v in df[col_name].drop_nulls().unique().to_list() if str(v) != ""]
+            invalid = sorted(v for v in values if v not in coded)
+            if not invalid:
+                continue
+
+            hints: list[str] = []
+            for v in invalid:
+                if v in decode_of:
+                    hints.append(f"'{v}' is the decode of submission value '{decode_of[v]}'")
+                elif v in ct_mapping:
+                    hints.append(f"'{v}' is a raw ct_mapping key — the mapping was not applied")
+            hint = f" ({'; '.join(hints)})" if hints else ""
+            msg = (
+                f"Column '{col_name}': value(s) {invalid} not in codelist "
+                f"'{oid}' ({codelist.get('name', oid)}). "
+                f"Valid values: {sorted(coded)}.{hint}"
+            )
+            result.ct_violations.append(msg)
+            result.errors.append(msg)
 
     # ------------------------------------------------------------------ #
     # CDISC Core validation                                                #

@@ -53,6 +53,9 @@ ARD_GROUP_COLUMNS = [
 ]
 
 #: Full column order matching {cards}::tidy_ard_column_order().
+#: ``variable_label`` is a Polars adaptation: R {cards} carries variable
+#: display labels as data-frame attributes, which Polars does not have,
+#: so the label travels as an ordinary (optional) column instead.
 ARD_COLUMN_ORDER = [
     "group1",
     "group1_level",
@@ -60,6 +63,7 @@ ARD_COLUMN_ORDER = [
     "group2_level",
     "variable",
     "variable_level",
+    "variable_label",
     "stat_name",
     "stat_label",
     "stat",
@@ -78,6 +82,7 @@ ARD_SCHEMA: dict[str, pl.DataType] = {
     "group2_level": pl.Utf8,
     "variable": pl.Utf8,
     "variable_level": pl.Utf8,
+    "variable_label": pl.Utf8,
     "stat_name": pl.Utf8,
     "stat_label": pl.Utf8,
     "stat": pl.Float64,
@@ -197,7 +202,7 @@ def format_ard(ard: pl.DataFrame) -> pl.DataFrame:
 # ------------------------------------------------------------------ #
 
 
-def validate_ard(df: pl.DataFrame) -> list[str]:
+def validate_ard(df: pl.DataFrame, *, strict: bool = True) -> list[str]:
     """Validate that *df* conforms to the {cards}-compatible ARD schema.
 
     Checks required column presence, data types, and structural integrity.
@@ -206,6 +211,11 @@ def validate_ard(df: pl.DataFrame) -> list[str]:
 
     Args:
         df: A DataFrame to validate as ARD.
+        strict: When ``True`` (default), columns outside the ARD schema
+            are flagged.  Pass ``strict=False`` for post-processing
+            workflows (the standard {cards} pattern of annotating an ARD
+            with extra columns) — unknown columns are then accepted and
+            ignored, while the known columns are still fully checked.
 
     Returns:
         list[str]: Diagnostic messages (empty if valid).
@@ -217,6 +227,10 @@ def validate_ard(df: pl.DataFrame) -> list[str]:
 
             issues = validate_ard(ard)
             assert issues == [], issues
+
+        Accept a post-processed ARD carrying annotation columns::
+
+            issues = validate_ard(annotated_ard, strict=False)
     """
     issues: list[str] = []
 
@@ -225,11 +239,15 @@ def validate_ard(df: pl.DataFrame) -> list[str]:
     if missing_required:
         issues.append(f"Missing required ARD columns: {missing_required}")
 
-    # Check for completely unknown columns
-    known = set(ARD_SCHEMA.keys())
-    extra = [c for c in df.columns if c not in known]
-    if extra:
-        issues.append(f"Unexpected columns (not in ARD schema): {extra}")
+    # Check for completely unknown columns (strict mode only)
+    if strict:
+        known = set(ARD_SCHEMA.keys())
+        extra = [c for c in df.columns if c not in known]
+        if extra:
+            issues.append(
+                f"Unexpected columns (not in ARD schema): {extra}. "
+                "Pass strict=False to accept post-processing columns."
+            )
 
     # Data types (only check columns that exist)
     for col, expected_dtype in ARD_SCHEMA.items():
@@ -258,6 +276,7 @@ def build_ard_row(
     group2_level: str = "",
     variable: str,
     variable_level: str = "",
+    variable_label: str = "",
     stat_name: str,
     stat_label: str,
     stat: float | int | str | None,
@@ -275,6 +294,8 @@ def build_ard_row(
         group2_level: Level within group2 (e.g. ``"F"``).
         variable: Analysis variable name (e.g. ``"AEDECOD"``).
         variable_level: Level of the analysis variable (e.g. ``"HEADACHE"``).
+        variable_label: Display label for *variable* (e.g. ``"Preferred
+            Term"``); ``""`` when no label applies.
         stat_name: Short stat identifier (e.g. ``"n"``, ``"pct"``).
         stat_label: Human-readable label (e.g. ``"n (%)"``, ``"N"``).
         stat: The computed statistic value.
@@ -294,6 +315,7 @@ def build_ard_row(
         "group2_level": group2_level,
         "variable": variable,
         "variable_level": variable_level,
+        "variable_label": variable_label,
         "stat_name": stat_name,
         "stat_label": stat_label,
         "stat": stat,
@@ -468,13 +490,20 @@ def compute_stat(
     stat_type: Statistic,
     level_df: pl.DataFrame,
     arm_n: int,
+    *,
+    value_col: str = "AVAL",
 ) -> tuple[str, str, float | int | str | None]:
     """Compute a single statistic for a subset of data.
+
+    Percentages are stored unrounded — display precision belongs
+    exclusively to ``fmt_fn`` / ``format_ard`` ({cards} stat/format
+    separation), so QC against SAS full-precision values stays possible.
 
     Args:
         stat_type: The statistic to compute.
         level_df: Filtered DataFrame for this analysis level.
         arm_n: Big-N denominator for the arm.
+        value_col: Analysis-value column for continuous statistics.
 
     Returns:
         Tuple of (stat_name, stat_label, stat_value).
@@ -482,46 +511,32 @@ def compute_stat(
     if stat_type == Statistic.N_SUBJECTS:
         n = level_df["USUBJID"].n_unique() if len(level_df) > 0 else 0
         return ("n", "n", n)
-    elif stat_type == Statistic.N_EVENTS:
+    if stat_type == Statistic.N_EVENTS:
         return ("n_events", "Events", len(level_df))
-    elif stat_type == Statistic.N_PCT:
+    if stat_type == Statistic.N_PCT:
         n = level_df["USUBJID"].n_unique() if len(level_df) > 0 else 0
         # No denominator → no percentage; never fabricate 0.0.
-        pct = round(n / arm_n * 100, 1) if arm_n > 0 else None
+        pct = n / arm_n * 100 if arm_n > 0 else None
         return ("pct", "n (%)", pct)
-    elif stat_type == Statistic.MEAN:
-        val = level_df["AVAL"].mean() if "AVAL" in level_df.columns and len(level_df) > 0 else None
-        return ("mean", "Mean", val)
-    elif stat_type == Statistic.SD:
-        val = level_df["AVAL"].std() if "AVAL" in level_df.columns and len(level_df) > 0 else None
-        return ("sd", "SD", val)
-    elif stat_type == Statistic.MEDIAN:
-        val = (
-            level_df["AVAL"].median() if "AVAL" in level_df.columns and len(level_df) > 0 else None
-        )
-        return ("median", "Median", val)
-    elif stat_type == Statistic.MIN:
-        val = level_df["AVAL"].min() if "AVAL" in level_df.columns and len(level_df) > 0 else None
-        return ("min", "Min", val)
-    elif stat_type == Statistic.MAX:
-        val = level_df["AVAL"].max() if "AVAL" in level_df.columns and len(level_df) > 0 else None
-        return ("max", "Max", val)
-    elif stat_type == Statistic.Q1:
-        val = (
-            level_df["AVAL"].quantile(0.25)
-            if "AVAL" in level_df.columns and len(level_df) > 0
-            else None
-        )
-        return ("q1", "Q1", val)
-    elif stat_type == Statistic.Q3:
-        val = (
-            level_df["AVAL"].quantile(0.75)
-            if "AVAL" in level_df.columns and len(level_df) > 0
-            else None
-        )
-        return ("q3", "Q3", val)
-    else:
+    meta = _CONT_STAT_META.get(stat_type)
+    if meta is None:
         return (stat_type.value, stat_type.value, None)
+    if value_col not in level_df.columns or len(level_df) == 0:
+        return (*meta, None)
+    values = level_df[value_col]
+    if stat_type == Statistic.MEAN:
+        return (*meta, values.mean())
+    if stat_type == Statistic.SD:
+        return (*meta, values.std())
+    if stat_type == Statistic.MEDIAN:
+        return (*meta, values.median())
+    if stat_type == Statistic.MIN:
+        return (*meta, values.min())
+    if stat_type == Statistic.MAX:
+        return (*meta, values.max())
+    if stat_type == Statistic.Q1:
+        return (*meta, values.quantile(0.25))
+    return (*meta, values.quantile(0.75))
 
 
 def ard_row(
@@ -536,6 +551,7 @@ def ard_row(
     *,
     group2: str = "",
     group2_level: str = "",
+    variable_label: str = "",
     fmt_fn: str | None = None,
     warning: str | None = None,
     error: str | None = None,
@@ -553,6 +569,7 @@ def ard_row(
         context: TLG context identifier.
         group2: Secondary grouping variable name.
         group2_level: Level within group2.
+        variable_label: Display label for *variable* (``""`` when none).
         fmt_fn: Format specifier; uses default if None.
         warning: Warning message from computation.
         error: Error message from computation.
@@ -567,6 +584,7 @@ def ard_row(
         "group2_level": group2_level,
         "variable": variable,
         "variable_level": variable_level,
+        "variable_label": variable_label,
         "stat_name": stat_name,
         "stat_label": stat_label,
         "stat": stat,
@@ -581,11 +599,18 @@ def ard_row(
 def rows_to_ard(rows: list[dict[str, Any]]) -> pl.DataFrame:
     """Convert a list of ARD row dicts to a {cards}-compatible Polars DataFrame.
 
+    The ARD ``stat`` column is Float64.  A value that cannot be coerced
+    to a float raises instead of being silently nulled — a nulled
+    statistic would render as an innocent blank cell.
+
     Args:
         rows: List of dicts (from ``ard_row()``).
 
     Returns:
         pl.DataFrame: Formatted ARD DataFrame.
+
+    Raises:
+        SchemaError: If any row carries a non-numeric ``stat`` value.
     """
     if not rows:
         return pl.DataFrame(schema=ARD_SCHEMA)
@@ -600,7 +625,14 @@ def rows_to_ard(rows: list[dict[str, Any]]) -> pl.DataFrame:
             try:
                 row["stat"] = float(v)
             except (TypeError, ValueError):
-                row["stat"] = None
+                raise SchemaError(
+                    f"Non-numeric stat value {v!r} for stat "
+                    f"{row.get('stat_name')!r} (variable "
+                    f"{row.get('variable')!r}, level "
+                    f"{row.get('variable_level')!r}): the ARD stat column "
+                    "is Float64. Convert the value or carry string "
+                    "statistics through stat_fmt instead."
+                ) from None
 
     df = pl.DataFrame(rows).cast({"stat": pl.Float64}, strict=False)
 
@@ -616,7 +648,7 @@ def rows_to_ard(rows: list[dict[str, Any]]) -> pl.DataFrame:
 #: Count-type statistics — meaningful at every hierarchy depth.
 COUNT_STATS = frozenset({Statistic.N_SUBJECTS, Statistic.N_EVENTS, Statistic.N_PCT})
 
-#: Continuous statistics: (stat_name, stat_label) and aggregation exprs on AVAL.
+#: Continuous statistics: (stat_name, stat_label) per Statistic.
 _CONT_STAT_META: dict[Statistic, tuple[str, str]] = {
     Statistic.MEAN: ("mean", "Mean"),
     Statistic.SD: ("sd", "SD"),
@@ -627,15 +659,19 @@ _CONT_STAT_META: dict[Statistic, tuple[str, str]] = {
     Statistic.Q3: ("q3", "Q3"),
 }
 
-_CONT_STAT_EXPRS: dict[Statistic, pl.Expr] = {
-    Statistic.MEAN: pl.col("AVAL").mean(),
-    Statistic.SD: pl.col("AVAL").std(),
-    Statistic.MEDIAN: pl.col("AVAL").median(),
-    Statistic.MIN: pl.col("AVAL").min(),
-    Statistic.MAX: pl.col("AVAL").max(),
-    Statistic.Q1: pl.col("AVAL").quantile(0.25),
-    Statistic.Q3: pl.col("AVAL").quantile(0.75),
-}
+
+def _cont_stat_exprs(value_col: str) -> dict[Statistic, pl.Expr]:
+    """Aggregation expressions for continuous statistics on *value_col*."""
+    col = pl.col(value_col)
+    return {
+        Statistic.MEAN: col.mean(),
+        Statistic.SD: col.std(),
+        Statistic.MEDIAN: col.median(),
+        Statistic.MIN: col.min(),
+        Statistic.MAX: col.max(),
+        Statistic.Q1: col.quantile(0.25),
+        Statistic.Q3: col.quantile(0.75),
+    }
 
 
 def _validate_pool_arms(
@@ -660,9 +696,13 @@ def _cell_stat(
     stat_type: Statistic,
     cell: dict[str, Any] | None,
     arm_n: int,
-    has_aval: bool,
+    has_value_col: bool,
 ) -> tuple[str, str, float | int | None]:
-    """Extract one statistic from an aggregated cell (``None`` = zero cell)."""
+    """Extract one statistic from an aggregated cell (``None`` = zero cell).
+
+    Percentages are stored unrounded — display precision belongs
+    exclusively to ``fmt_fn`` / ``format_ard``.
+    """
     if stat_type == Statistic.N_SUBJECTS:
         return ("n", "n", cell["__n"] if cell else 0)
     if stat_type == Statistic.N_EVENTS:
@@ -670,11 +710,11 @@ def _cell_stat(
     if stat_type == Statistic.N_PCT:
         n = cell["__n"] if cell else 0
         # No denominator → no percentage; never fabricate 0.0.
-        return ("pct", "n (%)", round(n / arm_n * 100, 1) if arm_n > 0 else None)
+        return ("pct", "n (%)", n / arm_n * 100 if arm_n > 0 else None)
     meta = _CONT_STAT_META.get(stat_type)
     if meta is None:
         return (stat_type.value, stat_type.value, None)
-    value = cell.get(f"__{stat_type.value}") if (cell is not None and has_aval) else None
+    value = cell.get(f"__{stat_type.value}") if (cell is not None and has_value_col) else None
     return (*meta, value)
 
 
@@ -686,6 +726,10 @@ def _level_rows(
     big_n: dict[str, int],
     group_col: str,
     context: str,
+    *,
+    value_col: str = "AVAL",
+    field_labels: dict[str, str] | None = None,
+    fmt_overrides: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """Stats per arm × level combination of *fields*, with explicit zero cells.
 
@@ -703,10 +747,12 @@ def _level_rows(
     if combos.height == 0:
         return []
 
-    has_aval = "AVAL" in frame.columns
+    fmt_overrides = fmt_overrides or {}
+    has_value_col = value_col in frame.columns
     aggs = [pl.col("USUBJID").n_unique().alias("__n"), pl.len().alias("__n_events")]
-    if has_aval:
-        aggs += [_CONT_STAT_EXPRS[s].alias(f"__{s.value}") for s in stats if s in _CONT_STAT_EXPRS]
+    if has_value_col:
+        cont_exprs = _cont_stat_exprs(value_col)
+        aggs += [cont_exprs[s].alias(f"__{s.value}") for s in stats if s in cont_exprs]
     group_keys = list(dict.fromkeys([group_col, *fields]))
     grouped = frame.drop_nulls(subset=select_fields).group_by(group_keys).agg(aggs)
     cells = {
@@ -714,6 +760,7 @@ def _level_rows(
     }
 
     variable = fields[-1]
+    variable_label = (field_labels or {}).get(variable, "")
     parent = fields[-2] if len(fields) >= 2 else None
     out: list[dict[str, Any]] = []
     combo_list = combos.to_dicts()
@@ -722,7 +769,7 @@ def _level_rows(
         for combo in combo_list:
             cell = cells.get((arm, *(combo[f] for f in fields)))
             for stat_type in stats:
-                sn, sl, sv = _cell_stat(stat_type, cell, arm_n, has_aval)
+                sn, sl, sv = _cell_stat(stat_type, cell, arm_n, has_value_col)
                 out.append(
                     ard_row(
                         group_col,
@@ -735,6 +782,8 @@ def _level_rows(
                         context,
                         group2=parent or "",
                         group2_level=str(combo[parent]) if parent else "",
+                        variable_label=variable_label,
+                        fmt_fn=fmt_overrides.get(sn),
                     )
                 )
     return out
@@ -755,6 +804,9 @@ def summarize_ard(
     prefilter: Any | None = None,
     header_rows: list[OverallStat] | None = None,
     nested: bool = False,
+    value_col: str = "AVAL",
+    label_col: str | None = None,
+    decimals: dict[str, str] | None = None,
 ) -> pl.DataFrame:
     """Build a {cards}-compatible ARD — the single shared TLG engine.
 
@@ -792,13 +844,26 @@ def summarize_ard(
             PT-within-SOC, visit-within-parameter) with the parent level
             in ``group2`` / ``group2_level``.  When ``False`` each field
             is summarized as an independent flat breakdown.
+        value_col: Analysis-value column for continuous statistics
+            (default ``"AVAL"``).  Point at ``CHG``/``PCHG``/``BASE`` to
+            summarize those without pre-renaming.  Missing while
+            continuous statistics are requested raises.
+        label_col: Column holding display labels for the first row
+            field's values (e.g. ``"PARAM"`` for ``"PARAMCD"`` stubs).
+            The mapped label replaces the raw value in
+            ``variable_level`` / ``group2_level``.
+        decimals: Per-statistic format overrides — ARD ``stat_name``
+            (e.g. ``"mean"``) to format string (e.g. ``"xx.xx"``).
+            ``Row.decimals`` overrides again for that row's leaf level.
 
     Returns:
         pl.DataFrame: Validated {cards}-compatible ARD.
 
     Raises:
         SchemaError: On missing group column, missing percentage
-            denominator, unknown arms/pools, or ARD schema violations.
+            denominator, missing *value_col* with continuous statistics
+            requested, missing *label_col*, unknown arms/pools, or ARD
+            schema violations.
     """
     pools = pools or []
     header_rows = header_rows or []
@@ -824,6 +889,27 @@ def summarize_ard(
             "Percentage statistics (n_pct) require an ADSL population for "
             "the denominator — pass adsl=... . A percentage computed "
             "without a population denominator would be silently wrong."
+        )
+
+    cont_requested = sorted(
+        {
+            s.value
+            for s in [*stats, *(s for hdr in header_rows for s in (hdr.statistics or stats))]
+            if s in _CONT_STAT_META
+        }
+    )
+    if cont_requested and value_col not in df.columns:
+        raise SchemaError(
+            f"Continuous statistics {cont_requested} require the value "
+            f"column '{value_col}', which is not in the analysis dataset. "
+            f"Available: {sorted(df.columns)}. Pass value_col=... to point "
+            "at the analysis value (e.g. CHG), or drop the continuous "
+            "statistics."
+        )
+    if label_col is not None and label_col not in df.columns:
+        raise SchemaError(
+            f"label_col '{label_col}' not found in the analysis dataset. "
+            f"Available: {sorted(df.columns)}"
         )
 
     data_arms = set(df[group_col].drop_nulls().unique().to_list())
@@ -858,11 +944,23 @@ def summarize_ard(
         arms = [a for a in column_order if a in arms] + [a for a in arms if a not in column_order]
 
     ard_rows: list[dict[str, Any]] = []
+    table_fmt = decimals or {}
 
     # Big-N rows exist only when a population is given.
     if adsl is not None:
         ard_rows += [
-            ard_row(group_col, arm, "", "", "N", "N", big_n.get(arm), context) for arm in arms
+            ard_row(
+                group_col,
+                arm,
+                "",
+                "",
+                "N",
+                "N",
+                big_n.get(arm),
+                context,
+                fmt_fn=table_fmt.get("N"),
+            )
+            for arm in arms
         ]
 
     # Header rows (OverallStat) — whole-dataset aggregates above the hierarchy.
@@ -876,10 +974,23 @@ def summarize_ard(
             arm_hdr = hdr_df.filter(pl.col(group_col) == arm)
             arm_n = big_n.get(arm, 0)
             for stat_type in effective_stats:
-                sn, sl, sv = compute_stat(stat_type, arm_hdr, arm_n)
-                ard_rows.append(ard_row(group_col, arm, "", hdr.label, sn, sl, sv, context))
+                sn, sl, sv = compute_stat(stat_type, arm_hdr, arm_n, value_col=value_col)
+                ard_rows.append(
+                    ard_row(
+                        group_col,
+                        arm,
+                        "",
+                        hdr.label,
+                        sn,
+                        sl,
+                        sv,
+                        context,
+                        fmt_fn=table_fmt.get(sn),
+                    )
+                )
 
     present = [r for r in row_defs if r.field in df.columns]
+    field_labels = {r.field: (r.label or "") for r in row_defs}
     if nested:
         fields = [r.field for r in present]
         if len(fields) > 2:
@@ -902,17 +1013,71 @@ def summarize_ard(
                 if row_def.filter_value is not None:
                     frame = frame.filter(pl.col(row_def.field) == row_def.filter_value)
             ard_rows += _level_rows(
-                frame, fields[: depth + 1], depth_stats, arms, big_n, group_col, context
+                frame,
+                fields[: depth + 1],
+                depth_stats,
+                arms,
+                big_n,
+                group_col,
+                context,
+                value_col=value_col,
+                field_labels=field_labels,
+                fmt_overrides={**table_fmt, **(present[depth].decimals or {})},
             )
     else:
         for row_def in present:
             frame = df
             if row_def.filter_value is not None:
                 frame = frame.filter(pl.col(row_def.field) == row_def.filter_value)
-            ard_rows += _level_rows(frame, [row_def.field], stats, arms, big_n, group_col, context)
+            ard_rows += _level_rows(
+                frame,
+                [row_def.field],
+                stats,
+                arms,
+                big_n,
+                group_col,
+                context,
+                value_col=value_col,
+                field_labels=field_labels,
+                fmt_overrides={**table_fmt, **(row_def.decimals or {})},
+            )
 
     ard = rows_to_ard(ard_rows)
+    if label_col is not None and present:
+        ard = _apply_label_col(ard, df, present[0].field, label_col)
     issues = validate_ard(ard)
     if issues:
         raise SchemaError("ARD output failed schema validation:\n  " + "\n  ".join(issues))
     return ard
+
+
+def _apply_label_col(
+    ard: pl.DataFrame,
+    df: pl.DataFrame,
+    field: str,
+    label_col: str,
+) -> pl.DataFrame:
+    """Replace *field*'s coded levels with display labels from *label_col*.
+
+    Applied to ``variable_level`` (where the field is the variable) and
+    ``group2_level`` (where it is the parent).  Codes without a label
+    pass through unchanged.
+    """
+    pairs = (
+        df.select(pl.col(field).cast(pl.Utf8), pl.col(label_col).cast(pl.Utf8))
+        .drop_nulls()
+        .unique(subset=[field], keep="first", maintain_order=True)
+    )
+    mapping = dict(zip(pairs[field].to_list(), pairs[label_col].to_list()))
+    if not mapping:
+        return ard
+    return ard.with_columns(
+        pl.when(pl.col("variable") == field)
+        .then(pl.col("variable_level").replace(mapping))
+        .otherwise(pl.col("variable_level"))
+        .alias("variable_level"),
+        pl.when(pl.col("group2") == field)
+        .then(pl.col("group2_level").replace(mapping))
+        .otherwise(pl.col("group2_level"))
+        .alias("group2_level"),
+    )

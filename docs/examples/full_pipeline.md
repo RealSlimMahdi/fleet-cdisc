@@ -63,11 +63,11 @@ We map the raw datasets to SDTM variables using `df.sdtm`.
 
 ```python
 dm = (
-    raw_dm.sdtm.hardcode_no_ct("DOMAIN", value="DM")
-    .assign_no_ct("USUBJID", source="subject_id")
-    .assign_no_ct("ARM", source="arm")
-    .assign_ct("SEX", source="sex", ct_codelist=SEX, ct_mapping={"M": "M", "F": "F"})
-    .assign_dtc("BRTHDTC", source="dob")
+    raw_dm.sdtm.assign("DOMAIN", value="DM")
+    .assign("USUBJID", source="subject_id")
+    .assign("ARM", source="arm")
+    .assign("SEX", source="sex", ct=SEX, ct_map={"M": "M", "F": "F"})
+    .date("BRTHDTC", source="dob")
     .to_frame()
 )
 ```
@@ -76,16 +76,16 @@ dm = (
 
 ```python
 vs = (
-    raw_vs.sdtm.hardcode_no_ct("DOMAIN", value="VS")
-    .assign_no_ct("USUBJID", source="subject_id")
-    .assign_ct(
+    raw_vs.sdtm.assign("DOMAIN", value="VS")
+    .assign("USUBJID", source="subject_id")
+    .assign(
         "VSTESTCD",
         source="test_name",
-        ct_codelist=VSTESTCD,
-        ct_mapping={"Weight": "WEIGHT", "Heart Rate": "HR"},
+        ct=VSTESTCD,
+        ct_map={"Weight": "WEIGHT", "Heart Rate": "HR"},
     )
-    .assign_no_ct("VSSTRESN", source="result")
-    .assign_dtc("VSDTC", source="date")
+    .assign("VSSTRESN", source="result")
+    .date("VSDTC", source="date")
     .to_frame()
 )
 ```
@@ -94,10 +94,10 @@ vs = (
 
 ```python
 ae = (
-    raw_ae.sdtm.hardcode_no_ct("DOMAIN", value="AE")
-    .assign_no_ct("USUBJID", source="subject_id")
-    .assign_no_ct("AEDECOD", source="ae_term")
-    .assign_dtc("AESTDTC", source="start_date")
+    raw_ae.sdtm.assign("DOMAIN", value="AE")
+    .assign("USUBJID", source="subject_id")
+    .assign("AEDECOD", source="ae_term")
+    .date("AESTDTC", source="start_date")
     .to_frame()
 )
 ```

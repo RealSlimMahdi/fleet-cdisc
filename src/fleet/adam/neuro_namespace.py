@@ -35,6 +35,7 @@ from typing import Self
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
+from fleet.core.exceptions import DerivationError
 
 # Centiloid calibration table (tracer + pipeline + ref_region → slope, intercept)
 # Source: Navitsky et al. (2018), Sims et al. (2024), Royse et al. (2021)
@@ -103,14 +104,14 @@ class NeuroNamespace(SharedADaMVerbsMixin):
             key = (tracer, pipeline, ref_region)
             if key not in _CENTILOID_CALIBRATIONS:
                 valid = list(_CENTILOID_CALIBRATIONS.keys())
-                raise ValueError(
+                raise DerivationError(
                     f"No calibration found for tracer={tracer!r}, "
                     f"pipeline={pipeline!r}, ref_region={ref_region!r}. "
                     f"Valid combinations: {valid}"
                 )
             s, i = _CENTILOID_CALIBRATIONS[key]
         else:
-            raise ValueError("Provide either (slope, intercept) or (tracer, pipeline).")
+            raise DerivationError("Provide either (slope, intercept) or (tracer, pipeline).")
 
         expr = pl.lit(s) * pl.col(suvr_col) + pl.lit(i)
         if round_digits is not None:

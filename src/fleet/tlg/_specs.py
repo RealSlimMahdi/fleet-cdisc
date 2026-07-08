@@ -11,11 +11,11 @@ flag values, pool arm existence).
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 import polars as pl
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 from fleet.core.exceptions import SchemaError
 from fleet.sdtm.utils import parse_expression
@@ -48,6 +48,26 @@ def resolve_filter(value: Any) -> pl.Expr | None:
     raise TypeError(
         f"Filter must be a pl.Expr or an expression string, got {type(value).__name__!r}"
     )
+
+
+def _check_filter_field(value: Any, info: ValidationInfo) -> Any:
+    """Shared Pydantic validator body for filter-carrying spec fields.
+
+    Runs string filters through :func:`resolve_filter` at model-validation
+    time so a malformed expression fails at construction, naming the
+    field — instead of exploding later, mid-computation, without context.
+    The original value is returned unchanged (strings stay strings so
+    ``to_yaml()`` keeps working).
+    """
+    try:
+        resolve_filter(value)
+    except (ValueError, TypeError) as exc:
+        raise ValueError(
+            f"invalid filter for field '{info.field_name}': {exc}. Pass a "
+            "pl.Expr or a parseable expression string such as "
+            '\'pl.col("SAFFL") == "Y"\'.'
+        ) from exc
+    return value
 
 
 class Statistic(str, Enum):  # noqa: UP042
@@ -83,6 +103,16 @@ class Row(BaseModel):
     filter_value: str | None = Field(
         default=None,
         description="Optional value used to subset the row to a single category.",
+    )
+    decimals: dict[str, str] | None = Field(
+        default=None,
+        description=(
+            'Per-row format overrides — ARD ``stat_name`` (e.g. ``"mean"``) '
+            'to format string (e.g. ``"xx.xx"``).  Merged over the spec-level '
+            ":attr:`SummarySpecBase.decimals` for this row only, so the "
+            "pharma one-more-decimal-than-collected rule is expressible per "
+            "parameter."
+        ),
     )
 
     model_config = {"extra": "forbid"}
@@ -162,6 +192,8 @@ class OverallStat(BaseModel):
 
     model_config = {"extra": "forbid", "arbitrary_types_allowed": True}
 
+    _validate_filter = field_validator("filter")(_check_filter_field)
+
 
 class TLGSpec(BaseModel):
     """Base specification for all TLG outputs.
@@ -172,6 +204,29 @@ class TLGSpec(BaseModel):
     in each field's description point to the matching builder method.
     """
 
+    #: Spec fields defined on the model but ignored by the owning
+    #: template method (e.g. ``rows`` on the fixed-hierarchy shift
+    #: table).  ``TLGBuilder.to_spec()`` raises when accumulated builder
+    #: state maps onto one of these instead of silently dropping it.
+    _unconsumed_spec_fields: ClassVar[frozenset[str]] = frozenset()
+
+    template: str | None = Field(
+        default=None,
+        description=(
+            'Registry template id (e.g. ``"aet01"``).  Carrying it in '
+            "the YAML makes the file self-executing: "
+            "[`load_spec()`][fleet.tlg.load_spec] resolves the spec "
+            "class and [`run_spec()`][fleet.tlg.run_spec] dispatches to "
+            "the template's method through the registry."
+        ),
+    )
+    schema_version: Literal[1] = Field(
+        default=1,
+        description=(
+            "TLG spec schema version.  Bump-guarded so a future breaking "
+            "layout change can be detected at load time."
+        ),
+    )
     output_type: str = Field(
         default="base",
         description=(
@@ -221,6 +276,16 @@ class TLGSpec(BaseModel):
     )
 
     model_config = {"extra": "forbid", "arbitrary_types_allowed": True}
+
+    _validate_filters = field_validator("adsl_filter", "dataset_filter")(_check_filter_field)
+
+    @field_validator("schema_version", mode="before")
+    @classmethod
+    def _coerce_schema_version(cls, value: Any) -> Any:
+        """Accept ``schema_version: "1"`` (string form) as version 1."""
+        if isinstance(value, str) and value.strip().isdigit():
+            return int(value.strip())
+        return value
 
     def validate_dataframe(self, df: pl.DataFrame, *, group_col: str | None = None) -> None:
         """Run structural + content validation against *df*.
@@ -368,6 +433,8 @@ class SummarySpecBase(TLGSpec):
         default_factory=lambda: ["TRTA"],
         description=(
             "Column-grouping variables (typically a treatment column).  "
+            "Exactly one entry — multi-column grouping is not implemented "
+            "yet, and the engine would silently read only the first.  "
             "Set inline via [`TLGBuilder.by()`][fleet.tlg.TLGBuilder.by]."
         ),
     )
@@ -393,6 +460,53 @@ class SummarySpecBase(TLGSpec):
             "[`TLGBuilder.column_order()`][fleet.tlg.TLGBuilder.column_order]."
         ),
     )
+    value_col: str = Field(
+        default="AVAL",
+        description=(
+            "Analysis-value column used for continuous statistics "
+            "(mean/SD/median/…).  Summarize ``CHG``, ``PCHG`` or ``BASE`` "
+            "by pointing this at the column — no pre-renaming needed.  "
+            "When the column is missing but continuous statistics are "
+            "requested, the engine raises instead of emitting null stats."
+        ),
+    )
+    label_col: str | None = Field(
+        default=None,
+        description=(
+            "Column holding display labels for the first row field's "
+            'values (e.g. ``"PARAM"`` when the row field is '
+            '``"PARAMCD"``) so stubs show display names instead of '
+            "codes.  ``None`` shows the raw values."
+        ),
+    )
+    decimals: dict[str, str] | None = Field(
+        default=None,
+        description=(
+            "Per-statistic format overrides — ARD ``stat_name`` (e.g. "
+            '``"mean"``, ``"sd"``, ``"pct"``) to format string (e.g. '
+            '``"xx.xx"``).  Overrides the built-in defaults for this '
+            "table; individual rows may override again via "
+            ":attr:`Row.decimals`."
+        ),
+    )
+
+    @field_validator("columns")
+    @classmethod
+    def _single_group_column(cls, value: list[str]) -> list[str]:
+        """Reject multi-column (or empty) grouping loudly.
+
+        The engine reads only ``columns[0]``; accepting more would
+        silently discard the rest of the grouping.
+        """
+        if len(value) != 1:
+            raise ValueError(
+                f"'columns' must contain exactly one treatment-arm column "
+                f"(got {value!r}). Multi-column grouping is not implemented "
+                "— the engine would silently read only the first entry. "
+                "Move additional grouping into the row hierarchy ('rows') "
+                "or file a feature request."
+            )
+        return value
 
 
 class AESummarySpec(SummarySpecBase):
@@ -415,6 +529,8 @@ class AESummarySpec(SummarySpecBase):
 
 class AEListingSpec(TLGSpec):
     """Spec for an AE listing (l_ae_listing)."""
+
+    _unconsumed_spec_fields: ClassVar[frozenset[str]] = frozenset({"adsl_filter", "header_rows"})
 
     output_type: str = "listing"
     columns: list[Column] = Field(

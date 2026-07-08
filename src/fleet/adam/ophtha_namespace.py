@@ -31,6 +31,7 @@ from typing import Self
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
+from fleet.core.exceptions import DerivationError
 
 
 class OphthaNamespace(SharedADaMVerbsMixin):
@@ -274,7 +275,7 @@ class OphthaNamespace(SharedADaMVerbsMixin):
         elif direction == "lt":
             cond = col < threshold
         else:
-            raise ValueError(f"direction must be one of ge/gt/le/lt, got '{direction}'.")
+            raise DerivationError(f"direction must be one of ge/gt/le/lt, got '{direction}'.")
 
         return self._chain(
             pl.when(cond).then(pl.lit(flag_value)).otherwise(pl.lit(None)).alias(target)

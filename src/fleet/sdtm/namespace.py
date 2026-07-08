@@ -1,7 +1,8 @@
 """
 SDTM Polars namespace extension.
 
-Registers ``df.sdtm`` on every Polars DataFrame.
+Registers ``df.sdtm`` on every Polars DataFrame and ``lf.sdtm`` on every
+LazyFrame (``pl.scan_parquet(...).sdtm`` chains fully lazily).
 
 Usage
 -----
@@ -9,15 +10,17 @@ Usage
 
     result = (
         raw_df.sdtm
-        .assign_no_ct("USUBJID", source="patient_number")
-        .assign_ct("SEX", source="sex", ct_codelist=SEX)
+        .assign("USUBJID", source="patient_number")
+        .assign("SEX", source="sex", ct=SEX)
         .date("BRTHDTC", source="birth_date")
-        .hardcode_no_ct("DOMAIN", value="DM")
+        .assign("DOMAIN", value="DM")
         .to_frame()
     )
 
     # Or spec-driven:
     result = raw_df.sdtm.from_spec("examples/cdiscpilot01/sdtm/define.yaml", dataset="DM").to_frame()
+
+Discover every available verb programmatically with ``df.sdtm.verbs()``.
 """
 
 from __future__ import annotations
@@ -29,8 +32,11 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 import yaml
 
+from fleet.core._deprecation import deprecated_kwargs, deprecated_verb
+from fleet.core._flag_mixin import FlagCriterionMixin
 from fleet.core._pin_mixin import PinMixin
 from fleet.core._verb_mixin import SharedVerbsMixin
+from fleet.core.exceptions import DerivationError
 from fleet.sdtm._tdd_mixin import TrialDesignMixin
 from fleet.sdtm.models import NSVMeta
 from fleet.sdtm.utils import dtc_date_expr, dtc_datetime_expr, parse_expression
@@ -39,16 +45,15 @@ if TYPE_CHECKING:
     from fleet.ct.validator import CTValidator
 
 
-from fleet.core._resolve_callable import resolve_callable as _resolve_callable
-
-
 @pl.api.register_dataframe_namespace("sdtm")
-class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
+@pl.api.register_lazyframe_namespace("sdtm")
+class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignMixin):
     """
     Immutable pipeline builder for SDTM derivations.
 
     Each verb appends to a lazy expression list; `to_frame()` materialises
-    everything in one ``with_columns`` call.
+    everything in one ``with_columns`` call.  Accepts both ``pl.DataFrame``
+    and ``pl.LazyFrame`` inputs, so scanned sources stay lazy end-to-end.
     """
 
     # -- SharedVerbsMixin configuration --
@@ -66,19 +71,23 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
         "ETCD": {"pin": "TE", "ref_col": "ETCD"},
     }
 
-    def __init__(self, df: pl.DataFrame) -> None:
+    def __init__(self, df: pl.DataFrame | pl.LazyFrame) -> None:
         self._lazy = df.lazy()
         self._nsv_meta: list[NSVMeta] = []
         self._domain: str | None = None
         self._pinned: dict[str, tuple[pl.DataFrame, list[str]]] = {}
         self._pin_lineage: list = []
+        self._pending_fk_checks: list[tuple[str, str, str, str]] = []
 
     # ------------------------------------------------------------------ #
-    # 1. assign_no_ct — direct 1:1 column rename                          #
+    # 1. assign_no_ct — deprecated alias of assign(source=)               #
     # ------------------------------------------------------------------ #
 
+    @deprecated_verb("assign_no_ct", use="assign(target, source=...)")
     def assign_no_ct(self, target: str, *, source: str) -> SDTMNamespace:
         """Copy *source* column to *target* with no controlled-terminology validation.
+
+        Deprecated alias of :meth:`~fleet.core._verb_mixin.SharedVerbsMixin.assign`.
 
         Args:
             target: Name of the output SDTM variable to create.
@@ -93,18 +102,17 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
 
                 dm = (
                     raw_df.sdtm
-                    .assign_no_ct("USUBJID", source="subject_id")
+                    .assign("USUBJID", source="subject_id")
                     .to_frame()
                 )
         """
-        ns = self._chain(pl.col(source).alias(target))
-        ns._auto_fk_check(target)
-        return ns
+        return self._assign_impl(target, source=source, verb="assign_no_ct", fk=True)
 
     # ------------------------------------------------------------------ #
-    # 2. assign_ct — 1:1 mapping with CT decode/validation                #
+    # 2. assign_ct — deprecated alias of assign(source=, ct=, ct_map=)    #
     # ------------------------------------------------------------------ #
 
+    @deprecated_verb("assign_ct", use="assign(target, source=..., ct=..., ct_map=...)")
     def assign_ct(
         self,
         target: str,
@@ -113,27 +121,13 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
         ct_codelist: str | type,
         ct_mapping: dict[str, str] | None = None,
         ct_validator: CTValidator | None = None,
-        validate_values: bool = False,
+        validate_values: bool | None = None,
     ) -> SDTMNamespace:
-        """Copy *source* to *target*, translating values via controlled terminology.
+        """Copy *source* to *target*, validated against controlled terminology.
 
-        Values are decoded using *ct_mapping* (explicit override) or, when
-        omitted, from the singleton ``CTValidator`` for the given codelist.
-
-        ``ct_mapping`` and ``ct_codelist`` are complementary:
-
-        * **With** ``ct_mapping`` — raw values are translated through the
-          supplied dictionary.  Use this when the source column contains
-          non-standard codes that need remapping (e.g.
-          ``{"1": "M", "2": "F"}``).
-        * **Without** ``ct_mapping`` — the raw values are assumed to
-          *already* match the CDISC submission values (e.g. the source
-          column already contains ``"M"`` / ``"F"``).  In this mode the
-          values are passed through and validated against the
-          ``ct_codelist`` via the ``CTValidator``.
-
-        In both cases ``ct_codelist`` identifies the NCI codelist used for
-        downstream validation (e.g. Define-XML, P21).
+        Deprecated alias of
+        :meth:`~fleet.core._verb_mixin.SharedVerbsMixin.assign` — pass
+        ``ct=`` / ``ct_map=`` instead of ``ct_codelist=`` / ``ct_mapping=``.
 
         Args:
             target: Name of the output SDTM variable.
@@ -141,158 +135,37 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
             ct_codelist: CDISC CT codelist identifier — either a string
                 (e.g. ``"C66731"``) or a generated codelist class
                 (e.g. ``SEX``) that exposes ``_concept_id``.
-            ct_mapping: Explicit ``{raw_value: ct_value}`` mapping.  When
-                provided, the CT validator is bypassed.  May be omitted when
-                raw data already matches the CDISC submission values — the
-                codelist is still recorded for validation.
+            ct_mapping: Explicit ``{raw_value: ct_value}`` mapping.
             ct_validator: Optional pre-built validator instance.
-            validate_values: When ``True``, eagerly collect unique values
-                from *source* and warn if any are not valid submission
-                terms for the codelist.  Requires CT data to be loaded.
+            validate_values: Controls the pass-through validation; see
+                ``assign``.
 
         Returns:
             SDTMNamespace: The namespace with *target* appended; call
                 ``.to_frame()`` to materialise.
 
         Examples:
-            Map raw ``sex`` values to CDISC Sex codelist using a generated
-            codelist class::
+            Map raw ``sex`` values to the CDISC Sex codelist::
 
                 from codelists import SEX
 
                 dm = (
                     raw_df.sdtm
-                    .assign_ct(
-                        "SEX",
-                        source="sex",
-                        ct_codelist=SEX,
-                        ct_mapping={"M": "M", "F": "F"},
-                    )
-                    .to_frame()
-                )
-
-            Using a generated codelist class instead of a raw code::
-
-                from codelists import SEX
-
-                dm = (
-                    raw_df.sdtm
-                    .assign_ct("SEX", source="sex", ct_codelist=SEX)
-                    .to_frame()
-                )
-
-            Validate that source values match the codelist (warns on mismatch)::
-
-                from codelists import ROUTE
-
-                ex = (
-                    raw_df.sdtm
-                    .assign_ct(
-                        "EXROUT",
-                        source="route",
-                        ct_codelist=ROUTE,
-                        validate_values=True,
-                    )
+                    .assign("SEX", source="sex", ct=SEX,
+                            ct_map={"M": "M", "F": "F"})
                     .to_frame()
                 )
         """
-        # Keep the original class for introspection (validate_values fallback).
-        ct_codelist_cls = ct_codelist if not isinstance(ct_codelist, str) else None
-
-        # Resolve codelist class to its concept ID string.
-        if not isinstance(ct_codelist, str):
-            ct_codelist = getattr(ct_codelist, "_concept_id", None) or ct_codelist.__name__
-
-        if ct_mapping:
-            mapping_expr = pl.col(source).replace(ct_mapping).alias(target)
-            ns = self._chain(mapping_expr)
-            ns._auto_fk_check(target)
-            return ns
-
-        # Try to auto-resolve from the singleton CTValidator
-        if ct_validator is None:
-            try:
-                from fleet.ct.validator import get_validator
-
-                ct_validator = get_validator()
-            except Exception:
-                ct_validator = None
-
-        if ct_validator is not None:
-            try:
-                decode_map = ct_validator.get_decode_map(ct_codelist)
-                if decode_map:
-                    ns = self._chain(pl.col(source).replace(decode_map).alias(target))
-                    ns._auto_fk_check(target)
-                    if validate_values:
-                        self._warn_invalid_values(
-                            source, ct_codelist, ct_validator, ct_codelist_cls
-                        )
-                    return ns
-            except Exception:
-                pass
-
-        # Fallback: pass-through (CT not loaded)
-        ns = self._chain(pl.col(source).alias(target))
-        ns._auto_fk_check(target)
-        if validate_values:
-            self._warn_invalid_values(source, ct_codelist, ct_validator, ct_codelist_cls)
-        return ns
-
-    # ------------------------------------------------------------------ #
-    # 2b. _warn_invalid_values — eager CT check for assign_ct             #
-    # ------------------------------------------------------------------ #
-
-    def _warn_invalid_values(
-        self,
-        source: str,
-        ct_codelist: str,
-        ct_validator: CTValidator | None,
-        ct_codelist_cls: type | None = None,
-    ) -> None:
-        """Eagerly check unique *source* values against the loaded codelist.
-
-        Emits a UserWarning for any values not in the valid submission terms.
-        Derives valid values from the validator cache first, falling back to
-        introspecting the codelist class attributes when CT is not loaded.
-        """
-        valid_values: set[str] = set()
-
-        # Strategy 1: from the validator cache
-        if ct_validator is not None:
-            valid_values = set(ct_validator.get_valid_values(ct_codelist))
-
-        # Strategy 2: introspect the codelist class (works without CT loaded)
-        if not valid_values and ct_codelist_cls is not None:
-            valid_values = {
-                v
-                for k, v in vars(ct_codelist_cls).items()
-                if not k.startswith("_") and isinstance(v, str)
-            }
-
-        if not valid_values:
-            return
-
-        try:
-            unique_vals = (
-                self._lazy.select(pl.col(source).drop_nulls().unique())
-                .collect()
-                .to_series()
-                .to_list()
-            )
-            invalid = [v for v in unique_vals if v not in valid_values]
-            if invalid:
-                import warnings
-
-                warnings.warn(
-                    f"Column '{source}' contains values not in codelist "
-                    f"'{ct_codelist}': {invalid}. "
-                    f"Valid values: {sorted(valid_values)}. "
-                    f"Consider providing a ct_mapping parameter.",
-                    stacklevel=3,
-                )
-        except Exception:
-            pass
+        return self._assign_impl(
+            target,
+            source=source,
+            ct=ct_codelist,
+            ct_map=ct_mapping,
+            ct_validator=ct_validator,
+            validate_values=validate_values,
+            verb="assign_ct",
+            fk=True,
+        )
 
     # ------------------------------------------------------------------ #
     # 3. date — unified date verb                                          #
@@ -366,9 +239,9 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
 
         # Validate source / value mutual exclusivity
         if source is not None and value is not None:
-            raise ValueError("Cannot specify both source= and value=. Choose one.")
+            raise DerivationError("Cannot specify both source= and value=. Choose one.")
         if source is None and value is None:
-            raise ValueError("Must specify either source= or value=.")
+            raise DerivationError("Must specify either source= or value=.")
 
         output_type = _resolve_output_type(target, output)
 
@@ -377,7 +250,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
             if flag is True:
                 flag = False
             exprs = impute_and_flag(None, target, value=value, output_type=output_type, flag=flag)
-            return self._chain(*exprs)
+            return self._chain(*exprs, verb="date")
 
         # source= path
         assert source is not None
@@ -403,11 +276,11 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
                     expr = dtc_date_expr(source, target, input_format=format)
             else:
                 expr = dtc_date_expr(source, target)
-            return self._chain(expr)
+            return self._chain(expr, verb="date")
 
         # DT/DTM: delegate to imputation engine
         if time is not None and output_type != "dtm":
-            raise ValueError(
+            raise DerivationError(
                 f"time= parameter is only valid for DTM targets, "
                 f"but target '{target}' resolves to output='{output_type}'."
             )
@@ -434,7 +307,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
             max_date=max_date,
             flag=flag,
         )
-        return self._chain(*exprs)
+        return self._chain(*exprs, verb="date")
 
     def _dtm_with_time(
         self,
@@ -460,7 +333,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
         if not time_is_literal:
             schema_cols = self._lazy.collect_schema().names()
             if time not in schema_cols:
-                raise ValueError(
+                raise DerivationError(
                     f"time='{time}' column not found in the DataFrame. "
                     f"Available columns: {schema_cols}"
                 )
@@ -527,9 +400,10 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
         return self._materialise_then(result)
 
     # ------------------------------------------------------------------ #
-    # 4. hardcode_ct — literal constant with CT validation                #
+    # 4. hardcode_ct — deprecated alias of assign(value=, ct=)            #
     # ------------------------------------------------------------------ #
 
+    @deprecated_verb("hardcode_ct", use="assign(target, value=..., ct=...)")
     def hardcode_ct(
         self,
         target: str,
@@ -539,18 +413,15 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
     ) -> SDTMNamespace:
         """Set *target* to a constant *value*, validated against controlled terminology.
 
-        When *ct_codelist* is provided **and** a ``CTValidator`` has been
-        initialised with CT data, the *value* is checked at pipeline-build
-        time.  A warning is emitted if the value is not a valid submission
-        value for that codelist.  If CT data is not loaded, the validation
-        is silently skipped and the value is assigned as-is.
+        Deprecated alias of
+        :meth:`~fleet.core._verb_mixin.SharedVerbsMixin.assign` — pass
+        ``ct=`` instead of ``ct_codelist=``.
 
         Args:
             target: Name of the output SDTM variable.
             value: The literal value to assign.
-            ct_codelist: CDISC CT codelist for validation — pass a generated
-                codelist class (e.g. ``SEX``) or a raw NCI concept ID string
-                (e.g. ``"C66741"``).  Prefer the class form.
+            ct_codelist: CDISC CT codelist for validation — a generated
+                codelist class (e.g. ``SEX``) or an NCI concept ID string.
 
         Returns:
             SDTMNamespace: The namespace with *target* appended; call
@@ -563,38 +434,22 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
 
                 dm = (
                     raw_df.sdtm
-                    .hardcode_ct("AGEU", value="YEARS",
-                                 ct_codelist=AGEU)
+                    .assign("AGEU", value="YEARS", ct=AGEU)
                     .to_frame()
                 )
         """
-        if ct_codelist is not None:
-            # Resolve codelist class to its concept ID string.
-            if not isinstance(ct_codelist, str):
-                ct_codelist = getattr(ct_codelist, "_concept_id", None) or ct_codelist.__name__
-
-            try:
-                from fleet.ct.validator import get_validator
-
-                validator = get_validator()
-                valid, msg = validator.validate_value(ct_codelist, str(value))
-                if not valid:
-                    import warnings
-
-                    warnings.warn(msg, stacklevel=2)
-            except Exception:
-                pass  # CT not loaded — skip validation
-
-        ns = self._chain(pl.lit(value).alias(target))
-        ns._auto_fk_check(target)
-        return ns
+        return self._assign_impl(target, value=value, ct=ct_codelist, verb="hardcode_ct", fk=True)
 
     # ------------------------------------------------------------------ #
-    # 5. hardcode_no_ct — literal constant, no CT                         #
+    # 5. hardcode_no_ct — deprecated alias of assign(value=)              #
     # ------------------------------------------------------------------ #
 
+    @deprecated_verb("hardcode_no_ct", use="assign(target, value=...)")
     def hardcode_no_ct(self, target: str, *, value: Any) -> SDTMNamespace:
         """Set *target* to a literal *value* for every row, with no CT validation.
+
+        Deprecated alias of
+        :meth:`~fleet.core._verb_mixin.SharedVerbsMixin.assign`.
 
         Args:
             target: Name of the output SDTM variable.
@@ -609,14 +464,11 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
 
                 dm = (
                     raw_df.sdtm
-                    .hardcode_no_ct("DOMAIN", value="DM")
+                    .assign("DOMAIN", value="DM")
                     .to_frame()
                 )
         """
-        ns = self._chain(pl.lit(value).alias(target))
-        if target == "DOMAIN":
-            ns._domain = str(value)
-        return ns
+        return self._assign_impl(target, value=value, verb="hardcode_no_ct", fk=False)
 
     # ------------------------------------------------------------------ #
     # 5b. nsv — Non-Standard Variable (qualifier) derivation               #
@@ -660,8 +512,8 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
 
                 dm = (
                     raw_df.sdtm
-                    .hardcode_no_ct("DOMAIN", value="DM")
-                    .assign_no_ct("USUBJID", source="patient_number")
+                    .assign("DOMAIN", value="DM")
+                    .assign("USUBJID", source="patient_number")
                     .nsv("SAFETY", source="safety_flag",
                          label="Safety Population Flag")
                     .nsv("ITT", source="itt_flag",
@@ -670,12 +522,12 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
                 )
         """
         if source is None and value is None:
-            raise ValueError("nsv() requires either 'source' or 'value'.")
+            raise DerivationError("nsv() requires either 'source' or 'value'.")
         if source is not None and value is not None:
-            raise ValueError("nsv() accepts 'source' or 'value', not both.")
+            raise DerivationError("nsv() accepts 'source' or 'value', not both.")
 
         expr = pl.col(source).alias(target) if source else pl.lit(value).alias(target)
-        new = self._chain(expr)
+        new = self._chain(expr, verb="nsv")
         # Copy-on-write: avoid mutating shared list across copies
         new._nsv_meta = [
             *self._nsv_meta,
@@ -684,69 +536,15 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
         return new
 
     # ------------------------------------------------------------------ #
-    # 5c. study_day — thin override for backward-compat `dm=` kwarg       #
+    # 5c. study_day is inherited from SharedVerbsMixin (one shared        #
+    # implementation; `dm=` / `adsl=` are documented ref_df aliases).     #
     # ------------------------------------------------------------------ #
-
-    def study_day(
-        self,
-        target: str,
-        *,
-        date_col: str,
-        ref_col: str = "RFSTDTC",
-        ref_pin: str = "DM",
-        dm: pl.DataFrame | None = None,
-    ) -> SDTMNamespace:
-        """Derive a CDISC study day variable from a date column and a reference date.
-
-        Uses the CDISC algorithm: ``date - ref_date + 1`` when
-        ``date >= ref_date``, else ``date - ref_date`` (no day 0).
-
-        The reference date is resolved in this order:
-
-        1. Explicit ``dm=`` parameter (highest priority).
-        2. Pinned domain (via ``.pin("DM", dm_df)``).
-        3. ``ref_col`` already present in the current frame.
-        4. Actionable ``LookupError`` telling the user what to do.
-
-        Args:
-            target: Name of the output study day variable
-                (e.g. ``"AESTDY"``).
-            date_col: Column in the current frame containing the date
-                to measure from (e.g. ``"AESTDTC"``).
-            ref_col: Column name of the reference start date in the
-                pinned/explicit domain (default ``"RFSTDTC"``).
-            ref_pin: Pinned domain to look up (default ``"DM"``).
-            dm: Optional explicit DataFrame override — bypasses pinning.
-
-        Returns:
-            SDTMNamespace: The namespace with *target* appended; call
-                ``.to_frame()`` to materialise.
-
-        Raises:
-            LookupError: If the reference date cannot be resolved from
-                any source.
-
-        Examples:
-            Derive AE study day from pinned DM::
-
-                ae = (
-                    ae_raw.sdtm
-                    .hardcode_no_ct("DOMAIN", value="AE")
-                    .assign_no_ct("USUBJID", source="patient_number")
-                    .date("AESTDTC", source="ae_start_date")
-                    .pin("DM", dm_df)
-                    .study_day("AESTDY", date_col="AESTDTC")
-                    .to_frame()
-                )
-        """
-        return super().study_day(
-            target, date_col=date_col, ref_col=ref_col, ref_pin=ref_pin, ref_df=dm
-        )
 
     # ------------------------------------------------------------------ #
     # 5d. baseline_flag — last pre-reference-date observation flag        #
     # ------------------------------------------------------------------ #
 
+    @deprecated_kwargs(group_by="by")
     def baseline_flag(
         self,
         target: str,
@@ -756,7 +554,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
         ref_col: str = "RFSTDTC",
         ref_pin: str = "DM",
         dm: pl.DataFrame | None = None,
-        group_by: list[str] | None = None,
+        by: list[str] | None = None,
     ) -> SDTMNamespace:
         """Flag the last observation before the reference date as baseline.
 
@@ -776,8 +574,9 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
             ref_pin: Pinned domain for the reference date
                 (default ``"DM"``).
             dm: Optional explicit DataFrame override.
-            group_by: Additional grouping columns beyond USUBJID
-                and *testcd_col*.
+            by: Additional grouping columns beyond USUBJID and
+                *testcd_col*.  The legacy ``group_by=`` spelling is
+                accepted with a ``FutureWarning``.
 
         Returns:
             SDTMNamespace: The namespace with *target* appended; call
@@ -788,9 +587,9 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
 
                 vs = (
                     vs_raw.sdtm
-                    .hardcode_no_ct("DOMAIN", value="VS")
-                    .assign_no_ct("USUBJID", source="patient_number")
-                    .assign_no_ct("VSTESTCD", source="vstestcd")
+                    .assign("DOMAIN", value="VS")
+                    .assign("USUBJID", source="patient_number")
+                    .assign("VSTESTCD", source="vstestcd")
                     .date("VSDTC", source="vs_date")
                     .pin("DM", dm_df)
                     .baseline_flag("VSBLFL", date_col="VSDTC",
@@ -829,8 +628,8 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
         grp_keys = ["USUBJID"]
         if testcd_col is not None:
             grp_keys.append(testcd_col)
-        if group_by:
-            grp_keys.extend(group_by)
+        if by:
+            grp_keys.extend(by)
         grp_keys = list(dict.fromkeys(grp_keys))
 
         # Parse dates, filter pre-reference, find last
@@ -929,12 +728,13 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
         """
         cond_expr = condition if isinstance(condition, pl.Expr) else parse_expression(condition)
         expr = pl.when(cond_expr).then(pl.lit(then_value)).otherwise(pl.lit(None)).alias(target)
-        return self._chain(expr)
+        return self._chain(expr, verb="condition_add")
 
     # ------------------------------------------------------------------ #
-    # 7. if_then_else — multi-branch conditional                          #
+    # 7. if_then_else — deprecated alias of case_when                     #
     # ------------------------------------------------------------------ #
 
+    @deprecated_verb("if_then_else", use="case_when(target, when=[...], else_=...)")
     def if_then_else(
         self,
         target: str,
@@ -944,7 +744,9 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
     ) -> SDTMNamespace:
         """Multi-branch conditional mapping.
 
-        Branches are evaluated in order; first match wins.
+        Deprecated alias of
+        :meth:`~fleet.core._verb_mixin.SharedVerbsMixin.case_when` —
+        pass ``else_=`` instead of ``else_value=``.
 
         Args:
             target: Name of the output SDTM variable.
@@ -960,33 +762,14 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
 
                 dm = (
                     raw_df.sdtm
-                    .if_then_else("AGEU", when=[
+                    .case_when("AGEU", when=[
                         {"condition": 'pl.col("age_unit") == "years"', "value": "YEARS"},
                         {"condition": 'pl.col("age_unit") == "months"', "value": "MONTHS"},
-                    ], else_value="YEARS")
+                    ], else_="YEARS")
                     .to_frame()
                 )
         """
-        if not when:
-            return self._chain(pl.lit(else_value).alias(target))
-
-        # Build nested pl.when().then().when().then()...
-        first = when[0]
-        cond = (
-            first["condition"]
-            if isinstance(first["condition"], pl.Expr)
-            else parse_expression(first["condition"])
-        )
-        chain = pl.when(cond).then(pl.lit(first["value"]))
-        for branch in when[1:]:
-            c = (
-                branch["condition"]
-                if isinstance(branch["condition"], pl.Expr)
-                else parse_expression(branch["condition"])
-            )
-            chain = chain.when(c).then(pl.lit(branch["value"]))
-        expr = chain.otherwise(pl.lit(else_value)).alias(target)
-        return self._chain(expr)
+        return self._case_when_impl(target, when=when, else_=else_value, verb="if_then_else")
 
     # ------------------------------------------------------------------ #
     # 8. ae_aerel — AE causality string mapping                           #
@@ -1037,24 +820,26 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
         """
         mapping = aerel_map or self._DEFAULT_AEREL_MAP
 
-        def _map(val: str | None) -> str | None:
-            if val is None:
-                return None
-            return mapping.get(str(val).lower().strip(), str(val).upper())
-
-        expr = pl.col(source).map_elements(_map, return_dtype=pl.String).alias(target)
-        return self._chain(expr)
+        raw = pl.col(source).cast(pl.String)
+        normalised = raw.str.to_lowercase().str.strip_chars()
+        expr = normalised.replace_strict(
+            mapping,
+            default=raw.str.to_uppercase(),
+            return_dtype=pl.String,
+        ).alias(target)
+        return self._chain(expr, verb="ae_aerel")
 
     # ------------------------------------------------------------------ #
     # 9. seq — --SEQ sequence number (with SDTM naming convention check)  #
     # ------------------------------------------------------------------ #
 
+    @deprecated_kwargs(groups="by")
     def seq(
         self,
         target: str,
         *,
         order_by: list[str] | None = None,
-        groups: list[str] | None = None,
+        by: list[str] | None = None,
         start_at: int = 1,
         check_uniqueness: bool = False,
     ) -> SDTMNamespace:
@@ -1062,7 +847,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
 
         Generates a 1-based integer sequence that uniquely identifies each
         record within the domain, per subject.  The dataset is sorted by
-        *order_by* columns within each *groups* partition before numbering
+        *order_by* columns within each *by* partition before numbering
         — this follows the sdtm.oak ``derive_seq()`` pattern and ensures
         deterministic, reproducible sequence values.
 
@@ -1072,12 +857,13 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
                 in ``SEQ``.
             order_by: Columns that define the sort order within each group.
                 When ``None``, the current row order is preserved.
-            groups: Subject-level grouping columns (default
+            by: Subject-level grouping columns (default
                 ``["STUDYID", "USUBJID"]``).  The sequence restarts at
-                *start_at* for each unique combination.
+                *start_at* for each unique combination.  The legacy
+                ``groups=`` spelling is accepted with a ``FutureWarning``.
             start_at: First sequence value (default ``1``).
             check_uniqueness: If ``True``, emit a warning when the
-                combination of *groups* + *order_by* does not uniquely
+                combination of *by* + *order_by* does not uniquely
                 identify each row.
 
         Returns:
@@ -1089,10 +875,10 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
 
                 ae = (
                     raw_df.sdtm
-                    .hardcode_no_ct("DOMAIN", value="AE")
-                    .assign_no_ct("USUBJID", source="patient_number")
-                    .assign_no_ct("AETERM", source="ae_term")
-                    .assign_no_ct("AESTDTC", source="ae_start_date")
+                    .assign("DOMAIN", value="AE")
+                    .assign("USUBJID", source="patient_number")
+                    .assign("AETERM", source="ae_term")
+                    .assign("AESTDTC", source="ae_start_date")
                     .seq("AESEQ", order_by=["AESTDTC"])
                     .to_frame()
                 )
@@ -1109,73 +895,37 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
         return super().seq(
             target,
             order_by=order_by,
-            groups=groups,
+            by=by,
             start_at=start_at,
             check_uniqueness=check_uniqueness,
         )
 
     # ------------------------------------------------------------------ #
-    # 10. merge — join another dataset                                     #
+    # 10. merge is inherited from SharedVerbsMixin (canonical join verb;  #
+    # the legacy positional target_cols spelling still works there).      #
     # ------------------------------------------------------------------ #
-
-    def merge(
-        self,
-        target_cols: list[str] | None = None,
-        *,
-        dataset: pl.DataFrame,
-        on: str | list[str],
-        how: str = "left",
-    ) -> SDTMNamespace:
-        """Join *dataset* into the pipeline using key column(s) *on*.
-
-        Materialises the current pipeline first (join requires a concrete
-        frame), then returns a namespace wrapping the joined result.
-
-        Args:
-            target_cols: Optional list of columns to keep from the joined
-                result. When ``None``, all columns are retained.
-            dataset: The ``pl.DataFrame`` to merge in.
-            on: Key column name(s) for the join.
-            how: Join strategy (default ``"left"``).
-
-        Returns:
-            SDTMNamespace: A fresh namespace wrapping the joined frame.
-
-        Examples:
-            Merge supplemental qualifier data onto the DM domain::
-
-                dm = (
-                    raw_df.sdtm
-                    .hardcode_no_ct("DOMAIN", value="DM")
-                    .merge(dataset=suppdm_df, on="USUBJID")
-                    .to_frame()
-                )
-        """
-        joined = self._lazy.join(dataset.lazy(), on=on, how=how)
-        if target_cols:
-            joined = joined.with_columns([pl.col(c) for c in target_cols])
-        return self._materialise_then(joined.collect())
 
     # ------------------------------------------------------------------ #
     # 10. group_by — aggregate records                                     #
     # ------------------------------------------------------------------ #
 
+    @deprecated_kwargs(group_cols="by")
     def group_by(
         self,
         *,
-        group_cols: list[str],
+        by: list[str],
         agg: list[pl.Expr],
     ) -> SDTMNamespace:
-        """Group by *group_cols* and apply *agg* aggregations.
-
-        Materialises, groups, and returns a fresh namespace.
+        """Group by *by* and apply *agg* aggregations (lazily).
 
         Args:
-            group_cols: Column(s) to group by.
+            by: Column(s) to group by.  The legacy ``group_cols=``
+                spelling is accepted with a ``FutureWarning``.
             agg: List of Polars aggregation expressions.
 
         Returns:
-            SDTMNamespace: A fresh namespace wrapping the grouped frame.
+            SDTMNamespace: A fresh namespace continuing from the grouped
+                plan.
 
         Examples:
             Compute max vital-sign result per subject and test::
@@ -1183,20 +933,24 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
                 vs_agg = (
                     raw_df.sdtm
                     .group_by(
-                        group_cols=["USUBJID", "VSTESTCD"],
+                        by=["USUBJID", "VSTESTCD"],
                         agg=[pl.col("VSSTRESN").max().alias("AVAL")],
                     )
                     .to_frame()
                 )
         """
-        return self._materialise_then(self._lazy.group_by(group_cols).agg(agg).collect())
+        return self._with_lazy(self._lazy.group_by(by).agg(agg))
 
     # ------------------------------------------------------------------ #
-    # 12. dataset_level — constant for whole dataset (alias hardcode_no_ct)
+    # 12. dataset_level — deprecated alias of assign(value=)               #
     # ------------------------------------------------------------------ #
 
+    @deprecated_verb("dataset_level", use="assign(target, value=...)")
     def dataset_level(self, target: str, *, value: Any) -> SDTMNamespace:
-        """Set a dataset-level constant on *target* (alias for ``hardcode_no_ct``).
+        """Set a dataset-level constant on *target*.
+
+        Deprecated alias of
+        :meth:`~fleet.core._verb_mixin.SharedVerbsMixin.assign`.
 
         Args:
             target: Name of the output SDTM variable.
@@ -1211,11 +965,11 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
 
                 dm = (
                     raw_df.sdtm
-                    .dataset_level("STUDYID", value="CDISCPILOT01")
+                    .assign("STUDYID", value="CDISCPILOT01")
                     .to_frame()
                 )
         """
-        return self.hardcode_no_ct(target, value=value)
+        return self._assign_impl(target, value=value, verb="dataset_level", fk=False)
 
     # ------------------------------------------------------------------ #
     # 13. notsubmitted — mark variable as null / not-submitted            #
@@ -1239,13 +993,13 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
 
                 dm = (
                     raw_df.sdtm
-                    .assign_no_ct("USUBJID", source="subject_id")
+                    .assign("USUBJID", source="subject_id")
                     .notsubmitted("_raw_id", "_site_code")
                     .to_frame()
                 )
         """
         exprs = [pl.lit(None).alias(t) for t in targets]
-        return self._chain(*exprs)
+        return self._chain(*exprs, verb="notsubmitted")
 
     # ------------------------------------------------------------------ #
     # 14. multiple_responses — expand multi-value eCRF fields             #
@@ -1260,8 +1014,8 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
     ) -> SDTMNamespace:
         """Explode a delimited multi-response field into separate rows.
 
-        Materialises the current pipeline, then splits *source* on
-        *delimiter* and explodes.
+        Splits *source* on *delimiter* and explodes — lazily, as part of
+        the accumulated plan.
 
         Args:
             target: Name of the output column for the split values.
@@ -1282,210 +1036,17 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
                     .to_frame()
                 )
         """
-        return self._materialise_then(
+        return self._with_lazy(
             self._lazy.with_columns(pl.col(source).str.split(delimiter).alias("__split__"))
             .explode("__split__")
             .with_columns(pl.col("__split__").str.strip_chars().alias(target))
             .drop("__split__")
-            .collect()
         )
 
     # ------------------------------------------------------------------ #
-    # Spec-driven pipeline                                                 #
+    # Spec-driven pipeline: from_spec() is inherited from                  #
+    # SharedVerbsMixin and executes through fleet.core.spec_registry.      #
     # ------------------------------------------------------------------ #
-
-    def from_spec(self, spec_path: str | Path, *, dataset: str | None = None) -> SDTMNamespace:
-        """Build a pipeline from a YAML specification file.
-
-        Reads a ``define.yaml`` with a top-level ``datasets`` list where each
-        variable carries a ``derivation`` block.  Pass *dataset* to select
-        which dataset to execute (e.g. ``dataset="DM"``).  When the file
-        contains only one dataset the *dataset* argument may be omitted.
-
-        Args:
-            spec_path: Path to the ``define.yaml`` specification file.
-            dataset: Name of the dataset to execute from the spec.
-
-        Returns:
-            SDTMNamespace: A namespace pre-loaded with all spec-driven
-                derivations; call ``.to_frame()`` to materialise.
-
-        Examples:
-            Build and materialise the DM domain from a spec::
-
-                dm = (
-                    raw_df.sdtm
-                    .from_spec("examples/cdiscpilot01/sdtm/define.yaml", dataset="DM")
-                    .to_frame()
-                )
-        """
-        from fleet.sdtm.models import SDTMDomainSpec
-
-        spec_data = yaml.safe_load(Path(spec_path).read_text())
-
-        # ── Detect format: define.yaml has a top-level "datasets" key ──
-        if "datasets" in spec_data:
-            variables = self._extract_define_variables(spec_data, dataset)
-        else:
-            spec = SDTMDomainSpec(**spec_data)
-            variables = spec.variables
-
-        ns: SDTMNamespace = self
-        for var in variables:
-            alg = var.algorithm.value
-            target = var.target
-
-            if alg == "assign_no_ct":
-                ns = ns.assign_no_ct(target, source=var.source or target)
-            elif alg == "assign_ct":
-                ns = ns.assign_ct(
-                    target,
-                    source=var.source or target,
-                    ct_codelist=var.ct_codelist or "",
-                    ct_mapping=var.ct_mapping,
-                )
-            elif alg in ("assign_dtc", "date"):
-                kwargs: dict[str, Any] = {}
-                if var.source:
-                    kwargs["source"] = var.source
-                elif getattr(var, "value", None):
-                    kwargs["value"] = var.value
-                else:
-                    kwargs["source"] = var.source or target
-                if getattr(var, "output", None):
-                    kwargs["output"] = var.output
-                if getattr(var, "format", None) or getattr(var, "input_format", None):
-                    kwargs["format"] = getattr(var, "format", None) or var.input_format
-                ns = ns.date(target, **kwargs)
-            elif alg == "duration":
-                ns = ns.duration(
-                    target,
-                    start=getattr(var, "start", None) or var.source or "",
-                    end=getattr(var, "end", None) or "",
-                    unit=getattr(var, "unit", "days") or "days",
-                )
-            elif alg == "hardcode_ct":
-                ns = ns.hardcode_ct(target, value=var.value, ct_codelist=var.ct_codelist)
-            elif alg in ("hardcode_no_ct", "dataset_level"):
-                ns = ns.hardcode_no_ct(target, value=var.value)
-            elif alg == "condition_add":
-                ns = ns.condition_add(
-                    target,
-                    condition=var.condition or "pl.lit(True)",
-                    then_value=var.then_value,
-                )
-            elif alg == "if_then_else":
-                ns = ns.if_then_else(target, when=var.when or [], else_value=var.else_value)
-            elif alg == "ae_aerel":
-                ns = ns.ae_aerel(
-                    target,
-                    source=var.aerel_source or "ae_relationship",
-                    aerel_map=var.aerel_map,
-                )
-            elif alg == "notsubmitted":
-                ns = ns.notsubmitted(target)
-            elif alg == "nsv":
-                ns = ns.nsv(
-                    target,
-                    source=var.source,
-                    value=var.value if var.source is None else None,
-                    label=var.label or "",
-                    origin=var.origin or "DERIVED",
-                    evaluator=var.evaluator,
-                )
-            elif alg == "multiple_responses":
-                ns = ns.multiple_responses(
-                    target,
-                    source=var.source or target,
-                    delimiter=getattr(var, "delimiter", "|") or "|",
-                )
-            elif alg == "group_by":
-                from .utils import parse_expression
-
-                ns = ns.group_by(
-                    group_cols=getattr(var, "group_cols", None) or [],
-                    agg=[parse_expression(e) for e in (getattr(var, "agg", None) or [])],
-                )
-            elif alg == "merge":
-                merge_df = ns._require_pin(str(getattr(var, "dataset", "") or "").upper(), "merge")
-                ns = ns.merge(
-                    target_cols=getattr(var, "target_cols", None),
-                    dataset=merge_df,
-                    on=getattr(var, "join_on", None) or getattr(var, "on", None) or "USUBJID",
-                    how=getattr(var, "how", "left") or "left",
-                )
-            elif alg == "seq":
-                ns = ns.seq(
-                    target,
-                    order_by=getattr(var, "order_by", None),
-                    groups=getattr(var, "groups", None),
-                    start_at=getattr(var, "start_at", 1) or 1,
-                )
-            elif alg == "callable":
-                fn = _resolve_callable(var.callable_ref or "")
-                if hasattr(fn, "kind"):
-                    ns = ns.derivation(fn)
-                else:
-                    ns = ns._materialise_then(fn(ns.to_frame()))
-            else:
-                import warnings
-
-                warnings.warn(
-                    f"from_spec: skipping variable '{target}' — "
-                    f"algorithm '{alg}' is not supported in spec-driven mode.",
-                    stacklevel=2,
-                )
-
-        return ns
-
-    @staticmethod
-    def _extract_define_variables(spec_data: dict, dataset: str | None) -> list:
-        """Convert define.yaml dataset variables into SDTMVariableSpec objects."""
-        from fleet.sdtm.models import SDTMVariableSpec
-
-        datasets = spec_data["datasets"]
-        if dataset is None:
-            if len(datasets) != 1:
-                names = [d["name"] for d in datasets]
-                raise ValueError(
-                    f"define.yaml contains {len(datasets)} datasets {names}. "
-                    "Pass dataset= to select one."
-                )
-            ds = datasets[0]
-        else:
-            matches = [d for d in datasets if d["name"].upper() == dataset.upper()]
-            if not matches:
-                names = [d["name"] for d in datasets]
-                raise ValueError(
-                    f"Dataset '{dataset}' not found in define.yaml. Available: {names}"
-                )
-            ds = matches[0]
-
-        result = []
-        for var in ds["variables"]:
-            drv = var.get("derivation")
-            if not drv:
-                continue  # no derivation → carry-through / manual column
-            # Backward compat: callable: without algorithm: → inject algorithm.
-            if "callable" in drv and "algorithm" not in drv:
-                drv = {**drv, "algorithm": "callable"}
-            # Pass top-level variable attributes into the spec if relevant
-            extra: dict[str, Any] = {}
-            if var.get("label"):
-                extra["label"] = var["label"]
-            if var.get("origin"):
-                extra["origin"] = var["origin"]
-            if var.get("role"):
-                extra["role"] = var["role"]
-            if var.get("evaluator"):
-                extra["evaluator"] = var["evaluator"]
-            spec = SDTMVariableSpec(
-                target=var["name"],
-                **drv,
-                **extra,
-            )
-            result.append(spec)
-        return result
 
     # ------------------------------------------------------------------ #
     # Terminal operations                                                  #
@@ -1537,8 +1098,8 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
 
                 ns = (
                     raw_df.sdtm
-                    .hardcode_no_ct("DOMAIN", value="DM")
-                    .assign_no_ct("USUBJID", source="patient_number")
+                    .assign("DOMAIN", value="DM")
+                    .assign("USUBJID", source="patient_number")
                     .nsv("SAFETY", source="safety_flag",
                          label="Safety Population Flag")
                 )
@@ -1591,7 +1152,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
         # Filter to only qualifier columns present in the frame
         present_meta = [m for m in meta if m.target in df.columns]
         if not present_meta:
-            raise ValueError(
+            raise DerivationError(
                 f"No qualifier columns found in frame. "
                 f"Expected: {[m.target for m in meta]}. "
                 f"Available: {df.columns}"

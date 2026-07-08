@@ -18,7 +18,7 @@ Usage
         rs_sdtm.adam.onco
         .source("USUBJID")
         .aval_resp("AVAL", source="OVRLRESP")
-        .best_overall_response("BOR", source="OVRLRESP", groups=["USUBJID"])
+        .best_overall_response("BOR", source="OVRLRESP", by=["USUBJID"])
         .tumor_response_flag("RSPFL", source="OVRLRESP")
         .to_frame()
     )
@@ -31,6 +31,7 @@ from typing import Self
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
+from fleet.core._deprecation import deprecated_kwargs
 
 # RECIST / RECIST-like response order (lower = more favourable)
 _RESP_TO_NUM: dict[str, int] = {
@@ -137,12 +138,13 @@ class OncoNamespace(SharedADaMVerbsMixin):
     # 3. best_overall_response — most favourable response per group       #
     # ------------------------------------------------------------------ #
 
+    @deprecated_kwargs(groups="by")
     def best_overall_response(
         self,
         target: str,
         *,
         source: str,
-        groups: list[str] | None = None,
+        by: list[str] | None = None,
     ) -> Self:
         """Derive best overall response (BOR) per group.
 
@@ -152,7 +154,8 @@ class OncoNamespace(SharedADaMVerbsMixin):
         Args:
             target: Name of the output column.
             source: Column containing RECIST response text.
-            groups: Partition columns (default ``["USUBJID"]``).
+            by: Partition columns (default ``["USUBJID"]``).  The legacy
+                ``groups=`` spelling is accepted with a ``FutureWarning``.
 
         Returns:
             Self: The namespace with *target* appended.
@@ -163,11 +166,11 @@ class OncoNamespace(SharedADaMVerbsMixin):
                 adrs = (
                     rs_raw.adam.onco
                     .best_overall_response("BOR", source="OVRLRESP",
-                                           groups=["USUBJID"])
+                                           by=["USUBJID"])
                     .to_frame()
                 )
         """
-        grps = groups or ["USUBJID"]
+        grps = by or ["USUBJID"]
         num_expr = _resp_num_expr(source)
         best_num = num_expr.min().over(grps)
         return self._chain(_num_resp_expr(best_num).alias(target))
@@ -176,6 +179,7 @@ class OncoNamespace(SharedADaMVerbsMixin):
     # 4. confirmed_response_flag — confirm response sustained N days      #
     # ------------------------------------------------------------------ #
 
+    @deprecated_kwargs(groups="by")
     def confirmed_response_flag(
         self,
         target: str,
@@ -184,7 +188,7 @@ class OncoNamespace(SharedADaMVerbsMixin):
         date_col: str,
         confirmation_days: int = 28,
         responses: list[str] | None = None,
-        groups: list[str] | None = None,
+        by: list[str] | None = None,
         flag_value: str = "Y",
     ) -> Self:
         """Flag a confirmed response sustained for at least *confirmation_days*.
@@ -198,7 +202,8 @@ class OncoNamespace(SharedADaMVerbsMixin):
             date_col: Assessment date column.
             confirmation_days: Minimum gap in days (default ``28``).
             responses: Values to consider (default ``["CR", "PR"]``).
-            groups: Partition columns (default ``["USUBJID"]``).
+            by: Partition columns (default ``["USUBJID"]``).  The legacy
+                ``groups=`` spelling is accepted with a ``FutureWarning``.
             flag_value: Value to assign (default ``"Y"``).
 
         Returns:
@@ -211,12 +216,12 @@ class OncoNamespace(SharedADaMVerbsMixin):
                     rs_raw.adam.onco
                     .confirmed_response_flag(
                         "CRSPFL", source="OVRLRESP", date_col="ADT",
-                        confirmation_days=28, groups=["USUBJID"])
+                        confirmation_days=28, by=["USUBJID"])
                     .to_frame()
                 )
         """
         rsp = responses if responses is not None else ["CR", "PR"]
-        grps = groups or ["USUBJID"]
+        grps = by or ["USUBJID"]
 
         df = self.to_frame()
 
@@ -255,12 +260,13 @@ class OncoNamespace(SharedADaMVerbsMixin):
     # 5. filter_pd — keep records up to first PD per group               #
     # ------------------------------------------------------------------ #
 
+    @deprecated_kwargs(groups="by")
     def filter_pd(
         self,
         *,
         response_col: str,
         date_col: str,
-        groups: list[str] | None = None,
+        by: list[str] | None = None,
     ) -> Self:
         """Keep records up to and including the first PD per group.
 
@@ -270,7 +276,8 @@ class OncoNamespace(SharedADaMVerbsMixin):
         Args:
             response_col: Column containing response text.
             date_col: Assessment date column.
-            groups: Partition columns (default ``["USUBJID"]``).
+            by: Partition columns (default ``["USUBJID"]``).  The legacy
+                ``groups=`` spelling is accepted with a ``FutureWarning``.
 
         Returns:
             Self: A fresh namespace wrapping the filtered frame.
@@ -281,11 +288,11 @@ class OncoNamespace(SharedADaMVerbsMixin):
                 adrs = (
                     rs_raw.adam.onco
                     .filter_pd(response_col="OVRLRESP", date_col="ADT",
-                               groups=["USUBJID"])
+                               by=["USUBJID"])
                     .to_frame()
                 )
         """
-        grps = groups or ["USUBJID"]
+        grps = by or ["USUBJID"]
         df = self.to_frame()
 
         # First PD date per group

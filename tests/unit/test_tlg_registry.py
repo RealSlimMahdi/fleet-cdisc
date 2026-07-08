@@ -5,7 +5,9 @@ working namespace method, run on the frozen fixture study in default-by,
 custom-by (TRT01P) and pooled-Total configurations, and — for tables —
 match its checked-in golden ARD (regenerate with
 ``uv run python scripts/regen_tlg_goldens.py`` after an intentional
-change, and review the CSV diff like a statistician).
+change, and review the diff like a statistician).  Goldens are Parquet:
+dtypes and the null vs "" distinction survive the round-trip, so the
+comparison is exact — no normalisation.
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ from polars.testing import assert_frame_equal
 
 import fleet  # noqa: F401 — registers df.tlg
 from fleet.tlg import TEMPLATES, GroupPool, catalog
-from fleet.tlg._ard import ARD_SCHEMA, validate_ard
+from fleet.tlg._ard import validate_ard
 from fleet.tlg._registry import OutputType, Status
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -34,13 +36,6 @@ NO_POOLS = {"lbt04"}
 
 def _frame_for(meta) -> pl.DataFrame:
     return FRAMES[meta.domains[-1]]
-
-
-def _normalize(ard: pl.DataFrame) -> pl.DataFrame:
-    """CSV round-trips cannot distinguish null from empty strings."""
-    return ard.with_columns(
-        pl.col(c).fill_null("") for c, dt in ard.schema.items() if dt == pl.Utf8
-    )
 
 
 @pytest.mark.parametrize("meta", TEMPLATES.values(), ids=lambda m: m.id)
@@ -86,16 +81,14 @@ def test_table_supports_pooled_total(meta) -> None:
 )
 def test_table_matches_golden(meta) -> None:
     """The default-by ARD equals the checked-in golden, cell for cell."""
-    golden_path = GOLDEN_DIR / f"{meta.id}.csv"
+    golden_path = GOLDEN_DIR / f"{meta.id}.parquet"
     assert golden_path.exists(), (
         f"No golden for {meta.id} — run scripts/regen_tlg_goldens.py and review the new file."
     )
     ns = getattr(_frame_for(meta).tlg, meta.namespace)
     ard = getattr(ns, meta.method)(groupby="TRTA", adsl=ADSL)
-    golden = pl.read_csv(
-        golden_path, schema_overrides=ARD_SCHEMA, missing_utf8_is_empty_string=True
-    )
-    assert_frame_equal(_normalize(ard), _normalize(golden), check_exact=False, rel_tol=1e-9)
+    golden = pl.read_parquet(golden_path)
+    assert_frame_equal(ard, golden, check_exact=False, rel_tol=1e-9)
 
 
 def test_catalog_is_complete() -> None:
@@ -103,3 +96,20 @@ def test_catalog_is_complete() -> None:
     assert df.height == len(TEMPLATES)
     assert set(df["status"].to_list()) == {"done"}
     assert set(df.columns) >= {"id", "title", "namespace", "method", "status"}
+
+
+def test_aet05_registers_t_relationship() -> None:
+    """t_relationship is reachable through the registry (review §3.1)."""
+    meta = TEMPLATES["aet05"]
+    assert (meta.namespace, meta.method) == ("ae", "t_relationship")
+    assert meta.output_type is OutputType.TABLE
+
+
+def test_aet01_is_an_overview_not_soc_pt() -> None:
+    """aet01 produces header-row counts, not a duplicate of aet02."""
+    ard = FRAMES["ADAE"].tlg.ae.t_overview(groupby="TRTA", adsl=ADSL)
+    assert ard.filter(pl.col("variable") != "").height == 0  # no hierarchy
+    labels = set(ard.filter(pl.col("stat_name") == "n")["variable_level"].to_list())
+    assert "Subjects with at least one serious adverse event" in labels
+    soc_pt = FRAMES["ADAE"].tlg.ae.t_soc_pt(groupby="TRTA", adsl=ADSL)
+    assert not ard.equals(soc_pt)

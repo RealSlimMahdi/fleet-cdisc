@@ -1,0 +1,29 @@
+# VST01 — Vital Signs Summary (continuous statistics per parameter)
+#
+#     import fleet.tlg as tlg
+#     spec = tlg.load_spec("examples/tlg_specs/vst01.yaml")
+#     ard = tlg.run_spec(spec, advs, adsl=adsl)
+template: vst01
+schema_version: 1
+
+rows:
+  - field: PARAMCD
+    label: Parameter
+
+statistics:
+  - n_subjects
+  - mean
+  - sd
+  - median
+  - min
+  - max
+
+# One more decimal than collected for location statistics.
+decimals:
+  mean: xx.xx
+  sd: xx.xx
+  median: xx.xx
+
+pools:
+  - label: Total
+    arms: "*"

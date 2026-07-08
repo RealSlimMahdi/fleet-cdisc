@@ -36,18 +36,17 @@ import fleet
 
 # Intent is immediately clear in a single chain
 adbd = (
-    adbd.adam
-    .baseline(flag_col="ABLFL", target_col="AVAL", new_name="BASE")
-    .chg(new_name="CHG", from_col="AVAL", base_col="BASE")
+    adbd.adam.baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
+    .chg("CHG", aval="AVAL", base="BASE")
     .to_frame()
 )
 ```
 
 ### 2. Power: High Performance Lazy Evaluation
 
-Fleet doesn't just wrap Polars; it deeply integrates with its lazy evaluation engine. When you chain Fleet verbs (e.g., `.assign_ct()`, `.study_day()`), no computation happens immediately.
+Fleet doesn't just wrap Polars; it deeply integrates with its lazy evaluation engine. When you chain Fleet verbs (e.g., `.assign()`, `.study_day()`), most accumulate business logic into a single optimized set of Polars expressions rather than computing immediately.
 
-Instead, Fleet accumulates your business logic into a single, optimized set of Polars expressions. When you call `.to_frame()`, Polars executes the entire pipeline in **one pass**, leveraging multithreading and query optimization.
+When you call `.to_frame()`, Polars executes the pipeline in one pass, leveraging multithreading and query optimization. A few window/cross-domain verbs (`baseline`, pinned `study_day`) checkpoint internally — but they re-wrap the collected frame and keep the chain going, so `flag → baseline → chg` stays a single pipeline. The namespaces are also registered on `pl.LazyFrame`, so `pl.scan_parquet(...).sdtm` keeps the whole pipeline lazy with predicate pushdown.
 
 - **No intermediate DataFrames:** Saves memory.
 - **Blazing fast:** Processes millions of records in milliseconds.
@@ -99,9 +98,8 @@ fleet init-ct --domains DM,AE,VS,EX --output codelists.py
 from codelists import SEX, RACE
 
 dm = (
-    raw_df.sdtm
-    .assign_ct("SEX", source="sex", ct_codelist=SEX)
-    .assign_ct("RACE", source="race", ct_codelist=RACE)
+    raw_df.sdtm.assign("SEX", source="sex", ct=SEX)
+    .assign("RACE", source="race", ct=RACE)
     .to_frame()
 )
 ```

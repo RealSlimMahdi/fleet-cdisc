@@ -274,6 +274,37 @@ class TestChaining:
         assert "AVAL" in result.columns
         assert result["STUDYID"][0] == "CDISCPILOT01"
 
+    def test_unbroken_flag_baseline_chg_chain(self):
+        """flag -> baseline -> chg -> pchg runs in ONE chain (GUIDE Part 8).
+
+        The old GUIDE taught that ABLFL/BASE must be materialised with an
+        intermediate ``.to_frame()`` before the next window verb — "a Polars
+        constraint". That is false: Fleet checkpoints internally and keeps the
+        chain going. This test locks the single-chain form in permanently.
+        """
+        vs = pl.DataFrame(
+            {
+                "USUBJID": ["S1", "S1", "S1", "S2", "S2"],
+                "PARAMCD": ["SYSBP"] * 5,
+                "AVAL": [120.0, 125.0, 130.0, 110.0, 112.0],
+                "vsdy": [-1, 2, 5, -2, 3],
+            }
+        )
+        advs = (
+            vs.adam.flag("ABLFL", criteria='pl.col("vsdy") <= 0', by=["USUBJID", "PARAMCD"])
+            .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
+            .chg("CHG", aval="AVAL", base="BASE")
+            .pchg("PCHG", aval="AVAL", base="BASE")
+            .to_frame()
+        )
+        assert {"ABLFL", "BASE", "CHG", "PCHG"}.issubset(advs.columns)
+        # BASE is the pre-dose value for each subject.
+        assert advs.filter(pl.col("USUBJID") == "S1")["BASE"].to_list() == [120.0] * 3
+        assert advs.filter(pl.col("USUBJID") == "S2")["BASE"].to_list() == [110.0] * 2
+        # CHG == 0 exactly on the baseline row, and equals AVAL-BASE elsewhere.
+        assert advs.filter(pl.col("ABLFL") == "Y")["CHG"].to_list() == [0.0, 0.0]
+        assert advs.filter(pl.col("USUBJID") == "S1")["CHG"].to_list() == [0.0, 5.0, 10.0]
+
 
 class TestToFrame:
     def test_empty_pipeline(self, vs_frame):

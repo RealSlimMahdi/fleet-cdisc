@@ -23,6 +23,8 @@ from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 import polars as pl
 
+from fleet.core.exceptions import DerivationError, PinError
+
 if TYPE_CHECKING:
     pass
 
@@ -77,7 +79,7 @@ class PinMixin:
 
                 ae = (
                     ae_raw.sdtm
-                    .hardcode_no_ct("DOMAIN", value="AE")
+                    .assign("DOMAIN", value="AE")
                     .pin("DM", dm_df)
                     .study_day("AESTDY", date_col="AESTDTC")
                     .to_frame()
@@ -164,12 +166,12 @@ class PinMixin:
                     ae_raw.sdtm
                     .pin("DM", dm_df)
                     .fk_policy("error")
-                    .assign_no_ct("USUBJID", source="patient_number")
+                    .assign("USUBJID", source="patient_number")
                     .to_frame()
                 )
         """
         if severity not in ("warn", "error", "off"):
-            raise ValueError(
+            raise DerivationError(
                 f"fk_policy severity must be 'warn', 'error', or 'off', got '{severity}'"
             )
         new = copy.copy(self)
@@ -200,13 +202,14 @@ class PinMixin:
             pl.DataFrame: The pinned (or sliced) DataFrame.
 
         Raises:
-            LookupError: If the domain is not pinned, with an actionable
-                message telling the user what to add.
+            PinError: If the domain is not pinned, with an actionable
+                message telling the user what to add.  Also catchable as
+                ``LookupError``.
         """
         pinned: dict[str, tuple[pl.DataFrame, list[str]]] = getattr(self, "_pinned", {})
         key = domain.upper()
         if key not in pinned:
-            raise LookupError(
+            raise PinError(
                 f"{verb}() requires a pinned '{key}' domain. "
                 f'Add .pin("{key}", {key.lower()}_df) before .{verb}() in your chain.'
             )
@@ -223,12 +226,13 @@ class PinMixin:
             domain: Upper-cased domain name.
 
         Raises:
-            LookupError: If *domain* is not pinned.
+            PinError: If *domain* is not pinned.  Also catchable as
+                ``LookupError``.
         """
         pinned: dict[str, tuple[pl.DataFrame, list[str]]] = getattr(self, "_pinned", {})
         key = domain.upper()
         if key not in pinned:
-            raise LookupError(f"No pin found for domain '{key}'.")
+            raise PinError(f"No pin found for domain '{key}'.")
         return list(pinned[key][1])
 
     def _check_fk(
@@ -275,12 +279,19 @@ class PinMixin:
                 f"pinned {pin}.{ref_column}: {sorted(orphans)[:5]}"
             )
             if sev == "error":
-                raise ValueError(msg)
+                raise DerivationError(msg)
             warnings.warn(msg, stacklevel=3)
         return orphans
 
     def _auto_fk_check(self, target: str) -> None:
-        """Dispatch FK check if *target* matches a rule in ``_FK_RULES``."""
+        """Queue an FK check if *target* matches a rule in ``_FK_RULES``.
+
+        The check itself is deferred to the next materialisation
+        (``to_frame()`` runs all pending checks in one pass over the
+        final frame) so pinning no longer forces a collect on every
+        assign verb.  The severity in force *now* is captured with the
+        queue entry, preserving ``fk_policy`` semantics.
+        """
         rules: dict[str, dict[str, str]] = self.__class__._FK_RULES
         if target not in rules:
             return
@@ -289,8 +300,46 @@ class PinMixin:
         # Only check if the pin actually exists (no pin = no noise)
         if pin_domain.upper() not in getattr(self, "_pinned", {}):
             return
-        self._check_fk(
-            target,
-            pin=pin_domain,
-            ref_col=rule.get("ref_col", target),
-        )
+        severity = getattr(self, "_fk_severity", "warn")
+        if severity == "off":
+            return
+        entry = (target, pin_domain, rule.get("ref_col", target), severity)
+        pending: list[tuple[str, str, str, str]] = list(getattr(self, "_pending_fk_checks", []))
+        if entry not in pending:
+            pending.append(entry)
+        self._pending_fk_checks = pending
+
+    def _run_pending_fk_checks(self, df: pl.DataFrame) -> None:
+        """Run all queued FK checks against the materialised *df*.
+
+        Called by ``to_frame()`` after collection — one batched pass
+        over the final frame instead of one collect per assign verb.
+        Emits the same ``FK check`` warnings / errors as the immediate
+        path.
+        """
+        pending: list[tuple[str, str, str, str]] = list(getattr(self, "_pending_fk_checks", []))
+        if not pending:
+            return
+        # Clear before raising/warning so repeated to_frame() calls on the
+        # same instance do not re-report (rebind, never mutate — earlier
+        # chain copies keep their own queue).
+        self._pending_fk_checks = []
+        pinned: dict[str, tuple[pl.DataFrame, list[str]]] = getattr(self, "_pinned", {})
+        for col, pin, ref_col, severity in pending:
+            if severity == "off" or pin.upper() not in pinned:
+                continue
+            ref_df, _ = pinned[pin.upper()]
+            if ref_col not in ref_df.columns or col not in df.columns:
+                continue
+            current_vals = set(df[col].drop_nulls().to_list())
+            ref_vals = set(ref_df[ref_col].drop_nulls().to_list())
+            orphans = current_vals - ref_vals
+            if not orphans:
+                continue
+            msg = (
+                f"FK check: {len(orphans)} value(s) in '{col}' not found in "
+                f"pinned {pin}.{ref_col}: {sorted(orphans)[:5]}"
+            )
+            if severity == "error":
+                raise DerivationError(msg)
+            warnings.warn(msg, stacklevel=3)

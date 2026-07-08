@@ -152,17 +152,17 @@ class TestBackwardCompatNoAlgorithm:
 
 class TestDottedImportFallback:
     def test_unregistered_raises_value_error(self, simple_df):
-        from fleet.adam.namespace import _resolve_callable
+        from fleet.core._resolve_callable import resolve_callable
 
         with pytest.raises(ValueError, match="not registered"):
-            _resolve_callable("COMPLETELY_UNKNOWN_FUNCTION_XYZ")
+            resolve_callable("COMPLETELY_UNKNOWN_FUNCTION_XYZ")
 
     def test_dotted_path_resolved(self):
         """A dotted path that is importable should be resolved successfully."""
-        from fleet.adam.namespace import _resolve_callable
+        from fleet.core._resolve_callable import resolve_callable
 
         # polars itself is importable; use a simple attribute as test
-        result = _resolve_callable("polars.col")
+        result = resolve_callable("polars.col")
         assert result is pl.col
 
 

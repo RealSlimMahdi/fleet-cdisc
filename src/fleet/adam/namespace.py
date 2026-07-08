@@ -23,12 +23,14 @@ Usage
         .derivation("AVAL", expression="VSSTRESN")
         .duration("ADY", start="TRTSDT", end="ADT")
         .flag("ABLFL", criteria='pl.col("VISITNUM") == 1',
-              groups=["USUBJID", "PARAMCD"])
+              by=["USUBJID", "PARAMCD"])
         .baseline("BASE", aval="AVAL", baseline_flag="ABLFL")
         .chg("CHG", aval="AVAL", base="BASE")
         .pchg("PCHG", aval="AVAL", base="BASE")
         .to_frame()
     )
+
+Discover every available verb programmatically with ``df.adam.verbs()``.
 
     # Or spec-driven:
     result = vs_sdtm.adam.from_spec("examples/cdiscpilot01/adam/define.yaml", dataset="ADVS").to_frame()
@@ -37,11 +39,12 @@ Usage
 from __future__ import annotations
 
 from collections.abc import Callable
-from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 import polars as pl
-import yaml
+
+from fleet.core._deprecation import deprecated_kwargs, deprecated_verb
+from fleet.core.exceptions import DerivationError, VerbUsageError
 
 from ._mixins import SharedADaMVerbsMixin
 from .utils import (
@@ -82,27 +85,30 @@ if TYPE_CHECKING:
     from .pk_namespace import PKNamespace
     from .vaccine_namespace import VaccineNamespace
 
-
-from fleet.core._resolve_callable import resolve_callable as _resolve_callable
+_SubNS = TypeVar("_SubNS", bound=SharedADaMVerbsMixin)
 
 
 @pl.api.register_dataframe_namespace("adam")
+@pl.api.register_lazyframe_namespace("adam")
 class AdamNamespace(SharedADaMVerbsMixin):
     """
     Immutable pipeline builder for ADaM derivations.
 
     Each verb appends to a lazy expression list; ``to_frame()`` materialises
     everything in one ``with_columns`` call (unless the verb requires a join/filter).
+    Accepts both ``pl.DataFrame`` and ``pl.LazyFrame`` inputs, so scanned
+    sources stay lazy end-to-end.
 
-    Inherits shared verbs from ``SharedADaMVerbsMixin``:
-    ``source``, ``derivation``, ``assigned``, ``recode``, ``rename``,
-    ``condderivation``, ``whereclauses``.
+    Inherits shared verbs from ``SharedADaMVerbsMixin`` (``assign``,
+    ``case_when``, ``merge``, ``source``, ``derivation``, ``whereclauses``,
+    ...).  Discover the full set with ``df.adam.verbs()``.
     """
 
     # ------------------------------------------------------------------ #
-    # 7. lookup — merge/join with subset conditions                       #
+    # 7. lookup — deprecated alias of merge                               #
     # ------------------------------------------------------------------ #
 
+    @deprecated_verb("lookup", use="merge(dataset, on=..., keep=..., where=...)")
     def lookup(
         self,
         target_cols: list[str] | None = None,
@@ -114,11 +120,15 @@ class AdamNamespace(SharedADaMVerbsMixin):
     ) -> AdamNamespace:
         """SQL-style join against a lookup *dataset*.
 
-        Optionally filters *dataset* with *where* before the join.
-        Materialises the current pipeline then returns a fresh namespace.
+        Deprecated alias of
+        :meth:`~fleet.core._verb_mixin.SharedVerbsMixin.merge` — pass
+        ``keep=`` instead of ``target_cols=``.
 
         Args:
-            target_cols: Optional columns to keep from the joined result.
+            target_cols: Optional columns to keep from the joined result —
+                the output is restricted to the *on* key(s) plus these
+                columns (order preserved).  When ``None``, all columns
+                are retained.
             dataset: The lookup ``pl.DataFrame`` to join.
             on: Key column name(s) for the join.
             how: Join strategy (default ``"left"``).
@@ -126,59 +136,65 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 the join.
 
         Returns:
-            AdamNamespace: A fresh namespace wrapping the joined frame.
+            AdamNamespace: A fresh namespace continuing from the joined plan.
+
+        Raises:
+            DerivationError: When a *target_cols* entry is absent from
+                the joined result.
 
         Examples:
             Join a parameter-code lookup table on ``VSTESTCD``::
 
                 advs = (
                     vs_df.adam
-                    .lookup(
-                        dataset=paramcd_lookup,
-                        on="VSTESTCD",
-                        how="left",
-                    )
+                    .merge(paramcd_lookup, on="VSTESTCD", how="left")
                     .to_frame()
                 )
         """
-        from ..sdtm.utils import parse_expression
-
-        lookup_df = dataset
-        if where:
-            filter_expr = parse_expression(where)
-            lookup_df = dataset.filter(filter_expr)
-
-        joined = self.to_frame().join(lookup_df, on=on, how=how)
-        ns = self._materialise_then(joined)
-        if target_cols:
-            ns._pipeline = [pl.col(c) for c in target_cols]
-        return ns
+        return self._merge_impl(
+            dataset, on=on, how=how, keep=target_cols, where=where, verb="lookup"
+        )
 
     # ------------------------------------------------------------------ #
     # 9.  baseline — propagate baseline value to all group records        #
     # ------------------------------------------------------------------ #
 
+    @deprecated_kwargs(groups="by")
     def baseline(
         self,
         target: str,
         *,
         aval: str = "AVAL",
         baseline_flag: str = "ABLFL",
-        groups: list[str] | None = None,
+        by: list[str] | None = None,
+        strict: bool = True,
     ) -> AdamNamespace:
         """Derive BASE as the AVAL where the baseline flag equals ``"Y"``.
 
         Uses a window function so all records in the same group receive the
-        same baseline value.
+        same baseline value.  A group with **more than one** flagged
+        record has an ambiguous baseline: with ``strict=True`` (default)
+        this raises a ``DerivationError`` naming the offending groups
+        (admiral semantics); ``strict=False`` keeps the legacy behaviour
+        (silently taking the maximum flagged value) but emits a
+        ``UserWarning``.
 
         Args:
             target: Name of the output column (e.g. ``"BASE"``).
             aval: Analysis value column (default ``"AVAL"``).
             baseline_flag: Flag column indicating the baseline record.
-            groups: Partition columns (default ``["USUBJID", "PARAMCD"]``).
+            by: Partition columns (default ``["USUBJID", "PARAMCD"]``).
+                The legacy ``groups=`` spelling is accepted with a
+                ``FutureWarning``.
+            strict: Raise when a group has multiple baseline-flagged
+                records (default ``True``).
 
         Returns:
             AdamNamespace: The namespace with *target* appended.
+
+        Raises:
+            DerivationError: When ``strict=True`` and at least one group
+                carries more than one baseline-flagged record.
 
         Examples:
             Propagate baseline AVAL to all records::
@@ -186,12 +202,49 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 advs = (
                     vs_raw.adam
                     .baseline("BASE", aval="AVAL", baseline_flag="ABLFL",
-                              groups=["USUBJID", "PARAMCD"])
+                              by=["USUBJID", "PARAMCD"])
                     .to_frame()
                 )
         """
+        import warnings
+
+        grps = by or ["USUBJID", "PARAMCD"]
+        schema_names = self._lazy.collect_schema().names()
+        if baseline_flag not in schema_names or any(g not in schema_names for g in grps):
+            # Missing columns — defer to _chain's verb-attributed error.
+            return self._chain(
+                baseline(aval=aval, baseline_flag_col=baseline_flag, group_by=grps, target=target),
+                verb="baseline",
+            )
+        dup_groups = (
+            self._lazy.filter(pl.col(baseline_flag) == "Y")
+            .group_by(grps)
+            .agg(pl.len().alias("__n_baseline__"))
+            .filter(pl.col("__n_baseline__") > 1)
+            .collect()
+        )
+        if dup_groups.height:
+            sample = dup_groups.select(grps).head(5).rows()
+            keys = "; ".join(", ".join(f"{k}={v!r}" for k, v in zip(grps, row)) for row in sample)
+            more = f" (+{dup_groups.height - 5} more)" if dup_groups.height > 5 else ""
+            detail = (
+                f"baseline('{target}'): {dup_groups.height} group(s) have more than one "
+                f"record flagged {baseline_flag}='Y' — the baseline is ambiguous. "
+                f"Offending groups: {keys}{more}."
+            )
+            if strict:
+                raise DerivationError(
+                    f"{detail} Deduplicate the baseline flag (e.g. via "
+                    ".flag(..., criteria='last') or .nodup(...)) or pass strict=False "
+                    "to keep the legacy max() behaviour."
+                )
+            warnings.warn(
+                f"{detail} Taking the maximum flagged value per group (strict=False).",
+                stacklevel=2,
+            )
         return self._chain(
-            baseline(aval=aval, baseline_flag_col=baseline_flag, group_by=groups, target=target)
+            baseline(aval=aval, baseline_flag_col=baseline_flag, group_by=grps, target=target),
+            verb="baseline",
         )
 
     # ------------------------------------------------------------------ #
@@ -224,7 +277,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        return self._chain(chg(aval=aval, base=base, target=target))
+        return self._chain(chg(aval=aval, base=base, target=target), verb="chg")
 
     # ------------------------------------------------------------------ #
     # 11. pchg — percent change from baseline                             #
@@ -259,7 +312,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        return self._chain(pchg(aval=aval, base=base, target=target))
+        return self._chain(pchg(aval=aval, base=base, target=target), verb="pchg")
 
     # ------------------------------------------------------------------ #
     # 13. bmi — Body Mass Index                                            #
@@ -291,7 +344,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        return self._chain(_bmi_expr(weight=weight, height=height, target=target))
+        return self._chain(_bmi_expr(weight=weight, height=height, target=target), verb="bmi")
 
     # ------------------------------------------------------------------ #
     # 14. nrind — normal range indicator                                   #
@@ -326,7 +379,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        return self._chain(_nrind_expr(value=value, low=low, high=high, target=target))
+        return self._chain(
+            _nrind_expr(value=value, low=low, high=high, target=target), verb="nrind"
+        )
 
     # ------------------------------------------------------------------ #
     # 15. on_treatment — derive ONTRTFL                                    #
@@ -373,7 +428,8 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 trtedt=trtedt,
                 target=target,
                 open_ended=open_ended,
-            )
+            ),
+            verb="on_treatment",
         )
 
     # ------------------------------------------------------------------ #
@@ -410,7 +466,8 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 )
         """
         return self._chain(
-            _shift_expr(baseline_cat=baseline_cat, post_cat=post_cat, target=target, sep=sep)
+            _shift_expr(baseline_cat=baseline_cat, post_cat=post_cat, target=target, sep=sep),
+            verb="shift",
         )
 
     # ------------------------------------------------------------------ #
@@ -446,7 +503,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        return self._chain(_bsa_expr(weight=weight, height=height, method=method, target=target))
+        return self._chain(
+            _bsa_expr(weight=weight, height=height, method=method, target=target), verb="bsa"
+        )
 
     # ------------------------------------------------------------------ #
     # 18. map — Mean Arterial Pressure                                     #
@@ -478,7 +537,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        return self._chain(_map_expr(systolic=systolic, diastolic=diastolic, target=target))
+        return self._chain(
+            _map_expr(systolic=systolic, diastolic=diastolic, target=target), verb="map"
+        )
 
     # ------------------------------------------------------------------ #
     # 19. qtc — Corrected QT interval                                      #
@@ -513,19 +574,20 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        return self._chain(_qtc_expr(qt=qt, rr=rr, method=method, target=target))
+        return self._chain(_qtc_expr(qt=qt, rr=rr, method=method, target=target), verb="qtc")
 
     # ------------------------------------------------------------------ #
     # 20. derive_summary_records — aggregate and append new rows          #
     # ------------------------------------------------------------------ #
 
+    @deprecated_kwargs(by_vars="by")
     def derive_summary_records(
         self,
         *,
-        by_vars: list[str],
+        by: list[str],
         analysis_var: str = "AVAL",
         set_values_to: dict[str, Any],
-        stat: str = "mean",
+        stat: Literal["mean", "sum", "min", "max", "median", "count"] = "mean",
     ) -> AdamNamespace:
         """
         Compute a summary statistic per group and append the results as new records.
@@ -544,7 +606,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 advs = (
                     vs_raw.adam
                     .derive_summary_records(
-                        by_vars=["USUBJID", "PARAMCD"],
+                        by=["USUBJID", "PARAMCD"],
                         analysis_var="AVAL",
                         set_values_to={"DTYPE": "AVERAGE"},
                         stat="mean",
@@ -562,10 +624,10 @@ class AdamNamespace(SharedADaMVerbsMixin):
             "count": pl.col(analysis_var).count().cast(pl.Float64),
         }
         if stat_lower not in agg_map:
-            raise ValueError(f"Unknown stat '{stat}'. Supported: {', '.join(agg_map)}.")
+            raise DerivationError(f"Unknown stat '{stat}'. Supported: {', '.join(agg_map)}.")
 
         df = self.to_frame()
-        summary = df.group_by(by_vars).agg(agg_map[stat_lower].alias(analysis_var))
+        summary = df.group_by(by).agg(agg_map[stat_lower].alias(analysis_var))
 
         # Apply constant values to the summary rows
         for col_name, col_val in set_values_to.items():
@@ -589,10 +651,11 @@ class AdamNamespace(SharedADaMVerbsMixin):
     # 21. derive_locf_records — last observation carried forward          #
     # ------------------------------------------------------------------ #
 
+    @deprecated_kwargs(by_vars="by")
     def derive_locf_records(
         self,
         *,
-        by_vars: list[str] | None = None,
+        by: list[str] | None = None,
         analysis_var: str = "AVAL",
         order_by: str = "ADT",
     ) -> AdamNamespace:
@@ -610,14 +673,14 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 advs = (
                     vs_raw.adam
                     .derive_locf_records(
-                        by_vars=["USUBJID", "PARAMCD"],
+                        by=["USUBJID", "PARAMCD"],
                         analysis_var="AVAL",
                         order_by="ADT",
                     )
                     .to_frame()
                 )
         """
-        grps = by_vars or ["USUBJID", "PARAMCD"]
+        grps = by or ["USUBJID", "PARAMCD"]
         df = self.to_frame()
         df = df.sort(grps + [order_by])
         df = df.with_columns(pl.col(analysis_var).forward_fill().over(grps).alias(analysis_var))
@@ -627,10 +690,11 @@ class AdamNamespace(SharedADaMVerbsMixin):
     # 22. derive_param — append a computed parameter as new records        #
     # ------------------------------------------------------------------ #
 
+    @deprecated_kwargs(by_vars="by")
     def derive_param(
         self,
         *,
-        by_vars: list[str] | None = None,
+        by: list[str] | None = None,
         set_values_to: dict[str, Any],
         parameter_filter: dict[str, str],
         analysis_value: pl.Expr,
@@ -657,7 +721,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 advs = (
                     vs_raw.adam
                     .derive_param(
-                        by_vars=["USUBJID", "ADT"],
+                        by=["USUBJID", "ADT"],
                         set_values_to={"PARAMCD": "BMI",
                                        "PARAM": "Body Mass Index"},
                         parameter_filter={"WEIGHT": "WEIGHT",
@@ -669,7 +733,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        grps = by_vars or ["USUBJID"]
+        grps = by or ["USUBJID"]
         df = self.to_frame()
 
         # Pivot: for each alias in parameter_filter, get AVAL as that alias
@@ -704,65 +768,6 @@ class AdamNamespace(SharedADaMVerbsMixin):
     # ------------------------------------------------------------------ #
     # Private: YAML spec dispatcher for algorithm: std_function           #
     # ------------------------------------------------------------------ #
-
-    def _std_function_dispatch(
-        self,
-        target: str,
-        func: str,
-        *,
-        analysis_date: str | None = None,
-        reference_date: str | None = None,
-        aval: str = "AVAL",
-        base: str = "BASE",
-        weight: str | None = None,
-        height: str | None = None,
-        systolic: str | None = None,
-        diastolic: str | None = None,
-        qt: str | None = None,
-        rr: str | None = None,
-        method: str | None = None,
-        baseline_flag: str = "ABLFL",
-        baseline_criteria: str | pl.Expr | None = None,
-        groups: list[str] | None = None,
-    ) -> AdamNamespace:
-        """Route YAML ``algorithm: std_function`` entries to the appropriate typed method."""
-        func = func.lower()
-        if func == "study_day":
-            if not analysis_date or not reference_date:
-                raise ValueError("study_day requires analysis_date and reference_date.")
-            return self.duration(target, start=reference_date, end=analysis_date)
-        elif func == "baseline":
-            return self.baseline(target, aval=aval, baseline_flag=baseline_flag, groups=groups)
-        elif func == "chg":
-            return self.chg(target, aval=aval, base=base)
-        elif func == "pchg":
-            return self.pchg(target, aval=aval, base=base)
-        elif func in ("flag_baseline", "flag"):
-            if baseline_criteria is None:
-                raise ValueError("flag requires baseline_criteria.")
-            return self.flag(target, criteria=baseline_criteria, groups=groups)
-        elif func == "bmi":
-            if not weight or not height:
-                raise ValueError("bmi requires weight and height.")
-            return self.bmi(target, weight=weight, height=height)
-        elif func == "bsa":
-            if not weight or not height:
-                raise ValueError("bsa requires weight and height.")
-            return self.bsa(target, weight=weight, height=height, method=method or "Mosteller")
-        elif func in ("map", "mean_arterial_pressure"):
-            if not systolic or not diastolic:
-                raise ValueError("map requires systolic and diastolic.")
-            return self.map(target, systolic=systolic, diastolic=diastolic)
-        elif func == "qtc":
-            if not qt or not rr:
-                raise ValueError("qtc requires qt and rr.")
-            return self.qtc(target, qt=qt, rr=rr, method=method or "Fridericia")
-        else:
-            raise ValueError(
-                f"Unknown func='{func}'. "
-                "Valid: study_day, baseline, chg, pchg, flag, flag_baseline, "
-                "bmi, bsa, map, qtc."
-            )
 
     # ------------------------------------------------------------------ #
     # 17. atoxgr — toxicity grading via criteria files                     #
@@ -882,7 +887,8 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 high_var,
                 low_desc_var=low_desc_var,
                 high_desc_var=high_desc_var,
-            ).alias(target)
+            ).alias(target),
+            verb="combine_grades",
         )
 
     # ------------------------------------------------------------------ #
@@ -929,7 +935,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
 
                 adsl = (
                     dm_raw.adam
-                    .assigned("STUDYID", value="S01")
+                    .assign("STUDYID", value="S01")
                     .transform("add_agegr1")
                     .to_frame()
                 )
@@ -939,7 +945,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         if isinstance(fn, str):
             fn = get_transform(fn)  # raises KeyError if not found
         elif not callable(fn):
-            raise TypeError(
+            raise VerbUsageError(
                 f"transform() expects a callable or a registered name string, "
                 f"got {type(fn).__name__!r}."
             )
@@ -949,322 +955,56 @@ class AdamNamespace(SharedADaMVerbsMixin):
         result = fn(committed)
 
         if not isinstance(result, pl.DataFrame):
-            raise TypeError(
+            raise VerbUsageError(
                 f"Transform function must return a polars DataFrame, got {type(result).__name__!r}."
             )
 
         return self._materialise_then(result)
 
     # ------------------------------------------------------------------ #
-    # Spec-driven pipeline                                                 #
+    # Spec-driven pipeline: from_spec() is inherited from                  #
+    # SharedVerbsMixin and executes through fleet.core.spec_registry.      #
     # ------------------------------------------------------------------ #
 
-    def from_spec(
-        self,
-        spec_path: str | Path,
-        *,
-        dataset: str | None = None,
-        only: list[str] | None = None,
-        omit: list[str] | None = None,
-    ) -> AdamNamespace:
-        """
-        Build an ADaM derivation pipeline from a YAML specification file.
-
-        Reads a ``define.yaml`` with a top-level ``datasets`` list where each
-        variable carries a ``derivation`` block.  Pass *dataset* to select
-        which dataset to execute (e.g. ``dataset="ADVS"``).  When the file
-        contains only one dataset the *dataset* argument may be omitted.
-
-        *only*: optional allow-list — process only the listed variable names.
-        *omit*: optional deny-list — skip the listed variable names; useful when
-        you want to override a spec variable with custom inline logic::
-
-            dm.adam.from_spec(..., omit=["MYVAR"]).assigned("MYVAR", value="override")
-
-        ``only`` and ``omit`` are mutually exclusive; specifying both raises
-        ``ValueError``.
-
-        For dependency-driven staging, declare
-        ``depends_on: [col, ...]`` in the YAML derivation block instead;
-        ``from_spec()`` will flush automatically before any variable whose
-        declared dependencies are not yet committed to the frame::
-
-            # define.yaml
-            - name: ADY
-              derivation:
-                algorithm: study_day
-                analysis_date: ADT
-                reference_date: TRTSDT
-                depends_on: [ADT]    # flush before ADY if ADT only pending
-
-        With ``depends_on`` set, a single call suffices::
-
-            advs = vs_df.adam.from_spec("specs/.../define.yaml", dataset="ADVS").to_frame()
-
-        Examples:
-            Build ADVS from a YAML specification::
-
-                advs = (
-                    vs_raw.adam
-                    .from_spec("examples/cdiscpilot01/adam/define.yaml",
-                               dataset="ADVS")
-                    .to_frame()
-                )
-        """
-        from .models import ADAMDatasetSpec
-
-        if only is not None and omit is not None:
-            raise ValueError(
-                "Cannot specify both only= and omit= in from_spec(). "
-                "Use only= to allow-list variables, or omit= to deny-list them."
-            )
-
-        spec_data = yaml.safe_load(Path(spec_path).read_text())
-
-        # ── Detect format: define.yaml has a top-level "datasets" key ──
-        if "datasets" in spec_data:
-            variables = self._extract_define_variables(spec_data, dataset)
-        else:
-            spec = ADAMDatasetSpec(**spec_data)
-            variables = spec.variables
-
-        ns: AdamNamespace = self
-        for var in variables:
-            alg = var.algorithm.value
-            target = var.target
-            if only is not None and target not in only:
-                continue
-            if omit is not None and target in omit:
-                continue
-
-            # ── auto-flush when a declared dependency is not yet committed ──
-            deps = getattr(var, "depends_on", None) or []
-            if deps and any(d not in ns._lazy.columns for d in deps):
-                ns = ns._materialise_then(ns.to_frame())
-
-            if alg == "source":
-                ns = ns.source(target, from_col=var.source)
-            elif alg == "derivation":
-                ns = ns.derivation(target, expression=var.expression or target)
-            elif alg == "assigned":
-                ns = ns.assigned(target, value=var.value)
-            elif alg == "recode":
-                ns = ns.recode(
-                    target,
-                    source=var.source or target,
-                    recode_map=var.recode_map or {},
-                    default=var.default,
-                )
-            elif alg == "rename":
-                ns = ns.rename(target, source=var.source or target)
-            elif alg == "condderivation":
-                ns = ns.condderivation(
-                    target, conditions=var.conditions or [], else_value=var.else_value
-                )
-            # First-class BDS algorithm names usable directly in YAML specs
-            elif alg in (
-                "study_day",
-                "baseline",
-                "chg",
-                "pchg",
-                "bmi",
-                "bsa",
-                "map",
-                "mean_arterial_pressure",
-                "qtc",
-            ):
-                ns = ns._std_function_dispatch(
-                    target,
-                    func=alg,
-                    analysis_date=var.analysis_date,
-                    reference_date=var.reference_date,
-                    aval=var.aval or "AVAL",
-                    base=var.base or "BASE",
-                    weight=var.weight,
-                    height=var.height,
-                    systolic=getattr(var, "systolic", None),
-                    diastolic=getattr(var, "diastolic", None),
-                    qt=getattr(var, "qt", None),
-                    rr=getattr(var, "rr", None),
-                    method=getattr(var, "method", None),
-                    baseline_flag=var.baseline_flag or "ABLFL",
-                    groups=getattr(var, "groups", None),
-                )
-            elif alg == "flag":
-                ns = ns.flag(
-                    target,
-                    criteria=getattr(var, "criteria", "") or "",
-                    groups=getattr(var, "groups", None),
-                    order_by=getattr(var, "flag_order_by", None),
-                    value_col=getattr(var, "flag_value_col", None),
-                    where=getattr(var, "flag_where", None),
-                )
-            elif alg == "date":
-                kwargs: dict[str, Any] = {}
-                if var.source:
-                    kwargs["source"] = var.source
-                elif getattr(var, "value", None):
-                    kwargs["value"] = var.value
-                if getattr(var, "output", None):
-                    kwargs["output"] = var.output
-                if getattr(var, "impute", None):
-                    kwargs["impute"] = var.impute
-                if getattr(var, "impute_time", None):
-                    kwargs["impute_time"] = var.impute_time
-                if getattr(var, "flag", None) is not None:
-                    kwargs["flag"] = var.flag
-                ns = ns.date(target, **kwargs)
-            elif alg == "duration":
-                ns = ns.duration(
-                    target,
-                    start=getattr(var, "start", None) or var.analysis_date or "",
-                    end=getattr(var, "end", None) or var.reference_date or "",
-                    unit=getattr(var, "unit", "days") or "days",
-                )
-            elif alg == "nrind":
-                ns = ns.nrind(
-                    target,
-                    value=var.aval or "AVAL",
-                    low=getattr(var, "low", "LBSTNRLO"),
-                    high=getattr(var, "high", "LBSTNRHI"),
-                )
-            elif alg == "on_treatment":
-                ns = ns.on_treatment(
-                    target,
-                    adt=var.analysis_date or "ADT",
-                    trtsdt=var.reference_date or "TRTSDT",
-                    trtedt=getattr(var, "trtedt", "TRTEDT"),
-                )
-            elif alg == "shift":
-                ns = ns.shift(
-                    target,
-                    baseline_cat=getattr(var, "baseline_cat", ""),
-                    post_cat=getattr(var, "post_cat", ""),
-                )
-            elif alg == "whereclauses":
-                if var.where:
-                    ns = ns.whereclauses(where=var.where)
-            elif alg == "pick":
-                pick_targets = getattr(var, "targets", None) or [target]
-                pick_events = getattr(var, "events", None) or []
-                pick_by = getattr(var, "by", None)
-                pick_order = getattr(var, "order", None)
-                pick_mode = getattr(var, "mode", "first") or "first"
-                ns = ns.pick(
-                    pick_targets,
-                    events=pick_events,
-                    by=pick_by,
-                    order=pick_order,
-                    mode=pick_mode,
-                )
-            elif alg == "lookup":
-                lookup_df = ns._require_pin(
-                    str(getattr(var, "dataset", "") or "").upper(), "lookup"
-                )
-                ns = ns.lookup(
-                    target_cols=getattr(var, "target_cols", None),
-                    dataset=lookup_df,
-                    on=getattr(var, "join_on", None) or getattr(var, "on", None) or "USUBJID",
-                    how=getattr(var, "how", "left") or "left",
-                    where=getattr(var, "where", None),
-                )
-            elif alg == "atoxgr":
-                ns = ns.atoxgr(
-                    target,
-                    system=getattr(var, "system", "ctcae_v5") or "ctcae_v5",
-                    direction=getattr(var, "direction", "") or "",
-                    term_var=getattr(var, "term_var", "PARAMCD") or "PARAMCD",
-                    unit_var=getattr(var, "unit_var", None),
-                    signif_dig=getattr(var, "signif_dig", 5) or 5,
-                    indicators=getattr(var, "indicators", None),
-                )
-            elif alg == "combine_grades":
-                ns = ns.combine_grades(
-                    target,
-                    low_var=getattr(var, "low_var", "ATOXGRL") or "ATOXGRL",
-                    high_var=getattr(var, "high_var", "ATOXGRH") or "ATOXGRH",
-                    low_desc_var=getattr(var, "low_desc_var", None),
-                    high_desc_var=getattr(var, "high_desc_var", None),
-                )
-            elif alg == "seq":
-                ns = ns.seq(
-                    target,
-                    order_by=getattr(var, "order_by", None),
-                    groups=getattr(var, "groups", None),
-                    start_at=getattr(var, "start_at", 1) or 1,
-                )
-            elif alg == "callable":
-                fn = _resolve_callable(var.callable_ref or "")
-                if hasattr(fn, "kind"):
-                    ns = ns.derivation(fn)
-                else:
-                    ns = ns._materialise_then(fn(ns.to_frame()))
-            else:
-                import warnings
-
-                warnings.warn(
-                    f"from_spec: skipping variable '{target}' — "
-                    f"algorithm '{alg}' is not supported in spec-driven mode.",
-                    stacklevel=2,
-                )
-
-        return ns
-
-    @staticmethod
-    def _extract_define_variables(spec_data: dict, dataset: str | None) -> list:
-        """Convert define.yaml dataset variables into ADAMVariableSpec objects."""
-        from .models import ADAMVariableSpec
-
-        datasets = spec_data["datasets"]
-        if dataset is None:
-            if len(datasets) != 1:
-                names = [d["name"] for d in datasets]
-                raise ValueError(
-                    f"define.yaml contains {len(datasets)} datasets {names}. "
-                    "Pass dataset= to select one."
-                )
-            ds = datasets[0]
-        else:
-            matches = [d for d in datasets if d["name"].upper() == dataset.upper()]
-            if not matches:
-                names = [d["name"] for d in datasets]
-                raise ValueError(
-                    f"Dataset '{dataset}' not found in define.yaml. Available: {names}"
-                )
-            ds = matches[0]
-
-        result = []
-        for var in ds["variables"]:
-            drv = var.get("derivation")
-            if not drv:
-                continue  # no derivation → carry-through / manual column
-            # Backward compat: callable: without algorithm: → inject algorithm.
-            if "callable" in drv and "algorithm" not in drv:
-                drv = {**drv, "algorithm": "callable"}
-            spec = ADAMVariableSpec(
-                target=var["name"],
-                **drv,
-            )
-            result.append(spec)
-        return result
-
+    # ------------------------------------------------------------------ #
     # ------------------------------------------------------------------ #
     # ADaM sub-structures (accessed as df.adam.adsl / df.adam.occds)       #
     # ------------------------------------------------------------------ #
+
+    def _sub_namespace(self, cls: type[_SubNS]) -> _SubNS:
+        """Hand the accumulated state over to a sub-namespace.
+
+        The lazy plan is passed through unchanged (no materialisation)
+        and pins, pin lineage, variable lineage, pending FK checks, and
+        FK policy all propagate, so ``.pin("ADSL", adsl).occds`` keeps
+        its pins.  The parent domain tag carries over unless the
+        sub-namespace sets its own (ADSL).
+        """
+        new = cls(self._lazy)
+        new._pinned = dict(getattr(self, "_pinned", {}))
+        new._pin_lineage = list(getattr(self, "_pin_lineage", []))
+        new._lineage = list(getattr(self, "_lineage", []))
+        new._pending_fk_checks = list(getattr(self, "_pending_fk_checks", []))
+        fk_severity = getattr(self, "_fk_severity", None)
+        if fk_severity is not None:
+            new._fk_severity = fk_severity
+        if getattr(new, "_domain", None) is None:
+            new._domain = getattr(self, "_domain", None)
+        return new
 
     @property
     def adsl(self) -> ADSLNamespace:
         """ADSL (one-row-per-subject) derivations: treatment dates, duration, population flags."""
         from .adsl_namespace import ADSLNamespace
 
-        return ADSLNamespace(self.to_frame())
+        return self._sub_namespace(ADSLNamespace)
 
     @property
     def occds(self) -> OCCDSNamespace:
         """OCCDS (one-row-per-event) derivations: sequencing, worst flag, treatment-emergent."""
         from .occds_namespace import OCCDSNamespace
 
-        return OCCDSNamespace(self.to_frame())
+        return self._sub_namespace(OCCDSNamespace)
 
     # ------------------------------------------------------------------ #
     # Therapeutic-area extensions (accessed as df.adam.<ta>)               #
@@ -1275,46 +1015,46 @@ class AdamNamespace(SharedADaMVerbsMixin):
         """Oncology derivations (admiralonco-inspired): RECIST, BOR, response flags."""
         from .onco_namespace import OncoNamespace
 
-        return OncoNamespace(self.to_frame())
+        return self._sub_namespace(OncoNamespace)
 
     @property
     def ophtha(self) -> OphthaNamespace:
         """Ophthalmology derivations (admiralophtha-inspired): ETDRS/LogMAR, study eye."""
         from .ophtha_namespace import OphthaNamespace
 
-        return OphthaNamespace(self.to_frame())
+        return self._sub_namespace(OphthaNamespace)
 
     @property
     def peds(self) -> PedsNamespace:
         """Pediatrics derivations (admiralpeds-inspired): age, prematurity, BMI."""
         from .peds_namespace import PedsNamespace
 
-        return PedsNamespace(self.to_frame())
+        return self._sub_namespace(PedsNamespace)
 
     @property
     def vaccine(self) -> VaccineNamespace:
         """Vaccine derivations (admiralvaccine-inspired): fever, seroconversion."""
         from .vaccine_namespace import VaccineNamespace
 
-        return VaccineNamespace(self.to_frame())
+        return self._sub_namespace(VaccineNamespace)
 
     @property
     def metabolic(self) -> MetabolicNamespace:
         """Metabolic derivations (admiralmetabolic-inspired): waist ratios, body fat."""
         from .metabolic_namespace import MetabolicNamespace
 
-        return MetabolicNamespace(self.to_frame())
+        return self._sub_namespace(MetabolicNamespace)
 
     @property
     def neuro(self) -> NeuroNamespace:
         """Neuroscience derivations (admiralneuro-inspired): Centiloid, MMSE, CDR-SoB."""
         from .neuro_namespace import NeuroNamespace
 
-        return NeuroNamespace(self.to_frame())
+        return self._sub_namespace(NeuroNamespace)
 
     @property
     def pk(self) -> PKNamespace:
         """PK (pharmacokinetics) derivations: BLQ flags, actual/nominal time, dose normalisation."""
         from .pk_namespace import PKNamespace
 
-        return PKNamespace(self.to_frame())
+        return self._sub_namespace(PKNamespace)

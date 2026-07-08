@@ -49,30 +49,30 @@ dm_raw = pl.from_repr("""\
 """)
 
 dm = (
-    dm_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")
-    .hardcode_no_ct("DOMAIN", value="DM")
-    .assign_no_ct("USUBJID", source="patient_number")
-    .assign_no_ct("AGE", source="age")
-    .assign_ct("SEX", source="sex", ct_codelist=SEX, ct_mapping={"F": "F", "M": "M"})
-    .assign_ct(
+    dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
+    .assign("DOMAIN", value="DM")
+    .assign("USUBJID", source="patient_number")
+    .assign("AGE", source="age")
+    .assign("SEX", source="sex", ct=SEX, ct_map={"F": "F", "M": "M"})
+    .assign(
         "RACE",
         source="race",
-        ct_codelist=RACE,
-        ct_mapping={
+        ct=RACE,
+        ct_map={
             "WHITE": "WHITE",
             "BLACK OR AFRICAN AMERICAN": "BLACK OR AFRICAN AMERICAN",
         },
     )
-    .assign_ct(
+    .assign(
         "ETHNIC",
         source="ethnic",
-        ct_codelist=ETHNIC,
-        ct_mapping={
+        ct=ETHNIC,
+        ct_map={
             "HISPANIC OR LATINO": "HISPANIC OR LATINO",
             "NOT HISPANIC OR LATINO": "NOT HISPANIC OR LATINO",
         },
     )
-    .assign_no_ct("ARM", source="arm_description")
+    .assign("ARM", source="arm_description")
     .date("RFSTDTC", source="first_dose_date")
     .date("RFENDTC", source="last_dose_date")
     .to_frame()
@@ -85,7 +85,7 @@ adsl = (
     .source("SEX")
     .source("RACE")
     .source("ARM")
-    .rename("TRT01P", source="ARM")
+    .assign("TRT01P", source="ARM")
     .date("TRTSDT", source="RFSTDTC")
     .date("TRTEDT", source="RFENDTC")
     .derivation(

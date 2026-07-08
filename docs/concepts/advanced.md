@@ -13,11 +13,10 @@ For row-by-row logic or straightforward column math, use the `.derivation()` ver
 **String expression (YAML-compatible, AST-sandboxed):**
 
 ```python
-adsl = (
-    dm.adam.adsl
-    .derivation("AGEGR1", expression="pl.when(pl.col('AGE') < 65).then(pl.lit('<65 yrs')).otherwise(pl.lit('>=65 yrs'))")
-    .to_frame()
-)
+adsl = dm.adam.adsl.derivation(
+    "AGEGR1",
+    expression="pl.when(pl.col('AGE') < 65).then(pl.lit('<65 yrs')).otherwise(pl.lit('>=65 yrs'))",
+).to_frame()
 ```
 
 **Direct `pl.Expr` (full Polars power):**
@@ -25,31 +24,27 @@ adsl = (
 ```python
 import polars as pl
 
-adsl = (
-    dm.adam.adsl
-    .derivation(
-        "AGEGR1",
-        expression=(
-            pl.when(pl.col("AGE") < 18).then(pl.lit("<18"))
-            .when(pl.col("AGE") <= 65).then(pl.lit("18-65"))
-            .otherwise(pl.lit(">65"))
-        ),
-    )
-    .to_frame()
-)
+adsl = dm.adam.adsl.derivation(
+    "AGEGR1",
+    expression=(
+        pl.when(pl.col("AGE") < 18)
+        .then(pl.lit("<18"))
+        .when(pl.col("AGE") <= 65)
+        .then(pl.lit("18-65"))
+        .otherwise(pl.lit(">65"))
+    ),
+).to_frame()
 ```
 
 **Lambda returning `pl.Expr` (inline, IDE auto-complete, no string sandbox):**
 
 ```python
-adsl = (
-    dm.adam.adsl
-    .derivation("AGEGR1", expression=lambda: (
-        pl.when(pl.col("AGE") < 65).then(pl.lit("<65 yrs"))
-        .otherwise(pl.lit(">=65 yrs"))
-    ))
-    .to_frame()
-)
+adsl = dm.adam.adsl.derivation(
+    "AGEGR1",
+    expression=lambda: (
+        pl.when(pl.col("AGE") < 65).then(pl.lit("<65 yrs")).otherwise(pl.lit(">=65 yrs"))
+    ),
+).to_frame()
 ```
 
 ## `@derivation` — File-Based, Lineage-Tracked Derivations
@@ -71,13 +66,12 @@ For study-specific logic that should be versioned, reused, and automatically doc
 from fleet.core.derivation import derivation
 import polars as pl
 
+
 @derivation
 def AGEGR1() -> pl.Expr:
     """Classify AGE into pooled age groups for ADSL."""
     return (
-        pl.when(pl.col("AGE") < 65)
-        .then(pl.lit("<65 yrs"))
-        .otherwise(pl.lit(">=65 yrs"))
+        pl.when(pl.col("AGE") < 65).then(pl.lit("<65 yrs")).otherwise(pl.lit(">=65 yrs"))
     ).alias("AGEGR1")
 ```
 
@@ -86,11 +80,7 @@ Use it directly in a pipeline:
 ```python
 from examples.cdiscpilot01.adam.derivations import AGEGR1
 
-adsl = (
-    dm.adam.adsl
-    .derivation(AGEGR1)
-    .to_frame()
-)
+adsl = dm.adam.adsl.derivation(AGEGR1).to_frame()
 ```
 
 ### `kind="frame"` example
@@ -114,9 +104,7 @@ def add_pop_flags(df: pl.DataFrame) -> pl.DataFrame:
 )
 def BMI(df: pl.DataFrame) -> pl.DataFrame:
     """Compute BMI per subject visit."""
-    return df.with_columns(
-        (pl.col("WEIGHT") / (pl.col("HEIGHT") / 100) ** 2).alias("AVAL")
-    )
+    return df.with_columns((pl.col("WEIGHT") / (pl.col("HEIGHT") / 100) ** 2).alias("AVAL"))
 ```
 
 ### Derivations folder convention
@@ -147,7 +135,9 @@ import polars as pl
 
 # 1. Start by compiling your base ADSL dataset to a Polars DataFrame
 # (Assuming you already have adsl base and adverse events dataframes)
-base_adsl = ctx.build("ADSL") # Or adsl_pipeline.to_frame()
+base_adsl = (
+    adsl_pipeline.to_frame()
+)  # or dm.adam.from_spec("define.yaml", dataset="ADSL").to_frame()
 
 # 2. Compute complex custom logic using pure Polars (e.g. tracking a multi-step clinical event pattern)
 # Here we find patients who had a Severe AE specifically after taking a certain concomitant medication.
@@ -156,23 +146,23 @@ complex_events = (
     .join(ae_df.filter(pl.col("AESEV") == "SEVERE"), on="USUBJID", how="inner")
     .join(cm_df.filter(pl.col("CMINDC") == "NAUSEA"), on="USUBJID", how="left")
     .group_by("USUBJID")
-    .agg([
-        pl.when(pl.col("AESTDTC").min() > pl.col("CMSTDTC").min())
-          .then(pl.lit("Y"))
-          .otherwise(pl.lit("N"))
-          .alias("CUSTFL")
-    ])
+    .agg(
+        [
+            pl.when(pl.col("AESTDTC").min() > pl.col("CMSTDTC").min())
+            .then(pl.lit("Y"))
+            .otherwise(pl.lit("N"))
+            .alias("CUSTFL")
+        ]
+    )
 )
 
 # 3. Merge the result natively using Polars
 merged_adsl = base_adsl.join(complex_events, on="USUBJID", how="left")
 
 # 4. Jump back into Fleet if you need to finalize any remaining standard derivations or metadata
-final_adsl = (
-    merged_adsl.adam.adsl
-    .derivation("CUSTFL", expression=pl.col("CUSTFL").fill_null("N"))
-    .to_frame()
-)
+final_adsl = merged_adsl.adam.adsl.derivation(
+    "CUSTFL", expression=pl.col("CUSTFL").fill_null("N")
+).to_frame()
 ```
 
 This pattern ensures you are never bottlenecked by the package API: if you can write it in Polars, you can execute it in Fleet.
@@ -185,11 +175,13 @@ If your organisation uses standard proprietary derivations across multiple datas
 from fleet.adam.namespace import AdamNamespace
 import polars as pl
 
+
 class CompanyAdamNamespace(AdamNamespace):
     def proprietary_flag(self, target_col: str, condition: str) -> "CompanyAdamNamespace":
         """Re-usable custom flag for your company."""
         expr = pl.when(pl.col(condition) == "Y").then(pl.lit("Y")).otherwise(pl.lit(None))
         return self._chain(expr.alias(target_col))
+
 
 # You can register this as a custom accessor using Polars
 @pl.api.register_dataframe_namespace("company_adam")
@@ -200,7 +192,7 @@ class _CompanyAdamPolarsAccessor(CompanyAdamNamespace):
 
 ## Handing Non-CDISC Raw Sources
 
-If you are pulling in non-standard vendor files, use Fleet verbs to rename and map columns directly inside the pipeline. The `.source()` verb (ADaM) and `.assign_no_ct()` verb (SDTM) both accept a `from_col` / `source` keyword to copy a raw column under a CDISC-compliant name — no intermediate Polars `.rename()` call needed:
+If you are pulling in non-standard vendor files, use Fleet verbs to rename and map columns directly inside the pipeline. The `.source()` verb (ADaM) and `.assign()` verb (SDTM) both accept a `from_col` / `source` keyword to copy a raw column under a CDISC-compliant name — no intermediate Polars `.rename()` call needed:
 
 ```python
 import polars as pl
@@ -210,21 +202,19 @@ raw_labs = pl.read_csv("vendor_labs.csv")
 
 # Rename non-standard columns inline using Fleet verbs, then continue derivation
 adlb = (
-    raw_labs.adam
-    .source("USUBJID", from_col="Subject_ID")
+    raw_labs.adam.source("USUBJID", from_col="Subject_ID")
     .source("AVAL", from_col="Lab_Result")
     .baseline("BASE", aval="AVAL", baseline_flag="ABLFL")
     .to_frame()
 )
 ```
 
-For SDTM pipelines the equivalent verb is `.assign_no_ct()`:
+For SDTM pipelines the equivalent verb is `.assign(source=...)`:
 
 ```python
 dm = (
-    raw_df.sdtm
-    .assign_no_ct("USUBJID", source="subject_id")
-    .assign_no_ct("SUBJID", source="subject_id")
+    raw_df.sdtm.assign("USUBJID", source="subject_id")
+    .assign("SUBJID", source="subject_id")
     .to_frame()
 )
 ```
@@ -239,17 +229,16 @@ Many CDISC derivations require data from sibling domains — SDTM study day need
 
 ```python
 # Build DM first
-dm = dm_raw.sdtm.hardcode_no_ct("DOMAIN", value="DM") ...  .to_frame()
+dm = dm_raw.sdtm.assign("DOMAIN", value="DM").to_frame()  # ...plus the rest of DM
 
 # Pin DM to the AE pipeline — verbs can now resolve RFSTDTC
 ae = (
-    ae_raw.sdtm
-    .hardcode_no_ct("DOMAIN", value="AE")
-    .assign_no_ct("USUBJID", source="patient_number")
+    ae_raw.sdtm.assign("DOMAIN", value="AE")
+    .assign("USUBJID", source="patient_number")
     .date("AESTDTC", source="ae_start_date")
-    .pin("DM", dm)                                      # ← attach reference
-    .study_day("AESTDY", date_col="AESTDTC")            # ← consumes the pin
-    .baseline_flag("AEBLFL", date_col="AESTDTC")        # ← also consumes it
+    .pin("DM", dm)  # ← attach reference
+    .study_day("AESTDY", date_col="AESTDTC")  # ← consumes the pin
+    .baseline_flag("AEBLFL", date_col="AESTDTC")  # ← also consumes it
     .to_frame()
 )
 ```
@@ -262,11 +251,10 @@ You can pin as many domains as you need:
 
 ```python
 ae = (
-    ae_raw.sdtm
-    .pin("DM", dm_df)                                # join on USUBJID (default)
-    .pin("TV", tv_df, join_on="VISITNUM")            # different join key
-    .pin("EX", ex_df, join_on=["USUBJID", "EXTRT"]) # compound key
-    .study_day("AESTDY", date_col="AESTDTC")        # uses DM pin
+    ae_raw.sdtm.pin("DM", dm_df)  # join on USUBJID (default)
+    .pin("TV", tv_df, join_on="VISITNUM")  # different join key
+    .pin("EX", ex_df, join_on=["USUBJID", "EXTRT"])  # compound key
+    .study_day("AESTDY", date_col="AESTDTC")  # uses DM pin
     .to_frame()
 )
 ```
@@ -289,7 +277,7 @@ adae = (
     ae_df.adam.occds("ADAE")
     .pin("ADSL", adsl)
     .source("USUBJID")
-    .join_adsl("TRTSDT", "TRTEDT", "SAFFL")             # carry forward from ADSL
+    .join_adsl("TRTSDT", "TRTEDT", "SAFFL")  # carry forward from ADSL
     .study_day("ASTDY", date_col="AESTDTC", ref_col="TRTSDT")
     .to_frame()
 )
@@ -301,10 +289,9 @@ When a pin exists, Fleet can automatically check foreign-key integrity. By defau
 
 ```python
 ae = (
-    ae_raw.sdtm
-    .pin("DM", dm)
-    .fk_policy("error")                                  # raise on FK violations
-    .assign_no_ct("USUBJID", source="patient_number")   # FK auto-checked vs DM
+    ae_raw.sdtm.pin("DM", dm)
+    .fk_policy("error")  # raise on FK violations
+    .assign("USUBJID", source="patient_number")  # FK auto-checked vs DM
     .to_frame()
 )
 ```
@@ -315,12 +302,11 @@ Every derivation — including cross-domain pin access — is recorded automatic
 
 ```python
 ae = (
-    ae_raw.sdtm
-    .assign_no_ct("USUBJID", source="patient_number")
-    .assign_no_ct("AESTDTC", source="ae_start_date")
+    ae_raw.sdtm.assign("USUBJID", source="patient_number")
+    .assign("AESTDTC", source="ae_start_date")
     .pin("DM", dm)
     .study_day("AESTDY", date_col="AESTDTC")
-    .trail()          # prints the origin table; pipeline continues
+    .trail()  # prints the origin table; pipeline continues
     .to_frame()
 )
 ```
@@ -337,11 +323,10 @@ Materialises the pipeline at that point, prints schema, shape, and first rows, t
 
 ```python
 adsl = (
-    dm.adam.adsl
-    .source("USUBJID")
+    dm.adam.adsl.source("USUBJID")
     .first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")
-    .inspect(prefix="After TRTSDT")   # prints and checkpoints
-    .duration("TRTDURD", start_date="TRTSDT", end_date="TRTEDT")
+    .inspect(prefix="After TRTSDT")  # prints and checkpoints
+    .duration("TRTDURD", start="TRTSDT", end="TRTEDT")
     .to_frame()
 )
 ```
@@ -352,10 +337,9 @@ Prints the Polars logical plan without materialising. Useful for understanding h
 
 ```python
 advs = (
-    vs_raw.adam
-    .source("USUBJID")
+    vs_raw.adam.source("USUBJID")
     .derivation("AVAL", expression="VSSTRESN")
-    .explain()   # shows optimised plan
+    .explain()  # shows optimised plan
     .to_frame()
 )
 ```
@@ -366,13 +350,12 @@ Prints a table of every *derived* variable: the verb that produced it and the so
 
 ```python
 ae = (
-    ae_raw.sdtm
-    .hardcode_no_ct("DOMAIN", value="AE")
-    .assign_no_ct("USUBJID", source="patient_number")
-    .assign_no_ct("AESTDTC", source="ae_start_date")
+    ae_raw.sdtm.assign("DOMAIN", value="AE")
+    .assign("USUBJID", source="patient_number")
+    .assign("AESTDTC", source="ae_start_date")
     .pin("DM", dm)
     .study_day("AESTDY", date_col="AESTDTC")
-    .trail()   # prints the table below, pipeline continues
+    .trail()  # prints the table below, pipeline continues
     .to_frame()
 )
 ```
@@ -382,9 +365,9 @@ Variable trail (4 derivation(s)):
 ┌───┬──────────┬────────────────┬─────────────────────┬────────┐
 │ # ┆ Variable ┆ Verb           ┆ Origin              ┆ Domain │
 ╞═══╪══════════╪════════════════╪═════════════════════╪════════╡
-│ 1 ┆ DOMAIN   ┆ hardcode_no_ct ┆ (literal)           ┆ —      │
-│ 2 ┆ USUBJID  ┆ assign_no_ct   ┆ patient_number      ┆ AE     │
-│ 3 ┆ AESTDTC  ┆ assign_no_ct   ┆ ae_start_date       ┆ AE     │
+│ 1 ┆ DOMAIN   ┆ assign         ┆ (literal)           ┆ —      │
+│ 2 ┆ USUBJID  ┆ assign         ┆ patient_number      ┆ AE     │
+│ 3 ┆ AESTDTC  ┆ assign         ┆ ae_start_date       ┆ AE     │
 │ 4 ┆ AESTDY   ┆ study_day      ┆ AESTDTC, DM.RFSTDTC ┆ AE     │
 └───┴──────────┴────────────────┴─────────────────────┴────────┘
 ```

@@ -26,7 +26,17 @@ from ._ard import (
     validate_ard,
 )
 from ._builder import TLGBuilder
-from ._registry import TEMPLATES, catalog
+from ._registry import (
+    TEMPLATES,
+    CDISCClass,
+    OutputType,
+    Status,
+    TemplateMeta,
+    catalog,
+    register_template,
+    unregister_template,
+)
+from ._runner import NAMESPACE_CLASSES, load_spec, run_spec, spec_schema
 from ._specs import (
     AEListingSpec,
     AESummarySpec,
@@ -42,6 +52,7 @@ from ._specs import (
 )
 from .ae_namespace import (
     AEGradeSpec,
+    AEOverviewSpec,
     AERelationshipSpec,
     AESeveritySpec,
     AESocPtSpec,
@@ -74,12 +85,16 @@ from .render import (
     TableModel,
     ard_to_table_model,
     listing_to_model,
+    paginate,
+    paginate_listing,
     render_html,
     render_listing_html,
     render_listing_pdf,
     render_listing_pptx,
+    render_listing_rtf,
     render_pdf,
     render_pptx,
+    render_rtf,
 )
 from .vs_namespace import VSTLGNamespace
 
@@ -100,6 +115,7 @@ __all__ = [
     "TLGSpec",
     "SummarySpecBase",
     "AESummarySpec",
+    "AEOverviewSpec",
     "AESocPtSpec",
     "AESeveritySpec",
     "AEGradeSpec",
@@ -127,7 +143,18 @@ __all__ = [
     "resolve_filter",
     # Registry
     "TEMPLATES",
+    "TemplateMeta",
+    "CDISCClass",
+    "OutputType",
+    "Status",
     "catalog",
+    "register_template",
+    "unregister_template",
+    # YAML workflow
+    "NAMESPACE_CLASSES",
+    "load_spec",
+    "run_spec",
+    "spec_schema",
     # Building blocks
     "Row",
     "Column",
@@ -150,10 +177,14 @@ __all__ = [
     "ListingModel",
     "ard_to_table_model",
     "listing_to_model",
+    "paginate",
+    "paginate_listing",
     "render_html",
     "render_listing_html",
     "render_pdf",
     "render_listing_pdf",
     "render_pptx",
     "render_listing_pptx",
+    "render_rtf",
+    "render_listing_rtf",
 ]

@@ -1,0 +1,35 @@
+# AET01 — Overview of Adverse Events
+#
+# A YAML file alone reproduces the table:
+#
+#     import fleet.tlg as tlg
+#     spec = tlg.load_spec("examples/tlg_specs/aet01.yaml")
+#     ard = tlg.run_spec(spec, adae, adsl=adsl)
+#
+# `template:` resolves the spec class (AEOverviewSpec) and the target
+# method (df.tlg.ae.t_overview) through the template registry.
+template: aet01
+schema_version: 1
+
+# Safety population denominator (big N).
+adsl_filter: 'pl.col("SAFFL") == "Y"'
+
+# Whole-population overview rows — no SOC -> PT hierarchy (that is aet02).
+# This sponsor variant omits the fatal-AE row (no AESDTH collected).
+header_rows:
+  - label: Subjects with at least one adverse event
+  - label: Subjects with at least one serious adverse event
+    filter: 'pl.col("AESER") == "Y"'
+  - label: Subjects with at least one adverse event leading to discontinuation
+    filter: 'pl.col("AEACN") == "DRUG WITHDRAWN"'
+
+rows: []
+statistics:
+  - n_subjects
+  - n_pct
+
+required_columns:
+  - USUBJID
+  - TRTA
+  - AESER
+  - AEACN

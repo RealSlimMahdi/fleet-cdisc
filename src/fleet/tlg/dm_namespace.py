@@ -25,6 +25,7 @@ from ._ard import (
 )
 from ._builder import BuilderVerbsMixin
 from ._specs import (
+    Row,
     Statistic,
     SummarySpecBase,
     resolve_filter,
@@ -143,9 +144,12 @@ class DMTLGNamespace(BuilderVerbsMixin):
             analysis_df = analysis_df.filter(population_filter)
 
         # --- Categorical breakdowns (big-N + n / %) via shared engine ---
+        # Each categorical variable carries its display label so the
+        # renderer can head its block ("Sex", "Race", …).
+        cat_rows = [Row(field=f, label=spec.category_labels.get(f)) for f in spec.categorical_vars]
         cat_ard = summarize_ard(
             analysis_df,
-            rows=spec.categorical_vars,
+            rows=cat_rows,
             stats=spec.statistics,
             context="t_dm_summary",
             group_col=group_col,
@@ -155,6 +159,9 @@ class DMTLGNamespace(BuilderVerbsMixin):
             adsl_filter=spec.adsl_filter,
             dataset_filter=spec.dataset_filter,
             header_rows=spec.header_rows,
+            value_col=spec.value_col,
+            label_col=spec.label_col,
+            decimals=spec.decimals,
         )
 
         # --- Continuous age statistics ---
@@ -172,6 +179,7 @@ class DMTLGNamespace(BuilderVerbsMixin):
         if age_var is None:
             return cat_ard
 
+        fmt = spec.decimals or {}
         age_rows: list[dict[str, Any]] = []
         for arm in arms:
             ages = df.filter(pl.col(group_col) == arm)[age_var]
@@ -187,6 +195,7 @@ class DMTLGNamespace(BuilderVerbsMixin):
                         stat_label,
                         value,
                         "t_dm_summary",
+                        fmt_fn=fmt.get(stat_name),
                     )
                 )
 

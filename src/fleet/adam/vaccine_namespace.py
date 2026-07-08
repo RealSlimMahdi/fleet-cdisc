@@ -19,7 +19,7 @@ Usage
         .source("USUBJID")
         .fever_flag("FEVFL", temp_col="AVAL", threshold=38.0)
         .event_flag("EVENTFL", aval_col="AVAL", cutoff=2.5,
-                    groups=["USUBJID", "FAOBJ", "ATPTREF"])
+                    by=["USUBJID", "FAOBJ", "ATPTREF"])
         .to_frame()
     )
 
@@ -40,6 +40,7 @@ from typing import Self
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
+from fleet.core._deprecation import deprecated_kwargs
 
 
 class VaccineNamespace(SharedADaMVerbsMixin):
@@ -229,20 +230,21 @@ class VaccineNamespace(SharedADaMVerbsMixin):
     # 5. event_flag — reactogenicity event occurrence flags               #
     # ------------------------------------------------------------------ #
 
+    @deprecated_kwargs(groups="by")
     def event_flag(
         self,
         target: str,
         *,
         aval_col: str,
         cutoff: float,
-        groups: list[str] | None = None,
+        by: list[str] | None = None,
         severity_col: str | None = None,
         severity_values: list[str] | None = None,
         flag_value: str = "Y",
         no_event_value: str = "N",
     ) -> Self:
         """
-        Flag whether a reactogenicity event occurred at least once per *groups*.
+        Flag whether a reactogenicity event occurred at least once per *by* group.
 
         An event is considered to have occurred if:
         - *aval_col* > *cutoff*, OR
@@ -259,10 +261,10 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         Example::
 
             .event_flag("EVENTFL", aval_col="AVAL", cutoff=2.5,
-                        groups=["USUBJID", "FAOBJ", "ATPTREF"])
+                        by=["USUBJID", "FAOBJ", "ATPTREF"])
         """
         sev_vals = severity_values or ["MILD", "MODERATE", "SEVERE"]
-        grps = groups or ["USUBJID"]
+        grps = by or ["USUBJID"]
 
         df = self.to_frame()
 

@@ -24,12 +24,20 @@ Usage
 
 from __future__ import annotations
 
+import warnings
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+#: File extension per supported export format (spec key ``output_format``).
+_OUTPUT_FORMAT_EXT: dict[str, str] = {
+    "parquet": ".parquet",
+    "xpt": ".xpt",
+    "dataset-json": ".json",
+}
 
 # ─────────────────────────────────────────────────────────── data model ── #
 
@@ -82,6 +90,13 @@ class VariableNode:
             context; ``None`` otherwise.
         pin_sources: Cross-domain dependencies recorded by pin-consuming
             verbs.  Empty for purely intra-frame derivations.
+        params: Verb keyword arguments captured at call time (only
+            YAML-serialisable, non-default values).  ``None`` when the
+            producing verb did not expose its parameters.  Consumed by
+            ``to_spec_yaml()`` to reconstruct ``derivation:`` blocks.
+        spec: Ready-made define.yaml ``derivation:`` block when the
+            variable was produced by ``from_spec()`` (the validated spec
+            fields round-trip verbatim).  Takes precedence over *params*.
     """
 
     name: str
@@ -90,6 +105,8 @@ class VariableNode:
     method: str
     domain: str | None = None
     pin_sources: list[PinDependency] = field(default_factory=list)
+    params: dict[str, Any] | None = None
+    spec: dict[str, Any] | None = None
 
     @property
     def cdisc_ref(self) -> str:
@@ -222,10 +239,24 @@ class PipelineDAG:
     def inject_lineage(self, namespace: Any, dataset_name: str) -> None:
         """Merge variable-level and pin lineage from *namespace* into the DAG.
 
-        Populates ``variables`` on the node named *dataset_name* and, for
+        Populates ``variables`` on the node named *dataset_name* (when a
+        variable was derived more than once, the last derivation wins —
+        matching what the materialised frame actually contains) and, for
         each ``PinDependency``, adds the pinned source domain to the
         node's ``inputs`` if it is not already present (creating the
         cross-domain edge in the DAG).
+
+        Declared ``inputs:`` are reconciled against the runtime pin
+        evidence in both directions:
+
+        * a dataset-type input declared in the spec but never consulted
+          at runtime emits a ``UserWarning`` (stale declaration);
+        * a runtime pin source missing from the declaration emits a
+          ``UserWarning`` *and* the edge is added (the DAG follows the
+          evidence).
+
+        Raw inputs carry no pin evidence and are exempt from the
+        declared-but-unused check.
 
         Args:
             namespace: A namespace instance with ``_lineage`` and
@@ -238,41 +269,90 @@ class PipelineDAG:
 
         from fleet.core.lineage import lineage_of, pin_lineage_of
 
-        # Merge intra-frame variable lineage
+        declared = list(node.inputs)
+
+        # Merge intra-frame variable lineage (last write wins per target)
         for vnode in lineage_of(namespace):
             node.variables[vnode.name] = vnode
 
         # Merge pin lineage → enrich variable nodes + add DAG edges
+        runtime_domains: set[str] = set()
         for pdep in pin_lineage_of(namespace):
+            runtime_domains.add(pdep.source_domain)
             if pdep.target_col in node.variables:
                 vnode = node.variables[pdep.target_col]
                 vnode.pin_sources.append(pdep)
             # Ensure the source domain is an input edge
             if pdep.source_domain in self.nodes and pdep.source_domain not in node.inputs:
+                warnings.warn(
+                    f"inject_lineage('{dataset_name}'): runtime evidence shows a "
+                    f"dependency on '{pdep.source_domain}' (via {pdep.verb}) that is "
+                    f"not declared in the spec's inputs: {declared}. "
+                    f"Adding the edge; declare it in the define.yaml to silence this.",
+                    stacklevel=2,
+                )
                 node.inputs.append(pdep.source_domain)
 
-    def trace(self, dataset: str, variable: str) -> list[dict[str, Any]]:
-        """Return full provenance chain for a single variable.
+        # Reverse direction: declared dataset inputs with no runtime evidence.
+        for name in declared:
+            upstream = self.nodes.get(name)
+            if upstream is not None and upstream.node_type == "raw":
+                continue  # raw sources are consumed as columns, not pins
+            if name not in runtime_domains:
+                warnings.warn(
+                    f"inject_lineage('{dataset_name}'): input '{name}' is declared "
+                    f"in the spec but no runtime pin/lineage evidence consumed it. "
+                    f"Remove the declaration or check the pipeline wiring.",
+                    stacklevel=2,
+                )
 
-        Follows both intra-frame sources and cross-domain pin sources.
+    def trace(self, dataset: str, variable: str) -> list[dict[str, Any]]:
+        """Return the full recursive provenance chain for a single variable.
+
+        Walks the variable's ``sources`` transitively — including
+        cross-domain pin sources into other DAG nodes — collecting every
+        upstream *derived* variable exactly once (cycle-safe, deduped).
+        Raw/leaf columns appear inside each entry's ``sources`` but do
+        not get entries of their own.
 
         Args:
             dataset: Logical node name (e.g. ``"AE"``).
             variable: Column name (e.g. ``"AESTDY"``).
 
         Returns:
-            list[dict]: Ordered provenance entries from output back to
-                source, each with ``name``, ``verb``, ``sources``,
-                and optional ``pin_sources``.
+            list[dict]: Depth-first provenance entries from the output
+                variable back to its sources, each with ``dataset``,
+                ``name``, ``verb``, ``sources``, ``domain``, and
+                ``pin_sources``.
         """
+        chain: list[dict[str, Any]] = []
+        visited: set[tuple[str, str]] = set()
+        self._trace_into(dataset, variable, chain, visited)
+        return chain
+
+    def _trace_into(
+        self,
+        dataset: str,
+        variable: str,
+        chain: list[dict[str, Any]],
+        visited: set[tuple[str, str]],
+    ) -> None:
+        """DFS helper for :meth:`trace` — appends entries in pre-order."""
+        key = (dataset, variable)
+        if key in visited:
+            return
+        visited.add(key)
+
         node = self.nodes.get(dataset)
         if node is None:
-            return []
+            return
         vnode = node.variables.get(variable)
         if vnode is None:
-            return []
-        chain: list[dict[str, Any]] = [
+            return  # leaf: raw column or variable without lineage
+
+        chain.append(
             {
+                "dataset": dataset,
                 "name": vnode.name,
                 "verb": vnode.verb,
                 "sources": vnode.sources,
@@ -287,8 +367,19 @@ class PipelineDAG:
                     for p in vnode.pin_sources
                 ],
             }
-        ]
-        return chain
+        )
+
+        # Columns attributed to a pinned domain recurse into that domain,
+        # not into the local frame (the local copy is a join artefact).
+        pinned_cols: set[str] = set()
+        for pdep in vnode.pin_sources:
+            for col in pdep.source_cols:
+                pinned_cols.add(col)
+                self._trace_into(pdep.source_domain, col, chain, visited)
+
+        for src in vnode.sources:
+            if src not in pinned_cols:
+                self._trace_into(dataset, src, chain, visited)
 
     # ── export ──────────────────────────────────────────────────────────── #
 
@@ -445,9 +536,13 @@ def build_dag(
         Paths to ``define.yaml`` files (SDTM, ADaM, SEND, or any mix).
         Pass multiple files to span an entire study pipeline.
     output_dir:
-        Directory where derived dataset outputs land (used to resolve the
-        ``path`` of non-raw nodes via the convention
-        ``{output_dir}/{name.lower()}.parquet``).
+        Directory where derived dataset outputs land.  A dataset's
+        ``path`` is resolved from, in order: the per-dataset ``output:``
+        key (relative paths are joined onto *output_dir*), then the
+        convention ``{output_dir}/{name.lower()}{ext}`` where *ext*
+        follows the per-dataset or spec-level ``output_format:`` key
+        (``parquet`` → ``.parquet`` by default, ``xpt`` → ``.xpt``,
+        ``dataset-json`` → ``.json``).
         Defaults to the parent directory of the *first* spec file.
 
     Returns
@@ -493,6 +588,7 @@ def build_dag(
 
         standard = spec.get("study", {}).get("standard", "")
         node_type = _standard_to_node_type(standard)
+        spec_format: str = spec.get("output_format", "parquet")
 
         for dataset in spec.get("datasets", []):
             ds_name: str = dataset["name"]
@@ -514,7 +610,14 @@ def build_dag(
 
                 ds_inputs.append(inp_name)
 
-            output_path = str(out_dir / f"{ds_name.lower()}.parquet")
+            declared_output: str | None = dataset.get("output")
+            if declared_output:
+                declared = Path(declared_output)
+                output_path = str(declared if declared.is_absolute() else out_dir / declared)
+            else:
+                fmt = dataset.get("output_format", spec_format)
+                ext = _OUTPUT_FORMAT_EXT.get(fmt, ".parquet")
+                output_path = str(out_dir / f"{ds_name.lower()}{ext}")
             nodes[ds_name] = PipelineNode(
                 name=ds_name,
                 node_type=node_type,

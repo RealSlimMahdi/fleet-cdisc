@@ -54,10 +54,13 @@ Every transform function must satisfy:
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
 from typing import Any, overload
 
 import polars as pl
+
+from fleet.core.exceptions import VerbUsageError
 
 # Module-level registry: name → callable or Derivation object.
 # Values may be plain callables (df → df) or ``Derivation`` instances created
@@ -113,7 +116,8 @@ def register_transform(name, fn=None):
     if fn is not None:
         # Imperative form: register_transform("name", fn)
         if not callable(fn):
-            raise TypeError(f"Expected a callable, got {type(fn).__name__}")
+            raise VerbUsageError(f"Expected a callable, got {type(fn).__name__}")
+        _warn_on_duplicate(name, fn)
         _TRANSFORMS[name] = fn
         return fn
 
@@ -121,10 +125,29 @@ def register_transform(name, fn=None):
     def _decorator(
         func: Callable[[pl.DataFrame], pl.DataFrame],
     ) -> Callable[[pl.DataFrame], pl.DataFrame]:
+        _warn_on_duplicate(name, func)
         _TRANSFORMS[name] = func
         return func
 
     return _decorator
+
+
+def _warn_on_duplicate(name: str, fn: Callable | Any) -> None:
+    """Warn when *name* is already registered with a different callable.
+
+    Silent overwrites let two studies' derivations (e.g. two ``AGEGR1``
+    implementations) shadow each other depending on import order — the
+    warning makes the collision visible without breaking re-imports of
+    the same function.
+    """
+    existing = _TRANSFORMS.get(name)
+    if existing is not None and existing is not fn:
+        warnings.warn(
+            f"Transform '{name}' is already registered "
+            f"({getattr(existing, '__module__', '?')}.{getattr(existing, '__qualname__', '?')}); "
+            f"overwriting with {getattr(fn, '__module__', '?')}.{getattr(fn, '__qualname__', '?')}.",
+            stacklevel=3,
+        )
 
 
 def get_transform(name: str) -> Callable[[pl.DataFrame], pl.DataFrame]:

@@ -39,6 +39,10 @@ jobs:
         if: matrix.python-version == '3.12'
         run: uv run python scripts/build_llms.py --check
 
+      - name: Check generated CLI docs are up-to-date
+        if: matrix.python-version == '3.12'
+        run: uv run python scripts/gen_cli_docs.py --check
+
       - name: Run tests
         run: uv run pytest --cov=fleet --cov-report=xml --cov-report=term-missing
 

@@ -92,17 +92,17 @@ print(f"  ae_raw           : {ae_raw.shape[0]:>3} rows × {ae_raw.shape[1]} cols
 print("\n━━ Layer 1 · SDTM AE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 ae = (
-    ae_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")
-    .hardcode_no_ct("DOMAIN", value="AE")
-    .assign_no_ct("USUBJID", source="patient_number")
-    .assign_no_ct("AETERM", source="ae_term")
-    .assign_no_ct("AESTDTC", source="ae_start_date")
-    .assign_no_ct("AEENDTC", source="ae_end_date")
-    .assign_no_ct("AESEV", source="ae_severity")
-    .assign_no_ct("AESER", source="ae_serious")
-    .assign_no_ct("AEOUT", source="ae_outcome")
-    .assign_no_ct("AEACN", source="ae_action_taken")
-    .assign_no_ct("AEREL", source="ae_relationship")
+    ae_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
+    .assign("DOMAIN", value="AE")
+    .assign("USUBJID", source="patient_number")
+    .assign("AETERM", source="ae_term")
+    .assign("AESTDTC", source="ae_start_date")
+    .assign("AEENDTC", source="ae_end_date")
+    .assign("AESEV", source="ae_severity")
+    .assign("AESER", source="ae_serious")
+    .assign("AEOUT", source="ae_outcome")
+    .assign("AEACN", source="ae_action_taken")
+    .assign("AEREL", source="ae_relationship")
     .seq("AESEQ", order_by=["AESTDTC"])
     .to_frame()
 )
@@ -155,9 +155,9 @@ _adae_occds_ns = (
         "ANL01FL",
         criteria="max",
         value_col="AESEVN",
-        groups=["USUBJID", "AETERM"],
+        by=["USUBJID", "AETERM"],
     )
-    .seq("ASEQ", groups=["USUBJID"])
+    .seq("ASEQ", by=["USUBJID"])
 )
 
 adae = _adae_occds_ns.to_frame()

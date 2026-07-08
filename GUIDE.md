@@ -104,13 +104,15 @@ This reads all codelist concept IDs referenced in the define.yaml files, fetches
 # Generated codelists.py — example excerpt
 class C66731:
     """SEX (C66731)."""
+
     _concept_id = "C66731"
     F = "F"
     M = "M"
     U = "U"
 
-SEX = C66731    # Human-readable alias
-RACE = C74457   # ...
+
+SEX = C66731  # Human-readable alias
+RACE = C74457  # ...
 ```
 
 ### Standalone codelist commands
@@ -134,40 +136,74 @@ uv run fleet init-ct --domains DM,AE --ig 3-4 --package sdtmct-2025-09-26 --outp
 
 ### 3.1 The namespace pipeline
 
-Importing `fleet` registers chainable namespaces on **every** Polars DataFrame:
+Importing `fleet` registers chainable namespaces on **every** Polars DataFrame
+— and on every `pl.LazyFrame`, so `pl.scan_parquet(...).sdtm` starts a pipeline
+that never leaves the lazy world (predicate/projection pushdown intact for large
+LB/PC domains):
 
 ```python
 import fleet
 import polars as pl
 ```
 
-| Namespace           | Target                 | Description            |
-| ------------------- | ---------------------- | ---------------------- |
-| `df.sdtm`           | SDTM domains           | 14 derivation verbs    |
-| `df.adam`           | ADaM BDS (ADVS, ADLB…) | 22 derivation verbs    |
-| `df.adam.adsl`      | ADSL                   | 8 patient-level verbs  |
-| `df.adam.occds`     | OCCDS (ADAE, ADCM…)    | 5 occurrence verbs     |
-| `df.adam.onco`      | Oncology TA            | RECIST response, BOR   |
-| `df.adam.ophtha`    | Ophthalmology TA       | ETDRS/LogMAR           |
-| `df.adam.peds`      | Pediatrics TA          | Age, prematurity       |
-| `df.adam.vaccine`   | Vaccine TA             | Fever, seroconversion  |
-| `df.adam.metabolic` | Metabolic TA           | Waist ratios, body fat |
-| `df.adam.neuro`     | Neuroscience TA        | Centiloid, MMSE        |
-| `df.adam.pk`        | Pharmacokinetics TA    | ADNCA pipeline         |
+| Namespace           | Target                 | Description                    |
+| ------------------- | ---------------------- | ------------------------------ |
+| `df.sdtm`           | SDTM domains           | domain mapping, CT, dates, TDD |
+| `df.adam`           | ADaM BDS (ADVS, ADLB…) | baseline, change, flags, …     |
+| `df.adam.adsl`      | ADSL                   | patient-level summaries        |
+| `df.adam.occds`     | OCCDS (ADAE, ADCM…)    | occurrence flags, ASEQ         |
+| `df.adam.onco`      | Oncology TA            | RECIST response, BOR           |
+| `df.adam.ophtha`    | Ophthalmology TA       | ETDRS/LogMAR                   |
+| `df.adam.peds`      | Pediatrics TA          | Age, prematurity               |
+| `df.adam.vaccine`   | Vaccine TA             | Fever, seroconversion          |
+| `df.adam.metabolic` | Metabolic TA           | Waist ratios, body fat         |
+| `df.adam.neuro`     | Neuroscience TA        | Centiloid, MMSE                |
+| `df.adam.pk`        | Pharmacokinetics TA    | ADNCA pipeline                 |
 
-Every verb returns a new namespace instance with the expression appended. **Nothing executes until `.to_frame()`**, which runs the entire pipeline in one Polars `with_columns` pass.
+Verb counts drift; don't trust a printed number. Every namespace answers
+`.verbs()` — the always-current catalog:
+
+```python
+print(dm_raw.sdtm.verbs())  # verb + one-line summary, deprecated aliases hidden
+print(vs_raw.adam.verbs())
+print(dm.adam.adsl.verbs())
+```
+
+Each verb returns a new namespace instance with its expression appended; call
+`.to_frame()` to materialise.
+
+### What is lazy, and what checkpoints
+
+Fleet is **not** "nothing runs until `.to_frame()`". Most verbs are pure
+lazy `with_columns` expressions, but a handful must materialise mid-chain
+(a window needs a real column; a cross-domain join needs the pinned frame
+collected). Chaining across a checkpoint still works — Fleet re-wraps the
+collected frame and continues — but each checkpoint is one Polars `collect()`.
+
+| Fully lazy (accumulate into one pass)                                                                                                  | Checkpoints (collect mid-chain)                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `assign`, `case_when`, `derivation`, `recode`, `keep`, `source`, `ae_aerel`, `notsubmitted`; `duration` (numeric & ISO paths); `study_day` (in-frame `ref_col=`); `seq`; `select`; `merge`/`lookup`; SDTM `group_by`; `multiple_responses` | `date` (DTC-with-time & DTM-with-time paths), `baseline`/`baseline_flag`, `study_day` with a pinned-domain join, `join_adsl`, `merge_adsl`, `whereclauses`, `first_date`/`last_date`/`count_events`, `pick`, `derive_summary_records`/`derive_locf_records`/`derive_param`, `atoxgr`, `transform`, `nodup`, `inspect`, `validate`, frame-kind `@derivation`, multi-column `flag(criteria="exists")` |
+
+Use `.explain()` to print the Polars logical plan without materialising, and
+`.inspect()` to force one checkpoint and log schema/shape/head.
 
 ### 3.2 Loading raw data
 
+<!-- docs:no-run -->
+
 ```python
+from pathlib import Path
+
 from fleet import load_raw_data
 
-dm_raw = load_raw_data("datasets/cdiscpilot01/raw/dm_raw.csv").collect()
-ae_raw = load_raw_data("datasets/cdiscpilot01/raw/ae_raw.csv").collect()
-vs_raw = load_raw_data("datasets/cdiscpilot01/raw/vs_raw.csv").collect()
+dm_raw = load_raw_data(Path("datasets/cdiscpilot01/raw/dm_raw.csv")).collect()
+ae_raw = load_raw_data(Path("datasets/cdiscpilot01/raw/ae_raw.csv")).collect()
+vs_raw = load_raw_data(Path("datasets/cdiscpilot01/raw/vs_raw.csv")).collect()
 ```
 
-`load_raw_data` returns a `pl.LazyFrame` — call `.collect()` to materialise.
+`load_raw_data` takes a `pathlib.Path` and returns a `pl.LazyFrame` — call
+`.collect()` to materialise. It also accepts a URL or Parquet/XPT/SAS path. The
+examples below reuse `dm_raw`, `ae_raw`, `vs_raw` from this step.
 
 ### 3.3 StudyContext (path management)
 
@@ -195,45 +231,55 @@ arm_code, arm_description, first_dose_date, last_dose_date, informed_consent_dat
 
 ### 4.1 Code-driven DM pipeline
 
+`assign` is the one canonical assignment verb: `source=` copies a column,
+`value=` hardcodes a literal, and `ct=` / `ct_map=` add controlled-terminology
+validation/decoding. `case_when` is the one conditional verb. (Reusing `dm_raw`
+from Part 3.2.)
+
 ```python
 import fleet
 import polars as pl
-from fleet import load_raw_data
 from examples.cdiscpilot01.sdtm.codelists import SEX, RACE, ETHNIC
 
-dm_raw = load_raw_data("datasets/cdiscpilot01/raw/dm_raw.csv").collect()
-
 dm = (
-    dm_raw.sdtm
-    .hardcode_no_ct("STUDYID",  value="CDISCPILOT01")
-    .hardcode_no_ct("DOMAIN",   value="DM")
-    .assign_no_ct(  "USUBJID",  source="patient_number")
-    .assign_no_ct(  "SUBJID",   source="patient_number")
-    .derivation(    "SITEID",   expression="pl.col('site_id').cast(pl.String)")
-    .assign_no_ct(  "AGE",      source="age")
-    .hardcode_no_ct("AGEU",     value="YEARS")
-    .assign_ct("SEX",   source="sex",    ct_codelist=SEX,
-               ct_mapping={"F": "F", "M": "M"})
-    .assign_ct("RACE",  source="race",   ct_codelist=RACE,
-               ct_mapping={
-                   "WHITE":                     "WHITE",
-                   "BLACK OR AFRICAN AMERICAN": "BLACK OR AFRICAN AMERICAN",
-               })
-    .assign_ct("ETHNIC", source="ethnic", ct_codelist=ETHNIC,
-               ct_mapping={
-                   "HISPANIC OR LATINO":     "HISPANIC OR LATINO",
-                   "NOT HISPANIC OR LATINO": "NOT HISPANIC OR LATINO",
-               })
-    .if_then_else("ARMCD",
-                  when=[
-                      {"condition": pl.col("arm_code") == "Pbo",    "value": "PBO"},
-                      {"condition": pl.col("arm_code") == "Xan_Lo", "value": "XAN_LO"},
-                      {"condition": pl.col("arm_code") == "Xan_Hi", "value": "XAN_HI"},
-                  ],
-                  else_value="SCRNFAIL")
-    .assign_no_ct(  "ARM",      source="arm_description")
-    .assign_no_ct(  "ACTARMCD", source="arm_code")
-    .assign_no_ct(  "ACTARM",   source="arm_description")
+    dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
+    .assign("DOMAIN", value="DM")
+    .assign("USUBJID", source="patient_number")
+    .assign("SUBJID", source="patient_number")
+    .derivation("SITEID", expression="pl.col('site_id').cast(pl.String)")
+    .assign("AGE", source="age")
+    .assign("AGEU", value="YEARS")
+    .assign("SEX", source="sex", ct=SEX, ct_map={"F": "F", "M": "M"})
+    .assign(
+        "RACE",
+        source="race",
+        ct=RACE,
+        ct_map={
+            "WHITE": "WHITE",
+            "BLACK OR AFRICAN AMERICAN": "BLACK OR AFRICAN AMERICAN",
+        },
+    )
+    .assign(
+        "ETHNIC",
+        source="ethnic",
+        ct=ETHNIC,
+        ct_map={
+            "HISPANIC OR LATINO": "HISPANIC OR LATINO",
+            "NOT HISPANIC OR LATINO": "NOT HISPANIC OR LATINO",
+        },
+    )
+    .case_when(
+        "ARMCD",
+        when=[
+            {"condition": pl.col("arm_code") == "Pbo", "value": "PBO"},
+            {"condition": pl.col("arm_code") == "Xan_Lo", "value": "XAN_LO"},
+            {"condition": pl.col("arm_code") == "Xan_Hi", "value": "XAN_HI"},
+        ],
+        else_="SCRNFAIL",
+    )
+    .assign("ARM", source="arm_description")
+    .assign("ACTARMCD", source="arm_code")
+    .assign("ACTARM", source="arm_description")
     .date("RFSTDTC", source="first_dose_date")
     .date("RFENDTC", source="last_dose_date")
     .date("RFICDTC", source="informed_consent_date")
@@ -243,9 +289,19 @@ dm = (
 print(dm.select("STUDYID", "DOMAIN", "USUBJID", "SEX", "RACE", "ARMCD", "RFSTDTC"))
 ```
 
+> **Old spellings still work.** `assign_no_ct` / `assign_ct` / `hardcode_no_ct` /
+> `hardcode_ct` / `dataset_level` / `if_then_else` remain as deprecated aliases
+> that emit a `FutureWarning` and point at the canonical verb. Run
+> `python -m fleet.tools.migrate <files...> --write` (or `fleet migrate`) to
+> rewrite call sites automatically. See the [deprecation table](#deprecated-verb--kwarg-names).
+
 ### 4.2 Spec-driven DM pipeline
 
-Put the derivation logic in `define.yaml`:
+Put the derivation logic in `define.yaml`. The spec path accepts both canonical
+and legacy algorithm names (the registry maps them onto the same verbs), so an
+existing define.yaml keeps working:
+
+<!-- docs:no-run -->
 
 ```yaml
 datasets:
@@ -279,9 +335,18 @@ datasets:
 
 Then execute in one line:
 
+<!-- docs:no-run -->
+
 ```python
 dm = dm_raw.sdtm.from_spec("examples/cdiscpilot01/sdtm/define.yaml", dataset="DM").to_frame()
 ```
+
+`from_spec` is `strict=True` by default: an unknown `algorithm:` raises a
+`SpecError` naming file → dataset → variable, with a did-you-mean suggestion.
+Pass `strict=False` to warn-and-skip, `overwrite=True` to let a spec variable
+replace an existing column, or `omit=["TRTSDT"]` to keep an inline derivation
+for one variable. Prototyped inline first? `ns.to_spec_yaml(dataset="DM")`
+emits the equivalent `derivation:` blocks so you don't retype the YAML by hand.
 
 ---
 
@@ -295,20 +360,17 @@ ae_severity, ae_serious, ae_outcome, ae_action_taken, ae_relationship
 ```
 
 ```python
-ae_raw = load_raw_data("datasets/cdiscpilot01/raw/ae_raw.csv").collect()
-
 ae = (
-    ae_raw.sdtm
-    .hardcode_no_ct("STUDYID", value="CDISCPILOT01")
-    .hardcode_no_ct("DOMAIN",  value="AE")
-    .assign_no_ct(  "USUBJID", source="patient_number")
-    .assign_no_ct(  "AETERM",  source="ae_term")
+    ae_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
+    .assign("DOMAIN", value="AE")
+    .assign("USUBJID", source="patient_number")
+    .assign("AETERM", source="ae_term")
     .date("AESTDTC", source="ae_start_date")
     .date("AEENDTC", source="ae_end_date")
-    .assign_no_ct(  "AESEV",   source="ae_severity")
-    .assign_no_ct(  "AESER",   source="ae_serious")
-    .assign_no_ct(  "AEOUT",   source="ae_outcome")
-    .assign_no_ct(  "AEACN",   source="ae_action_taken")
+    .assign("AESEV", source="ae_severity")
+    .assign("AESER", source="ae_serious")
+    .assign("AEOUT", source="ae_outcome")
+    .assign("AEACN", source="ae_action_taken")
     .ae_aerel("AEREL", source="ae_relationship")
     .to_frame()
 )
@@ -325,20 +387,17 @@ patient_number, site_number, vstestcd, vstest, vsorres, vsorresu, vsdtc, vsdy
 ```
 
 ```python
-vs_raw = load_raw_data("datasets/cdiscpilot01/raw/vs_raw.csv").collect()
-
 vs = (
-    vs_raw.sdtm
-    .hardcode_no_ct("STUDYID", value="CDISCPILOT01")
-    .hardcode_no_ct("DOMAIN",  value="VS")
-    .assign_no_ct(  "USUBJID", source="patient_number")
-    .assign_no_ct(  "VSTESTCD", source="vstestcd")
-    .assign_no_ct(  "VSTEST",  source="vstest")
-    .assign_no_ct(  "VSORRES", source="vsorres")
-    .assign_no_ct(  "VSORRESU", source="vsorresu")
-    .derivation(    "VSSTRESN", expression="pl.col('vsorres').cast(pl.Float64, strict=False)")
-    .assign_no_ct(  "VSSTRESU", source="vsorresu")
-    .date("VSDTC",  source="vsdtc")
+    vs_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
+    .assign("DOMAIN", value="VS")
+    .assign("USUBJID", source="patient_number")
+    .assign("VSTESTCD", source="vstestcd")
+    .assign("VSTEST", source="vstest")
+    .assign("VSORRES", source="vsorres")
+    .assign("VSORRESU", source="vsorresu")
+    .derivation("VSSTRESN", expression="pl.col('vsorres').cast(pl.Float64, strict=False)")
+    .assign("VSSTRESU", source="vsorresu")
+    .date("VSDTC", source="vsdtc")
     .nodup(subset=["USUBJID", "VSTESTCD", "VSDTC"])
     .to_frame()
 )
@@ -355,109 +414,90 @@ ADSL is built from the SDTM DM domain, enriched with treatment dates from EX and
 ```python
 # Synthesise EX from DM dates (in production, derive EX from raw exposure data)
 ex = (
-    dm.sdtm
-    .assign_no_ct("USUBJID",  source="USUBJID")
-    .assign_no_ct("EXSTDTC",  source="RFSTDTC")
-    .assign_no_ct("EXENDTC",  source="RFENDTC")
-    .hardcode_no_ct("EXDOSE", value=54.0)
+    dm.sdtm.assign("USUBJID", source="USUBJID")
+    .assign("EXSTDTC", source="RFSTDTC")
+    .assign("EXENDTC", source="RFENDTC")
+    .assign("EXDOSE", value=54.0)
     .to_frame()
 )
 
 # Synthesise DS from DM (disposition events)
 ds = (
-    dm.sdtm
-    .assign_no_ct("USUBJID",   source="USUBJID")
-    .hardcode_no_ct("DSCAT",   value="DISPOSITION EVENT")
-    .hardcode_no_ct("DSDECOD", value="COMPLETED")
-    .assign_no_ct("DSSTDTC",  source="RFENDTC")
+    dm.sdtm.assign("USUBJID", source="USUBJID")
+    .assign("DSCAT", value="DISPOSITION EVENT")
+    .assign("DSDECOD", value="COMPLETED")
+    .assign("DSSTDTC", source="RFENDTC")
     .to_frame()
 )
 
 # Prepare max-dose lookup for SAFFL
-_ex_max_dose = (
-    ex.sdtm
-    .group_by(group_cols=["USUBJID"],
-              agg=[pl.col("EXDOSE").max().alias("_EXDOSE_MAX")])
-    .to_frame()
-)
+_ex_max_dose = ex.sdtm.group_by(
+    by=["USUBJID"], agg=[pl.col("EXDOSE").max().alias("_EXDOSE_MAX")]
+).to_frame()
 ```
 
 ### 7.2 Derive ADSL
 
+The shared-verb mixin (`assign`, `case_when`, `merge`, `flag`, `duration`, …)
+lives on **every** ADaM sub-namespace, so the whole ADSL derivation is a single
+chain — no break-and-re-enter. `source()` is variadic: carry many columns in one
+call. `merge()` is the one join verb (`lookup` is its deprecated alias).
+
 ```python
 adsl = (
     dm.adam.adsl
-    # ── Demographics from DM ──
-    .source("STUDYID")
-    .source("USUBJID")
-    .source("SUBJID")
-    .source("SITEID")
-    .source("AGE")
-    .source("AGEU")
-    .source("SEX")
-    .source("RACE")
-    .source("ETHNIC")
-    .source("ARM")
-    .source("ARMCD")
-    .source("ACTARM")
-    .source("ACTARMCD")
+    # ── Demographics from DM (variadic carry-through) ──
+    .source(
+        "STUDYID",
+        "USUBJID",
+        "SUBJID",
+        "SITEID",
+        "AGE",
+        "AGEU",
+        "SEX",
+        "RACE",
+        "ETHNIC",
+        "ARM",
+        "ARMCD",
+        "ACTARM",
+        "ACTARMCD",
+    )
     # ── Treatment variables ──
-    .rename("TRT01P", source="ARM")
-    .rename("TRT01A", source="ACTARM")
+    .assign("TRT01P", source="ARM")
+    .assign("TRT01A", source="ACTARM")
     # ── Study dates ──
-    .source("RFSTDTC")
-    .source("RFENDTC")
-    .source("RFICDTC")
+    .source("RFSTDTC", "RFENDTC", "RFICDTC")
     # ── Treatment dates from EX ──
     .first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")
-    .last_date( "TRTEDT", from_dataset=ex, date_col="EXENDTC")
+    .last_date("TRTEDT", from_dataset=ex, date_col="EXENDTC")
     # ── Treatment duration ──
-    .duration("TRTDURD", start_date="TRTSDT", end_date="TRTEDT")
-    .to_frame()
-)
-
-# ── Disposition ──
-adsl = (
-    adsl.adam.adsl
-    .last_date("EOSDT", from_dataset=ds, date_col="DSSTDTC",
-               where='pl.col("DSCAT") == "DISPOSITION EVENT"')
-    .first_date("RANDDT", from_dataset=ds, date_col="DSSTDTC",
-                where='pl.col("DSDECOD") == "RANDOMIZED"')
-    .to_frame()
-)
-
-# ── Age grouping ──
-adsl = (
-    adsl.adam.adsl
-    .condderivation("AGEGR1",
-                    conditions=[
-                        {"condition": "pl.col('AGE') < 18",  "value": "<18"},
-                        {"condition": "pl.col('AGE') <= 64", "value": "18-64"},
-                        {"condition": "pl.col('AGE') > 64",  "value": ">64"},
-                    ],
-                    else_value="Missing")
-    .to_frame()
-)
-
-# ── Population flags ──
-adsl = (
-    adsl.adam
-    .lookup(dataset=_ex_max_dose, on="USUBJID", how="left")
-    .to_frame()
-    .adam.adsl
+    .duration("TRTDURD", start="TRTSDT", end="TRTEDT")
+    # ── Disposition ──
+    .last_date(
+        "EOSDT", from_dataset=ds, date_col="DSSTDTC", where='pl.col("DSCAT") == "DISPOSITION EVENT"'
+    )
+    .first_date(
+        "RANDDT", from_dataset=ds, date_col="DSSTDTC", where='pl.col("DSDECOD") == "RANDOMIZED"'
+    )
+    # ── Age grouping ──
+    .case_when(
+        "AGEGR1",
+        when=[
+            {"condition": "pl.col('AGE') < 18", "value": "<18"},
+            {"condition": "pl.col('AGE') <= 64", "value": "18-64"},
+            {"condition": "pl.col('AGE') > 64", "value": ">64"},
+        ],
+        else_="Missing",
+    )
+    # ── Population flags ──
+    .merge(_ex_max_dose, on="USUBJID")
     .flag("SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0')
     .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"')
+    # ── AE counts ──
+    .count_events("NUMAE", from_dataset=ae)
+    .count_events("NUMSAE", from_dataset=ae, where='pl.col("AESER") == "Y"')
     .to_frame()
     .drop("_EXDOSE_MAX")
-)
-
-# ── AE counts ──
-adsl = (
-    adsl.adam.adsl
-    .count_events("NUMAE",  from_dataset=ae)
-    .count_events("NUMSAE", from_dataset=ae,
-                  where='pl.col("AESER") == "Y"')
-    .to_frame()
 )
 
 print(adsl.select("USUBJID", "TRT01P", "TRTSDT", "TRTDURD", "SAFFL", "NUMAE"))
@@ -469,34 +509,33 @@ print(adsl.select("USUBJID", "TRT01P", "TRTSDT", "TRTDURD", "SAFFL", "NUMAE"))
 
 ADVS is a BDS (Basic Data Structure) dataset derived from SDTM VS.
 
+The full baseline derivation is **one unbroken chain**. `flag` writes `ABLFL`,
+`baseline` reads it to produce `BASE`, and `chg`/`pchg` read `BASE` — all in the
+same pipeline. Fleet checkpoints internally where a window function needs a real
+column and re-wraps the collected frame, so you never write intermediate
+`.to_frame()` calls. This keeps lineage intact end-to-end.
+
 ```python
 # Join treatment start date from ADSL
 _trtsdt_map = adsl.select("USUBJID", "TRTSDT")
 
 advs = (
-    vs_raw.adam
-    .assigned("STUDYID", value="CDISCPILOT01")
-    .rename(  "USUBJID",  source="patient_number")
-    .rename(  "PARAMCD",  source="vstestcd")
-    .rename(  "PARAM",    source="vstest")
-    .rename(  "AVALU",    source="vsorresu")
-    .derivation("AVAL",   expression="pl.col('vsorres').cast(pl.Float64, strict=False)")
+    vs_raw.adam.assign("STUDYID", value="CDISCPILOT01")
+    .assign("USUBJID", source="patient_number")
+    .assign("PARAMCD", source="vstestcd")
+    .assign("PARAM", source="vstest")
+    .assign("AVALU", source="vsorresu")
+    .derivation("AVAL", expression="pl.col('vsorres').cast(pl.Float64, strict=False)")
     .date("ADT", source="vsdtc")
     # Join TRTSDT for study day calculation
-    .lookup(dataset=_trtsdt_map, on="USUBJID", how="left")
+    .merge(_trtsdt_map, on="USUBJID")
     .duration("ADY", start="TRTSDT", end="ADT")
-    # Baseline flag: last pre-dose visit (vsdy ≤ 0)
-    .flag("ABLFL", criteria='pl.col("vsdy") <= 0',
-          groups=["USUBJID", "PARAMCD"])
-    .to_frame()
-    # Materialise — ABLFL must exist before baseline() window function
-    .adam
-    .baseline("BASE", aval="AVAL", baseline_flag="ABLFL",
-              groups=["USUBJID", "PARAMCD"])
-    .to_frame()
-    # Materialise — BASE must exist before chg()/pchg()
-    .adam
-    .chg( "CHG",  aval="AVAL", base="BASE")
+    # Baseline flag: last pre-dose visit (vsdy <= 0)
+    .flag("ABLFL", criteria='pl.col("vsdy") <= 0', by=["USUBJID", "PARAMCD"])
+    # BASE = AVAL where ABLFL == "Y" — reads the flag written one line up
+    .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
+    # CHG / PCHG read BASE — still the same chain
+    .chg("CHG", aval="AVAL", base="BASE")
     .pchg("PCHG", aval="AVAL", base="BASE")
     .to_frame()
 )
@@ -504,50 +543,44 @@ advs = (
 print(advs.select("USUBJID", "PARAMCD", "ADT", "AVAL", "ADY", "ABLFL", "BASE", "CHG"))
 ```
 
-### Why the intermediate `.to_frame()` calls?
+### Do I ever need an intermediate `.to_frame()`?
 
-Some ADaM derivations require materialisation before the next step:
-
-- `baseline()` needs `ABLFL` to exist as a real column (it's a window function).
-- `chg()` / `pchg()` need `BASE` to exist as a real column.
-
-This is a Polars constraint, not a Fleet limitation. Each segment still runs as a single `with_columns` pass.
+No — not for the `flag → baseline → chg` dependency shown above. That pattern is
+one of Fleet's `test_docs_examples.py` guardrails, so it can never silently
+regress. You only reach for `.to_frame()` when you want a plain `pl.DataFrame`
+to hand to non-Fleet code (a `select`, a raw Polars join, an export writer).
+`baseline`/`chg`/`pchg` still checkpoint internally (see the
+[laziness table](#what-is-lazy-and-what-checkpoints)) — but that is Fleet's job,
+not yours, and it does not break the chain.
 
 ---
 
 ## Part 9 — ADAE with OCCDS Verbs
+
+Because the shared verbs and the OCCDS-specific verbs share one namespace, the
+enrichment join, the standard derivations, and the occurrence flags run in a
+single `df.adam.occds` chain.
 
 ```python
 # Lookup columns from ADSL for enrichment
 _adsl_lookup = adsl.select("USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "AGE", "SEX", "SAFFL")
 
 adae = (
-    ae.adam
-    .lookup(dataset=_adsl_lookup, on="USUBJID", how="left")
-    .assigned("STUDYID", value="CDISCPILOT01")
-    .source("USUBJID")
-    .source("AETERM")
-    .source("AESTDTC")
-    .source("AEENDTC")
-    .source("AESEV")
-    .source("AESER")
-    .source("AEREL")
-    .source("AEOUT")
-    .source("AEACN")
+    ae.adam.occds.merge(_adsl_lookup, on="USUBJID")
+    .assign("STUDYID", value="CDISCPILOT01")
+    .source("USUBJID", "AETERM", "AESTDTC", "AEENDTC", "AESEV", "AESER", "AEREL", "AEOUT", "AEACN")
     .date("ASTDT", source="AESTDTC")
     .date("AENDT", source="AEENDTC")
     .duration("ADY", start="TRTSDT", end="ASTDT")
-    .to_frame()
-    # OCCDS-specific verbs
-    .adam.occds
-    .treatment_emergent("TRTEMFL", start_date="AESTDTC",
-                        trtsdt="TRTSDT", trtedt="TRTEDT")
+    # OCCDS-specific verbs — same chain
+    .treatment_emergent("TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT")
     .recode("AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
-    .flag("ANL01FL", criteria="max", value_col="AESEVN",
-          groups=["USUBJID", "AETERM"])
-    .seq("ASEQ", groups=["USUBJID"])
+    .flag("ANL01FL", criteria="max", value_col="AESEVN", by=["USUBJID", "AETERM"])
+    .seq("ASEQ", by=["USUBJID"])
     .to_frame()
 )
+
+print(adae.select("USUBJID", "AETERM", "TRTEMFL", "AESEVN", "ASEQ"))
 ```
 
 ---
@@ -561,28 +594,51 @@ Fleet supports all seven CDISC Trial Design domains through rich Pydantic models
 ```python
 import polars as pl
 from fleet.sdtm.tdd import (
-    Epoch, TrialElement, TrialElements,
-    TrialArm, TrialArms,
-    TrialVisit, TrialVisits,
-    TrialParameter, TrialParameters,
-    TrialCriterion, TrialCriteria,
+    Epoch,
+    TrialElement,
+    TrialElements,
+    TrialArm,
+    TrialArms,
+    TrialVisit,
+    TrialVisits,
+    TrialParameter,
+    TrialParameters,
+    TrialCriterion,
+    TrialCriteria,
 )
 
-te_rows = TrialElements(elements=[
-    TrialElement(etcd="SCRN", element="Screening",
-                 testrl="INFORMED CONSENT", teenrl="RANDOMIZATION - 1",
-                 tedur="P14D", epoch=Epoch.SCREENING),
-    TrialElement(etcd="TRT",  element="Treatment",
-                 testrl="RANDOMIZATION", teenrl="END OF TREATMENT",
-                 tedur="P84D", epoch=Epoch.TREATMENT),
-    TrialElement(etcd="FU",   element="Follow-up",
-                 testrl="END OF TREATMENT + 1", teenrl="END OF FOLLOW-UP",
-                 tedur="P28D", epoch=Epoch.FOLLOW_UP),
-])
+te_rows = TrialElements(
+    elements=[
+        TrialElement(
+            etcd="SCRN",
+            element="Screening",
+            testrl="INFORMED CONSENT",
+            teenrl="RANDOMIZATION - 1",
+            tedur="P14D",
+            epoch=Epoch.SCREENING,
+        ),
+        TrialElement(
+            etcd="TRT",
+            element="Treatment",
+            testrl="RANDOMIZATION",
+            teenrl="END OF TREATMENT",
+            tedur="P84D",
+            epoch=Epoch.TREATMENT,
+        ),
+        TrialElement(
+            etcd="FU",
+            element="Follow-up",
+            testrl="END OF TREATMENT + 1",
+            teenrl="END OF FOLLOW-UP",
+            tedur="P28D",
+            epoch=Epoch.FOLLOW_UP,
+        ),
+    ]
+)
 
 te = (
-    pl.DataFrame().sdtm
-    .fetch_structure("TE", ig_version="3-4")
+    pl.DataFrame()
+    .sdtm.fetch_structure("TE", ig_version="3-4")
     .study_header(study_id="CDISCPILOT01", domain="TE")
     .add_elements(te_rows)
     .to_frame()
@@ -592,24 +648,62 @@ te = (
 ### 10.2 TA — Trial Arms (with FK validation)
 
 ```python
-ta_rows = TrialArms(arms=[
-    TrialArm(armcd="PBO",    arm="Placebo",               taetord=1,
-             etcd="SCRN", element="Screening", epoch=Epoch.SCREENING),
-    TrialArm(armcd="PBO",    arm="Placebo",               taetord=2,
-             etcd="TRT",  element="Treatment", epoch=Epoch.TREATMENT),
-    TrialArm(armcd="PBO",    arm="Placebo",               taetord=3,
-             etcd="FU",   element="Follow-up", epoch=Epoch.FOLLOW_UP),
-    TrialArm(armcd="XAN_LO", arm="Xanomeline Low Dose",   taetord=1,
-             etcd="SCRN", element="Screening", epoch=Epoch.SCREENING),
-    TrialArm(armcd="XAN_LO", arm="Xanomeline Low Dose",   taetord=2,
-             etcd="TRT",  element="Treatment", epoch=Epoch.TREATMENT),
-    TrialArm(armcd="XAN_LO", arm="Xanomeline Low Dose",   taetord=3,
-             etcd="FU",   element="Follow-up", epoch=Epoch.FOLLOW_UP),
-])
+ta_rows = TrialArms(
+    arms=[
+        TrialArm(
+            armcd="PBO",
+            arm="Placebo",
+            taetord=1,
+            etcd="SCRN",
+            element="Screening",
+            epoch=Epoch.SCREENING,
+        ),
+        TrialArm(
+            armcd="PBO",
+            arm="Placebo",
+            taetord=2,
+            etcd="TRT",
+            element="Treatment",
+            epoch=Epoch.TREATMENT,
+        ),
+        TrialArm(
+            armcd="PBO",
+            arm="Placebo",
+            taetord=3,
+            etcd="FU",
+            element="Follow-up",
+            epoch=Epoch.FOLLOW_UP,
+        ),
+        TrialArm(
+            armcd="XAN_LO",
+            arm="Xanomeline Low Dose",
+            taetord=1,
+            etcd="SCRN",
+            element="Screening",
+            epoch=Epoch.SCREENING,
+        ),
+        TrialArm(
+            armcd="XAN_LO",
+            arm="Xanomeline Low Dose",
+            taetord=2,
+            etcd="TRT",
+            element="Treatment",
+            epoch=Epoch.TREATMENT,
+        ),
+        TrialArm(
+            armcd="XAN_LO",
+            arm="Xanomeline Low Dose",
+            taetord=3,
+            etcd="FU",
+            element="Follow-up",
+            epoch=Epoch.FOLLOW_UP,
+        ),
+    ]
+)
 
 ta = (
-    pl.DataFrame().sdtm
-    .fetch_structure("TA")
+    pl.DataFrame()
+    .sdtm.fetch_structure("TA")
     .study_header("CDISCPILOT01", "TA")
     .add_arms(ta_rows, te=te_rows)  # FK check: ETCD ∈ TE.ETCD
     .to_frame()
@@ -619,19 +713,21 @@ ta = (
 ### 10.3 TV — Trial Visits
 
 ```python
-tv_rows = TrialVisits(visits=[
-    TrialVisit(visitnum=1, visit="Screening",        visitdy=1),
-    TrialVisit(visitnum=2, visit="Baseline",         visitdy=14),
-    TrialVisit(visitnum=3, visit="Week 4",           visitdy=42),
-    TrialVisit(visitnum=4, visit="Week 8",           visitdy=70),
-    TrialVisit(visitnum=5, visit="Week 12",          visitdy=98),
-    TrialVisit(visitnum=6, visit="End of Treatment", visitdy=112),
-    TrialVisit(visitnum=7, visit="Follow-up",        visitdy=140),
-])
+tv_rows = TrialVisits(
+    visits=[
+        TrialVisit(visitnum=1, visit="Screening", visitdy=1),
+        TrialVisit(visitnum=2, visit="Baseline", visitdy=14),
+        TrialVisit(visitnum=3, visit="Week 4", visitdy=42),
+        TrialVisit(visitnum=4, visit="Week 8", visitdy=70),
+        TrialVisit(visitnum=5, visit="Week 12", visitdy=98),
+        TrialVisit(visitnum=6, visit="End of Treatment", visitdy=112),
+        TrialVisit(visitnum=7, visit="Follow-up", visitdy=140),
+    ]
+)
 
 tv = (
-    pl.DataFrame().sdtm
-    .fetch_structure("TV")
+    pl.DataFrame()
+    .sdtm.fetch_structure("TV")
     .study_header("CDISCPILOT01", "TV")
     .add_visits(tv_rows, ta=ta_rows)  # FK check: ARM ∈ TA.ARM
     .to_frame()
@@ -641,16 +737,18 @@ tv = (
 ### 10.4 TS — Trial Summary
 
 ```python
-ts_rows = TrialParameters(parameters=[
-    TrialParameter(tsparmcd="ADDON",   tsparm="Added on to Existing Treatments", tsval="N"),
-    TrialParameter(tsparmcd="AGEMAX",  tsparm="Planned Maximum Age of Subjects", tsval="80"),
-    TrialParameter(tsparmcd="AGEMIN",  tsparm="Planned Minimum Age of Subjects", tsval="50"),
-    TrialParameter(tsparmcd="LENGTH",  tsparm="Trial Length",                    tsval="26"),
-])
+ts_rows = TrialParameters(
+    parameters=[
+        TrialParameter(tsparmcd="ADDON", tsparm="Added on to Existing Treatments", tsval="N"),
+        TrialParameter(tsparmcd="AGEMAX", tsparm="Planned Maximum Age of Subjects", tsval="80"),
+        TrialParameter(tsparmcd="AGEMIN", tsparm="Planned Minimum Age of Subjects", tsval="50"),
+        TrialParameter(tsparmcd="LENGTH", tsparm="Trial Length", tsval="26"),
+    ]
+)
 
 ts = (
-    pl.DataFrame().sdtm
-    .fetch_structure("TS")
+    pl.DataFrame()
+    .sdtm.fetch_structure("TS")
     .study_header("CDISCPILOT01", "TS")
     .add_parameters(ts_rows)
     .to_frame()
@@ -660,20 +758,22 @@ ts = (
 ### 10.5 TI — Trial Inclusion/Exclusion
 
 ```python
-ti_rows = TrialCriteria(criteria=[
-    TrialCriterion(ietestcd="INCL01", ietest="Age 50-80 years at screening",
-                   iecat="INCLUSION"),
-    TrialCriterion(ietestcd="INCL02", ietest="Diagnosis of Alzheimer's Disease",
-                   iecat="INCLUSION"),
-    TrialCriterion(ietestcd="EXCL01", ietest="Pregnancy or lactation",
-                   iecat="EXCLUSION"),
-    TrialCriterion(ietestcd="EXCL02", ietest="Known hypersensitivity to study drug",
-                   iecat="EXCLUSION"),
-])
+ti_rows = TrialCriteria(
+    criteria=[
+        TrialCriterion(ietestcd="INCL01", ietest="Age 50-80 years at screening", iecat="INCLUSION"),
+        TrialCriterion(
+            ietestcd="INCL02", ietest="Diagnosis of Alzheimer's Disease", iecat="INCLUSION"
+        ),
+        TrialCriterion(ietestcd="EXCL01", ietest="Pregnancy or lactation", iecat="EXCLUSION"),
+        TrialCriterion(
+            ietestcd="EXCL02", ietest="Known hypersensitivity to study drug", iecat="EXCLUSION"
+        ),
+    ]
+)
 
 ti = (
-    pl.DataFrame().sdtm
-    .fetch_structure("TI")
+    pl.DataFrame()
+    .sdtm.fetch_structure("TI")
     .study_header("CDISCPILOT01", "TI")
     .add_criteria(ti_rows)
     .to_frame()
@@ -695,15 +795,26 @@ Calling verbs out of order raises a `ValueError`.
 ## Part 11 — TLG: Tables, Listings, and Graphs
 
 Fleet's `df.tlg` namespace produces **Analysis Results Datasets (ARDs)** from
-ADaM data. ARDs are long-format DataFrames aligned to CDISC ARS / pharmaverse
-{cards}, containing all the computed statistics needed for clinical tables.
+ADaM data — long-format DataFrames holding all the computed statistics needed
+for clinical tables, with a display-rounding step applied only at render time.
 
 ### Sub-namespaces
 
-| Sub-namespace | Access      | Domain                          |
-| ------------- | ----------- | ------------------------------- |
-| AE            | `df.tlg.ae` | Adverse-event summary & listing |
-| VS            | `df.tlg.vs` | Vital-signs summary             |
+Nine domain sub-namespaces cover the common submission tables. The full catalog
+of registry templates (id → CDISC class → namespace method → output type) is
+`df.tlg.catalog()`:
+
+| Sub-namespace | Access      | Example templates            |
+| ------------- | ----------- | ---------------------------- |
+| AE            | `df.tlg.ae` | `aet01` overview, `aet05` relationship, `ael01` listing |
+| VS            | `df.tlg.vs` | `vst01` summary              |
+| LB            | `df.tlg.lb` | `lbt01`/`lbt02` summary, shift, listing |
+| EG            | `df.tlg.eg` | ECG summary, change, QTc     |
+| CM            | `df.tlg.cm` | Concomitant medications      |
+| EX            | `df.tlg.ex` | Exposure summary             |
+| DM            | `df.tlg.dm` | Demographics summary         |
+| DS            | `df.tlg.ds` | Disposition, deaths          |
+| MH            | `df.tlg.mh` | Medical history              |
 
 ### Spec-driven path
 
@@ -727,8 +838,7 @@ The builder produces the same ARD without constructing a spec object:
 
 ```python
 ard = (
-    adae.tlg.ae
-    .population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
+    adae.tlg.ae.population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
     .by("TRTA")
     .rows(["AEBODSYS", "AEDECOD"])
     .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
@@ -737,6 +847,24 @@ ard = (
     .to_ard()
 )
 ```
+
+### YAML spec as a full workflow
+
+A TLG YAML file names a registry `template:` and its fields — so a spec file
+alone reproduces the table. `load_spec` resolves the template to its spec model,
+and `run_spec` dispatches to the right namespace method:
+
+```python
+import fleet.tlg as tlg
+
+spec = tlg.load_spec("examples/tlg_specs/aet01.yaml")
+ard = tlg.run_spec(spec, adae, adsl=adsl)
+```
+
+`tlg.spec_schema("aet01")` returns the JSON schema for a template (editor
+auto-complete), and `tlg.register_template(meta, fn)` adds a study-specific
+template to the open registry. These are also the composition points for the
+`fleet tlg list` / `fleet tlg run` CLI commands.
 
 ### Filters: `adsl_filter` vs `dataset_filter`
 
@@ -757,13 +885,14 @@ Whole-dataset aggregate rows appear above the hierarchy in the ARD:
 from fleet.tlg import OverallStat
 
 ard = (
-    adae.tlg.ae
-    .population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
+    adae.tlg.ae.population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
     .by("TRTA")
-    .header_rows([
-        OverallStat(label="Subjects with any AE"),
-        OverallStat(label="Subjects with ≥1 SAE", filter=pl.col("AESER") == "Y"),
-    ])
+    .header_rows(
+        [
+            OverallStat(label="Subjects with any AE"),
+            OverallStat(label="Subjects with ≥1 SAE", filter=pl.col("AESER") == "Y"),
+        ]
+    )
     .rows(["AEBODSYS", "AEDECOD"])
     .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
     .to_ard()
@@ -780,11 +909,11 @@ pre-merge it before calling the namespace — no hidden joins:
 ```python
 adae_strat = adae.join(
     adsl.select(["USUBJID", "AGEGR1"]),
-    on="USUBJID", how="left",
+    on="USUBJID",
+    how="left",
 )
 ard = (
-    adae_strat.tlg.ae
-    .population(adsl)
+    adae_strat.tlg.ae.population(adsl)
     .by("TRTA")
     .by2("AGEGR1")
     .rows(["AEBODSYS", "AEDECOD"])
@@ -798,14 +927,16 @@ ard = (
 ```python
 from fleet.tlg import AEListingSpec, Column
 
-listing = adae.tlg.ae.l_listing(spec=AEListingSpec(
-    columns=[
-        Column(field="USUBJID", label="Subject"),
-        Column(field="AEDECOD", label="Preferred Term"),
-        Column(field="AESEV", label="Severity"),
-    ],
-    sort_by=["USUBJID", "AEDECOD"],
-))
+listing = adae.tlg.ae.l_listing(
+    spec=AEListingSpec(
+        columns=[
+            Column(field="USUBJID", label="Subject"),
+            Column(field="AEDECOD", label="Preferred Term"),
+            Column(field="AESEV", label="Severity"),
+        ],
+        sort_by=["USUBJID", "AEDECOD"],
+    )
+)
 ```
 
 ### HTML & PDF export
@@ -829,8 +960,7 @@ Or use the builder shortcut:
 
 ```python
 html = (
-    adae.tlg.ae
-    .population(adsl)
+    adae.tlg.ae.population(adsl)
     .by("TRTA")
     .rows(["AEBODSYS", "AEDECOD"])
     .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
@@ -1047,9 +1177,8 @@ share the same `Core.Id` within the target directory.
 
 ```python
 ae = (
-    raw_df.sdtm
-    .hardcode_no_ct("DOMAIN", value="AE")
-    .assign_no_ct("USUBJID", source="subject_id")
+    raw_df.sdtm.assign("DOMAIN", value="AE")
+    .assign("USUBJID", source="subject_id")
     .validate("AE", custom_rules="metadata/custom_rules")
     .to_frame()
 )
@@ -1162,10 +1291,10 @@ from fleet import DefineSpecGenerator, DatasetChecker
 
 # Check datasets against the spec before generating
 sdtm_spec = "examples/cdiscpilot01/sdtm/define.yaml"
-adam_spec  = "examples/cdiscpilot01/adam/define.yaml"
+adam_spec = "examples/cdiscpilot01/adam/define.yaml"
 
 sdtm_checker = DatasetChecker(sdtm_spec)
-adam_checker  = DatasetChecker(adam_spec)
+adam_checker = DatasetChecker(adam_spec)
 
 sdtm_checker.check(dm, dataset="DM").print_report()
 adam_checker.check(adsl, dataset="ADSL").print_report()
@@ -1188,9 +1317,9 @@ DefineSpecGenerator(adam_spec, enrich_methods=True).generate("outputs/define_ada
 ```python
 from fleet import save_parquet
 
-save_parquet(dm,   "outputs/sdtm/dm.parquet")
-save_parquet(ae,   "outputs/sdtm/ae.parquet")
-save_parquet(vs,   "outputs/sdtm/vs.parquet")
+save_parquet(dm, "outputs/sdtm/dm.parquet")
+save_parquet(ae, "outputs/sdtm/ae.parquet")
+save_parquet(vs, "outputs/sdtm/vs.parquet")
 save_parquet(adsl, "outputs/adam/adsl.parquet")
 save_parquet(advs, "outputs/adam/advs.parquet")
 save_parquet(adae, "outputs/adam/adae.parquet")
@@ -1201,9 +1330,9 @@ save_parquet(adae, "outputs/adam/adae.parquet")
 ```python
 from fleet.io import save_xpt
 
-save_xpt(dm,   "outputs/sdtm/dm.xpt")
-save_xpt(ae,   "outputs/sdtm/ae.xpt")
-save_xpt(vs,   "outputs/sdtm/vs.xpt")
+save_xpt(dm, "outputs/sdtm/dm.xpt")
+save_xpt(ae, "outputs/sdtm/ae.xpt")
+save_xpt(vs, "outputs/sdtm/vs.xpt")
 save_xpt(adsl, "outputs/adam/adsl.xpt")
 save_xpt(advs, "outputs/adam/advs.xpt")
 save_xpt(adae, "outputs/adam/adae.xpt")
@@ -1218,19 +1347,18 @@ Dataset-JSON is the modern CDISC exchange format — no external dependencies re
 ```python
 from fleet.io import save_dataset_json
 
-save_dataset_json(dm,   "outputs/sdtm/dm.json",   domain="DM")
-save_dataset_json(ae,   "outputs/sdtm/ae.json",   domain="AE")
-save_dataset_json(adsl, "outputs/adam/adsl.json",  domain="ADSL")
-save_dataset_json(adae, "outputs/adam/adae.json",  domain="ADAE")
+save_dataset_json(dm, "outputs/sdtm/dm.json", domain="DM")
+save_dataset_json(ae, "outputs/sdtm/ae.json", domain="AE")
+save_dataset_json(adsl, "outputs/adam/adsl.json", domain="ADSL")
+save_dataset_json(adae, "outputs/adam/adae.json", domain="ADAE")
 ```
 
 Or use the terminal verb directly on a pipeline (no `to_frame()` needed):
 
 ```python
 path = (
-    raw_df.sdtm
-    .hardcode_no_ct("DOMAIN", value="DM")
-    .assign_no_ct("USUBJID", source="subject_id")
+    raw_df.sdtm.assign("DOMAIN", value="DM")
+    .assign("USUBJID", source="subject_id")
     .to_dataset_json("outputs/sdtm/dm.json", domain="DM")
 )
 ```
@@ -1245,9 +1373,8 @@ Materialises the pipeline at that point, prints schema + shape + first rows, and
 
 ```python
 dm = (
-    dm_raw.sdtm
-    .hardcode_no_ct("DOMAIN", value="DM")
-    .assign_no_ct("USUBJID", source="patient_number")
+    dm_raw.sdtm.assign("DOMAIN", value="DM")
+    .assign("USUBJID", source="patient_number")
     .inspect(prefix="After USUBJID")
     .date("RFSTDTC", source="first_dose_date")
     .to_frame()
@@ -1259,15 +1386,11 @@ dm = (
 Prints the Polars logical plan without materialising.
 
 ```python
-dm = (
-    dm_raw.sdtm
-    .hardcode_no_ct("DOMAIN", value="DM")
-    .explain()
-    .to_frame()
-)
+dm = dm_raw.sdtm.assign("DOMAIN", value="DM").explain().to_frame()
 ```
 
-Both verbs are available on `.sdtm` and all ADaM namespaces.
+Both verbs are available on `.sdtm` and all ADaM namespaces. `.trail()` prints
+each derived variable's origin (verb + source columns) from the lineage graph.
 
 ---
 
@@ -1302,66 +1425,71 @@ uv run fleet define-xml --spec metadata/adam/define.yaml  --output outputs/defin
 
 ## Quick Reference — Verb Cheat Sheet
 
-### SDTM verbs (`df.sdtm`)
+Verb sets grow; this cheat sheet lists the **canonical** verbs you reach for
+most. For the authoritative, always-current list on any namespace — including
+one-line summaries generated from the live docstrings — call `.verbs()`:
+
+```python
+import fleet  # noqa: F401
+import polars as pl
+
+df = pl.DataFrame({"x": [1]})
+print(df.sdtm.verbs())  # SDTM
+print(df.adam.verbs())  # ADaM BDS
+print(df.adam.adsl.verbs())  # ADSL
+print(df.adam.occds.verbs())  # OCCDS
+print(df.tlg.catalog())  # TLG template registry
+```
+
+### SDTM verbs (`df.sdtm`) — canonical highlights
 
 | Verb                 | Purpose                                          |
 | -------------------- | ------------------------------------------------ |
-| `assign_no_ct`       | Raw column → SDTM variable, no decoding          |
-| `assign_ct`          | Raw column → SDTM variable with CT decoding      |
+| `assign`             | Copy (`source=`) or hardcode (`value=`) a variable; add `ct=`/`ct_map=` for CT |
+| `case_when`          | Multi-branch conditional (`when=[…]`, `else_=`)  |
 | `date`               | Date/datetime normalisation                      |
-| `hardcode_no_ct`     | Constant value (DOMAIN, STUDYID, AGEU…)          |
-| `hardcode_ct`        | Constant value, CT-validated                     |
 | `condition_add`      | `IF X THEN Y ELSE NULL`                          |
-| `if_then_else`       | Multi-branch conditional                         |
 | `ae_aerel`           | AE relatedness mapping                           |
-| `merge`              | Join a reference dataset                         |
+| `merge`              | Join a reference dataset (`on=`, `keep=`, `where=`) |
+| `keep`               | Restrict frame to named columns                  |
 | `nodup`              | Detect/remove duplicates with diagnostics        |
-| `group_by`           | Aggregate to summary rows                        |
-| `dataset_level`      | Alias for `hardcode_no_ct`                       |
+| `group_by`           | Aggregate to summary rows (`by=`)                |
 | `notsubmitted`       | Set columns to null                              |
 | `multiple_responses` | Expand pipe-delimited fields into rows           |
-| `pin`                | Attach a reference domain for cross-domain verbs |
-| `repin`              | Replace a pin explicitly (no warning)            |
+| `flag` family        | `flag` + `flag_first`/`flag_last`/`flag_extreme`/`flag_exists`/`flag_relative` |
+| `pin` / `repin` / `pins` | Attach / replace / inspect reference domains |
 | `study_day`          | CDISC study day (consumes pinned DM)             |
 | `baseline_flag`      | Last pre-reference-date observation flag         |
 | `fk_policy`          | Set FK-check severity (warn/error/off)           |
-| `pins`               | Inspect currently pinned domains                 |
 
-### ADaM verbs (`df.adam`)
+### ADaM verbs (`df.adam`) — canonical highlights
+
+The shared-verb mixin (`assign`, `case_when`, `merge`, `source`, `derivation`,
+`recode`, `whereclauses`, `date`, `duration`, `flag`, `keep`, `pin`, `study_day`,
+`join_adsl`, `merge_adsl`, `nodup`, …) is available on **every** ADaM
+sub-namespace, so you rarely need to switch back to the base `adam` namespace.
 
 | Verb                     | Purpose                            |
 | ------------------------ | ---------------------------------- |
-| `source`                 | Carry over from SDTM               |
+| `source`                 | Variadic carry-over from SDTM      |
+| `assign`                 | Copy / hardcode / rename (`source=`/`value=`) |
 | `derivation`             | Arbitrary Polars expression        |
-| `assigned`               | Global constant                    |
 | `recode`                 | Map values to new labels           |
-| `rename`                 | Rename column (VSDTC → ADT)        |
-| `condderivation`         | Multi-branch conditional           |
-| `lookup`                 | Join a reference dataset           |
+| `case_when`              | Multi-branch conditional           |
+| `merge`                  | Join a reference dataset           |
 | `whereclauses`           | Filter rows                        |
 | `date`                   | Parse DTC → Date/Datetime          |
-| `duration`               | ADY / elapsed time / ISO duration  |
-| `baseline`               | BASE = AVAL at baseline            |
-| `chg`                    | CHG = AVAL − BASE                  |
-| `pchg`                   | PCHG = (AVAL − BASE) / BASE × 100  |
-| `flag`                   | General "Y" flag                   |
-| `bmi`                    | BMI from weight and height         |
+| `duration`               | ADY / elapsed time / ISO duration (`start=`, `end=`) |
+| `baseline`               | BASE = AVAL at baseline (`strict=True` guards dup flags) |
+| `chg` / `pchg`           | Change / percent change from BASE  |
+| `flag` family            | General "Y" flag + typed wrappers  |
+| `bmi` / `bsa` / `map` / `qtc` | Vital-sign / ECG calculations |
 | `nrind`                  | LOW / NORMAL / HIGH                |
-| `on_treatment`           | ONTRTFL = "Y" on-treatment         |
-| `shift`                  | Baseline-to-post shift string      |
-| `bsa`                    | Body Surface Area (4 methods)      |
-| `map`                    | Mean Arterial Pressure             |
-| `qtc`                    | Corrected QT interval              |
-| `derive_summary_records` | Append aggregate rows              |
-| `derive_locf_records`    | LOCF imputation                    |
-| `derive_param`           | Derive new parameter rows          |
-| `nodup`                  | Detect/remove duplicates with diag |
-| `pin`                    | Attach reference domain (passport) |
-| `repin`                  | Replace a pin explicitly           |
-| `join_adsl`              | Carry columns from pinned ADSL     |
-| `study_day`              | CDISC study day (ADaM, from ADSL)  |
-| `fk_policy`              | Set FK-check severity              |
-| `pins`                   | Inspect pinned domains             |
+| `on_treatment` / `shift` | On-treatment flag / shift string   |
+| `derive_summary_records` / `derive_locf_records` / `derive_param` | Multi-row generators |
+| `atoxgr` / `combine_grades` | CTCAE / DAIDS toxicity grading  |
+| `transform`              | Apply a `@derivation` frame function |
+| `pin` / `join_adsl` / `study_day` | Cross-domain reference verbs |
 
 ### ADSL verbs (`df.adam.adsl`)
 
@@ -1369,42 +1497,55 @@ uv run fleet define-xml --spec metadata/adam/define.yaml  --output outputs/defin
 | --------------- | ------------------------------------------------------------ |
 | `first_date`    | Earliest date from event dataset                             |
 | `last_date`     | Latest date from event dataset                               |
-| `duration`      | Days between two dates                                       |
 | `count_events`  | Count matching records per subject                           |
-| `flag`          | Generalised "Y" flag (expression, first/last/max/min/exists) |
-| `age_years`     | Unit-aware age → years                                       |
+| `pick`          | First/last event value(s) by ordered by-group               |
+| `age_years` / `age_from_dates` | Age → years                                   |
 | `derive_period` | Subperiod/Phase variables                                    |
 
 ### OCCDS verbs (`df.adam.occds`)
 
 | Verb                 | Purpose                                     |
 | -------------------- | ------------------------------------------- |
-| `seq`                | Sequential record number (ASEQ)             |
-| `flag`               | Generalised "Y" flag (criteria="max", etc.) |
+| `seq`                | Sequential record number (ASEQ, `by=`)      |
 | `treatment_emergent` | TRTEMFL = "Y" on/after TRTSDT               |
 | `onset_recovery`     | Event started on-treatment and resolved     |
 
-### TLG builder verbs (`df.tlg.ae`, `df.tlg.vs`)
+### TLG builder verbs (`df.tlg.<domain>`)
 
 | Verb           | Purpose                                      |
 | -------------- | -------------------------------------------- |
 | `population`   | Set ADSL for big-N + optional `adsl_filter`  |
 | `filter`       | Dataset filter (primary dataset only)        |
 | `by`           | Primary grouping column (treatment arm)      |
-| `by2`          | Secondary grouping column (stratification)   |
+| `template`     | Target a registry template (`aet01`, `lbt02`…) |
 | `header_rows`  | Whole-dataset aggregate rows (`OverallStat`) |
 | `rows`         | Row hierarchy fields (1 or 2 levels)         |
 | `stats`        | Statistics to compute                        |
+| `value` / `label` / `decimals` | Continuous value col, label col, per-stat rounding |
 | `pools`        | Pooled treatment group definitions           |
 | `column_order` | Display column ordering                      |
-| `fmt`          | Per-stat format overrides                    |
 | `to_ard`       | Materialise → ARD DataFrame                  |
-| `to_spec`      | Serialise builder state → spec YAML          |
-| `to_html`      | Render → pharma HTML (optional file write)   |
-| `to_pdf`       | Render → PDF via WeasyPrint (optional dep)   |
-| `to_pptx`      | Render → editable PPTX slides (optional dep) |
-| `t_summary`    | Spec-driven ARD computation                  |
-| `l_listing`    | AE listing (plain DataFrame)                 |
+| `to_listing`   | Materialise → listing DataFrame              |
+| `to_spec`      | Serialise builder state → spec model         |
+| `to_html` / `to_rtf` / `to_pdf` / `to_pptx` | Render (RTF/PDF/PPTX need optional deps) |
+
+### Deprecated verb / kwarg names
+
+Old spellings keep working as deprecated aliases (one `FutureWarning` per call
+site per session) until 1.0. Run `python -m fleet.tools.migrate <files...> --write`
+(or `fleet migrate`) to rewrite call sites automatically.
+
+| Deprecated                                                     | Canonical                          |
+| -------------------------------------------------------------- | ---------------------------------- |
+| `assign_no_ct(source=)`                                        | `assign(source=)`                  |
+| `assign_ct(source=, ct_codelist=, ct_mapping=)`                | `assign(source=, ct=, ct_map=)`    |
+| `hardcode_no_ct(value=)` / `dataset_level(value=)` / `assigned(value=)` | `assign(value=)`          |
+| `hardcode_ct(value=, ct_codelist=)`                            | `assign(value=, ct=)`              |
+| `rename(source=)`                                              | `assign(source=)`                  |
+| `if_then_else(when=, else_value=)` / `condderivation(conditions=, else_value=)` | `case_when(when=, else_=)` |
+| `lookup(dataset=, on=)`                                        | `merge(dataset, on=)`              |
+| `groups=` / `by_vars=` / `group_cols=` / `group_by=` (grouping) | `by=`                            |
+| `target_cols=` / `keep_cols=` (column restriction)             | `keep=`                            |
 
 ---
 

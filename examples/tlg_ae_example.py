@@ -89,30 +89,30 @@ print(f"   ae_raw : {ae_raw.shape[0]:>3} rows  ×  {ae_raw.shape[1]} cols")
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 2. SDTM DM ══════════════════════════════════════════════════════════")
 dm = (
-    dm_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")
-    .hardcode_no_ct("DOMAIN", value="DM")
-    .assign_no_ct("USUBJID", source="patient_number")
-    .assign_no_ct("AGE", source="age")
-    .assign_ct("SEX", source="sex", ct_codelist=SEX, ct_mapping={"F": "F", "M": "M"})
-    .assign_ct(
+    dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
+    .assign("DOMAIN", value="DM")
+    .assign("USUBJID", source="patient_number")
+    .assign("AGE", source="age")
+    .assign("SEX", source="sex", ct=SEX, ct_map={"F": "F", "M": "M"})
+    .assign(
         "RACE",
         source="race",
-        ct_codelist=RACE,
-        ct_mapping={
+        ct=RACE,
+        ct_map={
             "WHITE": "WHITE",
             "BLACK OR AFRICAN AMERICAN": "BLACK OR AFRICAN AMERICAN",
         },
     )
-    .assign_ct(
+    .assign(
         "ETHNIC",
         source="ethnic",
-        ct_codelist=ETHNIC,
-        ct_mapping={
+        ct=ETHNIC,
+        ct_map={
             "HISPANIC OR LATINO": "HISPANIC OR LATINO",
             "NOT HISPANIC OR LATINO": "NOT HISPANIC OR LATINO",
         },
     )
-    .assign_no_ct("ARM", source="arm_description")
+    .assign("ARM", source="arm_description")
     .date("RFSTDTC", source="first_dose_date")
     .date("RFENDTC", source="last_dose_date")
     .to_frame()
@@ -125,17 +125,17 @@ print(f"   {dm.shape[0]} subjects × {dm.shape[1]} variables")
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 3. SDTM AE ══════════════════════════════════════════════════════════")
 ae = (
-    ae_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")
-    .hardcode_no_ct("DOMAIN", value="AE")
-    .assign_no_ct("USUBJID", source="patient_number")
-    .assign_no_ct("AETERM", source="ae_term")
-    .assign_no_ct("AESTDTC", source="ae_start_date")
-    .assign_no_ct("AEENDTC", source="ae_end_date")
-    .assign_no_ct("AESEV", source="ae_severity")
-    .assign_no_ct("AESER", source="ae_serious")
-    .assign_no_ct("AEOUT", source="ae_outcome")
-    .assign_no_ct("AEACN", source="ae_action_taken")
-    .assign_no_ct("AEREL", source="ae_relationship")
+    ae_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
+    .assign("DOMAIN", value="AE")
+    .assign("USUBJID", source="patient_number")
+    .assign("AETERM", source="ae_term")
+    .assign("AESTDTC", source="ae_start_date")
+    .assign("AEENDTC", source="ae_end_date")
+    .assign("AESEV", source="ae_severity")
+    .assign("AESER", source="ae_serious")
+    .assign("AEOUT", source="ae_outcome")
+    .assign("AEACN", source="ae_action_taken")
+    .assign("AEREL", source="ae_relationship")
     .to_frame()
 )
 print(f"   {ae.shape[0]} records × {ae.shape[1]} variables")
@@ -152,7 +152,7 @@ adsl = (
     .source("SEX")
     .source("RACE")
     .source("ARM")
-    .rename("TRT01P", source="ARM")
+    .assign("TRT01P", source="ARM")
     .date("TRTSDT", source="RFSTDTC")
     .date("TRTEDT", source="RFENDTC")
     .derivation(
@@ -196,7 +196,7 @@ adae = (
     .adam.occds.treatment_emergent(
         "TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT"
     )
-    .seq("ASEQ", groups=["USUBJID"])
+    .seq("ASEQ", by=["USUBJID"])
     .to_frame()
 )
 
@@ -378,6 +378,29 @@ assert restored.rows == custom_spec.rows
 assert restored.statistics == custom_spec.statistics
 assert restored.pools == custom_spec.pools
 print("   ✓ Round-trip: to_yaml() → from_yaml() produces identical spec.")
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 10b. YAML-as-workflow — a spec file alone reproduces a table
+# ════════════════════════════════════════════════════════════════════════════
+print("\n══ 10b. YAML-as-workflow: load_spec() → run_spec() ═════════════════════")
+
+import fleet.tlg as tlg  # noqa: E402
+
+spec_path = Path(__file__).resolve().parent / "tlg_specs" / "aet01.yaml"
+overview_spec = tlg.load_spec(spec_path)
+print(
+    f"   Loaded {spec_path.name}: template={overview_spec.template!r} "
+    f"→ {type(overview_spec).__name__}"
+)
+
+ard_overview = tlg.run_spec(overview_spec, adae, adsl=adsl)
+print(ard_overview.filter(pl.col("stat_name").is_in(["n", "pct"])))
+print(
+    f"\n   AE overview ARD: {ard_overview.shape[0]} rows — the YAML file "
+    "carried the template id,\n   population filter, and header-row "
+    "definitions; no Python spec code needed."
+)
 
 
 # ════════════════════════════════════════════════════════════════════════════

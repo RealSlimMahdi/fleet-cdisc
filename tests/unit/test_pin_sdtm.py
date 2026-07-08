@@ -169,12 +169,16 @@ class TestSDTMBaselineFlag:
 
 class TestAutoFKCheck:
     def test_auto_fk_silent_without_pin(self, ae_raw):
-        """No pin → no FK check → no warning."""
+        """No pin → no FK check → no warning.
+
+        Uses the canonical assign() spelling: assign_no_ct is a deprecated
+        alias whose FutureWarning would trip simplefilter("error").
+        """
         import warnings
 
         with warnings.catch_warnings():
             warnings.simplefilter("error")
-            ae_raw.sdtm.assign_no_ct("USUBJID", source="patient_number").to_frame()
+            ae_raw.sdtm.assign("USUBJID", source="patient_number").to_frame()
 
     def test_auto_fk_triggers_with_pin(self, dm_df):
         """FK check fires when pin exists and orphan values are found."""

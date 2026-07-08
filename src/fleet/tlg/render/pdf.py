@@ -23,13 +23,23 @@ def render_pdf(
     path: str | Path,
     *,
     html_wrapper: str | None = None,
+    rows_per_page: int | None = None,
+    page_by: str | None = None,
 ) -> Path:
     """Render a ``TableModel`` to a PDF file via WeasyPrint.
+
+    Pagination comes from the model layer: pages break on real PDF
+    pages with repeated title, column headers, and footnotes, plus a
+    ``Page X of Y`` footer.
 
     Args:
         model: The display-ready table model.
         path: Output PDF file path.
         html_wrapper: Optional HTML template with ``{table}`` placeholder.
+        rows_per_page: Maximum body rows per page; ``None`` disables
+            row-count splitting.
+        page_by: ARD variable to page-break on (e.g. ``"PARAMCD"``).
+            Defaults to ``model.metadata.page_by``.
 
     Returns:
         Path: The written PDF path.
@@ -46,7 +56,9 @@ def render_pdf(
             "Or:  pip install fleet-cdisc[tlg-pdf]"
         ) from None
 
-    html = render_html(model, html_wrapper=html_wrapper)
+    html = render_html(
+        model, html_wrapper=html_wrapper, rows_per_page=rows_per_page, page_by=page_by
+    )
     # Wrap in a minimal HTML document for WeasyPrint
     doc = (
         "<!DOCTYPE html>\n"
@@ -69,6 +81,7 @@ def render_listing_pdf(
     path: str | Path,
     *,
     html_wrapper: str | None = None,
+    rows_per_page: int | None = None,
 ) -> Path:
     """Render a ``ListingModel`` to a PDF file via WeasyPrint.
 
@@ -76,6 +89,8 @@ def render_listing_pdf(
         model: The display-ready listing model.
         path: Output PDF file path.
         html_wrapper: Optional HTML template with ``{table}`` placeholder.
+        rows_per_page: Maximum data rows per page; ``None`` renders one
+            continuous listing.
 
     Returns:
         Path: The written PDF path.
@@ -92,7 +107,7 @@ def render_listing_pdf(
             "Or:  pip install fleet-cdisc[tlg-pdf]"
         ) from None
 
-    html = render_listing_html(model, html_wrapper=html_wrapper)
+    html = render_listing_html(model, html_wrapper=html_wrapper, rows_per_page=rows_per_page)
     doc = (
         "<!DOCTYPE html>\n"
         '<html><head><meta charset="utf-8">'

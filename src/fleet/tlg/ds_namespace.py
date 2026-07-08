@@ -141,6 +141,9 @@ class DSTLGNamespace(BuilderVerbsMixin):
             dataset_filter=spec.dataset_filter,
             prefilter=prefilter,
             header_rows=spec.header_rows,
+            value_col=getattr(spec, "value_col", "AVAL"),
+            label_col=getattr(spec, "label_col", None),
+            decimals=getattr(spec, "decimals", None),
         )
 
     # ------------------------------------------------------------------ #
@@ -242,6 +245,9 @@ class DSTLGNamespace(BuilderVerbsMixin):
             adsl_filter=spec.adsl_filter,
             prefilter=deaths_filter,
             header_rows=[OverallStat(label="Total Number of Deaths"), *spec.header_rows],
+            value_col=spec.value_col,
+            label_col=spec.label_col,
+            decimals=spec.decimals,
         )
 
         death_ids = deaths["USUBJID"].unique().to_list()
@@ -270,6 +276,9 @@ class DSTLGNamespace(BuilderVerbsMixin):
             adsl=deaths_population,
             adsl_filter=spec.adsl_filter,
             prefilter=deaths_filter,
+            value_col=spec.value_col,
+            label_col=spec.label_col,
+            decimals=spec.decimals,
         )
         # The headline block already carries the population N rows; drop
         # the cause block's deaths-denominator N rows to avoid two

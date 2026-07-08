@@ -2,8 +2,9 @@
 TLG render sub-module — ARD in, artifact out.
 
 Provides shaping utilities to convert long-format ARD DataFrames into
-display-ready table/listing models, and renderers that produce HTML, PDF,
-and editable PPTX slide deck artifacts.
+display-ready table/listing models, model-layer pagination shared by
+every output format, and renderers that produce HTML, PDF, RTF, and
+editable PPTX slide deck artifacts.
 
 Usage::
 
@@ -20,9 +21,12 @@ from ._models import (
     TableModel,
     ard_to_table_model,
     listing_to_model,
+    paginate,
+    paginate_listing,
 )
 from .html import render_html, render_listing_html
 from .pdf import render_listing_pdf, render_pdf
+from .rtf import render_listing_rtf, render_rtf
 from .slides import render_listing_pptx, render_pptx
 
 __all__ = [
@@ -31,10 +35,14 @@ __all__ = [
     "ListingModel",
     "ard_to_table_model",
     "listing_to_model",
+    "paginate",
+    "paginate_listing",
     "render_html",
     "render_listing_html",
     "render_pdf",
     "render_listing_pdf",
     "render_pptx",
     "render_listing_pptx",
+    "render_rtf",
+    "render_listing_rtf",
 ]

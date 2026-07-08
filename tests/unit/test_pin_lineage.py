@@ -157,9 +157,12 @@ class TestDAGInjection:
         dag.inject_lineage(ns, "AE")
 
         chain = dag.trace("AE", "AESTDY")
-        assert len(chain) == 1
-        assert chain[0]["name"] == "AESTDY"
+        # Recursive: AESTDY ← study_day(AESTDTC, DM.RFSTDTC); AESTDTC is
+        # itself derived (date ← ae_start_date) so it gets its own entry.
+        assert [c["name"] for c in chain] == ["AESTDY", "AESTDTC"]
         assert chain[0]["pin_sources"][0]["source_domain"] == "DM"
+        assert chain[1]["verb"] == "date"
+        assert chain[1]["sources"] == ["ae_start_date"]
 
     def test_to_dict_includes_pin_sources(self, dm_df):
         ae_raw = pl.DataFrame(

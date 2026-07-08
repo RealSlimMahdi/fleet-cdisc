@@ -1,0 +1,22 @@
+# LBT02 — Laboratory Mean Change from Baseline
+#
+#     import fleet.tlg as tlg
+#     spec = tlg.load_spec("examples/tlg_specs/lbt02.yaml")
+#     ard = tlg.run_spec(spec, adlb, adsl=adsl)
+template: lbt02
+schema_version: 1
+
+# The analysis value is the change from baseline, not raw AVAL.
+value_col: CHG
+
+statistics:
+  - n_subjects
+  - mean
+  - sd
+  - median
+  - min
+  - max
+
+decimals:
+  mean: xx.xx
+  sd: xx.xxx

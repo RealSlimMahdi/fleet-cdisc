@@ -369,7 +369,7 @@ class TrialDesignMixin:
 
                 sv = (
                     raw_visits.sdtm
-                    .assign_no_ct("USUBJID", source="subject_id")
+                    .assign("USUBJID", source="subject_id")
                     .assign_dtc("SVSTDTC", source="visit_date")
                     .visit_map("VISITNUM", "VISIT",
                                date_col="SVSTDTC",

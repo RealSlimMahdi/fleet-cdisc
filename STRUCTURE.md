@@ -10,14 +10,15 @@
 Fleet/
 ├── src/fleet/          # Main package
 │   ├── __init__.py         # Public API surface + namespace registration
-│   ├── _version.py         # Package version ("0.1.0")
-│   ├── core/               # Shared foundation
+│   ├── _version.py         # Package version (from git tags)
+│   ├── core/               # Shared foundation (verb mixin, spec registry, pins, log)
 │   ├── ct/                 # Controlled terminology
 │   ├── io/                 # Data loading / saving
-│   ├── sdtm/               # SDTM namespace (14 derivation verbs)
-│   ├── adam/               # ADaM namespace (9 derivation verbs)
-│   ├── tlg/                # TLG namespace — tables, listings, ARD generation
-│   ├── define_xml/         # Define-XML validation + generation
+│   ├── sdtm/               # SDTM namespace (verbs + TDD) — call `.verbs()` for the live list
+│   ├── adam/               # ADaM namespace + TA extensions
+│   ├── tlg/                # TLG namespace — tables, listings, template registry, render
+│   ├── tools/              # migrate codemod (deprecated → canonical rewrite)
+│   ├── define_xml/         # Define-XML validation + generation + schema_builder
 │   └── validation/         # CDISC rules-engine integration
 │
 ├── datasets/               # Example raw data (CDISCPILOT01)
@@ -29,7 +30,8 @@ Fleet/
 │
 ├── examples/               # End-to-end reference pipelines (cdiscpilot01_inline.py, …)
 ├── scripts/                # Developer utility scripts
-│   └── build_llms.py       # llms.txt generator (run: uv run python scripts/build_llms.py)
+│   ├── build_llms.py       # llms.txt generator (run: uv run python scripts/build_llms.py)
+│   └── gen_cli_docs.py     # docs/getting-started/cli.md generator (GENERATED — do not hand-edit)
 ├── llms.txt                # LLM context file — GENERATED, do not edit by hand
 ├── pyproject.toml          # Build config, dependencies, tool settings
 └── uv.lock                 # Locked dependency tree
@@ -43,11 +45,11 @@ Fleet/
 
 Importing `fleet` does two things automatically:
 
-1. **Registers namespace extensions** on all Polars DataFrames (`df.sdtm`, `df.adam`, `df.adsl`, `df.occds`, `df.tlg`)
+1. **Registers namespace extensions** on all Polars DataFrames **and LazyFrames** (`df.sdtm`, `df.adam` with sub-namespaces `df.adam.adsl` / `df.adam.occds` / …, `df.tlg`)
 2. **Re-exports the full public API** so everything is reachable from one import
 
 ```python
-import fleet  # registers df.sdtm, df.adam, df.adsl, df.occds, df.tlg everywhere
+import fleet  # registers df.sdtm, df.adam (+ .adsl/.occds/…), df.tlg everywhere
 ```
 
 ---
@@ -56,13 +58,18 @@ import fleet  # registers df.sdtm, df.adam, df.adsl, df.occds, df.tlg everywhere
 
 | File                    | Purpose                                                                                                                                                                                                                        |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `exceptions.py`         | All custom exception classes — `FleetError`, `SDTMError`, `ADAMError`, `CTError`, `FleetIOError`, `SpecError`, `ValidationError`                                                                                               |
+| `_verb_mixin.py`        | `SharedVerbsMixin` — the canonical cross-namespace verbs (`assign`, `case_when`, `merge`, `keep`, `source`, `derivation`, `duration`, `study_day`, `seq`, `select`, `nodup`, `validate`, `verbs`), plus `to_frame`/`from_spec`/`to_spec_yaml`, `_chain()`, and column-typo did-you-mean errors |
+| `_flag_mixin.py`        | `FlagCriterionMixin` — the `flag` family (`flag`, `flag_first`, `flag_last`, `flag_extreme`, `flag_exists`, `flag_relative`) shared across SDTM and ADaM; validates params per criteria mode                                    |
+| `_deprecation.py`       | `deprecated_verb` / `deprecated_kwargs` decorators + `warn_deprecated` — power every legacy alias (once-per-site `FutureWarning`); `__fleet_deprecated__` marker lets `.verbs()` hide aliases                                    |
+| `spec_registry.py`      | **Single source of truth for spec-executable algorithms** — `@spec_algorithm` declarations drive the `from_spec` executor, discriminated-union Pydantic models (`extra=forbid`), the JSON schema, and the `coverage_matrix()` / `SPEC_UNSUPPORTED` allowlist |
+| `log.py`                | `logging.getLogger("fleet")` setup — replaces the old `print()` calls in `inspect`/`trail`/`nodup`/`validate` so batch runs can route/suppress output                                                                          |
+| `exceptions.py`         | Custom exceptions — `FleetError` base, `DerivationError`/`VerbUsageError`/`PinError`/`SpecError`/`SchemaError` (dual-inherit builtins so both `except FleetError` and `except ValueError` styles catch)                          |
 | `study_context.py`      | `StudyContext` — wraps a study root directory and resolves configured paths (raw data, SDTM, ADaM, metadata, outputs). Loaded via `load_study_context(config_path)` from a YAML file.                                          |
-| `dag.py`                | `PipelineDAG`, `PipelineNode`, `VariableNode`, `PinDependency` — pipeline + variable-level lineage graph (verb name, source columns, defining method, cross-domain pin edges)                                                  |
+| `dag.py`                | `PipelineDAG`, `PipelineNode`, `VariableNode`, `PinDependency` — pipeline + variable-level lineage graph; recursive `.trace()`, input reconciliation, `output_format:` handling                                                |
 | `algorithm_resolver.py` | Resolves a Fleet verb name (`algorithm:`) or dotted callable (`callable:`) to its docstring + qualified path; powers Define-XML method enrichment                                                                              |
 | `derivation.py`         | `Derivation` protocol dataclass and `@derivation` decorator — wraps study-specific Python functions as typed, auto-registered derivation objects with `kind`, `targets`, `sources`, and `dotted_path`                          |
 | `lineage.py`            | `record_lineage(owner, exprs)` / `lineage_of(namespace)` / `record_pin_lineage()` / `pin_lineage_of()` / `_append_lineage_nodes()` — invoked by `_chain()` and pin-powered verbs to track intra-frame and cross-domain lineage |
-| `_pin_mixin.py`         | `PinMixin` — attaches reference-domain DataFrames to pipeline instances; provides `.pin()`, `.repin()`, FK validation, and `.pins()` introspection                                                                             |
+| `_pin_mixin.py`         | `PinMixin` — attaches reference-domain DataFrames to pipeline instances; provides `.pin()`, `.repin()`, FK validation (batched at `to_frame()`), and `.pins()` introspection; pins/lineage survive sub-namespace switches       |
 | `rules_scaffolder.py`   | `RulesScaffolder` — fetches CDISC conformance rules from the Library API and writes per-domain YAML files into `metadata/sdtm/rules/` and `metadata/adam/rules/`                                                               |
 | `scaffolder.py`         | `DefineScaffolder` — generates `define.yaml` from the CDISC Library IG for SDTM and ADaM domains                                                                                                                               |
 
@@ -120,29 +127,28 @@ The core of Fleet for SDTM work. Registers `df.sdtm` on every Polars DataFrame.
 
 | File           | Purpose                                                                                                                         |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `models.py`    | `SDTMAlgorithm` enum (the 14 verb names), `SDTMVariableSpec` (Pydantic model for one variable in a YAML spec), `SDTMDomainSpec` |
-| `utils.py`     | Internal helpers — `to_iso8601_date`, `to_iso8601_datetime`, `parse_expression(str) → pl.Expr` (with AST whitelist)             |
-| `namespace.py` | `SDTMNamespace` — the actual namespace class with all 14 verbs                                                                  |
+| `models.py`    | `SDTMAlgorithm` enum (verb names, kept in sync with `spec_registry`), `SDTMVariableSpec`, `SDTMDomainSpec`                       |
+| `utils.py`     | Internal helpers — `to_iso8601_date`, `to_iso8601_datetime`, `parse_expression(str) → pl.Expr` (AST whitelist; bare names in arithmetic resolve to `pl.col`) |
+| `namespace.py` | `SDTMNamespace` — the SDTM namespace class + `_tdd_mixin` for Trial Design domains                                              |
 
-**The 14 SDTM derivation verbs:**
+**Canonical SDTM verbs** (call `df.sdtm.verbs()` for the always-current, deprecation-filtered list — hardcoded counts rot):
 
-| Verb             | Signature                                             | Purpose                                                 |
-| ---------------- | ----------------------------------------------------- | ------------------------------------------------------- |
-| `assign_no_ct`   | `(target, *, source)`                                 | Direct 1:1 column copy/rename, no CT lookup             |
-| `assign_ct`      | `(target, *, source, ct_codelist, ct_mapping=None)`   | Copy column and decode values via CT codelist           |
-| `assign_dtc`     | `(target, *, source, mode="date", input_format=None)` | Parse date string → ISO 8601; preserves partial dates   |
-| `hardcode_ct`    | `(target, *, value, ct_codelist=None)`                | Set every row to a literal constant (CT-validated)      |
-| `hardcode_no_ct` | `(target, *, value)`                                  | Set every row to a literal constant, no CT              |
-| `condition_add`  | `(target, *, condition, then_value)`                  | `IF condition THEN value ELSE NULL`                     |
-| `if_then_else`   | `(target, *, when, else_value=None)`                  | Multi-branch conditional (list of `{condition, value}`) |
-| `ae_aerel`       | `(target="AEREL", *, source, aerel_map=None)`         | Standard adverse-event relatedness mapping              |
-| `merge`          | `(target_cols=None, *, dataset, on, how="left")`      | Join another DataFrame into the pipeline                |
-| `nodup`          | `(*, subset, sort_by=None, keep=None)`                | Report or deduplicate rows by subset keys               |
+| Verb                 | Signature                                                | Purpose                                                 |
+| -------------------- | -------------------------------------------------------- | ------------------------------------------------------- |
+| `assign`             | `(target, *, source=None, value=None, ct=None, ct_map=None)` | The one assignment verb — copy / hardcode / CT decode |
+| `case_when`          | `(target, *, when, else_=None)`                          | The one conditional — ordered `{condition, value}` branches |
+| `date`               | `(target, *, source=None, value=None, output=None, ...)` | Parse date/datetime → ISO 8601; preserves partial dates |
+| `condition_add`      | `(target, *, condition, then_value)`                     | `IF condition THEN value ELSE NULL`                     |
+| `ae_aerel`           | `(target="AEREL", *, source, aerel_map=None)`            | Standard adverse-event relatedness mapping              |
+| `merge`              | `(dataset, *, on, how="left", keep=None, where=None)`    | The one join verb (subsumes `lookup`)                   |
+| `keep`               | `(*columns)`                                             | Restrict frame to named columns                         |
+| `group_by`           | `(*, by, agg)`                                           | Group-and-aggregate to produce summary rows             |
+| `notsubmitted`       | `(*targets)`                                             | Set one or more columns to null (not for submission)    |
+| `multiple_responses` | `(target, *, source, delimiter="\|", id_cols=None)`      | Expand pipe-delimited fields into separate rows         |
+| `flag` family        | `flag`, `flag_first`, `flag_last`, `flag_extreme`, `flag_exists`, `flag_relative` | Criteria-driven `"Y"` flags |
+| `nodup`              | `(*, subset, sort_by=None, keep=None)`                   | Report or deduplicate rows by subset keys               |
 
-| `group_by` | `(*, group_cols, agg)` | Group-and-aggregate to produce a summary row |
-| `dataset_level` | `(target, *, value)` | Alias for `hardcode_no_ct` — marks dataset-level constants |
-| `notsubmitted` | `(*targets)` | Set one or more columns to null (not for submission) |
-| `multiple_responses` | `(target, *, source, delimiter="\|", id_cols=None)` | Expand pipe-delimited multi-answer fields into separate rows |
+Deprecated aliases (still work, emit `FutureWarning`): `assign_no_ct`/`assign_ct`/`hardcode_no_ct`/`hardcode_ct`/`dataset_level` → `assign`; `if_then_else` → `case_when`; the `groups=`/`group_cols=`/`group_by=` kwargs → `by=`.
 
 **Special methods:**
 
@@ -156,7 +162,7 @@ The core of Fleet for SDTM work. Registers `df.sdtm` on every Polars DataFrame.
 | `to_frame()`                | **Materialise** — execute the whole pipeline and return a `pl.DataFrame` |
 
 **How the pipeline works:**  
-Every verb returns a _new_ `SDTMNamespace` instance (via `copy.copy(self)`) with the expression appended to an internal lazy plan. Nothing executes until `to_frame()` is called, which collects the lazy frame. Both `_chain` and `_materialise_then` use `copy.copy` to preserve all instance state across chaining calls.
+Every verb returns a _new_ namespace instance (via `copy.copy(self)`) with its expression appended to an internal lazy plan. Most verbs are pure lazy `with_columns` and only run at `to_frame()`; a few (window functions like `baseline`, cross-domain joins, `date`-with-time) checkpoint internally via `_materialise_then` and re-wrap the collected frame so the **chain is never broken** — `flag → baseline → chg` is a single pipeline. The namespaces are registered on both `pl.DataFrame` and `pl.LazyFrame`, so `pl.scan_parquet(...).sdtm` stays lazy. Both `_chain` and `_materialise_then` use `copy.copy` to preserve all instance state (lineage, pins, domain) across chaining calls and sub-namespace switches.
 
 ---
 
@@ -166,45 +172,36 @@ Registers `df.adam` on every Polars DataFrame.
 
 | File           | Purpose                                                                                                                                                                                                       |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `models.py`    | `ADAMAlgorithm` enum (11 verb names), `ADAMVariableSpec`, `ADAMDatasetSpec`                                                                                                                                   |
+| `models.py`    | `ADAMAlgorithm` enum (verb names, kept in sync with `spec_registry`), `ADAMVariableSpec`, `ADAMDatasetSpec`                                                                                                   |
+| `_mixins.py`   | `SharedADaMVerbsMixin` — the shared verbs available on **every** ADaM sub-namespace (`assign`, `case_when`, `merge`, `source`, `derivation`, `recode`, `whereclauses`, `merge_adsl`, `date`, `duration`, `pick`, `first_date`, `last_date`, `count_events`, `join_adsl`, …); `MultiRowMixin` for `seq` |
 | `utils.py`     | Standard ADaM calculation functions — all return `pl.Expr`: `study_day`, `baseline`, `chg`, `pchg`, `bmi`, `bsa`, `mean_arterial_pressure`, `qtc`, `age_in_years`, `nrind`, `on_treatment`, `shift`           |
-| `namespace.py` | `AdamNamespace` — the BDS namespace class with 24 verbs including record-generating verbs (`derive_summary_records`, `derive_locf_records`, `derive_param`) and toxicity grading (`atoxgr`, `combine_grades`) |
+| `namespace.py` | `AdamNamespace` — the BDS namespace; BDS-specific verbs (`baseline`, `chg`, `pchg`, `bmi`, `bsa`, `map`, `qtc`, `nrind`, `on_treatment`, `shift`), record-generating verbs (`derive_summary_records`, `derive_locf_records`, `derive_param`), toxicity grading (`atoxgr`, `combine_grades`), `transform`, and the sub-namespace properties (`adsl`, `occds`, `onco`, …) |
 | `grading/`     | CTCAE / DAIDS toxicity-grading sub-package (see below)                                                                                                                                                        |
 
-**The 9 ADaM derivation verbs:**
+**Canonical ADaM verbs** (call `df.adam.verbs()` for the live list). The shared mixin (`assign`, `case_when`, `merge`, `source`, `derivation`, `recode`, `whereclauses`, `date`, `duration`, `flag`, `keep`, `pick`, …) is inherited by every sub-namespace, so a whole ADaM derivation can stay in one chain:
 
 | Verb             | Signature                                                    | Purpose                                                       |
 | ---------------- | ------------------------------------------------------------ | ------------------------------------------------------------- |
-| `source`         | `(target, *, from_col=None)`                                 | Copy a column from the predecessor SDTM dataset               |
-| `derivation`     | `(target, *, expression)`                                    | Polars expression string or `pl.Expr` — arbitrary calculation |
-| `assigned`       | `(target, *, value)`                                         | Global constant for all records                               |
-| `recode`         | `(target, *, source, recode_map, default=None)`              | Map raw values to new values (like a lookup table)            |
-| `rename`         | `(target, *, source)`                                        | Rename a column (e.g. `VSDTC → ADT`)                          |
-| `condderivation` | `(target, *, conditions, else_value=None)`                   | Multi-branch conditional derivation                           |
-| `lookup`         | `(target_cols=None, *, dataset, on, how="left", where=None)` | Join a reference dataset                                      |
-| `std_function`   | `(target, *, func, ...)`                                     | Named standard ADaM functions (see below)                     |
+| `source`         | `(*targets, from_col=None)`                                  | Variadic copy of column(s) from the predecessor dataset       |
+| `assign`         | `(target, *, source=None, value=None, ct=None, ct_map=None)` | Copy / hardcode / rename / CT decode                          |
+| `case_when`      | `(target, *, when, else_=None)`                              | Multi-branch conditional derivation                           |
+| `derivation`     | `(target, *, expression)`                                    | Polars expression string, `pl.Expr`, lambda, or `@derivation` |
+| `recode`         | `(target, *, source, recode_map, default=None)`              | Map raw values to new values                                  |
+| `merge`          | `(dataset, *, on, how="left", keep=None, where=None)`        | Join a reference dataset (subsumes `lookup`)                  |
+| `baseline` / `chg` / `pchg` | `(target, *, aval=..., baseline_flag=..., by=...)`| Baseline value / change / percent change (window verbs)       |
+| `duration`       | `(target, *, start, end, unit="days", out="numeric")`        | Elapsed time / study day between two date columns             |
 | `whereclauses`   | `(*, where)`                                                 | Filter rows by an expression                                  |
 
-**`std_function` — standard ADaM functions:**
+Deprecated aliases (still work, emit `FutureWarning`): `assigned`/`rename` → `assign`; `condderivation` → `case_when`; `lookup` → `merge`; kwargs `groups=`/`by_vars=` → `by=`, `keep_cols=`/`target_cols=` → `keep=`. There is no `std_function` verb — the calculations are individual verbs.
 
-| `func=`           | Extra params                      | Calculates                                   |
-| ----------------- | --------------------------------- | -------------------------------------------- |
-| `"study_day"`     | `analysis_date`, `reference_date` | `ADY = ADT - RFSTDTC + 1` (signed)           |
-| `"baseline"`      | `aval`, `baseline_flag`           | `BASE = AVAL` at the baseline record         |
-| `"chg"`           | `aval`, `base`                    | `CHG = AVAL - BASE`                          |
-| `"pchg"`          | `aval`, `base`                    | `PCHG = (AVAL - BASE) / BASE * 100`          |
-| `"flag_baseline"` | `baseline_criteria`               | Sets `ABLFL = "Y"` where condition is true   |
-| `"bmi"`           | `height`, `weight`                | `BMI = weight / (height/100)²`               |
-| `"bsa"`           | `height`, `weight`, `method`      | Body Surface Area (4 methods)                |
-| `"map"`           | `systolic`, `diastolic`           | Mean Arterial Pressure                       |
-| `"qtc"`           | `qt`, `rr`, `method`              | Corrected QT interval (Fridericia or Bazett) |
-
-**Special methods** (same as SDTM):
+**Special methods** (shared across SDTM and ADaM via `SharedVerbsMixin`):
 
 | Method                       | Purpose                                            |
 | ---------------------------- | -------------------------------------------------- |
-| `from_spec(spec_path)`       | YAML-driven derivation                             |
-| `validate(dataset, version, *, custom_rules=None)` | CDISC rules-engine validation (optionally with custom rules dir) |
+| `from_spec(spec_path, *, dataset=None, strict=True, overwrite=False, only=, omit=)` | Table-driven spec executor (shared with SDTM via `SharedVerbsMixin`); registry-validated |
+| `to_spec_yaml(dataset=None, path=None)` | Reverse: emit a define.yaml from the pipeline's lineage (registry verbs → real blocks, others → `callable` stubs) |
+| `verbs()`                    | List the namespace's public verbs (+ summaries), deprecation-filtered |
+| `validate(dataset, version, *, custom_rules=None, on_fail="warn")` | CDISC rules-engine validation; `.last_validation` holds the result |
 | `inspect(prefix)`            | Materialise pipeline, log state, return checkpoint |
 | `explain()`                  | Print query plan without materialising             |
 | `trail()`                    | Print each derived variable's origin (verb + sources) |
@@ -230,34 +227,37 @@ Registers `df.adam` on every Polars DataFrame.
 
 ### `tlg/` — Tables, Listings, and Graphs
 
-Registers `df.tlg` on every Polars DataFrame. Produces Analysis Results Datasets (ARDs) aligned with CDISC ARS / pharmaverse {cards}.
+Registers `df.tlg` on every Polars DataFrame. Produces Analysis Results Datasets (ARDs) — long-format statistic frames with a display-rounding step at render time.
 
-| File              | Purpose                                                                                                     |
-| ----------------- | ----------------------------------------------------------------------------------------------------------- |
-| `namespace.py`    | `TLGNamespace` — root namespace with `.ae` and `.vs` sub-namespace properties                               |
-| `ae_namespace.py` | `AETLGNamespace` — AE summary tables (`t_summary`), listings (`l_listing`), and inline builder entry points |
-| `vs_namespace.py` | `VSTLGNamespace` — vital-signs summary tables (`t_summary`) and inline builder entry points                 |
-| `_builder.py`     | `TLGBuilder` — shared fluent builder base class with chainable verbs (`by`, `rows`, `stats`, `to_ard`, …)   |
-| `_specs.py`       | Pydantic spec models: `TLGSpec`, `AESummarySpec`, `AEListingSpec`, `VSSummarySpec`, `OverallStat`           |
-| `_ard.py`         | ARD schema, formatting, validation, pool expansion, big-N computation                                       |
-| `render/`         | **Render sub-module** — ARD in, artifact out (HTML, PDF, PPTX)                                              |
+| File                 | Purpose                                                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `namespace.py`       | `TLGNamespace` — root namespace with 9 sub-namespace properties (`ae`, `vs`, `lb`, `eg`, `cm`, `ex`, `dm`, `ds`, `mh`) + `catalog()` |
+| `<domain>_namespace.py` | One module per domain (`ae_namespace.py`, `vs_namespace.py`, `lb_namespace.py`, …) — summary/listing methods + spec models   |
+| `_registry.py`       | Open **template registry** — `TemplateMeta`, `TEMPLATES`, `catalog()`, `register_template()`, `unregister_template()`            |
+| `_runner.py`         | YAML-as-workflow: `load_spec(path)`, `run_spec(spec, df, adsl=...)`, `spec_schema(template_id)`, `NAMESPACE_CLASSES` dispatch    |
+| `_builder.py`        | `TLGBuilder` — shared fluent builder (`by`, `template`, `rows`, `stats`, `value`, `label`, `decimals`, `to_ard`, `to_listing`, `to_html`/`to_rtf`/`to_pdf`/`to_pptx`) |
+| `_specs.py`          | Pydantic spec models: `TLGSpec`, `AESummarySpec`, `AEListingSpec`, `VSSummarySpec`, `OverallStat`, `Row`, `Column`, `Statistic` (+ `template`/`schema_version`/`value_col`/`label_col`/`decimals` fields) |
+| `_ard.py`            | ARD schema, per-statistic formatting (unrounded stats + display `fmt_fn`), validation, pool expansion, big-N computation         |
+| `render/`            | **Render sub-module** — ARD in, artifact out (HTML, RTF, PDF, PPTX) + pagination                                                 |
 
 #### `tlg/render/` — Rendering layer
 
 | File         | Purpose                                                                                                   |
 | ------------ | --------------------------------------------------------------------------------------------------------- |
-| `_models.py` | Display contract models (`RenderMetadata`, `TableModel`, `ListingModel`) + shaping (`ard_to_table_model`) |
+| `_models.py` | Display contract models (`RenderMetadata`, `TableModel`, `ListingModel`) + shaping (`ard_to_table_model`) + `paginate`/`paginate_listing` |
 | `html.py`    | Pharma-style HTML table/listing renderer with CSS; supports `{table}` injection via wrapper               |
+| `rtf.py`     | ARD/model → RTF (built-in, no optional dep) with pagination                                               |
 | `pdf.py`     | HTML → PDF via WeasyPrint (optional dep: `fleet-cdisc[tlg-pdf]`)                                          |
 | `slides.py`  | TableModel/ListingModel → editable PPTX slides via python-pptx (optional dep: `fleet-cdisc[tlg-pptx]`)    |
 
 **Key concepts:**
 
-- **ARD (Analysis Results Dataset)**: long-format DataFrame with columns aligned to {cards}::tidy_ard_column_order(). Every summary method returns an ARD.
-- **Dual-mode API**: users can build ARDs via spec-driven `t_summary(spec=...)` or the inline fluent builder (`df.tlg.ae.by("TRTA").rows([...]).to_ard()`).
-- **`OverallStat` header rows**: whole-dataset aggregate rows (e.g. "Subjects with any AE", "Deaths") emitted before hierarchy rows in the ARD.
+- **Template registry**: every table/listing is a registered template (id → CDISC class → namespace method → output type); `df.tlg.catalog()` lists them. The registry is open — `register_template()` adds study-specific ones.
+- **Triple-mode API**: build ARDs via the inline fluent builder, a spec object (`t_summary(spec=...)`), or a YAML spec file (`load_spec` + `run_spec`). Listings use the same dual API (`to_listing` / `l_listing`).
+- **`OverallStat` header rows**: whole-dataset aggregate rows emitted before hierarchy rows in the ARD.
 - **`adsl_filter` / `dataset_filter`**: separate filter fields — `adsl_filter` affects denominators only; `dataset_filter` subsets the primary dataset.
 - **Pool expansion**: `GroupPool` definitions duplicate rows under pooled arm labels (e.g. "Total", "All Active").
+- **No CDISC ARS module**: the earlier `_ars`/`_shells` modules were removed; do not cite ARS.
 
 ---
 
@@ -266,13 +266,14 @@ Registers `df.tlg` on every Polars DataFrame. Produces Analysis Results Datasets
 | File                                 | Purpose                                                                                                                                         |
 | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `schemas/define_xml_2_1_schema.json` | JSON Schema for Define-XML 2.1 YAML representation                                                                                              |
-| `schemas/define_spec_schema.json`    | JSON Schema for the higher-level `define.yaml` spec (datasets + derivations + `algorithm:` / `callable:`)                                       |
-| `validator.py`                       | `DefineValidator` — validates a YAML Define-XML spec against the schema; reports `DefineIssue` objects                                          |
-| `generator.py`                       | `DefineXMLGenerator` — converts a YAML spec into a Define-XML 2.1 ODM XML string                                                                |
-| `spec_generator.py`                  | `DefineSpecGenerator` — generates Define-XML from `define.yaml`; with `enrich_methods=True` emits `<MethodDef>` from verb / callable docstrings |
-| `checker.py`                         | `DatasetChecker` — runtime conformance check of a built dataset against its spec                                                                |
+| `schemas/define_spec_schema.json`    | JSON Schema for the higher-level `define.yaml` spec — **generated** from the algorithm registry by `schema_builder.py` (CI sync test enforces it)  |
+| `schema_builder.py`                  | Builds `define_spec_schema.json` from `spec_registry` (algorithm enum, per-algorithm required fields, `fleet_spec_version`/`derivations_module`/`value_level` properties) |
+| `validator.py`                       | `DefineValidator` — validates a YAML spec against the schema + business rules; `.issues` / `.has_errors()` / `.print_report()`                    |
+| `generator.py`                       | `DefineXMLGenerator(path)` — converts a YAML spec into Define-XML 2.1 ODM XML; `.generate(out_path)`                                              |
+| `spec_generator.py`                  | `DefineSpecGenerator(spec, enrich_methods=)` — generates Define-XML from `define.yaml`; honours `output_format:` / `value_level:` / `fleet_spec_version:`; `enrich_methods=True` emits `<MethodDef>` from verb / callable docstrings |
+| `checker.py`                         | `DatasetChecker(spec, check_ct=True)` — runtime conformance check of a built dataset against its spec (columns, types, CT via inline codelists)  |
 
-The YAML key `fleet_algorithm` in a variable spec is used to record the derivation verb for traceability in the generated XML. Use `algorithm:` (Fleet verb) or `callable:` (study-specific dotted path) inside `derivation:` to drive `enrich_methods` enrichment.
+Use `algorithm:` (Fleet verb) or `callable:` (study-specific dotted path) inside `derivation:` to drive execution and `enrich_methods` enrichment.
 
 ---
 
@@ -351,14 +352,17 @@ tests/
 │   ├── ct/cdisc_ct_sample.yaml          # Sample CT for CT validator tests
 │   └── specs/                           # define_sdtm.yaml, define_adam.yaml
 └── unit/
-    ├── test_sdtm_namespace.py           # 20 tests — all 14 SDTM verbs
-    ├── test_adam_namespace.py           # 24 tests — all 16 BDS ADaM verbs
-    ├── test_adsl_namespace.py           # 14 tests — ADSL namespace
-    ├── test_occds_namespace.py          # 12 tests — OCCDS namespace
-    ├── test_ct_validation.py            #  9 tests — CT loader + validator
-    ├── test_tlg_namespace.py            # 74 tests — TLG namespace, builder, ARD
-    └── test_define_xml.py               #  6 tests — validator + generator
+    ├── test_sdtm_namespace.py           # SDTM verbs
+    ├── test_adam_namespace.py           # BDS ADaM verbs (+ unbroken flag→baseline→chg chain)
+    ├── test_naming_unification.py       # canonical verbs + deprecated-alias FutureWarnings
+    ├── test_spec_parity.py              # registry ↔ enum ↔ JSON-schema sync
+    ├── test_to_spec_yaml.py             # code → spec round-trip
+    ├── test_tlg_registry.py             # TLG template registry + catalog
+    ├── test_docs_examples.py            # executes docs/GUIDE code blocks (guardrail)
+    └── test_define_xml.py               # validator + generator
 ```
+
+Test counts drift — the file names above are indicative, not exhaustive. Run the suite for the authoritative count.
 
 Run the suite:
 
@@ -370,23 +374,37 @@ uv run pytest tests/ -v
 
 ## `scripts/` — Developer Utilities
 
-| File            | Purpose                                                                                                                                                               |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `build_llms.py` | Generates `llms.txt` from static Python strings and live `examples/*.py` files. Run with `uv run python scripts/build_llms.py`. Use `--check` for CI stale detection. |
+| File               | Purpose                                                                                                                                                               |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `build_llms.py`    | Generates `llms.txt` (and the README namespace block) from static strings + live `examples/*.py`. Run with `uv run python scripts/build_llms.py`; `--check` for CI.  |
+| `gen_cli_docs.py`  | Generates `docs/getting-started/cli.md` from the live argparse tree. `--check` for CI. **Do not hand-edit `cli.md`.**                                                 |
+| `regen_tlg_goldens.py` | Regenerates the Parquet golden ARDs used by the TLG parity tests.                                                                                                 |
 
-`llms.txt` is the only output of this script and must never be edited by hand.
+`llms.txt`, the README namespace block, and `cli.md` are generated — never edit them by hand.
 
 ---
 
 ## Dependency Summary
 
+**Core (6 dependencies):**
+
 | Package                    | Role                                            |
 | -------------------------- | ----------------------------------------------- |
-| `polars ≥ 1.0.0`           | Core DataFrame engine; namespace extension host |
+| `polars ≥ 1.41.0`          | Core DataFrame engine; namespace extension host |
 | `pydantic ≥ 2.0.0`         | YAML spec validation and data modelling         |
 | `pyyaml ≥ 6.0`             | YAML spec / CT file parsing                     |
 | `httpx ≥ 0.27.0`           | HTTP downloads (CT files, raw data)             |
-| `jsonschema ≥ 4.26.0`      | Define-XML YAML schema validation               |
-| `pyreadstat ≥ 1.2.0`       | SAS XPT I/O (optional, `uv sync --extra io`)    |
-| `dsjson ≥ 1.3`             | Dataset-JSON oracle for tests (dev only)        |
-| `pytest, pytest-cov, ruff` | Dev tooling (`uv sync --extra dev`)             |
+| `jsonschema ≥ 4.26.0`      | Define-XML / spec schema validation             |
+| `lxml ≥ 5.0.0`             | Define-XML ODM XML generation                   |
+
+**Optional extras** (`uv sync --extra <name>`):
+
+| Extra       | Adds                | For                                    |
+| ----------- | ------------------- | -------------------------------------- |
+| `io`        | `pyreadstat`        | SAS XPT read/write                     |
+| `tlg-pdf`   | `weasyprint`        | TLG PDF export                         |
+| `tlg-pptx`  | `python-pptx`       | TLG PPTX slide export                  |
+| `migrate`   | `libcst`            | `fleet migrate` deprecated→canonical codemod |
+| `watch`     | `watchfiles`        | `--watch` dev loop                     |
+| `all`       | all of the above    | everything                             |
+| `dev`       | `pytest`, `pytest-cov`, `ruff`, `blacken-docs`, `dsjson` | Dev tooling  |

@@ -55,10 +55,11 @@ selectively::
 
 Cross-module mixins
 ~~~~~~~~~~~~~~~~~~~~
-``FlagCriterionMixin`` provides ``flag()`` and ``criterion()`` to both
-ADaM namespaces (via ``SharedADaMVerbsMixin`` inheritance) **and** the
-SDTM namespace (which inherits from this mixin directly).  Any namespace
-that exposes ``_chain()`` and ``_materialise_then()`` can inherit it.
+``FlagCriterionMixin`` (now defined in :mod:`fleet.core._flag_mixin`,
+re-exported here for backward compatibility) provides ``flag()`` and
+``criterion()`` to both ADaM namespaces (via ``SharedADaMVerbsMixin``
+inheritance) **and** the SDTM namespace.  Any namespace that exposes
+``_chain()`` / ``_with_lazy()`` / ``_materialise_then()`` can inherit it.
 
 Return types & IDE support
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -72,551 +73,22 @@ methods.  No ``if TYPE_CHECKING`` stubs or protocol tricks are needed.
 from __future__ import annotations
 
 import copy
+import difflib
 from typing import TYPE_CHECKING, Any, Self
 
 import polars as pl
 
+from fleet.core._deprecation import deprecated_kwargs, deprecated_verb
+from fleet.core._flag_mixin import (
+    _FLAG_CRITERIA_KEYWORDS,  # noqa: F401  — backward-compat re-export
+    FlagCriterionMixin,
+)
 from fleet.core._pin_mixin import PinMixin
 from fleet.core._verb_mixin import SharedVerbsMixin
+from fleet.core.exceptions import DerivationError
 
 if TYPE_CHECKING:
     pass
-
-
-class FlagCriterionMixin:
-    """Mixin providing ``flag()`` and ``criterion()`` to any namespace.
-
-    Both SDTM (``df.sdtm``) and all ADaM namespaces inherit from this
-    mixin.  The methods rely on ``_chain()`` and ``_materialise_then()``
-    which every concrete namespace class must provide.
-    """
-
-    _lazy: pl.LazyFrame
-
-    # Subclasses must provide these — declared here for type-checker only.
-    def _chain(self, *exprs: pl.Expr) -> Self: ...  # noqa: E704
-    def _materialise_then(self, df: pl.DataFrame) -> Self: ...  # noqa: E704
-
-    # ------------------------------------------------------------------ #
-    # Flag — generalised "Y" / null flagging                               #
-    # ------------------------------------------------------------------ #
-
-    def flag(
-        self,
-        target: str,
-        *,
-        criteria: str | pl.Expr,
-        groups: list[str] | None = None,
-        order_by: str | list[str] | None = None,
-        value_col: str | None = None,
-        where: str | pl.Expr | None = None,
-        from_dataset: pl.DataFrame | list[pl.DataFrame] | None = None,
-        on: list[str] | None = None,
-        source_filter: pl.Expr | None = None,
-        condition: pl.Expr | None = None,
-        inclusive: bool = True,
-        flag_no_ref_groups: bool = True,
-        flag_all: bool = False,
-        flag_value: str = "Y",
-        false_value: str | None = None,
-    ) -> Self:
-        """Set *target* to *flag_value* for records matching *criteria*.
-
-        Supports row-level boolean expressions and built-in shortcuts:
-
-        - ``"first"`` / ``"last"`` — rank-based edge detection within groups.
-        - ``"max"`` / ``"min"`` — value-based extreme within groups.
-        - ``"exists"`` — set-membership from external dataset(s).
-        - ``"before"`` / ``"after"`` — relative to a landmark condition.
-        - ``"exists_after"`` / ``"exists_before"`` — temporal/self-join flag.
-
-        Args:
-            target: Name of the output flag column.
-            criteria: A Polars expression, or one of ``"first"``,
-                ``"last"``, ``"max"``, ``"min"``, ``"exists"``,
-                ``"before"``, ``"after"``, ``"exists_after"``,
-                ``"exists_before"``.
-            groups: Partition columns (default ``["USUBJID"]``).
-            order_by: Sort column(s) required for ``"first"``/``"last"``
-                and ``"before"``/``"after"``.
-            value_col: Value column required for ``"max"``/``"min"``.
-            where: Optional pre-filter — only matching rows are candidates.
-            from_dataset: External dataset(s) for ``"exists"`` and
-                ``"exists_after"``/``"exists_before"`` criteria.
-            on: Join key columns for ``"exists"`` criteria.
-            source_filter: Filter applied to *from_dataset* before key
-                extraction or join.
-            condition: Boolean expression identifying landmark rows for
-                ``"before"``/``"after"`` or the current-row condition for
-                ``"exists_after"``/``"exists_before"``.
-            inclusive: Whether the landmark row itself is included in the
-                flag (for ``"before"``/``"after"``). Default ``True``.
-            flag_no_ref_groups: If ``False``, groups without a landmark
-                condition match get ``None`` instead of being flagged
-                (for ``"before"``/``"after"``). Default ``True``.
-            flag_all: If ``True``, all tied extreme values receive the
-                flag (for ``"first"``/``"last"``). Default ``False``.
-            flag_value: Value to assign when condition is met (default
-                ``"Y"``).
-            false_value: Value to assign when condition is not met.
-                Default ``None`` (null).
-
-        Returns:
-            Self: The namespace with *target* appended; call
-                ``.to_frame()`` to materialise.
-
-        Examples:
-            First observation per group::
-
-                advs = (
-                    vs_raw.adam
-                    .flag("ABLFL", criteria="first", order_by="AVISITN",
-                          groups=["USUBJID", "PARAMCD"])
-                    .to_frame()
-                )
-
-            Existence flag from external dataset::
-
-                adsl = (
-                    dm.adam.adsl
-                    .flag("VSEVALFL", criteria="exists",
-                          from_dataset=advs, on=["USUBJID"],
-                          source_filter=pl.col("AVISIT") == "BASELINE")
-                    .to_frame()
-                )
-
-            Relative flag — before first PD::
-
-                result = (
-                    response.adam
-                    .flag("ANL02FL", criteria="before",
-                          condition=pl.col("AVALC") == "PD",
-                          order_by="AVISITN", groups=["USUBJID"],
-                          inclusive=True)
-                    .to_frame()
-                )
-
-            Population flag on SDTM::
-
-                dm = (
-                    raw_df.sdtm
-                    .flag("SAFFL", criteria=pl.col("EXDOSE") > 0,
-                          groups=["USUBJID"])
-                    .to_frame()
-                )
-        """
-        from fleet.sdtm.utils import parse_expression
-
-        grps = groups or ["USUBJID"]
-        order_cols: list[str] | None = None
-        if order_by is not None:
-            order_cols = [order_by] if isinstance(order_by, str) else list(order_by)
-
-        where_expr: pl.Expr | None = None
-        if where is not None:
-            where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
-
-        false_lit = pl.lit(false_value) if false_value is not None else pl.lit(None)
-
-        criteria_lower = criteria.lower() if isinstance(criteria, str) else None
-
-        if criteria_lower in ("first", "last"):
-            return self._flag_ranked(
-                target,
-                criteria_lower=criteria_lower,
-                grps=grps,
-                order_cols=order_cols,
-                where_expr=where_expr,
-                flag_all=flag_all,
-                flag_value=flag_value,
-                false_value=false_value,
-                false_lit=false_lit,
-            )
-        elif criteria_lower in ("max", "min"):
-            return self._flag_extreme(
-                target,
-                criteria_lower=criteria_lower,
-                grps=grps,
-                value_col=value_col,
-                where_expr=where_expr,
-                flag_value=flag_value,
-                false_lit=false_lit,
-            )
-        elif criteria_lower == "exists":
-            return self._flag_exists(
-                target,
-                grps=grps,
-                from_dataset=from_dataset,
-                on=on,
-                source_filter=source_filter,
-                flag_value=flag_value,
-                false_value=false_value,
-                false_lit=false_lit,
-            )
-        elif criteria_lower in ("before", "after"):
-            return self._flag_relative(
-                target,
-                criteria_lower=criteria_lower,
-                grps=grps,
-                order_cols=order_cols,
-                condition=condition,
-                inclusive=inclusive,
-                flag_no_ref_groups=flag_no_ref_groups,
-                flag_value=flag_value,
-                false_value=false_value,
-            )
-        elif criteria_lower in ("exists_after", "exists_before"):
-            return self._flag_temporal_exists(
-                target,
-                criteria_lower=criteria_lower,
-                from_dataset=from_dataset,
-                on=on,
-                order_cols=order_cols,
-                condition=condition,
-                source_filter=source_filter,
-                flag_value=flag_value,
-            )
-        else:
-            return self._flag_expression(
-                target,
-                criteria=criteria,
-                where_expr=where_expr,
-                flag_value=flag_value,
-                false_lit=false_lit,
-            )
-
-    def _flag_ranked(
-        self,
-        target,
-        *,
-        criteria_lower,
-        grps,
-        order_cols,
-        where_expr,
-        flag_all,
-        flag_value,
-        false_value,
-        false_lit,
-    ) -> Self:
-        """Handle first/last rank-based flag criteria."""
-        if not order_cols:
-            raise ValueError(f"flag criteria='{criteria_lower}' requires order_by.")
-        descending = criteria_lower == "last"
-
-        df = self._lazy.collect()
-        df = df.with_row_index("__flag_orig_idx__")
-        null_mask = pl.all_horizontal([pl.col(c).is_not_null() for c in order_cols])
-
-        if flag_all:
-            if len(order_cols) == 1:
-                val_expr = pl.col(order_cols[0])
-            else:
-                val_expr = pl.struct(order_cols)
-            extreme = val_expr.max().over(grps) if descending else val_expr.min().over(grps)
-            row_cond = null_mask & (val_expr == extreme)
-            if where_expr is not None:
-                row_cond = where_expr & row_cond
-            expr = pl.when(row_cond).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
-            result_df = df.with_columns(expr).sort("__flag_orig_idx__").drop("__flag_orig_idx__")
-            return self._materialise_then(result_df)
-
-        sort_descending = [descending] * len(order_cols)
-        null_last = [True] * len(order_cols)
-
-        eligible = df.filter(null_mask)
-        if where_expr is not None:
-            eligible = eligible.filter(where_expr)
-
-        eligible_sorted = eligible.sort(
-            order_cols, descending=sort_descending, nulls_last=null_last
-        )
-        first_per_group = eligible_sorted.group_by(grps, maintain_order=True).first()
-        flagged_indices = set(first_per_group["__flag_orig_idx__"].to_list())
-
-        flags = [
-            flag_value if idx in flagged_indices else (false_value if false_value else None)
-            for idx in df["__flag_orig_idx__"].to_list()
-        ]
-        result_df = (
-            df.with_columns(pl.Series(target, flags))
-            .sort("__flag_orig_idx__")
-            .drop("__flag_orig_idx__")
-        )
-        return self._materialise_then(result_df)
-
-    def _flag_extreme(
-        self,
-        target,
-        *,
-        criteria_lower,
-        grps,
-        value_col,
-        where_expr,
-        flag_value,
-        false_lit,
-    ) -> Self:
-        """Handle max/min value-based extreme flag criteria."""
-        if not value_col:
-            raise ValueError(f"flag criteria='{criteria_lower}' requires value_col.")
-        if where_expr is not None:
-            masked_val = pl.when(where_expr).then(pl.col(value_col)).otherwise(pl.lit(None))
-            agg_val = (
-                masked_val.max().over(grps)
-                if criteria_lower == "max"
-                else masked_val.min().over(grps)
-            )
-            row_cond = where_expr & (pl.col(value_col) == agg_val)
-        else:
-            agg_val = (
-                pl.col(value_col).max().over(grps)
-                if criteria_lower == "max"
-                else pl.col(value_col).min().over(grps)
-            )
-            row_cond = pl.col(value_col) == agg_val
-        expr = pl.when(row_cond).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
-        return self._chain(expr)
-
-    def _flag_exists(
-        self,
-        target,
-        *,
-        grps,
-        from_dataset,
-        on,
-        source_filter,
-        flag_value,
-        false_value,
-        false_lit,
-    ) -> Self:
-        """Handle exists set-membership flag criteria."""
-        if from_dataset is None or on is None:
-            raise ValueError("flag criteria='exists' requires from_dataset and on.")
-        datasets = from_dataset if isinstance(from_dataset, list) else [from_dataset]
-        key_frames: list[pl.DataFrame] = []
-        for ds in datasets:
-            filtered = ds
-            if source_filter is not None:
-                filtered = ds.filter(source_filter)
-            key_frames.append(filtered.select(on).unique())
-        all_keys = pl.concat(key_frames).unique()
-
-        df = self._lazy.collect()
-
-        if len(on) == 1:
-            is_member = pl.col(on[0]).is_in(all_keys[on[0]].to_list())
-            expr = pl.when(is_member).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
-            return self._chain(expr)
-
-        # Multi-column join path
-        df_with_idx = df.with_row_index("__flag_idx__")
-        result = (
-            (df_with_idx.drop(target) if target in df_with_idx.columns else df_with_idx)
-            .join(
-                df_with_idx.select(on + ["__flag_idx__"])
-                .unique()
-                .join(all_keys, on=on, how="semi")
-                .with_columns(pl.lit(flag_value).alias(target)),
-                on="__flag_idx__",
-                how="left",
-            )
-            .with_columns(
-                pl.col(target).fill_null(pl.lit(false_value) if false_value else pl.lit(None))
-            )
-            .drop("__flag_idx__")
-        )
-        return self._materialise_then(result)
-
-    def _flag_relative(
-        self,
-        target,
-        *,
-        criteria_lower,
-        grps,
-        order_cols,
-        condition,
-        inclusive,
-        flag_no_ref_groups,
-        flag_value,
-        false_value,
-    ) -> Self:
-        """Handle before/after relative-to-landmark flag criteria."""
-        if condition is None:
-            raise ValueError(f"flag criteria='{criteria_lower}' requires condition.")
-        if not order_cols:
-            raise ValueError(f"flag criteria='{criteria_lower}' requires order_by.")
-
-        df = self._lazy.collect()
-        df = df.with_row_index("__orig_idx__")
-        df_sorted = df.sort(order_cols)
-
-        cond_col = "__flag_cond__"
-        df_sorted = df_sorted.with_columns(condition.cast(pl.Boolean).alias(cond_col))
-
-        result_parts: list[pl.DataFrame] = []
-        for _, grp_df in df_sorted.group_by(grps, maintain_order=True):
-            cond_mask = grp_df[cond_col].to_list()
-            first_cond_idx: int | None = None
-            for i, v in enumerate(cond_mask):
-                if v is True:
-                    first_cond_idx = i
-                    break
-
-            n = len(grp_df)
-            if first_cond_idx is None:
-                if flag_no_ref_groups:
-                    if criteria_lower == "before":
-                        flags = [flag_value] * n
-                    else:
-                        flags = [false_value] * n
-                else:
-                    flags = [false_value if false_value else None] * n
-            else:
-                flags = []
-                for i in range(n):
-                    if criteria_lower == "before":
-                        flagged = i <= first_cond_idx if inclusive else i < first_cond_idx
-                    else:
-                        flagged = i >= first_cond_idx if inclusive else i > first_cond_idx
-                    flags.append(flag_value if flagged else (false_value if false_value else None))
-            result_parts.append(grp_df.with_columns(pl.Series(target, flags)))
-
-        result_df = pl.concat(result_parts)
-        result_df = result_df.sort("__orig_idx__").drop(["__orig_idx__", cond_col])
-        return self._materialise_then(result_df)
-
-    def _flag_temporal_exists(
-        self,
-        target,
-        *,
-        criteria_lower,
-        from_dataset,
-        on,
-        order_cols,
-        condition,
-        source_filter,
-        flag_value,
-    ) -> Self:
-        """Handle exists_after/exists_before temporal join flag criteria."""
-        if from_dataset is None or condition is None:
-            raise ValueError(
-                f"flag criteria='{criteria_lower}' requires from_dataset and condition."
-            )
-        if on is None:
-            raise ValueError(f"flag criteria='{criteria_lower}' requires on.")
-
-        df = self._lazy.collect()
-        src = from_dataset if isinstance(from_dataset, pl.DataFrame) else pl.concat(from_dataset)
-        if source_filter is not None:
-            src = src.filter(source_filter)
-
-        if order_cols:
-            time_col = order_cols[0]
-        else:
-            common_time = [
-                c for c in ["AVISITN", "ADY", "ADT", "ADTM"] if c in df.columns and c in src.columns
-            ]
-            if not common_time:
-                raise ValueError(
-                    f"flag criteria='{criteria_lower}' requires order_by or a "
-                    "common temporal column (AVISITN, ADY, ADT, ADTM)."
-                )
-            time_col = common_time[0]
-
-        df = df.with_row_index("__flag_idx__")
-        cond_df = df.filter(condition)
-
-        flags = [None] * len(df)
-        for row in cond_df.iter_rows(named=True):
-            src_filtered = src
-            for key in on:
-                src_filtered = src_filtered.filter(pl.col(key) == row[key])
-            if len(src_filtered) == 0:
-                continue
-            row_time = row[time_col]
-            if criteria_lower == "exists_after":
-                matches = src_filtered.filter(pl.col(time_col) > row_time)
-            else:
-                matches = src_filtered.filter(pl.col(time_col) < row_time)
-            if len(matches) > 0:
-                flags[row["__flag_idx__"]] = flag_value
-
-        result_df = df.drop("__flag_idx__").with_columns(pl.Series(target, flags))
-        return self._materialise_then(result_df)
-
-    def _flag_expression(
-        self,
-        target,
-        *,
-        criteria,
-        where_expr,
-        flag_value,
-        false_lit,
-    ) -> Self:
-        """Handle direct expression-based flag criteria."""
-        from fleet.sdtm.utils import parse_expression
-
-        if isinstance(criteria, pl.Expr):
-            row_cond = criteria
-        else:
-            row_cond = parse_expression(str(criteria))
-        final_cond = (where_expr & row_cond) if where_expr is not None else row_cond
-        expr = pl.when(final_cond).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
-        return self._chain(expr)
-
-    # ------------------------------------------------------------------ #
-    # Criterion — CRITy / CRITyFL / CRITyFN triple-output                 #
-    # ------------------------------------------------------------------ #
-
-    def criterion(
-        self,
-        number: int,
-        *,
-        condition: pl.Expr,
-        description: str | None = None,
-        prefix: str = "CRIT",
-    ) -> Self:
-        """Derive criterion flag triple: CRITy, CRITyFL, CRITyFN.
-
-        Produces three columns following CDISC ADaM conventions:
-
-        - ``{prefix}{number}`` — the criterion description (constant string).
-        - ``{prefix}{number}FL`` — ``"Y"`` if condition is met, ``"N"`` otherwise.
-        - ``{prefix}{number}FN`` — ``1`` if met, ``0`` otherwise.
-
-        Args:
-            number: Criterion number (e.g. 1 → CRIT1, CRIT1FL, CRIT1FN).
-            condition: Boolean Polars expression defining the criterion.
-            description: Human-readable description stored in CRITy column.
-                If ``None``, the column is still created with null values.
-            prefix: Column name prefix (default ``"CRIT"``).
-
-        Returns:
-            Self: The namespace with three new columns appended; call
-                ``.to_frame()`` to materialise.
-
-        Examples:
-            Flag records where AVAL >= 10::
-
-                adlb = (
-                    lb_df.adam
-                    .criterion(1, condition=pl.col("AVAL") >= 10,
-                               description="AVAL >= 10")
-                    .to_frame()
-                )
-        """
-        col_crit = f"{prefix}{number}"
-        col_fl = f"{prefix}{number}FL"
-        col_fn = f"{prefix}{number}FN"
-
-        desc_expr = (
-            pl.lit(description).alias(col_crit)
-            if description is not None
-            else pl.lit(None).cast(pl.String).alias(col_crit)
-        )
-        fl_expr = pl.when(condition).then(pl.lit("Y")).otherwise(pl.lit("N")).alias(col_fl)
-        fn_expr = pl.when(condition).then(pl.lit(1)).otherwise(pl.lit(0)).alias(col_fn)
-
-        return self._chain(desc_expr, fl_expr, fn_expr)
 
 
 class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
@@ -653,11 +125,12 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
     # Lifecycle                                                            #
     # ------------------------------------------------------------------ #
 
-    def __init__(self, df: pl.DataFrame) -> None:
+    def __init__(self, df: pl.DataFrame | pl.LazyFrame) -> None:
         self._lazy = df.lazy()
         self._domain: str | None = None
         self._pinned: dict[str, tuple[pl.DataFrame, list[str]]] = {}
         self._pin_lineage: list = []
+        self._pending_fk_checks: list[tuple[str, str, str, str]] = []
 
     def __call__(self, domain: str) -> Self:
         """Return a copy of this namespace with *domain* set for CDISC lineage.
@@ -740,91 +213,64 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             )
         return new
 
-    def study_day(
-        self,
-        target: str,
-        *,
-        date_col: str,
-        ref_col: str = "TRTSDT",
-        ref_pin: str = "ADSL",
-        adsl: pl.DataFrame | None = None,
-    ) -> Self:
-        """Derive a CDISC study day variable for ADaM datasets.
-
-        Uses the CDISC algorithm: ``date - ref_date + 1`` when
-        ``date >= ref_date``, else ``date - ref_date`` (no day 0).
-
-        The reference date is resolved in this order:
-
-        1. Explicit ``adsl=`` parameter (highest priority).
-        2. Pinned domain (via ``.pin("ADSL", adsl_df)``).
-        3. ``ref_col`` already present in the current frame.
-        4. Actionable ``LookupError``.
-
-        Args:
-            target: Name of the output study day variable
-                (e.g. ``"ASTDY"``).
-            date_col: Column containing the analysis date
-                (e.g. ``"ASTDT"``).
-            ref_col: Reference date column in the pinned domain
-                (default ``"TRTSDT"``).
-            ref_pin: Pinned domain name (default ``"ADSL"``).
-            adsl: Optional explicit DataFrame override.
-
-        Returns:
-            Self: The namespace with *target* appended; call
-                ``.to_frame()`` to materialise.
-
-        Examples:
-            Derive AE analysis study day from pinned ADSL::
-
-                adae = (
-                    ae_df.adam.occds("ADAE")
-                    .pin("ADSL", adsl_df)
-                    .source("USUBJID")
-                    .join_adsl("TRTSDT")
-                    .derivation("ASTDT", expression="pl.col('AESTDTC').str.to_date(format='%Y-%m-%d', strict=False)")
-                    .study_day("ASTDY", date_col="ASTDT")
-                    .to_frame()
-                )
-        """
-        return super().study_day(
-            target, date_col=date_col, ref_col=ref_col, ref_pin=ref_pin, ref_df=adsl
-        )
+    # study_day is inherited from SharedVerbsMixin (one shared
+    # implementation; `adsl=` / `dm=` are documented ref_df aliases).
 
     # ------------------------------------------------------------------ #
     # Shared verbs                                                         #
     # ------------------------------------------------------------------ #
 
-    def source(self, target: str, *, from_col: str | None = None) -> Self:
-        """Copy a source column into the ADaM dataset.
+    def source(self, *targets: str, from_col: str | None = None) -> Self:
+        """Carry one or more source columns into the ADaM dataset.
 
-        When *from_col* is ``None``, the column named *target* is carried
-        through as-is (identity copy).
+        With a single name and ``from_col=``, copies *from_col* to the
+        target (legacy 1:1 form — prefer ``assign(target, source=...)``).
+        With multiple names, each column is carried through as-is::
+
+            .source("STUDYID", "USUBJID", "AETERM")
 
         Args:
-            target: Name of the output ADaM variable.
-            from_col: Name of the input column to copy from.  Defaults to
-                *target* when omitted.
+            *targets: Output ADaM variable name(s).  Without *from_col*
+                each is an identity copy of the same-named input column.
+            from_col: Name of the input column to copy from (single
+                target only).  Defaults to the target name.
 
         Returns:
-            Self: The namespace with *target* appended; call ``.to_frame()``
-                to materialise.
+            Self: The namespace with the target(s) appended; call
+                ``.to_frame()`` to materialise.
+
+        Raises:
+            DerivationError: When no target is given, or *from_col* is
+                combined with more than one target.
 
         Examples:
-            Copy ``AEDECOD`` from the source data::
+            Carry the key variables through in one call::
 
                 adae = (
                     ae_df.adam
-                    .source("AEDECOD", from_col="AEDECOD")
+                    .source("STUDYID", "USUBJID", "AEDECOD")
                     .to_frame()
                 )
         """
-        src = from_col if from_col is not None else target
-        return self._chain(pl.col(src).alias(target))
+        if not targets:
+            raise DerivationError("source() requires at least one column name.")
+        if from_col is not None:
+            if len(targets) > 1:
+                raise DerivationError(
+                    "source(): from_col= applies to a single target — got "
+                    f"{len(targets)} targets. Use assign(target, source=...) "
+                    "for renames, or list the columns without from_col."
+                )
+            return self._chain(pl.col(from_col).alias(targets[0]), verb="source")
+        exprs = [pl.col(t).alias(t) for t in targets]
+        return self._chain(*exprs, verb="source")
 
+    @deprecated_verb("assigned", use="assign(target, value=...)")
     def assigned(self, target: str, *, value: Any) -> Self:
         """Set *target* to a constant *value* for every record.
+
+        Deprecated alias of
+        :meth:`~fleet.core._verb_mixin.SharedVerbsMixin.assign`.
 
         Args:
             target: Name of the output ADaM variable.
@@ -839,11 +285,11 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
                 advs = (
                     vs_df.adam
-                    .assigned("PARAMCD", value="SYSBP")
+                    .assign("PARAMCD", value="SYSBP")
                     .to_frame()
                 )
         """
-        return self._chain(pl.lit(value).alias(target))
+        return self._assign_impl(target, value=value, verb="assigned", fk=False)
 
     def recode(
         self,
@@ -887,10 +333,14 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         else:
             default_expr = default if isinstance(default, pl.Expr) else pl.lit(default)
             expr = default_expr.alias(target)
-        return self._chain(expr)
+        return self._chain(expr, verb="recode")
 
+    @deprecated_verb("rename", use="assign(target, source=...)")
     def rename(self, target: str, *, source: str) -> Self:
         """Create *target* as a copy of *source* (variable renaming).
+
+        Deprecated alias of
+        :meth:`~fleet.core._verb_mixin.SharedVerbsMixin.assign`.
 
         Args:
             target: Name of the output ADaM variable.
@@ -905,12 +355,13 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
                 advs = (
                     vs_df.adam
-                    .rename("PARAM", source="VSTEST")
+                    .assign("PARAM", source="VSTEST")
                     .to_frame()
                 )
         """
-        return self._chain(pl.col(source).alias(target))
+        return self._assign_impl(target, source=source, verb="rename", fk=False)
 
+    @deprecated_verb("condderivation", use="case_when(target, when=[...], else_=...)")
     def condderivation(
         self,
         target: str,
@@ -920,7 +371,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
     ) -> Self:
         """Multi-branch conditional derivation (when/then/otherwise chain).
 
-        Branches are evaluated in order; the first matching condition wins.
+        Deprecated alias of
+        :meth:`~fleet.core._verb_mixin.SharedVerbsMixin.case_when` — pass
+        ``when=`` / ``else_=`` instead of ``conditions=`` / ``else_value=``.
 
         Args:
             target: Name of the output ADaM variable.
@@ -936,32 +389,16 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
                 advs = (
                     vs_df.adam
-                    .condderivation("DTYPE", conditions=[
+                    .case_when("DTYPE", when=[
                         {"condition": 'pl.col("LOCF_FLAG") == "Y"', "value": "LOCF"},
                         {"condition": 'pl.col("WOCF_FLAG") == "Y"', "value": "WOCF"},
-                    ], else_value=None)
+                    ], else_=None)
                     .to_frame()
                 )
         """
-        from fleet.sdtm.utils import parse_expression
-
-        if not conditions:
-            return self._chain(pl.lit(else_value).alias(target))
-        first = conditions[0]
-        c0 = (
-            first["condition"]
-            if isinstance(first["condition"], pl.Expr)
-            else parse_expression(str(first["condition"]))
+        return self._case_when_impl(
+            target, when=conditions, else_=else_value, verb="condderivation"
         )
-        chain = pl.when(c0).then(pl.lit(first["value"]))
-        for branch in conditions[1:]:
-            c = (
-                branch["condition"]
-                if isinstance(branch["condition"], pl.Expr)
-                else parse_expression(str(branch["condition"]))
-            )
-            chain = chain.when(c).then(pl.lit(branch["value"]))
-        return self._chain(chain.otherwise(pl.lit(else_value)).alias(target))
 
     # ------------------------------------------------------------------ #
     # pick — priority-ordered event selection across sources               #
@@ -1018,7 +455,10 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                 ``.to_frame()`` to materialise.
 
         Raises:
-            ValueError: If *events* is empty or a required key is missing.
+            DerivationError: If *events* is empty, a required key is
+                missing, or an event contains an unknown key (with a
+                did-you-mean suggestion).  Also catchable as
+                ``ValueError``.
 
         Examples:
             Derive last date known alive from death, AE, and treatment::
@@ -1068,7 +508,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         from fleet.sdtm.utils import parse_expression
 
         if not events:
-            raise ValueError("pick() requires at least one event.")
+            raise DerivationError("pick() requires at least one event.")
 
         target_list = [targets] if isinstance(targets, str) else list(targets)
         by_vars = by or ["USUBJID"]
@@ -1081,9 +521,20 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         # Collect one candidate row per event per group.
         candidate_frames: list[pl.DataFrame] = []
 
+        valid_event_keys = {"when", "set", "source", "mode", "order", "label"}
         for event_nr, event in enumerate(events):
+            unknown = sorted(set(event) - valid_event_keys)
+            if unknown:
+                hints = []
+                for key in unknown:
+                    close = difflib.get_close_matches(str(key), sorted(valid_event_keys), n=1)
+                    hints.append(f"'{key}'" + (f" (did you mean '{close[0]}'?)" if close else ""))
+                raise DerivationError(
+                    f"pick() event #{event_nr} contains unknown key(s): {', '.join(hints)}. "
+                    f"Valid keys: {sorted(valid_event_keys)}."
+                )
             if "when" not in event or "set" not in event:
-                raise ValueError(
+                raise DerivationError(
                     f"Event #{event_nr} must contain 'when' and 'set' keys. "
                     f"Got keys: {list(event.keys())}"
                 )
@@ -1208,24 +659,26 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         filter_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
         return self._materialise_then(df.filter(filter_expr))
 
+    @deprecated_kwargs(keep_cols="keep")
     def merge_adsl(
         self,
         adsl: pl.DataFrame,
         *,
         by: list[str] | None = None,
-        keep_cols: list[str] | None = None,
+        keep: list[str] | None = None,
     ) -> Self:
         """Left-join ADSL columns onto the current dataset.
 
         Materialises the pipeline, left-joins *adsl* (optionally restricted to
-        *keep_cols* plus the *by* key columns), and returns a fresh namespace.
+        *keep* plus the *by* key columns), and returns a fresh namespace.
 
         Args:
             adsl: The ADSL ``pl.DataFrame`` to merge in.
             by: Key column(s) for the join (default ``["USUBJID"]``).
-            keep_cols: Subset of ADSL columns to bring in (excluding *by*
+            keep: Subset of ADSL columns to bring in (excluding *by*
                 keys, which are always included).  When ``None``, all ADSL
-                columns are merged.
+                columns are merged.  The legacy ``keep_cols=`` spelling is
+                accepted with a ``FutureWarning``.
 
         Returns:
             Self: A fresh namespace wrapping the joined frame.
@@ -1235,17 +688,179 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
                 advs = (
                     vs_df.adam
-                    .merge_adsl(adsl_df, keep_cols=["TRTSDT", "TRTEDT", "TRT01P"])
+                    .merge_adsl(adsl_df, keep=["TRTSDT", "TRTEDT", "TRT01P"])
                     .to_frame()
                 )
         """
         join_keys = by if by is not None else ["USUBJID"]
-        if keep_cols is not None:
-            extra = [c for c in join_keys if c not in keep_cols]
-            adsl = adsl.select(keep_cols + extra)
+        if keep is not None:
+            extra = [c for c in join_keys if c not in keep]
+            adsl = adsl.select(keep + extra)
         df = self.to_frame()
         joined = df.join(adsl, on=join_keys, how="left")
         return self._materialise_then(joined)
+
+    # ------------------------------------------------------------------ #
+    # Subject-level event aggregations (first_date / last_date / count)    #
+    # ------------------------------------------------------------------ #
+
+    @deprecated_kwargs(groups="by")
+    def first_date(
+        self,
+        target: str,
+        *,
+        from_dataset: pl.DataFrame,
+        date_col: str,
+        where: str | pl.Expr | None = None,
+        by: list[str] | None = None,
+    ) -> Self:
+        """Derive *target* as the earliest date in *date_col* from *from_dataset*.
+
+        Materialises the current pipeline, aggregates *from_dataset* to
+        subject level, then left-joins.  Useful for ASTDTM, TRTSDT, etc.
+
+        Args:
+            target: Name of the output date column.
+            from_dataset: Source ``pl.DataFrame`` to aggregate.
+            date_col: Date column to take the minimum of.
+            where: Optional filter applied to *from_dataset* before aggregation.
+            by: Join key columns (default ``["USUBJID"]``).  The legacy
+                ``groups=`` spelling is accepted with a ``FutureWarning``.
+
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Derive earliest serious AE start date::
+
+                adsl = (
+                    dm_raw.adam.adsl
+                    .first_date("AESTDTM", from_dataset=ae_sdtm,
+                                date_col="AESTDTC",
+                                where='pl.col("AESER") == "Y"')
+                    .to_frame()
+                )
+        """
+        return self._date_agg(
+            target,
+            from_dataset=from_dataset,
+            date_col=date_col,
+            where=where,
+            by=by,
+            agg_fn="min",
+        )
+
+    @deprecated_kwargs(groups="by")
+    def last_date(
+        self,
+        target: str,
+        *,
+        from_dataset: pl.DataFrame,
+        date_col: str,
+        where: str | pl.Expr | None = None,
+        by: list[str] | None = None,
+    ) -> Self:
+        """Derive *target* as the latest date in *date_col* from *from_dataset*.
+
+        Useful for AENDTM, TRTEDT, DTHDT, etc.
+
+        Args:
+            target: Name of the output date column.
+            from_dataset: Source ``pl.DataFrame`` to aggregate.
+            date_col: Date column to take the maximum of.
+            where: Optional filter applied to *from_dataset* before aggregation.
+            by: Join key columns (default ``["USUBJID"]``).  The legacy
+                ``groups=`` spelling is accepted with a ``FutureWarning``.
+
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Derive latest treatment end date::
+
+                adsl = (
+                    dm_raw.adam.adsl
+                    .last_date("TRTEDT", from_dataset=ex_sdtm,
+                               date_col="EXENDTC")
+                    .to_frame()
+                )
+        """
+        return self._date_agg(
+            target,
+            from_dataset=from_dataset,
+            date_col=date_col,
+            where=where,
+            by=by,
+            agg_fn="max",
+        )
+
+    def _date_agg(
+        self,
+        target: str,
+        *,
+        from_dataset: pl.DataFrame,
+        date_col: str,
+        where: str | pl.Expr | None,
+        by: list[str] | None,
+        agg_fn: str,
+    ) -> Self:
+        """Shared implementation for first_date/last_date."""
+        from fleet.sdtm.utils import parse_expression
+
+        grps = by or ["USUBJID"]
+        src = from_dataset
+        if where is not None:
+            where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
+            src = src.filter(where_expr)
+        col = pl.col(date_col)
+        agg_expr = (col.min() if agg_fn == "min" else col.max()).alias(target)
+        agg_df = src.group_by(grps).agg(agg_expr)
+        df = self.to_frame().join(agg_df, on=grps, how="left")
+        return self._materialise_then(df)
+
+    @deprecated_kwargs(groups="by")
+    def count_events(
+        self,
+        target: str,
+        *,
+        from_dataset: pl.DataFrame,
+        where: str | pl.Expr | None = None,
+        by: list[str] | None = None,
+    ) -> Self:
+        """Derive *target* as the count of matching records in *from_dataset*.
+
+        Returns 0 for subjects with no matching records (never null).
+
+        Args:
+            target: Name of the output count column.
+            from_dataset: Source ``pl.DataFrame`` to count.
+            where: Optional filter applied before counting.
+            by: Join key columns (default ``["USUBJID"]``).  The legacy
+                ``groups=`` spelling is accepted with a ``FutureWarning``.
+
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Count total AE records per subject::
+
+                adsl = (
+                    dm_raw.adam.adsl
+                    .count_events("NUMAE", from_dataset=ae_sdtm)
+                    .to_frame()
+                )
+        """
+        from fleet.sdtm.utils import parse_expression
+
+        grps = by or ["USUBJID"]
+        src = from_dataset
+        if where is not None:
+            where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
+            src = src.filter(where_expr)
+        agg_df = src.group_by(grps).agg(pl.len().alias(target))
+        df = self.to_frame().join(agg_df, on=grps, how="left")
+        df = df.with_columns(pl.col(target).fill_null(0))
+        return self._materialise_then(df)
 
     # ------------------------------------------------------------------ #
     # Date derivation verbs                                                #
@@ -1340,22 +955,22 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         # ── validate source / value mutual exclusivity ──
         if source is not None and value is not None:
-            raise ValueError("Cannot specify both source= and value=. Choose one.")
+            raise DerivationError("Cannot specify both source= and value=. Choose one.")
         if source is None and value is None:
-            raise ValueError("Must specify either source= or value=.")
+            raise DerivationError("Must specify either source= or value=.")
 
         output_type = _resolve_output_type(target, output)
 
         # DTC targets belong in SDTM, not ADaM
         if output_type == "dtc":
-            raise ValueError(
+            raise DerivationError(
                 f"DTC output type is not supported on ADaM namespaces. "
                 f"Use the SDTM .date() verb for target '{target}'."
             )
 
         # time= only valid for DTM
         if time is not None and output_type != "dtm":
-            raise ValueError(
+            raise DerivationError(
                 f"time= parameter is only valid for DTM targets, "
                 f"but target '{target}' resolves to output='{output_type}'."
             )
@@ -1376,7 +991,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                 output_type=output_type,
                 flag=flag,
             )
-            return self._chain(*exprs)
+            return self._chain(*exprs, verb="date")
 
         # source= path
         assert source is not None
@@ -1392,7 +1007,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                 max_date=max_date,
                 flag=flag,
             )
-            return self._chain(*exprs)
+            return self._chain(*exprs, verb="date")
 
         # output_type == "dtm"
         # DTM with partial dates requires materialisation (same as derive_dtm)

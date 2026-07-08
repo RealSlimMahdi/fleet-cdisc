@@ -19,8 +19,13 @@ class CTValidator:
     """Validator for CDISC Controlled Terminology.
 
     Provides caching, lazy loading, and validation of SDTM/ADaM values
-    against CDISC controlled terminology codelists. Supports both NCI
-    codelist codes (e.g., C66731) and human-readable aliases (e.g., SEX).
+    against CDISC controlled terminology codelists.  Aliases are
+    resolved **at load time**: registering ``{"SEX": "C66731"}`` rekeys
+    a cache entry loaded under ``SEX`` to its NCI concept ID, so every
+    lookup path (assign-family verbs, ``DatasetChecker``, direct API)
+    reaches the same codelist by OID (``C66731``) or registered name
+    (``SEX``) interchangeably — see :meth:`_resolve` for the resolution
+    order.
 
     Usage:
         >>> from fleet import get_validator
@@ -65,6 +70,8 @@ class CTValidator:
                 self._initialized = True
                 if aliases:
                     self._codelist_aliases.update(aliases)
+                for alias, canonical in self._codelist_aliases.items():
+                    self._normalise_alias(alias, canonical)
                 logger.info("Loaded %d codelists from %s", len(self._ct_cache), ct_path)
             except CTError:
                 raise
@@ -91,6 +98,7 @@ class CTValidator:
                 self._ct_cache.update(data)
                 if alias:
                     self._codelist_aliases[alias] = codelist_name
+                    self._normalise_alias(alias, codelist_name)
                 logger.info("Lazy-loaded codelist: %s", codelist_name)
             except CTError as e:
                 logger.warning(
@@ -102,11 +110,55 @@ class CTValidator:
     def register_alias(self, alias: str, codelist_name: str) -> None:
         """Register a human-readable alias for a codelist code.
 
+        Resolves immediately: when the cache was loaded keyed by the
+        alias (e.g. a CT file using ``SEX:`` as the top-level key), the
+        entry is rekeyed to the canonical concept ID so both spellings
+        hit the same codelist.
+
         Args:
             alias: Human-readable name, e.g., "SEX".
             codelist_name: NCI codelist code, e.g., "C66731".
         """
-        self._codelist_aliases[alias] = codelist_name
+        with self._lock:
+            self._codelist_aliases[alias] = codelist_name
+            self._normalise_alias(alias, codelist_name)
+
+    def _normalise_alias(self, alias: str, canonical: str) -> None:
+        """Rekey a cache entry stored under *alias* to *canonical*.
+
+        Callers must hold ``self._lock``.  No-op when the canonical key
+        already exists (the alias mapping alone then suffices).
+        """
+        if alias in self._ct_cache and canonical not in self._ct_cache:
+            self._ct_cache[canonical] = self._ct_cache.pop(alias)
+
+    def _resolve(self, codelist_name: str) -> str:
+        """Resolve a codelist reference to its cache key.
+
+        Resolution order (documented contract for both the verb path
+        and the define/checker path):
+
+        1. **Exact cache key** — the name as stored by the loaded CT
+           file (post load-time normalisation this is the concept ID
+           whenever an alias declared one).
+        2. **Registered alias** — ``SEX`` → ``C66731`` via
+           :meth:`register_alias` / the ``aliases=`` load parameter.
+        3. **Reverse alias** — the name is the canonical target of a
+           registered alias whose cache entry was never rekeyed
+           (defensive; load-time normalisation makes this rare).
+
+        Unresolvable names are returned unchanged so callers report the
+        original spelling.
+        """
+        if codelist_name in self._ct_cache:
+            return codelist_name
+        canonical = self._codelist_aliases.get(codelist_name)
+        if canonical is not None and canonical in self._ct_cache:
+            return canonical
+        for alias, target in self._codelist_aliases.items():
+            if target == codelist_name and alias in self._ct_cache:
+                return alias
+        return codelist_name
 
     def validate_value(
         self,
@@ -129,7 +181,7 @@ class CTValidator:
                 return (True, f"Null value allowed for codelist '{codelist_name}'")
             return (False, f"Null value not allowed for codelist '{codelist_name}'")
 
-        actual_cl = self._codelist_aliases.get(codelist_name, codelist_name)
+        actual_cl = self._resolve(codelist_name)
 
         if actual_cl not in self._ct_cache:
             logger.warning(
@@ -149,6 +201,18 @@ class CTValidator:
             f"Value '{value}' not in codelist '{actual_cl}'. Valid values: {valid_str}",
         )
 
+    def has_codelist(self, codelist_name: str) -> bool:
+        """Return True when a codelist (or alias) is loaded in the cache.
+
+        Args:
+            codelist_name: Codelist name, alias, or NCI concept ID.
+
+        Returns:
+            True if the codelist is available for validation.
+        """
+        actual_cl = self._resolve(codelist_name)
+        return actual_cl in self._ct_cache
+
     def get_valid_values(self, codelist_name: str) -> list[str]:
         """Return all valid codes for a codelist.
 
@@ -158,7 +222,7 @@ class CTValidator:
         Returns:
             Sorted list of valid code strings, empty if codelist not loaded.
         """
-        actual_cl = self._codelist_aliases.get(codelist_name, codelist_name)
+        actual_cl = self._resolve(codelist_name)
         codelist = self._ct_cache.get(actual_cl, {})
         return sorted(codelist.keys())
 
@@ -178,7 +242,7 @@ class CTValidator:
         """
         if value is None:
             return None
-        actual_cl = self._codelist_aliases.get(codelist_name, codelist_name)
+        actual_cl = self._resolve(codelist_name)
         codelist = self._ct_cache.get(actual_cl, {})
         return codelist.get(value, value)
 
@@ -195,7 +259,7 @@ class CTValidator:
         Returns:
             Dictionary mapping coded values to their preferred terms.
         """
-        actual_cl = self._codelist_aliases.get(codelist_name, codelist_name)
+        actual_cl = self._resolve(codelist_name)
         codelist = self._ct_cache.get(actual_cl, {})
         return {
             coded: info.get("preferred_term", coded) if isinstance(info, dict) else coded

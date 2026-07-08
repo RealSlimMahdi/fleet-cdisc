@@ -8,8 +8,8 @@ immediately after the spec phase.
 
 Shared-verb mixin architecture
 -------------------------------
-Fleet's ``SharedADaMVerbsMixin`` provides seven verbs — ``source``,
-``assigned``, ``derivation``, ``recode``, ``rename``, ``condderivation``,
+Fleet's shared verb mixin provides the canonical verbs — ``assign``,
+``case_when``, ``merge``, ``keep``, ``derivation``, ``recode``,
 ``whereclauses`` — to **every** ADaM sub-namespace.
 
 For post-spec OCCDS derivations (steps 7–8 below) this means ``derivation``
@@ -92,41 +92,41 @@ vs_raw = pl.from_repr("""\
 
 # ── 2. SDTM DM ───────────────────────────────────────────────────────────────
 dm = (
-    dm_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-    .hardcode_no_ct("DOMAIN", value="DM")
-    .assign_no_ct("USUBJID", source="patient_number")
-    .assign_no_ct("SUBJID", source="patient_number")
+    dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    .assign("DOMAIN", value="DM")
+    .assign("USUBJID", source="patient_number")
+    .assign("SUBJID", source="patient_number")
     .derivation("SITEID", expression="pl.col('site_id').cast(pl.String)")
-    .assign_no_ct("AGE", source="age")
-    .hardcode_no_ct("AGEU", value="YEARS")
-    .assign_ct("SEX", source="sex", ct_codelist=SEX, ct_mapping={"F": "F", "M": "M"})
-    .assign_ct(
+    .assign("AGE", source="age")
+    .assign("AGEU", value="YEARS")
+    .assign("SEX", source="sex", ct=SEX, ct_map={"F": "F", "M": "M"})
+    .assign(
         "RACE",
         source="race",
-        ct_codelist=RACE,
-        ct_mapping={"WHITE": "WHITE", "BLACK OR AFRICAN AMERICAN": "BLACK OR AFRICAN AMERICAN"},
+        ct=RACE,
+        ct_map={"WHITE": "WHITE", "BLACK OR AFRICAN AMERICAN": "BLACK OR AFRICAN AMERICAN"},
     )
-    .assign_ct(
+    .assign(
         "ETHNIC",
         source="ethnic",
-        ct_codelist=ETHNIC,
-        ct_mapping={
+        ct=ETHNIC,
+        ct_map={
             "HISPANIC OR LATINO": "HISPANIC OR LATINO",
             "NOT HISPANIC OR LATINO": "NOT HISPANIC OR LATINO",
         },
     )
-    .if_then_else(
+    .case_when(
         "ARMCD",
         when=[
             {"condition": pl.col("arm_code") == "Pbo", "value": "PBO"},
             {"condition": pl.col("arm_code") == "Xan_Lo", "value": "XAN_LO"},
             {"condition": pl.col("arm_code") == "Xan_Hi", "value": "XAN_HI"},
         ],
-        else_value="SCRNFAIL",
+        else_="SCRNFAIL",
     )
-    .assign_no_ct("ARM", source="arm_description")
-    .assign_no_ct("ACTARMCD", source="arm_code")
-    .assign_no_ct("ACTARM", source="arm_description")
+    .assign("ARM", source="arm_description")
+    .assign("ACTARMCD", source="arm_code")
+    .assign("ACTARM", source="arm_description")
     .date("RFSTDTC", source="first_dose_date")
     .date("RFENDTC", source="last_dose_date")
     .date("RFICDTC", source="informed_consent_date")
@@ -137,11 +137,11 @@ print(f"SDTM DM  : {dm.shape[0]} subjects  ·  {dm.shape[1]} columns")
 
 # ── 3. Synthesise SDTM EX (one record per subject) ───────────────────────────
 ex = (
-    dm_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-    .hardcode_no_ct("DOMAIN", value="EX")
-    .assign_no_ct("USUBJID", source="patient_number")
-    .assign_no_ct("EXTRT", source="arm_description")
-    .if_then_else(
+    dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    .assign("DOMAIN", value="EX")
+    .assign("USUBJID", source="patient_number")
+    .assign("EXTRT", source="arm_description")
+    .case_when(
         "EXDOSE",
         when=[
             {"condition": pl.col("arm_code") == "Pbo", "value": 0.0},
@@ -149,10 +149,10 @@ ex = (
             {"condition": pl.col("arm_code") == "Xan_Hi", "value": 81.0},
         ],
     )
-    .hardcode_no_ct("EXDOSU", value="mg")
-    .assign_no_ct("EXSTDTC", source="first_dose_date")
-    .assign_no_ct("EXENDTC", source="last_dose_date")
-    .hardcode_no_ct("EXSEQ", value=1)
+    .assign("EXDOSU", value="mg")
+    .assign("EXSTDTC", source="first_dose_date")
+    .assign("EXENDTC", source="last_dose_date")
+    .assign("EXSEQ", value=1)
     .to_frame()
     .select(
         ["STUDYID", "DOMAIN", "USUBJID", "EXSEQ", "EXTRT", "EXDOSE", "EXDOSU", "EXSTDTC", "EXENDTC"]
@@ -161,17 +161,17 @@ ex = (
 
 # ── 4. Synthesise SDTM AE ─────────────────────────────────────────────────────
 ae = (
-    ae_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-    .hardcode_no_ct("DOMAIN", value="AE")
-    .assign_no_ct("USUBJID", source="patient_number")
-    .assign_no_ct("AETERM", source="ae_term")
-    .assign_no_ct("AESTDTC", source="ae_start_date")
-    .assign_no_ct("AEENDTC", source="ae_end_date")
-    .assign_no_ct("AESEV", source="ae_severity")
-    .assign_no_ct("AESER", source="ae_serious")
-    .assign_no_ct("AEOUT", source="ae_outcome")
-    .assign_no_ct("AEACN", source="ae_action_taken")
-    .assign_no_ct("AEREL", source="ae_relationship")
+    ae_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    .assign("DOMAIN", value="AE")
+    .assign("USUBJID", source="patient_number")
+    .assign("AETERM", source="ae_term")
+    .assign("AESTDTC", source="ae_start_date")
+    .assign("AEENDTC", source="ae_end_date")
+    .assign("AESEV", source="ae_severity")
+    .assign("AESER", source="ae_serious")
+    .assign("AEOUT", source="ae_outcome")
+    .assign("AEACN", source="ae_action_taken")
+    .assign("AEREL", source="ae_relationship")
     .derivation("AESEQ", expression='pl.col("ae_term").cum_count().over("patient_number")')
     .to_frame()
     .select(
@@ -204,24 +204,24 @@ print("\n── ADaM ADSL (spec-driven) ─────────────�
 _ex_max_dose = ex.group_by("USUBJID").agg(pl.col("EXDOSE").max().alias("_EXDOSE_MAX"))
 
 dm_enriched = (
-    dm.adam.lookup(dataset=_ex_max_dose, on="USUBJID", how="left")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    dm.adam.merge(dataset=_ex_max_dose, on="USUBJID", how="left")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .to_frame()
     .adam.adsl  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     # Treatment dates from EX (admiral: derive_vars_merged)
     .first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")
     .last_date("TRTEDT", from_dataset=ex, date_col="EXENDTC")
     # Treatment variables (admiral: mutate TRT01P=ARM, TRT01A=ACTARM)
-    .rename("TRT01P", source="ARM")
-    .rename("TRT01A", source="ACTARM")
+    .assign("TRT01P", source="ARM")
+    .assign("TRT01A", source="ACTARM")
     # Age grouping (admiral: derive_vars_cat)
-    .condderivation(
+    .case_when(
         "AGEGR1",
-        conditions=[
+        when=[
             {"condition": "pl.col('AGE') < 18", "value": "<18"},
             {"condition": "pl.col('AGE') <= 64", "value": "18-64"},
             {"condition": "pl.col('AGE') > 64", "value": ">64"},
         ],
-        else_value="Missing",
+        else_="Missing",
     )
     # Population flags (admiral: derive_var_merged_exist_flag)
     .flag("SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0')
@@ -230,8 +230,15 @@ dm_enriched = (
     .drop("_EXDOSE_MAX")
 )
 
+# The columns below are derived inline above (or upstream in DM) with a
+# *different* method than the spec documents, so they are omitted from the
+# spec pass — from_spec()'s overwrite guard would (rightly) raise otherwise.
 adsl = (
-    dm_enriched.adam.from_spec(ADAM_SPEC, dataset="ADSL")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    dm_enriched.adam.from_spec(  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+        ADAM_SPEC,
+        dataset="ADSL",
+        omit=["STUDYID", "TRT01P", "TRT01A", "TRTSDT", "TRTEDT"],
+    )
     .select(spec=ADAM_SPEC, dataset="ADSL")
     .write_parquet(OUT / "adsl.parquet")
 )
@@ -241,18 +248,44 @@ print(f"   {adsl.shape[0]} subjects × {adsl.shape[1]} variables")
 # 6. ADaM ADVS — spec-driven
 #    depends_on: in the spec triggers auto-flush between dependent batches:
 #      ADT → ADY,  ABLFL → BASE,  BASE → CHG / PCHG
+#    The define declares `inputs: [VS, ADSL]`: the subject-level variables it
+#    lists (SUBJID … ITTFL) are merged in from the ADSL built above, exactly
+#    as the define.yaml documents.
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── ADaM ADVS (spec-driven) ──────────────────────────────────────────────")
 
-_trtsdt_map = adsl.select(["USUBJID", "TRTSDT"])
-vs_with_trtsdt = (
-    vs_raw.adam.rename("USUBJID", source="patient_number")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-    .lookup(dataset=_trtsdt_map, on="USUBJID", how="left")
+_ADSL_CARRY = [
+    "USUBJID",
+    "SUBJID",
+    "SITEID",
+    "AGE",
+    "AGEU",
+    "SEX",
+    "RACE",
+    "ETHNIC",
+    "ARMCD",
+    "ARM",
+    "ACTARMCD",
+    "ACTARM",
+    "TRT01P",
+    "TRT01A",
+    "TRTSDT",
+    "TRTEDT",
+    "RFSTDTC",
+    "RFENDTC",
+    "RFICDTC",
+    "SAFFL",
+    "ITTFL",
+]
+vs_with_adsl = (
+    vs_raw.adam.assign("USUBJID", source="patient_number")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    .merge(dataset=adsl.select(_ADSL_CARRY), on="USUBJID", how="left")
     .to_frame()
 )
 
+# USUBJID is renamed inline above (the merge needs it) — omit the spec's copy.
 advs = (
-    vs_with_trtsdt.adam.from_spec(ADAM_SPEC, dataset="ADVS")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    vs_with_adsl.adam.from_spec(ADAM_SPEC, dataset="ADVS", omit=["USUBJID"])  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .select(spec=ADAM_SPEC, dataset="ADVS")
     .write_parquet(OUT / "advs.parquet")
 )
@@ -266,9 +299,10 @@ print(f"   Parameters: {sorted(advs['PARAMCD'].unique().to_list())}")
 print("\n── ADaM ADAE (spec-driven + occds verbs) ────────────────────────────────")
 
 _adsl_trt = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "AGE", "SEX", "SAFFL"])
-ae_with_trt = ae.adam.lookup(dataset=_adsl_trt, on="USUBJID", how="left").to_frame()  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+ae_with_trt = ae.adam.merge(dataset=_adsl_trt, on="USUBJID", how="left").to_frame()  # type: ignore[attr-defined]  # runtime namespace registered by fleet
 
-adae_sourced = ae_with_trt.adam.from_spec(ADAM_SPEC, dataset="ADAE").to_frame()  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+# STUDYID already exists on the SDTM AE frame — keep it, skip the spec's copy.
+adae_sourced = ae_with_trt.adam.from_spec(ADAM_SPEC, dataset="ADAE", omit=["STUDYID"]).to_frame()  # type: ignore[attr-defined]  # runtime namespace registered by fleet
 
 adae = (
     adae_sourced.adam.occds.treatment_emergent(  # type: ignore[attr-defined]  # runtime namespace registered by fleet
@@ -279,9 +313,9 @@ adae = (
         "ANL01FL",
         criteria="max",
         value_col="AESEVN",
-        groups=["USUBJID", "AETERM"],
+        by=["USUBJID", "AETERM"],
     )
-    .seq("ASEQ", groups=["USUBJID"])
+    .seq("ASEQ", by=["USUBJID"])
     .to_frame()
     .with_columns(
         pl.col("TRTSDT"),
@@ -307,9 +341,10 @@ print(f"   Serious AEs (AESER=Y)  : {(adae['AESER'] == 'Y').sum()}")
 print("\n── ADaM ADEX (spec-driven) ──────────────────────────────────────────────")
 
 _adsl_ex = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "AGE", "SAFFL"])
-ex_with_adsl = ex.adam.lookup(dataset=_adsl_ex, on="USUBJID", how="left").to_frame()  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+ex_with_adsl = ex.adam.merge(dataset=_adsl_ex, on="USUBJID", how="left").to_frame()  # type: ignore[attr-defined]  # runtime namespace registered by fleet
 
-adex_s1 = ex_with_adsl.adam.from_spec(ADAM_SPEC, dataset="ADEX").to_frame()  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+# STUDYID already exists on the SDTM EX frame — keep it, skip the spec's copy.
+adex_s1 = ex_with_adsl.adam.from_spec(ADAM_SPEC, dataset="ADEX", omit=["STUDYID"]).to_frame()  # type: ignore[attr-defined]  # runtime namespace registered by fleet
 
 adex = (
     adex_s1.adam.occds  # type: ignore[attr-defined]  # runtime namespace registered by fleet
@@ -320,7 +355,7 @@ adex = (
         ".dt.total_days() + 1",
     )
     # admiral: derive_var_obs_number
-    .seq("ASEQ", groups=["USUBJID"])  # occds-specific verb
+    .seq("ASEQ", by=["USUBJID"])  # occds-specific verb
     .to_frame()
     .with_columns(
         pl.col("TRTSDT"),
@@ -347,7 +382,9 @@ for checker, df, ds in [
     (adam_checker, adae, "ADAE"),
     (adam_checker, adex, "ADEX"),
 ]:
-    checker.check(df, dataset=ds).print_report()
+    result = checker.check(df, dataset=ds)
+    result.print_report()
+    result.raise_on_errors()  # a failing dataset must fail the pipeline
 
 # ── 10. Generate Define-XML 2.1 ───────────────────────────────────────────────
 # enrich_methods=True embeds Fleet verb docstrings into the Origin/MethodDef

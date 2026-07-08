@@ -93,44 +93,44 @@ print(f"   ae_raw : {ae_raw.shape[0]:>3} rows   columns → {ae_raw.columns}")
 #       adsl <- dm %>% select(-DOMAIN) %>% mutate(TRT01P = ARM, ...)
 # ════════════════════════════════════════════════════════════════════════════
 dm = (
-    dm_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-    .hardcode_no_ct("DOMAIN", value="DM")
-    .assign_no_ct("USUBJID", source="patient_number")
-    .assign_no_ct("SUBJID", source="patient_number")
+    dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    .assign("DOMAIN", value="DM")
+    .assign("USUBJID", source="patient_number")
+    .assign("SUBJID", source="patient_number")
     .derivation("SITEID", expression="pl.col('site_id').cast(pl.String)")
-    .assign_no_ct("AGE", source="age")
-    .hardcode_no_ct("AGEU", value="YEARS")
-    .assign_ct("SEX", source="sex", ct_codelist=SEX, ct_mapping={"F": "F", "M": "M"})
-    .assign_ct(
+    .assign("AGE", source="age")
+    .assign("AGEU", value="YEARS")
+    .assign("SEX", source="sex", ct=SEX, ct_map={"F": "F", "M": "M"})
+    .assign(
         "RACE",
         source="race",
-        ct_codelist=RACE,
-        ct_mapping={
+        ct=RACE,
+        ct_map={
             "WHITE": "WHITE",
             "BLACK OR AFRICAN AMERICAN": "BLACK OR AFRICAN AMERICAN",
         },
     )
-    .assign_ct(
+    .assign(
         "ETHNIC",
         source="ethnic",
-        ct_codelist=ETHNIC,
-        ct_mapping={
+        ct=ETHNIC,
+        ct_map={
             "HISPANIC OR LATINO": "HISPANIC OR LATINO",
             "NOT HISPANIC OR LATINO": "NOT HISPANIC OR LATINO",
         },
     )
-    .if_then_else(
+    .case_when(
         "ARMCD",
         when=[
             {"condition": pl.col("arm_code") == "Pbo", "value": "PBO"},
             {"condition": pl.col("arm_code") == "Xan_Lo", "value": "XAN_LO"},
             {"condition": pl.col("arm_code") == "Xan_Hi", "value": "XAN_HI"},
         ],
-        else_value="SCRNFAIL",
+        else_="SCRNFAIL",
     )
-    .assign_no_ct("ARM", source="arm_description")
-    .assign_no_ct("ACTARMCD", source="arm_code")
-    .assign_no_ct("ACTARM", source="arm_description")
+    .assign("ARM", source="arm_description")
+    .assign("ACTARMCD", source="arm_code")
+    .assign("ACTARM", source="arm_description")
     .date("RFSTDTC", source="first_dose_date")
     .date("RFENDTC", source="last_dose_date")
     .date("RFICDTC", source="informed_consent_date")
@@ -143,9 +143,9 @@ print(f"\n── 2a. SDTM DM : {dm.shape[0]} subjects × {dm.shape[1]} variables
 # columns stay in DM unchanged. For IG ≤3.4, export_supp() unpivots them
 # to the vertical SUPPQUAL structure.
 dm_ns = (
-    dm_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")
-    .hardcode_no_ct("DOMAIN", value="DM")
-    .assign_no_ct("USUBJID", source="patient_number")
+    dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
+    .assign("DOMAIN", value="DM")
+    .assign("USUBJID", source="patient_number")
     .nsv("SAFETY", value="Y", label="Safety Population Flag")
     .nsv("ITT", value="Y", label="Intent to Treat Population Flag")
 )
@@ -180,11 +180,11 @@ print(f"        → Dataset-JSON: {dm_json}")
 #       EXDOSE > 0  OR  (EXDOSE == 0 AND EXTRT contains "PLACEBO")
 # ════════════════════════════════════════════════════════════════════════════
 ex = (
-    dm_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-    .hardcode_no_ct("DOMAIN", value="EX")
-    .assign_no_ct("USUBJID", source="patient_number")
-    .assign_no_ct("EXTRT", source="arm_description")
-    .if_then_else(
+    dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    .assign("DOMAIN", value="EX")
+    .assign("USUBJID", source="patient_number")
+    .assign("EXTRT", source="arm_description")
+    .case_when(
         "EXDOSE",
         when=[
             {"condition": pl.col("arm_code") == "Pbo", "value": 0.0},
@@ -192,10 +192,10 @@ ex = (
             {"condition": pl.col("arm_code") == "Xan_Hi", "value": 81.0},
         ],
     )
-    .hardcode_no_ct("EXDOSU", value="mg")
-    .assign_no_ct("EXSTDTC", source="first_dose_date")
-    .assign_no_ct("EXENDTC", source="last_dose_date")
-    .hardcode_no_ct("EXSEQ", value=1)
+    .assign("EXDOSU", value="mg")
+    .assign("EXSTDTC", source="first_dose_date")
+    .assign("EXENDTC", source="last_dose_date")
+    .assign("EXSEQ", value=1)
     .to_frame()
     .select(
         ["STUDYID", "DOMAIN", "USUBJID", "EXSEQ", "EXTRT", "EXDOSE", "EXDOSU", "EXSTDTC", "EXENDTC"]
@@ -215,27 +215,27 @@ print(
 _ds_cols = ["STUDYID", "DOMAIN", "USUBJID", "DSSEQ", "DSCAT", "DSTERM", "DSDECOD", "DSSTDTC"]
 
 ds_completed = (
-    dm_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-    .hardcode_no_ct("DOMAIN", value="DS")
-    .assign_no_ct("USUBJID", source="patient_number")
-    .hardcode_no_ct("DSSEQ", value=1)
-    .hardcode_no_ct("DSCAT", value="DISPOSITION EVENT")
-    .hardcode_no_ct("DSTERM", value="PROTOCOL COMPLETED")
-    .hardcode_no_ct("DSDECOD", value="COMPLETED")
-    .assign_no_ct("DSSTDTC", source="last_dose_date")
+    dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    .assign("DOMAIN", value="DS")
+    .assign("USUBJID", source="patient_number")
+    .assign("DSSEQ", value=1)
+    .assign("DSCAT", value="DISPOSITION EVENT")
+    .assign("DSTERM", value="PROTOCOL COMPLETED")
+    .assign("DSDECOD", value="COMPLETED")
+    .assign("DSSTDTC", source="last_dose_date")
     .to_frame()
     .select(_ds_cols)
 )
 
 ds_randomized = (
-    dm_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-    .hardcode_no_ct("DOMAIN", value="DS")
-    .assign_no_ct("USUBJID", source="patient_number")
-    .hardcode_no_ct("DSSEQ", value=2)
-    .hardcode_no_ct("DSCAT", value="PROTOCOL MILESTONE")
-    .hardcode_no_ct("DSTERM", value="RANDOMIZED")
-    .hardcode_no_ct("DSDECOD", value="RANDOMIZED")
-    .assign_no_ct("DSSTDTC", source="first_dose_date")
+    dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    .assign("DOMAIN", value="DS")
+    .assign("USUBJID", source="patient_number")
+    .assign("DSSEQ", value=2)
+    .assign("DSCAT", value="PROTOCOL MILESTONE")
+    .assign("DSTERM", value="RANDOMIZED")
+    .assign("DSDECOD", value="RANDOMIZED")
+    .assign("DSSTDTC", source="first_dose_date")
     .to_frame()
     .select(_ds_cols)
 )
@@ -249,17 +249,17 @@ print(
 # 2d. Build SDTM AE (Adverse Events) from ae_raw
 # ════════════════════════════════════════════════════════════════════════════
 ae = (
-    ae_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-    .hardcode_no_ct("DOMAIN", value="AE")
-    .assign_no_ct("USUBJID", source="patient_number")
-    .assign_no_ct("AETERM", source="ae_term")
-    .assign_no_ct("AESTDTC", source="ae_start_date")
-    .assign_no_ct("AEENDTC", source="ae_end_date")
-    .assign_no_ct("AESEV", source="ae_severity")
-    .assign_no_ct("AESER", source="ae_serious")
-    .assign_no_ct("AEOUT", source="ae_outcome")
-    .assign_no_ct("AEACN", source="ae_action_taken")
-    .assign_no_ct("AEREL", source="ae_relationship")
+    ae_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    .assign("DOMAIN", value="AE")
+    .assign("USUBJID", source="patient_number")
+    .assign("AETERM", source="ae_term")
+    .assign("AESTDTC", source="ae_start_date")
+    .assign("AEENDTC", source="ae_end_date")
+    .assign("AESEV", source="ae_severity")
+    .assign("AESER", source="ae_serious")
+    .assign("AEOUT", source="ae_outcome")
+    .assign("AEACN", source="ae_action_taken")
+    .assign("AEREL", source="ae_relationship")
     # AESEQ: running count within each subject
     .derivation("AESEQ", expression='pl.col("ae_term").cum_count().over("patient_number")')
     # Pin DM for cross-domain study day derivation
@@ -312,8 +312,8 @@ adsl = (
     .source("ACTARM")
     .source("ACTARMCD")
     # ── treatment variables (admiral: adsl <- dm %>% mutate(TRT01P=ARM, TRT01A=ACTARM)) ──
-    .rename("TRT01P", source="ARM")
-    .rename("TRT01A", source="ACTARM")
+    .assign("TRT01P", source="ARM")
+    .assign("TRT01A", source="ACTARM")
     # ── study dates from DM ───────────────────────────────────────────────
     .source("RFSTDTC")
     .source("RFENDTC")
@@ -360,16 +360,16 @@ adsl = (
     )
     .to_frame()
     # Bring in DSDECOD/DSTERM from DS for status/reason derivations
-    .adam.lookup(dataset=_ds_disp, on="USUBJID", how="left")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    .adam.merge(dataset=_ds_disp, on="USUBJID", how="left")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     # EOSSTT: map disposition decode to study status (admiral: format_eosstt)
-    .condderivation(
+    .case_when(
         "EOSSTT",
-        conditions=[
+        when=[
             {"condition": 'pl.col("DSDECOD").is_null()', "value": None},
             {"condition": 'pl.col("DSDECOD") == "COMPLETED"', "value": "COMPLETED"},
             {"condition": 'pl.col("DSDECOD") == "SCREEN FAILURE"', "value": None},
         ],
-        else_value="DISCONTINUED",
+        else_="DISCONTINUED",
     )
     # DCSREAS: discontinuation reason (admiral: derive_vars_merged)
     .derivation(
@@ -399,14 +399,14 @@ print(f"   EOSSTT counts: {adsl['EOSSTT'].value_counts().to_dicts()}")
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── 7. Age grouping (AGEGR1) ─────────────────────────────────────────────")
 
-adsl = adsl.adam.adsl.condderivation(  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+adsl = adsl.adam.adsl.case_when(  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     "AGEGR1",
-    conditions=[
+    when=[
         {"condition": "pl.col('AGE') < 18", "value": "<18"},
         {"condition": "pl.col('AGE') <= 64", "value": "18-64"},
         {"condition": "pl.col('AGE') > 64", "value": ">64"},
     ],
-    else_value="Missing",
+    else_="Missing",
 ).to_frame()
 
 _agegr = adsl.group_by("AGEGR1").agg(pl.len().alias("n")).sort("AGEGR1")
@@ -424,7 +424,7 @@ print("\n── 8. Population flags ──────────────�
 _ex_max_dose = ex.group_by("USUBJID").agg(pl.col("EXDOSE").max().alias("_EXDOSE_MAX"))
 
 adsl = (
-    adsl.adam.lookup(dataset=_ex_max_dose, on="USUBJID", how="left")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    adsl.adam.merge(dataset=_ex_max_dose, on="USUBJID", how="left")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .to_frame()
     .adam.adsl  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     # SAFFL: subjects with at least one dose > 0 (admiral: derive_var_merged_exist_flag)
@@ -640,21 +640,21 @@ vs_raw = pl.from_repr("""\
 _trtsdt_map = adsl_final.select(["USUBJID", "TRTSDT"])
 
 advs = (
-    vs_raw.adam.assigned("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-    .rename("USUBJID", source="patient_number")
-    .rename("PARAMCD", source="vstestcd")
-    .rename("PARAM", source="vstest")
-    .rename("AVALU", source="vsorresu")
+    vs_raw.adam.assign("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    .assign("USUBJID", source="patient_number")
+    .assign("PARAMCD", source="vstestcd")
+    .assign("PARAM", source="vstest")
+    .assign("AVALU", source="vsorresu")
     .derivation("AVAL", expression="pl.col('vsorres').cast(pl.Float64, strict=False)")
     .date("ADT", source="vsdtc")
-    .lookup(dataset=_trtsdt_map, on="USUBJID", how="left")
+    .merge(dataset=_trtsdt_map, on="USUBJID", how="left")
     .duration("ADY", start="TRTSDT", end="ADT")
     # admiral: flag_variables — last pre-dose visit (vsdy ≤ 0)
-    .flag("ABLFL", criteria='pl.col("vsdy") <= 0', groups=["USUBJID", "PARAMCD"])
+    .flag("ABLFL", criteria='pl.col("vsdy") <= 0', by=["USUBJID", "PARAMCD"])
     .to_frame()  # materialise — ABLFL must exist before baseline() window fn
     .adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     # admiral: derive_var_base
-    .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", groups=["USUBJID", "PARAMCD"])
+    .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
     .to_frame()  # materialise — BASE must exist before chg()/pchg()
     .adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     # admiral: derive_var_chg
@@ -666,7 +666,7 @@ advs = (
         "ANL01FL",
         criteria="last",
         order_by="ADT",
-        groups=["USUBJID", "PARAMCD"],
+        by=["USUBJID", "PARAMCD"],
         where='~pl.col("AVAL").is_null()',
     )
     .to_frame()
@@ -717,7 +717,7 @@ _adsl_trt = adsl_final.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "SAFFL"]
 ae_with_trt = ae.join(_adsl_trt, on="USUBJID", how="left")
 
 adae = (
-    ae_with_trt.adam.assigned("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    ae_with_trt.adam.assign("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
     .source("USUBJID")
     .source("AETERM")
     .source("AESTDTC")
@@ -741,10 +741,10 @@ adae = (
         "ANL01FL",
         criteria="max",
         value_col="AESEVN",
-        groups=["USUBJID", "AETERM"],
+        by=["USUBJID", "AETERM"],
     )
     # admiral: derive_var_obs_number
-    .seq("ASEQ", groups=["USUBJID"])
+    .seq("ASEQ", by=["USUBJID"])
     .to_frame()
 )
 
@@ -797,7 +797,7 @@ _adsl_ex = adsl_final.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "SAFFL"])
 
 adex = (
     ex.join(_adsl_ex, on="USUBJID", how="left")
-    .adam.occds.assigned("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet  # shared verb (mixin)
+    .adam.occds.assign("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet  # shared verb (mixin)
     .source("USUBJID")  # shared verb (mixin)
     .source("EXTRT")  # shared verb (mixin)
     .source("EXDOSE")  # shared verb (mixin)
@@ -811,7 +811,7 @@ adex = (
         expression="(pl.col('AENDT') - pl.col('ASTDT')).dt.total_days() + 1",
     )
     # admiral: derive_var_obs_number
-    .seq("ASEQ", groups=["USUBJID"])  # occds-specific verb
+    .seq("ASEQ", by=["USUBJID"])  # occds-specific verb
     .to_frame()
 )
 

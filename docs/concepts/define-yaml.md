@@ -1,3 +1,10 @@
+<!--
+Runnable examples on this page are executed by tests/unit/test_docs_examples.py.
+A fenced ```python or ```yaml block is run unless the line immediately before its
+opening fence is the HTML comment `<!-- docs:no-run -->` (used for illustrative
+fragments that reference files or study data not present in the test harness).
+-->
+
 # How `define.yaml` Drives DataFrame Creation
 
 `define.yaml` is the **single source of truth** for a Fleet study. One file simultaneously:
@@ -11,8 +18,11 @@
 
 ## File Layout
 
+<!-- docs:no-run -->
+
 ```yaml
 # yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json
+fleet_spec_version: 1
 study:
   id:             CDISCPILOT01
   standard:       ADAMIG
@@ -41,24 +51,64 @@ datasets:
         ...
 ```
 
-The schema is validated by the bundled JSON Schema (`define_spec_schema.json`), which means editors with YAML language server support provide auto-complete and inline error highlighting.
+The spec is validated against the bundled JSON Schema (`define_spec_schema.json`),
+which is **generated from the algorithm registry** — its `algorithm:` enum and
+per-algorithm required fields always match what `from_spec()` actually executes
+(a CI sync test enforces this). Editors with a YAML language server give
+auto-complete and inline error highlighting straight from that schema. The
+top-level `fleet_spec_version: 1` pins the spec dialect; a future incompatible
+version is rejected with a clear message rather than silently misinterpreted.
 
 ---
 
 ## Derivation Algorithms
 
-Each variable's `derivation.algorithm` maps directly to an `.adsl` (or `.adam`) verb:
+Every spec-executable algorithm is declared once in the central registry
+(`fleet.core.spec_registry`), which drives the `from_spec` executor, the
+discriminated-union validation models, **and** the JSON schema. `algorithm:`
+names map onto namespace verbs; both canonical and legacy spellings are accepted
+(e.g. `assign_no_ct` → `assign`, `count` → `count_events`). A representative
+subset:
 
-| `algorithm`  | Namespace verb                                                   | What it does                    |
-| ------------ | ---------------------------------------------------------------- | ------------------------------- |
-| `assigned`   | `.assigned(target, value=...)`                                   | Constant literal for all rows   |
-| `source`     | `.source(target, from_col=...)`                                  | Copy column from predecessor    |
-| `derivation` | `.derivation(target, expression=...)`                            | Arbitrary Polars expression     |
-| `first_date` | `.first_date(target, from_dataset=..., date_col=..., where=...)` | Earliest event date per subject |
-| `last_date`  | `.last_date(...)`                                                | Latest event date per subject   |
-| `duration`   | `.duration(target, start_date=..., end_date=...)`                | Integer day count               |
-| `flag`       | `.flag(target, criteria=...)`                                    | `"Y"` / `null` flag             |
-| `count`      | `.count_events(target, from_dataset=..., where=...)`             | Integer event count             |
+| `algorithm`         | Namespace verb                                                  | What it does                    |
+| ------------------- | --------------------------------------------------------------- | ------------------------------- |
+| `assigned`          | `.assign(target, value=...)`                                    | Constant literal for all rows   |
+| `source`            | `.assign(target, source=...)`                                   | Copy column from predecessor    |
+| `assign_ct`         | `.assign(target, source=..., ct=..., ct_map=...)`               | Copy + CT validate/decode       |
+| `derivation`        | `.derivation(target, expression=...)`                           | Arbitrary Polars expression     |
+| `first_date`        | `.first_date(target, from_dataset=..., date_col=..., where=...)`| Earliest event date per subject |
+| `last_date`         | `.last_date(...)`                                               | Latest event date per subject   |
+| `count_events`      | `.count_events(target, from_dataset=..., where=...)`            | Integer event count             |
+| `duration`          | `.duration(target, start=..., end=...)`                        | Integer day count / elapsed time |
+| `flag`              | `.flag(target, criteria=...)`                                   | `"Y"` / `null` flag             |
+| `baseline` / `chg` / `pchg` | `.baseline(...)` / `.chg(...)` / `.pchg(...)`           | Baseline value & change         |
+| `callable`          | `.derivation(drv_obj)`                                          | Study-specific escape hatch     |
+
+The complete, always-current list is machine-readable:
+
+```python
+from fleet.core import spec_registry
+
+print(sorted(spec_registry.algorithm_names("adam")))
+print(sorted(spec_registry.algorithm_names("sdtm")))
+```
+
+### The verb-coverage matrix (`SPEC_UNSUPPORTED`)
+
+Not every inline verb is spec-expressible. `spec_registry.coverage_matrix()`
+returns the full algorithm ↔ verb ↔ required-fields mapping, and
+`spec_registry.SPEC_UNSUPPORTED` is the machine-checked allowlist of verbs that
+have **no** spec algorithm (e.g. `transform`, `derive_summary_records`, the TDD
+`add_*` verbs) — so "which subset is spec-safe" has a definite answer instead of
+a guess:
+
+```python
+from fleet.core import spec_registry
+
+matrix = spec_registry.coverage_matrix()  # list of algorithm rows
+unsupported = spec_registry.SPEC_UNSUPPORTED  # {"sdtm": {...}, "adam": {...}}
+print(len(matrix), "algorithms;", len(unsupported["adam"]), "adam verbs are inline-only")
+```
 
 ### Study-specific callables (`callable:`)
 
@@ -112,32 +162,61 @@ regulatory submission and the exact code that produced the data.
 
 ### Example — TRTSDT (date of first dose)
 
-In `define.yaml`:
+`first_date` is a real spec algorithm — this example runs end to end. In the
+spec, `from_dataset:` names a **pinned dataset** (attach it with `.pin("EX", ex)`
+before calling `from_spec`); the runtime resolves the name to the pinned frame.
 
 ```yaml
-- name: TRTSDT
-  label: Date of First Exposure to Treatment
-  type: date
-  origin: Derived
-  derivation:
-    algorithm: first_date
-    from_dataset: EX
-    date_col: EXSTDTC
-    where: 'pl.col("EXDOSE") > 0'
+fleet_spec_version: 1
+study:
+  id: CDISCPILOT01
+  standard: ADAMIG
+  standard_version: "1.1"
+datasets:
+  - name: ADSL
+    label: Subject-Level Analysis Dataset
+    structure: One record per subject
+    keys: [STUDYID, USUBJID]
+    variables:
+      - name: TRTSDT
+        label: Date of First Exposure to Treatment
+        type: date
+        origin: Derived
+        derivation:
+          algorithm: first_date
+          from_dataset: EX
+          date_col: EXSTDTC
+          where: 'pl.col("EXDOSE") > 0'
 ```
 
-Equivalent hand-written pipeline:
+Run it by pinning `EX` and calling `from_spec` (the harness writes the YAML above
+to `define.yaml` first):
 
 ```python
-adsl = (
-    dm_sdtm.adsl
-    ...
-    .first_date("TRTSDT", from_dataset=ex_sdtm,
-                date_col="EXSTDTC",
-                where='pl.col("EXDOSE") > 0')
-    ...
-    .to_frame()
+import polars as pl
+import fleet  # noqa: F401
+
+dm = pl.DataFrame({"STUDYID": ["CDISCPILOT01"] * 2, "USUBJID": ["S1", "S2"]})
+ex = pl.DataFrame(
+    {
+        "USUBJID": ["S1", "S1", "S2"],
+        "EXSTDTC": ["2014-01-05", "2014-01-02", "2014-02-01"],
+        "EXDOSE": [54.0, 0.0, 54.0],  # the 0-dose row is filtered out by where=
+    }
 )
+
+adsl = dm.adam.pin("EX", ex).from_spec("define.yaml", dataset="ADSL").to_frame()
+print(adsl)  # TRTSDT = 2014-01-05 for S1 (earliest dosed date), 2014-02-01 for S2
+```
+
+The equivalent hand-written pipeline calls the same verb directly:
+
+<!-- docs:no-run -->
+
+```python
+adsl = dm.adam.adsl.first_date(
+    "TRTSDT", from_dataset=ex, date_col="EXSTDTC", where='pl.col("EXDOSE") > 0'
+).to_frame()
 ```
 
 ---
@@ -146,36 +225,67 @@ adsl = (
 
 ```mermaid
 graph TD
-    A[define.yaml] -->|parsed| B[DefineSpecGenerator]
-    B -->|variable metadata| C[DefineXMLGenerator]
-    B -->|derivation specs| D[StudyContext.build]
+    A[define.yaml] -->|parsed + validated| B[spec_registry]
+    B -->|derivation specs| D[namespace.from_spec]
     D -->|applies verbs| E[Polars pipeline]
     E -->|calls .to_frame| F[ADSL DataFrame]
+    A -->|variable metadata| C[DefineSpecGenerator / DefineXMLGenerator]
     C --> G[define_adam.xml]
-    F --> H[adsl.parquet / adsl.csv]
+    F --> H[adsl.parquet / adsl.json]
     F --> I[DatasetChecker / ValidationService]
 ```
 
 ### Running the full pipeline programmatically
 
+`from_spec` is the execution entry point. Pin any datasets the spec references
+by name, then build each dataset:
+
+<!-- docs:no-run -->
+
 ```python
-from fleet import load_study_context
+import polars as pl
+import fleet  # noqa: F401
 
-ctx = load_study_context("examples/cdiscpilot01/adam/define.yaml")
+dm = pl.read_parquet("outputs/sdtm/dm.parquet")
+ex = pl.read_parquet("outputs/sdtm/ex.parquet")
 
-# Build every dataset declared in the spec
-adsl = ctx.build("ADSL")   # returns a polars.DataFrame
-advs = ctx.build("ADVS")
+adsl = (
+    dm.adam.pin("EX", ex)
+    .from_spec("examples/cdiscpilot01/adam/define.yaml", dataset="ADSL")
+    .to_frame()
+)
 ```
+
+`StudyContext` (via `load_study_context(config_path)`) resolves the configured
+`raw_data`, `sdtm_data`, `adam_data`, and `metadata` directories so you don't
+hard-code paths; it exposes `sdtm_spec` / `adam_spec` / `raw_file(...)` helpers.
 
 ### Generating Define-XML from the same spec
 
+<!-- docs:no-run -->
+
 ```python
+from pathlib import Path
+
 from fleet import DefineXMLGenerator
 
-gen = DefineXMLGenerator("examples/cdiscpilot01/adam/define.yaml")
-gen.write("outputs/cdiscpilot01/define_adam.xml")
+gen = DefineXMLGenerator(Path("examples/cdiscpilot01/adam/define.yaml"))
+gen.generate(Path("outputs/cdiscpilot01/define_adam.xml"))
 ```
+
+`DefineSpecGenerator(spec, enrich_methods=True).generate(out)` additionally emits
+a `<MethodDef>` per derivation, populated from the referenced verb / callable
+docstring. Both generators honour the same new spec keys:
+
+- **`fleet_spec_version: 1`** — spec dialect version (checked on load).
+- **`derivations_module:`** — a dotted module that `from_spec` imports itself, so
+  `callable:` derivations register without a manual import.
+- **`output_format:`** — per-dataset or spec-level export format (`parquet`,
+  `json`, `xpt`) recorded in the DAG and Define-XML leaf hrefs.
+- **`value_level:`** — value-level metadata entries emitted as Define-XML
+  `<ValueListDef>` / where-clause elements.
+- **`ct: {validate: true, file: ...}`** — opt the spec into CT validation
+  (see below).
 
 ---
 
@@ -193,7 +303,34 @@ Variables can reference codelists declared in the `codelists` block:
     source: SEX
 ```
 
-Fleet threads CT validation through the pipeline automatically — invalid values raise a `CTError` at runtime.
+### Opting the spec into CT validation
+
+By default the spec path does not validate values against codelists — it copies
+them through. Add a top-level `ct:` block to turn validation on for the whole
+spec; every `assign_ct` / `hardcode_ct` derivation then validates its values, and
+out-of-codelist values emit a warning naming the dataset, variable, and codelist:
+
+<!-- docs:no-run -->
+
+```yaml
+ct:
+  validate: true
+  file: ct/cdisc_ct.yaml   # optional — loaded into the CT cache before the run
+datasets:
+  - name: DM
+    variables:
+      - name: SEX
+        codelist: C66731
+        derivation:
+          algorithm: assign_ct
+          source: sex
+          ct_codelist: C66731
+```
+
+When datasets are checked with `DatasetChecker(spec, check_ct=True)`, the values
+are also verified against the spec's own inline `codelists:`, and codelist
+lookups are normalised to concept IDs — so a spec cannot ship values that
+contradict the conformance it asserts in the generated Define-XML.
 
 ---
 
@@ -202,31 +339,46 @@ Fleet threads CT validation through the pipeline automatically — invalid value
 Fleet has two independent layers of schema validation for `define.yaml`. They run at different
 points and catch different classes of error.
 
-### Layer 1 — Pydantic model validation (pipeline-build time)
+### Layer 1 — Registry model validation (pipeline-build time)
 
-When you call `.from_spec()` on an SDTM or ADaM namespace, Fleet parses each variable's
-`derivation` block through a Pydantic model (`SDTMVariableSpec` / `ADAMVariableSpec`). This
-runs **immediately when `.from_spec()` is called**, before any data is loaded.
+When you call `.from_spec()`, Fleet resolves each variable's `algorithm:` through
+the spec registry and validates its `derivation` block against a **discriminated-union
+Pydantic model** generated for that algorithm. The model declares exactly which
+fields are required and sets `extra="forbid"`, so a misspelled field is a loud
+error — not a silent column of nulls. This runs **immediately when `.from_spec()`
+is called**, before any data is materialised.
 
 What it catches:
 
-- Missing required fields for a given `algorithm` (e.g. `assign_ct` without `ct_codelist`)
-- Unknown algorithm names
+- Unknown algorithm names (with a did-you-mean suggestion)
+- Misspelled or unexpected fields (`extra="forbid"`)
+- Missing required fields for a given `algorithm`
 - Wrong field types (e.g. a list where a string is expected)
 
+Errors are wrapped in a `SpecError` that names **file → dataset → variable**.
+Here is the real message for a typo'd field (`ct_codelst` instead of
+`ct_codelist`):
+
+<!-- docs:no-run -->
+
 ```python
-# define.yaml snippet with a bug — assign_ct is missing ct_codelist:
+# derivation block with a typo:
 #   - name: SEX
 #     derivation:
 #       algorithm: assign_ct
-#       source: sex               ← ct_codelist is required but absent
+#       source: sex
+#       ct_codelst: C66731        # ← typo: should be ct_codelist
 
 dm = raw_df.sdtm.from_spec("specs/define.yaml", dataset="DM")
-# Raises pydantic.ValidationError immediately at this line, before .to_frame() is ever called.
-# pydantic_core._pydantic_core.ValidationError: 1 validation error for SDTMVariableSpec
-#   ct_codelist
-#     Field required [type=missing, ...]
+# fleet.core.exceptions.SpecError:
+# specs/define.yaml → dataset DM → variable SEX: 1 validation error for SDTMAssignCtSpec
+# ct_codelst
+#   Extra inputs are not permitted [type=extra_forbidden, input_value='C66731', input_type=str]
 ```
+
+(Note: a well-formed `assign_ct` *without* any codelist does **not** error — it
+copies the value through and emits a `UserWarning` that CT could not be validated.
+`assign` never fabricates a missing-field error for an optional field.)
 
 ### Layer 2 — JSON Schema + business rule validation (`DefineValidator`)
 
@@ -235,6 +387,8 @@ dm = raw_df.sdtm.from_spec("specs/define.yaml", dataset="DM")
 This layer fires **on demand**, not automatically during pipeline execution.
 
 **Trigger it explicitly** — before generating Define-XML or before submission:
+
+<!-- docs:no-run -->
 
 ```python
 from fleet.define_xml import DefineValidator
@@ -274,7 +428,7 @@ issues exist. Warnings do not block Define-XML generation.
 
 | Layer              | When it fires                             | Blocks execution?                                               |
 | ------------------ | ----------------------------------------- | --------------------------------------------------------------- |
-| Pydantic models    | Automatically on `.from_spec()` call      | Yes — raises `ValidationError`                                  |
+| Registry models    | Automatically on `.from_spec()` call      | Yes — raises `SpecError` (file → dataset → variable)            |
 | `DefineValidator`  | Manually, before Define-XML generation    | Only `has_errors()` returns `True`; you decide how to handle it |
 | CDISC Rules Engine | Manually, after datasets are materialised | No — report only                                                |
 
@@ -286,8 +440,18 @@ The YAML spec is validated against the bundled schema at:
 src/fleet/define_xml/schemas/define_spec_schema.json
 ```
 
+This schema is **generated from the algorithm registry** by
+`fleet.define_xml.schema_builder` — its `algorithm:` enum, per-algorithm required
+fields, and the `fleet_spec_version` / `derivations_module` properties are derived
+from the same declarations that drive execution, and a CI test fails if the
+checked-in schema drifts. So the editor red-squiggles you see match exactly what
+`from_spec()` will accept — including the `callable` escape hatch and every
+algorithm the engine can run.
+
 Add this comment to the top of every spec file to activate YAML language-server auto-complete in
 VS Code or any LSP-enabled editor:
+
+<!-- docs:no-run -->
 
 ```yaml
 # yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json

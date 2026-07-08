@@ -14,9 +14,42 @@ from ._builder import BuilderVerbsMixin
 from ._specs import (
     AEListingSpec,
     AESummarySpec,
+    OverallStat,
     Row,
     resolve_filter,
 )
+
+
+class AEOverviewSpec(AESummarySpec):
+    """Spec for the AE overview table (AET01).
+
+    A real overview: whole-population header rows (any AE, any serious
+    AE, any AE leading to treatment discontinuation, fatal AEs) with an
+    **empty** row hierarchy — the SOC→PT breakdown is AET02
+    (:class:`AESocPtSpec`), not this table.
+    """
+
+    rows: list[Row] = Field(default_factory=list)
+    header_rows: list[OverallStat] = Field(
+        default_factory=lambda: [
+            OverallStat(label="Subjects with at least one adverse event"),
+            OverallStat(
+                label="Subjects with at least one serious adverse event",
+                filter='pl.col("AESER") == "Y"',
+            ),
+            OverallStat(
+                label="Subjects with at least one adverse event leading to discontinuation",
+                filter='pl.col("AEACN") == "DRUG WITHDRAWN"',
+            ),
+            OverallStat(
+                label="Subjects with fatal adverse events",
+                filter='pl.col("AESDTH") == "Y"',
+            ),
+        ],
+    )
+    required_columns: list[str] = Field(
+        default_factory=lambda: ["USUBJID", "TRTA", "AESER", "AEACN", "AESDTH"],
+    )
 
 
 class AESocPtSpec(AESummarySpec):
@@ -116,10 +149,12 @@ class AETLGNamespace(BuilderVerbsMixin):
     _builder_context = "t_ae_summary"
     _builder_specs = {
         "t_summary": AESummarySpec,
+        "t_overview": AEOverviewSpec,
         "t_soc_pt": AESocPtSpec,
         "t_severity": AESeveritySpec,
         "t_grade": AEGradeSpec,
         "t_relationship": AERelationshipSpec,
+        "l_listing": AEListingSpec,
     }
 
     def __init__(self, df: pl.DataFrame) -> None:
@@ -186,6 +221,60 @@ class AETLGNamespace(BuilderVerbsMixin):
             dataset_filter=spec.dataset_filter,
             header_rows=spec.header_rows,
             nested=True,
+            value_col=spec.value_col,
+            label_col=spec.label_col,
+            decimals=spec.decimals,
+        )
+
+    # ------------------------------------------------------------------ #
+    # Overview (AET01)                                                     #
+    # ------------------------------------------------------------------ #
+
+    def t_overview(
+        self,
+        *,
+        groupby: str | None = None,
+        adsl: pl.DataFrame | None = None,
+        spec: AEOverviewSpec | None = None,
+    ) -> pl.DataFrame:
+        """Overview of adverse events (AET01): whole-population header rows.
+
+        Counts subjects with any AE, any serious AE, any AE leading to
+        treatment discontinuation, and fatal AEs — one n / % row each,
+        no SOC→PT hierarchy (that is :meth:`t_soc_pt` / AET02).  The
+        default filters read ``AESER`` / ``AEACN`` / ``AESDTH``;
+        override ``spec.header_rows`` for sponsor-specific definitions.
+
+        Args:
+            groupby: Treatment-arm column; overrides ``spec.columns[0]``.
+            adsl: ADSL for big-N denominators (percentages).
+            spec: Optional ``AEOverviewSpec`` override.
+
+        Returns:
+            pl.DataFrame: {cards}-compatible ARD.
+
+        Examples:
+            ``ard = adae.tlg.ae.t_overview(groupby="TRTA", adsl=adsl)``
+        """
+        spec = spec or AEOverviewSpec()
+        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
+        spec.validate_dataframe(self._df, group_col=group_col)
+        return summarize_ard(
+            self._df,
+            rows=spec.rows,
+            stats=spec.statistics,
+            context="t_ae_overview",
+            group_col=group_col,
+            pools=spec.pools,
+            column_order=spec.column_order,
+            adsl=adsl,
+            adsl_filter=spec.adsl_filter,
+            dataset_filter=spec.dataset_filter,
+            header_rows=spec.header_rows,
+            nested=True,
+            value_col=spec.value_col,
+            label_col=spec.label_col,
+            decimals=spec.decimals,
         )
 
     # ------------------------------------------------------------------ #
@@ -228,6 +317,9 @@ class AETLGNamespace(BuilderVerbsMixin):
             dataset_filter=spec.dataset_filter,
             header_rows=spec.header_rows,
             nested=True,
+            value_col=spec.value_col,
+            label_col=spec.label_col,
+            decimals=spec.decimals,
         )
 
     def t_severity(
@@ -282,6 +374,9 @@ class AETLGNamespace(BuilderVerbsMixin):
             adsl_filter=spec.adsl_filter,
             header_rows=spec.header_rows,
             nested=True,
+            value_col=spec.value_col,
+            label_col=spec.label_col,
+            decimals=spec.decimals,
         )
 
     def t_grade(
@@ -333,6 +428,9 @@ class AETLGNamespace(BuilderVerbsMixin):
             adsl_filter=spec.adsl_filter,
             header_rows=spec.header_rows,
             nested=True,
+            value_col=spec.value_col,
+            label_col=spec.label_col,
+            decimals=spec.decimals,
         )
 
     def t_relationship(
@@ -383,6 +481,9 @@ class AETLGNamespace(BuilderVerbsMixin):
             adsl_filter=spec.adsl_filter,
             header_rows=spec.header_rows,
             nested=True,
+            value_col=spec.value_col,
+            label_col=spec.label_col,
+            decimals=spec.decimals,
         )
 
     # ------------------------------------------------------------------ #

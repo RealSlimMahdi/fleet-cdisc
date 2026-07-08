@@ -17,8 +17,8 @@ Usage
         .actual_time("ATIME", sample_dtm="PCDTC", dose_dtm="EXSTDTC")
         .predose_flag("PREDFL", time_col="ATIME")
         .dose_normalized("AVALDNM", conc_col="AVAL", dose_col="DOSE")
-        .seq("PCSEQ", groups=["USUBJID"])
-        .merge_adsl(adsl_df, keep_cols=["TRTSDT", "TRT01P"])
+        .seq("PCSEQ", by=["USUBJID"])
+        .merge_adsl(adsl_df, keep=["TRTSDT", "TRT01P"])
         .to_frame()
     )
 """
@@ -30,6 +30,7 @@ from typing import Self
 import polars as pl
 
 from fleet.adam._mixins import MultiRowMixin, SharedADaMVerbsMixin
+from fleet.core.exceptions import DerivationError
 
 _UNIT_SCALE: dict[str, float] = {
     "s": 1.0,
@@ -121,7 +122,7 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         """
         valid_methods = {"half_lloq", "zero", "lloq", "missing"}
         if method not in valid_methods:
-            raise ValueError(
+            raise DerivationError(
                 f"blq_impute method={method!r} is not supported. "
                 f"Choose one of: {sorted(valid_methods)}"
             )
@@ -174,7 +175,7 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         valid_units = set(_UNIT_SCALE)
         for u in (input_unit, output_unit):
             if u not in valid_units:
-                raise ValueError(
+                raise DerivationError(
                     f"nominal_time unit={u!r} is not supported. "
                     f"Choose one of: {sorted(valid_units)}"
                 )
@@ -377,7 +378,7 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         """
         valid_bases = {"e", "2", "10"}
         if base not in valid_bases:
-            raise ValueError(
+            raise DerivationError(
                 f"log_conc base={base!r} is not supported. Choose one of: {sorted(valid_bases)}"
             )
         c = pl.col(conc_col).cast(pl.Float64)

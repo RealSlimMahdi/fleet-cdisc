@@ -80,6 +80,104 @@ def test_template_selector_rejects_unknown_id() -> None:
 
 
 # ================================================================== #
+# Listing parity — the fluent API produces listings too                #
+# ================================================================== #
+
+
+@pytest.mark.parametrize(
+    "meta",
+    [m for m in TEMPLATES.values() if m.output_type is OutputType.LISTING],
+    ids=lambda m: m.id,
+)
+def test_template_selector_reaches_every_listing(meta) -> None:
+    """.template(id).to_listing() materialises the direct l_listing output."""
+    frame = FRAMES[meta.domains[-1]]
+    ns = getattr(frame.tlg, meta.namespace)
+    inline = ns.template(meta.id).to_listing()
+    direct = getattr(ns, meta.method)()
+    assert inline.equals(direct), f"{meta.id}: template().to_listing() != direct call"
+
+
+def test_builder_listing_columns_and_sort() -> None:
+    """columns()/sort_by() drive the listing spec like Column objects do."""
+    from fleet.tlg import AEListingSpec, Column
+
+    inline = ADAE.tlg.ae.columns(["USUBJID", "AEDECOD", "AESEV"]).sort_by(["USUBJID"]).to_listing()
+    spec = AEListingSpec(
+        columns=[
+            Column(field="USUBJID"),
+            Column(field="AEDECOD"),
+            Column(field="AESEV"),
+        ],
+        sort_by=["USUBJID"],
+    )
+    direct = ADAE.tlg.ae.l_listing(spec=spec)
+    assert inline.equals(direct)
+    assert inline.columns == ["USUBJID", "AEDECOD", "AESEV"]
+
+
+def test_listing_target_rejects_to_ard_and_vice_versa() -> None:
+    with pytest.raises(SchemaError, match="to_listing"):
+        ADAE.tlg.ae.template("ael01").to_ard()
+    with pytest.raises(SchemaError, match="to_ard"):
+        ADAE.tlg.ae.template("aet02").to_listing()
+
+
+def test_listing_rejects_grouping_and_population_filter() -> None:
+    """Listings consume neither by() nor a population filter — loud, not silent."""
+    with pytest.raises(SchemaError, match="by\\(\\)"):
+        ADAE.tlg.ae.by("TRTA").template("ael01").to_listing()
+    with pytest.raises(SchemaError, match="adsl_filter"):
+        (
+            ADAE.tlg.ae.population(ADSL, adsl_filter='pl.col("SAFFL") == "Y"')
+            .template("ael01")
+            .to_listing()
+        )
+
+
+def test_namespace_without_listing_raises() -> None:
+    advs = FRAMES["ADVS"]
+    with pytest.raises(SchemaError, match="no listing"):
+        advs.tlg.vs.by("TRTA").to_listing()
+
+
+# ================================================================== #
+# New verb parity — value / label / decimals / Row objects             #
+# ================================================================== #
+
+
+def test_value_verb_matches_spec_path() -> None:
+    from fleet.tlg import LBChgSpec
+
+    adlb = FRAMES["ADLB"]
+    builder = adlb.tlg.lb.population(ADSL).by("TRTA").template("lbt02").value("CHG")
+    ard_inline = builder.to_ard()
+    ard_spec = adlb.tlg.lb.t_chg(groupby="TRTA", adsl=ADSL, spec=LBChgSpec(value_col="CHG"))
+    assert ard_inline.equals(ard_spec)
+
+
+def test_rows_accepts_row_objects() -> None:
+    from fleet.tlg import AESummarySpec, Row
+
+    row_objs = [Row(field="AEBODSYS", label="SOC"), Row(field="AEDECOD", label="PT")]
+    inline = ADAE.tlg.ae.population(ADSL).by("TRTA").rows(row_objs).to_ard()
+    direct = ADAE.tlg.ae.t_summary(groupby="TRTA", adsl=ADSL, spec=AESummarySpec(rows=row_objs))
+    assert inline.equals(direct)
+
+
+def test_decimals_verb_threads_to_fmt_fn() -> None:
+    ard = (
+        ADAE.tlg.ae.population(ADSL)
+        .by("TRTA")
+        .rows(["AEBODSYS"])
+        .decimals({"pct": "xx.xx"})
+        .to_ard()
+    )
+    pct = ard.filter(pl.col("stat_name") == "pct")
+    assert set(pct["fmt_fn"].to_list()) == {"xx.xx"}
+
+
+# ================================================================== #
 # Statistical edge battery                                             #
 # ================================================================== #
 

@@ -70,11 +70,11 @@ raw = pl.from_repr("""
 """)
 
 dm = (
-    raw.sdtm.hardcode_no_ct("DOMAIN", value="DM")
-    .hardcode_no_ct("STUDYID", value="MYSTUDY01")
-    .assign_no_ct("USUBJID", source="patient_id")
-    .assign_ct("SEX", source="sex_raw", ct_codelist=SEX, ct_mapping={"M": "M", "F": "F"})
-    .assign_dtc("BRTHDTC", source="birth_date")
+    raw.sdtm.assign("DOMAIN", value="DM")
+    .assign("STUDYID", value="MYSTUDY01")
+    .assign("USUBJID", source="patient_id")
+    .assign("SEX", source="sex_raw", ct=SEX, ct_map={"M": "M", "F": "F"})
+    .date("BRTHDTC", source="birth_date")
     .to_frame()
 )
 ```
@@ -96,11 +96,12 @@ vs_sdtm = pl.from_repr("""
 
 advs = (
     vs_sdtm.adam.source("USUBJID")
-    .source("PARAMCD")
-    .source("AVAL")
-    .study_day("ADY", analysis_date="ADT", reference_date="TRTSDT")
-    .flag("ABLFL", criteria='pl.col("VISITNUM") == 1', groups=["USUBJID", "PARAMCD"])
-    .baseline("BASE", aval="AVAL", baseline_flag="ABLFL")
+    .assign("PARAMCD", source="VSTESTCD")
+    .assign("AVAL", source="VSSTRESN")
+    .date("ADT", source="VSDTC")
+    .study_day("ADY", date_col="ADT", ref_col="TRTSDT")
+    .flag("ABLFL", criteria='pl.col("VISITNUM") == 1', by=["USUBJID", "PARAMCD"])
+    .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
     .chg("CHG", aval="AVAL", base="BASE")
     .pchg("PCHG", aval="AVAL", base="BASE")
     .to_frame()
@@ -111,12 +112,10 @@ advs = (
 
 ```python
 adsl = (
-    dm_sdtm.adsl.source("USUBJID")
-    .source("AGE")
-    .source("SEX")
+    dm_sdtm.adam.adsl.source("USUBJID", "AGE", "SEX")
     .first_date("TRTSDT", from_dataset=ex_sdtm, date_col="EXSTDTC", where='pl.col("EXDOSE") > 0')
     .last_date("TRTEDT", from_dataset=ex_sdtm, date_col="EXENDTC", where='pl.col("EXDOSE") > 0')
-    .duration("TRTDURD", start_date="TRTSDT", end_date="TRTEDT")
+    .duration("TRTDURD", start="TRTSDT", end="TRTEDT")
     .flag("SAFFL", criteria='pl.col("TRTSDT").is_not_null()')
     .count_events("NUMAE", from_dataset=ae_sdtm)
     .to_frame()
@@ -129,13 +128,22 @@ Fleet can read a `define.yaml` specification and execute the whole pipeline
 without hand-writing verbs:
 
 ```python
-from fleet import load_study_context
+import polars as pl
+import fleet  # noqa: F401
 
-ctx = load_study_context("examples/cdiscpilot01/adam/define.yaml")
-adsl = ctx.build("ADSL")  # reads inputs, applies derivations, validates output
+dm = pl.read_parquet("outputs/sdtm/dm.parquet")
+ex = pl.read_parquet("outputs/sdtm/ex.parquet")
+
+adsl = (
+    dm.adam.pin("EX", ex)
+    .from_spec("examples/cdiscpilot01/adam/define.yaml", dataset="ADSL")
+    .to_frame()
+)
 ```
 
-See [How define.yaml works](../concepts/define-yaml.md) for the full spec format.
+`from_spec` is the execution entry point: pin any datasets the spec references
+by name, then materialise with `.to_frame()`. See
+[How define.yaml works](../concepts/define-yaml.md) for the full spec format.
 
 ## 5. Generate Define-XML
 

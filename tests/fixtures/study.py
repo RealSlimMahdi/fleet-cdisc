@@ -12,8 +12,11 @@ Deliberate properties (mirroring the NEST testthat setup):
 - S01 carries multi-severity / multi-grade AEs (worst-case dedup),
   ADAE has a non-treatment-emergent record, ADCM an uncoded medication,
   ADLB a baseline-abnormal subject, ADEX interval dose records.
+- ADAE carries AESER / AEACN / AESDTH aligned with ADSL's disposition
+  (S02 discontinued for an AE and died) so the AET01 overview's header
+  rows each count a distinct population.
 
-Never edit values casually: the golden CSVs under
+Never edit values casually: the golden Parquet files under
 ``tests/fixtures/goldens/tlg/`` pin the ARDs computed from this study.
 """
 
@@ -90,6 +93,15 @@ ADAE = _with_trt01p(
             "AETOXGR": ["1", "3", "2", "2", "1", "1"],
             "AEREL": ["N", "Y", "N", "N", "Y", "N"],
             "AESER": ["N", "Y", "N", "N", "N", "N"],
+            "AEACN": [
+                "DOSE NOT CHANGED",
+                "DOSE NOT CHANGED",
+                "DRUG WITHDRAWN",
+                "DOSE NOT CHANGED",
+                "DOSE NOT CHANGED",
+                "DOSE NOT CHANGED",
+            ],
+            "AESDTH": ["N", "N", "Y", "N", "N", "N"],
             "TRTEMFL": ["Y", "Y", "Y", "Y", "Y", "N"],
         }
     )

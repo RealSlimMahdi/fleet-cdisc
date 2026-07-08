@@ -4,21 +4,68 @@
   "title": "Fleet Define Specification",
   "description": "Simplified JSON Schema for defining SDTM or ADaM dataset metadata in Fleet. Enforces structure, types, and codelist references. Generates Define-XML 2.1 and powers post-dataset checks.",
   "type": "object",
-  "required": ["study", "datasets"],
+  "required": [
+    "study",
+    "datasets"
+  ],
   "additionalProperties": false,
   "properties": {
-    "study": { "$ref": "#/$defs/study" },
+    "study": {
+      "$ref": "#/$defs/study"
+    },
     "codelists": {
       "type": "array",
       "description": "Shared codelists referenced by variables in this define.",
-      "items": { "$ref": "#/$defs/codelist" },
+      "items": {
+        "$ref": "#/$defs/codelist"
+      },
       "default": []
     },
     "datasets": {
       "type": "array",
-      "description": "Dataset definitions — one entry per SDTM domain or ADaM dataset.",
+      "description": "Dataset definitions \u2014 one entry per SDTM domain or ADaM dataset.",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/dataset" }
+      "items": {
+        "$ref": "#/$defs/dataset"
+      }
+    },
+    "fleet_spec_version": {
+      "type": "integer",
+      "description": "Optional spec-format version. from_spec() and DefineSpecGenerator reject versions this Fleet build does not understand.",
+      "enum": [
+        1
+      ]
+    },
+    "derivations_module": {
+      "type": "string",
+      "description": "Dotted Python module imported by from_spec() before execution so that its @derivation / register_transform callables are available (removes the import-order footgun for `algorithm: callable`)."
+    },
+    "ct": {
+      "type": "object",
+      "title": "CTConfig",
+      "description": "Controlled-terminology configuration for spec-driven execution. With validate: true, from_spec() runs assign-family derivations that declare a codelist with validate_values=True (out-of-codelist values warn, naming dataset/variable/codelist).",
+      "additionalProperties": false,
+      "properties": {
+        "validate": {
+          "type": "boolean",
+          "description": "Opt the spec into CT pass-through validation.",
+          "default": false
+        },
+        "file": {
+          "type": "string",
+          "description": "Optional CT file (.yaml/.csv) loaded into the validator cache before execution; relative paths resolve against the spec file."
+        }
+      }
+    },
+    "output_format": {
+      "type": "string",
+      "description": "Default export format for all datasets \u2014 drives def:leaf hrefs in Define-XML and output paths in the pipeline DAG. Overridable per dataset.",
+      "enum": [
+        "parquet",
+        "xpt",
+        "dataset-json"
+      ],
+      "default": "parquet"
     }
   },
   "$defs": {
@@ -74,7 +121,11 @@
         "standard": {
           "type": "string",
           "description": "CDISC implementation guide this define conforms to.",
-          "enum": ["SDTMIG", "ADAMIG", "SENDIG"]
+          "enum": [
+            "SDTMIG",
+            "ADAMIG",
+            "SENDIG"
+          ]
         },
         "standard_version": {
           "type": "string",
@@ -96,7 +147,11 @@
       "type": "object",
       "title": "Codelist",
       "description": "A controlled terminology codelist referenced by variables.",
-      "required": ["oid", "name", "type"],
+      "required": [
+        "oid",
+        "name",
+        "type"
+      ],
       "additionalProperties": false,
       "properties": {
         "oid": {
@@ -111,7 +166,11 @@
         "type": {
           "type": "string",
           "description": "Data type of the coded values.",
-          "enum": ["text", "integer", "float"]
+          "enum": [
+            "text",
+            "integer",
+            "float"
+          ]
         },
         "standard_oid": {
           "type": "string",
@@ -122,7 +181,9 @@
           "description": "Individual coded values.",
           "items": {
             "type": "object",
-            "required": ["coded_value"],
+            "required": [
+              "coded_value"
+            ],
             "additionalProperties": false,
             "properties": {
               "coded_value": {
@@ -142,7 +203,13 @@
       "type": "object",
       "title": "Dataset",
       "description": "Definition of a single SDTM domain or ADaM dataset.",
-      "required": ["name", "label", "structure", "keys", "variables"],
+      "required": [
+        "name",
+        "label",
+        "structure",
+        "keys",
+        "variables"
+      ],
       "additionalProperties": false,
       "properties": {
         "name": {
@@ -172,27 +239,56 @@
           "type": "array",
           "description": "Ordered list of key variable names that uniquely identify a record.",
           "minItems": 1,
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "inputs": {
           "type": "array",
           "description": "Upstream datasets or raw source files this dataset depends on. Used to build the pipeline DAG.",
-          "items": { "$ref": "#/$defs/dataset_input" },
+          "items": {
+            "$ref": "#/$defs/dataset_input"
+          },
           "default": []
         },
         "variables": {
           "type": "array",
           "description": "Ordered list of variable definitions.",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/variable" }
+          "items": {
+            "$ref": "#/$defs/variable"
+          }
+        },
+        "output": {
+          "type": "string",
+          "description": "Explicit output path for this dataset (used verbatim as the Define-XML def:leaf href; resolved against the DAG output_dir when relative). When omitted, the path is {name.lower()}{ext} per output_format."
+        },
+        "output_format": {
+          "type": "string",
+          "description": "Export format override for this dataset (see the top-level output_format).",
+          "enum": [
+            "parquet",
+            "xpt",
+            "dataset-json"
+          ]
+        },
+        "value_level": {
+          "type": "array",
+          "description": "Value-level metadata entries (Define-XML ValueListDef/WhereClauseDef) \u2014 parameter-dependent derivations of BDS datasets.",
+          "items": {
+            "$ref": "#/$defs/value_level_entry"
+          }
         }
       }
     },
     "dataset_input": {
       "type": "object",
       "title": "DatasetInput",
-      "description": "An upstream dependency of a dataset — either a raw source file or another pipeline dataset.",
-      "required": ["name", "type"],
+      "description": "An upstream dependency of a dataset \u2014 either a raw source file or another pipeline dataset.",
+      "required": [
+        "name",
+        "type"
+      ],
       "additionalProperties": false,
       "properties": {
         "name": {
@@ -201,7 +297,10 @@
         },
         "type": {
           "type": "string",
-          "enum": ["raw", "dataset"],
+          "enum": [
+            "raw",
+            "dataset"
+          ],
           "description": "'raw' for source files (csv, sas7bdat, xpt, parquet, etc.); 'dataset' for upstream pipeline datasets."
         },
         "path": {
@@ -214,7 +313,11 @@
       "type": "object",
       "title": "Variable",
       "description": "A single variable (column) in a dataset.",
-      "required": ["name", "label", "type"],
+      "required": [
+        "name",
+        "label",
+        "type"
+      ],
       "additionalProperties": false,
       "properties": {
         "name": {
@@ -230,7 +333,13 @@
         "type": {
           "type": "string",
           "description": "ODM data type. 'text' maps to Polars String; 'integer' to Int64; 'float' to Float64; 'date' to Date; 'datetime' to Datetime.",
-          "enum": ["text", "integer", "float", "date", "datetime"]
+          "enum": [
+            "text",
+            "integer",
+            "float",
+            "date",
+            "datetime"
+          ]
         },
         "length": {
           "type": "integer",
@@ -244,14 +353,27 @@
         },
         "core": {
           "type": "string",
-          "description": "CDISC core designation for the variable. When present, the checker uses this for graduated severity (Req → error, Exp → warning, Perm → info). Users may override the IG value to downgrade Req variables.",
-          "enum": ["Req", "Exp", "Perm", "Cond", "Conditionally Required"],
+          "description": "CDISC core designation for the variable. When present, the checker uses this for graduated severity (Req \u2192 error, Exp \u2192 warning, Perm \u2192 info). Users may override the IG value to downgrade Req variables.",
+          "enum": [
+            "Req",
+            "Exp",
+            "Perm",
+            "Cond",
+            "Conditionally Required"
+          ],
           "default": "Perm"
         },
         "origin": {
           "type": "string",
           "description": "How the value originates.",
-          "enum": ["Assigned", "Derived", "CRF", "Protocol", "eDT", "Other"]
+          "enum": [
+            "Assigned",
+            "Derived",
+            "CRF",
+            "Protocol",
+            "eDT",
+            "Other"
+          ]
         },
         "codelist": {
           "type": "string",
@@ -280,196 +402,6 @@
         }
       }
     },
-    "derivation": {
-      "type": "object",
-      "title": "Derivation",
-      "description": "Describes how a variable is programmatically derived by the Fleet pipeline engine. When present, from_spec() uses this block to build the transform expression instead of a separate _spec.yaml file.",
-      "required": ["algorithm"],
-      "minProperties": 1,
-      "additionalProperties": true,
-      "properties": {
-        "algorithm": {
-          "type": "string",
-          "description": "Derivation verb. Must match an SDTMAlgorithm or ADAMAlgorithm enum value.",
-          "minLength": 1,
-          "enum": [
-            "assign_no_ct",
-            "assign_ct",
-            "assign_dtc",
-            "hardcode_no_ct",
-            "hardcode_ct",
-            "condition_add",
-            "if_then_else",
-            "ae_aerel",
-            "merge",
-            "group_by",
-            "dataset_level",
-            "notsubmitted",
-            "multiple_responses",
-            "source",
-            "assigned",
-            "derivation",
-            "rename",
-            "recode",
-            "condderivation",
-            "lookup",
-            "study_day",
-            "baseline",
-            "chg",
-            "pchg",
-            "bmi",
-            "flag",
-            "nrind",
-            "on_treatment",
-            "shift",
-            "whereclauses"
-          ]
-        },
-        "source": {
-          "type": "string",
-          "description": "Source column name in the input DataFrame (assign_no_ct, assign_ct, assign_dtc, source, rename, recode)."
-        },
-        "value": {
-          "description": "Constant value to hardcode into this variable (hardcode_no_ct, hardcode_ct, assigned)."
-        },
-        "expression": {
-          "type": "string",
-          "description": "Polars column name or expression string (derivation, condderivation)."
-        },
-        "callable": {
-          "type": "string",
-          "description": "Optional dotted Python path to a study-specific function (e.g. 'mycompany.grading.ctcae_grade'). When set and Define-XML is generated with --enrich-methods, Fleet imports the callable and embeds its docstring summary into the MethodDef Description so regulatory reviewers see the exact computational method."
-        },
-        "ct_codelist": {
-          "type": "string",
-          "description": "CDISC controlled terminology codelist OID (assign_ct, hardcode_ct)."
-        },
-        "ct_mapping": {
-          "type": "object",
-          "description": "Explicit raw-value → CT-value mapping (assign_ct). Keys and values are strings.",
-          "additionalProperties": { "type": "string" }
-        },
-        "input_format": {
-          "type": "string",
-          "description": "strftime format of the source date/datetime column (assign_dtc)."
-        },
-        "func": {
-          "type": "string",
-          "description": "Standard function name for std_function algorithm: study_day | chg | pchg | bmi | baseline.",
-          "enum": ["study_day", "chg", "pchg", "bmi", "baseline"]
-        },
-        "analysis_date": {
-          "type": "string",
-          "description": "Analysis date column name (study_day, on_treatment)."
-        },
-        "reference_date": {
-          "type": "string",
-          "description": "Reference/start-of-treatment date column name (study_day)."
-        },
-        "aval": {
-          "type": "string",
-          "description": "Analysis value column name (chg, pchg, nrind)."
-        },
-        "base": {
-          "type": "string",
-          "description": "Baseline value column name (chg, pchg)."
-        },
-        "baseline_flag": {
-          "type": "string",
-          "description": "Baseline flag column name used when deriving BASE (baseline)."
-        },
-        "baseline_criteria": {
-          "type": "string",
-          "description": "Boolean expression identifying baseline records (baseline)."
-        },
-        "groups": {
-          "type": "array",
-          "description": "Partition columns for windowed operations (baseline, flag).",
-          "items": { "type": "string" }
-        },
-        "criteria": {
-          "type": "string",
-          "description": "Flag criteria expression or sentinel: first | last | max | min (flag)."
-        },
-        "flag_order_by": {
-          "type": "string",
-          "description": "Sort column for first/last flag criteria (flag)."
-        },
-        "flag_value": {
-          "type": "string",
-          "description": "String emitted when the flag condition is met. Defaults to Y.",
-          "default": "Y"
-        },
-        "low": {
-          "type": "string",
-          "description": "Lower normal range column name (nrind)."
-        },
-        "high": {
-          "type": "string",
-          "description": "Upper normal range column name (nrind)."
-        },
-        "trtedt": {
-          "type": "string",
-          "description": "End-of-treatment date column name (on_treatment)."
-        },
-        "baseline_cat": {
-          "type": "string",
-          "description": "Baseline category column (shift)."
-        },
-        "post_cat": {
-          "type": "string",
-          "description": "Post-baseline category column (shift)."
-        },
-        "recode_map": {
-          "type": "object",
-          "description": "Value mapping dict for recode algorithm.",
-          "additionalProperties": {}
-        },
-        "default": {
-          "description": "Default value for recode when the source value is not in recode_map."
-        },
-        "conditions": {
-          "type": "array",
-          "description": "List of when/then condition pairs for condderivation.",
-          "items": {
-            "type": "object",
-            "properties": {
-              "when": { "type": "string" },
-              "then": {}
-            }
-          }
-        },
-        "else_value": {
-          "description": "Fallback value for condderivation or if_then_else when no condition matches."
-        },
-        "when": {
-          "type": "array",
-          "description": "List of when/then/else clause dicts for if_then_else (SDTM).",
-          "items": { "type": "object" }
-        },
-        "condition": {
-          "type": "string",
-          "description": "Boolean expression for condition_add (SDTM)."
-        },
-        "then_value": {
-          "type": "string",
-          "description": "Value emitted when condition is true (condition_add, SDTM)."
-        },
-        "aerel_source": {
-          "type": "string",
-          "description": "Source column for ae_aerel algorithm (SDTM)."
-        },
-        "aerel_map": {
-          "type": "object",
-          "description": "Mapping dict for ae_aerel algorithm (SDTM).",
-          "additionalProperties": { "type": "string" }
-        },
-        "where": {
-          "type": "string",
-          "description": "Filter expression for whereclauses algorithm (ADaM)."
-        }
-      }
-    },
     "documents": {
       "type": "object",
       "title": "Documents",
@@ -479,7 +411,9 @@
         "annotated_crf": {
           "type": "object",
           "description": "Annotated Case Report Form PDF referenced from CRF-origin variables.",
-          "required": ["href"],
+          "required": [
+            "href"
+          ],
           "additionalProperties": false,
           "properties": {
             "href": {
@@ -502,7 +436,11 @@
           "description": "Additional supporting documents (reviewer guide, protocol, etc.).",
           "items": {
             "type": "object",
-            "required": ["id", "href", "title"],
+            "required": [
+              "id",
+              "href",
+              "title"
+            ],
             "additionalProperties": false,
             "properties": {
               "id": {
@@ -539,7 +477,10 @@
         "type": {
           "type": "string",
           "description": "Page reference type.",
-          "enum": ["PhysicalRef", "NamedDestination"],
+          "enum": [
+            "PhysicalRef",
+            "NamedDestination"
+          ],
           "default": "PhysicalRef"
         },
         "first_page": {
@@ -551,6 +492,2822 @@
           "description": "Last page of a page range."
         }
       }
+    },
+    "value_level_entry": {
+      "type": "object",
+      "title": "ValueLevelEntry",
+      "description": "One value-level slice: a condition (param: sugar for PARAMCD equality, or an explicit where:) plus the variable definitions/derivations that apply within it.",
+      "additionalProperties": false,
+      "required": [
+        "variables"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "param"
+          ]
+        },
+        {
+          "required": [
+            "where"
+          ]
+        }
+      ],
+      "properties": {
+        "param": {
+          "type": "string",
+          "description": "Shorthand: this entry applies where PARAMCD equals the given value."
+        },
+        "where": {
+          "$ref": "#/$defs/where_clause"
+        },
+        "variables": {
+          "type": "array",
+          "description": "Variable definitions (with derivations) valid within this slice.",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/variable"
+          }
+        }
+      }
+    },
+    "where_clause": {
+      "type": "object",
+      "title": "WhereClause",
+      "description": "Condition selecting the records a value-level entry applies to (Define-XML def:WhereClauseDef / RangeCheck).",
+      "additionalProperties": false,
+      "required": [
+        "variable",
+        "value"
+      ],
+      "properties": {
+        "variable": {
+          "type": "string",
+          "description": "Variable the condition tests (e.g. PARAMCD)."
+        },
+        "value": {
+          "description": "Value (EQ) or list of values (IN) the variable must match.",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
+          ]
+        }
+      }
+    },
+    "derivation": {
+      "title": "Derivation",
+      "description": "Describes how a variable is derived by the Fleet pipeline engine. Validated per algorithm: unknown keys are rejected. Generated from fleet.core.spec_registry \u2014 do not edit by hand; run `python -m fleet.define_xml.schema_builder` to regenerate.",
+      "anyOf": [
+        {
+          "discriminator": {
+            "mapping": {
+              "ae_aerel": "#/$defs/SDTMAeAerelSpec",
+              "assign_ct": "#/$defs/SDTMAssignCtSpec",
+              "assign_dtc": "#/$defs/SDTMDateSpec",
+              "assign_no_ct": "#/$defs/SDTMAssignNoCtSpec",
+              "callable": "#/$defs/SDTMCallableSpec",
+              "condition_add": "#/$defs/SDTMConditionAddSpec",
+              "dataset_level": "#/$defs/SDTMHardcodeNoCtSpec",
+              "date": "#/$defs/SDTMDateSpec",
+              "duration": "#/$defs/SDTMDurationSpec",
+              "group_by": "#/$defs/SDTMGroupBySpec",
+              "hardcode_ct": "#/$defs/SDTMHardcodeCtSpec",
+              "hardcode_no_ct": "#/$defs/SDTMHardcodeNoCtSpec",
+              "if_then_else": "#/$defs/SDTMIfThenElseSpec",
+              "merge": "#/$defs/SDTMMergeSpec",
+              "multiple_responses": "#/$defs/SDTMMultipleResponsesSpec",
+              "notsubmitted": "#/$defs/SDTMNotsubmittedSpec",
+              "nsv": "#/$defs/SDTMNsvSpec",
+              "seq": "#/$defs/SDTMSeqSpec"
+            },
+            "propertyName": "algorithm"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SDTMAssignNoCtSpec"
+            },
+            {
+              "$ref": "#/$defs/SDTMAssignCtSpec"
+            },
+            {
+              "$ref": "#/$defs/SDTMDateSpec"
+            },
+            {
+              "$ref": "#/$defs/SDTMHardcodeCtSpec"
+            },
+            {
+              "$ref": "#/$defs/SDTMHardcodeNoCtSpec"
+            },
+            {
+              "$ref": "#/$defs/SDTMConditionAddSpec"
+            },
+            {
+              "$ref": "#/$defs/SDTMIfThenElseSpec"
+            },
+            {
+              "$ref": "#/$defs/SDTMAeAerelSpec"
+            },
+            {
+              "$ref": "#/$defs/SDTMMergeSpec"
+            },
+            {
+              "$ref": "#/$defs/SDTMGroupBySpec"
+            },
+            {
+              "$ref": "#/$defs/SDTMNotsubmittedSpec"
+            },
+            {
+              "$ref": "#/$defs/SDTMMultipleResponsesSpec"
+            },
+            {
+              "$ref": "#/$defs/SDTMSeqSpec"
+            },
+            {
+              "$ref": "#/$defs/SDTMNsvSpec"
+            },
+            {
+              "$ref": "#/$defs/SDTMDurationSpec"
+            },
+            {
+              "$ref": "#/$defs/SDTMCallableSpec"
+            }
+          ]
+        },
+        {
+          "discriminator": {
+            "mapping": {
+              "assigned": "#/$defs/ADAMAssignedSpec",
+              "atoxgr": "#/$defs/ADAMAtoxgrSpec",
+              "baseline": "#/$defs/ADAMBaselineSpec",
+              "bmi": "#/$defs/ADAMBmiSpec",
+              "bsa": "#/$defs/ADAMBsaSpec",
+              "callable": "#/$defs/ADAMCallableSpec",
+              "chg": "#/$defs/ADAMChgSpec",
+              "combine_grades": "#/$defs/ADAMCombineGradesSpec",
+              "condderivation": "#/$defs/ADAMCondderivationSpec",
+              "count": "#/$defs/ADAMCountEventsSpec",
+              "count_events": "#/$defs/ADAMCountEventsSpec",
+              "date": "#/$defs/ADAMDateSpec",
+              "derivation": "#/$defs/ADAMDerivationSpec",
+              "duration": "#/$defs/ADAMDurationSpec",
+              "first_date": "#/$defs/ADAMFirstDateSpec",
+              "flag": "#/$defs/ADAMFlagSpec",
+              "last_date": "#/$defs/ADAMLastDateSpec",
+              "lookup": "#/$defs/ADAMLookupSpec",
+              "map": "#/$defs/ADAMMapSpec",
+              "mean_arterial_pressure": "#/$defs/ADAMMapSpec",
+              "nrind": "#/$defs/ADAMNrindSpec",
+              "on_treatment": "#/$defs/ADAMOnTreatmentSpec",
+              "pchg": "#/$defs/ADAMPchgSpec",
+              "pick": "#/$defs/ADAMPickSpec",
+              "qtc": "#/$defs/ADAMQtcSpec",
+              "recode": "#/$defs/ADAMRecodeSpec",
+              "rename": "#/$defs/ADAMRenameSpec",
+              "seq": "#/$defs/ADAMSeqSpec",
+              "shift": "#/$defs/ADAMShiftSpec",
+              "source": "#/$defs/ADAMSourceSpec",
+              "study_day": "#/$defs/ADAMStudyDaySpec",
+              "whereclauses": "#/$defs/ADAMWhereclausesSpec"
+            },
+            "propertyName": "algorithm"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ADAMSourceSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMDerivationSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMAssignedSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMRecodeSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMRenameSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMCondderivationSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMLookupSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMWhereclausesSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMStudyDaySpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMBaselineSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMChgSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMPchgSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMFlagSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMBmiSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMNrindSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMOnTreatmentSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMShiftSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMSeqSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMBsaSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMMapSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMQtcSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMAtoxgrSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMCombineGradesSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMDateSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMDurationSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMPickSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMFirstDateSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMLastDateSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMCountEventsSpec"
+            },
+            {
+              "$ref": "#/$defs/ADAMCallableSpec"
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "description": "Backward-compat callable block \u2014 `algorithm: callable` is injected automatically when only `callable:` is present.",
+          "required": [
+            "callable"
+          ],
+          "properties": {
+            "callable": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ADAMAssignedSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "assigned",
+          "description": "Assign a constant value for all rows.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "value": {
+          "description": "Constant value.",
+          "title": "Value"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm",
+        "value"
+      ],
+      "title": "ADAMAssignedSpec",
+      "type": "object"
+    },
+    "ADAMAtoxgrSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "atoxgr",
+          "description": "Toxicity grade via criteria-file grading.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "system": {
+          "default": "ctcae_v5",
+          "description": "Grading system.",
+          "title": "System",
+          "type": "string"
+        },
+        "direction": {
+          "description": "'L' or 'H'.",
+          "title": "Direction",
+          "type": "string"
+        },
+        "term_var": {
+          "default": "PARAMCD",
+          "description": "Toxicity term variable.",
+          "title": "Term Var",
+          "type": "string"
+        },
+        "unit_var": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Unit-of-measure variable.",
+          "title": "Unit Var"
+        },
+        "signif_dig": {
+          "default": 5,
+          "description": "Significant digits for comparisons.",
+          "title": "Signif Dig",
+          "type": "integer"
+        },
+        "indicators": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Baseline NRIND indicator lists.",
+          "title": "Indicators"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm",
+        "direction"
+      ],
+      "title": "ADAMAtoxgrSpec",
+      "type": "object"
+    },
+    "ADAMBaselineSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "baseline",
+          "description": "Propagate the baseline value to all records in a group.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "aval": {
+          "default": "AVAL",
+          "description": "Analysis value column.",
+          "title": "Aval",
+          "type": "string"
+        },
+        "baseline_flag": {
+          "default": "ABLFL",
+          "description": "Baseline record flag column.",
+          "title": "Baseline Flag",
+          "type": "string"
+        },
+        "groups": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Partition columns.",
+          "title": "Groups"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "ADAMBaselineSpec",
+      "type": "object"
+    },
+    "ADAMBmiSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "bmi",
+          "description": "Body Mass Index from weight and height.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "weight": {
+          "description": "Weight column (kg).",
+          "title": "Weight",
+          "type": "string"
+        },
+        "height": {
+          "description": "Height column (cm).",
+          "title": "Height",
+          "type": "string"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm",
+        "weight",
+        "height"
+      ],
+      "title": "ADAMBmiSpec",
+      "type": "object"
+    },
+    "ADAMBsaSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "bsa",
+          "description": "Body Surface Area.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "weight": {
+          "description": "Weight column (kg).",
+          "title": "Weight",
+          "type": "string"
+        },
+        "height": {
+          "description": "Height column (cm).",
+          "title": "Height",
+          "type": "string"
+        },
+        "method": {
+          "default": "Mosteller",
+          "description": "BSA formula.",
+          "title": "Method",
+          "type": "string"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm",
+        "weight",
+        "height"
+      ],
+      "title": "ADAMBsaSpec",
+      "type": "object"
+    },
+    "ADAMCallableSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "callable",
+          "description": "Escape hatch: run a registered or importable custom derivation.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "callable": {
+          "description": "Registered derivation name or dotted Python path.",
+          "title": "Callable",
+          "type": "string"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm",
+        "callable"
+      ],
+      "title": "ADAMCallableSpec",
+      "type": "object"
+    },
+    "ADAMChgSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "chg",
+          "description": "Change from baseline (AVAL - BASE).",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "aval": {
+          "default": "AVAL",
+          "title": "Aval",
+          "type": "string"
+        },
+        "base": {
+          "default": "BASE",
+          "title": "Base",
+          "type": "string"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "ADAMChgSpec",
+      "type": "object"
+    },
+    "ADAMCombineGradesSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "combine_grades",
+          "description": "Combine directional toxicity grades into one column.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "low_var": {
+          "default": "ATOXGRL",
+          "title": "Low Var",
+          "type": "string"
+        },
+        "high_var": {
+          "default": "ATOXGRH",
+          "title": "High Var",
+          "type": "string"
+        },
+        "low_desc_var": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Low-direction description column.",
+          "title": "Low Desc Var"
+        },
+        "high_desc_var": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "High-direction description column.",
+          "title": "High Desc Var"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "ADAMCombineGradesSpec",
+      "type": "object"
+    },
+    "ADAMCondderivationSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "condderivation",
+          "description": "Multi-branch conditional derivation.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "conditions": {
+          "description": "Ordered when/then condition dicts.",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Conditions",
+          "type": "array"
+        },
+        "else_value": {
+          "default": null,
+          "description": "Fallback when no condition matches.",
+          "title": "Else Value"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm",
+        "conditions"
+      ],
+      "title": "ADAMCondderivationSpec",
+      "type": "object"
+    },
+    "ADAMCountEventsSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "description": "Count matching records per subject from a pinned dataset.",
+          "enum": [
+            "count_events",
+            "count"
+          ],
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "from_dataset": {
+          "description": "Pinned event dataset name (resolved via .pin()).",
+          "title": "From Dataset",
+          "type": "string"
+        },
+        "where": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filter applied before counting.",
+          "title": "Where"
+        },
+        "groups": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Join key columns.",
+          "title": "Groups"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm",
+        "from_dataset"
+      ],
+      "title": "ADAMCountEventsSpec",
+      "type": "object"
+    },
+    "ADAMDateSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "date",
+          "description": "Parse, convert, impute, and flag an analysis date column.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source date column.",
+          "title": "Source"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Literal date value to broadcast.",
+          "title": "Value"
+        },
+        "output": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Output type override: 'dt' or 'dtm'.",
+          "title": "Output"
+        },
+        "time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Time column or 'HH:MM:SS' literal (DTM targets).",
+          "title": "Time"
+        },
+        "impute": {
+          "default": "first",
+          "description": "Imputation strategy.",
+          "title": "Impute",
+          "type": "string"
+        },
+        "impute_time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Time-part imputation override.",
+          "title": "Impute Time"
+        },
+        "highest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum imputation ceiling (D/M/Y/h/m/s).",
+          "title": "Highest"
+        },
+        "flag": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": true,
+          "description": "Auto-generate DTF/TMF flags (bool) or explicit flag name.",
+          "title": "Flag"
+        },
+        "min_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Lower clamp bound.",
+          "title": "Min Date"
+        },
+        "max_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Upper clamp bound.",
+          "title": "Max Date"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "ADAMDateSpec",
+      "type": "object"
+    },
+    "ADAMDerivationSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "derivation",
+          "description": "Derive a column from a Polars expression string.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "expression": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Polars expression string (or bare column name).",
+          "title": "Expression"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "ADAMDerivationSpec",
+      "type": "object"
+    },
+    "ADAMDurationSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "duration",
+          "description": "Compute the duration between two dates.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "start": {
+          "description": "Start date column.",
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "description": "End date column.",
+          "title": "End",
+          "type": "string"
+        },
+        "unit": {
+          "default": "days",
+          "description": "Output unit.",
+          "title": "Unit",
+          "type": "string"
+        },
+        "add_one": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "CDISC +1 day convention.",
+          "title": "Add One"
+        },
+        "out": {
+          "default": "numeric",
+          "description": "Output style: numeric or iso8601.",
+          "title": "Out",
+          "type": "string"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm",
+        "start",
+        "end"
+      ],
+      "title": "ADAMDurationSpec",
+      "type": "object"
+    },
+    "ADAMFirstDateSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "first_date",
+          "description": "Earliest event date per subject from a pinned dataset.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "from_dataset": {
+          "description": "Pinned event dataset name (resolved via .pin()).",
+          "title": "From Dataset",
+          "type": "string"
+        },
+        "date_col": {
+          "description": "Date column to minimise.",
+          "title": "Date Col",
+          "type": "string"
+        },
+        "where": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filter applied before aggregation.",
+          "title": "Where"
+        },
+        "groups": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Join key columns.",
+          "title": "Groups"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm",
+        "from_dataset",
+        "date_col"
+      ],
+      "title": "ADAMFirstDateSpec",
+      "type": "object"
+    },
+    "ADAMFlagSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "flag",
+          "description": "Derive a Y/null flag from criteria.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "criteria": {
+          "description": "Row expression or sentinel: first/last/max/min.",
+          "title": "Criteria",
+          "type": "string"
+        },
+        "groups": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Partition columns.",
+          "title": "Groups"
+        },
+        "order_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Sort column(s) for first/last criteria.",
+          "title": "Order By"
+        },
+        "value_col": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Column for max/min comparison.",
+          "title": "Value Col"
+        },
+        "where": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Candidate pre-filter expression.",
+          "title": "Where"
+        },
+        "flag_value": {
+          "default": "Y",
+          "description": "Value emitted when the flag condition is met.",
+          "title": "Flag Value",
+          "type": "string"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm",
+        "criteria"
+      ],
+      "title": "ADAMFlagSpec",
+      "type": "object"
+    },
+    "ADAMLastDateSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "last_date",
+          "description": "Latest event date per subject from a pinned dataset.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "from_dataset": {
+          "description": "Pinned event dataset name (resolved via .pin()).",
+          "title": "From Dataset",
+          "type": "string"
+        },
+        "date_col": {
+          "description": "Date column to maximise.",
+          "title": "Date Col",
+          "type": "string"
+        },
+        "where": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filter applied before aggregation.",
+          "title": "Where"
+        },
+        "groups": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Join key columns.",
+          "title": "Groups"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm",
+        "from_dataset",
+        "date_col"
+      ],
+      "title": "ADAMLastDateSpec",
+      "type": "object"
+    },
+    "ADAMLookupSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "lookup",
+          "description": "SQL-style join against a pinned lookup dataset.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "dataset": {
+          "description": "Pinned dataset name to join (resolved via .pin()).",
+          "title": "Dataset",
+          "type": "string"
+        },
+        "on": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "default": "USUBJID",
+          "description": "Join key column(s).",
+          "title": "On"
+        },
+        "how": {
+          "default": "left",
+          "description": "Join strategy.",
+          "title": "How",
+          "type": "string"
+        },
+        "target_cols": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Columns to keep from the joined result.",
+          "title": "Target Cols"
+        },
+        "where": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filter applied to the lookup dataset before joining.",
+          "title": "Where"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm",
+        "dataset"
+      ],
+      "title": "ADAMLookupSpec",
+      "type": "object"
+    },
+    "ADAMMapSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "description": "Mean Arterial Pressure.",
+          "enum": [
+            "map",
+            "mean_arterial_pressure"
+          ],
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "systolic": {
+          "default": "SYSBP",
+          "description": "Systolic BP column.",
+          "title": "Systolic",
+          "type": "string"
+        },
+        "diastolic": {
+          "default": "DIABP",
+          "description": "Diastolic BP column.",
+          "title": "Diastolic",
+          "type": "string"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "ADAMMapSpec",
+      "type": "object"
+    },
+    "ADAMNrindSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "nrind",
+          "description": "Reference-range indicator (LOW/NORMAL/HIGH).",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "aval": {
+          "default": "AVAL",
+          "description": "Analysis value column.",
+          "title": "Aval",
+          "type": "string"
+        },
+        "low": {
+          "default": "LBSTNRLO",
+          "description": "Lower normal range column.",
+          "title": "Low",
+          "type": "string"
+        },
+        "high": {
+          "default": "LBSTNRHI",
+          "description": "Upper normal range column.",
+          "title": "High",
+          "type": "string"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "ADAMNrindSpec",
+      "type": "object"
+    },
+    "ADAMOnTreatmentSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "on_treatment",
+          "description": "On-treatment flag from analysis vs treatment dates.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "analysis_date": {
+          "default": "ADT",
+          "description": "Analysis date column.",
+          "title": "Analysis Date",
+          "type": "string"
+        },
+        "reference_date": {
+          "default": "TRTSDT",
+          "description": "Treatment start date column.",
+          "title": "Reference Date",
+          "type": "string"
+        },
+        "trtedt": {
+          "default": "TRTEDT",
+          "description": "Treatment end date column.",
+          "title": "Trtedt",
+          "type": "string"
+        },
+        "open_ended": {
+          "default": true,
+          "description": "Treat a missing end date as still on treatment.",
+          "title": "Open Ended",
+          "type": "boolean"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "ADAMOnTreatmentSpec",
+      "type": "object"
+    },
+    "ADAMPchgSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "pchg",
+          "description": "Percent change from baseline.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "aval": {
+          "default": "AVAL",
+          "title": "Aval",
+          "type": "string"
+        },
+        "base": {
+          "default": "BASE",
+          "title": "Base",
+          "type": "string"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "ADAMPchgSpec",
+      "type": "object"
+    },
+    "ADAMPickSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "pick",
+          "description": "Select the first/last matching event per group.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "events": {
+          "description": "Ordered event definition dicts.",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Events",
+          "type": "array"
+        },
+        "targets": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Output columns; defaults to the variable name.",
+          "title": "Targets"
+        },
+        "by": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Grouping columns.",
+          "title": "By"
+        },
+        "order": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Sort order.",
+          "title": "Order"
+        },
+        "mode": {
+          "default": "first",
+          "description": "'first' or 'last'.",
+          "title": "Mode",
+          "type": "string"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm",
+        "events"
+      ],
+      "title": "ADAMPickSpec",
+      "type": "object"
+    },
+    "ADAMQtcSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "qtc",
+          "description": "Corrected QT interval.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "qt": {
+          "default": "QT",
+          "description": "QT interval column (ms).",
+          "title": "Qt",
+          "type": "string"
+        },
+        "rr": {
+          "default": "RR",
+          "description": "RR interval column (ms).",
+          "title": "Rr",
+          "type": "string"
+        },
+        "method": {
+          "default": "Fridericia",
+          "description": "Correction formula.",
+          "title": "Method",
+          "type": "string"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "ADAMQtcSpec",
+      "type": "object"
+    },
+    "ADAMRecodeSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "recode",
+          "description": "Map source values onto new values via a lookup dict.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "recode_map": {
+          "additionalProperties": true,
+          "description": "Old-value \u2192 new-value mapping.",
+          "title": "Recode Map",
+          "type": "object"
+        },
+        "default": {
+          "default": null,
+          "description": "Fallback for unmapped values.",
+          "title": "Default"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm",
+        "recode_map"
+      ],
+      "title": "ADAMRecodeSpec",
+      "type": "object"
+    },
+    "ADAMRenameSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "rename",
+          "description": "Copy a column under a new CDISC-compliant name.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "ADAMRenameSpec",
+      "type": "object"
+    },
+    "ADAMSeqSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "seq",
+          "description": "Assign the ASEQ sequence number within each group.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "order_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Sort column(s) for sequence order.",
+          "title": "Order By"
+        },
+        "groups": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Partition columns.",
+          "title": "Groups"
+        },
+        "start_at": {
+          "default": 1,
+          "description": "First sequence number.",
+          "title": "Start At",
+          "type": "integer"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "ADAMSeqSpec",
+      "type": "object"
+    },
+    "ADAMShiftSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "shift",
+          "description": "Shift-table category ('NORMAL to HIGH').",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "baseline_cat": {
+          "description": "Baseline category column.",
+          "title": "Baseline Cat",
+          "type": "string"
+        },
+        "post_cat": {
+          "description": "Post-baseline category column.",
+          "title": "Post Cat",
+          "type": "string"
+        },
+        "sep": {
+          "default": " to ",
+          "description": "Join separator.",
+          "title": "Sep",
+          "type": "string"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm",
+        "baseline_cat",
+        "post_cat"
+      ],
+      "title": "ADAMShiftSpec",
+      "type": "object"
+    },
+    "ADAMSourceSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "source",
+          "description": "Copy a column from the predecessor dataset.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Predecessor column; defaults to the variable name.",
+          "title": "Source"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "ADAMSourceSpec",
+      "type": "object"
+    },
+    "ADAMStudyDaySpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "study_day",
+          "description": "Relative study day (analysis date vs reference date).",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "analysis_date": {
+          "description": "Analysis date column (e.g. ADT).",
+          "title": "Analysis Date",
+          "type": "string"
+        },
+        "reference_date": {
+          "description": "Reference date column (e.g. TRTSDT).",
+          "title": "Reference Date",
+          "type": "string"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm",
+        "analysis_date",
+        "reference_date"
+      ],
+      "title": "ADAMStudyDaySpec",
+      "type": "object"
+    },
+    "ADAMWhereclausesSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "whereclauses",
+          "description": "Filter rows by a boolean expression.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "where": {
+          "description": "Row filter expression.",
+          "title": "Where",
+          "type": "string"
+        },
+        "depends_on": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Depends On"
+        }
+      },
+      "required": [
+        "algorithm",
+        "where"
+      ],
+      "title": "ADAMWhereclausesSpec",
+      "type": "object"
+    },
+    "SDTMAeAerelSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "ae_aerel",
+          "description": "Map raw relationship values onto AEREL controlled terms.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "aerel_source": {
+          "default": "ae_relationship",
+          "description": "Raw relationship column.",
+          "title": "Aerel Source",
+          "type": "string"
+        },
+        "aerel_map": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Raw\u2192AEREL mapping dict.",
+          "title": "Aerel Map"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "SDTMAeAerelSpec",
+      "type": "object"
+    },
+    "SDTMAssignCtSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "assign_ct",
+          "description": "Copy a raw column applying controlled-terminology mapping.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "ct_codelist": {
+          "default": "",
+          "description": "CT codelist OID.",
+          "title": "Ct Codelist",
+          "type": "string"
+        },
+        "ct_mapping": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Explicit raw\u2192CT value mapping.",
+          "title": "Ct Mapping"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "SDTMAssignCtSpec",
+      "type": "object"
+    },
+    "SDTMAssignNoCtSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "assign_no_ct",
+          "description": "Copy a raw column without controlled-terminology mapping.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source column; defaults to the variable name (carry-through).",
+          "title": "Source"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "SDTMAssignNoCtSpec",
+      "type": "object"
+    },
+    "SDTMCallableSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "callable",
+          "description": "Escape hatch: run a registered or importable custom derivation.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "callable": {
+          "description": "Registered derivation name or dotted Python path.",
+          "title": "Callable",
+          "type": "string"
+        }
+      },
+      "required": [
+        "algorithm",
+        "callable"
+      ],
+      "title": "SDTMCallableSpec",
+      "type": "object"
+    },
+    "SDTMConditionAddSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "condition_add",
+          "description": "Set a value where a condition holds (null otherwise).",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "condition": {
+          "description": "Boolean expression.",
+          "title": "Condition",
+          "type": "string"
+        },
+        "then_value": {
+          "description": "Value emitted when the condition is true.",
+          "title": "Then Value"
+        }
+      },
+      "required": [
+        "algorithm",
+        "condition",
+        "then_value"
+      ],
+      "title": "SDTMConditionAddSpec",
+      "type": "object"
+    },
+    "SDTMDateSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "description": "Parse, convert, impute, and flag a date/datetime column (ISO 8601).",
+          "enum": [
+            "date",
+            "assign_dtc"
+          ],
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source date column.",
+          "title": "Source"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Literal date value to broadcast.",
+          "title": "Value"
+        },
+        "output": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Output type override: 'dt' or 'dtm'.",
+          "title": "Output"
+        },
+        "format": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "strftime format of the source column.",
+          "title": "Format"
+        },
+        "time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Time column or 'HH:MM:SS' literal (DTM targets).",
+          "title": "Time"
+        },
+        "impute": {
+          "default": "first",
+          "description": "Imputation strategy.",
+          "title": "Impute",
+          "type": "string"
+        },
+        "impute_time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Time-part imputation override.",
+          "title": "Impute Time"
+        },
+        "highest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum imputation ceiling (D/M/Y/h/m/s).",
+          "title": "Highest"
+        },
+        "flag": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": true,
+          "description": "Auto-generate DTF/TMF flags (bool) or explicit flag name.",
+          "title": "Flag"
+        },
+        "min_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Lower clamp bound.",
+          "title": "Min Date"
+        },
+        "max_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Upper clamp bound.",
+          "title": "Max Date"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "SDTMDateSpec",
+      "type": "object"
+    },
+    "SDTMDurationSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "duration",
+          "description": "Compute the duration between two dates.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "start": {
+          "description": "Start date column.",
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "description": "End date column.",
+          "title": "End",
+          "type": "string"
+        },
+        "unit": {
+          "default": "days",
+          "description": "Output unit.",
+          "title": "Unit",
+          "type": "string"
+        },
+        "add_one": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "CDISC +1 day convention.",
+          "title": "Add One"
+        },
+        "out": {
+          "default": "numeric",
+          "description": "Output style: numeric or iso8601.",
+          "title": "Out",
+          "type": "string"
+        }
+      },
+      "required": [
+        "algorithm",
+        "start",
+        "end"
+      ],
+      "title": "SDTMDurationSpec",
+      "type": "object"
+    },
+    "SDTMGroupBySpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "group_by",
+          "description": "Aggregate the frame by group columns.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "group_cols": {
+          "description": "Grouping columns.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Group Cols",
+          "type": "array"
+        },
+        "agg": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Aggregation expression strings.",
+          "title": "Agg"
+        }
+      },
+      "required": [
+        "algorithm",
+        "group_cols"
+      ],
+      "title": "SDTMGroupBySpec",
+      "type": "object"
+    },
+    "SDTMHardcodeCtSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "hardcode_ct",
+          "description": "Hardcode a constant validated against controlled terminology.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "value": {
+          "description": "Constant CT value.",
+          "title": "Value"
+        },
+        "ct_codelist": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "CT codelist OID to validate against.",
+          "title": "Ct Codelist"
+        }
+      },
+      "required": [
+        "algorithm",
+        "value"
+      ],
+      "title": "SDTMHardcodeCtSpec",
+      "type": "object"
+    },
+    "SDTMHardcodeNoCtSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "description": "Hardcode a constant value for all rows.",
+          "enum": [
+            "hardcode_no_ct",
+            "dataset_level"
+          ],
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "value": {
+          "description": "Constant value.",
+          "title": "Value"
+        }
+      },
+      "required": [
+        "algorithm",
+        "value"
+      ],
+      "title": "SDTMHardcodeNoCtSpec",
+      "type": "object"
+    },
+    "SDTMIfThenElseSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "if_then_else",
+          "description": "Multi-branch conditional derivation.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "when": {
+          "description": "Ordered when/then clause dicts.",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "When",
+          "type": "array"
+        },
+        "else_value": {
+          "default": null,
+          "description": "Fallback when no clause matches.",
+          "title": "Else Value"
+        }
+      },
+      "required": [
+        "algorithm",
+        "when"
+      ],
+      "title": "SDTMIfThenElseSpec",
+      "type": "object"
+    },
+    "SDTMMergeSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "merge",
+          "description": "Join a pinned reference dataset into the pipeline.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "dataset": {
+          "description": "Pinned dataset name to merge (resolved via .pin()).",
+          "title": "Dataset",
+          "type": "string"
+        },
+        "on": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "default": "USUBJID",
+          "description": "Join key column(s).",
+          "title": "On"
+        },
+        "how": {
+          "default": "left",
+          "description": "Join strategy.",
+          "title": "How",
+          "type": "string"
+        },
+        "target_cols": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Columns to keep from the joined result.",
+          "title": "Target Cols"
+        }
+      },
+      "required": [
+        "algorithm",
+        "dataset"
+      ],
+      "title": "SDTMMergeSpec",
+      "type": "object"
+    },
+    "SDTMMultipleResponsesSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "multiple_responses",
+          "description": "Explode a delimited multi-response field into rows.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "delimiter": {
+          "default": "|",
+          "description": "Response separator.",
+          "title": "Delimiter",
+          "type": "string"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "SDTMMultipleResponsesSpec",
+      "type": "object"
+    },
+    "SDTMNotsubmittedSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "notsubmitted",
+          "description": "Null out a variable that is not submitted.",
+          "title": "Algorithm",
+          "type": "string"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "SDTMNotsubmittedSpec",
+      "type": "object"
+    },
+    "SDTMNsvSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "nsv",
+          "description": "Declare a Non-Standard Variable (SUPPQUAL qualifier).",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source column for the qualifier.",
+          "title": "Source"
+        },
+        "value": {
+          "default": null,
+          "description": "Constant qualifier value.",
+          "title": "Value"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "SDTMNsvSpec",
+      "type": "object"
+    },
+    "SDTMSeqSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "seq",
+          "description": "Assign the --SEQ sequence number within each group.",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "order_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Sort column(s) for sequence order.",
+          "title": "Order By"
+        },
+        "groups": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Partition columns.",
+          "title": "Groups"
+        },
+        "start_at": {
+          "default": 1,
+          "description": "First sequence number.",
+          "title": "Start At",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "SDTMSeqSpec",
+      "type": "object"
     }
   }
 }

@@ -44,9 +44,23 @@ tlg-pptx = [
     "python-pptx>=0.6.23",
 ]
 
+# MIGRATE: libcst-based rewrite of deprecated verb/kwarg spellings
+migrate = [
+    "libcst>=1.0",
+]
+
+# WATCH: --watch mode for `fleet define-xml` and `fleet tlg run`
+watch = [
+    "watchfiles>=0.21",
+]
+
 # FULL: All extras
 all = [
     "fleet-cdisc[io]",
+    "fleet-cdisc[tlg-pdf]",
+    "fleet-cdisc[tlg-pptx]",
+    "fleet-cdisc[migrate]",
+    "fleet-cdisc[watch]",
 ]
 
 # DEV: Development tools

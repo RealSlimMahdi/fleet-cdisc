@@ -131,6 +131,9 @@ class CMTLGNamespace(BuilderVerbsMixin):
             dataset_filter=spec.dataset_filter,
             header_rows=spec.header_rows,
             nested=True,
+            value_col=spec.value_col,
+            label_col=spec.label_col,
+            decimals=spec.decimals,
         )
 
     # ------------------------------------------------------------------ #
@@ -177,6 +180,9 @@ class CMTLGNamespace(BuilderVerbsMixin):
             adsl_filter=spec.adsl_filter,
             dataset_filter=spec.dataset_filter,
             header_rows=spec.header_rows,
+            value_col=spec.value_col,
+            label_col=spec.label_col,
+            decimals=spec.decimals,
         )
 
     # ------------------------------------------------------------------ #
