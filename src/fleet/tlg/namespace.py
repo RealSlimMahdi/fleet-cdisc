@@ -14,6 +14,13 @@ import polars as pl
 
 if TYPE_CHECKING:
     from .ae_namespace import AETLGNamespace
+    from .cm_namespace import CMTLGNamespace
+    from .dm_namespace import DMTLGNamespace
+    from .ds_namespace import DSTLGNamespace
+    from .eg_namespace import EGTLGNamespace
+    from .ex_namespace import EXTLGNamespace
+    from .lb_namespace import LBTLGNamespace
+    from .mh_namespace import MHTLGNamespace
     from .vs_namespace import VSTLGNamespace
 
 
@@ -42,6 +49,55 @@ class TLGNamespace:
         from .vs_namespace import VSTLGNamespace
 
         return VSTLGNamespace(self._df)
+
+    @property
+    def cm(self) -> CMTLGNamespace:
+        """Concomitant-medication tables."""
+        from .cm_namespace import CMTLGNamespace
+
+        return CMTLGNamespace(self._df)
+
+    @property
+    def ex(self) -> EXTLGNamespace:
+        """Exposure tables."""
+        from .ex_namespace import EXTLGNamespace
+
+        return EXTLGNamespace(self._df)
+
+    @property
+    def dm(self) -> DMTLGNamespace:
+        """Demographic tables."""
+        from .dm_namespace import DMTLGNamespace
+
+        return DMTLGNamespace(self._df)
+
+    @property
+    def ds(self) -> DSTLGNamespace:
+        """Disposition, deaths, enrollment, and deviation tables."""
+        from .ds_namespace import DSTLGNamespace
+
+        return DSTLGNamespace(self._df)
+
+    @property
+    def eg(self) -> EGTLGNamespace:
+        """ECG summary tables."""
+        from .eg_namespace import EGTLGNamespace
+
+        return EGTLGNamespace(self._df)
+
+    @property
+    def lb(self) -> LBTLGNamespace:
+        """Laboratory tables and listings."""
+        from .lb_namespace import LBTLGNamespace
+
+        return LBTLGNamespace(self._df)
+
+    @property
+    def mh(self) -> MHTLGNamespace:
+        """Medical-history tables."""
+        from .mh_namespace import MHTLGNamespace
+
+        return MHTLGNamespace(self._df)
 
     def check(self) -> list[str]:
         """Run pre-validation diagnostics across all sub-namespaces.

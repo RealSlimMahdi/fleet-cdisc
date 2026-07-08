@@ -311,19 +311,25 @@ ae = (
 
 ### Lineage tracing
 
-Every pin access is recorded. After building a pipeline, inspect pin lineage:
+Every derivation — including cross-domain pin access — is recorded automatically. Print the origin of every derived variable with the `.trail()` verb (detailed in the Observability section below), without breaking the chain:
 
 ```python
-from fleet.core.lineage import pin_lineage_of
-
-for dep in pin_lineage_of(ae_ns):
-    print(f"{dep.target_col} ← {dep.source_domain}.{dep.source_cols} via {dep.verb}")
-# AESTDY ← DM.['RFSTDTC'] via study_day
+ae = (
+    ae_raw.sdtm
+    .assign_no_ct("USUBJID", source="patient_number")
+    .assign_no_ct("AESTDTC", source="ae_start_date")
+    .pin("DM", dm)
+    .study_day("AESTDY", date_col="AESTDTC")
+    .trail()          # prints the origin table; pipeline continues
+    .to_frame()
+)
 ```
+
+The cross-domain pin is attributed in the `Origin` column as `DM.RFSTDTC`.
 
 ## Pipeline Debugging & Observability
 
-Fleet pipelines are lazy — all derivations accumulate until `.to_frame()` collects the result. This can make it hard to pinpoint which step introduced bad data or types. Two chainable verbs help:
+Fleet pipelines are lazy — all derivations accumulate until `.to_frame()` collects the result. This can make it hard to pinpoint which step introduced bad data or types — or to see where each variable came from. Three chainable verbs help:
 
 ### `.inspect()` — Hard Checkpoint
 
@@ -354,4 +360,35 @@ advs = (
 )
 ```
 
-Both verbs are available on `df.sdtm`, `df.adam`, and all ADaM sub-namespaces.
+### `.trail()` — Variable Origin
+
+Prints a table of every *derived* variable: the verb that produced it and the source columns it consumed, including cross-domain pin sources shown as `DOMAIN.COLUMN`. Nothing is materialised — the trail is metadata captured automatically on every verb — so it can sit anywhere in the chain, though it is most complete just before `.to_frame()`.
+
+```python
+ae = (
+    ae_raw.sdtm
+    .hardcode_no_ct("DOMAIN", value="AE")
+    .assign_no_ct("USUBJID", source="patient_number")
+    .assign_no_ct("AESTDTC", source="ae_start_date")
+    .pin("DM", dm)
+    .study_day("AESTDY", date_col="AESTDTC")
+    .trail()   # prints the table below, pipeline continues
+    .to_frame()
+)
+```
+
+```text
+Variable trail (4 derivation(s)):
+┌───┬──────────┬────────────────┬─────────────────────┬────────┐
+│ # ┆ Variable ┆ Verb           ┆ Origin              ┆ Domain │
+╞═══╪══════════╪════════════════╪═════════════════════╪════════╡
+│ 1 ┆ DOMAIN   ┆ hardcode_no_ct ┆ (literal)           ┆ —      │
+│ 2 ┆ USUBJID  ┆ assign_no_ct   ┆ patient_number      ┆ AE     │
+│ 3 ┆ AESTDTC  ┆ assign_no_ct   ┆ ae_start_date       ┆ AE     │
+│ 4 ┆ AESTDY   ┆ study_day      ┆ AESTDTC, DM.RFSTDTC ┆ AE     │
+└───┴──────────┴────────────────┴─────────────────────┴────────┘
+```
+
+Variables with no source column (e.g. hardcoded constants) are marked `(literal)`; a variable derived more than once appears once per derivation, in pipeline order. Passthrough columns that no verb touched are not listed.
+
+All three verbs are available on `df.sdtm`, `df.adam`, and all ADaM sub-namespaces.

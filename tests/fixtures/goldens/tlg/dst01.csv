@@ -1,0 +1,28 @@
+group1,group1_level,group2,group2_level,variable,variable_level,stat_name,stat_label,stat,fmt_fn,stat_fmt,warning,error,context
+TRTA,Drug A,"","","","",N,N,4.0,xx,4,,,t_ds_disposition
+TRTA,Drug B,"","","","",N,N,2.0,xx,2,,,t_ds_disposition
+TRTA,Placebo,"","","","",N,N,4.0,xx,4,,,t_ds_disposition
+TRTA,Drug A,"","",EOSSTT,COMPLETED,n,n,3.0,xx,3,,,t_ds_disposition
+TRTA,Drug A,"","",EOSSTT,COMPLETED,pct,n (%),75.0,xx.x,75.0,,,t_ds_disposition
+TRTA,Drug A,"","",EOSSTT,DISCONTINUED,n,n,1.0,xx,1,,,t_ds_disposition
+TRTA,Drug A,"","",EOSSTT,DISCONTINUED,pct,n (%),25.0,xx.x,25.0,,,t_ds_disposition
+TRTA,Drug B,"","",EOSSTT,COMPLETED,n,n,2.0,xx,2,,,t_ds_disposition
+TRTA,Drug B,"","",EOSSTT,COMPLETED,pct,n (%),100.0,xx.x,100.0,,,t_ds_disposition
+TRTA,Drug B,"","",EOSSTT,DISCONTINUED,n,n,0.0,xx,0,,,t_ds_disposition
+TRTA,Drug B,"","",EOSSTT,DISCONTINUED,pct,n (%),0.0,xx.x,0.0,,,t_ds_disposition
+TRTA,Placebo,"","",EOSSTT,COMPLETED,n,n,3.0,xx,3,,,t_ds_disposition
+TRTA,Placebo,"","",EOSSTT,COMPLETED,pct,n (%),75.0,xx.x,75.0,,,t_ds_disposition
+TRTA,Placebo,"","",EOSSTT,DISCONTINUED,n,n,1.0,xx,1,,,t_ds_disposition
+TRTA,Placebo,"","",EOSSTT,DISCONTINUED,pct,n (%),25.0,xx.x,25.0,,,t_ds_disposition
+TRTA,Drug A,"","",DCSREAS,ADVERSE EVENT,n,n,0.0,xx,0,,,t_ds_disposition
+TRTA,Drug A,"","",DCSREAS,ADVERSE EVENT,pct,n (%),0.0,xx.x,0.0,,,t_ds_disposition
+TRTA,Drug A,"","",DCSREAS,WITHDRAWAL BY SUBJECT,n,n,1.0,xx,1,,,t_ds_disposition
+TRTA,Drug A,"","",DCSREAS,WITHDRAWAL BY SUBJECT,pct,n (%),25.0,xx.x,25.0,,,t_ds_disposition
+TRTA,Drug B,"","",DCSREAS,ADVERSE EVENT,n,n,0.0,xx,0,,,t_ds_disposition
+TRTA,Drug B,"","",DCSREAS,ADVERSE EVENT,pct,n (%),0.0,xx.x,0.0,,,t_ds_disposition
+TRTA,Drug B,"","",DCSREAS,WITHDRAWAL BY SUBJECT,n,n,0.0,xx,0,,,t_ds_disposition
+TRTA,Drug B,"","",DCSREAS,WITHDRAWAL BY SUBJECT,pct,n (%),0.0,xx.x,0.0,,,t_ds_disposition
+TRTA,Placebo,"","",DCSREAS,ADVERSE EVENT,n,n,1.0,xx,1,,,t_ds_disposition
+TRTA,Placebo,"","",DCSREAS,ADVERSE EVENT,pct,n (%),25.0,xx.x,25.0,,,t_ds_disposition
+TRTA,Placebo,"","",DCSREAS,WITHDRAWAL BY SUBJECT,n,n,0.0,xx,0,,,t_ds_disposition
+TRTA,Placebo,"","",DCSREAS,WITHDRAWAL BY SUBJECT,pct,n (%),0.0,xx.x,0.0,,,t_ds_disposition

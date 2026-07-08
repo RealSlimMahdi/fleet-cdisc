@@ -55,3 +55,11 @@ my_rules
 presentation/
 .claude/
 claude/
+# temp clones for reference (do not commit)
+/tmp-clones/
+
+# benchmark/outputs folder
+benchmark/outputs/
+
+# ignore paper and presentation files
+papers/

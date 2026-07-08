@@ -239,7 +239,7 @@ print(f"   Arms in output: {sorted(ard_default['group1_level'].unique().to_list(
 #    Adds:
 #      • Pooled "All Xanomeline" and "Total" treatment groups
 #      • Event count statistic alongside n and %
-#      • Serious AE sub-analysis row
+#      • Serious AE header row (whole-dataset aggregate above the hierarchy)
 #      • Explicit column ordering
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 7. AE Summary — CUSTOM spec (with pools & extra stats) ══════════════")
@@ -248,7 +248,9 @@ custom_spec = AESummarySpec(
     rows=[
         Row(field="AEBODSYS", label="System Organ Class"),
         Row(field="AEDECOD", label="Preferred Term"),
-        Row(field="AESER", label="Serious AE", filter_value="Y"),
+    ],
+    header_rows=[
+        OverallStat(label="Subjects with at least one serious AE", filter='pl.col("AESER") == "Y"'),
     ],
     columns=["TRTA"],
     statistics=[Statistic.N_SUBJECTS, Statistic.N_PCT, Statistic.N_EVENTS],

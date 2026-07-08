@@ -1157,6 +1157,42 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     order=pick_order,
                     mode=pick_mode,
                 )
+            elif alg == "lookup":
+                lookup_df = ns._require_pin(
+                    str(getattr(var, "dataset", "") or "").upper(), "lookup"
+                )
+                ns = ns.lookup(
+                    target_cols=getattr(var, "target_cols", None),
+                    dataset=lookup_df,
+                    on=getattr(var, "join_on", None) or getattr(var, "on", None) or "USUBJID",
+                    how=getattr(var, "how", "left") or "left",
+                    where=getattr(var, "where", None),
+                )
+            elif alg == "atoxgr":
+                ns = ns.atoxgr(
+                    target,
+                    system=getattr(var, "system", "ctcae_v5") or "ctcae_v5",
+                    direction=getattr(var, "direction", "") or "",
+                    term_var=getattr(var, "term_var", "PARAMCD") or "PARAMCD",
+                    unit_var=getattr(var, "unit_var", None),
+                    signif_dig=getattr(var, "signif_dig", 5) or 5,
+                    indicators=getattr(var, "indicators", None),
+                )
+            elif alg == "combine_grades":
+                ns = ns.combine_grades(
+                    target,
+                    low_var=getattr(var, "low_var", "ATOXGRL") or "ATOXGRL",
+                    high_var=getattr(var, "high_var", "ATOXGRH") or "ATOXGRH",
+                    low_desc_var=getattr(var, "low_desc_var", None),
+                    high_desc_var=getattr(var, "high_desc_var", None),
+                )
+            elif alg == "seq":
+                ns = ns.seq(
+                    target,
+                    order_by=getattr(var, "order_by", None),
+                    groups=getattr(var, "groups", None),
+                    start_at=getattr(var, "start_at", 1) or 1,
+                )
             elif alg == "callable":
                 fn = _resolve_callable(var.callable_ref or "")
                 if hasattr(fn, "kind"):

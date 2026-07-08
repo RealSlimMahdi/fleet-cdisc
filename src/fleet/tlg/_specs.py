@@ -18,6 +18,36 @@ import yaml
 from pydantic import BaseModel, Field
 
 from fleet.core.exceptions import SchemaError
+from fleet.sdtm.utils import parse_expression
+
+
+def resolve_filter(value: Any) -> pl.Expr | None:
+    """Resolve a spec filter field to a Polars expression.
+
+    Filters may be given as a ``pl.Expr`` (inline use) or as a string
+    expression such as ``'pl.col("SAFFL") == "Y"'`` — the string form is
+    the YAML-serializable one, parsed through the same AST-whitelisted
+    ``parse_expression`` used by the SDTM/ADaM YAML specs.
+
+    Args:
+        value: ``None``, a ``pl.Expr``, or an expression string.
+
+    Returns:
+        pl.Expr | None: The resolved expression.
+
+    Raises:
+        ValueError: If a string expression cannot be parsed.
+        TypeError: If the value is neither ``None``, ``str`` nor ``pl.Expr``.
+    """
+    if value is None:
+        return None
+    if isinstance(value, pl.Expr):
+        return value
+    if isinstance(value, str):
+        return parse_expression(value)
+    raise TypeError(
+        f"Filter must be a pl.Expr or an expression string, got {type(value).__name__!r}"
+    )
 
 
 class Statistic(str, Enum):  # noqa: UP042
@@ -118,8 +148,9 @@ class OverallStat(BaseModel):
     filter: Any | None = Field(
         default=None,
         description=(
-            "Optional Polars expression to subset the dataset before "
-            "counting.  ``None`` means count all subjects."
+            "Optional filter to subset the dataset before counting — a "
+            "``pl.Expr`` or a string expression (the YAML-serializable "
+            "form).  ``None`` means count all subjects."
         ),
     )
     statistics: list[Statistic] | None = Field(
@@ -151,7 +182,9 @@ class TLGSpec(BaseModel):
     adsl_filter: Any | None = Field(
         default=None,
         description=(
-            "Polars expression filtering ADSL before subject counting. "
+            "Filter applied to ADSL before subject counting — a "
+            "``pl.Expr`` or a string expression such as "
+            '``\'pl.col("SAFFL") == "Y"\'`` (the YAML-serializable form). '
             "Set inline via "
             "[`TLGBuilder.population()`][fleet.tlg.TLGBuilder.population]."
         ),
@@ -159,8 +192,10 @@ class TLGSpec(BaseModel):
     dataset_filter: Any | None = Field(
         default=None,
         description=(
-            "Polars expression filtering the analysis dataset (e.g. ADAE).  "
-            "Set inline via [`TLGBuilder.filter()`][fleet.tlg.TLGBuilder.filter]."
+            "Filter applied to the analysis dataset (e.g. ADAE) — a "
+            "``pl.Expr`` or a string expression (the YAML-serializable "
+            "form).  Set inline via "
+            "[`TLGBuilder.filter()`][fleet.tlg.TLGBuilder.filter]."
         ),
     )
     header_rows: list[OverallStat] = Field(
@@ -187,23 +222,34 @@ class TLGSpec(BaseModel):
 
     model_config = {"extra": "forbid", "arbitrary_types_allowed": True}
 
-    def validate_dataframe(self, df: pl.DataFrame) -> None:
+    def validate_dataframe(self, df: pl.DataFrame, *, group_col: str | None = None) -> None:
         """Run structural + content validation against *df*.
+
+        Args:
+            df: The analysis DataFrame.
+            group_col: Effective treatment-arm column.  When it overrides
+                the spec's default arm column (``columns[0]``), the
+                default is substituted in the required-columns check so
+                ``groupby="TRT01A"`` works on data without ``TRTA``.
 
         Raises:
             SchemaError: If required columns are missing, required flag
                 values are absent, or other data constraints are violated.
         """
-        self._validate_structural(df)
+        self._validate_structural(df, group_col=group_col)
         self._validate_content(df)
 
-    def _validate_structural(self, df: pl.DataFrame) -> None:
+    def _validate_structural(self, df: pl.DataFrame, *, group_col: str | None = None) -> None:
         """Tier 1: check required columns exist."""
+        required = list(self.required_columns)
+        default_group = getattr(self, "columns", None)
+        if group_col and default_group and isinstance(default_group[0], str):
+            required = [group_col if c == default_group[0] else c for c in required]
         available = set(df.columns)
-        missing = [c for c in self.required_columns if c not in available]
+        missing = [c for c in required if c not in available]
         if missing:
             raise SchemaError(
-                f"{self.__class__.__name__} requires columns {self.required_columns} "
+                f"{self.__class__.__name__} requires columns {required} "
                 f"but DataFrame is missing {missing}. "
                 f"Available: {sorted(available)}"
             )
@@ -254,16 +300,35 @@ class TLGSpec(BaseModel):
     def to_yaml(self) -> str:
         """Serialize this spec to a YAML string.
 
+        Filters (``adsl_filter``, ``dataset_filter``, header-row
+        ``filter``) serialize only in their string-expression form.  A
+        live ``pl.Expr`` cannot be serialized faithfully, and silently
+        dropping it would change the numbers a reloaded spec computes —
+        so it raises instead.
+
         Returns:
             str: YAML representation of the spec.
+
+        Raises:
+            ValueError: If any filter field holds a ``pl.Expr``.  Pass
+                the filter as a string, e.g. ``'pl.col("SAFFL") == "Y"'``.
         """
+        for field_name in ("adsl_filter", "dataset_filter"):
+            value = getattr(self, field_name, None)
+            if value is not None and not isinstance(value, str):
+                raise ValueError(
+                    f"{field_name} holds a {type(value).__name__} and cannot be "
+                    "YAML-serialized. Use a string expression instead, e.g. "
+                    'adsl_filter=\'pl.col("SAFFL") == "Y"\'.'
+                )
+        for hr in getattr(self, "header_rows", []):
+            if hr.filter is not None and not isinstance(hr.filter, str):
+                raise ValueError(
+                    f"header_rows[{hr.label!r}].filter holds a "
+                    f"{type(hr.filter).__name__} and cannot be YAML-serialized. "
+                    "Use a string expression instead."
+                )
         data = self.model_dump(exclude_none=True, exclude_defaults=False)
-        # Remove filter fields (not YAML-serializable as Polars Expr)
-        data.pop("adsl_filter", None)
-        data.pop("dataset_filter", None)
-        # Remove header_rows filters (Polars Expr)
-        for hr in data.get("header_rows", []):
-            hr.pop("filter", None)
         # Convert enums to their values
         data = _enum_to_value(data)
         return yaml.dump(data, default_flow_style=False, sort_keys=False)
@@ -282,23 +347,21 @@ class TLGSpec(BaseModel):
         return cls.model_validate(data)
 
 
-class AESummarySpec(TLGSpec):
-    """Spec for an AE summary table (t_ae_summary).
+class SummarySpecBase(TLGSpec):
+    """Shared fields for every summary-table spec.
 
-    Defaults provide zero-config convenience for a standard SOC→PT
-    table.  Every field is also settable inline through
-    [`TLGBuilder`][fleet.tlg.TLGBuilder].
+    Domain specs subclass this and override only their defaults (rows,
+    statistics, required columns) — one declaration of the shared shape
+    instead of nine divergent copies.  Every field is also settable
+    inline through [`TLGBuilder`][fleet.tlg.TLGBuilder].
     """
 
     output_type: str = "summary"
     rows: list[Row] = Field(
-        default_factory=lambda: [
-            Row(field="AEBODSYS", label="System Organ Class"),
-            Row(field="AEDECOD", label="Preferred Term"),
-        ],
+        default_factory=list,
         description=(
-            "Hierarchy of row groupings.  Set inline via "
-            "[`TLGBuilder.rows()`][fleet.tlg.TLGBuilder.rows]."
+            "Row groupings (hierarchy for nested templates).  Set inline "
+            "via [`TLGBuilder.rows()`][fleet.tlg.TLGBuilder.rows]."
         ),
     )
     columns: list[str] = Field(
@@ -330,13 +393,23 @@ class AESummarySpec(TLGSpec):
             "[`TLGBuilder.column_order()`][fleet.tlg.TLGBuilder.column_order]."
         ),
     )
-    denominator: str = Field(
-        default="TRTA",
-        description="Column used as the denominator when computing percentages.",
+
+
+class AESummarySpec(SummarySpecBase):
+    """Spec for an AE summary table (t_ae_summary).
+
+    Defaults provide zero-config convenience for a standard SOC→PT
+    table.
+    """
+
+    rows: list[Row] = Field(
+        default_factory=lambda: [
+            Row(field="AEBODSYS", label="System Organ Class"),
+            Row(field="AEDECOD", label="Preferred Term"),
+        ],
     )
     required_columns: list[str] = Field(
         default_factory=lambda: ["USUBJID", "TRTA", "AEDECOD", "AEBODSYS"],
-        description="Columns required in the analysis dataset for this spec.",
     )
 
 
@@ -365,23 +438,11 @@ class AEListingSpec(TLGSpec):
     )
 
 
-class VSSummarySpec(TLGSpec):
+class VSSummarySpec(SummarySpecBase):
     """Spec for a vital-signs summary table."""
 
-    output_type: str = "summary"
     rows: list[Row] = Field(
         default_factory=lambda: [Row(field="PARAMCD", label="Parameter")],
-        description=(
-            "Hierarchy of row groupings.  Set inline via "
-            "[`TLGBuilder.rows()`][fleet.tlg.TLGBuilder.rows]."
-        ),
-    )
-    columns: list[str] = Field(
-        default_factory=lambda: ["TRTA"],
-        description=(
-            "Column-grouping variables.  Set inline via "
-            "[`TLGBuilder.by()`][fleet.tlg.TLGBuilder.by]."
-        ),
     )
     statistics: list[Statistic] = Field(
         default_factory=lambda: [
@@ -392,36 +453,9 @@ class VSSummarySpec(TLGSpec):
             Statistic.MIN,
             Statistic.MAX,
         ],
-        description=(
-            "Statistics computed per row.  Set inline via "
-            "[`TLGBuilder.stats()`][fleet.tlg.TLGBuilder.stats]."
-        ),
-    )
-    pools: list[GroupPool] = Field(
-        default_factory=list,
-        description=(
-            "Composite (pooled) treatment groups.  Set inline via "
-            "[`TLGBuilder.pools()`][fleet.tlg.TLGBuilder.pools]."
-        ),
-    )
-    column_order: list[str] = Field(
-        default_factory=list,
-        description=(
-            "Explicit ordering of column labels.  Set inline via "
-            "[`TLGBuilder.column_order()`][fleet.tlg.TLGBuilder.column_order]."
-        ),
-    )
-    denominator: str = Field(
-        default="TRTA",
-        description="Column used as the denominator when computing percentages.",
     )
     required_columns: list[str] = Field(
         default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVAL"],
-        description="Columns required in the analysis dataset for this spec.",
-    )
-    required_flags: dict[str, list[str]] = Field(
-        default_factory=dict,
-        description="Per-column lists of required values (content validation).",
     )
 
 

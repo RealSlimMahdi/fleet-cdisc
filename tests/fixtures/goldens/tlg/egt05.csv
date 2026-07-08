@@ -1,0 +1,28 @@
+group1,group1_level,group2,group2_level,variable,variable_level,stat_name,stat_label,stat,fmt_fn,stat_fmt,warning,error,context
+TRTA,Drug A,"","","","",N,N,4.0,xx,4,,,t_eg_qtcat
+TRTA,Drug B,"","","","",N,N,2.0,xx,2,,,t_eg_qtcat
+TRTA,Placebo,"","","","",N,N,4.0,xx,4,,,t_eg_qtcat
+TRTA,Drug A,"","",PARAMCD,QTCF,n,n,1.0,xx,1,,,t_eg_qtcat
+TRTA,Drug A,"","",PARAMCD,QTCF,pct,n (%),25.0,xx.x,25.0,,,t_eg_qtcat
+TRTA,Drug B,"","",PARAMCD,QTCF,n,n,0.0,xx,0,,,t_eg_qtcat
+TRTA,Drug B,"","",PARAMCD,QTCF,pct,n (%),0.0,xx.x,0.0,,,t_eg_qtcat
+TRTA,Placebo,"","",PARAMCD,QTCF,n,n,1.0,xx,1,,,t_eg_qtcat
+TRTA,Placebo,"","",PARAMCD,QTCF,pct,n (%),25.0,xx.x,25.0,,,t_eg_qtcat
+TRTA,Drug A,"","",AVISIT,BASELINE,n,n,1.0,xx,1,,,t_eg_qtcat
+TRTA,Drug A,"","",AVISIT,BASELINE,pct,n (%),25.0,xx.x,25.0,,,t_eg_qtcat
+TRTA,Drug A,"","",AVISIT,WEEK 1,n,n,1.0,xx,1,,,t_eg_qtcat
+TRTA,Drug A,"","",AVISIT,WEEK 1,pct,n (%),25.0,xx.x,25.0,,,t_eg_qtcat
+TRTA,Drug B,"","",AVISIT,BASELINE,n,n,0.0,xx,0,,,t_eg_qtcat
+TRTA,Drug B,"","",AVISIT,BASELINE,pct,n (%),0.0,xx.x,0.0,,,t_eg_qtcat
+TRTA,Drug B,"","",AVISIT,WEEK 1,n,n,0.0,xx,0,,,t_eg_qtcat
+TRTA,Drug B,"","",AVISIT,WEEK 1,pct,n (%),0.0,xx.x,0.0,,,t_eg_qtcat
+TRTA,Placebo,"","",AVISIT,BASELINE,n,n,1.0,xx,1,,,t_eg_qtcat
+TRTA,Placebo,"","",AVISIT,BASELINE,pct,n (%),25.0,xx.x,25.0,,,t_eg_qtcat
+TRTA,Placebo,"","",AVISIT,WEEK 1,n,n,1.0,xx,1,,,t_eg_qtcat
+TRTA,Placebo,"","",AVISIT,WEEK 1,pct,n (%),25.0,xx.x,25.0,,,t_eg_qtcat
+TRTA,Drug A,"","",AVALCAT1,<=450 msec,n,n,1.0,xx,1,,,t_eg_qtcat
+TRTA,Drug A,"","",AVALCAT1,<=450 msec,pct,n (%),25.0,xx.x,25.0,,,t_eg_qtcat
+TRTA,Drug B,"","",AVALCAT1,<=450 msec,n,n,0.0,xx,0,,,t_eg_qtcat
+TRTA,Drug B,"","",AVALCAT1,<=450 msec,pct,n (%),0.0,xx.x,0.0,,,t_eg_qtcat
+TRTA,Placebo,"","",AVALCAT1,<=450 msec,n,n,1.0,xx,1,,,t_eg_qtcat
+TRTA,Placebo,"","",AVALCAT1,<=450 msec,pct,n (%),25.0,xx.x,25.0,,,t_eg_qtcat

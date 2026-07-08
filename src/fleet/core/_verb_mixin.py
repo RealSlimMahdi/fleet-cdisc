@@ -6,7 +6,7 @@ across the SDTM and ADaM namespace hierarchies:
 
 Infrastructure (Group A):
     ``_chain``, ``_materialise_then``, ``to_frame``, ``to_dataset_json``,
-    ``inspect``, ``explain``, ``write_parquet``
+    ``inspect``, ``explain``, ``trail``, ``write_parquet``
 
 Algorithmic (Group B):
     ``derivation``, ``_apply_derivation``, ``duration``, ``study_day``,
@@ -201,6 +201,84 @@ class SharedVerbsMixin:
                 )
         """
         print(self._lazy.explain())
+        return self
+
+    def trail(self) -> Self:
+        """Print a table of each derived variable's origin in the pipeline.
+
+        Renders the accumulated variable lineage — the verb that produced
+        each column and the source columns it consumed, including
+        cross-domain pin sources — as a table, then returns the namespace
+        unchanged so the chain continues. Unlike ``inspect``, nothing is
+        materialised: the trail is pure metadata captured automatically on
+        every verb call.
+
+        Only *derived* variables appear; columns that pass through untouched
+        from the source frame are not listed. When a variable is derived more
+        than once, each derivation is shown in pipeline order. Variables with
+        no source column (e.g. hardcoded constants) are marked ``(literal)``.
+
+        Returns:
+            Self: The same namespace instance (unchanged); call further
+                verbs or ``.to_frame()`` to continue.
+
+        Examples:
+            Print the origin of every derived variable before collecting::
+
+                ae = (
+                    ae_raw.sdtm
+                    .assign_no_ct("USUBJID", source="patient_number")
+                    .assign_no_ct("AESTDTC", source="ae_start_date")
+                    .pin("DM", dm)
+                    .study_day("AESTDY", date_col="AESTDTC")
+                    .trail()
+                    .to_frame()
+                )
+        """
+        from fleet.core.lineage import lineage_of, pin_lineage_of
+
+        nodes = lineage_of(self)
+        if not nodes:
+            print("Variable trail: (empty — no derivations recorded yet)")
+            return self
+
+        # Group cross-domain pin sources by the variable they feed.
+        pin_origins: dict[str, list[str]] = {}
+        pinned_cols: dict[str, set[str]] = {}
+        for dep in pin_lineage_of(self):
+            cols = ", ".join(dep.source_cols) if dep.source_cols else "*"
+            label = f"{dep.source_domain}.{cols}"
+            if dep.relationship != "derivation":
+                label += f" [{dep.relationship}]"
+            pin_origins.setdefault(dep.target_col, []).append(label)
+            pinned_cols.setdefault(dep.target_col, set()).update(dep.source_cols)
+
+        has_domain = any(node.domain for node in nodes)
+        rows: list[dict[str, object]] = []
+        for i, node in enumerate(nodes, start=1):
+            # Drop bare local sources already attributed to a pinned domain.
+            covered = pinned_cols.get(node.name, set())
+            local = [src for src in node.sources if src not in covered]
+            origins = list(dict.fromkeys([*local, *pin_origins.get(node.name, [])]))
+            row: dict[str, object] = {
+                "#": i,
+                "Variable": node.name,
+                "Verb": node.verb,
+                "Origin": ", ".join(origins) if origins else "(literal)",
+            }
+            if has_domain:
+                row["Domain"] = node.domain or "—"
+            rows.append(row)
+
+        table = pl.DataFrame(rows)
+        print(f"Variable trail ({table.height} derivation(s)):")
+        with pl.Config(
+            tbl_hide_dataframe_shape=True,
+            tbl_hide_column_data_types=True,
+            fmt_str_lengths=100,
+            tbl_rows=table.height,
+        ):
+            print(table)
         return self
 
     def write_parquet(

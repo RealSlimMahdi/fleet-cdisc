@@ -26,6 +26,7 @@ from ._ard import (
     validate_ard,
 )
 from ._builder import TLGBuilder
+from ._registry import TEMPLATES, catalog
 from ._specs import (
     AEListingSpec,
     AESummarySpec,
@@ -34,10 +35,38 @@ from ._specs import (
     OverallStat,
     Row,
     Statistic,
+    SummarySpecBase,
     TLGSpec,
     VSSummarySpec,
+    resolve_filter,
 )
-from .ae_namespace import AETLGNamespace
+from .ae_namespace import (
+    AEGradeSpec,
+    AERelationshipSpec,
+    AESeveritySpec,
+    AESocPtSpec,
+    AETLGNamespace,
+)
+from .cm_namespace import CMByPTSpec, CMSummarySpec, CMTLGNamespace
+from .dm_namespace import DMSummarySpec, DMTLGNamespace
+from .ds_namespace import (
+    DSDeathsSpec,
+    DSDeviationsSpec,
+    DSDispositionSpec,
+    DSEnrollmentSpec,
+    DSTLGNamespace,
+)
+from .eg_namespace import EGChgSpec, EGQtcatSpec, EGSummarySpec, EGTLGNamespace
+from .ex_namespace import EXSummarySpec, EXTLGNamespace
+from .lb_namespace import (
+    LBAbnormalSpec,
+    LBChgSpec,
+    LBListingSpec,
+    LBShiftSpec,
+    LBSummarySpec,
+    LBTLGNamespace,
+)
+from .mh_namespace import MHSummarySpec, MHTLGNamespace
 from .namespace import TLGNamespace
 from .render import (
     ListingModel,
@@ -59,13 +88,46 @@ __all__ = [
     "TLGNamespace",
     "AETLGNamespace",
     "VSTLGNamespace",
+    "CMTLGNamespace",
+    "EXTLGNamespace",
+    "DMTLGNamespace",
+    "DSTLGNamespace",
+    "EGTLGNamespace",
+    "LBTLGNamespace",
+    "MHTLGNamespace",
     "TLGBuilder",
     # Specs
     "TLGSpec",
+    "SummarySpecBase",
     "AESummarySpec",
+    "AESocPtSpec",
+    "AESeveritySpec",
+    "AEGradeSpec",
+    "AERelationshipSpec",
     "AEListingSpec",
     "VSSummarySpec",
+    "CMSummarySpec",
+    "CMByPTSpec",
+    "DMSummarySpec",
+    "DSDispositionSpec",
+    "DSDeathsSpec",
+    "DSEnrollmentSpec",
+    "DSDeviationsSpec",
+    "EGSummarySpec",
+    "EGChgSpec",
+    "EGQtcatSpec",
+    "EXSummarySpec",
+    "LBSummarySpec",
+    "LBChgSpec",
+    "LBShiftSpec",
+    "LBAbnormalSpec",
+    "LBListingSpec",
+    "MHSummarySpec",
     "OverallStat",
+    "resolve_filter",
+    # Registry
+    "TEMPLATES",
+    "catalog",
     # Building blocks
     "Row",
     "Column",

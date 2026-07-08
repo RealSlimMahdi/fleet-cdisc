@@ -1393,6 +1393,34 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, TrialDesignMixin):
                     origin=var.origin or "DERIVED",
                     evaluator=var.evaluator,
                 )
+            elif alg == "multiple_responses":
+                ns = ns.multiple_responses(
+                    target,
+                    source=var.source or target,
+                    delimiter=getattr(var, "delimiter", "|") or "|",
+                )
+            elif alg == "group_by":
+                from .utils import parse_expression
+
+                ns = ns.group_by(
+                    group_cols=getattr(var, "group_cols", None) or [],
+                    agg=[parse_expression(e) for e in (getattr(var, "agg", None) or [])],
+                )
+            elif alg == "merge":
+                merge_df = ns._require_pin(str(getattr(var, "dataset", "") or "").upper(), "merge")
+                ns = ns.merge(
+                    target_cols=getattr(var, "target_cols", None),
+                    dataset=merge_df,
+                    on=getattr(var, "join_on", None) or getattr(var, "on", None) or "USUBJID",
+                    how=getattr(var, "how", "left") or "left",
+                )
+            elif alg == "seq":
+                ns = ns.seq(
+                    target,
+                    order_by=getattr(var, "order_by", None),
+                    groups=getattr(var, "groups", None),
+                    start_at=getattr(var, "start_at", 1) or 1,
+                )
             elif alg == "callable":
                 fn = _resolve_callable(var.callable_ref or "")
                 if hasattr(fn, "kind"):

@@ -6,36 +6,103 @@ Accessed via ``df.tlg.ae`` on any Polars DataFrame containing ADaM AE data.
 
 from __future__ import annotations
 
-from typing import Any
-
 import polars as pl
+from pydantic import Field
 
-from ._ard import (
-    ard_row as _ard_row,
-)
-from ._ard import (
-    compute_big_n,
-    expand_pools,
-    validate_ard,
-)
-from ._ard import (
-    compute_stat as _compute_stat,
-)
-from ._ard import (
-    rows_to_ard as _rows_to_ard,
-)
-from ._ard import (
-    validate_pools as _validate_pools,
-)
-from ._builder import TLGBuilder
+from ._ard import fill_uncoded, summarize_ard, worst_case
+from ._builder import BuilderVerbsMixin
 from ._specs import (
     AEListingSpec,
     AESummarySpec,
-    SchemaError,
+    Row,
+    resolve_filter,
 )
 
 
-class AETLGNamespace:
+class AESocPtSpec(AESummarySpec):
+    """Spec for AE by SOC → PT (AET02): n / % subjects by SOC → PT."""
+
+    rows: list[Row] = Field(
+        default_factory=lambda: [
+            Row(field="AEBODSYS", label="MedDRA System Organ Class"),
+            Row(field="AEDECOD", label="MedDRA Preferred Term"),
+        ]
+    )
+
+
+class AESeveritySpec(AESummarySpec):
+    """Spec for AE by greatest severity (AET03): n / % by SOC → worst intensity.
+
+    Each subject is counted once per SOC at their greatest intensity
+    (``severity_order`` rank, never alphabetical), so the intensity rows
+    partition the SOC's any-AE count.  PT-level intensity nesting needs
+    a third lineage slot (group3) and is deferred until the ARD schema
+    grows one.
+    """
+
+    rows: list[Row] = Field(
+        default_factory=lambda: [
+            Row(field="AEBODSYS", label="MedDRA System Organ Class"),
+            Row(field="AESEV", label="Intensity"),
+        ]
+    )
+    severity_order: list[str] = Field(
+        default_factory=lambda: ["MILD", "MODERATE", "SEVERE"],
+        description=(
+            "Intensity values from least to most severe — the explicit "
+            "clinical rank used for the worst-case reduction."
+        ),
+    )
+    required_columns: list[str] = Field(
+        default_factory=lambda: ["USUBJID", "TRTA", "AEBODSYS", "AESEV"]
+    )
+
+
+class AEGradeSpec(AESummarySpec):
+    """Spec for AE by highest NCI CTCAE grade (AET04): n / % by SOC → worst grade.
+
+    Each subject is counted once per SOC at their highest toxicity grade
+    (``grade_order`` rank).
+    """
+
+    rows: list[Row] = Field(
+        default_factory=lambda: [
+            Row(field="AEBODSYS", label="MedDRA System Organ Class"),
+            Row(field="AETOXGR", label="Grade"),
+        ]
+    )
+    grade_order: list[str] = Field(
+        default_factory=lambda: ["1", "2", "3", "4", "5"],
+        description="Toxicity grades from lowest to highest.",
+    )
+    required_columns: list[str] = Field(
+        default_factory=lambda: ["USUBJID", "TRTA", "AEBODSYS", "AETOXGR"]
+    )
+
+
+class AERelationshipSpec(AESummarySpec):
+    """Spec for AE by relationship (n / % by SOC → relationship).
+
+    Each subject is counted once per SOC — related if any of their
+    events in the SOC is related (``relationship_order`` rank).
+    """
+
+    rows: list[Row] = Field(
+        default_factory=lambda: [
+            Row(field="AEBODSYS", label="MedDRA System Organ Class"),
+            Row(field="AEREL", label="Relationship"),
+        ]
+    )
+    relationship_order: list[str] = Field(
+        default_factory=lambda: ["N", "Y"],
+        description="Relationship values from least to most related.",
+    )
+    required_columns: list[str] = Field(
+        default_factory=lambda: ["USUBJID", "TRTA", "AEBODSYS", "AEREL"]
+    )
+
+
+class AETLGNamespace(BuilderVerbsMixin):
     """AE tables, listings, and diagnostics.
 
     Accessed as ``df.tlg.ae``.  Supports both spec-driven
@@ -46,70 +113,17 @@ class AETLGNamespace:
         df: A Polars DataFrame containing ADaM AE-level data.
     """
 
+    _builder_context = "t_ae_summary"
+    _builder_specs = {
+        "t_summary": AESummarySpec,
+        "t_soc_pt": AESocPtSpec,
+        "t_severity": AESeveritySpec,
+        "t_grade": AEGradeSpec,
+        "t_relationship": AERelationshipSpec,
+    }
+
     def __init__(self, df: pl.DataFrame) -> None:
         self._df = df
-
-    def _builder(self) -> TLGBuilder:
-        """Return a ``TLGBuilder`` pre-configured with AE defaults."""
-        return TLGBuilder(
-            self._df,
-            context="t_ae_summary",
-            spec_cls=AESummarySpec,
-            namespace_cls=AETLGNamespace,
-        )
-
-    # -- Builder entry-point verbs delegated to TLGBuilder --
-
-    def population(
-        self,
-        adsl: pl.DataFrame,
-        *,
-        adsl_filter: pl.Expr | None = None,
-    ) -> TLGBuilder:
-        """Start the inline builder with an ADSL population.
-
-        Args:
-            adsl: ADSL DataFrame for big-N denominators.
-            adsl_filter: Optional filter applied to ADSL only.
-
-        Returns:
-            TLGBuilder: A new builder with population set.
-
-        Examples:
-            Inline AE summary::
-
-                ard = (
-                    adae.tlg.ae
-                    .population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
-                    .by("TRTA")
-                    .rows(["AEBODSYS", "AEDECOD"])
-                    .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
-                    .to_ard()
-                )
-        """
-        return self._builder().population(adsl, adsl_filter=adsl_filter)
-
-    def filter(self, expr: pl.Expr) -> TLGBuilder:
-        """Start the inline builder with a dataset filter.
-
-        Args:
-            expr: Polars expression to filter the primary dataset.
-
-        Returns:
-            TLGBuilder: A new builder with dataset filter set.
-        """
-        return self._builder().filter(expr)
-
-    def by(self, col: str) -> TLGBuilder:
-        """Start the inline builder with a primary grouping column.
-
-        Args:
-            col: Column name for group1 (e.g. ``"TRTA"``).
-
-        Returns:
-            TLGBuilder: A new builder with group1 set.
-        """
-        return self._builder().by(col)
 
     # ------------------------------------------------------------------ #
     # Summary table                                                        #
@@ -158,105 +172,218 @@ class AETLGNamespace:
         """
         spec = spec or AESummarySpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
+        spec.validate_dataframe(self._df, group_col=group_col)
+        return summarize_ard(
+            fill_uncoded(self._df, ["AEBODSYS", "AEDECOD"]),
+            rows=spec.rows,
+            stats=spec.statistics,
+            context="t_ae_summary",
+            group_col=group_col,
+            pools=spec.pools,
+            column_order=spec.column_order,
+            adsl=adsl,
+            adsl_filter=spec.adsl_filter,
+            dataset_filter=spec.dataset_filter,
+            header_rows=spec.header_rows,
+            nested=True,
+        )
 
-        # --- Validation ---
-        spec.validate_dataframe(self._df)
-        _validate_pools(self._df, spec.pools, group_col)
+    # ------------------------------------------------------------------ #
+    # Hierarchical variants (AET02 / AET03 / AET04)                        #
+    # ------------------------------------------------------------------ #
 
-        # --- Apply dataset_filter ---
-        df = self._df
-        if spec.dataset_filter is not None:
-            df = df.filter(spec.dataset_filter)
+    def t_soc_pt(
+        self,
+        *,
+        groupby: str | None = None,
+        adsl: pl.DataFrame | None = None,
+        spec: AESocPtSpec | None = None,
+    ) -> pl.DataFrame:
+        """AE by SOC → PT (AET02): n / % subjects per arm × SOC → PT.
 
-        # --- Big-N denominators from ADSL ---
-        big_n: dict[str, int] = {}
-        if adsl is not None:
-            big_n = compute_big_n(adsl, group_col, spec.pools, filter_expr=spec.adsl_filter)
+        Args:
+            groupby: Treatment-arm column; overrides ``spec.columns[0]``.
+            adsl: ADSL for big-N denominators (percentages).
+            spec: Optional ``AESocPtSpec`` override.
 
-        # --- Expand pools ---
-        df = expand_pools(df, spec.pools, group_col)
+        Returns:
+            pl.DataFrame: {cards}-compatible ARD.
 
-        # --- Compute statistics ---
-        ard_rows: list[dict[str, Any]] = []
-        arms = sorted(df[group_col].drop_nulls().unique().to_list())
+        Examples:
+            ``ard = adae.tlg.ae.t_soc_pt(groupby="TRTA", adsl=adsl)``
+        """
+        spec = spec or AESocPtSpec()
+        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
+        spec.validate_dataframe(self._df, group_col=group_col)
+        return summarize_ard(
+            fill_uncoded(self._df, ["AEBODSYS", "AEDECOD"]),
+            rows=spec.rows,
+            stats=spec.statistics,
+            context="t_ae_soc_pt",
+            group_col=group_col,
+            pools=spec.pools,
+            column_order=spec.column_order,
+            adsl=adsl,
+            adsl_filter=spec.adsl_filter,
+            dataset_filter=spec.dataset_filter,
+            header_rows=spec.header_rows,
+            nested=True,
+        )
 
-        # Re-order arms if column_order specified
-        if spec.column_order:
-            ordered = [a for a in spec.column_order if a in arms]
-            remaining = [a for a in arms if a not in ordered]
-            arms = ordered + remaining
+    def t_severity(
+        self,
+        *,
+        groupby: str | None = None,
+        adsl: pl.DataFrame | None = None,
+        spec: AESeveritySpec | None = None,
+    ) -> pl.DataFrame:
+        """AE by greatest severity (AET03): n / % by SOC → worst intensity.
 
-        # Big-N row
-        for arm in arms:
-            n_val = big_n.get(arm)
-            ard_rows.append(_ard_row(group_col, arm, "", "", "N", "N", n_val, "t_ae_summary"))
+        Each subject is counted once per SOC at their greatest intensity
+        (``spec.severity_order`` rank), so intensity rows partition the
+        SOC's subject count instead of double-counting a subject at
+        every intensity they reported.
 
-        # --- Header rows (OverallStat) ---
-        for hdr in spec.header_rows:
-            hdr_df = df
-            if hdr.filter is not None:
-                hdr_df = hdr_df.filter(hdr.filter)
-            effective_stats = hdr.statistics or spec.statistics
-            for arm in arms:
-                arm_hdr = hdr_df.filter(pl.col(group_col) == arm)
-                arm_n = big_n.get(arm, 0)
-                for stat_type in effective_stats:
-                    stat_name, stat_label, stat_val = _compute_stat(stat_type, arm_hdr, arm_n)
-                    ard_rows.append(
-                        _ard_row(
-                            group_col,
-                            arm,
-                            "",
-                            hdr.label,
-                            stat_name,
-                            stat_label,
-                            stat_val,
-                            "t_ae_summary",
-                        )
-                    )
+        Args:
+            groupby: Treatment-arm column; overrides ``spec.columns[0]``.
+            adsl: ADSL for big-N denominators (percentages).
+            spec: Optional ``AESeveritySpec`` override.
 
-        # Per-row-field statistics (hierarchical: SOC → PT, etc.)
-        for row_def in spec.rows:
-            field = row_def.field
-            if field not in df.columns:
-                continue
+        Returns:
+            pl.DataFrame: {cards}-compatible ARD.
 
-            analysis_df = df
-            if row_def.filter_value is not None:
-                if field not in analysis_df.columns:
-                    continue
-                analysis_df = analysis_df.filter(pl.col(field) == row_def.filter_value)
+        Examples:
+            ``ard = adae.tlg.ae.t_severity(groupby="TRTA", adsl=adsl)``
+        """
+        spec = spec or AESeveritySpec()
+        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
+        spec.validate_dataframe(self._df, group_col=group_col)
+        df = fill_uncoded(self._df, ["AEBODSYS", "AEDECOD"])
+        # The dataset filter must bite before the worst-case reduction:
+        # a filtered-out record must not decide a subject's worst level.
+        dataset_filter = resolve_filter(spec.dataset_filter)
+        if dataset_filter is not None:
+            df = df.filter(dataset_filter)
+        df = worst_case(
+            df,
+            by=["USUBJID", group_col, "AEBODSYS"],
+            order_col="AESEV",
+            order=spec.severity_order,
+        )
+        return summarize_ard(
+            df,
+            rows=spec.rows,
+            stats=spec.statistics,
+            context="t_ae_severity",
+            group_col=group_col,
+            pools=spec.pools,
+            column_order=spec.column_order,
+            adsl=adsl,
+            adsl_filter=spec.adsl_filter,
+            header_rows=spec.header_rows,
+            nested=True,
+        )
 
-            # Compute per arm × level
-            levels = sorted(analysis_df[field].drop_nulls().unique().to_list())
+    def t_grade(
+        self,
+        *,
+        groupby: str | None = None,
+        adsl: pl.DataFrame | None = None,
+        spec: AEGradeSpec | None = None,
+    ) -> pl.DataFrame:
+        """AE by highest NCI CTCAE grade (AET04): n / % by SOC → worst grade.
 
-            for arm in arms:
-                arm_df = analysis_df.filter(pl.col(group_col) == arm)
-                arm_n = big_n.get(arm, 0)
+        Each subject is counted once per SOC at their highest toxicity
+        grade (``spec.grade_order`` rank).
 
-                for level in levels:
-                    level_df = arm_df.filter(pl.col(field) == level)
+        Args:
+            groupby: Treatment-arm column; overrides ``spec.columns[0]``.
+            adsl: ADSL for big-N denominators (percentages).
+            spec: Optional ``AEGradeSpec`` override.
 
-                    for stat_type in spec.statistics:
-                        stat_name, stat_label, stat_val = _compute_stat(stat_type, level_df, arm_n)
-                        ard_rows.append(
-                            _ard_row(
-                                group_col,
-                                arm,
-                                field,
-                                str(level),
-                                stat_name,
-                                stat_label,
-                                stat_val,
-                                "t_ae_summary",
-                            )
-                        )
+        Returns:
+            pl.DataFrame: {cards}-compatible ARD.
 
-        ard = _rows_to_ard(ard_rows)
-        issues = validate_ard(ard)
-        if issues:
-            raise SchemaError("ARD output failed schema validation:\n  " + "\n  ".join(issues))
-        return ard
+        Examples:
+            ``ard = adae.tlg.ae.t_grade(groupby="TRTA", adsl=adsl)``
+        """
+        spec = spec or AEGradeSpec()
+        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
+        spec.validate_dataframe(self._df, group_col=group_col)
+        df = fill_uncoded(self._df, ["AEBODSYS", "AEDECOD"])
+        dataset_filter = resolve_filter(spec.dataset_filter)
+        if dataset_filter is not None:
+            df = df.filter(dataset_filter)
+        df = df.with_columns(pl.col("AETOXGR").cast(pl.Utf8).str.replace(r"\.0$", ""))
+        df = worst_case(
+            df,
+            by=["USUBJID", group_col, "AEBODSYS"],
+            order_col="AETOXGR",
+            order=spec.grade_order,
+        )
+        return summarize_ard(
+            df,
+            rows=spec.rows,
+            stats=spec.statistics,
+            context="t_ae_grade",
+            group_col=group_col,
+            pools=spec.pools,
+            column_order=spec.column_order,
+            adsl=adsl,
+            adsl_filter=spec.adsl_filter,
+            header_rows=spec.header_rows,
+            nested=True,
+        )
+
+    def t_relationship(
+        self,
+        *,
+        groupby: str | None = None,
+        adsl: pl.DataFrame | None = None,
+        spec: AERelationshipSpec | None = None,
+    ) -> pl.DataFrame:
+        """AE by relationship: n / % by SOC → relationship.
+
+        Each subject is counted once per SOC — related if any of their
+        events in the SOC is related (``spec.relationship_order`` rank).
+
+        Args:
+            groupby: Treatment-arm column; overrides ``spec.columns[0]``.
+            adsl: ADSL for big-N denominators (percentages).
+            spec: Optional ``AERelationshipSpec`` override.
+
+        Returns:
+            pl.DataFrame: {cards}-compatible ARD.
+
+        Examples:
+            ``ard = adae.tlg.ae.t_relationship(groupby="TRTA", adsl=adsl)``
+        """
+        spec = spec or AERelationshipSpec()
+        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
+        spec.validate_dataframe(self._df, group_col=group_col)
+        df = fill_uncoded(self._df, ["AEBODSYS", "AEDECOD"])
+        dataset_filter = resolve_filter(spec.dataset_filter)
+        if dataset_filter is not None:
+            df = df.filter(dataset_filter)
+        df = worst_case(
+            df,
+            by=["USUBJID", group_col, "AEBODSYS"],
+            order_col="AEREL",
+            order=spec.relationship_order,
+        )
+        return summarize_ard(
+            df,
+            rows=spec.rows,
+            stats=spec.statistics,
+            context="t_ae_relationship",
+            group_col=group_col,
+            pools=spec.pools,
+            column_order=spec.column_order,
+            adsl=adsl,
+            adsl_filter=spec.adsl_filter,
+            header_rows=spec.header_rows,
+            nested=True,
+        )
 
     # ------------------------------------------------------------------ #
     # Listing                                                              #
@@ -299,8 +426,9 @@ class AETLGNamespace:
         spec.validate_dataframe(self._df)
 
         df = self._df
-        if spec.dataset_filter is not None:
-            df = df.filter(spec.dataset_filter)
+        dataset_filter = resolve_filter(spec.dataset_filter)
+        if dataset_filter is not None:
+            df = df.filter(dataset_filter)
 
         # Select only requested columns (that exist)
         available = set(df.columns)

@@ -207,7 +207,9 @@ ae_spec = AESummarySpec(
     rows=[
         Row(field="AEBODSYS", label="System Organ Class"),
         Row(field="AEDECOD", label="Preferred Term"),
-        Row(field="AESER", label="Serious AE", filter_value="Y"),
+    ],
+    header_rows=[
+        OverallStat(label="Subjects with at least one serious AE", filter='pl.col("AESER") == "Y"'),
     ],
     columns=["TRTA"],
     statistics=[Statistic.N_SUBJECTS, Statistic.N_PCT, Statistic.N_EVENTS],
