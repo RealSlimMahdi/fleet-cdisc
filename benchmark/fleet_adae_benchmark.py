@@ -46,20 +46,20 @@ def run_pipeline(ae_raw: pl.DataFrame, adsl: pl.DataFrame) -> dict:
     # ── SDTM AE ───────────────────────────────────────────────────────
     t_sdtm = time.perf_counter()
     ae = (
-        ae_raw.sdtm.hardcode_no_ct("STUDYID", value="STUDY001")
-        .hardcode_no_ct("DOMAIN", value="AE")
-        .assign_no_ct("USUBJID", source="subject_id")
-        .assign_no_ct("AETERM", source="event_term")
-        .assign_no_ct("AESTDTC", source="start_date")
-        .assign_no_ct("AEENDTC", source="end_date")
-        .assign_no_ct("AESEV", source="severity")
+        ae_raw.sdtm.assign("STUDYID", value="STUDY001")
+        .assign("DOMAIN", value="AE")
+        .assign("USUBJID", source="subject_id")
+        .assign("AETERM", source="event_term")
+        .assign("AESTDTC", source="start_date")
+        .assign("AEENDTC", source="end_date")
+        .assign("AESEV", source="severity")
         .derivation(
             "AESER",
             expression=pl.when(pl.col("serious") == "Yes").then(pl.lit("Y")).otherwise(pl.lit("N")),
         )
-        .assign_no_ct("AEREL", source="relationship_to_study_drug")
-        .assign_no_ct("AEOUT", source="outcome")
-        .assign_no_ct("AEACN", source="action_taken")
+        .assign("AEREL", source="relationship_to_study_drug")
+        .assign("AEOUT", source="outcome")
+        .assign("AEACN", source="action_taken")
         .seq("AESEQ", order_by=["AESTDTC"])
         .to_frame()
     )
@@ -71,7 +71,7 @@ def run_pipeline(ae_raw: pl.DataFrame, adsl: pl.DataFrame) -> dict:
     ae_merged = ae.join(_adsl_cols, on="USUBJID", how="left")
 
     adae = (
-        ae_merged.adam.assigned("STUDYID", value="STUDY001")
+        ae_merged.adam.assign("STUDYID", value="STUDY001")
         .source("USUBJID")
         .source("AETERM")
         .source("AESTDTC")
@@ -100,9 +100,9 @@ def run_pipeline(ae_raw: pl.DataFrame, adsl: pl.DataFrame) -> dict:
             "ANL01FL",
             criteria="max",
             value_col="AESEVN",
-            groups=["USUBJID", "AETERM"],
+            by=["USUBJID", "AETERM"],
         )
-        .seq("ASEQ", groups=["USUBJID"])
+        .seq("ASEQ", by=["USUBJID"])
         .to_frame()
     )
     adam_sec = time.perf_counter() - t_adam

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <?xml-stylesheet type="text/xsl" href="define2-1.xsl"?>
-<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:def="http://www.cdisc.org/ns/def/v2.1" ODMVersion="1.3.2" FileOID="CDISC.CDISCPILOT01.1.Define-XML_2.1.0" FileType="Snapshot" CreationDateTime="2026-07-07T20:14:41" Originator="Fleet Team" SourceSystem="Fleet" SourceSystemVersion="0.1.0" def:Context="Submission">
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:def="http://www.cdisc.org/ns/def/v2.1" ODMVersion="1.3.2" FileOID="CDISC.CDISCPILOT01.1.Define-XML_2.1.0" FileType="Snapshot" CreationDateTime="2026-07-09T08:12:43" Originator="Fleet Team" SourceSystem="Fleet" SourceSystemVersion="0.1.0" def:Context="Submission">
   <Study OID="STDY.CDISCPILOT01">
     <GlobalVariables>
       <StudyName>CDISCPILOT01</StudyName>
@@ -20,119 +20,119 @@
           <TranslatedText xml:lang="en">Demographics</TranslatedText>
         </Description>
         <def:Class Name="SPECIAL PURPOSE"/>
-        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
-        <ItemRef ItemOID="IT.DOMAIN" OrderNumber="2" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2"/>
-        <ItemRef ItemOID="IT.SUBJID" OrderNumber="4" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.DM.RFSTDTC" OrderNumber="5" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.DM.RFENDTC" OrderNumber="6" Mandatory="No"/>
+        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" MethodOID="MT.hardcode_no_ct"/>
+        <ItemRef ItemOID="IT.DOMAIN" OrderNumber="2" Mandatory="Yes" MethodOID="MT.hardcode_no_ct"/>
+        <ItemRef ItemOID="IT.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.SUBJID" OrderNumber="4" Mandatory="Yes" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.DM.RFSTDTC" OrderNumber="5" Mandatory="Yes" MethodOID="MT.assign_dtc"/>
+        <ItemRef ItemOID="IT.DM.RFENDTC" OrderNumber="6" Mandatory="No" MethodOID="MT.assign_dtc"/>
         <ItemRef ItemOID="IT.DM.RFXSTDTC" OrderNumber="7" Mandatory="No"/>
         <ItemRef ItemOID="IT.DM.RFXENDTC" OrderNumber="8" Mandatory="No"/>
-        <ItemRef ItemOID="IT.SITEID" OrderNumber="9" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.AGE" OrderNumber="10" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.AGEU" OrderNumber="11" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.SEX" OrderNumber="12" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.RACE" OrderNumber="13" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ETHNIC" OrderNumber="14" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ARMCD" OrderNumber="15" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.ARM" OrderNumber="16" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.ACTARMCD" OrderNumber="17" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.ACTARM" OrderNumber="18" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.DM.RFICDTC" OrderNumber="19" Mandatory="No"/>
-        <def:leaf ID="LF.DM" xlink:href="dm.xpt" xlink:title="dm.xpt"/>
+        <ItemRef ItemOID="IT.SITEID" OrderNumber="9" Mandatory="Yes" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.AGE" OrderNumber="10" Mandatory="Yes" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.AGEU" OrderNumber="11" Mandatory="Yes" MethodOID="MT.hardcode_no_ct"/>
+        <ItemRef ItemOID="IT.SEX" OrderNumber="12" Mandatory="Yes" MethodOID="MT.assign_ct"/>
+        <ItemRef ItemOID="IT.RACE" OrderNumber="13" Mandatory="No" MethodOID="MT.assign_ct"/>
+        <ItemRef ItemOID="IT.ETHNIC" OrderNumber="14" Mandatory="No" MethodOID="MT.assign_ct"/>
+        <ItemRef ItemOID="IT.ARMCD" OrderNumber="15" Mandatory="Yes" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.ARM" OrderNumber="16" Mandatory="Yes" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.ACTARMCD" OrderNumber="17" Mandatory="Yes" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.ACTARM" OrderNumber="18" Mandatory="Yes" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.DM.RFICDTC" OrderNumber="19" Mandatory="No" MethodOID="MT.assign_dtc"/>
+        <def:leaf ID="LF.DM" xlink:href="dm.parquet" xlink:title="dm.parquet"/>
       </ItemGroupDef>
       <ItemGroupDef OID="IG.AE" Name="AE" Repeating="Yes" IsReferenceData="No" SASDatasetName="AE" Domain="AE" def:Structure="One record per adverse event per subject" Purpose="Tabulation" def:StandardOID="STD.SDTMIG" def:ArchiveLocationID="LF.AE">
         <Description>
           <TranslatedText xml:lang="en">Adverse Events</TranslatedText>
         </Description>
         <def:Class Name="EVENTS"/>
-        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
-        <ItemRef ItemOID="IT.DOMAIN" OrderNumber="2" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2"/>
+        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" MethodOID="MT.hardcode_no_ct"/>
+        <ItemRef ItemOID="IT.DOMAIN" OrderNumber="2" Mandatory="Yes" MethodOID="MT.hardcode_no_ct"/>
+        <ItemRef ItemOID="IT.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2" MethodOID="MT.assign_no_ct"/>
         <ItemRef ItemOID="IT.AE.AESEQ" OrderNumber="4" Mandatory="Yes" KeySequence="3"/>
-        <ItemRef ItemOID="IT.AE.AETERM" OrderNumber="5" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.AE.AEDECOD" OrderNumber="6" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.AE.AESTDTC" OrderNumber="7" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.AE.AEENDTC" OrderNumber="8" Mandatory="No"/>
-        <ItemRef ItemOID="IT.AE.AESEV" OrderNumber="9" Mandatory="No"/>
-        <ItemRef ItemOID="IT.AE.AESER" OrderNumber="10" Mandatory="No"/>
-        <ItemRef ItemOID="IT.AE.AEOUT" OrderNumber="11" Mandatory="No"/>
-        <ItemRef ItemOID="IT.AE.AEACN" OrderNumber="12" Mandatory="No"/>
-        <ItemRef ItemOID="IT.AE.AEREL" OrderNumber="13" Mandatory="No"/>
-        <def:leaf ID="LF.AE" xlink:href="ae.xpt" xlink:title="ae.xpt"/>
+        <ItemRef ItemOID="IT.AE.AETERM" OrderNumber="5" Mandatory="Yes" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.AE.AEDECOD" OrderNumber="6" Mandatory="Yes" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.AE.AESTDTC" OrderNumber="7" Mandatory="Yes" MethodOID="MT.assign_dtc"/>
+        <ItemRef ItemOID="IT.AE.AEENDTC" OrderNumber="8" Mandatory="No" MethodOID="MT.assign_dtc"/>
+        <ItemRef ItemOID="IT.AE.AESEV" OrderNumber="9" Mandatory="No" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.AE.AESER" OrderNumber="10" Mandatory="No" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.AE.AEOUT" OrderNumber="11" Mandatory="No" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.AE.AEACN" OrderNumber="12" Mandatory="No" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.AE.AEREL" OrderNumber="13" Mandatory="No" MethodOID="MT.ae_aerel"/>
+        <def:leaf ID="LF.AE" xlink:href="ae.parquet" xlink:title="ae.parquet"/>
       </ItemGroupDef>
       <ItemGroupDef OID="IG.VS" Name="VS" Repeating="Yes" IsReferenceData="No" SASDatasetName="VS" Domain="VS" def:Structure="One record per vital sign measurement per subject per visit" Purpose="Tabulation" def:StandardOID="STD.SDTMIG" def:ArchiveLocationID="LF.VS">
         <Description>
           <TranslatedText xml:lang="en">Vital Signs</TranslatedText>
         </Description>
         <def:Class Name="FINDINGS"/>
-        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
-        <ItemRef ItemOID="IT.DOMAIN" OrderNumber="2" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2"/>
-        <ItemRef ItemOID="IT.VS.VSTESTCD" OrderNumber="4" Mandatory="Yes" KeySequence="3"/>
-        <ItemRef ItemOID="IT.VS.VSTEST" OrderNumber="5" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.VS.VSORRES" OrderNumber="6" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.VS.VSORRESU" OrderNumber="7" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.VS.VSSTRESN" OrderNumber="8" Mandatory="No"/>
-        <ItemRef ItemOID="IT.VS.VSSTRESU" OrderNumber="9" Mandatory="No"/>
-        <ItemRef ItemOID="IT.VS.VISITNUM" OrderNumber="10" Mandatory="No" KeySequence="4"/>
-        <ItemRef ItemOID="IT.VS.VISIT" OrderNumber="11" Mandatory="No"/>
-        <ItemRef ItemOID="IT.VS.VSDTC" OrderNumber="12" Mandatory="Yes"/>
-        <def:leaf ID="LF.VS" xlink:href="vs.xpt" xlink:title="vs.xpt"/>
+        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" MethodOID="MT.hardcode_no_ct"/>
+        <ItemRef ItemOID="IT.DOMAIN" OrderNumber="2" Mandatory="Yes" MethodOID="MT.hardcode_no_ct"/>
+        <ItemRef ItemOID="IT.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.VS.VSTESTCD" OrderNumber="4" Mandatory="Yes" KeySequence="3" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.VS.VSTEST" OrderNumber="5" Mandatory="Yes" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.VS.VSORRES" OrderNumber="6" Mandatory="Yes" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.VS.VSORRESU" OrderNumber="7" Mandatory="Yes" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.VS.VSSTRESN" OrderNumber="8" Mandatory="No" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.VS.VSSTRESU" OrderNumber="9" Mandatory="No" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.VS.VISITNUM" OrderNumber="10" Mandatory="No" KeySequence="4" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.VS.VISIT" OrderNumber="11" Mandatory="No" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.VS.VSDTC" OrderNumber="12" Mandatory="Yes" MethodOID="MT.assign_dtc"/>
+        <def:leaf ID="LF.VS" xlink:href="vs.parquet" xlink:title="vs.parquet"/>
       </ItemGroupDef>
       <ItemGroupDef OID="IG.EX" Name="EX" Repeating="Yes" IsReferenceData="No" SASDatasetName="EX" Domain="EX" def:Structure="One record per protocol-specified study treatment per subject" Purpose="Tabulation" def:StandardOID="STD.SDTMIG" def:ArchiveLocationID="LF.EX">
         <Description>
           <TranslatedText xml:lang="en">Exposure</TranslatedText>
         </Description>
         <def:Class Name="INTERVENTIONS"/>
-        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
-        <ItemRef ItemOID="IT.DOMAIN" OrderNumber="2" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2"/>
+        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" MethodOID="MT.hardcode_no_ct"/>
+        <ItemRef ItemOID="IT.DOMAIN" OrderNumber="2" Mandatory="Yes" MethodOID="MT.hardcode_no_ct"/>
+        <ItemRef ItemOID="IT.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2" MethodOID="MT.assign_no_ct"/>
         <ItemRef ItemOID="IT.EX.EXSEQ" OrderNumber="4" Mandatory="Yes" KeySequence="3"/>
-        <ItemRef ItemOID="IT.EX.EXTRT" OrderNumber="5" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.EX.EXDOSE" OrderNumber="6" Mandatory="No"/>
-        <ItemRef ItemOID="IT.EX.EXDOSU" OrderNumber="7" Mandatory="No"/>
-        <ItemRef ItemOID="IT.EX.EXSTDTC" OrderNumber="8" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.EX.EXENDTC" OrderNumber="9" Mandatory="No"/>
-        <def:leaf ID="LF.EX" xlink:href="ex.xpt" xlink:title="ex.xpt"/>
+        <ItemRef ItemOID="IT.EX.EXTRT" OrderNumber="5" Mandatory="Yes" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.EX.EXDOSE" OrderNumber="6" Mandatory="No" MethodOID="MT.assign_no_ct"/>
+        <ItemRef ItemOID="IT.EX.EXDOSU" OrderNumber="7" Mandatory="No" MethodOID="MT.hardcode_no_ct"/>
+        <ItemRef ItemOID="IT.EX.EXSTDTC" OrderNumber="8" Mandatory="Yes" MethodOID="MT.assign_dtc"/>
+        <ItemRef ItemOID="IT.EX.EXENDTC" OrderNumber="9" Mandatory="No" MethodOID="MT.assign_dtc"/>
+        <def:leaf ID="LF.EX" xlink:href="ex.parquet" xlink:title="ex.parquet"/>
       </ItemGroupDef>
-      <ItemDef OID="IT.STUDYID" Name="STUDYID" DataType="text" SASFieldName="STUDYID" Length="12" MethodOID="MT.hardcode_no_ct">
+      <ItemDef OID="IT.STUDYID" Name="STUDYID" DataType="text" SASFieldName="STUDYID" Length="12">
         <Description>
           <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
         </Description>
         <def:Origin Type="Assigned">
           <Description>
-            <TranslatedText xml:lang="en">Set *target* to a literal *value* for every row, with no CT validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.DOMAIN" Name="DOMAIN" DataType="text" SASFieldName="DOMAIN" Length="2" MethodOID="MT.hardcode_no_ct">
+      <ItemDef OID="IT.DOMAIN" Name="DOMAIN" DataType="text" SASFieldName="DOMAIN" Length="2">
         <Description>
           <TranslatedText xml:lang="en">Domain Abbreviation</TranslatedText>
         </Description>
         <def:Origin Type="Assigned">
           <Description>
-            <TranslatedText xml:lang="en">Set *target* to a literal *value* for every row, with no CT validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.USUBJID" Name="USUBJID" DataType="text" SASFieldName="USUBJID" Length="40" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.USUBJID" Name="USUBJID" DataType="text" SASFieldName="USUBJID" Length="40">
         <Description>
           <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
         </Description>
         <def:Origin Type="Derived">
           <Description>
-            <TranslatedText xml:lang="en">Concatenation of STUDYID, SITEID, and SUBJID Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Concatenation of STUDYID, SITEID, and SUBJID Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.SUBJID" Name="SUBJID" DataType="text" SASFieldName="SUBJID" Length="20" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.SUBJID" Name="SUBJID" DataType="text" SASFieldName="SUBJID" Length="20">
         <Description>
           <TranslatedText xml:lang="en">Subject Identifier for the Study</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
           <def:DocumentRef leafID="LF.acrf">
             <def:PDFPageRef PageRefs="6" Type="PhysicalRef"/>
@@ -144,6 +144,9 @@
           <TranslatedText xml:lang="en">Subject Reference Start Date/Time</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
+          <Description>
+            <TranslatedText xml:lang="en">Parse, convert, impute, and flag a date or datetime column.</TranslatedText>
+          </Description>
           <def:DocumentRef leafID="LF.acrf">
             <def:PDFPageRef PageRefs="7" Type="PhysicalRef"/>
           </def:DocumentRef>
@@ -153,7 +156,11 @@
         <Description>
           <TranslatedText xml:lang="en">Subject Reference End Date/Time</TranslatedText>
         </Description>
-        <def:Origin Type="CRF"/>
+        <def:Origin Type="CRF">
+          <Description>
+            <TranslatedText xml:lang="en">Parse, convert, impute, and flag a date or datetime column.</TranslatedText>
+          </Description>
+        </def:Origin>
       </ItemDef>
       <ItemDef OID="IT.DM.RFXSTDTC" Name="RFXSTDTC" DataType="datetime" SASFieldName="RFXSTDTC">
         <Description>
@@ -167,118 +174,118 @@
         </Description>
         <def:Origin Type="Derived"/>
       </ItemDef>
-      <ItemDef OID="IT.SITEID" Name="SITEID" DataType="text" SASFieldName="SITEID" Length="20" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.SITEID" Name="SITEID" DataType="text" SASFieldName="SITEID" Length="20">
         <Description>
           <TranslatedText xml:lang="en">Study Site Identifier</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
           <def:DocumentRef leafID="LF.acrf">
             <def:PDFPageRef PageRefs="6" Type="PhysicalRef"/>
           </def:DocumentRef>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.AGE" Name="AGE" DataType="integer" SASFieldName="AGE" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.AGE" Name="AGE" DataType="integer" SASFieldName="AGE">
         <Description>
           <TranslatedText xml:lang="en">Age</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
           <def:DocumentRef leafID="LF.acrf">
             <def:PDFPageRef PageRefs="8" Type="PhysicalRef"/>
           </def:DocumentRef>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.AGEU" Name="AGEU" DataType="text" SASFieldName="AGEU" Length="10" MethodOID="MT.hardcode_no_ct">
+      <ItemDef OID="IT.AGEU" Name="AGEU" DataType="text" SASFieldName="AGEU" Length="10">
         <Description>
           <TranslatedText xml:lang="en">Age Units</TranslatedText>
         </Description>
         <def:Origin Type="Assigned">
           <Description>
-            <TranslatedText xml:lang="en">Set *target* to a literal *value* for every row, with no CT validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.SEX" Name="SEX" DataType="text" SASFieldName="SEX" Length="2" MethodOID="MT.assign_ct">
+      <ItemDef OID="IT.SEX" Name="SEX" DataType="text" SASFieldName="SEX" Length="2">
         <Description>
           <TranslatedText xml:lang="en">Sex</TranslatedText>
         </Description>
         <CodeListRef CodeListOID="C66731"/>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* to *target*, translating values via controlled terminology.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
           <def:DocumentRef leafID="LF.acrf">
             <def:PDFPageRef PageRefs="8" Type="PhysicalRef"/>
           </def:DocumentRef>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.RACE" Name="RACE" DataType="text" SASFieldName="RACE" Length="60" MethodOID="MT.assign_ct">
+      <ItemDef OID="IT.RACE" Name="RACE" DataType="text" SASFieldName="RACE" Length="60">
         <Description>
           <TranslatedText xml:lang="en">Race</TranslatedText>
         </Description>
         <CodeListRef CodeListOID="C74457"/>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* to *target*, translating values via controlled terminology.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
           <def:DocumentRef leafID="LF.acrf">
             <def:PDFPageRef PageRefs="8 9" Type="PhysicalRef"/>
           </def:DocumentRef>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ETHNIC" Name="ETHNIC" DataType="text" SASFieldName="ETHNIC" Length="60" MethodOID="MT.assign_ct">
+      <ItemDef OID="IT.ETHNIC" Name="ETHNIC" DataType="text" SASFieldName="ETHNIC" Length="60">
         <Description>
           <TranslatedText xml:lang="en">Ethnicity</TranslatedText>
         </Description>
         <CodeListRef CodeListOID="C66790"/>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* to *target*, translating values via controlled terminology.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ARMCD" Name="ARMCD" DataType="text" SASFieldName="ARMCD" Length="20" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.ARMCD" Name="ARMCD" DataType="text" SASFieldName="ARMCD" Length="20">
         <Description>
           <TranslatedText xml:lang="en">Planned Arm Code</TranslatedText>
         </Description>
         <def:Origin Type="Protocol">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ARM" Name="ARM" DataType="text" SASFieldName="ARM" Length="200" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.ARM" Name="ARM" DataType="text" SASFieldName="ARM" Length="200">
         <Description>
           <TranslatedText xml:lang="en">Description of Planned Arm</TranslatedText>
         </Description>
         <def:Origin Type="Protocol">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ACTARMCD" Name="ACTARMCD" DataType="text" SASFieldName="ACTARMCD" Length="20" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.ACTARMCD" Name="ACTARMCD" DataType="text" SASFieldName="ACTARMCD" Length="20">
         <Description>
           <TranslatedText xml:lang="en">Actual Arm Code</TranslatedText>
         </Description>
         <def:Origin Type="Assigned">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ACTARM" Name="ACTARM" DataType="text" SASFieldName="ACTARM" Length="200" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.ACTARM" Name="ACTARM" DataType="text" SASFieldName="ACTARM" Length="200">
         <Description>
           <TranslatedText xml:lang="en">Description of Actual Arm</TranslatedText>
         </Description>
         <def:Origin Type="Assigned">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -286,7 +293,11 @@
         <Description>
           <TranslatedText xml:lang="en">Date/Time of Informed Consent</TranslatedText>
         </Description>
-        <def:Origin Type="CRF"/>
+        <def:Origin Type="CRF">
+          <Description>
+            <TranslatedText xml:lang="en">Parse, convert, impute, and flag a date or datetime column.</TranslatedText>
+          </Description>
+        </def:Origin>
       </ItemDef>
       <ItemDef OID="IT.AE.AESEQ" Name="AESEQ" DataType="integer" SASFieldName="AESEQ">
         <Description>
@@ -294,23 +305,23 @@
         </Description>
         <def:Origin Type="Assigned"/>
       </ItemDef>
-      <ItemDef OID="IT.AE.AETERM" Name="AETERM" DataType="text" SASFieldName="AETERM" Length="200" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.AE.AETERM" Name="AETERM" DataType="text" SASFieldName="AETERM" Length="200">
         <Description>
           <TranslatedText xml:lang="en">Reported Term for the Adverse Event</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.AE.AEDECOD" Name="AEDECOD" DataType="text" SASFieldName="AEDECOD" Length="200" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.AE.AEDECOD" Name="AEDECOD" DataType="text" SASFieldName="AEDECOD" Length="200">
         <Description>
           <TranslatedText xml:lang="en">Dictionary-Derived Term</TranslatedText>
         </Description>
         <def:Origin Type="Derived">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -318,55 +329,63 @@
         <Description>
           <TranslatedText xml:lang="en">Start Date/Time of Adverse Event</TranslatedText>
         </Description>
-        <def:Origin Type="CRF"/>
+        <def:Origin Type="CRF">
+          <Description>
+            <TranslatedText xml:lang="en">Parse, convert, impute, and flag a date or datetime column.</TranslatedText>
+          </Description>
+        </def:Origin>
       </ItemDef>
       <ItemDef OID="IT.AE.AEENDTC" Name="AEENDTC" DataType="datetime" SASFieldName="AEENDTC">
         <Description>
           <TranslatedText xml:lang="en">End Date/Time of Adverse Event</TranslatedText>
         </Description>
-        <def:Origin Type="CRF"/>
+        <def:Origin Type="CRF">
+          <Description>
+            <TranslatedText xml:lang="en">Parse, convert, impute, and flag a date or datetime column.</TranslatedText>
+          </Description>
+        </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.AE.AESEV" Name="AESEV" DataType="text" SASFieldName="AESEV" Length="20" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.AE.AESEV" Name="AESEV" DataType="text" SASFieldName="AESEV" Length="20">
         <Description>
           <TranslatedText xml:lang="en">Severity/Intensity</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.AE.AESER" Name="AESER" DataType="text" SASFieldName="AESER" Length="2" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.AE.AESER" Name="AESER" DataType="text" SASFieldName="AESER" Length="2">
         <Description>
           <TranslatedText xml:lang="en">Serious Event</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.AE.AEOUT" Name="AEOUT" DataType="text" SASFieldName="AEOUT" Length="60" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.AE.AEOUT" Name="AEOUT" DataType="text" SASFieldName="AEOUT" Length="60">
         <Description>
           <TranslatedText xml:lang="en">Outcome of Adverse Event</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.AE.AEACN" Name="AEACN" DataType="text" SASFieldName="AEACN" Length="60" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.AE.AEACN" Name="AEACN" DataType="text" SASFieldName="AEACN" Length="60">
         <Description>
           <TranslatedText xml:lang="en">Action Taken with Study Treatment</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.AE.AEREL" Name="AEREL" DataType="text" SASFieldName="AEREL" Length="60" MethodOID="MT.ae_aerel">
+      <ItemDef OID="IT.AE.AEREL" Name="AEREL" DataType="text" SASFieldName="AEREL" Length="60">
         <Description>
           <TranslatedText xml:lang="en">Causality</TranslatedText>
         </Description>
@@ -376,84 +395,84 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.VS.VSTESTCD" Name="VSTESTCD" DataType="text" SASFieldName="VSTESTCD" Length="8" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.VS.VSTESTCD" Name="VSTESTCD" DataType="text" SASFieldName="VSTESTCD" Length="8">
         <Description>
           <TranslatedText xml:lang="en">Vital Signs Test Short Name</TranslatedText>
         </Description>
         <CodeListRef CodeListOID="CL.VSTEST"/>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.VS.VSTEST" Name="VSTEST" DataType="text" SASFieldName="VSTEST" Length="40" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.VS.VSTEST" Name="VSTEST" DataType="text" SASFieldName="VSTEST" Length="40">
         <Description>
           <TranslatedText xml:lang="en">Vital Signs Test Name</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.VS.VSORRES" Name="VSORRES" DataType="text" SASFieldName="VSORRES" Length="20" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.VS.VSORRES" Name="VSORRES" DataType="text" SASFieldName="VSORRES" Length="20">
         <Description>
           <TranslatedText xml:lang="en">Result or Finding in Original Units</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.VS.VSORRESU" Name="VSORRESU" DataType="text" SASFieldName="VSORRESU" Length="20" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.VS.VSORRESU" Name="VSORRESU" DataType="text" SASFieldName="VSORRESU" Length="20">
         <Description>
           <TranslatedText xml:lang="en">Original Units</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.VS.VSSTRESN" Name="VSSTRESN" DataType="float" SASFieldName="VSSTRESN" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.VS.VSSTRESN" Name="VSSTRESN" DataType="float" SASFieldName="VSSTRESN">
         <Description>
           <TranslatedText xml:lang="en">Numeric Result/Finding in Standard Units</TranslatedText>
         </Description>
         <def:Origin Type="Derived">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.VS.VSSTRESU" Name="VSSTRESU" DataType="text" SASFieldName="VSSTRESU" Length="20" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.VS.VSSTRESU" Name="VSSTRESU" DataType="text" SASFieldName="VSSTRESU" Length="20">
         <Description>
           <TranslatedText xml:lang="en">Standard Units</TranslatedText>
         </Description>
         <def:Origin Type="Derived">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.VS.VISITNUM" Name="VISITNUM" DataType="float" SASFieldName="VISITNUM" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.VS.VISITNUM" Name="VISITNUM" DataType="float" SASFieldName="VISITNUM">
         <Description>
           <TranslatedText xml:lang="en">Visit Number</TranslatedText>
         </Description>
         <def:Origin Type="Protocol">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.VS.VISIT" Name="VISIT" DataType="text" SASFieldName="VISIT" Length="200" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.VS.VISIT" Name="VISIT" DataType="text" SASFieldName="VISIT" Length="200">
         <Description>
           <TranslatedText xml:lang="en">Visit Name</TranslatedText>
         </Description>
         <def:Origin Type="Protocol">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -461,7 +480,11 @@
         <Description>
           <TranslatedText xml:lang="en">Date/Time of Measurements</TranslatedText>
         </Description>
-        <def:Origin Type="CRF"/>
+        <def:Origin Type="CRF">
+          <Description>
+            <TranslatedText xml:lang="en">Parse, convert, impute, and flag a date or datetime column.</TranslatedText>
+          </Description>
+        </def:Origin>
       </ItemDef>
       <ItemDef OID="IT.EX.EXSEQ" Name="EXSEQ" DataType="integer" SASFieldName="EXSEQ">
         <Description>
@@ -469,33 +492,33 @@
         </Description>
         <def:Origin Type="Assigned"/>
       </ItemDef>
-      <ItemDef OID="IT.EX.EXTRT" Name="EXTRT" DataType="text" SASFieldName="EXTRT" Length="200" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.EX.EXTRT" Name="EXTRT" DataType="text" SASFieldName="EXTRT" Length="200">
         <Description>
           <TranslatedText xml:lang="en">Name of Actual Treatment</TranslatedText>
         </Description>
         <def:Origin Type="Protocol">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.EX.EXDOSE" Name="EXDOSE" DataType="float" SASFieldName="EXDOSE" MethodOID="MT.assign_no_ct">
+      <ItemDef OID="IT.EX.EXDOSE" Name="EXDOSE" DataType="float" SASFieldName="EXDOSE">
         <Description>
           <TranslatedText xml:lang="en">Dose per Administration</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.EX.EXDOSU" Name="EXDOSU" DataType="text" SASFieldName="EXDOSU" Length="20" MethodOID="MT.hardcode_no_ct">
+      <ItemDef OID="IT.EX.EXDOSU" Name="EXDOSU" DataType="text" SASFieldName="EXDOSU" Length="20">
         <Description>
           <TranslatedText xml:lang="en">Dose Units</TranslatedText>
         </Description>
         <def:Origin Type="Protocol">
           <Description>
-            <TranslatedText xml:lang="en">Set *target* to a literal *value* for every row, with no CT validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -503,13 +526,21 @@
         <Description>
           <TranslatedText xml:lang="en">Start Date/Time of Treatment</TranslatedText>
         </Description>
-        <def:Origin Type="CRF"/>
+        <def:Origin Type="CRF">
+          <Description>
+            <TranslatedText xml:lang="en">Parse, convert, impute, and flag a date or datetime column.</TranslatedText>
+          </Description>
+        </def:Origin>
       </ItemDef>
       <ItemDef OID="IT.EX.EXENDTC" Name="EXENDTC" DataType="datetime" SASFieldName="EXENDTC">
         <Description>
           <TranslatedText xml:lang="en">End Date/Time of Treatment</TranslatedText>
         </Description>
-        <def:Origin Type="CRF"/>
+        <def:Origin Type="CRF">
+          <Description>
+            <TranslatedText xml:lang="en">Parse, convert, impute, and flag a date or datetime column.</TranslatedText>
+          </Description>
+        </def:Origin>
       </ItemDef>
       <CodeList OID="C66731" Name="Sex" DataType="text">
         <CodeListItem CodedValue="M">
@@ -602,26 +633,32 @@
       </MethodDef>
       <MethodDef OID="MT.assign_ct" Name="assign_ct" Type="Computation">
         <Description>
-          <TranslatedText xml:lang="en">Copy *source* to *target*, translating values via controlled terminology.</TranslatedText>
+          <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
         </Description>
         <FormalExpression Context="Python/Fleet">.assign_ct(...)</FormalExpression>
       </MethodDef>
+      <MethodDef OID="MT.assign_dtc" Name="assign_dtc" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">Parse, convert, impute, and flag a date or datetime column.</TranslatedText>
+        </Description>
+        <FormalExpression Context="Python/Fleet">.assign_dtc(...)</FormalExpression>
+      </MethodDef>
       <MethodDef OID="MT.assign_no_ct" Name="assign_no_ct" Type="Computation">
         <Description>
-          <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+          <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
         </Description>
         <FormalExpression Context="Python/Fleet">.assign_no_ct(...)</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.hardcode_no_ct" Name="hardcode_no_ct" Type="Computation">
         <Description>
-          <TranslatedText xml:lang="en">Set *target* to a literal *value* for every row, with no CT validation.</TranslatedText>
+          <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
         </Description>
         <FormalExpression Context="Python/Fleet">.hardcode_no_ct(...)</FormalExpression>
       </MethodDef>
-      <def:leaf ID="LF.DM" xlink:href="dm.xpt" xlink:title="dm.xpt"/>
-      <def:leaf ID="LF.AE" xlink:href="ae.xpt" xlink:title="ae.xpt"/>
-      <def:leaf ID="LF.VS" xlink:href="vs.xpt" xlink:title="vs.xpt"/>
-      <def:leaf ID="LF.EX" xlink:href="ex.xpt" xlink:title="ex.xpt"/>
+      <def:leaf ID="LF.DM" xlink:href="dm.parquet" xlink:title="dm.parquet"/>
+      <def:leaf ID="LF.AE" xlink:href="ae.parquet" xlink:title="ae.parquet"/>
+      <def:leaf ID="LF.VS" xlink:href="vs.parquet" xlink:title="vs.parquet"/>
+      <def:leaf ID="LF.EX" xlink:href="ex.parquet" xlink:title="ex.parquet"/>
       <def:leaf ID="LF.acrf" xlink:href="blankcrf.pdf">
         <def:title>Annotated Case Report Form</def:title>
       </def:leaf>

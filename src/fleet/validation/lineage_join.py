@@ -12,7 +12,7 @@ Examples:
         from fleet.core.lineage import lineage_of
         from fleet.validation.lineage_join import enrich_with_lineage
 
-        ns = raw_df.sdtm.assign_no_ct("USUBJID", source="subject_id")
+        ns = raw_df.sdtm.assign("USUBJID", source="subject_id")
         result = run_validation(ns.to_frame(), ...)  # produces ValidationResult
         enrich_with_lineage(result, lineage_of(ns), spec_ref="define.yaml -> DM")
 """

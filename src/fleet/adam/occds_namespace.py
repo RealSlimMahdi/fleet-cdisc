@@ -13,9 +13,9 @@ Usage
         .source("AETERM")
         .treatment_emergent("TRTEMFL", start_date="AESTDTC",
                              trtsdt="TRTSDT", trtedt="TRTEDT")
-        .seq("ASEQ", groups=["USUBJID"])
+        .seq("ASEQ", by=["USUBJID"])
         .flag("ANL01FL", criteria="max", value_col="AESEV",
-              groups=["USUBJID", "AEBODSYS"])
+              by=["USUBJID", "AEBODSYS"])
         .to_frame()
     )
 """
@@ -29,16 +29,20 @@ import polars as pl
 from fleet.adam._mixins import MultiRowMixin, SharedADaMVerbsMixin
 
 
+@pl.api.register_lazyframe_namespace("occds")
 class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin):
     """
     Immutable pipeline builder for OCCDS (one-row-per-event) derivations.
 
-    Covers occurrence datasets: ADAE, ADCM, ADMH, ADEX, etc.
+    Covers occurrence datasets: ADAE, ADCM, ADMH, ADEX, etc.  Also
+    registered as the ``occds`` LazyFrame namespace, so
+    ``pl.scan_parquet(...).occds`` starts a fully lazy OCCDS pipeline.
 
     Inherits shared verbs from ``SharedADaMVerbsMixin``
-    (source, derivation, assigned, recode, rename, condderivation,
-    whereclauses) and adds OCCDS-specific verbs for event sequencing,
-    worst-record flagging, and treatment-emergent classification.
+    (assign, case_when, merge, source, derivation, whereclauses, ...)
+    and adds OCCDS-specific verbs for event sequencing, worst-record
+    flagging, and treatment-emergent classification.  Discover the full
+    set with ``.verbs()``.
     """
 
     # ------------------------------------------------------------------ #

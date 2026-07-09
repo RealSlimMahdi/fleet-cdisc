@@ -54,11 +54,13 @@ Same method body in 2+ namespace classes → extract into:
 
 When argparse constrains via `choices=`, don't re-validate in the handler. Use dispatch dict + let argparse handle errors.
 
-## Polars stubs must stay in sync
+## Typed entry must stay in sync
 
-The file `src/polars-stubs/dataframe/frame.pyi` teaches Pylance about Fleet's namespace accessors on `pl.DataFrame`. When you:
+`fleet.frame()` in `src/fleet/core/frames.py` is the single typed entry for namespace accessors: a zero-cost cast returning `fleet.DataFrame` / `fleet.LazyFrame` (TYPE_CHECKING-only subclasses declaring the namespace properties; plain `pl.DataFrame`/`pl.LazyFrame` aliases at runtime). There is deliberately NO polars stub overlay — a partial stub replaces the real `DataFrame` class for type checkers and breaks every native polars method (see pola-rs/polars#27795).
 
-- **Add a new top-level namespace** (a new `@pl.api.register_dataframe_namespace`): add a matching `@property` entry in the stub.
-- **Rename or move a namespace class**: update the import path in the stub.
+When you:
 
-Do NOT duplicate method signatures — Pylance reads those from the real source files.
+- **Add a new top-level namespace** (a new `@pl.api.register_dataframe_namespace` / `register_lazyframe_namespace`): add a matching `@property` to the `DataFrame`/`LazyFrame` declarations in `core/frames.py`.
+- **Rename or move a namespace class**: update the import paths in `core/frames.py`.
+
+Do NOT reintroduce `polars-stubs` overlays. Do NOT add `# type: ignore` for namespace access; use `fleet.frame()` at the IO boundary instead.

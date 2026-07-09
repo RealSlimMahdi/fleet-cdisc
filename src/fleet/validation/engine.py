@@ -350,8 +350,13 @@ def uninstall_engine() -> bool:
     return False
 
 
-def doctor() -> dict[str, str]:
+def doctor(study_root: Path | None = None) -> dict[str, str]:
     """Check the health of the CDISC Rules Engine installation.
+
+    Args:
+        study_root: Optional study root directory; when given,
+            ``validation.engine_path`` from its ``study_config.yaml`` is
+            honoured during engine discovery.
 
     Returns:
         A dict of check names to status strings.
@@ -361,7 +366,7 @@ def doctor() -> dict[str, str]:
     checks: dict[str, str] = {}
 
     # Engine discovery
-    found = discover_engine()
+    found = discover_engine(study_root)
     if found is None:
         checks["engine"] = "NOT FOUND — run `fleet install-engine`"
         checks["version"] = "N/A"

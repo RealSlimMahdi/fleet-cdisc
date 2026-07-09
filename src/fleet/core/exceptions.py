@@ -1,8 +1,46 @@
-"""Core exceptions for fleet."""
+"""Core exceptions for fleet.
+
+The verb-layer exceptions use **dual inheritance** so both catch styles
+work: ``except FleetError`` (the Fleet-native style) and the legacy
+builtin style (``except ValueError`` / ``except TypeError`` /
+``except LookupError``) that predates the hierarchy.
+
+* :class:`DerivationError` — a verb received invalid values or arguments
+  (missing column, unparseable expression, unsupported option, ...).
+  Catchable as ``ValueError``.
+* :class:`VerbUsageError` — a verb was called with a wrong *type*.
+  Catchable as ``TypeError``.
+* :class:`PinError` — a cross-domain verb could not resolve a pinned
+  reference domain.  Catchable as ``LookupError``.
+"""
 
 
 class FleetError(Exception):
     """Base exception for all fleet errors."""
+
+
+class DerivationError(FleetError, ValueError):
+    """Raised when a derivation verb receives invalid values or arguments.
+
+    Dual-inherits from ``ValueError`` so legacy ``except ValueError``
+    handlers keep working.
+    """
+
+
+class VerbUsageError(FleetError, TypeError):
+    """Raised when a verb is called with arguments of the wrong type.
+
+    Dual-inherits from ``TypeError`` so legacy ``except TypeError``
+    handlers keep working.
+    """
+
+
+class PinError(FleetError, LookupError):
+    """Raised when a pinned reference domain cannot be resolved.
+
+    Dual-inherits from ``LookupError`` so legacy ``except LookupError``
+    handlers keep working.
+    """
 
 
 class SDTMError(FleetError):

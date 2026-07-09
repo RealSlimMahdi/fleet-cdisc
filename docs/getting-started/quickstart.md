@@ -45,17 +45,23 @@ raw = pl.from_repr("""
 """)
 
 dm = (
-    raw.sdtm.hardcode_no_ct("DOMAIN", value="DM")
-    .hardcode_no_ct("STUDYID", value="MYSTUDY01")
-    .assign_no_ct("USUBJID", source="patient_id")
-    .assign_ct("SEX", source="sex_raw", ct_codelist=SEX)
-    .assign_dtc("BRTHDTC", source="birth_date")
+    raw.sdtm.assign("DOMAIN", value="DM")
+    .assign("STUDYID", value="MYSTUDY01")
+    .assign("USUBJID", source="patient_id")
+    .assign("SEX", source="sex_raw", ct=SEX)
+    .date("BRTHDTC", source="birth_date")
     .to_frame()
 )
 print(dm)
 ```
 
-`assign_ct` accepts the generated codelist class directly — no need to look up NCI concept IDs. When `ct_mapping` is omitted (as above), raw values are passed through and validated against the codelist. Add `ct_mapping={"1": "M", "2": "F"}` if your raw data needs recoding.
+`assign` is the one assignment verb: `source=` copies a column, `value=` hardcodes
+a literal, and `ct=` (a generated codelist class or an NCI concept ID) turns on
+controlled-terminology validation — no need to look up concept IDs. When `ct_map`
+is omitted (as above), raw values are passed through and validated against the
+codelist; add `ct_map={"1": "M", "2": "F"}` if your raw data needs recoding. The
+old spellings (`hardcode_no_ct`, `assign_no_ct`, `assign_ct`, `assign_dtc`) were
+removed outright — run `fleet migrate <files...> --write` to rewrite old scripts.
 
 ---
 
@@ -75,18 +81,19 @@ vs_sdtm = pl.from_repr("""
 """)
 
 advs = (
-    vs_sdtm.adam.source("USUBJID")
-    .source("PARAMCD", from_col="VSTESTCD")
-    .source("AVAL", from_col="VSSTRESN")
-    .derive_dt("ADT", source="VSDTC")
-    .study_day("ADY", analysis_date="ADT", reference_date="TRTSDT")
-    .flag("ABLFL", criteria='pl.col("VISITNUM") == 1', groups=["USUBJID", "PARAMCD"])
-    .baseline("BASE", aval="AVAL", baseline_flag="ABLFL")
+    vs_sdtm.adam.source("USUBJID", "PARAMCD", "AVAL")
+    .study_day("ADY", date_col="ADT", ref_col="TRTSDT")
+    .flag("ABLFL", criteria='pl.col("VISITNUM") == 1', by=["USUBJID", "PARAMCD"])
+    .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
     .chg("CHG", aval="AVAL", base="BASE")
     .pchg("PCHG", aval="AVAL", base="BASE")
     .to_frame()
 )
 ```
+
+The `flag → baseline → chg` chain runs in one pipeline — no intermediate
+`.to_frame()`. `study_day` uses the CDISC algorithm (`+1` when on/after the
+reference date, no day 0).
 
 ---
 
@@ -94,12 +101,10 @@ advs = (
 
 ```python
 adsl = (
-    dm_sdtm.adam.adsl.source("USUBJID")
-    .source("AGE")
-    .source("SEX")
+    dm_sdtm.adam.adsl.source("USUBJID", "AGE", "SEX")
     .first_date("TRTSDT", from_dataset=ex_sdtm, date_col="EXSTDTC", where='pl.col("EXDOSE") > 0')
     .last_date("TRTEDT", from_dataset=ex_sdtm, date_col="EXENDTC", where='pl.col("EXDOSE") > 0')
-    .duration("TRTDURD", start_date="TRTSDT", end_date="TRTEDT")
+    .duration("TRTDURD", start="TRTSDT", end="TRTEDT")
     .flag("SAFFL", criteria='pl.col("TRTSDT").is_not_null()')
     .count_events("NUMAE", from_dataset=ae_sdtm)
     .to_frame()

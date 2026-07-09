@@ -113,7 +113,7 @@ def save_dataset_json(
 
             from fleet.io import save_dataset_json
 
-            dm = raw_df.sdtm.hardcode_no_ct("DOMAIN", value="DM").to_frame()
+            dm = raw_df.sdtm.assign("DOMAIN", value="DM").to_frame()
             save_dataset_json(dm, "outputs/dm.json", domain="DM")
     """
     path = Path(path)

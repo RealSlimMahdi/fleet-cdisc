@@ -77,7 +77,7 @@ class TestSourceOnAllNamespaces:
 class TestAssignedOnAllNamespaces:
     def test_assigned_constant(self, base_frame, accessor, label):
         ns = _get_ns(base_frame, accessor)
-        result = ns.assigned("STUDYID", value="STUDY01").to_frame()
+        result = ns.assign("STUDYID", value="STUDY01").to_frame()
         assert result["STUDYID"].to_list() == ["STUDY01"] * 3
 
 
@@ -115,7 +115,7 @@ class TestRecodeOnAllNamespaces:
 class TestRenameOnAllNamespaces:
     def test_rename_column(self, base_frame, accessor, label):
         ns = _get_ns(base_frame, accessor)
-        result = ns.rename("SUBJECTID", source="USUBJID").to_frame()
+        result = ns.assign("SUBJECTID", source="USUBJID").to_frame()
         assert "SUBJECTID" in result.columns
         assert result["SUBJECTID"].to_list() == base_frame["USUBJID"].to_list()
 
@@ -124,13 +124,13 @@ class TestRenameOnAllNamespaces:
 class TestCondderivationOnAllNamespaces:
     def test_multi_branch(self, base_frame, accessor, label):
         ns = _get_ns(base_frame, accessor)
-        result = ns.condderivation(
+        result = ns.case_when(
             "AGEGR1",
-            conditions=[
+            when=[
                 {"condition": "pl.col('AGE') < 40", "value": "<40"},
                 {"condition": "pl.col('AGE') <= 64", "value": "40-64"},
             ],
-            else_value=">64",
+            else_=">64",
         ).to_frame()
         assert result["AGEGR1"].to_list() == ["40-64", "40-64", "<40"]
 
@@ -154,16 +154,16 @@ class TestChainingSharedVerbs:
         ns = _get_ns(base_frame, accessor)
         result = (
             ns.source("USUBJID")
-            .assigned("STUDYID", value="S01")
-            .rename("SUBJ", source="USUBJID")
+            .assign("STUDYID", value="S01")
+            .assign("SUBJ", source="USUBJID")
             .derivation("AGE_DBL", expression='pl.col("AGE") * 2')
             .recode("SEXN", source="SEX", recode_map={"F": "Female", "M": "Male"})
-            .condderivation(
+            .case_when(
                 "AGEGR",
-                conditions=[
+                when=[
                     {"condition": "pl.col('AGE') < 50", "value": "Young"},
                 ],
-                else_value="Old",
+                else_="Old",
             )
             .to_frame()
         )
@@ -183,9 +183,7 @@ class TestSharedVerbEdgeCases:
         assert result.height == 0
 
     def test_condderivation_empty_conditions(self, base_frame):
-        result = base_frame.adam.condderivation(
-            "FLAG", conditions=[], else_value="DEFAULT"
-        ).to_frame()
+        result = base_frame.adam.case_when("FLAG", when=[], else_="DEFAULT").to_frame()
         assert result["FLAG"].to_list() == ["DEFAULT"] * 3
 
     def test_recode_empty_map_uses_default(self, base_frame):
@@ -195,12 +193,12 @@ class TestSharedVerbEdgeCases:
         assert result["CODED"].to_list() == ["UNK"] * 3
 
     def test_condderivation_with_polars_expr(self, base_frame):
-        result = base_frame.adam.condderivation(
+        result = base_frame.adam.case_when(
             "GRP",
-            conditions=[
+            when=[
                 {"condition": pl.col("AGE") < 40, "value": "Young"},
             ],
-            else_value="Old",
+            else_="Old",
         ).to_frame()
         assert result["GRP"].to_list() == ["Old", "Old", "Young"]
 

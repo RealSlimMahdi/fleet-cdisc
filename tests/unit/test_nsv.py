@@ -136,8 +136,8 @@ class TestNSVChaining:
 
     def test_nsv_chains_with_other_verbs(self, dm_raw_with_flags):
         result = (
-            dm_raw_with_flags.sdtm.hardcode_no_ct("DOMAIN", value="DM")
-            .assign_no_ct("USUBJID", source="USUBJID")
+            dm_raw_with_flags.sdtm.assign("DOMAIN", value="DM")
+            .assign("USUBJID", source="USUBJID")
             .nsv("SAFETY", source="safety_flag", label="Safety Population Flag")
             .to_frame()
         )
@@ -416,8 +416,8 @@ class TestExportSuppSpecAware:
     def test_spec_reads_qualifiers(self, dm_raw_with_flags, nsv_spec_yaml):
         # Build a frame that has the qualifier columns
         df = (
-            dm_raw_with_flags.sdtm.assign_no_ct("SAFETY", source="safety_flag")
-            .assign_no_ct("ITT", source="itt_flag")
+            dm_raw_with_flags.sdtm.assign("SAFETY", source="safety_flag")
+            .assign("ITT", source="itt_flag")
             .to_frame()
         )
         supp = df.sdtm.export_supp(spec=str(nsv_spec_yaml), dataset="DM")

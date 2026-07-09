@@ -134,13 +134,13 @@ from fleet.ct import import_codelists
 ct = import_codelists()
 
 dm = (
-    raw_df.sdtm.assign_ct("SEX", source="sex", ct_codelist=ct.SEX)
-    .assign_ct("RACE", source="race", ct_codelist=ct.RACE)
+    raw_df.sdtm.assign("SEX", source="sex", ct=ct.SEX)
+    .assign("RACE", source="race", ct=ct.RACE)
     .to_frame()
 )
 ```
 
-`assign_ct` accepts either a codelist class (`SEX`) or a raw NCI concept ID string (`"C66731"`). The class form is preferred for readability and auto-completion.
+`assign(ct=...)` accepts either a codelist class (`SEX`) or a raw NCI concept ID string (`"C66731"`). The class form is preferred for readability and auto-completion.
 
 ::: fleet.ct.CodelistGenerator
 options:
@@ -169,12 +169,12 @@ The singleton `CTValidator` provides runtime validation of values against loaded
 
 ### How CT validation works
 
-**Validation fires at pipeline-build time** — when you call `.hardcode_ct()` or `.assign_ct()` in
+**Validation fires at pipeline-build time** — when you call `.assign(ct=...)` in
 Python, not when you call `.to_frame()`. The check happens during the method call itself, before
 any data is processed.
 
 **The validator is opt-in via initialization.** Fleet ships a module-level singleton that starts
-empty. You must load CT data into it before using `ct_codelist=` parameters. If the singleton
+empty. You must load CT data into it before using `ct=` parameters. If the singleton
 has no data loaded, validation is silently skipped and the value is assigned as-is — no error,
 no warning.
 
@@ -206,12 +206,12 @@ import warnings
 with warnings.catch_warnings(record=True) as caught:
     warnings.simplefilter("always")
     dm = (
-        raw_df.sdtm.hardcode_ct("AGEU", value="YEARS", ct_codelist=AGEU)  # OK — valid term
-        .hardcode_ct("AGEU", value="YRS", ct_codelist=AGEU)  # Warns immediately
+        raw_df.sdtm.assign("AGEU", value="YEARS", ct=AGEU)  # OK — valid term
+        .assign("AGEU", value="YRS", ct=AGEU)  # Warns immediately
         .to_frame()
     )
 
-# Any invalid values produce a warning at the .hardcode_ct() call site,
+# Any invalid values produce a warning at the .assign(ct=...) call site,
 # not when .to_frame() runs.
 for w in caught:
     print(w.message)
@@ -234,9 +234,9 @@ print(v.get_valid_values("C66781"))  # ['DAYS', 'HOURS', 'MINUTES', 'MONTHS', 'W
 
 #### ADaM namespaces
 
-The ADaM namespace verbs (`.assigned()`, `.derivation()`, etc.) do **not** accept a
-`ct_codelist=` parameter — ADaM CT compliance is validated post-hoc via the CDISC Rules Engine
-rather than inline. CT validation at pipeline-build time is a feature of the SDTM namespace only.
+ADaM pipelines typically skip build-time CT validation (`assign` without `ct=`) —
+ADaM CT compliance is validated post-hoc via the CDISC Rules Engine rather than
+inline. Passing `ct=` still works on any namespace since `assign` is shared.
 
 ---
 

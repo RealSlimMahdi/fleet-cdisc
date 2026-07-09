@@ -19,7 +19,7 @@ Usage::
 
 from __future__ import annotations
 
-from ._models import ListingModel, TableModel
+from ._models import ListingModel, TableModel, paginate, paginate_listing
 
 # ------------------------------------------------------------------ #
 # CSS — pharma submission style                                        #
@@ -84,12 +84,16 @@ table.fleet-summary tbody tr.header-row td {
 table.fleet-summary tbody tr.header-row td.stub {
   font-weight: normal;
 }
-table.fleet-summary tbody tr.group-row td.stub {
+table.fleet-summary tbody tr.group-row td.stub,
+table.fleet-summary tbody tr.section-row td.stub {
   font-weight: bold;
   padding-top: 6px;
 }
-table.fleet-summary tbody tr.data-row td.stub {
+table.fleet-summary tbody td.stub.indent-1 {
   padding-left: 24px;
+}
+table.fleet-summary tbody td.stub.indent-2 {
+  padding-left: 48px;
 }
 table.fleet-summary tbody tr:last-child td {
   border-bottom: 2px solid #000;
@@ -100,11 +104,18 @@ table.fleet-summary tbody tr.separator-row td {
   height: 0;
   line-height: 0;
 }
+.fleet-page-footer {
+  font-size: 8pt;
+  text-align: right;
+  margin-top: 4px;
+}
 /* Print-friendly */
 @media print {
   .fleet-table-container { max-width: none; overflow: visible; }
   table.fleet-summary { page-break-inside: auto; }
   table.fleet-summary tr { page-break-inside: avoid; }
+  .fleet-page { page-break-after: always; }
+  .fleet-page:last-child { page-break-after: auto; }
 }
 </style>"""
 
@@ -154,10 +165,17 @@ table.fleet-listing tbody td {
 table.fleet-listing tbody tr:last-child td {
   border-bottom: 2px solid #000;
 }
+.fleet-page-footer {
+  font-size: 8pt;
+  text-align: right;
+  margin-top: 4px;
+}
 @media print {
   .fleet-listing-container { max-width: none; overflow: visible; }
   table.fleet-listing { page-break-inside: auto; }
   table.fleet-listing tr { page-break-inside: avoid; }
+  .fleet-page { page-break-after: always; }
+  .fleet-page:last-child { page-break-after: auto; }
 }
 </style>"""
 
@@ -183,36 +201,13 @@ def _esc(text: str) -> str:
 # ------------------------------------------------------------------ #
 
 
-def render_html(
-    model: TableModel,
-    *,
-    html_wrapper: str | None = None,
-) -> str:
-    """Render a ``TableModel`` as a pharma-style HTML table.
-
-    Args:
-        model: The display-ready table model from ``ard_to_table_model()``.
-        html_wrapper: Optional HTML template string.  If given, the
-            generated ``<table>`` block replaces the ``{table}`` placeholder,
-            enabling embedding in sponsor portals, Quarto documents, or
-            interactive dashboards.
-
-    Returns:
-        str: Complete HTML string (with ``<style>`` block) or injected
-            into *html_wrapper*.
-    """
+def _table_page_parts(model: TableModel, page_footer: str | None = None) -> list[str]:
+    """HTML fragments for one page: title, table, footnotes, page footer."""
     parts: list[str] = []
 
-    # ── Title / subtitle ──
-    has_title = bool(model.metadata.title)
-    has_subtitle = bool(model.metadata.subtitle)
-
-    parts.append('<div class="fleet-table-container">')
-    parts.append(_SUMMARY_CSS)
-
-    if has_title:
+    if model.metadata.title:
         parts.append(f'<div class="fleet-table-title">{_esc(model.metadata.title)}</div>')
-    if has_subtitle:
+    if model.metadata.subtitle:
         parts.append(f'<div class="fleet-table-subtitle">{_esc(model.metadata.subtitle)}</div>')
 
     # ── Table header ──
@@ -228,13 +223,13 @@ def render_html(
     # ── Table body ──
     parts.append("<tbody>")
 
-    # Track whether we've seen hierarchy rows to insert separator
+    # Track whether we've seen header rows to insert a separator
     seen_header = False
     separator_inserted = False
 
     for row in model.rows:
         # Insert separator between header rows and hierarchy rows
-        if row.row_type in ("group", "data", "flat") and seen_header and not separator_inserted:
+        if row.row_type != "header" and seen_header and not separator_inserted:
             parts.append('<tr class="separator-row">')
             parts.append(f'<td colspan="{1 + len(model.columns)}"></td>')
             parts.append("</tr>")
@@ -246,9 +241,9 @@ def render_html(
         css_class = f"{row.row_type}-row"
         parts.append(f'<tr class="{css_class}">')
 
-        # Stub cell
-        label = _esc(row.label)
-        parts.append(f'<td class="stub">{label}</td>')
+        # Stub cell (indent expressed as a CSS class)
+        stub_class = "stub" if row.indent == 0 else f"stub indent-{row.indent}"
+        parts.append(f'<td class="{stub_class}">{_esc(row.label)}</td>')
 
         # Stat cells
         for col in model.columns:
@@ -267,6 +262,57 @@ def render_html(
             parts.append(f"<p>{_esc(fn)}</p>")
         parts.append("</div>")
 
+    if page_footer:
+        parts.append(f'<div class="fleet-page-footer">{_esc(page_footer)}</div>')
+
+    return parts
+
+
+def render_html(
+    model: TableModel,
+    *,
+    html_wrapper: str | None = None,
+    rows_per_page: int | None = None,
+    page_by: str | None = None,
+) -> str:
+    """Render a ``TableModel`` as a pharma-style HTML table.
+
+    Pagination happens in the model layer (:func:`~fleet.tlg.render.paginate`):
+    each page repeats title, column headers, and footnotes, carries a
+    ``Page X of Y`` footer, and breaks on a real page in print/PDF media.
+
+    Args:
+        model: The display-ready table model from ``ard_to_table_model()``.
+        html_wrapper: Optional HTML template string.  If given, the
+            generated ``<table>`` block replaces the ``{table}`` placeholder,
+            enabling embedding in sponsor portals, Quarto documents, or
+            interactive dashboards.
+        rows_per_page: Maximum body rows per page; ``None`` disables
+            row-count splitting.
+        page_by: ARD variable to page-break on (e.g. ``"PARAMCD"``).
+            Defaults to ``model.metadata.page_by``.
+
+    Returns:
+        str: Complete HTML string (with ``<style>`` block) or injected
+            into *html_wrapper*.
+
+    Examples:
+        Render an AE summary to HTML::
+
+            ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl)
+            model = ard_to_table_model(ard, RenderMetadata(title="Table 14.3.1.1"))
+            html = render_html(model)
+    """
+    pages = paginate(model, rows_per_page=rows_per_page, page_by=page_by)
+
+    parts: list[str] = ['<div class="fleet-table-container">', _SUMMARY_CSS]
+    if len(pages) == 1:
+        parts += _table_page_parts(pages[0])
+    else:
+        for idx, page in enumerate(pages, start=1):
+            parts.append('<div class="fleet-page">')
+            parts += _table_page_parts(page, page_footer=f"Page {idx} of {len(pages)}")
+            parts.append("</div>")
     parts.append("</div>")
 
     html = "\n".join(parts)
@@ -282,25 +328,9 @@ def render_html(
 # ------------------------------------------------------------------ #
 
 
-def render_listing_html(
-    model: ListingModel,
-    *,
-    html_wrapper: str | None = None,
-) -> str:
-    """Render a ``ListingModel`` as a pharma-style HTML listing.
-
-    Args:
-        model: The display-ready listing model from ``listing_to_model()``.
-        html_wrapper: Optional HTML template string with ``{table}``
-            placeholder.
-
-    Returns:
-        str: Complete HTML string (with ``<style>`` block).
-    """
+def _listing_page_parts(model: ListingModel, page_footer: str | None = None) -> list[str]:
+    """HTML fragments for one listing page."""
     parts: list[str] = []
-
-    parts.append('<div class="fleet-listing-container">')
-    parts.append(_LISTING_CSS)
 
     if model.metadata.title:
         parts.append(f'<div class="fleet-listing-title">{_esc(model.metadata.title)}</div>')
@@ -335,6 +365,48 @@ def render_listing_html(
             parts.append(f"<p>{_esc(fn)}</p>")
         parts.append("</div>")
 
+    if page_footer:
+        parts.append(f'<div class="fleet-page-footer">{_esc(page_footer)}</div>')
+
+    return parts
+
+
+def render_listing_html(
+    model: ListingModel,
+    *,
+    html_wrapper: str | None = None,
+    rows_per_page: int | None = None,
+) -> str:
+    """Render a ``ListingModel`` as a pharma-style HTML listing.
+
+    Args:
+        model: The display-ready listing model from ``listing_to_model()``.
+        html_wrapper: Optional HTML template string with ``{table}``
+            placeholder.
+        rows_per_page: Maximum data rows per page; each page repeats
+            title, column headers, and footnotes with a ``Page X of Y``
+            footer.  ``None`` renders one continuous listing.
+
+    Returns:
+        str: Complete HTML string (with ``<style>`` block).
+
+    Examples:
+        Render an AE listing to HTML::
+
+            listing = adae.tlg.ae.template("ael01").to_listing()
+            model = listing_to_model(listing, RenderMetadata(title="Listing 16.2.7"))
+            html = render_listing_html(model)
+    """
+    pages = paginate_listing(model, rows_per_page=rows_per_page)
+
+    parts: list[str] = ['<div class="fleet-listing-container">', _LISTING_CSS]
+    if len(pages) == 1:
+        parts += _listing_page_parts(pages[0])
+    else:
+        for idx, page in enumerate(pages, start=1):
+            parts.append('<div class="fleet-page">')
+            parts += _listing_page_parts(page, page_footer=f"Page {idx} of {len(pages)}")
+            parts.append("</div>")
     parts.append("</div>")
 
     html = "\n".join(parts)

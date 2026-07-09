@@ -2,6 +2,8 @@
 description: Communication plan for the Alpha release of the Fleet library
 ---
 
+> **Status (2026-07): historical draft — code snippets predate the canonical verb rename (`assign`, `case_when`, unified `merge`); do not copy API from here.**
+
 # Fleet Alpha Release Communication Plan
 
 Below are the drafted communications for the Alpha release of Fleet, tailored to different audiences.

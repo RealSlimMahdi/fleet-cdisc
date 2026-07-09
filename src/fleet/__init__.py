@@ -1,11 +1,14 @@
 """
 Fleet — CDISC-compliant clinical data derivation using Polars.
 
-Importing this package registers the following Polars namespace extensions:
-  - ``df.sdtm``           — 14 SDTM derivation verbs (BDS/domain mapping)
-  - ``df.adam``           — 16 ADaM derivation verbs (BDS datasets)
-  - ``df.adam.adsl``      —  6 patient-level verbs (one row per subject)
-  - ``df.adam.occds``     —  5 occurrence verbs (one row per event)
+Importing this package registers the following Polars namespace extensions
+(each namespace lists its own verbs — call ``.verbs()`` on any of them,
+e.g. ``df.sdtm.verbs()``, for the always-current catalogue):
+
+  - ``df.sdtm``           — SDTM derivation verbs (BDS/domain mapping)
+  - ``df.adam``           — ADaM derivation verbs (BDS datasets)
+  - ``df.adam.adsl``      — patient-level verbs (one row per subject)
+  - ``df.adam.occds``     — occurrence verbs (one row per event)
   - ``df.adam.onco``      — Oncology (admiralonco-inspired)
   - ``df.adam.ophtha``    — Ophthalmology (admiralophtha)
   - ``df.adam.peds``      — Pediatrics (admiralpeds)
@@ -13,23 +16,27 @@ Importing this package registers the following Polars namespace extensions:
   - ``df.adam.metabolic`` — Metabolic (admiralmetabolic)
   - ``df.adam.neuro``     — Neuroscience (admiralneuro)
 
+The ``sdtm``, ``adam``, ``adsl``, and ``occds`` namespaces are also
+registered on ``pl.LazyFrame``, so ``pl.scan_parquet(...).sdtm`` chains
+fully lazily.
+
 Usage
 -----
     import fleet
 
     result = (
         raw_df.sdtm
-        .assign_no_ct("USUBJID", source="patient_number")
-        .hardcode_no_ct("DOMAIN", value="DM")
+        .assign("USUBJID", source="patient_number")
+        .assign("DOMAIN", value="DM")
         .to_frame()
     )
 
     advs = (
         vs_df.adam
         .source("USUBJID")
-        .study_day("ADY", analysis_date="ADT", reference_date="TRTSDT")
+        .study_day("ADY", date_col="ADT")
         .flag("ABLFL", criteria='pl.col("VISITNUM") == 1',
-              groups=["USUBJID", "PARAMCD"])
+              by=["USUBJID", "PARAMCD"])
         .baseline("BASE", aval="AVAL", baseline_flag="ABLFL")
         .chg("CHG", aval="AVAL", base="BASE")
         .to_frame()
@@ -37,30 +44,11 @@ Usage
 """
 
 # Importing sdtm/adam triggers the @pl.api.register_dataframe_namespace decorators
-from typing import TYPE_CHECKING
-
 from . import (
     adam,  # noqa: F401  (registers df.adam)
     sdtm,  # noqa: F401  (registers df.sdtm)
     tlg,  # noqa: F401  (registers df.tlg)
 )
-
-# ---------------------------------------------------------------------------
-# TYPE_CHECKING augmentation: teach Pylance about .sdtm / .adam / .tlg
-# ---------------------------------------------------------------------------
-if TYPE_CHECKING:
-    import polars as pl
-
-    from fleet.adam.namespace import AdamNamespace as _AdamNS
-    from fleet.sdtm.namespace import SDTMNamespace as _SDTMNS
-    from fleet.tlg.namespace import TLGNamespace as _TLGNS
-
-    class DataFrame(pl.DataFrame):
-        sdtm: _SDTMNS
-        adam: _AdamNS
-        tlg: _TLGNS
-
-
 from ._version import __version__
 from .adam import (
     ADAMAlgorithm,
@@ -82,6 +70,7 @@ from .core import (
     load_study_context,
     to_repr,
 )
+from .core.frames import DataFrame, LazyFrame, frame
 from .ct import CTValidator, get_validator, import_codelists, load_controlled_terminology
 
 # TA namespace classes are also importable directly for type hints / isinstance
@@ -111,6 +100,10 @@ from .validation import ValidationResult, ValidationService
 
 __all__ = [
     "__version__",
+    # Typed entry points (zero-cost casts — see fleet.core.frames)
+    "DataFrame",
+    "LazyFrame",
+    "frame",
     # Core
     "StudyContext",
     "load_study_context",

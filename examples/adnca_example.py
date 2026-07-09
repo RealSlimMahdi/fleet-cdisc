@@ -73,7 +73,7 @@ from pathlib import Path
 
 import polars as pl
 
-import fleet  # noqa: F401 — registers .sdtm / .adam namespace extensions
+import fleet  # registers .sdtm / .adam namespace extensions
 
 OUT = Path("outputs/cdiscpilot01")
 OUT.mkdir(parents=True, exist_ok=True)
@@ -81,7 +81,8 @@ OUT.mkdir(parents=True, exist_ok=True)
 # ════════════════════════════════════════════════════════════════════════════
 # 1. Raw Data (inline — no external CSV dependencies)
 # ════════════════════════════════════════════════════════════════════════════
-pc_raw = pl.from_repr("""\
+pc_raw = fleet.frame(
+    pl.from_repr("""\
 ┌─────────────┬───────┬──────────┬────────┬──────────┬────────┬─────────────────────┬──────────┬──────────────────┬─────────┬──────────┬──────────┬──────────┬────────┬────────┬────────┬─────────────────────┐
 │ USUBJID     ┆ PCSEQ ┆ VISITNUM ┆ VISIT  ┆ PCTESTCD ┆ PCTEST ┆ PCDTC               ┆ PCTPTNUM ┆ PCTPT            ┆ PCORRES ┆ PCSTRESC ┆ PCSTRESN ┆ PCSTRESU ┆ PCSPEC ┆ PCBLFL ┆ PCLLOQ ┆ EXSTDTC             │
 │ ---         ┆ ---   ┆ ---      ┆ ---    ┆ ---      ┆ ---    ┆ ---                 ┆ ---      ┆ ---              ┆ ---     ┆ ---      ┆ ---      ┆ ---      ┆ ---    ┆ ---    ┆ ---    ┆ ---                 │
@@ -113,8 +114,10 @@ pc_raw = pl.from_repr("""\
 │ 01-701-1028 ┆ 8     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-03-06T08:00:00 ┆ 24.0     ┆ 24 HR POST-DOSE  ┆ 0.88    ┆ 0.88     ┆ 0.88     ┆ ng/mL    ┆ PLASMA ┆ null   ┆ 1.0    ┆ 2014-03-05T08:00:00 │
 └─────────────┴───────┴──────────┴────────┴──────────┴────────┴─────────────────────┴──────────┴──────────────────┴─────────┴──────────┴──────────┴──────────┴────────┴────────┴────────┴─────────────────────┘
 """)
+)
 
-dm_raw = pl.from_repr("""\
+dm_raw = fleet.frame(
+    pl.from_repr("""\
 ┌────────────────┬─────────┬─────┬─────┬───────────────────────────┬────────────────────────┬──────────┬──────────────────────┬─────────────────┬────────────────┬───────────────────────┐
 │ patient_number ┆ site_id ┆ age ┆ sex ┆ race                      ┆ ethnic                 ┆ arm_code ┆ arm_description      ┆ first_dose_date ┆ last_dose_date ┆ informed_consent_date │
 │ ---            ┆ ---     ┆ --- ┆ --- ┆ ---                       ┆ ---                    ┆ ---      ┆ ---                  ┆ ---             ┆ ---            ┆ ---                   │
@@ -127,8 +130,10 @@ dm_raw = pl.from_repr("""\
 │ 01-701-1047    ┆ 701     ┆ 56  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-06      ┆ 2014-07-07     ┆ 2014-01-05            │
 └────────────────┴─────────┴─────┴─────┴───────────────────────────┴────────────────────────┴──────────┴──────────────────────┴─────────────────┴────────────────┴───────────────────────┘
 """)
+)
 
-vs_raw = pl.from_repr("""\
+vs_raw = fleet.frame(
+    pl.from_repr("""\
 ┌────────────────┬─────────────┬──────────┬────────┬─────────┬──────────┬────────────┬──────┐
 │ patient_number ┆ site_number ┆ vstestcd ┆ vstest ┆ vsorres ┆ vsorresu ┆ vsdtc      ┆ vsdy │
 │ ---            ┆ ---         ┆ ---      ┆ ---    ┆ ---     ┆ ---      ┆ ---        ┆ ---  │
@@ -141,6 +146,7 @@ vs_raw = pl.from_repr("""\
 │ 01-701-1047    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 166.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
 └────────────────┴─────────────┴──────────┴────────┴─────────┴──────────┴────────────┴──────┘
 """)
+)
 
 print("── 1. Raw data loaded ───────────────────────────────────────────────────")
 print(f"   pc_raw: {pc_raw.shape[0]:>2} rows   columns → {pc_raw.columns}")
@@ -151,38 +157,38 @@ print(f"   dm_raw: {dm_raw.shape[0]:>2} rows   columns → {dm_raw.columns}")
 #    TRTSDT = first_dose_date, TRT01P = arm_description, DOSEP from arm
 # ════════════════════════════════════════════════════════════════════════════
 adsl = (
-    dm_raw.adam.adsl.rename("USUBJID", source="patient_number")
-    .rename("TRT01P", source="arm_description")
-    .rename("TRTSDT", source="first_dose_date")
-    .rename("SEX", source="sex")
-    .rename("RACE", source="race")
-    .rename("AGE", source="age")
+    dm_raw.adam.adsl.assign("USUBJID", source="patient_number")
+    .assign("TRT01P", source="arm_description")
+    .assign("TRTSDT", source="first_dose_date")
+    .assign("SEX", source="sex")
+    .assign("RACE", source="race")
+    .assign("AGE", source="age")
     # Planned dose from treatment arm
-    .condderivation(
+    .case_when(
         "DOSEP",
-        conditions=[
+        when=[
             {"condition": pl.col("arm_code") == "Xan_Hi", "value": 81.0},
             {"condition": pl.col("arm_code") == "Xan_Lo", "value": 54.0},
         ],
-        else_value=0.0,
+        else_=0.0,
     )
     # Numeric sex covariate (admiral: compute_bmi / SEXN)
-    .condderivation(
+    .case_when(
         "SEXN",
-        conditions=[
+        when=[
             {"condition": pl.col("SEX") == "M", "value": 1},
             {"condition": pl.col("SEX") == "F", "value": 2},
         ],
-        else_value=3,
+        else_=3,
     )
     # Numeric arm covariate (admiral: ARMN)
-    .condderivation(
+    .case_when(
         "ARMN",
-        conditions=[
+        when=[
             {"condition": pl.col("arm_code") == "Xan_Hi", "value": 2},
             {"condition": pl.col("arm_code") == "Xan_Lo", "value": 1},
         ],
-        else_value=0,
+        else_=0,
     )
     .to_frame()
     .select(["USUBJID", "TRT01P", "TRTSDT", "DOSEP", "SEX", "SEXN", "RACE", "AGE", "ARMN"])
@@ -220,11 +226,12 @@ pc = pc_raw.with_columns(
 print("\n════════════ PART 1: ADPC (NCA) ════════════")
 
 adpc = (
-    pc.adam.pk
+    fleet.frame(pc)
+    .adam.pk
     # ── Step 5. Merge early ADSL variables ──────────────────────────────────
     # admiral: derive_vars_merged(dataset_add = adsl, new_vars = adsl_vars,
     #           by_vars = exprs(STUDYID, USUBJID))
-    .merge_adsl(adsl, keep_cols=["TRT01P", "TRTSDT", "DOSEP", "SEX", "SEXN", "RACE", "AGE", "ARMN"])
+    .merge_adsl(adsl, keep=["TRT01P", "TRTSDT", "DOSEP", "SEX", "SEXN", "RACE", "AGE", "ARMN"])
     # ── Step 6. EVID = 0 for all concentration records ──────────────────────
     # admiral: mutate(EVID = 0)
     .evid("EVID")
@@ -261,8 +268,8 @@ adpc = (
     .avalcat("AVALCAT1", conc_col="PCSTRESN", lloq_col="PCLLOQ", blq_label="BLQ")
     # ── Step 13. Analysis identifiers ────────────────────────────────────────
     # admiral: mutate(ATPT = PCTPT, ATPTREF = AVISIT_prev, BASETYPE = paste(ATPTREF, "Baseline"))
-    .source("ATPT", from_col="PCTPT")
-    .source("ATPTREF", from_col="VISIT")  # reference dosing visit
+    .assign("ATPT", source="PCTPT")
+    .assign("ATPTREF", source="VISIT")  # reference dosing visit
     .derivation(
         "BASETYPE",
         expression=pl.concat_str([pl.col("VISIT"), pl.lit(" Baseline")]),
@@ -275,16 +282,16 @@ adpc = (
     # DOSEP already merged from ADSL above.
     # DOSEA is derived as the actual dose from the reference dosing record.
     # In this single-dose dataset we use DOSEP as a proxy for DOSEA.
-    .source("DOSEA", from_col="DOSEP")
-    .assigned("DOSEU", value="mg")
+    .assign("DOSEA", source="DOSEP")
+    .assign("DOSEU", value="mg")
     # ── Step 15. DTYPE for BLQ-imputed records ───────────────────────────────
     # admiral: set_values_to = exprs(DTYPE = "HALFLLOQ") on BLQ records
-    .condderivation(
+    .case_when(
         "DTYPE",
-        conditions=[
+        when=[
             {"condition": pl.col("BLQFL") == "Y", "value": "HALFLLOQ"},
         ],
-        else_value=None,
+        else_=None,
     )
     # ── Step 16. Analysis flags ───────────────────────────────────────────────
     # admiral: mutate(ANL01FL = "Y", ANL02FL = if_else(is.na(DTYPE), "Y", NA))
@@ -292,7 +299,7 @@ adpc = (
     .anl_flag("ANL02FL", exclude_dtype=True)  # non-DTYPE records only
     # ── Step 17. ASEQ — sequential record number per subject ─────────────────
     # admiral: derive_var_obs_number(new_var = ASEQ, by_vars = exprs(STUDYID, USUBJID))
-    .seq("ASEQ", groups=["USUBJID"])
+    .seq("ASEQ", by=["USUBJID"])
     .to_frame()
 )
 
@@ -371,9 +378,10 @@ pc_with_ex = pl.concat(
 )
 
 adppk = (
-    pc_with_ex.adam.pk
+    fleet.frame(pc_with_ex)
+    .adam.pk
     # Merge ADSL
-    .merge_adsl(adsl, keep_cols=["TRT01P", "TRTSDT", "DOSEP", "SEXN", "ARMN"])
+    .merge_adsl(adsl, keep=["TRT01P", "TRTSDT", "DOSEP", "SEXN", "ARMN"])
     # ── AFRLT / APRLT — Actual Relative Time from First / Previous Dose ──────
     # admiral: derive_vars_duration(new_var = AFRLT, add_one = FALSE)
     # admiral: derive_vars_duration(new_var = APRLT, add_one = FALSE)
@@ -390,7 +398,7 @@ adppk = (
     # ── DV / DVL ─────────────────────────────────────────────────────────────
     # admiral: mutate(DV = PCSTRESN, DVL = case_when(DV != 0 ~ log(DV)))
     .blq_impute("AVAL", conc_col="PCSTRESN", lloq_col="PCLLOQ", method="half_lloq")
-    .source("DV", from_col="AVAL")
+    .assign("DV", source="AVAL")
     .log_conc("DVL", conc_col="DV")
     # ── MDV — Missing Dependent Variable ─────────────────────────────────────
     # admiral: mutate(MDV = case_when(EVID == 1 ~ 1, is.na(DV) ~ 1, TRUE ~ 0))
@@ -407,7 +415,7 @@ adppk = (
     .blqfn("BLQFN", conc_col="PCSTRESN", lloq_col="PCLLOQ")
     # ── ASEQ ───────────────────────────────────────────────────────────────────
     # admiral: derive_var_obs_number(new_var = ASEQ, order = exprs(AFRLT, EVID, CMT))
-    .seq("ASEQ", groups=["USUBJID"])
+    .seq("ASEQ", by=["USUBJID"])
     .to_frame()
 )
 

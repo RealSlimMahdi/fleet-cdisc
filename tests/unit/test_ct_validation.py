@@ -162,9 +162,7 @@ class TestCTMalformedCodelistClass:
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            result = simple_raw.sdtm.hardcode_ct(
-                "AGEU", value="YEARS", ct_codelist=BadCodelist
-            ).to_frame()
+            result = simple_raw.sdtm.assign("AGEU", value="YEARS", ct=BadCodelist).to_frame()
         assert result["AGEU"].to_list() == ["YEARS", "YEARS", "YEARS"]
 
     def test_codelist_class_with_none_concept_id(self, simple_raw):
@@ -175,7 +173,7 @@ class TestCTMalformedCodelistClass:
 
         # Should either raise or fall back — not crash with cryptic error
         try:
-            simple_raw.sdtm.hardcode_ct("AGEU", value="YEARS", ct_codelist=NoneCodelist).to_frame()
+            simple_raw.sdtm.assign("AGEU", value="YEARS", ct=NoneCodelist).to_frame()
         except (ValueError, TypeError, AttributeError):
             pass  # acceptable: explicit rejection
 
@@ -186,11 +184,11 @@ class TestAssignCTWithMessyData:
     def test_unmapped_value_propagates_as_null_or_passthrough(self):
         """Source value not in ct_mapping should not silently map to wrong term."""
         df = pl.DataFrame({"sex": ["F", "M", "UNKNOWN", None]})
-        result = df.sdtm.assign_ct(
+        result = df.sdtm.assign(
             "SEX",
             source="sex",
-            ct_codelist="C66731",
-            ct_mapping={"F": "F", "M": "M"},
+            ct="C66731",
+            ct_map={"F": "F", "M": "M"},
         ).to_frame()
         # UNKNOWN should become null (unmapped) or remain unchanged — never "F" or "M"
         assert result["SEX"][2] is None or result["SEX"][2] == "UNKNOWN"
@@ -200,11 +198,11 @@ class TestAssignCTWithMessyData:
     def test_whitespace_in_source_not_silently_matched(self):
         """Source ' M' should not map to 'M' without explicit stripping."""
         df = pl.DataFrame({"sex": [" M", "F "]})
-        result = df.sdtm.assign_ct(
+        result = df.sdtm.assign(
             "SEX",
             source="sex",
-            ct_codelist="C66731",
-            ct_mapping={"F": "F", "M": "M"},
+            ct="C66731",
+            ct_map={"F": "F", "M": "M"},
         ).to_frame()
         # Whitespace-drifted values should NOT silently match
         assert result["SEX"][0] is None or result["SEX"][0] == " M"
@@ -226,10 +224,10 @@ class TestAssignCTValidateValues:
         df = pl.DataFrame({"sex": ["M", "Female", "f"]})
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            result = df.sdtm.assign_ct(
+            result = df.sdtm.assign(
                 "SEX",
                 source="sex",
-                ct_codelist="C66731",
+                ct="C66731",
                 validate_values=True,
             ).to_frame()
 
@@ -253,10 +251,10 @@ class TestAssignCTValidateValues:
         df = pl.DataFrame({"sex": ["M", "F", "U"]})
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            df.sdtm.assign_ct(
+            df.sdtm.assign(
                 "SEX",
                 source="sex",
-                ct_codelist="C66731",
+                ct="C66731",
                 validate_values=True,
             ).to_frame()
 
@@ -275,10 +273,10 @@ class TestAssignCTValidateValues:
         df = pl.DataFrame({"sex": ["Invalid"]})
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            df.sdtm.assign_ct(
+            df.sdtm.assign(
                 "SEX",
                 source="sex",
-                ct_codelist="C66731",
+                ct="C66731",
                 validate_values=False,
             ).to_frame()
 
@@ -297,10 +295,10 @@ class TestAssignCTValidateValues:
         df = pl.DataFrame({"sex": ["M", None, "F"]})
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            df.sdtm.assign_ct(
+            df.sdtm.assign(
                 "SEX",
                 source="sex",
-                ct_codelist="C66731",
+                ct="C66731",
                 validate_values=True,
             ).to_frame()
 
@@ -331,10 +329,10 @@ class TestAssignCTValidateValues:
             df = pl.DataFrame({"route": ["Oral", "ORAL", "IV"]})
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
-                result = df.sdtm.assign_ct(
+                result = df.sdtm.assign(
                     "EXROUT",
                     source="route",
-                    ct_codelist=FakeRoute,
+                    ct=FakeRoute,
                     validate_values=True,
                 ).to_frame()
 

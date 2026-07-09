@@ -187,9 +187,9 @@ class TestMergeNPct:
         assert _merge_n_pct("", "50.0") == ""
 
     def test_zero_pct_nonzero_n(self) -> None:
-        # n=1 but pct=0.0 should show "1 (  0%)"
-        result = _merge_n_pct("1", "0.0")
-        assert "1" in result
+        # n=1 with a computed denominator whose pct rounds below the
+        # display precision → sub-threshold form (E5), never "(  0%)".
+        assert _merge_n_pct("1", "0.0") == "1 (<0.1%)"
 
 
 # ================================================================== #

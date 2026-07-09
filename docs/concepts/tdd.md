@@ -82,9 +82,9 @@ Subject-level domains (SV, SE) use derivation verbs that **freely mix** with exi
 
 ```python
 sv = (
-    raw_visits.sdtm.hardcode_no_ct("DOMAIN", value="SV")
-    .assign_no_ct("USUBJID", source="subject_id")
-    .assign_dtc("SVSTDTC", source="visit_date")
+    raw_visits.sdtm.assign("DOMAIN", value="SV")
+    .assign("USUBJID", source="subject_id")
+    .date("SVSTDTC", source="visit_date")
     .visit_map(
         "VISITNUM",
         "VISIT",

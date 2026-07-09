@@ -31,9 +31,9 @@ class TestSDTMOrderInvarianceParameterized:
 
         def pipeline(d):
             return (
-                d.sdtm.hardcode_no_ct("DOMAIN", value="DM")
-                .assign_no_ct("USUBJID", source="patient_number")
-                .assign_no_ct("SITEID", source="site_id")
+                d.sdtm.assign("DOMAIN", value="DM")
+                .assign("USUBJID", source="patient_number")
+                .assign("SITEID", source="site_id")
                 .to_frame()
             )
 
@@ -70,7 +70,7 @@ class TestADaMOrderInvarianceParameterized:
                 d.adam.source("USUBJID")
                 .source("PARAMCD")
                 .derivation("AVAL", expression="VSSTRESN")
-                .assigned("STUDYID", value="STUDY01")
+                .assign("STUDYID", value="STUDY01")
                 .to_frame()
             )
 

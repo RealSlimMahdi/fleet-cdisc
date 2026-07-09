@@ -26,12 +26,25 @@ from ._ard import (
     validate_ard,
 )
 from ._builder import TLGBuilder
-from ._registry import TEMPLATES, catalog
+from ._registry import (
+    TEMPLATES,
+    CDISCClass,
+    OutputType,
+    Status,
+    TemplateMeta,
+    catalog,
+    register_template,
+    unregister_template,
+)
+from ._runner import NAMESPACE_CLASSES, load_spec, run_spec, spec_schema
 from ._specs import (
     AEListingSpec,
     AESummarySpec,
+    ChoiceOption,
     Column,
+    GroupbyChoice,
     GroupPool,
+    InteractiveBlock,
     OverallStat,
     Row,
     Statistic,
@@ -40,8 +53,10 @@ from ._specs import (
     VSSummarySpec,
     resolve_filter,
 )
+from ._variants import Variant, enumerate_variants
 from .ae_namespace import (
     AEGradeSpec,
+    AEOverviewSpec,
     AERelationshipSpec,
     AESeveritySpec,
     AESocPtSpec,
@@ -69,17 +84,23 @@ from .lb_namespace import (
 from .mh_namespace import MHSummarySpec, MHTLGNamespace
 from .namespace import TLGNamespace
 from .render import (
+    ExplorerEntry,
     ListingModel,
     RenderMetadata,
     TableModel,
     ard_to_table_model,
     listing_to_model,
+    paginate,
+    paginate_listing,
+    render_explorer,
     render_html,
     render_listing_html,
     render_listing_pdf,
     render_listing_pptx,
+    render_listing_rtf,
     render_pdf,
     render_pptx,
+    render_rtf,
 )
 from .vs_namespace import VSTLGNamespace
 
@@ -100,6 +121,7 @@ __all__ = [
     "TLGSpec",
     "SummarySpecBase",
     "AESummarySpec",
+    "AEOverviewSpec",
     "AESocPtSpec",
     "AESeveritySpec",
     "AEGradeSpec",
@@ -125,9 +147,28 @@ __all__ = [
     "MHSummarySpec",
     "OverallStat",
     "resolve_filter",
+    # Interactive explorer
+    "ChoiceOption",
+    "GroupbyChoice",
+    "InteractiveBlock",
+    "Variant",
+    "enumerate_variants",
+    "ExplorerEntry",
+    "render_explorer",
     # Registry
     "TEMPLATES",
+    "TemplateMeta",
+    "CDISCClass",
+    "OutputType",
+    "Status",
     "catalog",
+    "register_template",
+    "unregister_template",
+    # YAML workflow
+    "NAMESPACE_CLASSES",
+    "load_spec",
+    "run_spec",
+    "spec_schema",
     # Building blocks
     "Row",
     "Column",
@@ -150,10 +191,14 @@ __all__ = [
     "ListingModel",
     "ard_to_table_model",
     "listing_to_model",
+    "paginate",
+    "paginate_listing",
     "render_html",
     "render_listing_html",
     "render_pdf",
     "render_listing_pdf",
     "render_pptx",
     "render_listing_pptx",
+    "render_rtf",
+    "render_listing_rtf",
 ]

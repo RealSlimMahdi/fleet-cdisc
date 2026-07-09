@@ -39,9 +39,9 @@ Files under `docs/api/` contain **mkdocstrings directives** — special YAML blo
 ```markdown
 ::: fleet.<module>.<ClassName>
 options:
-show*root_heading: true
+show_root_heading: true
 heading_level: 3
-filters: ["!^*"]
+filters: ["!^_"]
 ```
 
 ## Known Corruption

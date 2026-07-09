@@ -94,7 +94,7 @@ class TestMergeAdsl:
         assert result.height == 12
 
     def test_keep_cols_subsets_adsl(self, pc_frame, adsl_frame):
-        result = pc_frame.adam.pk.merge_adsl(adsl_frame, keep_cols=["TRT01P"]).to_frame()
+        result = pc_frame.adam.pk.merge_adsl(adsl_frame, keep=["TRT01P"]).to_frame()
         assert "TRT01P" in result.columns
         assert "TRTSDT" not in result.columns
 
@@ -117,7 +117,7 @@ class TestMergeAdsl:
 
     def test_merge_adsl_available_on_occds(self, pc_frame, adsl_frame):
         """merge_adsl is a shared verb — must work on occds too."""
-        result = pc_frame.adam.occds.merge_adsl(adsl_frame, keep_cols=["TRT01P"]).to_frame()
+        result = pc_frame.adam.occds.merge_adsl(adsl_frame, keep=["TRT01P"]).to_frame()
         assert "TRT01P" in result.columns
 
 
@@ -128,18 +128,18 @@ class TestMergeAdsl:
 
 class TestSeq:
     def test_seq_starts_at_one(self, pc_frame):
-        result = pc_frame.adam.pk.seq("PCSEQ", groups=["USUBJID"]).to_frame()
+        result = pc_frame.adam.pk.seq("PCSEQ", by=["USUBJID"]).to_frame()
         subj_001 = result.filter(pl.col("USUBJID") == "01-001")
         assert sorted(subj_001["PCSEQ"].to_list()) == [1, 2, 3, 4]
 
     def test_seq_resets_per_subject(self, pc_frame):
-        result = pc_frame.adam.pk.seq("PCSEQ", groups=["USUBJID"]).to_frame()
+        result = pc_frame.adam.pk.seq("PCSEQ", by=["USUBJID"]).to_frame()
         for subj in ["01-001", "01-002", "01-003"]:
             rows = result.filter(pl.col("USUBJID") == subj)
             assert sorted(rows["PCSEQ"].to_list()) == [1, 2, 3, 4]
 
     def test_seq_default_target(self, pc_frame):
-        result = pc_frame.adam.pk.seq(groups=["USUBJID"]).to_frame()
+        result = pc_frame.adam.pk.seq(by=["USUBJID"]).to_frame()
         assert "ASEQ" in result.columns
 
 

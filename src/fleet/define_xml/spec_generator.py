@@ -32,6 +32,7 @@ from fleet.core.algorithm_resolver import (
     resolve_algorithm_docstring,
     resolve_callable_docstring,
 )
+from fleet.core.exceptions import SpecError
 
 _SCHEMA_PATH = Path(__file__).parent / "schemas" / "define_spec_schema.json"
 
@@ -60,6 +61,13 @@ _STANDARD_OIDS: dict[str, str] = {
 }
 _CT_OID = "STD.CT"
 
+# Map export format (spec key ``output_format``) → def:leaf href extension.
+_FORMAT_EXT: dict[str, str] = {
+    "parquet": ".parquet",
+    "xpt": ".xpt",
+    "dataset-json": ".json",
+}
+
 
 class DefineSpecGenerator:
     """Generate Define-XML 2.1 from a simplified Fleet define YAML spec.
@@ -83,11 +91,14 @@ class DefineSpecGenerator:
     ) -> None:
         self._path = Path(define_yaml_path)
         self._data: dict[str, Any] = yaml.safe_load(self._path.read_text(encoding="utf-8"))
+        self._check_spec_version()
         self._enrich_methods = enrich_methods
-        # Populated by _build_item_def via _register_method when
-        # enrich_methods is True; rendered into MethodDef elements at the
-        # end of MetaDataVersion.
+        # Populated via _register_method when enrich_methods is True;
+        # rendered into MethodDef elements at the end of MetaDataVersion.
         self._method_defs: dict[str, dict[str, str]] = {}
+        # ItemDef OID → ValueListDef OID (populated by _build_value_level;
+        # consumed by _build_item_def to emit def:ValueListRef).
+        self._value_list_refs: dict[str, str] = {}
         # Resolve the CRF page map once (merges external page_map with
         # inline crf_pages; inline takes precedence).
         self._page_map: dict[str, str | dict[str, Any]] = self._load_page_map()
@@ -207,6 +218,17 @@ class DefineSpecGenerator:
     # Schema validation                                                    #
     # ------------------------------------------------------------------ #
 
+    def _check_spec_version(self) -> None:
+        """Raise ``SpecError`` when the spec declares an unknown future version."""
+        from fleet.core._verb_mixin import SUPPORTED_SPEC_VERSION
+
+        version = self._data.get("fleet_spec_version")
+        if version is not None and version != SUPPORTED_SPEC_VERSION:
+            raise SpecError(
+                f"{self._path}: unsupported fleet_spec_version {version!r}. "
+                f"This Fleet version supports fleet_spec_version {SUPPORTED_SPEC_VERSION}."
+            )
+
     def _validate(self) -> None:
         schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
         validator = jsonschema.Draft202012Validator(schema)
@@ -215,11 +237,57 @@ class DefineSpecGenerator:
             msgs = "\n".join(f"  - {e.json_path}: {e.message}" for e in errors[:5])
             raise ValueError(f"define YAML failed schema validation:\n{msgs}")
 
+    def _validate_codelist_refs(self) -> None:
+        """Fail loudly on ``codelist:`` references to undeclared codelists.
+
+        Every ``CodeListRef`` the generated Define-XML would emit must
+        point at a ``CodeList`` element declared in this spec's
+        ``codelists:`` section — a dangling OID renders a define that
+        asserts conformance to nothing.
+
+        Raises:
+            SpecError: Naming each offending dataset/variable and listing
+                the declared codelist OIDs.
+        """
+        declared = {cl["oid"] for cl in self._data.get("codelists", [])}
+        dangling: list[str] = []
+        for ds in self._data.get("datasets", []):
+            variables = list(ds.get("variables", []))
+            for entry in ds.get("value_level", []) or []:
+                variables.extend(entry.get("variables", []))
+            for var in variables:
+                oid = var.get("codelist")
+                if oid and oid not in declared:
+                    dangling.append(f"{ds['name']}.{var['name']} → '{oid}'")
+        if dangling:
+            raise SpecError(
+                f"{self._path}: CodeListRef to undeclared codelist(s): "
+                f"{'; '.join(dangling)}. Declared codelist OIDs: "
+                f"{sorted(declared) or '(none)'}. Add the codelist to the "
+                f"spec's `codelists:` section or fix the reference."
+            )
+
+    def _leaf_href(self, ds: dict[str, Any]) -> str:
+        """Resolve the ``def:leaf`` href for a dataset.
+
+        Uses the per-dataset ``output:`` path verbatim when given;
+        otherwise ``{name.lower()}{ext}`` where the extension follows the
+        per-dataset or spec-level ``output_format:`` key (default
+        ``parquet`` → ``.parquet``).
+        """
+        output = ds.get("output")
+        if output:
+            return str(output)
+        fmt = ds.get("output_format") or self._data.get("output_format") or "parquet"
+        ext = _FORMAT_EXT.get(fmt, ".parquet")
+        return f"{ds['name'].lower()}{ext}"
+
     # ------------------------------------------------------------------ #
     # ODM root                                                             #
     # ------------------------------------------------------------------ #
 
     def _build_odm(self) -> ET.Element:
+        self._validate_codelist_refs()
         study = self._data["study"]
         std_oid = _STANDARD_OIDS.get(study["standard"], f"STD.{study['standard']}")
         ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
@@ -295,13 +363,23 @@ class DefineSpecGenerator:
             for sd in supp_docs:
                 ET.SubElement(supp_elem, "def:DocumentRef", {"leafID": sd["id"]})
 
-        # ItemGroupDefs (one per dataset)
         datasets: list[dict[str, Any]] = self._data.get("datasets", [])
+
+        # Value-level metadata (def:ValueListDef / def:WhereClauseDef) —
+        # placed before ItemGroupDefs per the Define-XML 2.1 element order.
+        # Must run before ItemDefs so def:ValueListRef wiring is known.
+        vl_defs, wc_defs, vl_item_defs = self._build_value_level(datasets)
+        mdv.extend(vl_defs)
+        mdv.extend(wc_defs)
+
+        # ItemGroupDefs (one per dataset)
         for ds in datasets:
             mdv.append(self._build_item_group_def(ds, study["id"]))
 
-        # ItemDefs (collect all unique variables across datasets)
+        # ItemDefs (collect all unique variables across datasets), then the
+        # value-level ItemDefs referenced from the ValueListDefs.
         mdv.extend(self._build_all_item_defs(datasets))
+        mdv.extend(vl_item_defs)
 
         # CodeLists
         for cl in self._data.get("codelists", []):
@@ -397,16 +475,24 @@ class DefineSpecGenerator:
             }
             if var_name in key_vars:
                 ref_attrs["KeySequence"] = str(key_order[var_name])
+            # Define-XML 2.1 places MethodOID on the ItemRef (usage site),
+            # not on the ItemDef.
+            derivation = var.get("derivation")
+            if self._enrich_methods and derivation:
+                method_oid, _ = self._register_method(derivation)
+                if method_oid:
+                    ref_attrs["MethodOID"] = method_oid
             ET.SubElement(elem, "ItemRef", attrib=ref_attrs)
 
-        # Leaf reference
+        # Leaf reference — href follows the actual export format
+        href = self._leaf_href(ds)
         ET.SubElement(
             elem,
             "def:leaf",
             {
                 "ID": leaf_id,
-                "xlink:href": f"{name.lower()}.xpt",
-                "xlink:title": f"{name.lower()}.xpt",
+                "xlink:href": href,
+                "xlink:title": href,
             },
         )
 
@@ -449,12 +535,12 @@ class DefineSpecGenerator:
         # Build the human-readable origin description.  When
         # enrich_methods is on we resolve the verb (or callable) docstring
         # so reviewers see the exact computational method without leaving
-        # the Define-XML.
+        # the Define-XML.  (The MethodOID itself lives on the ItemRef per
+        # Define-XML 2.1 — see _build_item_group_def / _build_value_level.)
         comment = var.get("comment") or ""
         derivation = var.get("derivation") or {}
-        method_oid: str | None = None
         if self._enrich_methods and derivation:
-            method_oid, summary = self._register_method(derivation)
+            _, summary = self._register_method(derivation)
             if summary:
                 comment = f"{comment} {summary}".strip() if comment else summary
         if comment:
@@ -464,10 +550,10 @@ class DefineSpecGenerator:
         # CRF page references — emit DocumentRef/PDFPageRef inside Origin
         self._append_crf_page_ref(orig_elem, dataset_name, var["name"])
 
-        # MethodOID is an ItemDef attribute per Define-XML 2.1; emit only
-        # when enrichment produced one.
-        if method_oid:
-            elem.set("MethodOID", method_oid)
+        # Value-level metadata: point the parent ItemDef at its ValueListDef
+        vl_oid = self._value_list_refs.get(item_oid)
+        if vl_oid:
+            ET.SubElement(elem, "def:ValueListRef", {"ValueListOID": vl_oid})
 
         return elem
 
@@ -522,16 +608,23 @@ class DefineSpecGenerator:
         summary, dotted = resolve_algorithm_docstring(str(algorithm))
         if not dotted:
             return (None, "")
+        info = {
+            "name": algorithm,
+            "description": summary or f"Fleet verb: {algorithm}",
+            "expression": expression or f".{algorithm}(...)",
+            "context": "Python/Fleet",
+        }
+        # Same algorithm, different expression (e.g. per-PARAMCD value-level
+        # derivations) → distinct MethodDef OIDs; identical calls share one.
         method_oid = f"MT.{algorithm}"
-        self._method_defs.setdefault(
-            method_oid,
-            {
-                "name": algorithm,
-                "description": summary or f"Fleet verb: {algorithm}",
-                "expression": expression or f".{algorithm}(...)",
-                "context": "Python/Fleet",
-            },
-        )
+        suffix = 2
+        while (
+            method_oid in self._method_defs
+            and self._method_defs[method_oid]["expression"] != info["expression"]
+        ):
+            method_oid = f"MT.{algorithm}.{suffix}"
+            suffix += 1
+        self._method_defs.setdefault(method_oid, info)
         return (method_oid, summary or "")
 
     @staticmethod
@@ -565,12 +658,105 @@ class DefineSpecGenerator:
                 ET.SubElement(decode, "TranslatedText", {"xml:lang": "en"}).text = item["decode"]
         return elem
 
-    @staticmethod
-    def _build_leaf(ds: dict[str, Any]) -> ET.Element:
-        name = ds["name"]
-        leaf_id = f"LF.{name}"
-        href = f"{name.lower()}.xpt"
+    def _build_leaf(self, ds: dict[str, Any]) -> ET.Element:
+        leaf_id = f"LF.{ds['name']}"
+        href = self._leaf_href(ds)
         return ET.Element("def:leaf", {"ID": leaf_id, "xlink:href": href, "xlink:title": href})
+
+    # ------------------------------------------------------------------ #
+    # Value-level metadata (def:ValueListDef / def:WhereClauseDef)         #
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _normalise_where(ds_name: str, entry: dict[str, Any]) -> tuple[str, str, list[str]]:
+        """Resolve a value-level entry's condition to (wc_oid, variable, values).
+
+        ``param: SYSBP`` is sugar for ``where: {variable: PARAMCD,
+        value: SYSBP}`` — the idiomatic BDS case.
+        """
+        if entry.get("param") is not None:
+            wc_var, values = "PARAMCD", [str(entry["param"])]
+        else:
+            where = entry["where"]
+            wc_var = where["variable"]
+            raw = where["value"]
+            values = [str(v) for v in raw] if isinstance(raw, list) else [str(raw)]
+        key = "_".join(values)
+        return f"WC.{ds_name}.{wc_var}.{key}", wc_var, values
+
+    def _build_value_level(
+        self, datasets: list[dict[str, Any]]
+    ) -> tuple[list[ET.Element], list[ET.Element], list[ET.Element]]:
+        """Build value-level metadata elements from ``value_level:`` specs.
+
+        For each dataset entry ``{param|where, variables}``, emits:
+
+        * one ``def:WhereClauseDef`` per condition (``RangeCheck`` with
+          ``EQ`` for a single value, ``IN`` for a list);
+        * per value-level variable, an ``ItemRef`` (with
+          ``def:WhereClauseRef`` and, when method enrichment is on, a
+          ``MethodOID``) inside that variable's ``def:ValueListDef``;
+        * one ``ItemDef`` per (variable, condition) pair.
+
+        Also populates ``self._value_list_refs`` so the parent ItemDefs
+        emit their ``def:ValueListRef``.
+
+        Returns:
+            tuple: ``(value_list_defs, where_clause_defs, item_defs)``.
+        """
+        value_lists: dict[str, ET.Element] = {}  # VL OID → element
+        vl_counters: dict[str, int] = {}
+        where_defs: dict[str, ET.Element] = {}  # WC OID → element
+        item_defs: list[ET.Element] = []
+
+        for ds in datasets:
+            ds_name = ds["name"]
+            for entry in ds.get("value_level", []) or []:
+                wc_oid, wc_var, values = self._normalise_where(ds_name, entry)
+
+                if wc_oid not in where_defs:
+                    wc_elem = ET.Element("def:WhereClauseDef", {"OID": wc_oid})
+                    rc = ET.SubElement(
+                        wc_elem,
+                        "RangeCheck",
+                        {
+                            "Comparator": "EQ" if len(values) == 1 else "IN",
+                            "SoftHard": "Soft",
+                            "def:ItemOID": self._item_oid(ds_name, wc_var),
+                        },
+                    )
+                    for value in values:
+                        ET.SubElement(rc, "CheckValue").text = value
+                    where_defs[wc_oid] = wc_elem
+
+                for var in entry.get("variables", []):
+                    var_name = var["name"]
+                    parent_oid = self._item_oid(ds_name, var_name)
+                    vl_oid = f"VL.{ds_name}.{var_name}"
+                    self._value_list_refs[parent_oid] = vl_oid
+                    if vl_oid not in value_lists:
+                        value_lists[vl_oid] = ET.Element("def:ValueListDef", {"OID": vl_oid})
+                        vl_counters[vl_oid] = 0
+
+                    key = "_".join(values)
+                    item_oid = f"IT.{ds_name}.{var_name}.{key}"
+                    item_defs.append(self._build_item_def(item_oid, var, ds_name))
+
+                    vl_counters[vl_oid] += 1
+                    ref_attrs: dict[str, str] = {
+                        "ItemOID": item_oid,
+                        "OrderNumber": str(vl_counters[vl_oid]),
+                        "Mandatory": "Yes" if var.get("mandatory") else "No",
+                    }
+                    derivation = var.get("derivation")
+                    if self._enrich_methods and derivation:
+                        method_oid, _ = self._register_method(derivation)
+                        if method_oid:
+                            ref_attrs["MethodOID"] = method_oid
+                    item_ref = ET.SubElement(value_lists[vl_oid], "ItemRef", ref_attrs)
+                    ET.SubElement(item_ref, "def:WhereClauseRef", {"WhereClauseOID": wc_oid})
+
+        return list(value_lists.values()), list(where_defs.values()), item_defs
 
     def _append_crf_page_ref(
         self, origin_elem: ET.Element, dataset_name: str, var_name: str

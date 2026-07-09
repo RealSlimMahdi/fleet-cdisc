@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <?xml-stylesheet type="text/xsl" href="define2-1.xsl"?>
-<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:def="http://www.cdisc.org/ns/def/v2.1" ODMVersion="1.3.2" FileOID="CDISC.CDISCPILOT01.1.Define-XML_2.1.0" FileType="Snapshot" CreationDateTime="2026-07-07T20:14:41" Originator="Fleet Team" SourceSystem="Fleet" SourceSystemVersion="0.1.0" def:Context="Submission">
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:def="http://www.cdisc.org/ns/def/v2.1" ODMVersion="1.3.2" FileOID="CDISC.CDISCPILOT01.1.Define-XML_2.1.0" FileType="Snapshot" CreationDateTime="2026-07-09T08:12:43" Originator="Fleet Team" SourceSystem="Fleet" SourceSystemVersion="0.1.0" def:Context="Submission">
   <Study OID="STDY.CDISCPILOT01">
     <GlobalVariables>
       <StudyName>CDISCPILOT01</StudyName>
@@ -17,45 +17,45 @@
           <TranslatedText xml:lang="en">Subject-Level Analysis Dataset</TranslatedText>
         </Description>
         <def:Class Name="SUBJECT LEVEL ANALYSIS DATASET"/>
-        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
-        <ItemRef ItemOID="IT.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2"/>
-        <ItemRef ItemOID="IT.SUBJID" OrderNumber="3" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.SITEID" OrderNumber="4" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.AGE" OrderNumber="5" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.AGEU" OrderNumber="6" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.SEX" OrderNumber="7" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.RACE" OrderNumber="8" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ETHNIC" OrderNumber="9" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ARMCD" OrderNumber="10" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.ARM" OrderNumber="11" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.ACTARMCD" OrderNumber="12" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.ACTARM" OrderNumber="13" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.ADSL.TRT01P" OrderNumber="14" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADSL.TRT01A" OrderNumber="15" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADSL.TRTSDT" OrderNumber="16" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADSL.TRTEDT" OrderNumber="17" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADSL.RFSTDTC" OrderNumber="18" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADSL.RFENDTC" OrderNumber="19" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADSL.RFICDTC" OrderNumber="20" Mandatory="No"/>
+        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" MethodOID="MT.assigned"/>
+        <ItemRef ItemOID="IT.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.SUBJID" OrderNumber="3" Mandatory="Yes" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.SITEID" OrderNumber="4" Mandatory="Yes" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.AGE" OrderNumber="5" Mandatory="Yes" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.AGEU" OrderNumber="6" Mandatory="Yes" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.SEX" OrderNumber="7" Mandatory="Yes" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.RACE" OrderNumber="8" Mandatory="No" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ETHNIC" OrderNumber="9" Mandatory="No" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ARMCD" OrderNumber="10" Mandatory="Yes" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ARM" OrderNumber="11" Mandatory="Yes" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ACTARMCD" OrderNumber="12" Mandatory="Yes" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ACTARM" OrderNumber="13" Mandatory="Yes" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADSL.TRT01P" OrderNumber="14" Mandatory="No" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADSL.TRT01A" OrderNumber="15" Mandatory="No" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADSL.TRTSDT" OrderNumber="16" Mandatory="No" MethodOID="MT.derivation"/>
+        <ItemRef ItemOID="IT.ADSL.TRTEDT" OrderNumber="17" Mandatory="No" MethodOID="MT.derivation.2"/>
+        <ItemRef ItemOID="IT.ADSL.RFSTDTC" OrderNumber="18" Mandatory="No" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADSL.RFENDTC" OrderNumber="19" Mandatory="No" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADSL.RFICDTC" OrderNumber="20" Mandatory="No" MethodOID="MT.source"/>
         <ItemRef ItemOID="IT.ADSL.DTHFL" OrderNumber="21" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADSL.SAFFL" OrderNumber="22" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADSL.ITTFL" OrderNumber="23" Mandatory="No"/>
-        <def:leaf ID="LF.ADSL" xlink:href="adsl.xpt" xlink:title="adsl.xpt"/>
+        <def:leaf ID="LF.ADSL" xlink:href="adsl.parquet" xlink:title="adsl.parquet"/>
       </ItemGroupDef>
       <ItemGroupDef OID="IG.ADVS" Name="ADVS" Repeating="Yes" IsReferenceData="No" SASDatasetName="ADVS" Domain="ADVS" def:Structure="One record per subject per parameter per analysis timepoint" Purpose="Analysis" def:StandardOID="STD.ADAMIG" def:ArchiveLocationID="LF.ADVS">
         <Description>
           <TranslatedText xml:lang="en">Analysis Dataset for Vital Signs</TranslatedText>
         </Description>
         <def:Class Name="BASIC DATA STRUCTURE"/>
-        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
-        <ItemRef ItemOID="IT.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2"/>
-        <ItemRef ItemOID="IT.ADVS.PARAMCD" OrderNumber="3" Mandatory="Yes" KeySequence="3"/>
-        <ItemRef ItemOID="IT.ADVS.PARAM" OrderNumber="4" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.ADVS.AVAL" OrderNumber="5" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADVS.AVALU" OrderNumber="6" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADVS.ADT" OrderNumber="7" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADVS.ADY" OrderNumber="8" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADVS.ABLFL" OrderNumber="9" Mandatory="No"/>
+        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" MethodOID="MT.assigned"/>
+        <ItemRef ItemOID="IT.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADVS.PARAMCD" OrderNumber="3" Mandatory="Yes" KeySequence="3" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADVS.PARAM" OrderNumber="4" Mandatory="Yes" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADVS.AVAL" OrderNumber="5" Mandatory="No" MethodOID="MT.derivation.3"/>
+        <ItemRef ItemOID="IT.ADVS.AVALU" OrderNumber="6" Mandatory="No" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADVS.ADT" OrderNumber="7" Mandatory="No" MethodOID="MT.rename"/>
+        <ItemRef ItemOID="IT.ADVS.ADY" OrderNumber="8" Mandatory="No" MethodOID="MT.study_day"/>
+        <ItemRef ItemOID="IT.ADVS.ABLFL" OrderNumber="9" Mandatory="No" MethodOID="MT.flag"/>
         <ItemRef ItemOID="IT.ADVS.BASE" OrderNumber="10" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADVS.CHG" OrderNumber="11" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADVS.PCHG" OrderNumber="12" Mandatory="No"/>
@@ -84,26 +84,26 @@
         <ItemRef ItemOID="IT.ADVS.DTHFL" OrderNumber="35" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADVS.SAFFL" OrderNumber="36" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADVS.ITTFL" OrderNumber="37" Mandatory="No"/>
-        <def:leaf ID="LF.ADVS" xlink:href="advs.xpt" xlink:title="advs.xpt"/>
+        <def:leaf ID="LF.ADVS" xlink:href="advs.parquet" xlink:title="advs.parquet"/>
       </ItemGroupDef>
       <ItemGroupDef OID="IG.ADAE" Name="ADAE" Repeating="Yes" IsReferenceData="No" SASDatasetName="ADAE" Domain="ADAE" def:Structure="One record per subject per adverse event" Purpose="Analysis" def:StandardOID="STD.ADAMIG" def:ArchiveLocationID="LF.ADAE">
         <Description>
           <TranslatedText xml:lang="en">Adverse Event Analysis Dataset</TranslatedText>
         </Description>
         <def:Class Name="OCCURRENCE DATA STRUCTURE"/>
-        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
-        <ItemRef ItemOID="IT.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2"/>
-        <ItemRef ItemOID="IT.ADAE.AETERM" OrderNumber="3" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.ADAE.AESTDTC" OrderNumber="4" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADAE.AEENDTC" OrderNumber="5" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADAE.AESEV" OrderNumber="6" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADAE.AESER" OrderNumber="7" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADAE.AEREL" OrderNumber="8" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADAE.AEOUT" OrderNumber="9" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADAE.AEACN" OrderNumber="10" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADAE.ASTDT" OrderNumber="11" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADAE.AENDT" OrderNumber="12" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADAE.ADY" OrderNumber="13" Mandatory="No"/>
+        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" MethodOID="MT.assigned"/>
+        <ItemRef ItemOID="IT.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADAE.AETERM" OrderNumber="3" Mandatory="Yes" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADAE.AESTDTC" OrderNumber="4" Mandatory="No" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADAE.AEENDTC" OrderNumber="5" Mandatory="No" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADAE.AESEV" OrderNumber="6" Mandatory="No" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADAE.AESER" OrderNumber="7" Mandatory="No" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADAE.AEREL" OrderNumber="8" Mandatory="No" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADAE.AEOUT" OrderNumber="9" Mandatory="No" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADAE.AEACN" OrderNumber="10" Mandatory="No" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADAE.ASTDT" OrderNumber="11" Mandatory="No" MethodOID="MT.rename"/>
+        <ItemRef ItemOID="IT.ADAE.AENDT" OrderNumber="12" Mandatory="No" MethodOID="MT.rename"/>
+        <ItemRef ItemOID="IT.ADAE.ADY" OrderNumber="13" Mandatory="No" MethodOID="MT.study_day"/>
         <ItemRef ItemOID="IT.ADAE.TRTEMFL" OrderNumber="14" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADAE.ANL01FL" OrderNumber="15" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADAE.ASEQ" OrderNumber="16" Mandatory="Yes" KeySequence="3"/>
@@ -113,20 +113,20 @@
         <ItemRef ItemOID="IT.AGE" OrderNumber="20" Mandatory="Yes"/>
         <ItemRef ItemOID="IT.SEX" OrderNumber="21" Mandatory="Yes"/>
         <ItemRef ItemOID="IT.ADAE.SAFFL" OrderNumber="22" Mandatory="No"/>
-        <def:leaf ID="LF.ADAE" xlink:href="adae.xpt" xlink:title="adae.xpt"/>
+        <def:leaf ID="LF.ADAE" xlink:href="adae.parquet" xlink:title="adae.parquet"/>
       </ItemGroupDef>
       <ItemGroupDef OID="IG.ADEX" Name="ADEX" Repeating="Yes" IsReferenceData="No" SASDatasetName="ADEX" Domain="ADEX" def:Structure="One record per subject per exposure record" Purpose="Analysis" def:StandardOID="STD.ADAMIG" def:ArchiveLocationID="LF.ADEX">
         <Description>
           <TranslatedText xml:lang="en">Exposure Analysis Dataset</TranslatedText>
         </Description>
         <def:Class Name="BASIC DATA STRUCTURE"/>
-        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
-        <ItemRef ItemOID="IT.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2"/>
-        <ItemRef ItemOID="IT.ADEX.EXTRT" OrderNumber="3" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.ADEX.EXDOSE" OrderNumber="4" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADEX.EXDOSU" OrderNumber="5" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADEX.ASTDT" OrderNumber="6" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ADEX.AENDT" OrderNumber="7" Mandatory="No"/>
+        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" MethodOID="MT.assigned"/>
+        <ItemRef ItemOID="IT.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADEX.EXTRT" OrderNumber="3" Mandatory="Yes" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADEX.EXDOSE" OrderNumber="4" Mandatory="No" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADEX.EXDOSU" OrderNumber="5" Mandatory="No" MethodOID="MT.source"/>
+        <ItemRef ItemOID="IT.ADEX.ASTDT" OrderNumber="6" Mandatory="No" MethodOID="MT.rename"/>
+        <ItemRef ItemOID="IT.ADEX.AENDT" OrderNumber="7" Mandatory="No" MethodOID="MT.rename"/>
         <ItemRef ItemOID="IT.ADEX.ASEQ" OrderNumber="8" Mandatory="Yes" KeySequence="3"/>
         <ItemRef ItemOID="IT.ADEX.EXDURD" OrderNumber="9" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADEX.TRTSDT" OrderNumber="10" Mandatory="No"/>
@@ -134,160 +134,160 @@
         <ItemRef ItemOID="IT.ADEX.TRT01P" OrderNumber="12" Mandatory="No"/>
         <ItemRef ItemOID="IT.AGE" OrderNumber="13" Mandatory="Yes"/>
         <ItemRef ItemOID="IT.ADEX.SAFFL" OrderNumber="14" Mandatory="No"/>
-        <def:leaf ID="LF.ADEX" xlink:href="adex.xpt" xlink:title="adex.xpt"/>
+        <def:leaf ID="LF.ADEX" xlink:href="adex.parquet" xlink:title="adex.parquet"/>
       </ItemGroupDef>
-      <ItemDef OID="IT.STUDYID" Name="STUDYID" DataType="text" SASFieldName="STUDYID" Length="12" MethodOID="MT.assigned">
+      <ItemDef OID="IT.STUDYID" Name="STUDYID" DataType="text" SASFieldName="STUDYID" Length="12">
         <Description>
           <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
         </Description>
         <def:Origin Type="Assigned">
           <Description>
-            <TranslatedText xml:lang="en">Set *target* to a constant *value* for every record.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.USUBJID" Name="USUBJID" DataType="text" SASFieldName="USUBJID" Length="40" MethodOID="MT.source">
+      <ItemDef OID="IT.USUBJID" Name="USUBJID" DataType="text" SASFieldName="USUBJID" Length="40">
         <Description>
           <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
         </Description>
         <def:Origin Type="Derived">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.SUBJID" Name="SUBJID" DataType="text" SASFieldName="SUBJID" Length="20" MethodOID="MT.source">
+      <ItemDef OID="IT.SUBJID" Name="SUBJID" DataType="text" SASFieldName="SUBJID" Length="20">
         <Description>
           <TranslatedText xml:lang="en">Subject Identifier for the Study</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.SITEID" Name="SITEID" DataType="text" SASFieldName="SITEID" Length="20" MethodOID="MT.source">
+      <ItemDef OID="IT.SITEID" Name="SITEID" DataType="text" SASFieldName="SITEID" Length="20">
         <Description>
           <TranslatedText xml:lang="en">Study Site Identifier</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.AGE" Name="AGE" DataType="integer" SASFieldName="AGE" MethodOID="MT.source">
+      <ItemDef OID="IT.AGE" Name="AGE" DataType="integer" SASFieldName="AGE">
         <Description>
           <TranslatedText xml:lang="en">Age</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.AGEU" Name="AGEU" DataType="text" SASFieldName="AGEU" Length="10" MethodOID="MT.source">
+      <ItemDef OID="IT.AGEU" Name="AGEU" DataType="text" SASFieldName="AGEU" Length="10">
         <Description>
           <TranslatedText xml:lang="en">Age Units</TranslatedText>
         </Description>
         <def:Origin Type="Assigned">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.SEX" Name="SEX" DataType="text" SASFieldName="SEX" Length="2" MethodOID="MT.source">
+      <ItemDef OID="IT.SEX" Name="SEX" DataType="text" SASFieldName="SEX" Length="2">
         <Description>
           <TranslatedText xml:lang="en">Sex</TranslatedText>
         </Description>
         <CodeListRef CodeListOID="C66731"/>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.RACE" Name="RACE" DataType="text" SASFieldName="RACE" Length="60" MethodOID="MT.source">
+      <ItemDef OID="IT.RACE" Name="RACE" DataType="text" SASFieldName="RACE" Length="60">
         <Description>
           <TranslatedText xml:lang="en">Race</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ETHNIC" Name="ETHNIC" DataType="text" SASFieldName="ETHNIC" Length="60" MethodOID="MT.source">
+      <ItemDef OID="IT.ETHNIC" Name="ETHNIC" DataType="text" SASFieldName="ETHNIC" Length="60">
         <Description>
           <TranslatedText xml:lang="en">Ethnicity</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ARMCD" Name="ARMCD" DataType="text" SASFieldName="ARMCD" Length="20" MethodOID="MT.source">
+      <ItemDef OID="IT.ARMCD" Name="ARMCD" DataType="text" SASFieldName="ARMCD" Length="20">
         <Description>
           <TranslatedText xml:lang="en">Planned Arm Code</TranslatedText>
         </Description>
         <def:Origin Type="Protocol">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ARM" Name="ARM" DataType="text" SASFieldName="ARM" Length="200" MethodOID="MT.source">
+      <ItemDef OID="IT.ARM" Name="ARM" DataType="text" SASFieldName="ARM" Length="200">
         <Description>
           <TranslatedText xml:lang="en">Description of Planned Arm</TranslatedText>
         </Description>
         <def:Origin Type="Protocol">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ACTARMCD" Name="ACTARMCD" DataType="text" SASFieldName="ACTARMCD" Length="20" MethodOID="MT.source">
+      <ItemDef OID="IT.ACTARMCD" Name="ACTARMCD" DataType="text" SASFieldName="ACTARMCD" Length="20">
         <Description>
           <TranslatedText xml:lang="en">Actual Arm Code</TranslatedText>
         </Description>
         <def:Origin Type="Assigned">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ACTARM" Name="ACTARM" DataType="text" SASFieldName="ACTARM" Length="200" MethodOID="MT.source">
+      <ItemDef OID="IT.ACTARM" Name="ACTARM" DataType="text" SASFieldName="ACTARM" Length="200">
         <Description>
           <TranslatedText xml:lang="en">Description of Actual Arm</TranslatedText>
         </Description>
         <def:Origin Type="Assigned">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADSL.TRT01P" Name="TRT01P" DataType="text" SASFieldName="TRT01P" Length="200" MethodOID="MT.source">
+      <ItemDef OID="IT.ADSL.TRT01P" Name="TRT01P" DataType="text" SASFieldName="TRT01P" Length="200">
         <Description>
           <TranslatedText xml:lang="en">Planned Treatment for Period 01</TranslatedText>
         </Description>
         <def:Origin Type="Protocol">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADSL.TRT01A" Name="TRT01A" DataType="text" SASFieldName="TRT01A" Length="200" MethodOID="MT.source">
+      <ItemDef OID="IT.ADSL.TRT01A" Name="TRT01A" DataType="text" SASFieldName="TRT01A" Length="200">
         <Description>
           <TranslatedText xml:lang="en">Actual Treatment for Period 01</TranslatedText>
         </Description>
         <def:Origin Type="Assigned">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADSL.TRTSDT" Name="TRTSDT" DataType="date" SASFieldName="TRTSDT" MethodOID="MT.derivation">
+      <ItemDef OID="IT.ADSL.TRTSDT" Name="TRTSDT" DataType="date" SASFieldName="TRTSDT">
         <Description>
           <TranslatedText xml:lang="en">Date of First Exposure to Treatment</TranslatedText>
         </Description>
@@ -297,7 +297,7 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADSL.TRTEDT" Name="TRTEDT" DataType="date" SASFieldName="TRTEDT" MethodOID="MT.derivation">
+      <ItemDef OID="IT.ADSL.TRTEDT" Name="TRTEDT" DataType="date" SASFieldName="TRTEDT">
         <Description>
           <TranslatedText xml:lang="en">Date of Last Exposure to Treatment</TranslatedText>
         </Description>
@@ -307,33 +307,33 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADSL.RFSTDTC" Name="RFSTDTC" DataType="datetime" SASFieldName="RFSTDTC" MethodOID="MT.source">
+      <ItemDef OID="IT.ADSL.RFSTDTC" Name="RFSTDTC" DataType="datetime" SASFieldName="RFSTDTC">
         <Description>
           <TranslatedText xml:lang="en">Subject Reference Start Date/Time</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADSL.RFENDTC" Name="RFENDTC" DataType="datetime" SASFieldName="RFENDTC" MethodOID="MT.source">
+      <ItemDef OID="IT.ADSL.RFENDTC" Name="RFENDTC" DataType="datetime" SASFieldName="RFENDTC">
         <Description>
           <TranslatedText xml:lang="en">Subject Reference End Date/Time</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADSL.RFICDTC" Name="RFICDTC" DataType="datetime" SASFieldName="RFICDTC" MethodOID="MT.source">
+      <ItemDef OID="IT.ADSL.RFICDTC" Name="RFICDTC" DataType="datetime" SASFieldName="RFICDTC">
         <Description>
           <TranslatedText xml:lang="en">Date/Time of Informed Consent</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -355,27 +355,27 @@
         </Description>
         <def:Origin Type="Derived"/>
       </ItemDef>
-      <ItemDef OID="IT.ADVS.PARAMCD" Name="PARAMCD" DataType="text" SASFieldName="PARAMCD" Length="8" MethodOID="MT.source">
+      <ItemDef OID="IT.ADVS.PARAMCD" Name="PARAMCD" DataType="text" SASFieldName="PARAMCD" Length="8">
         <Description>
           <TranslatedText xml:lang="en">Parameter Code</TranslatedText>
         </Description>
         <def:Origin Type="Derived">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADVS.PARAM" Name="PARAM" DataType="text" SASFieldName="PARAM" Length="200" MethodOID="MT.source">
+      <ItemDef OID="IT.ADVS.PARAM" Name="PARAM" DataType="text" SASFieldName="PARAM" Length="200">
         <Description>
           <TranslatedText xml:lang="en">Parameter</TranslatedText>
         </Description>
         <def:Origin Type="Derived">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADVS.AVAL" Name="AVAL" DataType="float" SASFieldName="AVAL" MethodOID="MT.derivation">
+      <ItemDef OID="IT.ADVS.AVAL" Name="AVAL" DataType="float" SASFieldName="AVAL">
         <Description>
           <TranslatedText xml:lang="en">Analysis Value</TranslatedText>
         </Description>
@@ -385,37 +385,37 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADVS.AVALU" Name="AVALU" DataType="text" SASFieldName="AVALU" Length="20" MethodOID="MT.source">
+      <ItemDef OID="IT.ADVS.AVALU" Name="AVALU" DataType="text" SASFieldName="AVALU" Length="20">
         <Description>
           <TranslatedText xml:lang="en">Analysis Value Units</TranslatedText>
         </Description>
         <def:Origin Type="Derived">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADVS.ADT" Name="ADT" DataType="date" SASFieldName="ADT" MethodOID="MT.rename">
+      <ItemDef OID="IT.ADVS.ADT" Name="ADT" DataType="date" SASFieldName="ADT">
         <Description>
           <TranslatedText xml:lang="en">Analysis Date</TranslatedText>
         </Description>
         <def:Origin Type="Derived">
           <Description>
-            <TranslatedText xml:lang="en">Create *target* as a copy of *source* (variable renaming).</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADVS.ADY" Name="ADY" DataType="integer" SASFieldName="ADY" MethodOID="MT.study_day">
+      <ItemDef OID="IT.ADVS.ADY" Name="ADY" DataType="integer" SASFieldName="ADY">
         <Description>
           <TranslatedText xml:lang="en">Analysis Relative Day</TranslatedText>
         </Description>
         <def:Origin Type="Derived">
           <Description>
-            <TranslatedText xml:lang="en">Derive a CDISC study day variable from a date column and a reference date.</TranslatedText>
+            <TranslatedText xml:lang="en">Derive a CDISC study day variable from a date column and reference date.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADVS.ABLFL" Name="ABLFL" DataType="text" SASFieldName="ABLFL" Length="2" MethodOID="MT.flag">
+      <ItemDef OID="IT.ADVS.ABLFL" Name="ABLFL" DataType="text" SASFieldName="ABLFL" Length="2">
         <Description>
           <TranslatedText xml:lang="en">Baseline Record Flag</TranslatedText>
         </Description>
@@ -529,113 +529,113 @@
         </Description>
         <def:Origin Type="Derived"/>
       </ItemDef>
-      <ItemDef OID="IT.ADAE.AETERM" Name="AETERM" DataType="text" SASFieldName="AETERM" Length="200" MethodOID="MT.source">
+      <ItemDef OID="IT.ADAE.AETERM" Name="AETERM" DataType="text" SASFieldName="AETERM" Length="200">
         <Description>
           <TranslatedText xml:lang="en">Reported Term for the Adverse Event</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADAE.AESTDTC" Name="AESTDTC" DataType="datetime" SASFieldName="AESTDTC" MethodOID="MT.source">
+      <ItemDef OID="IT.ADAE.AESTDTC" Name="AESTDTC" DataType="datetime" SASFieldName="AESTDTC">
         <Description>
           <TranslatedText xml:lang="en">Start Date/Time of Adverse Event</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADAE.AEENDTC" Name="AEENDTC" DataType="datetime" SASFieldName="AEENDTC" MethodOID="MT.source">
+      <ItemDef OID="IT.ADAE.AEENDTC" Name="AEENDTC" DataType="datetime" SASFieldName="AEENDTC">
         <Description>
           <TranslatedText xml:lang="en">End Date/Time of Adverse Event</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADAE.AESEV" Name="AESEV" DataType="text" SASFieldName="AESEV" Length="20" MethodOID="MT.source">
+      <ItemDef OID="IT.ADAE.AESEV" Name="AESEV" DataType="text" SASFieldName="AESEV" Length="20">
         <Description>
           <TranslatedText xml:lang="en">Severity/Intensity</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADAE.AESER" Name="AESER" DataType="text" SASFieldName="AESER" Length="2" MethodOID="MT.source">
+      <ItemDef OID="IT.ADAE.AESER" Name="AESER" DataType="text" SASFieldName="AESER" Length="2">
         <Description>
           <TranslatedText xml:lang="en">Serious Event</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADAE.AEREL" Name="AEREL" DataType="text" SASFieldName="AEREL" Length="60" MethodOID="MT.source">
+      <ItemDef OID="IT.ADAE.AEREL" Name="AEREL" DataType="text" SASFieldName="AEREL" Length="60">
         <Description>
           <TranslatedText xml:lang="en">Causality</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADAE.AEOUT" Name="AEOUT" DataType="text" SASFieldName="AEOUT" Length="60" MethodOID="MT.source">
+      <ItemDef OID="IT.ADAE.AEOUT" Name="AEOUT" DataType="text" SASFieldName="AEOUT" Length="60">
         <Description>
           <TranslatedText xml:lang="en">Outcome of Adverse Event</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADAE.AEACN" Name="AEACN" DataType="text" SASFieldName="AEACN" Length="60" MethodOID="MT.source">
+      <ItemDef OID="IT.ADAE.AEACN" Name="AEACN" DataType="text" SASFieldName="AEACN" Length="60">
         <Description>
           <TranslatedText xml:lang="en">Action Taken with Study Treatment</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADAE.ASTDT" Name="ASTDT" DataType="date" SASFieldName="ASTDT" MethodOID="MT.rename">
+      <ItemDef OID="IT.ADAE.ASTDT" Name="ASTDT" DataType="date" SASFieldName="ASTDT">
         <Description>
           <TranslatedText xml:lang="en">Analysis Start Date</TranslatedText>
         </Description>
         <def:Origin Type="Derived">
           <Description>
-            <TranslatedText xml:lang="en">Create *target* as a copy of *source* (variable renaming).</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADAE.AENDT" Name="AENDT" DataType="date" SASFieldName="AENDT" MethodOID="MT.rename">
+      <ItemDef OID="IT.ADAE.AENDT" Name="AENDT" DataType="date" SASFieldName="AENDT">
         <Description>
           <TranslatedText xml:lang="en">Analysis End Date</TranslatedText>
         </Description>
         <def:Origin Type="Derived">
           <Description>
-            <TranslatedText xml:lang="en">Create *target* as a copy of *source* (variable renaming).</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADAE.ADY" Name="ADY" DataType="integer" SASFieldName="ADY" MethodOID="MT.study_day">
+      <ItemDef OID="IT.ADAE.ADY" Name="ADY" DataType="integer" SASFieldName="ADY">
         <Description>
           <TranslatedText xml:lang="en">Analysis Relative Day</TranslatedText>
         </Description>
         <def:Origin Type="Derived">
           <Description>
-            <TranslatedText xml:lang="en">Derive a CDISC study day variable from a date column and a reference date.</TranslatedText>
+            <TranslatedText xml:lang="en">Derive a CDISC study day variable from a date column and reference date.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -681,53 +681,53 @@
         </Description>
         <def:Origin Type="Derived"/>
       </ItemDef>
-      <ItemDef OID="IT.ADEX.EXTRT" Name="EXTRT" DataType="text" SASFieldName="EXTRT" Length="200" MethodOID="MT.source">
+      <ItemDef OID="IT.ADEX.EXTRT" Name="EXTRT" DataType="text" SASFieldName="EXTRT" Length="200">
         <Description>
           <TranslatedText xml:lang="en">Name of Actual Treatment</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADEX.EXDOSE" Name="EXDOSE" DataType="float" SASFieldName="EXDOSE" MethodOID="MT.source">
+      <ItemDef OID="IT.ADEX.EXDOSE" Name="EXDOSE" DataType="float" SASFieldName="EXDOSE">
         <Description>
           <TranslatedText xml:lang="en">Dose per Administration</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADEX.EXDOSU" Name="EXDOSU" DataType="text" SASFieldName="EXDOSU" Length="20" MethodOID="MT.source">
+      <ItemDef OID="IT.ADEX.EXDOSU" Name="EXDOSU" DataType="text" SASFieldName="EXDOSU" Length="20">
         <Description>
           <TranslatedText xml:lang="en">Dose Units</TranslatedText>
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+            <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADEX.ASTDT" Name="ASTDT" DataType="date" SASFieldName="ASTDT" MethodOID="MT.rename">
+      <ItemDef OID="IT.ADEX.ASTDT" Name="ASTDT" DataType="date" SASFieldName="ASTDT">
         <Description>
           <TranslatedText xml:lang="en">Analysis Start Date</TranslatedText>
         </Description>
         <def:Origin Type="Derived">
           <Description>
-            <TranslatedText xml:lang="en">Create *target* as a copy of *source* (variable renaming).</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ADEX.AENDT" Name="AENDT" DataType="date" SASFieldName="AENDT" MethodOID="MT.rename">
+      <ItemDef OID="IT.ADEX.AENDT" Name="AENDT" DataType="date" SASFieldName="AENDT">
         <Description>
           <TranslatedText xml:lang="en">Analysis End Date</TranslatedText>
         </Description>
         <def:Origin Type="Derived">
           <Description>
-            <TranslatedText xml:lang="en">Create *target* as a copy of *source* (variable renaming).</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -800,7 +800,7 @@
       </CodeList>
       <MethodDef OID="MT.assigned" Name="assigned" Type="Computation">
         <Description>
-          <TranslatedText xml:lang="en">Set *target* to a constant *value* for every record.</TranslatedText>
+          <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
         </Description>
         <FormalExpression Context="Python/Fleet">.assigned(...)</FormalExpression>
       </MethodDef>
@@ -810,6 +810,18 @@
         </Description>
         <FormalExpression Context="Python/Fleet">RFSTDTC</FormalExpression>
       </MethodDef>
+      <MethodDef OID="MT.derivation.2" Name="derivation" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">Derive *target* using an expression, lambda, or ``Derivation`` object.</TranslatedText>
+        </Description>
+        <FormalExpression Context="Python/Fleet">RFENDTC</FormalExpression>
+      </MethodDef>
+      <MethodDef OID="MT.derivation.3" Name="derivation" Type="Computation">
+        <Description>
+          <TranslatedText xml:lang="en">Derive *target* using an expression, lambda, or ``Derivation`` object.</TranslatedText>
+        </Description>
+        <FormalExpression Context="Python/Fleet">pl.col('vsorres').cast(pl.Float64, strict=False)</FormalExpression>
+      </MethodDef>
       <MethodDef OID="MT.flag" Name="flag" Type="Computation">
         <Description>
           <TranslatedText xml:lang="en">Set *target* to *flag_value* for records matching *criteria*.</TranslatedText>
@@ -818,26 +830,26 @@
       </MethodDef>
       <MethodDef OID="MT.rename" Name="rename" Type="Computation">
         <Description>
-          <TranslatedText xml:lang="en">Create *target* as a copy of *source* (variable renaming).</TranslatedText>
+          <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
         </Description>
         <FormalExpression Context="Python/Fleet">.rename(...)</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.source" Name="source" Type="Computation">
         <Description>
-          <TranslatedText xml:lang="en">Copy a source column into the ADaM dataset.</TranslatedText>
+          <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
         </Description>
         <FormalExpression Context="Python/Fleet">.source(...)</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.study_day" Name="study_day" Type="Computation">
         <Description>
-          <TranslatedText xml:lang="en">Derive a CDISC study day variable from a date column and a reference date.</TranslatedText>
+          <TranslatedText xml:lang="en">Derive a CDISC study day variable from a date column and reference date.</TranslatedText>
         </Description>
         <FormalExpression Context="Python/Fleet">.study_day(...)</FormalExpression>
       </MethodDef>
-      <def:leaf ID="LF.ADSL" xlink:href="adsl.xpt" xlink:title="adsl.xpt"/>
-      <def:leaf ID="LF.ADVS" xlink:href="advs.xpt" xlink:title="advs.xpt"/>
-      <def:leaf ID="LF.ADAE" xlink:href="adae.xpt" xlink:title="adae.xpt"/>
-      <def:leaf ID="LF.ADEX" xlink:href="adex.xpt" xlink:title="adex.xpt"/>
+      <def:leaf ID="LF.ADSL" xlink:href="adsl.parquet" xlink:title="adsl.parquet"/>
+      <def:leaf ID="LF.ADVS" xlink:href="advs.parquet" xlink:title="advs.parquet"/>
+      <def:leaf ID="LF.ADAE" xlink:href="adae.parquet" xlink:title="adae.parquet"/>
+      <def:leaf ID="LF.ADEX" xlink:href="adex.parquet" xlink:title="adex.parquet"/>
     </MetaDataVersion>
   </Study>
 </ODM>

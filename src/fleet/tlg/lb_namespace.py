@@ -8,6 +8,8 @@ PARAM/AVISIT) and LBL01 (laboratory abnormalities listing) templates.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import polars as pl
 from pydantic import Field
 
@@ -77,6 +79,8 @@ class LBListingSpec(TLGSpec):
     grade columns sorted for review.
     """
 
+    _unconsumed_spec_fields: ClassVar[frozenset[str]] = frozenset({"adsl_filter", "header_rows"})
+
     output_type: str = "listing"
     columns: list[Column] = Field(
         default_factory=lambda: [
@@ -104,6 +108,10 @@ class LBListingSpec(TLGSpec):
 class LBChgSpec(LBSummarySpec):
     """Spec for lab change from baseline (lbt02): CHG stats per PARAM × visit."""
 
+    value_col: str = Field(
+        default="CHG",
+        description="Analysis-value column summarized (change from baseline).",
+    )
     required_columns: list[str] = Field(
         default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVISIT", "CHG"],
     )
@@ -116,6 +124,10 @@ class LBShiftSpec(SummarySpecBase):
     the spec drives validation, pooling, ordering and the worst-case
     rank (``anrind_order``).
     """
+
+    _unconsumed_spec_fields: ClassVar[frozenset[str]] = frozenset(
+        {"rows", "header_rows", "value_col"}
+    )
 
     statistics: list[Statistic] = Field(
         default_factory=lambda: [Statistic.N_SUBJECTS],
@@ -131,6 +143,10 @@ class LBShiftSpec(SummarySpecBase):
 
 class LBAbnormalSpec(SummarySpecBase):
     """Spec for laboratory abnormalities not present at baseline (lbt04)."""
+
+    _unconsumed_spec_fields: ClassVar[frozenset[str]] = frozenset(
+        {"rows", "statistics", "header_rows", "pools", "value_col", "label_col"}
+    )
 
     low_values: list[str] = Field(
         default_factory=lambda: ["LOW", "LOW LOW"],
@@ -161,6 +177,7 @@ class LBTLGNamespace(BuilderVerbsMixin):
         "t_chg": LBChgSpec,
         "t_shift": LBShiftSpec,
         "t_abnormal": LBAbnormalSpec,
+        "l_listing": LBListingSpec,
     }
 
     def __init__(self, df: pl.DataFrame) -> None:
@@ -227,6 +244,9 @@ class LBTLGNamespace(BuilderVerbsMixin):
             dataset_filter=spec.dataset_filter,
             header_rows=spec.header_rows,
             nested=True,
+            value_col=spec.value_col,
+            label_col=spec.label_col,
+            decimals=spec.decimals,
         )
 
     # ------------------------------------------------------------------ #
@@ -242,14 +262,16 @@ class LBTLGNamespace(BuilderVerbsMixin):
     ) -> pl.DataFrame:
         """Mean change-from-baseline ARD per parameter and visit (LBT02).
 
-        Summarizes ``CHG`` (not raw ``AVAL``) for post-baseline records,
-        nested per parameter × visit.  The paired n counts only subjects
-        with a non-missing change value at the visit; baseline records
-        are excluded null-safely (ADaM codes ``ABLFL`` as Y / null).
+        Summarizes ``spec.value_col`` (``CHG`` by default, not raw
+        ``AVAL``) for post-baseline records, nested per parameter ×
+        visit.  The paired n counts only subjects with a non-missing
+        change value at the visit; baseline records are excluded
+        null-safely (ADaM codes ``ABLFL`` as Y / null).
 
         Args:
             groupby: Treatment-arm column.
             adsl: ADSL DataFrame for big-N denominators.
+            spec: Optional ``LBChgSpec`` override.
 
         Returns:
             pl.DataFrame: {cards}-compatible ARD.
@@ -260,12 +282,11 @@ class LBTLGNamespace(BuilderVerbsMixin):
         spec = spec or LBChgSpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
         spec.validate_dataframe(self._df, group_col=group_col)
-        df = self._df.with_columns(pl.col("CHG").alias("AVAL"))
-        prefilter = pl.col("CHG").is_not_null()
-        if "ABLFL" in df.columns:
+        prefilter = pl.col(spec.value_col).is_not_null()
+        if "ABLFL" in self._df.columns:
             prefilter = prefilter & pl.col("ABLFL").ne_missing("Y")
         return summarize_ard(
-            df,
+            self._df,
             rows=spec.rows,
             stats=spec.statistics,
             context="t_lb_chg",
@@ -278,6 +299,9 @@ class LBTLGNamespace(BuilderVerbsMixin):
             prefilter=prefilter,
             header_rows=spec.header_rows,
             nested=True,
+            value_col=spec.value_col,
+            label_col=spec.label_col,
+            decimals=spec.decimals,
         )
 
     # ------------------------------------------------------------------ #
@@ -310,14 +334,27 @@ class LBTLGNamespace(BuilderVerbsMixin):
         Args:
             groupby: Treatment-arm column.
             adsl: ADSL DataFrame for the arm universe and big-N rows.
+            spec: Optional ``LBShiftSpec`` override.
 
         Returns:
             pl.DataFrame: {cards}-compatible ARD (subject counts).
+
+        Raises:
+            SchemaError: If the spec carries ``rows`` or ``header_rows``
+                — the shift hierarchy is fixed and would silently ignore
+                them.
 
         Examples:
             ``ard = adlb.tlg.lb.t_shift(groupby="TRTA", adsl=adsl)``
         """
         spec = spec or LBShiftSpec()
+        if spec.rows or spec.header_rows:
+            raise SchemaError(
+                "t_shift's row hierarchy is fixed (PARAMCD → baseline-to-worst "
+                "shift cell) and it emits no header rows — 'rows' and "
+                "'header_rows' in the spec would be silently ignored, so they "
+                "are rejected. Use t_summary for a custom hierarchy."
+            )
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
         spec.validate_dataframe(self._df, group_col=group_col)
         post = self._df.filter(pl.col("ANRIND").is_not_null())
@@ -348,6 +385,8 @@ class LBTLGNamespace(BuilderVerbsMixin):
             adsl_filter=spec.adsl_filter,
             dataset_filter=spec.dataset_filter,
             nested=True,
+            label_col=spec.label_col,
+            decimals=spec.decimals,
         )
 
     # ------------------------------------------------------------------ #
@@ -430,10 +469,14 @@ class LBTLGNamespace(BuilderVerbsMixin):
                 a for a in arms if a not in spec.column_order
             ]
 
+        fmt = spec.decimals or {}
         rows_out: list[dict[str, object]] = []
         if adsl is not None:
             rows_out += [
-                ard_row(group_col, arm, "", "", "N", "N", big_n.get(arm), context) for arm in arms
+                ard_row(
+                    group_col, arm, "", "", "N", "N", big_n.get(arm), context, fmt_fn=fmt.get("N")
+                )
+                for arm in arms
             ]
 
         directions = {"Low": spec.low_values, "High": spec.high_values}
@@ -461,11 +504,21 @@ class LBTLGNamespace(BuilderVerbsMixin):
                     )
                     n = len(abnormal & eligible)
                     denom = len(eligible)
-                    pct = round(n / denom * 100, 1) if denom > 0 else None
+                    # Unrounded — display precision belongs to fmt_fn.
+                    pct = n / denom * 100 if denom > 0 else None
                     lineage = {"group2": "PARAMCD", "group2_level": str(param)}
                     rows_out += [
                         ard_row(
-                            group_col, arm, "ABNORMAL", direction, "n", "n", n, context, **lineage
+                            group_col,
+                            arm,
+                            "ABNORMAL",
+                            direction,
+                            "n",
+                            "n",
+                            n,
+                            context,
+                            fmt_fn=fmt.get("n"),
+                            **lineage,
                         ),
                         ard_row(
                             group_col,
@@ -476,6 +529,7 @@ class LBTLGNamespace(BuilderVerbsMixin):
                             "N assessed",
                             denom,
                             context,
+                            fmt_fn=fmt.get("N"),
                             **lineage,
                         ),
                         ard_row(
@@ -487,6 +541,7 @@ class LBTLGNamespace(BuilderVerbsMixin):
                             "n / N (%)",
                             pct,
                             context,
+                            fmt_fn=fmt.get("pct"),
                             **lineage,
                         ),
                     ]

@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import polars as pl
 
-import fleet  # noqa: F401 — registers .sdtm / .adam / .tlg namespaces
+import fleet  # registers .sdtm / .adam / .tlg namespaces
 from fleet.tlg import (
     AESummarySpec,
     GroupPool,
@@ -52,7 +52,8 @@ OUT.mkdir(parents=True, exist_ok=True)
 print("━━ Layer 0 · Inputs ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 # Pre-existing ADSL (subject-level reference for Big-N, treatment arms, dates)
-adsl = pl.from_repr("""\
+adsl = fleet.frame(
+    pl.from_repr("""\
 ┌─────────────┬─────┬─────┬───────────────────────────┬──────────────────────┬────────────┬────────────┬───────┐
 │ USUBJID     ┆ AGE ┆ SEX ┆ RACE                      ┆ TRT01P               ┆ TRTSDT     ┆ TRTEDT     ┆ SAFFL │
 │ ---         ┆ --- ┆ --- ┆ ---                       ┆ ---                  ┆ ---        ┆ ---        ┆ ---   │
@@ -65,12 +66,14 @@ adsl = pl.from_repr("""\
 │ 01-701-1047 ┆ 56  ┆ F   ┆ WHITE                     ┆ Xanomeline Low Dose  ┆ 2014-01-06 ┆ 2014-07-06 ┆ Y     │
 └─────────────┴─────┴─────┴───────────────────────────┴──────────────────────┴────────────┴────────────┴───────┘
 """)
+)
 adsl = adsl.with_columns(pl.col("TRT01P").alias("TRTA"))
 print(f"  ADSL (inline)    : {adsl.shape[0]} subjects × {adsl.shape[1]} variables")
 print(f"         Arms: {sorted(adsl['TRTA'].unique().to_list())}")
 
 # Raw AE extract — the only raw data this script owns
-ae_raw = pl.from_repr("""\
+ae_raw = fleet.frame(
+    pl.from_repr("""\
 ┌────────────────┬───────────────────────────┬───────────────┬─────────────┬─────────────┬────────────┬────────────────────────────┬──────────────────┬──────────────────┐
 │ patient_number ┆ ae_term                   ┆ ae_start_date ┆ ae_end_date ┆ ae_severity ┆ ae_serious ┆ ae_outcome                 ┆ ae_action_taken  ┆ ae_relationship  │
 │ ---            ┆ ---                       ┆ ---           ┆ ---         ┆ ---         ┆ ---        ┆ ---                        ┆ ---              ┆ ---              │
@@ -83,6 +86,7 @@ ae_raw = pl.from_repr("""\
 │ 01-701-1034    ┆ APPLICATION SITE ERYTHEMA ┆ 2014-01-20    ┆ 2014-01-25  ┆ SEVERE      ┆ Y          ┆ RECOVERED/RESOLVED         ┆ DRUG WITHDRAWN   ┆ RELATED          │
 └────────────────┴───────────────────────────┴───────────────┴─────────────┴─────────────┴────────────┴────────────────────────────┴──────────────────┴──────────────────┘
 """)
+)
 print(f"  ae_raw           : {ae_raw.shape[0]:>3} rows × {ae_raw.shape[1]} cols")
 
 
@@ -92,17 +96,17 @@ print(f"  ae_raw           : {ae_raw.shape[0]:>3} rows × {ae_raw.shape[1]} cols
 print("\n━━ Layer 1 · SDTM AE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 ae = (
-    ae_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")
-    .hardcode_no_ct("DOMAIN", value="AE")
-    .assign_no_ct("USUBJID", source="patient_number")
-    .assign_no_ct("AETERM", source="ae_term")
-    .assign_no_ct("AESTDTC", source="ae_start_date")
-    .assign_no_ct("AEENDTC", source="ae_end_date")
-    .assign_no_ct("AESEV", source="ae_severity")
-    .assign_no_ct("AESER", source="ae_serious")
-    .assign_no_ct("AEOUT", source="ae_outcome")
-    .assign_no_ct("AEACN", source="ae_action_taken")
-    .assign_no_ct("AEREL", source="ae_relationship")
+    ae_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
+    .assign("DOMAIN", value="AE")
+    .assign("USUBJID", source="patient_number")
+    .assign("AETERM", source="ae_term")
+    .assign("AESTDTC", source="ae_start_date")
+    .assign("AEENDTC", source="ae_end_date")
+    .assign("AESEV", source="ae_severity")
+    .assign("AESER", source="ae_serious")
+    .assign("AEOUT", source="ae_outcome")
+    .assign("AEACN", source="ae_action_taken")
+    .assign("AEREL", source="ae_relationship")
     .seq("AESEQ", order_by=["AESTDTC"])
     .to_frame()
 )
@@ -120,7 +124,7 @@ print("\n━━ Layer 2 · ADaM ADAE ━━━━━━━━━━━━━━�
 
 # Merge ADSL treatment dates & population flags into SDTM AE
 _adsl_trt = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "TRTA", "SAFFL"])
-ae_with_trt = ae.join(_adsl_trt, on="USUBJID", how="left")
+ae_with_trt = fleet.frame(ae.join(_adsl_trt, on="USUBJID", how="left"))
 
 _adae_base_ns = (
     ae_with_trt.adam("ADAE")
@@ -155,24 +159,26 @@ _adae_occds_ns = (
         "ANL01FL",
         criteria="max",
         value_col="AESEVN",
-        groups=["USUBJID", "AETERM"],
+        by=["USUBJID", "AETERM"],
     )
-    .seq("ASEQ", groups=["USUBJID"])
+    .seq("ASEQ", by=["USUBJID"])
 )
 
 adae = _adae_occds_ns.to_frame()
 
 # Simulate MedDRA coding (in a real study these come from a dictionary)
-adae = adae.with_columns(
-    pl.col("AETERM").str.to_titlecase().alias("AEDECOD"),
-    pl.when(pl.col("AETERM").is_in(["HEADACHE", "DIZZINESS"]))
-    .then(pl.lit("NERVOUS SYSTEM DISORDERS"))
-    .when(pl.col("AETERM").is_in(["NAUSEA"]))
-    .then(pl.lit("GASTROINTESTINAL DISORDERS"))
-    .when(pl.col("AETERM").is_in(["FATIGUE"]))
-    .then(pl.lit("GENERAL DISORDERS"))
-    .otherwise(pl.lit("OTHER"))
-    .alias("AEBODSYS"),
+adae = fleet.frame(
+    adae.with_columns(
+        pl.col("AETERM").str.to_titlecase().alias("AEDECOD"),
+        pl.when(pl.col("AETERM").is_in(["HEADACHE", "DIZZINESS"]))
+        .then(pl.lit("NERVOUS SYSTEM DISORDERS"))
+        .when(pl.col("AETERM").is_in(["NAUSEA"]))
+        .then(pl.lit("GASTROINTESTINAL DISORDERS"))
+        .when(pl.col("AETERM").is_in(["FATIGUE"]))
+        .then(pl.lit("GENERAL DISORDERS"))
+        .otherwise(pl.lit("OTHER"))
+        .alias("AEBODSYS"),
+    )
 )
 
 print(f"  ADAE : {adae.shape[0]} records × {adae.shape[1]} variables")

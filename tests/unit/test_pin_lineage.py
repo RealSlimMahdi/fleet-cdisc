@@ -12,23 +12,30 @@ from fleet.core.lineage import pin_lineage_of
 
 @pytest.fixture
 def dm_df():
-    return pl.DataFrame(
-        {
-            "USUBJID": ["S001", "S002"],
-            "RFSTDTC": ["2014-01-02", "2014-01-03"],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ RFSTDTC    │
+│ ---     ┆ ---        │
+│ str     ┆ str        │
+╞═════════╪════════════╡
+│ S001    ┆ 2014-01-02 │
+│ S002    ┆ 2014-01-03 │
+└─────────┴────────────┘
+""")
 
 
 @pytest.fixture
 def adsl_df():
-    return pl.DataFrame(
-        {
-            "USUBJID": ["S001", "S002"],
-            "TRTSDT": ["2014-01-02", "2014-01-03"],
-            "SAFFL": ["Y", "Y"],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬────────────┬───────┐
+│ USUBJID ┆ TRTSDT     ┆ SAFFL │
+│ ---     ┆ ---        ┆ ---   │
+│ str     ┆ str        ┆ str   │
+╞═════════╪════════════╪═══════╡
+│ S001    ┆ 2014-01-02 ┆ Y     │
+│ S002    ┆ 2014-01-03 ┆ Y     │
+└─────────┴────────────┴───────┘
+""")
 
 
 # ── Pin lineage recording ───────────────────────────────────────────── #
@@ -36,15 +43,19 @@ def adsl_df():
 
 class TestPinLineage:
     def test_study_day_records_pin_lineage(self, dm_df):
-        ae_raw = pl.DataFrame(
-            {
-                "patient_number": ["S001", "S002"],
-                "ae_start_date": ["2014-01-10", "2014-02-15"],
-            }
-        )
+        ae_raw = pl.from_repr("""\
+┌────────────────┬───────────────┐
+│ patient_number ┆ ae_start_date │
+│ ---            ┆ ---           │
+│ str            ┆ str           │
+╞════════════════╪═══════════════╡
+│ S001           ┆ 2014-01-10    │
+│ S002           ┆ 2014-02-15    │
+└────────────────┴───────────────┘
+""")
         ns = (
-            ae_raw.sdtm.hardcode_no_ct("DOMAIN", value="AE")
-            .assign_no_ct("USUBJID", source="patient_number")
+            ae_raw.sdtm.assign("DOMAIN", value="AE")
+            .assign("USUBJID", source="patient_number")
             .date("AESTDTC", source="ae_start_date")
             .pin("DM", dm_df)
             .study_day("AESTDY", date_col="AESTDTC")
@@ -60,7 +71,16 @@ class TestPinLineage:
         assert dep.relationship == "derivation"
 
     def test_join_adsl_records_carry_forward(self, adsl_df):
-        ae_df = pl.DataFrame({"USUBJID": ["S001", "S002"], "AETERM": ["HA", "NA"]})
+        ae_df = pl.from_repr("""\
+┌─────────┬────────┐
+│ USUBJID ┆ AETERM │
+│ ---     ┆ ---    │
+│ str     ┆ str    │
+╞═════════╪════════╡
+│ S001    ┆ HA     │
+│ S002    ┆ NA     │
+└─────────┴────────┘
+""")
         ns = (
             ae_df.adam.occds("ADAE")
             .pin("ADSL", adsl_df)
@@ -73,18 +93,21 @@ class TestPinLineage:
         assert {d.target_col for d in pl_entries} == {"TRTSDT", "SAFFL"}
 
     def test_pin_lineage_survives_chain(self, dm_df):
-        ae_raw = pl.DataFrame(
-            {
-                "patient_number": ["S001"],
-                "ae_start_date": ["2014-01-10"],
-            }
-        )
+        ae_raw = pl.from_repr("""\
+┌────────────────┬───────────────┐
+│ patient_number ┆ ae_start_date │
+│ ---            ┆ ---           │
+│ str            ┆ str           │
+╞════════════════╪═══════════════╡
+│ S001           ┆ 2014-01-10    │
+└────────────────┴───────────────┘
+""")
         ns = (
-            ae_raw.sdtm.assign_no_ct("USUBJID", source="patient_number")
+            ae_raw.sdtm.assign("USUBJID", source="patient_number")
             .date("AESTDTC", source="ae_start_date")
             .pin("DM", dm_df)
             .study_day("AESTDY", date_col="AESTDTC")
-            .hardcode_no_ct("DOMAIN", value="AE")
+            .assign("DOMAIN", value="AE")
         )
         # Pin lineage should survive the hardcode_no_ct chain
         pl_entries = pin_lineage_of(ns)
@@ -92,7 +115,7 @@ class TestPinLineage:
 
     def test_no_pin_lineage_without_pin(self):
         df = pl.DataFrame({"USUBJID": ["S001"]})
-        ns = df.sdtm.assign_no_ct("SUBJID", source="USUBJID")
+        ns = df.sdtm.assign("SUBJID", source="USUBJID")
         assert pin_lineage_of(ns) == []
 
 
@@ -101,15 +124,19 @@ class TestPinLineage:
 
 class TestDAGInjection:
     def test_inject_lineage_adds_pin_edges(self, dm_df):
-        ae_raw = pl.DataFrame(
-            {
-                "patient_number": ["S001", "S002"],
-                "ae_start_date": ["2014-01-10", "2014-02-15"],
-            }
-        )
+        ae_raw = pl.from_repr("""\
+┌────────────────┬───────────────┐
+│ patient_number ┆ ae_start_date │
+│ ---            ┆ ---           │
+│ str            ┆ str           │
+╞════════════════╪═══════════════╡
+│ S001           ┆ 2014-01-10    │
+│ S002           ┆ 2014-02-15    │
+└────────────────┴───────────────┘
+""")
         ns = (
-            ae_raw.sdtm.hardcode_no_ct("DOMAIN", value="AE")
-            .assign_no_ct("USUBJID", source="patient_number")
+            ae_raw.sdtm.assign("DOMAIN", value="AE")
+            .assign("USUBJID", source="patient_number")
             .date("AESTDTC", source="ae_start_date")
             .pin("DM", dm_df)
             .study_day("AESTDY", date_col="AESTDTC")
@@ -134,15 +161,18 @@ class TestDAGInjection:
         assert vnode.pin_sources[0].source_domain == "DM"
 
     def test_trace_returns_provenance(self, dm_df):
-        ae_raw = pl.DataFrame(
-            {
-                "patient_number": ["S001"],
-                "ae_start_date": ["2014-01-10"],
-            }
-        )
+        ae_raw = pl.from_repr("""\
+┌────────────────┬───────────────┐
+│ patient_number ┆ ae_start_date │
+│ ---            ┆ ---           │
+│ str            ┆ str           │
+╞════════════════╪═══════════════╡
+│ S001           ┆ 2014-01-10    │
+└────────────────┴───────────────┘
+""")
         ns = (
-            ae_raw.sdtm.hardcode_no_ct("DOMAIN", value="AE")
-            .assign_no_ct("USUBJID", source="patient_number")
+            ae_raw.sdtm.assign("DOMAIN", value="AE")
+            .assign("USUBJID", source="patient_number")
             .date("AESTDTC", source="ae_start_date")
             .pin("DM", dm_df)
             .study_day("AESTDY", date_col="AESTDTC")
@@ -157,20 +187,26 @@ class TestDAGInjection:
         dag.inject_lineage(ns, "AE")
 
         chain = dag.trace("AE", "AESTDY")
-        assert len(chain) == 1
-        assert chain[0]["name"] == "AESTDY"
+        # Recursive: AESTDY ← study_day(AESTDTC, DM.RFSTDTC); AESTDTC is
+        # itself derived (date ← ae_start_date) so it gets its own entry.
+        assert [c["name"] for c in chain] == ["AESTDY", "AESTDTC"]
         assert chain[0]["pin_sources"][0]["source_domain"] == "DM"
+        assert chain[1]["verb"] == "date"
+        assert chain[1]["sources"] == ["ae_start_date"]
 
     def test_to_dict_includes_pin_sources(self, dm_df):
-        ae_raw = pl.DataFrame(
-            {
-                "patient_number": ["S001"],
-                "ae_start_date": ["2014-01-10"],
-            }
-        )
+        ae_raw = pl.from_repr("""\
+┌────────────────┬───────────────┐
+│ patient_number ┆ ae_start_date │
+│ ---            ┆ ---           │
+│ str            ┆ str           │
+╞════════════════╪═══════════════╡
+│ S001           ┆ 2014-01-10    │
+└────────────────┴───────────────┘
+""")
         ns = (
-            ae_raw.sdtm.hardcode_no_ct("DOMAIN", value="AE")
-            .assign_no_ct("USUBJID", source="patient_number")
+            ae_raw.sdtm.assign("DOMAIN", value="AE")
+            .assign("USUBJID", source="patient_number")
             .date("AESTDTC", source="ae_start_date")
             .pin("DM", dm_df)
             .study_day("AESTDY", date_col="AESTDTC")

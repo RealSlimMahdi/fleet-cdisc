@@ -32,7 +32,7 @@ class TestFlagFirstLast:
             "firstfl",
             criteria="first",
             order_by=["AVISITN", "AVAL"],
-            groups=["USUBJID"],
+            by=["USUBJID"],
         ).to_frame()
         # Ascending lexicographic: (3,10) < (3,14) so AVAL=10 is "first" for USUBJID=3
         assert result["firstfl"].to_list() == ["Y", None, "Y", None, "Y"]
@@ -50,7 +50,7 @@ class TestFlagFirstLast:
             "lastfl",
             criteria="last",
             order_by=["AVISITN", "AVAL"],
-            groups=["USUBJID"],
+            by=["USUBJID"],
         ).to_frame()
         # Descending: (3,14) > (3,10) so AVAL=14 is "last" for USUBJID=3
         assert result["lastfl"].to_list() == [None, "Y", "Y", "Y", None]
@@ -68,7 +68,7 @@ class TestFlagFirstLast:
             "firstfl",
             criteria="first",
             order_by=["AVISITN", "AVAL"],
-            groups=["USUBJID"],
+            by=["USUBJID"],
         ).to_frame()
         # Row 0: null AVISITN → None; USUBJID=3: (3,10) < (3,14) → row 4 is first
         assert result["firstfl"].to_list() == [None, "Y", "Y", None, "Y"]
@@ -95,7 +95,7 @@ class TestFlagFirstLast:
             "FIRSTFL",
             criteria="first",
             order_by="ADTM",
-            groups=["STUDYID", "USUBJID", "BASETYPE", "AVISITN"],
+            by=["STUDYID", "USUBJID", "BASETYPE", "AVISITN"],
             flag_all=True,
         ).to_frame()
         assert result["FIRSTFL"].to_list() == ["Y", "Y", None, None, None]
@@ -113,7 +113,7 @@ class TestFlagFirstLast:
             "firstfl",
             criteria="first",
             order_by=["AVISITN", "AVAL"],
-            groups=["USUBJID"],
+            by=["USUBJID"],
             flag_value="Yes",
             false_value="No",
         ).to_frame()
@@ -124,7 +124,7 @@ class TestFlagFirstLast:
         """flag criteria='first' raises without order_by."""
         df = pl.DataFrame({"USUBJID": [1], "AVAL": [10]})
         with pytest.raises(ValueError, match="requires order_by"):
-            df.adam.flag("FL", criteria="first", groups=["USUBJID"]).to_frame()
+            df.adam.flag("FL", criteria="first", by=["USUBJID"]).to_frame()
 
 
 # ====================================================================== #
@@ -144,7 +144,7 @@ class TestFlagMaxMin:
             }
         )
         result = df.adam.flag(
-            "AMXFL", criteria="max", value_col="AVAL", groups=["USUBJID", "PARAMCD"]
+            "AMXFL", criteria="max", value_col="AVAL", by=["USUBJID", "PARAMCD"]
         ).to_frame()
         assert result["AMXFL"].to_list() == [None, "Y", None, None, "Y"]
 
@@ -157,14 +157,14 @@ class TestFlagMaxMin:
             }
         )
         result = df.adam.flag(
-            "AMNFL", criteria="min", value_col="AVAL", groups=["USUBJID", "PARAMCD"]
+            "AMNFL", criteria="min", value_col="AVAL", by=["USUBJID", "PARAMCD"]
         ).to_frame()
         assert result["AMNFL"].to_list() == [None, "Y", None, "Y"]
 
     def test_max_requires_value_col(self):
         df = pl.DataFrame({"USUBJID": [1], "AVAL": [10]})
         with pytest.raises(ValueError, match="requires value_col"):
-            df.adam.flag("FL", criteria="max", groups=["USUBJID"]).to_frame()
+            df.adam.flag("FL", criteria="max", by=["USUBJID"]).to_frame()
 
 
 # ====================================================================== #
@@ -260,7 +260,7 @@ class TestFlagExists:
     def test_exist_requires_from_dataset(self):
         df = pl.DataFrame({"USUBJID": [1]})
         with pytest.raises(ValueError, match="requires from_dataset and on"):
-            df.adam.flag("FL", criteria="exists", groups=["USUBJID"]).to_frame()
+            df.adam.flag("FL", criteria="exists", by=["USUBJID"]).to_frame()
 
 
 # ====================================================================== #
@@ -315,7 +315,7 @@ class TestFlagRelative:
             criteria="before",
             condition=pl.col("AVALC") == "PD",
             order_by="AVISITN",
-            groups=["USUBJID"],
+            by=["USUBJID"],
             inclusive=True,
         ).to_frame()
         expected = [
@@ -351,7 +351,7 @@ class TestFlagRelative:
             criteria="after",
             condition=pl.col("ACOVFL") == "Y",
             order_by=["ASTDY", "AESEQ"],
-            groups=["USUBJID"],
+            by=["USUBJID"],
             inclusive=False,
             flag_no_ref_groups=False,
         ).to_frame()
@@ -370,7 +370,7 @@ class TestFlagRelative:
     def test_before_requires_condition(self):
         df = pl.DataFrame({"USUBJID": ["1"], "AVISITN": [1]})
         with pytest.raises(ValueError, match="requires condition"):
-            df.adam.flag("FL", criteria="before", order_by="AVISITN", groups=["USUBJID"]).to_frame()
+            df.adam.flag("FL", criteria="before", order_by="AVISITN", by=["USUBJID"]).to_frame()
 
     def test_before_requires_order_by(self):
         df = pl.DataFrame({"USUBJID": ["1"], "AVISITN": [1]})
@@ -379,7 +379,7 @@ class TestFlagRelative:
                 "FL",
                 criteria="before",
                 condition=pl.col("AVISITN") == 1,
-                groups=["USUBJID"],
+                by=["USUBJID"],
             ).to_frame()
 
 
@@ -464,7 +464,7 @@ class TestFlagExistsAfter:
                 "FL",
                 criteria="exists_after",
                 condition=pl.col("AVALC") == "PR",
-                groups=["USUBJID"],
+                by=["USUBJID"],
             ).to_frame()
 
 
@@ -490,7 +490,7 @@ class TestFlagExpression:
     def test_unknown_criteria_raises(self):
         df = pl.DataFrame({"USUBJID": [1], "AVAL": [10]})
         with pytest.raises(ValueError):
-            df.adam.flag("FL", criteria="not_a_valid_expr!!!", groups=["USUBJID"]).to_frame()
+            df.adam.flag("FL", criteria="not_a_valid_expr!!!", by=["USUBJID"]).to_frame()
 
 
 # ====================================================================== #

@@ -9,8 +9,8 @@ and is regenerated whenever a new domain is added.
 The same Python module powers:
 
     - **IDE auto-completion** for programmers writing pipelines (`SEX.M`, `RACE.WHITE`).
-    - **Live runtime validation** through [`assign_ct`][fleet.sdtm.SDTMNamespace.assign_ct]
-      and [`hardcode_ct`][fleet.sdtm.SDTMNamespace.hardcode_ct].
+    - **Live runtime validation** through
+      [`assign(ct=...)`][fleet.core._verb_mixin.SharedVerbsMixin.assign].
     - **Direct hyperlinks to the CDISC Library Browser** for reviewers and auditors,
       via the `_cdisc_url` attribute on every codelist class.
 
@@ -30,9 +30,9 @@ from fleet.ct import import_codelists
 ct = import_codelists()
 
 dm = (
-    raw_df.sdtm.assign_ct("SEX", source="sex", ct_codelist=ct.SEX)
-    .assign_ct("RACE", source="race", ct_codelist=ct.RACE)
-    .hardcode_ct("AGEU", value="YEARS", ct_codelist=ct.AGEU)
+    raw_df.sdtm.assign("SEX", source="sex", ct=ct.SEX)
+    .assign("RACE", source="race", ct=ct.RACE)
+    .assign("AGEU", value="YEARS", ct=ct.AGEU)
     .to_frame()
 )
 ```
@@ -46,9 +46,9 @@ import_codelists()  # registers 'codelists' in sys.modules
 from codelists import SEX, RACE, AGEU  # now works everywhere in the session
 
 dm = (
-    raw_df.sdtm.assign_ct("SEX", source="sex", ct_codelist=SEX)
-    .assign_ct("RACE", source="race", ct_codelist=RACE)
-    .hardcode_ct("AGEU", value="YEARS", ct_codelist=AGEU)
+    raw_df.sdtm.assign("SEX", source="sex", ct=SEX)
+    .assign("RACE", source="race", ct=RACE)
+    .assign("AGEU", value="YEARS", ct=AGEU)
     .to_frame()
 )
 ```
@@ -65,9 +65,9 @@ ct = import_codelists("path/to/my_codelists.py")
 from examples.cdiscpilot01.sdtm.codelists import SEX, RACE, AGEU
 
 dm = (
-    raw_df.sdtm.assign_ct("SEX", source="sex", ct_codelist=SEX)
-    .assign_ct("RACE", source="race", ct_codelist=RACE)
-    .hardcode_ct("AGEU", value="YEARS", ct_codelist=AGEU)
+    raw_df.sdtm.assign("SEX", source="sex", ct=SEX)
+    .assign("RACE", source="race", ct=RACE)
+    .assign("AGEU", value="YEARS", ct=AGEU)
     .to_frame()
 )
 ```

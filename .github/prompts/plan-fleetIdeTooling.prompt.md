@@ -1,3 +1,5 @@
+> **Status (2026-07): Tier 1 LSP + MCP + VS Code scaffold shipped (`fleet lsp --stdio`, `fleet mcp --stdio`, `editors/vscode/`); Tiers 2b/3/4 open.**
+
 # Companion VS Code Extension & Language Server for Fleet — Updated Plan (May 2026)
 
 **What changed since the original brainstorm:** Fleet has grown significantly. 200+ verbs across 12 namespaces. A full TLG/ARD pipeline. A pin system for cross-domain data access. Staged derivation ordering via `depends_on`. 9 validated example scripts. The overarching design principle for tooling must therefore be: **discover Fleet's surface dynamically from the installed package, never hardcode it.** Every feature that enumerates verbs, algorithms, or namespaces must call into the live Python runtime, because Fleet will keep growing.

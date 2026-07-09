@@ -4,6 +4,12 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 
+from fleet.core import log as fleet_log
+
+#: Validation reports emit through this logger (INFO level, stdout by
+#: default — see :mod:`fleet.core.log` to route or silence them).
+_logger = fleet_log.get_logger("fleet.validation")
+
 
 class Severity(Enum):
     """Validation issue severity levels."""
@@ -75,7 +81,11 @@ class ValidationResult:
         )
 
     def print_report(self, report_type: str = "smart") -> None:
-        """Print a formatted validation report to stdout.
+        """Emit a formatted validation report through the ``fleet.validation`` logger.
+
+        By default the report reaches stdout (INFO level); use the
+        standard :mod:`logging` API or :func:`fleet.core.log.disable_console`
+        to route or silence it.
 
         Args:
             report_type: ``"smart"`` (default) for a deduplicated view that
@@ -84,16 +94,17 @@ class ValidationResult:
                 ``"full"`` for expanded details including variable names,
                 affected rows, producing verbs, and suggested fixes.
         """
-        print("\n" + "=" * 70)
-        print(f"CDISC Validation Report: {self.dataset_name}")
-        print("=" * 70)
-        print(f"Dataset Type: {self.dataset_type} {self.model_version}")
-        print(f"Status: {'PASS' if self.is_valid else 'FAIL'}")
-        print(f"Total Issues: {self.total_issues}")
-        print(
+        fleet_log.ensure_default_handler()
+        _logger.info("\n" + "=" * 70)
+        _logger.info(f"CDISC Validation Report: {self.dataset_name}")
+        _logger.info("=" * 70)
+        _logger.info(f"Dataset Type: {self.dataset_type} {self.model_version}")
+        _logger.info(f"Status: {'PASS' if self.is_valid else 'FAIL'}")
+        _logger.info(f"Total Issues: {self.total_issues}")
+        _logger.info(
             f"  Errors: {len(self.errors)}, Warnings: {len(self.warnings)}, Info: {len(self.infos)}"
         )
-        print("-" * 70)
+        _logger.info("-" * 70)
 
         if report_type == "full":
             self._print_full()
@@ -102,46 +113,46 @@ class ValidationResult:
         else:
             self._print_summary()
 
-        print("\n" + "=" * 70)
+        _logger.info("\n" + "=" * 70)
 
     def _print_summary(self) -> None:
         """Compact view: one line per issue."""
         if self.errors:
-            print(f"\nERRORS ({len(self.errors)}):")
+            _logger.info(f"\nERRORS ({len(self.errors)}):")
             for issue in self.errors:
                 label = f"  [{issue.rule_id}]"
                 if issue.variable:
                     label += f" {issue.variable}:"
-                print(f"{label} {issue.message}")
+                _logger.info(f"{label} {issue.message}")
         if self.warnings:
-            print(f"\nWARNINGS ({len(self.warnings)}):")
+            _logger.info(f"\nWARNINGS ({len(self.warnings)}):")
             for issue in self.warnings:
                 label = f"  [{issue.rule_id}]"
                 if issue.variable:
                     label += f" {issue.variable}:"
-                print(f"{label} {issue.message}")
+                _logger.info(f"{label} {issue.message}")
         if not self.errors and not self.warnings:
-            print("\n  No errors or warnings.")
+            _logger.info("\n  No errors or warnings.")
 
     def _print_full(self) -> None:
         """Expanded view: all fields per issue, including info."""
         if self.errors:
-            print(f"\nERRORS ({len(self.errors)}):")
+            _logger.info(f"\nERRORS ({len(self.errors)}):")
             for i, issue in enumerate(self.errors, 1):
-                print(f"\n{i}. {issue}")
+                _logger.info(f"\n{i}. {issue}")
 
         if self.warnings:
-            print(f"\nWARNINGS ({len(self.warnings)}):")
+            _logger.info(f"\nWARNINGS ({len(self.warnings)}):")
             for i, issue in enumerate(self.warnings, 1):
-                print(f"\n{i}. {issue}")
+                _logger.info(f"\n{i}. {issue}")
 
         if self.infos:
-            print(f"\nINFO ({len(self.infos)}):")
+            _logger.info(f"\nINFO ({len(self.infos)}):")
             for i, issue in enumerate(self.infos, 1):
-                print(f"\n{i}. {issue}")
+                _logger.info(f"\n{i}. {issue}")
 
         if not self.errors and not self.warnings and not self.infos:
-            print("\n  No issues found.")
+            _logger.info("\n  No issues found.")
 
     def _print_smart(self) -> None:
         """Deduplicated view: groups identical findings and shows row ranges."""
@@ -184,29 +195,29 @@ class ValidationResult:
             grouped = _group_issues(issues)
             unique_count = len(grouped)
             total_count = len(issues)
-            print(f"\n{label} ({unique_count} unique, {total_count} total):")
+            _logger.info(f"\n{label} ({unique_count} unique, {total_count} total):")
             for i, grp in enumerate(grouped, 1):
                 issue = grp["issue"]
                 count = grp["count"]
                 rows = grp["rows"]
-                print(f"\n{i}. [{issue.rule_id}] {issue.message}")
+                _logger.info(f"\n{i}. [{issue.rule_id}] {issue.message}")
                 if issue.variable:
-                    print(f"   Variable: {issue.variable}")
+                    _logger.info(f"   Variable: {issue.variable}")
                 if rows:
-                    print(f"   Rows affected: {_format_rows(rows)} ({count} occurrences)")
+                    _logger.info(f"   Rows affected: {_format_rows(rows)} ({count} occurrences)")
                 elif count > 1:
-                    print(f"   Occurrences: {count}")
+                    _logger.info(f"   Occurrences: {count}")
                 if issue.producing_verb:
-                    print(f"   Producing verb: {issue.producing_verb} ({issue.verb_method})")
+                    _logger.info(f"   Producing verb: {issue.producing_verb} ({issue.verb_method})")
                 if issue.suggested_fix:
-                    print(f"   Suggested fix: {issue.suggested_fix}")
+                    _logger.info(f"   Suggested fix: {issue.suggested_fix}")
 
         _print_grouped("ERRORS", self.errors)
         _print_grouped("WARNINGS", self.warnings)
         _print_grouped("INFO", self.infos)
 
         if not self.errors and not self.warnings and not self.infos:
-            print("\n  No issues found.")
+            _logger.info("\n  No issues found.")
 
     def save_html_report(self, output_path: str | Path) -> str:
         """Save validation report as HTML file."""

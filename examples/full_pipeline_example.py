@@ -12,13 +12,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import polars as pl
 
-import fleet  # noqa: F401  — register namespace extensions
+import fleet  # registers namespace extensions
 from examples.cdiscpilot01.sdtm.codelists import SEX, VSTESTCD
 
 
 def main():
     print("--- 1. Loading Raw Mock Data ---")
-    raw_dm = pl.from_repr("""\
+    raw_dm = fleet.frame(
+        pl.from_repr("""\
 ┌────────────┬─────┬────────────┬─────────┐
 │ subject_id ┆ sex ┆ dob        ┆ arm     │
 │ ---        ┆ --- ┆ ---        ┆ ---     │
@@ -28,8 +29,10 @@ def main():
 │ S002       ┆ F   ┆ 1992-05-15 ┆ Placebo │
 └────────────┴─────┴────────────┴─────────┘
 """)
+    )
 
-    raw_vs = pl.from_repr("""\
+    raw_vs = fleet.frame(
+        pl.from_repr("""\
 ┌────────────┬────────────┬────────┬────────────┐
 │ subject_id ┆ test_name  ┆ result ┆ date       │
 │ ---        ┆ ---        ┆ ---    ┆ ---        │
@@ -41,8 +44,10 @@ def main():
 │ S002       ┆ Heart Rate ┆ 88.0   ┆ 2023-01-02 │
 └────────────┴────────────┴────────┴────────────┘
 """)
+    )
 
-    raw_ae = pl.from_repr("""\
+    raw_ae = fleet.frame(
+        pl.from_repr("""\
 ┌────────────┬──────────┬────────────┐
 │ subject_id ┆ ae_term  ┆ start_date │
 │ ---        ┆ ---      ┆ ---        │
@@ -52,13 +57,14 @@ def main():
 │ S002       ┆ Nausea   ┆ 2023-01-04 │
 └────────────┴──────────┴────────────┘
 """)
+    )
 
     print("--- 2. Deriving SDTM ---")
     dm = (
-        raw_dm.sdtm.hardcode_no_ct("DOMAIN", value="DM")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-        .assign_no_ct("USUBJID", source="subject_id")
-        .assign_no_ct("ARM", source="arm")
-        .assign_ct("SEX", source="sex", ct_codelist=SEX, ct_mapping={"M": "M", "F": "F"})
+        raw_dm.sdtm.assign("DOMAIN", value="DM")
+        .assign("USUBJID", source="subject_id")
+        .assign("ARM", source="arm")
+        .assign("SEX", source="sex", ct=SEX, ct_map={"M": "M", "F": "F"})
         .date("BRTHDTC", source="dob")
         .to_frame()
     )
@@ -66,15 +72,15 @@ def main():
     print(dm)
 
     vs = (
-        raw_vs.sdtm.hardcode_no_ct("DOMAIN", value="VS")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-        .assign_no_ct("USUBJID", source="subject_id")
-        .assign_ct(
+        raw_vs.sdtm.assign("DOMAIN", value="VS")
+        .assign("USUBJID", source="subject_id")
+        .assign(
             "VSTESTCD",
             source="test_name",
-            ct_codelist=VSTESTCD,
-            ct_mapping={"Weight": "WEIGHT", "Heart Rate": "HR"},
+            ct=VSTESTCD,
+            ct_map={"Weight": "WEIGHT", "Heart Rate": "HR"},
         )
-        .assign_no_ct("VSSTRESN", source="result")
+        .assign("VSSTRESN", source="result")
         .date("VSDTC", source="date")
         .to_frame()
     )
@@ -82,9 +88,9 @@ def main():
     print(vs)
 
     ae = (
-        raw_ae.sdtm.hardcode_no_ct("DOMAIN", value="AE")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-        .assign_no_ct("USUBJID", source="subject_id")
-        .assign_no_ct("AEDECOD", source="ae_term")
+        raw_ae.sdtm.assign("DOMAIN", value="AE")
+        .assign("USUBJID", source="subject_id")
+        .assign("AEDECOD", source="ae_term")
         .date("AESTDTC", source="start_date")
         .to_frame()
     )
@@ -93,7 +99,7 @@ def main():
 
     print("--- 3. Deriving ADaM ---")
     adsl = (
-        dm.adam.adsl.source("USUBJID")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+        dm.adam.adsl.source("USUBJID")
         .source("ARM")
         .source("SEX")
         .first_date("TRTSDT", from_dataset=ae, date_col="AESTDTC")
@@ -102,14 +108,16 @@ def main():
     print("\nADSL Dataset:")
     print(adsl)
 
-    vs_with_adsl = vs.join(adsl.select(["USUBJID", "TRTSDT"]), on="USUBJID", how="left")
+    vs_with_adsl = fleet.frame(
+        vs.join(adsl.select(["USUBJID", "TRTSDT"]), on="USUBJID", how="left")
+    )
 
     advs = (
-        vs_with_adsl.adam.source("USUBJID")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+        vs_with_adsl.adam.source("USUBJID")
         .source("VSTESTCD")
         .source("VSSTRESN")
         .derivation("ABLFL", expression=pl.lit("Y"))
-        .baseline("BASE", aval="VSSTRESN", baseline_flag="ABLFL", groups=["USUBJID", "VSTESTCD"])
+        .baseline("BASE", aval="VSSTRESN", baseline_flag="ABLFL", by=["USUBJID", "VSTESTCD"])
         .to_frame()
     )
     print("\nADVS Dataset:")

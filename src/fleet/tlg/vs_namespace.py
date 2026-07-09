@@ -86,6 +86,9 @@ class VSTLGNamespace(BuilderVerbsMixin):
             dataset_filter=spec.dataset_filter,
             header_rows=spec.header_rows,
             nested=True,
+            value_col=spec.value_col,
+            label_col=spec.label_col,
+            decimals=spec.decimals,
         )
 
     # ------------------------------------------------------------------ #

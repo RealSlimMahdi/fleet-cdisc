@@ -119,14 +119,14 @@ Standardise raw columns into CDISC-compliant SDTM variables:
 
 ```python
 ae = (
-    ae_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")
-    .hardcode_no_ct("DOMAIN", value="AE")
-    .assign_no_ct("USUBJID", source="patient_number")
-    .assign_no_ct("AETERM", source="ae_term")
-    .assign_no_ct("AESTDTC", source="ae_start_date")
-    .assign_no_ct("AEENDTC", source="ae_end_date")
-    .assign_no_ct("AESEV", source="ae_severity")
-    .assign_no_ct("AESER", source="ae_serious")
+    ae_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
+    .assign("DOMAIN", value="AE")
+    .assign("USUBJID", source="patient_number")
+    .assign("AETERM", source="ae_term")
+    .assign("AESTDTC", source="ae_start_date")
+    .assign("AEENDTC", source="ae_end_date")
+    .assign("AESEV", source="ae_severity")
+    .assign("AESER", source="ae_serious")
     .to_frame()
 )
 ```
@@ -147,8 +147,8 @@ adae = (
     .source("AETERM")
     .source("TRTA")
     .source("SAFFL")
-    .derive_dt("ASTDT", source="AESTDTC")
-    .study_day("ADY", analysis_date="ASTDT", reference_date="TRTSDT")
+    .date("ASTDT", source="AESTDTC")
+    .study_day("ADY", date_col="ASTDT", ref_col="TRTSDT")
     .to_frame()
     .adam.occds.treatment_emergent(
         "TRTEMFL",
@@ -161,9 +161,9 @@ adae = (
         "ANL01FL",
         criteria="max",
         value_col="AESEVN",
-        groups=["USUBJID", "AETERM"],
+        by=["USUBJID", "AETERM"],
     )
-    .seq("ASEQ", groups=["USUBJID"])
+    .seq("ASEQ", by=["USUBJID"])
     .to_frame()
 )
 ```
@@ -175,14 +175,14 @@ report and returns the namespace unchanged so derivations can continue:
 
 ```python
 ae = (
-    ae_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")
-    .hardcode_no_ct("DOMAIN", value="AE")
-    .assign_no_ct("USUBJID", source="patient_number")
-    .assign_no_ct("AETERM", source="ae_term")
-    .assign_no_ct("AESTDTC", source="ae_start_date")
-    .assign_no_ct("AEENDTC", source="ae_end_date")
-    .assign_no_ct("AESEV", source="ae_severity")
-    .assign_no_ct("AESER", source="ae_serious")
+    ae_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
+    .assign("DOMAIN", value="AE")
+    .assign("USUBJID", source="patient_number")
+    .assign("AETERM", source="ae_term")
+    .assign("AESTDTC", source="ae_start_date")
+    .assign("AEENDTC", source="ae_end_date")
+    .assign("AESEV", source="ae_severity")
+    .assign("AESER", source="ae_serious")
     .validate("AE")  # ← prints report, chain continues
     .to_frame()
 )
@@ -193,8 +193,8 @@ adae = (
     .source("AETERM")
     .source("TRTA")
     .source("SAFFL")
-    .derive_dt("ASTDT", source="AESTDTC")
-    .study_day("ADY", analysis_date="ASTDT", reference_date="TRTSDT")
+    .date("ASTDT", source="AESTDTC")
+    .study_day("ADY", date_col="ASTDT", ref_col="TRTSDT")
     .to_frame()
     .adam.occds.treatment_emergent(
         "TRTEMFL",
@@ -207,9 +207,9 @@ adae = (
         "ANL01FL",
         criteria="max",
         value_col="AESEVN",
-        groups=["USUBJID", "AETERM"],
+        by=["USUBJID", "AETERM"],
     )
-    .seq("ASEQ", groups=["USUBJID"])
+    .seq("ASEQ", by=["USUBJID"])
     .validate("ADAE")  # ← prints report, chain continues
     .to_frame()
 )
@@ -234,7 +234,7 @@ ERRORS (2):
 2. [Error] SDTM.AE.R0014: AEBODSYS must be populated when AEDECOD is present
    Variable: AEBODSYS
    Rows: 43
-   Producing verb: assign_no_ct (AETERM)
+   Producing verb: assign (AETERM)
    Suggested fix: Map AEBODSYS from MedDRA lookup or hardcode domain SOC
 
 ======================================================================

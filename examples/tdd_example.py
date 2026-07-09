@@ -20,7 +20,7 @@ from unittest.mock import patch
 
 import polars as pl
 
-import fleet  # noqa: F401 — registers .sdtm namespace extension
+import fleet  # registers .sdtm namespace extension
 from fleet.sdtm.tdd import (
     Epoch,
     TrialArm,
@@ -128,8 +128,8 @@ def main() -> None:
         side_effect=_mock_fetch,
     ):
         te = (
-            pl.DataFrame()
-            .sdtm.fetch_structure("TE", ig_version="3-4")  # type: ignore[attr-defined]
+            fleet.frame(pl.DataFrame())
+            .sdtm.fetch_structure("TE", ig_version="3-4")
             .study_header(study_id="CDISCPILOT01", domain="TE")
             .add_elements(te_rows)
             .to_frame()
@@ -199,8 +199,8 @@ def main() -> None:
         side_effect=_mock_fetch,
     ):
         ta = (
-            pl.DataFrame()
-            .sdtm.fetch_structure("TA")  # type: ignore[attr-defined]
+            fleet.frame(pl.DataFrame())
+            .sdtm.fetch_structure("TA")
             .study_header("CDISCPILOT01", "TA")
             .add_arms(ta_rows, te=te_rows)  # FK check: ETCD ∈ TE.ETCD
             .to_frame()
@@ -229,8 +229,8 @@ def main() -> None:
         side_effect=_mock_fetch,
     ):
         tv = (
-            pl.DataFrame()
-            .sdtm.fetch_structure("TV")  # type: ignore[attr-defined]
+            fleet.frame(pl.DataFrame())
+            .sdtm.fetch_structure("TV")
             .study_header("CDISCPILOT01", "TV")
             .add_visits(tv_rows)
             .to_frame()
@@ -260,8 +260,8 @@ def main() -> None:
         side_effect=_mock_fetch,
     ):
         ts = (
-            pl.DataFrame()
-            .sdtm.fetch_structure("TS")  # type: ignore[attr-defined]
+            fleet.frame(pl.DataFrame())
+            .sdtm.fetch_structure("TS")
             .study_header("CDISCPILOT01", "TS")
             .add_parameters(ts_rows)
             .to_frame()
@@ -293,8 +293,8 @@ def main() -> None:
         side_effect=_mock_fetch,
     ):
         ti = (
-            pl.DataFrame()
-            .sdtm.fetch_structure("TI")  # type: ignore[attr-defined]
+            fleet.frame(pl.DataFrame())
+            .sdtm.fetch_structure("TI")
             .study_header("CDISCPILOT01", "TI")
             .add_criteria(ti_rows)
             .to_frame()
@@ -306,7 +306,8 @@ def main() -> None:
     # ════════════════════════════════════════════════════════════════════
     print("\n── 6. SV (Subject Visits) ──────────────────────────────────")
 
-    raw_visits = pl.from_repr("""\
+    raw_visits = fleet.frame(
+        pl.from_repr("""\
 ┌─────────────┬────────────┬────────────┐
 │ subject_id  ┆ visit_date ┆ ref_date   │
 │ ---         ┆ ---        ┆ ---        │
@@ -320,12 +321,13 @@ def main() -> None:
 │ 01-701-1023 ┆ 2014-02-14 ┆ 2014-01-01 │
 └─────────────┴────────────┴────────────┘
 """)
+    )
 
     sv = (
-        raw_visits.sdtm.hardcode_no_ct("DOMAIN", value="SV")  # type: ignore[attr-defined]
-        .hardcode_no_ct("STUDYID", value="CDISCPILOT01")
-        .assign_no_ct("USUBJID", source="subject_id")
-        .assign_no_ct("SVSTDTC", source="visit_date")
+        raw_visits.sdtm.assign("DOMAIN", value="SV")
+        .assign("STUDYID", value="CDISCPILOT01")
+        .assign("USUBJID", source="subject_id")
+        .assign("SVSTDTC", source="visit_date")
         .visit_map(
             "VISITNUM",
             "VISIT",
@@ -353,7 +355,8 @@ def main() -> None:
     # ════════════════════════════════════════════════════════════════════
     print("\n── 7. SE (Subject Elements) ────────────────────────────────")
 
-    disposition = pl.from_repr("""\
+    disposition = fleet.frame(
+        pl.from_repr("""\
 ┌─────────────┬──────┬────────────────┬─────────────────┬─────────────────┬────────────┐
 │ subject_id  ┆ ETCD ┆ screening_date ┆ first_dose_date ┆ last_visit_date ┆ ref_date   │
 │ ---         ┆ ---  ┆ ---            ┆ ---             ┆ ---             ┆ ---        │
@@ -364,12 +367,13 @@ def main() -> None:
 │ 01-701-1015 ┆ FU   ┆ 2014-01-01     ┆ 2014-01-15      ┆ 2014-05-01      ┆ 2014-01-15 │
 └─────────────┴──────┴────────────────┴─────────────────┴─────────────────┴────────────┘
 """)
+    )
 
     se = (
-        disposition.sdtm.hardcode_no_ct("DOMAIN", value="SE")  # type: ignore[attr-defined]
-        .hardcode_no_ct("STUDYID", value="CDISCPILOT01")
-        .assign_no_ct("USUBJID", source="subject_id")
-        .assign_no_ct("ETCD", source="ETCD")
+        disposition.sdtm.assign("DOMAIN", value="SE")
+        .assign("STUDYID", value="CDISCPILOT01")
+        .assign("USUBJID", source="subject_id")
+        .assign("ETCD", source="ETCD")
         .element_boundaries(
             "SESTDTC",
             "SEENDTC",

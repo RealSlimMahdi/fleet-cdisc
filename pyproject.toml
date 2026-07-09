@@ -44,9 +44,35 @@ tlg-pptx = [
     "python-pptx>=0.6.23",
 ]
 
+# MIGRATE: libcst-based rewrite of deprecated verb/kwarg spellings
+migrate = [
+    "libcst>=1.0",
+]
+
+# WATCH: --watch mode for `fleet define-xml` and `fleet tlg run`
+watch = [
+    "watchfiles>=0.21",
+]
+
+# LSP: `fleet lsp --stdio` language server for define.yaml files
+lsp = [
+    "pygls>=1.3",
+]
+
+# MCP: `fleet mcp --stdio` Model Context Protocol server
+mcp = [
+    "mcp>=1.2",
+]
+
 # FULL: All extras
 all = [
     "fleet-cdisc[io]",
+    "fleet-cdisc[tlg-pdf]",
+    "fleet-cdisc[tlg-pptx]",
+    "fleet-cdisc[migrate]",
+    "fleet-cdisc[watch]",
+    "fleet-cdisc[lsp]",
+    "fleet-cdisc[mcp]",
 ]
 
 # DEV: Development tools
@@ -83,7 +109,6 @@ packages = ["src/fleet"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/fleet/py.typed" = "fleet/py.typed"
-"src/polars-stubs" = "polars-stubs"
 "src/fleet/adam/grading/criteria" = "fleet/adam/grading/criteria"
 
 [tool.ruff]

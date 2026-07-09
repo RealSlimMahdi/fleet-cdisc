@@ -2,58 +2,28 @@
 description: "Use when working with Fleet CLI commands, bootstrapping studies, CDISC CT, define-xml, TLG export, or validation engine"
 ---
 
-# Fleet CLI Reference
+# Fleet CLI
 
-## Bootstrapping Pipeline (new studies)
+**Authoritative reference:** `docs/getting-started/cli.md` — AUTO-GENERATED from the argparse tree by `scripts/gen_cli_docs.py` (CI fails if stale). Do not duplicate command/flag inventories here or anywhere else; regenerate with `uv run python scripts/gen_cli_docs.py`, or check freshness with `--check`. `uv run fleet <cmd> --help` is always current.
 
-```bash
-uv run fleet init cfg --study-id CDISCPILOT01 --company "CDISC" \
-  --domains DM,AE,VS,EX --adam-datasets ADSL,ADVS,ADAE --root ./my_study
-uv run fleet init define
-uv run fleet init ct
-uv run fleet init rules
-```
+## Command map (names only)
 
-## Standalone Codelist Commands
+- **Bootstrap:** `fleet init cfg|define|ct|rules` (pipeline), `fleet new` (all four, one confirmation)
+- **Pipeline:** `fleet run` (execute define.yaml), `fleet check` (CI gate), `fleet validate` (CDISC Rules Engine, exit 1 on errors)
+- **Migration:** `fleet migrate` (libcst codemod: removed pre-alpha verb/kwarg spellings → canonical)
+- **TLG:** `fleet tlg list|schema|run|explore|export` (`run`/`explore` take `--watch`, needs the `watch` extra)
+- **Define-XML:** `fleet define-xml` (also `--watch`)
+- **CT:** `fleet add-ct`; `fleet init-ct` is **deprecated** — prefer the `fleet init` pipeline
+- **Rules:** `fleet add-rule`, `fleet check-rule`, `fleet install-engine`, `fleet uninstall-engine`, `fleet doctor`
+- **Tooling servers:** `fleet mcp --stdio`, `fleet lsp --stdio` (require the `mcp` / `lsp` extras)
+- **Misc:** `fleet derivation`, `fleet --version`
 
-```bash
-uv run fleet init-ct --domains DM,AE,VS,EX --output examples/cdiscpilot01/sdtm/codelists.py
-uv run fleet add-ct --domains LB,CM --output examples/cdiscpilot01/sdtm/codelists.py
-uv run fleet init-ct --domains DM,AE --ig 3-4 --package sdtmct-2025-09-26 --output codelists.py
-uv run fleet init-ct --domains DM --no-docs --output codelists.py
-```
+## Conventions
 
-## Define-XML Generation
+- Config discovery is git-style: cwd, then parents, until `study_config.yaml` is found; `--config <path>` overrides.
+- Errors go to stderr; exit codes: 0 success, 1 Fleet error, 2 usage error.
 
-```bash
-uv run fleet define-xml --spec examples/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml
-uv run fleet define-xml --spec examples/cdiscpilot01/sdtm/define.yaml --output outputs/define_sdtm.xml --enrich-methods
-uv run fleet define-xml --spec examples/cdiscpilot01/adam/define.yaml --output outputs/define_adam.xml --no-preview
-```
-
-## TLG Export
-
-```bash
-uv run fleet tlg export --domain ae --data adae.csv --adsl adsl.csv --output ae_summary.html \
-    --title "Table 14.3.1.1" --subtitle "AE Summary" --footnote "Source: ADAE"
-uv run fleet tlg export --domain ae --format pdf --data adae.csv --adsl adsl.csv --output ae.pdf
-uv run fleet tlg export --domain ae --format pptx --data adae.csv --adsl adsl.csv --output ae.pptx
-uv run fleet tlg export --domain vs --data advs.csv --adsl adsl.csv --output vs_summary.html
-```
-
-## CDISC Rules Engine (Validation)
-
-```bash
-uv run fleet install-engine
-uv run fleet install-engine --version v0.15
-uv run fleet install-engine --force
-uv run fleet doctor
-uv run fleet uninstall-engine
-```
-
-Engine discovery order: `FLEET_RULES_ENGINE` env → `validation.engine_path` in study_config.yaml → managed install → legacy fallback.
-
-## Documentation
+## Documentation build
 
 ```bash
 uv run --extra docs mkdocs serve

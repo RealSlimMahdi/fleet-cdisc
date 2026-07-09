@@ -19,7 +19,7 @@ Usage
         .source("USUBJID")
         .fever_flag("FEVFL", temp_col="AVAL", threshold=38.0)
         .event_flag("EVENTFL", aval_col="AVAL", cutoff=2.5,
-                    groups=["USUBJID", "FAOBJ", "ATPTREF"])
+                    by=["USUBJID", "FAOBJ", "ATPTREF"])
         .to_frame()
     )
 
@@ -235,14 +235,14 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         *,
         aval_col: str,
         cutoff: float,
-        groups: list[str] | None = None,
+        by: list[str] | None = None,
         severity_col: str | None = None,
         severity_values: list[str] | None = None,
         flag_value: str = "Y",
         no_event_value: str = "N",
     ) -> Self:
         """
-        Flag whether a reactogenicity event occurred at least once per *groups*.
+        Flag whether a reactogenicity event occurred at least once per *by* group.
 
         An event is considered to have occurred if:
         - *aval_col* > *cutoff*, OR
@@ -259,10 +259,10 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         Example::
 
             .event_flag("EVENTFL", aval_col="AVAL", cutoff=2.5,
-                        groups=["USUBJID", "FAOBJ", "ATPTREF"])
+                        by=["USUBJID", "FAOBJ", "ATPTREF"])
         """
         sev_vals = severity_values or ["MILD", "MODERATE", "SEVERE"]
-        grps = groups or ["USUBJID"]
+        grps = by or ["USUBJID"]
 
         df = self.to_frame()
 

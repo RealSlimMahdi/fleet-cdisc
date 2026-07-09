@@ -8,6 +8,8 @@ from typing import Literal
 
 import polars as pl
 
+from fleet.core.exceptions import DerivationError
+
 
 def study_day(analysis_date: str, reference_date: str, target: str = "ADY") -> pl.Expr:
     """
@@ -69,11 +71,21 @@ def bmi(weight: str = "weight_kg", height: str = "height_cm", target: str = "BMI
 
 
 def nrind(value: str, low: str, high: str, target: str = "NRIND") -> pl.Expr:
-    """Normal range indicator: LOW / NORMAL / HIGH."""
+    """Normal range indicator: LOW / NORMAL / HIGH (admiral semantics).
+
+    Null guard: a null analysis value, or both limits null, yields a
+    null indicator instead of a spurious "NORMAL".  One-sided ranges
+    classify against the available limit only.
+    """
+    value_col = pl.col(value)
+    low_col = pl.col(low)
+    high_col = pl.col(high)
     return (
-        pl.when(pl.col(value) < pl.col(low))
+        pl.when(value_col.is_null() | (low_col.is_null() & high_col.is_null()))
+        .then(pl.lit(None, dtype=pl.String))
+        .when(low_col.is_not_null() & (value_col < low_col))
         .then(pl.lit("LOW"))
-        .when(pl.col(value) > pl.col(high))
+        .when(high_col.is_not_null() & (value_col > high_col))
         .then(pl.lit("HIGH"))
         .otherwise(pl.lit("NORMAL"))
         .alias(target)
@@ -143,7 +155,7 @@ def bsa(
     elif method_lower in ("gehan-george", "gehan_george"):
         expr = 0.0235 * h.pow(0.42246) * w.pow(0.51456)
     else:
-        raise ValueError(
+        raise DerivationError(
             f"Unknown BSA method '{method}'. Supported: Mosteller, DuBois, Haycock, Gehan-George."
         )
     return expr.round(4).alias(target)
@@ -198,7 +210,7 @@ def qtc(
     elif method_lower == "bazett":
         expr = qt_col / rr_col.sqrt()
     else:
-        raise ValueError(f"Unknown QTc method '{method}'. Supported: Fridericia, Bazett.")
+        raise DerivationError(f"Unknown QTc method '{method}'. Supported: Fridericia, Bazett.")
     return expr.round(2).alias(target)
 
 
@@ -261,7 +273,7 @@ def _resolve_day(strategy: str) -> pl.Expr:
         return pl.lit("15")
     if strategy == "last":
         # We need month context — handled at call-site via _pad_to_full_date
-        raise ValueError("day_imputation='last' must be handled at call-site")
+        raise DerivationError("day_imputation='last' must be handled at call-site")
     if strategy == "none":
         return pl.lit(None, dtype=pl.String)
     # Column reference or date literal
@@ -522,11 +534,11 @@ def _resolve_output_type(target: str, output: str | None) -> Literal["dtc", "dt"
     if output is not None:
         out = output.lower()
         if out not in ("dtc", "dt", "dtm"):
-            raise ValueError(f"output={output!r} is not valid. Choose 'dtc', 'dt', or 'dtm'.")
+            raise DerivationError(f"output={output!r} is not valid. Choose 'dtc', 'dt', or 'dtm'.")
         return out  # type: ignore[return-value]
     inferred = _infer_output_type(target)
     if inferred is None:
-        raise ValueError(
+        raise DerivationError(
             f"Cannot infer output type from target '{target}'. "
             "Use output='dt', 'dtm', or 'dtc' to specify explicitly."
         )
@@ -544,7 +556,7 @@ def _extract_prefix(target: str) -> str:
         return target[:-3]
     if target.endswith("DT"):
         return target[:-2]
-    raise ValueError(f"Cannot extract prefix from '{target}'")
+    raise DerivationError(f"Cannot extract prefix from '{target}'")
 
 
 def _resolve_flag_names(
@@ -566,7 +578,7 @@ def _resolve_flag_names(
     try:
         prefix = _extract_prefix(target)
     except ValueError:
-        raise ValueError(
+        raise DerivationError(
             f"Cannot auto-name flag for target '{target}'. Use flag='<name>DTF' or flag=False."
         ) from None
     dtf = f"{prefix}DTF"
@@ -588,7 +600,9 @@ def _apply_highest(
     level_map = {"Y": 4, "M": 7, "D": 10, "h": 13, "m": 16, "s": 19}
     min_len = level_map.get(highest)
     if min_len is None:
-        raise ValueError(f"highest={highest!r} is not valid. Choose one of: {sorted(level_map)}")
+        raise DerivationError(
+            f"highest={highest!r} is not valid. Choose one of: {sorted(level_map)}"
+        )
     length = source_col.str.len_chars()
     return length >= min_len
 

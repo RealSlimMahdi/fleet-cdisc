@@ -33,7 +33,7 @@ pl.Config.set_tbl_cols(20)
 pl.Config.set_tbl_rows(200)
 pl.Config.set_tbl_width_chars(220)
 
-import fleet  # noqa: E402, F401 — registers .sdtm / .adam / .tlg namespaces
+import fleet  # noqa: E402 — registers .sdtm / .adam / .tlg namespaces
 from examples.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX  # noqa: E402
 from fleet.tlg import (  # noqa: E402
     AEListingSpec,
@@ -52,7 +52,8 @@ from fleet.tlg import (  # noqa: E402
 # 1. Raw data (inline)
 # ════════════════════════════════════════════════════════════════════════════
 print("══ 1. Load raw data ═════════════════════════════════════════════════════")
-dm_raw = pl.from_repr("""\
+dm_raw = fleet.frame(
+    pl.from_repr("""\
 ┌────────────────┬─────────┬─────┬─────┬───────────────────────────┬────────────────────────┬──────────┬──────────────────────┬─────────────────┬────────────────┬───────────────────────┐
 │ patient_number ┆ site_id ┆ age ┆ sex ┆ race                      ┆ ethnic                 ┆ arm_code ┆ arm_description      ┆ first_dose_date ┆ last_dose_date ┆ informed_consent_date │
 │ ---            ┆ ---     ┆ --- ┆ --- ┆ ---                       ┆ ---                    ┆ ---      ┆ ---                  ┆ ---             ┆ ---            ┆ ---                   │
@@ -65,8 +66,10 @@ dm_raw = pl.from_repr("""\
 │ 01-701-1047    ┆ 701     ┆ 56  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-06      ┆ 2014-07-07     ┆ 2014-01-05            │
 └────────────────┴─────────┴─────┴─────┴───────────────────────────┴────────────────────────┴──────────┴──────────────────────┴─────────────────┴────────────────┴───────────────────────┘
 """)
+)
 
-ae_raw = pl.from_repr("""\
+ae_raw = fleet.frame(
+    pl.from_repr("""\
 ┌────────────────┬───────────────────────────┬───────────────┬─────────────┬─────────────┬────────────┬────────────────────────────┬──────────────────┬──────────────────┐
 │ patient_number ┆ ae_term                   ┆ ae_start_date ┆ ae_end_date ┆ ae_severity ┆ ae_serious ┆ ae_outcome                 ┆ ae_action_taken  ┆ ae_relationship  │
 │ ---            ┆ ---                       ┆ ---           ┆ ---         ┆ ---         ┆ ---        ┆ ---                        ┆ ---              ┆ ---              │
@@ -79,6 +82,7 @@ ae_raw = pl.from_repr("""\
 │ 01-701-1034    ┆ APPLICATION SITE ERYTHEMA ┆ 2014-01-20    ┆ 2014-01-25  ┆ SEVERE      ┆ Y          ┆ RECOVERED/RESOLVED         ┆ DRUG WITHDRAWN   ┆ RELATED          │
 └────────────────┴───────────────────────────┴───────────────┴─────────────┴─────────────┴────────────┴────────────────────────────┴──────────────────┴──────────────────┘
 """)
+)
 
 print(f"   dm_raw : {dm_raw.shape[0]:>3} rows  ×  {dm_raw.shape[1]} cols")
 print(f"   ae_raw : {ae_raw.shape[0]:>3} rows  ×  {ae_raw.shape[1]} cols")
@@ -89,30 +93,30 @@ print(f"   ae_raw : {ae_raw.shape[0]:>3} rows  ×  {ae_raw.shape[1]} cols")
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 2. SDTM DM ══════════════════════════════════════════════════════════")
 dm = (
-    dm_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")
-    .hardcode_no_ct("DOMAIN", value="DM")
-    .assign_no_ct("USUBJID", source="patient_number")
-    .assign_no_ct("AGE", source="age")
-    .assign_ct("SEX", source="sex", ct_codelist=SEX, ct_mapping={"F": "F", "M": "M"})
-    .assign_ct(
+    dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
+    .assign("DOMAIN", value="DM")
+    .assign("USUBJID", source="patient_number")
+    .assign("AGE", source="age")
+    .assign("SEX", source="sex", ct=SEX, ct_map={"F": "F", "M": "M"})
+    .assign(
         "RACE",
         source="race",
-        ct_codelist=RACE,
-        ct_mapping={
+        ct=RACE,
+        ct_map={
             "WHITE": "WHITE",
             "BLACK OR AFRICAN AMERICAN": "BLACK OR AFRICAN AMERICAN",
         },
     )
-    .assign_ct(
+    .assign(
         "ETHNIC",
         source="ethnic",
-        ct_codelist=ETHNIC,
-        ct_mapping={
+        ct=ETHNIC,
+        ct_map={
             "HISPANIC OR LATINO": "HISPANIC OR LATINO",
             "NOT HISPANIC OR LATINO": "NOT HISPANIC OR LATINO",
         },
     )
-    .assign_no_ct("ARM", source="arm_description")
+    .assign("ARM", source="arm_description")
     .date("RFSTDTC", source="first_dose_date")
     .date("RFENDTC", source="last_dose_date")
     .to_frame()
@@ -125,17 +129,17 @@ print(f"   {dm.shape[0]} subjects × {dm.shape[1]} variables")
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 3. SDTM AE ══════════════════════════════════════════════════════════")
 ae = (
-    ae_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")
-    .hardcode_no_ct("DOMAIN", value="AE")
-    .assign_no_ct("USUBJID", source="patient_number")
-    .assign_no_ct("AETERM", source="ae_term")
-    .assign_no_ct("AESTDTC", source="ae_start_date")
-    .assign_no_ct("AEENDTC", source="ae_end_date")
-    .assign_no_ct("AESEV", source="ae_severity")
-    .assign_no_ct("AESER", source="ae_serious")
-    .assign_no_ct("AEOUT", source="ae_outcome")
-    .assign_no_ct("AEACN", source="ae_action_taken")
-    .assign_no_ct("AEREL", source="ae_relationship")
+    ae_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
+    .assign("DOMAIN", value="AE")
+    .assign("USUBJID", source="patient_number")
+    .assign("AETERM", source="ae_term")
+    .assign("AESTDTC", source="ae_start_date")
+    .assign("AEENDTC", source="ae_end_date")
+    .assign("AESEV", source="ae_severity")
+    .assign("AESER", source="ae_serious")
+    .assign("AEOUT", source="ae_outcome")
+    .assign("AEACN", source="ae_action_taken")
+    .assign("AEREL", source="ae_relationship")
     .to_frame()
 )
 print(f"   {ae.shape[0]} records × {ae.shape[1]} variables")
@@ -152,7 +156,7 @@ adsl = (
     .source("SEX")
     .source("RACE")
     .source("ARM")
-    .rename("TRT01P", source="ARM")
+    .assign("TRT01P", source="ARM")
     .date("TRTSDT", source="RFSTDTC")
     .date("TRTEDT", source="RFENDTC")
     .derivation(
@@ -174,7 +178,7 @@ print(f"   SAFFL=Y: {(adsl['SAFFL'] == 'Y').sum()} / {adsl.shape[0]}")
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 5. ADAE ═════════════════════════════════════════════════════════════")
 _adsl_trt = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "TRTA", "SAFFL"])
-ae_with_trt = ae.join(_adsl_trt, on="USUBJID", how="left")
+ae_with_trt = fleet.frame(ae.join(_adsl_trt, on="USUBJID", how="left"))
 
 adae = (
     ae_with_trt.adam.source("STUDYID")
@@ -196,22 +200,24 @@ adae = (
     .adam.occds.treatment_emergent(
         "TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT"
     )
-    .seq("ASEQ", groups=["USUBJID"])
+    .seq("ASEQ", by=["USUBJID"])
     .to_frame()
 )
 
 # Derive AEDECOD and AEBODSYS for TLG consumption.
 # In a real study these come from MedDRA coding; here we simulate them.
-adae = adae.with_columns(
-    pl.col("AETERM").str.to_titlecase().alias("AEDECOD"),
-    pl.when(pl.col("AETERM").is_in(["HEADACHE", "DIZZINESS"]))
-    .then(pl.lit("NERVOUS SYSTEM DISORDERS"))
-    .when(pl.col("AETERM").is_in(["NAUSEA"]))
-    .then(pl.lit("GASTROINTESTINAL DISORDERS"))
-    .when(pl.col("AETERM").is_in(["FATIGUE"]))
-    .then(pl.lit("GENERAL DISORDERS"))
-    .otherwise(pl.lit("OTHER"))
-    .alias("AEBODSYS"),
+adae = fleet.frame(
+    adae.with_columns(
+        pl.col("AETERM").str.to_titlecase().alias("AEDECOD"),
+        pl.when(pl.col("AETERM").is_in(["HEADACHE", "DIZZINESS"]))
+        .then(pl.lit("NERVOUS SYSTEM DISORDERS"))
+        .when(pl.col("AETERM").is_in(["NAUSEA"]))
+        .then(pl.lit("GASTROINTESTINAL DISORDERS"))
+        .when(pl.col("AETERM").is_in(["FATIGUE"]))
+        .then(pl.lit("GENERAL DISORDERS"))
+        .otherwise(pl.lit("OTHER"))
+        .alias("AEBODSYS"),
+    )
 )
 
 print(f"   {adae.shape[0]} records × {adae.shape[1]} variables")
@@ -378,6 +384,29 @@ assert restored.rows == custom_spec.rows
 assert restored.statistics == custom_spec.statistics
 assert restored.pools == custom_spec.pools
 print("   ✓ Round-trip: to_yaml() → from_yaml() produces identical spec.")
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# 10b. YAML-as-workflow — a spec file alone reproduces a table
+# ════════════════════════════════════════════════════════════════════════════
+print("\n══ 10b. YAML-as-workflow: load_spec() → run_spec() ═════════════════════")
+
+import fleet.tlg as tlg  # noqa: E402
+
+spec_path = Path(__file__).resolve().parent / "tlg_specs" / "aet01.yaml"
+overview_spec = tlg.load_spec(spec_path)
+print(
+    f"   Loaded {spec_path.name}: template={overview_spec.template!r} "
+    f"→ {type(overview_spec).__name__}"
+)
+
+ard_overview = tlg.run_spec(overview_spec, adae, adsl=adsl)
+print(ard_overview.filter(pl.col("stat_name").is_in(["n", "pct"])))
+print(
+    f"\n   AE overview ARD: {ard_overview.shape[0]} rows — the YAML file "
+    "carried the template id,\n   population filter, and header-row "
+    "definitions; no Python spec code needed."
+)
 
 
 # ════════════════════════════════════════════════════════════════════════════

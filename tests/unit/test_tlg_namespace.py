@@ -293,6 +293,7 @@ class TestARDStructure:
         "group2_level",
         "variable",
         "variable_level",
+        "variable_label",
         "stat_name",
         "stat_label",
         "stat",

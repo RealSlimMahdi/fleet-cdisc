@@ -10,10 +10,10 @@ Usage
     adsl = (
         dm_sdtm.adam.adsl
         .source("USUBJID")
-        .assigned("STUDYID", value="MYSTUDY01")
-        .first_date("AESTDTM", from_dataset=ae_sdtm, date_col="AESTDTC",
+        .assign("STUDYID", value="MYSTUDY01")
+        .first_date("AESTDT", from_dataset=ae_sdtm, date_col="AESTDTC",
                     where='pl.col("AESER") == "Y"')
-        .duration("TRTDURD", start_date="TRTSDT", end_date="TRTEDT")
+        .duration("TRTDURD", start="TRTSDT", end="TRTEDT")
         .count_events("NUMAE",  from_dataset=ae_sdtm)
         .flag("SAFFL",   criteria='pl.col("RANDFL") == "Y"')
         .flag("PPROTFL", criteria='pl.col("COMPLFL") == "Y"')
@@ -30,175 +30,30 @@ import polars as pl
 from fleet.adam._mixins import SharedADaMVerbsMixin
 
 
+@pl.api.register_lazyframe_namespace("adsl")
 class ADSLNamespace(SharedADaMVerbsMixin):
     """
     Immutable pipeline builder for ADSL (one-row-per-subject) derivations.
 
+    Also registered as the ``adsl`` LazyFrame namespace, so
+    ``pl.scan_parquet(...).adsl`` starts a fully lazy ADSL pipeline.
+
     Inherits shared verbs from ``SharedADaMVerbsMixin``
-    (source, derivation, assigned, recode, rename, condderivation,
-    whereclauses) and adds ADSL-specific verbs that pull summary
-    statistics from event-level datasets (AE, CM, MH, EX…).
+    (assign, case_when, merge, source, derivation, whereclauses, ...)
+    and adds ADSL-specific verbs that pull summary statistics from
+    event-level datasets (AE, CM, MH, EX…).  Discover the full set with
+    ``.verbs()``.
     """
 
-    def __init__(self, df: pl.DataFrame) -> None:
+    def __init__(self, df: pl.DataFrame | pl.LazyFrame) -> None:
         super().__init__(df)
         self._domain = "ADSL"
 
     # ------------------------------------------------------------------ #
-    # ADSL-specific verbs                                                  #
+    # ADSL-specific verbs.                                                 #
+    # first_date / last_date / count_events moved to                       #
+    # SharedADaMVerbsMixin so the spec path (from_spec) can dispatch them. #
     # ------------------------------------------------------------------ #
-
-    def first_date(
-        self,
-        target: str,
-        *,
-        from_dataset: pl.DataFrame,
-        date_col: str,
-        where: str | pl.Expr | None = None,
-        groups: list[str] | None = None,
-    ) -> Self:
-        """Derive *target* as the earliest date in *date_col* from *from_dataset*.
-
-        Materialises the current pipeline, aggregates *from_dataset* to
-        subject level, then left-joins.  Useful for ASTDTM, TRTSDT, etc.
-
-        Args:
-            target: Name of the output date column.
-            from_dataset: Source ``pl.DataFrame`` to aggregate.
-            date_col: Date column to take the minimum of.
-            where: Optional filter applied to *from_dataset* before aggregation.
-            groups: Join key columns (default ``["USUBJID"]``).
-
-        Returns:
-            Self: The namespace with *target* appended.
-
-        Examples:
-            Derive earliest serious AE start date::
-
-                adsl = (
-                    dm_raw.adam.adsl
-                    .first_date("AESTDTM", from_dataset=ae_sdtm,
-                                date_col="AESTDTC",
-                                where='pl.col("AESER") == "Y"')
-                    .to_frame()
-                )
-        """
-        return self._date_agg(
-            target,
-            from_dataset=from_dataset,
-            date_col=date_col,
-            where=where,
-            groups=groups,
-            agg_fn="min",
-        )
-
-    def last_date(
-        self,
-        target: str,
-        *,
-        from_dataset: pl.DataFrame,
-        date_col: str,
-        where: str | pl.Expr | None = None,
-        groups: list[str] | None = None,
-    ) -> Self:
-        """Derive *target* as the latest date in *date_col* from *from_dataset*.
-
-        Useful for AENDTM, TRTEDT, DTHDT, etc.
-
-        Args:
-            target: Name of the output date column.
-            from_dataset: Source ``pl.DataFrame`` to aggregate.
-            date_col: Date column to take the maximum of.
-            where: Optional filter applied to *from_dataset* before aggregation.
-            groups: Join key columns (default ``["USUBJID"]``).
-
-        Returns:
-            Self: The namespace with *target* appended.
-
-        Examples:
-            Derive latest treatment end date::
-
-                adsl = (
-                    dm_raw.adam.adsl
-                    .last_date("TRTEDT", from_dataset=ex_sdtm,
-                               date_col="EXENDTC")
-                    .to_frame()
-                )
-        """
-        return self._date_agg(
-            target,
-            from_dataset=from_dataset,
-            date_col=date_col,
-            where=where,
-            groups=groups,
-            agg_fn="max",
-        )
-
-    def _date_agg(
-        self,
-        target: str,
-        *,
-        from_dataset: pl.DataFrame,
-        date_col: str,
-        where: str | pl.Expr | None,
-        groups: list[str] | None,
-        agg_fn: str,
-    ) -> Self:
-        """Shared implementation for first_date/last_date."""
-        from fleet.sdtm.utils import parse_expression
-
-        grps = groups or ["USUBJID"]
-        src = from_dataset
-        if where is not None:
-            where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
-            src = src.filter(where_expr)
-        col = pl.col(date_col)
-        agg_expr = (col.min() if agg_fn == "min" else col.max()).alias(target)
-        agg_df = src.group_by(grps).agg(agg_expr)
-        df = self.to_frame().join(agg_df, on=grps, how="left")
-        return self._materialise_then(df)
-
-    def count_events(
-        self,
-        target: str,
-        *,
-        from_dataset: pl.DataFrame,
-        where: str | pl.Expr | None = None,
-        groups: list[str] | None = None,
-    ) -> Self:
-        """Derive *target* as the count of matching records in *from_dataset*.
-
-        Returns 0 for subjects with no matching records (never null).
-
-        Args:
-            target: Name of the output count column.
-            from_dataset: Source ``pl.DataFrame`` to count.
-            where: Optional filter applied before counting.
-            groups: Join key columns (default ``["USUBJID"]``).
-
-        Returns:
-            Self: The namespace with *target* appended.
-
-        Examples:
-            Count total AE records per subject::
-
-                adsl = (
-                    dm_raw.adam.adsl
-                    .count_events("NUMAE", from_dataset=ae_sdtm)
-                    .to_frame()
-                )
-        """
-        from fleet.sdtm.utils import parse_expression
-
-        grps = groups or ["USUBJID"]
-        src = from_dataset
-        if where is not None:
-            where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
-            src = src.filter(where_expr)
-        agg_df = src.group_by(grps).agg(pl.len().alias(target))
-        df = self.to_frame().join(agg_df, on=grps, how="left")
-        df = df.with_columns(pl.col(target).fill_null(0))
-        return self._materialise_then(df)
 
     # ------------------------------------------------------------------ #
     # ADSL: age_years — unit-aware age conversion                         #

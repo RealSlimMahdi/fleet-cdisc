@@ -14,8 +14,9 @@ Examples:
         from fleet.core.algorithm_resolver import resolve_algorithm_docstring
 
         summary, dotted = resolve_algorithm_docstring("assign_ct")
-        # summary -> first sentence of SDTMNamespace.assign_ct.__doc__
-        # dotted  -> "fleet.sdtm.namespace.SDTMNamespace.assign_ct"
+        # spec algorithm ids resolve through the registry to their verb:
+        # summary -> first sentence of SharedVerbsMixin.assign.__doc__
+        # dotted  -> "fleet.core._verb_mixin.SharedVerbsMixin.assign"
 
     Resolve a study-specific callable::
 
@@ -33,8 +34,22 @@ import inspect
 from typing import Any
 
 
-def _first_sentence(doc: str | None) -> str:
-    """Return the first sentence of a docstring, stripped and dedented."""
+def first_sentence(doc: str | None) -> str:
+    """Return the first sentence of a docstring, stripped and dedented.
+
+    Args:
+        doc: A raw ``__doc__`` string (or ``None``).
+
+    Returns:
+        str: The first sentence, or ``""`` when the docstring is empty.
+
+    Examples:
+        Summarise a verb for a catalogue listing::
+
+            from fleet.core.algorithm_resolver import first_sentence
+
+            summary = first_sentence(SDTMNamespace.assign.__doc__)
+    """
     if not doc:
         return ""
     text = inspect.cleandoc(doc).strip()
@@ -45,6 +60,10 @@ def _first_sentence(doc: str | None) -> str:
     if "." in head:
         head = head.split(".", 1)[0].strip() + "."
     return head
+
+
+#: Backward-compatible internal alias.
+_first_sentence = first_sentence
 
 
 def _candidate_namespaces() -> list[type]:
@@ -95,13 +114,28 @@ def resolve_algorithm_docstring(
     """
     if not algorithm:
         return (None, None)
-    for cls in _candidate_namespaces():
-        method = getattr(cls, algorithm, None)
-        if method is None or not callable(method):
-            continue
-        summary = _first_sentence(method.__doc__)
-        dotted = f"{cls.__module__}.{cls.__qualname__}.{algorithm}"
-        return (summary, dotted)
+
+    # Resolve through the spec registry first: algorithm names are not
+    # always method names (e.g. study_day executes via duration()).
+    method_names = [algorithm]
+    try:
+        from fleet.core.spec_registry import get_algorithm
+
+        for standard in ("sdtm", "adam"):
+            algo = get_algorithm(standard, algorithm)
+            if algo is not None and algo.verb not in method_names:
+                method_names.append(algo.verb)
+    except Exception:  # pragma: no cover — resolver must never break generation
+        pass
+
+    for name in method_names:
+        for cls in _candidate_namespaces():
+            method = getattr(cls, name, None)
+            if method is None or not callable(method):
+                continue
+            summary = _first_sentence(method.__doc__)
+            dotted = f"{cls.__module__}.{cls.__qualname__}.{name}"
+            return (summary, dotted)
     return (None, None)
 
 

@@ -165,7 +165,7 @@ Fleet's `pick()` is semantically equivalent but:
 | Scenario | Use |
 |----------|-----|
 | Multi-source priority cascade (LSTALVDT, DTHCAUS, LDDTHELD) | `pick()` |
-| Simple conditional (AGEGR1, EOSSTT) | `condderivation()` |
+| Simple conditional (AGEGR1, EOSSTT) | `case_when()` |
 | Complex cross-record logic within one source (CBOR confirmation rules) | `@derivation(kind="frame")` |
 | Aggregation that needs custom grouping (derived parameters) | `derive_param()` |
 

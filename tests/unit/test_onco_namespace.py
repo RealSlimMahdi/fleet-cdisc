@@ -40,7 +40,7 @@ class TestBaseVerbs:
         assert "USUBJID" in result.columns
 
     def test_assigned(self, onco_frame):
-        result = onco_frame.adam.onco.assigned("STUDYID", value="ONC01").to_frame()
+        result = onco_frame.adam.onco.assign("STUDYID", value="ONC01").to_frame()
         assert result["STUDYID"].to_list() == ["ONC01"] * 3
 
     def test_derivation(self, onco_frame):
@@ -57,14 +57,14 @@ class TestBaseVerbs:
         assert result["RESP"].to_list() == ["Complete", "Partial", "Other"]
 
     def test_rename(self, onco_frame):
-        result = onco_frame.adam.onco.rename("SUBJ", source="USUBJID").to_frame()
+        result = onco_frame.adam.onco.assign("SUBJ", source="USUBJID").to_frame()
         assert result["SUBJ"].to_list() == onco_frame["USUBJID"].to_list()
 
     def test_condderivation(self, onco_frame):
-        result = onco_frame.adam.onco.condderivation(
+        result = onco_frame.adam.onco.case_when(
             "AGEGR",
-            conditions=[{"condition": 'pl.col("AGE") < 60', "value": "<60"}],
-            else_value=">=60",
+            when=[{"condition": 'pl.col("AGE") < 60', "value": "<60"}],
+            else_=">=60",
         ).to_frame()
         assert result["AGEGR"].to_list() == ["<60", ">=60", "<60"]
 
@@ -155,7 +155,7 @@ class TestBestOverallResponse:
             }
         )
         result = df.adam.onco.best_overall_response(
-            "BOR", source="OVRLRESP", groups=["USUBJID"]
+            "BOR", source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
         # PR is rank 2, SD=3, PD=5 → best is PR
         assert all(r == "PR" for r in result["BOR"].to_list())
@@ -168,7 +168,7 @@ class TestBestOverallResponse:
             }
         )
         result = df.adam.onco.best_overall_response(
-            "BOR", source="OVRLRESP", groups=["USUBJID"]
+            "BOR", source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
         assert all(r == "NE" for r in result["BOR"].to_list())
 
@@ -182,7 +182,7 @@ class TestBestOverallResponse:
             }
         )
         result = df.adam.onco.best_overall_response(
-            "BOR", source="OVRLRESP", groups=["USUBJID"]
+            "BOR", source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
         bor = dict(zip(result["USUBJID"].to_list(), result["BOR"].to_list()))
         assert bor["01-701-1015"] == "CR"  # CR beats SD
@@ -196,7 +196,7 @@ class TestBestOverallResponse:
             }
         )
         result = df.adam.onco.best_overall_response(
-            "BOR", source="OVRLRESP", groups=["USUBJID"]
+            "BOR", source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
         assert all(r == "PD" for r in result["BOR"].to_list())
 
@@ -220,7 +220,7 @@ class TestFilterPD:
             }
         )
         result = df.adam.onco.filter_pd(
-            response_col="OVRLRESP", date_col="ADT", groups=["USUBJID"]
+            response_col="OVRLRESP", date_col="ADT", by=["USUBJID"]
         ).to_frame()
         # Only rows up to and including first PD (2024-02-01)
         assert result.height == 2
@@ -235,7 +235,7 @@ class TestFilterPD:
             }
         )
         result = df.adam.onco.filter_pd(
-            response_col="OVRLRESP", date_col="ADT", groups=["USUBJID"]
+            response_col="OVRLRESP", date_col="ADT", by=["USUBJID"]
         ).to_frame()
         assert result.height == 2
 
@@ -267,7 +267,7 @@ class TestFilterPD:
             }
         )
         result = df.adam.onco.filter_pd(
-            response_col="OVRLRESP", date_col="ADT", groups=["USUBJID"]
+            response_col="OVRLRESP", date_col="ADT", by=["USUBJID"]
         ).to_frame()
         subj1015 = result.filter(pl.col("USUBJID") == "01-701-1015")
         subj1023 = result.filter(pl.col("USUBJID") == "01-701-1023")
@@ -294,7 +294,7 @@ class TestConfirmedResponseFlag:
             }
         )
         result = df.adam.onco.confirmed_response_flag(
-            "CNFFL", source="OVRLRESP", date_col="ADT", confirmation_days=28, groups=["USUBJID"]
+            "CNFFL", source="OVRLRESP", date_col="ADT", confirmation_days=28, by=["USUBJID"]
         ).to_frame()
         # At least one "Y" in the group (≥28-day gap exists)
         assert "Y" in result["CNFFL"].to_list()
@@ -308,7 +308,7 @@ class TestConfirmedResponseFlag:
             }
         )
         result = df.adam.onco.confirmed_response_flag(
-            "CNFFL", source="OVRLRESP", date_col="ADT", confirmation_days=28, groups=["USUBJID"]
+            "CNFFL", source="OVRLRESP", date_col="ADT", confirmation_days=28, by=["USUBJID"]
         ).to_frame()
         assert all(v is None for v in result["CNFFL"].to_list())
 
@@ -322,7 +322,7 @@ class TestConfirmedResponseFlag:
             }
         )
         result = df.adam.onco.confirmed_response_flag(
-            "CNFFL", source="OVRLRESP", date_col="ADT", groups=["USUBJID"]
+            "CNFFL", source="OVRLRESP", date_col="ADT", by=["USUBJID"]
         ).to_frame()
         assert all(v is None for v in result["CNFFL"].to_list())
 
@@ -340,7 +340,7 @@ class TestChaining:
         result = (
             df.adam.onco.aval_resp("AVAL", source="OVRLRESP")
             .tumor_response_flag("RSPFL", source="OVRLRESP")
-            .best_overall_response("BOR", source="OVRLRESP", groups=["USUBJID"])
+            .best_overall_response("BOR", source="OVRLRESP", by=["USUBJID"])
             .to_frame()
         )
         assert "AVAL" in result.columns
@@ -369,7 +369,7 @@ class TestOncoProgressionAmbiguity:
             }
         )
         result = df.adam.onco.best_overall_response(
-            "BOR", source="OVRLRESP", groups=["USUBJID"]
+            "BOR", source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
         assert all(v == "NE" for v in result["BOR"].to_list())
 
@@ -383,7 +383,7 @@ class TestOncoProgressionAmbiguity:
             }
         )
         result = df.adam.onco.best_overall_response(
-            "BOR", source="OVRLRESP", groups=["USUBJID"]
+            "BOR", source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
         # BOR should be CR (best non-null response)
         bor_vals = result["BOR"].drop_nulls().unique().to_list()
@@ -399,7 +399,7 @@ class TestOncoProgressionAmbiguity:
             }
         )
         result = df.adam.onco.best_overall_response(
-            "BOR", source="OVRLRESP", groups=["USUBJID"]
+            "BOR", source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
         bor_vals = result["BOR"].unique().to_list()
         assert "CR" in bor_vals

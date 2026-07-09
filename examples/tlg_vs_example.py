@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import polars as pl
 
-import fleet  # noqa: F401 — registers namespaces
+import fleet  # registers namespaces
 from examples.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
 from fleet.tlg import (
     GroupPool,
@@ -34,7 +34,8 @@ from fleet.tlg import (
 # 1. Load raw data & build ADSL (reuse pattern from tlg_ae_example.py)
 # ════════════════════════════════════════════════════════════════════════════
 print("══ 1. Load raw data & build ADSL ═══════════════════════════════════════")
-dm_raw = pl.from_repr("""\
+dm_raw = fleet.frame(
+    pl.from_repr("""\
 ┌────────────────┬─────────┬─────┬─────┬───────────────────────────┬────────────────────────┬──────────┬──────────────────────┬─────────────────┬────────────────┬───────────────────────┐
 │ patient_number ┆ site_id ┆ age ┆ sex ┆ race                      ┆ ethnic                 ┆ arm_code ┆ arm_description      ┆ first_dose_date ┆ last_dose_date ┆ informed_consent_date │
 │ ---            ┆ ---     ┆ --- ┆ --- ┆ ---                       ┆ ---                    ┆ ---      ┆ ---                  ┆ ---             ┆ ---            ┆ ---                   │
@@ -47,32 +48,33 @@ dm_raw = pl.from_repr("""\
 │ 01-701-1047    ┆ 701     ┆ 56  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-06      ┆ 2014-07-07     ┆ 2014-01-05            │
 └────────────────┴─────────┴─────┴─────┴───────────────────────────┴────────────────────────┴──────────┴──────────────────────┴─────────────────┴────────────────┴───────────────────────┘
 """)
+)
 
 dm = (
-    dm_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")
-    .hardcode_no_ct("DOMAIN", value="DM")
-    .assign_no_ct("USUBJID", source="patient_number")
-    .assign_no_ct("AGE", source="age")
-    .assign_ct("SEX", source="sex", ct_codelist=SEX, ct_mapping={"F": "F", "M": "M"})
-    .assign_ct(
+    dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
+    .assign("DOMAIN", value="DM")
+    .assign("USUBJID", source="patient_number")
+    .assign("AGE", source="age")
+    .assign("SEX", source="sex", ct=SEX, ct_map={"F": "F", "M": "M"})
+    .assign(
         "RACE",
         source="race",
-        ct_codelist=RACE,
-        ct_mapping={
+        ct=RACE,
+        ct_map={
             "WHITE": "WHITE",
             "BLACK OR AFRICAN AMERICAN": "BLACK OR AFRICAN AMERICAN",
         },
     )
-    .assign_ct(
+    .assign(
         "ETHNIC",
         source="ethnic",
-        ct_codelist=ETHNIC,
-        ct_mapping={
+        ct=ETHNIC,
+        ct_map={
             "HISPANIC OR LATINO": "HISPANIC OR LATINO",
             "NOT HISPANIC OR LATINO": "NOT HISPANIC OR LATINO",
         },
     )
-    .assign_no_ct("ARM", source="arm_description")
+    .assign("ARM", source="arm_description")
     .date("RFSTDTC", source="first_dose_date")
     .date("RFENDTC", source="last_dose_date")
     .to_frame()
@@ -85,7 +87,7 @@ adsl = (
     .source("SEX")
     .source("RACE")
     .source("ARM")
-    .rename("TRT01P", source="ARM")
+    .assign("TRT01P", source="ARM")
     .date("TRTSDT", source="RFSTDTC")
     .date("TRTEDT", source="RFENDTC")
     .derivation(
@@ -130,7 +132,7 @@ for subj in subjects:
                 }
             )
 
-advs = pl.DataFrame(vs_records)
+advs = fleet.frame(pl.DataFrame(vs_records))
 print(f"   {advs.shape[0]} records × {advs.shape[1]} variables")
 print(f"   Parameters: {sorted(advs['PARAMCD'].unique().to_list())}")
 print(f"   Visits: {advs['AVISIT'].unique().to_list()}")
@@ -206,7 +208,13 @@ print(f"   Age groups: {sorted(advs_strat['AGEGR1'].unique().to_list())}")
 
 # Nested stratification: pass the merged column as a second row field —
 # the engine computes per-(AGEGR1, PARAMCD) cells with group2 lineage.
-ard_strat = advs_strat.tlg.vs.population(adsl_age).by("TRTA").rows(["AGEGR1", "PARAMCD"]).to_ard()
+ard_strat = (
+    fleet.frame(advs_strat)
+    .tlg.vs.population(adsl_age)
+    .by("TRTA")
+    .rows(["AGEGR1", "PARAMCD"])
+    .to_ard()
+)
 print(f"   Stratified ARD: {ard_strat.shape[0]} rows (AGEGR1 → PARAMCD nesting)")
 print("   ✓ C3 pre-merge pattern demonstrated: AGEGR1 joined from ADSL onto ADVS.")
 

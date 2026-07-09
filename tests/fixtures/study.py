@@ -12,8 +12,11 @@ Deliberate properties (mirroring the NEST testthat setup):
 - S01 carries multi-severity / multi-grade AEs (worst-case dedup),
   ADAE has a non-treatment-emergent record, ADCM an uncoded medication,
   ADLB a baseline-abnormal subject, ADEX interval dose records.
+- ADAE carries AESER / AEACN / AESDTH aligned with ADSL's disposition
+  (S02 discontinued for an AE and died) so the AET01 overview's header
+  rows each count a distinct population.
 
-Never edit values casually: the golden CSVs under
+Never edit values casually: the golden Parquet files under
 ``tests/fixtures/goldens/tlg/`` pin the ARDs computed from this study.
 """
 
@@ -80,94 +83,106 @@ ADSL = _with_trt01p(
 )
 
 ADAE = _with_trt01p(
-    pl.DataFrame(
-        {
-            "USUBJID": ["S01", "S01", "S02", "S05", "S05", "S06"],
-            "TRTA": ["Placebo", "Placebo", "Placebo", "Drug A", "Drug A", "Drug A"],
-            "AEBODSYS": ["NERVOUS", "NERVOUS", "GASTRO", "NERVOUS", "GASTRO", "NERVOUS"],
-            "AEDECOD": ["HEADACHE", "MIGRAINE", "NAUSEA", "HEADACHE", "NAUSEA", "DIZZINESS"],
-            "AESEV": ["MILD", "SEVERE", "MODERATE", "MODERATE", "MILD", "MILD"],
-            "AETOXGR": ["1", "3", "2", "2", "1", "1"],
-            "AEREL": ["N", "Y", "N", "N", "Y", "N"],
-            "AESER": ["N", "Y", "N", "N", "N", "N"],
-            "TRTEMFL": ["Y", "Y", "Y", "Y", "Y", "N"],
-        }
-    )
+    pl.from_repr("""\
+┌─────────┬─────────┬──────────┬───────────┬──────────┬─────────┬───────┬───────┬──────────────────┬────────┬─────────┐
+│ USUBJID ┆ TRTA    ┆ AEBODSYS ┆ AEDECOD   ┆ AESEV    ┆ AETOXGR ┆ AEREL ┆ AESER ┆ AEACN            ┆ AESDTH ┆ TRTEMFL │
+│ ---     ┆ ---     ┆ ---      ┆ ---       ┆ ---      ┆ ---     ┆ ---   ┆ ---   ┆ ---              ┆ ---    ┆ ---     │
+│ str     ┆ str     ┆ str      ┆ str       ┆ str      ┆ str     ┆ str   ┆ str   ┆ str              ┆ str    ┆ str     │
+╞═════════╪═════════╪══════════╪═══════════╪══════════╪═════════╪═══════╪═══════╪══════════════════╪════════╪═════════╡
+│ S01     ┆ Placebo ┆ NERVOUS  ┆ HEADACHE  ┆ MILD     ┆ 1       ┆ N     ┆ N     ┆ DOSE NOT CHANGED ┆ N      ┆ Y       │
+│ S01     ┆ Placebo ┆ NERVOUS  ┆ MIGRAINE  ┆ SEVERE   ┆ 3       ┆ Y     ┆ Y     ┆ DOSE NOT CHANGED ┆ N      ┆ Y       │
+│ S02     ┆ Placebo ┆ GASTRO   ┆ NAUSEA    ┆ MODERATE ┆ 2       ┆ N     ┆ N     ┆ DRUG WITHDRAWN   ┆ Y      ┆ Y       │
+│ S05     ┆ Drug A  ┆ NERVOUS  ┆ HEADACHE  ┆ MODERATE ┆ 2       ┆ N     ┆ N     ┆ DOSE NOT CHANGED ┆ N      ┆ Y       │
+│ S05     ┆ Drug A  ┆ GASTRO   ┆ NAUSEA    ┆ MILD     ┆ 1       ┆ Y     ┆ N     ┆ DOSE NOT CHANGED ┆ N      ┆ Y       │
+│ S06     ┆ Drug A  ┆ NERVOUS  ┆ DIZZINESS ┆ MILD     ┆ 1       ┆ N     ┆ N     ┆ DOSE NOT CHANGED ┆ N      ┆ N       │
+└─────────┴─────────┴──────────┴───────────┴──────────┴─────────┴───────┴───────┴──────────────────┴────────┴─────────┘
+""")
 )
 
 ADCM = _with_trt01p(
-    pl.DataFrame(
-        {
-            "USUBJID": ["S01", "S02", "S05"],
-            "TRTA": ["Placebo", "Placebo", "Drug A"],
-            "CMCLAS": ["NSAID", None, "NSAID"],
-            "CMDECOD": ["ASPIRIN", None, "IBUPROFEN"],
-        }
-    )
+    pl.from_repr("""\
+┌─────────┬─────────┬────────┬───────────┐
+│ USUBJID ┆ TRTA    ┆ CMCLAS ┆ CMDECOD   │
+│ ---     ┆ ---     ┆ ---    ┆ ---       │
+│ str     ┆ str     ┆ str    ┆ str       │
+╞═════════╪═════════╪════════╪═══════════╡
+│ S01     ┆ Placebo ┆ NSAID  ┆ ASPIRIN   │
+│ S02     ┆ Placebo ┆ null   ┆ null      │
+│ S05     ┆ Drug A  ┆ NSAID  ┆ IBUPROFEN │
+└─────────┴─────────┴────────┴───────────┘
+""")
 )
 
 ADMH = _with_trt01p(
-    pl.DataFrame(
-        {
-            "USUBJID": ["S01", "S06"],
-            "TRTA": ["Placebo", "Drug A"],
-            "MHBODSYS": ["CARDIAC", "CARDIAC"],
-            "MHDECOD": ["ANGINA", "ANGINA"],
-        }
-    )
+    pl.from_repr("""\
+┌─────────┬─────────┬──────────┬─────────┐
+│ USUBJID ┆ TRTA    ┆ MHBODSYS ┆ MHDECOD │
+│ ---     ┆ ---     ┆ ---      ┆ ---     │
+│ str     ┆ str     ┆ str      ┆ str     │
+╞═════════╪═════════╪══════════╪═════════╡
+│ S01     ┆ Placebo ┆ CARDIAC  ┆ ANGINA  │
+│ S06     ┆ Drug A  ┆ CARDIAC  ┆ ANGINA  │
+└─────────┴─────────┴──────────┴─────────┘
+""")
 )
 
 ADLB = _with_trt01p(
-    pl.DataFrame(
-        {
-            "USUBJID": ["S01", "S01", "S02", "S02", "S05", "S05"],
-            "TRTA": ["Placebo", "Placebo", "Placebo", "Placebo", "Drug A", "Drug A"],
-            "PARAMCD": ["ALT"] * 6,
-            "AVISIT": ["BASELINE", "WEEK 1"] * 3,
-            "ABLFL": ["Y", None, "Y", None, "Y", None],
-            "AVAL": [10.0, 16.0, 40.0, 44.0, 20.0, 18.0],
-            "CHG": [None, 6.0, None, 4.0, None, -2.0],
-            "BNRIND": ["NORMAL", "NORMAL", "HIGH", "HIGH", "NORMAL", "NORMAL"],
-            "ANRIND": ["NORMAL", "HIGH", "HIGH", "HIGH", "NORMAL", "NORMAL"],
-        }
-    )
+    pl.from_repr("""\
+┌─────────┬─────────┬─────────┬──────────┬───────┬──────┬──────┬────────┬────────┐
+│ USUBJID ┆ TRTA    ┆ PARAMCD ┆ AVISIT   ┆ ABLFL ┆ AVAL ┆ CHG  ┆ BNRIND ┆ ANRIND │
+│ ---     ┆ ---     ┆ ---     ┆ ---      ┆ ---   ┆ ---  ┆ ---  ┆ ---    ┆ ---    │
+│ str     ┆ str     ┆ str     ┆ str      ┆ str   ┆ f64  ┆ f64  ┆ str    ┆ str    │
+╞═════════╪═════════╪═════════╪══════════╪═══════╪══════╪══════╪════════╪════════╡
+│ S01     ┆ Placebo ┆ ALT     ┆ BASELINE ┆ Y     ┆ 10   ┆ null ┆ NORMAL ┆ NORMAL │
+│ S01     ┆ Placebo ┆ ALT     ┆ WEEK 1   ┆ null  ┆ 16   ┆ 6    ┆ NORMAL ┆ HIGH   │
+│ S02     ┆ Placebo ┆ ALT     ┆ BASELINE ┆ Y     ┆ 40   ┆ null ┆ HIGH   ┆ HIGH   │
+│ S02     ┆ Placebo ┆ ALT     ┆ WEEK 1   ┆ null  ┆ 44   ┆ 4    ┆ HIGH   ┆ HIGH   │
+│ S05     ┆ Drug A  ┆ ALT     ┆ BASELINE ┆ Y     ┆ 20   ┆ null ┆ NORMAL ┆ NORMAL │
+│ S05     ┆ Drug A  ┆ ALT     ┆ WEEK 1   ┆ null  ┆ 18   ┆ -2   ┆ NORMAL ┆ NORMAL │
+└─────────┴─────────┴─────────┴──────────┴───────┴──────┴──────┴────────┴────────┘
+""")
 )
 
 ADEG = _with_trt01p(
-    pl.DataFrame(
-        {
-            "USUBJID": ["S01", "S01", "S05", "S05"],
-            "TRTA": ["Placebo", "Placebo", "Drug A", "Drug A"],
-            "PARAMCD": ["QTCF"] * 4,
-            "AVISIT": ["BASELINE", "WEEK 1", "BASELINE", "WEEK 1"],
-            "ABLFL": ["Y", None, "Y", None],
-            "AVAL": [400.0, 432.0, 410.0, 415.0],
-            "CHG": [None, 32.0, None, 5.0],
-            "AVALCAT1": ["<=450 msec", "<=450 msec", "<=450 msec", "<=450 msec"],
-        }
-    )
+    pl.from_repr("""\
+┌─────────┬─────────┬─────────┬──────────┬───────┬──────┬──────┬────────────┐
+│ USUBJID ┆ TRTA    ┆ PARAMCD ┆ AVISIT   ┆ ABLFL ┆ AVAL ┆ CHG  ┆ AVALCAT1   │
+│ ---     ┆ ---     ┆ ---     ┆ ---      ┆ ---   ┆ ---  ┆ ---  ┆ ---        │
+│ str     ┆ str     ┆ str     ┆ str      ┆ str   ┆ f64  ┆ f64  ┆ str        │
+╞═════════╪═════════╪═════════╪══════════╪═══════╪══════╪══════╪════════════╡
+│ S01     ┆ Placebo ┆ QTCF    ┆ BASELINE ┆ Y     ┆ 400  ┆ null ┆ <=450 msec │
+│ S01     ┆ Placebo ┆ QTCF    ┆ WEEK 1   ┆ null  ┆ 432  ┆ 32   ┆ <=450 msec │
+│ S05     ┆ Drug A  ┆ QTCF    ┆ BASELINE ┆ Y     ┆ 410  ┆ null ┆ <=450 msec │
+│ S05     ┆ Drug A  ┆ QTCF    ┆ WEEK 1   ┆ null  ┆ 415  ┆ 5    ┆ <=450 msec │
+└─────────┴─────────┴─────────┴──────────┴───────┴──────┴──────┴────────────┘
+""")
 )
 
 ADEX = _with_trt01p(
-    pl.DataFrame(
-        {
-            "USUBJID": ["S01", "S01", "S05"],
-            "TRTA": ["Placebo", "Placebo", "Drug A"],
-            "PARAMCD": ["TDOSE"] * 3,
-            "PARCAT1": ["OVERALL", "WEEK", "OVERALL"],
-            "AVAL": [540.0, 54.0, 810.0],
-        }
-    )
+    pl.from_repr("""\
+┌─────────┬─────────┬─────────┬─────────┬──────┐
+│ USUBJID ┆ TRTA    ┆ PARAMCD ┆ PARCAT1 ┆ AVAL │
+│ ---     ┆ ---     ┆ ---     ┆ ---     ┆ ---  │
+│ str     ┆ str     ┆ str     ┆ str     ┆ f64  │
+╞═════════╪═════════╪═════════╪═════════╪══════╡
+│ S01     ┆ Placebo ┆ TDOSE   ┆ OVERALL ┆ 540  │
+│ S01     ┆ Placebo ┆ TDOSE   ┆ WEEK    ┆ 54   │
+│ S05     ┆ Drug A  ┆ TDOSE   ┆ OVERALL ┆ 810  │
+└─────────┴─────────┴─────────┴─────────┴──────┘
+""")
 )
 
 ADDV = _with_trt01p(
-    pl.DataFrame(
-        {
-            "USUBJID": ["S01", "S05"],
-            "TRTA": ["Placebo", "Drug A"],
-            "DVDECOD": ["VISIT OUT OF WINDOW", "EXCLUDED CONCOMITANT MEDICATION"],
-        }
-    )
+    pl.from_repr("""\
+┌─────────┬─────────┬─────────────────────────────────┐
+│ USUBJID ┆ TRTA    ┆ DVDECOD                         │
+│ ---     ┆ ---     ┆ ---                             │
+│ str     ┆ str     ┆ str                             │
+╞═════════╪═════════╪═════════════════════════════════╡
+│ S01     ┆ Placebo ┆ VISIT OUT OF WINDOW             │
+│ S05     ┆ Drug A  ┆ EXCLUDED CONCOMITANT MEDICATION │
+└─────────┴─────────┴─────────────────────────────────┘
+""")
 )
 
 #: Analysis dataset per ADaM name — the registry's ``domains`` metadata

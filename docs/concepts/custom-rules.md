@@ -62,7 +62,7 @@ Check:
 ```python
 # Inline in a pipeline
 ae = (
-    raw_df.sdtm.hardcode_no_ct("DOMAIN", value="AE")
+    raw_df.sdtm.assign("DOMAIN", value="AE")
     .validate("AE", custom_rules="metadata/custom_rules")
     .to_frame()
 )

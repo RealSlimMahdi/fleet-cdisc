@@ -32,12 +32,16 @@ jobs:
         run: |
           uv run ruff check
           uv run ruff format --check
-          rc=0; uv run blacken-docs --check --line-length 100 docs/**/*.md || rc=$?
+          rc=0; uv run blacken-docs --check --line-length 100 $(find docs -name '*.md') || rc=$?
           if [ "$rc" -eq 1 ]; then echo "Code blocks need formatting"; exit 1; fi
 
       - name: Check llms.txt is up-to-date
         if: matrix.python-version == '3.12'
         run: uv run python scripts/build_llms.py --check
+
+      - name: Check generated CLI docs are up-to-date
+        if: matrix.python-version == '3.12'
+        run: uv run python scripts/gen_cli_docs.py --check
 
       - name: Run tests
         run: uv run pytest --cov=fleet --cov-report=xml --cov-report=term-missing
