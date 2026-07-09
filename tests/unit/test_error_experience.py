@@ -322,6 +322,10 @@ class TestValidateResultAccess:
             total_issues=1,
             errors=[ValidationIssue(severity=Severity.ERROR, rule_id="X1", message="boom")],
         )
+        # Bypass provider construction too — it discovers the rules-engine
+        # binary, which is absent in CI (these tests exercise on_fail
+        # plumbing, not the engine).
+        monkeypatch.setattr(ValidationService, "__init__", lambda self, **kw: None)
         monkeypatch.setattr(ValidationService, "validate_sdtm", lambda self, df, **kw: result)
         df = pl.DataFrame({"USUBJID": ["S1"]})
         return df.sdtm.assign("DOMAIN", value="DM")
