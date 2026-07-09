@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://realslimmahdi.github.io/fleet-cdisc/latest/getting-started/troubleshooting/">
       
       
-        <link rel="prev" href="../cli/">
+        <link rel="prev" href="../ide-tooling/">
       
       
         <link rel="next" href="../../concepts/define-yaml/">
@@ -629,6 +629,34 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../ide-tooling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE & AI Tooling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -988,6 +1016,34 @@
     
   
     Advanced Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/interactive-explorer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interactive Explorer
   
 
     
@@ -1871,11 +1927,11 @@
 <p>When building SDTM or ADaM pipelines in Fleet, you may encounter errors either from data mismatches or pipeline syntax. This guide will help you understand common errors and debug effectively.</p>
 <h2 id="common-errors">Common Errors<a class="headerlink" href="#common-errors" title="Permanent link">&para;</a></h2>
 <h3 id="cterror-invalid-value-for-codelist"><code>CTError: Invalid value for codelist...</code><a class="headerlink" href="#cterror-invalid-value-for-codelist" title="Permanent link">&para;</a></h3>
-<p><strong>What it means:</strong> A value in your source data does not match the expected Controlled Terminology mappings for a variable derived using <code>.assign_ct()</code>.</p>
+<p><strong>What it means:</strong> A value in your source data does not match the expected Controlled Terminology mappings for a variable derived using <code>.assign(ct=...)</code>.</p>
 <p><strong>How to fix it:</strong></p>
 <ol>
 <li>Check the raw values using Polars: <code>df.select("raw_column").unique()</code>.</li>
-<li>Compare those values to the mapping dictionary provided in <code>.assign_ct(ct_mapping={...})</code>.</li>
+<li>Compare those values to the mapping dictionary provided in <code>.assign(ct_map={...})</code>.</li>
 <li>Add the missing key -&gt; value pair, or fix upstream data collection errors.</li>
 </ol>
 <h3 id="columnnotfounderror-from-polars"><code>ColumnNotFoundError</code> from Polars<a class="headerlink" href="#columnnotfounderror-from-polars" title="Permanent link">&para;</a></h3>
@@ -1889,7 +1945,7 @@ Check your spelling against the supported lists of verbs in the <a href="../../c
 <h2 id="debugging-lazy-evaluation">Debugging Lazy Evaluation<a class="headerlink" href="#debugging-lazy-evaluation" title="Permanent link">&para;</a></h2>
 <p>Because Fleet builds pipelines conceptually and executes them lazily via Polars, a python stack trace might sometimes point to <code>.to_frame()</code> rather than the specific verb that caused an issue.</p>
 <p>To inspect what expressions have been queued up before running:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">pipeline</span> <span class="o">=</span> <span class="n">dm</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">hardcode_no_ct</span><span class="p">(</span><span class="s2">&quot;DOMAIN&quot;</span><span class="p">,</span> <span class="s2">&quot;DM&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">assign_no_ct</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="s2">&quot;patient_id&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">pipeline</span> <span class="o">=</span> <span class="n">dm</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;DOMAIN&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">&quot;DM&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;patient_id&quot;</span><span class="p">)</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># Inspect the underlying Polars Expressions</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">pipeline</span><span class="o">.</span><span class="n">_exprs</span><span class="p">)</span>
@@ -1897,8 +1953,8 @@ Check your spelling against the supported lists of verbs in the <a href="../../c
 <p>You can also comment out <code>.to_frame()</code> and print intermediate outputs to verify your structure step-by-step.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># To debug an intermediate state, truncate the pipeline:</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">debug_df</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">dm</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">hardcode_no_ct</span><span class="p">(</span><span class="s2">&quot;DOMAIN&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">&quot;DM&quot;</span><span class="p">)</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="c1"># .assign_ct(&quot;SEX&quot;, source=&quot;sex_raw&quot;, ...)  &lt;-- Commented out to isolate the bug</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>    <span class="n">dm</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;DOMAIN&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">&quot;DM&quot;</span><span class="p">)</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="c1"># .assign(&quot;SEX&quot;, source=&quot;sex_raw&quot;, ct=...)  &lt;-- Commented out to isolate the bug</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="p">)</span>
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="nb">print</span><span class="p">(</span><span class="n">debug_df</span><span class="o">.</span><span class="n">head</span><span class="p">())</span>
@@ -1931,7 +1987,7 @@ Check your spelling against the supported lists of verbs in the <a href="../../c
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="May 26, 2026 21:09:41 UTC">May 26, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 9, 2026 15:11:23 UTC">July 9, 2026</span>
   </span>
 
     

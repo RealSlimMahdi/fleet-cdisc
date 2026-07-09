@@ -629,6 +629,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../getting-started/ide-tooling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE & AI Tooling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../getting-started/troubleshooting/" class="md-nav__link">
         
   
@@ -866,6 +894,34 @@
     
   
     Advanced Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/interactive-explorer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Interactive Explorer
   
 
     
@@ -5555,7 +5611,7 @@ called in the correct order.  Subject-level verbs ignore the stage.</p>
 </span><span id="__span-0-369"><a id="__codelineno-0-369" name="__codelineno-0-369"></a>
 </span><span id="__span-0-370"><a id="__codelineno-0-370" name="__codelineno-0-370"></a><span class="sd">                sv = (</span>
 </span><span id="__span-0-371"><a id="__codelineno-0-371" name="__codelineno-0-371"></a><span class="sd">                    raw_visits.sdtm</span>
-</span><span id="__span-0-372"><a id="__codelineno-0-372" name="__codelineno-0-372"></a><span class="sd">                    .assign_no_ct(&quot;USUBJID&quot;, source=&quot;subject_id&quot;)</span>
+</span><span id="__span-0-372"><a id="__codelineno-0-372" name="__codelineno-0-372"></a><span class="sd">                    .assign(&quot;USUBJID&quot;, source=&quot;subject_id&quot;)</span>
 </span><span id="__span-0-373"><a id="__codelineno-0-373" name="__codelineno-0-373"></a><span class="sd">                    .assign_dtc(&quot;SVSTDTC&quot;, source=&quot;visit_date&quot;)</span>
 </span><span id="__span-0-374"><a id="__codelineno-0-374" name="__codelineno-0-374"></a><span class="sd">                    .visit_map(&quot;VISITNUM&quot;, &quot;VISIT&quot;,</span>
 </span><span id="__span-0-375"><a id="__codelineno-0-375" name="__codelineno-0-375"></a><span class="sd">                               date_col=&quot;SVSTDTC&quot;,</span>
@@ -7184,7 +7240,7 @@ When <code>None</code>, the raw study day is expected in the data.</p>
     <p>Map subject visits to planned visits::</p>
 <div class="language-text highlight"><pre><span></span><code>sv = (
     raw_visits.sdtm
-    .assign_no_ct(&quot;USUBJID&quot;, source=&quot;subject_id&quot;)
+    .assign(&quot;USUBJID&quot;, source=&quot;subject_id&quot;)
     .assign_dtc(&quot;SVSTDTC&quot;, source=&quot;visit_date&quot;)
     .visit_map(&quot;VISITNUM&quot;, &quot;VISIT&quot;,
                date_col=&quot;SVSTDTC&quot;,
@@ -7340,7 +7396,7 @@ When <code>None</code>, the raw study day is expected in the data.</p>
 </span><span id="__span-0-369"><a id="__codelineno-0-369" name="__codelineno-0-369"></a>
 </span><span id="__span-0-370"><a id="__codelineno-0-370" name="__codelineno-0-370"></a><span class="sd">            sv = (</span>
 </span><span id="__span-0-371"><a id="__codelineno-0-371" name="__codelineno-0-371"></a><span class="sd">                raw_visits.sdtm</span>
-</span><span id="__span-0-372"><a id="__codelineno-0-372" name="__codelineno-0-372"></a><span class="sd">                .assign_no_ct(&quot;USUBJID&quot;, source=&quot;subject_id&quot;)</span>
+</span><span id="__span-0-372"><a id="__codelineno-0-372" name="__codelineno-0-372"></a><span class="sd">                .assign(&quot;USUBJID&quot;, source=&quot;subject_id&quot;)</span>
 </span><span id="__span-0-373"><a id="__codelineno-0-373" name="__codelineno-0-373"></a><span class="sd">                .assign_dtc(&quot;SVSTDTC&quot;, source=&quot;visit_date&quot;)</span>
 </span><span id="__span-0-374"><a id="__codelineno-0-374" name="__codelineno-0-374"></a><span class="sd">                .visit_map(&quot;VISITNUM&quot;, &quot;VISIT&quot;,</span>
 </span><span id="__span-0-375"><a id="__codelineno-0-375" name="__codelineno-0-375"></a><span class="sd">                           date_col=&quot;SVSTDTC&quot;,</span>
