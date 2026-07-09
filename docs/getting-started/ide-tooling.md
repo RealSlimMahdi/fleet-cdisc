@@ -18,7 +18,7 @@ dm = pl.read_csv("dm_raw.csv").sdtm.assign("DOMAIN", value="DM").to_frame()
 
 # With frame(): fully typed, zero runtime cost (returns its input unchanged).
 raw = fleet.frame(pl.read_csv("dm_raw.csv"))
-dm = raw.sdtm.assign("DOMAIN", value="DM").to_frame()   # -> fleet.DataFrame
+dm = raw.sdtm.assign("DOMAIN", value="DM").to_frame()  # -> fleet.DataFrame
 dm.tlg.ae  # typed downstream too, since to_frame() returns fleet.DataFrame
 ```
 

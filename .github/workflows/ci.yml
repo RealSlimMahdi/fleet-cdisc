@@ -32,7 +32,7 @@ jobs:
         run: |
           uv run ruff check
           uv run ruff format --check
-          rc=0; uv run blacken-docs --check --line-length 100 docs/**/*.md || rc=$?
+          rc=0; uv run blacken-docs --check --line-length 100 $(find docs -name '*.md') || rc=$?
           if [ "$rc" -eq 1 ]; then echo "Code blocks need formatting"; exit 1; fi
 
       - name: Check llms.txt is up-to-date

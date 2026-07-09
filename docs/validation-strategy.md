@@ -53,8 +53,7 @@ This produces codelist classes â€” for example `SEX` (C66731), `RACE` (C74457) â
 from examples.cdiscpilot01.sdtm.codelists import SEX, RACE
 
 dm = (
-    raw_df.sdtm
-    .assign("SEX",  source="sex",  ct=SEX)
+    raw_df.sdtm.assign("SEX", source="sex", ct=SEX)
     .assign("RACE", source="race", ct=RACE)
     .to_frame()
 )
@@ -102,13 +101,13 @@ This approach means the validation does not depend on an R installation, a speci
 #                   order = exprs(ADT), new_var = ANL01FL, mode = "last"),
 #     filter = !is.na(AVAL))
 
-result = (
-    bds_frame.adam
-    .flag("ANL01FL", criteria="last", order_by="ADT",
-          by=["USUBJID", "PARAMCD"],
-          where='~pl.col("AVAL").is_null()')
-    .to_frame()
-)
+result = bds_frame.adam.flag(
+    "ANL01FL",
+    criteria="last",
+    order_by="ADT",
+    by=["USUBJID", "PARAMCD"],
+    where='~pl.col("AVAL").is_null()',
+).to_frame()
 # Only the last non-null-AVAL record per group receives "Y"; all others are null
 assert result["ANL01FL"].to_list() == [None, "Y", None, "Y", None, "Y"]
 ```
@@ -140,7 +139,7 @@ svc = ValidationService()
 
 # Validate an SDTM domain against SDTMIG 3.4
 dm_result = svc.validate_sdtm(dm, domain="DM", version="3.4")
-dm_result.print_report()          # console: pass/warn/fail by rule
+dm_result.print_report()  # console: pass/warn/fail by rule
 dm_result.save_html_report("outputs/dm_validation.html")  # archivable HTML
 
 # Validate an ADaM dataset against ADaMIG 1.3
