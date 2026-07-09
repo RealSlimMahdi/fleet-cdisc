@@ -231,9 +231,7 @@ def _widget_bar(entry_id: str, variants: list[Variant], spec: TLGSpec) -> str:
         axis_value = getattr(block, axis)
         if axis_value is None:
             continue
-        labels = (
-            list(axis_value.choices) if axis == "groupby" else [o.label for o in axis_value]
-        )
+        labels = list(axis_value.choices) if axis == "groupby" else [o.label for o in axis_value]
         parts.append(f"<fieldset><legend>{_esc(_AXIS_LEGENDS[axis])}</legend>")
         for label in labels:
             checked = " checked" if label == default_labels[axis] else ""
@@ -332,8 +330,7 @@ def render_explorer(
             _EXPLORER_CSS,
             "</head>",
             "<body>",
-            '<header class="fleet-explorer-header"><h1>Fleet TLG Explorer</h1>'
-            f"{tab_bar}</header>",
+            f'<header class="fleet-explorer-header"><h1>Fleet TLG Explorer</h1>{tab_bar}</header>',
             "<main>",
             *body,
             "</main>",

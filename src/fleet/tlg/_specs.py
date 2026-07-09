@@ -212,7 +212,7 @@ class ChoiceOption(BaseModel):
         default=None,
         description=(
             "Filter expression string (the YAML-serializable form, e.g. "
-            "``'pl.col(\"AESER\") == \"Y\"'``); ``None`` means no filter. "
+            '``\'pl.col("AESER") == "Y"\'``); ``None`` means no filter. '
             "Used by the ``population``/``dataset_filter`` axes."
         ),
     )

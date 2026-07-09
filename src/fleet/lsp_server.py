@@ -208,8 +208,7 @@ def compute_diagnostics(text: str, path: str = "") -> list[dict[str, Any]]:
         )
         if other is not None:
             message = (
-                f"'{algo}' is a {other} algorithm, but this file targets "
-                f"{'/'.join(standards)}."
+                f"'{algo}' is a {other} algorithm, but this file targets {'/'.join(standards)}."
             )
         else:
             suggestion = next(

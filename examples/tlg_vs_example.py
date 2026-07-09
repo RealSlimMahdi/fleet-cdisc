@@ -34,7 +34,8 @@ from fleet.tlg import (
 # 1. Load raw data & build ADSL (reuse pattern from tlg_ae_example.py)
 # ════════════════════════════════════════════════════════════════════════════
 print("══ 1. Load raw data & build ADSL ═══════════════════════════════════════")
-dm_raw = fleet.frame(pl.from_repr("""\
+dm_raw = fleet.frame(
+    pl.from_repr("""\
 ┌────────────────┬─────────┬─────┬─────┬───────────────────────────┬────────────────────────┬──────────┬──────────────────────┬─────────────────┬────────────────┬───────────────────────┐
 │ patient_number ┆ site_id ┆ age ┆ sex ┆ race                      ┆ ethnic                 ┆ arm_code ┆ arm_description      ┆ first_dose_date ┆ last_dose_date ┆ informed_consent_date │
 │ ---            ┆ ---     ┆ --- ┆ --- ┆ ---                       ┆ ---                    ┆ ---      ┆ ---                  ┆ ---             ┆ ---            ┆ ---                   │
@@ -46,7 +47,8 @@ dm_raw = fleet.frame(pl.from_repr("""\
 │ 01-701-1034    ┆ 701     ┆ 74  ┆ M   ┆ BLACK OR AFRICAN AMERICAN ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-05      ┆ 2014-07-06     ┆ 2014-01-04            │
 │ 01-701-1047    ┆ 701     ┆ 56  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-06      ┆ 2014-07-07     ┆ 2014-01-05            │
 └────────────────┴─────────┴─────┴─────┴───────────────────────────┴────────────────────────┴──────────┴──────────────────────┴─────────────────┴────────────────┴───────────────────────┘
-"""))
+""")
+)
 
 dm = (
     dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
@@ -207,7 +209,11 @@ print(f"   Age groups: {sorted(advs_strat['AGEGR1'].unique().to_list())}")
 # Nested stratification: pass the merged column as a second row field —
 # the engine computes per-(AGEGR1, PARAMCD) cells with group2 lineage.
 ard_strat = (
-    fleet.frame(advs_strat).tlg.vs.population(adsl_age).by("TRTA").rows(["AGEGR1", "PARAMCD"]).to_ard()
+    fleet.frame(advs_strat)
+    .tlg.vs.population(adsl_age)
+    .by("TRTA")
+    .rows(["AGEGR1", "PARAMCD"])
+    .to_ard()
 )
 print(f"   Stratified ARD: {ard_strat.shape[0]} rows (AGEGR1 → PARAMCD nesting)")
 print("   ✓ C3 pre-merge pattern demonstrated: AGEGR1 joined from ADSL onto ADVS.")

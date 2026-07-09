@@ -195,8 +195,11 @@ class TestAntiDriftGolden:
             ard_to_table_model(run_spec(spec, ADAE, adsl=ADSL, groupby="TRTA"), rmeta)
         )
         explorer_html = render_explorer(
-            [ExplorerEntry(name="aet01", spec=spec, df=ADAE, adsl=ADSL, groupby="TRTA",
-                           metadata=rmeta)]
+            [
+                ExplorerEntry(
+                    name="aet01", spec=spec, df=ADAE, adsl=ADSL, groupby="TRTA", metadata=rmeta
+                )
+            ]
         )
         # Embedded untouched inside the default (visible, v0) container.
         assert f'id="var-aet01-v0">\n{batch_html}' in explorer_html
@@ -215,9 +218,7 @@ class TestAntiDriftGolden:
 
     def test_non_default_variants_hidden_and_qc_panels_present(self) -> None:
         spec = _four_axis_spec()
-        html = render_explorer(
-            [ExplorerEntry(name="aet01", spec=spec, df=ADAE, adsl=ADSL)]
-        )
+        html = render_explorer([ExplorerEntry(name="aet01", spec=spec, df=ADAE, adsl=ADSL)])
         assert html.count('class="fleet-variant"') == 16
         assert html.count(" hidden>") >= 15  # every non-default fragment starts hidden
         assert html.count("Download ARD (JSON)") == 16

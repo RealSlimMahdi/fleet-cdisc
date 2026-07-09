@@ -390,9 +390,7 @@ def test_tlg_explore_default_matches_tlg_run_output(
     assert f'id="var-aet01-v0">\n{batch_html}' in explorer_html
 
 
-def test_tlg_explore_missing_data_errors(
-    tmp_path: Path, capsys: pytest.CaptureFixture
-) -> None:
+def test_tlg_explore_missing_data_errors(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     spec = Path("examples/tlg_specs/aet01.yaml").resolve()
     code = _run(["tlg", "explore", str(spec), "-o", str(tmp_path / "x.html")])
     assert code == 1

@@ -55,7 +55,8 @@ OUT = Path("outputs/cdiscpilot01")
 # ════════════════════════════════════════════════════════════════════════════
 # 1. Raw Data (inline — no external CSV dependencies)
 # ════════════════════════════════════════════════════════════════════════════
-dm_raw = fleet.frame(pl.from_repr("""\
+dm_raw = fleet.frame(
+    pl.from_repr("""\
 ┌────────────────┬─────────┬─────┬─────┬───────────────────────────┬────────────────────────┬──────────┬──────────────────────┬─────────────────┬────────────────┬───────────────────────┐
 │ patient_number ┆ site_id ┆ age ┆ sex ┆ race                      ┆ ethnic                 ┆ arm_code ┆ arm_description      ┆ first_dose_date ┆ last_dose_date ┆ informed_consent_date │
 │ ---            ┆ ---     ┆ --- ┆ --- ┆ ---                       ┆ ---                    ┆ ---      ┆ ---                  ┆ ---             ┆ ---            ┆ ---                   │
@@ -67,9 +68,11 @@ dm_raw = fleet.frame(pl.from_repr("""\
 │ 01-701-1034    ┆ 701     ┆ 74  ┆ M   ┆ BLACK OR AFRICAN AMERICAN ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-05      ┆ 2014-07-06     ┆ 2014-01-04            │
 │ 01-701-1047    ┆ 701     ┆ 56  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-06      ┆ 2014-07-07     ┆ 2014-01-05            │
 └────────────────┴─────────┴─────┴─────┴───────────────────────────┴────────────────────────┴──────────┴──────────────────────┴─────────────────┴────────────────┴───────────────────────┘
-"""))
+""")
+)
 
-ae_raw = fleet.frame(pl.from_repr("""\
+ae_raw = fleet.frame(
+    pl.from_repr("""\
 ┌────────────────┬───────────────────────────┬───────────────┬─────────────┬─────────────┬────────────┬────────────────────────────┬──────────────────┬──────────────────┐
 │ patient_number ┆ ae_term                   ┆ ae_start_date ┆ ae_end_date ┆ ae_severity ┆ ae_serious ┆ ae_outcome                 ┆ ae_action_taken  ┆ ae_relationship  │
 │ ---            ┆ ---                       ┆ ---           ┆ ---         ┆ ---         ┆ ---        ┆ ---                        ┆ ---              ┆ ---              │
@@ -81,7 +84,8 @@ ae_raw = fleet.frame(pl.from_repr("""\
 │ 01-701-1028    ┆ FATIGUE                   ┆ 2014-02-20    ┆ null        ┆ MODERATE    ┆ N          ┆ NOT RECOVERED/NOT RESOLVED ┆ DOSE NOT CHANGED ┆ PROBABLY RELATED │
 │ 01-701-1034    ┆ APPLICATION SITE ERYTHEMA ┆ 2014-01-20    ┆ 2014-01-25  ┆ SEVERE      ┆ Y          ┆ RECOVERED/RESOLVED         ┆ DRUG WITHDRAWN   ┆ RELATED          │
 └────────────────┴───────────────────────────┴───────────────┴─────────────┴─────────────┴────────────┴────────────────────────────┴──────────────────┴──────────────────┘
-"""))
+""")
+)
 
 print("── 1. Raw data loaded ───────────────────────────────────────────────────")
 print(f"   dm_raw : {dm_raw.shape[0]:>3} rows   columns → {dm_raw.columns}")
@@ -296,8 +300,9 @@ print(f"── 2d. SDTM AE : {ae.shape[0]} records  × {ae.shape[1]} variables (
 print("\n── 3–5. ADSL base + treatment dates ────────────────────────────────────")
 
 adsl = (
-    dm.adam.adsl    # ── demographics from DM ──────────────────────────────────────────────
-    .source("STUDYID")
+    dm.adam.adsl.source(  # ── demographics from DM ──────────────────────────────────────────────
+        "STUDYID"
+    )
     .source("USUBJID")
     .source("SUBJID")
     .source("SITEID")
@@ -348,8 +353,7 @@ _ds_disp = ds.filter(pl.col("DSCAT") == "DISPOSITION EVENT").select(
 )
 
 adsl = (
-    adsl.adam.adsl    # EOSDT: latest date of DISPOSITION EVENT (admiral: derive_vars_merged)
-    .last_date(
+    adsl.adam.adsl.last_date(  # EOSDT: latest date of DISPOSITION EVENT (admiral: derive_vars_merged)
         "EOSDT", from_dataset=ds, date_col="DSSTDTC", where='pl.col("DSCAT") == "DISPOSITION EVENT"'
     )
     # RANDDT: date of RANDOMIZED protocol milestone (admiral: derive_vars_merged)
@@ -358,7 +362,9 @@ adsl = (
     )
     .to_frame()
     # Bring in DSDECOD/DSTERM from DS for status/reason derivations
-    .adam.merge(dataset=_ds_disp, on="USUBJID", how="left")    # EOSSTT: map disposition decode to study status (admiral: format_eosstt)
+    .adam.merge(
+        dataset=_ds_disp, on="USUBJID", how="left"
+    )  # EOSSTT: map disposition decode to study status (admiral: format_eosstt)
     .case_when(
         "EOSSTT",
         when=[
@@ -396,15 +402,19 @@ print(f"   EOSSTT counts: {adsl['EOSSTT'].value_counts().to_dicts()}")
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── 7. Age grouping (AGEGR1) ─────────────────────────────────────────────")
 
-adsl = fleet.frame(adsl).adam.adsl.case_when(
-    "AGEGR1",
-    when=[
-        {"condition": "pl.col('AGE') < 18", "value": "<18"},
-        {"condition": "pl.col('AGE') <= 64", "value": "18-64"},
-        {"condition": "pl.col('AGE') > 64", "value": ">64"},
-    ],
-    else_="Missing",
-).to_frame()
+adsl = (
+    fleet.frame(adsl)
+    .adam.adsl.case_when(
+        "AGEGR1",
+        when=[
+            {"condition": "pl.col('AGE') < 18", "value": "<18"},
+            {"condition": "pl.col('AGE') <= 64", "value": "18-64"},
+            {"condition": "pl.col('AGE') > 64", "value": ">64"},
+        ],
+        else_="Missing",
+    )
+    .to_frame()
+)
 
 _agegr = adsl.group_by("AGEGR1").agg(pl.len().alias("n")).sort("AGEGR1")
 print(f"   AGEGR1 distribution: {_agegr.to_dicts()}")
@@ -423,8 +433,9 @@ _ex_max_dose = ex.group_by("USUBJID").agg(pl.col("EXDOSE").max().alias("_EXDOSE_
 adsl = (
     adsl.adam.merge(dataset=_ex_max_dose, on="USUBJID", how="left")
     .to_frame()
-    .adam.adsl    # SAFFL: subjects with at least one dose > 0 (admiral: derive_var_merged_exist_flag)
-    .flag("SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0')
+    .adam.adsl.flag(  # SAFFL: subjects with at least one dose > 0 (admiral: derive_var_merged_exist_flag)
+        "SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0'
+    )
     # ITTFL: all randomised subjects (ARMCD not SCRNFAIL)
     .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"')
     .to_frame()
@@ -448,31 +459,35 @@ print(f"   ITTFL : {adsl['ITTFL'].value_counts().to_dicts()}")
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── 9. Last date known alive (LSTALVDT) — via pick() ─────────────────────")
 
-adsl = fleet.frame(adsl).adam.adsl.pick(
-    "LSTALVDT",
-    events=[
-        {
-            "when": pl.col("AEENDTC").is_not_null(),
-            "set": {"LSTALVDT": "AEENDTC"},
-            "source": ae,
-            "label": "AE end date (latest contact)",
-        },
-        {
-            "when": pl.col("AESTDTC").is_not_null(),
-            "set": {"LSTALVDT": "AESTDTC"},
-            "source": ae,
-            "label": "AE start date (fallback)",
-        },
-        {
-            "when": pl.col("TRTEDT").is_not_null(),
-            "set": {"LSTALVDT": "TRTEDT"},
-            "label": "Treatment end (last resort)",
-        },
-    ],
-    by=["USUBJID"],
-    order=["LSTALVDT"],
-    mode="last",
-).to_frame()
+adsl = (
+    fleet.frame(adsl)
+    .adam.adsl.pick(
+        "LSTALVDT",
+        events=[
+            {
+                "when": pl.col("AEENDTC").is_not_null(),
+                "set": {"LSTALVDT": "AEENDTC"},
+                "source": ae,
+                "label": "AE end date (latest contact)",
+            },
+            {
+                "when": pl.col("AESTDTC").is_not_null(),
+                "set": {"LSTALVDT": "AESTDTC"},
+                "source": ae,
+                "label": "AE start date (fallback)",
+            },
+            {
+                "when": pl.col("TRTEDT").is_not_null(),
+                "set": {"LSTALVDT": "TRTEDT"},
+                "label": "Treatment end (last resort)",
+            },
+        ],
+        by=["USUBJID"],
+        order=["LSTALVDT"],
+        mode="last",
+    )
+    .to_frame()
+)
 
 print(f"   {adsl.shape[0]} subjects × {adsl.shape[1]} variables")
 print(f"   LSTALVDT range: {adsl['LSTALVDT'].min()} → {adsl['LSTALVDT'].max()}")
@@ -619,7 +634,8 @@ print(
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 13. ADaM ADVS (inline) ═══════════════════════════════════════════════")
 
-vs_raw = fleet.frame(pl.from_repr("""\
+vs_raw = fleet.frame(
+    pl.from_repr("""\
 ┌────────────────┬─────────────┬──────────┬────────┬─────────┬──────────┬────────────┬──────┐
 │ patient_number ┆ site_number ┆ vstestcd ┆ vstest ┆ vsorres ┆ vsorresu ┆ vsdtc      ┆ vsdy │
 │ ---            ┆ ---         ┆ ---      ┆ ---    ┆ ---     ┆ ---      ┆ ---        ┆ ---  │
@@ -631,7 +647,8 @@ vs_raw = fleet.frame(pl.from_repr("""\
 │ 01-701-1034    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 170.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
 │ 01-701-1047    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 166.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
 └────────────────┴─────────────┴──────────┴────────┴─────────┴──────────┴────────────┴──────┘
-"""))
+""")
+)
 
 _trtsdt_map = adsl_final.select(["USUBJID", "TRTSDT"])
 
@@ -648,11 +665,11 @@ advs = (
     # admiral: flag_variables — last pre-dose visit (vsdy ≤ 0)
     .flag("ABLFL", criteria='pl.col("vsdy") <= 0', by=["USUBJID", "PARAMCD"])
     .to_frame()  # materialise — ABLFL must exist before baseline() window fn
-    .adam    # admiral: derive_var_base
-    .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
+    .adam.baseline(  # admiral: derive_var_base
+        "BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"]
+    )
     .to_frame()  # materialise — BASE must exist before chg()/pchg()
-    .adam    # admiral: derive_var_chg
-    .chg("CHG", aval="AVAL", base="BASE")
+    .adam.chg("CHG", aval="AVAL", base="BASE")  # admiral: derive_var_chg
     .pchg("PCHG", aval="AVAL", base="BASE")
     # admiral: restrict_derivation + derive_var_extreme_flag
     # ANL01FL — last valid assessment per subject/parameter (non-null AVAL)
@@ -726,8 +743,9 @@ adae = (
     .date("AENDT", source="AEENDTC")
     .duration("ADY", start="TRTSDT", end="ASTDT")
     .to_frame()
-    .adam.occds    # admiral: derive_var_trtemfl
-    .treatment_emergent("TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT")
+    .adam.occds.treatment_emergent(  # admiral: derive_var_trtemfl
+        "TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT"
+    )
     # admiral: slice_derivation (worst severity per subject × AE term)
     .recode("AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
     .flag(

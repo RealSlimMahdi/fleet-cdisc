@@ -48,7 +48,8 @@ SDTM_SPEC = SPECS / "sdtm/define.yaml"
 ADAM_SPEC = SPECS / "adam/define.yaml"
 
 # ── 1. Raw data (inline) ─────────────────────────────────────────────────────
-dm_raw = fleet.frame(pl.from_repr("""\
+dm_raw = fleet.frame(
+    pl.from_repr("""\
 ┌────────────────┬─────────┬─────┬─────┬───────────────────────────┬────────────────────────┬──────────┬──────────────────────┬─────────────────┬────────────────┬───────────────────────┐
 │ patient_number ┆ site_id ┆ age ┆ sex ┆ race                      ┆ ethnic                 ┆ arm_code ┆ arm_description      ┆ first_dose_date ┆ last_dose_date ┆ informed_consent_date │
 │ ---            ┆ ---     ┆ --- ┆ --- ┆ ---                       ┆ ---                    ┆ ---      ┆ ---                  ┆ ---             ┆ ---            ┆ ---                   │
@@ -60,9 +61,11 @@ dm_raw = fleet.frame(pl.from_repr("""\
 │ 01-701-1034    ┆ 701     ┆ 74  ┆ M   ┆ BLACK OR AFRICAN AMERICAN ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-05      ┆ 2014-07-06     ┆ 2014-01-04            │
 │ 01-701-1047    ┆ 701     ┆ 56  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-06      ┆ 2014-07-07     ┆ 2014-01-05            │
 └────────────────┴─────────┴─────┴─────┴───────────────────────────┴────────────────────────┴──────────┴──────────────────────┴─────────────────┴────────────────┴───────────────────────┘
-"""))
+""")
+)
 
-ae_raw = fleet.frame(pl.from_repr("""\
+ae_raw = fleet.frame(
+    pl.from_repr("""\
 ┌────────────────┬───────────────────────────┬───────────────┬─────────────┬─────────────┬────────────┬────────────────────────────┬──────────────────┬──────────────────┐
 │ patient_number ┆ ae_term                   ┆ ae_start_date ┆ ae_end_date ┆ ae_severity ┆ ae_serious ┆ ae_outcome                 ┆ ae_action_taken  ┆ ae_relationship  │
 │ ---            ┆ ---                       ┆ ---           ┆ ---         ┆ ---         ┆ ---        ┆ ---                        ┆ ---              ┆ ---              │
@@ -74,9 +77,11 @@ ae_raw = fleet.frame(pl.from_repr("""\
 │ 01-701-1028    ┆ FATIGUE                   ┆ 2014-02-20    ┆ null        ┆ MODERATE    ┆ N          ┆ NOT RECOVERED/NOT RESOLVED ┆ DOSE NOT CHANGED ┆ PROBABLY RELATED │
 │ 01-701-1034    ┆ APPLICATION SITE ERYTHEMA ┆ 2014-01-20    ┆ 2014-01-25  ┆ SEVERE      ┆ Y          ┆ RECOVERED/RESOLVED         ┆ DRUG WITHDRAWN   ┆ RELATED          │
 └────────────────┴───────────────────────────┴───────────────┴─────────────┴─────────────┴────────────┴────────────────────────────┴──────────────────┴──────────────────┘
-"""))
+""")
+)
 
-vs_raw = fleet.frame(pl.from_repr("""\
+vs_raw = fleet.frame(
+    pl.from_repr("""\
 ┌────────────────┬─────────────┬──────────┬────────┬─────────┬──────────┬────────────┬──────┐
 │ patient_number ┆ site_number ┆ vstestcd ┆ vstest ┆ vsorres ┆ vsorresu ┆ vsdtc      ┆ vsdy │
 │ ---            ┆ ---         ┆ ---      ┆ ---    ┆ ---     ┆ ---      ┆ ---        ┆ ---  │
@@ -88,7 +93,8 @@ vs_raw = fleet.frame(pl.from_repr("""\
 │ 01-701-1034    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 170.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
 │ 01-701-1047    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 166.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
 └────────────────┴─────────────┴──────────┴────────┴─────────┴──────────┴────────────┴──────┘
-"""))
+""")
+)
 
 # ── 2. SDTM DM ───────────────────────────────────────────────────────────────
 dm = (
@@ -202,8 +208,9 @@ print(f"SDTM AE  : {ae.shape[0]} records  ·  {ae.shape[1]} columns")
 print("\n── ADaM ADSL (spec-driven) ──────────────────────────────────────────────")
 
 dm_enriched = (
-    dm.adam.adsl    # Treatment dates from EX (admiral: derive_vars_merged)
-    .first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")
+    dm.adam.adsl.first_date(  # Treatment dates from EX (admiral: derive_vars_merged)
+        "TRTSDT", from_dataset=ex, date_col="EXSTDTC"
+    )
     .last_date("TRTEDT", from_dataset=ex, date_col="EXENDTC")
     # Treatment variables (admiral: mutate TRT01P=ARM, TRT01A=ACTARM)
     .assign("TRT01P", source="ARM")
@@ -328,8 +335,7 @@ ex_with_adsl = fleet.frame(ex).adam.merge(dataset=_adsl_ex, on="USUBJID", how="l
 # STUDYID already exists on the SDTM EX frame — keep it, skip the spec's copy.
 adex_s1 = ex_with_adsl.adam.from_spec(ADAM_SPEC, dataset="ADEX", omit=["STUDYID"]).to_frame()
 adex = (
-    adex_s1.adam.occds    # admiral: derive_var_dur (inclusive end-date convention)
-    .derivation(
+    adex_s1.adam.occds.derivation(  # admiral: derive_var_dur (inclusive end-date convention)
         "EXDURD",  # shared verb on occds via mixin
         expression="(pl.col('AENDT').cast(pl.Date) - pl.col('ASTDT').cast(pl.Date))"
         ".dt.total_days() + 1",

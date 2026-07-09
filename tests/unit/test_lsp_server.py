@@ -94,10 +94,7 @@ class TestCompletions:
     def _algo_items(self, text: str) -> list[str]:
         lines = text.splitlines()
         line = next(i for i, ln in enumerate(lines) if "algorithm:" in ln)
-        return [
-            i["label"]
-            for i in compute_completions(text, line, len(lines[line]))
-        ]
+        return [i["label"] for i in compute_completions(text, line, len(lines[line]))]
 
     def test_algorithm_completions_match_registry(self):
         labels = self._algo_items(BAD_ALGO_SPEC)

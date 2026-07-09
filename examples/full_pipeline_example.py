@@ -18,7 +18,8 @@ from examples.cdiscpilot01.sdtm.codelists import SEX, VSTESTCD
 
 def main():
     print("--- 1. Loading Raw Mock Data ---")
-    raw_dm = fleet.frame(pl.from_repr("""\
+    raw_dm = fleet.frame(
+        pl.from_repr("""\
 ┌────────────┬─────┬────────────┬─────────┐
 │ subject_id ┆ sex ┆ dob        ┆ arm     │
 │ ---        ┆ --- ┆ ---        ┆ ---     │
@@ -27,9 +28,11 @@ def main():
 │ S001       ┆ M   ┆ 1980-01-01 ┆ Drug A  │
 │ S002       ┆ F   ┆ 1992-05-15 ┆ Placebo │
 └────────────┴─────┴────────────┴─────────┘
-"""))
+""")
+    )
 
-    raw_vs = fleet.frame(pl.from_repr("""\
+    raw_vs = fleet.frame(
+        pl.from_repr("""\
 ┌────────────┬────────────┬────────┬────────────┐
 │ subject_id ┆ test_name  ┆ result ┆ date       │
 │ ---        ┆ ---        ┆ ---    ┆ ---        │
@@ -40,9 +43,11 @@ def main():
 │ S002       ┆ Weight     ┆ 65.0   ┆ 2023-01-02 │
 │ S002       ┆ Heart Rate ┆ 88.0   ┆ 2023-01-02 │
 └────────────┴────────────┴────────┴────────────┘
-"""))
+""")
+    )
 
-    raw_ae = fleet.frame(pl.from_repr("""\
+    raw_ae = fleet.frame(
+        pl.from_repr("""\
 ┌────────────┬──────────┬────────────┐
 │ subject_id ┆ ae_term  ┆ start_date │
 │ ---        ┆ ---      ┆ ---        │
@@ -51,7 +56,8 @@ def main():
 │ S001       ┆ Headache ┆ 2023-01-05 │
 │ S002       ┆ Nausea   ┆ 2023-01-04 │
 └────────────┴──────────┴────────────┘
-"""))
+""")
+    )
 
     print("--- 2. Deriving SDTM ---")
     dm = (
@@ -102,7 +108,9 @@ def main():
     print("\nADSL Dataset:")
     print(adsl)
 
-    vs_with_adsl = fleet.frame(vs.join(adsl.select(["USUBJID", "TRTSDT"]), on="USUBJID", how="left"))
+    vs_with_adsl = fleet.frame(
+        vs.join(adsl.select(["USUBJID", "TRTSDT"]), on="USUBJID", how="left")
+    )
 
     advs = (
         vs_with_adsl.adam.source("USUBJID")
