@@ -1,3 +1,5 @@
+> **Status (2026-07): implemented — `.tlg` namespaces, `TLGSpec` models, open registry, and the YAML spec workflow shipped. Details herein are historical.**
+
 ## Plan: Declarative TLG Namespace with Spec-Driven Customization
 
 Add a `.tlg` Polars DataFrame namespace to Fleet with a **Vega-Lite-inspired declarative spec system**. Each TLG output (AE summary, AE listing, VS summary, etc.) is defined by a `TLGSpec` Pydantic model that declares field→role mappings, statistics, and data requirements. The spec carries both **structural validation** (column presence/types) and **content validation** (required PARAM/PARAMCD values, flag values, pool arm existence). Methods like `.t_summary()` accept an optional spec override for full customization. Default specs provide zero-config convenience; custom specs let users add columns, change grouping, or adjust statistics declaratively — without writing compute code.

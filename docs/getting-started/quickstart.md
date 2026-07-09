@@ -60,8 +60,8 @@ a literal, and `ct=` (a generated codelist class or an NCI concept ID) turns on
 controlled-terminology validation — no need to look up concept IDs. When `ct_map`
 is omitted (as above), raw values are passed through and validated against the
 codelist; add `ct_map={"1": "M", "2": "F"}` if your raw data needs recoding. The
-old spellings (`hardcode_no_ct`, `assign_no_ct`, `assign_ct`, `assign_dtc`) still
-work as deprecated aliases — run `fleet migrate <files...> --write` to upgrade.
+old spellings (`hardcode_no_ct`, `assign_no_ct`, `assign_ct`, `assign_dtc`) were
+removed outright — run `fleet migrate <files...> --write` to rewrite old scripts.
 
 ---
 

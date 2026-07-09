@@ -865,12 +865,12 @@ class TestSDTMRegression:
 
     def test_assign_no_ct(self):
         raw = pl.DataFrame({"patient_number": ["01-001"]})
-        result = raw.sdtm.assign_no_ct("USUBJID", source="patient_number").to_frame()
+        result = raw.sdtm.assign("USUBJID", source="patient_number").to_frame()
         assert result["USUBJID"][0] == "01-001"
 
     def test_hardcode_no_ct(self):
         raw = pl.DataFrame({"x": [1, 2, 3]})
-        result = raw.sdtm.hardcode_no_ct("DOMAIN", value="DM").to_frame()
+        result = raw.sdtm.assign("DOMAIN", value="DM").to_frame()
         assert result["DOMAIN"].to_list() == ["DM", "DM", "DM"]
 
     def test_chain_multiple_verbs(self):
@@ -881,9 +881,9 @@ class TestSDTMRegression:
             }
         )
         result = (
-            raw.sdtm.assign_no_ct("USUBJID", source="patient_number")
-            .assign_no_ct("SITEID", source="site_id")
-            .hardcode_no_ct("DOMAIN", value="DM")
+            raw.sdtm.assign("USUBJID", source="patient_number")
+            .assign("SITEID", source="site_id")
+            .assign("DOMAIN", value="DM")
             .to_frame()
         )
         assert set(result.columns) >= {"USUBJID", "SITEID", "DOMAIN", "patient_number", "site_id"}

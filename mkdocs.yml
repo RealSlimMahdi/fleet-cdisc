@@ -101,6 +101,7 @@ nav:
       - Installation: getting-started/installation.md
       - Quickstart: getting-started/quickstart.md
       - CLI Reference: getting-started/cli.md
+      - IDE & AI Tooling: getting-started/ide-tooling.md
       - Troubleshooting Guide: getting-started/troubleshooting.md
   - Concepts:
       - How define.yaml Works: concepts/define-yaml.md
@@ -109,6 +110,7 @@ nav:
       - Trial Design Domains: concepts/tdd.md
       - Custom Validation Rules: concepts/custom-rules.md
       - Advanced Patterns: concepts/advanced.md
+      - Interactive Explorer: concepts/interactive-explorer.md
   - Examples:
       - Multi-Domain Pipeline: examples/full_pipeline.md
       - "Raw-to-Render (R2R)": examples/r2r_strategy.md

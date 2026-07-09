@@ -118,7 +118,7 @@ class TestTransformInline:
             )
 
         result = (
-            dm_frame.adam.assigned("STUDYID", value="STUDY01")
+            dm_frame.adam.assign("STUDYID", value="STUDY01")
             .transform(add_elderly, label="Elderly flag")
             .source("USUBJID")
             .to_frame()
@@ -135,7 +135,7 @@ class TestTransformInline:
             assert "MY_COL" in df.columns, "Pipeline was not materialised"
             return df
 
-        dm_frame.adam.assigned("MY_COL", value=1).transform(check_col_exists).to_frame()
+        dm_frame.adam.assign("MY_COL", value=1).transform(check_col_exists).to_frame()
 
     def test_label_is_ignored(self, dm_frame):
         """label= is cosmetic — doesn't affect output."""
@@ -201,7 +201,7 @@ class TestFromSpecOmit:
         """Omit a variable from spec, then derive it with custom logic."""
         result = (
             base_frame.adam.from_spec(spec_path, dataset="TEST", omit=["MYVAR"])
-            .assigned("MYVAR", value="FROM_INLINE")
+            .assign("MYVAR", value="FROM_INLINE")
             .to_frame()
         )
         assert result["MYVAR"].to_list() == ["FROM_INLINE", "FROM_INLINE"]

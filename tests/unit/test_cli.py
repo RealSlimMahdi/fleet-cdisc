@@ -87,7 +87,16 @@ def study(tmp_path: Path) -> Path:
     (sdtm_dir / "define.yaml").write_text(_SDTM_DEFINE, encoding="utf-8")
     raw = tmp_path / "data" / "raw"
     raw.mkdir(parents=True)
-    pl.DataFrame({"patient_number": ["P1", "P2"], "age": [45, 60]}).write_csv(raw / "dm.csv")
+    pl.from_repr("""\
+┌────────────────┬─────┐
+│ patient_number ┆ age │
+│ ---            ┆ --- │
+│ str            ┆ i64 │
+╞════════════════╪═════╡
+│ P1             ┆ 45  │
+│ P2             ┆ 60  │
+└────────────────┴─────┘
+""").write_csv(raw / "dm.csv")
     return tmp_path
 
 
@@ -101,14 +110,18 @@ def tlg_data(tmp_path: Path) -> tuple[Path, Path]:
             "SAFFL": ["Y"] * 8,
         }
     )
-    adae = pl.DataFrame(
-        {
-            "USUBJID": ["S001", "S002", "S005", "S006"],
-            "TRTA": ["Placebo", "Placebo", "Drug A", "Drug A"],
-            "AESER": ["N", "Y", "N", "Y"],
-            "AEACN": ["DOSE NOT CHANGED", "DRUG WITHDRAWN", "DOSE NOT CHANGED", "DRUG WITHDRAWN"],
-        }
-    )
+    adae = pl.from_repr("""\
+┌─────────┬─────────┬───────┬──────────────────┐
+│ USUBJID ┆ TRTA    ┆ AESER ┆ AEACN            │
+│ ---     ┆ ---     ┆ ---   ┆ ---              │
+│ str     ┆ str     ┆ str   ┆ str              │
+╞═════════╪═════════╪═══════╪══════════════════╡
+│ S001    ┆ Placebo ┆ N     ┆ DOSE NOT CHANGED │
+│ S002    ┆ Placebo ┆ Y     ┆ DRUG WITHDRAWN   │
+│ S005    ┆ Drug A  ┆ N     ┆ DOSE NOT CHANGED │
+│ S006    ┆ Drug A  ┆ Y     ┆ DRUG WITHDRAWN   │
+└─────────┴─────────┴───────┴──────────────────┘
+""")
     adsl_path = tmp_path / "adsl.csv"
     adae_path = tmp_path / "adae.csv"
     adsl.write_csv(adsl_path)
@@ -327,14 +340,90 @@ def test_tlg_run_rtf_format(tmp_path: Path, tlg_data: tuple[Path, Path]) -> None
 
 
 # ------------------------------------------------------------------ #
+# fleet tlg explore — static variant explorer                        #
+# ------------------------------------------------------------------ #
+
+
+def test_tlg_explore_happy_path(
+    tmp_path: Path, tlg_data: tuple[Path, Path], capsys: pytest.CaptureFixture
+) -> None:
+    """The shipped aet01 spec (8 declared variants) renders one HTML file."""
+    adsl_path, adae_path = tlg_data
+    spec = Path("examples/tlg_specs/aet01.yaml").resolve()
+    out = tmp_path / "explorer.html"
+    code = _run(
+        [
+            "tlg",
+            "explore",
+            str(spec),
+            "--data",
+            str(adae_path),
+            "--adsl",
+            str(adsl_path),
+            "-o",
+            str(out),
+        ]
+    )
+    assert code == 0
+    assert "8 variant(s)" in capsys.readouterr().out
+    html = out.read_text(encoding="utf-8")
+    assert html.count('class="fleet-variant"') == 8
+    assert "Download ARD (JSON)" in html
+    assert "Show definition (spec YAML)" in html
+
+
+def test_tlg_explore_default_matches_tlg_run_output(
+    tmp_path: Path, tlg_data: tuple[Path, Path]
+) -> None:
+    """Anti-drift, CLI edition: `tlg run`'s HTML is embedded byte-identical
+    as the explorer's default variant fragment."""
+    adsl_path, adae_path = tlg_data
+    spec = Path("examples/tlg_specs/aet01.yaml").resolve()
+    run_dir = tmp_path / "run"
+    out = tmp_path / "explorer.html"
+    common = ["--data", str(adae_path), "--adsl", str(adsl_path)]
+    assert _run(["tlg", "run", str(spec), *common, "-o", str(run_dir)]) == 0
+    assert _run(["tlg", "explore", str(spec), *common, "-o", str(out)]) == 0
+
+    batch_html = (run_dir / "aet01.html").read_text(encoding="utf-8")
+    explorer_html = out.read_text(encoding="utf-8")
+    assert f'id="var-aet01-v0">\n{batch_html}' in explorer_html
+
+
+def test_tlg_explore_missing_data_errors(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    spec = Path("examples/tlg_specs/aet01.yaml").resolve()
+    code = _run(["tlg", "explore", str(spec), "-o", str(tmp_path / "x.html")])
+    assert code == 1
+    assert "needs the ADAE dataset" in capsys.readouterr().err
+
+
+# ------------------------------------------------------------------ #
 # fleet tlg export — C9 groupby detection                            #
 # ------------------------------------------------------------------ #
 
 
 def test_tlg_export_groupby_missing_errors(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     # ADAE without any known arm column → clear error listing candidates.
-    adae = pl.DataFrame({"USUBJID": ["S001"], "AESER": ["N"], "AEACN": ["DOSE NOT CHANGED"]})
-    adsl = pl.DataFrame({"USUBJID": ["S001"], "SAFFL": ["Y"]})
+    adae = pl.from_repr("""\
+┌─────────┬───────┬──────────────────┐
+│ USUBJID ┆ AESER ┆ AEACN            │
+│ ---     ┆ ---   ┆ ---              │
+│ str     ┆ str   ┆ str              │
+╞═════════╪═══════╪══════════════════╡
+│ S001    ┆ N     ┆ DOSE NOT CHANGED │
+└─────────┴───────┴──────────────────┘
+""")
+    adsl = pl.from_repr("""\
+┌─────────┬───────┐
+│ USUBJID ┆ SAFFL │
+│ ---     ┆ ---   │
+│ str     ┆ str   │
+╞═════════╪═══════╡
+│ S001    ┆ Y     │
+└─────────┴───────┘
+""")
     adae_path = tmp_path / "adae.csv"
     adsl_path = tmp_path / "adsl.csv"
     adae.write_csv(adae_path)

@@ -1,3 +1,5 @@
+> **Status (2026-07): implemented; the factory/CSV-fixture approach herein was later superseded by inline `pl.from_repr` — see `.github/instructions/tests.instructions.md`.**
+
 ## Plan: Harden Fleet Test Suite
 
 Raise defect detection by making the suite resemble messy clinical reality instead of idealized toy data. Start with shared fixtures and assertion discipline, then harden each test cluster against CDISC-relevant edge cases: partial dates, duplicate keys, denominator drift, sparse strata, terminology drift, null propagation, join cardinality, and audit-trail fidelity. Keep production code out of scope unless stronger tests expose a real defect.

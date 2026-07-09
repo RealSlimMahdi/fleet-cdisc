@@ -40,9 +40,9 @@ class TestChainColumnValidation:
 
     def test_typo_raises_at_verb_with_suggestion(self, raw):
         with pytest.raises(DerivationError) as excinfo:
-            raw.sdtm.assign_no_ct("USUBJID", source="patient_numbr")
+            raw.sdtm.assign("USUBJID", source="patient_numbr")
         msg = str(excinfo.value)
-        assert "assign_no_ct" in msg
+        assert "assign" in msg
         assert "USUBJID" in msg
         assert "patient_numbr" in msg
         assert "Did you mean 'patient_number'?" in msg
@@ -50,12 +50,12 @@ class TestChainColumnValidation:
     def test_error_surfaces_at_call_not_at_to_frame(self, raw):
         """The error must be raised by the verb call itself (eager schema check)."""
         with pytest.raises(DerivationError):
-            raw.sdtm.assign_no_ct("USUBJID", source="nope")  # no .to_frame()
+            raw.sdtm.assign("USUBJID", source="nope")  # no .to_frame()
 
     def test_previously_chained_columns_are_visible(self, raw):
         result = (
-            raw.sdtm.assign_no_ct("USUBJID", source="patient_number")
-            .assign_no_ct("SUBJID", source="USUBJID")  # created one verb earlier
+            raw.sdtm.assign("USUBJID", source="patient_number")
+            .assign("SUBJID", source="USUBJID")  # created one verb earlier
             .to_frame()
         )
         assert result["SUBJID"].to_list() == ["S001"]
@@ -66,7 +66,7 @@ class TestChainColumnValidation:
 
     def test_legacy_catch_style_works(self, raw):
         with pytest.raises(ValueError):
-            raw.sdtm.assign_no_ct("USUBJID", source="patient_numbr")
+            raw.sdtm.assign("USUBJID", source="patient_numbr")
 
 
 # ------------------------------------------------------------------ #
@@ -77,7 +77,7 @@ class TestChainColumnValidation:
 class TestToFrameTranslation:
     def test_lazy_column_error_translated_with_lineage(self):
         df = pl.DataFrame({"a": [1]})
-        ns = df.sdtm.hardcode_no_ct("DOMAIN", value="DM")
+        ns = df.sdtm.assign("DOMAIN", value="DM")
         # Bypass _chain validation to simulate a lazily-surfacing error.
         ns._lazy = ns._lazy.with_columns(pl.col("DOMAIN").alias("COPY")).drop("DOMAIN")
         ns._lazy = ns._lazy.with_columns(pl.col("DOMAIN").alias("AGAIN"))
@@ -86,7 +86,7 @@ class TestToFrameTranslation:
         msg = str(excinfo.value)
         assert "DOMAIN" in msg
         # Lineage names the verb that produced the missing column.
-        assert "hardcode_no_ct" in msg
+        assert "assign" in msg
 
 
 # ------------------------------------------------------------------ #
@@ -108,7 +108,15 @@ class TestExceptionHierarchy:
         assert issubclass(PinError, LookupError)
 
     def test_missing_pin_raises_pin_error(self):
-        df = pl.DataFrame({"USUBJID": ["S1"], "ASTDT": ["2014-01-05"]})
+        df = pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ ASTDT      │
+│ ---     ┆ ---        │
+│ str     ┆ str        │
+╞═════════╪════════════╡
+│ S1      ┆ 2014-01-05 │
+└─────────┴────────────┘
+""")
         with pytest.raises(PinError, match="pinned 'ADSL'"):
             df.adam.study_day("ASTDY", date_col="ASTDT")
         with pytest.raises(LookupError):
@@ -158,13 +166,22 @@ class TestFlagKeywordDidYouMean:
             advs.adam.flag("ANLFL", criteria="FIRSTLF")
 
     def test_bare_boolean_column_still_accepted(self):
-        df = pl.DataFrame({"USUBJID": ["S1", "S2"], "ELIGIBLE": [True, False]})
+        df = pl.from_repr("""\
+┌─────────┬──────────┐
+│ USUBJID ┆ ELIGIBLE │
+│ ---     ┆ ---      │
+│ str     ┆ bool     │
+╞═════════╪══════════╡
+│ S1      ┆ true     │
+│ S2      ┆ false    │
+└─────────┴──────────┘
+""")
         result = df.adam.flag("ELIGFL", criteria="ELIGIBLE").to_frame()
         assert result["ELIGFL"].to_list() == ["Y", None]
 
     def test_real_keywords_still_dispatch(self, advs):
         result = advs.adam.flag(
-            "ABLFL", criteria="first", order_by="AVISITN", groups=["USUBJID"]
+            "ABLFL", criteria="first", order_by="AVISITN", by=["USUBJID"]
         ).to_frame()
         assert result["ABLFL"].to_list() == ["Y", None]
 
@@ -185,7 +202,15 @@ class TestParseExpressionBareNames:
     def test_mixed_bare_and_pl_syntax(self):
         from fleet.sdtm.utils import parse_expression
 
-        df = pl.DataFrame({"AVAL": [5.0], "HI": [4.0]})
+        df = pl.from_repr("""\
+┌──────┬─────┐
+│ AVAL ┆ HI  │
+│ ---  ┆ --- │
+│ f64  ┆ f64 │
+╞══════╪═════╡
+│ 5    ┆ 4   │
+└──────┴─────┘
+""")
         result = df.select(parse_expression("pl.col('AVAL') > HI").alias("OUT"))
         assert result["OUT"].to_list() == [True]
 
@@ -248,7 +273,17 @@ class TestFleetLogging:
 
 class TestNodupReport:
     def test_report_only_attaches_duplicates_frame(self):
-        df = pl.DataFrame({"USUBJID": ["S1", "S1", "S2"], "AESEQ": [1, 1, 2]})
+        df = pl.from_repr("""\
+┌─────────┬───────┐
+│ USUBJID ┆ AESEQ │
+│ ---     ┆ ---   │
+│ str     ┆ i64   │
+╞═════════╪═══════╡
+│ S1      ┆ 1     │
+│ S1      ┆ 1     │
+│ S2      ┆ 2     │
+└─────────┴───────┘
+""")
         ns = df.sdtm.nodup(subset=["USUBJID", "AESEQ"])
         report = ns.last_nodup_report
         assert report is not None
@@ -289,7 +324,7 @@ class TestValidateResultAccess:
         )
         monkeypatch.setattr(ValidationService, "validate_sdtm", lambda self, df, **kw: result)
         df = pl.DataFrame({"USUBJID": ["S1"]})
-        return df.sdtm.hardcode_no_ct("DOMAIN", value="DM")
+        return df.sdtm.assign("DOMAIN", value="DM")
 
     def test_on_fail_warn_default_keeps_chain_and_stashes_result(self, failing_ns):
         with pytest.warns(UserWarning, match="validation failed"):

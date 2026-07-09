@@ -62,16 +62,24 @@ class TestTrace:
     def test_cross_domain_pin_recursion(self, dm_raw):
         """AESTDY traces through the pinned DM domain's own lineage."""
         dm_ns = (
-            dm_raw.sdtm.hardcode_no_ct("DOMAIN", value="DM")
-            .assign_no_ct("USUBJID", source="patient_number")
+            dm_raw.sdtm.assign("DOMAIN", value="DM")
+            .assign("USUBJID", source="patient_number")
             .date("RFSTDTC", source="first_dose_date")
         )
         dm = dm_ns.to_frame()
 
-        ae_raw = pl.DataFrame({"patient_number": ["01-701-1015"], "ae_start_date": ["2014-01-10"]})
+        ae_raw = pl.from_repr("""\
+┌────────────────┬───────────────┐
+│ patient_number ┆ ae_start_date │
+│ ---            ┆ ---           │
+│ str            ┆ str           │
+╞════════════════╪═══════════════╡
+│ 01-701-1015    ┆ 2014-01-10    │
+└────────────────┴───────────────┘
+""")
         ae_ns = (
-            ae_raw.sdtm.hardcode_no_ct("DOMAIN", value="AE")
-            .assign_no_ct("USUBJID", source="patient_number")
+            ae_raw.sdtm.assign("DOMAIN", value="AE")
+            .assign("USUBJID", source="patient_number")
             .date("AESTDTC", source="ae_start_date")
             .pin("DM", dm)
             .study_day("AESTDY", date_col="AESTDTC")
@@ -104,11 +112,27 @@ class TestTrace:
 class TestInjectLineageReconciliation:
     @pytest.fixture
     def ae_ns(self, dm_raw):
-        dm = pl.DataFrame({"USUBJID": ["01-701-1015"], "RFSTDTC": ["2014-01-02"]})
-        ae_raw = pl.DataFrame({"patient_number": ["01-701-1015"], "ae_start_date": ["2014-01-10"]})
+        dm = pl.from_repr("""\
+┌─────────────┬────────────┐
+│ USUBJID     ┆ RFSTDTC    │
+│ ---         ┆ ---        │
+│ str         ┆ str        │
+╞═════════════╪════════════╡
+│ 01-701-1015 ┆ 2014-01-02 │
+└─────────────┴────────────┘
+""")
+        ae_raw = pl.from_repr("""\
+┌────────────────┬───────────────┐
+│ patient_number ┆ ae_start_date │
+│ ---            ┆ ---           │
+│ str            ┆ str           │
+╞════════════════╪═══════════════╡
+│ 01-701-1015    ┆ 2014-01-10    │
+└────────────────┴───────────────┘
+""")
         return (
-            ae_raw.sdtm.hardcode_no_ct("DOMAIN", value="AE")
-            .assign_no_ct("USUBJID", source="patient_number")
+            ae_raw.sdtm.assign("DOMAIN", value="AE")
+            .assign("USUBJID", source="patient_number")
             .date("AESTDTC", source="ae_start_date")
             .pin("DM", dm)
             .study_day("AESTDY", date_col="AESTDTC")
@@ -149,8 +173,16 @@ class TestInjectLineageReconciliation:
         assert not any("ae_raw" in m for m in messages)
 
     def test_last_write_wins_in_dag_variables(self):
-        df = pl.DataFrame({"a": ["x"], "b": ["y"]})
-        ns = df.sdtm.assign_no_ct("COL", source="a").assign_no_ct("COL", source="b")
+        df = pl.from_repr("""\
+┌─────┬─────┐
+│ a   ┆ b   │
+│ --- ┆ --- │
+│ str ┆ str │
+╞═════╪═════╡
+│ x   ┆ y   │
+└─────┴─────┘
+""")
+        ns = df.sdtm.assign("COL", source="a").assign("COL", source="b")
         # Full history in the namespace lineage…
         assert [n.sources for n in lineage_of(ns) if n.name == "COL"] == [["a"], ["b"]]
         # …deduped last-write-wins at the consumers.
@@ -227,7 +259,15 @@ class TestSpecDispatchAttribution:
         }
         p = tmp_path / "define.yaml"
         p.write_text(yaml.safe_dump(spec))
-        df = pl.DataFrame({"USUBJID": ["S1"], "ADT": ["2024-01-10"], "TRTSDT": ["2024-01-01"]})
+        df = pl.from_repr("""\
+┌─────────┬────────────┬────────────┐
+│ USUBJID ┆ ADT        ┆ TRTSDT     │
+│ ---     ┆ ---        ┆ ---        │
+│ str     ┆ str        ┆ str        │
+╞═════════╪════════════╪════════════╡
+│ S1      ┆ 2024-01-10 ┆ 2024-01-01 │
+└─────────┴────────────┴────────────┘
+""")
         ns = df.adam.from_spec(p, dataset="ADVS")
         (node,) = [n for n in lineage_of(ns) if n.name == "ADY"]
         assert node.verb == "study_day"
@@ -238,7 +278,15 @@ class TestSpecDispatchAttribution:
         }
 
     def test_inline_duration_still_records_duration(self):
-        df = pl.DataFrame({"TRTSDT": ["2024-01-01"], "ADT": ["2024-01-10"]})
+        df = pl.from_repr("""\
+┌────────────┬────────────┐
+│ TRTSDT     ┆ ADT        │
+│ ---        ┆ ---        │
+│ str        ┆ str        │
+╞════════════╪════════════╡
+│ 2024-01-01 ┆ 2024-01-10 │
+└────────────┴────────────┘
+""")
         ns = df.adam.duration("ADY", start="TRTSDT", end="ADT")
         (node,) = [n for n in lineage_of(ns) if n.name == "ADY"]
         assert node.verb == "duration"

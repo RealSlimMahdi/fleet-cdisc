@@ -42,44 +42,44 @@ def dm_pipeline(dm_raw: pl.DataFrame):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         ns = (
-            dm_raw.sdtm.hardcode_no_ct("STUDYID", value="CDISCPILOT01")
-            .hardcode_no_ct("DOMAIN", value="DM")
-            .assign_no_ct("USUBJID", source="patient_number")
-            .assign_no_ct("SUBJID", source="patient_number")
+            dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
+            .assign("DOMAIN", value="DM")
+            .assign("USUBJID", source="patient_number")
+            .assign("SUBJID", source="patient_number")
             .derivation("SITEID", expression="pl.col('site_id').cast(pl.String)")
-            .assign_no_ct("AGE", source="age")
-            .hardcode_no_ct("AGEU", value="YEARS")
-            .assign_ct("SEX", source="sex", ct_codelist="C66731", ct_mapping={"F": "F", "M": "M"})
-            .assign_ct(
+            .assign("AGE", source="age")
+            .assign("AGEU", value="YEARS")
+            .assign("SEX", source="sex", ct="C66731", ct_map={"F": "F", "M": "M"})
+            .assign(
                 "RACE",
                 source="race",
-                ct_codelist="C74457",
-                ct_mapping={
+                ct="C74457",
+                ct_map={
                     "WHITE": "WHITE",
                     "BLACK OR AFRICAN AMERICAN": "BLACK OR AFRICAN AMERICAN",
                 },
             )
-            .assign_ct(
+            .assign(
                 "ETHNIC",
                 source="ethnic",
-                ct_codelist="C66790",
-                ct_mapping={
+                ct="C66790",
+                ct_map={
                     "HISPANIC OR LATINO": "HISPANIC OR LATINO",
                     "NOT HISPANIC OR LATINO": "NOT HISPANIC OR LATINO",
                 },
             )
-            .if_then_else(
+            .case_when(
                 "ARMCD",
                 when=[
                     {"condition": pl.col("arm_code") == "Pbo", "value": "PBO"},
                     {"condition": pl.col("arm_code") == "Xan_Lo", "value": "XAN_LO"},
                     {"condition": pl.col("arm_code") == "Xan_Hi", "value": "XAN_HI"},
                 ],
-                else_value="SCRNFAIL",
+                else_="SCRNFAIL",
             )
-            .assign_no_ct("ARM", source="arm_description")
-            .assign_no_ct("ACTARMCD", source="arm_code")
-            .assign_no_ct("ACTARM", source="arm_description")
+            .assign("ARM", source="arm_description")
+            .assign("ACTARMCD", source="arm_code")
+            .assign("ACTARM", source="arm_description")
             .date("RFSTDTC", source="first_dose_date")
             .date("RFENDTC", source="last_dose_date")
             .date("RFICDTC", source="informed_consent_date")
@@ -120,7 +120,7 @@ class TestDMRoundTrip:
 
     def test_stub_comment_carries_verb_and_sources(self, dm_pipeline):
         text = dm_pipeline.to_spec_yaml(dataset="DM")
-        assert "# TODO: verb 'if_then_else' (sources: arm_code)" in text
+        assert "# TODO: verb 'case_when' (sources: arm_code)" in text
         assert "# TODO: verb 'derivation' (sources: site_id)" in text
 
     def test_emitted_blocks_use_registry_spellings(self, dm_pipeline):
@@ -169,15 +169,15 @@ class TestSpecDrivenRoundTrip:
         }
         p = tmp_path / "define.yaml"
         p.write_text(yaml.safe_dump(spec))
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S1"],
-                "ADT": ["2024-01-10"],
-                "TRTSDT": ["2024-01-01"],
-                "AVAL": [7.0],
-                "BASE": [5.0],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬────────────┬────────────┬──────┬──────┐
+│ USUBJID ┆ ADT        ┆ TRTSDT     ┆ AVAL ┆ BASE │
+│ ---     ┆ ---        ┆ ---        ┆ ---  ┆ ---  │
+│ str     ┆ str        ┆ str        ┆ f64  ┆ f64  │
+╞═════════╪════════════╪════════════╪══════╪══════╡
+│ S1      ┆ 2024-01-10 ┆ 2024-01-01 ┆ 7    ┆ 5    │
+└─────────┴────────────┴────────────┴──────┴──────┘
+""")
         ns = df.adam.from_spec(p, dataset="ADVS")
         data = yaml.safe_load(ns.to_spec_yaml(dataset="ADVS"))
         by_name = {v["name"]: v.get("derivation") for v in data["datasets"][0]["variables"]}
@@ -207,16 +207,16 @@ class TestSpecDrivenRoundTrip:
 class TestAdamInlineRoundTrip:
     def test_frame_capture_covers_bds_verbs(self, tmp_path):
         """date/duration/flag/baseline/chg/pchg emit real blocks from inline code."""
-        vs = pl.DataFrame(
-            {
-                "USUBJID": ["S1", "S1"],
-                "PARAMCD": ["SYSBP", "SYSBP"],
-                "AVAL": [120.0, 132.0],
-                "vsdy": [-1, 10],
-                "vsdtc": ["2024-01-01", "2024-01-12"],
-                "TRTSDT": ["2024-01-02", "2024-01-02"],
-            }
-        )
+        vs = pl.from_repr("""\
+┌─────────┬─────────┬──────┬──────┬────────────┬────────────┐
+│ USUBJID ┆ PARAMCD ┆ AVAL ┆ vsdy ┆ vsdtc      ┆ TRTSDT     │
+│ ---     ┆ ---     ┆ ---  ┆ ---  ┆ ---        ┆ ---        │
+│ str     ┆ str     ┆ f64  ┆ i64  ┆ str        ┆ str        │
+╞═════════╪═════════╪══════╪══════╪════════════╪════════════╡
+│ S1      ┆ SYSBP   ┆ 120  ┆ -1   ┆ 2024-01-01 ┆ 2024-01-02 │
+│ S1      ┆ SYSBP   ┆ 132  ┆ 10   ┆ 2024-01-12 ┆ 2024-01-02 │
+└─────────┴─────────┴──────┴──────┴────────────┴────────────┘
+""")
         ns = (
             vs.adam.date("ADT", source="vsdtc")
             .duration("ADY", start="TRTSDT", end="ADT")
@@ -261,29 +261,53 @@ class TestAdamInlineRoundTrip:
 
 class TestDedupAndEdgeCases:
     def test_last_write_wins_on_rederived_target(self, tmp_path):
-        df = pl.DataFrame({"USUBJID": ["S1"], "a": ["x"], "b": ["y"]})
+        df = pl.from_repr("""\
+┌─────────┬─────┬─────┐
+│ USUBJID ┆ a   ┆ b   │
+│ ---     ┆ --- ┆ --- │
+│ str     ┆ str ┆ str │
+╞═════════╪═════╪═════╡
+│ S1      ┆ x   ┆ y   │
+└─────────┴─────┴─────┘
+""")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            ns = df.sdtm.assign_no_ct("COL", source="a").assign_no_ct("COL", source="b")
+            ns = df.sdtm.assign("COL", source="a").assign("COL", source="b")
         data = yaml.safe_load(ns.to_spec_yaml(dataset="DM"))
         cols = [v for v in data["datasets"][0]["variables"] if v["name"] == "COL"]
         assert len(cols) == 1
         assert cols[0]["derivation"] == {"algorithm": "assign_no_ct", "source": "b"}
 
     def test_dropped_columns_are_not_emitted(self):
-        df = pl.DataFrame({"USUBJID": ["S1"], "a": ["x"]})
+        df = pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ a   │
+│ ---     ┆ --- │
+│ str     ┆ str │
+╞═════════╪═════╡
+│ S1      ┆ x   │
+└─────────┴─────┘
+""")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            ns = df.sdtm.assign_no_ct("TMP", source="a").keep("USUBJID")
+            ns = df.sdtm.assign("TMP", source="a").keep("USUBJID")
         data = yaml.safe_load(ns.to_spec_yaml(dataset="DM"))
         names = [v["name"] for v in data["datasets"][0]["variables"]]
         assert "TMP" not in names
 
     def test_empty_pipeline_still_valid(self):
-        df = pl.DataFrame({"USUBJID": ["S1"], "AGE": [64]})
+        df = pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ AGE │
+│ ---     ┆ --- │
+│ str     ┆ i64 │
+╞═════════╪═════╡
+│ S1      ┆ 64  │
+└─────────┴─────┘
+""")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            ns = df.sdtm.assign_no_ct("SUBJID", source="USUBJID")
+            ns = df.sdtm.assign("SUBJID", source="USUBJID")
         data = yaml.safe_load(ns.to_spec_yaml())
         jsonschema.Draft202012Validator(_schema()).validate(data)
         assert data["datasets"][0]["name"] == "DATASET"

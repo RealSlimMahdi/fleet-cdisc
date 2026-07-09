@@ -6,17 +6,17 @@ Reproduces the admiral "Creating ADSL" programming flow in Python/Fleet:
 
 Shared-verb mixin architecture
 -------------------------------
-Fleet's ``SharedADaMVerbsMixin`` provides eight verbs — ``source``,
-``assigned``, ``derivation``, ``recode``, ``rename``, ``condderivation``,
-``whereclauses``, ``pick`` — to **every** ADaM sub-namespace (``adsl``, ``occds``,
-``onco``, ``ophtha``, ``peds``, ``vaccine``, ``metabolic``, ``neuro``).
+Fleet's ``SharedADaMVerbsMixin`` provides the shared verbs — ``source``,
+``assign``, ``derivation``, ``recode``, ``case_when``, ``whereclauses``,
+``pick`` — to **every** ADaM sub-namespace (``adsl``, ``occds``, ``onco``,
+``ophtha``, ``peds``, ``vaccine``, ``metabolic``, ``neuro``).
 
 This means the pipeline can stay in a single sub-namespace without
 break-and-re-enter chains whenever a shared verb is needed.
 For example, ``derivation()`` can now be called directly on ``adsl``
 without switching to the base ``adam`` namespace, and ``source()`` /
-``rename()`` / ``assigned()`` can be called on ``occds`` so that
-event-level pipelines don't need intermediate materialisations.
+``assign()`` can be called on ``occds`` so that event-level pipelines
+don't need intermediate materialisations.
 
 For OCCDS datasets (ADAE, ADEX) this means the entire derivation +
 sequence number chain can run in one ``adam.occds`` pipeline.
@@ -47,7 +47,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import polars as pl
 
-import fleet  # noqa: F401 — registers .sdtm / .adam namespace extensions
+import fleet  # registers .sdtm / .adam namespace extensions
 from examples.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX
 
 OUT = Path("outputs/cdiscpilot01")
@@ -55,7 +55,7 @@ OUT = Path("outputs/cdiscpilot01")
 # ════════════════════════════════════════════════════════════════════════════
 # 1. Raw Data (inline — no external CSV dependencies)
 # ════════════════════════════════════════════════════════════════════════════
-dm_raw = pl.from_repr("""\
+dm_raw = fleet.frame(pl.from_repr("""\
 ┌────────────────┬─────────┬─────┬─────┬───────────────────────────┬────────────────────────┬──────────┬──────────────────────┬─────────────────┬────────────────┬───────────────────────┐
 │ patient_number ┆ site_id ┆ age ┆ sex ┆ race                      ┆ ethnic                 ┆ arm_code ┆ arm_description      ┆ first_dose_date ┆ last_dose_date ┆ informed_consent_date │
 │ ---            ┆ ---     ┆ --- ┆ --- ┆ ---                       ┆ ---                    ┆ ---      ┆ ---                  ┆ ---             ┆ ---            ┆ ---                   │
@@ -67,9 +67,9 @@ dm_raw = pl.from_repr("""\
 │ 01-701-1034    ┆ 701     ┆ 74  ┆ M   ┆ BLACK OR AFRICAN AMERICAN ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-05      ┆ 2014-07-06     ┆ 2014-01-04            │
 │ 01-701-1047    ┆ 701     ┆ 56  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-06      ┆ 2014-07-07     ┆ 2014-01-05            │
 └────────────────┴─────────┴─────┴─────┴───────────────────────────┴────────────────────────┴──────────┴──────────────────────┴─────────────────┴────────────────┴───────────────────────┘
-""")
+"""))
 
-ae_raw = pl.from_repr("""\
+ae_raw = fleet.frame(pl.from_repr("""\
 ┌────────────────┬───────────────────────────┬───────────────┬─────────────┬─────────────┬────────────┬────────────────────────────┬──────────────────┬──────────────────┐
 │ patient_number ┆ ae_term                   ┆ ae_start_date ┆ ae_end_date ┆ ae_severity ┆ ae_serious ┆ ae_outcome                 ┆ ae_action_taken  ┆ ae_relationship  │
 │ ---            ┆ ---                       ┆ ---           ┆ ---         ┆ ---         ┆ ---        ┆ ---                        ┆ ---              ┆ ---              │
@@ -81,7 +81,7 @@ ae_raw = pl.from_repr("""\
 │ 01-701-1028    ┆ FATIGUE                   ┆ 2014-02-20    ┆ null        ┆ MODERATE    ┆ N          ┆ NOT RECOVERED/NOT RESOLVED ┆ DOSE NOT CHANGED ┆ PROBABLY RELATED │
 │ 01-701-1034    ┆ APPLICATION SITE ERYTHEMA ┆ 2014-01-20    ┆ 2014-01-25  ┆ SEVERE      ┆ Y          ┆ RECOVERED/RESOLVED         ┆ DRUG WITHDRAWN   ┆ RELATED          │
 └────────────────┴───────────────────────────┴───────────────┴─────────────┴─────────────┴────────────┴────────────────────────────┴──────────────────┴──────────────────┘
-""")
+"""))
 
 print("── 1. Raw data loaded ───────────────────────────────────────────────────")
 print(f"   dm_raw : {dm_raw.shape[0]:>3} rows   columns → {dm_raw.columns}")
@@ -93,7 +93,7 @@ print(f"   ae_raw : {ae_raw.shape[0]:>3} rows   columns → {ae_raw.columns}")
 #       adsl <- dm %>% select(-DOMAIN) %>% mutate(TRT01P = ARM, ...)
 # ════════════════════════════════════════════════════════════════════════════
 dm = (
-    dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
     .assign("DOMAIN", value="DM")
     .assign("USUBJID", source="patient_number")
     .assign("SUBJID", source="patient_number")
@@ -180,7 +180,7 @@ print(f"        → Dataset-JSON: {dm_json}")
 #       EXDOSE > 0  OR  (EXDOSE == 0 AND EXTRT contains "PLACEBO")
 # ════════════════════════════════════════════════════════════════════════════
 ex = (
-    dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
     .assign("DOMAIN", value="EX")
     .assign("USUBJID", source="patient_number")
     .assign("EXTRT", source="arm_description")
@@ -215,7 +215,7 @@ print(
 _ds_cols = ["STUDYID", "DOMAIN", "USUBJID", "DSSEQ", "DSCAT", "DSTERM", "DSDECOD", "DSSTDTC"]
 
 ds_completed = (
-    dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
     .assign("DOMAIN", value="DS")
     .assign("USUBJID", source="patient_number")
     .assign("DSSEQ", value=1)
@@ -228,7 +228,7 @@ ds_completed = (
 )
 
 ds_randomized = (
-    dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
     .assign("DOMAIN", value="DS")
     .assign("USUBJID", source="patient_number")
     .assign("DSSEQ", value=2)
@@ -249,7 +249,7 @@ print(
 # 2d. Build SDTM AE (Adverse Events) from ae_raw
 # ════════════════════════════════════════════════════════════════════════════
 ae = (
-    ae_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    ae_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
     .assign("DOMAIN", value="AE")
     .assign("USUBJID", source="patient_number")
     .assign("AETERM", source="ae_term")
@@ -296,8 +296,7 @@ print(f"── 2d. SDTM AE : {ae.shape[0]} records  × {ae.shape[1]} variables (
 print("\n── 3–5. ADSL base + treatment dates ────────────────────────────────────")
 
 adsl = (
-    dm.adam.adsl  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-    # ── demographics from DM ──────────────────────────────────────────────
+    dm.adam.adsl    # ── demographics from DM ──────────────────────────────────────────────
     .source("STUDYID")
     .source("USUBJID")
     .source("SUBJID")
@@ -349,8 +348,7 @@ _ds_disp = ds.filter(pl.col("DSCAT") == "DISPOSITION EVENT").select(
 )
 
 adsl = (
-    adsl.adam.adsl  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-    # EOSDT: latest date of DISPOSITION EVENT (admiral: derive_vars_merged)
+    adsl.adam.adsl    # EOSDT: latest date of DISPOSITION EVENT (admiral: derive_vars_merged)
     .last_date(
         "EOSDT", from_dataset=ds, date_col="DSSTDTC", where='pl.col("DSCAT") == "DISPOSITION EVENT"'
     )
@@ -360,8 +358,7 @@ adsl = (
     )
     .to_frame()
     # Bring in DSDECOD/DSTERM from DS for status/reason derivations
-    .adam.merge(dataset=_ds_disp, on="USUBJID", how="left")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-    # EOSSTT: map disposition decode to study status (admiral: format_eosstt)
+    .adam.merge(dataset=_ds_disp, on="USUBJID", how="left")    # EOSSTT: map disposition decode to study status (admiral: format_eosstt)
     .case_when(
         "EOSSTT",
         when=[
@@ -399,7 +396,7 @@ print(f"   EOSSTT counts: {adsl['EOSSTT'].value_counts().to_dicts()}")
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── 7. Age grouping (AGEGR1) ─────────────────────────────────────────────")
 
-adsl = adsl.adam.adsl.case_when(  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+adsl = fleet.frame(adsl).adam.adsl.case_when(
     "AGEGR1",
     when=[
         {"condition": "pl.col('AGE') < 18", "value": "<18"},
@@ -424,10 +421,9 @@ print("\n── 8. Population flags ──────────────�
 _ex_max_dose = ex.group_by("USUBJID").agg(pl.col("EXDOSE").max().alias("_EXDOSE_MAX"))
 
 adsl = (
-    adsl.adam.merge(dataset=_ex_max_dose, on="USUBJID", how="left")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    adsl.adam.merge(dataset=_ex_max_dose, on="USUBJID", how="left")
     .to_frame()
-    .adam.adsl  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-    # SAFFL: subjects with at least one dose > 0 (admiral: derive_var_merged_exist_flag)
+    .adam.adsl    # SAFFL: subjects with at least one dose > 0 (admiral: derive_var_merged_exist_flag)
     .flag("SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0')
     # ITTFL: all randomised subjects (ARMCD not SCRNFAIL)
     .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"')
@@ -452,7 +448,7 @@ print(f"   ITTFL : {adsl['ITTFL'].value_counts().to_dicts()}")
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── 9. Last date known alive (LSTALVDT) — via pick() ─────────────────────")
 
-adsl = adsl.adam.adsl.pick(  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+adsl = fleet.frame(adsl).adam.adsl.pick(
     "LSTALVDT",
     events=[
         {
@@ -490,7 +486,7 @@ print(f"   LSTALVDT range: {adsl['LSTALVDT'].min()} → {adsl['LSTALVDT'].max()}
 print("\n── 10. AE counts ────────────────────────────────────────────────────────")
 
 adsl = (
-    adsl.adam.adsl.count_events("NUMAE", from_dataset=ae)  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    adsl.adam.adsl.count_events("NUMAE", from_dataset=ae)
     .count_events("NUMSAE", from_dataset=ae, where='pl.col("AESER") == "Y"')
     .to_frame()
 )
@@ -623,7 +619,7 @@ print(
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 13. ADaM ADVS (inline) ═══════════════════════════════════════════════")
 
-vs_raw = pl.from_repr("""\
+vs_raw = fleet.frame(pl.from_repr("""\
 ┌────────────────┬─────────────┬──────────┬────────┬─────────┬──────────┬────────────┬──────┐
 │ patient_number ┆ site_number ┆ vstestcd ┆ vstest ┆ vsorres ┆ vsorresu ┆ vsdtc      ┆ vsdy │
 │ ---            ┆ ---         ┆ ---      ┆ ---    ┆ ---     ┆ ---      ┆ ---        ┆ ---  │
@@ -635,12 +631,12 @@ vs_raw = pl.from_repr("""\
 │ 01-701-1034    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 170.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
 │ 01-701-1047    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 166.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
 └────────────────┴─────────────┴──────────┴────────┴─────────┴──────────┴────────────┴──────┘
-""")
+"""))
 
 _trtsdt_map = adsl_final.select(["USUBJID", "TRTSDT"])
 
 advs = (
-    vs_raw.adam.assign("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    vs_raw.adam.assign("STUDYID", value="CDISCPILOT01")
     .assign("USUBJID", source="patient_number")
     .assign("PARAMCD", source="vstestcd")
     .assign("PARAM", source="vstest")
@@ -652,12 +648,10 @@ advs = (
     # admiral: flag_variables — last pre-dose visit (vsdy ≤ 0)
     .flag("ABLFL", criteria='pl.col("vsdy") <= 0', by=["USUBJID", "PARAMCD"])
     .to_frame()  # materialise — ABLFL must exist before baseline() window fn
-    .adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-    # admiral: derive_var_base
+    .adam    # admiral: derive_var_base
     .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
     .to_frame()  # materialise — BASE must exist before chg()/pchg()
-    .adam  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-    # admiral: derive_var_chg
+    .adam    # admiral: derive_var_chg
     .chg("CHG", aval="AVAL", base="BASE")
     .pchg("PCHG", aval="AVAL", base="BASE")
     # admiral: restrict_derivation + derive_var_extreme_flag
@@ -714,10 +708,10 @@ print(
 print("\n══ 14. ADaM ADAE (inline) ═══════════════════════════════════════════════")
 
 _adsl_trt = adsl_final.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "SAFFL"])
-ae_with_trt = ae.join(_adsl_trt, on="USUBJID", how="left")
+ae_with_trt = fleet.frame(ae.join(_adsl_trt, on="USUBJID", how="left"))
 
 adae = (
-    ae_with_trt.adam.assign("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet
+    ae_with_trt.adam.assign("STUDYID", value="CDISCPILOT01")
     .source("USUBJID")
     .source("AETERM")
     .source("AESTDTC")
@@ -732,8 +726,7 @@ adae = (
     .date("AENDT", source="AEENDTC")
     .duration("ADY", start="TRTSDT", end="ASTDT")
     .to_frame()
-    .adam.occds  # type: ignore[attr-defined]  # runtime namespace registered by fleet
-    # admiral: derive_var_trtemfl
+    .adam.occds    # admiral: derive_var_trtemfl
     .treatment_emergent("TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT")
     # admiral: slice_derivation (worst severity per subject × AE term)
     .recode("AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
@@ -796,8 +789,8 @@ print("\n══ 15. ADaM ADEX (inline) ═════════════�
 _adsl_ex = adsl_final.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "SAFFL"])
 
 adex = (
-    ex.join(_adsl_ex, on="USUBJID", how="left")
-    .adam.occds.assign("STUDYID", value="CDISCPILOT01")  # type: ignore[attr-defined]  # runtime namespace registered by fleet  # shared verb (mixin)
+    fleet.frame(ex.join(_adsl_ex, on="USUBJID", how="left"))
+    .adam.occds.assign("STUDYID", value="CDISCPILOT01")  # shared verb (mixin)
     .source("USUBJID")  # shared verb (mixin)
     .source("EXTRT")  # shared verb (mixin)
     .source("EXDOSE")  # shared verb (mixin)

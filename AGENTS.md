@@ -69,11 +69,11 @@ Exception: empty DataFrames for TDD scaffolding, programmatic/random data.
 
 Distribution name: `fleet-cdisc` (import: `fleet`). Version comes from git tags — never edit version strings manually.
 
-## Polars Stubs (Pylance Autocomplete)
+## Typed Entry (IDE Autocomplete)
 
-`src/polars-stubs/dataframe/frame.pyi` declares `.sdtm`, `.adam`, `.tlg` properties on `pl.DataFrame` so Pylance can offer code completion. Update this file when:
+`fleet.frame()` (`src/fleet/core/frames.py`) is the typed entry: wrap loads at IO boundaries and type checkers see `.sdtm`, `.adam`, `.tlg` (and `.to_frame()` stays typed downstream). There is deliberately no `polars-stubs` overlay — partial stubs shadow the real `pl.DataFrame` and break native method typing. Update `core/frames.py` when:
 
-1. **New top-level namespace** added (e.g. `df.safety`) — add a `@property` entry.
+1. **New top-level namespace** added (e.g. `df.safety`) — add a `@property` to the `DataFrame`/`LazyFrame` declarations.
 2. **Namespace class renamed or moved** — update the import path.
 
 Do NOT update for new verbs or changed signatures — those are resolved from the real `.py` source.

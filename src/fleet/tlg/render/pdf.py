@@ -46,6 +46,13 @@ def render_pdf(
 
     Raises:
         ImportError: If WeasyPrint is not installed.
+
+    Examples:
+        Render an AE summary to PDF::
+
+            ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl)
+            model = ard_to_table_model(ard, RenderMetadata(title="Table 14.3.1.1"))
+            render_pdf(model, "ae_summary.pdf")
     """
     try:
         import weasyprint  # type: ignore[import-untyped]
@@ -97,6 +104,13 @@ def render_listing_pdf(
 
     Raises:
         ImportError: If WeasyPrint is not installed.
+
+    Examples:
+        Render an AE listing to PDF::
+
+            listing = adae.tlg.ae.template("ael01").to_listing()
+            model = listing_to_model(listing, RenderMetadata(title="Listing 16.2.7"))
+            render_listing_pdf(model, "ae_listing.pdf")
     """
     try:
         import weasyprint  # type: ignore[import-untyped]

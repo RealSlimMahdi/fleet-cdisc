@@ -410,6 +410,12 @@ def ard_to_table_model(
 
     Returns:
         TableModel: A display-ready table model suitable for any renderer.
+
+    Examples:
+        Shape an ARD for rendering::
+
+            ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl)
+            model = ard_to_table_model(ard, RenderMetadata(title="Table 14.3.1.1"))
     """
     meta = metadata or RenderMetadata()
 
@@ -701,6 +707,11 @@ def paginate_listing(
 
     Returns:
         list[ListingModel]: One model per page.
+
+    Examples:
+        Split a long listing into 40-row pages::
+
+            pages = paginate_listing(model, rows_per_page=40)
     """
     if rows_per_page is None or len(model.data) <= rows_per_page:
         return [model]
@@ -726,6 +737,12 @@ def listing_to_model(
 
     Returns:
         ListingModel: A display-ready listing model.
+
+    Examples:
+        Shape a listing for rendering::
+
+            listing = adae.tlg.ae.template("ael01").to_listing()
+            model = listing_to_model(listing, RenderMetadata(title="Listing 16.2.7"))
     """
     meta = metadata or RenderMetadata()
     col_labels = list(listing.columns)

@@ -6,12 +6,12 @@ When building SDTM or ADaM pipelines in Fleet, you may encounter errors either f
 
 ### `CTError: Invalid value for codelist...`
 
-**What it means:** A value in your source data does not match the expected Controlled Terminology mappings for a variable derived using `.assign_ct()`.
+**What it means:** A value in your source data does not match the expected Controlled Terminology mappings for a variable derived using `.assign(ct=...)`.
 
 **How to fix it:**
 
 1. Check the raw values using Polars: `df.select("raw_column").unique()`.
-2. Compare those values to the mapping dictionary provided in `.assign_ct(ct_mapping={...})`.
+2. Compare those values to the mapping dictionary provided in `.assign(ct_map={...})`.
 3. Add the missing key -> value pair, or fix upstream data collection errors.
 
 ### `ColumnNotFoundError` from Polars
@@ -35,7 +35,7 @@ Because Fleet builds pipelines conceptually and executes them lazily via Polars,
 To inspect what expressions have been queued up before running:
 
 ```python
-pipeline = dm.sdtm.hardcode_no_ct("DOMAIN", "DM").assign_no_ct("USUBJID", "patient_id")
+pipeline = dm.sdtm.assign("DOMAIN", value="DM").assign("USUBJID", source="patient_id")
 
 # Inspect the underlying Polars Expressions
 print(pipeline._exprs)
@@ -46,8 +46,8 @@ You can also comment out `.to_frame()` and print intermediate outputs to verify 
 ```python
 # To debug an intermediate state, truncate the pipeline:
 debug_df = (
-    dm.sdtm.hardcode_no_ct("DOMAIN", value="DM")
-    # .assign_ct("SEX", source="sex_raw", ...)  <-- Commented out to isolate the bug
+    dm.sdtm.assign("DOMAIN", value="DM")
+    # .assign("SEX", source="sex_raw", ct=...)  <-- Commented out to isolate the bug
     .to_frame()
 )
 print(debug_df.head())

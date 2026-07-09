@@ -28,19 +28,19 @@ import re
 import sys
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, overload
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast, overload
 
 import polars as pl
 import yaml
 
 from fleet.core import log as fleet_log
-from fleet.core._deprecation import deprecated_kwargs, warn_deprecated
 from fleet.core.exceptions import DerivationError, SpecError, ValidationError, VerbUsageError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from fleet.core.derivation import Derivation
+    from fleet.core.frames import DataFrame
     from fleet.ct.validator import CTValidator
     from fleet.validation.models import ValidationResult
 
@@ -294,12 +294,14 @@ class SharedVerbsMixin:
         new._lazy = lf
         return new
 
-    def to_frame(self) -> pl.DataFrame:
+    def to_frame(self) -> DataFrame:
         """Materialise the accumulated pipeline into a Polars DataFrame.
 
         Returns:
-            pl.DataFrame: The fully materialised result of all chained
-                verbs.
+            DataFrame: The fully materialised result of all chained
+                verbs — a plain ``pl.DataFrame`` at runtime, typed as
+                :class:`fleet.DataFrame` so re-entering ``.sdtm`` /
+                ``.adam`` / ``.tlg`` type-checks.
 
         Raises:
             DerivationError: When collection fails because a column is
@@ -328,7 +330,7 @@ class SharedVerbsMixin:
         run_checks = getattr(self, "_run_pending_fk_checks", None)
         if run_checks is not None:
             run_checks(df)
-        return df
+        return cast("DataFrame", df)
 
     def _enrich_collect_error(self, err: Exception) -> DerivationError:
         """Translate a Polars missing-column error into a lineage-aware one."""
@@ -529,7 +531,7 @@ class SharedVerbsMixin:
         path: str | Path,
         *,
         mkdir: bool = True,
-    ) -> pl.DataFrame:
+    ) -> DataFrame:
         """Materialise the pipeline, write to Parquet, and return the DataFrame.
 
         This is a drop-in alternative to ``to_frame()`` when you want to
@@ -541,7 +543,8 @@ class SharedVerbsMixin:
                 are created automatically.
 
         Returns:
-            pl.DataFrame: The materialised result.
+            DataFrame: The materialised result (typed as
+                :class:`fleet.DataFrame` — see ``to_frame()``).
 
         Examples:
             Write a domain to Parquet::
@@ -576,12 +579,9 @@ class SharedVerbsMixin:
     ) -> Self:
         """Assign *target* from a source column or a literal value.
 
-        The one canonical assignment verb: it subsumes the legacy
-        ``assign_no_ct`` / ``assign_ct`` / ``hardcode_no_ct`` /
-        ``hardcode_ct`` / ``dataset_level`` / ``assigned`` / ``rename``
-        spellings.  Exactly one of *source* / *value* must be given;
-        controlled-terminology behaviour is toggled by the presence of
-        *ct* / *ct_map*.
+        The one canonical assignment verb.  Exactly one of *source* /
+        *value* must be given; controlled-terminology behaviour is
+        toggled by the presence of *ct* / *ct_map*.
 
         Args:
             target: Name of the output variable to create.
@@ -650,11 +650,10 @@ class SharedVerbsMixin:
         verb: str = "assign",
         fk: bool = True,
     ) -> Self:
-        """Shared implementation behind ``assign`` and its legacy aliases.
+        """Implementation behind ``assign``.
 
-        *verb* is recorded in lineage/errors so deprecated spellings keep
-        their attribution; *fk* controls the automatic foreign-key check
-        (legacy verbs differ in whether they performed it).
+        *verb* is recorded in lineage/errors (spec-driven runs attribute
+        the spec algorithm); *fk* controls the automatic foreign-key check.
         """
         if (source is None) == (value is None):
             raise DerivationError(f"{verb}('{target}'): pass exactly one of source= or value=.")
@@ -825,8 +824,7 @@ class SharedVerbsMixin:
     ) -> Self:
         """Multi-branch conditional derivation (first matching branch wins).
 
-        The one canonical conditional verb — it subsumes the legacy
-        ``if_then_else`` (SDTM) and ``condderivation`` (ADaM) spellings.
+        The one canonical conditional verb.
 
         Args:
             target: Name of the output variable.
@@ -861,7 +859,7 @@ class SharedVerbsMixin:
         else_: Any,
         verb: str = "case_when",
     ) -> Self:
-        """Shared implementation behind ``case_when`` and its legacy aliases."""
+        """Implementation behind ``case_when``."""
         from fleet.sdtm.utils import parse_expression
 
         def _cond(raw: Any) -> pl.Expr:
@@ -878,24 +876,19 @@ class SharedVerbsMixin:
 
     def merge(
         self,
-        *args: Any,
         dataset: pl.DataFrame | pl.LazyFrame | None = None,
+        *,
         on: str | list[str] | None = None,
         how: str = "left",
         keep: list[str] | None = None,
         where: str | pl.Expr | None = None,
-        target_cols: list[str] | None = None,
     ) -> Self:
         """Join *dataset* into the pipeline using key column(s) *on*.
 
-        The one canonical join verb — it subsumes the legacy SDTM
-        ``merge(target_cols, ...)`` and ADaM ``lookup`` spellings.  The
-        join is appended to the lazy plan; nothing is materialised.
+        The one canonical join verb.  The join is appended to the lazy
+        plan; nothing is materialised.
 
         Args:
-            *args: The dataset may be passed positionally:
-                ``merge(suppdm_df, on="USUBJID")``.  (A leading list is
-                accepted as the deprecated positional ``target_cols``.)
             dataset: The ``pl.DataFrame`` / ``pl.LazyFrame`` to merge in.
             on: Key column name(s) for the join.
             how: Join strategy (default ``"left"``).
@@ -905,14 +898,12 @@ class SharedVerbsMixin:
                 are retained.
             where: Optional filter expression applied to *dataset*
                 before the join.
-            target_cols: Deprecated alias of *keep*.
 
         Returns:
             Self: The namespace continuing from the joined plan.
 
         Raises:
-            VerbUsageError: When *dataset* or *on* is missing, or the
-                positional argument is neither a frame nor a list.
+            VerbUsageError: When *dataset* or *on* is missing.
             DerivationError: When a *keep* entry is absent from the
                 joined result (with a did-you-mean suggestion).
 
@@ -926,43 +917,6 @@ class SharedVerbsMixin:
                     .to_frame()
                 )
         """
-        if len(args) > 1:
-            raise VerbUsageError(
-                "merge() takes at most one positional argument (the dataset); "
-                "pass everything else by keyword."
-            )
-        if args:
-            first = args[0]
-            if isinstance(first, (pl.DataFrame, pl.LazyFrame)):
-                if dataset is not None:
-                    raise VerbUsageError(
-                        "merge() got the dataset both positionally and as dataset=."
-                    )
-                dataset = first
-            elif isinstance(first, list):
-                warn_deprecated(
-                    "merge.target_cols",
-                    "merge(): passing the column restriction positionally is "
-                    "deprecated; use keep=[...] instead.",
-                )
-                if keep is not None or target_cols is not None:
-                    raise VerbUsageError(
-                        "merge() got a positional column list and keep=/target_cols= together."
-                    )
-                target_cols = first
-            else:
-                raise VerbUsageError(
-                    f"merge() positional argument must be a DataFrame/LazyFrame "
-                    f"(or a deprecated target_cols list), got {type(first).__name__}."
-                )
-        if target_cols is not None:
-            if keep is not None:
-                raise VerbUsageError("merge() got both 'target_cols=' (deprecated) and 'keep='.")
-            warn_deprecated(
-                "merge.target_cols",
-                "merge(): keyword 'target_cols=' is deprecated; use 'keep=' instead.",
-            )
-            keep = target_cols
         return self._merge_impl(dataset, on=on, how=how, keep=keep, where=where, verb="merge")
 
     def _merge_impl(
@@ -975,7 +929,7 @@ class SharedVerbsMixin:
         where: str | pl.Expr | None = None,
         verb: str = "merge",
     ) -> Self:
-        """Shared implementation behind ``merge`` and its legacy aliases."""
+        """Implementation behind ``merge``."""
         from fleet.sdtm.utils import parse_expression
 
         if isinstance(dataset, pl.LazyFrame):
@@ -1067,11 +1021,10 @@ class SharedVerbsMixin:
     def verbs(self) -> pl.DataFrame:
         """List the public verbs available on this namespace.
 
-        Walks the class MRO collecting public Fleet-defined methods,
-        skipping deprecated aliases, and returns a tidy frame with each
-        verb's name and the first sentence of its docstring.  This is
-        the always-current alternative to hard-coded verb counts in
-        docs.
+        Walks the class MRO collecting public Fleet-defined methods and
+        returns a tidy frame with each verb's name and the first
+        sentence of its docstring.  This is the always-current
+        alternative to hard-coded verb counts in docs.
 
         Returns:
             pl.DataFrame: Columns ``verb`` and ``summary``, sorted by
@@ -1099,8 +1052,6 @@ class SharedVerbsMixin:
                 if isinstance(attr, (property, staticmethod, classmethod)):
                     continue
                 if not callable(attr):
-                    continue
-                if getattr(attr, "__fleet_deprecated__", None):
                     continue
                 rows.append({"verb": name, "summary": first_sentence(attr.__doc__)})
         rows.sort(key=lambda r: r["verb"])
@@ -1625,7 +1576,6 @@ class SharedVerbsMixin:
     # seq                                                                   #
     # ------------------------------------------------------------------ #
 
-    @deprecated_kwargs(groups="by")
     def seq(
         self,
         target: str = "ASEQ",
@@ -1649,8 +1599,7 @@ class SharedVerbsMixin:
             order_by: Columns that define the sort order within each group.
                 When ``None``, the current row order is preserved.
             by: Partition columns.  Defaults to class constant
-                ``_SEQ_DEFAULT_GROUPS``.  The legacy ``groups=`` spelling
-                is accepted with a ``FutureWarning``.
+                ``_SEQ_DEFAULT_GROUPS``.
             start_at: First sequence value (default ``1``).
             check_uniqueness: If ``True``, emit a warning when the
                 combination of *by* + *order_by* does not uniquely

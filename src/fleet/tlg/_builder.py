@@ -21,6 +21,7 @@ import polars as pl
 from ._specs import (
     Column,
     GroupPool,
+    InteractiveBlock,
     OverallStat,
     Row,
     SchemaError,
@@ -83,6 +84,7 @@ class TLGBuilder:
         self._sort_by: list[str] | None = None
         self._template_id: str | None = None
         self._template_fn: Callable[..., pl.DataFrame] | None = None
+        self._interactive: InteractiveBlock | None = None
 
     def _clone(self) -> TLGBuilder:
         return copy.copy(self)
@@ -145,6 +147,16 @@ class TLGBuilder:
 
         Returns:
             TLGBuilder: Builder with population set.
+
+        Examples:
+            Use ADSL for the big-N denominators::
+
+                ard = (
+                    adae.tlg.ae
+                    .population(adsl)
+                    .by("TRTA")
+                    .to_ard()
+                )
         """
         new = self._clone()
         new._adsl = adsl
@@ -160,6 +172,17 @@ class TLGBuilder:
 
         Returns:
             TLGBuilder: Builder with dataset filter set.
+
+        Examples:
+            Restrict the table to treatment-emergent events::
+
+                ard = (
+                    adae.tlg.ae
+                    .population(adsl)
+                    .filter('pl.col("TRTEMFL") == "Y"')
+                    .by("TRTA")
+                    .to_ard()
+                )
         """
         new = self._clone()
         new._dataset_filter = expr
@@ -182,6 +205,16 @@ class TLGBuilder:
             SchemaError: If *col* is not a single column name —
                 multi-column grouping is not implemented, and accepting a
                 list would silently read only the first entry.
+
+        Examples:
+            Split columns by actual treatment arm::
+
+                ard = (
+                    adae.tlg.ae
+                    .population(adsl)
+                    .by("TRTA")
+                    .to_ard()
+                )
         """
         if not isinstance(col, str):
             raise SchemaError(
@@ -217,6 +250,17 @@ class TLGBuilder:
         Raises:
             SchemaError: If the id is unknown, belongs to a different
                 namespace, or is a graph template.
+
+        Examples:
+            Materialise the AET02 shell::
+
+                ard = (
+                    adae.tlg.ae
+                    .population(adsl)
+                    .by("TRTA")
+                    .template("aet02")
+                    .to_ard()
+                )
         """
         from ._registry import TEMPLATES, OutputType
 
@@ -268,6 +312,19 @@ class TLGBuilder:
 
         Returns:
             TLGBuilder: Builder with header rows set.
+
+        Examples:
+            Add a whole-dataset aggregate row::
+
+                from fleet.tlg import OverallStat
+
+                ard = (
+                    adlb.tlg.lb
+                    .population(adsl)
+                    .by("TRTA")
+                    .header_rows([OverallStat(label="Any abnormal")])
+                    .to_ard()
+                )
         """
         new = self._clone()
         new._header_rows_list = list(overall_stats)
@@ -287,6 +344,17 @@ class TLGBuilder:
 
         Returns:
             TLGBuilder: Builder with row fields set.
+
+        Examples:
+            Two-level SOC → preferred-term hierarchy::
+
+                ard = (
+                    adae.tlg.ae
+                    .population(adsl)
+                    .by("TRTA")
+                    .rows(["AEBODSYS", "AEDECOD"])
+                    .to_ard()
+                )
         """
         new = self._clone()
         new._rows_fields = list(fields)
@@ -303,6 +371,17 @@ class TLGBuilder:
 
         Returns:
             TLGBuilder: Builder with the value column set.
+
+        Examples:
+            Summarise change from baseline instead of AVAL::
+
+                ard = (
+                    advs.tlg.vs
+                    .population(adsl)
+                    .by("TRTA")
+                    .value("CHG")
+                    .to_ard()
+                )
         """
         new = self._clone()
         new._value_col = col
@@ -319,6 +398,18 @@ class TLGBuilder:
 
         Returns:
             TLGBuilder: Builder with the label column set.
+
+        Examples:
+            Show PARAM display names for PARAMCD rows::
+
+                ard = (
+                    advs.tlg.vs
+                    .population(adsl)
+                    .by("TRTA")
+                    .rows(["PARAMCD"])
+                    .label("PARAM")
+                    .to_ard()
+                )
         """
         new = self._clone()
         new._label_col = col
@@ -335,6 +426,17 @@ class TLGBuilder:
 
         Returns:
             TLGBuilder: Builder with format overrides set.
+
+        Examples:
+            Report means with two decimal places::
+
+                ard = (
+                    advs.tlg.vs
+                    .population(adsl)
+                    .by("TRTA")
+                    .decimals({"mean": "xx.xx"})
+                    .to_ard()
+                )
         """
         new = self._clone()
         new._decimals = dict(mapping)
@@ -356,6 +458,16 @@ class TLGBuilder:
 
         Returns:
             TLGBuilder: Builder with listing columns set.
+
+        Examples:
+            A subject-level AE listing::
+
+                listing = (
+                    adae.tlg.ae
+                    .template("ael01")
+                    .columns(["USUBJID", "AEDECOD", "AESEV"])
+                    .to_listing()
+                )
         """
         new = self._clone()
         new._listing_columns = list(cols)
@@ -369,6 +481,16 @@ class TLGBuilder:
 
         Returns:
             TLGBuilder: Builder with the sort order set.
+
+        Examples:
+            Sort the listing by subject then onset date::
+
+                listing = (
+                    adae.tlg.ae
+                    .template("ael01")
+                    .sort_by(["USUBJID", "ASTDT"])
+                    .to_listing()
+                )
         """
         new = self._clone()
         new._sort_by = list(cols)
@@ -382,6 +504,19 @@ class TLGBuilder:
 
         Returns:
             TLGBuilder: Builder with statistics set.
+
+        Examples:
+            Report subject counts and percentages::
+
+                from fleet.tlg import Statistic
+
+                ard = (
+                    adae.tlg.ae
+                    .population(adsl)
+                    .by("TRTA")
+                    .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
+                    .to_ard()
+                )
         """
         new = self._clone()
         new._statistics = list(statistics)
@@ -395,6 +530,19 @@ class TLGBuilder:
 
         Returns:
             TLGBuilder: Builder with pools set.
+
+        Examples:
+            Add a pooled Total column across all arms::
+
+                from fleet.tlg import GroupPool
+
+                ard = (
+                    adae.tlg.ae
+                    .population(adsl)
+                    .by("TRTA")
+                    .pools([GroupPool(label="Total", arms="*")])
+                    .to_ard()
+                )
         """
         new = self._clone()
         new._pools = list(pool_defs)
@@ -408,9 +556,78 @@ class TLGBuilder:
 
         Returns:
             TLGBuilder: Builder with column order set.
+
+        Examples:
+            Force placebo first::
+
+                ard = (
+                    adae.tlg.ae
+                    .population(adsl)
+                    .by("TRTA")
+                    .column_order(["Placebo", "Low Dose", "High Dose"])
+                    .to_ard()
+                )
         """
         new = self._clone()
         new._column_order = list(order)
+        return new
+
+    def interactive(
+        self,
+        *,
+        groupby: Any | None = None,
+        population: list[Any] | None = None,
+        dataset_filter: list[Any] | None = None,
+        stats: list[Any] | None = None,
+    ) -> TLGBuilder:
+        """Declare the explorer's degrees of freedom (``interactive:`` block).
+
+        Each axis maps onto an existing spec field — ``groupby`` →
+        ``columns``, ``population`` → ``adsl_filter``, ``dataset_filter``
+        → ``dataset_filter``, ``stats`` → ``statistics`` — so every
+        explorer variant runs through the same engine as the batch
+        output.  Values may be plain dicts (the YAML shapes) or
+        ``GroupbyChoice``/``ChoiceOption`` instances.
+
+        Args:
+            groupby: ``{"choices": [...], "default": ...}`` — candidate
+                treatment-arm columns.
+            population: ADSL filter presets, each
+                ``{"label": ..., "filter": ..., "default": ...}``.
+            dataset_filter: Analysis-dataset filter presets (same shape).
+            stats: Statistics presets, each
+                ``{"label": ..., "statistics": [...], "default": ...}``.
+
+        Returns:
+            TLGBuilder: Builder with the interactive block set.
+
+        Examples:
+            Declare a two-axis explorer and save the spec::
+
+                spec = (
+                    adae.tlg.ae
+                    .population(adsl, adsl_filter='pl.col("SAFFL") == "Y"')
+                    .by("TRTA")
+                    .template("aet01")
+                    .interactive(
+                        groupby={"choices": ["TRTA", "TRT01A"], "default": "TRTA"},
+                        stats=[
+                            {"label": "n (%)", "statistics": ["n_subjects", "n_pct"],
+                             "default": True},
+                            {"label": "+ events",
+                             "statistics": ["n_subjects", "n_pct", "n_events"]},
+                        ],
+                    )
+                    .to_spec()
+                )
+        """
+        new = self._clone()
+        new._interactive = InteractiveBlock(
+            groupby=groupby,
+            population=population,
+            dataset_filter=dataset_filter,
+            stats=stats,
+        )
         return new
 
     # ------------------------------------------------------------------ #
@@ -434,6 +651,17 @@ class TLGBuilder:
             SchemaError: If accumulated builder state maps to a spec
                 field the target template's method does not consume, or
                 to no field at all.
+
+        Examples:
+            Capture the builder state as a reusable spec::
+
+                spec = (
+                    adae.tlg.ae
+                    .population(adsl)
+                    .by("TRTA")
+                    .template("aet02")
+                    .to_spec()
+                )
         """
         is_listing = self._targets_listing()
         kwargs: dict[str, Any] = dict(self._defaults)
@@ -492,6 +720,8 @@ class TLGBuilder:
         if self._sort_by is not None:
             self._require_consumed_field("sort_by", "sort_by()")
             kwargs["sort_by"] = list(self._sort_by)
+        if self._interactive is not None:
+            kwargs["interactive"] = self._interactive
 
         return self._spec_cls(**kwargs)
 
@@ -850,6 +1080,17 @@ class BuilderVerbsMixin:
 
         Returns:
             TLGBuilder: A new builder with dataset filter set.
+
+        Examples:
+            Treatment-emergent AEs only::
+
+                ard = (
+                    adae.tlg.ae
+                    .filter('pl.col("TRTEMFL") == "Y"')
+                    .population(adsl)
+                    .by("TRTA")
+                    .to_ard()
+                )
         """
         return self._builder().filter(expr)
 
@@ -861,6 +1102,16 @@ class BuilderVerbsMixin:
 
         Returns:
             TLGBuilder: A new builder with group1 set.
+
+        Examples:
+            Group by actual treatment arm::
+
+                ard = (
+                    adae.tlg.ae
+                    .by("TRTA")
+                    .population(adsl)
+                    .to_ard()
+                )
         """
         return self._builder().by(col)
 
@@ -900,5 +1151,15 @@ class BuilderVerbsMixin:
 
         Returns:
             TLGBuilder: A new builder with the sort order set.
+
+        Examples:
+            Order the listing by subject::
+
+                listing = (
+                    adae.tlg.ae
+                    .template("ael01")
+                    .sort_by(["USUBJID"])
+                    .to_listing()
+                )
         """
         return self._builder().sort_by(cols)

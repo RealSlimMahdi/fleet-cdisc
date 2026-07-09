@@ -33,7 +33,7 @@ pl.Config.set_tbl_cols(20)
 pl.Config.set_tbl_rows(200)
 pl.Config.set_tbl_width_chars(220)
 
-import fleet  # noqa: E402, F401 — registers .sdtm / .adam / .tlg namespaces
+import fleet  # noqa: E402 — registers .sdtm / .adam / .tlg namespaces
 from examples.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX  # noqa: E402
 from fleet.tlg import (  # noqa: E402
     AEListingSpec,
@@ -52,7 +52,7 @@ from fleet.tlg import (  # noqa: E402
 # 1. Raw data (inline)
 # ════════════════════════════════════════════════════════════════════════════
 print("══ 1. Load raw data ═════════════════════════════════════════════════════")
-dm_raw = pl.from_repr("""\
+dm_raw = fleet.frame(pl.from_repr("""\
 ┌────────────────┬─────────┬─────┬─────┬───────────────────────────┬────────────────────────┬──────────┬──────────────────────┬─────────────────┬────────────────┬───────────────────────┐
 │ patient_number ┆ site_id ┆ age ┆ sex ┆ race                      ┆ ethnic                 ┆ arm_code ┆ arm_description      ┆ first_dose_date ┆ last_dose_date ┆ informed_consent_date │
 │ ---            ┆ ---     ┆ --- ┆ --- ┆ ---                       ┆ ---                    ┆ ---      ┆ ---                  ┆ ---             ┆ ---            ┆ ---                   │
@@ -64,9 +64,9 @@ dm_raw = pl.from_repr("""\
 │ 01-701-1034    ┆ 701     ┆ 74  ┆ M   ┆ BLACK OR AFRICAN AMERICAN ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-05      ┆ 2014-07-06     ┆ 2014-01-04            │
 │ 01-701-1047    ┆ 701     ┆ 56  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-06      ┆ 2014-07-07     ┆ 2014-01-05            │
 └────────────────┴─────────┴─────┴─────┴───────────────────────────┴────────────────────────┴──────────┴──────────────────────┴─────────────────┴────────────────┴───────────────────────┘
-""")
+"""))
 
-ae_raw = pl.from_repr("""\
+ae_raw = fleet.frame(pl.from_repr("""\
 ┌────────────────┬───────────────────────────┬───────────────┬─────────────┬─────────────┬────────────┬────────────────────────────┬──────────────────┬──────────────────┐
 │ patient_number ┆ ae_term                   ┆ ae_start_date ┆ ae_end_date ┆ ae_severity ┆ ae_serious ┆ ae_outcome                 ┆ ae_action_taken  ┆ ae_relationship  │
 │ ---            ┆ ---                       ┆ ---           ┆ ---         ┆ ---         ┆ ---        ┆ ---                        ┆ ---              ┆ ---              │
@@ -78,7 +78,7 @@ ae_raw = pl.from_repr("""\
 │ 01-701-1028    ┆ FATIGUE                   ┆ 2014-02-20    ┆ null        ┆ MODERATE    ┆ N          ┆ NOT RECOVERED/NOT RESOLVED ┆ DOSE NOT CHANGED ┆ PROBABLY RELATED │
 │ 01-701-1034    ┆ APPLICATION SITE ERYTHEMA ┆ 2014-01-20    ┆ 2014-01-25  ┆ SEVERE      ┆ Y          ┆ RECOVERED/RESOLVED         ┆ DRUG WITHDRAWN   ┆ RELATED          │
 └────────────────┴───────────────────────────┴───────────────┴─────────────┴─────────────┴────────────┴────────────────────────────┴──────────────────┴──────────────────┘
-""")
+"""))
 
 print(f"   dm_raw : {dm_raw.shape[0]:>3} rows  ×  {dm_raw.shape[1]} cols")
 print(f"   ae_raw : {ae_raw.shape[0]:>3} rows  ×  {ae_raw.shape[1]} cols")
@@ -174,7 +174,7 @@ print(f"   SAFFL=Y: {(adsl['SAFFL'] == 'Y').sum()} / {adsl.shape[0]}")
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 5. ADAE ═════════════════════════════════════════════════════════════")
 _adsl_trt = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "TRTA", "SAFFL"])
-ae_with_trt = ae.join(_adsl_trt, on="USUBJID", how="left")
+ae_with_trt = fleet.frame(ae.join(_adsl_trt, on="USUBJID", how="left"))
 
 adae = (
     ae_with_trt.adam.source("STUDYID")
@@ -202,7 +202,7 @@ adae = (
 
 # Derive AEDECOD and AEBODSYS for TLG consumption.
 # In a real study these come from MedDRA coding; here we simulate them.
-adae = adae.with_columns(
+adae = fleet.frame(adae.with_columns(
     pl.col("AETERM").str.to_titlecase().alias("AEDECOD"),
     pl.when(pl.col("AETERM").is_in(["HEADACHE", "DIZZINESS"]))
     .then(pl.lit("NERVOUS SYSTEM DISORDERS"))
@@ -212,7 +212,7 @@ adae = adae.with_columns(
     .then(pl.lit("GENERAL DISORDERS"))
     .otherwise(pl.lit("OTHER"))
     .alias("AEBODSYS"),
-)
+))
 
 print(f"   {adae.shape[0]} records × {adae.shape[1]} variables")
 print(f"   Columns: {adae.columns}")

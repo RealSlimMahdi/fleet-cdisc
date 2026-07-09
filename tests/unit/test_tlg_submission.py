@@ -38,23 +38,28 @@ from fixtures.study import ADSL, FRAMES  # noqa: E402
 GOLDEN_DIR = Path(__file__).parent.parent / "fixtures" / "goldens" / "tlg"
 
 #: Three subjects in one arm → 1/3 percentages exercise unrounded storage.
-ADSL3 = pl.DataFrame(
-    {
-        "USUBJID": ["S01", "S02", "S03"],
-        "TRTA": ["Placebo"] * 3,
-    }
-)
+ADSL3 = pl.from_repr("""\
+┌─────────┬─────────┐
+│ USUBJID ┆ TRTA    │
+│ ---     ┆ ---     │
+│ str     ┆ str     │
+╞═════════╪═════════╡
+│ S01     ┆ Placebo │
+│ S02     ┆ Placebo │
+│ S03     ┆ Placebo │
+└─────────┴─────────┘
+""")
 
-ADVS = pl.DataFrame(
-    {
-        "USUBJID": ["S01", "S02"],
-        "TRTA": ["Placebo"] * 2,
-        "PARAMCD": ["SYSBP", "SYSBP"],
-        "PARAM": ["Systolic Blood Pressure (mmHg)"] * 2,
-        "AVAL": [120.0, 130.0],
-        "CHG": [2.0, 6.0],
-    }
-)
+ADVS = pl.from_repr("""\
+┌─────────┬─────────┬─────────┬────────────────────────────────┬──────┬─────┐
+│ USUBJID ┆ TRTA    ┆ PARAMCD ┆ PARAM                          ┆ AVAL ┆ CHG │
+│ ---     ┆ ---     ┆ ---     ┆ ---                            ┆ ---  ┆ --- │
+│ str     ┆ str     ┆ str     ┆ str                            ┆ f64  ┆ f64 │
+╞═════════╪═════════╪═════════╪════════════════════════════════╪══════╪═════╡
+│ S01     ┆ Placebo ┆ SYSBP   ┆ Systolic Blood Pressure (mmHg) ┆ 120  ┆ 2   │
+│ S02     ┆ Placebo ┆ SYSBP   ┆ Systolic Blood Pressure (mmHg) ┆ 130  ┆ 6   │
+└─────────┴─────────┴─────────┴────────────────────────────────┴──────┴─────┘
+""")
 
 
 # ================================================================== #
@@ -133,14 +138,15 @@ class TestContinuousRendering:
 
 
 class TestUnroundedPercentages:
-    ADAE3 = pl.DataFrame(
-        {
-            "USUBJID": ["S01"],
-            "TRTA": ["Placebo"],
-            "AEBODSYS": ["NERVOUS"],
-            "AEDECOD": ["HEADACHE"],
-        }
-    )
+    ADAE3 = pl.from_repr("""\
+┌─────────┬─────────┬──────────┬──────────┐
+│ USUBJID ┆ TRTA    ┆ AEBODSYS ┆ AEDECOD  │
+│ ---     ┆ ---     ┆ ---      ┆ ---      │
+│ str     ┆ str     ┆ str      ┆ str      │
+╞═════════╪═════════╪══════════╪══════════╡
+│ S01     ┆ Placebo ┆ NERVOUS  ┆ HEADACHE │
+└─────────┴─────────┴──────────┴──────────┘
+""")
 
     def test_stat_holds_full_precision(self) -> None:
         ard = self.ADAE3.tlg.ae.t_summary(groupby="TRTA", adsl=ADSL3)
@@ -163,16 +169,17 @@ class TestUnroundedPercentages:
         assert headache.cells["Placebo"] == "1 (33.3%)"
 
     def test_abnormal_pct_unrounded(self) -> None:
-        adlb = pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S02", "S03"],
-                "TRTA": ["Placebo"] * 3,
-                "PARAMCD": ["ALT"] * 3,
-                "ABLFL": [None, None, None],
-                "BNRIND": ["NORMAL"] * 3,
-                "ANRIND": ["HIGH", "NORMAL", "NORMAL"],
-            }
-        )
+        adlb = pl.from_repr("""\
+┌─────────┬─────────┬─────────┬───────┬────────┬────────┐
+│ USUBJID ┆ TRTA    ┆ PARAMCD ┆ ABLFL ┆ BNRIND ┆ ANRIND │
+│ ---     ┆ ---     ┆ ---     ┆ ---   ┆ ---    ┆ ---    │
+│ str     ┆ str     ┆ str     ┆ null  ┆ str    ┆ str    │
+╞═════════╪═════════╪═════════╪═══════╪════════╪════════╡
+│ S01     ┆ Placebo ┆ ALT     ┆ null  ┆ NORMAL ┆ HIGH   │
+│ S02     ┆ Placebo ┆ ALT     ┆ null  ┆ NORMAL ┆ NORMAL │
+│ S03     ┆ Placebo ┆ ALT     ┆ null  ┆ NORMAL ┆ NORMAL │
+└─────────┴─────────┴─────────┴───────┴────────┴────────┘
+""")
         ard = adlb.tlg.lb.t_abnormal(groupby="TRTA", adsl=ADSL3)
         high = ard.filter((pl.col("variable_level") == "High") & (pl.col("stat_name") == "pct"))
         assert high["stat"].to_list() == [pytest.approx(100 / 3)]
@@ -206,7 +213,15 @@ class TestArdHonesty:
         assert validate_ard(annotated, strict=False) == []
 
     def test_validate_ard_relaxed_still_checks_required(self) -> None:
-        bad = pl.DataFrame({"group1": ["TRTA"], "stat": [1.0]})
+        bad = pl.from_repr("""\
+┌────────┬──────┐
+│ group1 ┆ stat │
+│ ---    ┆ ---  │
+│ str    ┆ f64  │
+╞════════╪══════╡
+│ TRTA   ┆ 1    │
+└────────┴──────┘
+""")
         assert any("Missing required" in i for i in validate_ard(bad, strict=False))
 
 
@@ -317,14 +332,15 @@ class TestPercentDisplay:
             assert "  " not in _merge_n_pct(n, pct)
 
     def test_standalone_pct_carries_percent_sign(self) -> None:
-        adae = pl.DataFrame(
-            {
-                "USUBJID": ["S01"],
-                "TRTA": ["Placebo"],
-                "AEBODSYS": ["NERVOUS"],
-                "AEDECOD": ["HEADACHE"],
-            }
-        )
+        adae = pl.from_repr("""\
+┌─────────┬─────────┬──────────┬──────────┐
+│ USUBJID ┆ TRTA    ┆ AEBODSYS ┆ AEDECOD  │
+│ ---     ┆ ---     ┆ ---      ┆ ---      │
+│ str     ┆ str     ┆ str      ┆ str      │
+╞═════════╪═════════╪══════════╪══════════╡
+│ S01     ┆ Placebo ┆ NERVOUS  ┆ HEADACHE │
+└─────────┴─────────┴──────────┴──────────┘
+""")
         from fleet.tlg import AESummarySpec
 
         spec = AESummarySpec(statistics=[Statistic.N_PCT])
@@ -341,14 +357,15 @@ class TestPercentDisplay:
                 "TRTA": ["Placebo"] * 3000,
             }
         )
-        adae = pl.DataFrame(
-            {
-                "USUBJID": ["S0001"],
-                "TRTA": ["Placebo"],
-                "AEBODSYS": ["NERVOUS"],
-                "AEDECOD": ["HEADACHE"],
-            }
-        )
+        adae = pl.from_repr("""\
+┌─────────┬─────────┬──────────┬──────────┐
+│ USUBJID ┆ TRTA    ┆ AEBODSYS ┆ AEDECOD  │
+│ ---     ┆ ---     ┆ ---      ┆ ---      │
+│ str     ┆ str     ┆ str      ┆ str      │
+╞═════════╪═════════╪══════════╪══════════╡
+│ S0001   ┆ Placebo ┆ NERVOUS  ┆ HEADACHE │
+└─────────┴─────────┴──────────┴──────────┘
+""")
         ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=big_adsl)
         model = ard_to_table_model(ard)
         headache = next(r for r in model.rows if r.label == "HEADACHE")
@@ -494,7 +511,16 @@ class TestRenderRtf:
         assert out.read_text(encoding="ascii") == rtf
 
     def test_listing_rtf(self, tmp_path: Path) -> None:
-        listing = pl.DataFrame({"Subject": ["S01", "S02"], "Result": ["120", "130"]})
+        listing = pl.from_repr("""\
+┌─────────┬────────┐
+│ Subject ┆ Result │
+│ ---     ┆ ---    │
+│ str     ┆ str    │
+╞═════════╪════════╡
+│ S01     ┆ 120    │
+│ S02     ┆ 130    │
+└─────────┴────────┘
+""")
         model = listing_to_model(listing, RenderMetadata(title="Listing 16.1"))
         rtf = render_listing_rtf(model, tmp_path / "l.rtf")
         assert "Listing 16.1" in rtf

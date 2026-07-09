@@ -66,8 +66,8 @@ class TestPin:
     def test_pin_survives_chain(self, simple_ae, dm_ref):
         ns = (
             simple_ae.sdtm.pin("DM", dm_ref)
-            .hardcode_no_ct("DOMAIN", value="AE")
-            .assign_no_ct("USUBJID", source="patient_number")
+            .assign("DOMAIN", value="AE")
+            .assign("USUBJID", source="patient_number")
         )
         assert "DM" in ns.pins()
 
@@ -116,13 +116,13 @@ class TestRequirePin:
 
 class TestFKCheck:
     def test_fk_check_clean(self, simple_ae, dm_ref):
-        ns = simple_ae.sdtm.pin("DM", dm_ref).assign_no_ct("USUBJID", source="patient_number")
+        ns = simple_ae.sdtm.pin("DM", dm_ref).assign("USUBJID", source="patient_number")
         orphans = ns._check_fk("USUBJID", pin="DM")
         assert orphans == set()
 
     def test_fk_check_orphans_warn(self, dm_ref):
         bad_df = pl.DataFrame({"patient_number": ["01-701-1015", "UNKNOWN_SUBJ"]})
-        ns = bad_df.sdtm.pin("DM", dm_ref).assign_no_ct("USUBJID", source="patient_number")
+        ns = bad_df.sdtm.pin("DM", dm_ref).assign("USUBJID", source="patient_number")
         with pytest.warns(UserWarning, match="FK check"):
             orphans = ns._check_fk("USUBJID", pin="DM")
         assert "UNKNOWN_SUBJ" in orphans
@@ -132,8 +132,8 @@ class TestFKCheck:
         ns = (
             bad_df.sdtm.pin("DM", dm_ref)
             .fk_policy("error")
-            .hardcode_no_ct("DOMAIN", value="AE")
-            .assign_no_ct("SUBJID", source="patient_number")
+            .assign("DOMAIN", value="AE")
+            .assign("SUBJID", source="patient_number")
         )
         with pytest.raises(ValueError, match="FK check"):
             ns._check_fk("SUBJID", pin="DM", ref_col="USUBJID")
@@ -143,7 +143,7 @@ class TestFKCheck:
         ns = (
             bad_df.sdtm.pin("DM", dm_ref)
             .fk_policy("off")
-            .assign_no_ct("USUBJID", source="patient_number")
+            .assign("USUBJID", source="patient_number")
         )
         orphans = ns._check_fk("USUBJID", pin="DM")
         assert orphans == set()

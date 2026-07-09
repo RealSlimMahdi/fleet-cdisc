@@ -197,7 +197,7 @@ class TestNamespaceQTc:
 class TestDeriveSummaryRecords:
     def test_mean_summary(self, vs_bds):
         result = vs_bds.adam.derive_summary_records(
-            by_vars=["USUBJID", "PARAMCD"],
+            by=["USUBJID", "PARAMCD"],
             analysis_var="AVAL",
             set_values_to={"DTYPE": "AVERAGE"},
             stat="mean",
@@ -212,7 +212,7 @@ class TestDeriveSummaryRecords:
 
     def test_sum_summary(self, vs_bds):
         result = vs_bds.adam.derive_summary_records(
-            by_vars=["USUBJID", "PARAMCD"],
+            by=["USUBJID", "PARAMCD"],
             analysis_var="AVAL",
             set_values_to={"DTYPE": "SUM"},
             stat="sum",
@@ -224,7 +224,7 @@ class TestDeriveSummaryRecords:
     def test_invalid_stat_raises(self, vs_bds):
         with pytest.raises(ValueError, match="Unknown stat"):
             vs_bds.adam.derive_summary_records(
-                by_vars=["USUBJID"],
+                by=["USUBJID"],
                 set_values_to={"DTYPE": "X"},
                 stat="variance",
             ).to_frame()
@@ -241,7 +241,7 @@ class TestDeriveLOCFRecords:
             }
         )
         result = df.adam.derive_locf_records(
-            by_vars=["USUBJID", "PARAMCD"],
+            by=["USUBJID", "PARAMCD"],
             analysis_var="AVAL",
             order_by="ADT",
         ).to_frame()
@@ -262,7 +262,7 @@ class TestDeriveParam:
             }
         )
         result = df.adam.derive_param(
-            by_vars=["USUBJID"],
+            by=["USUBJID"],
             set_values_to={"PARAMCD": "BMI", "PARAM": "Body Mass Index"},
             parameter_filter={"WEIGHT": "WEIGHT", "HEIGHT": "HEIGHT"},
             analysis_value=pl.col("WEIGHT") / (pl.col("HEIGHT") / 100) ** 2,
@@ -333,7 +333,7 @@ class TestDeriveSummarySchemaAlignment:
     def test_concat_schema_matches(self, vs_bds):
         """Ensures pl.concat handles mismatched schemas via vertical_relaxed."""
         result = vs_bds.adam.derive_summary_records(
-            by_vars=["USUBJID"],
+            by=["USUBJID"],
             analysis_var="AVAL",
             set_values_to={"DTYPE": "OVERALL_MEAN"},
             stat="mean",
@@ -424,7 +424,7 @@ class TestANL01FLAdmiralParity:
             "ANL01FL",
             criteria="last",
             order_by="ADT",
-            groups=["USUBJID", "PARAMCD"],
+            by=["USUBJID", "PARAMCD"],
             where='~pl.col("AVAL").is_null()',
         ).to_frame()
 
@@ -453,7 +453,7 @@ class TestANL01FLAdmiralParity:
             "ANL01FL",
             criteria="last",
             order_by="ADT",
-            groups=["USUBJID", "PARAMCD"],
+            by=["USUBJID", "PARAMCD"],
             where='~pl.col("AVAL").is_null()',
         ).to_frame()
         assert result["ANL01FL"].to_list() == ["Y", "Y"]
@@ -472,7 +472,7 @@ class TestANL01FLAdmiralParity:
             "ANL01FL",
             criteria="last",
             order_by="ADT",
-            groups=["USUBJID", "PARAMCD"],
+            by=["USUBJID", "PARAMCD"],
             where='~pl.col("AVAL").is_null()',
         ).to_frame()
         assert result["ANL01FL"].to_list() == [None, None]
@@ -505,7 +505,7 @@ class TestANL01FLAdmiralParity:
             "ANL01FL",
             criteria="last",
             order_by="ADT",
-            groups=["USUBJID", "PARAMCD", "AVISIT"],
+            by=["USUBJID", "PARAMCD", "AVISIT"],
             where='~pl.col("AVAL").is_null()',
         ).to_frame()
         flags = result["ANL01FL"].to_list()

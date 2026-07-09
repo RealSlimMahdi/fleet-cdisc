@@ -177,7 +177,16 @@ class Case:
 
 
 def _subjects() -> pl.DataFrame:
-    return pl.DataFrame({"USUBJID": ["S1", "S2"], "AGE": [70, 50]})
+    return pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ AGE │
+│ ---     ┆ --- │
+│ str     ┆ i64 │
+╞═════════╪═════╡
+│ S1      ┆ 70  │
+│ S2      ┆ 50  │
+└─────────┴─────┘
+""")
 
 
 def _register_sdtm_callable() -> None:
@@ -273,11 +282,32 @@ SDTM_CASES: list[Case] = [
         lambda: _subjects(),
         [{"target": "EXTRA", "algorithm": "merge", "dataset": "SUPP", "on": "USUBJID"}],
         lambda df: df["EXTRA"].to_list() == ["x", "y"],
-        pins={"SUPP": lambda: pl.DataFrame({"USUBJID": ["S1", "S2"], "EXTRA": ["x", "y"]})},
+        pins={
+            "SUPP": lambda: pl.from_repr("""\
+┌─────────┬───────┐
+│ USUBJID ┆ EXTRA │
+│ ---     ┆ ---   │
+│ str     ┆ str   │
+╞═════════╪═══════╡
+│ S1      ┆ x     │
+│ S2      ┆ y     │
+└─────────┴───────┘
+""")
+        },
     ),
     Case(
         "group_by",
-        lambda: pl.DataFrame({"USUBJID": ["S1", "S1", "S2"], "val": [1, 5, 3]}),
+        lambda: pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ val │
+│ ---     ┆ --- │
+│ str     ┆ i64 │
+╞═════════╪═════╡
+│ S1      ┆ 1   │
+│ S1      ┆ 5   │
+│ S2      ┆ 3   │
+└─────────┴─────┘
+"""),
         [
             {
                 "target": "VAL",
@@ -296,7 +326,15 @@ SDTM_CASES: list[Case] = [
     ),
     Case(
         "multiple_responses",
-        lambda: pl.DataFrame({"USUBJID": ["S1"], "ae_terms": ["fever|rash"]}),
+        lambda: pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ ae_terms   │
+│ ---     ┆ ---        │
+│ str     ┆ str        │
+╞═════════╪════════════╡
+│ S1      ┆ fever|rash │
+└─────────┴────────────┘
+"""),
         [
             {
                 "target": "AETERM",
@@ -322,7 +360,15 @@ SDTM_CASES: list[Case] = [
     ),
     Case(
         "nsv",
-        lambda: pl.DataFrame({"USUBJID": ["S1"], "safety_flag": ["Y"]}),
+        lambda: pl.from_repr("""\
+┌─────────┬─────────────┐
+│ USUBJID ┆ safety_flag │
+│ ---     ┆ ---         │
+│ str     ┆ str         │
+╞═════════╪═════════════╡
+│ S1      ┆ Y           │
+└─────────┴─────────────┘
+"""),
         [
             {
                 "target": "SAFETY",
@@ -335,7 +381,15 @@ SDTM_CASES: list[Case] = [
     ),
     Case(
         "duration",
-        lambda: pl.DataFrame({"AESTDTC": ["2024-01-01"], "AEENDTC": ["2024-01-05"]}),
+        lambda: pl.from_repr("""\
+┌────────────┬────────────┐
+│ AESTDTC    ┆ AEENDTC    │
+│ ---        ┆ ---        │
+│ str        ┆ str        │
+╞════════════╪════════════╡
+│ 2024-01-01 ┆ 2024-01-05 │
+└────────────┴────────────┘
+"""),
         [
             {
                 "target": "AEDUR",
@@ -357,14 +411,17 @@ SDTM_CASES: list[Case] = [
 
 
 def _vs_frame() -> pl.DataFrame:
-    return pl.DataFrame(
-        {
-            "USUBJID": ["S1", "S1", "S2"],
-            "PARAMCD": ["SYSBP", "SYSBP", "SYSBP"],
-            "VISITNUM": [1, 2, 1],
-            "AVAL": [120.0, 130.0, 110.0],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬─────────┬──────────┬──────┐
+│ USUBJID ┆ PARAMCD ┆ VISITNUM ┆ AVAL │
+│ ---     ┆ ---     ┆ ---      ┆ ---  │
+│ str     ┆ str     ┆ i64      ┆ f64  │
+╞═════════╪═════════╪══════════╪══════╡
+│ S1      ┆ SYSBP   ┆ 1        ┆ 120  │
+│ S1      ┆ SYSBP   ┆ 2        ┆ 130  │
+│ S2      ┆ SYSBP   ┆ 1        ┆ 110  │
+└─────────┴─────────┴──────────┴──────┘
+""")
 
 
 ADAM_CASES: list[Case] = [
@@ -471,13 +528,29 @@ ADAM_CASES: list[Case] = [
     ),
     Case(
         "chg",
-        lambda: pl.DataFrame({"AVAL": [130.0], "BASE": [120.0]}),
+        lambda: pl.from_repr("""\
+┌──────┬──────┐
+│ AVAL ┆ BASE │
+│ ---  ┆ ---  │
+│ f64  ┆ f64  │
+╞══════╪══════╡
+│ 130  ┆ 120  │
+└──────┴──────┘
+"""),
         [{"target": "CHG", "algorithm": "chg"}],
         lambda df: df["CHG"].to_list() == [10.0],
     ),
     Case(
         "pchg",
-        lambda: pl.DataFrame({"AVAL": [130.0], "BASE": [100.0]}),
+        lambda: pl.from_repr("""\
+┌──────┬──────┐
+│ AVAL ┆ BASE │
+│ ---  ┆ ---  │
+│ f64  ┆ f64  │
+╞══════╪══════╡
+│ 130  ┆ 100  │
+└──────┴──────┘
+"""),
         [{"target": "PCHG", "algorithm": "pchg"}],
         lambda df: df["PCHG"].to_list() == [30.0],
     ),
@@ -496,19 +569,31 @@ ADAM_CASES: list[Case] = [
     ),
     Case(
         "bmi",
-        lambda: pl.DataFrame({"WEIGHT": [80.0], "HEIGHT": [200.0]}),
+        lambda: pl.from_repr("""\
+┌────────┬────────┐
+│ WEIGHT ┆ HEIGHT │
+│ ---    ┆ ---    │
+│ f64    ┆ f64    │
+╞════════╪════════╡
+│ 80     ┆ 200    │
+└────────┴────────┘
+"""),
         [{"target": "BMI", "algorithm": "bmi", "weight": "WEIGHT", "height": "HEIGHT"}],
         lambda df: df["BMI"].to_list() == [20.0],
     ),
     Case(
         "nrind",
-        lambda: pl.DataFrame(
-            {
-                "AVAL": [50.0, 100.0, 200.0],
-                "LBSTNRLO": [60.0, 60.0, 60.0],
-                "LBSTNRHI": [140.0, 140.0, 140.0],
-            }
-        ),
+        lambda: pl.from_repr("""\
+┌──────┬──────────┬──────────┐
+│ AVAL ┆ LBSTNRLO ┆ LBSTNRHI │
+│ ---  ┆ ---      ┆ ---      │
+│ f64  ┆ f64      ┆ f64      │
+╞══════╪══════════╪══════════╡
+│ 50   ┆ 60       ┆ 140      │
+│ 100  ┆ 60       ┆ 140      │
+│ 200  ┆ 60       ┆ 140      │
+└──────┴──────────┴──────────┘
+"""),
         [{"target": "LBNRIND", "algorithm": "nrind"}],
         lambda df: df["LBNRIND"].to_list() == ["LOW", "NORMAL", "HIGH"],
     ),
@@ -526,7 +611,15 @@ ADAM_CASES: list[Case] = [
     ),
     Case(
         "shift",
-        lambda: pl.DataFrame({"BNRIND": ["NORMAL"], "ANRIND": ["HIGH"]}),
+        lambda: pl.from_repr("""\
+┌────────┬────────┐
+│ BNRIND ┆ ANRIND │
+│ ---    ┆ ---    │
+│ str    ┆ str    │
+╞════════╪════════╡
+│ NORMAL ┆ HIGH   │
+└────────┴────────┘
+"""),
         [
             {
                 "target": "SHIFT1",
@@ -545,33 +638,58 @@ ADAM_CASES: list[Case] = [
     ),
     Case(
         "bsa",
-        lambda: pl.DataFrame({"WEIGHT": [80.0], "HEIGHT": [180.0]}),
+        lambda: pl.from_repr("""\
+┌────────┬────────┐
+│ WEIGHT ┆ HEIGHT │
+│ ---    ┆ ---    │
+│ f64    ┆ f64    │
+╞════════╪════════╡
+│ 80     ┆ 180    │
+└────────┴────────┘
+"""),
         [{"target": "BSA", "algorithm": "bsa", "weight": "WEIGHT", "height": "HEIGHT"}],
         lambda df: 1.5 < df["BSA"][0] < 2.5,
     ),
     Case(
         "map",
-        lambda: pl.DataFrame({"SYSBP": [120.0], "DIABP": [80.0]}),
+        lambda: pl.from_repr("""\
+┌───────┬───────┐
+│ SYSBP ┆ DIABP │
+│ ---   ┆ ---   │
+│ f64   ┆ f64   │
+╞═══════╪═══════╡
+│ 120   ┆ 80    │
+└───────┴───────┘
+"""),
         [{"target": "MAP", "algorithm": "mean_arterial_pressure"}],
         lambda df: 90 < df["MAP"][0] < 96,
     ),
     Case(
         "qtc",
-        lambda: pl.DataFrame({"QT": [400.0], "RR": [1000.0]}),
+        lambda: pl.from_repr("""\
+┌─────┬──────┐
+│ QT  ┆ RR   │
+│ --- ┆ ---  │
+│ f64 ┆ f64  │
+╞═════╪══════╡
+│ 400 ┆ 1000 │
+└─────┴──────┘
+"""),
         [{"target": "QTCF", "algorithm": "qtc"}],
         lambda df: df["QTCF"][0] is not None,
     ),
     Case(
         "atoxgr",
-        lambda: pl.DataFrame(
-            {
-                "USUBJID": ["S1", "S2"],
-                "PARAMCD": ["Anemia", "Anemia"],
-                "AVAL": [75.0, 150.0],
-                "ANRLO": [140.0, 140.0],
-                "AVALU": ["g/L", "g/L"],
-            }
-        ),
+        lambda: pl.from_repr("""\
+┌─────────┬─────────┬──────┬───────┬───────┐
+│ USUBJID ┆ PARAMCD ┆ AVAL ┆ ANRLO ┆ AVALU │
+│ ---     ┆ ---     ┆ ---  ┆ ---   ┆ ---   │
+│ str     ┆ str     ┆ f64  ┆ f64   ┆ str   │
+╞═════════╪═════════╪══════╪═══════╪═══════╡
+│ S1      ┆ Anemia  ┆ 75   ┆ 140   ┆ g/L   │
+│ S2      ┆ Anemia  ┆ 150  ┆ 140   ┆ g/L   │
+└─────────┴─────────┴──────┴───────┴───────┘
+"""),
         [
             {
                 "target": "ATOXGRL",
@@ -584,10 +702,15 @@ ADAM_CASES: list[Case] = [
     ),
     Case(
         "combine_grades",
-        lambda: pl.DataFrame(
-            {"ATOXGRL": ["3"], "ATOXGRH": [None]},
-            schema={"ATOXGRL": pl.String, "ATOXGRH": pl.String},
-        ),
+        lambda: pl.from_repr("""\
+┌─────────┬─────────┐
+│ ATOXGRL ┆ ATOXGRH │
+│ ---     ┆ ---     │
+│ str     ┆ str     │
+╞═════════╪═════════╡
+│ 3       ┆ null    │
+└─────────┴─────────┘
+"""),
         [{"target": "ATOXGR", "algorithm": "combine_grades"}],
         lambda df: df["ATOXGR"].to_list() == ["-3"],
     ),
@@ -640,12 +763,17 @@ ADAM_CASES: list[Case] = [
         ],
         lambda df: df.sort("USUBJID")["TRTSDT"].to_list() == ["2024-01-01", "2024-01-03"],
         pins={
-            "EX": lambda: pl.DataFrame(
-                {
-                    "USUBJID": ["S1", "S1", "S2"],
-                    "EXSTDTC": ["2024-01-01", "2024-01-05", "2024-01-03"],
-                }
-            )
+            "EX": lambda: pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ EXSTDTC    │
+│ ---     ┆ ---        │
+│ str     ┆ str        │
+╞═════════╪════════════╡
+│ S1      ┆ 2024-01-01 │
+│ S1      ┆ 2024-01-05 │
+│ S2      ┆ 2024-01-03 │
+└─────────┴────────────┘
+""")
         },
     ),
     Case(
@@ -661,12 +789,17 @@ ADAM_CASES: list[Case] = [
         ],
         lambda df: df.sort("USUBJID")["TRTEDT"].to_list() == ["2024-01-05", "2024-01-03"],
         pins={
-            "EX": lambda: pl.DataFrame(
-                {
-                    "USUBJID": ["S1", "S1", "S2"],
-                    "EXSTDTC": ["2024-01-01", "2024-01-05", "2024-01-03"],
-                }
-            )
+            "EX": lambda: pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ EXSTDTC    │
+│ ---     ┆ ---        │
+│ str     ┆ str        │
+╞═════════╪════════════╡
+│ S1      ┆ 2024-01-01 │
+│ S1      ┆ 2024-01-05 │
+│ S2      ┆ 2024-01-03 │
+└─────────┴────────────┘
+""")
         },
     ),
     Case(
@@ -682,7 +815,17 @@ ADAM_CASES: list[Case] = [
         ],
         lambda df: df.sort("USUBJID")["NUMAE"].to_list() == [1, 0],
         pins={
-            "AE": lambda: pl.DataFrame({"USUBJID": ["S1", "S1", "S2"], "AESER": ["Y", "N", "N"]})
+            "AE": lambda: pl.from_repr("""\
+┌─────────┬───────┐
+│ USUBJID ┆ AESER │
+│ ---     ┆ ---   │
+│ str     ┆ str   │
+╞═════════╪═══════╡
+│ S1      ┆ Y     │
+│ S1      ┆ N     │
+│ S2      ┆ N     │
+└─────────┴───────┘
+""")
         },
     ),
     Case(

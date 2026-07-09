@@ -8,37 +8,37 @@ import fleet  # noqa: F401 — triggers namespace registration
 
 class TestAssignNoCT:
     def test_basic_rename(self, simple_raw):
-        result = simple_raw.sdtm.assign_no_ct("USUBJID", source="patient_number").to_frame()
+        result = simple_raw.sdtm.assign("USUBJID", source="patient_number").to_frame()
         assert "USUBJID" in result.columns
         assert result["USUBJID"].to_list() == simple_raw["patient_number"].to_list()
 
     def test_chained(self, simple_raw):
         result = (
-            simple_raw.sdtm.assign_no_ct("USUBJID", source="patient_number")
-            .assign_no_ct("SITEID", source="site_id")
+            simple_raw.sdtm.assign("USUBJID", source="patient_number")
+            .assign("SITEID", source="site_id")
             .to_frame()
         )
         assert "USUBJID" in result.columns
         assert "SITEID" in result.columns
 
     def test_original_frame_unchanged(self, simple_raw):
-        simple_raw.sdtm.assign_no_ct("USUBJID", source="patient_number").to_frame()
+        simple_raw.sdtm.assign("USUBJID", source="patient_number").to_frame()
         assert "USUBJID" not in simple_raw.columns
 
 
 class TestHardcodeNoCT:
     def test_constant_string(self, simple_raw):
-        result = simple_raw.sdtm.hardcode_no_ct("DOMAIN", value="DM").to_frame()
+        result = simple_raw.sdtm.assign("DOMAIN", value="DM").to_frame()
         assert result["DOMAIN"].to_list() == ["DM", "DM", "DM"]
 
     def test_constant_int(self, simple_raw):
-        result = simple_raw.sdtm.hardcode_no_ct("DMSEQ", value=1).to_frame()
+        result = simple_raw.sdtm.assign("DMSEQ", value=1).to_frame()
         assert result["DMSEQ"].to_list() == [1, 1, 1]
 
 
 class TestHardcodeCT:
     def test_constant_with_ct(self, simple_raw):
-        result = simple_raw.sdtm.hardcode_ct("AGEU", value="YEARS", ct_codelist="C66789").to_frame()
+        result = simple_raw.sdtm.assign("AGEU", value="YEARS", ct="C66789").to_frame()
         assert result["AGEU"].to_list() == ["YEARS", "YEARS", "YEARS"]
 
     def test_warns_on_invalid_value(self, simple_raw):
@@ -50,9 +50,7 @@ class TestHardcodeCT:
         validator._ct_cache["C_TEST"] = {"YEARS": {}, "MONTHS": {}}
         try:
             with pytest.warns(UserWarning, match="not in codelist"):
-                simple_raw.sdtm.hardcode_ct(
-                    "AGEU", value="INVALID", ct_codelist="C_TEST"
-                ).to_frame()
+                simple_raw.sdtm.assign("AGEU", value="INVALID", ct="C_TEST").to_frame()
         finally:
             validator._ct_cache.pop("C_TEST", None)
 
@@ -67,11 +65,7 @@ class TestHardcodeCT:
 
             with warnings.catch_warnings():
                 warnings.simplefilter("error")
-                # Canonical assign() spelling: hardcode_ct is a deprecated
-                # alias whose FutureWarning would trip simplefilter("error").
-                result = simple_raw.sdtm.assign(
-                    "AGEU", value="YEARS", ct="C_TEST2"
-                ).to_frame()
+                result = simple_raw.sdtm.assign("AGEU", value="YEARS", ct="C_TEST2").to_frame()
             assert result["AGEU"].to_list() == ["YEARS", "YEARS", "YEARS"]
         finally:
             validator._ct_cache.pop("C_TEST2", None)
@@ -87,9 +81,7 @@ class TestHardcodeCT:
             class FakeCodelist:
                 _concept_id = "C99999"
 
-            result = simple_raw.sdtm.hardcode_ct(
-                "AGEU", value="YEARS", ct_codelist=FakeCodelist
-            ).to_frame()
+            result = simple_raw.sdtm.assign("AGEU", value="YEARS", ct=FakeCodelist).to_frame()
             assert result["AGEU"].to_list() == ["YEARS", "YEARS", "YEARS"]
         finally:
             validator._ct_cache.pop("C99999", None)
@@ -132,19 +124,17 @@ class TestAssignDtc:
 
 class TestAssignCT:
     def test_with_explicit_mapping(self, simple_raw):
-        result = simple_raw.sdtm.assign_ct(
+        result = simple_raw.sdtm.assign(
             "SEX",
             source="sex",
-            ct_codelist="C66731",
-            ct_mapping={"F": "F", "M": "M"},
+            ct="C66731",
+            ct_map={"F": "F", "M": "M"},
         ).to_frame()
         assert result["SEX"].to_list() == ["F", "F", "M"]
 
     def test_fallback_passthrough(self, simple_raw):
         # Without CT loaded, should pass through the raw value
-        result = simple_raw.sdtm.assign_ct(
-            "SEX", source="sex", ct_codelist="NONEXISTENT"
-        ).to_frame()
+        result = simple_raw.sdtm.assign("SEX", source="sex", ct="NONEXISTENT").to_frame()
         assert "SEX" in result.columns
 
 
@@ -171,13 +161,13 @@ class TestConditionAdd:
 
 class TestIfThenElse:
     def test_multi_branch(self, simple_raw):
-        result = simple_raw.sdtm.if_then_else(
+        result = simple_raw.sdtm.case_when(
             "ARMFULL",
             when=[
                 {"condition": pl.col("arm_code") == "Pbo", "value": "Placebo Group"},
                 {"condition": pl.col("arm_code") == "Xan_Lo", "value": "Low Dose Group"},
             ],
-            else_value="High Dose Group",
+            else_="High Dose Group",
         ).to_frame()
         vals = result["ARMFULL"].to_list()
         assert vals[0] == "Placebo Group"
@@ -232,7 +222,7 @@ class TestNotsubmitted:
 
 class TestDatasetLevel:
     def test_alias_for_hardcode(self, simple_raw):
-        result = simple_raw.sdtm.dataset_level("STUDYID", value="STUDY01").to_frame()
+        result = simple_raw.sdtm.assign("STUDYID", value="STUDY01").to_frame()
         assert result["STUDYID"].to_list() == ["STUDY01", "STUDY01", "STUDY01"]
 
 
@@ -373,7 +363,7 @@ class TestAssignNoCTWithNulls:
 │ C    │
 └──────┘
 """)
-        result = df.sdtm.assign_no_ct("TARGET", source="src").to_frame()
+        result = df.sdtm.assign("TARGET", source="src").to_frame()
         assert result["TARGET"][1] is None
 
     def test_all_null_source(self):
@@ -387,7 +377,7 @@ class TestAssignNoCTWithNulls:
 │ null │
 └──────┘
 """)
-        result = df.sdtm.assign_no_ct("TARGET", source="src").to_frame()
+        result = df.sdtm.assign("TARGET", source="src").to_frame()
         assert result["TARGET"].null_count() == 3
 
 
@@ -408,8 +398,8 @@ class TestSDTMOrderInvariance:
 │ 01-701-1019    ┆ 701     ┆ 48  ┆ F   │
 └────────────────┴─────────┴─────┴─────┘
 """)
-        result1 = df.sdtm.assign_no_ct("USUBJID", source="patient_number").to_frame()
-        result2 = shuffle_rows(df).sdtm.assign_no_ct("USUBJID", source="patient_number").to_frame()
+        result1 = df.sdtm.assign("USUBJID", source="patient_number").to_frame()
+        result2 = shuffle_rows(df).sdtm.assign("USUBJID", source="patient_number").to_frame()
         assert_deterministic(result1, result2, sort_cols=["USUBJID"])
 
     def test_hardcode_no_ct_order_invariant(self):
@@ -426,8 +416,8 @@ class TestSDTMOrderInvariance:
 │ 01-701-1019    ┆ 701     ┆ 48  ┆ F   │
 └────────────────┴─────────┴─────┴─────┘
 """)
-        result1 = df.sdtm.hardcode_no_ct("DOMAIN", value="DM").to_frame()
-        result2 = shuffle_rows(df).sdtm.hardcode_no_ct("DOMAIN", value="DM").to_frame()
+        result1 = df.sdtm.assign("DOMAIN", value="DM").to_frame()
+        result2 = shuffle_rows(df).sdtm.assign("DOMAIN", value="DM").to_frame()
         # All rows get same value so just check count
         assert result1.height == result2.height
         assert_column_values_in(result1, "DOMAIN", {"DM"})

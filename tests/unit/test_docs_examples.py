@@ -71,52 +71,44 @@ def _section(text: str, start_heading: str, stop_prefix: str = "## ") -> str:
 
 def _guide_namespace() -> dict:
     """Seed the variables the GUIDE Part 4/8/9 blocks reference."""
-    dm_raw = pl.DataFrame(
-        {
-            "patient_number": ["01-701-1015", "01-701-1023", "01-701-1028"],
-            "site_id": [701, 701, 701],
-            "age": [63, 64, 71],
-            "sex": ["F", "F", "M"],
-            "race": ["WHITE", "WHITE", "BLACK OR AFRICAN AMERICAN"],
-            "ethnic": ["NOT HISPANIC OR LATINO"] * 3,
-            "arm_code": ["Pbo", "Xan_Lo", "Xan_Hi"],
-            "arm_description": ["Placebo", "Xanomeline Low Dose", "Xanomeline High Dose"],
-            "first_dose_date": ["2014-01-02", "2014-01-03", "2014-01-04"],
-            "last_dose_date": ["2014-07-02", "2014-07-04", "2014-07-05"],
-            "informed_consent_date": ["2014-01-01", "2014-01-02", "2014-01-03"],
-        }
-    )
-    ae_raw = pl.DataFrame(
-        {
-            "patient_number": ["01-701-1015", "01-701-1015", "01-701-1023"],
-            "ae_term": ["HEADACHE", "NAUSEA", "DIZZINESS"],
-            "ae_start_date": ["2014-01-10", "2014-02-05", "2014-01-15"],
-            "ae_end_date": ["2014-01-12", "2014-02-06", "2014-01-16"],
-            "ae_severity": ["MILD", "MODERATE", "MILD"],
-            "ae_serious": ["N", "Y", "N"],
-            "ae_outcome": ["RECOVERED/RESOLVED"] * 3,
-            "ae_action_taken": ["DOSE NOT CHANGED"] * 3,
-            "ae_relationship": ["POSSIBLY RELATED", "NOT RELATED", "POSSIBLY RELATED"],
-        }
-    )
-    vs_raw = pl.DataFrame(
-        {
-            "patient_number": ["01-701-1015"] * 4 + ["01-701-1023"] * 4,
-            "site_number": [701] * 8,
-            "vstestcd": ["SYSBP", "SYSBP", "DIABP", "DIABP"] * 2,
-            "vstest": [
-                "Systolic Blood Pressure",
-                "Systolic Blood Pressure",
-                "Diastolic Blood Pressure",
-                "Diastolic Blood Pressure",
-            ]
-            * 2,
-            "vsorres": ["121", "124", "78", "80", "118", "115", "74", "73"],
-            "vsorresu": ["mmHg"] * 8,
-            "vsdtc": ["2014-01-01", "2014-01-16", "2014-01-01", "2014-01-16"] * 2,
-            "vsdy": [-1, 15, -1, 15] * 2,
-        }
-    )
+    dm_raw = pl.from_repr("""\
+┌────────────────┬─────────┬─────┬─────┬───────────────────────────┬────────────────────────┬──────────┬──────────────────────┬─────────────────┬────────────────┬───────────────────────┐
+│ patient_number ┆ site_id ┆ age ┆ sex ┆ race                      ┆ ethnic                 ┆ arm_code ┆ arm_description      ┆ first_dose_date ┆ last_dose_date ┆ informed_consent_date │
+│ ---            ┆ ---     ┆ --- ┆ --- ┆ ---                       ┆ ---                    ┆ ---      ┆ ---                  ┆ ---             ┆ ---            ┆ ---                   │
+│ str            ┆ i64     ┆ i64 ┆ str ┆ str                       ┆ str                    ┆ str      ┆ str                  ┆ str             ┆ str            ┆ str                   │
+╞════════════════╪═════════╪═════╪═════╪═══════════════════════════╪════════════════════════╪══════════╪══════════════════════╪═════════════════╪════════════════╪═══════════════════════╡
+│ 01-701-1015    ┆ 701     ┆ 63  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-02      ┆ 2014-07-02     ┆ 2014-01-01            │
+│ 01-701-1023    ┆ 701     ┆ 64  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-03      ┆ 2014-07-04     ┆ 2014-01-02            │
+│ 01-701-1028    ┆ 701     ┆ 71  ┆ M   ┆ BLACK OR AFRICAN AMERICAN ┆ NOT HISPANIC OR LATINO ┆ Xan_Hi   ┆ Xanomeline High Dose ┆ 2014-01-04      ┆ 2014-07-05     ┆ 2014-01-03            │
+└────────────────┴─────────┴─────┴─────┴───────────────────────────┴────────────────────────┴──────────┴──────────────────────┴─────────────────┴────────────────┴───────────────────────┘
+""")
+    ae_raw = pl.from_repr("""\
+┌────────────────┬───────────┬───────────────┬─────────────┬─────────────┬────────────┬────────────────────┬──────────────────┬──────────────────┐
+│ patient_number ┆ ae_term   ┆ ae_start_date ┆ ae_end_date ┆ ae_severity ┆ ae_serious ┆ ae_outcome         ┆ ae_action_taken  ┆ ae_relationship  │
+│ ---            ┆ ---       ┆ ---           ┆ ---         ┆ ---         ┆ ---        ┆ ---                ┆ ---              ┆ ---              │
+│ str            ┆ str       ┆ str           ┆ str         ┆ str         ┆ str        ┆ str                ┆ str              ┆ str              │
+╞════════════════╪═══════════╪═══════════════╪═════════════╪═════════════╪════════════╪════════════════════╪══════════════════╪══════════════════╡
+│ 01-701-1015    ┆ HEADACHE  ┆ 2014-01-10    ┆ 2014-01-12  ┆ MILD        ┆ N          ┆ RECOVERED/RESOLVED ┆ DOSE NOT CHANGED ┆ POSSIBLY RELATED │
+│ 01-701-1015    ┆ NAUSEA    ┆ 2014-02-05    ┆ 2014-02-06  ┆ MODERATE    ┆ Y          ┆ RECOVERED/RESOLVED ┆ DOSE NOT CHANGED ┆ NOT RELATED      │
+│ 01-701-1023    ┆ DIZZINESS ┆ 2014-01-15    ┆ 2014-01-16  ┆ MILD        ┆ N          ┆ RECOVERED/RESOLVED ┆ DOSE NOT CHANGED ┆ POSSIBLY RELATED │
+└────────────────┴───────────┴───────────────┴─────────────┴─────────────┴────────────┴────────────────────┴──────────────────┴──────────────────┘
+""")
+    vs_raw = pl.from_repr("""\
+┌────────────────┬─────────────┬──────────┬──────────────────────────┬─────────┬──────────┬────────────┬──────┐
+│ patient_number ┆ site_number ┆ vstestcd ┆ vstest                   ┆ vsorres ┆ vsorresu ┆ vsdtc      ┆ vsdy │
+│ ---            ┆ ---         ┆ ---      ┆ ---                      ┆ ---     ┆ ---      ┆ ---        ┆ ---  │
+│ str            ┆ i64         ┆ str      ┆ str                      ┆ str     ┆ str      ┆ str        ┆ i64  │
+╞════════════════╪═════════════╪══════════╪══════════════════════════╪═════════╪══════════╪════════════╪══════╡
+│ 01-701-1015    ┆ 701         ┆ SYSBP    ┆ Systolic Blood Pressure  ┆ 121     ┆ mmHg     ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1015    ┆ 701         ┆ SYSBP    ┆ Systolic Blood Pressure  ┆ 124     ┆ mmHg     ┆ 2014-01-16 ┆ 15   │
+│ 01-701-1015    ┆ 701         ┆ DIABP    ┆ Diastolic Blood Pressure ┆ 78      ┆ mmHg     ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1015    ┆ 701         ┆ DIABP    ┆ Diastolic Blood Pressure ┆ 80      ┆ mmHg     ┆ 2014-01-16 ┆ 15   │
+│ 01-701-1023    ┆ 701         ┆ SYSBP    ┆ Systolic Blood Pressure  ┆ 118     ┆ mmHg     ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1023    ┆ 701         ┆ SYSBP    ┆ Systolic Blood Pressure  ┆ 115     ┆ mmHg     ┆ 2014-01-16 ┆ 15   │
+│ 01-701-1023    ┆ 701         ┆ DIABP    ┆ Diastolic Blood Pressure ┆ 74      ┆ mmHg     ┆ 2014-01-01 ┆ -1   │
+│ 01-701-1023    ┆ 701         ┆ DIABP    ┆ Diastolic Blood Pressure ┆ 73      ┆ mmHg     ┆ 2014-01-16 ┆ 15   │
+└────────────────┴─────────────┴──────────┴──────────────────────────┴─────────┴──────────┴────────────┴──────┘
+""")
 
     # SDTM DM (canonical verbs) — what Part 4.1 produces.
     from examples.cdiscpilot01.sdtm.codelists import ETHNIC, RACE, SEX

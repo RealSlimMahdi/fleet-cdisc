@@ -7,6 +7,7 @@ applyTo: "examples/*.py"
 # Namespace-only policy for Fleet examples
 
 - Use Fleet namespace chaining for all dataset transformations.
+- Enter pipelines through `fleet.frame(...)` at IO boundaries — the sanctioned zero-cost typed entry (`fleet.DataFrame` / `fleet.LazyFrame`); never `# type: ignore` on namespace access.
 - Start transformations from a namespace entrypoint:
   - **SDTM:** `.sdtm`
   - **ADaM BDS:** `.adam`
@@ -19,62 +20,70 @@ applyTo: "examples/*.py"
   - **ADaM Vaccine:** `.adam.vaccine`
   - **ADaM Metabolic:** `.adam.metabolic`
   - **ADaM Neurology:** `.adam.neuro`
-  - **TLG:** `.tlg.ae`, `.tlg.vs`
-- End every transformation chain with `.to_frame()`.
+  - **TLG:** `.tlg.ae`, `.tlg.cm`, `.tlg.dm`, `.tlg.ds`, `.tlg.eg`, `.tlg.ex`, `.tlg.lb`, `.tlg.mh`, `.tlg.vs` (spec-driven: `fleet.tlg.load_spec` / `run_spec`)
+- End every SDTM/ADaM transformation chain with `.to_frame()`.
 - Do not use direct DataFrame transformation methods in examples (for example: .with_columns, .rename, .select, .filter, .join, .group_by, pl.concat) when the step is a derivation or merge that belongs in namespace verbs.
 - If a required derivation is not covered by an existing namespace verb, stop and implement or request a namespace verb first; do not inline plain Polars transformation logic in the example.
-- Keep mapping arguments explicit and keyword-based (source=, value=, ct_mapping=, etc.).
+- Keep mapping arguments explicit and keyword-based (`source=`, `value=`, `ct=`, `ct_map=`, `by=`, `keep=`, etc.). Pre-alpha spellings (`ct_codelist=`, `ct_mapping=`, `by_vars=`, `target_cols=`, …) are removed at runtime.
 - Preserve lazy/chained style and avoid mixed patterns where part of the pipeline is namespace-based and part is ad hoc DataFrame logic.
 - Only use non-namespace operations for basic IO boundaries (read/write files, constants, simple printing), not for derivation logic.
 - For shared ADaM logic needed in multiple namespaces, implement in mixins instead of per-namespace duplication.
 
 # Available verbs by namespace
 
-## SDTM (`.sdtm`)
+Regenerated 2026-07 from the live package. To re-check, run `df.<namespace>.verbs()` (returns a `verb`/`summary` table).
 
-`assign_no_ct`, `assign_ct`, `date`, `hardcode_ct`, `hardcode_no_ct`, `nsv`, `study_day`, `baseline_flag`, `condition_add`, `if_then_else`, `ae_aerel`, `seq`, `merge`, `group_by`, `dataset_level`, `notsubmitted`, `multiple_responses`, `from_spec`, `export_supp`, `derivation`, `duration`, `validate`, `select`, `nodup`, `flag`, `criterion`, `pin`, `repin`, `inspect`, `explain`, `to_frame`, `to_dataset_json`, `write_parquet`
+## SDTM (`.sdtm`) — 49 verbs
 
-**Trial Design (`.sdtm` with `fetch_structure`):** `fetch_structure`, `study_header`, `add_elements`, `add_arms`, `add_visits`, `add_parameters`, `add_criteria`, `visit_map`, `element_boundaries`, `epoch_assign`
+`ae_aerel`, `assign`, `baseline_flag`, `case_when`, `condition_add`, `criterion`, `date`, `derivation`, `duration`, `explain`, `export_supp`, `fk_policy`, `flag`, `flag_exists`, `flag_extreme`, `flag_first`, `flag_last`, `flag_relative`, `from_spec`, `group_by`, `inspect`, `keep`, `merge`, `multiple_responses`, `nodup`, `notsubmitted`, `nsv`, `pin`, `pins`, `repin`, `select`, `seq`, `study_day`, `to_dataset_json`, `to_frame`, `to_spec_yaml`, `trail`, `validate`, `write_parquet`
 
-## ADaM BDS (`.adam`)
+**Trial Design (also on `.sdtm`, via `fetch_structure`):** `fetch_structure`, `study_header`, `add_elements`, `add_arms`, `add_visits`, `add_parameters`, `add_criteria`, `visit_map`, `element_boundaries`, `epoch_assign`
 
-`source`, `assigned`, `recode`, `rename`, `condderivation`, `whereclauses`, `merge_adsl`, `join_adsl`, `date`, `study_day`, `lookup`, `baseline`, `chg`, `pchg`, `bmi`, `nrind`, `on_treatment`, `shift`, `bsa`, `map`, `qtc`, `derive_summary_records`, `derive_locf_records`, `derive_param`, `atoxgr`, `combine_grades`, `transform`, `from_spec`, `derivation`, `duration`, `seq`, `validate`, `select`, `nodup`, `flag`, `criterion`, `pin`, `repin`, `inspect`, `explain`, `to_frame`, `to_dataset_json`, `write_parquet`
+## Shared ADaM core (all `.adam*` namespaces) — 40 verbs
 
-## ADaM ADSL (`.adam.adsl`)
+`assign`, `case_when`, `count_events`, `criterion`, `date`, `derivation`, `duration`, `explain`, `first_date`, `fk_policy`, `flag`, `flag_exists`, `flag_extreme`, `flag_first`, `flag_last`, `flag_relative`, `from_spec`, `inspect`, `join_adsl`, `keep`, `last_date`, `merge`, `merge_adsl`, `nodup`, `pick`, `pin`, `pins`, `recode`, `repin`, `select`, `seq`, `source`, `study_day`, `to_dataset_json`, `to_frame`, `to_spec_yaml`, `trail`, `validate`, `whereclauses`, `write_parquet`
 
-Inherits all BDS verbs plus: `first_date`, `last_date`, `count_events`, `age_years`, `age_from_dates`, `derive_period`
+Sub-namespaces do NOT inherit BDS-specific verbs — each adds only its own on top of the core:
 
-## ADaM OCCDS (`.adam.occds`)
+## ADaM BDS (`.adam`) — core + 16
 
-Inherits all BDS verbs plus: `treatment_emergent`, `onset_recovery`
+`atoxgr`, `baseline`, `bmi`, `bsa`, `chg`, `combine_grades`, `derive_locf_records`, `derive_param`, `derive_summary_records`, `map`, `nrind`, `on_treatment`, `pchg`, `qtc`, `shift`, `transform`
 
-## ADaM PK (`.adam.pk`)
+## ADaM ADSL (`.adam.adsl`) — core + 3
 
-Inherits all BDS verbs plus: `blq_flag`, `blq_impute`, `nominal_time`, `predose_flag`, `dose_normalized`, `evid`, `mrrlt`, `blqfn`, `log_conc`, `mdv`, `amt`, `cmt`, `avalcat`, `anl_flag`
+`age_from_dates`, `age_years`, `derive_period`
 
-## ADaM Oncology (`.adam.onco`)
+## ADaM OCCDS (`.adam.occds`) — core + 2
 
-Inherits all BDS verbs plus: `aval_resp`, `tumor_response_flag`, `best_overall_response`, `confirmed_response_flag`, `filter_pd`
+`onset_recovery`, `treatment_emergent`
 
-## ADaM Ophthalmology (`.adam.ophtha`)
+## ADaM PK (`.adam.pk`) — core + 14
 
-Inherits all BDS verbs plus: `etdrs_to_logmar`, `logmar_to_etdrs`, `study_eye`, `affected_eye`, `bcva_criterion`
+`amt`, `anl_flag`, `avalcat`, `blq_flag`, `blq_impute`, `blqfn`, `cmt`, `dose_normalized`, `evid`, `log_conc`, `mdv`, `mrrlt`, `nominal_time`, `predose_flag`
 
-## ADaM Pediatrics (`.adam.peds`)
+## ADaM Oncology (`.adam.onco`) — core + 5
 
-Inherits all BDS verbs plus: `age_days`, `age_months`, `age_years`, `corrected_age`, `prematurity_flag`, `bmi_category`
+`aval_resp`, `best_overall_response`, `confirmed_response_flag`, `filter_pd`, `tumor_response_flag`
 
-## ADaM Vaccine (`.adam.vaccine`)
+## ADaM Ophthalmology (`.adam.ophtha`) — core + 5
 
-Inherits all BDS verbs plus: `fever_flag`, `seroconversion_flag`, `seroresponse_flag`, `aval_adis`, `event_flag`
+`affected_eye`, `bcva_criterion`, `etdrs_to_logmar`, `logmar_to_etdrs`, `study_eye`
 
-## ADaM Metabolic (`.adam.metabolic`)
+## ADaM Pediatrics (`.adam.peds`) — core + 6
 
-Inherits all BDS verbs plus: `waist_hip_ratio`, `waist_height_ratio`, `body_fat_pct`, `visceral_fat_flag`
+`age_days`, `age_months`, `age_years`, `bmi_category`, `corrected_age`, `prematurity_flag`
 
-## ADaM Neurology (`.adam.neuro`)
+## ADaM Vaccine (`.adam.vaccine`) — core + 5
 
-Inherits all BDS verbs plus: `centiloid`, `mmse_category`, `cdrsob_total`, `moca_category`, `panss_total`
+`aval_adis`, `event_flag`, `fever_flag`, `seroconversion_flag`, `seroresponse_flag`
+
+## ADaM Metabolic (`.adam.metabolic`) — core + 4
+
+`body_fat_pct`, `visceral_fat_flag`, `waist_height_ratio`, `waist_hip_ratio`
+
+## ADaM Neurology (`.adam.neuro`) — core + 5
+
+`cdrsob_total`, `centiloid`, `mmse_category`, `moca_category`, `panss_total`
 
 # Validation requirement
 
@@ -90,4 +99,4 @@ Inherits all BDS verbs plus: `centiloid`, `mmse_category`, `cdrsob_total`, `moca
   uv run python examples/tlg_ae_example.py
   uv run python examples/tlg_vs_example.py
   ```
-- If a new example script is added, it must also be added to the validation list in `.github/copilot-instructions.md` §3 and §9.
+- If a new example script is added, it must also be added to the validation list above.

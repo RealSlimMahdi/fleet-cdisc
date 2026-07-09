@@ -14,8 +14,9 @@ Examples:
         from fleet.core.algorithm_resolver import resolve_algorithm_docstring
 
         summary, dotted = resolve_algorithm_docstring("assign_ct")
-        # summary -> first sentence of SDTMNamespace.assign_ct.__doc__
-        # dotted  -> "fleet.sdtm.namespace.SDTMNamespace.assign_ct"
+        # spec algorithm ids resolve through the registry to their verb:
+        # summary -> first sentence of SharedVerbsMixin.assign.__doc__
+        # dotted  -> "fleet.core._verb_mixin.SharedVerbsMixin.assign"
 
     Resolve a study-specific callable::
 

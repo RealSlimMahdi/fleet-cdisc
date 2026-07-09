@@ -30,7 +30,7 @@ All notable changes to Fleet are documented here.
   - `fleet init cfg` scaffolds the `custom_rules/` directory and field automatically
   - Header comments in generated rule files include CDISC operator reference link and rule type guide
 
-- **`assign_ct` now accepts codelist classes** — pass a generated class (e.g. `SEX`) instead of a raw NCI string; `ct_mapping` is optional when raw data already matches CDISC submission values
+- **CT assignment now accepts codelist classes** (today: `assign(ct=...)`) — pass a generated class (e.g. `SEX`) instead of a raw NCI string; `ct_map` is optional when raw data already matches CDISC submission values
 
 - **Admiral-parity expansion** — new core computations and record-generating verbs:
   - `utils.py`: `bsa()` (Body Surface Area, 4 methods), `mean_arterial_pressure()`, `qtc()` (Fridericia/Bazett), `age_in_years()` (unit-aware), `extreme_flag()` (min/max per group)

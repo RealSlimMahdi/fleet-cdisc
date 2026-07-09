@@ -391,6 +391,14 @@ def get(template_id: str) -> TemplateMeta:
 
     Raises:
         KeyError: If *template_id* is not registered.
+
+    Examples:
+        Look up a built-in template's metadata::
+
+            import fleet.tlg as tlg
+
+            meta = tlg.get("aet01")
+            print(meta.title, meta.domains)
     """
     return TEMPLATES[template_id]
 
@@ -461,8 +469,18 @@ def unregister_template(template_id: str) -> None:
     Args:
         template_id: Id of the user-registered template.
 
+    Returns:
+        None.
+
     Raises:
         SchemaError: If the id is unknown or belongs to a built-in.
+
+    Examples:
+        Remove a sponsor template after a run::
+
+            import fleet.tlg as tlg
+
+            tlg.unregister_template("spon01")
     """
     meta = TEMPLATES.get(template_id)
     if meta is None:
@@ -473,12 +491,42 @@ def unregister_template(template_id: str) -> None:
 
 
 def by_class(cdisc_class: CDISCClass) -> list[TemplateMeta]:
-    """Return all registered templates for a CDISC class."""
+    """Return all registered templates for a CDISC class.
+
+    Args:
+        cdisc_class: The CDISC dataset class to filter on.
+
+    Returns:
+        list[TemplateMeta]: Matching catalog entries.
+
+    Examples:
+        List every Events-class template::
+
+            import fleet.tlg as tlg
+
+            for meta in tlg.by_class(tlg.CDISCClass.EVENTS):
+                print(meta.id, meta.title)
+    """
     return [t for t in TEMPLATES.values() if t.cdisc_class == cdisc_class]
 
 
 def by_namespace(namespace: str) -> list[TemplateMeta]:
-    """Return all registered templates for a ``df.tlg`` sub-namespace."""
+    """Return all registered templates for a ``df.tlg`` sub-namespace.
+
+    Args:
+        namespace: Sub-namespace attribute name (e.g. ``"ae"``).
+
+    Returns:
+        list[TemplateMeta]: Matching catalog entries.
+
+    Examples:
+        List the AE templates::
+
+            import fleet.tlg as tlg
+
+            for meta in tlg.by_namespace("ae"):
+                print(meta.id, meta.title)
+    """
     return [t for t in TEMPLATES.values() if t.namespace == namespace]
 
 

@@ -40,7 +40,6 @@ from typing import Self
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
-from fleet.core._deprecation import deprecated_kwargs
 
 
 class VaccineNamespace(SharedADaMVerbsMixin):
@@ -230,7 +229,6 @@ class VaccineNamespace(SharedADaMVerbsMixin):
     # 5. event_flag — reactogenicity event occurrence flags               #
     # ------------------------------------------------------------------ #
 
-    @deprecated_kwargs(groups="by")
     def event_flag(
         self,
         target: str,

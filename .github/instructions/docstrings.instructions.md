@@ -45,7 +45,7 @@ def verb_name(self, target: str, *, source: str) -> Self:
 
             dm = (
                 raw_df.sdtm
-                .assign_no_ct("USUBJID", source="subject_id")
+                .assign("USUBJID", source="subject_id")
                 .to_frame()
             )
     """

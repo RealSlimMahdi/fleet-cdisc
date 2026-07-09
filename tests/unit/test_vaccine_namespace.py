@@ -39,7 +39,7 @@ class TestBaseVerbs:
         assert "USUBJID" in result.columns
 
     def test_assigned(self, vaccine_frame):
-        result = vaccine_frame.adam.vaccine.assigned("STUDYID", value="VAC01").to_frame()
+        result = vaccine_frame.adam.vaccine.assign("STUDYID", value="VAC01").to_frame()
         assert result["STUDYID"].to_list() == ["VAC01"] * 3
 
     def test_derivation(self, vaccine_frame):
@@ -55,14 +55,14 @@ class TestBaseVerbs:
         assert result["SEXN"].to_list() == ["Female", "Male", "Female"]
 
     def test_rename(self, vaccine_frame):
-        result = vaccine_frame.adam.vaccine.rename("SUBJ", source="USUBJID").to_frame()
+        result = vaccine_frame.adam.vaccine.assign("SUBJ", source="USUBJID").to_frame()
         assert result["SUBJ"].to_list() == vaccine_frame["USUBJID"].to_list()
 
     def test_condderivation(self, vaccine_frame):
-        result = vaccine_frame.adam.vaccine.condderivation(
+        result = vaccine_frame.adam.vaccine.case_when(
             "FEVCAT",
-            conditions=[{"condition": 'pl.col("TEMP") >= 38.0', "value": "FEVER"}],
-            else_value="NORMAL",
+            when=[{"condition": 'pl.col("TEMP") >= 38.0', "value": "FEVER"}],
+            else_="NORMAL",
         ).to_frame()
         assert result["FEVCAT"].to_list() == ["NORMAL", "FEVER", "FEVER"]
 
@@ -288,7 +288,7 @@ class TestEventFlag:
             }
         )
         result = df.adam.vaccine.event_flag(
-            "EVENTFL", aval_col="AVAL", cutoff=2.5, groups=["USUBJID", "FAOBJ", "ATPTREF"]
+            "EVENTFL", aval_col="AVAL", cutoff=2.5, by=["USUBJID", "FAOBJ", "ATPTREF"]
         ).to_frame()
         # Event occurred (> 2.5) at least once → all rows flagged "Y"
         assert all(f == "Y" for f in result["EVENTFL"].to_list())
@@ -308,7 +308,7 @@ class TestEventFlag:
             "EVENTFL",
             aval_col="AVAL",
             cutoff=2.5,
-            groups=["USUBJID", "FAOBJ", "ATPTREF"],
+            by=["USUBJID", "FAOBJ", "ATPTREF"],
             no_event_value="N",
         ).to_frame()
         assert all(f == "N" for f in result["EVENTFL"].to_list())
@@ -328,7 +328,7 @@ class TestEventFlag:
             "EVENTFL",
             aval_col="AVAL",
             cutoff=2.5,
-            groups=["USUBJID", "FAOBJ", "ATPTREF"],
+            by=["USUBJID", "FAOBJ", "ATPTREF"],
             no_event_value="N",
         ).to_frame()
         s01_flags = result.filter(pl.col("USUBJID") == "S01")["EVENTFL"].to_list()
@@ -347,6 +347,6 @@ class TestEventFlag:
             }
         )
         result = df.adam.vaccine.event_flag(
-            "EVENTFL", aval_col="AVAL", cutoff=2.5, groups=["USUBJID", "FAOBJ", "ATPTREF"]
+            "EVENTFL", aval_col="AVAL", cutoff=2.5, by=["USUBJID", "FAOBJ", "ATPTREF"]
         ).to_frame()
         assert all(f == "N" for f in result["EVENTFL"].to_list())

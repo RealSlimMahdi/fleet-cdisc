@@ -166,13 +166,30 @@ def checker(tmp_path: Path) -> DatasetChecker:
 
 class TestCheckerInlineCodelists:
     def test_valid_values_pass(self, checker):
-        df = pl.DataFrame({"USUBJID": ["S1", "S2"], "SEX": ["M", "F"]})
+        df = pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ SEX │
+│ ---     ┆ --- │
+│ str     ┆ str │
+╞═════════╪═════╡
+│ S1      ┆ M   │
+│ S2      ┆ F   │
+└─────────┴─────┘
+""")
         result = checker.check(df, dataset="DM")
         assert result.is_valid
         assert result.ct_violations == []
 
     def test_out_of_codelist_value_is_error(self, checker):
-        df = pl.DataFrame({"USUBJID": ["S1"], "SEX": ["X"]})
+        df = pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ SEX │
+│ ---     ┆ --- │
+│ str     ┆ str │
+╞═════════╪═════╡
+│ S1      ┆ X   │
+└─────────┴─────┘
+""")
         result = checker.check(df, dataset="DM")
         assert not result.is_valid
         (msg,) = result.ct_violations
@@ -181,22 +198,44 @@ class TestCheckerInlineCodelists:
         assert msg in result.errors
 
     def test_decode_hint(self, checker):
-        df = pl.DataFrame({"USUBJID": ["S1"], "SEX": ["Male"]})
+        df = pl.from_repr("""\
+┌─────────┬──────┐
+│ USUBJID ┆ SEX  │
+│ ---     ┆ ---  │
+│ str     ┆ str  │
+╞═════════╪══════╡
+│ S1      ┆ Male │
+└─────────┴──────┘
+""")
         result = checker.check(df, dataset="DM")
         (msg,) = result.ct_violations
         assert "'Male' is the decode of submission value 'M'" in msg
 
     def test_ct_mapping_hint(self, checker):
         """A raw mapping key in the data means the mapping never ran."""
-        df = pl.DataFrame({"USUBJID": ["S1"], "SEX": ["1"]})
+        df = pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ SEX │
+│ ---     ┆ --- │
+│ str     ┆ str │
+╞═════════╪═════╡
+│ S1      ┆ 1   │
+└─────────┴─────┘
+""")
         result = checker.check(df, dataset="DM")
         (msg,) = result.ct_violations
         assert "raw ct_mapping key" in msg
 
     def test_nulls_ignored(self, checker):
-        df = pl.DataFrame(
-            {"USUBJID": ["S1"], "SEX": [None]}, schema={"USUBJID": pl.String, "SEX": pl.String}
-        )
+        df = pl.from_repr("""\
+┌─────────┬──────┐
+│ USUBJID ┆ SEX  │
+│ ---     ┆ ---  │
+│ str     ┆ str  │
+╞═════════╪══════╡
+│ S1      ┆ null │
+└─────────┴──────┘
+""")
         result = checker.check(df, dataset="DM")
         assert result.ct_violations == []
 
@@ -206,7 +245,15 @@ class TestCheckerInlineCodelists:
         p = tmp_path / "define.yaml"
         p.write_text(yaml.safe_dump(spec))
         checker = DatasetChecker(p, validate_schema=False)
-        df = pl.DataFrame({"USUBJID": ["S1"], "SEX": ["M"]})
+        df = pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ SEX │
+│ ---     ┆ --- │
+│ str     ┆ str │
+╞═════════╪═════╡
+│ S1      ┆ M   │
+└─────────┴─────┘
+""")
         result = checker.check(df, dataset="DM")
         assert any("C99999" in w for w in result.warnings)
         assert result.ct_violations == []
@@ -215,7 +262,15 @@ class TestCheckerInlineCodelists:
         p = tmp_path / "define.yaml"
         p.write_text(yaml.safe_dump(CHECKER_SPEC))
         checker = DatasetChecker(p, validate_schema=False, check_ct=False)
-        df = pl.DataFrame({"USUBJID": ["S1"], "SEX": ["X"]})
+        df = pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ SEX │
+│ ---     ┆ --- │
+│ str     ┆ str │
+╞═════════╪═════╡
+│ S1      ┆ X   │
+└─────────┴─────┘
+""")
         result = checker.check(df, dataset="DM")
         assert result.ct_violations == []
         assert result.is_valid

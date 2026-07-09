@@ -43,7 +43,6 @@ from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 import polars as pl
 
-from fleet.core._deprecation import deprecated_kwargs, deprecated_verb
 from fleet.core.exceptions import DerivationError, VerbUsageError
 
 from ._mixins import SharedADaMVerbsMixin
@@ -105,61 +104,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
     """
 
     # ------------------------------------------------------------------ #
-    # 7. lookup — deprecated alias of merge                               #
-    # ------------------------------------------------------------------ #
-
-    @deprecated_verb("lookup", use="merge(dataset, on=..., keep=..., where=...)")
-    def lookup(
-        self,
-        target_cols: list[str] | None = None,
-        *,
-        dataset: pl.DataFrame,
-        on: str | list[str],
-        how: str = "left",
-        where: str | None = None,
-    ) -> AdamNamespace:
-        """SQL-style join against a lookup *dataset*.
-
-        Deprecated alias of
-        :meth:`~fleet.core._verb_mixin.SharedVerbsMixin.merge` — pass
-        ``keep=`` instead of ``target_cols=``.
-
-        Args:
-            target_cols: Optional columns to keep from the joined result —
-                the output is restricted to the *on* key(s) plus these
-                columns (order preserved).  When ``None``, all columns
-                are retained.
-            dataset: The lookup ``pl.DataFrame`` to join.
-            on: Key column name(s) for the join.
-            how: Join strategy (default ``"left"``).
-            where: Optional filter expression applied to *dataset* before
-                the join.
-
-        Returns:
-            AdamNamespace: A fresh namespace continuing from the joined plan.
-
-        Raises:
-            DerivationError: When a *target_cols* entry is absent from
-                the joined result.
-
-        Examples:
-            Join a parameter-code lookup table on ``VSTESTCD``::
-
-                advs = (
-                    vs_df.adam
-                    .merge(paramcd_lookup, on="VSTESTCD", how="left")
-                    .to_frame()
-                )
-        """
-        return self._merge_impl(
-            dataset, on=on, how=how, keep=target_cols, where=where, verb="lookup"
-        )
-
-    # ------------------------------------------------------------------ #
     # 9.  baseline — propagate baseline value to all group records        #
     # ------------------------------------------------------------------ #
 
-    @deprecated_kwargs(groups="by")
     def baseline(
         self,
         target: str,
@@ -184,8 +131,6 @@ class AdamNamespace(SharedADaMVerbsMixin):
             aval: Analysis value column (default ``"AVAL"``).
             baseline_flag: Flag column indicating the baseline record.
             by: Partition columns (default ``["USUBJID", "PARAMCD"]``).
-                The legacy ``groups=`` spelling is accepted with a
-                ``FutureWarning``.
             strict: Raise when a group has multiple baseline-flagged
                 records (default ``True``).
 
@@ -580,7 +525,6 @@ class AdamNamespace(SharedADaMVerbsMixin):
     # 20. derive_summary_records — aggregate and append new rows          #
     # ------------------------------------------------------------------ #
 
-    @deprecated_kwargs(by_vars="by")
     def derive_summary_records(
         self,
         *,
@@ -651,7 +595,6 @@ class AdamNamespace(SharedADaMVerbsMixin):
     # 21. derive_locf_records — last observation carried forward          #
     # ------------------------------------------------------------------ #
 
-    @deprecated_kwargs(by_vars="by")
     def derive_locf_records(
         self,
         *,
@@ -662,7 +605,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         """
         Forward-fill *analysis_var* within each group (LOCF).
 
-        Sorts by *order_by* within each group defined by *by_vars*,
+        Sorts by *order_by* within each group defined by *by*,
         then forward-fills null values in *analysis_var*.
 
         Materialises the current pipeline, applies the fill, and returns.
@@ -690,7 +633,6 @@ class AdamNamespace(SharedADaMVerbsMixin):
     # 22. derive_param — append a computed parameter as new records        #
     # ------------------------------------------------------------------ #
 
-    @deprecated_kwargs(by_vars="by")
     def derive_param(
         self,
         *,
@@ -744,7 +686,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
             )
             pivoted_parts.append(part)
 
-        # Join all pivoted parts on the by_vars
+        # Join all pivoted parts on the by keys
         joined = pivoted_parts[0]
         for part in pivoted_parts[1:]:
             joined = joined.join(part, on=grps, how="inner")

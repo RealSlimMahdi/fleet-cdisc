@@ -1,3 +1,5 @@
+> **Status (2026-07): implemented — superseded by `fleet.tlg.render` and `fleet tlg export`.**
+
 ## Plan: AE ARD Export to Pharma-Style HTML and PDF
 
 Build a dedicated TLG rendering layer that converts the already-implemented AE outputs into submission-style table artifacts. Use the existing AE summary ARD and AE listing as input, render pharma-style HTML first (modeled on NEST AET01 structure), then generate PDF from the same HTML using WeasyPrint. Expose both Python API and CLI entry points while keeping ARD computation unchanged.

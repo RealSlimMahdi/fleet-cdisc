@@ -1,3 +1,5 @@
+> **Status (2026-07): largely implemented — CI runs ruff, pytest+coverage, and llms.txt / generated-CLI-doc freshness checks.**
+
 ## Plan: Raise Fleet to 9/10
 
 Tighten the repo where it is currently weakest: automate the documented quality bar, remove packaging and release inconsistencies, and correct documentation drift around the real API surface. Preserve the current architecture; the plan focuses on maturity, reliability, and discoverability rather than redesign.

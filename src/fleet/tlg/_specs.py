@@ -11,11 +11,11 @@ flag values, pool arm existence).
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Literal, Self
 
 import polars as pl
 import yaml
-from pydantic import BaseModel, Field, ValidationInfo, field_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_validator
 
 from fleet.core.exceptions import SchemaError
 from fleet.sdtm.utils import parse_expression
@@ -195,6 +195,128 @@ class OverallStat(BaseModel):
     _validate_filter = field_validator("filter")(_check_filter_field)
 
 
+class ChoiceOption(BaseModel):
+    """One selectable value for an ``interactive:`` axis.
+
+    Each option maps to a value for an *existing* spec field —
+    ``filter`` for the ``population``/``dataset_filter`` axes,
+    ``statistics`` for the ``stats`` axis.  A widget in the explorer is
+    a spec-field editor, never new semantics.
+    """
+
+    label: str = Field(
+        ...,
+        description="Display label for this choice in the explorer widget bar.",
+    )
+    filter: str | None = Field(
+        default=None,
+        description=(
+            "Filter expression string (the YAML-serializable form, e.g. "
+            "``'pl.col(\"AESER\") == \"Y\"'``); ``None`` means no filter. "
+            "Used by the ``population``/``dataset_filter`` axes."
+        ),
+    )
+    statistics: list[Statistic] | None = Field(
+        default=None,
+        description="Statistics list for this choice.  Used by the ``stats`` axis.",
+    )
+    default: bool = Field(
+        default=False,
+        description=(
+            "Marks the batch default — exactly one option per axis. The "
+            "default variant is the submission output."
+        ),
+    )
+
+    model_config = {"extra": "forbid"}
+
+    _validate_filter = field_validator("filter")(_check_filter_field)
+
+
+class GroupbyChoice(BaseModel):
+    """The ``groupby`` axis of an ``interactive:`` block.
+
+    Each choice is a treatment-arm column name mapped onto the spec's
+    ``columns`` field.
+    """
+
+    choices: list[str] = Field(
+        ...,
+        min_length=1,
+        description="Candidate treatment-arm columns (e.g. ``[TRTA, TRT01A]``).",
+    )
+    default: str = Field(
+        ...,
+        description="The batch-default column.  Must be one of *choices*.",
+    )
+
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _default_in_choices(self) -> GroupbyChoice:
+        """Reject a default column that is not one of the choices."""
+        if self.default not in self.choices:
+            raise ValueError(
+                f"interactive.groupby: default {self.default!r} is not in choices {self.choices!r}."
+            )
+        return self
+
+
+class InteractiveBlock(BaseModel):
+    """Declared degrees of freedom for the TLG explorer.
+
+    Every axis maps onto one existing :class:`TLGSpec` field
+    (``groupby``→``columns``, ``population``→``adsl_filter``,
+    ``dataset_filter``→``dataset_filter``, ``stats``→``statistics``), so
+    the interactive variant space is spanned by the same engine that
+    produces the batch output — no second body of table logic exists.
+    An absent axis stays fixed at the spec's value.
+    """
+
+    groupby: GroupbyChoice | None = Field(
+        default=None,
+        description="Treatment-arm column choices (→ spec ``columns``).",
+    )
+    population: list[ChoiceOption] | None = Field(
+        default=None,
+        description="ADSL population presets (→ spec ``adsl_filter``).",
+    )
+    dataset_filter: list[ChoiceOption] | None = Field(
+        default=None,
+        description="Analysis-dataset filter presets (→ spec ``dataset_filter``).",
+    )
+    stats: list[ChoiceOption] | None = Field(
+        default=None,
+        description="Statistics presets (→ spec ``statistics``).",
+    )
+
+    model_config = {"extra": "forbid"}
+
+    @model_validator(mode="after")
+    def _check_axes(self) -> InteractiveBlock:
+        """Require at least one axis, one default per axis, stats lists."""
+        if all(v is None for v in (self.groupby, self.population, self.dataset_filter, self.stats)):
+            raise ValueError("interactive: declare at least one axis (or drop the block).")
+        for axis in ("population", "dataset_filter", "stats"):
+            options = getattr(self, axis)
+            if options is None:
+                continue
+            n_default = sum(o.default for o in options)
+            if n_default != 1:
+                raise ValueError(
+                    f"interactive.{axis}: exactly one option must set "
+                    f"'default: true' (got {n_default}) — the default variant "
+                    "is the batch/submission output."
+                )
+        if self.stats is not None:
+            missing = [o.label for o in self.stats if not o.statistics]
+            if missing:
+                raise ValueError(
+                    f"interactive.stats: options {missing} must declare a 'statistics' list."
+                )
+        return self
+
+
 class TLGSpec(BaseModel):
     """Base specification for all TLG outputs.
 
@@ -274,10 +396,56 @@ class TLGSpec(BaseModel):
             "(content validation).  Empty by default."
         ),
     )
+    interactive: InteractiveBlock | None = Field(
+        default=None,
+        description=(
+            "Declared degrees of freedom for the explorer "
+            "(``fleet tlg explore``).  Each axis maps onto one existing "
+            "spec field; the all-defaults variant is the batch output.  "
+            "Set inline via "
+            "[`TLGBuilder.interactive()`][fleet.tlg.TLGBuilder.interactive]."
+        ),
+    )
 
     model_config = {"extra": "forbid", "arbitrary_types_allowed": True}
 
     _validate_filters = field_validator("adsl_filter", "dataset_filter")(_check_filter_field)
+
+    #: interactive axis name → the spec field its choices map onto.
+    _INTERACTIVE_AXIS_FIELDS: ClassVar[dict[str, str]] = {
+        "groupby": "columns",
+        "population": "adsl_filter",
+        "dataset_filter": "dataset_filter",
+        "stats": "statistics",
+    }
+
+    @model_validator(mode="after")
+    def _check_interactive_applies(self) -> TLGSpec:
+        """Reject interactive axes mapping to fields this spec cannot consume.
+
+        Variants are built with ``model_copy(update=...)`` (no
+        re-validation), so an axis targeting a missing or unconsumed
+        field must fail here, at construction, naming the axis.
+        """
+        if self.interactive is None:
+            return self
+        fields = type(self).model_fields
+        for axis, target in self._INTERACTIVE_AXIS_FIELDS.items():
+            if getattr(self.interactive, axis) is None:
+                continue
+            if target not in fields or target in self._unconsumed_spec_fields:
+                raise ValueError(
+                    f"interactive.{axis} maps to spec field {target!r}, which "
+                    f"{type(self).__name__} does not consume — the axis would "
+                    "be silently ignored. Remove it or target a template that "
+                    "consumes it."
+                )
+        if self.interactive.groupby is not None and "statistics" not in fields:
+            raise ValueError(
+                "interactive.groupby needs a summary spec — listings have no "
+                "column grouping. Remove the axis."
+            )
+        return self
 
     @field_validator("schema_version", mode="before")
     @classmethod
@@ -399,14 +567,14 @@ class TLGSpec(BaseModel):
         return yaml.dump(data, default_flow_style=False, sort_keys=False)
 
     @classmethod
-    def from_yaml(cls, yaml_str: str) -> TLGSpec:
+    def from_yaml(cls, yaml_str: str) -> Self:
         """Deserialize a spec from a YAML string.
 
         Args:
             yaml_str: YAML text.
 
         Returns:
-            TLGSpec: The reconstructed spec instance.
+            Self: The reconstructed spec instance (the class it is called on).
         """
         data = yaml.safe_load(yaml_str)
         return cls.model_validate(data)

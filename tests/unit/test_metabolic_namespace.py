@@ -26,7 +26,7 @@ class TestBaseVerbs:
         assert "USUBJID" in result.columns
 
     def test_assigned(self, metab_frame):
-        result = metab_frame.adam.metabolic.assigned("STUDYID", value="MET01").to_frame()
+        result = metab_frame.adam.metabolic.assign("STUDYID", value="MET01").to_frame()
         assert result["STUDYID"].to_list() == ["MET01"] * 2
 
     def test_derivation(self, metab_frame):
@@ -42,14 +42,14 @@ class TestBaseVerbs:
         assert result["SEXN"].to_list() == ["1", "2"]
 
     def test_rename(self, metab_frame):
-        result = metab_frame.adam.metabolic.rename("SUBJ", source="USUBJID").to_frame()
+        result = metab_frame.adam.metabolic.assign("SUBJ", source="USUBJID").to_frame()
         assert result["SUBJ"].to_list() == metab_frame["USUBJID"].to_list()
 
     def test_condderivation(self, metab_frame):
-        result = metab_frame.adam.metabolic.condderivation(
+        result = metab_frame.adam.metabolic.case_when(
             "WSTCAT",
-            conditions=[{"condition": 'pl.col("WSTCIR") > 100', "value": "HIGH"}],
-            else_value="NORMAL",
+            when=[{"condition": 'pl.col("WSTCIR") > 100', "value": "HIGH"}],
+            else_="NORMAL",
         ).to_frame()
         assert result["WSTCAT"].to_list() == ["NORMAL", "HIGH"]
 

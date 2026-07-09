@@ -59,7 +59,16 @@ def _define(variables: list[dict], dataset: str = "ADSL", **top: object) -> dict
 
 @pytest.fixture
 def subjects() -> pl.DataFrame:
-    return pl.DataFrame({"USUBJID": ["S1", "S2"], "AGE": [70, 50]})
+    return pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ AGE │
+│ ---     ┆ --- │
+│ str     ┆ i64 │
+╞═════════╪═════╡
+│ S1      ┆ 70  │
+│ S2      ┆ 50  │
+└─────────┴─────┘
+""")
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -143,19 +152,43 @@ class TestOverwriteGuard:
         )
 
     def test_overwrite_raises(self, write_spec):
-        df = pl.DataFrame({"USUBJID": ["S1"], "AGE": [70], "TRTSDT": ["inline"]})
+        df = pl.from_repr("""\
+┌─────────┬─────┬────────┐
+│ USUBJID ┆ AGE ┆ TRTSDT │
+│ ---     ┆ --- ┆ ---    │
+│ str     ┆ i64 ┆ str    │
+╞═════════╪═════╪════════╡
+│ S1      ┆ 70  ┆ inline │
+└─────────┴─────┴────────┘
+""")
         spec = self._trtsdt_spec(write_spec)
         with pytest.raises(SpecError, match=r"variable TRTSDT.*overwrite.*omit"):
             df.adam.from_spec(spec, dataset="ADSL")
 
     def test_overwrite_true_allows(self, write_spec):
-        df = pl.DataFrame({"USUBJID": ["S1"], "AGE": [70], "TRTSDT": ["inline"]})
+        df = pl.from_repr("""\
+┌─────────┬─────┬────────┐
+│ USUBJID ┆ AGE ┆ TRTSDT │
+│ ---     ┆ --- ┆ ---    │
+│ str     ┆ i64 ┆ str    │
+╞═════════╪═════╪════════╡
+│ S1      ┆ 70  ┆ inline │
+└─────────┴─────┴────────┘
+""")
         spec = self._trtsdt_spec(write_spec)
         result = df.adam.from_spec(spec, dataset="ADSL", overwrite=True).to_frame()
         assert result["TRTSDT"].to_list() == [70]
 
     def test_omit_keeps_inline_derivation(self, write_spec):
-        df = pl.DataFrame({"USUBJID": ["S1"], "AGE": [70], "TRTSDT": ["inline"]})
+        df = pl.from_repr("""\
+┌─────────┬─────┬────────┐
+│ USUBJID ┆ AGE ┆ TRTSDT │
+│ ---     ┆ --- ┆ ---    │
+│ str     ┆ i64 ┆ str    │
+╞═════════╪═════╪════════╡
+│ S1      ┆ 70  ┆ inline │
+└─────────┴─────┴────────┘
+""")
         spec = self._trtsdt_spec(write_spec)
         result = df.adam.from_spec(spec, dataset="ADSL", omit=["TRTSDT"]).to_frame()
         assert result["TRTSDT"].to_list() == ["inline"]
@@ -328,7 +361,7 @@ class TestSelectSpecWarnings:
         )
 
     def test_warns_on_dropped_computed_column(self, subjects, select_spec):
-        ns = subjects.adam.assigned("AGEGR1", value="<65")
+        ns = subjects.adam.assign("AGEGR1", value="<65")
         with pytest.warns(UserWarning, match=r"dropping computed column.*AGEGR1"):
             ns.select(spec=select_spec, dataset="ADSL")
 
@@ -380,7 +413,15 @@ class TestDuplicateTransformWarning:
 
 class TestDependsOn:
     def test_depends_on_key_accepted_and_executes(self, write_spec):
-        df = pl.DataFrame({"USUBJID": ["S1"], "vsdtc": ["2024-01-10"]})
+        df = pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ vsdtc      │
+│ ---     ┆ ---        │
+│ str     ┆ str        │
+╞═════════╪════════════╡
+│ S1      ┆ 2024-01-10 │
+└─────────┴────────────┘
+""")
         spec = write_spec(
             _define(
                 [

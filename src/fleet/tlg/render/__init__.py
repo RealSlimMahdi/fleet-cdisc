@@ -24,12 +24,15 @@ from ._models import (
     paginate,
     paginate_listing,
 )
+from .explorer import ExplorerEntry, render_explorer
 from .html import render_html, render_listing_html
 from .pdf import render_listing_pdf, render_pdf
 from .rtf import render_listing_rtf, render_rtf
 from .slides import render_listing_pptx, render_pptx
 
 __all__ = [
+    "ExplorerEntry",
+    "render_explorer",
     "RenderMetadata",
     "TableModel",
     "ListingModel",

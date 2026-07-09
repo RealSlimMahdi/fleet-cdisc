@@ -11,7 +11,7 @@ Demonstrates:
 
 import polars as pl
 
-import fleet  # noqa: F401  — registers the .adam namespace
+import fleet  # registers the .adam namespace
 from fleet.adam.grading import list_systems
 
 
@@ -28,7 +28,7 @@ def main() -> None:
     #   Anemia:     G3 <80 g/L · G2 <100 g/L · G1 <LLN
     #   ALT incr:   G4 >20×ULN · G3 >5×ULN · G2 >3×ULN · G1 >ULN
     #   Creat incr: G4 >6×ULN · G3 >3×ULN & >3×BASE · G2 >1.5×ULN & >1.5×BASE · G1 >ULN
-    adlb = pl.from_repr("""\
+    adlb = fleet.frame(pl.from_repr("""\
 ┌─────────┬─────────┬──────────┬────────────────────────────────────┬───────┬───────┬───────┬──────┬────────┬───────┐
 │ USUBJID ┆ PARAMCD ┆ ATOXDSCL ┆ ATOXDSCH                           ┆ AVAL  ┆ ANRLO ┆ ANRHI ┆ BASE ┆ BNRIND ┆ AVALU │
 │ ---     ┆ ---     ┆ ---      ┆ ---                                ┆ ---   ┆ ---   ┆ ---   ┆ ---  ┆ ---    ┆ ---   │
@@ -45,7 +45,7 @@ def main() -> None:
 │ 01-002  ┆ ALT     ┆ null     ┆ Alanine aminotransferase increased ┆ 42.0  ┆ null  ┆ 40.0  ┆ 35.0 ┆ NORMAL ┆ null  │
 │ 01-002  ┆ CREAT   ┆ null     ┆ Creatinine increased               ┆ 50.0  ┆ null  ┆ 100.0 ┆ 80.0 ┆ NORMAL ┆ null  │
 └─────────┴─────────┴──────────┴────────────────────────────────────┴───────┴───────┴───────┴──────┴────────┴───────┘
-""")
+"""))
 
     print("── Input ADLB data ──")
     print(adlb.select("USUBJID", "PARAMCD", "AVAL", "ANRLO", "ANRHI"))
@@ -56,7 +56,7 @@ def main() -> None:
     # Step 2: Grade high-direction parameters (ALT, Creatinine)
     # Step 3: Combine low + high into signed ATOXGR
     result = (
-        adlb.adam.atoxgr(  # type: ignore[attr-defined]
+        adlb.adam.atoxgr(
             "ATOXGRL",
             system="ctcae_v5",
             direction="L",
@@ -85,7 +85,7 @@ def main() -> None:
     # DAIDS uses different term names and thresholds.
     #   ALT, High:        G4 ≥10×ULN · G3 ≥5×ULN · G2 ≥2.5×ULN · G1 ≥1.25×ULN
     #   Creatinine, High: G4 ≥3.5×ULN & ≥2×BASE · G3 >1.8×ULN & ≥1.5×BASE · …
-    daids_df = pl.from_repr("""\
+    daids_df = fleet.frame(pl.from_repr("""\
 ┌─────────┬─────────┬──────────────────┬───────┬───────┬──────┬────────┐
 │ USUBJID ┆ PARAMCD ┆ ATOXDSCH         ┆ AVAL  ┆ ANRHI ┆ BASE ┆ BNRIND │
 │ ---     ┆ ---     ┆ ---              ┆ ---   ┆ ---   ┆ ---  ┆ ---    │
@@ -96,9 +96,9 @@ def main() -> None:
 │ 01-002  ┆ ALT     ┆ ALT, High        ┆ 50.0  ┆ 40.0  ┆ 35.0 ┆ NORMAL │
 │ 01-002  ┆ CREAT   ┆ Creatinine, High ┆ 95.0  ┆ 100.0 ┆ 80.0 ┆ NORMAL │
 └─────────┴─────────┴──────────────────┴───────┴───────┴──────┴────────┘
-""")
+"""))
 
-    daids_result = daids_df.adam.atoxgr(  # type: ignore[attr-defined]
+    daids_result = daids_df.adam.atoxgr(
         "ATOXGRH",
         system="daids",
         direction="H",

@@ -1,3 +1,5 @@
+> **Status (2026-07): implemented — `pin`/`pins`/`repin` shipped on the SDTM and ADaM namespaces.**
+
 # Plan: Implement `.pin()` Pipeline Passport in Fleet
 
 Add a `.pin(domain, df)` chainable verb to both SDTM and ADaM namespaces that attaches reference domains to the pipeline instance. Pinned domains propagate via `copy.copy()` (same mechanism as `_tdd_stage`, `_domain_meta`). Cross-domain verbs consume pins via `_require_pin()`. Pin usage is recorded in lineage and feeds the DAG with variable-granular cross-domain edges.

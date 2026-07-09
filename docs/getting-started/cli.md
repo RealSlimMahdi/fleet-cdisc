@@ -34,8 +34,8 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | [`fleet validate`](#fleet-validate) | Validate datasets with the CDISC Rules Engine (exit 1 on errors). |
 | [`fleet check`](#fleet-check) | CI gate: config parse + define.yaml schema + custom-rule YAMLs. |
 | [`fleet new`](#fleet-new) | Bootstrap a study: init cfg → define → ct → rules, one confirmation. |
-| [`fleet migrate`](#fleet-migrate) | Rewrite deprecated verb/kwarg spellings to canonical ones (libcst). |
-| [`fleet tlg`](#fleet-tlg) | TLG workflow: list templates, run YAML specs, export summaries. |
+| [`fleet migrate`](#fleet-migrate) | Rewrite removed pre-alpha verb/kwarg spellings to canonical ones (libcst). |
+| [`fleet tlg`](#fleet-tlg) | TLG workflow: list templates, run/explore YAML specs, export summaries. |
 | [`fleet define-xml`](#fleet-define-xml) | Generate Define-XML 2.1 from a define.yaml specification. |
 | [`fleet init-ct`](#fleet-init-ct) | [deprecated] Bootstrap a codelists.py directly from the SDTM IG. Prefer the pipeline: fleet init cfg → init define → init ct. |
 | [`fleet add-ct`](#fleet-add-ct) | Add domains to an existing codelists.py (preserves existing). |
@@ -45,6 +45,8 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | [`fleet uninstall-engine`](#fleet-uninstall-engine) | Remove the managed CDISC Rules Engine binary. |
 | [`fleet doctor`](#fleet-doctor) | Check Fleet setup: engine, API key, optional extras. |
 | [`fleet derivation`](#fleet-derivation) | Scaffold and manage study-specific derivations. |
+| [`fleet mcp`](#fleet-mcp) | Serve Fleet tools to MCP-capable assistants (requires the 'mcp' extra). |
+| [`fleet lsp`](#fleet-lsp) | Language server for define.yaml files (requires the 'lsp' extra). |
 
 ---
 
@@ -187,6 +189,23 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | `--page-by` | _(none)_ | ARD variable to page-break on (e.g. PARAMCD). |
 | `--watch` | _(none)_ | Re-run whenever a spec file changes (requires the 'watch' extra). |
 
+### `fleet tlg explore`
+
+| Argument | Description |
+| -------- | ----------- |
+| `spec` | A spec .yaml file or a directory of spec files. |
+
+| Option | Default | Description |
+| ------ | ------- | ----------- |
+| `--data` | _(none)_ | Analysis dataset path, repeatable. Plain PATH applies to every spec; NAME=PATH (e.g. ADAE=adae.parquet) targets the template's analysis domain. |
+| `--adsl` | _(none)_ | ADSL dataset path (population denominators for tables). |
+| `--output` / `-o` | `explorer.html` | Output HTML file (default: explorer.html). |
+| `--groupby` | _(none)_ | Treatment-arm column for specs without a groupby axis. Default: auto-detect (TRTA → TRT01A → TRT01P). |
+| `--title` | `""` | Output title (default: template title). |
+| `--subtitle` | `""` | Output subtitle. |
+| `--footnote` | _(none)_ | Footnote (repeatable). |
+| `--watch` | _(none)_ | Rebuild whenever a spec file changes (requires the 'watch' extra). |
+
 ### `fleet tlg export`
 
 | Option | Default | Description |
@@ -297,5 +316,21 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | `--dataset` | `ADSL` | Target dataset name (default: ADSL). |
 | `--kind` | `column` | Derivation kind: column / frame / param (default: column). Choices: `column`, `frame`, `param`. |
 | `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
+
+---
+
+## `fleet mcp`
+
+| Option | Default | Description |
+| ------ | ------- | ----------- |
+| `--stdio` | _(none)_ | Serve over stdio (the only supported transport; accepted for explicitness). |
+
+---
+
+## `fleet lsp`
+
+| Option | Default | Description |
+| ------ | ------- | ----------- |
+| `--stdio` | _(none)_ | Serve over stdio (the only supported transport; accepted for explicitness). |
 
 ---

@@ -39,7 +39,7 @@ class TestBaseVerbs:
         assert "BRTHDT" in result.columns
 
     def test_assigned(self, age_frame):
-        result = age_frame.adam.peds.assigned("STUDYID", value="PED01").to_frame()
+        result = age_frame.adam.peds.assign("STUDYID", value="PED01").to_frame()
         assert result["STUDYID"].to_list() == ["PED01"] * 2
 
     def test_derivation(self, age_frame):
@@ -54,15 +54,15 @@ class TestBaseVerbs:
         assert result["GRPCD"].to_list() == ["GroupA", "GroupB"]
 
     def test_rename(self, age_frame):
-        result = age_frame.adam.peds.rename("DOB", source="BRTHDT").to_frame()
+        result = age_frame.adam.peds.assign("DOB", source="BRTHDT").to_frame()
         assert result["DOB"].to_list() == age_frame["BRTHDT"].to_list()
 
     def test_condderivation(self, age_frame):
         df = age_frame.with_columns(pl.Series("AGE", [5, 12]))
-        result = df.adam.peds.condderivation(
+        result = df.adam.peds.case_when(
             "AGEGR",
-            conditions=[{"condition": 'pl.col("AGE") < 6', "value": "Infant"}],
-            else_value="Child",
+            when=[{"condition": 'pl.col("AGE") < 6', "value": "Infant"}],
+            else_="Child",
         ).to_frame()
         assert result["AGEGR"].to_list() == ["Infant", "Child"]
 

@@ -73,7 +73,7 @@ from pathlib import Path
 
 import polars as pl
 
-import fleet  # noqa: F401 — registers .sdtm / .adam namespace extensions
+import fleet  # registers .sdtm / .adam namespace extensions
 
 OUT = Path("outputs/cdiscpilot01")
 OUT.mkdir(parents=True, exist_ok=True)
@@ -81,7 +81,7 @@ OUT.mkdir(parents=True, exist_ok=True)
 # ════════════════════════════════════════════════════════════════════════════
 # 1. Raw Data (inline — no external CSV dependencies)
 # ════════════════════════════════════════════════════════════════════════════
-pc_raw = pl.from_repr("""\
+pc_raw = fleet.frame(pl.from_repr("""\
 ┌─────────────┬───────┬──────────┬────────┬──────────┬────────┬─────────────────────┬──────────┬──────────────────┬─────────┬──────────┬──────────┬──────────┬────────┬────────┬────────┬─────────────────────┐
 │ USUBJID     ┆ PCSEQ ┆ VISITNUM ┆ VISIT  ┆ PCTESTCD ┆ PCTEST ┆ PCDTC               ┆ PCTPTNUM ┆ PCTPT            ┆ PCORRES ┆ PCSTRESC ┆ PCSTRESN ┆ PCSTRESU ┆ PCSPEC ┆ PCBLFL ┆ PCLLOQ ┆ EXSTDTC             │
 │ ---         ┆ ---   ┆ ---      ┆ ---    ┆ ---      ┆ ---    ┆ ---                 ┆ ---      ┆ ---              ┆ ---     ┆ ---      ┆ ---      ┆ ---      ┆ ---    ┆ ---    ┆ ---    ┆ ---                 │
@@ -112,9 +112,9 @@ pc_raw = pl.from_repr("""\
 │ 01-701-1028 ┆ 7     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-03-05T20:00:00 ┆ 12.0     ┆ 12 HR POST-DOSE  ┆ 9.01    ┆ 9.01     ┆ 9.01     ┆ ng/mL    ┆ PLASMA ┆ null   ┆ 1.0    ┆ 2014-03-05T08:00:00 │
 │ 01-701-1028 ┆ 8     ┆ 2        ┆ Week 1 ┆ DRUG     ┆ Drug A ┆ 2014-03-06T08:00:00 ┆ 24.0     ┆ 24 HR POST-DOSE  ┆ 0.88    ┆ 0.88     ┆ 0.88     ┆ ng/mL    ┆ PLASMA ┆ null   ┆ 1.0    ┆ 2014-03-05T08:00:00 │
 └─────────────┴───────┴──────────┴────────┴──────────┴────────┴─────────────────────┴──────────┴──────────────────┴─────────┴──────────┴──────────┴──────────┴────────┴────────┴────────┴─────────────────────┘
-""")
+"""))
 
-dm_raw = pl.from_repr("""\
+dm_raw = fleet.frame(pl.from_repr("""\
 ┌────────────────┬─────────┬─────┬─────┬───────────────────────────┬────────────────────────┬──────────┬──────────────────────┬─────────────────┬────────────────┬───────────────────────┐
 │ patient_number ┆ site_id ┆ age ┆ sex ┆ race                      ┆ ethnic                 ┆ arm_code ┆ arm_description      ┆ first_dose_date ┆ last_dose_date ┆ informed_consent_date │
 │ ---            ┆ ---     ┆ --- ┆ --- ┆ ---                       ┆ ---                    ┆ ---      ┆ ---                  ┆ ---             ┆ ---            ┆ ---                   │
@@ -126,9 +126,9 @@ dm_raw = pl.from_repr("""\
 │ 01-701-1034    ┆ 701     ┆ 74  ┆ M   ┆ BLACK OR AFRICAN AMERICAN ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo              ┆ 2014-01-05      ┆ 2014-07-06     ┆ 2014-01-04            │
 │ 01-701-1047    ┆ 701     ┆ 56  ┆ F   ┆ WHITE                     ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose  ┆ 2014-01-06      ┆ 2014-07-07     ┆ 2014-01-05            │
 └────────────────┴─────────┴─────┴─────┴───────────────────────────┴────────────────────────┴──────────┴──────────────────────┴─────────────────┴────────────────┴───────────────────────┘
-""")
+"""))
 
-vs_raw = pl.from_repr("""\
+vs_raw = fleet.frame(pl.from_repr("""\
 ┌────────────────┬─────────────┬──────────┬────────┬─────────┬──────────┬────────────┬──────┐
 │ patient_number ┆ site_number ┆ vstestcd ┆ vstest ┆ vsorres ┆ vsorresu ┆ vsdtc      ┆ vsdy │
 │ ---            ┆ ---         ┆ ---      ┆ ---    ┆ ---     ┆ ---      ┆ ---        ┆ ---  │
@@ -140,7 +140,7 @@ vs_raw = pl.from_repr("""\
 │ 01-701-1034    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 170.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
 │ 01-701-1047    ┆ 701         ┆ HEIGHT   ┆ Height ┆ 166.2   ┆ cm       ┆ 2014-01-01 ┆ -1   │
 └────────────────┴─────────────┴──────────┴────────┴─────────┴──────────┴────────────┴──────┘
-""")
+"""))
 
 print("── 1. Raw data loaded ───────────────────────────────────────────────────")
 print(f"   pc_raw: {pc_raw.shape[0]:>2} rows   columns → {pc_raw.columns}")
@@ -220,7 +220,7 @@ pc = pc_raw.with_columns(
 print("\n════════════ PART 1: ADPC (NCA) ════════════")
 
 adpc = (
-    pc.adam.pk
+    fleet.frame(pc).adam.pk
     # ── Step 5. Merge early ADSL variables ──────────────────────────────────
     # admiral: derive_vars_merged(dataset_add = adsl, new_vars = adsl_vars,
     #           by_vars = exprs(STUDYID, USUBJID))
@@ -371,7 +371,7 @@ pc_with_ex = pl.concat(
 )
 
 adppk = (
-    pc_with_ex.adam.pk
+    fleet.frame(pc_with_ex).adam.pk
     # Merge ADSL
     .merge_adsl(adsl, keep=["TRT01P", "TRTSDT", "DOSEP", "SEXN", "ARMN"])
     # ── AFRLT / APRLT — Actual Relative Time from First / Previous Dose ──────

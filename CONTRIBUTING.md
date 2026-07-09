@@ -69,10 +69,10 @@ Always use generated codelist classes (`SEX`, `RACE`, …) — never raw NCI con
 
 ```python
 # Correct
-.assign_ct("SEX", source="sex", ct_codelist=SEX)
+.assign("SEX", source="sex", ct=SEX)
 
 # Wrong — raw concept ID
-.assign_ct("SEX", source="sex", ct_codelist="C66731")
+.assign("SEX", source="sex", ct="C66731")
 ```
 
 ### Polars Only
@@ -109,7 +109,7 @@ def verb_name(self, target: str, *, source: str) -> Self:
 
             dm = (
                 raw_df.sdtm
-                .assign_no_ct("USUBJID", source="subject_id")
+                .assign("USUBJID", source="subject_id")
                 .to_frame()
             )
     """

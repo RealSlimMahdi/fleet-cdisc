@@ -221,6 +221,11 @@ class CodelistGenerator:
         """Return the set of concept IDs already loaded."""
         return {cl["conceptId"] for cl in self._codelists}
 
+    @property
+    def codelist_count(self) -> int:
+        """Return the number of codelists registered so far."""
+        return len(self._codelists)
+
     @classmethod
     def from_concept_ids(
         cls,

@@ -17,7 +17,7 @@ Fleet/
 │   ├── sdtm/               # SDTM namespace (verbs + TDD) — call `.verbs()` for the live list
 │   ├── adam/               # ADaM namespace + TA extensions
 │   ├── tlg/                # TLG namespace — tables, listings, template registry, render
-│   ├── tools/              # migrate codemod (deprecated → canonical rewrite)
+│   ├── tools/              # migrate codemod (old → canonical spellings)
 │   ├── define_xml/         # Define-XML validation + generation + schema_builder
 │   └── validation/         # CDISC rules-engine integration
 │
@@ -60,7 +60,6 @@ import fleet  # registers df.sdtm, df.adam (+ .adsl/.occds/…), df.tlg everywhe
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `_verb_mixin.py`        | `SharedVerbsMixin` — the canonical cross-namespace verbs (`assign`, `case_when`, `merge`, `keep`, `source`, `derivation`, `duration`, `study_day`, `seq`, `select`, `nodup`, `validate`, `verbs`), plus `to_frame`/`from_spec`/`to_spec_yaml`, `_chain()`, and column-typo did-you-mean errors |
 | `_flag_mixin.py`        | `FlagCriterionMixin` — the `flag` family (`flag`, `flag_first`, `flag_last`, `flag_extreme`, `flag_exists`, `flag_relative`) shared across SDTM and ADaM; validates params per criteria mode                                    |
-| `_deprecation.py`       | `deprecated_verb` / `deprecated_kwargs` decorators + `warn_deprecated` — power every legacy alias (once-per-site `FutureWarning`); `__fleet_deprecated__` marker lets `.verbs()` hide aliases                                    |
 | `spec_registry.py`      | **Single source of truth for spec-executable algorithms** — `@spec_algorithm` declarations drive the `from_spec` executor, discriminated-union Pydantic models (`extra=forbid`), the JSON schema, and the `coverage_matrix()` / `SPEC_UNSUPPORTED` allowlist |
 | `log.py`                | `logging.getLogger("fleet")` setup — replaces the old `print()` calls in `inspect`/`trail`/`nodup`/`validate` so batch runs can route/suppress output                                                                          |
 | `exceptions.py`         | Custom exceptions — `FleetError` base, `DerivationError`/`VerbUsageError`/`PinError`/`SpecError`/`SchemaError` (dual-inherit builtins so both `except FleetError` and `except ValueError` styles catch)                          |
@@ -96,7 +95,7 @@ import fleet  # registers df.sdtm, df.adam (+ .adsl/.occds/…), df.tlg everywhe
 | `.register_alias(alias, codelist_code)` | Adds a name → code mapping at runtime                                                                |
 | `.get_cache_info()`                     | Returns `{"codelists_loaded": n, ...}`                                                               |
 
-The `assign_ct` SDTM verb and `recode` ADaM verb use the singleton automatically when no explicit mapping is provided.
+The `assign` SDTM verb (with `ct=`) and the `recode` ADaM verb use the singleton automatically when no explicit mapping is provided.
 
 ---
 
@@ -131,7 +130,7 @@ The core of Fleet for SDTM work. Registers `df.sdtm` on every Polars DataFrame.
 | `utils.py`     | Internal helpers — `to_iso8601_date`, `to_iso8601_datetime`, `parse_expression(str) → pl.Expr` (AST whitelist; bare names in arithmetic resolve to `pl.col`) |
 | `namespace.py` | `SDTMNamespace` — the SDTM namespace class + `_tdd_mixin` for Trial Design domains                                              |
 
-**Canonical SDTM verbs** (call `df.sdtm.verbs()` for the always-current, deprecation-filtered list — hardcoded counts rot):
+**Canonical SDTM verbs** (call `df.sdtm.verbs()` for the always-current list — hardcoded counts rot):
 
 | Verb                 | Signature                                                | Purpose                                                 |
 | -------------------- | -------------------------------------------------------- | ------------------------------------------------------- |
@@ -148,7 +147,7 @@ The core of Fleet for SDTM work. Registers `df.sdtm` on every Polars DataFrame.
 | `flag` family        | `flag`, `flag_first`, `flag_last`, `flag_extreme`, `flag_exists`, `flag_relative` | Criteria-driven `"Y"` flags |
 | `nodup`              | `(*, subset, sort_by=None, keep=None)`                   | Report or deduplicate rows by subset keys               |
 
-Deprecated aliases (still work, emit `FutureWarning`): `assign_no_ct`/`assign_ct`/`hardcode_no_ct`/`hardcode_ct`/`dataset_level` → `assign`; `if_then_else` → `case_when`; the `groups=`/`group_cols=`/`group_by=` kwargs → `by=`.
+Renamed in pre-alpha (removed outright, `fleet migrate` rewrites old scripts): `assign_no_ct`/`assign_ct`/`hardcode_no_ct`/`hardcode_ct`/`dataset_level` → `assign`; `if_then_else` → `case_when`; the `groups=`/`group_cols=`/`group_by=` kwargs → `by=`.
 
 **Special methods:**
 
@@ -192,7 +191,7 @@ Registers `df.adam` on every Polars DataFrame.
 | `duration`       | `(target, *, start, end, unit="days", out="numeric")`        | Elapsed time / study day between two date columns             |
 | `whereclauses`   | `(*, where)`                                                 | Filter rows by an expression                                  |
 
-Deprecated aliases (still work, emit `FutureWarning`): `assigned`/`rename` → `assign`; `condderivation` → `case_when`; `lookup` → `merge`; kwargs `groups=`/`by_vars=` → `by=`, `keep_cols=`/`target_cols=` → `keep=`. There is no `std_function` verb — the calculations are individual verbs.
+Renamed in pre-alpha (removed outright, `fleet migrate` rewrites old scripts): `assigned`/`rename` → `assign`; `condderivation` → `case_when`; `lookup` → `merge`; kwargs `groups=`/`by_vars=` → `by=`, `keep_cols=`/`target_cols=` → `keep=`. There is no `std_function` verb — the calculations are individual verbs.
 
 **Special methods** (shared across SDTM and ADaM via `SharedVerbsMixin`):
 
@@ -200,7 +199,7 @@ Deprecated aliases (still work, emit `FutureWarning`): `assigned`/`rename` → `
 | ---------------------------- | -------------------------------------------------- |
 | `from_spec(spec_path, *, dataset=None, strict=True, overwrite=False, only=, omit=)` | Table-driven spec executor (shared with SDTM via `SharedVerbsMixin`); registry-validated |
 | `to_spec_yaml(dataset=None, path=None)` | Reverse: emit a define.yaml from the pipeline's lineage (registry verbs → real blocks, others → `callable` stubs) |
-| `verbs()`                    | List the namespace's public verbs (+ summaries), deprecation-filtered |
+| `verbs()`                    | List the namespace's public verbs (+ summaries)    |
 | `validate(dataset, version, *, custom_rules=None, on_fail="warn")` | CDISC rules-engine validation; `.last_validation` holds the result |
 | `inspect(prefix)`            | Materialise pipeline, log state, return checkpoint |
 | `explain()`                  | Print query plan without materialising             |
@@ -354,7 +353,7 @@ tests/
 └── unit/
     ├── test_sdtm_namespace.py           # SDTM verbs
     ├── test_adam_namespace.py           # BDS ADaM verbs (+ unbroken flag→baseline→chg chain)
-    ├── test_naming_unification.py       # canonical verbs + deprecated-alias FutureWarnings
+    ├── test_naming_unification.py       # canonical verbs + old spellings removed
     ├── test_spec_parity.py              # registry ↔ enum ↔ JSON-schema sync
     ├── test_to_spec_yaml.py             # code → spec round-trip
     ├── test_tlg_registry.py             # TLG template registry + catalog
@@ -404,7 +403,7 @@ uv run pytest tests/ -v
 | `io`        | `pyreadstat`        | SAS XPT read/write                     |
 | `tlg-pdf`   | `weasyprint`        | TLG PDF export                         |
 | `tlg-pptx`  | `python-pptx`       | TLG PPTX slide export                  |
-| `migrate`   | `libcst`            | `fleet migrate` deprecated→canonical codemod |
+| `migrate`   | `libcst`            | `fleet migrate` old→canonical codemod  |
 | `watch`     | `watchfiles`        | `--watch` dev loop                     |
 | `all`       | all of the above    | everything                             |
 | `dev`       | `pytest`, `pytest-cov`, `ruff`, `blacken-docs`, `dsjson` | Dev tooling  |

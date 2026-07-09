@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <?xml-stylesheet type="text/xsl" href="define2-1.xsl"?>
-<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:def="http://www.cdisc.org/ns/def/v2.1" ODMVersion="1.3.2" FileOID="CDISC.CDISCPILOT01.1.Define-XML_2.1.0" FileType="Snapshot" CreationDateTime="2026-07-08T18:06:09" Originator="Fleet Team" SourceSystem="Fleet" SourceSystemVersion="0.1.0" def:Context="Submission">
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:def="http://www.cdisc.org/ns/def/v2.1" ODMVersion="1.3.2" FileOID="CDISC.CDISCPILOT01.1.Define-XML_2.1.0" FileType="Snapshot" CreationDateTime="2026-07-09T08:12:43" Originator="Fleet Team" SourceSystem="Fleet" SourceSystemVersion="0.1.0" def:Context="Submission">
   <Study OID="STDY.CDISCPILOT01">
     <GlobalVariables>
       <StudyName>CDISCPILOT01</StudyName>
@@ -102,7 +102,7 @@
         </Description>
         <def:Origin Type="Assigned">
           <Description>
-            <TranslatedText xml:lang="en">Set *target* to a literal *value* for every row, with no CT validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -112,7 +112,7 @@
         </Description>
         <def:Origin Type="Assigned">
           <Description>
-            <TranslatedText xml:lang="en">Set *target* to a literal *value* for every row, with no CT validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -122,7 +122,7 @@
         </Description>
         <def:Origin Type="Derived">
           <Description>
-            <TranslatedText xml:lang="en">Concatenation of STUDYID, SITEID, and SUBJID Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Concatenation of STUDYID, SITEID, and SUBJID Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -132,7 +132,7 @@
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
           <def:DocumentRef leafID="LF.acrf">
             <def:PDFPageRef PageRefs="6" Type="PhysicalRef"/>
@@ -180,7 +180,7 @@
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
           <def:DocumentRef leafID="LF.acrf">
             <def:PDFPageRef PageRefs="6" Type="PhysicalRef"/>
@@ -193,7 +193,7 @@
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
           <def:DocumentRef leafID="LF.acrf">
             <def:PDFPageRef PageRefs="8" Type="PhysicalRef"/>
@@ -206,7 +206,7 @@
         </Description>
         <def:Origin Type="Assigned">
           <Description>
-            <TranslatedText xml:lang="en">Set *target* to a literal *value* for every row, with no CT validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -217,7 +217,7 @@
         <CodeListRef CodeListOID="C66731"/>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* to *target*, validated against controlled terminology.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
           <def:DocumentRef leafID="LF.acrf">
             <def:PDFPageRef PageRefs="8" Type="PhysicalRef"/>
@@ -231,7 +231,7 @@
         <CodeListRef CodeListOID="C74457"/>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* to *target*, validated against controlled terminology.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
           <def:DocumentRef leafID="LF.acrf">
             <def:PDFPageRef PageRefs="8 9" Type="PhysicalRef"/>
@@ -245,7 +245,7 @@
         <CodeListRef CodeListOID="C66790"/>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* to *target*, validated against controlled terminology.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -255,7 +255,7 @@
         </Description>
         <def:Origin Type="Protocol">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -265,7 +265,7 @@
         </Description>
         <def:Origin Type="Protocol">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -275,7 +275,7 @@
         </Description>
         <def:Origin Type="Assigned">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -285,7 +285,7 @@
         </Description>
         <def:Origin Type="Assigned">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -311,7 +311,7 @@
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -321,7 +321,7 @@
         </Description>
         <def:Origin Type="Derived">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -351,7 +351,7 @@
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -361,7 +361,7 @@
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -371,7 +371,7 @@
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -381,7 +381,7 @@
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -402,7 +402,7 @@
         <CodeListRef CodeListOID="CL.VSTEST"/>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -412,7 +412,7 @@
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -422,7 +422,7 @@
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -432,7 +432,7 @@
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -442,7 +442,7 @@
         </Description>
         <def:Origin Type="Derived">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -452,7 +452,7 @@
         </Description>
         <def:Origin Type="Derived">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -462,7 +462,7 @@
         </Description>
         <def:Origin Type="Protocol">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -472,7 +472,7 @@
         </Description>
         <def:Origin Type="Protocol">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -498,7 +498,7 @@
         </Description>
         <def:Origin Type="Protocol">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -508,7 +508,7 @@
         </Description>
         <def:Origin Type="CRF">
           <Description>
-            <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -518,7 +518,7 @@
         </Description>
         <def:Origin Type="Protocol">
           <Description>
-            <TranslatedText xml:lang="en">Set *target* to a literal *value* for every row, with no CT validation.</TranslatedText>
+            <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -633,7 +633,7 @@
       </MethodDef>
       <MethodDef OID="MT.assign_ct" Name="assign_ct" Type="Computation">
         <Description>
-          <TranslatedText xml:lang="en">Copy *source* to *target*, validated against controlled terminology.</TranslatedText>
+          <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
         </Description>
         <FormalExpression Context="Python/Fleet">.assign_ct(...)</FormalExpression>
       </MethodDef>
@@ -645,13 +645,13 @@
       </MethodDef>
       <MethodDef OID="MT.assign_no_ct" Name="assign_no_ct" Type="Computation">
         <Description>
-          <TranslatedText xml:lang="en">Copy *source* column to *target* with no controlled-terminology validation.</TranslatedText>
+          <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
         </Description>
         <FormalExpression Context="Python/Fleet">.assign_no_ct(...)</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.hardcode_no_ct" Name="hardcode_no_ct" Type="Computation">
         <Description>
-          <TranslatedText xml:lang="en">Set *target* to a literal *value* for every row, with no CT validation.</TranslatedText>
+          <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
         </Description>
         <FormalExpression Context="Python/Fleet">.hardcode_no_ct(...)</FormalExpression>
       </MethodDef>

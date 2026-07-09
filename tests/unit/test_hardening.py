@@ -34,7 +34,7 @@ class TestCopyChainPreservesState:
         df = pl.DataFrame({"subject_id": ["S01"]})
         ns = df.sdtm
         ns._custom_marker = "sdtm_state"
-        chained = ns.assign_no_ct("USUBJID", source="subject_id")
+        chained = ns.assign("USUBJID", source="subject_id")
         assert getattr(chained, "_custom_marker", None) == "sdtm_state"
 
     def test_sdtm_materialise_then_preserves_custom_attr(self):
@@ -80,9 +80,9 @@ class TestInspectExplain:
     def test_sdtm_inspect_creates_checkpoint(self):
         df = pl.DataFrame({"subject_id": ["S01", "S02"]})
         result = (
-            df.sdtm.assign_no_ct("USUBJID", source="subject_id")
+            df.sdtm.assign("USUBJID", source="subject_id")
             .inspect()
-            .hardcode_no_ct("DOMAIN", value="DM")
+            .assign("DOMAIN", value="DM")
             .to_frame()
         )
         assert "USUBJID" in result.columns
@@ -90,7 +90,7 @@ class TestInspectExplain:
 
     def test_sdtm_explain_returns_self(self):
         df = pl.DataFrame({"subject_id": ["S01"]})
-        ns = df.sdtm.assign_no_ct("USUBJID", source="subject_id")
+        ns = df.sdtm.assign("USUBJID", source="subject_id")
         returned = ns.explain()
         assert returned is ns
 

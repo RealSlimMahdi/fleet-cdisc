@@ -41,7 +41,7 @@ class TestBaseVerbs:
         assert "USUBJID" in result.columns
 
     def test_assigned(self, subject_frame):
-        result = subject_frame.adam.adsl.assigned("STUDYID", value="TEST01").to_frame()
+        result = subject_frame.adam.adsl.assign("STUDYID", value="TEST01").to_frame()
         assert result["STUDYID"].to_list() == ["TEST01"] * 3
 
     def test_derivation(self, subject_frame):
@@ -51,7 +51,7 @@ class TestBaseVerbs:
         assert result["AGE2"][0] == 90
 
     def test_rename(self, subject_frame):
-        result = subject_frame.adam.adsl.rename("SUBJECTID", source="USUBJID").to_frame()
+        result = subject_frame.adam.adsl.assign("SUBJECTID", source="USUBJID").to_frame()
         assert "SUBJECTID" in result.columns
 
     def test_whereclauses(self, subject_frame):
@@ -67,13 +67,13 @@ class TestBaseVerbs:
         assert result["RANDFL_N"].to_list() == ["1", "1", "1"]
 
     def test_condderivation(self, subject_frame):
-        result = subject_frame.adam.adsl.condderivation(
+        result = subject_frame.adam.adsl.case_when(
             "AGEGR",
-            conditions=[
+            when=[
                 {"condition": 'pl.col("AGE") < 40', "value": "<40"},
                 {"condition": 'pl.col("AGE") <= 64', "value": "40-64"},
             ],
-            else_value=">64",
+            else_=">64",
         ).to_frame()
         assert result["AGEGR"].to_list() == ["40-64", "40-64", "<40"]
 

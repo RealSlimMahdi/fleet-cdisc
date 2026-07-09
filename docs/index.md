@@ -52,8 +52,9 @@ advs = (
 
 Most verbs accumulate into a single Polars `with_columns` pass; window verbs
 (`baseline`, cross-domain joins) checkpoint internally without breaking the chain.
-Legacy verb spellings (`hardcode_no_ct`, `assign_no_ct`, `assign_ct`, …) still
-work as deprecated aliases — run `fleet migrate <files...> --write` to upgrade.
+The pre-alpha verb spellings (`hardcode_no_ct`, `assign_no_ct`, `assign_ct`, …)
+were removed outright — run `fleet migrate <files...> --write` to rewrite old
+scripts.
 
 ---
 

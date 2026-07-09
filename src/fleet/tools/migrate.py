@@ -1,4 +1,8 @@
-"""Rewrite deprecated Fleet verb/kwarg spellings to their canonical forms.
+"""Rewrite old Fleet verb/kwarg spellings to their canonical forms.
+
+The old spellings no longer exist at runtime — they were removed outright
+(pre-alpha rename, no deprecation window).  This codemod remains so that
+external scripts written against the old names can be rewritten in one go.
 
 Usage (standalone)::
 

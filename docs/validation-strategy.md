@@ -54,8 +54,8 @@ from examples.cdiscpilot01.sdtm.codelists import SEX, RACE
 
 dm = (
     raw_df.sdtm
-    .assign_ct("SEX",  source="sex",  ct_codelist=SEX)
-    .assign_ct("RACE", source="race", ct_codelist=RACE)
+    .assign("SEX",  source="sex",  ct=SEX)
+    .assign("RACE", source="race", ct=RACE)
     .to_frame()
 )
 ```
@@ -105,7 +105,7 @@ This approach means the validation does not depend on an R installation, a speci
 result = (
     bds_frame.adam
     .flag("ANL01FL", criteria="last", order_by="ADT",
-          groups=["USUBJID", "PARAMCD"],
+          by=["USUBJID", "PARAMCD"],
           where='~pl.col("AVAL").is_null()')
     .to_frame()
 )

@@ -63,7 +63,7 @@ class TestBaseVerbs:
         assert "USUBJID" in result.columns
 
     def test_assigned(self, neuro_frame):
-        result = neuro_frame.adam.neuro.assigned("STUDYID", value="NEU01").to_frame()
+        result = neuro_frame.adam.neuro.assign("STUDYID", value="NEU01").to_frame()
         assert result["STUDYID"].to_list() == ["NEU01"] * 2
 
     def test_derivation(self, neuro_frame):
@@ -79,14 +79,14 @@ class TestBaseVerbs:
         assert result["ARMCD"].to_list() == ["ACT", "PBO"]
 
     def test_rename(self, neuro_frame):
-        result = neuro_frame.adam.neuro.rename("SUBJ", source="USUBJID").to_frame()
+        result = neuro_frame.adam.neuro.assign("SUBJ", source="USUBJID").to_frame()
         assert result["SUBJ"].to_list() == neuro_frame["USUBJID"].to_list()
 
     def test_condderivation(self, neuro_frame):
-        result = neuro_frame.adam.neuro.condderivation(
+        result = neuro_frame.adam.neuro.case_when(
             "SEVCAT",
-            conditions=[{"condition": 'pl.col("MMSE") >= 27', "value": "Normal"}],
-            else_value="Impaired",
+            when=[{"condition": 'pl.col("MMSE") >= 27', "value": "Normal"}],
+            else_="Impaired",
         ).to_frame()
         assert result["SEVCAT"].to_list() == ["Normal", "Impaired"]
 

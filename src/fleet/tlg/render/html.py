@@ -295,6 +295,13 @@ def render_html(
     Returns:
         str: Complete HTML string (with ``<style>`` block) or injected
             into *html_wrapper*.
+
+    Examples:
+        Render an AE summary to HTML::
+
+            ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl)
+            model = ard_to_table_model(ard, RenderMetadata(title="Table 14.3.1.1"))
+            html = render_html(model)
     """
     pages = paginate(model, rows_per_page=rows_per_page, page_by=page_by)
 
@@ -382,6 +389,13 @@ def render_listing_html(
 
     Returns:
         str: Complete HTML string (with ``<style>`` block).
+
+    Examples:
+        Render an AE listing to HTML::
+
+            listing = adae.tlg.ae.template("ael01").to_listing()
+            model = listing_to_model(listing, RenderMetadata(title="Listing 16.2.7"))
+            html = render_listing_html(model)
     """
     pages = paginate_listing(model, rows_per_page=rows_per_page)
 

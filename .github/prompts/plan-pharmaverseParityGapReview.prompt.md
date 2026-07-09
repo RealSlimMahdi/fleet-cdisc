@@ -1,3 +1,5 @@
+> **Status (2026-07): historical audit (reference state 2026-06-11), partially actioned in the 2026-06/07 overhaul (`flag_*` family, unified `merge`, canonical verb rename); verb names herein are historical.**
+
 # Plan — Pharmaverse Parity Gap Review
 
 > Fleet gap analysis vs **{sdtm.oak} v0.2.0** and **{admiral} 1.4.2 / 1.5.0-dev**, with proposed fixes in Fleet style.

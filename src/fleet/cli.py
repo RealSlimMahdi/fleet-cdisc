@@ -16,7 +16,9 @@ Execution commands:
 - ``fleet validate`` — validate datasets with the CDISC Rules Engine.
 - ``fleet check``    — one CI gate: config + define schema + rule YAMLs.
 - ``fleet tlg``      — list / run / export TLG templates (``tlg --help``).
-- ``fleet migrate``  — rewrite deprecated verb spellings to canonical ones.
+- ``fleet migrate``  — rewrite removed pre-alpha verb spellings to canonical ones.
+- ``fleet mcp``      — MCP server for AI assistants (``mcp`` extra).
+- ``fleet lsp``      — define.yaml language server (``lsp`` extra).
 
 Every command that needs ``study_config.yaml`` discovers it git-style: the
 current directory first, then each parent.  Pass ``--config`` to override.
@@ -52,6 +54,8 @@ _OPTIONAL_EXTRAS: dict[str, tuple[str, str]] = {
     "pyreadstat": ("io", "SAS XPT read/write"),
     "libcst": ("migrate", "fleet migrate codemod"),
     "watchfiles": ("watch", "--watch mode"),
+    "pygls": ("lsp", "fleet lsp language server"),
+    "mcp": ("mcp", "fleet mcp server"),
 }
 
 
@@ -378,7 +382,7 @@ def _run_init_ct_pipeline(args: argparse.Namespace) -> None:
         )
         dest = gen.write(output)
 
-    print(f"Generated {len(gen._codelists)} codelists → {dest}")
+    print(f"Generated {gen.codelist_count} codelists → {dest}")
 
     print()
     print("Bootstrap complete! Next steps:")
@@ -418,7 +422,7 @@ def _run_init_ct(args: argparse.Namespace) -> None:
         )
         dest = gen.write(output)
 
-    print(f"Generated {len(gen._codelists)} codelists → {dest}")
+    print(f"Generated {gen.codelist_count} codelists → {dest}")
 
 
 def _run_add_ct(args: argparse.Namespace) -> None:
@@ -458,7 +462,7 @@ def _run_add_ct(args: argparse.Namespace) -> None:
         )
         dest = gen.write(output)
 
-    print(f"Updated {dest} — {len(gen._codelists)} codelists")
+    print(f"Updated {dest} — {gen.codelist_count} codelists")
 
 
 # ────────────────────────────────────────────────────────────────────── #
@@ -1211,9 +1215,51 @@ def _collect_spec_paths(spec_arg: str) -> list[Path]:
     raise AssertionError("unreachable")
 
 
+def _resolve_spec_frames(
+    spec_path: Path,
+    meta: Any,
+    named_data: dict[str, Path],
+    default_data: Path | None,
+    adsl_df: pl.DataFrame | None,
+    adsl_arg: str | None,
+) -> tuple[pl.DataFrame, pl.DataFrame | None, bool]:
+    """Resolve one spec's ``(data_df, population, is_listing)`` from CLI args.
+
+    Shared by ``fleet tlg run`` and ``fleet tlg explore`` so both wire
+    data identically: NAME=PATH mapping → plain ``--data`` → (for
+    ADSL-only templates) the ``--adsl`` frame; population defaults to
+    the data frame for ADSL-only templates and is required for every
+    other table.
+    """
+    analysis_domain = meta.domains[-1] if meta.domains else None
+    is_listing = meta.output_type.value == "listing"
+
+    data_path = named_data.get(analysis_domain or "")
+    if data_path is None and default_data is not None:
+        data_path = default_data
+    if data_path is None and analysis_domain == "ADSL" and adsl_arg:
+        data_path = Path(adsl_arg)
+    if data_path is None:
+        _fail(
+            f"{spec_path}: template '{meta.id}' needs the {analysis_domain} dataset. "
+            f"Pass --data <path> or --data {analysis_domain}=<path>."
+        )
+    data_df = _load_dataset(str(data_path))
+
+    population = adsl_df
+    if population is None and analysis_domain == "ADSL":
+        population = data_df
+    if population is None and not is_listing and "ADSL" in meta.domains:
+        _fail(
+            f"{spec_path}: template '{meta.id}' needs ADSL for population "
+            "denominators. Pass --adsl <path>."
+        )
+    return data_df, population, is_listing
+
+
 def _tlg_run_once(args: argparse.Namespace) -> None:
     """One ``fleet tlg run`` pass over all resolved spec files."""
-    from fleet.tlg import TEMPLATES, OutputType, RenderMetadata, load_spec, run_spec
+    from fleet.tlg import TEMPLATES, RenderMetadata, load_spec, run_spec
 
     spec_paths = _collect_spec_paths(args.spec)
     named_data, default_data = _parse_data_args(args.data)
@@ -1227,32 +1273,9 @@ def _tlg_run_once(args: argparse.Namespace) -> None:
     for spec_path in spec_paths:
         spec = load_spec(spec_path)
         meta = TEMPLATES[spec.template]
-        analysis_domain = meta.domains[-1] if meta.domains else None
-        is_listing = meta.output_type is OutputType.LISTING
-
-        # Resolve the analysis dataset: NAME=PATH mapping → plain --data →
-        # (for ADSL-only templates) the --adsl frame.
-        data_path = named_data.get(analysis_domain or "")
-        if data_path is None and default_data is not None:
-            data_path = default_data
-        if data_path is None and analysis_domain == "ADSL" and args.adsl:
-            data_path = Path(args.adsl)
-        if data_path is None:
-            _fail(
-                f"{spec_path}: template '{meta.id}' needs the {analysis_domain} dataset. "
-                f"Pass --data <path> or --data {analysis_domain}=<path>."
-            )
-        data_df = _load_dataset(str(data_path))
-
-        population = adsl_df
-        if population is None and analysis_domain == "ADSL":
-            population = data_df
-        if population is None and not is_listing and "ADSL" in meta.domains:
-            _fail(
-                f"{spec_path}: template '{meta.id}' needs ADSL for population "
-                "denominators. Pass --adsl <path>."
-            )
-
+        data_df, population, is_listing = _resolve_spec_frames(
+            spec_path, meta, named_data, default_data, adsl_df, args.adsl
+        )
         groupby = None if is_listing else _detect_groupby(data_df, args.groupby)
 
         result = run_spec(spec, data_df, adsl=population, groupby=groupby)
@@ -1284,6 +1307,63 @@ def _run_tlg_run(args: argparse.Namespace) -> None:
         _watch_loop(targets, lambda: _tlg_run_once(args))
         return
     _tlg_run_once(args)
+
+
+def _tlg_explore_once(args: argparse.Namespace) -> None:
+    """One ``fleet tlg explore`` pass: specs → one static explorer HTML."""
+    from fleet.tlg import TEMPLATES, RenderMetadata, enumerate_variants, load_spec
+    from fleet.tlg.render.explorer import ExplorerEntry, render_explorer
+
+    spec_paths = _collect_spec_paths(args.spec)
+    named_data, default_data = _parse_data_args(args.data)
+
+    adsl_df: pl.DataFrame | None = None
+    if args.adsl:
+        adsl_df = _load_dataset(args.adsl)
+
+    entries = []
+    for spec_path in spec_paths:
+        spec = load_spec(spec_path)
+        meta = TEMPLATES[spec.template]
+        data_df, population, is_listing = _resolve_spec_frames(
+            spec_path, meta, named_data, default_data, adsl_df, args.adsl
+        )
+        # A declared groupby axis supplies the arm column per variant —
+        # only detect one when the spec leaves it fixed.
+        has_groupby_axis = spec.interactive is not None and spec.interactive.groupby is not None
+        groupby = (
+            None if (is_listing or has_groupby_axis) else _detect_groupby(data_df, args.groupby)
+        )
+        n_variants = len(enumerate_variants(spec))
+        print(f"{spec_path.name}: {n_variants} variant(s)")
+        entries.append(
+            ExplorerEntry(
+                name=spec_path.stem,
+                spec=spec,
+                df=data_df,
+                adsl=population,
+                groupby=groupby,
+                metadata=RenderMetadata(
+                    title=args.title or meta.title,
+                    subtitle=args.subtitle or "",
+                    footnotes=args.footnote or [],
+                ),
+            )
+        )
+
+    out_path = Path(args.output)
+    html = render_explorer(entries, path=out_path)
+    print(f"Explorer → {out_path}  ({len(entries)} spec(s), {len(html) / 1024:.0f} KiB)")
+
+
+def _run_tlg_explore(args: argparse.Namespace) -> None:
+    if args.watch:
+        watch_paths = _collect_spec_paths(args.spec)
+        spec_arg = Path(args.spec)
+        targets = [spec_arg] if spec_arg.is_dir() else watch_paths
+        _watch_loop(targets, lambda: _tlg_explore_once(args))
+        return
+    _tlg_explore_once(args)
 
 
 def _run_tlg_export(args: argparse.Namespace) -> None:
@@ -1341,6 +1421,36 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
         html_wrapper=html_wrapper,
     )
     print(f"{fmt.upper()} written → {output_path}")
+
+
+# ────────────────────────────────────────────────────────────────────── #
+# Editor / assistant servers (lsp + mcp extras)                            #
+# ────────────────────────────────────────────────────────────────────── #
+
+
+def _require_extra(module: str, extra: str, command: str) -> None:
+    """Exit 1 with an install hint when an optional server dep is missing."""
+    import importlib.util
+
+    if importlib.util.find_spec(module) is None:
+        _fail(
+            f"{module} is required for `fleet {command}`. Install it with: "
+            f"uv sync --extra {extra}  (or: uv pip install 'fleet-cdisc[{extra}]')"
+        )
+
+
+def _run_mcp(args: argparse.Namespace) -> None:
+    _require_extra("mcp", "mcp", "mcp")
+    from fleet.mcp_server import main as mcp_main
+
+    mcp_main()
+
+
+def _run_lsp(args: argparse.Namespace) -> None:
+    _require_extra("pygls", "lsp", "lsp")
+    from fleet.lsp_server import main as lsp_main
+
+    lsp_main()
 
 
 # ────────────────────────────────────────────────────────────────────── #
@@ -1940,7 +2050,7 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     # -- migrate ------------------------------------------------------------- #
     migrate = sub.add_parser(
         "migrate",
-        help="Rewrite deprecated verb/kwarg spellings to canonical ones (libcst).",
+        help="Rewrite removed pre-alpha verb/kwarg spellings to canonical ones (libcst).",
     )
     migrate.add_argument(
         "files",
@@ -1965,7 +2075,7 @@ def _tlg_domain_choices() -> list[str]:
 def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
     tlg = sub.add_parser(
         "tlg",
-        help="TLG workflow: list templates, run YAML specs, export summaries.",
+        help="TLG workflow: list templates, run/explore YAML specs, export summaries.",
     )
     tlg_sub = tlg.add_subparsers(dest="tlg_command", required=True)
 
@@ -2056,6 +2166,64 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
     )
     tlg_run.set_defaults(func=_run_tlg_run)
 
+    # -- tlg explore --------------------------------------------------------- #
+    tlg_explore = tlg_sub.add_parser(
+        "explore",
+        help=(
+            "Render the interactive variant space of YAML spec(s) into one "
+            "self-contained HTML explorer (no server; the default variant is "
+            "byte-identical to `tlg run`'s output)."
+        ),
+    )
+    tlg_explore.add_argument(
+        "spec",
+        help="A spec .yaml file or a directory of spec files.",
+    )
+    tlg_explore.add_argument(
+        "--data",
+        action="append",
+        default=None,
+        metavar="[NAME=]PATH",
+        help=(
+            "Analysis dataset path, repeatable. Plain PATH applies to every "
+            "spec; NAME=PATH (e.g. ADAE=adae.parquet) targets the template's "
+            "analysis domain."
+        ),
+    )
+    tlg_explore.add_argument(
+        "--adsl",
+        default=None,
+        help="ADSL dataset path (population denominators for tables).",
+    )
+    tlg_explore.add_argument(
+        "--output",
+        "-o",
+        default="explorer.html",
+        help="Output HTML file (default: explorer.html).",
+    )
+    tlg_explore.add_argument(
+        "--groupby",
+        default=None,
+        help=(
+            "Treatment-arm column for specs without a groupby axis. "
+            "Default: auto-detect (TRTA → TRT01A → TRT01P)."
+        ),
+    )
+    tlg_explore.add_argument("--title", default="", help="Output title (default: template title).")
+    tlg_explore.add_argument("--subtitle", default="", help="Output subtitle.")
+    tlg_explore.add_argument(
+        "--footnote",
+        action="append",
+        default=None,
+        help="Footnote (repeatable).",
+    )
+    tlg_explore.add_argument(
+        "--watch",
+        action="store_true",
+        help="Rebuild whenever a spec file changes (requires the 'watch' extra).",
+    )
+    tlg_explore.set_defaults(func=_run_tlg_explore)
+
     # -- tlg export ---------------------------------------------------------- #
     tlg_export = tlg_sub.add_parser(
         "export",
@@ -2130,6 +2298,30 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
     tlg_export.set_defaults(func=_run_tlg_export)
 
 
+def _add_server_parsers(sub: argparse._SubParsersAction) -> None:
+    mcp = sub.add_parser(
+        "mcp",
+        help="Serve Fleet tools to MCP-capable assistants (requires the 'mcp' extra).",
+    )
+    mcp.add_argument(
+        "--stdio",
+        action="store_true",
+        help="Serve over stdio (the only supported transport; accepted for explicitness).",
+    )
+    mcp.set_defaults(func=_run_mcp)
+
+    lsp = sub.add_parser(
+        "lsp",
+        help="Language server for define.yaml files (requires the 'lsp' extra).",
+    )
+    lsp.add_argument(
+        "--stdio",
+        action="store_true",
+        help="Serve over stdio (the only supported transport; accepted for explicitness).",
+    )
+    lsp.set_defaults(func=_run_lsp)
+
+
 def _add_derivation_parsers(sub: argparse._SubParsersAction) -> None:
     drv_parser = sub.add_parser(
         "derivation",
@@ -2182,6 +2374,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_rule_parsers(sub)
     _add_engine_parsers(sub)
     _add_derivation_parsers(sub)
+    _add_server_parsers(sub)
 
     return parser
 

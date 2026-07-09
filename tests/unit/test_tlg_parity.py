@@ -196,15 +196,24 @@ class TestEdgeBattery:
         assert ard.filter(pl.col("variable") == "AESEV").height == 0
 
     def test_single_subject_arm_sd_is_null(self) -> None:
-        advs = pl.DataFrame(
-            {
-                "USUBJID": ["S01"],
-                "TRTA": ["Placebo"],
-                "PARAMCD": ["SYSBP"],
-                "AVAL": [120.0],
-            }
-        )
-        adsl = pl.DataFrame({"USUBJID": ["S01"], "TRTA": ["Placebo"]})
+        advs = pl.from_repr("""\
+┌─────────┬─────────┬─────────┬──────┐
+│ USUBJID ┆ TRTA    ┆ PARAMCD ┆ AVAL │
+│ ---     ┆ ---     ┆ ---     ┆ ---  │
+│ str     ┆ str     ┆ str     ┆ f64  │
+╞═════════╪═════════╪═════════╪══════╡
+│ S01     ┆ Placebo ┆ SYSBP   ┆ 120  │
+└─────────┴─────────┴─────────┴──────┘
+""")
+        adsl = pl.from_repr("""\
+┌─────────┬─────────┐
+│ USUBJID ┆ TRTA    │
+│ ---     ┆ ---     │
+│ str     ┆ str     │
+╞═════════╪═════════╡
+│ S01     ┆ Placebo │
+└─────────┴─────────┘
+""")
         ard = advs.tlg.vs.t_summary(groupby="TRTA", adsl=adsl)
         sd = ard.filter(pl.col("stat_name") == "sd")["stat"].to_list()
         assert sd == [None]

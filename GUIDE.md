@@ -164,7 +164,7 @@ Verb counts drift; don't trust a printed number. Every namespace answers
 `.verbs()` — the always-current catalog:
 
 ```python
-print(dm_raw.sdtm.verbs())  # verb + one-line summary, deprecated aliases hidden
+print(dm_raw.sdtm.verbs())  # verb + one-line summary
 print(vs_raw.adam.verbs())
 print(dm.adam.adsl.verbs())
 ```
@@ -204,6 +204,25 @@ vs_raw = load_raw_data(Path("datasets/cdiscpilot01/raw/vs_raw.csv")).collect()
 `load_raw_data` takes a `pathlib.Path` and returns a `pl.LazyFrame` — call
 `.collect()` to materialise. It also accepts a URL or Parquet/XPT/SAS path. The
 examples below reuse `dm_raw`, `ae_raw`, `vs_raw` from this step.
+
+### Typed entry (`fleet.frame`)
+
+Registered namespaces are invisible to type checkers (pola-rs/polars#27795):
+`df.sdtm` works at runtime but a bare `pl.DataFrame` gives no autocomplete and
+Pyright flags it. Wrap the IO-boundary load in `fleet.frame()` — a zero-cost
+identity cast that types the frame as `fleet.DataFrame` / `fleet.LazyFrame`
+with `.sdtm` / `.adam` / `.tlg` declared:
+
+<!-- docs:no-run -->
+
+```python
+raw = fleet.frame(pl.read_csv("dm_raw.csv"))  # returns the same object, typed
+dm = raw.sdtm.assign("DOMAIN", value="DM").to_frame()
+dm.tlg  # to_frame() returns fleet.DataFrame — chains stay typed downstream
+```
+
+At runtime `fleet.DataFrame` *is* `pl.DataFrame` (a plain alias) and
+`frame()` returns its argument unchanged — no wrapper, no copy.
 
 ### 3.3 StudyContext (path management)
 
@@ -289,11 +308,11 @@ dm = (
 print(dm.select("STUDYID", "DOMAIN", "USUBJID", "SEX", "RACE", "ARMCD", "RFSTDTC"))
 ```
 
-> **Old spellings still work.** `assign_no_ct` / `assign_ct` / `hardcode_no_ct` /
-> `hardcode_ct` / `dataset_level` / `if_then_else` remain as deprecated aliases
-> that emit a `FutureWarning` and point at the canonical verb. Run
-> `python -m fleet.tools.migrate <files...> --write` (or `fleet migrate`) to
-> rewrite call sites automatically. See the [deprecation table](#deprecated-verb--kwarg-names).
+> **Renamed in pre-alpha.** The old spellings (`assign_no_ct` / `assign_ct` /
+> `hardcode_no_ct` / `hardcode_ct` / `dataset_level` / `if_then_else`, …) were
+> removed outright — `assign` / `case_when` / `merge` with `by=` / `keep=` are
+> the only spellings. Run `python -m fleet.tools.migrate <files...> --write`
+> (or `fleet migrate`) to rewrite old external scripts automatically.
 
 ### 4.2 Spec-driven DM pipeline
 
@@ -441,7 +460,7 @@ _ex_max_dose = ex.sdtm.group_by(
 The shared-verb mixin (`assign`, `case_when`, `merge`, `flag`, `duration`, …)
 lives on **every** ADaM sub-namespace, so the whole ADSL derivation is a single
 chain — no break-and-re-enter. `source()` is variadic: carry many columns in one
-call. `merge()` is the one join verb (`lookup` is its deprecated alias).
+call. `merge()` is the one join verb.
 
 ```python
 adsl = (
@@ -1529,23 +1548,16 @@ sub-namespace, so you rarely need to switch back to the base `adam` namespace.
 | `to_spec`      | Serialise builder state → spec model         |
 | `to_html` / `to_rtf` / `to_pdf` / `to_pptx` | Render (RTF/PDF/PPTX need optional deps) |
 
-### Deprecated verb / kwarg names
+### Renamed in pre-alpha
 
-Old spellings keep working as deprecated aliases (one `FutureWarning` per call
-site per session) until 1.0. Run `python -m fleet.tools.migrate <files...> --write`
-(or `fleet migrate`) to rewrite call sites automatically.
-
-| Deprecated                                                     | Canonical                          |
-| -------------------------------------------------------------- | ---------------------------------- |
-| `assign_no_ct(source=)`                                        | `assign(source=)`                  |
-| `assign_ct(source=, ct_codelist=, ct_mapping=)`                | `assign(source=, ct=, ct_map=)`    |
-| `hardcode_no_ct(value=)` / `dataset_level(value=)` / `assigned(value=)` | `assign(value=)`          |
-| `hardcode_ct(value=, ct_codelist=)`                            | `assign(value=, ct=)`              |
-| `rename(source=)`                                              | `assign(source=)`                  |
-| `if_then_else(when=, else_value=)` / `condderivation(conditions=, else_value=)` | `case_when(when=, else_=)` |
-| `lookup(dataset=, on=)`                                        | `merge(dataset, on=)`              |
-| `groups=` / `by_vars=` / `group_cols=` / `group_by=` (grouping) | `by=`                            |
-| `target_cols=` / `keep_cols=` (column restriction)             | `keep=`                            |
+The pre-alpha verb/kwarg spellings (`assign_no_ct`, `assign_ct`, `hardcode_*`,
+`dataset_level`, `assigned`, `rename`, `if_then_else`, `condderivation`,
+`lookup`; `groups=`/`by_vars=`/`group_cols=`/`group_by=` → `by=`;
+`target_cols=`/`keep_cols=` → `keep=`) were removed outright — no deprecation
+shims remain. Old external scripts migrate in one command:
+`python -m fleet.tools.migrate <files...> --write` (or `fleet migrate`).
+Spec-file algorithm ids (`algorithm: assign_no_ct`, …) are the stable YAML
+vocabulary and are unaffected.
 
 ---
 

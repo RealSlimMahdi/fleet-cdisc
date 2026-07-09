@@ -1,3 +1,5 @@
+> **Status (2026-07): implemented — unified TLG engine, open registry + `fleet.tlg.catalog()`, YAML spec workflow.**
+
 # Plan: TLG Static Catalog + cards-Aligned Scaling
 
 Ship the next TLG feature as a **static-first catalog**: self-describing specs → composable ARD primitives → one ordered HTML/PDF shell for many tables, plus an ARD-level QC comparison for double-programming. The scaling lever is refactoring AE/VS compute onto **cards-style primitives**, so adding a _new report type_ becomes a new composition — not new bespoke code.

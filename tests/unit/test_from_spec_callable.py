@@ -22,12 +22,16 @@ def _clean_registry():
 
 @pytest.fixture
 def simple_df():
-    return pl.DataFrame(
-        {
-            "USUBJID": ["01-001", "01-002"],
-            "AGE": [45, 72],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ AGE │
+│ ---     ┆ --- │
+│ str     ┆ i64 │
+╞═════════╪═════╡
+│ 01-001  ┆ 45  │
+│ 01-002  ┆ 72  │
+└─────────┴─────┘
+""")
 
 
 @pytest.fixture

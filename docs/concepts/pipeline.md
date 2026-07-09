@@ -66,8 +66,8 @@ result = (
 `assign` is the one canonical assignment verb (`source=` copies, `value=`
 hardcodes, `ct=`/`ct_map=` add CT). Most verbs only build an internal expression
 list at step 2; a few window/cross-domain verbs checkpoint internally but keep
-the chain going. Legacy spellings (`assign_no_ct`, `hardcode_no_ct`, `assign_ct`)
-still work as deprecated aliases.
+the chain going. The old spellings (`assign_no_ct`, `hardcode_no_ct`,
+`assign_ct`) were removed in pre-alpha.
 
 To inspect intermediate state or the query plan during development, use the
 chainable debug verbs `.inspect()` (hard checkpoint with diagnostic output)
@@ -105,8 +105,8 @@ This means you pay no cost for columns you don't chain. Expression ordering mirr
 | `merge(dataset, on=, keep=)`               | Join a reference dataset               |
 | `to_frame()`                               | Materialise                            |
 
-(Legacy `assign_no_ct` / `hardcode_no_ct` / `assign_ct` / `if_then_else` still
-work as deprecated aliases.)
+(The old `assign_no_ct` / `hardcode_no_ct` / `assign_ct` / `if_then_else`
+spellings were removed in pre-alpha.)
 
 ---
 

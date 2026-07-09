@@ -18,7 +18,6 @@ from typing import Literal, Self
 
 import polars as pl
 
-from fleet.core._deprecation import deprecated_kwargs
 from fleet.core.exceptions import DerivationError, VerbUsageError
 
 #: Built-in shortcut keywords accepted by ``flag(criteria=...)``.
@@ -91,7 +90,6 @@ class FlagCriterionMixin:
     # Flag — generalised "Y" / null flagging                               #
     # ------------------------------------------------------------------ #
 
-    @deprecated_kwargs(groups="by")
     def flag(
         self,
         target: str,
@@ -133,9 +131,7 @@ class FlagCriterionMixin:
                 ``"last"``, ``"max"``, ``"min"``, ``"exists"``,
                 ``"before"``, ``"after"``, ``"exists_after"``,
                 ``"exists_before"``.
-            by: Partition columns (default ``["USUBJID"]``).  The
-                legacy ``groups=`` spelling is accepted with a
-                ``FutureWarning``.
+            by: Partition columns (default ``["USUBJID"]``).
             order_by: Sort column(s) required for ``"first"``/``"last"``
                 and ``"before"``/``"after"``.
             value_col: Value column required for ``"max"``/``"min"``.

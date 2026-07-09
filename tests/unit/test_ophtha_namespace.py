@@ -51,7 +51,7 @@ class TestBaseVerbs:
         assert "USUBJID" in result.columns
 
     def test_assigned(self, ophtha_frame):
-        result = ophtha_frame.adam.ophtha.assigned("STUDYID", value="OPH01").to_frame()
+        result = ophtha_frame.adam.ophtha.assign("STUDYID", value="OPH01").to_frame()
         assert result["STUDYID"].to_list() == ["OPH01"] * 2
 
     def test_derivation(self, ophtha_frame):
@@ -67,14 +67,14 @@ class TestBaseVerbs:
         assert result["EYE"].to_list() == ["LEFT", "RIGHT"]
 
     def test_rename(self, ophtha_frame):
-        result = ophtha_frame.adam.ophtha.rename("SUBJ", source="USUBJID").to_frame()
+        result = ophtha_frame.adam.ophtha.assign("SUBJ", source="USUBJID").to_frame()
         assert result["SUBJ"].to_list() == ophtha_frame["USUBJID"].to_list()
 
     def test_condderivation(self, ophtha_frame):
-        result = ophtha_frame.adam.ophtha.condderivation(
+        result = ophtha_frame.adam.ophtha.case_when(
             "VACAT",
-            conditions=[{"condition": 'pl.col("ETDRS") >= 70', "value": "GOOD"}],
-            else_value="POOR",
+            when=[{"condition": 'pl.col("ETDRS") >= 70', "value": "GOOD"}],
+            else_="POOR",
         ).to_frame()
         assert result["VACAT"].to_list() == ["GOOD", "POOR"]
 

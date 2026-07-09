@@ -1,3 +1,5 @@
+> **Status (2026-07): implemented — `fleet.tlg.render` ships HTML/PDF/PPTX/RTF; see current API. Verb/kwarg names herein are historical.**
+
 ## Plan: TLG Architecture Fitness + ARD → HTML/PDF/Slides Export
 
 Two streams run in sequence:

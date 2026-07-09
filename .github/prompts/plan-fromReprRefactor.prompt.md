@@ -1,3 +1,5 @@
+> **Status (2026-07): implemented and promoted to `.github/instructions/tests.instructions.md`.**
+
 ## Plan: Replace factories & CSV fixtures with `pl.from_repr()`
 
 **TL;DR:** Replace the `tests/factories.py` module and CSV-backed session fixtures with inline `pl.from_repr()` tables directly in tests. Each test becomes self-documenting — no chasing external files or factory parameters. Keep only a tiny `shuffle_rows()` helper.

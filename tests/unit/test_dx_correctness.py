@@ -44,7 +44,7 @@ class TestMergeTargetCols:
 """)
 
     def test_sdtm_merge_restricts_columns(self, base, lookup_df):
-        result = base.sdtm.merge(["RFSTDTC"], dataset=lookup_df, on="USUBJID").to_frame()
+        result = base.sdtm.merge(dataset=lookup_df, on="USUBJID", keep=["RFSTDTC"]).to_frame()
         assert result.columns == ["USUBJID", "RFSTDTC"]
         assert "EXTRA" not in result.columns
 
@@ -54,19 +54,19 @@ class TestMergeTargetCols:
 
     def test_sdtm_merge_unknown_target_col_raises_with_suggestion(self, base, lookup_df):
         with pytest.raises(DerivationError, match="RFSTDTC"):
-            base.sdtm.merge(["RFSTDTX"], dataset=lookup_df, on="USUBJID")
+            base.sdtm.merge(dataset=lookup_df, on="USUBJID", keep=["RFSTDTX"])
 
     def test_adam_lookup_restricts_columns(self, base, lookup_df):
-        result = base.adam.lookup(["RFSTDTC"], dataset=lookup_df, on="USUBJID").to_frame()
+        result = base.adam.merge(dataset=lookup_df, on="USUBJID", keep=["RFSTDTC"]).to_frame()
         assert result.columns == ["USUBJID", "RFSTDTC"]
 
     def test_adam_lookup_no_dead_pipeline_attr(self, base, lookup_df):
-        ns = base.adam.lookup(["RFSTDTC"], dataset=lookup_df, on="USUBJID")
+        ns = base.adam.merge(dataset=lookup_df, on="USUBJID", keep=["RFSTDTC"])
         assert not hasattr(ns, "_pipeline")
 
     def test_adam_lookup_unknown_target_col_raises(self, base, lookup_df):
         with pytest.raises(DerivationError, match="not found"):
-            base.adam.lookup(["NOPE"], dataset=lookup_df, on="USUBJID")
+            base.adam.merge(dataset=lookup_df, on="USUBJID", keep=["NOPE"])
 
 
 # ------------------------------------------------------------------ #
@@ -117,14 +117,10 @@ class TestAssignCTDegradeWarning:
     def test_unknown_codelist_warns_unvalidated(self):
         df = pl.DataFrame({"sex": ["M", "F"]})
         with pytest.warns(UserWarning, match="copied unvalidated"):
-            result = df.sdtm.assign_ct(
-                "SEX", source="sex", ct_codelist="C_DOES_NOT_EXIST"
-            ).to_frame()
+            result = df.sdtm.assign("SEX", source="sex", ct="C_DOES_NOT_EXIST").to_frame()
         assert result["SEX"].to_list() == ["M", "F"]
 
     def test_validate_values_false_opts_out_silently(self):
-        # Uses the canonical assign() spelling: assign_ct is a deprecated
-        # alias whose FutureWarning would trip simplefilter("error").
         df = pl.DataFrame({"sex": ["M", "F"]})
         with warnings.catch_warnings():
             warnings.simplefilter("error")
@@ -144,15 +140,13 @@ class TestAssignCTDegradeWarning:
         try:
             df = pl.DataFrame({"sex": ["M", "BAD"]})
             with pytest.warns(UserWarning, match="not in codelist"):
-                df.sdtm.assign_ct("SEX", source="sex", ct_codelist="C_TEST_ASSIGN").to_frame()
+                df.sdtm.assign("SEX", source="sex", ct="C_TEST_ASSIGN").to_frame()
         finally:
             validator._ct_cache.pop("C_TEST_ASSIGN", None)
 
     def test_hardcode_ct_unknown_codelist_warns(self, simple_raw):
         with pytest.warns(UserWarning, match="assigned unvalidated"):
-            simple_raw.sdtm.hardcode_ct(
-                "AGEU", value="YEARS", ct_codelist="C_DOES_NOT_EXIST"
-            ).to_frame()
+            simple_raw.sdtm.assign("AGEU", value="YEARS", ct="C_DOES_NOT_EXIST").to_frame()
 
 
 # ------------------------------------------------------------------ #
@@ -172,15 +166,15 @@ class TestAssignCTNoDecode:
         }
         try:
             df = pl.DataFrame({"sex": ["M", "F"]})
-            result = df.sdtm.assign_ct("SEX", source="sex", ct_codelist="C_TEST_SEX").to_frame()
+            result = df.sdtm.assign("SEX", source="sex", ct="C_TEST_SEX").to_frame()
             assert result["SEX"].to_list() == ["M", "F"]
         finally:
             validator._ct_cache.pop("C_TEST_SEX", None)
 
     def test_explicit_mapping_still_translates(self):
         df = pl.DataFrame({"sex": ["1", "2"]})
-        result = df.sdtm.assign_ct(
-            "SEX", source="sex", ct_codelist="C66731", ct_mapping={"1": "M", "2": "F"}
+        result = df.sdtm.assign(
+            "SEX", source="sex", ct="C66731", ct_map={"1": "M", "2": "F"}
         ).to_frame()
         assert result["SEX"].to_list() == ["M", "F"]
 

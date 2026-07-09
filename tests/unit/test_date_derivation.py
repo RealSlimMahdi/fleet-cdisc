@@ -277,7 +277,7 @@ class TestFlagMaxSeverity:
             "AOCSFL",
             criteria="max",
             value_col="AESEVN",
-            groups=["USUBJID"],
+            by=["USUBJID"],
         ).to_frame()
         flags = result["AOCSFL"].to_list()
         # Both rows with AESEVN=3 are tied max → both flagged
@@ -297,7 +297,7 @@ class TestFlagMaxSeverity:
             "AOCSFL",
             criteria="max",
             value_col="AESEVN",
-            groups=["USUBJID"],
+            by=["USUBJID"],
         ).to_frame()
         # Both SEVERE rows (max AESEVN=3) flagged
         assert result["AOCSFL"].to_list().count("Y") == 2
@@ -323,7 +323,7 @@ class TestFlagWherePreFilter:
             "LSTOBSFL",
             criteria="last",
             order_by="ADT",
-            groups=["USUBJID", "PARAMCD"],
+            by=["USUBJID", "PARAMCD"],
             where=pl.col("ONTRTFL") == "Y",
         ).to_frame()
         flags = result["LSTOBSFL"].to_list()

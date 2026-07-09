@@ -33,3 +33,18 @@ required_columns:
   - TRTA
   - AESER
   - AEACN
+
+# Declared degrees of freedom for `fleet tlg explore` — every choice is
+# a value for an existing spec field above, and each axis's default
+# matches the fixed value, so the batch output (`fleet tlg run`) is the
+# explorer's default variant, byte for byte.
+interactive:
+  population:
+    - {label: Safety, filter: 'pl.col("SAFFL") == "Y"', default: true}
+    - {label: All subjects, filter: null}
+  dataset_filter:
+    - {label: All AEs, filter: null, default: true}
+    - {label: Serious only, filter: 'pl.col("AESER") == "Y"'}
+  stats:
+    - {label: "n (%)", statistics: [n_subjects, n_pct], default: true}
+    - {label: "+ events", statistics: [n_subjects, n_pct, n_events]}

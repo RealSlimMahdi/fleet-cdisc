@@ -14,6 +14,8 @@ tools:
   ]
 ---
 
+> **Status (2026-07): implemented — `from_spec(..., strict=True)`, single registry in `core/spec_registry.py`, generated JSON schema. Algorithm ids herein are still current spec language.**
+
 # Spec-Driven Workflow — Mitigation Plan
 
 Harden Fleet's `define.yaml` → `from_spec()` pipeline against silent failures, late errors, and user experience gaps while respecting Fleet philosophy: **minimalistic, simple, powerful**.

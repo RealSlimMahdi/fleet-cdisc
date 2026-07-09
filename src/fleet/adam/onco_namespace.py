@@ -31,7 +31,6 @@ from typing import Self
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
-from fleet.core._deprecation import deprecated_kwargs
 
 # RECIST / RECIST-like response order (lower = more favourable)
 _RESP_TO_NUM: dict[str, int] = {
@@ -138,7 +137,6 @@ class OncoNamespace(SharedADaMVerbsMixin):
     # 3. best_overall_response — most favourable response per group       #
     # ------------------------------------------------------------------ #
 
-    @deprecated_kwargs(groups="by")
     def best_overall_response(
         self,
         target: str,
@@ -154,8 +152,7 @@ class OncoNamespace(SharedADaMVerbsMixin):
         Args:
             target: Name of the output column.
             source: Column containing RECIST response text.
-            by: Partition columns (default ``["USUBJID"]``).  The legacy
-                ``groups=`` spelling is accepted with a ``FutureWarning``.
+            by: Partition columns (default ``["USUBJID"]``).
 
         Returns:
             Self: The namespace with *target* appended.
@@ -179,7 +176,6 @@ class OncoNamespace(SharedADaMVerbsMixin):
     # 4. confirmed_response_flag — confirm response sustained N days      #
     # ------------------------------------------------------------------ #
 
-    @deprecated_kwargs(groups="by")
     def confirmed_response_flag(
         self,
         target: str,
@@ -202,8 +198,7 @@ class OncoNamespace(SharedADaMVerbsMixin):
             date_col: Assessment date column.
             confirmation_days: Minimum gap in days (default ``28``).
             responses: Values to consider (default ``["CR", "PR"]``).
-            by: Partition columns (default ``["USUBJID"]``).  The legacy
-                ``groups=`` spelling is accepted with a ``FutureWarning``.
+            by: Partition columns (default ``["USUBJID"]``).
             flag_value: Value to assign (default ``"Y"``).
 
         Returns:
@@ -260,7 +255,6 @@ class OncoNamespace(SharedADaMVerbsMixin):
     # 5. filter_pd — keep records up to first PD per group               #
     # ------------------------------------------------------------------ #
 
-    @deprecated_kwargs(groups="by")
     def filter_pd(
         self,
         *,
@@ -276,8 +270,7 @@ class OncoNamespace(SharedADaMVerbsMixin):
         Args:
             response_col: Column containing response text.
             date_col: Assessment date column.
-            by: Partition columns (default ``["USUBJID"]``).  The legacy
-                ``groups=`` spelling is accepted with a ``FutureWarning``.
+            by: Partition columns (default ``["USUBJID"]``).
 
         Returns:
             Self: A fresh namespace wrapping the filtered frame.

@@ -48,7 +48,7 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
     such as ADPP.
 
     Inherits shared verbs from ``SharedADaMVerbsMixin``
-    (source, derivation, assigned, recode, rename, condderivation,
+    (source, derivation, assign, recode, case_when,
     whereclauses, merge_adsl) and ``MultiRowMixin`` (seq), and adds
     PK-specific verbs for BLQ handling, time derivation, and
     dose normalisation.

@@ -27,12 +27,11 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import polars as pl
 import yaml
 
-from fleet.core._deprecation import deprecated_kwargs, deprecated_verb
 from fleet.core._flag_mixin import FlagCriterionMixin
 from fleet.core._pin_mixin import PinMixin
 from fleet.core._verb_mixin import SharedVerbsMixin
@@ -40,9 +39,6 @@ from fleet.core.exceptions import DerivationError
 from fleet.sdtm._tdd_mixin import TrialDesignMixin
 from fleet.sdtm.models import NSVMeta
 from fleet.sdtm.utils import dtc_date_expr, dtc_datetime_expr, parse_expression
-
-if TYPE_CHECKING:
-    from fleet.ct.validator import CTValidator
 
 
 @pl.api.register_dataframe_namespace("sdtm")
@@ -80,92 +76,8 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         self._pending_fk_checks: list[tuple[str, str, str, str]] = []
 
     # ------------------------------------------------------------------ #
-    # 1. assign_no_ct — deprecated alias of assign(source=)               #
+    # assign / case_when are inherited from SharedVerbsMixin.             #
     # ------------------------------------------------------------------ #
-
-    @deprecated_verb("assign_no_ct", use="assign(target, source=...)")
-    def assign_no_ct(self, target: str, *, source: str) -> SDTMNamespace:
-        """Copy *source* column to *target* with no controlled-terminology validation.
-
-        Deprecated alias of :meth:`~fleet.core._verb_mixin.SharedVerbsMixin.assign`.
-
-        Args:
-            target: Name of the output SDTM variable to create.
-            source: Name of the raw/source column to copy from.
-
-        Returns:
-            SDTMNamespace: The namespace with *target* appended; call
-                ``.to_frame()`` to materialise.
-
-        Examples:
-            Copy the raw subject identifier to ``USUBJID``::
-
-                dm = (
-                    raw_df.sdtm
-                    .assign("USUBJID", source="subject_id")
-                    .to_frame()
-                )
-        """
-        return self._assign_impl(target, source=source, verb="assign_no_ct", fk=True)
-
-    # ------------------------------------------------------------------ #
-    # 2. assign_ct — deprecated alias of assign(source=, ct=, ct_map=)    #
-    # ------------------------------------------------------------------ #
-
-    @deprecated_verb("assign_ct", use="assign(target, source=..., ct=..., ct_map=...)")
-    def assign_ct(
-        self,
-        target: str,
-        *,
-        source: str,
-        ct_codelist: str | type,
-        ct_mapping: dict[str, str] | None = None,
-        ct_validator: CTValidator | None = None,
-        validate_values: bool | None = None,
-    ) -> SDTMNamespace:
-        """Copy *source* to *target*, validated against controlled terminology.
-
-        Deprecated alias of
-        :meth:`~fleet.core._verb_mixin.SharedVerbsMixin.assign` — pass
-        ``ct=`` / ``ct_map=`` instead of ``ct_codelist=`` / ``ct_mapping=``.
-
-        Args:
-            target: Name of the output SDTM variable.
-            source: Name of the raw column containing coded values.
-            ct_codelist: CDISC CT codelist identifier — either a string
-                (e.g. ``"C66731"``) or a generated codelist class
-                (e.g. ``SEX``) that exposes ``_concept_id``.
-            ct_mapping: Explicit ``{raw_value: ct_value}`` mapping.
-            ct_validator: Optional pre-built validator instance.
-            validate_values: Controls the pass-through validation; see
-                ``assign``.
-
-        Returns:
-            SDTMNamespace: The namespace with *target* appended; call
-                ``.to_frame()`` to materialise.
-
-        Examples:
-            Map raw ``sex`` values to the CDISC Sex codelist::
-
-                from codelists import SEX
-
-                dm = (
-                    raw_df.sdtm
-                    .assign("SEX", source="sex", ct=SEX,
-                            ct_map={"M": "M", "F": "F"})
-                    .to_frame()
-                )
-        """
-        return self._assign_impl(
-            target,
-            source=source,
-            ct=ct_codelist,
-            ct_map=ct_mapping,
-            ct_validator=ct_validator,
-            validate_values=validate_values,
-            verb="assign_ct",
-            fk=True,
-        )
 
     # ------------------------------------------------------------------ #
     # 3. date — unified date verb                                          #
@@ -400,77 +312,6 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         return self._materialise_then(result)
 
     # ------------------------------------------------------------------ #
-    # 4. hardcode_ct — deprecated alias of assign(value=, ct=)            #
-    # ------------------------------------------------------------------ #
-
-    @deprecated_verb("hardcode_ct", use="assign(target, value=..., ct=...)")
-    def hardcode_ct(
-        self,
-        target: str,
-        *,
-        value: Any,
-        ct_codelist: str | type | None = None,
-    ) -> SDTMNamespace:
-        """Set *target* to a constant *value*, validated against controlled terminology.
-
-        Deprecated alias of
-        :meth:`~fleet.core._verb_mixin.SharedVerbsMixin.assign` — pass
-        ``ct=`` instead of ``ct_codelist=``.
-
-        Args:
-            target: Name of the output SDTM variable.
-            value: The literal value to assign.
-            ct_codelist: CDISC CT codelist for validation — a generated
-                codelist class (e.g. ``SEX``) or an NCI concept ID string.
-
-        Returns:
-            SDTMNamespace: The namespace with *target* appended; call
-                ``.to_frame()`` to materialise.
-
-        Examples:
-            Set ``AGEU`` to a constant value with CT validation::
-
-                from codelists import AGEU
-
-                dm = (
-                    raw_df.sdtm
-                    .assign("AGEU", value="YEARS", ct=AGEU)
-                    .to_frame()
-                )
-        """
-        return self._assign_impl(target, value=value, ct=ct_codelist, verb="hardcode_ct", fk=True)
-
-    # ------------------------------------------------------------------ #
-    # 5. hardcode_no_ct — deprecated alias of assign(value=)              #
-    # ------------------------------------------------------------------ #
-
-    @deprecated_verb("hardcode_no_ct", use="assign(target, value=...)")
-    def hardcode_no_ct(self, target: str, *, value: Any) -> SDTMNamespace:
-        """Set *target* to a literal *value* for every row, with no CT validation.
-
-        Deprecated alias of
-        :meth:`~fleet.core._verb_mixin.SharedVerbsMixin.assign`.
-
-        Args:
-            target: Name of the output SDTM variable.
-            value: The literal value to assign to every row.
-
-        Returns:
-            SDTMNamespace: The namespace with *target* appended; call
-                ``.to_frame()`` to materialise.
-
-        Examples:
-            Hardcode the ``DOMAIN`` variable to ``"DM"``::
-
-                dm = (
-                    raw_df.sdtm
-                    .assign("DOMAIN", value="DM")
-                    .to_frame()
-                )
-        """
-        return self._assign_impl(target, value=value, verb="hardcode_no_ct", fk=False)
-
-    # ------------------------------------------------------------------ #
     # 5b. nsv — Non-Standard Variable (qualifier) derivation               #
     # ------------------------------------------------------------------ #
 
@@ -486,8 +327,8 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
     ) -> SDTMNamespace:
         """Derive a Non-Standard Variable with qualifier metadata.
 
-        Behaves like ``assign_no_ct`` (when *source* is given) or
-        ``hardcode_no_ct`` (when *value* is given) but additionally
+        Behaves like ``assign(source=...)`` (when *source* is given) or
+        ``assign(value=...)`` (when *value* is given) but additionally
         registers SUPPQUAL metadata (label, origin, evaluator) on the
         pipeline.  Use ``export_supp()`` to produce the vertical SUPPQUAL
         structure for SDTM IG ≤3.4.  For IG 3.5+, NSVs remain in the
@@ -544,7 +385,6 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
     # 5d. baseline_flag — last pre-reference-date observation flag        #
     # ------------------------------------------------------------------ #
 
-    @deprecated_kwargs(group_by="by")
     def baseline_flag(
         self,
         target: str,
@@ -575,8 +415,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                 (default ``"DM"``).
             dm: Optional explicit DataFrame override.
             by: Additional grouping columns beyond USUBJID and
-                *testcd_col*.  The legacy ``group_by=`` spelling is
-                accepted with a ``FutureWarning``.
+                *testcd_col*.
 
         Returns:
             SDTMNamespace: The namespace with *target* appended; call
@@ -731,47 +570,6 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         return self._chain(expr, verb="condition_add")
 
     # ------------------------------------------------------------------ #
-    # 7. if_then_else — deprecated alias of case_when                     #
-    # ------------------------------------------------------------------ #
-
-    @deprecated_verb("if_then_else", use="case_when(target, when=[...], else_=...)")
-    def if_then_else(
-        self,
-        target: str,
-        *,
-        when: list[dict[str, Any]],
-        else_value: Any = None,
-    ) -> SDTMNamespace:
-        """Multi-branch conditional mapping.
-
-        Deprecated alias of
-        :meth:`~fleet.core._verb_mixin.SharedVerbsMixin.case_when` —
-        pass ``else_=`` instead of ``else_value=``.
-
-        Args:
-            target: Name of the output SDTM variable.
-            when: List of ``{"condition": expr_str, "value": any}`` dicts.
-            else_value: Fallback value when no branch matches.
-
-        Returns:
-            SDTMNamespace: The namespace with *target* appended; call
-                ``.to_frame()`` to materialise.
-
-        Examples:
-            Map raw age-unit strings to CDISC ``AGEU`` values::
-
-                dm = (
-                    raw_df.sdtm
-                    .case_when("AGEU", when=[
-                        {"condition": 'pl.col("age_unit") == "years"', "value": "YEARS"},
-                        {"condition": 'pl.col("age_unit") == "months"', "value": "MONTHS"},
-                    ], else_="YEARS")
-                    .to_frame()
-                )
-        """
-        return self._case_when_impl(target, when=when, else_=else_value, verb="if_then_else")
-
-    # ------------------------------------------------------------------ #
     # 8. ae_aerel — AE causality string mapping                           #
     # ------------------------------------------------------------------ #
 
@@ -833,7 +631,6 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
     # 9. seq — --SEQ sequence number (with SDTM naming convention check)  #
     # ------------------------------------------------------------------ #
 
-    @deprecated_kwargs(groups="by")
     def seq(
         self,
         target: str,
@@ -859,8 +656,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                 When ``None``, the current row order is preserved.
             by: Subject-level grouping columns (default
                 ``["STUDYID", "USUBJID"]``).  The sequence restarts at
-                *start_at* for each unique combination.  The legacy
-                ``groups=`` spelling is accepted with a ``FutureWarning``.
+                *start_at* for each unique combination.
             start_at: First sequence value (default ``1``).
             check_uniqueness: If ``True``, emit a warning when the
                 combination of *by* + *order_by* does not uniquely
@@ -901,15 +697,13 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         )
 
     # ------------------------------------------------------------------ #
-    # 10. merge is inherited from SharedVerbsMixin (canonical join verb;  #
-    # the legacy positional target_cols spelling still works there).      #
+    # 10. merge is inherited from SharedVerbsMixin (canonical join verb). #
     # ------------------------------------------------------------------ #
 
     # ------------------------------------------------------------------ #
     # 10. group_by — aggregate records                                     #
     # ------------------------------------------------------------------ #
 
-    @deprecated_kwargs(group_cols="by")
     def group_by(
         self,
         *,
@@ -919,8 +713,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         """Group by *by* and apply *agg* aggregations (lazily).
 
         Args:
-            by: Column(s) to group by.  The legacy ``group_cols=``
-                spelling is accepted with a ``FutureWarning``.
+            by: Column(s) to group by.
             agg: List of Polars aggregation expressions.
 
         Returns:
@@ -940,36 +733,6 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                 )
         """
         return self._with_lazy(self._lazy.group_by(by).agg(agg))
-
-    # ------------------------------------------------------------------ #
-    # 12. dataset_level — deprecated alias of assign(value=)               #
-    # ------------------------------------------------------------------ #
-
-    @deprecated_verb("dataset_level", use="assign(target, value=...)")
-    def dataset_level(self, target: str, *, value: Any) -> SDTMNamespace:
-        """Set a dataset-level constant on *target*.
-
-        Deprecated alias of
-        :meth:`~fleet.core._verb_mixin.SharedVerbsMixin.assign`.
-
-        Args:
-            target: Name of the output SDTM variable.
-            value: The literal constant to broadcast to every row.
-
-        Returns:
-            SDTMNamespace: The namespace with *target* appended; call
-                ``.to_frame()`` to materialise.
-
-        Examples:
-            Hardcode ``STUDYID`` at the dataset level::
-
-                dm = (
-                    raw_df.sdtm
-                    .assign("STUDYID", value="CDISCPILOT01")
-                    .to_frame()
-                )
-        """
-        return self._assign_impl(target, value=value, verb="dataset_level", fk=False)
 
     # ------------------------------------------------------------------ #
     # 13. notsubmitted — mark variable as null / not-submitted            #

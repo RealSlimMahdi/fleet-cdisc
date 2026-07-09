@@ -1,3 +1,5 @@
+> **Status (2026-07): implemented — `.derivation()` accepts str | pl.Expr | callable (see `core/_resolve_callable.py`).**
+
 # Plan: Polymorphic `.derivation()` Verb + `Derivation` Protocol
 
 ## Context

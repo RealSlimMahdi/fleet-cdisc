@@ -29,7 +29,7 @@ class TestBaseVerbs:
         assert "USUBJID" in result.columns
 
     def test_assigned(self, ae_frame):
-        result = ae_frame.adam.occds.assigned("STUDYID", value="TEST01").to_frame()
+        result = ae_frame.adam.occds.assign("STUDYID", value="TEST01").to_frame()
         assert result["STUDYID"].to_list() == ["TEST01"] * 4
 
     def test_derivation(self, ae_frame):
@@ -52,16 +52,16 @@ class TestBaseVerbs:
         assert result["AESEVN"][1] == "3"  # Nausea=SEVERE
 
     def test_rename(self, ae_frame):
-        result = ae_frame.adam.occds.rename("AEDECOD", source="AETERM").to_frame()
+        result = ae_frame.adam.occds.assign("AEDECOD", source="AETERM").to_frame()
         assert result["AEDECOD"].to_list() == ae_frame["AETERM"].to_list()
 
     def test_condderivation(self, ae_frame):
-        result = ae_frame.adam.occds.condderivation(
+        result = ae_frame.adam.occds.case_when(
             "SEVGR",
-            conditions=[
+            when=[
                 {"condition": 'pl.col("AESEV") == "SEVERE"', "value": "HIGH"},
             ],
-            else_value="LOW",
+            else_="LOW",
         ).to_frame()
         # Only Nausea is SEVERE
         assert result["SEVGR"][1] == "HIGH"
@@ -70,12 +70,12 @@ class TestBaseVerbs:
 
 class TestSeq:
     def test_seq_starts_at_one(self, ae_frame):
-        result = ae_frame.adam.occds.seq("ASEQ", groups=["USUBJID"]).to_frame()
+        result = ae_frame.adam.occds.seq("ASEQ", by=["USUBJID"]).to_frame()
         rows_001 = result.filter(pl.col("USUBJID") == "01-001")
         assert sorted(rows_001["ASEQ"].to_list()) == [1, 2, 3]
 
     def test_seq_resets_per_subject(self, ae_frame):
-        result = ae_frame.adam.occds.seq("ASEQ", groups=["USUBJID"]).to_frame()
+        result = ae_frame.adam.occds.seq("ASEQ", by=["USUBJID"]).to_frame()
         rows_002 = result.filter(pl.col("USUBJID") == "01-002")
         assert rows_002["ASEQ"].to_list() == [1]
 
@@ -91,7 +91,7 @@ class TestFlagMax:
             "ANL01FL",
             criteria="max",
             value_col="AESEVN",
-            groups=["USUBJID", "AEBODSYS"],
+            by=["USUBJID", "AEBODSYS"],
         ).to_frame()
         assert "ANL01FL" in result.columns
         # For 01-001 / Nervous system: only MILD (AESEVN=1) → flagged (it's the max for that group)
@@ -109,7 +109,7 @@ class TestFlagMax:
             "ANL01FL",
             criteria="max",
             value_col="AESEVN",
-            groups=["USUBJID"],
+            by=["USUBJID"],
         ).to_frame()
         # SEVERE (AESEVN=3) is worst for 01-001; MILD rows should be null
         mild_001 = result.filter((pl.col("USUBJID") == "01-001") & (pl.col("AESEV") == "MILD"))

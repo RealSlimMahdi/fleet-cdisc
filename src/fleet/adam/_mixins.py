@@ -6,7 +6,7 @@ Architecture
 Fleet registers ``df.adam`` on every Polars DataFrame; sub-structures are
 accessed as properties: ``df.adam.adsl``, ``df.adam.occds``, ``df.adam.onco``,
 etc.  Each sub-namespace is its own class, but many verbs are **identical**
-across domains (``source``, ``derivation``, ``condderivation``, …).
+across domains (``source``, ``derivation``, ``case_when``, …).
 
 This module provides **mixin classes** that consolidate the shared logic so
 that each namespace class only defines its domain-specific methods.
@@ -78,7 +78,6 @@ from typing import TYPE_CHECKING, Any, Self
 
 import polars as pl
 
-from fleet.core._deprecation import deprecated_kwargs, deprecated_verb
 from fleet.core._flag_mixin import (
     _FLAG_CRITERIA_KEYWORDS,  # noqa: F401  — backward-compat re-export
     FlagCriterionMixin,
@@ -265,32 +264,6 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         exprs = [pl.col(t).alias(t) for t in targets]
         return self._chain(*exprs, verb="source")
 
-    @deprecated_verb("assigned", use="assign(target, value=...)")
-    def assigned(self, target: str, *, value: Any) -> Self:
-        """Set *target* to a constant *value* for every record.
-
-        Deprecated alias of
-        :meth:`~fleet.core._verb_mixin.SharedVerbsMixin.assign`.
-
-        Args:
-            target: Name of the output ADaM variable.
-            value: The literal value to broadcast.
-
-        Returns:
-            Self: The namespace with *target* appended; call ``.to_frame()``
-                to materialise.
-
-        Examples:
-            Set a constant ``PARAMCD``::
-
-                advs = (
-                    vs_df.adam
-                    .assign("PARAMCD", value="SYSBP")
-                    .to_frame()
-                )
-        """
-        return self._assign_impl(target, value=value, verb="assigned", fk=False)
-
     def recode(
         self,
         target: str,
@@ -334,71 +307,6 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             default_expr = default if isinstance(default, pl.Expr) else pl.lit(default)
             expr = default_expr.alias(target)
         return self._chain(expr, verb="recode")
-
-    @deprecated_verb("rename", use="assign(target, source=...)")
-    def rename(self, target: str, *, source: str) -> Self:
-        """Create *target* as a copy of *source* (variable renaming).
-
-        Deprecated alias of
-        :meth:`~fleet.core._verb_mixin.SharedVerbsMixin.assign`.
-
-        Args:
-            target: Name of the output ADaM variable.
-            source: Name of the existing column to rename.
-
-        Returns:
-            Self: The namespace with *target* appended; call ``.to_frame()``
-                to materialise.
-
-        Examples:
-            Rename ``VSTEST`` to ``PARAM``::
-
-                advs = (
-                    vs_df.adam
-                    .assign("PARAM", source="VSTEST")
-                    .to_frame()
-                )
-        """
-        return self._assign_impl(target, source=source, verb="rename", fk=False)
-
-    @deprecated_verb("condderivation", use="case_when(target, when=[...], else_=...)")
-    def condderivation(
-        self,
-        target: str,
-        *,
-        conditions: list[dict[str, Any]],
-        else_value: Any = None,
-    ) -> Self:
-        """Multi-branch conditional derivation (when/then/otherwise chain).
-
-        Deprecated alias of
-        :meth:`~fleet.core._verb_mixin.SharedVerbsMixin.case_when` — pass
-        ``when=`` / ``else_=`` instead of ``conditions=`` / ``else_value=``.
-
-        Args:
-            target: Name of the output ADaM variable.
-            conditions: List of ``{"condition": expr, "value": any}`` dicts.
-            else_value: Fallback value when no condition matches.
-
-        Returns:
-            Self: The namespace with *target* appended; call ``.to_frame()``
-                to materialise.
-
-        Examples:
-            Derive ``DTYPE`` based on imputation method::
-
-                advs = (
-                    vs_df.adam
-                    .case_when("DTYPE", when=[
-                        {"condition": 'pl.col("LOCF_FLAG") == "Y"', "value": "LOCF"},
-                        {"condition": 'pl.col("WOCF_FLAG") == "Y"', "value": "WOCF"},
-                    ], else_=None)
-                    .to_frame()
-                )
-        """
-        return self._case_when_impl(
-            target, when=conditions, else_=else_value, verb="condderivation"
-        )
 
     # ------------------------------------------------------------------ #
     # pick — priority-ordered event selection across sources               #
@@ -659,7 +567,6 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         filter_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
         return self._materialise_then(df.filter(filter_expr))
 
-    @deprecated_kwargs(keep_cols="keep")
     def merge_adsl(
         self,
         adsl: pl.DataFrame,
@@ -677,8 +584,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             by: Key column(s) for the join (default ``["USUBJID"]``).
             keep: Subset of ADSL columns to bring in (excluding *by*
                 keys, which are always included).  When ``None``, all ADSL
-                columns are merged.  The legacy ``keep_cols=`` spelling is
-                accepted with a ``FutureWarning``.
+                columns are merged.
 
         Returns:
             Self: A fresh namespace wrapping the joined frame.
@@ -704,7 +610,6 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
     # Subject-level event aggregations (first_date / last_date / count)    #
     # ------------------------------------------------------------------ #
 
-    @deprecated_kwargs(groups="by")
     def first_date(
         self,
         target: str,
@@ -724,8 +629,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             from_dataset: Source ``pl.DataFrame`` to aggregate.
             date_col: Date column to take the minimum of.
             where: Optional filter applied to *from_dataset* before aggregation.
-            by: Join key columns (default ``["USUBJID"]``).  The legacy
-                ``groups=`` spelling is accepted with a ``FutureWarning``.
+            by: Join key columns (default ``["USUBJID"]``).
 
         Returns:
             Self: The namespace with *target* appended.
@@ -750,7 +654,6 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             agg_fn="min",
         )
 
-    @deprecated_kwargs(groups="by")
     def last_date(
         self,
         target: str,
@@ -769,8 +672,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             from_dataset: Source ``pl.DataFrame`` to aggregate.
             date_col: Date column to take the maximum of.
             where: Optional filter applied to *from_dataset* before aggregation.
-            by: Join key columns (default ``["USUBJID"]``).  The legacy
-                ``groups=`` spelling is accepted with a ``FutureWarning``.
+            by: Join key columns (default ``["USUBJID"]``).
 
         Returns:
             Self: The namespace with *target* appended.
@@ -818,7 +720,6 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         df = self.to_frame().join(agg_df, on=grps, how="left")
         return self._materialise_then(df)
 
-    @deprecated_kwargs(groups="by")
     def count_events(
         self,
         target: str,
@@ -835,8 +736,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             target: Name of the output count column.
             from_dataset: Source ``pl.DataFrame`` to count.
             where: Optional filter applied before counting.
-            by: Join key columns (default ``["USUBJID"]``).  The legacy
-                ``groups=`` spelling is accepted with a ``FutureWarning``.
+            by: Join key columns (default ``["USUBJID"]``).
 
         Returns:
             Self: The namespace with *target* appended.
