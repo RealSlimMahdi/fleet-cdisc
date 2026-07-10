@@ -57,3 +57,18 @@ options:
 show_root_heading: true
 heading_level: 3
 filters: ["!^_"]
+
+## Time-to-event — `df.adam.tte`
+
+::: fleet.adam.TTENamespace
+options:
+show_root_heading: true
+heading_level: 3
+filters: ["!^_"]
+
+::: fleet.adam.tte
+options:
+show_root_heading: true
+heading_level: 3
+members_order: source
+show_source: false

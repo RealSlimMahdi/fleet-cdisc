@@ -82,6 +82,7 @@ if TYPE_CHECKING:
     from .ophtha_namespace import OphthaNamespace
     from .peds_namespace import PedsNamespace
     from .pk_namespace import PKNamespace
+    from .tte_namespace import TTENamespace
     from .vaccine_namespace import VaccineNamespace
 
 _SubNS = TypeVar("_SubNS", bound=SharedADaMVerbsMixin)
@@ -1085,3 +1086,10 @@ class AdamNamespace(SharedADaMVerbsMixin):
         from .pk_namespace import PKNamespace
 
         return self._sub_namespace(PKNamespace)
+
+    @property
+    def tte(self) -> TTENamespace:
+        """Time-to-event (ADTTE) derivations: event/censor sources, param, AVAL, KM inputs."""
+        from .tte_namespace import TTENamespace
+
+        return self._sub_namespace(TTENamespace)

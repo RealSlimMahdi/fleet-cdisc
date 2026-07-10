@@ -107,6 +107,18 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 | [`.avalcat()`][fleet.adam.pk_namespace.PKNamespace.avalcat]                 | Listing-ready categorised analysis value.                           | `.avalcat("AVALCAT1", conc_col="PCSTRESC", lloq_col="PCLLOQ")`   |
 | [`.anl_flag()`][fleet.adam.pk_namespace.PKNamespace.anl_flag]               | Analysis flag (`ANL01FL` / `ANL02FL`).                              | `.anl_flag("ANL01FL")`                                           |
 
+## Time-to-event (`df.adam.tte`)
+
+Typed `EventSource` / `CensorSource` objects describe the candidates; the
+prebuilt library (`DEATH_EVENT`, `AE_EVENT`, ...) is browsable via
+`prebuilt_sources_frame()`. Source frames attach by nickname with `.pin()`.
+
+| Verb                                                             | Description                                                        | Example                                                              |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| [`.param()`][fleet.adam.TTENamespace.param]                      | Derive one TTE parameter: earliest event wins, else latest censor. | `.param("OS", "Overall Survival", start_date="TRTSDT", events=[...])` |
+| [`.aval()`][fleet.adam.TTENamespace.aval]                        | AVAL (+AVALU) from STARTDT/ADT with CDISC unit conventions.        | `.aval(unit="months")`                                                |
+| [`.km_data()`][fleet.adam.TTENamespace.km_data]                  | `(duration, event)` frame for lifelines / scikit-survival.         | `.km_data("OS", by=["TRT01P"])`                                       |
+
 ## Trial Design (`df.sdtm` verbs + `fleet.StudyDesign`)
 
 TDD verbs live directly on `df.sdtm` (there is no `.tdd` sub-namespace).
