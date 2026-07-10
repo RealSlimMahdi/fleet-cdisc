@@ -417,6 +417,10 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         if not events:
             raise DerivationError("pick() requires at least one event.")
+        if mode not in ("first", "last"):
+            raise DerivationError(
+                f"pick() mode={mode!r} is not supported. Choose 'first' or 'last'."
+            )
 
         target_list = [targets] if isinstance(targets, str) else list(targets)
         by_vars = by or ["USUBJID"]
@@ -490,6 +494,11 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
             # Resolve per-event mode/order
             evt_mode = event.get("mode", mode)
+            if evt_mode not in ("first", "last"):
+                raise DerivationError(
+                    f"pick() event #{event_nr} mode={evt_mode!r} is not supported. "
+                    "Choose 'first' or 'last'."
+                )
             evt_order_raw = event.get("order", global_order)
             evt_order: list[str] | None = (
                 [evt_order_raw] if isinstance(evt_order_raw, str) else evt_order_raw
@@ -517,18 +526,13 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             null_exprs = [pl.lit(None).alias(t) for t in target_list]
             return self._materialise_then(df.with_columns(null_exprs))
 
-        # Stack all candidates and pick the winning event per group
+        # Stack all candidates and pick the winning event per group.
+        # Each event contributed at most one row per group, so event priority
+        # alone decides the winner — per-event order/mode already selected the
+        # record *within* each event. (Sorting by *order* here would also
+        # crash: order columns that are not targets were dropped above.)
         all_candidates = pl.concat(candidate_frames, how="diagonal_relaxed")
-
-        # Sort by event priority (lowest nr = highest priority), then order
-        sort_cols = ["__pick_event_nr__"]
-        sort_desc = [False]
-        if global_order:
-            sort_cols.extend(global_order)
-            global_mode_desc = mode == "last"
-            sort_desc.extend([global_mode_desc] * len(global_order))
-
-        all_candidates = all_candidates.sort(sort_cols, descending=sort_desc, nulls_last=True)
+        all_candidates = all_candidates.sort("__pick_event_nr__")
         winners = all_candidates.group_by(by_vars, maintain_order=True).first()
         winners = winners.select(by_vars + target_list)
 

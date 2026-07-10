@@ -639,21 +639,41 @@ class AdamNamespace(SharedADaMVerbsMixin):
         by: list[str] | None = None,
         set_values_to: dict[str, Any],
         parameter_filter: dict[str, str],
-        analysis_value: pl.Expr,
+        analysis_value: pl.Expr | str,
+        from_dataset: pl.DataFrame | None = None,
+        where: str | pl.Expr | None = None,
     ) -> AdamNamespace:
         """
         Derive a new parameter (e.g. BMI) from existing records and append
         the computed rows to the dataset.
 
-        *parameter_filter*: ``{PARAMCD: value}`` pairs identifying the source
+        *parameter_filter*: ``{alias: PARAMCD}`` pairs identifying the source
         records to pivot on (e.g. ``{"WEIGHT": "WEIGHT", "HEIGHT": "HEIGHT"}``).
         Each key is a local alias; the value is the ``PARAMCD`` it matches.
+        Every source parameter must be unique per *by* group — duplicates
+        raise instead of silently multiplying the derived rows.
 
-        *analysis_value*: a Polars expression referencing the aliases to
-        compute the new AVAL (e.g. ``pl.col("WEIGHT") / (pl.col("HEIGHT")/100)**2``).
+        *analysis_value*: a Polars expression (or YAML-friendly string)
+        referencing the aliases to compute the new AVAL
+        (e.g. ``pl.col("WEIGHT") / (pl.col("HEIGHT")/100)**2``).
 
-        *set_values_to*: constant columns on the new rows
-        (e.g. ``{"PARAMCD": "BMI", "PARAM": "Body Mass Index"}``).
+        *set_values_to*: constant columns on the new rows — including the
+        parameter-level identifiers ``PARAM``, ``PARAMN``, ``PARCATy`` /
+        ``PARCATyN``, and ``DTYPE`` (e.g. ``{"PARAMCD": "BMI",
+        "PARAM": "Body Mass Index", "PARAMN": 3, "PARCAT1": "ANTHRO"}``).
+        Columns that don't exist yet are added to the dataset.  The new
+        ``PARAMCD`` must not already exist in the dataset: appending under
+        an existing code would break the PARAMCD ↔ PARAM/PARAMN one-to-one
+        mapping that ADaM conformance checks enforce.
+
+        *from_dataset*: optional BDS-shaped frame (``PARAMCD`` + ``AVAL``)
+        to pivot the source parameters from — derive into this dataset
+        **from another one** (e.g. compute a param in ADVS from ADLB rows).
+        Defaults to the current pipeline frame.
+
+        *where*: optional filter applied to the source records before the
+        pivot (e.g. restrict to ``ANL01FL == "Y"`` or baseline rows) —
+        the current dataset's rows are never dropped.
 
         Materialises the pipeline before appending.
 
@@ -674,16 +694,72 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     )
                     .to_frame()
                 )
+
+            Add a parameter computed from ANOTHER dataset's records::
+
+                advs = (
+                    advs.adam
+                    .derive_param(
+                        by=["USUBJID", "AVISIT"],
+                        set_values_to={"PARAMCD": "BSCRCL",
+                                       "PARAM": "Creatinine Clearance"},
+                        parameter_filter={"CREAT": "CREAT"},
+                        analysis_value='pl.col("CREAT") * 1.1',
+                        from_dataset=adlb,
+                        where='pl.col("ANL01FL") == "Y"',
+                    )
+                    .to_frame()
+                )
         """
+        from fleet.sdtm.utils import parse_expression
+
+        if not parameter_filter:
+            raise DerivationError("derive_param() requires at least one parameter_filter entry.")
+
         grps = by or ["USUBJID"]
         df = self.to_frame()
+
+        # Guard the BDS one-to-one parameter mapping: appending rows under an
+        # already-used PARAMCD would mix parameter-level metadata (PARAM,
+        # PARAMN, PARCATy) for one code — a guaranteed conformance finding.
+        new_paramcd = set_values_to.get("PARAMCD")
+        if (
+            isinstance(new_paramcd, str)
+            and "PARAMCD" in df.columns
+            and (df.get_column("PARAMCD") == new_paramcd).any()
+        ):
+            raise DerivationError(
+                f"derive_param(): PARAMCD '{new_paramcd}' already exists in the dataset — "
+                "appending would break the PARAMCD ↔ PARAM/PARAMN one-to-one mapping. "
+                "Choose a new PARAMCD, or remove the existing rows first."
+            )
+
+        source = from_dataset if from_dataset is not None else df
+        missing = [c for c in ("PARAMCD", "AVAL") if c not in source.columns]
+        if missing:
+            origin = "from_dataset" if from_dataset is not None else "the current frame"
+            raise DerivationError(
+                f"derive_param(): {origin} is missing required column(s) {missing} — "
+                "the source must be BDS-shaped (PARAMCD + AVAL)."
+            )
+        if where is not None:
+            where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
+            source = source.filter(where_expr)
 
         # Pivot: for each alias in parameter_filter, get AVAL as that alias
         pivoted_parts = []
         for alias, paramcd_val in parameter_filter.items():
-            part = df.filter(pl.col("PARAMCD") == paramcd_val).select(
+            part = source.filter(pl.col("PARAMCD") == paramcd_val).select(
                 grps + [pl.col("AVAL").alias(alias)]
             )
+            dup = part.group_by(grps).len().filter(pl.col("len") > 1)
+            if dup.height:
+                raise DerivationError(
+                    f"derive_param(): PARAMCD '{paramcd_val}' has multiple records for "
+                    f"{dup.height} {grps} group(s) (e.g. {dup.select(grps).row(0)}). "
+                    "The derived rows would multiply — deduplicate the source, extend "
+                    "by=, or narrow the records with where=."
+                )
             pivoted_parts.append(part)
 
         # Join all pivoted parts on the by keys
@@ -692,16 +768,25 @@ class AdamNamespace(SharedADaMVerbsMixin):
             joined = joined.join(part, on=grps, how="inner")
 
         # Compute the new AVAL
-        new_rows = joined.with_columns(analysis_value.alias("AVAL")).select(grps + ["AVAL"])
+        aval_expr = (
+            analysis_value
+            if isinstance(analysis_value, pl.Expr)
+            else parse_expression(str(analysis_value))
+        )
+        new_rows = joined.with_columns(aval_expr.alias("AVAL")).select(grps + ["AVAL"])
 
         # Apply set_values_to constants
         for col_name, col_val in set_values_to.items():
             new_rows = new_rows.with_columns(pl.lit(col_val).alias(col_name))
 
-        # Align schemas and concat
+        # Align schemas both ways: new set_values_to columns (e.g. DTYPE)
+        # are added to the base frame instead of being silently dropped.
         for c in df.columns:
             if c not in new_rows.columns:
                 new_rows = new_rows.with_columns(pl.lit(None).cast(df.schema[c]).alias(c))
+        for c in new_rows.columns:
+            if c not in df.columns:
+                df = df.with_columns(pl.lit(None).cast(new_rows.schema[c]).alias(c))
         new_rows = new_rows.select(df.columns)
 
         combined = pl.concat([df, new_rows], how="vertical_relaxed")

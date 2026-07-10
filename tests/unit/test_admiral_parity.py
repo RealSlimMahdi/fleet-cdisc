@@ -276,6 +276,153 @@ class TestDeriveParam:
         bmi_02 = bmi_rows.filter(pl.col("USUBJID") == "02")["AVAL"][0]
         assert bmi_02 == pytest.approx(80.0 / 1.8**2, rel=0.01)
 
+    def test_duplicate_source_records_raise_instead_of_multiplying(self):
+        """admiral parity: non-unique by-groups are an error, not silent dup rows."""
+        df = pl.from_repr("""
+┌─────────┬─────────┬───────┐
+│ USUBJID ┆ PARAMCD ┆ AVAL  │
+│ ---     ┆ ---     ┆ ---   │
+│ str     ┆ str     ┆ f64   │
+╞═════════╪═════════╪═══════╡
+│ 01      ┆ WEIGHT  ┆ 70.0  │
+│ 01      ┆ WEIGHT  ┆ 71.0  │
+│ 01      ┆ HEIGHT  ┆ 170.0 │
+└─────────┴─────────┴───────┘
+""")
+        with pytest.raises(Exception, match="multiple records"):
+            df.adam.derive_param(
+                by=["USUBJID"],
+                set_values_to={"PARAMCD": "BMI"},
+                parameter_filter={"WEIGHT": "WEIGHT", "HEIGHT": "HEIGHT"},
+                analysis_value=pl.col("WEIGHT") / (pl.col("HEIGHT") / 100) ** 2,
+            )
+
+    def test_set_values_to_adds_new_columns_like_dtype(self):
+        """A set_values_to column absent from the frame (DTYPE) must be added,
+        not silently dropped."""
+        df = pl.from_repr("""
+┌─────────┬─────────┬───────┐
+│ USUBJID ┆ PARAMCD ┆ AVAL  │
+│ ---     ┆ ---     ┆ ---   │
+│ str     ┆ str     ┆ f64   │
+╞═════════╪═════════╪═══════╡
+│ 01      ┆ WEIGHT  ┆ 70.0  │
+│ 01      ┆ HEIGHT  ┆ 170.0 │
+└─────────┴─────────┴───────┘
+""")
+        result = df.adam.derive_param(
+            by=["USUBJID"],
+            set_values_to={"PARAMCD": "BMI", "DTYPE": "DERIVED"},
+            parameter_filter={"WEIGHT": "WEIGHT", "HEIGHT": "HEIGHT"},
+            analysis_value=pl.col("WEIGHT") / (pl.col("HEIGHT") / 100) ** 2,
+        ).to_frame()
+        assert "DTYPE" in result.columns
+        assert result.filter(pl.col("PARAMCD") == "BMI")["DTYPE"].to_list() == ["DERIVED"]
+        assert result.filter(pl.col("PARAMCD") == "WEIGHT")["DTYPE"].to_list() == [None]
+
+    def test_from_dataset_pivots_another_bds_frame(self):
+        """The source parameters can come from a different dataset entirely."""
+        advs = pl.from_repr("""
+┌─────────┬─────────┬───────┐
+│ USUBJID ┆ PARAMCD ┆ AVAL  │
+│ ---     ┆ ---     ┆ ---   │
+│ str     ┆ str     ┆ f64   │
+╞═════════╪═════════╪═══════╡
+│ 01      ┆ SYSBP   ┆ 120.0 │
+└─────────┴─────────┴───────┘
+""")
+        adlb = pl.from_repr("""
+┌─────────┬─────────┬──────┬─────────┐
+│ USUBJID ┆ PARAMCD ┆ AVAL ┆ ANL01FL │
+│ ---     ┆ ---     ┆ ---  ┆ ---     │
+│ str     ┆ str     ┆ f64  ┆ str     │
+╞═════════╪═════════╪══════╪═════════╡
+│ 01      ┆ CREAT   ┆ 1.0  ┆ Y       │
+│ 01      ┆ CREAT   ┆ 9.9  ┆ N       │
+└─────────┴─────────┴──────┴─────────┘
+""")
+        result = advs.adam.derive_param(
+            by=["USUBJID"],
+            set_values_to={"PARAMCD": "CREATX"},
+            parameter_filter={"CREAT": "CREAT"},
+            analysis_value='pl.col("CREAT") * 2',
+            from_dataset=adlb,
+            where='pl.col("ANL01FL") == "Y"',  # excludes the 9.9 row (and dedups)
+        ).to_frame()
+        new = result.filter(pl.col("PARAMCD") == "CREATX")
+        assert new["AVAL"].to_list() == [2.0]
+        # The current dataset's rows are untouched by where=
+        assert result.filter(pl.col("PARAMCD") == "SYSBP").height == 1
+
+    def test_param_level_identifiers_land_on_new_rows(self):
+        """PARAMN / PARCATy / PARCATyN / DTYPE flow through set_values_to with
+        dtypes relaxed to the frame's schema."""
+        df = pl.from_repr("""
+┌─────────┬─────────┬─────────────┬────────┬─────────┬──────────┬───────┐
+│ USUBJID ┆ PARAMCD ┆ PARAM       ┆ PARAMN ┆ PARCAT1 ┆ PARCAT1N ┆ AVAL  │
+│ ---     ┆ ---     ┆ ---         ┆ ---    ┆ ---     ┆ ---      ┆ ---   │
+│ str     ┆ str     ┆ str         ┆ i64    ┆ str     ┆ i64      ┆ f64   │
+╞═════════╪═════════╪═════════════╪════════╪═════════╪══════════╪═══════╡
+│ 01      ┆ WEIGHT  ┆ Weight (kg) ┆ 1      ┆ ANTHRO  ┆ 1        ┆ 70.0  │
+│ 01      ┆ HEIGHT  ┆ Height (cm) ┆ 2      ┆ ANTHRO  ┆ 1        ┆ 170.0 │
+└─────────┴─────────┴─────────────┴────────┴─────────┴──────────┴───────┘
+""")
+        result = df.adam.derive_param(
+            by=["USUBJID"],
+            set_values_to={
+                "PARAMCD": "BMI",
+                "PARAM": "Body Mass Index (kg/m^2)",
+                "PARAMN": 3,
+                "PARCAT1": "ANTHRO",
+                "PARCAT1N": 1,
+                "DTYPE": "DERIVED",
+            },
+            parameter_filter={"WEIGHT": "WEIGHT", "HEIGHT": "HEIGHT"},
+            analysis_value=pl.col("WEIGHT") / (pl.col("HEIGHT") / 100) ** 2,
+        ).to_frame()
+        bmi = result.filter(pl.col("PARAMCD") == "BMI")
+        assert bmi.select("PARAM", "PARAMN", "PARCAT1", "PARCAT1N", "DTYPE").row(0) == (
+            "Body Mass Index (kg/m^2)",
+            3,
+            "ANTHRO",
+            1,
+            "DERIVED",
+        )
+        assert result.schema["PARAMN"] == pl.Int64  # relaxed to the frame's dtype
+
+    def test_existing_paramcd_collision_raises(self):
+        """Appending under an already-used PARAMCD would break the
+        PARAMCD ↔ PARAM one-to-one mapping — admiral parity: hard error."""
+        df = pl.from_repr("""
+┌─────────┬─────────┬─────────────┬───────┐
+│ USUBJID ┆ PARAMCD ┆ PARAM       ┆ AVAL  │
+│ ---     ┆ ---     ┆ ---         ┆ ---   │
+│ str     ┆ str     ┆ str         ┆ f64   │
+╞═════════╪═════════╪═════════════╪═══════╡
+│ 01      ┆ WEIGHT  ┆ Weight (kg) ┆ 70.0  │
+│ 01      ┆ HEIGHT  ┆ Height (cm) ┆ 170.0 │
+└─────────┴─────────┴─────────────┴───────┘
+""")
+        with pytest.raises(Exception, match="already exists"):
+            df.adam.derive_param(
+                by=["USUBJID"],
+                set_values_to={"PARAMCD": "WEIGHT", "PARAM": "Weight (LB)"},
+                parameter_filter={"HEIGHT": "HEIGHT"},
+                analysis_value=pl.col("HEIGHT"),
+            )
+
+    def test_from_dataset_missing_bds_columns_raises(self):
+        advs = pl.DataFrame({"USUBJID": ["01"], "PARAMCD": ["SYSBP"], "AVAL": [120.0]})
+        not_bds = pl.DataFrame({"USUBJID": ["01"], "CREAT": [1.0]})
+        with pytest.raises(Exception, match="BDS-shaped"):
+            advs.adam.derive_param(
+                by=["USUBJID"],
+                set_values_to={"PARAMCD": "X"},
+                parameter_filter={"CREAT": "CREAT"},
+                analysis_value=pl.col("CREAT"),
+                from_dataset=not_bds,
+            )
+
 
 # ══════════════════════════════════════════════════════════════════════
 # 3. ADSL namespace verb tests (df.adam.adsl.*)

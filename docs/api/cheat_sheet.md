@@ -63,7 +63,7 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 | [`.transform()`][fleet.adam.AdamNamespace.transform]                           | Apply an arbitrary frame-level transformation.                       | `.transform(lambda df: df.sort("USUBJID"))`                             |
 | [`.derive_summary_records()`][fleet.adam.AdamNamespace.derive_summary_records] | Aggregate by group and append summary rows.                          | `.derive_summary_records(by=["USUBJID"], ...)`                          |
 | [`.derive_locf_records()`][fleet.adam.AdamNamespace.derive_locf_records]       | LOCF forward-fill within patient groups.                             | `.derive_locf_records(by=["USUBJID","PARAMCD"])`                        |
-| [`.derive_param()`][fleet.adam.AdamNamespace.derive_param]                     | Derive a new parameter and append rows.                              | `.derive_param(by=["USUBJID"], ...)`                                    |
+| [`.derive_param()`][fleet.adam.AdamNamespace.derive_param]                     | Derive a new parameter and append rows (own frame or `from_dataset=`). | `.derive_param(by=["USUBJID"], parameter_filter={...}, from_dataset=adlb, ...)` |
 | [`.from_spec()`][fleet.adam.AdamNamespace.from_spec]                           | Build the entire pipeline from a `define.yaml` spec.                 | `df.adam.from_spec("define.yaml", dataset="ADVS")`                      |
 | [`.validate()`][fleet.core._verb_mixin.SharedVerbsMixin.validate]                             | Run CDISC Rules Engine on the resulting frame.                       | `.validate(domain="ADVS")`                                              |
 
