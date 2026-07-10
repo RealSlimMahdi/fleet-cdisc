@@ -13,7 +13,7 @@
         <link rel="canonical" href="https://realslimmahdi.github.io/fleet-cdisc/latest/concepts/advanced/">
       
       
-        <link rel="prev" href="../custom-rules/">
+        <link rel="prev" href="../exports/">
       
       
         <link rel="next" href="../interactive-explorer/">
@@ -861,6 +861,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../validation-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Validation with CORE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../custom-rules/" class="md-nav__link">
         
   
@@ -869,6 +897,34 @@
     
   
     Custom Validation Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../exports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exporting Datasets
   
 
     
@@ -1071,10 +1127,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#handing-non-cdisc-raw-sources" class="md-nav__link">
+  <a href="#handling-non-cdisc-raw-sources" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Handing Non-CDISC Raw Sources
+        Handling Non-CDISC Raw Sources
       
     </span>
   </a>
@@ -1355,6 +1411,62 @@
     
   
     Raw-to-Render (R2R)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/tdd_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trial Design (offline)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/tlg_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TLG from a Spec
   
 
     
@@ -2148,10 +2260,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#handing-non-cdisc-raw-sources" class="md-nav__link">
+  <a href="#handling-non-cdisc-raw-sources" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Handing Non-CDISC Raw Sources
+        Handling Non-CDISC Raw Sources
       
     </span>
   </a>
@@ -2374,6 +2486,26 @@
 </tr>
 </tbody>
 </table>
+<p><strong>What the function receives and returns:</strong></p>
+<ul>
+<li><strong><code>column</code></strong> — the function takes <strong>no arguments</strong> and returns a
+  <code>pl.Expr</code>. Fleet splices the expression into the lazy pipeline, so
+  nothing is materialised: it behaves exactly like an inline
+  <code>.derivation(expression=...)</code>, just versioned in its own file.</li>
+<li><strong><code>frame</code></strong> — the <code>df</code> parameter is <strong>the pipeline's current state</strong>,
+  materialised as a plain <code>pl.DataFrame</code> at the point the derivation runs
+  (every column derived by earlier verbs is present). The function returns
+  a <code>pl.DataFrame</code> — usually <code>df.with_columns(...)</code> — and Fleet wraps the
+  result back into the namespace so the chain continues.</li>
+<li><strong><code>param</code></strong> — same in/out contract as <code>frame</code> (upstream
+  <code>pl.DataFrame</code> in, <code>pl.DataFrame</code> out), but tagged for BDS parameter
+  derivation: the <code>by=</code> / <code>set_values_to=</code> metadata drives the by-group
+  reshape and the PARAMCD/PARAM stamping of the appended rows.</li>
+</ul>
+<p>You rarely need to pass <code>kind=</code> yourself — it is inferred from the
+signature: a return annotation of <code>pl.Expr</code> (or a zero-argument function)
+means <code>column</code>; <code>by=</code>/<code>set_values_to=</code> means <code>param</code>; everything else is
+<code>frame</code>.</p>
 <h3 id="kindcolumn-example"><code>kind="column"</code> example<a class="headerlink" href="#kindcolumn-example" title="Permanent link">&para;</a></h3>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># examples/cdiscpilot01/adam/derivations/AGEGR1.py</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet.core.derivation</span><span class="w"> </span><span class="kn">import</span> <span class="n">derivation</span>
@@ -2411,15 +2543,19 @@
 </span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="k">return</span> <span class="n">df</span><span class="o">.</span><span class="n">with_columns</span><span class="p">((</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;WEIGHT&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">pl</span><span class="o">.</span><span class="n">col</span><span class="p">(</span><span class="s2">&quot;HEIGHT&quot;</span><span class="p">)</span> <span class="o">/</span> <span class="mi">100</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">alias</span><span class="p">(</span><span class="s2">&quot;AVAL&quot;</span><span class="p">))</span>
 </span></code></pre></div>
 <h3 id="derivations-folder-convention">Derivations folder convention<a class="headerlink" href="#derivations-folder-convention" title="Permanent link">&para;</a></h3>
-<p>Study derivations live under:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>specs/&lt;study_id&gt;/adam/derivations/
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    __init__.py        # auto-updated by `fleet derivation add`
+<p>Study derivations live under the study's configured programs tree:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>programs/derivations/       # &lt;programs dir from study_config.yaml&gt;
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>    __init__.py
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    AGEGR1.py
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    BMI.py
 </span></code></pre></div>
-<p>Scaffold a new derivation with the CLI:</p>
+<p>Scaffold a new derivation with the CLI (config-context — run it anywhere
+inside the study workspace):</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>fleet<span class="w"> </span>derivation<span class="w"> </span>add<span class="w"> </span>AGEGR1<span class="w"> </span>--dataset<span class="w"> </span>ADSL<span class="w"> </span>--kind<span class="w"> </span>column
 </span></code></pre></div>
+<p>The convention is <strong>standard-agnostic</strong>: the same <code>@derivation</code> objects and
+<code>algorithm: callable</code> escape hatch work in SDTM pipelines and specs exactly
+as in ADaM — both dispatch through the shared core registry.</p>
 <h3 id="complex-multi-dataset-derivations-escaping-the-pipeline">Complex Multi-Dataset Derivations (Escaping the Pipeline)<a class="headerlink" href="#complex-multi-dataset-derivations-escaping-the-pipeline" title="Permanent link">&para;</a></h3>
 <p>For highly complex, advanced logic—such as derivations requiring customized multi-dataset joins, complex rolling window aggregations, or logic that simply cannot be expressed linearly in standard verbs—the recommended pattern is to "escape" the automated pipeline.</p>
 <p>Because Fleet is built securely on Polars DataFrames, you can drop out to native Polars, compute your advanced logic, merge it back, and then seamlessly resume your Fleet pipeline.</p>
@@ -2476,22 +2612,25 @@
 </span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">df</span><span class="p">:</span> <span class="n">pl</span><span class="o">.</span><span class="n">DataFrame</span><span class="p">):</span>
 </span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a>        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">df</span><span class="p">)</span>
 </span></code></pre></div>
-<h2 id="handing-non-cdisc-raw-sources">Handing Non-CDISC Raw Sources<a class="headerlink" href="#handing-non-cdisc-raw-sources" title="Permanent link">&para;</a></h2>
-<p>If you are pulling in non-standard vendor files, use Fleet verbs to rename and map columns directly inside the pipeline. The <code>.source()</code> verb (ADaM) and <code>.assign()</code> verb (SDTM) both accept a <code>from_col</code> / <code>source</code> keyword to copy a raw column under a CDISC-compliant name — no intermediate Polars <code>.rename()</code> call needed:</p>
+<h2 id="handling-non-cdisc-raw-sources">Handling Non-CDISC Raw Sources<a class="headerlink" href="#handling-non-cdisc-raw-sources" title="Permanent link">&para;</a></h2>
+<p>If you are pulling in non-standard vendor files, rename and map columns
+directly inside the pipeline — no intermediate Polars <code>.rename()</code> call
+needed. <strong><code>.assign(target, source=...)</code> is the canonical rename verb in
+both SDTM and ADaM</strong>; the ADaM <code>.source(*cols)</code> verb is the variadic
+pass-through for carrying already-named columns as-is:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">polars</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pl</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_study_context</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">raw_labs</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="s2">&quot;vendor_labs.csv&quot;</span><span class="p">)</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="c1"># Rename non-standard columns inline using Fleet verbs, then continue derivation</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="n">adlb</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>    <span class="n">raw_labs</span><span class="o">.</span><span class="n">adam</span><span class="o">.</span><span class="n">source</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="n">from_col</span><span class="o">=</span><span class="s2">&quot;Subject_ID&quot;</span><span class="p">)</span>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>    <span class="o">.</span><span class="n">source</span><span class="p">(</span><span class="s2">&quot;AVAL&quot;</span><span class="p">,</span> <span class="n">from_col</span><span class="o">=</span><span class="s2">&quot;Lab_Result&quot;</span><span class="p">)</span>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>    <span class="o">.</span><span class="n">baseline</span><span class="p">(</span><span class="s2">&quot;BASE&quot;</span><span class="p">,</span> <span class="n">aval</span><span class="o">=</span><span class="s2">&quot;AVAL&quot;</span><span class="p">,</span> <span class="n">baseline_flag</span><span class="o">=</span><span class="s2">&quot;ABLFL&quot;</span><span class="p">)</span>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="p">)</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">raw_labs</span> <span class="o">=</span> <span class="n">pl</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="s2">&quot;vendor_labs.csv&quot;</span><span class="p">)</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="c1"># Rename non-standard columns inline, then continue the derivation</span>
+</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="n">adlb</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>    <span class="n">raw_labs</span><span class="o">.</span><span class="n">adam</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;Subject_ID&quot;</span><span class="p">)</span>
+</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a>    <span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;AVAL&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;Lab_Result&quot;</span><span class="p">)</span>
+</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a>    <span class="o">.</span><span class="n">baseline</span><span class="p">(</span><span class="s2">&quot;BASE&quot;</span><span class="p">,</span> <span class="n">aval</span><span class="o">=</span><span class="s2">&quot;AVAL&quot;</span><span class="p">,</span> <span class="n">baseline_flag</span><span class="o">=</span><span class="s2">&quot;ABLFL&quot;</span><span class="p">)</span>
+</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
+</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="p">)</span>
 </span></code></pre></div>
-<p>For SDTM pipelines the equivalent verb is <code>.assign(source=...)</code>:</p>
+<p>Same verb, same spelling in SDTM:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">dm</span> <span class="o">=</span> <span class="p">(</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>    <span class="n">raw_df</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;subject_id&quot;</span><span class="p">)</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>    <span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;SUBJID&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;subject_id&quot;</span><span class="p">)</span>
@@ -2510,103 +2649,123 @@
 </span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>    <span class="n">ae_raw</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;DOMAIN&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">&quot;AE&quot;</span><span class="p">)</span>
 </span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>    <span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;patient_number&quot;</span><span class="p">)</span>
 </span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>    <span class="o">.</span><span class="n">date</span><span class="p">(</span><span class="s2">&quot;AESTDTC&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;ae_start_date&quot;</span><span class="p">)</span>
-</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>    <span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;DM&quot;</span><span class="p">,</span> <span class="n">dm</span><span class="p">)</span>  <span class="c1"># ← attach reference</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>    <span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;DM&quot;</span><span class="p">,</span> <span class="n">dm</span><span class="p">)</span>  <span class="c1"># ← attach reference (join_on=&quot;USUBJID&quot; by default)</span>
 </span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>    <span class="o">.</span><span class="n">study_day</span><span class="p">(</span><span class="s2">&quot;AESTDY&quot;</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;AESTDTC&quot;</span><span class="p">)</span>  <span class="c1"># ← consumes the pin</span>
 </span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>    <span class="o">.</span><span class="n">baseline_flag</span><span class="p">(</span><span class="s2">&quot;AEBLFL&quot;</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;AESTDTC&quot;</span><span class="p">)</span>  <span class="c1"># ← also consumes it</span>
 </span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
 </span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="p">)</span>
 </span></code></pre></div>
+<p>You don't see <code>RFSTDTC</code> in the call because <code>.study_day()</code> fills it in from
+its <strong>SDTM defaults</strong>: <code>ref_pin="DM"</code> and <code>ref_col="RFSTDTC"</code> — i.e. "look
+up RFSTDTC in the pinned DM, joined on the pin's key". Spelled out in full,
+the call above is:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">ae_ns</span><span class="o">.</span><span class="n">study_day</span><span class="p">(</span><span class="s2">&quot;AESTDY&quot;</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;AESTDTC&quot;</span><span class="p">,</span> <span class="n">ref_pin</span><span class="o">=</span><span class="s2">&quot;DM&quot;</span><span class="p">,</span> <span class="n">ref_col</span><span class="o">=</span><span class="s2">&quot;RFSTDTC&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<p>On ADaM namespaces the same defaults become <code>ref_pin="ADSL"</code> /
+<code>ref_col="TRTSDT"</code>. Resolution order: an explicit <code>ref_df=</code>/<code>dm=</code>/<code>adsl=</code>
+frame wins, then the pinned domain, then a <code>ref_col</code> already present in the
+frame — and a <code>LookupError</code> tells you what to pin when none of those hold.</p>
 <p>The pinned DataFrame is <strong>not</strong> merged into the frame — it stays beside it. Verbs borrow what they need, compute, and drop temp columns. The output frame stays clean.</p>
 <h3 id="multiple-pins">Multiple pins<a class="headerlink" href="#multiple-pins" title="Permanent link">&para;</a></h3>
 <p>You can pin as many domains as you need:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">ae</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>    <span class="n">ae_raw</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;DM&quot;</span><span class="p">,</span> <span class="n">dm_df</span><span class="p">)</span>  <span class="c1"># join on USUBJID (default)</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>    <span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;TV&quot;</span><span class="p">,</span> <span class="n">tv_df</span><span class="p">,</span> <span class="n">join_on</span><span class="o">=</span><span class="s2">&quot;VISITNUM&quot;</span><span class="p">)</span>  <span class="c1"># different join key</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>    <span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;EX&quot;</span><span class="p">,</span> <span class="n">ex_df</span><span class="p">,</span> <span class="n">join_on</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="s2">&quot;EXTRT&quot;</span><span class="p">])</span>  <span class="c1"># compound key</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>    <span class="o">.</span><span class="n">study_day</span><span class="p">(</span><span class="s2">&quot;AESTDY&quot;</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;AESTDTC&quot;</span><span class="p">)</span>  <span class="c1"># uses DM pin</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">ae</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>    <span class="n">ae_raw</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;DM&quot;</span><span class="p">,</span> <span class="n">dm_df</span><span class="p">)</span>  <span class="c1"># join on USUBJID (default)</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>    <span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;TV&quot;</span><span class="p">,</span> <span class="n">tv_df</span><span class="p">,</span> <span class="n">join_on</span><span class="o">=</span><span class="s2">&quot;VISITNUM&quot;</span><span class="p">)</span>  <span class="c1"># different join key</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>    <span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;EX&quot;</span><span class="p">,</span> <span class="n">ex_df</span><span class="p">,</span> <span class="n">join_on</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="s2">&quot;EXTRT&quot;</span><span class="p">])</span>  <span class="c1"># compound key</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>    <span class="o">.</span><span class="n">study_day</span><span class="p">(</span><span class="s2">&quot;AESTDY&quot;</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;AESTDTC&quot;</span><span class="p">)</span>  <span class="c1"># ← reads DM.RFSTDTC via the DM pin</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="p">)</span>
 </span></code></pre></div>
+<p>Each verb names the pin it consumes (or falls back to its default
+<code>ref_pin</code>), and the join uses <strong>that pin's</strong> stored <code>join_on</code> — so the TV
+and EX pins above sit untouched until a visit- or exposure-consuming verb
+asks for them.</p>
 <h3 id="inspecting-pins">Inspecting pins<a class="headerlink" href="#inspecting-pins" title="Permanent link">&para;</a></h3>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">ae_ns</span> <span class="o">=</span> <span class="n">ae_raw</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;DM&quot;</span><span class="p">,</span> <span class="n">dm</span><span class="p">)</span><span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;TV&quot;</span><span class="p">,</span> <span class="n">tv</span><span class="p">,</span> <span class="n">join_on</span><span class="o">=</span><span class="s2">&quot;VISITNUM&quot;</span><span class="p">)</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">ae_ns</span><span class="o">.</span><span class="n">pins</span><span class="p">()</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="c1"># {&#39;DM&#39;: {&#39;df&#39;: ..., &#39;join_on&#39;: [&#39;USUBJID&#39;]},</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="c1">#  &#39;TV&#39;: {&#39;df&#39;: ..., &#39;join_on&#39;: [&#39;VISITNUM&#39;]}}</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">ae_ns</span> <span class="o">=</span> <span class="n">ae_raw</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;DM&quot;</span><span class="p">,</span> <span class="n">dm</span><span class="p">)</span><span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;TV&quot;</span><span class="p">,</span> <span class="n">tv</span><span class="p">,</span> <span class="n">join_on</span><span class="o">=</span><span class="s2">&quot;VISITNUM&quot;</span><span class="p">)</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">ae_ns</span><span class="o">.</span><span class="n">pins</span><span class="p">()</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="c1"># {&#39;DM&#39;: {&#39;df&#39;: ..., &#39;join_on&#39;: [&#39;USUBJID&#39;]},</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1">#  &#39;TV&#39;: {&#39;df&#39;: ..., &#39;join_on&#39;: [&#39;VISITNUM&#39;]}}</span>
 </span></code></pre></div>
 <h3 id="adam-join_adsl-and-study_day">ADaM: <code>.join_adsl()</code> and <code>.study_day()</code><a class="headerlink" href="#adam-join_adsl-and-study_day" title="Permanent link">&para;</a></h3>
 <p>For ADaM datasets, pin ADSL and use <code>.join_adsl()</code> to carry forward columns, and <code>.study_day()</code> with the ADaM-standard default (<code>TRTSDT</code>):</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">adae</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>    <span class="n">ae_df</span><span class="o">.</span><span class="n">adam</span><span class="o">.</span><span class="n">occds</span><span class="p">(</span><span class="s2">&quot;ADAE&quot;</span><span class="p">)</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>    <span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;ADSL&quot;</span><span class="p">,</span> <span class="n">adsl</span><span class="p">)</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>    <span class="o">.</span><span class="n">source</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">)</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>    <span class="o">.</span><span class="n">join_adsl</span><span class="p">(</span><span class="s2">&quot;TRTSDT&quot;</span><span class="p">,</span> <span class="s2">&quot;TRTEDT&quot;</span><span class="p">,</span> <span class="s2">&quot;SAFFL&quot;</span><span class="p">)</span>  <span class="c1"># carry forward from ADSL</span>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>    <span class="o">.</span><span class="n">study_day</span><span class="p">(</span><span class="s2">&quot;ASTDY&quot;</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;AESTDTC&quot;</span><span class="p">,</span> <span class="n">ref_col</span><span class="o">=</span><span class="s2">&quot;TRTSDT&quot;</span><span class="p">)</span>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="n">adae</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>    <span class="n">ae_df</span><span class="o">.</span><span class="n">adam</span><span class="o">.</span><span class="n">occds</span><span class="p">(</span><span class="s2">&quot;ADAE&quot;</span><span class="p">)</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>    <span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;ADSL&quot;</span><span class="p">,</span> <span class="n">adsl</span><span class="p">)</span>  <span class="c1"># join_on=&quot;USUBJID&quot; unless overridden</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>    <span class="o">.</span><span class="n">source</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">)</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>    <span class="o">.</span><span class="n">join_adsl</span><span class="p">(</span><span class="s2">&quot;TRTSDT&quot;</span><span class="p">,</span> <span class="s2">&quot;TRTEDT&quot;</span><span class="p">,</span> <span class="s2">&quot;SAFFL&quot;</span><span class="p">)</span>  <span class="c1"># left-join on the ADSL pin&#39;s key (USUBJID)</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>    <span class="o">.</span><span class="n">study_day</span><span class="p">(</span><span class="s2">&quot;ASTDY&quot;</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;AESTDTC&quot;</span><span class="p">,</span> <span class="n">ref_col</span><span class="o">=</span><span class="s2">&quot;TRTSDT&quot;</span><span class="p">)</span>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="p">)</span>
 </span></code></pre></div>
+<p><code>.join_adsl()</code> has no <code>by=</code> parameter on purpose: the merge key is whatever
+the ADSL pin was registered with — <code>USUBJID</code> by default, or
+<code>.pin("ADSL", adsl, join_on=["STUDYID", "USUBJID"])</code> for a compound key —
+so the join key is declared once, next to the data it belongs to. The
+pin-free alternative <code>.merge_adsl(adsl, by=["USUBJID"], keep=[...])</code> takes
+an explicit frame and defaults <code>by=</code> to <code>["USUBJID"]</code>.</p>
 <h3 id="fk-validation">FK validation<a class="headerlink" href="#fk-validation" title="Permanent link">&para;</a></h3>
 <p>When a pin exists, Fleet can automatically check foreign-key integrity. By default it emits warnings for orphan values; use <code>.fk_policy()</code> to make it strict or silent:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="n">ae</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>    <span class="n">ae_raw</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;DM&quot;</span><span class="p">,</span> <span class="n">dm</span><span class="p">)</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>    <span class="o">.</span><span class="n">fk_policy</span><span class="p">(</span><span class="s2">&quot;error&quot;</span><span class="p">)</span>  <span class="c1"># raise on FK violations</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>    <span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;patient_number&quot;</span><span class="p">)</span>  <span class="c1"># FK auto-checked vs DM</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="n">ae</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>    <span class="n">ae_raw</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;DM&quot;</span><span class="p">,</span> <span class="n">dm</span><span class="p">)</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>    <span class="o">.</span><span class="n">fk_policy</span><span class="p">(</span><span class="s2">&quot;error&quot;</span><span class="p">)</span>  <span class="c1"># raise on FK violations</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>    <span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;patient_number&quot;</span><span class="p">)</span>  <span class="c1"># FK auto-checked vs DM</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="lineage-tracing">Lineage tracing<a class="headerlink" href="#lineage-tracing" title="Permanent link">&para;</a></h3>
 <p>Every derivation — including cross-domain pin access — is recorded automatically. Print the origin of every derived variable with the <code>.trail()</code> verb (detailed in the Observability section below), without breaking the chain:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="n">ae</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>    <span class="n">ae_raw</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;patient_number&quot;</span><span class="p">)</span>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>    <span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;AESTDTC&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;ae_start_date&quot;</span><span class="p">)</span>
-</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>    <span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;DM&quot;</span><span class="p">,</span> <span class="n">dm</span><span class="p">)</span>
-</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>    <span class="o">.</span><span class="n">study_day</span><span class="p">(</span><span class="s2">&quot;AESTDY&quot;</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;AESTDTC&quot;</span><span class="p">)</span>
-</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>    <span class="o">.</span><span class="n">trail</span><span class="p">()</span>  <span class="c1"># prints the origin table; pipeline continues</span>
-</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
-</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="n">ae</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>    <span class="n">ae_raw</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;patient_number&quot;</span><span class="p">)</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>    <span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;AESTDTC&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;ae_start_date&quot;</span><span class="p">)</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>    <span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;DM&quot;</span><span class="p">,</span> <span class="n">dm</span><span class="p">)</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>    <span class="o">.</span><span class="n">study_day</span><span class="p">(</span><span class="s2">&quot;AESTDY&quot;</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;AESTDTC&quot;</span><span class="p">)</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>    <span class="o">.</span><span class="n">trail</span><span class="p">()</span>  <span class="c1"># prints the origin table; pipeline continues</span>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="p">)</span>
 </span></code></pre></div>
 <p>The cross-domain pin is attributed in the <code>Origin</code> column as <code>DM.RFSTDTC</code>.</p>
 <h2 id="pipeline-debugging-observability">Pipeline Debugging &amp; Observability<a class="headerlink" href="#pipeline-debugging-observability" title="Permanent link">&para;</a></h2>
 <p>Fleet pipelines are lazy — all derivations accumulate until <code>.to_frame()</code> collects the result. This can make it hard to pinpoint which step introduced bad data or types — or to see where each variable came from. Three chainable verbs help:</p>
 <h3 id="inspect-hard-checkpoint"><code>.inspect()</code> — Hard Checkpoint<a class="headerlink" href="#inspect-hard-checkpoint" title="Permanent link">&para;</a></h3>
 <p>Materialises the pipeline at that point, prints schema, shape, and first rows, then returns a fresh namespace wrapping the collected frame. The pipeline resumes from this checkpoint.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="n">adsl</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>    <span class="n">dm</span><span class="o">.</span><span class="n">adam</span><span class="o">.</span><span class="n">adsl</span><span class="o">.</span><span class="n">source</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">)</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>    <span class="o">.</span><span class="n">first_date</span><span class="p">(</span><span class="s2">&quot;TRTSDT&quot;</span><span class="p">,</span> <span class="n">from_dataset</span><span class="o">=</span><span class="n">ex</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;EXSTDTC&quot;</span><span class="p">)</span>
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>    <span class="o">.</span><span class="n">inspect</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;After TRTSDT&quot;</span><span class="p">)</span>  <span class="c1"># prints and checkpoints</span>
-</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>    <span class="o">.</span><span class="n">duration</span><span class="p">(</span><span class="s2">&quot;TRTDURD&quot;</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="s2">&quot;TRTSDT&quot;</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;TRTEDT&quot;</span><span class="p">)</span>
-</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
-</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="n">adsl</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>    <span class="n">dm</span><span class="o">.</span><span class="n">adam</span><span class="o">.</span><span class="n">adsl</span><span class="o">.</span><span class="n">source</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">)</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>    <span class="o">.</span><span class="n">first_date</span><span class="p">(</span><span class="s2">&quot;TRTSDT&quot;</span><span class="p">,</span> <span class="n">from_dataset</span><span class="o">=</span><span class="n">ex</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;EXSTDTC&quot;</span><span class="p">)</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>    <span class="o">.</span><span class="n">inspect</span><span class="p">(</span><span class="n">prefix</span><span class="o">=</span><span class="s2">&quot;After TRTSDT&quot;</span><span class="p">)</span>  <span class="c1"># prints and checkpoints</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>    <span class="o">.</span><span class="n">duration</span><span class="p">(</span><span class="s2">&quot;TRTDURD&quot;</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="s2">&quot;TRTSDT&quot;</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;TRTEDT&quot;</span><span class="p">)</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="explain-query-plan"><code>.explain()</code> — Query Plan<a class="headerlink" href="#explain-query-plan" title="Permanent link">&para;</a></h3>
 <p>Prints the Polars logical plan without materialising. Useful for understanding how Polars optimises the accumulated derivation pipeline.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="n">advs</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>    <span class="n">vs_raw</span><span class="o">.</span><span class="n">adam</span><span class="o">.</span><span class="n">source</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">)</span>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>    <span class="o">.</span><span class="n">derivation</span><span class="p">(</span><span class="s2">&quot;AVAL&quot;</span><span class="p">,</span> <span class="n">expression</span><span class="o">=</span><span class="s2">&quot;VSSTRESN&quot;</span><span class="p">)</span>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>    <span class="o">.</span><span class="n">explain</span><span class="p">()</span>  <span class="c1"># shows optimised plan</span>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="n">advs</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>    <span class="n">vs_raw</span><span class="o">.</span><span class="n">adam</span><span class="o">.</span><span class="n">source</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">)</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>    <span class="o">.</span><span class="n">derivation</span><span class="p">(</span><span class="s2">&quot;AVAL&quot;</span><span class="p">,</span> <span class="n">expression</span><span class="o">=</span><span class="s2">&quot;VSSTRESN&quot;</span><span class="p">)</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>    <span class="o">.</span><span class="n">explain</span><span class="p">()</span>  <span class="c1"># shows optimised plan</span>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="trail-variable-origin"><code>.trail()</code> — Variable Origin<a class="headerlink" href="#trail-variable-origin" title="Permanent link">&para;</a></h3>
 <p>Prints a table of every <em>derived</em> variable: the verb that produced it and the source columns it consumed, including cross-domain pin sources shown as <code>DOMAIN.COLUMN</code>. Nothing is materialised — the trail is metadata captured automatically on every verb — so it can sit anywhere in the chain, though it is most complete just before <code>.to_frame()</code>.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="n">ae</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>    <span class="n">ae_raw</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;DOMAIN&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">&quot;AE&quot;</span><span class="p">)</span>
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>    <span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;patient_number&quot;</span><span class="p">)</span>
-</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>    <span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;AESTDTC&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;ae_start_date&quot;</span><span class="p">)</span>
-</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>    <span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;DM&quot;</span><span class="p">,</span> <span class="n">dm</span><span class="p">)</span>
-</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>    <span class="o">.</span><span class="n">study_day</span><span class="p">(</span><span class="s2">&quot;AESTDY&quot;</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;AESTDTC&quot;</span><span class="p">)</span>
-</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>    <span class="o">.</span><span class="n">trail</span><span class="p">()</span>  <span class="c1"># prints the table below, pipeline continues</span>
-</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
-</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="n">ae</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>    <span class="n">ae_raw</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;DOMAIN&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">&quot;AE&quot;</span><span class="p">)</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>    <span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;USUBJID&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;patient_number&quot;</span><span class="p">)</span>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>    <span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;AESTDTC&quot;</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="s2">&quot;ae_start_date&quot;</span><span class="p">)</span>
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>    <span class="o">.</span><span class="n">pin</span><span class="p">(</span><span class="s2">&quot;DM&quot;</span><span class="p">,</span> <span class="n">dm</span><span class="p">)</span>
+</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>    <span class="o">.</span><span class="n">study_day</span><span class="p">(</span><span class="s2">&quot;AESTDY&quot;</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;AESTDTC&quot;</span><span class="p">)</span>
+</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>    <span class="o">.</span><span class="n">trail</span><span class="p">()</span>  <span class="c1"># prints the table below, pipeline continues</span>
+</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
+</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a><span class="p">)</span>
 </span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>Variable trail (4 derivation(s)):
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>┌───┬──────────┬────────────────┬─────────────────────┬────────┐
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>│ # ┆ Variable ┆ Verb           ┆ Origin              ┆ Domain │
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>╞═══╪══════════╪════════════════╪═════════════════════╪════════╡
-</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>│ 1 ┆ DOMAIN   ┆ assign         ┆ (literal)           ┆ —      │
-</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>│ 2 ┆ USUBJID  ┆ assign         ┆ patient_number      ┆ AE     │
-</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>│ 3 ┆ AESTDTC  ┆ assign         ┆ ae_start_date       ┆ AE     │
-</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>│ 4 ┆ AESTDY   ┆ study_day      ┆ AESTDTC, DM.RFSTDTC ┆ AE     │
-</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>└───┴──────────┴────────────────┴─────────────────────┴────────┘
+<div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>Variable trail (4 derivation(s)):
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>┌───┬──────────┬────────────────┬─────────────────────┬────────┐
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>│ # ┆ Variable ┆ Verb           ┆ Origin              ┆ Domain │
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>╞═══╪══════════╪════════════════╪═════════════════════╪════════╡
+</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>│ 1 ┆ DOMAIN   ┆ assign         ┆ (literal)           ┆ —      │
+</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a>│ 2 ┆ USUBJID  ┆ assign         ┆ patient_number      ┆ AE     │
+</span><span id="__span-23-7"><a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a>│ 3 ┆ AESTDTC  ┆ assign         ┆ ae_start_date       ┆ AE     │
+</span><span id="__span-23-8"><a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a>│ 4 ┆ AESTDY   ┆ study_day      ┆ AESTDTC, DM.RFSTDTC ┆ AE     │
+</span><span id="__span-23-9"><a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a>└───┴──────────┴────────────────┴─────────────────────┴────────┘
 </span></code></pre></div>
 <p>Variables with no source column (e.g. hardcoded constants) are marked <code>(literal)</code>; a variable derived more than once appears once per derivation, in pipeline order. Passthrough columns that no verb touched are not listed.</p>
 <p>All three verbs are available on <code>df.sdtm</code>, <code>df.adam</code>, and all ADaM sub-namespaces.</p>
@@ -2632,7 +2791,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 8, 2026 19:01:27 UTC">July 8, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 10, 2026 15:35:40 UTC">July 10, 2026</span>
   </span>
 
     

@@ -85,6 +85,10 @@
          <lastmod>2026-07-10</lastmod>
     </url>
     <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/concepts/exports/</loc>
+         <lastmod>2026-07-10</lastmod>
+    </url>
+    <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/concepts/interactive-explorer/</loc>
          <lastmod>2026-07-10</lastmod>
     </url>
@@ -101,6 +105,10 @@
          <lastmod>2026-07-10</lastmod>
     </url>
     <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/concepts/validation-core/</loc>
+         <lastmod>2026-07-10</lastmod>
+    </url>
+    <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/examples/01_code_driven_pipeline/</loc>
          <lastmod>2026-07-10</lastmod>
     </url>
@@ -114,6 +122,14 @@
     </url>
     <url>
          <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/examples/r2r_strategy/</loc>
+         <lastmod>2026-07-10</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/examples/tdd_pipeline/</loc>
+         <lastmod>2026-07-10</lastmod>
+    </url>
+    <url>
+         <loc>https://realslimmahdi.github.io/fleet-cdisc/latest/examples/tlg_pipeline/</loc>
          <lastmod>2026-07-10</lastmod>
     </url>
     <url>

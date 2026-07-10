@@ -935,10 +935,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#fleet-init-ct_1" class="md-nav__link">
+  <a href="#fleet-add-acrf" class="md-nav__link">
     <span class="md-ellipsis">
       
-        fleet init-ct
+        fleet add-acrf
       
     </span>
   </a>
@@ -1306,6 +1306,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../concepts/validation-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Validation with CORE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../concepts/custom-rules/" class="md-nav__link">
         
   
@@ -1314,6 +1342,34 @@
     
   
     Custom Validation Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/exports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Exporting Datasets
   
 
     
@@ -1487,6 +1543,62 @@
     
   
     Raw-to-Render (R2R)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/tdd_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trial Design (offline)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../examples/tlg_pipeline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TLG from a Spec
   
 
     
@@ -2429,10 +2541,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#fleet-init-ct_1" class="md-nav__link">
+  <a href="#fleet-add-acrf" class="md-nav__link">
     <span class="md-ellipsis">
       
-        fleet init-ct
+        fleet add-acrf
       
     </span>
   </a>
@@ -2643,8 +2755,8 @@ set it in a <code>.env</code> file at your project root or as an environment var
 <td>Generate Define-XML 2.1 from a define.yaml specification.</td>
 </tr>
 <tr>
-<td><a href="#fleet-init-ct"><code>fleet init-ct</code></a></td>
-<td>[deprecated] Bootstrap a codelists.py directly from the SDTM IG. Prefer the pipeline: fleet init cfg → init define → init ct.</td>
+<td><a href="#fleet-add-acrf"><code>fleet add-acrf</code></a></td>
+<td>Declare the annotated CRF document (study.documents block) in define.yaml.</td>
 </tr>
 <tr>
 <td><a href="#fleet-add-ct"><code>fleet add-ct</code></a></td>
@@ -3424,7 +3536,7 @@ set it in a <code>.env</code> file at your project root or as an environment var
 </tbody>
 </table>
 <hr />
-<h2 id="fleet-init-ct_1"><code>fleet init-ct</code><a class="headerlink" href="#fleet-init-ct_1" title="Permanent link">&para;</a></h2>
+<h2 id="fleet-add-acrf"><code>fleet add-acrf</code><a class="headerlink" href="#fleet-add-acrf" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
@@ -3435,29 +3547,29 @@ set it in a <code>.env</code> file at your project root or as an environment var
 </thead>
 <tbody>
 <tr>
-<td><code>--domains</code></td>
-<td><em>(required)</em></td>
-<td>Comma-separated SDTM domain abbreviations (e.g. DM,AE,VS,EX).</td>
+<td><code>--href</code></td>
+<td><code>blankcrf.pdf</code></td>
+<td>aCRF file path in the submission package (default: blankcrf.pdf).</td>
 </tr>
 <tr>
-<td><code>--ig</code></td>
-<td><code>3-4</code></td>
-<td>SDTM IG version (default: 3-4).</td>
-</tr>
-<tr>
-<td><code>--package</code></td>
-<td><code>sdtmct-2023-12-15</code></td>
-<td>CT package version (default: sdtmct-2023-12-15).</td>
-</tr>
-<tr>
-<td><code>--output</code> / <code>-o</code></td>
-<td><code>codelists.py</code></td>
-<td>Output file path (default: codelists.py).</td>
-</tr>
-<tr>
-<td><code>--no-docs</code></td>
+<td><code>--title</code></td>
 <td><em>(none)</em></td>
-<td>Omit definitions and preferred terms from generated code.</td>
+<td>Display title (default: "Annotated Case Report Form").</td>
+</tr>
+<tr>
+<td><code>--page-map</code></td>
+<td><em>(none)</em></td>
+<td>External DOMAIN.VARIABLE → pages YAML file, relative to define.yaml.</td>
+</tr>
+<tr>
+<td><code>--standard</code></td>
+<td><code>sdtm</code></td>
+<td>Which define.yaml to update (default: sdtm). Choices: <code>sdtm</code>, <code>adam</code>, <code>both</code>.</td>
+</tr>
+<tr>
+<td><code>--config</code> / <code>-c</code></td>
+<td><em>(none)</em></td>
+<td>Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style).</td>
 </tr>
 </tbody>
 </table>
@@ -3703,7 +3815,7 @@ set it in a <code>.env</code> file at your project root or as an environment var
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 10, 2026 12:25:44 UTC">July 10, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 10, 2026 15:35:40 UTC">July 10, 2026</span>
   </span>
 
     
