@@ -143,6 +143,8 @@ subdirectory of any company's folder structure. The YAML mirrors the
 ```bash
 uv run fleet tdd audit                       # conformance pre-check
 uv run fleet tdd build --format xpt          # audit + write to <sdtm_data>/
+uv run fleet tdd ctgov NCT04280705           # print TS parameters from ClinicalTrials.gov
+uv run fleet tdd ctgov NCT04280705 --write   # ...or merge them into trial_design.yaml
 uv run fleet tdd build --design specs/td.yaml --out /tmp/out   # explicit overrides
 ```
 
@@ -315,6 +317,16 @@ parameters (REGID, TITLE, TPHASE, STYPE, INTMODEL, RANDOM, TBLIND, NARMS,
 PLANSUB, AGEMIN/AGEMAX, SEXPOP, HLTSUBJI, SSTDTC/SENDTC, SPONSOR, OUTMSPRI,
 FCNTRY) from the ClinicalTrials.gov v2 API. It is a starting point —
 dictionary-bound parameters are deliberately not guessed.
+
+The same flow from the CLI — print the `parameters:` YAML block, or merge
+it directly into the study's `trial_design.yaml` (new TSPARMCD/TSSEQ rows
+only, existing entries untouched), then rebuild:
+
+```bash
+uv run fleet tdd ctgov NCT04280705           # print the parameters: YAML
+uv run fleet tdd ctgov NCT04280705 --write   # merge into trial_design.yaml
+uv run fleet tdd build                       # → ts.parquet in <sdtm_data>/
+```
 
 ## Epoch values
 

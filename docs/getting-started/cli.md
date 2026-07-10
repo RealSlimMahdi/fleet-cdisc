@@ -173,6 +173,18 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | `--force` | _(none)_ | Write datasets even when the conformance audit reports errors. |
 | `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 
+### `fleet tdd ctgov`
+
+| Argument | Description |
+| -------- | ----------- |
+| `nct_id` | ClinicalTrials.gov identifier (e.g. NCT04280705). |
+
+| Option | Default | Description |
+| ------ | ------- | ----------- |
+| `--write` | _(none)_ | Merge the parameters into the trial design spec (new TSPARMCD/TSSEQ rows only) instead of printing YAML to stdout. |
+| `--design` | _(none)_ | Trial design spec to merge into with --write. Default: <metadata_sdtm>/trial_design.yaml from the discovered study_config.yaml. |
+| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
+
 ### `fleet tdd audit`
 
 | Option | Default | Description |

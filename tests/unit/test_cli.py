@@ -642,3 +642,59 @@ def test_tlg_run_defaults_from_config(
     assert code == 0
     assert (study / "outputs" / "aet01.html").is_file()
     assert not list(nested.iterdir())  # nothing written to the cwd
+
+
+def test_tdd_ctgov_write_merges_into_design(
+    study: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """`fleet tdd ctgov --write`: new (TSPARMCD, TSSEQ) rows merge into the
+    config-resolved trial_design.yaml; existing rows are untouched."""
+    import yaml
+
+    from fleet.sdtm.tdd import TrialParameter, TrialParameters
+
+    (study / "metadata" / "sdtm" / "trial_design.yaml").write_text(_TRIAL_DESIGN, encoding="utf-8")
+    seeded = TrialParameters(
+        parameters=[
+            TrialParameter(tsparmcd="TITLE", tsparm="Trial Title", tsval="From Registry"),
+            TrialParameter(tsparmcd="REGID", tsparm="Registry Identifier", tsval="NCT00000001"),
+        ]
+    )
+    monkeypatch.setattr(
+        TrialParameters, "from_ctgov", classmethod(lambda cls, nct_id, **kw: seeded)
+    )
+
+    nested = study / "programs" / "tdd"
+    nested.mkdir(parents=True)
+    monkeypatch.chdir(nested)
+
+    assert _run(["tdd", "ctgov", "NCT00000001", "--write"]) == 0
+    assert "1 parameter(s)" in capsys.readouterr().out  # REGID added, TITLE kept
+
+    data = yaml.safe_load(
+        (study / "metadata" / "sdtm" / "trial_design.yaml").read_text(encoding="utf-8")
+    )
+    params = data["trial_design"]["parameters"]
+    by_code = {p["tsparmcd"]: p["tsval"] for p in params}
+    assert by_code["REGID"] == "NCT00000001"
+    assert by_code["TITLE"] == "Demo"  # pre-existing row wins over registry
+
+
+def test_tdd_ctgov_prints_yaml(
+    study: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    import yaml
+
+    from fleet.sdtm.tdd import TrialParameter, TrialParameters
+
+    seeded = TrialParameters(
+        parameters=[TrialParameter(tsparmcd="REGID", tsparm="Registry Identifier", tsval="NCT1")]
+    )
+    monkeypatch.setattr(
+        TrialParameters, "from_ctgov", classmethod(lambda cls, nct_id, **kw: seeded)
+    )
+    monkeypatch.chdir(study)
+
+    assert _run(["tdd", "ctgov", "NCT1"]) == 0
+    printed = yaml.safe_load(capsys.readouterr().out)
+    assert printed["parameters"][0]["tsparmcd"] == "REGID"

@@ -845,6 +845,13 @@ FCNTRY, SSTDTC, …) and extend by hand:
 ts_seed = TrialParameters.from_ctgov("NCT00048217")  # network call
 ```
 
+Or from the CLI — print the YAML, or merge it into `trial_design.yaml`:
+
+```bash
+uv run fleet tdd ctgov NCT00048217           # print the parameters: block
+uv run fleet tdd ctgov NCT00048217 --write   # merge into trial_design.yaml
+```
+
 ### 10.8 TI — Trial Inclusion/Exclusion
 
 ```python
@@ -950,6 +957,7 @@ trial_design:
 ```bash
 uv run fleet tdd audit                       # conformance pre-check
 uv run fleet tdd build --format xpt          # audit + write to <sdtm_data>/
+uv run fleet tdd ctgov NCT04280705 --write   # seed TS parameters from ClinicalTrials.gov
 uv run fleet tdd build --design specs/td.yaml --out /tmp/out   # explicit overrides
 ```
 

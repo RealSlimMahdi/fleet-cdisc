@@ -1578,6 +1578,54 @@ def _resolve_design_path(args: argparse.Namespace) -> Path:
     return _load_ctx(args.config).metadata_sdtm_dir / "trial_design.yaml"
 
 
+def _run_tdd_ctgov(args: argparse.Namespace) -> None:
+    import yaml
+
+    from fleet.sdtm.tdd import TrialParameters
+
+    try:
+        ts = TrialParameters.from_ctgov(args.nct_id)
+    except Exception as exc:
+        _fail(f"could not fetch {args.nct_id} from ClinicalTrials.gov: {exc}")
+    params = [p.model_dump(exclude_defaults=True) for p in ts.parameters]
+
+    if not args.write:
+        print(
+            yaml.dump(
+                {"parameters": params},
+                default_flow_style=False,
+                sort_keys=False,
+                allow_unicode=True,
+            )
+        )
+        print(
+            f"# {len(params)} parameter(s) from {args.nct_id} — paste into "
+            "trial_design.yaml, or re-run with --write to merge automatically.",
+            file=sys.stderr,
+        )
+        return
+
+    design_path = _resolve_design_path(args)
+    if not design_path.is_file():
+        _fail(
+            f"trial design spec not found: {design_path}. "
+            "Create it first, or run without --write to print the YAML."
+        )
+    data = yaml.safe_load(design_path.read_text(encoding="utf-8"))
+    root = data.get("trial_design", data)
+    existing = {(p.get("tsparmcd"), p.get("tsseq", 1)) for p in root.get("parameters") or []}
+    added = [p for p in params if (p["tsparmcd"], p.get("tsseq", 1)) not in existing]
+    root.setdefault("parameters", []).extend(added)
+    design_path.write_text(
+        yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+    print(
+        f"{len(added)} parameter(s) from {args.nct_id} merged into {design_path} "
+        f"({len(params) - len(added)} already present)."
+    )
+
+
 def _load_design(design_path: Path):
     from fleet.sdtm.design import StudyDesign
 
@@ -2333,6 +2381,34 @@ def _add_tdd_parsers(sub: argparse._SubParsersAction) -> None:
     )
     _add_config_flag(tdd_build)
     tdd_build.set_defaults(func=_run_tdd_build)
+
+    # -- tdd ctgov ------------------------------------------------------ #
+    tdd_ctgov = tdd_sub.add_parser(
+        "ctgov",
+        help="Seed TS parameters from a ClinicalTrials.gov registration.",
+    )
+    tdd_ctgov.add_argument(
+        "nct_id",
+        help="ClinicalTrials.gov identifier (e.g. NCT04280705).",
+    )
+    tdd_ctgov.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Merge the parameters into the trial design spec (new TSPARMCD/TSSEQ "
+            "rows only) instead of printing YAML to stdout."
+        ),
+    )
+    tdd_ctgov.add_argument(
+        "--design",
+        default=None,
+        help=(
+            "Trial design spec to merge into with --write. Default: "
+            "<metadata_sdtm>/trial_design.yaml from the discovered study_config.yaml."
+        ),
+    )
+    _add_config_flag(tdd_ctgov)
+    tdd_ctgov.set_defaults(func=_run_tdd_ctgov)
 
     # -- tdd audit ------------------------------------------------------ #
     tdd_audit = tdd_sub.add_parser(
