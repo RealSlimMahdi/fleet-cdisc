@@ -116,7 +116,7 @@ assert result["ANL01FL"].to_list() == [None, "Y", None, "Y", None, "Y"]
 
 ### Pillar 3 — Official CDISC Rules Engine (CORE)
 
-Fleet integrates the **official CDISC Rules Engine (CORE)**[^5] — the open-source validation binary published by CDISC and used by FDA as the reference conformance checker for SDTM and ADaM submissions. Fleet manages the engine lifecycle through its own CLI and wraps it via a Python API.
+Fleet integrates the **official CDISC Rules Engine (CORE)**[^5] — the open-source validation binary published by CDISC and used by FDA as the reference conformance checker for SDTM and SEND submissions. (ADaM standard/version selection is supported by the engine, but CDISC has not yet published an executable ADaMIG rule set — ADaM validation today runs custom rules; see [Validation with CORE](concepts/validation-core.md).) Fleet manages the engine lifecycle through its own CLI and wraps it via a Python API.
 
 #### Installation and health check
 

@@ -776,6 +776,61 @@ class TestVisitMap:
         # Day 15 should map to Visit 2 (VISITDY=14, diff=1)
         assert result["VISITNUM"][1] == 2
 
+    def test_equidistant_tie_resolves_to_earlier_visitnum(self, tv_rows):
+        # tv_rows: VISITDY 1 and 14 → day 8 is equidistant (diff 7 / 7 with
+        # the no-day-zero shift: 2014-01-08 is day 8).
+        raw = pl.DataFrame({"SVSTDTC": ["2014-01-08"], "RFSTDTC": ["2014-01-01"]})
+        result = raw.sdtm.visit_map(
+            "VISITNUM", "VISIT", date_col="SVSTDTC", planned_visits=tv_rows, ref_date="RFSTDTC"
+        ).to_frame()
+        # 8 - 1 = 7 vs 14 - 8 = 6 → visit 2 wins outright; shift the date to
+        # the true midpoint instead: day 7.5 does not exist, so use VISITDY
+        # 1/15 spacing via a custom TV to construct an exact tie.
+        assert result["VISITNUM"][0] == 2
+
+        tv = pl.DataFrame({"VISITNUM": [1, 2], "VISIT": ["V1", "V2"], "VISITDY": [1, 15]})
+        tie = pl.DataFrame({"SVSTDTC": ["2014-01-08"], "RFSTDTC": ["2014-01-01"]})
+        result = tie.sdtm.visit_map(
+            "VISITNUM", "VISIT", date_col="SVSTDTC", planned_visits=tv, ref_date="RFSTDTC"
+        ).to_frame()
+        # Day 8 is exactly 7 days from both VISITDY 1 and 15 → earlier VISITNUM wins.
+        assert result["VISITNUM"][0] == 1
+
+    def test_tolerance_window_boundaries_inclusive(self, tv_rows):
+        tv = pl.DataFrame({"VISITNUM": [1], "VISIT": ["Baseline"], "VISITDY": [10]})
+        raw = pl.DataFrame(
+            {
+                # days 7, 13, 14 relative to 2014-01-01 (no-day-zero: +1)
+                "SVSTDTC": ["2014-01-07", "2014-01-13", "2014-01-14"],
+                "RFSTDTC": ["2014-01-01", "2014-01-01", "2014-01-01"],
+            }
+        )
+        result = raw.sdtm.visit_map(
+            "VISITNUM",
+            "VISIT",
+            date_col="SVSTDTC",
+            planned_visits=tv,
+            ref_date="RFSTDTC",
+            tolerance={"before": 3, "after": 3},
+        ).to_frame()
+        # Day 7 (3 before) and day 13 (3 after) sit ON the boundary → mapped;
+        # day 14 (4 after) is outside → null, not force-mapped.
+        assert result["VISITNUM"].to_list() == [1, 1, None]
+
+    def test_unparsable_date_maps_to_null_not_arbitrary_visit(self, tv_rows):
+        raw = pl.DataFrame(
+            {
+                "SVSTDTC": ["NOT-A-DATE", "2014-01-15"],
+                "RFSTDTC": ["2014-01-01", "2014-01-01"],
+            }
+        )
+        result = raw.sdtm.visit_map(
+            "VISITNUM", "VISIT", date_col="SVSTDTC", planned_visits=tv_rows, ref_date="RFSTDTC"
+        ).to_frame()
+        assert result["VISITNUM"][0] is None
+        assert result["VISIT"][0] is None
+        assert result["VISITNUM"][1] == 2
+
 
 # ================================================================== #
 # Phase 8 — Mermaid Parser                                            #

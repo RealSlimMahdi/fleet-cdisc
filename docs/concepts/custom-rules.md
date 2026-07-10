@@ -1,6 +1,13 @@
 # Custom Validation Rules
 
-When the standard CDISC CORE conformance rule set does not cover a study-specific requirement — a sponsor SOP constraint, an FDA Technical Conformance Guide (TCG) gap, or a protocol-specific range check — you can author **custom rules** and run them alongside the official rules.
+Custom rules are Fleet's **extension mechanism for CORE** — start with
+[Validation with CORE](validation-core.md) for the base engine setup and the
+official rule sets. When the standard CDISC CORE conformance rules do not
+cover a study-specific requirement — a sponsor SOP constraint, an FDA
+Technical Conformance Guide (TCG) gap, a protocol-specific range check, or
+ADaM checks while the official ADaMIG rule set remains unpublished — you
+author **custom rules** and run them alongside (and in the same engine as)
+the official rules.
 
 ---
 

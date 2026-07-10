@@ -59,6 +59,27 @@ For study-specific logic that should be versioned, reused, and automatically doc
 | `frame`  | Multi-column or aggregation logic            | `(df: pl.DataFrame) -> pl.DataFrame`                            |
 | `param`  | By-group reshape (e.g. tall/narrow BDS rows) | `(df: pl.DataFrame) -> pl.DataFrame` + `by=` / `set_values_to=` |
 
+**What the function receives and returns:**
+
+- **`column`** — the function takes **no arguments** and returns a
+  `pl.Expr`. Fleet splices the expression into the lazy pipeline, so
+  nothing is materialised: it behaves exactly like an inline
+  `.derivation(expression=...)`, just versioned in its own file.
+- **`frame`** — the `df` parameter is **the pipeline's current state**,
+  materialised as a plain `pl.DataFrame` at the point the derivation runs
+  (every column derived by earlier verbs is present). The function returns
+  a `pl.DataFrame` — usually `df.with_columns(...)` — and Fleet wraps the
+  result back into the namespace so the chain continues.
+- **`param`** — same in/out contract as `frame` (upstream
+  `pl.DataFrame` in, `pl.DataFrame` out), but tagged for BDS parameter
+  derivation: the `by=` / `set_values_to=` metadata drives the by-group
+  reshape and the PARAMCD/PARAM stamping of the appended rows.
+
+You rarely need to pass `kind=` yourself — it is inferred from the
+signature: a return annotation of `pl.Expr` (or a zero-argument function)
+means `column`; `by=`/`set_values_to=` means `param`; everything else is
+`frame`.
+
 ### `kind="column"` example
 
 ```python
@@ -109,20 +130,25 @@ def BMI(df: pl.DataFrame) -> pl.DataFrame:
 
 ### Derivations folder convention
 
-Study derivations live under:
+Study derivations live under the study's configured programs tree:
 
 ```
-specs/<study_id>/adam/derivations/
-    __init__.py        # auto-updated by `fleet derivation add`
+programs/derivations/       # <programs dir from study_config.yaml>
+    __init__.py
     AGEGR1.py
     BMI.py
 ```
 
-Scaffold a new derivation with the CLI:
+Scaffold a new derivation with the CLI (config-context — run it anywhere
+inside the study workspace):
 
 ```bash
 fleet derivation add AGEGR1 --dataset ADSL --kind column
 ```
+
+The convention is **standard-agnostic**: the same `@derivation` objects and
+`algorithm: callable` escape hatch work in SDTM pipelines and specs exactly
+as in ADaM — both dispatch through the shared core registry.
 
 ### Complex Multi-Dataset Derivations (Escaping the Pipeline)
 
@@ -190,26 +216,29 @@ class _CompanyAdamPolarsAccessor(CompanyAdamNamespace):
         super().__init__(df)
 ```
 
-## Handing Non-CDISC Raw Sources
+## Handling Non-CDISC Raw Sources
 
-If you are pulling in non-standard vendor files, use Fleet verbs to rename and map columns directly inside the pipeline. The `.source()` verb (ADaM) and `.assign()` verb (SDTM) both accept a `from_col` / `source` keyword to copy a raw column under a CDISC-compliant name — no intermediate Polars `.rename()` call needed:
+If you are pulling in non-standard vendor files, rename and map columns
+directly inside the pipeline — no intermediate Polars `.rename()` call
+needed. **`.assign(target, source=...)` is the canonical rename verb in
+both SDTM and ADaM**; the ADaM `.source(*cols)` verb is the variadic
+pass-through for carrying already-named columns as-is:
 
 ```python
 import polars as pl
-from fleet import load_study_context
 
 raw_labs = pl.read_csv("vendor_labs.csv")
 
-# Rename non-standard columns inline using Fleet verbs, then continue derivation
+# Rename non-standard columns inline, then continue the derivation
 adlb = (
-    raw_labs.adam.source("USUBJID", from_col="Subject_ID")
-    .source("AVAL", from_col="Lab_Result")
+    raw_labs.adam.assign("USUBJID", source="Subject_ID")
+    .assign("AVAL", source="Lab_Result")
     .baseline("BASE", aval="AVAL", baseline_flag="ABLFL")
     .to_frame()
 )
 ```
 
-For SDTM pipelines the equivalent verb is `.assign(source=...)`:
+Same verb, same spelling in SDTM:
 
 ```python
 dm = (
@@ -236,12 +265,26 @@ ae = (
     ae_raw.sdtm.assign("DOMAIN", value="AE")
     .assign("USUBJID", source="patient_number")
     .date("AESTDTC", source="ae_start_date")
-    .pin("DM", dm)  # ← attach reference
+    .pin("DM", dm)  # ← attach reference (join_on="USUBJID" by default)
     .study_day("AESTDY", date_col="AESTDTC")  # ← consumes the pin
     .baseline_flag("AEBLFL", date_col="AESTDTC")  # ← also consumes it
     .to_frame()
 )
 ```
+
+You don't see `RFSTDTC` in the call because `.study_day()` fills it in from
+its **SDTM defaults**: `ref_pin="DM"` and `ref_col="RFSTDTC"` — i.e. "look
+up RFSTDTC in the pinned DM, joined on the pin's key". Spelled out in full,
+the call above is:
+
+```python
+ae_ns.study_day("AESTDY", date_col="AESTDTC", ref_pin="DM", ref_col="RFSTDTC")
+```
+
+On ADaM namespaces the same defaults become `ref_pin="ADSL"` /
+`ref_col="TRTSDT"`. Resolution order: an explicit `ref_df=`/`dm=`/`adsl=`
+frame wins, then the pinned domain, then a `ref_col` already present in the
+frame — and a `LookupError` tells you what to pin when none of those hold.
 
 The pinned DataFrame is **not** merged into the frame — it stays beside it. Verbs borrow what they need, compute, and drop temp columns. The output frame stays clean.
 
@@ -254,10 +297,15 @@ ae = (
     ae_raw.sdtm.pin("DM", dm_df)  # join on USUBJID (default)
     .pin("TV", tv_df, join_on="VISITNUM")  # different join key
     .pin("EX", ex_df, join_on=["USUBJID", "EXTRT"])  # compound key
-    .study_day("AESTDY", date_col="AESTDTC")  # uses DM pin
+    .study_day("AESTDY", date_col="AESTDTC")  # ← reads DM.RFSTDTC via the DM pin
     .to_frame()
 )
 ```
+
+Each verb names the pin it consumes (or falls back to its default
+`ref_pin`), and the join uses **that pin's** stored `join_on` — so the TV
+and EX pins above sit untouched until a visit- or exposure-consuming verb
+asks for them.
 
 ### Inspecting pins
 
@@ -275,13 +323,20 @@ For ADaM datasets, pin ADSL and use `.join_adsl()` to carry forward columns, and
 ```python
 adae = (
     ae_df.adam.occds("ADAE")
-    .pin("ADSL", adsl)
+    .pin("ADSL", adsl)  # join_on="USUBJID" unless overridden
     .source("USUBJID")
-    .join_adsl("TRTSDT", "TRTEDT", "SAFFL")  # carry forward from ADSL
+    .join_adsl("TRTSDT", "TRTEDT", "SAFFL")  # left-join on the ADSL pin's key (USUBJID)
     .study_day("ASTDY", date_col="AESTDTC", ref_col="TRTSDT")
     .to_frame()
 )
 ```
+
+`.join_adsl()` has no `by=` parameter on purpose: the merge key is whatever
+the ADSL pin was registered with — `USUBJID` by default, or
+`.pin("ADSL", adsl, join_on=["STUDYID", "USUBJID"])` for a compound key —
+so the join key is declared once, next to the data it belongs to. The
+pin-free alternative `.merge_adsl(adsl, by=["USUBJID"], keep=[...])` takes
+an explicit frame and defaults `by=` to `["USUBJID"]`.
 
 ### FK validation
 

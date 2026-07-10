@@ -39,4 +39,4 @@ When raw data already matches the standard, `ct_map` can be omitted — the code
 uv run fleet init ct
 ```
 
-(`fleet init-ct` still exists but is deprecated — prefer the pipeline `fleet init cfg → init define → init ct`.)
+(Prefer the pipeline `fleet init cfg → init define → init ct`; `fleet add-ct` covers standalone bootstrap.)

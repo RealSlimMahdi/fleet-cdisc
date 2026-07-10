@@ -147,6 +147,16 @@ by name, then materialise with `.to_frame()`. See
 
 ## 5. Generate Define-XML
 
+One CLI command — inside a study workspace both paths default from
+`study_config.yaml` (`--spec`, `--output`, and `--standard sdtm|adam`
+override):
+
+```bash
+uv run fleet define-xml --standard adam
+```
+
+The same generation from Python, for notebooks or custom scripts:
+
 ```python
 from fleet import DefineXMLGenerator
 

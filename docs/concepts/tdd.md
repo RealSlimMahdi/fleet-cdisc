@@ -90,7 +90,14 @@ element codes must be unique.
 
 ## Conformance audit — a P21 dry-run, offline
 
-`design.audit()` — or the standalone
+One CLI command (config-context — the design spec resolves from
+`study_config.yaml`; exit code 1 on errors, so it drops straight into CI):
+
+```bash
+uv run fleet tdd audit
+```
+
+The same audit from Python — `design.audit()`, or the standalone
 `fleet.sdtm.trial_design_audit(te=..., ta=..., tv=..., ts=..., ti=..., dm=...)` —
 checks the domains against published P21/FDA rule IDs and returns a findings
 DataFrame (`rule_id`, `severity`, `domain`, `message`):

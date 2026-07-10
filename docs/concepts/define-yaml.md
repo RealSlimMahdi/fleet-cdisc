@@ -1,7 +1,7 @@
 <!--
 Runnable examples on this page are executed by tests/unit/test_docs_examples.py.
-A fenced ```python or ```yaml block is run unless the line immediately before its
-opening fence is the HTML comment `<!-- docs:no-run -->` (used for illustrative
+A fenced python or yaml block is run unless the line immediately before its
+opening fence is the HTML comment "docs:no-run" (used for illustrative
 fragments that reference files or study data not present in the test harness).
 -->
 
@@ -65,10 +65,18 @@ version is rejected with a clear message rather than silently misinterpreted.
 
 Every spec-executable algorithm is declared once in the central registry
 (`fleet.core.spec_registry`), which drives the `from_spec` executor, the
-discriminated-union validation models, **and** the JSON schema. `algorithm:`
-names map onto namespace verbs; both canonical and legacy spellings are accepted
-(e.g. `assign_no_ct` → `assign`, `count` → `count_events`). A representative
-subset:
+discriminated-union validation models, **and** the JSON schema.
+
+**Two vocabularies, one mapping.** The spec dialect deliberately keeps
+define-spec terminology (`assign_ct`, `hardcode_no_ct`, …) — the language a
+data-standards reviewer reads in a metadata document — while the runtime API
+keeps one verb per intent (`assign`). The two are not competing spellings:
+every algorithm is declared **with** its runtime verb, the mapping below is
+machine-checkable (`fleet.spec_coverage()`), and a CI test fails if they
+drift. Splitting `assign_ct` / `assign_no_ct` in the spec is also what makes
+validation strict — each algorithm gets its own required-field model, so a
+CT derivation missing its codelist is a load-time error, not a runtime
+surprise. A representative subset:
 
 | `algorithm`         | Namespace verb                                                  | What it does                    |
 | ------------------- | --------------------------------------------------------------- | ------------------------------- |
@@ -84,30 +92,30 @@ subset:
 | `baseline` / `chg` / `pchg` | `.baseline(...)` / `.chg(...)` / `.pchg(...)`           | Baseline value & change         |
 | `callable`          | `.derivation(drv_obj)`                                          | Study-specific escape hatch     |
 
-The complete, always-current list is machine-readable:
+The complete, always-current list is one call away (and `df.sdtm.verbs()` /
+`df.adam.verbs()` gives the runtime-verb counterpart):
 
 ```python
-from fleet.core import spec_registry
+import fleet
 
-print(sorted(spec_registry.algorithm_names("adam")))
-print(sorted(spec_registry.algorithm_names("sdtm")))
+print(sorted(fleet.spec_algorithms("adam")))
+print(sorted(fleet.spec_algorithms("sdtm")))
 ```
 
-### The verb-coverage matrix (`SPEC_UNSUPPORTED`)
+### The verb-coverage matrix
 
-Not every inline verb is spec-expressible. `spec_registry.coverage_matrix()`
-returns the full algorithm ↔ verb ↔ required-fields mapping, and
-`spec_registry.SPEC_UNSUPPORTED` is the machine-checked allowlist of verbs that
-have **no** spec algorithm (e.g. `transform`, `derive_summary_records`, the TDD
-`add_*` verbs) — so "which subset is spec-safe" has a definite answer instead of
-a guess:
+Not every inline verb is spec-expressible. `fleet.spec_coverage()` returns the
+full algorithm ↔ verb ↔ required-fields mapping, and `fleet.SPEC_UNSUPPORTED`
+is the machine-checked allowlist of verbs that have **no** spec algorithm
+(e.g. `transform`, `derive_summary_records`, the TDD `add_*` verbs) — so
+"which subset is spec-safe" has a definite answer instead of a guess:
 
 ```python
-from fleet.core import spec_registry
+import fleet
 
-matrix = spec_registry.coverage_matrix()  # list of algorithm rows
-unsupported = spec_registry.SPEC_UNSUPPORTED  # {"sdtm": {...}, "adam": {...}}
-print(len(matrix), "algorithms;", len(unsupported["adam"]), "adam verbs are inline-only")
+matrix = fleet.spec_coverage()  # algorithm ↔ verb ↔ required fields
+inline_only = fleet.SPEC_UNSUPPORTED  # {"sdtm": {...}, "adam": {...}}
+print(len(matrix), "algorithms;", len(inline_only["adam"]), "adam verbs are inline-only")
 ```
 
 ### Study-specific callables (`callable:`)
@@ -139,18 +147,23 @@ Or use the registered short name (if the derivations module was imported):
 
 ### Derivations folder convention
 
-Study derivations live under:
+`fleet derivation add AGEGR1 --dataset ADSL` scaffolds a derivation file
+under the study's configured programs tree:
 
 ```
-specs/<study_id>/adam/derivations/
-    __init__.py        # auto-updated by `fleet derivation add`
+programs/derivations/       # <programs dir from study_config.yaml>
+    __init__.py
     AGEGR1.py
     BMI.py
 ```
 
-`fleet init cfg` creates the empty `derivations/__init__.py` automatically.
-`fleet derivation add AGEGR1 --dataset ADSL` scaffolds a new derivation file
-and appends the import to `__init__.py`.
+The convention is **shared across standards** — `algorithm: callable` works
+identically in SDTM and ADaM specs, because both dispatch through the same
+core registry and resolver. The resolver itself does no folder scanning: a
+callable is found either (a) by short name, when its module has been imported
+and the function is `@derivation`-registered, or (b) by fully qualified
+dotted path. Declare `derivations_module:` at the top of the spec and
+`from_spec()` imports it for you, so short names always resolve.
 
 Both `algorithm:` and `callable:` plug into Define-XML method enrichment:
 running `DefineSpecGenerator(spec, enrich_methods=True)` (or
@@ -261,6 +274,16 @@ adsl = (
 hard-code paths; it exposes `sdtm_spec` / `adam_spec` / `raw_file(...)` helpers.
 
 ### Generating Define-XML from the same spec
+
+One CLI command — inside a study workspace, spec and output default from
+`study_config.yaml`:
+
+```bash
+uv run fleet define-xml --standard adam                 # config-based defaults
+uv run fleet define-xml -s specs/define.yaml -o out.xml --enrich-methods
+```
+
+The same generation from Python:
 
 <!-- docs:no-run -->
 
@@ -386,7 +409,15 @@ copies the value through and emits a `UserWarning` that CT could not be validate
 (`src/fleet/define_xml/schemas/define_xml_2_1_schema.json`) and a set of CDISC business rules.
 This layer fires **on demand**, not automatically during pipeline execution.
 
-**Trigger it explicitly** — before generating Define-XML or before submission:
+From the CLI, this layer is part of the one-shot CI gate — it validates every
+define.yaml the study config points at:
+
+```bash
+uv run fleet check
+```
+
+Or trigger it explicitly from Python — before generating Define-XML or before
+submission:
 
 <!-- docs:no-run -->
 
@@ -440,13 +471,17 @@ The YAML spec is validated against the bundled schema at:
 src/fleet/define_xml/schemas/define_spec_schema.json
 ```
 
-This schema is **generated from the algorithm registry** by
-`fleet.define_xml.schema_builder` — its `algorithm:` enum, per-algorithm required
-fields, and the `fleet_spec_version` / `derivations_module` properties are derived
-from the same declarations that drive execution, and a CI test fails if the
-checked-in schema drifts. So the editor red-squiggles you see match exactly what
-`from_spec()` will accept — including the `callable` escape hatch and every
-algorithm the engine can run.
+This schema is **generated from the algorithm registry** — its `algorithm:`
+enum, per-algorithm required fields, and the `fleet_spec_version` /
+`derivations_module` properties are derived from the same declarations that
+drive execution, and a CI test fails if the checked-in schema drifts. So the
+editor red-squiggles you see match exactly what `from_spec()` will accept —
+including the `callable` escape hatch and every algorithm the engine can run.
+Regenerate it after registry changes with:
+
+```bash
+uv run python -m fleet.define_xml.schema_builder
+```
 
 Add this comment to the top of every spec file to activate YAML language-server auto-complete in
 VS Code or any LSP-enabled editor:
@@ -468,7 +503,15 @@ the standard `define2-1.xsl` stylesheet renders them as clickable links.
 
 ### Setup: declare the aCRF document
 
-Add a `documents` block to the `study:` section:
+Scaffold the block with one command (config-context: it edits the study's
+own define.yaml; `--standard adam|both` covers the ADaM spec too):
+
+```bash
+uv run fleet add-acrf --href blankcrf.pdf
+uv run fleet add-acrf --href blankcrf.pdf --page-map acrf_pages.yaml --standard both
+```
+
+Which adds a `documents` block to the `study:` section:
 
 ```yaml
 study:

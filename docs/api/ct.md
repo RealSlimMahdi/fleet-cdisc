@@ -33,7 +33,7 @@ The `CodelistGenerator` converts CDISC Library JSON responses into a Python modu
 
 ```bash
 # Bootstrap from the SDTM IG (source of truth)
-fleet init-ct --domains DM,AE,VS,EX --output specs/my_study/sdtm/codelists.py
+fleet add-ct --domains DM,AE,VS,EX --output specs/my_study/sdtm/codelists.py
 
 # Add domains later (preserves existing codelists)
 fleet add-ct --domains LB,CM --output specs/my_study/sdtm/codelists.py
@@ -190,7 +190,7 @@ import warnings
 from fleet import load_controlled_terminology, get_validator
 
 # 1. Load the CT package once, at script/session start.
-#    The file is a YAML or CSV produced by `fleet init ct` or `fleet init-ct`.
+#    The file is a YAML or CSV produced by `fleet init ct` or `fleet add-ct`.
 load_controlled_terminology("examples/cdiscpilot01/sdtm/ct_package.yaml")
 
 # 2. Import the generated codelist classes.

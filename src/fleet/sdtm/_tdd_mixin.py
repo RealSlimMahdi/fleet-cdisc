@@ -433,7 +433,11 @@ class TrialDesignMixin:
 
         For each row, finds the planned visit whose ``VISITDY`` is closest
         to the actual study day (computed from *date_col* − *ref_date*),
-        within the optional *tolerance* window.
+        within the optional *tolerance* window.  Ties (a date equidistant
+        between two planned visits) resolve deterministically to the
+        earlier ``VISITNUM``; rows whose date cannot be parsed, or that
+        fall outside the tolerance window, map to null — never to an
+        arbitrary visit.
 
         Args:
             target_num: Name of the output ``VISITNUM`` column.
@@ -443,7 +447,10 @@ class TrialDesignMixin:
                 ``VISITNUM``, ``VISIT``, and ``VISITDY`` columns.
             ref_date: Column with the reference date for study day calculation.
                 When ``None``, the raw study day is expected in the data.
-            tolerance: Optional ``{"before": n, "after": n}`` window in days.
+            tolerance: Optional ``{"before": n, "after": n}`` window in days,
+                boundaries inclusive: the actual day may precede the planned
+                ``VISITDY`` by up to *before* days and follow it by up to
+                *after* days.  Rows outside every window get null.
 
         Returns:
             Self: The namespace with *target_num* and *target_name* appended.
@@ -507,7 +514,13 @@ class TrialDesignMixin:
             (pl.col("__actual_dy__") - pl.col("__tv_dy__")).abs().alias("__diff__")
         )
 
-        # Apply tolerance filter
+        # Rows with an unresolvable study day (unparsable/missing dates) must
+        # map to no visit at all — never to an arbitrary one.
+        crossed = crossed.filter(pl.col("__diff__").is_not_null())
+
+        # Apply tolerance filter (boundaries inclusive): `before` bounds how
+        # many days the actual visit may precede the planned day, `after` how
+        # many days it may follow it.
         if tolerance:
             before = tolerance.get("before", 999999)
             after = tolerance.get("after", 999999)
@@ -516,10 +529,11 @@ class TrialDesignMixin:
                 & (pl.col("__actual_dy__") - pl.col("__tv_dy__") <= after)
             )
 
-        # Pick closest visit per row
+        # Pick the closest visit per row; equidistant candidates resolve
+        # deterministically to the earliest VISITNUM.
         best = (
-            crossed.sort("__diff__")
-            .group_by("__row_idx__")
+            crossed.sort("__row_idx__", "__diff__", "__tv_num__")
+            .group_by("__row_idx__", maintain_order=True)
             .first()
             .select("__row_idx__", "__tv_num__", "__tv_name__")
             .rename({"__tv_num__": target_num, "__tv_name__": target_name})

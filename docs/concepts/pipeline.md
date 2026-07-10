@@ -58,7 +58,7 @@ Every Fleet namespace (`sdtm`, `adam`, `adsl`, `occds`) follows the same pattern
 result = (
     raw_df.sdtm.assign("USUBJID", source="patient_id")  # 1. access  # 2. chain
     .assign("DOMAIN", value="DM")
-    .assign("SEX", source="sex_raw", ct=SEX, ct_map={"M": "M", "F": "F"})
+    .assign("SEX", source="sex_raw", ct=SEX, ct_map={"Male": "M", "Female": "F"})
     .to_frame()  # 3. materialise
 )
 ```
@@ -66,8 +66,7 @@ result = (
 `assign` is the one canonical assignment verb (`source=` copies, `value=`
 hardcodes, `ct=`/`ct_map=` add CT). Most verbs only build an internal expression
 list at step 2; a few window/cross-domain verbs checkpoint internally but keep
-the chain going. The old spellings (`assign_no_ct`, `hardcode_no_ct`,
-`assign_ct`) were removed in pre-alpha.
+the chain going.
 
 To inspect intermediate state or the query plan during development, use the
 chainable debug verbs `.inspect()` (hard checkpoint with diagnostic output)
@@ -104,9 +103,6 @@ This means you pay no cost for columns you don't chain. Expression ordering mirr
 | `derivation(target, expression=)`          | Arbitrary `pl.Expr`                    |
 | `merge(dataset, on=, keep=)`               | Join a reference dataset               |
 | `to_frame()`                               | Materialise                            |
-
-(The old `assign_no_ct` / `hardcode_no_ct` / `assign_ct` / `if_then_else`
-spellings were removed in pre-alpha.)
 
 ---
 

@@ -7,30 +7,14 @@
 
 ---
 
-## Your first SDTM domain
+## Your first SDTM domain — zero setup
 
-### Step 1: Bootstrap Controlled Terminology
-
-Before writing SDTM pipelines, generate your study's controlled terminology constants from the CDISC Library. This requires a CDISC API key in a `.env` file at your project root:
-
-```bash title=".env"
-CDISC_API_KEY=your-key-here
-```
-
-Then bootstrap the codelists for your study's domains:
-
-```bash
-fleet init-ct --domains DM,AE,VS,EX --output codelists.py
-```
-
-This queries the **SDTM Implementation Guide** to discover every codelist referenced by variables in those domains, downloads the term definitions from the CDISC Library, and generates a typed Python module with IDE auto-completion.
-
-### Step 2: Write your pipeline
+No API key, no config file, no network. Import `fleet` and chain verbs on any
+Polars DataFrame:
 
 ```python
 import fleet
 import polars as pl
-from codelists import SEX  # generated in Step 1
 
 raw = pl.from_repr("""
 ┌────────────┬─────────┬────────────┐
@@ -38,9 +22,9 @@ raw = pl.from_repr("""
 │ ---        ┆ ---     ┆ ---        │
 │ str        ┆ str     ┆ str        │
 ╞════════════╪═════════╪════════════╡
-│ 001        ┆ M       ┆ 1970-04-15 │
-│ 002        ┆ F       ┆ 1985-11-02 │
-│ 003        ┆ M       ┆ 1960-07-30 │
+│ 001        ┆ Male    ┆ 1970-04-15 │
+│ 002        ┆ Female  ┆ 1985-11-02 │
+│ 003        ┆ Male    ┆ 1960-07-30 │
 └────────────┴─────────┴────────────┘
 """)
 
@@ -48,20 +32,65 @@ dm = (
     raw.sdtm.assign("DOMAIN", value="DM")
     .assign("STUDYID", value="MYSTUDY01")
     .assign("USUBJID", source="patient_id")
-    .assign("SEX", source="sex_raw", ct=SEX)
     .date("BRTHDTC", source="birth_date")
     .to_frame()
 )
 print(dm)
 ```
 
-`assign` is the one assignment verb: `source=` copies a column, `value=` hardcodes
-a literal, and `ct=` (a generated codelist class or an NCI concept ID) turns on
-controlled-terminology validation — no need to look up concept IDs. When `ct_map`
-is omitted (as above), raw values are passed through and validated against the
-codelist; add `ct_map={"1": "M", "2": "F"}` if your raw data needs recoding. The
-old spellings (`hardcode_no_ct`, `assign_no_ct`, `assign_ct`, `assign_dtc`) were
-removed outright — run `fleet migrate <files...> --write` to rewrite old scripts.
+```text
+┌────────────┬─────────┬────────────┬────────┬───────────┬─────────┬────────────┐
+│ patient_id ┆ sex_raw ┆ birth_date ┆ DOMAIN ┆ STUDYID   ┆ USUBJID ┆ BRTHDTC    │
+│ 001        ┆ Male    ┆ 1970-04-15 ┆ DM     ┆ MYSTUDY01 ┆ 001     ┆ 1970-04-15 │
+│ …          ┆         ┆            ┆        ┆           ┆         ┆            │
+└────────────┴─────────┴────────────┴────────┴───────────┴─────────┴────────────┘
+```
+
+`assign` is the one assignment verb: `source=` copies a column, `value=`
+hardcodes a literal. All derivations accumulate lazily and collapse into a
+single optimized Polars pass at `.to_frame()`.
+
+!!! tip "More zero-setup wins"
+    The Trial Design domains work fully offline too — SDTMIG 3.4 structures
+    ship with Fleet, so `fleet tdd build` and the whole
+    [Trial Design walkthrough](../examples/tdd_pipeline.md) run without an
+    API key.
+
+### Add controlled terminology
+
+CT is where the CDISC Library comes in. Put an API key in a `.env` file at
+your project root:
+
+```bash title=".env"
+CDISC_API_KEY=your-key-here
+```
+
+Then bootstrap typed codelist constants for your study's domains:
+
+```bash
+fleet add-ct --domains DM,AE,VS,EX --output codelists.py
+```
+
+This queries the **SDTM Implementation Guide** to discover every codelist referenced by variables in those domains, downloads the term definitions from the CDISC Library, and generates a typed Python module with IDE auto-completion. Now the same pipeline validates and recodes against real CT:
+
+```python
+from codelists import SEX  # generated above
+
+dm = (
+    raw.sdtm.assign("DOMAIN", value="DM")
+    .assign("STUDYID", value="MYSTUDY01")
+    .assign("USUBJID", source="patient_id")
+    .assign("SEX", source="sex_raw", ct=SEX, ct_map={"Male": "M", "Female": "F"})
+    .date("BRTHDTC", source="birth_date")
+    .to_frame()
+)
+```
+
+`ct=` (a generated codelist class or an NCI concept ID) turns on
+controlled-terminology validation — no need to look up concept IDs. `ct_map`
+recodes collected values to CT submission values (here ``"Male"`` → ``"M"``);
+omit it when the raw data already matches the codelist — values are then passed
+through and validated as-is.
 
 ---
 
@@ -134,7 +163,7 @@ fleet init ct
 ```
 
 See the [CLI Reference](cli.md) for full argument details and standalone
-commands like `fleet init-ct` and `fleet add-ct`.
+commands like `fleet add-ct`.
 
 The same first step can be done programmatically with `StudyContext.init()`:
 

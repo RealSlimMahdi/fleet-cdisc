@@ -61,6 +61,14 @@ requests.
 ## Limits
 
 - Variant space is the cartesian product of declared choices: hard error above
-  500 variants, warning above 100.
+  500 variants, warning above 100. **This is not an engine bottleneck** — the
+  Polars pipeline renders hundreds of variants in seconds. The cap protects
+  the *artifact*: the explorer is one self-contained HTML file with every
+  variant pre-rendered and embedded (fragment + ARD JSON + spec YAML), so the
+  file grows linearly with the variant count and a 500-variant page is
+  unusable to open, review, and share — which defeats its purpose. Beyond
+  that scale, a live server that renders on demand is the right tool (a
+  future `fleet tlg serve`); the static explorer deliberately trades variant
+  count for zero-infrastructure portability.
 - Views are sanctioned-only (declared choices, not free-form filtering) — every
   number a reviewer sees was produced by the validated engine at build time.

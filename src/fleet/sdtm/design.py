@@ -321,7 +321,9 @@ class StudyDesign(BaseModel):
             te=frames.get("TE"),
             ta=frames.get("TA"),
             tv=frames.get("TV"),
-            ts=frames.get("TS"),
+            # TS is always audited: an absent parameters section means every
+            # FDA-required parameter is missing (rejection-level), not "skip".
+            ts=frames.get("TS", self.to_ts()),
             ti=frames.get("TI"),
             dm=dm,
         )

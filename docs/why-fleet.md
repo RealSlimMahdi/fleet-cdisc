@@ -86,7 +86,7 @@ fleet init define
 fleet init ct
 
 # Or standalone: bootstrap codelists directly from the SDTM IG
-fleet init-ct --domains DM,AE,VS,EX --output codelists.py
+fleet add-ct --domains DM,AE,VS,EX --output codelists.py
 ```
 
 - **Source of truth is the CDISC Library IG** — Fleet queries the Implementation Guide model to discover every variable and codelist for your domains. No manual curation, no guessing concept IDs.
