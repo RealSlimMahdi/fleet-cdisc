@@ -159,14 +159,6 @@ MOCK_TE_META = {
             "role": "",
         },
         {"name": "TEDUR", "label": "Planned Duration", "type": "Char", "core": "Perm", "role": ""},
-        {
-            "name": "EPOCH",
-            "label": "Epoch",
-            "type": "Char",
-            "core": "Req",
-            "role": "",
-            "codelist": "C99079",
-        },
     ],
 }
 
@@ -315,7 +307,8 @@ class TestTrialElementsCollection:
         df = te_rows.to_polars()
         assert "ETCD" in df.columns
         assert "ELEMENT" in df.columns
-        assert "EPOCH" in df.columns
+        # epoch is design-time only: SDTMIG 3.4 has no EPOCH variable in TE
+        assert "EPOCH" not in df.columns
         assert df.shape[0] == 3
         assert df["ETCD"].to_list() == ["SCRN", "TRT", "FU"]
 
@@ -388,7 +381,7 @@ class TestTrialParametersCollection:
         assert len(ts_rows.parameters) == 3
 
     def test_duplicate_tsparmcd_rejected(self):
-        with pytest.raises(ValueError, match="Duplicate TSPARMCD"):
+        with pytest.raises(ValueError, match=r"Duplicate \(TSPARMCD, TSSEQ\)"):
             TrialParameters(
                 parameters=[
                     TrialParameter(tsparmcd="ADDON", tsparm="Test 1"),
@@ -511,10 +504,17 @@ class TestSequenceEnforcement:
 class TestFetchStructure:
     @patch("fleet.sdtm._tdd_mixin.TrialDesignMixin._fetch_ig_domain", return_value=MOCK_TE_META)
     def test_fetch_sets_domain_meta(self, mock_fetch):
+        """IG 3.4 TDD structures are packaged — no API call needed."""
         ns = pl.DataFrame().sdtm.fetch_structure("TE")
         assert hasattr(ns, "_domain_meta")
         assert ns._domain_meta["domain"] == "TE"
-        mock_fetch.assert_called_once_with("TE", "3-4")
+        mock_fetch.assert_not_called()
+
+    @patch("fleet.sdtm._tdd_mixin.TrialDesignMixin._fetch_ig_domain", return_value=MOCK_TE_META)
+    def test_fetch_falls_back_to_api_for_other_ig_versions(self, mock_fetch):
+        ns = pl.DataFrame().sdtm.fetch_structure("TE", ig_version="3-3")
+        assert ns._domain_meta["domain"] == "TE"
+        mock_fetch.assert_called_once_with("TE", "3-3")
 
     @patch("fleet.sdtm._tdd_mixin.TrialDesignMixin._fetch_ig_domain", return_value=MOCK_TE_META)
     def test_fetch_saves_yaml(self, mock_fetch, tmp_path):
@@ -553,7 +553,8 @@ class TestFetchStructure:
         }
         mock_fetch.return_value = meta_with_extra
         with pytest.warns(UserWarning, match="TESEQ"):
-            pl.DataFrame().sdtm.fetch_structure("TE")
+            # 3-3 bypasses the packaged 3-4 structures so the mock is reached
+            pl.DataFrame().sdtm.fetch_structure("TE", ig_version="3-3")
 
 
 # ================================================================== #
@@ -575,7 +576,7 @@ class TestProtocolReferencePipelines:
         assert result["STUDYID"][0] == "CDISCPILOT01"
         assert result["DOMAIN"][0] == "TE"
         assert result["ETCD"].to_list() == ["SCRN", "TRT", "FU"]
-        assert result["EPOCH"].to_list() == ["SCREENING", "TREATMENT", "FOLLOW-UP"]
+        assert "EPOCH" not in result.columns  # not an SDTMIG 3.4 TE variable
 
     @patch("fleet.sdtm._tdd_mixin.TrialDesignMixin._fetch_ig_domain", return_value=MOCK_TE_META)
     def test_ta_pipeline(self, mock_fetch, ta_rows, te_rows):

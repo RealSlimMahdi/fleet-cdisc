@@ -83,7 +83,7 @@ from .define_xml import (
     TypeMismatch,
 )
 from .io import load_datasets, load_raw_data, save_dataset_json, save_parquet
-from .sdtm import SDTMAlgorithm, SDTMNamespace
+from .sdtm import SDTMAlgorithm, SDTMNamespace, StudyDesign
 from .tlg import (
     AEListingSpec,
     AESummarySpec,
@@ -123,6 +123,7 @@ __all__ = [
     # SDTM
     "SDTMAlgorithm",
     "SDTMNamespace",
+    "StudyDesign",
     # ADaM core + sub-structures (accessed via df.adam, df.adam.adsl, df.adam.occds)
     "ADAMAlgorithm",
     "AdamNamespace",

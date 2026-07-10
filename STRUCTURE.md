@@ -129,6 +129,10 @@ The core of Fleet for SDTM work. Registers `df.sdtm` on every Polars DataFrame.
 | `models.py`    | `SDTMAlgorithm` enum (verb names, kept in sync with `spec_registry`), `SDTMVariableSpec`, `SDTMDomainSpec`                       |
 | `utils.py`     | Internal helpers — `to_iso8601_date`, `to_iso8601_datetime`, `parse_expression(str) → pl.Expr` (AST whitelist; bare names in arithmetic resolve to `pl.col`) |
 | `namespace.py` | `SDTMNamespace` — the SDTM namespace class + `_tdd_mixin` for Trial Design domains                                              |
+| `tdd.py`       | Trial Design row/collection Pydantic models (TE/TA/TV/TS/TI/TD/TM), `TrialVisits.from_schedule`, `TrialParameters.from_ctgov`, Mermaid parser |
+| `design.py`    | `StudyDesign` — define-once aggregate deriving every TDD domain; YAML/Mermaid/USDM interchange                                   |
+| `tdd_audit.py` | P21-style conformance pre-check (SD-series structural rules + FDA TS parameter profile)                                          |
+| `_tdd_structures.yaml` | Packaged SDTMIG 3.4 structures for the nine TDD domains (offline `fetch_structure()`)                                    |
 
 **Canonical SDTM verbs** (call `df.sdtm.verbs()` for the always-current list — hardcoded counts rot):
 

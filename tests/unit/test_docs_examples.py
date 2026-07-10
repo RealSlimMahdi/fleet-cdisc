@@ -197,6 +197,7 @@ def _guide_enforced_python_blocks() -> list[str]:
         "## Part 4 — SDTM Derivation: DM",
         "## Part 8 — ADaM Derivation: ADVS",
         "## Part 9 — ADAE with OCCDS Verbs",
+        "## Part 10 — Trial Design Domains (TDD)",
     ):
         section = _section(text, heading)
         for lang, body, run in _iter_blocks(section):
@@ -227,6 +228,11 @@ def test_guide_pipeline_blocks_execute(tmp_path, monkeypatch):
     assert (baseline_rows["CHG"] == 0.0).all()  # CHG is 0 at baseline
     # Part 9 built ADAE with TRTEMFL + ASEQ.
     assert {"TRTEMFL", "ASEQ", "AESEVN"}.issubset(ns["adae"].columns)
+    # Part 10 built the trial design domains offline (StudyDesign + pipeline).
+    assert set(ns["design"].domains()) >= {"TE", "TA", "TS"}
+    assert {"TABRANCH", "TAETORD"}.issubset(ns["ta"].columns)
+    assert "TSSEQ" in ns["ts"].columns
+    assert ns["td"].shape[0] == 1 and ns["tm"].shape[0] == 1
 
 
 def test_define_yaml_doc_blocks_execute(tmp_path, monkeypatch):

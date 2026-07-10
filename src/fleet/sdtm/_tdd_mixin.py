@@ -5,7 +5,8 @@ Provides two families of verbs:
 Protocol-reference verbs
     ``fetch_structure()``, ``study_header()``, ``add_elements()``,
     ``add_arms()``, ``add_visits()``, ``add_parameters()``,
-    ``add_criteria()`` — follow a fixed stage sequence.
+    ``add_criteria()``, ``add_disease_assessments()``,
+    ``add_milestones()`` — follow a fixed stage sequence.
 
 Subject-level verbs
     ``visit_map()``, ``element_boundaries()``, ``epoch_assign()``,
@@ -25,7 +26,9 @@ from fleet.sdtm.tdd import (
     Epoch,
     TrialArms,
     TrialCriteria,
+    TrialDiseaseAssessments,
     TrialElements,
+    TrialMilestones,
     TrialParameters,
     TrialVisits,
 )
@@ -40,7 +43,21 @@ _DOMAIN_ADD_VERBS: dict[str, str] = {
     "TV": "add_visits",
     "TS": "add_parameters",
     "TI": "add_criteria",
+    "TD": "add_disease_assessments",
+    "TM": "add_milestones",
 }
+
+# Packaged SDTMIG 3.4 structures for the TDD domains (offline default).
+_PACKAGED_STRUCTURES = Path(__file__).with_name("_tdd_structures.yaml")
+_PACKAGED_IG_VERSION = "3-4"
+
+
+def _load_packaged_structure(domain: str, ig_version: str) -> dict[str, Any] | None:
+    """Return the packaged IG metadata for *domain*, or None when unavailable."""
+    if ig_version != _PACKAGED_IG_VERSION:
+        return None
+    return yaml.safe_load(_PACKAGED_STRUCTURES.read_text(encoding="utf-8")).get(domain)
+
 
 # Stage labels for error messages
 _STAGE_SEQUENCE = (
@@ -105,6 +122,11 @@ class TrialDesignMixin:
         When *save_to* is given the fetched metadata is cached as YAML; on
         subsequent calls the cache is read instead of hitting the API.
 
+        SDTMIG 3.4 structures for the nine TDD domains (TE, TA, TV, TS, TI,
+        TD, TM, SV, SE) ship with Fleet, so the default flow needs no
+        network access and no API key; the CDISC Library is only queried
+        for other domains or IG versions.
+
         Sets ``_domain_meta`` on the namespace for downstream validation
         and performs schema reconciliation against the static Pydantic model.
 
@@ -134,7 +156,7 @@ class TrialDesignMixin:
         self._check_stage("fetch_structure", required=0)
         domain = domain.upper()
 
-        # Priority: define_path → save_to cache → online CDISC Library
+        # Priority: define_path → save_to cache → packaged IG 3.4 → online
         meta: dict[str, Any] | None = None
 
         if define_path is not None:
@@ -145,14 +167,16 @@ class TrialDesignMixin:
             meta = yaml.safe_load(cache_path.read_text())
 
         if meta is None:
-            try:
-                meta = self._fetch_ig_domain(domain, ig_version)
-            except Exception as exc:
-                raise type(exc)(
-                    f"Domain '{domain}' not found in SDTM IG {ig_version}. "
-                    f"If this is a company-specific domain, provide its structure "
-                    f"via define_path= or a cached YAML via save_to=."
-                ) from exc
+            meta = _load_packaged_structure(domain, ig_version)
+            if meta is None:
+                try:
+                    meta = self._fetch_ig_domain(domain, ig_version)
+                except Exception as exc:
+                    raise type(exc)(
+                        f"Domain '{domain}' not found in SDTM IG {ig_version}. "
+                        f"If this is a company-specific domain, provide its structure "
+                        f"via define_path= or a cached YAML via save_to=."
+                    ) from exc
             if cache_path:
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
                 cache_path.write_text(yaml.dump(meta, default_flow_style=False, sort_keys=False))
@@ -262,27 +286,41 @@ class TrialDesignMixin:
                     )
         return self._materialise_collection(arms.to_polars())
 
-    def add_visits(self, visits: TrialVisits) -> Self:  # type: ignore[type-var]
+    def add_visits(
+        self,
+        visits: TrialVisits,
+        *,
+        ta: TrialArms | None = None,
+    ) -> Self:  # type: ignore[type-var]
         """Materialise a validated ``TrialVisits`` collection into the pipeline.
 
         Args:
             visits: A ``TrialVisits`` collection.
+            ta: Optional ``TrialArms`` for FK validation (non-blank
+                ARMCD ∈ TA.ARMCD).
 
         Returns:
             Self: The namespace at stage 3 with TV rows loaded.
 
         Examples:
-            Add trial visits::
+            Add trial visits with FK validation::
 
                 tv = (
                     pl.DataFrame().sdtm
                     .fetch_structure("TV")
                     .study_header("CDISCPILOT01", "TV")
-                    .add_visits(tv_rows)
+                    .add_visits(tv_rows, ta=ta_rows)
                     .to_frame()
                 )
         """
         self._check_stage("add_visits", required=2)
+        if ta is not None:
+            valid_armcds = {a.armcd for a in ta.arms}
+            for v in visits.visits:
+                if v.armcd and v.armcd not in valid_armcds:
+                    raise ValueError(
+                        f"TV.ARMCD '{v.armcd}' not found in TA. Valid: {sorted(valid_armcds)}"
+                    )
         return self._materialise_collection(visits.to_polars())
 
     def add_parameters(self, params: TrialParameters) -> Self:  # type: ignore[type-var]
@@ -330,6 +368,52 @@ class TrialDesignMixin:
         """
         self._check_stage("add_criteria", required=2)
         return self._materialise_collection(criteria.to_polars())
+
+    def add_disease_assessments(self, assessments: TrialDiseaseAssessments) -> Self:  # type: ignore[type-var]
+        """Materialise a validated ``TrialDiseaseAssessments`` collection.
+
+        Args:
+            assessments: A ``TrialDiseaseAssessments`` collection.
+
+        Returns:
+            Self: The namespace at stage 3 with TD rows loaded.
+
+        Examples:
+            Add trial disease assessments::
+
+                td = (
+                    pl.DataFrame().sdtm
+                    .fetch_structure("TD")
+                    .study_header("CDISCPILOT01", "TD")
+                    .add_disease_assessments(td_rows)
+                    .to_frame()
+                )
+        """
+        self._check_stage("add_disease_assessments", required=2)
+        return self._materialise_collection(assessments.to_polars())
+
+    def add_milestones(self, milestones: TrialMilestones) -> Self:  # type: ignore[type-var]
+        """Materialise a validated ``TrialMilestones`` collection.
+
+        Args:
+            milestones: A ``TrialMilestones`` collection.
+
+        Returns:
+            Self: The namespace at stage 3 with TM rows loaded.
+
+        Examples:
+            Add trial disease milestones::
+
+                tm = (
+                    pl.DataFrame().sdtm
+                    .fetch_structure("TM")
+                    .study_header("CDISCPILOT01", "TM")
+                    .add_milestones(tm_rows)
+                    .to_frame()
+                )
+        """
+        self._check_stage("add_milestones", required=2)
+        return self._materialise_collection(milestones.to_polars())
 
     # ------------------------------------------------------------------ #
     # Subject-level derivation verbs                                       #
@@ -507,37 +591,75 @@ class TrialDesignMixin:
         target: str,
         *,
         date_col: str,
-        epoch_ranges: list[dict[str, str]] | pl.DataFrame,
+        epoch_ranges: list[dict[str, str]] | pl.DataFrame | None = None,
+        se: pl.DataFrame | pl.LazyFrame | None = None,
+        subject_col: str = "USUBJID",
     ) -> Self:  # type: ignore[type-var]
-        """Assign ``EPOCH`` based on date ranges.
+        """Assign ``EPOCH`` based on date ranges or per-subject SE intervals.
 
-        Each entry in *epoch_ranges* maps a date interval to an ``Epoch``
-        value.  The first matching range wins.
+        With *epoch_ranges*, each entry maps a study-level date interval to
+        an ``Epoch`` value; the first matching range wins.  With *se*, the
+        subject's own element intervals drive the assignment: for each row,
+        the epoch of the SE record whose ``[SESTDTC, SEENDTC]`` interval
+        (date precision; open-ended when ``SEENDTC`` is null) contains the
+        date — the standard cross-domain EPOCH derivation P21 checks
+        against SE.
 
         Args:
             target: Name of the output ``EPOCH`` column.
             date_col: Column containing the date to classify.
             epoch_ranges: A list of ``{"start": date, "end": date,
                 "epoch": str}`` dicts, or a DataFrame with those columns.
+            se: An SE domain frame with ``USUBJID``, ``SESTDTC``,
+                ``SEENDTC``, and ``EPOCH`` columns.  Mutually exclusive
+                with *epoch_ranges*.
+            subject_col: Subject key used to join *se* (default
+                ``"USUBJID"``).
 
         Returns:
             Self: The namespace with *target* appended.
 
-        Examples:
-            Assign epoch from date ranges::
+        Raises:
+            ValueError: When neither or both of *epoch_ranges* and *se*
+                are provided.
 
-                sv = (
-                    raw_df.sdtm
-                    .epoch_assign("EPOCH", date_col="SVSTDTC",
-                                  epoch_ranges=[
-                                      {"start": "2014-01-01", "end": "2014-01-15",
-                                       "epoch": "SCREENING"},
-                                      {"start": "2014-01-16", "end": "2014-04-15",
-                                       "epoch": "TREATMENT"},
-                                  ])
+        Examples:
+            Stamp EPOCH onto any domain from the subject's SE intervals::
+
+                ae = (
+                    ae_raw.sdtm
+                    .assign("USUBJID", source="subject_id")
+                    .date("AESTDTC", source="ae_start_date")
+                    .epoch_assign("EPOCH", date_col="AESTDTC", se=se)
                     .to_frame()
                 )
         """
+        if (epoch_ranges is None) == (se is None):
+            raise ValueError("epoch_assign() takes exactly one of epoch_ranges= or se=")
+
+        if se is not None:
+            se_df = se.collect() if isinstance(se, pl.LazyFrame) else se
+            slim = se_df.select(
+                pl.col(subject_col),
+                pl.col("SESTDTC").alias("__se_st__"),
+                pl.col("SEENDTC").alias("__se_en__"),
+                pl.col("EPOCH").alias("__se_ep__"),
+            )
+            df = self._lazy.collect().with_row_index("__row_idx__")  # type: ignore[attr-defined]
+            date = pl.col(date_col).str.to_date(strict=False)
+            start = pl.col("__se_st__").str.to_date(strict=False)
+            end = pl.col("__se_en__").str.to_date(strict=False)
+            best = (
+                df.join(slim, on=subject_col, how="inner")
+                .filter((date >= start) & (end.is_null() | (date <= end)))
+                .sort("__se_st__")
+                .group_by("__row_idx__")
+                .last()
+                .select("__row_idx__", pl.col("__se_ep__").alias(target))
+            )
+            out = df.join(best, on="__row_idx__", how="left").drop("__row_idx__")
+            return self._materialise_then(out)  # type: ignore[attr-defined]
+
         if isinstance(epoch_ranges, pl.DataFrame):
             ranges = epoch_ranges.to_dicts()
         else:
@@ -696,11 +818,45 @@ def _extract_domain_from_define(domain: str, define_path: Path) -> dict[str, Any
 
 # Static model fields by domain
 _DOMAIN_FIELDS: dict[str, set[str]] = {
-    "TE": {"STUDYID", "DOMAIN", "ETCD", "ELEMENT", "TESTRL", "TEENRL", "TEDUR", "EPOCH"},
-    "TA": {"STUDYID", "DOMAIN", "ARMCD", "ARM", "TAETORD", "ETCD", "ELEMENT", "EPOCH"},
+    "TE": {"STUDYID", "DOMAIN", "ETCD", "ELEMENT", "TESTRL", "TEENRL", "TEDUR"},
+    "TA": {
+        "STUDYID",
+        "DOMAIN",
+        "ARMCD",
+        "ARM",
+        "TAETORD",
+        "ETCD",
+        "ELEMENT",
+        "TABRANCH",
+        "TATRANS",
+        "EPOCH",
+    },
     "TV": {"STUDYID", "DOMAIN", "VISITNUM", "VISIT", "VISITDY", "ARMCD", "TVSTRL", "TVENRL"},
-    "TS": {"STUDYID", "DOMAIN", "TSPARMCD", "TSPARM", "TSVAL", "TSVALNF", "TSVALCD"},
-    "TI": {"STUDYID", "DOMAIN", "IETESTCD", "IETEST", "IECAT", "IESCAT", "TIRL"},
+    "TS": {
+        "STUDYID",
+        "DOMAIN",
+        "TSSEQ",
+        "TSPARMCD",
+        "TSPARM",
+        "TSVAL",
+        "TSVALNF",
+        "TSVALCD",
+        "TSVCDREF",
+        "TSVCDVER",
+    },
+    "TI": {"STUDYID", "DOMAIN", "IETESTCD", "IETEST", "IECAT", "IESCAT", "TIRL", "TIVERS"},
+    "TD": {
+        "STUDYID",
+        "DOMAIN",
+        "TDORDER",
+        "TDANCVAR",
+        "TDSTOFF",
+        "TDTGTPAI",
+        "TDMINPAI",
+        "TDMAXPAI",
+        "TDNUMRPT",
+    },
+    "TM": {"STUDYID", "DOMAIN", "MIDSTYPE", "TMDEF", "TMRPT"},
     "SV": {"STUDYID", "DOMAIN", "USUBJID", "VISITNUM", "VISIT", "SVSTDTC", "SVENDTC", "EPOCH"},
     "SE": {
         "STUDYID",
