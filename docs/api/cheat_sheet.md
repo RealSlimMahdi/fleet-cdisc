@@ -27,13 +27,13 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 | [`.case_when()`][fleet.core._verb_mixin.SharedVerbsMixin.case_when] | Derive a value conditionally over multiple branches.                   | `.case_when("AGEGR1", when=[...], else_="OTHER")`                            |
 | [`.condition_add()`][fleet.sdtm.SDTMNamespace.condition_add]   | Single-condition assignment.                                                | `.condition_add("FLAG", condition=..., then_value="Y")`                      |
 | [`.ae_aerel()`][fleet.sdtm.SDTMNamespace.ae_aerel]             | AE causality mapping.                                                       | `.ae_aerel("AEREL", source="rel_raw", aerel_map={...})`                      |
-| [`.merge()`][fleet.sdtm.SDTMNamespace.merge]                   | Join supplementary dataset on key columns.                                  | `.merge(other, on="USUBJID")`                                                |
+| [`.merge()`][fleet.core._verb_mixin.SharedVerbsMixin.merge]    | Join supplementary dataset on key columns.                                  | `.merge(other, on="USUBJID")`                                                |
 | [`.nodup()`][fleet.core._verb_mixin.SharedVerbsMixin.nodup]    | Detect/remove duplicates with diagnostics.                                  | `.nodup(subset=["USUBJID","VISIT"])`                                         |
 | [`.group_by()`][fleet.sdtm.SDTMNamespace.group_by]             | Aggregate rows by group columns.                                            | `.group_by(by=["USUBJID"], agg=[...])`                                       |
 | [`.seq()`][fleet.sdtm.SDTMNamespace.seq]                       | Generate sequence number per group.                                         | `.seq("AESEQ", by=["USUBJID"])`                                              |
 | [`.nsv()`][fleet.sdtm.SDTMNamespace.nsv]                       | Derive a Non-Standard Variable with qualifier metadata.                     | `.nsv("SAFETY", source="safety_flag", label="Safety Population Flag")`       |
 | [`.export_supp()`][fleet.sdtm.SDTMNamespace.export_supp]       | Export NSV columns as vertical SUPPQUAL (IG ≤3.4).                          | `.export_supp(spec="define.yaml", dataset="DM")`                             |
-| [`.from_spec()`][fleet.sdtm.SDTMNamespace.from_spec]           | Build the entire pipeline from a `define.yaml` spec.                        | `df.sdtm.from_spec("define.yaml", dataset="DM")`                             |
+| [`.from_spec()`][fleet.core._verb_mixin.SharedVerbsMixin.from_spec] | Build the entire pipeline from a `define.yaml` spec.                   | `df.sdtm.from_spec("define.yaml", dataset="DM")`                             |
 | [`.validate()`][fleet.core._verb_mixin.SharedVerbsMixin.validate]             | Run CDISC Rules Engine on the resulting frame.                              | `.validate(domain="DM")`                                                     |
 
 ## ADaM BDS namespace (`df.adam`)
@@ -71,11 +71,11 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 
 | Verb                                                           | Description                                                                 | Example                                                       |
 | -------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| [`.first_date()`][fleet.adam.ADSLNamespace.first_date]         | Earliest date per subject from a second dataset.                            | `.first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")`  |
-| [`.last_date()`][fleet.adam.ADSLNamespace.last_date]           | Latest date per subject from a second dataset.                              | `.last_date("TRTEDT", from_dataset=ex, date_col="EXENDTC")`   |
+| [`.first_date()`][fleet.adam.SharedADaMVerbsMixin.first_date] | Earliest date per subject from a second dataset.                     | `.first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")`  |
+| [`.last_date()`][fleet.adam.SharedADaMVerbsMixin.last_date]   | Latest date per subject from a second dataset.                       | `.last_date("TRTEDT", from_dataset=ex, date_col="EXENDTC")`   |
 | [`.duration()`][fleet.core._verb_mixin.SharedVerbsMixin.duration]             | Number of elapsed days (start to end).                                      | `.duration("TRTDURD", start="TRTSDT", end="TRTEDT")`          |
 | [`.flag()`][fleet.adam.FlagCriterionMixin.flag]                | Generalised `"Y"` flag (first/last/max/min/exists/before/after/expression). | `.flag("SAFFL", criteria='pl.col("EXDOSE") > 0')`             |
-| [`.count_events()`][fleet.adam.ADSLNamespace.count_events]     | Tally events for each subject.                                              | `.count_events("NUMAE", from_dataset=ae)`                     |
+| [`.count_events()`][fleet.adam.SharedADaMVerbsMixin.count_events] | Tally events for each subject.                                   | `.count_events("NUMAE", from_dataset=ae)`                     |
 | [`.age_years()`][fleet.adam.ADSLNamespace.age_years]           | Unit-aware age conversion (YEARS, MONTHS, WEEKS, DAYS).                     | `.age_years("AAGE", age_col="AGE", age_unit_col="AGEU")`      |
 | [`.age_from_dates()`][fleet.adam.ADSLNamespace.age_from_dates] | Compute age between two dates.                                              | `.age_from_dates("AGE", birth="BRTHDT", reference="RFSTDTC")` |
 | [`.derive_period()`][fleet.adam.ADSLNamespace.derive_period]   | Create APxxSDT / APxxEDT / TRTxxP subperiod variables.                      | `.derive_period(periods=[{"number": 1, ...}])`                |

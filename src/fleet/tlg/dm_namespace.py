@@ -46,12 +46,10 @@ class DMSummarySpec(SummarySpecBase):
 
     Defaults provide zero-config convenience for a standard ADSL
     demographics table mixing continuous age statistics with categorical
-    breakdowns of sex, race, ethnicity and age group.
-
-    Args:
-        age_var: Continuous age column (``AGE`` or ``AAGE``).
-        categorical_vars: Ordered list of categorical column names.
-        category_labels: Display labels keyed by categorical column.
+    breakdowns of sex, race, ethnicity and age group.  Each field's
+    ``description`` documents it (rendered by mkdocstrings) — a docstring
+    ``Args:`` section would duplicate them and confuse griffe, since
+    Pydantic fields are not ``__init__`` parameters.
     """
 
     age_var: str = Field(
