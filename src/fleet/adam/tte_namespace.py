@@ -293,7 +293,9 @@ class TTENamespace(SharedADaMVerbsMixin):
         Args:
             paramcd: Restrict to one parameter (required when the frame
                 holds several).
-            by: Grouping columns to carry (e.g. ``["TRT01P"]``).
+            by: Grouping columns to carry (e.g. ``["TRT01P"]``).  Columns
+                not present on the ADTTE rows are pulled from the pinned
+                ADSL automatically.
 
         Returns:
             pl.DataFrame: ``USUBJID | duration | event [| by...]``.
@@ -322,6 +324,26 @@ class TTENamespace(SharedADaMVerbsMixin):
             raise DerivationError(
                 "km_data(): several parameters present — pass paramcd= to pick one."
             )
+
+        # Group columns absent from the ADTTE rows resolve from the pinned
+        # ADSL (the admiral template's post-hoc derive_vars_merged, built in).
+        needed = [c for c in (by or []) if c not in df.columns]
+        if needed:
+            pinned = getattr(self, "_pinned", {})
+            if "ADSL" not in pinned:
+                raise DerivationError(
+                    f"km_data(): column(s) {needed} not on the ADTTE rows and no "
+                    "ADSL is pinned to resolve them — pin ADSL or join_adsl() first."
+                )
+            adsl_df, join_on = pinned["ADSL"]
+            missing = [c for c in needed if c not in adsl_df.columns]
+            if missing:
+                raise DerivationError(
+                    f"km_data(): column(s) {missing} not found on the ADTTE rows "
+                    "nor in the pinned ADSL."
+                )
+            df = df.join(adsl_df.select(list(join_on) + needed), on=list(join_on), how="left")
+
         cols = [
             pl.col("USUBJID"),
             pl.col("AVAL").alias("duration"),

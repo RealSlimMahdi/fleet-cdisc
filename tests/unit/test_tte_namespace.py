@@ -549,3 +549,22 @@ class TestInspectability:
         ns = _os(adsl.adam.tte.pin("ADSL", adsl), retain="censor_at_start")
         names = [node.name for node in ns._lineage]
         assert "OS" in names
+
+
+class TestKmDataGrouping:
+    def test_km_data_pulls_group_columns_from_pinned_adsl(self, adsl):
+        """by= columns absent from the ADTTE rows resolve from the ADSL pin."""
+        universe = adsl.with_columns(pl.Series("TRT01P", ["Drug A", "Placebo", "Drug A"]))
+        km = (
+            _os(universe.adam.tte.pin("ADSL", universe), retain="censor_at_start")
+            .aval()
+            .km_data("OS", by=["TRT01P"])
+            .sort("USUBJID")
+        )
+        assert km.columns == ["USUBJID", "duration", "event", "TRT01P"]
+        assert km["TRT01P"].to_list() == ["Drug A", "Placebo", "Drug A"]
+
+    def test_km_data_unknown_group_column_raises(self, adsl):
+        ns = _os(adsl.adam.tte.pin("ADSL", adsl), retain="censor_at_start").aval()
+        with pytest.raises(Exception, match="nor in the pinned ADSL"):
+            ns.km_data("OS", by=["NOPE"])
