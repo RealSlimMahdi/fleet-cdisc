@@ -802,6 +802,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#fleet-tdd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet tdd
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="fleet tdd">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fleet-tdd-build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet tdd build
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fleet-tdd-audit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet tdd audit
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#fleet-tlg" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2246,6 +2285,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#fleet-tdd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet tdd
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="fleet tdd">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fleet-tdd-build" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet tdd build
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fleet-tdd-audit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet tdd audit
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#fleet-tlg" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2529,6 +2607,10 @@ set it in a <code>.env</code> file at your project root or as an environment var
 <tr>
 <td><a href="#fleet-migrate"><code>fleet migrate</code></a></td>
 <td>Rewrite removed pre-alpha verb/kwarg spellings to canonical ones (libcst).</td>
+</tr>
+<tr>
+<td><a href="#fleet-tdd"><code>fleet tdd</code></a></td>
+<td>Trial design workflow: build/audit TDD datasets from trial_design.yaml.</td>
 </tr>
 <tr>
 <td><a href="#fleet-tlg"><code>fleet tlg</code></a></td>
@@ -2924,6 +3006,57 @@ set it in a <code>.env</code> file at your project root or as an environment var
 <td><code>--write</code></td>
 <td><em>(none)</em></td>
 <td>Rewrite files in place (default: print a unified diff).</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="fleet-tdd"><code>fleet tdd</code><a class="headerlink" href="#fleet-tdd" title="Permanent link">&para;</a></h2>
+<h3 id="fleet-tdd-build"><code>fleet tdd build</code><a class="headerlink" href="#fleet-tdd-build" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--design</code></td>
+<td><code>trial_design.yaml</code></td>
+<td>Path to the trial design YAML spec (default: ./trial_design.yaml).</td>
+</tr>
+<tr>
+<td><code>--out</code> / <code>-o</code></td>
+<td><code>.</code></td>
+<td>Output directory (default: current directory).</td>
+</tr>
+<tr>
+<td><code>--format</code></td>
+<td><code>parquet</code></td>
+<td>Output format (default: parquet). Choices: <code>parquet</code>, <code>xpt</code>, <code>dataset-json</code>.</td>
+</tr>
+<tr>
+<td><code>--force</code></td>
+<td><em>(none)</em></td>
+<td>Write datasets even when the conformance audit reports errors.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="fleet-tdd-audit"><code>fleet tdd audit</code><a class="headerlink" href="#fleet-tdd-audit" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--design</code></td>
+<td><code>trial_design.yaml</code></td>
+<td>Path to the trial design YAML spec (default: ./trial_design.yaml).</td>
 </tr>
 </tbody>
 </table>
@@ -3482,7 +3615,7 @@ set it in a <code>.env</code> file at your project root or as an environment var
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 9, 2026 15:11:23 UTC">July 9, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 10, 2026 10:06:19 UTC">July 10, 2026</span>
   </span>
 
     

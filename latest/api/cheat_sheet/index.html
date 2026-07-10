@@ -1333,10 +1333,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#trial-design-dfsdtmtdd" class="md-nav__link">
+  <a href="#trial-design-dfsdtm-verbs-fleetstudydesign" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Trial Design (df.sdtm.tdd)
+        Trial Design (df.sdtm verbs + fleet.StudyDesign)
       
     </span>
   </a>
@@ -1914,10 +1914,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#trial-design-dfsdtmtdd" class="md-nav__link">
+  <a href="#trial-design-dfsdtm-verbs-fleetstudydesign" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Trial Design (df.sdtm.tdd)
+        Trial Design (df.sdtm verbs + fleet.StudyDesign)
       
     </span>
   </a>
@@ -2393,7 +2393,10 @@
 </tr>
 </tbody>
 </table>
-<h2 id="trial-design-dfsdtmtdd">Trial Design (<code>df.sdtm.tdd</code>)<a class="headerlink" href="#trial-design-dfsdtmtdd" title="Permanent link">&para;</a></h2>
+<h2 id="trial-design-dfsdtm-verbs-fleetstudydesign">Trial Design (<code>df.sdtm</code> verbs + <code>fleet.StudyDesign</code>)<a class="headerlink" href="#trial-design-dfsdtm-verbs-fleetstudydesign" title="Permanent link">&para;</a></h2>
+<p>TDD verbs live directly on <code>df.sdtm</code> (there is no <code>.tdd</code> sub-namespace).
+<code>fleet.StudyDesign</code> is the define-once aggregate that derives every TDD
+domain — see the <a href="../../concepts/tdd/">Trial Design concepts page</a>.</p>
 <table>
 <thead>
 <tr>
@@ -2405,58 +2408,68 @@
 <tbody>
 <tr>
 <td><a class="autorefs autorefs-internal" title="            fetch_structure" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.fetch_structure"><code>.fetch_structure()</code></a></td>
-<td>Fetch TDD structure from CDISC Library.</td>
-<td><code>df.sdtm.tdd.fetch_structure(domain="TA")</code></td>
+<td>Load domain IG structure (packaged offline for 3.4).</td>
+<td><code>df.sdtm.fetch_structure("TA")</code></td>
 </tr>
 <tr>
-<td><a class="autorefs autorefs-internal" title="            add_arms" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.add_arms"><code>.add_arms()</code></a></td>
-<td>Define study arms.</td>
-<td><code>.add_arms([...])</code></td>
+<td><a class="autorefs autorefs-internal" title="            study_header" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.study_header"><code>.study_header()</code></a></td>
+<td>Hardcode STUDYID and DOMAIN.</td>
+<td><code>.study_header("STUDY01", "TA")</code></td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="            add_elements" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.add_elements"><code>.add_elements()</code></a></td>
-<td>Define trial elements.</td>
-<td><code>.add_elements([...])</code></td>
+<td>Load a <code>TrialElements</code> collection (TE).</td>
+<td><code>.add_elements(te_rows)</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            add_arms" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.add_arms"><code>.add_arms()</code></a></td>
+<td>Load a <code>TrialArms</code> collection (TA), FK vs TE.</td>
+<td><code>.add_arms(ta_rows, te=te_rows)</code></td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="            add_visits" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.add_visits"><code>.add_visits()</code></a></td>
-<td>Define visits.</td>
-<td><code>.add_visits([...])</code></td>
-</tr>
-<tr>
-<td><a class="autorefs autorefs-internal" title="            add_criteria" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.add_criteria"><code>.add_criteria()</code></a></td>
-<td>Define inclusion/exclusion criteria.</td>
-<td><code>.add_criteria([...])</code></td>
+<td>Load a <code>TrialVisits</code> collection (TV), FK vs TA.</td>
+<td><code>.add_visits(tv_rows, ta=ta_rows)</code></td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="            add_parameters" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.add_parameters"><code>.add_parameters()</code></a></td>
-<td>Define trial summary parameters.</td>
-<td><code>.add_parameters([...])</code></td>
+<td>Load a <code>TrialParameters</code> collection (TS).</td>
+<td><code>.add_parameters(ts_rows)</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            add_criteria" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.add_criteria"><code>.add_criteria()</code></a></td>
+<td>Load a <code>TrialCriteria</code> collection (TI).</td>
+<td><code>.add_criteria(ti_rows)</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            add_disease_assessments" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.add_disease_assessments"><code>.add_disease_assessments()</code></a></td>
+<td>Load a <code>TrialDiseaseAssessments</code> collection (TD).</td>
+<td><code>.add_disease_assessments(td_rows)</code></td>
+</tr>
+<tr>
+<td><a class="autorefs autorefs-internal" title="            add_milestones" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.add_milestones"><code>.add_milestones()</code></a></td>
+<td>Load a <code>TrialMilestones</code> collection (TM).</td>
+<td><code>.add_milestones(tm_rows)</code></td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="            element_boundaries" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.element_boundaries"><code>.element_boundaries()</code></a></td>
-<td>Compute element start/end.</td>
-<td><code>.element_boundaries()</code></td>
+<td>Compute element start/end (SE).</td>
+<td><code>.element_boundaries("SESTDTC", "SEENDTC", ...)</code></td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="            epoch_assign" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.epoch_assign"><code>.epoch_assign()</code></a></td>
-<td>Assign epochs to events.</td>
-<td><code>.epoch_assign()</code></td>
+<td>Assign EPOCH from date ranges or per-subject SE.</td>
+<td><code>.epoch_assign("EPOCH", date_col="AESTDTC", se=se)</code></td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="            visit_map" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.visit_map"><code>.visit_map()</code></a></td>
-<td>Map planned ↔ actual visits.</td>
-<td><code>.visit_map()</code></td>
+<td>Map planned ↔ actual visits (SV).</td>
+<td><code>.visit_map("VISITNUM", "VISIT", ...)</code></td>
 </tr>
 <tr>
 <td><a class="autorefs autorefs-internal" title="            duration" href="../core/#fleet.core._verb_mixin.SharedVerbsMixin.duration"><code>.duration()</code></a></td>
 <td>Derive study day from reference.</td>
 <td><code>.duration("SVSTDY", start="RFSTDTC", end="SVSTDTC")</code></td>
-</tr>
-<tr>
-<td><a class="autorefs autorefs-internal" title="            study_header" href="../tdd/#fleet.sdtm._tdd_mixin.TrialDesignMixin.study_header"><code>.study_header()</code></a></td>
-<td>Build the trial summary (TS) header.</td>
-<td><code>.study_header(...)</code></td>
 </tr>
 </tbody>
 </table>
@@ -2492,7 +2505,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 9, 2026 15:11:23 UTC">July 9, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 10, 2026 10:06:19 UTC">July 10, 2026</span>
   </span>
 
     
