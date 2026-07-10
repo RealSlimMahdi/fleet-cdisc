@@ -107,21 +107,27 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 | [`.avalcat()`][fleet.adam.pk_namespace.PKNamespace.avalcat]                 | Listing-ready categorised analysis value.                           | `.avalcat("AVALCAT1", conc_col="PCSTRESC", lloq_col="PCLLOQ")`   |
 | [`.anl_flag()`][fleet.adam.pk_namespace.PKNamespace.anl_flag]               | Analysis flag (`ANL01FL` / `ANL02FL`).                              | `.anl_flag("ANL01FL")`                                           |
 
-## Trial Design (`df.sdtm.tdd`)
+## Trial Design (`df.sdtm` verbs + `fleet.StudyDesign`)
 
-| Verb                                                                                 | Description                             | Example                                               |
-| ------------------------------------------------------------------------------------ | --------------------------------------- | ----------------------------------------------------- |
-| [`.fetch_structure()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.fetch_structure]       | Fetch TDD structure from CDISC Library. | `df.sdtm.tdd.fetch_structure(domain="TA")`            |
-| [`.add_arms()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_arms]                     | Define study arms.                      | `.add_arms([...])`                                    |
-| [`.add_elements()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_elements]             | Define trial elements.                  | `.add_elements([...])`                                |
-| [`.add_visits()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_visits]                 | Define visits.                          | `.add_visits([...])`                                  |
-| [`.add_criteria()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_criteria]             | Define inclusion/exclusion criteria.    | `.add_criteria([...])`                                |
-| [`.add_parameters()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_parameters]         | Define trial summary parameters.        | `.add_parameters([...])`                              |
-| [`.element_boundaries()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.element_boundaries] | Compute element start/end.              | `.element_boundaries()`                               |
-| [`.epoch_assign()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.epoch_assign]             | Assign epochs to events.                | `.epoch_assign()`                                     |
-| [`.visit_map()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.visit_map]                   | Map planned ↔ actual visits.            | `.visit_map()`                                        |
-| [`.duration()`][fleet.core._verb_mixin.SharedVerbsMixin.duration]                     | Derive study day from reference.        | `.duration("SVSTDY", start="RFSTDTC", end="SVSTDTC")` |
-| [`.study_header()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.study_header]             | Build the trial summary (TS) header.    | `.study_header(...)`                                  |
+TDD verbs live directly on `df.sdtm` (there is no `.tdd` sub-namespace).
+`fleet.StudyDesign` is the define-once aggregate that derives every TDD
+domain — see the [Trial Design concepts page](../concepts/tdd.md).
+
+| Verb                                                                                            | Description                                            | Example                                               |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------ | ----------------------------------------------------- |
+| [`.fetch_structure()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.fetch_structure]                   | Load domain IG structure (packaged offline for 3.4).   | `df.sdtm.fetch_structure("TA")`                       |
+| [`.study_header()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.study_header]                         | Hardcode STUDYID and DOMAIN.                           | `.study_header("STUDY01", "TA")`                      |
+| [`.add_elements()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_elements]                         | Load a `TrialElements` collection (TE).                | `.add_elements(te_rows)`                              |
+| [`.add_arms()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_arms]                                 | Load a `TrialArms` collection (TA), FK vs TE.          | `.add_arms(ta_rows, te=te_rows)`                      |
+| [`.add_visits()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_visits]                             | Load a `TrialVisits` collection (TV), FK vs TA.        | `.add_visits(tv_rows, ta=ta_rows)`                    |
+| [`.add_parameters()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_parameters]                     | Load a `TrialParameters` collection (TS).              | `.add_parameters(ts_rows)`                            |
+| [`.add_criteria()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_criteria]                         | Load a `TrialCriteria` collection (TI).                | `.add_criteria(ti_rows)`                              |
+| [`.add_disease_assessments()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_disease_assessments]   | Load a `TrialDiseaseAssessments` collection (TD).      | `.add_disease_assessments(td_rows)`                   |
+| [`.add_milestones()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.add_milestones]                     | Load a `TrialMilestones` collection (TM).              | `.add_milestones(tm_rows)`                            |
+| [`.element_boundaries()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.element_boundaries]             | Compute element start/end (SE).                        | `.element_boundaries("SESTDTC", "SEENDTC", ...)`      |
+| [`.epoch_assign()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.epoch_assign]                         | Assign EPOCH from date ranges or per-subject SE.       | `.epoch_assign("EPOCH", date_col="AESTDTC", se=se)`   |
+| [`.visit_map()`][fleet.sdtm._tdd_mixin.TrialDesignMixin.visit_map]                               | Map planned ↔ actual visits (SV).                      | `.visit_map("VISITNUM", "VISIT", ...)`                |
+| [`.duration()`][fleet.core._verb_mixin.SharedVerbsMixin.duration]                                 | Derive study day from reference.                       | `.duration("SVSTDY", start="RFSTDTC", end="SVSTDTC")` |
 
 ---
 

@@ -1,8 +1,8 @@
 """Trial Design Domain (TDD) Pydantic models.
 
 Provides row models, collection models, constrained types, and an ``Epoch``
-enum for the seven CDISC Trial Design domains: TE, TA, TV, TS, TI (protocol-
-reference) and SV, SE (subject-level).
+enum for the CDISC Trial Design domains: TE, TA, TV, TS, TI, TD, TM
+(protocol-reference) and SV, SE (subject-level).
 
 Each **row model** maps one record in the target SDTM domain and carries a
 ``_SDTM_MAP`` that translates Python-friendly field names to official CDISC
@@ -64,6 +64,10 @@ class Epoch(StrEnum):
 # Constrained types                                                    #
 # ------------------------------------------------------------------ #
 
+# C99079 is an extensible codelist: accept the standard Epoch enum first,
+# then any sponsor-defined term in CT casing (upper-case words).
+EpochLike = Epoch | Annotated[str, Field(min_length=1, max_length=40, pattern=r"^[A-Z0-9 /()\-]+$")]
+
 ElementCode = Annotated[
     str,
     Field(min_length=1, max_length=8, pattern=r"^[A-Z0-9_]+$"),
@@ -85,7 +89,12 @@ RuleExpression = Annotated[str, Field(max_length=2000)]
 
 
 class TrialElement(BaseModel):
-    """One row in the TE (Trial Elements) domain."""
+    """One row in the TE (Trial Elements) domain.
+
+    ``epoch`` is a design-time attribute: SDTMIG 3.4 has no EPOCH variable
+    in TE, so it is excluded from ``to_polars()`` output — but it drives the
+    element→epoch mapping used when deriving TA and SE.
+    """
 
     _SDTM_MAP: ClassVar[dict[str, str]] = {
         "etcd": "ETCD",
@@ -93,7 +102,6 @@ class TrialElement(BaseModel):
         "testrl": "TESTRL",
         "teenrl": "TEENRL",
         "tedur": "TEDUR",
-        "epoch": "EPOCH",
     }
 
     etcd: ElementCode
@@ -101,7 +109,7 @@ class TrialElement(BaseModel):
     testrl: RuleExpression = ""
     teenrl: RuleExpression = ""
     tedur: ISODuration | Literal[""] = ""
-    epoch: Epoch
+    epoch: EpochLike
 
 
 class TrialArm(BaseModel):
@@ -113,6 +121,8 @@ class TrialArm(BaseModel):
         "taetord": "TAETORD",
         "etcd": "ETCD",
         "element": "ELEMENT",
+        "tabranch": "TABRANCH",
+        "tatrans": "TATRANS",
         "epoch": "EPOCH",
     }
 
@@ -121,7 +131,9 @@ class TrialArm(BaseModel):
     taetord: int = Field(ge=1)
     etcd: ElementCode
     element: str = Field(min_length=1, max_length=200)
-    epoch: Epoch
+    tabranch: RuleExpression = ""
+    tatrans: RuleExpression = ""
+    epoch: EpochLike
 
 
 class TrialVisit(BaseModel):
@@ -148,18 +160,24 @@ class TrialParameter(BaseModel):
     """One row in the TS (Trial Summary) domain."""
 
     _SDTM_MAP: ClassVar[dict[str, str]] = {
+        "tsseq": "TSSEQ",
         "tsparmcd": "TSPARMCD",
         "tsparm": "TSPARM",
         "tsval": "TSVAL",
         "tsvalnf": "TSVALNF",
         "tsvalcd": "TSVALCD",
+        "tsvcdref": "TSVCDREF",
+        "tsvcdver": "TSVCDVER",
     }
 
+    tsseq: int = Field(default=1, ge=1)
     tsparmcd: str = Field(min_length=1, max_length=8, pattern=r"^[A-Z0-9_]+$")
     tsparm: str = Field(min_length=1, max_length=200)
     tsval: str = ""
     tsvalnf: str = ""
     tsvalcd: str = ""
+    tsvcdref: str = ""
+    tsvcdver: str = ""
 
 
 class TrialCriterion(BaseModel):
@@ -171,6 +189,7 @@ class TrialCriterion(BaseModel):
         "iecat": "IECAT",
         "iescat": "IESCAT",
         "tirl": "TIRL",
+        "tivers": "TIVERS",
     }
 
     ietestcd: str = Field(min_length=1, max_length=8, pattern=r"^[A-Z0-9_]+$")
@@ -178,11 +197,60 @@ class TrialCriterion(BaseModel):
     iecat: Literal["INCLUSION", "EXCLUSION"]
     iescat: str = ""
     tirl: RuleExpression = ""
+    tivers: str = ""
+
+
+class TrialDiseaseAssessment(BaseModel):
+    """One row in the TD (Trial Disease Assessments) domain."""
+
+    _SDTM_MAP: ClassVar[dict[str, str]] = {
+        "tdorder": "TDORDER",
+        "tdancvar": "TDANCVAR",
+        "tdstoff": "TDSTOFF",
+        "tdtgtpai": "TDTGTPAI",
+        "tdminpai": "TDMINPAI",
+        "tdmaxpai": "TDMAXPAI",
+        "tdnumrpt": "TDNUMRPT",
+    }
+
+    tdorder: int = Field(ge=1)
+    tdancvar: str = Field(min_length=1, max_length=8)
+    tdstoff: ISODuration | Literal[""] = ""
+    tdtgtpai: ISODuration
+    tdminpai: ISODuration | Literal[""] = ""
+    tdmaxpai: ISODuration | Literal[""] = ""
+    tdnumrpt: int = Field(ge=1)
+
+
+class TrialMilestone(BaseModel):
+    """One row in the TM (Trial Disease Milestones) domain."""
+
+    _SDTM_MAP: ClassVar[dict[str, str]] = {
+        "midstype": "MIDSTYPE",
+        "tmdef": "TMDEF",
+        "tmrpt": "TMRPT",
+    }
+
+    midstype: str = Field(min_length=1, max_length=200)
+    tmdef: str = Field(min_length=1, max_length=2000)
+    tmrpt: Literal["Y", "N"]
 
 
 # ------------------------------------------------------------------ #
 # Collection models                                                    #
 # ------------------------------------------------------------------ #
+
+
+def _rows_to_polars(rows: list[BaseModel]) -> pl.DataFrame:
+    """Convert row models to a DataFrame with CDISC names via ``_SDTM_MAP``."""
+    dicts = [
+        {
+            sdtm: v.value if isinstance(v := getattr(row, field), Enum) else v
+            for field, sdtm in type(row)._SDTM_MAP.items()
+        }
+        for row in rows
+    ]
+    return pl.DataFrame(dicts)
 
 
 class TrialElements(BaseModel):
@@ -220,14 +288,7 @@ class TrialElements(BaseModel):
                 te = TrialElements(elements=[...])
                 df = te.to_polars()
         """
-        rows = [
-            {
-                v: getattr(e, k) if not isinstance(getattr(e, k), Enum) else getattr(e, k).value
-                for k, v in TrialElement._SDTM_MAP.items()
-            }
-            for e in self.elements
-        ]
-        return pl.DataFrame(rows)
+        return _rows_to_polars(self.elements)
 
 
 class TrialArms(BaseModel):
@@ -261,14 +322,7 @@ class TrialArms(BaseModel):
                 ta = TrialArms(arms=[...])
                 df = ta.to_polars()
         """
-        rows = [
-            {
-                v: getattr(a, k) if not isinstance(getattr(a, k), Enum) else getattr(a, k).value
-                for k, v in TrialArm._SDTM_MAP.items()
-            }
-            for a in self.arms
-        ]
-        return pl.DataFrame(rows)
+        return _rows_to_polars(self.arms)
 
 
 class TrialVisits(BaseModel):
@@ -291,6 +345,69 @@ class TrialVisits(BaseModel):
             raise ValueError("VISITDY must increase with VISITNUM")
         return self
 
+    @classmethod
+    def from_schedule(
+        cls,
+        schedule: list[tuple[str, int]],
+        *,
+        anchor: str = "RANDOMIZATION",
+        window: int | tuple[int, int] | None = None,
+    ) -> TrialVisits:
+        """Build a visit schedule from day offsets relative to an anchor event.
+
+        Visits are sorted by offset; ``VISITNUM`` is assigned 1..N in that
+        order and ``VISITDY`` follows the CDISC no-day-zero convention
+        (offset 0 → day 1, negative offsets stay negative).  ``TVSTRL`` is
+        rendered deterministically from the offset, anchor, and window, so
+        rule text stays consistent across visits and study amendments.
+
+        Args:
+            schedule: ``(visit_name, day_offset)`` pairs; offsets are days
+                relative to the *anchor* event (day 0).
+            anchor: Name of the anchoring milestone (e.g. ``"RANDOMIZATION"``).
+            window: Allowed deviation in days — a single int for a symmetric
+                window or a ``(before, after)`` tuple.
+
+        Returns:
+            TrialVisits: A validated collection ready for ``add_visits()``.
+
+        Examples:
+            Build a 12-week schedule anchored on randomization::
+
+                tv_rows = TrialVisits.from_schedule(
+                    [("Screening", -14), ("Baseline", 0), ("Week 4", 28),
+                     ("Week 8", 56), ("Week 12", 84)],
+                    anchor="RANDOMIZATION",
+                    window=3,
+                )
+                tv = (
+                    fleet.frame(pl.DataFrame()).sdtm
+                    .fetch_structure("TV")
+                    .study_header("CDISCPILOT01", "TV")
+                    .add_visits(tv_rows)
+                    .to_frame()
+                )
+        """
+        before, after = (window, window) if isinstance(window, int) else (window or (0, 0))
+        window_txt = f"; window -{before}/+{after} days" if window else ""
+        visits = []
+        for num, (name, offset) in enumerate(sorted(schedule, key=lambda p: p[1]), start=1):
+            if offset == 0:
+                rule = f"On day of {anchor}"
+            elif offset > 0:
+                rule = f"{offset} days after {anchor}"
+            else:
+                rule = f"{-offset} days before {anchor}"
+            visits.append(
+                TrialVisit(
+                    visitnum=num,
+                    visit=name,
+                    visitdy=offset + 1 if offset >= 0 else offset,
+                    tvstrl=rule + window_txt,
+                )
+            )
+        return cls(visits=visits)
+
     def to_polars(self) -> pl.DataFrame:
         """Convert validated visits to a Polars DataFrame with SDTM names.
 
@@ -304,10 +421,7 @@ class TrialVisits(BaseModel):
                 tv = TrialVisits(visits=[...])
                 df = tv.to_polars()
         """
-        rows = [
-            {v: getattr(vis, k) for k, v in TrialVisit._SDTM_MAP.items()} for vis in self.visits
-        ]
-        return pl.DataFrame(rows)
+        return _rows_to_polars(self.visits)
 
 
 class TrialParameters(BaseModel):
@@ -317,10 +431,54 @@ class TrialParameters(BaseModel):
 
     @model_validator(mode="after")
     def check_unique_tsparmcd(self) -> TrialParameters:
-        codes = [p.tsparmcd for p in self.parameters]
-        if len(codes) != len(set(codes)):
-            raise ValueError("Duplicate TSPARMCD values")
+        keys = [(p.tsparmcd, p.tsseq) for p in self.parameters]
+        if len(keys) != len(set(keys)):
+            dupes = {k for k in keys if keys.count(k) > 1}
+            raise ValueError(f"Duplicate (TSPARMCD, TSSEQ) pairs: {sorted(dupes)}")
         return self
+
+    @classmethod
+    def from_ctgov(cls, nct_id: str, *, timeout: float = 30.0) -> TrialParameters:
+        """Seed TS parameters from a ClinicalTrials.gov registration.
+
+        Fetches the study record from the ClinicalTrials.gov v2 JSON API and
+        maps the cleanly-derivable fields to TS parameters.  The result is a
+        **starting point**, not a submission-ready TS: dictionary-bound
+        parameters (INDIC/SNOMED, TRT/UNII, PCLAS/MED-RT) are deliberately
+        not guessed and must be added by the study team.
+
+        Args:
+            nct_id: ClinicalTrials.gov identifier (e.g. ``"NCT01234567"``).
+            timeout: HTTP timeout in seconds.
+
+        Returns:
+            TrialParameters: Collection with one row per derivable parameter
+                (repeating parameters such as FCNTRY get incrementing TSSEQ).
+
+        Raises:
+            httpx.HTTPStatusError: When the NCT ID is unknown to the registry.
+
+        Examples:
+            Seed TS from the registry, then extend and build::
+
+                ts_rows = TrialParameters.from_ctgov("NCT00048217")
+                ts = (
+                    fleet.frame(pl.DataFrame()).sdtm
+                    .fetch_structure("TS")
+                    .study_header("CDISCPILOT01", "TS")
+                    .add_parameters(ts_rows)
+                    .to_frame()
+                )
+        """
+        import httpx
+
+        resp = httpx.get(
+            f"https://clinicaltrials.gov/api/v2/studies/{nct_id}",
+            timeout=timeout,
+            follow_redirects=True,
+        )
+        resp.raise_for_status()
+        return cls(parameters=_ctgov_to_parameters(resp.json()))
 
     def to_polars(self) -> pl.DataFrame:
         """Convert validated parameters to a Polars DataFrame with SDTM names.
@@ -335,10 +493,7 @@ class TrialParameters(BaseModel):
                 ts = TrialParameters(parameters=[...])
                 df = ts.to_polars()
         """
-        rows = [
-            {v: getattr(p, k) for k, v in TrialParameter._SDTM_MAP.items()} for p in self.parameters
-        ]
-        return pl.DataFrame(rows)
+        return _rows_to_polars(self.parameters)
 
 
 class TrialCriteria(BaseModel):
@@ -366,10 +521,141 @@ class TrialCriteria(BaseModel):
                 ti = TrialCriteria(criteria=[...])
                 df = ti.to_polars()
         """
-        rows = [
-            {v: getattr(c, k) for k, v in TrialCriterion._SDTM_MAP.items()} for c in self.criteria
-        ]
-        return pl.DataFrame(rows)
+        return _rows_to_polars(self.criteria)
+
+
+class TrialDiseaseAssessments(BaseModel):
+    """Typed collection of TD rows."""
+
+    assessments: list[TrialDiseaseAssessment]
+
+    @model_validator(mode="after")
+    def check_unique_tdorder(self) -> TrialDiseaseAssessments:
+        orders = [a.tdorder for a in self.assessments]
+        if len(orders) != len(set(orders)):
+            raise ValueError("Duplicate TDORDER values")
+        return self
+
+    def to_polars(self) -> pl.DataFrame:
+        """Convert validated assessments to a Polars DataFrame with SDTM names.
+
+        Returns:
+            pl.DataFrame: DataFrame with columns named per CDISC SDTM (e.g.
+                ``TDORDER``, ``TDANCVAR``, ``TDTGTPAI``).
+
+        Examples:
+            Materialise trial disease assessments::
+
+                td = TrialDiseaseAssessments(assessments=[...])
+                df = td.to_polars()
+        """
+        return _rows_to_polars(self.assessments)
+
+
+class TrialMilestones(BaseModel):
+    """Typed collection of TM rows."""
+
+    milestones: list[TrialMilestone]
+
+    @model_validator(mode="after")
+    def check_unique_midstype(self) -> TrialMilestones:
+        types = [m.midstype for m in self.milestones]
+        if len(types) != len(set(types)):
+            raise ValueError("Duplicate MIDSTYPE values")
+        return self
+
+    def to_polars(self) -> pl.DataFrame:
+        """Convert validated milestones to a Polars DataFrame with SDTM names.
+
+        Returns:
+            pl.DataFrame: DataFrame with columns named per CDISC SDTM (e.g.
+                ``MIDSTYPE``, ``TMDEF``, ``TMRPT``).
+
+        Examples:
+            Materialise trial disease milestones::
+
+                tm = TrialMilestones(milestones=[...])
+                df = tm.to_polars()
+        """
+        return _rows_to_polars(self.milestones)
+
+
+# ------------------------------------------------------------------ #
+# ClinicalTrials.gov v2 → TS parameters                                #
+# ------------------------------------------------------------------ #
+
+# ctgov enum → CDISC C66737 (Trial Phase) submission values
+_CTGOV_PHASE = {
+    "EARLY_PHASE1": "PHASE 0 TRIAL",
+    "PHASE1": "PHASE I TRIAL",
+    "PHASE1|PHASE2": "PHASE I/II TRIAL",
+    "PHASE2": "PHASE II TRIAL",
+    "PHASE2|PHASE3": "PHASE II/III TRIAL",
+    "PHASE3": "PHASE III TRIAL",
+    "PHASE4": "PHASE IV TRIAL",
+    "NA": "NOT APPLICABLE",
+}
+_CTGOV_MASKING = {"NONE": "OPEN LABEL", "SINGLE": "SINGLE BLIND", "DOUBLE": "DOUBLE BLIND"}
+_CTGOV_SEX = {"ALL": "BOTH", "FEMALE": "F", "MALE": "M"}
+_CTGOV_AGE_RE = re.compile(r"(\d+)\s*(Year|Month|Week|Day)", re.IGNORECASE)
+
+
+def _ctgov_age_to_iso(age: str | None) -> str | None:
+    """``"50 Years"`` → ``"P50Y"`` (None when unparseable)."""
+    m = _CTGOV_AGE_RE.match(age or "")
+    return f"P{m.group(1)}{m.group(2)[0].upper()}" if m else None
+
+
+def _ctgov_to_parameters(study: dict) -> list[TrialParameter]:
+    """Map a ClinicalTrials.gov v2 study record to TS parameter rows."""
+    proto = study.get("protocolSection", {})
+    ident = proto.get("identificationModule", {})
+    status = proto.get("statusModule", {})
+    design = proto.get("designModule", {})
+    design_info = design.get("designInfo", {})
+    elig = proto.get("eligibilityModule", {})
+    rows: list[TrialParameter] = []
+
+    def add(code: str, name: str, value: object, seq: int = 1) -> None:
+        if value not in (None, "", []):
+            rows.append(TrialParameter(tsseq=seq, tsparmcd=code, tsparm=name, tsval=str(value)))
+
+    add("REGID", "Registry Identifier", ident.get("nctId"))
+    add("TITLE", "Trial Title", ident.get("officialTitle") or ident.get("briefTitle"))
+    add("STYPE", "Study Type", design.get("studyType"))
+    add(
+        "TPHASE", "Trial Phase Classification", _CTGOV_PHASE.get("|".join(design.get("phases", [])))
+    )
+    add("INTMODEL", "Intervention Model", design_info.get("interventionModel"))
+    allocation = design_info.get("allocation")
+    if allocation in ("RANDOMIZED", "NON_RANDOMIZED"):
+        add("RANDOM", "Trial is Randomized", "Y" if allocation == "RANDOMIZED" else "N")
+    masking = design_info.get("maskingInfo", {}).get("masking")
+    add("TBLIND", "Trial Blinding Schema", _CTGOV_MASKING.get(masking, masking))
+    arms = proto.get("armsInterventionsModule", {}).get("armGroups", [])
+    add("NARMS", "Planned Number of Arms", len(arms) or None)
+    add("PLANSUB", "Planned Number of Subjects", design.get("enrollmentInfo", {}).get("count"))
+    add("AGEMIN", "Planned Minimum Age of Subjects", _ctgov_age_to_iso(elig.get("minimumAge")))
+    add("AGEMAX", "Planned Maximum Age of Subjects", _ctgov_age_to_iso(elig.get("maximumAge")))
+    add("SEXPOP", "Sex of Participants", _CTGOV_SEX.get(elig.get("sex", "")))
+    if isinstance(elig.get("healthyVolunteers"), bool):
+        add("HLTSUBJI", "Healthy Subject Indicator", "Y" if elig["healthyVolunteers"] else "N")
+    add("SSTDTC", "Study Start Date", status.get("startDateStruct", {}).get("date"))
+    if status.get("overallStatus") == "COMPLETED":
+        add("SENDTC", "Study End Date", status.get("completionDateStruct", {}).get("date"))
+    add(
+        "SPONSOR",
+        "Clinical Study Sponsor",
+        proto.get("sponsorCollaboratorsModule", {}).get("leadSponsor", {}).get("name"),
+    )
+    outcomes = proto.get("outcomesModule", {}).get("primaryOutcomes", [])
+    for seq, outcome in enumerate(outcomes, start=1):
+        add("OUTMSPRI", "Primary Outcome Measure", outcome.get("measure"), seq=seq)
+    locations = proto.get("contactsLocationsModule", {}).get("locations", [])
+    countries = sorted({loc["country"] for loc in locations if loc.get("country")})
+    for seq, country in enumerate(countries, start=1):
+        add("FCNTRY", "Planned Country of Investigational Sites", country, seq=seq)
+    return rows
 
 
 # ------------------------------------------------------------------ #
@@ -523,6 +809,10 @@ def parse_trial_design(
     # If no labelled edges, treat as single-arm
     if len(arm_paths) == 1 and "DEFAULT" in arm_paths:
         arm_paths["SCRNARM"] = arm_paths.pop("DEFAULT")
+    # With labelled edges the walk also records the shared pre-branch prefix
+    # under "DEFAULT" — that is not a real arm, drop it.
+    elif "DEFAULT" in arm_paths:
+        del arm_paths["DEFAULT"]
 
     # 5. Build TrialElements (deduplicated)
     seen_etcd: set[str] = set()

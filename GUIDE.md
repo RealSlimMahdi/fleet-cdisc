@@ -606,9 +606,100 @@ print(adae.select("USUBJID", "AETERM", "TRTEMFL", "AESEVN", "ASEQ"))
 
 ## Part 10 — Trial Design Domains (TDD)
 
-Fleet supports all seven CDISC Trial Design domains through rich Pydantic models and a fixed-sequence pipeline.
+Fleet supports all nine CDISC Trial Design domains (TE, TA, TV, TS, TI, TD,
+TM protocol-reference; SV, SE subject-level) through two complementary paths:
 
-### 10.1 TE — Trial Elements
+1. **`fleet.StudyDesign`** — define the design once, derive every domain.
+2. **Row-level pipeline** — `fetch_structure() → study_header() → add_*() → to_frame()`
+   with rich Pydantic collections.
+
+SDTMIG 3.4 structures for the TDD domains **ship with Fleet**, so both paths
+run offline — no CDISC Library API key required.
+
+### 10.1 StudyDesign — define once, derive everything
+
+Arms are declared as *element paths*; `TAETORD`, `ELEMENT`, `EPOCH`, and
+`TABRANCH` (at the randomization branch point) are derived, never typed:
+
+```python
+import fleet
+import polars as pl
+
+design = fleet.StudyDesign(
+    study_id="CDISCPILOT01",
+    elements=[
+        {"etcd": "SCRN", "element": "Screening", "tedur": "P14D",
+         "epoch": "SCREENING", "testrl": "INFORMED CONSENT",
+         "teenrl": "RANDOMIZATION - 1"},
+        {"etcd": "PBO", "element": "Placebo Treatment", "tedur": "P84D",
+         "epoch": "TREATMENT", "testrl": "RANDOMIZATION"},
+        {"etcd": "XANLO", "element": "Xanomeline Low Dose", "tedur": "P84D",
+         "epoch": "TREATMENT", "testrl": "RANDOMIZATION"},
+        {"etcd": "FU", "element": "Follow-up", "tedur": "P28D",
+         "epoch": "FOLLOW-UP", "testrl": "END OF TREATMENT + 1"},
+    ],
+    arms={"PBO": ["SCRN", "PBO", "FU"], "XAN_LO": ["SCRN", "XANLO", "FU"]},
+    arm_names={"PBO": "Placebo", "XAN_LO": "Xanomeline Low Dose"},
+    parameters=[
+        {"tsparmcd": "TITLE", "tsparm": "Trial Title", "tsval": "Demo"},
+        {"tsparmcd": "SSTDTC", "tsparm": "Study Start Date", "tsval": "2014-01-01"},
+    ],
+)
+
+ta = design.to_ta()               # one domain
+frames = design.domains()          # every populated domain: {"TE": df, ...}
+assert ta.filter(pl.col("TABRANCH") != "")["ETCD"].to_list() == ["SCRN", "SCRN"]
+```
+
+The design serialises to YAML (`design.to_yaml("trial_design.yaml")` /
+`fleet.StudyDesign.from_yaml(...)`) and imports from a CDISC USDM (DDF)
+study definition via `fleet.StudyDesign.from_usdm(usdm_json)` — arms,
+epochs, elements, study cells, encounters, and eligibility criteria map to
+the corresponding design sections.
+
+### 10.2 Conformance audit — a P21 dry-run, offline
+
+`design.audit()` (or the standalone `fleet.sdtm.trial_design_audit(te=, ta=, ...)`)
+checks the derived domains against the published P21/FDA rule IDs: SD-series
+structural rules (TAETORD uniqueness, TA↔TE element consistency, reserved
+ARMCDs, ARM↔ARMCD one-to-one) and the FDA Technical Conformance Guide TS
+parameter profile (missing `SSTDTC` is flagged as rejection-level 1734):
+
+```python
+findings = design.audit()
+errors = findings.filter(pl.col("severity") == "error")
+assert "SD2214" in findings["rule_id"].to_list()  # TPHASE missing above
+```
+
+Pass `dm=` to cross-check ARMCD assignments against Demographics
+(`SD1354`, undefined-arm detection).
+
+### 10.3 Visit schedules and Mermaid round trip
+
+Build TV from day offsets relative to an anchor event — `VISITNUM`,
+`VISITDY` (no-day-zero convention), and deterministic `TVSTRL` text derive:
+
+```python
+from fleet.sdtm.tdd import TrialVisits
+
+tv_rows = TrialVisits.from_schedule(
+    [("Screening", -14), ("Baseline", 0), ("Week 4", 28), ("Week 8", 56)],
+    anchor="RANDOMIZATION",
+    window=3,
+)
+assert tv_rows.to_polars()["VISITDY"].to_list() == [-14, 1, 29, 57]
+```
+
+A design renders to a Mermaid flowchart and parses back — diagram-as-code
+for protocol review decks:
+
+```python
+diagram = design.to_mermaid()
+reparsed = fleet.StudyDesign.from_mermaid(diagram, study_id="CDISCPILOT01")
+assert reparsed.arms == design.arms
+```
+
+### 10.4 Row-level pipeline: TE — Trial Elements
 
 ```python
 import polars as pl
@@ -619,7 +710,6 @@ from fleet.sdtm.tdd import (
     TrialArm,
     TrialArms,
     TrialVisit,
-    TrialVisits,
     TrialParameter,
     TrialParameters,
     TrialCriterion,
@@ -664,59 +754,23 @@ te = (
 )
 ```
 
-### 10.2 TA — Trial Arms (with FK validation)
+`epoch` on `TrialElement` is a **design-time attribute** — it drives the
+element→epoch mapping when deriving TA and SE, but is not written to the TE
+dataset (SDTMIG 3.4 has no EPOCH variable in TE). Sponsor-defined epoch
+terms are accepted alongside the `Epoch` enum (C99079 is extensible):
+`TrialElement(etcd="ESC", element="Escalation", epoch="DOSE ESCALATION")`.
+
+### 10.5 TA — Trial Arms (with FK validation)
 
 ```python
 ta_rows = TrialArms(
     arms=[
-        TrialArm(
-            armcd="PBO",
-            arm="Placebo",
-            taetord=1,
-            etcd="SCRN",
-            element="Screening",
-            epoch=Epoch.SCREENING,
-        ),
-        TrialArm(
-            armcd="PBO",
-            arm="Placebo",
-            taetord=2,
-            etcd="TRT",
-            element="Treatment",
-            epoch=Epoch.TREATMENT,
-        ),
-        TrialArm(
-            armcd="PBO",
-            arm="Placebo",
-            taetord=3,
-            etcd="FU",
-            element="Follow-up",
-            epoch=Epoch.FOLLOW_UP,
-        ),
-        TrialArm(
-            armcd="XAN_LO",
-            arm="Xanomeline Low Dose",
-            taetord=1,
-            etcd="SCRN",
-            element="Screening",
-            epoch=Epoch.SCREENING,
-        ),
-        TrialArm(
-            armcd="XAN_LO",
-            arm="Xanomeline Low Dose",
-            taetord=2,
-            etcd="TRT",
-            element="Treatment",
-            epoch=Epoch.TREATMENT,
-        ),
-        TrialArm(
-            armcd="XAN_LO",
-            arm="Xanomeline Low Dose",
-            taetord=3,
-            etcd="FU",
-            element="Follow-up",
-            epoch=Epoch.FOLLOW_UP,
-        ),
+        TrialArm(armcd="PBO", arm="Placebo", taetord=1,
+                 etcd="SCRN", element="Screening", epoch=Epoch.SCREENING),
+        TrialArm(armcd="PBO", arm="Placebo", taetord=2,
+                 etcd="TRT", element="Treatment", epoch=Epoch.TREATMENT),
+        TrialArm(armcd="PBO", arm="Placebo", taetord=3,
+                 etcd="FU", element="Follow-up", epoch=Epoch.FOLLOW_UP),
     ]
 )
 
@@ -729,18 +783,17 @@ ta = (
 )
 ```
 
-### 10.3 TV — Trial Visits
+`TrialArm` also carries the optional `tabranch` / `tatrans` rule fields
+(SDTMIG `TABRANCH`, `TATRANS`).
+
+### 10.6 TV — Trial Visits (with FK validation)
 
 ```python
-tv_rows = TrialVisits(
+tv_rows2 = TrialVisits(
     visits=[
-        TrialVisit(visitnum=1, visit="Screening", visitdy=1),
-        TrialVisit(visitnum=2, visit="Baseline", visitdy=14),
-        TrialVisit(visitnum=3, visit="Week 4", visitdy=42),
-        TrialVisit(visitnum=4, visit="Week 8", visitdy=70),
-        TrialVisit(visitnum=5, visit="Week 12", visitdy=98),
-        TrialVisit(visitnum=6, visit="End of Treatment", visitdy=112),
-        TrialVisit(visitnum=7, visit="Follow-up", visitdy=140),
+        TrialVisit(visitnum=1, visit="Screening", visitdy=-14),
+        TrialVisit(visitnum=2, visit="Baseline", visitdy=1, armcd="PBO"),
+        TrialVisit(visitnum=3, visit="Week 4", visitdy=29),
     ]
 )
 
@@ -748,20 +801,28 @@ tv = (
     pl.DataFrame()
     .sdtm.fetch_structure("TV")
     .study_header("CDISCPILOT01", "TV")
-    .add_visits(tv_rows, ta=ta_rows)  # FK check: ARM ∈ TA.ARM
+    .add_visits(tv_rows2, ta=ta_rows)  # FK check: ARMCD ∈ TA.ARMCD
     .to_frame()
 )
 ```
 
-### 10.4 TS — Trial Summary
+### 10.7 TS — Trial Summary (with ClinicalTrials.gov seeding)
+
+`TrialParameter` supports the full SDTMIG 3.4 variable set — `TSSEQ` for
+repeating parameters (e.g. one `FCNTRY` row per country) plus `TSGRPID`,
+`TSVCDREF`, `TSVCDVER` for dictionary-bound values:
 
 ```python
 ts_rows = TrialParameters(
     parameters=[
-        TrialParameter(tsparmcd="ADDON", tsparm="Added on to Existing Treatments", tsval="N"),
-        TrialParameter(tsparmcd="AGEMAX", tsparm="Planned Maximum Age of Subjects", tsval="80"),
-        TrialParameter(tsparmcd="AGEMIN", tsparm="Planned Minimum Age of Subjects", tsval="50"),
-        TrialParameter(tsparmcd="LENGTH", tsparm="Trial Length", tsval="26"),
+        TrialParameter(tsparmcd="TITLE", tsparm="Trial Title", tsval="Demo study"),
+        TrialParameter(tsparmcd="FCNTRY", tsparm="Planned Country of Investigational Sites",
+                       tsval="USA", tsseq=1),
+        TrialParameter(tsparmcd="FCNTRY", tsparm="Planned Country of Investigational Sites",
+                       tsval="DEU", tsseq=2),
+        TrialParameter(tsparmcd="INDIC", tsparm="Trial Disease/Condition Indication",
+                       tsval="Alzheimer's disease", tsvalcd="26929004",
+                       tsvcdref="SNOMED CT", tsvcdver="2014-03-01"),
     ]
 )
 
@@ -774,19 +835,25 @@ ts = (
 )
 ```
 
-### 10.5 TI — Trial Inclusion/Exclusion
+Seed the registry-derivable parameters straight from ClinicalTrials.gov
+(REGID, TITLE, TPHASE, STYPE, AGEMIN/AGEMAX, SEXPOP, PLANSUB, NARMS,
+FCNTRY, SSTDTC, …) and extend by hand:
+
+<!-- docs:no-run -->
+
+```python
+ts_seed = TrialParameters.from_ctgov("NCT00048217")  # network call
+```
+
+### 10.8 TI — Trial Inclusion/Exclusion
 
 ```python
 ti_rows = TrialCriteria(
     criteria=[
-        TrialCriterion(ietestcd="INCL01", ietest="Age 50-80 years at screening", iecat="INCLUSION"),
-        TrialCriterion(
-            ietestcd="INCL02", ietest="Diagnosis of Alzheimer's Disease", iecat="INCLUSION"
-        ),
-        TrialCriterion(ietestcd="EXCL01", ietest="Pregnancy or lactation", iecat="EXCLUSION"),
-        TrialCriterion(
-            ietestcd="EXCL02", ietest="Known hypersensitivity to study drug", iecat="EXCLUSION"
-        ),
+        TrialCriterion(ietestcd="INCL01", ietest="Age 50-80 years at screening",
+                       iecat="INCLUSION"),
+        TrialCriterion(ietestcd="EXCL01", ietest="Pregnancy or lactation",
+                       iecat="EXCLUSION", tivers="2.0"),
     ]
 )
 
@@ -799,9 +866,95 @@ ti = (
 )
 ```
 
+### 10.9 TD & TM — Disease Assessments and Milestones
+
+```python
+from fleet.sdtm.tdd import (
+    TrialDiseaseAssessment,
+    TrialDiseaseAssessments,
+    TrialMilestone,
+    TrialMilestones,
+)
+
+td = (
+    pl.DataFrame()
+    .sdtm.fetch_structure("TD")
+    .study_header("CDISCPILOT01", "TD")
+    .add_disease_assessments(TrialDiseaseAssessments(assessments=[
+        TrialDiseaseAssessment(tdorder=1, tdancvar="TDANCH01", tdstoff="P0D",
+                               tdtgtpai="P8W", tdminpai="P7W", tdmaxpai="P9W",
+                               tdnumrpt=6),
+    ]))
+    .to_frame()
+)
+
+tm = (
+    pl.DataFrame()
+    .sdtm.fetch_structure("TM")
+    .study_header("CDISCPILOT01", "TM")
+    .add_milestones(TrialMilestones(milestones=[
+        TrialMilestone(midstype="DIAGNOSIS",
+                       tmdef="Initial diagnosis of disease", tmrpt="N"),
+    ]))
+    .to_frame()
+)
+```
+
+### 10.10 Subject-level: EPOCH stamped from SE
+
+`epoch_assign(se=...)` derives EPOCH for **any** domain from the subject's
+own element intervals — the cross-domain consistency P21 checks against SE:
+
+```python
+se = pl.DataFrame({
+    "USUBJID": ["001", "001"],
+    "SESTDTC": ["2014-01-01", "2014-01-15"],
+    "SEENDTC": ["2014-01-14", None],
+    "EPOCH": ["SCREENING", "TREATMENT"],
+})
+
+ae_epoch = (
+    pl.DataFrame({"USUBJID": ["001", "001"],
+                  "AESTDTC": ["2014-01-05", "2014-02-01"]})
+    .sdtm.epoch_assign("EPOCH", date_col="AESTDTC", se=se)
+    .to_frame()
+)
+assert ae_epoch["EPOCH"].to_list() == ["SCREENING", "TREATMENT"]
+```
+
+Derive `SESEQ` with the standard `seq()` verb:
+`.seq("SESEQ", order_by=["SESTDTC"])`.
+
+### 10.11 CLI: build and audit from trial_design.yaml
+
+A `trial_design.yaml` mirrors the `StudyDesign` schema:
+
+```yaml
+trial_design:
+  study_id: CDISCPILOT01
+  elements:
+    - {etcd: SCRN, element: Screening, tedur: P14D, epoch: SCREENING,
+       testrl: INFORMED CONSENT}
+    - {etcd: TRT, element: Treatment, tedur: P84D, epoch: TREATMENT,
+       testrl: RANDOMIZATION}
+  arms:
+    PBO: [SCRN, TRT]
+  arm_names:
+    PBO: Placebo
+```
+
+```bash
+uv run fleet tdd audit --design trial_design.yaml            # conformance pre-check
+uv run fleet tdd build --design trial_design.yaml \
+  --out data/sdtm --format xpt                               # audit + write datasets
+```
+
+`fleet tdd build` refuses to write when the audit reports errors
+(override with `--force`).
+
 ### TDD pipeline sequence
 
-The pipeline enforces a fixed order:
+The row-level pipeline enforces a fixed order:
 
 ```
 fetch_structure() → study_header() → add_*() → to_frame()

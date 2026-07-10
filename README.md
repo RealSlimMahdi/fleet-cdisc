@@ -381,6 +381,7 @@ uv run fleet validate data/sdtm --custom-rules metadata/custom_rules
 uv run fleet check                                       # one CI gate: config + spec + rules + doctor
 uv run fleet tlg list                                    # registered TLG templates
 uv run fleet tlg run specs/aet01.yaml --data ADAE=adae.parquet --adsl adsl.parquet --format rtf --rows-per-page 40
+uv run fleet tdd build --design trial_design.yaml --out data/sdtm  # trial design datasets + conformance audit
 uv run fleet migrate src/ --write                        # rewrite removed pre-alpha verb/kwarg spellings
 ```
 
@@ -440,7 +441,7 @@ For detailed module-by-module documentation, see [STRUCTURE.md](STRUCTURE.md).
 - [x] ADSL patient-level namespace
 - [x] OCCDS occurrence namespace (ADAE, ADCM)
 - [x] Therapeutic area extensions (Oncology, Ophthalmology, Pediatrics, Vaccine, Metabolic, Neuroscience, PK)
-- [x] Trial Design Domain support (TE, TA, TV, TS, TI)
+- [x] Trial Design Domain support (TE, TA, TV, TS, TI, TD, TM) — `fleet.StudyDesign` define-once aggregate, P21-style conformance audit, `fleet tdd` CLI, USDM/Mermaid/ClinicalTrials.gov import
 - [x] Spec-driven pipeline (`define.yaml` → `from_spec()`) + code→spec round-trip (`to_spec_yaml()`)
 - [x] TLG engine — tables, listings, template registry, HTML/RTF/PDF/PPTX render
 - [x] Executable CLI (`fleet run/validate/check/tlg/migrate`) + Define-XML generation

@@ -35,6 +35,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | [`fleet check`](#fleet-check) | CI gate: config parse + define.yaml schema + custom-rule YAMLs. |
 | [`fleet new`](#fleet-new) | Bootstrap a study: init cfg → define → ct → rules, one confirmation. |
 | [`fleet migrate`](#fleet-migrate) | Rewrite removed pre-alpha verb/kwarg spellings to canonical ones (libcst). |
+| [`fleet tdd`](#fleet-tdd) | Trial design workflow: build/audit TDD datasets from trial_design.yaml. |
 | [`fleet tlg`](#fleet-tlg) | TLG workflow: list templates, run/explore YAML specs, export summaries. |
 | [`fleet define-xml`](#fleet-define-xml) | Generate Define-XML 2.1 from a define.yaml specification. |
 | [`fleet init-ct`](#fleet-init-ct) | [deprecated] Bootstrap a codelists.py directly from the SDTM IG. Prefer the pipeline: fleet init cfg → init define → init ct. |
@@ -156,6 +157,25 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | Option | Default | Description |
 | ------ | ------- | ----------- |
 | `--write` | _(none)_ | Rewrite files in place (default: print a unified diff). |
+
+---
+
+## `fleet tdd`
+
+### `fleet tdd build`
+
+| Option | Default | Description |
+| ------ | ------- | ----------- |
+| `--design` | `trial_design.yaml` | Path to the trial design YAML spec (default: ./trial_design.yaml). |
+| `--out` / `-o` | `.` | Output directory (default: current directory). |
+| `--format` | `parquet` | Output format (default: parquet). Choices: `parquet`, `xpt`, `dataset-json`. |
+| `--force` | _(none)_ | Write datasets even when the conformance audit reports errors. |
+
+### `fleet tdd audit`
+
+| Option | Default | Description |
+| ------ | ------- | ----------- |
+| `--design` | `trial_design.yaml` | Path to the trial design YAML spec (default: ./trial_design.yaml). |
 
 ---
 

@@ -1454,6 +1454,72 @@ def _run_lsp(args: argparse.Namespace) -> None:
 
 
 # ────────────────────────────────────────────────────────────────────── #
+# Trial Design — build/audit from trial_design.yaml                       #
+# ────────────────────────────────────────────────────────────────────── #
+
+
+def _load_design(path: str):
+    from fleet.sdtm.design import StudyDesign
+
+    design_path = Path(path)
+    if not design_path.is_file():
+        _fail(f"trial design spec not found: {design_path}")
+    return StudyDesign.from_yaml(design_path)
+
+
+def _print_findings(findings) -> int:
+    """Print audit findings to stderr; return the number of errors."""
+    errors = 0
+    for row in findings.iter_rows(named=True):
+        print(
+            f"  [{row['severity']}] {row['rule_id']} {row['domain']}: {row['message']}",
+            file=sys.stderr,
+        )
+        errors += row["severity"] == "error"
+    return errors
+
+
+def _run_tdd_audit(args: argparse.Namespace) -> None:
+    design = _load_design(args.design)
+    findings = design.audit()
+    if findings.is_empty():
+        print("Audit clean — no findings.")
+        return
+    errors = _print_findings(findings)
+    print(f"{findings.height} finding(s), {errors} error(s).")
+    if errors:
+        raise SystemExit(1)
+
+
+def _run_tdd_build(args: argparse.Namespace) -> None:
+    from fleet.io import save_dataset_json, save_parquet, save_xpt
+
+    design = _load_design(args.design)
+    frames = design.domains()
+    if not frames:
+        _fail("trial design spec has no populated sections (elements, arms, visits, ...)")
+
+    findings = design.audit()
+    errors = _print_findings(findings)
+    if errors and not args.force:
+        _fail(f"{errors} conformance error(s) — fix the design or re-run with --force")
+
+    writers: dict[str, Callable[[pl.DataFrame, Path, str], Path]] = {
+        "parquet": lambda df, d, n: save_parquet(df, d / f"{n.lower()}.parquet"),
+        "xpt": lambda df, d, n: save_xpt(df, d / f"{n.lower()}.xpt"),
+        "dataset-json": lambda df, d, n: save_dataset_json(df, d / f"{n.lower()}.json", domain=n),
+    }
+    writer = writers[args.format]
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    for name, df in frames.items():
+        out_path = writer(df, out_dir, name)
+        print(f"  {name}: {df.shape[0]} rows × {df.shape[1]} cols → {out_path}")
+    print(f"Done — {len(frames)} trial design dataset(s) written.")
+
+
+# ────────────────────────────────────────────────────────────────────── #
 # Derivation scaffolding                                                  #
 # ────────────────────────────────────────────────────────────────────── #
 
@@ -2072,6 +2138,55 @@ def _tlg_domain_choices() -> list[str]:
     return sorted(NAMESPACE_CLASSES)
 
 
+def _add_tdd_parsers(sub: argparse._SubParsersAction) -> None:
+    tdd = sub.add_parser(
+        "tdd",
+        help="Trial design workflow: build/audit TDD datasets from trial_design.yaml.",
+    )
+    tdd_sub = tdd.add_subparsers(dest="tdd_command", required=True)
+
+    # -- tdd build ----------------------------------------------------- #
+    tdd_build = tdd_sub.add_parser(
+        "build",
+        help="Derive the trial design datasets (TE/TA/TV/TS/TI/TD/TM) and write them.",
+    )
+    tdd_build.add_argument(
+        "--design",
+        default="trial_design.yaml",
+        help="Path to the trial design YAML spec (default: ./trial_design.yaml).",
+    )
+    tdd_build.add_argument(
+        "--out",
+        "-o",
+        default=".",
+        help="Output directory (default: current directory).",
+    )
+    tdd_build.add_argument(
+        "--format",
+        choices=["parquet", "xpt", "dataset-json"],
+        default="parquet",
+        help="Output format (default: parquet).",
+    )
+    tdd_build.add_argument(
+        "--force",
+        action="store_true",
+        help="Write datasets even when the conformance audit reports errors.",
+    )
+    tdd_build.set_defaults(func=_run_tdd_build)
+
+    # -- tdd audit ------------------------------------------------------ #
+    tdd_audit = tdd_sub.add_parser(
+        "audit",
+        help="Run the P21-style conformance pre-check on a trial design spec.",
+    )
+    tdd_audit.add_argument(
+        "--design",
+        default="trial_design.yaml",
+        help="Path to the trial design YAML spec (default: ./trial_design.yaml).",
+    )
+    tdd_audit.set_defaults(func=_run_tdd_audit)
+
+
 def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
     tlg = sub.add_parser(
         "tlg",
@@ -2368,6 +2483,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     _add_init_parsers(sub)
     _add_exec_parsers(sub)
+    _add_tdd_parsers(sub)
     _add_tlg_parsers(sub)
     _add_define_xml_parser(sub)
     _add_ct_parsers(sub)

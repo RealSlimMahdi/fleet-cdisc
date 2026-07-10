@@ -1,0 +1,496 @@
+TE:
+  domain: TE
+  label: Trial Elements
+  ig_version: 3-4
+  variables:
+  - name: STUDYID
+    label: Study Identifier
+    type: Char
+    core: Req
+    role: Identifier
+  - name: DOMAIN
+    label: Domain Abbreviation
+    type: Char
+    core: Req
+    role: Identifier
+  - name: ETCD
+    label: Element Code
+    type: Char
+    core: Req
+    role: Topic
+  - name: ELEMENT
+    label: Description of Element
+    type: Char
+    core: Req
+    role: Synonym Qualifier
+  - name: TESTRL
+    label: Rule for Start of Element
+    type: Char
+    core: Req
+    role: Rule
+  - name: TEENRL
+    label: Rule for End of Element
+    type: Char
+    core: Perm
+    role: Rule
+  - name: TEDUR
+    label: Planned Duration of Element
+    type: Char
+    core: Perm
+    role: Timing
+TA:
+  domain: TA
+  label: Trial Arms
+  ig_version: 3-4
+  variables:
+  - name: STUDYID
+    label: Study Identifier
+    type: Char
+    core: Req
+    role: Identifier
+  - name: DOMAIN
+    label: Domain Abbreviation
+    type: Char
+    core: Req
+    role: Identifier
+  - name: ARMCD
+    label: Planned Arm Code
+    type: Char
+    core: Req
+    role: Topic
+  - name: ARM
+    label: Description of Planned Arm
+    type: Char
+    core: Req
+    role: Synonym Qualifier
+  - name: TAETORD
+    label: Planned Order of Element within Arm
+    type: Num
+    core: Req
+    role: Timing
+  - name: ETCD
+    label: Element Code
+    type: Char
+    core: Req
+    role: Record Qualifier
+  - name: ELEMENT
+    label: Description of Element
+    type: Char
+    core: Perm
+    role: Synonym Qualifier
+  - name: TABRANCH
+    label: Branch
+    type: Char
+    core: Exp
+    role: Rule
+  - name: TATRANS
+    label: Transition Rule
+    type: Char
+    core: Exp
+    role: Rule
+  - name: EPOCH
+    label: Epoch
+    type: Char
+    core: Req
+    role: Timing
+    codelist: C99079
+TV:
+  domain: TV
+  label: Trial Visits
+  ig_version: 3-4
+  variables:
+  - name: STUDYID
+    label: Study Identifier
+    type: Char
+    core: Req
+    role: Identifier
+  - name: DOMAIN
+    label: Domain Abbreviation
+    type: Char
+    core: Req
+    role: Identifier
+  - name: VISITNUM
+    label: Visit Number
+    type: Num
+    core: Req
+    role: Topic
+  - name: VISIT
+    label: Visit Name
+    type: Char
+    core: Req
+    role: Synonym Qualifier
+  - name: VISITDY
+    label: Planned Study Day of Visit
+    type: Num
+    core: Perm
+    role: Timing
+  - name: ARMCD
+    label: Planned Arm Code
+    type: Char
+    core: Exp
+    role: Record Qualifier
+  - name: ARM
+    label: Description of Planned Arm
+    type: Char
+    core: Perm
+    role: Synonym Qualifier
+  - name: TVSTRL
+    label: Visit Start Rule
+    type: Char
+    core: Req
+    role: Rule
+  - name: TVENRL
+    label: Visit End Rule
+    type: Char
+    core: Perm
+    role: Rule
+TS:
+  domain: TS
+  label: Trial Summary
+  ig_version: 3-4
+  variables:
+  - name: STUDYID
+    label: Study Identifier
+    type: Char
+    core: Req
+    role: Identifier
+  - name: DOMAIN
+    label: Domain Abbreviation
+    type: Char
+    core: Req
+    role: Identifier
+  - name: TSSEQ
+    label: Sequence Number
+    type: Num
+    core: Req
+    role: Identifier
+  - name: TSGRPID
+    label: Group ID
+    type: Char
+    core: Perm
+    role: Identifier
+  - name: TSPARMCD
+    label: Trial Summary Parameter Short Name
+    type: Char
+    core: Req
+    role: Topic
+    codelist: C66738
+  - name: TSPARM
+    label: Trial Summary Parameter
+    type: Char
+    core: Req
+    role: Synonym Qualifier
+    codelist: C67152
+  - name: TSVAL
+    label: Parameter Value
+    type: Char
+    core: Exp
+    role: Result Qualifier
+  - name: TSVALNF
+    label: Parameter Value Null Flavor
+    type: Char
+    core: Perm
+    role: Result Qualifier
+  - name: TSVALCD
+    label: Parameter Value Code
+    type: Char
+    core: Exp
+    role: Result Qualifier
+  - name: TSVCDREF
+    label: Name of the Reference Terminology
+    type: Char
+    core: Exp
+    role: Result Qualifier
+    codelist: C66788
+  - name: TSVCDVER
+    label: Version of the Reference Terminology
+    type: Char
+    core: Exp
+    role: Result Qualifier
+TI:
+  domain: TI
+  label: Trial Inclusion/Exclusion Criteria
+  ig_version: 3-4
+  variables:
+  - name: STUDYID
+    label: Study Identifier
+    type: Char
+    core: Req
+    role: Identifier
+  - name: DOMAIN
+    label: Domain Abbreviation
+    type: Char
+    core: Req
+    role: Identifier
+  - name: IETESTCD
+    label: Incl/Excl Criterion Short Name
+    type: Char
+    core: Req
+    role: Topic
+  - name: IETEST
+    label: Inclusion/Exclusion Criterion
+    type: Char
+    core: Req
+    role: Synonym Qualifier
+  - name: IECAT
+    label: Inclusion/Exclusion Category
+    type: Char
+    core: Req
+    role: Grouping Qualifier
+    codelist: C66797
+  - name: IESCAT
+    label: Inclusion/Exclusion Subcategory
+    type: Char
+    core: Perm
+    role: Grouping Qualifier
+  - name: TIRL
+    label: Inclusion/Exclusion Criterion Rule
+    type: Char
+    core: Perm
+    role: Rule
+  - name: TIVERS
+    label: Protocol Criteria Versions
+    type: Char
+    core: Perm
+    role: Record Qualifier
+SV:
+  domain: SV
+  label: Subject Visits
+  ig_version: 3-4
+  variables:
+  - name: STUDYID
+    label: Study Identifier
+    type: Char
+    core: Req
+    role: Identifier
+  - name: DOMAIN
+    label: Domain Abbreviation
+    type: Char
+    core: Req
+    role: Identifier
+  - name: USUBJID
+    label: Unique Subject Identifier
+    type: Char
+    core: Req
+    role: Identifier
+  - name: VISITNUM
+    label: Visit Number
+    type: Num
+    core: Req
+    role: Topic
+  - name: VISIT
+    label: Visit Name
+    type: Char
+    core: Perm
+    role: Synonym Qualifier
+  - name: SVPRESP
+    label: Pre-specified
+    type: Char
+    core: Exp
+    role: Variable Qualifier
+    codelist: C66742
+  - name: SVOCCUR
+    label: Occurrence
+    type: Char
+    core: Exp
+    role: Record Qualifier
+    codelist: C66742
+  - name: SVREASOC
+    label: Reason for Occur Value
+    type: Char
+    core: Perm
+    role: Record Qualifier
+  - name: SVCNTMOD
+    label: Contact Mode
+    type: Char
+    core: Perm
+    role: Record Qualifier
+    codelist: C171445
+  - name: SVEPCHGI
+    label: Epi/Pandemic Related Change Indicator
+    type: Char
+    core: Perm
+    role: Record Qualifier
+    codelist: C66742
+  - name: VISITDY
+    label: Planned Study Day of Visit
+    type: Num
+    core: Perm
+    role: Timing
+  - name: SVSTDTC
+    label: Start Date/Time of Observation
+    type: Char
+    core: Exp
+    role: Timing
+  - name: SVENDTC
+    label: End Date/Time of Observation
+    type: Char
+    core: Exp
+    role: Timing
+  - name: SVSTDY
+    label: Study Day of Start of Observation
+    type: Num
+    core: Perm
+    role: Timing
+  - name: SVENDY
+    label: Study Day of End of Observation
+    type: Num
+    core: Perm
+    role: Timing
+  - name: SVUPDES
+    label: Description of Unplanned Visit
+    type: Char
+    core: Perm
+    role: Record Qualifier
+SE:
+  domain: SE
+  label: Subject Elements
+  ig_version: 3-4
+  variables:
+  - name: STUDYID
+    label: Study Identifier
+    type: Char
+    core: Req
+    role: Identifier
+  - name: DOMAIN
+    label: Domain Abbreviation
+    type: Char
+    core: Req
+    role: Identifier
+  - name: USUBJID
+    label: Unique Subject Identifier
+    type: Char
+    core: Req
+    role: Identifier
+  - name: SESEQ
+    label: Sequence Number
+    type: Num
+    core: Req
+    role: Identifier
+  - name: ETCD
+    label: Element Code
+    type: Char
+    core: Req
+    role: Topic
+  - name: ELEMENT
+    label: Description of Element
+    type: Char
+    core: Perm
+    role: Synonym Qualifier
+  - name: TAETORD
+    label: Planned Order of Element within Arm
+    type: Num
+    core: Perm
+    role: Timing
+  - name: EPOCH
+    label: Epoch
+    type: Char
+    core: Perm
+    role: Timing
+    codelist: C99079
+  - name: SESTDTC
+    label: Start Date/Time of Element
+    type: Char
+    core: Req
+    role: Timing
+  - name: SEENDTC
+    label: End Date/Time of Element
+    type: Char
+    core: Exp
+    role: Timing
+  - name: SESTDY
+    label: Study Day of Start of Element
+    type: Num
+    core: Perm
+    role: Timing
+  - name: SEENDY
+    label: Study Day of End of Element
+    type: Num
+    core: Perm
+    role: Timing
+  - name: SEUPDES
+    label: Description of Unplanned Element
+    type: Char
+    core: Perm
+    role: Synonym Qualifier
+TD:
+  domain: TD
+  label: Trial Disease Assessments
+  ig_version: 3-4
+  variables:
+  - name: STUDYID
+    label: Study Identifier
+    type: Char
+    core: Req
+    role: Identifier
+  - name: DOMAIN
+    label: Domain Abbreviation
+    type: Char
+    core: Req
+    role: Identifier
+  - name: TDORDER
+    label: Sequence of Planned Assessment Schedule
+    type: Num
+    core: Req
+    role: Timing
+  - name: TDANCVAR
+    label: Anchor Variable Name
+    type: Char
+    core: Req
+    role: Timing
+  - name: TDSTOFF
+    label: Offset from the Anchor
+    type: Char
+    core: Req
+    role: Timing
+  - name: TDTGTPAI
+    label: Planned Assessment Interval
+    type: Char
+    core: Req
+    role: Timing
+  - name: TDMINPAI
+    label: Planned Assessment Interval Minimum
+    type: Char
+    core: Req
+    role: Timing
+  - name: TDMAXPAI
+    label: Planned Assessment Interval Maximum
+    type: Char
+    core: Req
+    role: Timing
+  - name: TDNUMRPT
+    label: Maximum Number of Actual Assessments
+    type: Num
+    core: Req
+    role: Record Qualifier
+TM:
+  domain: TM
+  label: Trial Disease Milestones
+  ig_version: 3-4
+  variables:
+  - name: STUDYID
+    label: Study Identifier
+    type: Char
+    core: Req
+    role: Identifier
+  - name: DOMAIN
+    label: Domain Abbreviation
+    type: Char
+    core: Req
+    role: Identifier
+  - name: MIDSTYPE
+    label: Disease Milestone Type
+    type: Char
+    core: Req
+    role: Topic
+  - name: TMDEF
+    label: Disease Milestone Definition
+    type: Char
+    core: Req
+    role: Variable Qualifier
+  - name: TMRPT
+    label: Disease Milestone Repetition Indicator
+    type: Char
+    core: Req
+    role: Record Qualifier
+    codelist: C66742
