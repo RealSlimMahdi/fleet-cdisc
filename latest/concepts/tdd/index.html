@@ -2366,11 +2366,17 @@ text are derived:</p>
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">)</span>
 </span></code></pre></div>
 <h2 id="cli-fleet-tdd">CLI: <code>fleet tdd</code><a class="headerlink" href="#cli-fleet-tdd" title="Permanent link">&para;</a></h2>
-<p>Drive the whole flow from a <code>trial_design.yaml</code> (the YAML mirrors the
-<code>StudyDesign</code> schema; a top-level <code>trial_design:</code> wrapper key is accepted):</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>tdd<span class="w"> </span>audit<span class="w"> </span>--design<span class="w"> </span>trial_design.yaml<span class="w">          </span><span class="c1"># conformance pre-check</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>tdd<span class="w"> </span>build<span class="w"> </span>--design<span class="w"> </span>trial_design.yaml<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--out<span class="w"> </span>data/sdtm<span class="w"> </span>--format<span class="w"> </span>xpt<span class="w">                             </span><span class="c1"># audit + write datasets</span>
+<p>Like every Fleet command, <code>fleet tdd</code> runs in the context of the discovered
+<code>study_config.yaml</code> (git-style parent walk, <code>--config</code> to override): the
+design spec defaults to <code>&lt;metadata_sdtm&gt;/trial_design.yaml</code> and the output
+directory to the config's <code>sdtm_data</code> path — so the command works from any
+subdirectory of any company's folder structure. The YAML mirrors the
+<code>StudyDesign</code> schema; a top-level <code>trial_design:</code> wrapper key is accepted.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>tdd<span class="w"> </span>audit<span class="w">                       </span><span class="c1"># conformance pre-check</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>tdd<span class="w"> </span>build<span class="w"> </span>--format<span class="w"> </span>xpt<span class="w">          </span><span class="c1"># audit + write to &lt;sdtm_data&gt;/</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>tdd<span class="w"> </span>ctgov<span class="w"> </span>NCT04280705<span class="w">           </span><span class="c1"># print TS parameters from ClinicalTrials.gov</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>tdd<span class="w"> </span>ctgov<span class="w"> </span>NCT04280705<span class="w"> </span>--write<span class="w">   </span><span class="c1"># ...or merge them into trial_design.yaml</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>tdd<span class="w"> </span>build<span class="w"> </span>--design<span class="w"> </span>specs/td.yaml<span class="w"> </span>--out<span class="w"> </span>/tmp/out<span class="w">   </span><span class="c1"># explicit overrides</span>
 </span></code></pre></div>
 <p><code>build</code> writes every populated domain (parquet, xpt, or dataset-json) and
 refuses to write when the audit reports errors (<code>--force</code> overrides).</p>
@@ -2538,14 +2544,21 @@ parameters (REGID, TITLE, TPHASE, STYPE, INTMODEL, RANDOM, TBLIND, NARMS,
 PLANSUB, AGEMIN/AGEMAX, SEXPOP, HLTSUBJI, SSTDTC/SENDTC, SPONSOR, OUTMSPRI,
 FCNTRY) from the ClinicalTrials.gov v2 API. It is a starting point —
 dictionary-bound parameters are deliberately not guessed.</p>
+<p>The same flow from the CLI — print the <code>parameters:</code> YAML block, or merge
+it directly into the study's <code>trial_design.yaml</code> (new TSPARMCD/TSSEQ rows
+only, existing entries untouched), then rebuild:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>tdd<span class="w"> </span>ctgov<span class="w"> </span>NCT04280705<span class="w">           </span><span class="c1"># print the parameters: YAML</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>tdd<span class="w"> </span>ctgov<span class="w"> </span>NCT04280705<span class="w"> </span>--write<span class="w">   </span><span class="c1"># merge into trial_design.yaml</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>tdd<span class="w"> </span>build<span class="w">                       </span><span class="c1"># → ts.parquet in &lt;sdtm_data&gt;/</span>
+</span></code></pre></div>
 <h2 id="epoch-values">Epoch values<a class="headerlink" href="#epoch-values" title="Permanent link">&para;</a></h2>
 <p>The <code>Epoch</code> enum is bound to NCI C99079 with all 14 standard values.
 C99079 is <strong>extensible</strong>: sponsor-defined terms are accepted as plain
 upper-case strings anywhere an epoch is expected:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet.sdtm.tdd</span><span class="w"> </span><span class="kn">import</span> <span class="n">Epoch</span><span class="p">,</span> <span class="n">TrialElement</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">TrialElement</span><span class="p">(</span><span class="n">etcd</span><span class="o">=</span><span class="s2">&quot;TRT&quot;</span><span class="p">,</span> <span class="n">element</span><span class="o">=</span><span class="s2">&quot;Treatment&quot;</span><span class="p">,</span> <span class="n">epoch</span><span class="o">=</span><span class="n">Epoch</span><span class="o">.</span><span class="n">TREATMENT</span><span class="p">)</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">TrialElement</span><span class="p">(</span><span class="n">etcd</span><span class="o">=</span><span class="s2">&quot;ESC&quot;</span><span class="p">,</span> <span class="n">element</span><span class="o">=</span><span class="s2">&quot;Escalation&quot;</span><span class="p">,</span> <span class="n">epoch</span><span class="o">=</span><span class="s2">&quot;DOSE ESCALATION&quot;</span><span class="p">)</span>  <span class="c1"># sponsor term</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet.sdtm.tdd</span><span class="w"> </span><span class="kn">import</span> <span class="n">Epoch</span><span class="p">,</span> <span class="n">TrialElement</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">TrialElement</span><span class="p">(</span><span class="n">etcd</span><span class="o">=</span><span class="s2">&quot;TRT&quot;</span><span class="p">,</span> <span class="n">element</span><span class="o">=</span><span class="s2">&quot;Treatment&quot;</span><span class="p">,</span> <span class="n">epoch</span><span class="o">=</span><span class="n">Epoch</span><span class="o">.</span><span class="n">TREATMENT</span><span class="p">)</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="n">TrialElement</span><span class="p">(</span><span class="n">etcd</span><span class="o">=</span><span class="s2">&quot;ESC&quot;</span><span class="p">,</span> <span class="n">element</span><span class="o">=</span><span class="s2">&quot;Escalation&quot;</span><span class="p">,</span> <span class="n">epoch</span><span class="o">=</span><span class="s2">&quot;DOSE ESCALATION&quot;</span><span class="p">)</span>  <span class="c1"># sponsor term</span>
 </span></code></pre></div>
 <p>Note: <code>TrialElement.epoch</code> is a <strong>design-time attribute</strong> — it drives the
 element→epoch mapping when deriving TA and SE, but is not written to the TE
@@ -2553,23 +2566,23 @@ dataset (SDTMIG 3.4 has no EPOCH variable in TE).</p>
 <h2 id="mermaid-parser">Mermaid parser<a class="headerlink" href="#mermaid-parser" title="Permanent link">&para;</a></h2>
 <p>Parse a Mermaid flowchart directly into a design (or use the lower-level
 <code>parse_trial_design()</code> for raw TE/TA collections):</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">design</span> <span class="o">=</span> <span class="n">fleet</span><span class="o">.</span><span class="n">StudyDesign</span><span class="o">.</span><span class="n">from_mermaid</span><span class="p">(</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="sd">    flowchart TD</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="sd">    subgraph SCR[SCREENING]</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="sd">        SCRN[&quot;Screening&lt;br/&gt;P14D&quot;]</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="sd">    end</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="sd">    subgraph TRT[TREATMENT]</span>
-</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="sd">        DRUG[&quot;Drug Treatment&lt;br/&gt;P84D&quot;]</span>
-</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="sd">        PBO[&quot;Placebo&lt;br/&gt;P84D&quot;]</span>
-</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="sd">    end</span>
-</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="sd">    SCRN --&gt;|DRUG_ARM| DRUG</span>
-</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="sd">    SCRN --&gt;|PBO_ARM| PBO</span>
-</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="sd">&quot;&quot;&quot;</span><span class="p">,</span>
-</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a>    <span class="n">study_id</span><span class="o">=</span><span class="s2">&quot;CDISCPILOT01&quot;</span><span class="p">,</span>
-</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="p">)</span>
-</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a>
-</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a><span class="nb">print</span><span class="p">(</span><span class="n">design</span><span class="o">.</span><span class="n">to_mermaid</span><span class="p">())</span>  <span class="c1"># and back out — protocol-vs-datasets QC</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">design</span> <span class="o">=</span> <span class="n">fleet</span><span class="o">.</span><span class="n">StudyDesign</span><span class="o">.</span><span class="n">from_mermaid</span><span class="p">(</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="sd">    flowchart TD</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="sd">    subgraph SCR[SCREENING]</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="sd">        SCRN[&quot;Screening&lt;br/&gt;P14D&quot;]</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="sd">    end</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="sd">    subgraph TRT[TREATMENT]</span>
+</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="sd">        DRUG[&quot;Drug Treatment&lt;br/&gt;P84D&quot;]</span>
+</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="sd">        PBO[&quot;Placebo&lt;br/&gt;P84D&quot;]</span>
+</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="sd">    end</span>
+</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a><span class="sd">    SCRN --&gt;|DRUG_ARM| DRUG</span>
+</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="sd">    SCRN --&gt;|PBO_ARM| PBO</span>
+</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="sd">&quot;&quot;&quot;</span><span class="p">,</span>
+</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>    <span class="n">study_id</span><span class="o">=</span><span class="s2">&quot;CDISCPILOT01&quot;</span><span class="p">,</span>
+</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="p">)</span>
+</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a>
+</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a><span class="nb">print</span><span class="p">(</span><span class="n">design</span><span class="o">.</span><span class="n">to_mermaid</span><span class="p">())</span>  <span class="c1"># and back out — protocol-vs-datasets QC</span>
 </span></code></pre></div>
 
 
@@ -2593,7 +2606,7 @@ dataset (SDTMIG 3.4 has no EPOCH variable in TE).</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 10, 2026 11:20:38 UTC">July 10, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 10, 2026 12:25:44 UTC">July 10, 2026</span>
   </span>
 
     
