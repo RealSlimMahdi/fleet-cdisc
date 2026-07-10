@@ -37,22 +37,42 @@ import fleet
 design = fleet.StudyDesign(
     study_id="CDISCPILOT01",
     elements=[
-        {"etcd": "SCRN", "element": "Screening", "tedur": "P14D",
-         "epoch": "SCREENING", "testrl": "INFORMED CONSENT",
-         "teenrl": "RANDOMIZATION - 1"},
-        {"etcd": "PBO", "element": "Placebo Treatment", "tedur": "P84D",
-         "epoch": "TREATMENT", "testrl": "RANDOMIZATION"},
-        {"etcd": "XANLO", "element": "Xanomeline Low Dose", "tedur": "P84D",
-         "epoch": "TREATMENT", "testrl": "RANDOMIZATION"},
-        {"etcd": "FU", "element": "Follow-up", "tedur": "P28D",
-         "epoch": "FOLLOW-UP", "testrl": "END OF TREATMENT + 1"},
+        {
+            "etcd": "SCRN",
+            "element": "Screening",
+            "tedur": "P14D",
+            "epoch": "SCREENING",
+            "testrl": "INFORMED CONSENT",
+            "teenrl": "RANDOMIZATION - 1",
+        },
+        {
+            "etcd": "PBO",
+            "element": "Placebo Treatment",
+            "tedur": "P84D",
+            "epoch": "TREATMENT",
+            "testrl": "RANDOMIZATION",
+        },
+        {
+            "etcd": "XANLO",
+            "element": "Xanomeline Low Dose",
+            "tedur": "P84D",
+            "epoch": "TREATMENT",
+            "testrl": "RANDOMIZATION",
+        },
+        {
+            "etcd": "FU",
+            "element": "Follow-up",
+            "tedur": "P28D",
+            "epoch": "FOLLOW-UP",
+            "testrl": "END OF TREATMENT + 1",
+        },
     ],
     arms={"PBO": ["SCRN", "PBO", "FU"], "XAN_LO": ["SCRN", "XANLO", "FU"]},
     arm_names={"PBO": "Placebo", "XAN_LO": "Xanomeline Low Dose"},
 )
 
-te = design.to_te()          # one domain at a time
-frames = design.domains()    # or every populated domain: {"TE": df, "TA": df, ...}
+te = design.to_te()  # one domain at a time
+frames = design.domains()  # or every populated domain: {"TE": df, "TA": df, ...}
 ```
 
 Referential integrity is validated at construction: arm paths must reference
@@ -145,10 +165,22 @@ from fleet.sdtm.tdd import TrialElement, TrialElements, Epoch
 
 te_rows = TrialElements(
     elements=[
-        TrialElement(etcd="SCRN", element="Screening", testrl="INFORMED CONSENT",
-                     teenrl="RANDOMIZATION - 1", tedur="P14D", epoch=Epoch.SCREENING),
-        TrialElement(etcd="TRT", element="Treatment", testrl="RANDOMIZATION",
-                     teenrl="END OF TREATMENT", tedur="P84D", epoch=Epoch.TREATMENT),
+        TrialElement(
+            etcd="SCRN",
+            element="Screening",
+            testrl="INFORMED CONSENT",
+            teenrl="RANDOMIZATION - 1",
+            tedur="P14D",
+            epoch=Epoch.SCREENING,
+        ),
+        TrialElement(
+            etcd="TRT",
+            element="Treatment",
+            testrl="RANDOMIZATION",
+            teenrl="END OF TREATMENT",
+            tedur="P84D",
+            epoch=Epoch.TREATMENT,
+        ),
     ]
 )
 
@@ -176,9 +208,14 @@ sv = (
     raw_visits.sdtm.assign("DOMAIN", value="SV")
     .assign("USUBJID", source="subject_id")
     .date("SVSTDTC", source="visit_date")
-    .visit_map("VISITNUM", "VISIT", date_col="SVSTDTC",
-               planned_visits=tv_rows, ref_date="RFSTDTC",
-               tolerance={"before": 3, "after": 3})
+    .visit_map(
+        "VISITNUM",
+        "VISIT",
+        date_col="SVSTDTC",
+        planned_visits=tv_rows,
+        ref_date="RFSTDTC",
+        tolerance={"before": 3, "after": 3},
+    )
     .study_day("SVSTDY", date_col="SVSTDTC", ref_date_col="RFSTDTC")
     .to_frame()
 )
@@ -191,9 +228,9 @@ number with the standard `seq()` verb:
 se = (
     disposition_df.sdtm.assign("DOMAIN", value="SE")
     .assign("USUBJID", source="subject_id")
-    .element_boundaries("SESTDTC", "SEENDTC",
-                        milestones={"SCRN": "screening_date",
-                                    "TRT": "first_dose_date"})
+    .element_boundaries(
+        "SESTDTC", "SEENDTC", milestones={"SCRN": "screening_date", "TRT": "first_dose_date"}
+    )
     .seq("SESEQ", order_by=["SESTDTC"])
     .to_frame()
 )
@@ -236,7 +273,7 @@ ta = (
     pl.DataFrame()
     .sdtm.fetch_structure("TA")
     .study_header("CDISCPILOT01", "TA")
-    .add_arms(ta_rows, te=te_rows)      # TA.ETCD ∈ TE.ETCD
+    .add_arms(ta_rows, te=te_rows)  # TA.ETCD ∈ TE.ETCD
     .to_frame()
 )
 
@@ -244,7 +281,7 @@ tv = (
     pl.DataFrame()
     .sdtm.fetch_structure("TV")
     .study_header("CDISCPILOT01", "TV")
-    .add_visits(tv_rows, ta=ta_rows)    # TV.ARMCD ∈ TA.ARMCD
+    .add_visits(tv_rows, ta=ta_rows)  # TV.ARMCD ∈ TA.ARMCD
     .to_frame()
 )
 ```
@@ -259,9 +296,14 @@ for `OUTMSPRI`, ...) plus `TSGRPID`, `TSVCDREF`, `TSVCDVER` for
 dictionary-bound values (SNOMED, UNII, MED-RT):
 
 ```python
-TrialParameter(tsparmcd="INDIC", tsparm="Trial Disease/Condition Indication",
-               tsval="Alzheimer's disease", tsvalcd="26929004",
-               tsvcdref="SNOMED CT", tsvcdver="2014-03-01")
+TrialParameter(
+    tsparmcd="INDIC",
+    tsparm="Trial Disease/Condition Indication",
+    tsval="Alzheimer's disease",
+    tsvalcd="26929004",
+    tsvcdref="SNOMED CT",
+    tsvcdver="2014-03-01",
+)
 ```
 
 `TrialParameters.from_ctgov("NCT00048217")` seeds the registry-derivable
@@ -293,7 +335,8 @@ Parse a Mermaid flowchart directly into a design (or use the lower-level
 `parse_trial_design()` for raw TE/TA collections):
 
 ```python
-design = fleet.StudyDesign.from_mermaid("""
+design = fleet.StudyDesign.from_mermaid(
+    """
     flowchart TD
     subgraph SCR[SCREENING]
         SCRN["Screening<br/>P14D"]
@@ -304,7 +347,9 @@ design = fleet.StudyDesign.from_mermaid("""
     end
     SCRN -->|DRUG_ARM| DRUG
     SCRN -->|PBO_ARM| PBO
-""", study_id="CDISCPILOT01")
+""",
+    study_id="CDISCPILOT01",
+)
 
 print(design.to_mermaid())  # and back out — protocol-vs-datasets QC
 ```
