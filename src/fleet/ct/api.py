@@ -47,7 +47,7 @@ class CDISCClientConfig:
 
     def __post_init__(self) -> None:
         if not self.api_key:
-            _try_load_dotenv()
+            try_load_dotenv()
             self.api_key = os.environ.get("CDISC_API_KEY", "")
         if self.base_url == _DEFAULT_BASE_URL:
             env_url = os.environ.get("CDISC_BASE_URL", "")
@@ -55,23 +55,28 @@ class CDISCClientConfig:
                 self.base_url = env_url.rstrip("/")
 
 
-def _try_load_dotenv() -> None:
+def try_load_dotenv() -> None:
     """Best-effort load of a ``.env`` file into ``os.environ``.
 
-    Uses ``python-dotenv`` when available, otherwise falls back to a
+    Walks up from the current directory (git-style, like ``study_config.yaml``
+    discovery) so a study-root ``.env`` is found when running from any
+    subdirectory.  Uses ``python-dotenv`` when available, otherwise a
     minimal stdlib parser that handles ``KEY=VALUE`` lines.
     """
     try:
-        from dotenv import load_dotenv
+        from dotenv import find_dotenv, load_dotenv
 
-        load_dotenv()
+        load_dotenv(find_dotenv(usecwd=True))
         return
     except ImportError:
         pass
 
-    # Stdlib fallback: walk up to find .env
-    env_path = Path.cwd() / ".env"
-    if not env_path.is_file():
+    # Stdlib fallback: walk up from the cwd to find .env
+    for parent in (Path.cwd(), *Path.cwd().parents):
+        env_path = parent / ".env"
+        if env_path.is_file():
+            break
+    else:
         return
     for line in env_path.read_text(encoding="utf-8").splitlines():
         line = line.strip()

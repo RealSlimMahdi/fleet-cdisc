@@ -133,13 +133,17 @@ tv_rows = TrialVisits.from_schedule(
 
 ## CLI: `fleet tdd`
 
-Drive the whole flow from a `trial_design.yaml` (the YAML mirrors the
-`StudyDesign` schema; a top-level `trial_design:` wrapper key is accepted):
+Like every Fleet command, `fleet tdd` runs in the context of the discovered
+`study_config.yaml` (git-style parent walk, `--config` to override): the
+design spec defaults to `<metadata_sdtm>/trial_design.yaml` and the output
+directory to the config's `sdtm_data` path — so the command works from any
+subdirectory of any company's folder structure. The YAML mirrors the
+`StudyDesign` schema; a top-level `trial_design:` wrapper key is accepted.
 
 ```bash
-uv run fleet tdd audit --design trial_design.yaml          # conformance pre-check
-uv run fleet tdd build --design trial_design.yaml \
-  --out data/sdtm --format xpt                             # audit + write datasets
+uv run fleet tdd audit                       # conformance pre-check
+uv run fleet tdd build --format xpt          # audit + write to <sdtm_data>/
+uv run fleet tdd build --design specs/td.yaml --out /tmp/out   # explicit overrides
 ```
 
 `build` writes every populated domain (parquet, xpt, or dataset-json) and

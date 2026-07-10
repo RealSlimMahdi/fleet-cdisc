@@ -479,3 +479,166 @@ def test_fleet_error_reaches_stderr(
     assert code == 1
     assert "kaboom in the pipeline" in captured.err
     assert captured.out == ""  # nothing leaked to stdout
+
+
+# ------------------------------------------------------------------ #
+# fleet tdd — everything resolves through study_config.yaml            #
+# ------------------------------------------------------------------ #
+
+_TRIAL_DESIGN = """\
+trial_design:
+  study_id: TESTRUN
+  elements:
+    - {etcd: SCRN, element: Screening, tedur: P14D, epoch: SCREENING,
+       testrl: INFORMED CONSENT}
+    - {etcd: TRT, element: Treatment, tedur: P84D, epoch: TREATMENT,
+       testrl: RANDOMIZATION}
+  arms:
+    A1: [SCRN, TRT]
+  parameters:
+    - {tsparmcd: TITLE, tsparm: Trial Title, tsval: Demo}
+    - {tsparmcd: SSTDTC, tsparm: Study Start Date, tsval: 2026-01-01}
+"""
+
+
+def test_tdd_build_resolves_paths_from_config(
+    study: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """From a nested subdir, the design is read from the config's metadata_sdtm
+    dir and datasets land in the config's sdtm_data dir — never the cwd."""
+    (study / "metadata" / "sdtm" / "trial_design.yaml").write_text(_TRIAL_DESIGN, encoding="utf-8")
+    nested = study / "programs" / "tdd"
+    nested.mkdir(parents=True)
+    monkeypatch.chdir(nested)
+
+    code = _run(["tdd", "build", "--force"])  # --force: TS FDA profile is incomplete
+    assert code == 0
+    assert (study / "data" / "sdtm" / "te.parquet").exists()
+    assert (study / "data" / "sdtm" / "ta.parquet").exists()
+    assert not list(nested.iterdir())  # nothing written to the cwd
+
+
+def test_tdd_audit_accepts_unquoted_yaml_dates(
+    study: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """YAML parses `2026-01-01` as datetime.date — must coerce to string."""
+    (study / "metadata" / "sdtm" / "trial_design.yaml").write_text(_TRIAL_DESIGN, encoding="utf-8")
+    monkeypatch.chdir(study)
+
+    code = _run(["tdd", "audit"])
+    err = capsys.readouterr().err
+    assert code == 1  # TS FDA profile findings — expected
+    assert "SD2232" not in err  # SSTDTC present (the date row survived)
+    assert "SD2214" in err  # TPHASE genuinely missing
+    assert "Traceback" not in err
+
+
+def test_tdd_build_missing_design_errors_cleanly(
+    study: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    monkeypatch.chdir(study)
+    code = _run(["tdd", "build"])
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "trial design spec not found" in err
+    assert str(study / "metadata" / "sdtm" / "trial_design.yaml") in err
+
+
+# ------------------------------------------------------------------ #
+# config-context defaults — validate / define-xml / tlg                #
+# ------------------------------------------------------------------ #
+
+
+class _StubValidationResult:
+    def __init__(self, name: str) -> None:
+        self.dataset_name = name
+        self.errors: list = []
+        self.warnings: list = []
+        self.infos: list = []
+
+    def print_report(self) -> None:
+        pass
+
+
+def test_validate_defaults_resolve_from_config(
+    study: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """Bare `fleet validate`: datasets from the config's data dirs, custom
+    CORE rules from validation.custom_rules, IG version from sdtm.ig_version."""
+    import fleet.validation
+    import fleet.validation.engine
+
+    sdtm_dir = study / "data" / "sdtm"
+    sdtm_dir.mkdir(parents=True)
+    pl.DataFrame({"USUBJID": ["1"]}).write_parquet(sdtm_dir / "dm.parquet")
+    rules_dir = study / "metadata" / "custom_rules"
+    rules_dir.mkdir(parents=True)
+    (study / "study_config.yaml").write_text(
+        _CONFIG + "validation:\n  custom_rules: metadata/custom_rules\n",
+        encoding="utf-8",
+    )
+
+    calls: list[dict] = []
+
+    class _StubService:
+        def __init__(self, rules_engine_path: object) -> None:
+            pass
+
+        def validate_sdtm(self, df: object, name: str, **kwargs: object) -> _StubValidationResult:
+            calls.append({"name": name, **kwargs})
+            return _StubValidationResult(name)
+
+        validate_adam = validate_sdtm
+
+    monkeypatch.setattr(fleet.validation, "ValidationService", _StubService)
+    monkeypatch.setattr(fleet.validation.engine, "discover_engine", lambda root: Path("/fake"))
+
+    nested = study / "programs" / "qc"
+    nested.mkdir(parents=True)
+    monkeypatch.chdir(nested)
+
+    assert _run(["validate"]) == 0
+    assert calls and calls[0]["name"] == "DM"
+    assert calls[0]["custom_rules"] == str(rules_dir)
+    assert calls[0]["version"] == "3.4"  # config ig_version "3-4" → "3.4"
+
+
+def test_define_xml_defaults_from_config(
+    study: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """Bare `fleet define-xml`: spec from metadata_sdtm, output to define_xml dir."""
+    nested = study / "programs" / "meta"
+    nested.mkdir(parents=True)
+    monkeypatch.chdir(nested)
+
+    code = _run(["define-xml"])
+    assert code == 0
+    assert (study / "metadata" / "define_sdtm.xml").is_file()
+    assert not list(nested.iterdir())  # nothing written to the cwd
+
+
+def test_tlg_run_defaults_from_config(
+    study: Path,
+    tlg_data: tuple[Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """`fleet tlg run <spec>` with no data/output flags: datasets found in the
+    config's adam_data dir, output written to the config's outputs dir."""
+    import shutil
+
+    adsl_path, adae_path = tlg_data
+    spec = Path("examples/tlg_specs/aet01.yaml").resolve()
+    adam_dir = study / "data" / "adam"
+    adam_dir.mkdir(parents=True)
+    shutil.copy(adae_path, adam_dir / "adae.csv")
+    shutil.copy(adsl_path, adam_dir / "adsl.csv")
+
+    nested = study / "programs" / "tlg"
+    nested.mkdir(parents=True)
+    monkeypatch.chdir(nested)
+
+    code = _run(["tlg", "run", str(spec), "--format", "html"])
+    assert code == 0
+    assert (study / "outputs" / "aet01.html").is_file()
+    assert not list(nested.iterdir())  # nothing written to the cwd
