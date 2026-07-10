@@ -202,34 +202,53 @@ and the Define-XML method descriptions.
 
 ## 6. Validate — are we CDISC compliant?
 
-Write the datasets into the configured folders, then run the CDISC Rules
-Engine over everything (`fleet install-engine` once, first):
+Validation is a **verb** — chain `.validate()` right where the dataset is
+born and the CDISC Rules Engine report prints without breaking the pipeline
+(`fleet install-engine` once, first). Revisiting the AE chain from step 3:
 
 ```python
-adsl.write_parquet("data/adam/adsl.parquet")
-advs.write_parquet("data/adam/advs.parquet")
-for name, df in {"dm": dm, "vs": vs, "ae": ae}.items():
-    df.write_parquet(f"data/sdtm/{name}.parquet")
-```
-
-```bash
-uv run fleet validate --report outputs/validation.html
+ae = (
+    raw_ae.sdtm.assign("STUDYID", value="STUDY01")
+    .assign("DOMAIN", value="AE")
+    .assign("USUBJID", source="subject_id")
+    .assign("AEDECOD", source="ae_term")
+    .date("AESTDTC", source="start_date")
+    .pin("DM", dm)
+    .study_day("AESTDY", date_col="AESTDTC")
+    .validate("AE")  # ← CORE report prints here; the chain continues
+    .to_frame()
+)
 ```
 
 ```text
-Validating DM (sdtm) — data/sdtm/dm.parquet
 ======================================================================
-CDISC Validation Report: DM
-Dataset Type: sdtmig v3.4          ← version from study_config.yaml
+CDISC Validation Report: AE
+======================================================================
+Dataset Type: sdtmig v3.4
 Status: PASS
-...
-Validated 5 dataset(s): 5 passed, 0 failed.
+Total Issues: 0
+----------------------------------------------------------------------
 ```
 
-The exit code is 1 on any error, so this line **is** your CI compliance
-gate. The same check is chainable per-dataset inside a pipeline via the
-`.validate()` verb. (Note: official executable ADaMIG rules are not yet
-published by CDISC — ADaM datasets run your custom rules; see
+For a CI pipeline, make compliance a hard gate — `on_fail="raise"` turns
+findings into a `ValidationError` instead of a warning:
+
+```python
+adsl = (
+    dm.adam.adsl.source("STUDYID", "USUBJID", "ARM", "SEX")
+    .assign("TRT01P", source="ARM")
+    .date("TRTSDT", source="RFSTDTC")
+    .validate("ADSL", on_fail="raise")  # ← errors stop the build
+    .to_frame()
+)
+```
+
+The full `ValidationResult` stays retrievable via the namespace's
+`last_validation` property when you need programmatic access to findings.
+To sweep every written dataset at once (e.g. a nightly job), the batch
+equivalent is `uv run fleet validate --report outputs/validation.html`.
+(Note: official executable ADaMIG rules are not yet published by CDISC —
+ADaM datasets run your custom rules; see
 [Validation with CORE](../concepts/validation-core.md).)
 
 ## 7. Define-XML with an annotated CRF
