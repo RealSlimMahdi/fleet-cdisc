@@ -41,3 +41,22 @@ pl.DataFrame({"x": [1]}).adam.pk  # PK (pharmacokinetics) verbs
 pl.DataFrame({"x": [1]}).tlg.ae  # AE summary tables and listings
 pl.DataFrame({"x": [1]}).tlg.vs  # Vital-signs summary tables
 ```
+
+## Discovering what's available
+
+Every namespace answers for itself — no cheat sheet required:
+
+```python
+import fleet
+import polars as pl
+
+df = pl.DataFrame({"x": [1]})
+df.sdtm.verbs()  # DataFrame: every SDTM verb + one-line summary
+df.adam.adsl.verbs()  # same for any (sub-)namespace
+
+fleet.spec_algorithms("sdtm")  # define.yaml algorithm ids per standard
+fleet.spec_coverage()  # algorithm ↔ verb ↔ required-fields matrix
+```
+
+`verbs()` returns a sorted Polars DataFrame (`verb`, `summary`) built live
+from the class docstrings, so it can never lag behind the installed version.

@@ -108,12 +108,16 @@ nav:
       - Namespace Pipeline: concepts/pipeline.md
       - "Event-Priority Derivation (pick)": concepts/pick.md
       - Trial Design Domains: concepts/tdd.md
+      - Validation with CORE: concepts/validation-core.md
       - Custom Validation Rules: concepts/custom-rules.md
+      - Exporting Datasets: concepts/exports.md
       - Advanced Patterns: concepts/advanced.md
       - Interactive Explorer: concepts/interactive-explorer.md
   - Examples:
       - Multi-Domain Pipeline: examples/full_pipeline.md
       - "Raw-to-Render (R2R)": examples/r2r_strategy.md
+      - "Trial Design (offline)": examples/tdd_pipeline.md
+      - TLG from a Spec: examples/tlg_pipeline.md
       - Code-Driven Workflow: examples/01_code_driven_pipeline.ipynb
       - Spec-Driven Workflow: examples/02_spec_driven_pipeline.ipynb
   - API Reference:

@@ -71,6 +71,9 @@ from .core import (
     to_repr,
 )
 from .core.frames import DataFrame, LazyFrame, frame
+from .core.spec_registry import SPEC_UNSUPPORTED
+from .core.spec_registry import algorithm_names as spec_algorithms
+from .core.spec_registry import coverage_matrix as spec_coverage
 from .ct import CTValidator, get_validator, import_codelists, load_controlled_terminology
 
 # TA namespace classes are also importable directly for type hints / isinstance
@@ -110,6 +113,10 @@ __all__ = [
     "build_dag",
     "PipelineDAG",
     "PipelineNode",
+    # Spec registry discovery
+    "spec_algorithms",
+    "spec_coverage",
+    "SPEC_UNSUPPORTED",
     # CT
     "CTValidator",
     "get_validator",

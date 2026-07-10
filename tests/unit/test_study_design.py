@@ -380,3 +380,24 @@ class TestEpochFromSE:
         df = pl.DataFrame({"DTC": ["2014-01-01"]})
         with pytest.raises(ValueError, match="exactly one"):
             df.sdtm.epoch_assign("EPOCH", date_col="DTC")
+
+
+def test_audit_flags_ts_profile_even_without_parameters_section():
+    """A design with no TS section still gets the FDA profile findings —
+    a missing TS dataset is the rejection-level case, not a skip."""
+    design = StudyDesign(
+        study_id="S1",
+        elements=[
+            {
+                "etcd": "SCRN",
+                "element": "Screening",
+                "epoch": "SCREENING",
+                "teenrl": "RANDOMIZATION",
+            }
+        ],
+        arms={"A1": ["SCRN"]},
+    )
+    findings = design.audit()
+    rule_ids = findings["rule_id"].to_list()
+    assert "SD2213" in rule_ids  # TITLE missing
+    assert "SD2232" in rule_ids  # SSTDTC missing (rejection criterion 1734)

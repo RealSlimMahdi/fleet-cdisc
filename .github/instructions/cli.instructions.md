@@ -13,7 +13,7 @@ description: "Use when working with Fleet CLI commands, bootstrapping studies, C
 - **Migration:** `fleet migrate` (libcst codemod: removed pre-alpha verb/kwarg spellings → canonical)
 - **TLG:** `fleet tlg list|schema|run|explore|export` (`run`/`explore` take `--watch`, needs the `watch` extra)
 - **Define-XML:** `fleet define-xml` (also `--watch`)
-- **CT:** `fleet add-ct`; `fleet init-ct` is **deprecated** — prefer the `fleet init` pipeline
+- **CT:** `fleet add-ct` (bootstraps or extends codelists.py); prefer the `fleet init` pipeline for full studies
 - **Rules:** `fleet add-rule`, `fleet check-rule`, `fleet install-engine`, `fleet uninstall-engine`, `fleet doctor`
 - **Tooling servers:** `fleet mcp --stdio`, `fleet lsp --stdio` (require the `mcp` / `lsp` extras)
 - **Misc:** `fleet derivation`, `fleet --version`

@@ -38,7 +38,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | [`fleet tdd`](#fleet-tdd) | Trial design workflow: build/audit TDD datasets from trial_design.yaml. |
 | [`fleet tlg`](#fleet-tlg) | TLG workflow: list templates, run/explore YAML specs, export summaries. |
 | [`fleet define-xml`](#fleet-define-xml) | Generate Define-XML 2.1 from a define.yaml specification. |
-| [`fleet init-ct`](#fleet-init-ct) | [deprecated] Bootstrap a codelists.py directly from the SDTM IG. Prefer the pipeline: fleet init cfg → init define → init ct. |
+| [`fleet add-acrf`](#fleet-add-acrf) | Declare the annotated CRF document (study.documents block) in define.yaml. |
 | [`fleet add-ct`](#fleet-add-ct) | Add domains to an existing codelists.py (preserves existing). |
 | [`fleet add-rule`](#fleet-add-rule) | Scaffold a new custom validation rule YAML. |
 | [`fleet check-rule`](#fleet-check-rule) | Validate a custom rule YAML (syntax, structure, schema). |
@@ -274,15 +274,15 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 
 ---
 
-## `fleet init-ct`
+## `fleet add-acrf`
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
-| `--domains` | _(required)_ | Comma-separated SDTM domain abbreviations (e.g. DM,AE,VS,EX). |
-| `--ig` | `3-4` | SDTM IG version (default: 3-4). |
-| `--package` | `sdtmct-2023-12-15` | CT package version (default: sdtmct-2023-12-15). |
-| `--output` / `-o` | `codelists.py` | Output file path (default: codelists.py). |
-| `--no-docs` | _(none)_ | Omit definitions and preferred terms from generated code. |
+| `--href` | `blankcrf.pdf` | aCRF file path in the submission package (default: blankcrf.pdf). |
+| `--title` | _(none)_ | Display title (default: "Annotated Case Report Form"). |
+| `--page-map` | _(none)_ | External DOMAIN.VARIABLE → pages YAML file, relative to define.yaml. |
+| `--standard` | `sdtm` | Which define.yaml to update (default: sdtm). Choices: `sdtm`, `adam`, `both`. |
+| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 
 ---
 

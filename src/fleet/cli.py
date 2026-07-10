@@ -432,32 +432,6 @@ def _run_init_ct_pipeline(args: argparse.Namespace) -> None:
 # ────────────────────────────────────────────────────────────────────── #
 
 
-def _run_init_ct(args: argparse.Namespace) -> None:
-    from fleet.ct.api import CDISCClient
-    from fleet.ct.generator import CodelistGenerator
-
-    domains = _parse_domains(args.domains)
-    output = Path(args.output)
-
-    print(f"Domains:  {', '.join(domains)}")
-    print(f"IG:       sdtmig/{args.ig}")
-    print(f"Package:  {args.package}")
-    print(f"Output:   {output}")
-    print()
-
-    with CDISCClient() as client:
-        gen = CodelistGenerator.from_sdtm_ig(
-            client,
-            domains=domains,
-            ig_version=args.ig,
-            package=args.package,
-            include_docs=not args.no_docs,
-        )
-        dest = gen.write(output)
-
-    print(f"Generated {gen.codelist_count} codelists → {dest}")
-
-
 def _run_add_ct(args: argparse.Namespace) -> None:
     from fleet.ct.api import CDISCClient
     from fleet.ct.generator import (
@@ -710,6 +684,46 @@ def _generate_define_xml(args: argparse.Namespace) -> None:
     if not args.no_preview:
         preview = output.with_name(output.stem + "_preview.html")
         print(f"HTML preview → {preview}")
+
+
+def _run_add_acrf(args: argparse.Namespace) -> None:
+    import yaml
+
+    ctx = _load_ctx(args.config)
+    standards = ["sdtm", "adam"] if args.standard == "both" else [args.standard]
+    touched = 0
+    for std in standards:
+        meta_dir = ctx.metadata_adam_dir if std == "adam" else ctx.metadata_sdtm_dir
+        spec_path = meta_dir / "define.yaml"
+        if not spec_path.is_file():
+            print(f"  {std}: no define.yaml at {spec_path} — skipped")
+            continue
+        text = spec_path.read_text(encoding="utf-8")
+        # Preserve the leading comment header (e.g. the yaml-language-server
+        # schema hint) — yaml round-trips drop comments.
+        header: list[str] = []
+        for line in text.splitlines():
+            if line.startswith("#") or not line.strip():
+                header.append(line)
+            else:
+                break
+        data = yaml.safe_load(text) or {}
+        acrf = (
+            data.setdefault("study", {}).setdefault("documents", {}).setdefault("annotated_crf", {})
+        )
+        acrf["href"] = args.href
+        if args.title:
+            acrf["title"] = args.title
+        acrf.setdefault("title", "Annotated Case Report Form")
+        if args.page_map:
+            acrf["page_map"] = args.page_map
+        body = yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        prefix = "\n".join(header) + "\n" if header else ""
+        spec_path.write_text(prefix + body, encoding="utf-8")
+        print(f"  {std}: annotated_crf ({args.href}) → {spec_path}")
+        touched += 1
+    if not touched:
+        _fail("no define.yaml found to update. Run `fleet init define` first.")
 
 
 def _run_define_xml(args: argparse.Namespace) -> None:
@@ -1961,42 +1975,6 @@ def _add_init_parsers(sub: argparse._SubParsersAction) -> None:
 
 
 def _add_ct_parsers(sub: argparse._SubParsersAction) -> None:
-    # -- init-ct (standalone, deprecated) -------------------------------- #
-    init_ct = sub.add_parser(
-        "init-ct",
-        help=(
-            "[deprecated] Bootstrap a codelists.py directly from the SDTM IG. "
-            "Prefer the pipeline: fleet init cfg → init define → init ct."
-        ),
-    )
-    init_ct.add_argument(
-        "--domains",
-        required=True,
-        help="Comma-separated SDTM domain abbreviations (e.g. DM,AE,VS,EX).",
-    )
-    init_ct.add_argument(
-        "--ig",
-        default="3-4",
-        help="SDTM IG version (default: 3-4).",
-    )
-    init_ct.add_argument(
-        "--package",
-        default="sdtmct-2023-12-15",
-        help="CT package version (default: sdtmct-2023-12-15).",
-    )
-    init_ct.add_argument(
-        "--output",
-        "-o",
-        default="codelists.py",
-        help="Output file path (default: codelists.py).",
-    )
-    init_ct.add_argument(
-        "--no-docs",
-        action="store_true",
-        help="Omit definitions and preferred terms from generated code.",
-    )
-    init_ct.set_defaults(func=_run_init_ct)
-
     # -- add-ct ---------------------------------------------------------- #
     add = sub.add_parser(
         "add-ct",
@@ -2136,6 +2114,35 @@ def _add_define_xml_parser(sub: argparse._SubParsersAction) -> None:
         help="Re-generate whenever the spec file changes (requires the 'watch' extra).",
     )
     defxml.set_defaults(func=_run_define_xml)
+
+    # -- add-acrf --------------------------------------------------------- #
+    add_acrf = sub.add_parser(
+        "add-acrf",
+        help="Declare the annotated CRF document (study.documents block) in define.yaml.",
+    )
+    add_acrf.add_argument(
+        "--href",
+        default="blankcrf.pdf",
+        help="aCRF file path in the submission package (default: blankcrf.pdf).",
+    )
+    add_acrf.add_argument(
+        "--title",
+        default=None,
+        help='Display title (default: "Annotated Case Report Form").',
+    )
+    add_acrf.add_argument(
+        "--page-map",
+        default=None,
+        help="External DOMAIN.VARIABLE → pages YAML file, relative to define.yaml.",
+    )
+    add_acrf.add_argument(
+        "--standard",
+        choices=["sdtm", "adam", "both"],
+        default="sdtm",
+        help="Which define.yaml to update (default: sdtm).",
+    )
+    _add_config_flag(add_acrf)
+    add_acrf.set_defaults(func=_run_add_acrf)
 
 
 def _add_engine_parsers(sub: argparse._SubParsersAction) -> None:

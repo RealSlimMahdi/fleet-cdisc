@@ -6,10 +6,13 @@ The **Raw-to-Render** (R2R) strategy collapses the traditional multi-program pha
 workflow into a single, self-contained script that takes raw source data all the
 way to a rendered clinical table:
 
-```
-ADSL (pre-built)  ─────────────────┐
-                                    ▼
-Raw AE CSV  →  SDTM AE  →  ADaM ADAE  →  Validate  →  TLG (HTML)
+```mermaid
+flowchart LR
+    RAW["Raw AE CSV"] --> SDTM["SDTM AE<br/>df.sdtm"]
+    SDTM --> ADAE["ADaM ADAE<br/>df.adam · df.adam.occds"]
+    ADSL[("ADSL<br/>pre-built, governed")] -.-> ADAE
+    ADAE --> VAL["Validate<br/>.validate()"]
+    VAL --> TLG["AE summary table<br/>df.tlg.ae → HTML"]
 ```
 
 DM and ADSL are assumed to already exist — they are **governed, shared artefacts**
@@ -43,8 +46,16 @@ names haven't drifted.
 
 ### The R2R model
 
-```
-r2r_ae.py   ADSL (input) + Raw AE → SDTM AE → ADAE → validate → AE summary → HTML
+```mermaid
+flowchart LR
+    subgraph R2R["r2r_ae.py — one script, one review"]
+        direction LR
+        L1["Layer 1<br/>SDTM AE"] --> L2["Layer 2<br/>ADAE"]
+        L2 --> L3["Layer 3<br/>Validate"]
+        L3 --> L4["Layer 4<br/>Render HTML"]
+    end
+    RAWAE["Raw AE"] --> L1
+    ADSL[("ADSL<br/>pre-built input")] -.-> L2
 ```
 
 One script. One review. When cell `(3, 2)` in the table looks wrong, scroll up —

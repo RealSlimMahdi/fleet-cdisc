@@ -400,7 +400,7 @@ class DefineScaffolder:
                     codelists.append(
                         {
                             "oid": oid,
-                            "name": oid,  # placeholder — init-ct will provide real names
+                            "name": oid,  # placeholder — fleet init ct will provide real names
                             "type": "text",
                         }
                     )

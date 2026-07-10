@@ -206,11 +206,16 @@ def audit(
 
     # -- TS FDA profile -------------------------------------------------- #
     if ts is not None:
-        present = set(ts["TSPARMCD"].to_list())
-        values = {
-            row["TSPARMCD"]: row["TSVAL"]
-            for row in ts.select("TSPARMCD", "TSVAL").iter_rows(named=True)
-        }
+        # An empty TS frame (no rows / no columns) still runs the profile:
+        # every required parameter is then missing.
+        if "TSPARMCD" in ts.columns:
+            present = set(ts["TSPARMCD"].to_list())
+            values = {
+                row["TSPARMCD"]: row["TSVAL"]
+                for row in ts.select("TSPARMCD", "TSVAL").iter_rows(named=True)
+            }
+        else:
+            present, values = set(), {}
         for parm, rule in TS_REQUIRED.items():
             if parm not in present:
                 extra = " (FDA rejection criterion 1734)" if parm == "SSTDTC" else ""

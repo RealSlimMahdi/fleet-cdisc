@@ -698,3 +698,25 @@ def test_tdd_ctgov_prints_yaml(
     assert _run(["tdd", "ctgov", "NCT1"]) == 0
     printed = yaml.safe_load(capsys.readouterr().out)
     assert printed["parameters"][0]["tsparmcd"] == "REGID"
+
+
+def test_add_acrf_updates_define_yaml(
+    study: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """`fleet add-acrf` injects study.documents.annotated_crf, preserving the
+    leading comment header of the define.yaml."""
+    import yaml
+
+    spec_path = study / "metadata" / "sdtm" / "define.yaml"
+    spec_path.write_text("# schema-hint comment\n" + spec_path.read_text(), encoding="utf-8")
+    monkeypatch.chdir(study)
+
+    assert _run(["add-acrf", "--href", "blankcrf.pdf", "--page-map", "acrf_pages.yaml"]) == 0
+
+    text = spec_path.read_text(encoding="utf-8")
+    assert text.startswith("# schema-hint comment")
+    data = yaml.safe_load(text)
+    acrf = data["study"]["documents"]["annotated_crf"]
+    assert acrf["href"] == "blankcrf.pdf"
+    assert acrf["title"] == "Annotated Case Report Form"
+    assert acrf["page_map"] == "acrf_pages.yaml"

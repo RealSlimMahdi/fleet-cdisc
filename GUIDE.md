@@ -117,17 +117,19 @@ RACE = C74457  # ...
 
 ### Standalone codelist commands
 
-If you prefer to skip the full bootstrap pipeline:
+If you prefer to skip the full bootstrap pipeline, `fleet add-ct` both
+bootstraps a fresh `codelists.py` and extends an existing one (only missing
+codelists are added):
 
 ```bash
-# Generate codelists.py directly from the SDTM IG
-uv run fleet init-ct --domains DM,AE,VS,EX --output examples/cdiscpilot01/sdtm/codelists.py
+# Bootstrap (or extend) codelists.py directly from the SDTM IG
+uv run fleet add-ct --domains DM,AE,VS,EX --output examples/cdiscpilot01/sdtm/codelists.py
 
-# Add more domains incrementally (preserves existing codelists)
+# Add more domains later (preserves existing codelists)
 uv run fleet add-ct --domains LB,CM --output examples/cdiscpilot01/sdtm/codelists.py
 
 # Pin to a specific IG version and CT package
-uv run fleet init-ct --domains DM,AE --ig 3-4 --package sdtmct-2025-09-26 --output codelists.py
+uv run fleet add-ct --domains DM,AE --ig 3-4 --package sdtmct-2025-09-26 --output codelists.py
 ```
 
 ---

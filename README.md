@@ -104,7 +104,7 @@ dm = (
     raw_df.sdtm.assign("DOMAIN", value="DM")
     .assign("STUDYID", value="MYSTUDY01")
     .assign("USUBJID", source="patient_id")
-    .assign("SEX", source="sex_raw", ct=SEX, ct_map={"M": "M", "F": "F"})
+    .assign("SEX", source="sex_raw", ct=SEX, ct_map={"Male": "M", "Female": "F"})
     .date("RFSTDTC", source="first_dose_date")
     .to_frame()
 )
@@ -392,7 +392,7 @@ uv run fleet migrate src/ --write                        # rewrite removed pre-a
 uv run fleet define-xml --spec examples/cdiscpilot01/sdtm/define.yaml \
   --output outputs/define_sdtm.xml --enrich-methods       # embed verb/callable docstrings as <MethodDef>
 uv run fleet install-engine && uv run fleet doctor        # CDISC Rules Engine + health check (checks extras)
-uv run fleet init-ct --domains DM,AE,VS,EX --output codelists.py
+uv run fleet add-ct --domains DM,AE,VS,EX --output codelists.py
 uv run fleet add-rule --domain AE --description "AESEV required when AESER = Y"
 ```
 

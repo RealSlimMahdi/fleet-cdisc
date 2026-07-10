@@ -290,3 +290,46 @@ class TestSpecDispatchAttribution:
         ns = df.adam.duration("ADY", start="TRTSDT", end="ADT")
         (node,) = [n for n in lineage_of(ns) if n.name == "ADY"]
         assert node.verb == "duration"
+
+
+class TestOrchestrationExports:
+    """to_snakefile()/to_airflow_dag() emit genuinely executable artifacts."""
+
+    @pytest.fixture
+    def dag(self, tmp_path: Path) -> PipelineDAG:
+        spec = {
+            "study": {"id": "S1", "standard": "SDTMIG", "standard_version": "3.4"},
+            "datasets": [
+                {
+                    "name": "DM",
+                    "inputs": [{"name": "dm_raw", "type": "raw"}],
+                    "variables": [],
+                },
+                {
+                    "name": "AE",
+                    "inputs": [{"name": "ae_raw", "type": "raw"}, {"name": "DM"}],
+                    "variables": [],
+                },
+            ],
+        }
+        p = tmp_path / "define.yaml"
+        p.write_text(yaml.safe_dump(spec))
+        return build_dag(p, output_dir=tmp_path / "out")
+
+    def test_airflow_dag_is_valid_python(self, dag: PipelineDAG, tmp_path: Path):
+        import ast
+
+        text = dag.to_airflow_dag(dag_id="s1", path=tmp_path / "s1_dag.py")
+        ast.parse(text)  # must be a valid Python module
+        assert "BashOperator(task_id='DM', bash_command='fleet run --dataset DM')" in text
+        assert "dm >> ae" in text  # dependency wiring from inputs:
+        assert (tmp_path / "s1_dag.py").read_text() == text
+
+    def test_snakefile_has_runnable_rules(self, dag: PipelineDAG, tmp_path: Path):
+        text = dag.to_snakefile(path=tmp_path / "Snakefile")
+        assert "rule all:" in text
+        assert "rule ae:" in text
+        assert '"fleet run --dataset AE"' in text
+        # AE's inputs include DM's output file, so Snakemake re-runs on change.
+        assert str(dag.nodes["DM"].path) in text
+        assert (tmp_path / "Snakefile").read_text() == text
