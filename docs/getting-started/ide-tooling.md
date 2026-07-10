@@ -51,13 +51,42 @@ Fleet package (never hardcoded):
 
 ## AI assistants — `fleet mcp` (Model Context Protocol)
 
+The MCP server lets any MCP-capable assistant (Claude Code, Claude Desktop,
+Cursor, ...) call Fleet's pipeline intelligence as tools instead of guessing
+from source code.
+
+### Setup
+
 ```bash
 uv add "fleet-cdisc[mcp]"
-# Claude Code:
+# Claude Code (run from the study root — see note below):
 claude mcp add fleet -- uv run fleet mcp --stdio
 ```
 
-Exposed tools, each a thin wrapper over a public Fleet API:
+Any other MCP client uses the same stdio command. For JSON-config clients
+(Claude Desktop, Cursor, a project `.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "fleet": {
+      "command": "uv",
+      "args": ["run", "fleet", "mcp", "--stdio"],
+      "cwd": "/path/to/your/study"
+    }
+  }
+}
+```
+
+**Launch from the study root.** The tools take dataset/spec paths as
+arguments; registering the server with the study workspace as its working
+directory (`cwd` above, or running `claude mcp add` inside the study) lets
+the assistant pass the same relative paths your `study_config.yaml` uses
+(`data/sdtm/ae.parquet`, `metadata/sdtm/define.yaml`, ...).
+
+### Exposed tools
+
+Each is a thin wrapper over a public Fleet API:
 
 | Tool | Does |
 | --- | --- |
@@ -69,5 +98,24 @@ Exposed tools, each a thin wrapper over a public Fleet API:
 | `fleet_tlg_catalog()` | all registered TLG templates |
 | `fleet_tlg_run(spec_path, data_path, adsl_path?, groupby?)` | run a TLG spec YAML, return rendered HTML |
 | `fleet_dataset_check(data_path, define_yaml, dataset)` | conformance check against the spec |
+
+### What to ask your assistant
+
+Once connected, these workflows stop being copy-paste-the-error loops and
+become one question each:
+
+- *"In what order do I need to build the datasets in metadata/adam/define.yaml?"*
+  → `fleet_execution_order`
+- *"If I change DM, which downstream datasets must re-run?"* → `fleet_impacted_by`
+- *"Where does ADSL.TRTSDT come from?"* → `fleet_lineage`
+- *"Validate data/sdtm/ae.parquet and summarise the errors."* → `fleet_validate`
+- *"Is 'INTERVENTIONAL' a valid term for C99077? What are the others?"* → `fleet_ct_terms`
+- *"Which TLG template covers an AE overview table, and run it against my ADAE."*
+  → `fleet_tlg_catalog` + `fleet_tlg_run`
+- *"Does data/sdtm/dm.parquet conform to its define.yaml spec?"* → `fleet_dataset_check`
+
+Combined with `llms.txt` (the machine-readable API summary shipped at the
+repo root), an assistant can both **write** Fleet pipelines and **verify**
+their outputs without leaving the conversation.
 
 `fleet doctor` reports whether the `lsp` and `mcp` extras are installed.

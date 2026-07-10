@@ -456,7 +456,7 @@ class TrialParameters(BaseModel):
                 (repeating parameters such as FCNTRY get incrementing TSSEQ).
 
         Raises:
-            httpx.HTTPStatusError: When the NCT ID is unknown to the registry.
+            urllib.error.HTTPError: When the NCT ID is unknown to the registry.
 
         Examples:
             Seed TS from the registry, then extend and build::
@@ -470,15 +470,20 @@ class TrialParameters(BaseModel):
                     .to_frame()
                 )
         """
-        import httpx
+        import json
+        import urllib.request
 
-        resp = httpx.get(
+        # ponytail: stdlib on purpose — ctgov's WAF 403s httpx's TLS/client
+        # fingerprint in some environments while urllib passes.
+        req = urllib.request.Request(
             f"https://clinicaltrials.gov/api/v2/studies/{nct_id}",
-            timeout=timeout,
-            follow_redirects=True,
+            headers={
+                "User-Agent": "fleet-cdisc (https://github.com/RealSlimMahdi/fleet-cdisc)",
+                "Accept": "application/json",
+            },
         )
-        resp.raise_for_status()
-        return cls(parameters=_ctgov_to_parameters(resp.json()))
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — fixed https URL
+            return cls(parameters=_ctgov_to_parameters(json.load(resp)))
 
     def to_polars(self) -> pl.DataFrame:
         """Convert validated parameters to a Polars DataFrame with SDTM names.

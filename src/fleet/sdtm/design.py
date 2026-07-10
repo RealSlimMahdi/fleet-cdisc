@@ -31,6 +31,7 @@ Usage::
 
 from __future__ import annotations
 
+import datetime
 import re
 from pathlib import Path
 from typing import Any
@@ -56,6 +57,21 @@ from fleet.sdtm.tdd import (
     TrialVisits,
     parse_trial_design,
 )
+
+
+def _dates_to_iso(value: Any) -> Any:
+    """Recursively turn YAML-parsed date/datetime scalars back into ISO strings.
+
+    YAML parses an unquoted ``2026-01-01`` as ``datetime.date``, but every
+    SDTM date-bearing field (TSVAL, rule text, ...) is a string.
+    """
+    if isinstance(value, dict):
+        return {k: _dates_to_iso(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_dates_to_iso(v) for v in value]
+    if isinstance(value, datetime.datetime | datetime.date):
+        return value.isoformat()
+    return value
 
 
 def _sdtm_code(name: str, max_len: int, taken: set[str]) -> str:
@@ -335,7 +351,7 @@ class StudyDesign(BaseModel):
                 frames = design.domains()
         """
         data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
-        return cls(**data.get("trial_design", data))
+        return cls(**_dates_to_iso(data.get("trial_design", data)))
 
     def to_yaml(self, path: str | Path | None = None) -> str:
         """Serialise the design to YAML (the ``from_yaml`` round-trip).

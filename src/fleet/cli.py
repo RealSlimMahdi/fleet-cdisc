@@ -127,6 +127,39 @@ def _load_ctx(config_arg: str | None) -> StudyContext:
     return load_study_context(_resolve_config(config_arg))
 
 
+def _try_ctx(config_arg: str | None = None) -> StudyContext | None:
+    """Best-effort study context — ``None`` when no config is discoverable.
+
+    For commands that also work standalone on explicit paths: inside a
+    study workspace they resolve defaults from the config, outside one
+    they fall back to their explicit arguments.
+    """
+    cfg = Path(config_arg) if config_arg else find_study_config()
+    if cfg is None or not cfg.is_file():
+        return None
+    from fleet.core.study_context import StudyConfigError, load_study_context
+
+    try:
+        return load_study_context(cfg)
+    except StudyConfigError:
+        return None
+
+
+#: Dataset file extensions searched by name-based dataset resolution.
+_DATASET_EXTENSIONS = (".parquet", ".csv", ".xpt", ".sas7bdat")
+
+
+def _find_dataset_file(name: str, dirs: Sequence[Path]) -> Path | None:
+    """Find ``<name>.<ext>`` (lower/upper stem) in the given directories."""
+    for directory in dirs:
+        for stem in (name.lower(), name.upper()):
+            for ext in _DATASET_EXTENSIONS:
+                candidate = directory / f"{stem}{ext}"
+                if candidate.is_file():
+                    return candidate
+    return None
+
+
 def _config_flag_hint(config_path: Path) -> str:
     """Return `` --config <path>`` unless the config sits in the cwd."""
     if config_path.resolve().parent == Path.cwd().resolve():
@@ -434,7 +467,11 @@ def _run_add_ct(args: argparse.Namespace) -> None:
     )
 
     domains = _parse_domains(args.domains)
-    output = Path(args.output)
+    if args.output:
+        output = Path(args.output)
+    else:
+        ctx = _try_ctx()
+        output = ctx.codelists_file if ctx else Path("codelists.py")
     existing = existing_concept_ids(output)
 
     print(f"Adding domains: {', '.join(domains)}")
@@ -676,6 +713,15 @@ def _generate_define_xml(args: argparse.Namespace) -> None:
 
 
 def _run_define_xml(args: argparse.Namespace) -> None:
+    # Explicit --spec/--output win; otherwise resolve via study_config.yaml.
+    if args.spec is None or args.output is None:
+        ctx = _load_ctx(args.config)
+        if args.spec is None:
+            meta_dir = ctx.metadata_adam_dir if args.standard == "adam" else ctx.metadata_sdtm_dir
+            args.spec = str(meta_dir / "define.yaml")
+        if args.output is None:
+            args.output = str(ctx.define_xml_dir / f"define_{args.standard}.xml")
+
     spec = Path(args.spec)
     if not spec.is_file():
         _fail(f"spec file not found: {spec}")
@@ -700,17 +746,13 @@ def _load_run_input(ctx: StudyContext, name: str, built: dict[str, pl.DataFrame]
         return built[key]
 
     search_dirs = [ctx.raw_data_dir, ctx.sdtm_data_dir, ctx.adam_data_dir]
-    extensions = (".parquet", ".csv", ".xpt", ".sas7bdat")
-    for directory in search_dirs:
-        for stem in (name.lower(), name.upper()):
-            for ext in extensions:
-                candidate = directory / f"{stem}{ext}"
-                if candidate.is_file():
-                    return load_raw_data(candidate).collect()
+    candidate = _find_dataset_file(name, search_dirs)
+    if candidate is not None:
+        return load_raw_data(candidate).collect()
 
     _fail(
         f"input dataset '{name}' not found. Searched for {name.lower()}/{name.upper()} "
-        f"with extensions {', '.join(extensions)} under: "
+        f"with extensions {', '.join(_DATASET_EXTENSIONS)} under: "
         f"{', '.join(str(d) for d in search_dirs)}. "
         "Run the upstream dataset first (fleet run --dataset ...) or place the file "
         "in one of those directories."
@@ -884,16 +926,37 @@ def _run_validate(args: argparse.Namespace) -> None:
     from fleet.validation import ValidationService
     from fleet.validation.engine import discover_engine
 
-    files = _collect_data_files(args.paths)
+    ctx = _try_ctx(args.config)
+
+    # No paths given → validate the study's configured data directories.
+    paths = args.paths
+    if not paths:
+        if ctx is None:
+            _fail(
+                "no dataset paths given and no study_config.yaml found. "
+                "Pass files/directories, or run inside a study workspace."
+            )
+        paths = [str(d) for d in (ctx.sdtm_data_dir, ctx.adam_data_dir) if d.is_dir()]
+        if not paths:
+            _fail(
+                f"no data directories found under {ctx.study_root} "
+                f"({ctx.config.paths.sdtm_data}, {ctx.config.paths.adam_data}). "
+                "Run `fleet run` first or pass explicit paths."
+            )
+
+    files = _collect_data_files(paths)
     if not files:
         _fail(
             "no dataset files found. Pass files or a directory containing "
             f"{', '.join(_DATA_EXTENSIONS)} files."
         )
 
-    config_path = find_study_config()
-    study_root = config_path.parent if config_path else None
-    engine = discover_engine(study_root)
+    # Custom CORE rules: explicit flag, else validation.custom_rules from the config.
+    custom_rules = args.custom_rules
+    if custom_rules is None and ctx is not None and ctx.custom_rules_dir is not None:
+        custom_rules = str(ctx.custom_rules_dir)
+
+    engine = discover_engine(ctx.study_root if ctx else None)
     if engine is None:
         _fail(
             "CDISC Rules Engine not found. Install it with `fleet install-engine` "
@@ -908,9 +971,14 @@ def _run_validate(args: argparse.Namespace) -> None:
         df = _load_dataset(str(f))
         name = f.stem.upper()
         standard = args.standard or ("adam" if name.startswith("AD") else "sdtm")
-        kwargs: dict[str, Any] = {"custom_rules": args.custom_rules}
-        if args.standard_version:
-            kwargs["version"] = args.standard_version
+        kwargs: dict[str, Any] = {"custom_rules": custom_rules}
+        version = args.standard_version
+        if version is None and ctx is not None:
+            # The config's declared IG versions drive validation ("3-4" → "3.4").
+            declared = ctx.config.adam if standard == "adam" else ctx.config.sdtm
+            version = declared.ig_version.replace("-", ".")
+        if version:
+            kwargs["version"] = version
 
         print(f"Validating {name} ({standard}) — {f}")
         if standard == "adam":
@@ -1222,14 +1290,16 @@ def _resolve_spec_frames(
     default_data: Path | None,
     adsl_df: pl.DataFrame | None,
     adsl_arg: str | None,
+    ctx: StudyContext | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame | None, bool]:
     """Resolve one spec's ``(data_df, population, is_listing)`` from CLI args.
 
     Shared by ``fleet tlg run`` and ``fleet tlg explore`` so both wire
     data identically: NAME=PATH mapping → plain ``--data`` → (for
-    ADSL-only templates) the ``--adsl`` frame; population defaults to
-    the data frame for ADSL-only templates and is required for every
-    other table.
+    ADSL-only templates) the ``--adsl`` frame → the study's configured
+    data directories (when a study_config.yaml is discoverable);
+    population defaults to the data frame for ADSL-only templates and
+    is required for every other table.
     """
     analysis_domain = meta.domains[-1] if meta.domains else None
     is_listing = meta.output_type.value == "listing"
@@ -1239,16 +1309,27 @@ def _resolve_spec_frames(
         data_path = default_data
     if data_path is None and analysis_domain == "ADSL" and adsl_arg:
         data_path = Path(adsl_arg)
+    if data_path is None and ctx is not None and analysis_domain:
+        data_path = _find_dataset_file(analysis_domain, [ctx.adam_data_dir, ctx.sdtm_data_dir])
     if data_path is None:
         _fail(
             f"{spec_path}: template '{meta.id}' needs the {analysis_domain} dataset. "
-            f"Pass --data <path> or --data {analysis_domain}=<path>."
+            f"Pass --data <path> or --data {analysis_domain}=<path>"
+            + (
+                f", or place it under {ctx.adam_data_dir}."
+                if ctx is not None
+                else ", or run inside a study workspace."
+            )
         )
     data_df = _load_dataset(str(data_path))
 
     population = adsl_df
     if population is None and analysis_domain == "ADSL":
         population = data_df
+    if population is None and not is_listing and "ADSL" in meta.domains and ctx is not None:
+        adsl_path = _find_dataset_file("ADSL", [ctx.adam_data_dir])
+        if adsl_path is not None:
+            population = _load_dataset(str(adsl_path))
     if population is None and not is_listing and "ADSL" in meta.domains:
         _fail(
             f"{spec_path}: template '{meta.id}' needs ADSL for population "
@@ -1263,7 +1344,8 @@ def _tlg_run_once(args: argparse.Namespace) -> None:
 
     spec_paths = _collect_spec_paths(args.spec)
     named_data, default_data = _parse_data_args(args.data)
-    out_dir = Path(args.output)
+    ctx = _try_ctx()
+    out_dir = Path(args.output) if args.output else (ctx.outputs_dir if ctx else Path("."))
     fmt: str = args.fmt
 
     adsl_df: pl.DataFrame | None = None
@@ -1274,7 +1356,7 @@ def _tlg_run_once(args: argparse.Namespace) -> None:
         spec = load_spec(spec_path)
         meta = TEMPLATES[spec.template]
         data_df, population, is_listing = _resolve_spec_frames(
-            spec_path, meta, named_data, default_data, adsl_df, args.adsl
+            spec_path, meta, named_data, default_data, adsl_df, args.adsl, ctx
         )
         groupby = None if is_listing else _detect_groupby(data_df, args.groupby)
 
@@ -1316,6 +1398,7 @@ def _tlg_explore_once(args: argparse.Namespace) -> None:
 
     spec_paths = _collect_spec_paths(args.spec)
     named_data, default_data = _parse_data_args(args.data)
+    ctx = _try_ctx()
 
     adsl_df: pl.DataFrame | None = None
     if args.adsl:
@@ -1326,7 +1409,7 @@ def _tlg_explore_once(args: argparse.Namespace) -> None:
         spec = load_spec(spec_path)
         meta = TEMPLATES[spec.template]
         data_df, population, is_listing = _resolve_spec_frames(
-            spec_path, meta, named_data, default_data, adsl_df, args.adsl
+            spec_path, meta, named_data, default_data, adsl_df, args.adsl, ctx
         )
         # A declared groupby axis supplies the arm column per variant —
         # only detect one when the spec leaves it fixed.
@@ -1351,7 +1434,12 @@ def _tlg_explore_once(args: argparse.Namespace) -> None:
             )
         )
 
-    out_path = Path(args.output)
+    out_path = (
+        Path(args.output)
+        if args.output
+        else (ctx.outputs_dir / "explorer.html" if ctx else Path("explorer.html"))
+    )
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     html = render_explorer(entries, path=out_path)
     print(f"Explorer → {out_path}  ({len(entries)} spec(s), {len(html) / 1024:.0f} KiB)")
 
@@ -1371,14 +1459,39 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
 
     domain: str = args.domain
     fmt: str = args.fmt
+    ctx = _try_ctx()
 
-    # Load datasets
-    data_df = _load_dataset(args.data)
-    adsl_df = _load_dataset(args.adsl)
+    # Resolve datasets: explicit paths, else the study's configured data dirs.
+    # DM summaries read subject-level data, i.e. ADSL; other domains map to ADxx.
+    dataset_name = "ADSL" if domain == "dm" else f"AD{domain.upper()}"
+    data_arg = args.data
+    if data_arg is None and ctx is not None:
+        found = _find_dataset_file(dataset_name, [ctx.adam_data_dir, ctx.sdtm_data_dir])
+        data_arg = str(found) if found else None
+    if data_arg is None:
+        _fail(
+            f"no dataset for domain '{domain}'. Pass --data <path>"
+            + (f" or place {dataset_name} under {ctx.adam_data_dir}." if ctx else ".")
+        )
+    adsl_arg = args.adsl
+    if adsl_arg is None and ctx is not None:
+        found = _find_dataset_file("ADSL", [ctx.adam_data_dir])
+        adsl_arg = str(found) if found else None
+    if adsl_arg is None:
+        _fail(
+            "no ADSL dataset. Pass --adsl <path>"
+            + (f" or place ADSL under {ctx.adam_data_dir}." if ctx else ".")
+        )
+    data_df = _load_dataset(data_arg)
+    adsl_df = _load_dataset(adsl_arg)
 
-    # Default output filename
-    output = args.output or f"{domain}_summary.{fmt}"
-    output_path = Path(output)
+    # Default output: <outputs dir>/<domain>_summary.<fmt> inside a study.
+    filename = f"{domain}_summary.{fmt}"
+    output_path = (
+        Path(args.output)
+        if args.output
+        else (ctx.outputs_dir / filename if ctx else Path(filename))
+    )
 
     # Metadata (page_by flows through RenderMetadata into every renderer)
     rmeta = RenderMetadata(
@@ -1401,8 +1514,8 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
 
     print(f"Domain:   {domain}")
     print(f"Format:   {fmt}")
-    print(f"Data:     {args.data} ({data_df.shape[0]} rows)")
-    print(f"ADSL:     {args.adsl} ({adsl_df.shape[0]} rows)")
+    print(f"Data:     {data_arg} ({data_df.shape[0]} rows)")
+    print(f"ADSL:     {adsl_arg} ({adsl_df.shape[0]} rows)")
     print(f"Groupby:  {group_col}")
     print(f"Output:   {output_path}")
     print()
@@ -1458,13 +1571,72 @@ def _run_lsp(args: argparse.Namespace) -> None:
 # ────────────────────────────────────────────────────────────────────── #
 
 
-def _load_design(path: str):
+def _resolve_design_path(args: argparse.Namespace) -> Path:
+    """Resolve the trial design spec: explicit --design, else via study_config.yaml."""
+    if args.design:
+        return Path(args.design)
+    return _load_ctx(args.config).metadata_sdtm_dir / "trial_design.yaml"
+
+
+def _run_tdd_ctgov(args: argparse.Namespace) -> None:
+    import yaml
+
+    from fleet.sdtm.tdd import TrialParameters
+
+    try:
+        ts = TrialParameters.from_ctgov(args.nct_id)
+    except Exception as exc:
+        _fail(f"could not fetch {args.nct_id} from ClinicalTrials.gov: {exc}")
+    params = [p.model_dump(exclude_defaults=True) for p in ts.parameters]
+
+    if not args.write:
+        print(
+            yaml.dump(
+                {"parameters": params},
+                default_flow_style=False,
+                sort_keys=False,
+                allow_unicode=True,
+            )
+        )
+        print(
+            f"# {len(params)} parameter(s) from {args.nct_id} — paste into "
+            "trial_design.yaml, or re-run with --write to merge automatically.",
+            file=sys.stderr,
+        )
+        return
+
+    design_path = _resolve_design_path(args)
+    if not design_path.is_file():
+        _fail(
+            f"trial design spec not found: {design_path}. "
+            "Create it first, or run without --write to print the YAML."
+        )
+    data = yaml.safe_load(design_path.read_text(encoding="utf-8"))
+    root = data.get("trial_design", data)
+    existing = {(p.get("tsparmcd"), p.get("tsseq", 1)) for p in root.get("parameters") or []}
+    added = [p for p in params if (p["tsparmcd"], p.get("tsseq", 1)) not in existing]
+    root.setdefault("parameters", []).extend(added)
+    design_path.write_text(
+        yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+    print(
+        f"{len(added)} parameter(s) from {args.nct_id} merged into {design_path} "
+        f"({len(params) - len(added)} already present)."
+    )
+
+
+def _load_design(design_path: Path):
     from fleet.sdtm.design import StudyDesign
 
-    design_path = Path(path)
     if not design_path.is_file():
-        _fail(f"trial design spec not found: {design_path}")
-    return StudyDesign.from_yaml(design_path)
+        _fail(
+            f"trial design spec not found: {design_path}. Create it there or pass --design <path>."
+        )
+    try:
+        return StudyDesign.from_yaml(design_path)
+    except Exception as exc:
+        _fail(f"invalid trial design spec {design_path}:\n{exc}")
 
 
 def _print_findings(findings) -> int:
@@ -1480,7 +1652,7 @@ def _print_findings(findings) -> int:
 
 
 def _run_tdd_audit(args: argparse.Namespace) -> None:
-    design = _load_design(args.design)
+    design = _load_design(_resolve_design_path(args))
     findings = design.audit()
     if findings.is_empty():
         print("Audit clean — no findings.")
@@ -1494,7 +1666,7 @@ def _run_tdd_audit(args: argparse.Namespace) -> None:
 def _run_tdd_build(args: argparse.Namespace) -> None:
     from fleet.io import save_dataset_json, save_parquet, save_xpt
 
-    design = _load_design(args.design)
+    design = _load_design(_resolve_design_path(args))
     frames = design.domains()
     if not frames:
         _fail("trial design spec has no populated sections (elements, arms, visits, ...)")
@@ -1510,7 +1682,7 @@ def _run_tdd_build(args: argparse.Namespace) -> None:
         "dataset-json": lambda df, d, n: save_dataset_json(df, d / f"{n.lower()}.json", domain=n),
     }
     writer = writers[args.format]
-    out_dir = Path(args.out)
+    out_dir = Path(args.out) if args.out else _load_ctx(args.config).sdtm_data_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
     for name, df in frames.items():
@@ -1848,8 +2020,12 @@ def _add_ct_parsers(sub: argparse._SubParsersAction) -> None:
     add.add_argument(
         "--output",
         "-o",
-        default="codelists.py",
-        help="Path to the existing codelists.py (default: codelists.py).",
+        default=None,
+        help=(
+            "Path to the existing codelists.py. Default: "
+            "<metadata_sdtm>/codelists.py from the discovered study_config.yaml "
+            "(./codelists.py outside a study)."
+        ),
     )
     add.add_argument(
         "--no-docs",
@@ -1915,15 +2091,30 @@ def _add_define_xml_parser(sub: argparse._SubParsersAction) -> None:
     defxml.add_argument(
         "--spec",
         "-s",
-        required=True,
-        help="Path to the define.yaml specification file.",
+        default=None,
+        help=(
+            "Path to the define.yaml specification file. Default: "
+            "<metadata_sdtm|metadata_adam>/define.yaml from the discovered "
+            "study_config.yaml (per --standard)."
+        ),
     )
     defxml.add_argument(
         "--output",
         "-o",
-        required=True,
-        help="Output path for the Define-XML file (e.g. outputs/define_sdtm.xml).",
+        default=None,
+        help=(
+            "Output path for the Define-XML file. Default: "
+            "<define_xml dir>/define_<standard>.xml from the discovered "
+            "study_config.yaml."
+        ),
     )
+    defxml.add_argument(
+        "--standard",
+        choices=["sdtm", "adam"],
+        default="sdtm",
+        help="Which define.yaml to use for the config-based defaults (default: sdtm).",
+    )
+    _add_config_flag(defxml)
     defxml.add_argument(
         "--no-preview",
         action="store_true",
@@ -2024,9 +2215,13 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     )
     validate.add_argument(
         "paths",
-        nargs="+",
-        help="Dataset files or directories (parquet / csv / xpt / sas7bdat).",
+        nargs="*",
+        help=(
+            "Dataset files or directories (parquet / csv / xpt / sas7bdat). "
+            "Default: the configured sdtm_data and adam_data directories."
+        ),
     )
+    _add_config_flag(validate)
     validate.add_argument(
         "--standard",
         choices=["sdtm", "adam"],
@@ -2037,12 +2232,18 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         "--version",
         dest="standard_version",
         default=None,
-        help="IG version (default: 3.4 for SDTM, 1.3 for ADaM).",
+        help=(
+            "IG version. Default: the sdtm/adam ig_version declared in the "
+            "discovered study_config.yaml (3.4 / 1.3 outside a study)."
+        ),
     )
     validate.add_argument(
         "--custom-rules",
         default=None,
-        help="Directory of custom validation rule YAML files.",
+        help=(
+            "Directory of custom validation rule YAML files. "
+            "Default: validation.custom_rules from the discovered study_config.yaml."
+        ),
     )
     validate.add_argument(
         "--report",
@@ -2152,14 +2353,20 @@ def _add_tdd_parsers(sub: argparse._SubParsersAction) -> None:
     )
     tdd_build.add_argument(
         "--design",
-        default="trial_design.yaml",
-        help="Path to the trial design YAML spec (default: ./trial_design.yaml).",
+        default=None,
+        help=(
+            "Path to the trial design YAML spec. Default: "
+            "<metadata_sdtm>/trial_design.yaml from the discovered study_config.yaml."
+        ),
     )
     tdd_build.add_argument(
         "--out",
         "-o",
-        default=".",
-        help="Output directory (default: current directory).",
+        default=None,
+        help=(
+            "Output directory. Default: the sdtm_data directory from the "
+            "discovered study_config.yaml."
+        ),
     )
     tdd_build.add_argument(
         "--format",
@@ -2172,7 +2379,36 @@ def _add_tdd_parsers(sub: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Write datasets even when the conformance audit reports errors.",
     )
+    _add_config_flag(tdd_build)
     tdd_build.set_defaults(func=_run_tdd_build)
+
+    # -- tdd ctgov ------------------------------------------------------ #
+    tdd_ctgov = tdd_sub.add_parser(
+        "ctgov",
+        help="Seed TS parameters from a ClinicalTrials.gov registration.",
+    )
+    tdd_ctgov.add_argument(
+        "nct_id",
+        help="ClinicalTrials.gov identifier (e.g. NCT04280705).",
+    )
+    tdd_ctgov.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Merge the parameters into the trial design spec (new TSPARMCD/TSSEQ "
+            "rows only) instead of printing YAML to stdout."
+        ),
+    )
+    tdd_ctgov.add_argument(
+        "--design",
+        default=None,
+        help=(
+            "Trial design spec to merge into with --write. Default: "
+            "<metadata_sdtm>/trial_design.yaml from the discovered study_config.yaml."
+        ),
+    )
+    _add_config_flag(tdd_ctgov)
+    tdd_ctgov.set_defaults(func=_run_tdd_ctgov)
 
     # -- tdd audit ------------------------------------------------------ #
     tdd_audit = tdd_sub.add_parser(
@@ -2181,9 +2417,13 @@ def _add_tdd_parsers(sub: argparse._SubParsersAction) -> None:
     )
     tdd_audit.add_argument(
         "--design",
-        default="trial_design.yaml",
-        help="Path to the trial design YAML spec (default: ./trial_design.yaml).",
+        default=None,
+        help=(
+            "Path to the trial design YAML spec. Default: "
+            "<metadata_sdtm>/trial_design.yaml from the discovered study_config.yaml."
+        ),
     )
+    _add_config_flag(tdd_audit)
     tdd_audit.set_defaults(func=_run_tdd_audit)
 
 
@@ -2240,8 +2480,11 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
     tlg_run.add_argument(
         "--output",
         "-o",
-        default=".",
-        help="Output directory (default: current directory).",
+        default=None,
+        help=(
+            "Output directory. Default: the configured outputs directory "
+            "(current directory outside a study workspace)."
+        ),
     )
     tlg_run.add_argument(
         "--format",
@@ -2313,8 +2556,11 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
     tlg_explore.add_argument(
         "--output",
         "-o",
-        default="explorer.html",
-        help="Output HTML file (default: explorer.html).",
+        default=None,
+        help=(
+            "Output HTML file. Default: explorer.html in the configured "
+            "outputs directory (current directory outside a study workspace)."
+        ),
     )
     tlg_explore.add_argument(
         "--groupby",
@@ -2359,19 +2605,27 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
     )
     tlg_export.add_argument(
         "--data",
-        required=True,
-        help="Path to the primary analysis dataset (CSV or Parquet).",
+        default=None,
+        help=(
+            "Path to the primary analysis dataset. Default: the domain's ADxx "
+            "dataset (ADSL for dm) found in the configured data directories."
+        ),
     )
     tlg_export.add_argument(
         "--adsl",
-        required=True,
-        help="Path to the ADSL dataset (CSV or Parquet).",
+        default=None,
+        help=(
+            "Path to the ADSL dataset. Default: ADSL found in the configured adam_data directory."
+        ),
     )
     tlg_export.add_argument(
         "--output",
         "-o",
         default=None,
-        help="Output file path.  Defaults to <domain>_summary.<format>.",
+        help=(
+            "Output file path. Default: <domain>_summary.<format> in the "
+            "configured outputs directory (current directory outside a study)."
+        ),
     )
     tlg_export.add_argument(
         "--groupby",
@@ -2508,6 +2762,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     """
     parser = _build_parser()
     args = parser.parse_args(argv)
+
+    # Load a study .env (walking up from the cwd) before any handler reads
+    # CDISC_API_KEY & co. — commands must work from any study subdirectory.
+    from fleet.ct.api import try_load_dotenv
+
+    try_load_dotenv()
 
     from fleet.core.exceptions import FleetError
     from fleet.core.study_context import StudyConfigError

@@ -110,13 +110,14 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 
 | Argument | Description |
 | -------- | ----------- |
-| `paths` | Dataset files or directories (parquet / csv / xpt / sas7bdat). |
+| `paths` | Dataset files or directories (parquet / csv / xpt / sas7bdat). Default: the configured sdtm_data and adam_data directories. |
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
+| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 | `--standard` | _(none)_ | Force the standard. Default: AD* datasets → adam, others → sdtm. Choices: `sdtm`, `adam`. |
-| `--version` | _(none)_ | IG version (default: 3.4 for SDTM, 1.3 for ADaM). |
-| `--custom-rules` | _(none)_ | Directory of custom validation rule YAML files. |
+| `--version` | _(none)_ | IG version. Default: the sdtm/adam ig_version declared in the discovered study_config.yaml (3.4 / 1.3 outside a study). |
+| `--custom-rules` | _(none)_ | Directory of custom validation rule YAML files. Default: validation.custom_rules from the discovered study_config.yaml. |
 | `--report` | _(none)_ | Write an HTML findings report to PATH. |
 
 ---
@@ -166,16 +167,30 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
-| `--design` | `trial_design.yaml` | Path to the trial design YAML spec (default: ./trial_design.yaml). |
-| `--out` / `-o` | `.` | Output directory (default: current directory). |
+| `--design` | _(none)_ | Path to the trial design YAML spec. Default: <metadata_sdtm>/trial_design.yaml from the discovered study_config.yaml. |
+| `--out` / `-o` | _(none)_ | Output directory. Default: the sdtm_data directory from the discovered study_config.yaml. |
 | `--format` | `parquet` | Output format (default: parquet). Choices: `parquet`, `xpt`, `dataset-json`. |
 | `--force` | _(none)_ | Write datasets even when the conformance audit reports errors. |
+| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
+
+### `fleet tdd ctgov`
+
+| Argument | Description |
+| -------- | ----------- |
+| `nct_id` | ClinicalTrials.gov identifier (e.g. NCT04280705). |
+
+| Option | Default | Description |
+| ------ | ------- | ----------- |
+| `--write` | _(none)_ | Merge the parameters into the trial design spec (new TSPARMCD/TSSEQ rows only) instead of printing YAML to stdout. |
+| `--design` | _(none)_ | Trial design spec to merge into with --write. Default: <metadata_sdtm>/trial_design.yaml from the discovered study_config.yaml. |
+| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 
 ### `fleet tdd audit`
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
-| `--design` | `trial_design.yaml` | Path to the trial design YAML spec (default: ./trial_design.yaml). |
+| `--design` | _(none)_ | Path to the trial design YAML spec. Default: <metadata_sdtm>/trial_design.yaml from the discovered study_config.yaml. |
+| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 
 ---
 
@@ -199,7 +214,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | ------ | ------- | ----------- |
 | `--data` | _(none)_ | Analysis dataset path, repeatable. Plain PATH applies to every spec; NAME=PATH (e.g. ADAE=adae.parquet) targets the template's analysis domain. |
 | `--adsl` | _(none)_ | ADSL dataset path (population denominators for tables). |
-| `--output` / `-o` | `.` | Output directory (default: current directory). |
+| `--output` / `-o` | _(none)_ | Output directory. Default: the configured outputs directory (current directory outside a study workspace). |
 | `--format` | `html` | Output format (default: html). Choices: `html`, `rtf`, `pdf`, `pptx`. |
 | `--groupby` | _(none)_ | Treatment-arm column. Default: auto-detect (TRTA → TRT01A → TRT01P). |
 | `--title` | `""` | Output title (default: template title). |
@@ -219,7 +234,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | ------ | ------- | ----------- |
 | `--data` | _(none)_ | Analysis dataset path, repeatable. Plain PATH applies to every spec; NAME=PATH (e.g. ADAE=adae.parquet) targets the template's analysis domain. |
 | `--adsl` | _(none)_ | ADSL dataset path (population denominators for tables). |
-| `--output` / `-o` | `explorer.html` | Output HTML file (default: explorer.html). |
+| `--output` / `-o` | _(none)_ | Output HTML file. Default: explorer.html in the configured outputs directory (current directory outside a study workspace). |
 | `--groupby` | _(none)_ | Treatment-arm column for specs without a groupby axis. Default: auto-detect (TRTA → TRT01A → TRT01P). |
 | `--title` | `""` | Output title (default: template title). |
 | `--subtitle` | `""` | Output subtitle. |
@@ -232,9 +247,9 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | ------ | ------- | ----------- |
 | `--domain` | _(required)_ | TLG sub-namespace to summarise. Choices: `ae`, `cm`, `dm`, `ds`, `eg`, `ex`, `lb`, `mh`, `vs`. |
 | `--format` | `html` | Output format (default: html). Choices: `html`, `rtf`, `pdf`, `pptx`. |
-| `--data` | _(required)_ | Path to the primary analysis dataset (CSV or Parquet). |
-| `--adsl` | _(required)_ | Path to the ADSL dataset (CSV or Parquet). |
-| `--output` / `-o` | _(none)_ | Output file path.  Defaults to <domain>_summary.<format>. |
+| `--data` | _(none)_ | Path to the primary analysis dataset. Default: the domain's ADxx dataset (ADSL for dm) found in the configured data directories. |
+| `--adsl` | _(none)_ | Path to the ADSL dataset. Default: ADSL found in the configured adam_data directory. |
+| `--output` / `-o` | _(none)_ | Output file path. Default: <domain>_summary.<format> in the configured outputs directory (current directory outside a study). |
 | `--groupby` | _(none)_ | Treatment-arm column. Default: auto-detect (TRTA → TRT01A → TRT01P). |
 | `--title` | `""` | Table title. |
 | `--subtitle` | `""` | Table subtitle. |
@@ -249,8 +264,10 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
-| `--spec` / `-s` | _(required)_ | Path to the define.yaml specification file. |
-| `--output` / `-o` | _(required)_ | Output path for the Define-XML file (e.g. outputs/define_sdtm.xml). |
+| `--spec` / `-s` | _(none)_ | Path to the define.yaml specification file. Default: <metadata_sdtm\|metadata_adam>/define.yaml from the discovered study_config.yaml (per --standard). |
+| `--output` / `-o` | _(none)_ | Output path for the Define-XML file. Default: <define_xml dir>/define_<standard>.xml from the discovered study_config.yaml. |
+| `--standard` | `sdtm` | Which define.yaml to use for the config-based defaults (default: sdtm). Choices: `sdtm`, `adam`. |
+| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 | `--no-preview` | _(none)_ | Skip generating the HTML preview alongside the XML. |
 | `--enrich-methods` | _(none)_ | Embed Python verb / callable docstrings into Define-XML Origin descriptions and emit MethodDef elements with FormalExpression. Creates a verifiable link between the regulatory submission and the exact code that produced the data. |
 | `--watch` | _(none)_ | Re-generate whenever the spec file changes (requires the 'watch' extra). |
@@ -276,7 +293,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | `--domains` | _(required)_ | Comma-separated SDTM domain abbreviations to add. |
 | `--ig` | `3-4` | SDTM IG version (default: 3-4). |
 | `--package` | `sdtmct-2023-12-15` | CT package version (default: sdtmct-2023-12-15). |
-| `--output` / `-o` | `codelists.py` | Path to the existing codelists.py (default: codelists.py). |
+| `--output` / `-o` | _(none)_ | Path to the existing codelists.py. Default: <metadata_sdtm>/codelists.py from the discovered study_config.yaml (./codelists.py outside a study). |
 | `--no-docs` | _(none)_ | Omit definitions and preferred terms from generated code. |
 
 ---

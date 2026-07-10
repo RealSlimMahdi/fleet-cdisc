@@ -845,6 +845,13 @@ FCNTRY, SSTDTC, …) and extend by hand:
 ts_seed = TrialParameters.from_ctgov("NCT00048217")  # network call
 ```
 
+Or from the CLI — print the YAML, or merge it into `trial_design.yaml`:
+
+```bash
+uv run fleet tdd ctgov NCT00048217           # print the parameters: block
+uv run fleet tdd ctgov NCT00048217 --write   # merge into trial_design.yaml
+```
+
 ### 10.8 TI — Trial Inclusion/Exclusion
 
 ```python
@@ -927,7 +934,11 @@ Derive `SESEQ` with the standard `seq()` verb:
 
 ### 10.11 CLI: build and audit from trial_design.yaml
 
-A `trial_design.yaml` mirrors the `StudyDesign` schema:
+`fleet tdd` runs in the context of the discovered `study_config.yaml`
+(git-style parent walk, `--config` to override): the design spec defaults
+to `<metadata_sdtm>/trial_design.yaml` and the output directory to the
+config's `sdtm_data` path — so the command works from any subdirectory of
+any company's folder structure. The YAML mirrors the `StudyDesign` schema:
 
 ```yaml
 trial_design:
@@ -944,9 +955,10 @@ trial_design:
 ```
 
 ```bash
-uv run fleet tdd audit --design trial_design.yaml            # conformance pre-check
-uv run fleet tdd build --design trial_design.yaml \
-  --out data/sdtm --format xpt                               # audit + write datasets
+uv run fleet tdd audit                       # conformance pre-check
+uv run fleet tdd build --format xpt          # audit + write to <sdtm_data>/
+uv run fleet tdd ctgov NCT04280705 --write   # seed TS parameters from ClinicalTrials.gov
+uv run fleet tdd build --design specs/td.yaml --out /tmp/out   # explicit overrides
 ```
 
 `fleet tdd build` refuses to write when the audit reports errors
