@@ -274,6 +274,15 @@ Importing `fleet` registers chainable namespaces on **every** Polars DataFrame. 
 
 </details>
 
+<details>
+<summary><b><code>df.adam.tte</code></b> — Time-to-event (ADTTE) (23 verbs: 3 specific + 20 shared)</summary>
+
+**Specific:** `param` · `aval` · `km_data`
+
+**Shared:** `source` · `assign` · `case_when` · `derivation` · `recode` · `merge` · `keep` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `pick` · `pin` · `repin` · `join_adsl` · `study_day` · `nodup` · `fk_policy` · `pins`
+
+</details>
+
 <!-- AUTO:NAMESPACES:END -->
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -448,7 +457,8 @@ For detailed module-by-module documentation, see [STRUCTURE.md](STRUCTURE.md).
 - [x] Executable CLI (`fleet run/validate/check/tlg/migrate`) + Define-XML generation
 - [x] CDISC Rules Engine integration
 - [x] SAS XPT / Dataset-JSON export
-- [ ] Additional ADaM dataset structures (ADTTE, ADPC)
+- [x] ADTTE time-to-event framework (`df.adam.tte` — typed event/censor sources, KM inputs)
+- [ ] Additional ADaM dataset structures (ADPC)
 - [ ] Enhanced validation reporting
 
 See the [open issues](https://github.com/RealSlimMahdi/fleet-cdisc/issues) for a full list of proposed features and known issues.

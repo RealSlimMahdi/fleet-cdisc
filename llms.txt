@@ -1729,6 +1729,7 @@ Registered on every `pl.DataFrame` **and** `pl.LazyFrame` (so `pl.scan_parquet(.
 - `df.adam.vaccine` — Vaccine: fever flag, seroconversion, ADIS AVAL
 - `df.adam.metabolic` — Metabolic: waist-to-hip ratio, body fat %
 - `df.adam.neuro` — Neuroscience: Centiloid, MMSE, CDR-SoB
+- `df.adam.tte` — Time-to-event (ADTTE): EventSource/CensorSource objects, param, AVAL/AVALU, KM inputs
 
 ## SDTM verbs
 
@@ -1817,7 +1818,7 @@ Available on `df.adam` (BDS base namespace). Shared verbs (source, assign, case_
 - `shift(target: str, *, baseline_cat: str, post_cat: str, sep: str = ' to ') -> AdamNamespace` — Derive a categorical shift label: ``"<baseline><sep><post>"``.
 - `derive_summary_records(*, by: list[str], analysis_var: str = 'AVAL', set_values_to: dict[str, Any], stat: "Literal['mean', 'sum', 'min', 'max', 'median', 'count']" = 'mean') -> AdamNamespace` — Compute a summary statistic per group and append the results as new records.
 - `derive_locf_records(*, by: list[str] | None = None, analysis_var: str = 'AVAL', order_by: str = 'ADT') -> AdamNamespace` — Forward-fill *analysis_var* within each group (LOCF).
-- `derive_param(*, by: list[str] | None = None, set_values_to: dict[str, Any], parameter_filter: dict[str, str], analysis_value: pl.Expr) -> AdamNamespace` — Derive a new parameter (e.g. BMI) from existing records and append
+- `derive_param(*, by: list[str] | None = None, set_values_to: dict[str, Any], parameter_filter: dict[str, str], analysis_value: pl.Expr | str, from_dataset: pl.DataFrame | None = None, where: str | pl.Expr | None = None) -> AdamNamespace` — Derive a new parameter (e.g. BMI) from existing records and append
 - `atoxgr(target: str, *, system: str = 'ctcae_v5', direction: str, term_var: str, unit_var: str | None = None, signif_dig: int = 5, indicators: dict[str, list[str]] | None = None) -> AdamNamespace` — Derive a toxicity grade column using a criteria-file grading system.
 - `transform(fn: str | Callable[[pl.DataFrame], pl.DataFrame], *, label: str | None = None) -> AdamNamespace` — Apply an arbitrary ``(pl.DataFrame) -> pl.DataFrame`` function.
 - `from_spec(spec_path: str | Path, *, dataset: str | None = None, only: list[str] | None = None, omit: list[str] | None = None, strict: bool = True, overwrite: bool = False) -> Self` — Build a derivation pipeline from a YAML specification file.

@@ -294,6 +294,53 @@ class TestPickDTHCAUS:
 class TestPickEdgeCases:
     """Stress tests: empty sources, duplicates, type coercion."""
 
+    def test_invalid_mode_raises(self, adsl_base):
+        with pytest.raises(Exception, match="mode='lastt'"):
+            adsl_base.adam.adsl.pick(
+                "MYVAR",
+                events=[{"when": pl.col("TRTEDT").is_not_null(), "set": {"MYVAR": "TRTEDT"}}],
+                mode="lastt",
+            )
+
+    def test_invalid_per_event_mode_raises(self, adsl_base):
+        with pytest.raises(Exception, match="event #0 mode='frist'"):
+            adsl_base.adam.adsl.pick(
+                "MYVAR",
+                events=[
+                    {
+                        "when": pl.col("TRTEDT").is_not_null(),
+                        "set": {"MYVAR": "TRTEDT"},
+                        "mode": "frist",
+                    }
+                ],
+            ).to_frame()
+
+    def test_global_order_on_non_target_column_does_not_crash(self, adsl_base):
+        """order= may name a source column that is not a target — within-event
+        selection uses it; the cross-event winner is decided by priority."""
+        ae = pl.DataFrame(
+            {
+                "USUBJID": ["SUBJ-01", "SUBJ-01"],
+                "AEENDTC": [date(2024, 1, 5), date(2024, 2, 1)],
+                "ASEQ": [1, 2],
+            }
+        )
+        result = adsl_base.adam.adsl.pick(  # type: ignore[attr-defined]
+            "LSTALVDT",
+            events=[
+                {
+                    "when": pl.col("AEENDTC").is_not_null(),
+                    "set": {"LSTALVDT": "AEENDTC"},
+                    "source": ae,
+                }
+            ],
+            by=["USUBJID"],
+            order=["ASEQ"],  # not a target — used within the event only
+            mode="last",
+        ).to_frame()
+        row = result.filter(pl.col("USUBJID") == "SUBJ-01")
+        assert row["LSTALVDT"][0] == date(2024, 2, 1)  # last by ASEQ
+
     def test_empty_source_skipped(self, adsl_base):
         """An event whose source produces zero matches is silently skipped."""
         empty = pl.DataFrame(

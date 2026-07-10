@@ -63,7 +63,7 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 | [`.transform()`][fleet.adam.AdamNamespace.transform]                           | Apply an arbitrary frame-level transformation.                       | `.transform(lambda df: df.sort("USUBJID"))`                             |
 | [`.derive_summary_records()`][fleet.adam.AdamNamespace.derive_summary_records] | Aggregate by group and append summary rows.                          | `.derive_summary_records(by=["USUBJID"], ...)`                          |
 | [`.derive_locf_records()`][fleet.adam.AdamNamespace.derive_locf_records]       | LOCF forward-fill within patient groups.                             | `.derive_locf_records(by=["USUBJID","PARAMCD"])`                        |
-| [`.derive_param()`][fleet.adam.AdamNamespace.derive_param]                     | Derive a new parameter and append rows.                              | `.derive_param(by=["USUBJID"], ...)`                                    |
+| [`.derive_param()`][fleet.adam.AdamNamespace.derive_param]                     | Derive a new parameter and append rows (own frame or `from_dataset=`). | `.derive_param(by=["USUBJID"], parameter_filter={...}, from_dataset=adlb, ...)` |
 | [`.from_spec()`][fleet.adam.AdamNamespace.from_spec]                           | Build the entire pipeline from a `define.yaml` spec.                 | `df.adam.from_spec("define.yaml", dataset="ADVS")`                      |
 | [`.validate()`][fleet.core._verb_mixin.SharedVerbsMixin.validate]                             | Run CDISC Rules Engine on the resulting frame.                       | `.validate(domain="ADVS")`                                              |
 
@@ -106,6 +106,18 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 | [`.cmt()`][fleet.adam.pk_namespace.PKNamespace.cmt]                         | Derive `CMT` compartment number (NONMEM).                           | `.cmt("CMT", evid_col="EVID", dose_cmt=1, conc_cmt=2)`           |
 | [`.avalcat()`][fleet.adam.pk_namespace.PKNamespace.avalcat]                 | Listing-ready categorised analysis value.                           | `.avalcat("AVALCAT1", conc_col="PCSTRESC", lloq_col="PCLLOQ")`   |
 | [`.anl_flag()`][fleet.adam.pk_namespace.PKNamespace.anl_flag]               | Analysis flag (`ANL01FL` / `ANL02FL`).                              | `.anl_flag("ANL01FL")`                                           |
+
+## Time-to-event (`df.adam.tte`)
+
+Typed `EventSource` / `CensorSource` objects describe the candidates; the
+prebuilt library (`DEATH_EVENT`, `AE_EVENT`, ...) is browsable via
+`prebuilt_sources_frame()`. Source frames attach by nickname with `.pin()`.
+
+| Verb                                                             | Description                                                        | Example                                                              |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------- |
+| [`.param()`][fleet.adam.TTENamespace.param]                      | Derive one TTE parameter: earliest event wins, else latest censor. | `.param("OS", "Overall Survival", start_date="TRTSDT", events=[...])` |
+| [`.aval()`][fleet.adam.TTENamespace.aval]                        | AVAL (+AVALU) from STARTDT/ADT with CDISC unit conventions.        | `.aval(unit="months")`                                                |
+| [`.km_data()`][fleet.adam.TTENamespace.km_data]                  | `(duration, event)` frame for lifelines / scikit-survival.         | `.km_data("OS", by=["TRT01P"])`                                       |
 
 ## Trial Design (`df.sdtm` verbs + `fleet.StudyDesign`)
 

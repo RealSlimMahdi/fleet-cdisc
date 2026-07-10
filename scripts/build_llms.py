@@ -325,7 +325,8 @@ dates, sequence number)
 - `df.adam.peds` — Pediatrics: age derivations, prematurity flag
 - `df.adam.vaccine` — Vaccine: fever flag, seroconversion, ADIS AVAL
 - `df.adam.metabolic` — Metabolic: waist-to-hip ratio, body fat %
-- `df.adam.neuro` — Neuroscience: Centiloid, MMSE, CDR-SoB\
+- `df.adam.neuro` — Neuroscience: Centiloid, MMSE, CDR-SoB
+- `df.adam.tte` — Time-to-event (ADTTE): EventSource/CensorSource objects, param, AVAL/AVALU, KM inputs\
 """
 
 
@@ -969,6 +970,12 @@ _README_PK_SPECIFIC = [
 ]
 _README_PK_MULTI = ["seq"]
 
+_README_TTE_SPECIFIC = [
+    "param",
+    "aval",
+    "km_data",
+]
+
 
 def _render_namespace_details(
     *,
@@ -1095,6 +1102,12 @@ def _readme_namespaces_block() -> str:
             specific=_README_PK_SPECIFIC,
             with_shared=True,
             multi_row=_README_PK_MULTI,
+        ),
+        _render_namespace_details(
+            namespace="df.adam.tte",
+            title="Time-to-event (ADTTE)",
+            specific=_README_TTE_SPECIFIC,
+            with_shared=True,
         ),
     ]
 
