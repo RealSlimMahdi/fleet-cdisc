@@ -19,6 +19,14 @@ hands the result straight to a Kaplan-Meier fit. Every output below is real.
 Datasets attach by nickname through the pin system — a source saying
 `dataset="ADAE"` reads whatever you pinned as `ADAE`.
 
+!!! note "Choosing the time origin (`start_date=`)"
+    `TRTSDT` (ADaMIG: *Date of First Exposure to Treatment*) is the
+    conventional origin for **safety** endpoints like time to first AE.
+    For ITT **efficacy** endpoints in randomized trials — overall survival
+    in particular — use the randomization date (`RANDDT`): ITT time starts
+    at randomization, not at first dose. `start_date=` accepts any ADSL
+    date column, so pick per parameter.
+
 ## 1. Input data
 
 ```python
