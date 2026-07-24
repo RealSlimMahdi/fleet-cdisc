@@ -148,11 +148,8 @@ flowchart TD
         ADAM --> TLG
     end
 
-    SPEC --> SDTM
-    SPEC --> ADAM
-
-    SDTM --> VAL["CORE validation<br/>fleet validate"]
-    ADAM --> VAL
+    SPEC --> FLEET
+    FLEET --> VAL["CORE validation<br/>fleet validate"]
     SPEC --> XML["Define-XML 2.1<br/>fleet define-xml"]
     TLG --> OUT["HTML · RTF · PDF · PPTX"]
 ```
