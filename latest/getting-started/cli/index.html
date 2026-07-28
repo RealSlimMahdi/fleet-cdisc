@@ -3466,7 +3466,7 @@ set it in a <code>.env</code> file at your project root or as an environment var
 <tr>
 <td><code>--data</code></td>
 <td><em>(none)</em></td>
-<td>Path to the primary analysis dataset. Default: the domain's ADxx dataset (ADSL for dm) found in the configured data directories.</td>
+<td>Path to the primary analysis dataset. Default: the analysis dataset the domain's t_summary template declares (e.g. ADAE for ae, ADSL for dm/ds), found in the configured data directories.</td>
 </tr>
 <tr>
 <td><code>--adsl</code></td>
@@ -3619,13 +3619,13 @@ set it in a <code>.env</code> file at your project root or as an environment var
 </tr>
 <tr>
 <td><code>--ig</code></td>
-<td><code>3-4</code></td>
-<td>SDTM IG version (default: 3-4).</td>
+<td><em>(none)</em></td>
+<td>SDTM IG version. Default: sdtm.ig_version from the discovered study_config.yaml (3-4 outside a study).</td>
 </tr>
 <tr>
 <td><code>--package</code></td>
-<td><code>sdtmct-2023-12-15</code></td>
-<td>CT package version (default: sdtmct-2023-12-15).</td>
+<td><em>(none)</em></td>
+<td>CT package version. Default: ct.package from the discovered study_config.yaml (sdtmct-2023-12-15 outside a study).</td>
 </tr>
 <tr>
 <td><code>--output</code> / <code>-o</code></td>
@@ -3843,7 +3843,7 @@ set it in a <code>.env</code> file at your project root or as an environment var
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 10, 2026 15:35:40 UTC">July 10, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 21, 2026 12:38:41 UTC">July 21, 2026</span>
   </span>
 
     
