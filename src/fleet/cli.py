@@ -441,19 +441,25 @@ def _run_add_ct(args: argparse.Namespace) -> None:
     )
 
     domains = _parse_domains(args.domains)
-    if args.output:
-        output = Path(args.output)
-    else:
-        ctx = _try_ctx()
-        output = ctx.codelists_file if ctx else Path("codelists.py")
+    ctx = _try_ctx()
+    output = (
+        Path(args.output) if args.output else (ctx.codelists_file if ctx else Path("codelists.py"))
+    )
+    # Version resolution mirrors every other command: explicit flag, then the
+    # discovered study config, then the hard default. Regenerating existing
+    # codelists against a different CT package than the study pins would
+    # silently change already-reviewed terms.
+    ig = args.ig or (ctx.config.sdtm.ig_version if ctx else "3-4")
+    package = args.package or (ctx.config.ct.package if ctx else "sdtmct-2023-12-15")
     existing = existing_concept_ids(output)
 
     print(f"Adding domains: {', '.join(domains)}")
     print(f"Existing file:  {output} ({len(existing)} codelists)")
+    print(f"IG / package:   {ig} / {package}")
     print()
 
     with CDISCClient() as client:
-        new_ids = extract_ig_concept_ids(client, args.ig, domains)
+        new_ids = extract_ig_concept_ids(client, ig, domains)
         to_add = new_ids - existing
         all_ids = existing | new_ids
 
@@ -468,7 +474,7 @@ def _run_add_ct(args: argparse.Namespace) -> None:
         gen = CodelistGenerator.from_concept_ids(
             client,
             all_ids,
-            package=args.package,
+            package=package,
             include_docs=not args.no_docs,
         )
         dest = gen.write(output)
@@ -682,8 +688,11 @@ def _generate_define_xml(args: argparse.Namespace) -> None:
     gen.generate(str(output), html_preview=not args.no_preview)
     print(f"Generated Define-XML → {output}")
     if not args.no_preview:
+        # The generator skips the preview (with its own message) when the
+        # XSL stylesheet is unavailable — only report a file that exists.
         preview = output.with_name(output.stem + "_preview.html")
-        print(f"HTML preview → {preview}")
+        if preview.is_file():
+            print(f"HTML preview → {preview}")
 
 
 def _run_add_acrf(args: argparse.Namespace) -> None:
@@ -1469,15 +1478,24 @@ def _run_tlg_explore(args: argparse.Namespace) -> None:
 
 
 def _run_tlg_export(args: argparse.Namespace) -> None:
-    from fleet.tlg import NAMESPACE_CLASSES, RenderMetadata
+    from fleet.tlg import NAMESPACE_CLASSES, TEMPLATES, RenderMetadata
 
     domain: str = args.domain
     fmt: str = args.fmt
     ctx = _try_ctx()
 
     # Resolve datasets: explicit paths, else the study's configured data dirs.
-    # DM summaries read subject-level data, i.e. ADSL; other domains map to ADxx.
-    dataset_name = "ADSL" if domain == "dm" else f"AD{domain.upper()}"
+    # The default dataset comes from the registry: the namespace's t_summary
+    # template declares its analysis domain last (ADSL for subject-level
+    # summaries like dm and ds, ADxx otherwise).
+    dataset_name = next(
+        (
+            meta.domains[-1]
+            for meta in TEMPLATES.values()
+            if meta.namespace == domain and meta.method == "t_summary" and meta.domains
+        ),
+        f"AD{domain.upper()}",
+    )
     data_arg = args.data
     if data_arg is None and ctx is not None:
         found = _find_dataset_file(dataset_name, [ctx.adam_data_dir, ctx.sdtm_data_dir])
@@ -1711,7 +1729,12 @@ def _run_tdd_build(args: argparse.Namespace) -> None:
 
 
 def _run_derivation_add(args: argparse.Namespace) -> None:
-    """Scaffold a new derivation file under specs/<study_id>/adam/derivations/."""
+    """Scaffold a derivation file in the study's derivations/ package.
+
+    The package sits next to the configured programs_adam directory
+    (``programs/derivations/`` with default paths), where ``fleet init cfg``
+    created its ``__init__.py`` stub.
+    """
     name: str = args.name.strip()
     dataset: str = args.dataset.strip().upper()
     kind: str = args.kind
@@ -1987,13 +2010,19 @@ def _add_ct_parsers(sub: argparse._SubParsersAction) -> None:
     )
     add.add_argument(
         "--ig",
-        default="3-4",
-        help="SDTM IG version (default: 3-4).",
+        default=None,
+        help=(
+            "SDTM IG version. Default: sdtm.ig_version from the discovered "
+            "study_config.yaml (3-4 outside a study)."
+        ),
     )
     add.add_argument(
         "--package",
-        default="sdtmct-2023-12-15",
-        help="CT package version (default: sdtmct-2023-12-15).",
+        default=None,
+        help=(
+            "CT package version. Default: ct.package from the discovered "
+            "study_config.yaml (sdtmct-2023-12-15 outside a study)."
+        ),
     )
     add.add_argument(
         "--output",
@@ -2614,8 +2643,9 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
         "--data",
         default=None,
         help=(
-            "Path to the primary analysis dataset. Default: the domain's ADxx "
-            "dataset (ADSL for dm) found in the configured data directories."
+            "Path to the primary analysis dataset. Default: the analysis dataset "
+            "the domain's t_summary template declares (e.g. ADAE for ae, ADSL for "
+            "dm/ds), found in the configured data directories."
         ),
     )
     tlg_export.add_argument(
@@ -2707,7 +2737,10 @@ def _add_derivation_parsers(sub: argparse._SubParsersAction) -> None:
 
     drv_add = drv_sub.add_parser(
         "add",
-        help="Scaffold a new derivation file under specs/<study>/adam/derivations/.",
+        help=(
+            "Scaffold a new derivation file in the study's derivations/ package "
+            "(next to the configured programs/adam directory)."
+        ),
     )
     drv_add.add_argument(
         "name",

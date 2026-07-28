@@ -73,13 +73,19 @@ Priority is explicit in list order.  Each event's `"label"` documents intent.  N
 
 ```mermaid
 flowchart TD
-    A[Events list: ordered by priority] --> B{For each event}
-    B --> C[Filter source by 'when' condition]
-    C --> D[Apply 'set' mappings to targets]
-    D --> E[Group by 'by' vars]
-    E --> F[Select record per mode/order]
-    F --> G[Tag with event priority number]
-    G --> H[Stack all candidate records]
+    A[Events list<br/>ordered by priority] --> PE
+
+    subgraph PE["For each event · in priority order"]
+        direction TB
+        C[Filter source by 'when' condition]
+        D[Apply 'set' mappings to targets]
+        E[Group by 'by' vars]
+        F[Select record per mode / order]
+        G[Tag with event priority number]
+        C --> D --> E --> F --> G
+    end
+
+    PE --> H[Stack all candidate records]
     H --> I[Sort by priority, then order]
     I --> J[Keep first per group = winner]
     J --> K[Left-join targets back to base frame]

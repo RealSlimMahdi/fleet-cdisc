@@ -247,7 +247,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | ------ | ------- | ----------- |
 | `--domain` | _(required)_ | TLG sub-namespace to summarise. Choices: `ae`, `cm`, `dm`, `ds`, `eg`, `ex`, `lb`, `mh`, `vs`. |
 | `--format` | `html` | Output format (default: html). Choices: `html`, `rtf`, `pdf`, `pptx`. |
-| `--data` | _(none)_ | Path to the primary analysis dataset. Default: the domain's ADxx dataset (ADSL for dm) found in the configured data directories. |
+| `--data` | _(none)_ | Path to the primary analysis dataset. Default: the analysis dataset the domain's t_summary template declares (e.g. ADAE for ae, ADSL for dm/ds), found in the configured data directories. |
 | `--adsl` | _(none)_ | Path to the ADSL dataset. Default: ADSL found in the configured adam_data directory. |
 | `--output` / `-o` | _(none)_ | Output file path. Default: <domain>_summary.<format> in the configured outputs directory (current directory outside a study). |
 | `--groupby` | _(none)_ | Treatment-arm column. Default: auto-detect (TRTA → TRT01A → TRT01P). |
@@ -291,8 +291,8 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | Option | Default | Description |
 | ------ | ------- | ----------- |
 | `--domains` | _(required)_ | Comma-separated SDTM domain abbreviations to add. |
-| `--ig` | `3-4` | SDTM IG version (default: 3-4). |
-| `--package` | `sdtmct-2023-12-15` | CT package version (default: sdtmct-2023-12-15). |
+| `--ig` | _(none)_ | SDTM IG version. Default: sdtm.ig_version from the discovered study_config.yaml (3-4 outside a study). |
+| `--package` | _(none)_ | CT package version. Default: ct.package from the discovered study_config.yaml (sdtmct-2023-12-15 outside a study). |
 | `--output` / `-o` | _(none)_ | Path to the existing codelists.py. Default: <metadata_sdtm>/codelists.py from the discovered study_config.yaml (./codelists.py outside a study). |
 | `--no-docs` | _(none)_ | Omit definitions and preferred terms from generated code. |
 
