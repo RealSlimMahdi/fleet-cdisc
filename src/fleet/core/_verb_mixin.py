@@ -2057,6 +2057,8 @@ class SharedVerbsMixin:
         self,
         dataset: str | None = None,
         path: str | Path | None = None,
+        *,
+        predecessor: str | None = None,
     ) -> str:
         """Serialise the pipeline's lineage into a define.yaml spec.
 
@@ -2083,6 +2085,18 @@ class SharedVerbsMixin:
                 ...)``) or ``"DATASET"``.
             path: Optional file path — when given, the YAML is also
                 written there (parent directories are created).
+            predecessor: Name of the upstream dataset this ADaM pipeline
+                was built from (e.g. ``"DM"``).  When given, variables
+                carried through unchanged — metadata-only entries and
+                pure ``algorithm: source`` copies of CDISC-named columns
+                — are emitted with ``origin: Predecessor`` and
+                ``predecessor: '<DATASET>.<SOURCE>'``.  The emitted YAML
+                stays the explicit, reviewable source of truth; Fleet
+                never infers Predecessor at Define-XML generation time.
+                Columns brought in by ``merge()`` leave no lineage and
+                are labeled like carry-throughs — when the pipeline
+                contains a join, a review note is added to the header.
+                ADaM pipelines only.
 
         Returns:
             str: The define.yaml document.
@@ -2097,12 +2111,30 @@ class SharedVerbsMixin:
                 )
                 yaml_text = ns.to_spec_yaml(dataset="DM", path="specs/define_dm.yaml")
                 dm = raw_df.sdtm.from_spec("specs/define_dm.yaml", dataset="DM").to_frame()
+
+            Freeze an ADSL prototype, labelling DM carry-throughs::
+
+                adsl_ns.to_spec_yaml(dataset="ADSL", predecessor="DM")
         """
         from fleet.core import spec_registry
         from fleet.core.lineage import latest_lineage_of
 
         standard = self._VALIDATE_STANDARD
         ds_name = (dataset or getattr(self, "_domain", None) or "DATASET").upper()
+
+        pred_ds = predecessor.upper() if predecessor else None
+        if pred_ds:
+            if standard != "adam":
+                raise DerivationError(
+                    "to_spec_yaml(predecessor=...) applies to ADaM pipelines only — "
+                    "SDTM variables built from raw data are Collected/Derived, not "
+                    "Predecessor."
+                )
+            if not re.match(r"^[A-Z_][A-Z0-9_]{0,7}$", pred_ds):
+                raise DerivationError(
+                    f"to_spec_yaml(): predecessor {predecessor!r} is not a valid "
+                    "dataset name (expected e.g. 'DM' or 'ADSL')."
+                )
 
         schema = self._lazy.collect_schema()
         derived = {n.name: n for n in latest_lineage_of(self)}
@@ -2126,6 +2158,19 @@ class SharedVerbsMixin:
                 if meta.get("origin"):
                     entry["origin"] = meta["origin"]
                 if status == "ok":
+                    # A pure copy of a CDISC-named upstream column is a
+                    # Predecessor in Define-XML terms; an explicit origin
+                    # captured from the verb call wins.
+                    source = str(block.get("source") or col) if block else col
+                    if (
+                        pred_ds
+                        and "origin" not in entry
+                        and block
+                        and block.get("algorithm") == "source"
+                        and name_pattern.match(source)
+                    ):
+                        entry["origin"] = "Predecessor"
+                        entry["predecessor"] = f"{pred_ds}.{source}"
                     entry["derivation"] = block
                 elif status == "stub":
                     srcs = ", ".join(node.sources) if node.sources else "none"
@@ -2139,12 +2184,25 @@ class SharedVerbsMixin:
                         "callable": f"TODO_{col}",
                     }
                 # status == "byproduct": metadata-only (auto-generated column).
+            elif pred_ds:
+                # Metadata-only carry-through — flowed in untouched.
+                entry["origin"] = "Predecessor"
+                entry["predecessor"] = f"{pred_ds}.{col}"
             entries.append((entry, comment))
 
         if not entries:
             raise DerivationError(
                 "to_spec_yaml(): nothing to serialise — the frame has no derived "
                 "variables and no CDISC-named columns."
+            )
+
+        stubs = [entry["name"] for entry, comment in entries if comment]
+        if stubs:
+            warnings.warn(
+                f"to_spec_yaml: {len(stubs)} variable(s) have no reviewer-facing "
+                f"derivation text for Define-XML ({', '.join(stubs)}) — add a "
+                "`comment:` in the spec or wrap the logic in a @derivation callable.",
+                stacklevel=2,
             )
 
         var_names = [e["name"] for e, _ in entries]
@@ -2172,6 +2230,17 @@ class SharedVerbsMixin:
         lines: list[str] = [
             "# Generated by Fleet to_spec_yaml() — review study fields, labels, keys,",
             "# and TODO stubs before use.",
+        ]
+        if pred_ds and "JOIN" in self._lazy.explain().upper():
+            lines.append(
+                f"# predecessor={pred_ds!r}: this pipeline merges other datasets, and "
+                "merged-in columns"
+            )
+            lines.append(
+                f"# are indistinguishable from {pred_ds} carry-throughs — review each "
+                "predecessor: entry."
+            )
+        lines += [
             yaml.safe_dump(head, sort_keys=False, allow_unicode=True).rstrip(),
             "datasets:",
             _indent_yaml(yaml.safe_dump([ds_head], sort_keys=False, allow_unicode=True), 2),

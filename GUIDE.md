@@ -367,7 +367,9 @@ dm = dm_raw.sdtm.from_spec("examples/cdiscpilot01/sdtm/define.yaml", dataset="DM
 Pass `strict=False` to warn-and-skip, `overwrite=True` to let a spec variable
 replace an existing column, or `omit=["TRTSDT"]` to keep an inline derivation
 for one variable. Prototyped inline first? `ns.to_spec_yaml(dataset="DM")`
-emits the equivalent `derivation:` blocks so you don't retype the YAML by hand.
+emits the equivalent `derivation:` blocks so you don't retype the YAML by hand;
+for an ADaM pipeline, `to_spec_yaml(dataset="ADSL", predecessor="DM")` also
+pre-fills `origin: Predecessor` / `predecessor: DM.<VAR>` for carried columns.
 
 ---
 
@@ -1489,7 +1491,7 @@ adam_checker.check(advs, dataset="ADVS").print_report()
 # Use strict=False during development to downgrade Req errors to warnings
 sdtm_checker.check(dm, dataset="DM", strict=False).print_report()
 
-# Generate Define-XML 2.1 (enrich_methods=True embeds verb docstrings as <MethodDef>)
+# Generate Define-XML 2.1 (enrich_methods=True emits one <MethodDef> per Derived variable)
 DefineSpecGenerator(sdtm_spec, enrich_methods=True).generate("outputs/define_sdtm.xml")
 DefineSpecGenerator(adam_spec, enrich_methods=True).generate("outputs/define_adam.xml")
 ```
@@ -1794,14 +1796,19 @@ The `Derivation` object's `kind` determines routing:
 - `kind="column"` → expression added to lazy plan (no materialisation)
 - `kind="frame"` / `kind="param"` → pipeline materialised, function called, result re-wrapped
 
-### How Define-XML MethodDef is enriched from the docstring
+### How Define-XML MethodDef text is resolved
 
-When `fleet define-xml --enrich-methods` is run, the `callable:` key in the derivation block
-causes `DefineSpecGenerator` to:
+When `fleet define-xml --enrich-methods` is run, `DefineSpecGenerator` emits
+one `<MethodDef>` per **Derived** variable (`Algorithm for <VARIABLE>`),
+choosing its `<Description>` in this order:
 
-1. Look up the `Derivation` object in the transform registry.
-2. Read `obj.dotted_path` as the `<FormalExpression>` context.
-3. Extract the first line of `obj.fn.__doc__` as the `<Description>`.
+1. The variable's `comment:` in the spec — always wins.
+2. For `callable:` derivations, the study callable's docstring
+   (`@derivation` objects use `obj.fn.__doc__`; `obj.dotted_path` becomes
+   the `<FormalExpression>`).
+3. The algorithm registry's submission-facing template with the spec params
+   filled in (e.g. `chg` → `Change from baseline: AVAL - BASE.`).
 
-This creates a verifiable link between the regulatory submission and the exact code
-that produced the data.
+Fleet verb docstrings are never emitted — the same spec renders the same
+text on any Fleet version. This creates a verifiable link between the
+regulatory submission and the exact code that produced the data.

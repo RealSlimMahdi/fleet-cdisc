@@ -2,6 +2,7 @@
 
 from fleet.define_xml.checker import CheckResult, DatasetChecker, TypeMismatch
 from fleet.define_xml.generator import DefineXMLGenerator
+from fleet.define_xml.semantic_checks import semantic_errors
 from fleet.define_xml.spec_generator import DefineSpecGenerator
 from fleet.define_xml.validator import DefineIssue, DefineValidator
 from fleet.define_xml.xsd import validate_define_xml
@@ -16,6 +17,7 @@ __all__ = [
     "DefineIssue",
     "DefineValidator",
     "DefineXMLGenerator",
-    # XSD validation of generated Define-XML
+    # Validation of generated Define-XML (structure + reviewer-facing content)
     "validate_define_xml",
+    "semantic_errors",
 ]

@@ -51,6 +51,7 @@ class VariableEntry(BaseModel):
     label: str | None = None
     origin: str | None = None
     origin_source: str | None = None
+    predecessor: str | None = None
     role: str | None = None
     evaluator: str | None = None
     derivation: dict[str, Any] | None = None

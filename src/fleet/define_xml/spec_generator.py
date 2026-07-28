@@ -18,6 +18,8 @@ Usage::
 from __future__ import annotations
 
 import json
+import re
+import warnings
 import xml.dom.minidom
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime
@@ -28,10 +30,8 @@ import jsonschema
 import yaml
 from lxml import etree as lxml_etree
 
-from fleet.core.algorithm_resolver import (
-    resolve_algorithm_docstring,
-    resolve_callable_docstring,
-)
+from fleet.core import spec_registry
+from fleet.core.algorithm_resolver import resolve_callable_docstring
 from fleet.core.exceptions import SpecError
 
 _SCHEMA_PATH = Path(__file__).parent / "schemas" / "define_spec_schema.json"
@@ -83,6 +83,22 @@ _FORMAT_EXT: dict[str, str] = {
     "xpt": ".xpt",
     "dataset-json": ".json",
 }
+
+#: Spec ``study.standard`` → the algorithm-registry standard (SEND shares
+#: the SDTM verb set).
+_REGISTRY_STANDARDS: dict[str, str] = {
+    "SDTMIG": "sdtm",
+    "ADAMIG": "adam",
+    "SENDIG": "sdtm",
+}
+
+#: reST formatting in study docstrings (````code````, ``ref``, *emphasis*)
+#: is noise in a regulatory document — content kept, markup dropped.
+_REST_MARKUP = re.compile(r"``([^`]+)``|`([^`]+)`|\*([^*\s][^*]*)\*")
+
+
+def _strip_rest_markup(text: str) -> str:
+    return _REST_MARKUP.sub(lambda m: next(g for g in m.groups() if g is not None), text)
 
 
 class DefineSpecGenerator:
@@ -196,21 +212,29 @@ class DefineSpecGenerator:
         return self._serialise(self._build_odm())
 
     def _serialise(self, root: ET.Element) -> str:
-        """Format *root* and, unless disabled, XSD-validate before returning."""
+        """Format *root* and, unless disabled, validate before returning.
+
+        Two layers, same gate: XSD validation (structure, element order,
+        enumerations) and the semantic lint (reviewer-facing conformance
+        — see :func:`fleet.define_xml.semantic_checks.semantic_errors`).
+        A document that fails either never ships silently.
+        """
         xml_str = self._to_pretty_xml(root)
         if not self._validate_xml:
             return xml_str
 
         from fleet.core.exceptions import SpecError
+        from fleet.define_xml.semantic_checks import semantic_errors
         from fleet.define_xml.xsd import validate_define_xml
 
-        errors = validate_define_xml(xml_str)
+        errors = [f"schema: {e}" for e in validate_define_xml(xml_str)]
+        errors += [f"conformance: {e}" for e in semantic_errors(xml_str)]
         if errors:
             shown = "\n  ".join(errors[:10])
             more = f"\n  ... and {len(errors) - 10} more" if len(errors) > 10 else ""
             raise SpecError(
-                f"{self._path}: generated Define-XML is not valid against the "
-                f"Define-XML 2.1 schema ({len(errors)} error(s)):\n  {shown}{more}\n"
+                f"{self._path}: generated Define-XML failed Define-XML 2.1 "
+                f"validation ({len(errors)} error(s)):\n  {shown}{more}\n"
                 "Pass validate_xml=False to generate it anyway."
             )
         return xml_str
@@ -330,8 +354,36 @@ class DefineSpecGenerator:
     # ODM root                                                             #
     # ------------------------------------------------------------------ #
 
+    def _warn_predecessor_candidates(self) -> None:
+        """Warn on ADaM ``algorithm: source`` variables marked Collected.
+
+        A column copied verbatim from an upstream dataset is a
+        ``Predecessor`` in Define-XML 2.1 terms; ``Collected`` claims it
+        was captured on the CRF.  Output is not changed (origin stays an
+        explicit spec decision) — the warning surfaces the likely miss
+        where the author can fix it.
+        """
+        if self._data.get("study", {}).get("standard") != "ADAMIG":
+            return
+        hits = [
+            f"{ds['name']}.{var['name']}"
+            for ds in self._data.get("datasets", [])
+            for var in ds.get("variables", [])
+            if (var.get("derivation") or {}).get("algorithm") == "source"
+            and var.get("origin") == "Collected"
+        ]
+        if hits:
+            warnings.warn(
+                f"{self._path}: {', '.join(hits)} use 'algorithm: source' with "
+                "origin 'Collected' — a variable carried from an upstream dataset "
+                "should declare origin: Predecessor with "
+                "predecessor: '<DATASET>.<VARIABLE>'.",
+                stacklevel=2,
+            )
+
     def _build_odm(self) -> ET.Element:
         self._validate_codelist_refs()
+        self._warn_predecessor_candidates()
         study = self._data["study"]
         std_oid = _STANDARD_OIDS.get(study["standard"], f"STD.{study['standard']}")
         ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
@@ -518,10 +570,14 @@ class DefineSpecGenerator:
             if var_name in key_vars:
                 ref_attrs["KeySequence"] = str(key_order[var_name])
             # Define-XML 2.1 places MethodOID on the ItemRef (usage site),
-            # not on the ItemDef.
+            # not on the ItemDef — and only Derived-origin variables carry
+            # a computational method (a collected column rename is not a
+            # MethodDef).
             derivation = var.get("derivation")
-            if self._enrich_methods and derivation:
-                method_oid, _ = self._register_method(derivation)
+            if self._enrich_methods and derivation and var.get("origin", "Derived") == "Derived":
+                method_oid = self._register_method(
+                    derivation, dataset=name, target=var_name, comment=var.get("comment")
+                )
                 if method_oid:
                     ref_attrs["MethodOID"] = method_oid
             ET.SubElement(elem, "ItemRef", attrib=ref_attrs)
@@ -551,7 +607,14 @@ class DefineSpecGenerator:
                     result.append(elem)
         return result
 
-    def _build_item_def(self, item_oid: str, var: dict[str, Any], dataset_name: str) -> ET.Element:
+    def _build_item_def(
+        self,
+        item_oid: str,
+        var: dict[str, Any],
+        dataset_name: str,
+        *,
+        vl_key: str | None = None,
+    ) -> ET.Element:
         attribs: dict[str, str] = {
             "OID": item_oid,
             "Name": var["name"],
@@ -577,100 +640,125 @@ class DefineSpecGenerator:
             origin_attrs["Source"] = var.get("origin_source") or "Investigator"
         orig_elem = ET.SubElement(elem, "def:Origin", origin_attrs)
 
-        # Build the human-readable origin description.  When
-        # enrich_methods is on we resolve the verb (or callable) docstring
-        # so reviewers see the exact computational method without leaving
-        # the Define-XML.  (The MethodOID itself lives on the ItemRef per
-        # Define-XML 2.1 — see _build_item_group_def / _build_value_level.)
+        # Origin description — study-authored text only, never Fleet
+        # docstrings.  Precedence: a Predecessor names its
+        # DATASET.VARIABLE source; a comment: that already became this
+        # variable's MethodDef description is not repeated here; a
+        # value-level parent points reviewers at the VLM section; a
+        # CRF-collected variable with no page reference still names its
+        # source document.  (MethodDefs are registered before ItemDefs
+        # are built — see _build_metadata_version ordering.)
+        vl_oid = self._value_list_refs.get(item_oid)
         comment = var.get("comment") or ""
-        derivation = var.get("derivation") or {}
-        if self._enrich_methods and derivation:
-            _, summary = self._register_method(derivation)
-            if summary:
-                comment = f"{comment} {summary}".strip() if comment else summary
-        if comment:
+        if origin_type == "Predecessor":
+            desc_text = var.get("predecessor") or comment
+        elif self._method_oid(dataset_name, var["name"], vl_key) in self._method_defs:
+            desc_text = ""
+        else:
+            desc_text = comment
+        if not desc_text and vl_oid:
+            desc_text = "See Value Level Metadata"
+        if (
+            not desc_text
+            and origin_type == "Collected"
+            and origin_attrs["Source"] == "Investigator"
+            and f"{dataset_name}.{var['name']}" not in self._page_map
+        ):
+            desc_text = "Case Report Form"
+        if desc_text:
             orig_desc = ET.SubElement(orig_elem, "Description")
-            ET.SubElement(orig_desc, "TranslatedText", {"xml:lang": "en"}).text = comment
+            ET.SubElement(orig_desc, "TranslatedText", {"xml:lang": "en"}).text = desc_text
 
         # CRF page references — emit DocumentRef/PDFPageRef inside Origin
         self._append_crf_page_ref(orig_elem, dataset_name, var["name"])
 
         # Value-level metadata: point the parent ItemDef at its ValueListDef
-        vl_oid = self._value_list_refs.get(item_oid)
         if vl_oid:
             ET.SubElement(elem, "def:ValueListRef", {"ValueListOID": vl_oid})
 
         return elem
 
+    @staticmethod
+    def _method_oid(dataset: str, target: str, vl_key: str | None = None) -> str:
+        """Per-variable MethodDef OID: ``MT.<dataset>.<target>[.<vl_key>]``."""
+        oid = f"MT.{dataset}.{target}"
+        return f"{oid}.{vl_key}" if vl_key else oid
+
+    @staticmethod
+    def _resolve_callable(callable_path: str) -> tuple[str | None, str | None]:
+        """Summary + dotted path for a ``callable:`` derivation.
+
+        Prefers a registered ``Derivation`` object's own docstring and
+        ``dotted_path``; falls back to importing the dotted path.  This
+        is *study-authored* text (unlike Fleet verb docstrings, which are
+        never used in a define).
+        """
+        try:
+            from fleet.adam.transforms import get_transform
+
+            obj = get_transform(callable_path)
+            if hasattr(obj, "dotted_path"):
+                return ((obj.fn.__doc__ or "").splitlines()[0].strip(), obj.dotted_path)
+        except Exception:
+            pass
+        return resolve_callable_docstring(callable_path)
+
     def _register_method(
         self,
         derivation: dict[str, Any],
-    ) -> tuple[str | None, str]:
-        """Resolve a derivation block to a MethodDef and return its OID + summary.
+        *,
+        dataset: str,
+        target: str,
+        comment: str | None = None,
+        vl_key: str | None = None,
+    ) -> str | None:
+        """Register the MethodDef for one derived variable; return its OID.
 
-        Looks up either the ``callable`` dotted path (UC-5) or the
-        ``algorithm`` verb name (UC-4) and registers a MethodDef entry on
-        ``self._method_defs`` keyed by a stable OID.  Returns the OID and
-        the docstring summary so the caller can also append the summary
-        to the Origin description.
+        One MethodDef per derived variable, named ``Algorithm for
+        <target>`` — never Fleet's internal algorithm id.  Description
+        precedence: the spec ``comment:``, then the study callable's
+        docstring (``callable:`` escape hatch), then the registry's
+        submission-facing template / synthesised text
+        (:func:`fleet.core.spec_registry.render_method_text`).  Returns
+        ``None`` when no reviewer-facing text can be produced — the
+        variable then ships without a MethodDef rather than with API
+        prose.
         """
         callable_path = derivation.get("callable")
-        algorithm = derivation.get("algorithm") or ""
-        expression = derivation.get("expression") or ""
+        algorithm = str(derivation.get("algorithm") or "")
+        description = (comment or "").strip()
+        context = "Python/Fleet"
 
-        if callable_path:
-            # Prefer Derivation.dotted_path when the object is registered.
-            try:
-                from fleet.adam.transforms import get_transform
-
-                obj = get_transform(str(callable_path))
-                if hasattr(obj, "dotted_path"):
-                    # Derivation object — use its dotted_path and fn docstring.
-                    summary = (obj.fn.__doc__ or "").splitlines()[0].strip()
-                    dotted = obj.dotted_path
-                else:
-                    summary, dotted = resolve_callable_docstring(str(callable_path))
-            except (KeyError, Exception):
-                summary, dotted = resolve_callable_docstring(str(callable_path))
-            if not dotted:
-                return (None, "")
-            method_name = dotted.rsplit(".", 1)[-1]
-            method_oid = f"MT.{method_name}"
-            self._method_defs.setdefault(
-                method_oid,
-                {
-                    "name": method_name,
-                    "description": summary or f"Custom callable: {dotted}",
-                    "expression": expression or dotted,
-                    "context": "Python",
-                },
+        if callable_path and algorithm in ("", "callable"):
+            summary, dotted = self._resolve_callable(str(callable_path))
+            description = description or _strip_rest_markup(summary or "")
+            expression = dotted or str(callable_path)
+            context = "Python"
+        else:
+            params = {k: v for k, v in derivation.items() if k != "algorithm"}
+            std = _REGISTRY_STANDARDS.get(self._data["study"]["standard"], "sdtm")
+            description = description or (
+                spec_registry.render_method_text(std, algorithm, params, target=target) or ""
             )
-            return (method_oid, summary or "")
+            expression = (
+                spec_registry.render_formal_expression(std, algorithm, params, target=target)
+                or algorithm
+            )
 
-        if not algorithm:
-            return (None, "")
+        if not description:
+            return None
 
-        summary, dotted = resolve_algorithm_docstring(str(algorithm))
-        if not dotted:
-            return (None, "")
-        info = {
-            "name": algorithm,
-            "description": summary or f"Fleet verb: {algorithm}",
-            "expression": expression or f".{algorithm}(...)",
-            "context": "Python/Fleet",
-        }
-        # Same algorithm, different expression (e.g. per-PARAMCD value-level
-        # derivations) → distinct MethodDef OIDs; identical calls share one.
-        method_oid = f"MT.{algorithm}"
-        suffix = 2
-        while (
-            method_oid in self._method_defs
-            and self._method_defs[method_oid]["expression"] != info["expression"]
-        ):
-            method_oid = f"MT.{algorithm}.{suffix}"
-            suffix += 1
-        self._method_defs.setdefault(method_oid, info)
-        return (method_oid, summary or "")
+        method_oid = self._method_oid(dataset, target, vl_key)
+        self._method_defs.setdefault(
+            method_oid,
+            {
+                "name": f"Algorithm for {target}",
+                "description": description,
+                "expression": expression,
+                "context": context,
+            },
+        )
+        return method_oid
 
     @staticmethod
     def _build_method_def(method_oid: str, info: dict[str, str]) -> ET.Element:
@@ -780,7 +868,6 @@ class DefineSpecGenerator:
 
                     key = "_".join(values)
                     item_oid = f"IT.{ds_name}.{var_name}.{key}"
-                    item_defs.append(self._build_item_def(item_oid, var, ds_name))
 
                     vl_counters[vl_oid] += 1
                     ref_attrs: dict[str, str] = {
@@ -789,12 +876,25 @@ class DefineSpecGenerator:
                         "Mandatory": "Yes" if var.get("mandatory") else "No",
                     }
                     derivation = var.get("derivation")
-                    if self._enrich_methods and derivation:
-                        method_oid, _ = self._register_method(derivation)
+                    if (
+                        self._enrich_methods
+                        and derivation
+                        and var.get("origin", "Derived") == "Derived"
+                    ):
+                        method_oid = self._register_method(
+                            derivation,
+                            dataset=ds_name,
+                            target=var_name,
+                            comment=var.get("comment"),
+                            vl_key=key,
+                        )
                         if method_oid:
                             ref_attrs["MethodOID"] = method_oid
                     item_ref = ET.SubElement(value_lists[vl_oid], "ItemRef", ref_attrs)
                     ET.SubElement(item_ref, "def:WhereClauseRef", {"WhereClauseOID": wc_oid})
+                    # Built after _register_method so the ItemDef knows its
+                    # comment: was consumed by the MethodDef.
+                    item_defs.append(self._build_item_def(item_oid, var, ds_name, vl_key=key))
 
         return list(value_lists.values()), list(where_defs.values()), item_defs
 

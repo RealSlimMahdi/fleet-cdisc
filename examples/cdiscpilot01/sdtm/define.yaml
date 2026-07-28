@@ -152,12 +152,14 @@ datasets:
         type: datetime
         mandatory: false
         origin: Derived
+        comment: Earliest EX.EXSTDTC for the subject
 
       - name: RFXENDTC
         label: Date/Time of Last Study Treatment
         type: datetime
         mandatory: false
         origin: Derived
+        comment: Latest EX.EXENDTC for the subject
 
       - name: SITEID
         label: Study Site Identifier

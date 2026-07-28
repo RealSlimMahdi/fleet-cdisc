@@ -34,6 +34,7 @@ Examples:
 from __future__ import annotations
 
 import difflib
+import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Annotated, Any, ClassVar, Literal, Union
@@ -53,6 +54,8 @@ __all__ = [
     "is_identity_copy",
     "model_for",
     "parse_variable_spec",
+    "render_formal_expression",
+    "render_method_text",
     "spec_algorithm",
     "suggest_algorithm",
     "variable_spec_union",
@@ -126,6 +129,11 @@ class SpecAlgorithm:
         dispatch: Optional custom executor ``(ns, var) -> ns`` for
             algorithms whose call shape is not expressible via *params*.
         description: One-line description for docs / JSON schema.
+        define_template: Optional ``str.format`` template for the
+            Define-XML MethodDef description (submission-facing text —
+            review as content, not code).  ``{param}`` placeholders are
+            filled from the spec block; when absent the text is
+            synthesised from *description* and the given params.
     """
 
     name: str
@@ -138,6 +146,7 @@ class SpecAlgorithm:
     overwrite_guard: bool = True
     dispatch: Callable[[Any, SpecVariableBase], Any] | None = None
     description: str = ""
+    define_template: str | None = None
 
     @property
     def names(self) -> tuple[str, ...]:
@@ -231,6 +240,7 @@ def spec_algorithm(
     overwrite_guard: bool = True,
     dispatch: Callable[[Any, SpecVariableBase], Any] | None = None,
     description: str = "",
+    define_template: str | None = None,
 ) -> SpecAlgorithm:
     """Declare a spec-executable algorithm (single source of truth).
 
@@ -248,6 +258,8 @@ def spec_algorithm(
         overwrite_guard: Whether the overwrite guard applies to *target*.
         dispatch: Custom executor for non-tabular call shapes.
         description: One-line description for docs and JSON schema.
+        define_template: Submission-facing MethodDef text template
+            (see :class:`SpecAlgorithm` and :func:`render_method_text`).
 
     Returns:
         SpecAlgorithm: The registered declaration.
@@ -278,6 +290,7 @@ def spec_algorithm(
         overwrite_guard=overwrite_guard,
         dispatch=dispatch,
         description=description,
+        define_template=define_template,
     )
     table = _REGISTRY[standard]
     for spelling in algo.names:
@@ -626,6 +639,144 @@ def derivation_from_lineage(standard: str, node: Any) -> tuple[str, dict | None,
 
 
 # --------------------------------------------------------------------- #
+# Define-XML method text (single choke point for both spec paths)          #
+# --------------------------------------------------------------------- #
+
+#: ``{param}`` placeholders inside a ``define_template``.
+_TEMPLATE_KEYS_RE = re.compile(r"{(\w+)}")
+
+
+def _fmt_value(value: Any) -> str:
+    """Render one param value as reviewer-readable prose (no Python reprs)."""
+    if isinstance(value, dict):
+        return "; ".join(f"{k} → {v}" for k, v in value.items())
+    if isinstance(value, (list, tuple)):
+        return ", ".join(str(v) for v in value)
+    return str(value)
+
+
+def _given_param(params: Mapping[str, Any], p: Param) -> Any:
+    """Value the spec block provides for *p* (by name or alias), else None."""
+    if p.name in params:
+        return params[p.name]
+    if p.alias and p.alias in params:
+        return params[p.alias]
+    return None
+
+
+def render_method_text(
+    standard: str,
+    algorithm: str,
+    params: Mapping[str, Any],
+    *,
+    target: str | None = None,
+) -> str | None:
+    """Reviewer-facing derivation text for a Define-XML ``MethodDef``.
+
+    The single text source both spec paths share: the spec-driven
+    generator passes the validated ``derivation:`` block, the inline
+    path passes the block reverse-mapped from lineage — identical input,
+    identical submission text.  Fleet verb docstrings are never used
+    (API-shaped, generic, and unstable across Fleet versions).
+
+    Resolution: the algorithm's ``define_template`` (formatted with the
+    spec params, defaults filled) when declared and fully resolvable;
+    otherwise text synthesised from the registry ``description`` plus the
+    explicitly-given params.
+
+    Args:
+        standard: ``"sdtm"`` or ``"adam"``.
+        algorithm: Algorithm name from the derivation block.
+        params: The derivation block minus ``algorithm`` (spec field
+            names or aliases).
+        target: Variable name, available to templates as ``{target}``.
+
+    Returns:
+        str | None: The rendered text, or ``None`` for an unregistered
+        algorithm (caller decides the fallback).
+
+    Examples:
+        Render the text for a change-from-baseline derivation::
+
+            from fleet.core.spec_registry import render_method_text
+
+            text = render_method_text("adam", "chg", {})
+            assert text == "Change from baseline: AVAL - BASE."
+    """
+    algo = get_algorithm(standard, algorithm)
+    if algo is None:
+        return None
+
+    if algo.define_template:
+        values: dict[str, Any] = {"target": target or ""}
+        for p in algo.params:
+            raw = _given_param(params, p)
+            if raw is None and p.default_to_target:
+                raw = target
+            if raw is None:
+                raw = p.default
+            values[p.name] = None if raw is None else _fmt_value(raw)
+        try:
+            if all(
+                values.get(k) is not None for k in _TEMPLATE_KEYS_RE.findall(algo.define_template)
+            ):
+                return algo.define_template.format(**values)
+        except (KeyError, IndexError):  # template names an unknown key — fall through
+            pass
+
+    base = (algo.description or f"Fleet '{algo.name}' derivation.").rstrip(".")
+    given = [
+        f"{p.name.replace('_', ' ')}: {_fmt_value(_given_param(params, p))}"
+        for p in algo.params
+        if _given_param(params, p) is not None
+    ]
+    if given:
+        return f"{base} ({'; '.join(given)})."
+    return f"{base}."
+
+
+def render_formal_expression(
+    standard: str,
+    algorithm: str,
+    params: Mapping[str, Any],
+    *,
+    target: str | None = None,
+) -> str | None:
+    """Machine-readable provenance for ``FormalExpression Context="Python/Fleet"``.
+
+    Renders the faithful Fleet call — dotted verb path plus the spec
+    params as keyword arguments in declared (deterministic) order — so a
+    reviewer can reproduce the derivation, unlike the former
+    ``.verb(...)`` stub.
+
+    Args:
+        standard: ``"sdtm"`` or ``"adam"``.
+        algorithm: Algorithm name from the derivation block.
+        params: The derivation block minus ``algorithm``.
+        target: Variable name, rendered as the first positional argument
+            for target-taking verbs.
+
+    Returns:
+        str | None: e.g. ``fleet...SharedVerbsMixin.assign('AEREL',
+        source='AEREL_')``, or ``None`` for an unregistered algorithm.
+    """
+    algo = get_algorithm(standard, algorithm)
+    if algo is None:
+        return None
+    from fleet.core.algorithm_resolver import resolve_algorithm_docstring
+
+    _, dotted = resolve_algorithm_docstring(algo.name)
+    args: list[str] = []
+    if target and algo.takes_target:
+        args.append(repr(target))
+    for p in algo.params:
+        value = _given_param(params, p)
+        if value is not None:
+            args.append(f"{p.kwarg or p.name}={value!r}")
+    return f"{dotted or algo.verb}({', '.join(args)})"
+
+
+# --------------------------------------------------------------------- #
 # Custom dispatchers (non-tabular call shapes)                             #
 # --------------------------------------------------------------------- #
 
@@ -705,6 +856,7 @@ spec_algorithm(
         ),
     ),
     description="Copy a raw column without controlled-terminology mapping.",
+    define_template="Direct copy of {source}.",
 )
 
 spec_algorithm(
@@ -728,6 +880,7 @@ spec_algorithm(
         ),
     ),
     description="Copy a raw column applying controlled-terminology mapping.",
+    define_template="Value of {source} mapped to controlled terminology.",
 )
 
 spec_algorithm(
@@ -756,6 +909,7 @@ spec_algorithm(
         Param("max_date", description="Upper clamp bound."),
     ),
     description="Parse, convert, impute, and flag a date/datetime column (ISO 8601).",
+    define_template="ISO 8601 date/time derived from {source} (imputation: {impute}).",
 )
 
 spec_algorithm(
@@ -767,6 +921,7 @@ spec_algorithm(
         Param("ct_codelist", kwarg="ct", description="CT codelist OID to validate against."),
     ),
     description="Hardcode a constant validated against controlled terminology.",
+    define_template="Set to the controlled terminology value '{value}' for all records.",
 )
 
 spec_algorithm(
@@ -776,6 +931,7 @@ spec_algorithm(
     aliases=("dataset_level",),
     params=(Param("value", annotation=Any, required=True, description="Constant value."),),
     description="Hardcode a constant value for all rows.",
+    define_template="Set to '{value}' for all records.",
 )
 
 spec_algorithm(
@@ -792,6 +948,7 @@ spec_algorithm(
         ),
     ),
     description="Set a value where a condition holds (null otherwise).",
+    define_template="Set to '{then_value}' where {condition}; null otherwise.",
 )
 
 spec_algorithm(
@@ -865,6 +1022,7 @@ spec_algorithm(
         ),
     ),
     description="Join a pinned reference dataset into the pipeline.",
+    define_template="Records merged from {dataset} (join key: {on}).",
 )
 
 spec_algorithm(
@@ -955,6 +1113,7 @@ spec_algorithm(
         ),
     ),
     description="Compute the duration between two dates.",
+    define_template="Duration from {start} to {end}, in {unit}.",
 )
 
 spec_algorithm(
@@ -992,6 +1151,7 @@ spec_algorithm(
         ),
     ),
     description="Copy a column from the predecessor dataset.",
+    define_template="Direct copy of {source}.",
 )
 
 spec_algorithm(
@@ -1007,6 +1167,7 @@ spec_algorithm(
         ),
     ),
     description="Derive a column from a Polars expression string.",
+    define_template="Derived as: {expression}.",
 )
 
 spec_algorithm(
@@ -1015,6 +1176,7 @@ spec_algorithm(
     verb="assign",
     params=(Param("value", annotation=Any, required=True, description="Constant value."),),
     description="Assign a constant value for all rows.",
+    define_template="Set to '{value}' for all records.",
 )
 
 spec_algorithm(
@@ -1032,6 +1194,7 @@ spec_algorithm(
         Param("default", annotation=Any, description="Fallback for unmapped values."),
     ),
     description="Map source values onto new values via a lookup dict.",
+    define_template="Values of {source} recoded as: {recode_map}.",
 )
 
 spec_algorithm(
@@ -1040,6 +1203,7 @@ spec_algorithm(
     verb="assign",
     params=(Param("source", default_to_target=True, identity_source=True),),
     description="Copy a column under a new CDISC-compliant name.",
+    define_template="Direct copy of {source}.",
 )
 
 spec_algorithm(
@@ -1094,6 +1258,7 @@ spec_algorithm(
         Param("where", description="Filter applied to the lookup dataset before joining."),
     ),
     description="SQL-style join against a pinned lookup dataset.",
+    define_template="Records merged from {dataset} (join key: {on}).",
 )
 
 spec_algorithm(
@@ -1126,6 +1291,7 @@ spec_algorithm(
         ),
     ),
     description="Relative study day (analysis date vs reference date).",
+    define_template="Study day of {analysis_date} relative to {reference_date}.",
 )
 
 spec_algorithm(
@@ -1143,6 +1309,7 @@ spec_algorithm(
         Param("groups", annotation=_LIST_OR_NONE, kwarg="by", description="Partition columns."),
     ),
     description="Propagate the baseline value to all records in a group.",
+    define_template="Value of {aval} at the baseline record ({baseline_flag} = 'Y').",
 )
 
 spec_algorithm(
@@ -1154,6 +1321,7 @@ spec_algorithm(
         Param("base", annotation=str, default="BASE"),
     ),
     description="Change from baseline (AVAL - BASE).",
+    define_template="Change from baseline: {aval} - {base}.",
 )
 
 spec_algorithm(
@@ -1165,6 +1333,7 @@ spec_algorithm(
         Param("base", annotation=str, default="BASE"),
     ),
     description="Percent change from baseline.",
+    define_template="Percent change from baseline: 100 * ({aval} - {base}) / {base}.",
 )
 
 spec_algorithm(
@@ -1210,6 +1379,7 @@ spec_algorithm(
         Param("height", annotation=str, required=True, description="Height column (cm)."),
     ),
     description="Body Mass Index from weight and height.",
+    define_template="Body Mass Index (kg/m2) from {weight} and {height}.",
 )
 
 spec_algorithm(
@@ -1239,6 +1409,7 @@ spec_algorithm(
         ),
     ),
     description="Reference-range indicator (LOW/NORMAL/HIGH).",
+    define_template="Reference range indicator: {aval} compared with {low} and {high}.",
 )
 
 spec_algorithm(
@@ -1275,6 +1446,7 @@ spec_algorithm(
         ),
     ),
     description="On-treatment flag from analysis vs treatment dates.",
+    define_template="Set to 'Y' when {analysis_date} falls between {reference_date} and {trtedt}.",
 )
 
 spec_algorithm(
@@ -1297,6 +1469,7 @@ spec_algorithm(
         Param("sep", annotation=str, default=" to ", description="Join separator."),
     ),
     description="Shift-table category ('NORMAL to HIGH').",
+    define_template="Shift from {baseline_cat} to {post_cat}.",
 )
 
 spec_algorithm(
@@ -1325,6 +1498,7 @@ spec_algorithm(
         Param("method", annotation=str, default="Mosteller", description="BSA formula."),
     ),
     description="Body Surface Area.",
+    define_template="Body Surface Area ({method} formula) from {weight} and {height}.",
 )
 
 spec_algorithm(
@@ -1337,6 +1511,7 @@ spec_algorithm(
         Param("diastolic", annotation=str, default="DIABP", description="Diastolic BP column."),
     ),
     description="Mean Arterial Pressure.",
+    define_template="Mean Arterial Pressure from {systolic} and {diastolic}.",
 )
 
 spec_algorithm(
@@ -1349,6 +1524,7 @@ spec_algorithm(
         Param("method", annotation=str, default="Fridericia", description="Correction formula."),
     ),
     description="Corrected QT interval.",
+    define_template="QT interval corrected using the {method} formula, from {qt} and {rr}.",
 )
 
 spec_algorithm(
@@ -1415,6 +1591,7 @@ spec_algorithm(
         Param("max_date", description="Upper clamp bound."),
     ),
     description="Parse, convert, impute, and flag an analysis date column.",
+    define_template="ISO 8601 date/time derived from {source} (imputation: {impute}).",
 )
 
 spec_algorithm(
@@ -1440,6 +1617,7 @@ spec_algorithm(
         ),
     ),
     description="Compute the duration between two dates.",
+    define_template="Duration from {start} to {end}, in {unit}.",
 )
 
 spec_algorithm(
@@ -1483,6 +1661,7 @@ spec_algorithm(
         Param("groups", annotation=_LIST_OR_NONE, kwarg="by", description="Join key columns."),
     ),
     description="Earliest event date per subject from a pinned dataset.",
+    define_template="Earliest {date_col} per subject from {from_dataset}.",
 )
 
 spec_algorithm(
@@ -1502,6 +1681,7 @@ spec_algorithm(
         Param("groups", annotation=_LIST_OR_NONE, kwarg="by", description="Join key columns."),
     ),
     description="Latest event date per subject from a pinned dataset.",
+    define_template="Latest {date_col} per subject from {from_dataset}.",
 )
 
 spec_algorithm(
@@ -1521,6 +1701,7 @@ spec_algorithm(
         Param("groups", annotation=_LIST_OR_NONE, kwarg="by", description="Join key columns."),
     ),
     description="Count matching records per subject from a pinned dataset.",
+    define_template="Count of qualifying records per subject from {from_dataset}.",
 )
 
 spec_algorithm(

@@ -214,10 +214,16 @@ class TestMethodPlacement:
         mdv = _mdv(root)
         advs = next(g for g in mdv.findall(f"{ODM}ItemGroupDef") if g.get("OID") == "IG.ADVS")
         by_item = {r.get("ItemOID"): r for r in advs.findall(f"{ODM}ItemRef")}
-        assert by_item["IT.STUDYID"].get("MethodOID") == "MT.assigned"
-        assert by_item["IT.ADVS.CUSTOM"].get("MethodOID") is not None
+        # One MethodDef per derived variable — OID carries the usage site,
+        # never the Fleet-internal algorithm id.
+        assert by_item["IT.STUDYID"].get("MethodOID") == "MT.ADVS.STUDYID"
+        assert by_item["IT.ADVS.CUSTOM"].get("MethodOID") == "MT.ADVS.CUSTOM"
         # Variables without a derivation get no MethodOID.
         assert by_item["IT.ADVS.AVAL"].get("MethodOID") is None
+
+    def test_methoddef_names_are_reviewer_facing(self, root):
+        for m in root.iter(f"{ODM}MethodDef"):
+            assert m.get("Name", "").startswith("Algorithm for ")
 
     def test_every_methodoid_is_backed_by_a_methoddef(self, root):
         declared = {m.get("OID") for m in root.iter(f"{ODM}MethodDef")}
