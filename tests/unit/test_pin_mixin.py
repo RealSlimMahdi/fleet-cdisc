@@ -72,6 +72,53 @@ class TestPin:
         assert "DM" in ns.pins()
 
 
+class TestKeywordPins:
+    """pin(DM=dm_df, TV=tv_df) — several datasets, one call."""
+
+    def test_keyword_form_pins_several(self, simple_ae, dm_ref):
+        tv_df = pl.DataFrame({"VISITNUM": [1], "VISIT": ["SCREENING"]})
+        ns = simple_ae.sdtm.pin(DM=dm_ref, TV=tv_df)
+        assert set(ns.pins().keys()) == {"DM", "TV"}
+
+    def test_keyword_names_are_uppercased(self, simple_ae, dm_ref):
+        ns = simple_ae.sdtm.pin(dm=dm_ref)
+        assert "DM" in ns.pins()
+
+    def test_join_on_applies_to_every_pin_in_the_call(self, simple_ae, dm_ref):
+        ns = simple_ae.sdtm.pin(DM=dm_ref, ADSL=dm_ref, join_on=["USUBJID", "ARMCD"])
+        assert ns.pins()["DM"]["join_on"] == ["USUBJID", "ARMCD"]
+        assert ns.pins()["ADSL"]["join_on"] == ["USUBJID", "ARMCD"]
+
+    def test_positional_and_keyword_mix(self, simple_ae, dm_ref):
+        tv_df = pl.DataFrame({"VISITNUM": [1]})
+        ns = simple_ae.sdtm.pin("DM", dm_ref, TV=tv_df)
+        assert set(ns.pins().keys()) == {"DM", "TV"}
+
+    def test_keyword_duplicate_still_warns(self, simple_ae, dm_ref):
+        ns = simple_ae.sdtm.pin("DM", dm_ref)
+        with pytest.warns(UserWarning, match="Pin 'DM' replaced"):
+            ns.pin(DM=dm_ref)
+
+    def test_empty_call_raises(self, simple_ae):
+        with pytest.raises(Exception, match="at least one pin"):
+            simple_ae.sdtm.pin()
+
+    def test_domain_without_frame_raises(self, simple_ae):
+        with pytest.raises(Exception, match="both a domain name and a DataFrame"):
+            simple_ae.sdtm.pin("DM")
+
+    def test_keyword_pins_feed_cross_domain_verbs(self, simple_ae, dm_ref):
+        """A keyword pin is a real pin — study_day resolves it."""
+        result = (
+            simple_ae.sdtm.assign("DOMAIN", value="AE")
+            .assign("USUBJID", source="patient_number")
+            .pin(DM=dm_ref)
+            .study_day("AESTDY", date_col="ae_start_date")
+            .to_frame()
+        )
+        assert "AESTDY" in result.columns
+
+
 # ── Duplicate pin guard ─────────────────────────────────────────────────── #
 
 
