@@ -7,16 +7,11 @@
   "anyOf": [
     {
       "title": "Define format",
-      "required": [
-        "study",
-        "datasets"
-      ]
+      "required": ["study", "datasets"]
     },
     {
       "title": "Simplified single-dataset format",
-      "required": [
-        "variables"
-      ]
+      "required": ["variables"]
     }
   ],
   "additionalProperties": false,
@@ -43,9 +38,7 @@
     "fleet_spec_version": {
       "type": "integer",
       "description": "Optional spec-format version. from_spec() and DefineSpecGenerator reject versions this Fleet build does not understand.",
-      "enum": [
-        1
-      ]
+      "enum": [1]
     },
     "derivations_module": {
       "type": "string",
@@ -71,11 +64,7 @@
     "output_format": {
       "type": "string",
       "description": "Default export format for all datasets \u2014 drives def:leaf hrefs in Define-XML and output paths in the pipeline DAG. Overridable per dataset.",
-      "enum": [
-        "parquet",
-        "xpt",
-        "dataset-json"
-      ],
+      "enum": ["parquet", "xpt", "dataset-json"],
       "default": "parquet"
     },
     "domain": {
@@ -147,11 +136,7 @@
         "standard": {
           "type": "string",
           "description": "CDISC implementation guide this define conforms to.",
-          "enum": [
-            "SDTMIG",
-            "ADAMIG",
-            "SENDIG"
-          ]
+          "enum": ["SDTMIG", "ADAMIG", "SENDIG"]
         },
         "standard_version": {
           "type": "string",
@@ -173,11 +158,7 @@
       "type": "object",
       "title": "Codelist",
       "description": "A controlled terminology codelist referenced by variables.",
-      "required": [
-        "oid",
-        "name",
-        "type"
-      ],
+      "required": ["oid", "name", "type"],
       "additionalProperties": false,
       "properties": {
         "oid": {
@@ -192,11 +173,7 @@
         "type": {
           "type": "string",
           "description": "Data type of the coded values.",
-          "enum": [
-            "text",
-            "integer",
-            "float"
-          ]
+          "enum": ["text", "integer", "float"]
         },
         "standard_oid": {
           "type": "string",
@@ -207,9 +184,7 @@
           "description": "Individual coded values.",
           "items": {
             "type": "object",
-            "required": [
-              "coded_value"
-            ],
+            "required": ["coded_value"],
             "additionalProperties": false,
             "properties": {
               "coded_value": {
@@ -229,13 +204,7 @@
       "type": "object",
       "title": "Dataset",
       "description": "Definition of a single SDTM domain or ADaM dataset.",
-      "required": [
-        "name",
-        "label",
-        "structure",
-        "keys",
-        "variables"
-      ],
+      "required": ["name", "label", "structure", "keys", "variables"],
       "additionalProperties": false,
       "properties": {
         "name": {
@@ -292,11 +261,7 @@
         "output_format": {
           "type": "string",
           "description": "Export format override for this dataset (see the top-level output_format).",
-          "enum": [
-            "parquet",
-            "xpt",
-            "dataset-json"
-          ]
+          "enum": ["parquet", "xpt", "dataset-json"]
         },
         "value_level": {
           "type": "array",
@@ -311,10 +276,7 @@
       "type": "object",
       "title": "DatasetInput",
       "description": "An upstream dependency of a dataset \u2014 either a raw source file or another pipeline dataset.",
-      "required": [
-        "name",
-        "type"
-      ],
+      "required": ["name", "type"],
       "additionalProperties": false,
       "properties": {
         "name": {
@@ -323,10 +285,7 @@
         },
         "type": {
           "type": "string",
-          "enum": [
-            "raw",
-            "dataset"
-          ],
+          "enum": ["raw", "dataset"],
           "description": "'raw' for source files (csv, sas7bdat, xpt, parquet, etc.); 'dataset' for upstream pipeline datasets."
         },
         "path": {
@@ -339,11 +298,7 @@
       "type": "object",
       "title": "Variable",
       "description": "A single variable (column) in a dataset.",
-      "required": [
-        "name",
-        "label",
-        "type"
-      ],
+      "required": ["name", "label", "type"],
       "additionalProperties": false,
       "properties": {
         "name": {
@@ -359,13 +314,7 @@
         "type": {
           "type": "string",
           "description": "ODM data type. 'text' maps to Polars String; 'integer' to Int64; 'float' to Float64; 'date' to Date; 'datetime' to Datetime.",
-          "enum": [
-            "text",
-            "integer",
-            "float",
-            "date",
-            "datetime"
-          ]
+          "enum": ["text", "integer", "float", "date", "datetime"]
         },
         "length": {
           "type": "integer",
@@ -380,13 +329,7 @@
         "core": {
           "type": "string",
           "description": "CDISC core designation for the variable. When present, the checker uses this for graduated severity (Req \u2192 error, Exp \u2192 warning, Perm \u2192 info). Users may override the IG value to downgrade Req variables.",
-          "enum": [
-            "Req",
-            "Exp",
-            "Perm",
-            "Cond",
-            "Conditionally Required"
-          ],
+          "enum": ["Req", "Exp", "Perm", "Cond", "Conditionally Required"],
           "default": "Perm"
         },
         "origin": {
@@ -403,12 +346,7 @@
         "origin_source": {
           "type": "string",
           "description": "Who provided a collected value \u2014 emitted as def:Source alongside Origin. Only meaningful when origin is 'Collected', where it defaults to 'Investigator' (CRF data).",
-          "enum": [
-            "Investigator",
-            "Sponsor",
-            "Vendor",
-            "Subject"
-          ],
+          "enum": ["Investigator", "Sponsor", "Vendor", "Subject"],
           "default": "Investigator"
         },
         "codelist": {
@@ -418,9 +356,7 @@
         "role": {
           "type": "string",
           "description": "Marks the variable as a Non-Standard Variable (qualifier) so supp() can build SUPPQUAL from this spec. Read by SDTMNamespace.supp(spec=...); 'qualifier' is the only value Fleet acts on.",
-          "enum": [
-            "qualifier"
-          ]
+          "enum": ["qualifier"]
         },
         "evaluator": {
           "type": "string",
@@ -458,9 +394,7 @@
         "annotated_crf": {
           "type": "object",
           "description": "Annotated Case Report Form PDF referenced from collected variables.",
-          "required": [
-            "href"
-          ],
+          "required": ["href"],
           "additionalProperties": false,
           "properties": {
             "href": {
@@ -483,11 +417,7 @@
           "description": "Additional supporting documents (reviewer guide, protocol, etc.).",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "href",
-              "title"
-            ],
+            "required": ["id", "href", "title"],
             "additionalProperties": false,
             "properties": {
               "id": {
@@ -524,10 +454,7 @@
         "type": {
           "type": "string",
           "description": "Page reference type.",
-          "enum": [
-            "PhysicalRef",
-            "NamedDestination"
-          ],
+          "enum": ["PhysicalRef", "NamedDestination"],
           "default": "PhysicalRef"
         },
         "first_page": {
@@ -545,19 +472,13 @@
       "title": "ValueLevelEntry",
       "description": "One value-level slice: a condition (param: sugar for PARAMCD equality, or an explicit where:) plus the variable definitions/derivations that apply within it.",
       "additionalProperties": false,
-      "required": [
-        "variables"
-      ],
+      "required": ["variables"],
       "oneOf": [
         {
-          "required": [
-            "param"
-          ]
+          "required": ["param"]
         },
         {
-          "required": [
-            "where"
-          ]
+          "required": ["where"]
         }
       ],
       "properties": {
@@ -583,10 +504,7 @@
       "title": "WhereClause",
       "description": "Condition selecting the records a value-level entry applies to (Define-XML def:WhereClauseDef / RangeCheck).",
       "additionalProperties": false,
-      "required": [
-        "variable",
-        "value"
-      ],
+      "required": ["variable", "value"],
       "properties": {
         "variable": {
           "type": "string",
@@ -822,9 +740,7 @@
         {
           "type": "object",
           "description": "Backward-compat callable block \u2014 `algorithm: callable` is injected automatically when only `callable:` is present.",
-          "required": [
-            "callable"
-          ],
+          "required": ["callable"],
           "properties": {
             "callable": {
               "type": "string"
@@ -863,10 +779,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm",
-        "value"
-      ],
+      "required": ["algorithm", "value"],
       "title": "ADAMAssignedSpec",
       "type": "object"
     },
@@ -950,10 +863,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm",
-        "direction"
-      ],
+      "required": ["algorithm", "direction"],
       "title": "ADAMAtoxgrSpec",
       "type": "object"
     },
@@ -1010,9 +920,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "ADAMBaselineSpec",
       "type": "object"
     },
@@ -1051,11 +959,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm",
-        "weight",
-        "height"
-      ],
+      "required": ["algorithm", "weight", "height"],
       "title": "ADAMBmiSpec",
       "type": "object"
     },
@@ -1100,11 +1004,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm",
-        "weight",
-        "height"
-      ],
+      "required": ["algorithm", "weight", "height"],
       "title": "ADAMBsaSpec",
       "type": "object"
     },
@@ -1138,10 +1038,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm",
-        "callable"
-      ],
+      "required": ["algorithm", "callable"],
       "title": "ADAMCallableSpec",
       "type": "object"
     },
@@ -1180,9 +1077,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "ADAMChgSpec",
       "type": "object"
     },
@@ -1247,9 +1142,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "ADAMCombineGradesSpec",
       "type": "object"
     },
@@ -1292,10 +1185,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm",
-        "conditions"
-      ],
+      "required": ["algorithm", "conditions"],
       "title": "ADAMCondderivationSpec",
       "type": "object"
     },
@@ -1304,10 +1194,7 @@
       "properties": {
         "algorithm": {
           "description": "Count matching records per subject from a pinned dataset.",
-          "enum": [
-            "count_events",
-            "count"
-          ],
+          "enum": ["count_events", "count"],
           "title": "Algorithm",
           "type": "string"
         },
@@ -1361,10 +1248,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm",
-        "from_dataset"
-      ],
+      "required": ["algorithm", "from_dataset"],
       "title": "ADAMCountEventsSpec",
       "type": "object"
     },
@@ -1516,9 +1400,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "ADAMDateSpec",
       "type": "object"
     },
@@ -1560,9 +1442,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "ADAMDerivationSpec",
       "type": "object"
     },
@@ -1626,11 +1506,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm",
-        "start",
-        "end"
-      ],
+      "required": ["algorithm", "start", "end"],
       "title": "ADAMDurationSpec",
       "type": "object"
     },
@@ -1698,11 +1574,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm",
-        "from_dataset",
-        "date_col"
-      ],
+      "required": ["algorithm", "from_dataset", "date_col"],
       "title": "ADAMFirstDateSpec",
       "type": "object"
     },
@@ -1803,10 +1675,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm",
-        "criteria"
-      ],
+      "required": ["algorithm", "criteria"],
       "title": "ADAMFlagSpec",
       "type": "object"
     },
@@ -1874,11 +1743,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm",
-        "from_dataset",
-        "date_col"
-      ],
+      "required": ["algorithm", "from_dataset", "date_col"],
       "title": "ADAMLastDateSpec",
       "type": "object"
     },
@@ -1963,10 +1828,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm",
-        "dataset"
-      ],
+      "required": ["algorithm", "dataset"],
       "title": "ADAMLookupSpec",
       "type": "object"
     },
@@ -1975,10 +1837,7 @@
       "properties": {
         "algorithm": {
           "description": "Mean Arterial Pressure.",
-          "enum": [
-            "map",
-            "mean_arterial_pressure"
-          ],
+          "enum": ["map", "mean_arterial_pressure"],
           "title": "Algorithm",
           "type": "string"
         },
@@ -2010,9 +1869,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "ADAMMapSpec",
       "type": "object"
     },
@@ -2059,9 +1916,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "ADAMNrindSpec",
       "type": "object"
     },
@@ -2114,9 +1969,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "ADAMOnTreatmentSpec",
       "type": "object"
     },
@@ -2155,9 +2008,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "ADAMPchgSpec",
       "type": "object"
     },
@@ -2252,10 +2103,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm",
-        "events"
-      ],
+      "required": ["algorithm", "events"],
       "title": "ADAMPickSpec",
       "type": "object"
     },
@@ -2302,9 +2150,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "ADAMQtcSpec",
       "type": "object"
     },
@@ -2356,10 +2202,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm",
-        "recode_map"
-      ],
+      "required": ["algorithm", "recode_map"],
       "title": "ADAMRecodeSpec",
       "type": "object"
     },
@@ -2400,9 +2243,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "ADAMRenameSpec",
       "type": "object"
     },
@@ -2472,9 +2313,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "ADAMSeqSpec",
       "type": "object"
     },
@@ -2519,11 +2358,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm",
-        "baseline_cat",
-        "post_cat"
-      ],
+      "required": ["algorithm", "baseline_cat", "post_cat"],
       "title": "ADAMShiftSpec",
       "type": "object"
     },
@@ -2565,9 +2400,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "ADAMSourceSpec",
       "type": "object"
     },
@@ -2606,11 +2439,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm",
-        "analysis_date",
-        "reference_date"
-      ],
+      "required": ["algorithm", "analysis_date", "reference_date"],
       "title": "ADAMStudyDaySpec",
       "type": "object"
     },
@@ -2644,10 +2473,7 @@
           "title": "Depends On"
         }
       },
-      "required": [
-        "algorithm",
-        "where"
-      ],
+      "required": ["algorithm", "where"],
       "title": "ADAMWhereclausesSpec",
       "type": "object"
     },
@@ -2683,9 +2509,7 @@
           "title": "Aerel Map"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "SDTMAeAerelSpec",
       "type": "object"
     },
@@ -2733,9 +2557,7 @@
           "title": "Ct Mapping"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "SDTMAssignCtSpec",
       "type": "object"
     },
@@ -2762,9 +2584,7 @@
           "title": "Source"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "SDTMAssignNoCtSpec",
       "type": "object"
     },
@@ -2783,10 +2603,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "algorithm",
-        "callable"
-      ],
+      "required": ["algorithm", "callable"],
       "title": "SDTMCallableSpec",
       "type": "object"
     },
@@ -2809,11 +2626,7 @@
           "title": "Then Value"
         }
       },
-      "required": [
-        "algorithm",
-        "condition",
-        "then_value"
-      ],
+      "required": ["algorithm", "condition", "then_value"],
       "title": "SDTMConditionAddSpec",
       "type": "object"
     },
@@ -2822,10 +2635,7 @@
       "properties": {
         "algorithm": {
           "description": "Parse, convert, impute, and flag a date/datetime column (ISO 8601).",
-          "enum": [
-            "date",
-            "assign_dtc"
-          ],
+          "enum": ["date", "assign_dtc"],
           "title": "Algorithm",
           "type": "string"
         },
@@ -2966,9 +2776,7 @@
           "title": "Max Date"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "SDTMDateSpec",
       "type": "object"
     },
@@ -3017,11 +2825,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "algorithm",
-        "start",
-        "end"
-      ],
+      "required": ["algorithm", "start", "end"],
       "title": "SDTMDurationSpec",
       "type": "object"
     },
@@ -3059,10 +2863,7 @@
           "title": "Agg"
         }
       },
-      "required": [
-        "algorithm",
-        "group_cols"
-      ],
+      "required": ["algorithm", "group_cols"],
       "title": "SDTMGroupBySpec",
       "type": "object"
     },
@@ -3093,10 +2894,7 @@
           "title": "Ct Codelist"
         }
       },
-      "required": [
-        "algorithm",
-        "value"
-      ],
+      "required": ["algorithm", "value"],
       "title": "SDTMHardcodeCtSpec",
       "type": "object"
     },
@@ -3105,10 +2903,7 @@
       "properties": {
         "algorithm": {
           "description": "Hardcode a constant value for all rows.",
-          "enum": [
-            "hardcode_no_ct",
-            "dataset_level"
-          ],
+          "enum": ["hardcode_no_ct", "dataset_level"],
           "title": "Algorithm",
           "type": "string"
         },
@@ -3117,10 +2912,7 @@
           "title": "Value"
         }
       },
-      "required": [
-        "algorithm",
-        "value"
-      ],
+      "required": ["algorithm", "value"],
       "title": "SDTMHardcodeNoCtSpec",
       "type": "object"
     },
@@ -3148,10 +2940,7 @@
           "title": "Else Value"
         }
       },
-      "required": [
-        "algorithm",
-        "when"
-      ],
+      "required": ["algorithm", "when"],
       "title": "SDTMIfThenElseSpec",
       "type": "object"
     },
@@ -3208,10 +2997,7 @@
           "title": "Target Cols"
         }
       },
-      "required": [
-        "algorithm",
-        "dataset"
-      ],
+      "required": ["algorithm", "dataset"],
       "title": "SDTMMergeSpec",
       "type": "object"
     },
@@ -3243,9 +3029,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "SDTMMultipleResponsesSpec",
       "type": "object"
     },
@@ -3259,9 +3043,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "SDTMNotsubmittedSpec",
       "type": "object"
     },
@@ -3293,9 +3075,7 @@
           "title": "Value"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "SDTMNsvSpec",
       "type": "object"
     },
@@ -3350,9 +3130,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "algorithm"
-      ],
+      "required": ["algorithm"],
       "title": "SDTMSeqSpec",
       "type": "object"
     }
