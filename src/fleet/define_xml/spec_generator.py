@@ -61,6 +61,22 @@ _STANDARD_OIDS: dict[str, str] = {
 }
 _CT_OID = "STD.CT"
 
+#: Spec ``study.standard`` → the ``def:Standard/@Name`` value Define-XML 2.1
+#: enumerates (note the lower-case 'a' in ADaMIG).
+_STANDARD_NAMES: dict[str, str] = {
+    "SDTMIG": "SDTMIG",
+    "ADAMIG": "ADaMIG",
+    "SENDIG": "SENDIG",
+}
+
+#: Spec ``study.standard`` → the ``def:Standard/@PublishingSet`` value, a
+#: separate and smaller enumeration than the IG names.
+_PUBLISHING_SETS: dict[str, str] = {
+    "SDTMIG": "SDTM",
+    "ADAMIG": "ADaM",
+    "SENDIG": "SEND",
+}
+
 # Map export format (spec key ``output_format``) → def:leaf href extension.
 _FORMAT_EXT: dict[str, str] = {
     "parquet": ".parquet",
@@ -80,6 +96,12 @@ class DefineSpecGenerator:
     validate_schema:
         When *True* (default), validates the YAML against the JSON schema
         before generating and raises ``ValueError`` on schema violations.
+    validate_xml:
+        When *True* (default), validates the generated document against the
+        vendored Define-XML 2.1 XSDs and raises
+        :class:`~fleet.core.exceptions.SpecError` rather than emitting a
+        non-conformant define.xml.  Set to ``False`` to write the file
+        anyway (e.g. to inspect what failed).
     """
 
     def __init__(
@@ -87,12 +109,14 @@ class DefineSpecGenerator:
         define_yaml_path: str | Path,
         *,
         validate_schema: bool = True,
+        validate_xml: bool = True,
         enrich_methods: bool = False,
     ) -> None:
         self._path = Path(define_yaml_path)
         self._data: dict[str, Any] = yaml.safe_load(self._path.read_text(encoding="utf-8"))
         self._check_spec_version()
         self._enrich_methods = enrich_methods
+        self._validate_xml = validate_xml
         # Populated via _register_method when enrich_methods is True;
         # rendered into MethodDef elements at the end of MetaDataVersion.
         self._method_defs: dict[str, dict[str, str]] = {}
@@ -133,7 +157,7 @@ class DefineSpecGenerator:
             is the standard layout used by Fleet.
         """
         root = self._build_odm()
-        xml_str = self._to_pretty_xml(root)
+        xml_str = self._serialise(root)
         out = Path(output_path)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(xml_str, encoding="utf-8")
@@ -169,7 +193,27 @@ class DefineSpecGenerator:
 
     def to_xml_string(self) -> str:
         """Return the Define-XML as a formatted string without writing a file."""
-        return self._to_pretty_xml(self._build_odm())
+        return self._serialise(self._build_odm())
+
+    def _serialise(self, root: ET.Element) -> str:
+        """Format *root* and, unless disabled, XSD-validate before returning."""
+        xml_str = self._to_pretty_xml(root)
+        if not self._validate_xml:
+            return xml_str
+
+        from fleet.core.exceptions import SpecError
+        from fleet.define_xml.xsd import validate_define_xml
+
+        errors = validate_define_xml(xml_str)
+        if errors:
+            shown = "\n  ".join(errors[:10])
+            more = f"\n  ... and {len(errors) - 10} more" if len(errors) > 10 else ""
+            raise SpecError(
+                f"{self._path}: generated Define-XML is not valid against the "
+                f"Define-XML 2.1 schema ({len(errors)} error(s)):\n  {shown}{more}\n"
+                "Pass validate_xml=False to generate it anyway."
+            )
+        return xml_str
 
     # ------------------------------------------------------------------ #
     # CRF page map                                                         #
@@ -336,7 +380,12 @@ class DefineSpecGenerator:
         # Standards list — must be wrapped in def:Standards per Define-XML 2.1 spec
         stds_container = ET.SubElement(mdv, "def:Standards")
         stds_container.append(
-            self._build_standard(std_oid, study["standard"], "IG", study["standard_version"])
+            self._build_standard(
+                std_oid,
+                _STANDARD_NAMES.get(study["standard"], study["standard"]),
+                "IG",
+                study["standard_version"],
+            )
         )
         if study.get("ct_version"):
             stds_container.append(
@@ -345,7 +394,7 @@ class DefineSpecGenerator:
                     "CDISC/NCI",
                     "CT",
                     study["ct_version"],
-                    publishing_set=study["standard"],
+                    publishing_set=_PUBLISHING_SETS.get(study["standard"]),
                 )
             )
 
@@ -389,10 +438,6 @@ class DefineSpecGenerator:
         # registered by _build_item_def via _register_method).
         for method_oid in sorted(self._method_defs):
             mdv.append(self._build_method_def(method_oid, self._method_defs[method_oid]))
-
-        # LeafDefs (one per dataset)
-        for ds in datasets:
-            mdv.append(self._build_leaf(ds))
 
         # Annotated CRF leaf
         if acrf_cfg:
@@ -459,9 +504,6 @@ class DefineSpecGenerator:
         desc = ET.SubElement(elem, "Description")
         ET.SubElement(desc, "TranslatedText", {"xml:lang": "en"}).text = ds["label"]
 
-        if ds.get("class"):
-            ET.SubElement(elem, "def:Class", {"Name": ds["class"]})
-
         key_vars: set[str] = set(ds.get("keys", []))
         key_order: dict[str, int] = {v: i + 1 for i, v in enumerate(ds.get("keys", []))}
 
@@ -484,17 +526,15 @@ class DefineSpecGenerator:
                     ref_attrs["MethodOID"] = method_oid
             ET.SubElement(elem, "ItemRef", attrib=ref_attrs)
 
+        # Define-XML 2.1 orders ItemGroupDef children Description → ItemRef*
+        # → def:Class → def:leaf; emitting Class earlier invalidates the file.
+        if ds.get("class"):
+            ET.SubElement(elem, "def:Class", {"Name": ds["class"]})
+
         # Leaf reference — href follows the actual export format
         href = self._leaf_href(ds)
-        ET.SubElement(
-            elem,
-            "def:leaf",
-            {
-                "ID": leaf_id,
-                "xlink:href": href,
-                "xlink:title": href,
-            },
-        )
+        leaf = ET.SubElement(elem, "def:leaf", {"ID": leaf_id, "xlink:href": href})
+        ET.SubElement(leaf, "def:title").text = href
 
         return elem
 
@@ -530,7 +570,12 @@ class DefineSpecGenerator:
             ET.SubElement(elem, "CodeListRef", {"CodeListOID": var["codelist"]})
 
         origin_type = var.get("origin", "Derived")
-        orig_elem = ET.SubElement(elem, "def:Origin", {"Type": origin_type})
+        origin_attrs = {"Type": origin_type}
+        # Define-XML 2.1 pairs a collected value with its source; CRF data
+        # (the common case) is Investigator-provided unless stated.
+        if origin_type == "Collected":
+            origin_attrs["Source"] = var.get("origin_source") or "Investigator"
+        orig_elem = ET.SubElement(elem, "def:Origin", origin_attrs)
 
         # Build the human-readable origin description.  When
         # enrich_methods is on we resolve the verb (or callable) docstring
@@ -657,11 +702,6 @@ class DefineSpecGenerator:
                 decode = ET.SubElement(ci, "Decode")
                 ET.SubElement(decode, "TranslatedText", {"xml:lang": "en"}).text = item["decode"]
         return elem
-
-    def _build_leaf(self, ds: dict[str, Any]) -> ET.Element:
-        leaf_id = f"LF.{ds['name']}"
-        href = self._leaf_href(ds)
-        return ET.Element("def:leaf", {"ID": leaf_id, "xlink:href": href, "xlink:title": href})
 
     # ------------------------------------------------------------------ #
     # Value-level metadata (def:ValueListDef / def:WhereClauseDef)         #

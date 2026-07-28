@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <?xml-stylesheet type="text/xsl" href="define2-1.xsl"?>
-<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:def="http://www.cdisc.org/ns/def/v2.1" ODMVersion="1.3.2" FileOID="CDISC.CDISCPILOT01.1.Define-XML_2.1.0" FileType="Snapshot" CreationDateTime="2026-07-09T08:12:43" Originator="Fleet Team" SourceSystem="Fleet" SourceSystemVersion="0.1.0" def:Context="Submission">
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:def="http://www.cdisc.org/ns/def/v2.1" ODMVersion="1.3.2" FileOID="CDISC.CDISCPILOT01.1.Define-XML_2.1.0" FileType="Snapshot" CreationDateTime="2026-07-28T12:38:30" Originator="Fleet Team" SourceSystem="Fleet" SourceSystemVersion="0.1.0" def:Context="Submission">
   <Study OID="STDY.CDISCPILOT01">
     <GlobalVariables>
       <StudyName>CDISCPILOT01</StudyName>
@@ -9,14 +9,13 @@
     </GlobalVariables>
     <MetaDataVersion OID="MDV.CDISCPILOT01.1.ADAMIG.1.1" Name="CDISCPILOT01 ADAMIG Data Definitions" Description="Dataset metadata for CDISCPILOT01 ADAMIG datasets" def:DefineVersion="2.1.0">
       <def:Standards>
-        <def:Standard OID="STD.ADAMIG" Name="ADAMIG" Type="IG" Version="1.1" Status="Final"/>
-        <def:Standard OID="STD.CT" Name="CDISC/NCI" Type="CT" Version="2023-12-15" Status="Final" PublishingSet="ADAMIG"/>
+        <def:Standard OID="STD.ADAMIG" Name="ADaMIG" Type="IG" Version="1.1" Status="Final"/>
+        <def:Standard OID="STD.CT" Name="CDISC/NCI" Type="CT" Version="2023-12-15" Status="Final" PublishingSet="ADaM"/>
       </def:Standards>
       <ItemGroupDef OID="IG.ADSL" Name="ADSL" Repeating="No" IsReferenceData="No" SASDatasetName="ADSL" Domain="ADSL" def:Structure="One record per subject" Purpose="Analysis" def:StandardOID="STD.ADAMIG" def:ArchiveLocationID="LF.ADSL">
         <Description>
           <TranslatedText xml:lang="en">Subject-Level Analysis Dataset</TranslatedText>
         </Description>
-        <def:Class Name="SUBJECT LEVEL ANALYSIS DATASET"/>
         <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" MethodOID="MT.assigned"/>
         <ItemRef ItemOID="IT.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2" MethodOID="MT.source"/>
         <ItemRef ItemOID="IT.SUBJID" OrderNumber="3" Mandatory="Yes" MethodOID="MT.source"/>
@@ -40,13 +39,15 @@
         <ItemRef ItemOID="IT.ADSL.DTHFL" OrderNumber="21" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADSL.SAFFL" OrderNumber="22" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADSL.ITTFL" OrderNumber="23" Mandatory="No"/>
-        <def:leaf ID="LF.ADSL" xlink:href="adsl.parquet" xlink:title="adsl.parquet"/>
+        <def:Class Name="SUBJECT LEVEL ANALYSIS DATASET"/>
+        <def:leaf ID="LF.ADSL" xlink:href="adsl.parquet">
+          <def:title>adsl.parquet</def:title>
+        </def:leaf>
       </ItemGroupDef>
       <ItemGroupDef OID="IG.ADVS" Name="ADVS" Repeating="Yes" IsReferenceData="No" SASDatasetName="ADVS" Domain="ADVS" def:Structure="One record per subject per parameter per analysis timepoint" Purpose="Analysis" def:StandardOID="STD.ADAMIG" def:ArchiveLocationID="LF.ADVS">
         <Description>
           <TranslatedText xml:lang="en">Analysis Dataset for Vital Signs</TranslatedText>
         </Description>
-        <def:Class Name="BASIC DATA STRUCTURE"/>
         <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" MethodOID="MT.assigned"/>
         <ItemRef ItemOID="IT.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2" MethodOID="MT.source"/>
         <ItemRef ItemOID="IT.ADVS.PARAMCD" OrderNumber="3" Mandatory="Yes" KeySequence="3" MethodOID="MT.source"/>
@@ -84,13 +85,15 @@
         <ItemRef ItemOID="IT.ADVS.DTHFL" OrderNumber="35" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADVS.SAFFL" OrderNumber="36" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADVS.ITTFL" OrderNumber="37" Mandatory="No"/>
-        <def:leaf ID="LF.ADVS" xlink:href="advs.parquet" xlink:title="advs.parquet"/>
+        <def:Class Name="BASIC DATA STRUCTURE"/>
+        <def:leaf ID="LF.ADVS" xlink:href="advs.parquet">
+          <def:title>advs.parquet</def:title>
+        </def:leaf>
       </ItemGroupDef>
       <ItemGroupDef OID="IG.ADAE" Name="ADAE" Repeating="Yes" IsReferenceData="No" SASDatasetName="ADAE" Domain="ADAE" def:Structure="One record per subject per adverse event" Purpose="Analysis" def:StandardOID="STD.ADAMIG" def:ArchiveLocationID="LF.ADAE">
         <Description>
           <TranslatedText xml:lang="en">Adverse Event Analysis Dataset</TranslatedText>
         </Description>
-        <def:Class Name="OCCURRENCE DATA STRUCTURE"/>
         <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" MethodOID="MT.assigned"/>
         <ItemRef ItemOID="IT.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2" MethodOID="MT.source"/>
         <ItemRef ItemOID="IT.ADAE.AETERM" OrderNumber="3" Mandatory="Yes" MethodOID="MT.source"/>
@@ -113,13 +116,15 @@
         <ItemRef ItemOID="IT.AGE" OrderNumber="20" Mandatory="Yes"/>
         <ItemRef ItemOID="IT.SEX" OrderNumber="21" Mandatory="Yes"/>
         <ItemRef ItemOID="IT.ADAE.SAFFL" OrderNumber="22" Mandatory="No"/>
-        <def:leaf ID="LF.ADAE" xlink:href="adae.parquet" xlink:title="adae.parquet"/>
+        <def:Class Name="OCCURRENCE DATA STRUCTURE"/>
+        <def:leaf ID="LF.ADAE" xlink:href="adae.parquet">
+          <def:title>adae.parquet</def:title>
+        </def:leaf>
       </ItemGroupDef>
       <ItemGroupDef OID="IG.ADEX" Name="ADEX" Repeating="Yes" IsReferenceData="No" SASDatasetName="ADEX" Domain="ADEX" def:Structure="One record per subject per exposure record" Purpose="Analysis" def:StandardOID="STD.ADAMIG" def:ArchiveLocationID="LF.ADEX">
         <Description>
           <TranslatedText xml:lang="en">Exposure Analysis Dataset</TranslatedText>
         </Description>
-        <def:Class Name="BASIC DATA STRUCTURE"/>
         <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" MethodOID="MT.assigned"/>
         <ItemRef ItemOID="IT.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2" MethodOID="MT.source"/>
         <ItemRef ItemOID="IT.ADEX.EXTRT" OrderNumber="3" Mandatory="Yes" MethodOID="MT.source"/>
@@ -134,7 +139,10 @@
         <ItemRef ItemOID="IT.ADEX.TRT01P" OrderNumber="12" Mandatory="No"/>
         <ItemRef ItemOID="IT.AGE" OrderNumber="13" Mandatory="Yes"/>
         <ItemRef ItemOID="IT.ADEX.SAFFL" OrderNumber="14" Mandatory="No"/>
-        <def:leaf ID="LF.ADEX" xlink:href="adex.parquet" xlink:title="adex.parquet"/>
+        <def:Class Name="BASIC DATA STRUCTURE"/>
+        <def:leaf ID="LF.ADEX" xlink:href="adex.parquet">
+          <def:title>adex.parquet</def:title>
+        </def:leaf>
       </ItemGroupDef>
       <ItemDef OID="IT.STUDYID" Name="STUDYID" DataType="text" SASFieldName="STUDYID" Length="12">
         <Description>
@@ -160,7 +168,7 @@
         <Description>
           <TranslatedText xml:lang="en">Subject Identifier for the Study</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
@@ -170,7 +178,7 @@
         <Description>
           <TranslatedText xml:lang="en">Study Site Identifier</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
@@ -180,7 +188,7 @@
         <Description>
           <TranslatedText xml:lang="en">Age</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
@@ -201,7 +209,7 @@
           <TranslatedText xml:lang="en">Sex</TranslatedText>
         </Description>
         <CodeListRef CodeListOID="C66731"/>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
@@ -211,7 +219,7 @@
         <Description>
           <TranslatedText xml:lang="en">Race</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
@@ -221,7 +229,7 @@
         <Description>
           <TranslatedText xml:lang="en">Ethnicity</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
@@ -311,7 +319,7 @@
         <Description>
           <TranslatedText xml:lang="en">Subject Reference Start Date/Time</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
@@ -321,7 +329,7 @@
         <Description>
           <TranslatedText xml:lang="en">Subject Reference End Date/Time</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
@@ -331,7 +339,7 @@
         <Description>
           <TranslatedText xml:lang="en">Date/Time of Informed Consent</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
@@ -497,19 +505,19 @@
         <Description>
           <TranslatedText xml:lang="en">Subject Reference Start Date/Time</TranslatedText>
         </Description>
-        <def:Origin Type="CRF"/>
+        <def:Origin Type="Collected" Source="Investigator"/>
       </ItemDef>
       <ItemDef OID="IT.ADVS.RFENDTC" Name="RFENDTC" DataType="datetime" SASFieldName="RFENDTC">
         <Description>
           <TranslatedText xml:lang="en">Subject Reference End Date/Time</TranslatedText>
         </Description>
-        <def:Origin Type="CRF"/>
+        <def:Origin Type="Collected" Source="Investigator"/>
       </ItemDef>
       <ItemDef OID="IT.ADVS.RFICDTC" Name="RFICDTC" DataType="datetime" SASFieldName="RFICDTC">
         <Description>
           <TranslatedText xml:lang="en">Date/Time of Informed Consent</TranslatedText>
         </Description>
-        <def:Origin Type="CRF"/>
+        <def:Origin Type="Collected" Source="Investigator"/>
       </ItemDef>
       <ItemDef OID="IT.ADVS.DTHFL" Name="DTHFL" DataType="text" SASFieldName="DTHFL" Length="2">
         <Description>
@@ -533,7 +541,7 @@
         <Description>
           <TranslatedText xml:lang="en">Reported Term for the Adverse Event</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
@@ -543,7 +551,7 @@
         <Description>
           <TranslatedText xml:lang="en">Start Date/Time of Adverse Event</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
@@ -553,7 +561,7 @@
         <Description>
           <TranslatedText xml:lang="en">End Date/Time of Adverse Event</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
@@ -563,7 +571,7 @@
         <Description>
           <TranslatedText xml:lang="en">Severity/Intensity</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
@@ -573,7 +581,7 @@
         <Description>
           <TranslatedText xml:lang="en">Serious Event</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
@@ -583,7 +591,7 @@
         <Description>
           <TranslatedText xml:lang="en">Causality</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
@@ -593,7 +601,7 @@
         <Description>
           <TranslatedText xml:lang="en">Outcome of Adverse Event</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
@@ -603,7 +611,7 @@
         <Description>
           <TranslatedText xml:lang="en">Action Taken with Study Treatment</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
@@ -685,7 +693,7 @@
         <Description>
           <TranslatedText xml:lang="en">Name of Actual Treatment</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
@@ -695,7 +703,7 @@
         <Description>
           <TranslatedText xml:lang="en">Dose per Administration</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
@@ -705,7 +713,7 @@
         <Description>
           <TranslatedText xml:lang="en">Dose Units</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Carry one or more source columns into the ADaM dataset.</TranslatedText>
           </Description>
@@ -846,10 +854,6 @@
         </Description>
         <FormalExpression Context="Python/Fleet">.study_day(...)</FormalExpression>
       </MethodDef>
-      <def:leaf ID="LF.ADSL" xlink:href="adsl.parquet" xlink:title="adsl.parquet"/>
-      <def:leaf ID="LF.ADVS" xlink:href="advs.parquet" xlink:title="advs.parquet"/>
-      <def:leaf ID="LF.ADAE" xlink:href="adae.parquet" xlink:title="adae.parquet"/>
-      <def:leaf ID="LF.ADEX" xlink:href="adex.parquet" xlink:title="adex.parquet"/>
     </MetaDataVersion>
   </Study>
 </ODM>

@@ -669,7 +669,7 @@ def _dispatch_nsv(ns: Any, var: SpecVariableBase) -> Any:
         source=var.source,
         value=var.value if var.source is None else None,
         label=var.label or "",
-        origin=var.origin or "DERIVED",
+        origin=var.origin or "Derived",
         evaluator=var.evaluator,
     )
 

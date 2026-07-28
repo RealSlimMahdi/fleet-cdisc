@@ -496,10 +496,19 @@ VS Code or any LSP-enabled editor:
 
 ## CRF Page References
 
-Variables with `origin: CRF` can include page references to the annotated
+Variables with `origin: Collected` can include page references to the annotated
 Case Report Form PDF. Fleet emits these as `<def:DocumentRef>` /
 `<def:PDFPageRef>` elements inside `<def:Origin>` in the Define-XML, and
 the standard `define2-1.xsl` stylesheet renders them as clickable links.
+
+!!! note "One origin vocabulary"
+
+    `origin:` uses the Define-XML 2.1 Origin Types — `Collected`,
+    `Derived`, `Assigned`, `Protocol`, `Predecessor` — and the same
+    values flow into `QORIG` in generated SUPPQUAL datasets. Collected
+    values also carry `def:Source`, which defaults to `Investigator`
+    (CRF data); override it with `origin_source: Vendor | Sponsor |
+    Subject`. The Define-XML 2.0 spellings `CRF` and `eDT` are not valid.
 
 ### Setup: declare the aCRF document
 
@@ -529,14 +538,14 @@ This emits the top-level `<def:AnnotatedCRF>` container and the
 
 ### Layer 1 — Simple page strings (most common)
 
-Add `crf_pages` to any CRF-origin variable:
+Add `crf_pages` to any collected variable:
 
 ```yaml
 variables:
   - name: SEX
     label: Sex
     type: text
-    origin: CRF
+    origin: Collected
     crf_pages: "8" # single page
     derivation:
       algorithm: assign_ct
@@ -545,7 +554,7 @@ variables:
   - name: RACE
     label: Race
     type: text
-    origin: CRF
+    origin: Collected
     crf_pages: "8 9" # space-separated multiple pages
 ```
 
@@ -558,13 +567,13 @@ For PDF bookmarks or page ranges, use the dict form:
 
 ```yaml
 - name: SEX
-  origin: CRF
+  origin: Collected
   crf_pages:
     pages: "DM_SEX" # PDF bookmark name
     type: NamedDestination # or PhysicalRef (default)
 
 - name: RACE
-  origin: CRF
+  origin: Collected
   crf_pages:
     pages: "8 9"
     type: PhysicalRef
@@ -621,5 +630,5 @@ These emit `<def:SupplementalDoc>` and corresponding `<def:leaf>` elements.
 ## Tips
 
 - The `inputs` block declares which upstream datasets the pipeline should join/merge.
-- Variables with no `derivation` block are expected to flow in via the `source` dataset — they appear in Define-XML as `origin: CRF`.
+- Variables with no `derivation` block are expected to flow in via the `source` dataset — they appear in Define-XML as `origin: Collected`.
 - Run `DefineValidator("...").validate(Path("specs/.../define.yaml"))` to catch schema and business rule errors before generating Define-XML or running pipelines.

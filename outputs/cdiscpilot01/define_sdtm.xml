@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <?xml-stylesheet type="text/xsl" href="define2-1.xsl"?>
-<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:def="http://www.cdisc.org/ns/def/v2.1" ODMVersion="1.3.2" FileOID="CDISC.CDISCPILOT01.1.Define-XML_2.1.0" FileType="Snapshot" CreationDateTime="2026-07-09T08:12:43" Originator="Fleet Team" SourceSystem="Fleet" SourceSystemVersion="0.1.0" def:Context="Submission">
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:def="http://www.cdisc.org/ns/def/v2.1" ODMVersion="1.3.2" FileOID="CDISC.CDISCPILOT01.1.Define-XML_2.1.0" FileType="Snapshot" CreationDateTime="2026-07-28T12:38:30" Originator="Fleet Team" SourceSystem="Fleet" SourceSystemVersion="0.1.0" def:Context="Submission">
   <Study OID="STDY.CDISCPILOT01">
     <GlobalVariables>
       <StudyName>CDISCPILOT01</StudyName>
@@ -10,7 +10,7 @@
     <MetaDataVersion OID="MDV.CDISCPILOT01.1.SDTMIG.3.4" Name="CDISCPILOT01 SDTMIG Data Definitions" Description="Dataset metadata for CDISCPILOT01 SDTMIG datasets" def:DefineVersion="2.1.0">
       <def:Standards>
         <def:Standard OID="STD.SDTMIG" Name="SDTMIG" Type="IG" Version="3.4" Status="Final"/>
-        <def:Standard OID="STD.CT" Name="CDISC/NCI" Type="CT" Version="2023-12-15" Status="Final" PublishingSet="SDTMIG"/>
+        <def:Standard OID="STD.CT" Name="CDISC/NCI" Type="CT" Version="2023-12-15" Status="Final" PublishingSet="SDTM"/>
       </def:Standards>
       <def:AnnotatedCRF>
         <def:DocumentRef leafID="LF.acrf"/>
@@ -19,7 +19,6 @@
         <Description>
           <TranslatedText xml:lang="en">Demographics</TranslatedText>
         </Description>
-        <def:Class Name="SPECIAL PURPOSE"/>
         <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" MethodOID="MT.hardcode_no_ct"/>
         <ItemRef ItemOID="IT.DOMAIN" OrderNumber="2" Mandatory="Yes" MethodOID="MT.hardcode_no_ct"/>
         <ItemRef ItemOID="IT.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2" MethodOID="MT.assign_no_ct"/>
@@ -39,13 +38,15 @@
         <ItemRef ItemOID="IT.ACTARMCD" OrderNumber="17" Mandatory="Yes" MethodOID="MT.assign_no_ct"/>
         <ItemRef ItemOID="IT.ACTARM" OrderNumber="18" Mandatory="Yes" MethodOID="MT.assign_no_ct"/>
         <ItemRef ItemOID="IT.DM.RFICDTC" OrderNumber="19" Mandatory="No" MethodOID="MT.assign_dtc"/>
-        <def:leaf ID="LF.DM" xlink:href="dm.parquet" xlink:title="dm.parquet"/>
+        <def:Class Name="SPECIAL PURPOSE"/>
+        <def:leaf ID="LF.DM" xlink:href="dm.parquet">
+          <def:title>dm.parquet</def:title>
+        </def:leaf>
       </ItemGroupDef>
       <ItemGroupDef OID="IG.AE" Name="AE" Repeating="Yes" IsReferenceData="No" SASDatasetName="AE" Domain="AE" def:Structure="One record per adverse event per subject" Purpose="Tabulation" def:StandardOID="STD.SDTMIG" def:ArchiveLocationID="LF.AE">
         <Description>
           <TranslatedText xml:lang="en">Adverse Events</TranslatedText>
         </Description>
-        <def:Class Name="EVENTS"/>
         <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" MethodOID="MT.hardcode_no_ct"/>
         <ItemRef ItemOID="IT.DOMAIN" OrderNumber="2" Mandatory="Yes" MethodOID="MT.hardcode_no_ct"/>
         <ItemRef ItemOID="IT.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2" MethodOID="MT.assign_no_ct"/>
@@ -59,13 +60,15 @@
         <ItemRef ItemOID="IT.AE.AEOUT" OrderNumber="11" Mandatory="No" MethodOID="MT.assign_no_ct"/>
         <ItemRef ItemOID="IT.AE.AEACN" OrderNumber="12" Mandatory="No" MethodOID="MT.assign_no_ct"/>
         <ItemRef ItemOID="IT.AE.AEREL" OrderNumber="13" Mandatory="No" MethodOID="MT.ae_aerel"/>
-        <def:leaf ID="LF.AE" xlink:href="ae.parquet" xlink:title="ae.parquet"/>
+        <def:Class Name="EVENTS"/>
+        <def:leaf ID="LF.AE" xlink:href="ae.parquet">
+          <def:title>ae.parquet</def:title>
+        </def:leaf>
       </ItemGroupDef>
       <ItemGroupDef OID="IG.VS" Name="VS" Repeating="Yes" IsReferenceData="No" SASDatasetName="VS" Domain="VS" def:Structure="One record per vital sign measurement per subject per visit" Purpose="Tabulation" def:StandardOID="STD.SDTMIG" def:ArchiveLocationID="LF.VS">
         <Description>
           <TranslatedText xml:lang="en">Vital Signs</TranslatedText>
         </Description>
-        <def:Class Name="FINDINGS"/>
         <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" MethodOID="MT.hardcode_no_ct"/>
         <ItemRef ItemOID="IT.DOMAIN" OrderNumber="2" Mandatory="Yes" MethodOID="MT.hardcode_no_ct"/>
         <ItemRef ItemOID="IT.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2" MethodOID="MT.assign_no_ct"/>
@@ -78,13 +81,15 @@
         <ItemRef ItemOID="IT.VS.VISITNUM" OrderNumber="10" Mandatory="No" KeySequence="4" MethodOID="MT.assign_no_ct"/>
         <ItemRef ItemOID="IT.VS.VISIT" OrderNumber="11" Mandatory="No" MethodOID="MT.assign_no_ct"/>
         <ItemRef ItemOID="IT.VS.VSDTC" OrderNumber="12" Mandatory="Yes" MethodOID="MT.assign_dtc"/>
-        <def:leaf ID="LF.VS" xlink:href="vs.parquet" xlink:title="vs.parquet"/>
+        <def:Class Name="FINDINGS"/>
+        <def:leaf ID="LF.VS" xlink:href="vs.parquet">
+          <def:title>vs.parquet</def:title>
+        </def:leaf>
       </ItemGroupDef>
       <ItemGroupDef OID="IG.EX" Name="EX" Repeating="Yes" IsReferenceData="No" SASDatasetName="EX" Domain="EX" def:Structure="One record per protocol-specified study treatment per subject" Purpose="Tabulation" def:StandardOID="STD.SDTMIG" def:ArchiveLocationID="LF.EX">
         <Description>
           <TranslatedText xml:lang="en">Exposure</TranslatedText>
         </Description>
-        <def:Class Name="INTERVENTIONS"/>
         <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1" MethodOID="MT.hardcode_no_ct"/>
         <ItemRef ItemOID="IT.DOMAIN" OrderNumber="2" Mandatory="Yes" MethodOID="MT.hardcode_no_ct"/>
         <ItemRef ItemOID="IT.USUBJID" OrderNumber="3" Mandatory="Yes" KeySequence="2" MethodOID="MT.assign_no_ct"/>
@@ -94,7 +99,10 @@
         <ItemRef ItemOID="IT.EX.EXDOSU" OrderNumber="7" Mandatory="No" MethodOID="MT.hardcode_no_ct"/>
         <ItemRef ItemOID="IT.EX.EXSTDTC" OrderNumber="8" Mandatory="Yes" MethodOID="MT.assign_dtc"/>
         <ItemRef ItemOID="IT.EX.EXENDTC" OrderNumber="9" Mandatory="No" MethodOID="MT.assign_dtc"/>
-        <def:leaf ID="LF.EX" xlink:href="ex.parquet" xlink:title="ex.parquet"/>
+        <def:Class Name="INTERVENTIONS"/>
+        <def:leaf ID="LF.EX" xlink:href="ex.parquet">
+          <def:title>ex.parquet</def:title>
+        </def:leaf>
       </ItemGroupDef>
       <ItemDef OID="IT.STUDYID" Name="STUDYID" DataType="text" SASFieldName="STUDYID" Length="12">
         <Description>
@@ -130,7 +138,7 @@
         <Description>
           <TranslatedText xml:lang="en">Subject Identifier for the Study</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
@@ -143,7 +151,7 @@
         <Description>
           <TranslatedText xml:lang="en">Subject Reference Start Date/Time</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Parse, convert, impute, and flag a date or datetime column.</TranslatedText>
           </Description>
@@ -156,7 +164,7 @@
         <Description>
           <TranslatedText xml:lang="en">Subject Reference End Date/Time</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Parse, convert, impute, and flag a date or datetime column.</TranslatedText>
           </Description>
@@ -178,7 +186,7 @@
         <Description>
           <TranslatedText xml:lang="en">Study Site Identifier</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
@@ -191,7 +199,7 @@
         <Description>
           <TranslatedText xml:lang="en">Age</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
@@ -215,7 +223,7 @@
           <TranslatedText xml:lang="en">Sex</TranslatedText>
         </Description>
         <CodeListRef CodeListOID="C66731"/>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
@@ -229,7 +237,7 @@
           <TranslatedText xml:lang="en">Race</TranslatedText>
         </Description>
         <CodeListRef CodeListOID="C74457"/>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
@@ -243,7 +251,7 @@
           <TranslatedText xml:lang="en">Ethnicity</TranslatedText>
         </Description>
         <CodeListRef CodeListOID="C66790"/>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
@@ -293,7 +301,7 @@
         <Description>
           <TranslatedText xml:lang="en">Date/Time of Informed Consent</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Parse, convert, impute, and flag a date or datetime column.</TranslatedText>
           </Description>
@@ -309,7 +317,7 @@
         <Description>
           <TranslatedText xml:lang="en">Reported Term for the Adverse Event</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
@@ -329,7 +337,7 @@
         <Description>
           <TranslatedText xml:lang="en">Start Date/Time of Adverse Event</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Parse, convert, impute, and flag a date or datetime column.</TranslatedText>
           </Description>
@@ -339,7 +347,7 @@
         <Description>
           <TranslatedText xml:lang="en">End Date/Time of Adverse Event</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Parse, convert, impute, and flag a date or datetime column.</TranslatedText>
           </Description>
@@ -349,7 +357,7 @@
         <Description>
           <TranslatedText xml:lang="en">Severity/Intensity</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
@@ -359,7 +367,7 @@
         <Description>
           <TranslatedText xml:lang="en">Serious Event</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
@@ -369,7 +377,7 @@
         <Description>
           <TranslatedText xml:lang="en">Outcome of Adverse Event</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
@@ -379,7 +387,7 @@
         <Description>
           <TranslatedText xml:lang="en">Action Taken with Study Treatment</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
@@ -389,7 +397,7 @@
         <Description>
           <TranslatedText xml:lang="en">Causality</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Map free-text AE causality strings to controlled ``AEREL`` values.</TranslatedText>
           </Description>
@@ -400,7 +408,7 @@
           <TranslatedText xml:lang="en">Vital Signs Test Short Name</TranslatedText>
         </Description>
         <CodeListRef CodeListOID="CL.VSTEST"/>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
@@ -410,7 +418,7 @@
         <Description>
           <TranslatedText xml:lang="en">Vital Signs Test Name</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
@@ -420,7 +428,7 @@
         <Description>
           <TranslatedText xml:lang="en">Result or Finding in Original Units</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
@@ -430,7 +438,7 @@
         <Description>
           <TranslatedText xml:lang="en">Original Units</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
@@ -480,7 +488,7 @@
         <Description>
           <TranslatedText xml:lang="en">Date/Time of Measurements</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Parse, convert, impute, and flag a date or datetime column.</TranslatedText>
           </Description>
@@ -506,7 +514,7 @@
         <Description>
           <TranslatedText xml:lang="en">Dose per Administration</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Assign *target* from a source column or a literal value.</TranslatedText>
           </Description>
@@ -526,7 +534,7 @@
         <Description>
           <TranslatedText xml:lang="en">Start Date/Time of Treatment</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Parse, convert, impute, and flag a date or datetime column.</TranslatedText>
           </Description>
@@ -536,7 +544,7 @@
         <Description>
           <TranslatedText xml:lang="en">End Date/Time of Treatment</TranslatedText>
         </Description>
-        <def:Origin Type="CRF">
+        <def:Origin Type="Collected" Source="Investigator">
           <Description>
             <TranslatedText xml:lang="en">Parse, convert, impute, and flag a date or datetime column.</TranslatedText>
           </Description>
@@ -655,10 +663,6 @@
         </Description>
         <FormalExpression Context="Python/Fleet">.hardcode_no_ct(...)</FormalExpression>
       </MethodDef>
-      <def:leaf ID="LF.DM" xlink:href="dm.parquet" xlink:title="dm.parquet"/>
-      <def:leaf ID="LF.AE" xlink:href="ae.parquet" xlink:title="ae.parquet"/>
-      <def:leaf ID="LF.VS" xlink:href="vs.parquet" xlink:title="vs.parquet"/>
-      <def:leaf ID="LF.EX" xlink:href="ex.parquet" xlink:title="ex.parquet"/>
       <def:leaf ID="LF.acrf" xlink:href="blankcrf.pdf">
         <def:title>Annotated Case Report Form</def:title>
       </def:leaf>

@@ -34,6 +34,7 @@ import polars as pl
 import yaml
 
 from fleet.core import log as fleet_log
+from fleet.core.define_spec import DefineSpec, load_define_spec
 from fleet.core.exceptions import DerivationError, SpecError, ValidationError, VerbUsageError
 
 if TYPE_CHECKING:
@@ -70,9 +71,9 @@ def _check_ig_version(version: str, *, standard: str) -> None:
 SUPPORTED_SPEC_VERSION = 1
 
 
-def _check_spec_version(spec_data: dict, *, source: str) -> None:
+def _check_spec_version(spec: DefineSpec, *, source: str) -> None:
     """Raise ``SpecError`` when the spec declares an unknown future version."""
-    version = spec_data.get("fleet_spec_version")
+    version = spec.fleet_spec_version
     if version is not None and version != SUPPORTED_SPEC_VERSION:
         raise SpecError(
             f"{source}: unsupported fleet_spec_version {version!r}. "
@@ -80,9 +81,9 @@ def _check_spec_version(spec_data: dict, *, source: str) -> None:
         )
 
 
-def _import_derivations_module(spec_data: dict, *, source: str) -> None:
+def _import_derivations_module(spec: DefineSpec, *, source: str) -> None:
     """Import the spec-declared ``derivations_module`` (callable registrations)."""
-    module = spec_data.get("derivations_module")
+    module = spec.derivations_module
     if not module:
         return
     try:
@@ -96,25 +97,8 @@ def _import_derivations_module(spec_data: dict, *, source: str) -> None:
 _SPEC_META_KEYS = ("label", "origin", "role", "evaluator")
 
 
-def _select_spec_dataset(datasets: list[dict], dataset: str | None) -> dict:
-    """Pick one dataset entry from a define.yaml ``datasets`` list."""
-    if dataset is None:
-        if len(datasets) != 1:
-            names = [d["name"] for d in datasets]
-            raise DerivationError(
-                f"define.yaml contains {len(datasets)} datasets {names}. "
-                "Pass dataset= to select one."
-            )
-        return datasets[0]
-    matches = [d for d in datasets if d["name"].upper() == dataset.upper()]
-    if not matches:
-        names = [d["name"] for d in datasets]
-        raise DerivationError(f"Dataset '{dataset}' not found in define.yaml. Available: {names}")
-    return matches[0]
-
-
 def _extract_spec_variables(
-    spec_data: dict, dataset: str | None
+    spec: DefineSpec, dataset: str | None
 ) -> tuple[str, list[tuple[str, dict]]]:
     """Return ``(dataset_name, [(variable_name, derivation_dict), ...])``.
 
@@ -124,11 +108,11 @@ def _extract_spec_variables(
     fields).  Variables without a derivation are carry-through columns and
     are skipped.
     """
-    if "datasets" in spec_data:
-        ds = _select_spec_dataset(spec_data["datasets"], dataset)
+    if spec.datasets is not None:
+        ds = spec.select(dataset)
         out: list[tuple[str, dict]] = []
-        for var in ds.get("variables", []):
-            drv = var.get("derivation")
+        for var in ds.variables:
+            drv = var.derivation
             if not drv:
                 continue  # no derivation → carry-through / manual column
             # Backward compat: callable: without algorithm: → inject algorithm.
@@ -136,15 +120,16 @@ def _extract_spec_variables(
                 drv = {**drv, "algorithm": "callable"}
             merged = dict(drv)
             for meta in _SPEC_META_KEYS:
-                if var.get(meta) and meta not in merged:
-                    merged[meta] = var[meta]
-            out.append((var["name"], merged))
-        return ds["name"], out
+                value = getattr(var, meta, None)
+                if value and meta not in merged:
+                    merged[meta] = value
+            out.append((var.name, merged))
+        return ds.name, out
 
     # Simplified single-dataset format (domain:/dataset: + variables:).
-    ds_name = spec_data.get("domain") or spec_data.get("dataset") or "spec"
+    ds_name = spec.domain or spec.dataset or "spec"
     out = []
-    for var in spec_data.get("variables") or []:
+    for var in spec.variables or []:
         entry = dict(var)
         if "callable" in entry and "algorithm" not in entry:
             entry["algorithm"] = "callable"
@@ -1881,28 +1866,9 @@ class SharedVerbsMixin:
         spec_path: Path, dataset: str | None
     ) -> tuple[list[str], dict[str, str]]:
         """Return ``(column_names, date_type_map)`` for *dataset* from a define.yaml."""
-        spec_data = yaml.safe_load(spec_path.read_text())
-        datasets = spec_data.get("datasets", [])
-        if dataset is None:
-            if len(datasets) != 1:
-                names = [d["name"] for d in datasets]
-                raise DerivationError(
-                    f"define.yaml contains {len(datasets)} datasets {names}; "
-                    "pass dataset= to select one."
-                )
-            ds = datasets[0]
-        else:
-            matches = [d for d in datasets if d["name"].upper() == dataset.upper()]
-            if not matches:
-                names = [d["name"] for d in datasets]
-                raise DerivationError(
-                    f"Dataset '{dataset}' not found in define.yaml. Available: {names}"
-                )
-            ds = matches[0]
-        columns = [v["name"] for v in ds["variables"]]
-        type_map = {
-            v["name"]: v["type"] for v in ds["variables"] if v.get("type") in ("date", "datetime")
-        }
+        ds = load_define_spec(spec_path).select(dataset)
+        columns = [v.name for v in ds.variables]
+        type_map = {v.name: v.type for v in ds.variables if v.type in ("date", "datetime")}
         return columns, type_map
 
     # ------------------------------------------------------------------ #
@@ -1996,19 +1962,18 @@ class SharedVerbsMixin:
             )
 
         path = Path(spec_path)
-        spec_data = yaml.safe_load(path.read_text())
-        _check_spec_version(spec_data, source=str(path))
-        _import_derivations_module(spec_data, source=str(path))
+        spec = load_define_spec(path)
+        _check_spec_version(spec, source=str(path))
+        _import_derivations_module(spec, source=str(path))
 
         standard = self._VALIDATE_STANDARD
-        ds_name, raw_vars = _extract_spec_variables(spec_data, dataset)
+        ds_name, raw_vars = _extract_spec_variables(spec, dataset)
 
         ns = self
 
         # Spec-level CT config: `ct: {validate: true, file: <path>}`.
-        ct_cfg = spec_data.get("ct") or {}
-        if ct_cfg.get("validate"):
-            ct_file = ct_cfg.get("file")
+        if spec.ct.enabled:
+            ct_file = spec.ct.file
             if ct_file:
                 from fleet.ct.validator import get_validator
 

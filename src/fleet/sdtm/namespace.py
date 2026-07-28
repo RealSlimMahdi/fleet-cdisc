@@ -30,11 +30,11 @@ from pathlib import Path
 from typing import Any
 
 import polars as pl
-import yaml
 
 from fleet.core._flag_mixin import FlagCriterionMixin
 from fleet.core._pin_mixin import PinMixin
 from fleet.core._verb_mixin import SharedVerbsMixin
+from fleet.core.define_spec import load_define_spec
 from fleet.core.exceptions import DerivationError
 from fleet.sdtm._tdd_mixin import TrialDesignMixin
 from fleet.sdtm.models import NSVMeta
@@ -322,7 +322,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         source: str | None = None,
         value: Any | None = None,
         label: str,
-        origin: str = "DERIVED",
+        origin: str = "Derived",
         evaluator: str | None = None,
     ) -> SDTMNamespace:
         """Derive a Non-Standard Variable with qualifier metadata.
@@ -341,7 +341,10 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
             value: A literal value to broadcast.  Mutually exclusive with
                 *source*.
             label: Human-readable label (becomes QLABEL in SUPP).
-            origin: Variable origin (becomes QORIG in SUPP).
+            origin: Variable origin (becomes QORIG in SUPP) — the
+                Define-XML 2.1 vocabulary shared with ``origin:`` in a
+                define.yaml (``Collected``, ``Derived``, ``Assigned``,
+                ``Protocol``, ``Predecessor``).
             evaluator: Optional evaluator (becomes QEVAL in SUPP).
 
         Returns:
@@ -880,9 +883,9 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                 suppdm = dm.sdtm.export_supp(
                     qualifiers={
                         "COMPLT16": {"label": "Completers of Week 16",
-                                     "origin": "DERIVED"},
+                                     "origin": "Derived"},
                         "SAFETY": {"label": "Safety Population Flag",
-                                   "origin": "DERIVED"},
+                                   "origin": "Derived"},
                     },
                     idvar="DMSEQ",
                 )
@@ -955,7 +958,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
             pl.lit(rdomain).cast(pl.String).alias("RDOMAIN"),
             pl.col("QNAM").replace_strict(label_map, default=None).cast(pl.String).alias("QLABEL"),
             pl.col("QNAM")
-            .replace_strict(origin_map, default="DERIVED")
+            .replace_strict(origin_map, default="Derived")
             .cast(pl.String)
             .alias("QORIG"),
             pl.col("QNAM").replace_strict(eval_map, default=None).cast(pl.String).alias("QEVAL"),
@@ -1008,7 +1011,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                 NSVMeta(
                     target=name,
                     label=info.get("label", ""),
-                    origin=info.get("origin", "DERIVED"),
+                    origin=info.get("origin", "Derived"),
                     evaluator=info.get("evaluator"),
                 )
                 for name, info in qualifiers.items()
@@ -1016,31 +1019,25 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
 
         # Priority 2: spec file
         if spec is not None:
-            spec_data = yaml.safe_load(Path(spec).read_text())
-            if "datasets" not in spec_data:
+            spec_data = load_define_spec(spec)
+            if not spec_data.datasets:
                 return []
-            datasets = spec_data["datasets"]
-            if dataset:
-                matches = [d for d in datasets if d["name"].upper() == dataset.upper()]
-                ds = matches[0] if matches else None
-            elif len(datasets) == 1:
-                ds = datasets[0]
-            else:
-                ds = None
-            if ds is None:
+            try:
+                ds = spec_data.select(dataset)
+            except DerivationError:
                 return []
             meta = []
-            for var in ds.get("variables", []):
-                is_qual = var.get("role") == "qualifier" or (
-                    var.get("derivation", {}).get("algorithm") == "nsv"
+            for var in ds.variables:
+                is_qual = (
+                    var.role == "qualifier" or (var.derivation or {}).get("algorithm") == "nsv"
                 )
                 if is_qual:
                     meta.append(
                         NSVMeta(
-                            target=var["name"],
-                            label=var.get("label", ""),
-                            origin=var.get("origin", "DERIVED"),
-                            evaluator=var.get("evaluator"),
+                            target=var.name,
+                            label=var.label or "",
+                            origin=var.origin or "Derived",
+                            evaluator=var.evaluator,
                         )
                     )
             return meta
