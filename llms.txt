@@ -1353,9 +1353,10 @@ for checker, df, ds in [
     result.raise_on_errors()  # a failing dataset must fail the pipeline
 
 # ── 10. Generate Define-XML 2.1 ───────────────────────────────────────────────
-# enrich_methods=True embeds Fleet verb docstrings into the Origin/MethodDef
-# elements so reviewers see the exact computational method (single source of
-# truth: docstring -> Define-XML).
+# enrich_methods=True emits one MethodDef per Derived variable, with
+# submission-facing text rendered from the algorithm registry (a spec
+# `comment:` overrides it) and the faithful Fleet call as FormalExpression.
+# XSD validation + the semantic lint run automatically on the way out.
 DefineSpecGenerator(SDTM_SPEC, enrich_methods=True).generate(OUT / "define_sdtm.xml")
 DefineSpecGenerator(ADAM_SPEC, enrich_methods=True).generate(OUT / "define_adam.xml")
 print(f"\nDefine-XML written to {OUT}/")

@@ -12,24 +12,32 @@ import fleet  # noqa: F401 — triggers namespace registration
 
 @pytest.fixture
 def simple_ae():
-    return pl.DataFrame(
-        {
-            "patient_number": ["01-701-1015", "01-701-1023", "01-701-1028"],
-            "ae_term": ["HEADACHE", "NAUSEA", "RASH"],
-            "ae_start_date": ["2014-01-10", "2014-02-15", "2014-03-20"],
-        }
-    )
+    return pl.from_repr("""\
+┌────────────────┬──────────┬───────────────┐
+│ patient_number ┆ ae_term  ┆ ae_start_date │
+│ ---            ┆ ---      ┆ ---           │
+│ str            ┆ str      ┆ str           │
+╞════════════════╪══════════╪═══════════════╡
+│ 01-701-1015    ┆ HEADACHE ┆ 2014-01-10    │
+│ 01-701-1023    ┆ NAUSEA   ┆ 2014-02-15    │
+│ 01-701-1028    ┆ RASH     ┆ 2014-03-20    │
+└────────────────┴──────────┴───────────────┘
+""")
 
 
 @pytest.fixture
 def dm_ref():
-    return pl.DataFrame(
-        {
-            "USUBJID": ["01-701-1015", "01-701-1023", "01-701-1028"],
-            "RFSTDTC": ["2014-01-02", "2014-01-03", "2014-01-04"],
-            "ARMCD": ["PBO", "XAN_LO", "XAN_HI"],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────────┬────────────┬────────┐
+│ USUBJID     ┆ RFSTDTC    ┆ ARMCD  │
+│ ---         ┆ ---        ┆ ---    │
+│ str         ┆ str        ┆ str    │
+╞═════════════╪════════════╪════════╡
+│ 01-701-1015 ┆ 2014-01-02 ┆ PBO    │
+│ 01-701-1023 ┆ 2014-01-03 ┆ XAN_LO │
+│ 01-701-1028 ┆ 2014-01-04 ┆ XAN_HI │
+└─────────────┴────────────┴────────┘
+""")
 
 
 # ── Pin basics ──────────────────────────────────────────────────────────── #
@@ -53,7 +61,16 @@ class TestPin:
         assert "DM" in ns.pins()
 
     def test_pin_multiple_domains(self, simple_ae, dm_ref):
-        tv_df = pl.DataFrame({"VISITNUM": [1, 2], "VISIT": ["SCREENING", "WEEK 1"]})
+        tv_df = pl.from_repr("""\
+┌──────────┬───────────┐
+│ VISITNUM ┆ VISIT     │
+│ ---      ┆ ---       │
+│ i64      ┆ str       │
+╞══════════╪═══════════╡
+│ 1        ┆ SCREENING │
+│ 2        ┆ WEEK 1    │
+└──────────┴───────────┘
+""")
         ns = simple_ae.sdtm.pin("DM", dm_ref).pin("TV", tv_df, join_on="VISITNUM")
         assert set(ns.pins().keys()) == {"DM", "TV"}
 
@@ -76,7 +93,15 @@ class TestKeywordPins:
     """pin(DM=dm_df, TV=tv_df) — several datasets, one call."""
 
     def test_keyword_form_pins_several(self, simple_ae, dm_ref):
-        tv_df = pl.DataFrame({"VISITNUM": [1], "VISIT": ["SCREENING"]})
+        tv_df = pl.from_repr("""\
+┌──────────┬───────────┐
+│ VISITNUM ┆ VISIT     │
+│ ---      ┆ ---       │
+│ i64      ┆ str       │
+╞══════════╪═══════════╡
+│ 1        ┆ SCREENING │
+└──────────┴───────────┘
+""")
         ns = simple_ae.sdtm.pin(DM=dm_ref, TV=tv_df)
         assert set(ns.pins().keys()) == {"DM", "TV"}
 
@@ -90,7 +115,15 @@ class TestKeywordPins:
         assert ns.pins()["ADSL"]["join_on"] == ["USUBJID", "ARMCD"]
 
     def test_positional_and_keyword_mix(self, simple_ae, dm_ref):
-        tv_df = pl.DataFrame({"VISITNUM": [1]})
+        tv_df = pl.from_repr("""\
+┌──────────┐
+│ VISITNUM │
+│ ---      │
+│ i64      │
+╞══════════╡
+│ 1        │
+└──────────┘
+""")
         ns = simple_ae.sdtm.pin("DM", dm_ref, TV=tv_df)
         assert set(ns.pins().keys()) == {"DM", "TV"}
 
@@ -106,6 +139,20 @@ class TestKeywordPins:
     def test_domain_without_frame_raises(self, simple_ae):
         with pytest.raises(Exception, match="both a domain name and a DataFrame"):
             simple_ae.sdtm.pin("DM")
+
+    def test_no_keyword_name_is_reserved(self, simple_ae, dm_ref):
+        """domain/df are positional-only, so even those spellings pin datasets."""
+        ns = simple_ae.sdtm.pin(domain=dm_ref, df=dm_ref)
+        assert {"DOMAIN", "DF"} <= set(ns.pins().keys())
+
+    def test_non_frame_value_raises(self, simple_ae):
+        with pytest.raises(Exception, match="expected a DataFrame or LazyFrame, got str"):
+            simple_ae.sdtm.pin(DM="not a frame")
+
+    def test_old_style_keyword_call_errors_loudly(self, simple_ae, dm_ref):
+        """pin(domain="DM", df=...) is not silently mispinned — the str value errors."""
+        with pytest.raises(Exception, match="expected a DataFrame or LazyFrame"):
+            simple_ae.sdtm.pin(domain="DM", df=dm_ref)
 
     def test_keyword_pins_feed_cross_domain_verbs(self, simple_ae, dm_ref):
         """A keyword pin is a real pin — study_day resolves it."""
@@ -168,14 +215,31 @@ class TestFKCheck:
         assert orphans == set()
 
     def test_fk_check_orphans_warn(self, dm_ref):
-        bad_df = pl.DataFrame({"patient_number": ["01-701-1015", "UNKNOWN_SUBJ"]})
+        bad_df = pl.from_repr("""\
+┌────────────────┐
+│ patient_number │
+│ ---            │
+│ str            │
+╞════════════════╡
+│ 01-701-1015    │
+│ UNKNOWN_SUBJ   │
+└────────────────┘
+""")
         ns = bad_df.sdtm.pin("DM", dm_ref).assign("USUBJID", source="patient_number")
         with pytest.warns(UserWarning, match="FK check"):
             orphans = ns._check_fk("USUBJID", pin="DM")
         assert "UNKNOWN_SUBJ" in orphans
 
     def test_fk_check_error_mode(self, dm_ref):
-        bad_df = pl.DataFrame({"patient_number": ["UNKNOWN_SUBJ"]})
+        bad_df = pl.from_repr("""\
+┌────────────────┐
+│ patient_number │
+│ ---            │
+│ str            │
+╞════════════════╡
+│ UNKNOWN_SUBJ   │
+└────────────────┘
+""")
         ns = (
             bad_df.sdtm.pin("DM", dm_ref)
             .fk_policy("error")
@@ -186,7 +250,15 @@ class TestFKCheck:
             ns._check_fk("SUBJID", pin="DM", ref_col="USUBJID")
 
     def test_fk_check_off(self, dm_ref):
-        bad_df = pl.DataFrame({"patient_number": ["UNKNOWN_SUBJ"]})
+        bad_df = pl.from_repr("""\
+┌────────────────┐
+│ patient_number │
+│ ---            │
+│ str            │
+╞════════════════╡
+│ UNKNOWN_SUBJ   │
+└────────────────┘
+""")
         ns = (
             bad_df.sdtm.pin("DM", dm_ref)
             .fk_policy("off")

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import copy
 import warnings
-from typing import TYPE_CHECKING, Any, ClassVar, Self
+from typing import TYPE_CHECKING, Any, ClassVar, Self, overload
 
 import polars as pl
 
@@ -54,10 +54,31 @@ class PinMixin:
     # Public verbs                                                         #
     # ------------------------------------------------------------------ #
 
+    @overload
+    def pin(
+        self,
+        domain: str,
+        df: pl.DataFrame,
+        /,
+        *,
+        join_on: str | list[str] = "USUBJID",
+        **frames: pl.DataFrame,
+    ) -> Self: ...
+
+    @overload
+    def pin(
+        self,
+        /,
+        *,
+        join_on: str | list[str] = "USUBJID",
+        **frames: pl.DataFrame,
+    ) -> Self: ...
+
     def pin(
         self,
         domain: str | None = None,
         df: pl.DataFrame | None = None,
+        /,
         *,
         join_on: str | list[str] = "USUBJID",
         **frames: pl.DataFrame,
@@ -70,6 +91,9 @@ class PinMixin:
 
         * ``pin("DM", dm_df)`` — one pin, positional.
         * ``pin(DM=dm_df, ADSL=adsl_df)`` — several pins, one call.
+
+        The name/frame pair is positional-only, so *every* keyword except
+        ``join_on`` is a dataset pin — no dataset name is reserved.
 
         Args:
             domain: Logical name (e.g. ``"DM"``, ``"ADSL"``, ``"TV"``).
@@ -84,8 +108,9 @@ class PinMixin:
                 ``.to_frame()`` to materialise.
 
         Raises:
-            DerivationError: When called with no pins, or a *domain*
-                without its *df* (and vice versa).
+            DerivationError: When called with no pins, a name without its
+                frame (or vice versa), or a pinned value that is not a
+                DataFrame/LazyFrame.
 
         Examples:
             Pin DM to an AE pipeline for study-day derivation::
@@ -124,6 +149,11 @@ class PinMixin:
         new = copy.copy(self)
         pinned: dict[str, tuple[pl.DataFrame, list[str]]] = dict(getattr(self, "_pinned", {}))
         for name, frame in pins.items():
+            if not isinstance(frame, (pl.DataFrame, pl.LazyFrame)):
+                raise DerivationError(
+                    f"pin '{name.upper()}': expected a DataFrame or LazyFrame, "
+                    f"got {type(frame).__name__}."
+                )
             key = name.upper()
             if key in pinned:
                 warnings.warn(
