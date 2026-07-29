@@ -22,28 +22,32 @@ from fleet.io.dataset_json import (
 
 @pytest.fixture
 def sample_df() -> pl.DataFrame:
-    return pl.DataFrame(
-        {
-            "STUDYID": ["STUDY01", "STUDY01", "STUDY01"],
-            "USUBJID": ["01-001", "01-002", "01-003"],
-            "SEX": ["M", "F", "M"],
-            "AGE": [45, 32, 67],
-            "WEIGHT": [80.5, 65.2, 92.0],
-            "SAFFL": ["Y", "Y", "N"],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬─────────┬─────┬─────┬────────┬───────┐
+│ STUDYID ┆ USUBJID ┆ SEX ┆ AGE ┆ WEIGHT ┆ SAFFL │
+│ ---     ┆ ---     ┆ --- ┆ --- ┆ ---    ┆ ---   │
+│ str     ┆ str     ┆ str ┆ i64 ┆ f64    ┆ str   │
+╞═════════╪═════════╪═════╪═════╪════════╪═══════╡
+│ STUDY01 ┆ 01-001  ┆ M   ┆ 45  ┆ 80.5   ┆ Y     │
+│ STUDY01 ┆ 01-002  ┆ F   ┆ 32  ┆ 65.2   ┆ Y     │
+│ STUDY01 ┆ 01-003  ┆ M   ┆ 67  ┆ 92.0   ┆ N     │
+└─────────┴─────────┴─────┴─────┴────────┴───────┘
+""")
 
 
 @pytest.fixture
 def mixed_dtype_df() -> pl.DataFrame:
-    return pl.DataFrame(
-        {
-            "STR_COL": ["a", "b", None],
-            "INT_COL": [1, 2, 3],
-            "FLOAT_COL": [1.1, 2.2, 3.3],
-            "BOOL_COL": [True, False, True],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬─────────┬───────────┬──────────┐
+│ STR_COL ┆ INT_COL ┆ FLOAT_COL ┆ BOOL_COL │
+│ ---     ┆ ---     ┆ ---       ┆ ---      │
+│ str     ┆ i64     ┆ f64       ┆ bool     │
+╞═════════╪═════════╪═══════════╪══════════╡
+│ a       ┆ 1       ┆ 1.1       ┆ true     │
+│ b       ┆ 2       ┆ 2.2       ┆ false    │
+│ null    ┆ 3       ┆ 3.3       ┆ true     │
+└─────────┴─────────┴───────────┴──────────┘
+""")
 
 
 # ────────────────────────────────────────────────────────────────────── #
@@ -162,7 +166,15 @@ def test_string_columns_have_length(sample_df: pl.DataFrame, tmp_path: Path) -> 
 
 
 def test_domain_uppercased(tmp_path: Path) -> None:
-    df = pl.DataFrame({"X": [1]})
+    df = pl.from_repr("""\
+┌─────┐
+│ X   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
     out = tmp_path / "test.json"
     save_dataset_json(df, out, domain="dm")
     payload = json.loads(out.read_text())

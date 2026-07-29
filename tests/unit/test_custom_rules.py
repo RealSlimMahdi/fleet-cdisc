@@ -182,7 +182,15 @@ class TestCustomRulesEngineIntegration:
 
                     import polars as pl
 
-                    df = pl.DataFrame({"DOMAIN": ["AE"], "USUBJID": ["001"]})
+                    df = pl.from_repr("""\
+┌────────┬─────────┐
+│ DOMAIN ┆ USUBJID │
+│ ---    ┆ ---     │
+│ str    ┆ str     │
+╞════════╪═════════╡
+│ AE     ┆ 001     │
+└────────┴─────────┘
+""")
 
                     # Call with custom_rules
                     with patch.object(validator, "_write_dataset_json"):
@@ -220,7 +228,15 @@ class TestCustomRulesEngineIntegration:
 
                 import polars as pl
 
-                df = pl.DataFrame({"DOMAIN": ["AE"], "USUBJID": ["001"]})
+                df = pl.from_repr("""\
+┌────────┬─────────┐
+│ DOMAIN ┆ USUBJID │
+│ ---    ┆ ---     │
+│ str    ┆ str     │
+╞════════╪═════════╡
+│ AE     ┆ 001     │
+└────────┴─────────┘
+""")
 
                 with patch.object(validator, "_write_dataset_json"):
                     try:
@@ -249,7 +265,15 @@ class TestCustomRulesEngineIntegration:
 
             import polars as pl
 
-            df = pl.DataFrame({"DOMAIN": ["AE"], "USUBJID": ["001"]})
+            df = pl.from_repr("""\
+┌────────┬─────────┐
+│ DOMAIN ┆ USUBJID │
+│ ---    ┆ ---     │
+│ str    ┆ str     │
+╞════════╪═════════╡
+│ AE     ┆ 001     │
+└────────┴─────────┘
+""")
 
             with patch.object(validator, "_write_dataset_json"):
                 with pytest.raises(FileNotFoundError, match="does not exist"):
@@ -276,7 +300,15 @@ class TestCustomRulesEngineIntegration:
 
                 import polars as pl
 
-                df = pl.DataFrame({"DOMAIN": ["AE"], "USUBJID": ["001"]})
+                df = pl.from_repr("""\
+┌────────┬─────────┐
+│ DOMAIN ┆ USUBJID │
+│ ---    ┆ ---     │
+│ str    ┆ str     │
+╞════════╪═════════╡
+│ AE     ┆ 001     │
+└────────┴─────────┘
+""")
 
                 with patch.object(validator, "_write_dataset_json"):
                     with pytest.raises(NotADirectoryError, match="must be a directory"):

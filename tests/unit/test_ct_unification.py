@@ -77,13 +77,30 @@ class TestFromSpecCTConfig:
             ct={"validate": True, "file": ct_file.name},
             ct_mapping={"F": "F", "M": "M"},
         )
-        df = pl.DataFrame({"sex": ["F", "UNKNOWN"]})
+        df = pl.from_repr("""\
+┌─────────┐
+│ sex     │
+│ ---     │
+│ str     │
+╞═════════╡
+│ F       │
+│ UNKNOWN │
+└─────────┘
+""")
         with pytest.warns(UserWarning, match=r"DM\.SEX.*'sex'.*not in codelist 'C66731'"):
             df.sdtm.from_spec(spec, dataset="DM").to_frame()
 
     def test_validate_true_passthrough_warns(self, tmp_path, ct_file):
         spec = _dm_spec(tmp_path, ct={"validate": True, "file": ct_file.name})
-        df = pl.DataFrame({"sex": ["Female"]})
+        df = pl.from_repr("""\
+┌────────┐
+│ sex    │
+│ ---    │
+│ str    │
+╞════════╡
+│ Female │
+└────────┘
+""")
         with pytest.warns(UserWarning, match=r"not in codelist 'C66731'.*Female"):
             df.sdtm.from_spec(spec, dataset="DM").to_frame()
 
@@ -91,7 +108,16 @@ class TestFromSpecCTConfig:
         """Back-compat: a mapped assign_ct without ct: stays silent."""
         get_validator().load_ct_file(ct_file)
         spec = _dm_spec(tmp_path, ct=None, ct_mapping={"F": "F", "M": "M"})
-        df = pl.DataFrame({"sex": ["F", "UNKNOWN"]})
+        df = pl.from_repr("""\
+┌─────────┐
+│ sex     │
+│ ---     │
+│ str     │
+╞═════════╡
+│ F       │
+│ UNKNOWN │
+└─────────┘
+""")
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             df.sdtm.from_spec(spec, dataset="DM").to_frame()
@@ -101,7 +127,15 @@ class TestFromSpecCTConfig:
         spec = _dm_spec(
             tmp_path, ct={"validate": False, "file": ct_file.name}, ct_mapping={"F": "F"}
         )
-        df = pl.DataFrame({"sex": ["UNKNOWN"]})
+        df = pl.from_repr("""\
+┌─────────┐
+│ sex     │
+│ ---     │
+│ str     │
+╞═════════╡
+│ UNKNOWN │
+└─────────┘
+""")
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             df.sdtm.from_spec(spec, dataset="DM").to_frame()
@@ -109,7 +143,15 @@ class TestFromSpecCTConfig:
 
     def test_unloadable_ct_file_raises_spec_error(self, tmp_path):
         spec = _dm_spec(tmp_path, ct={"validate": True, "file": "missing_ct.yaml"})
-        df = pl.DataFrame({"sex": ["F"]})
+        df = pl.from_repr("""\
+┌─────┐
+│ sex │
+│ --- │
+│ str │
+╞═════╡
+│ F   │
+└─────┘
+""")
         with pytest.raises(SpecError, match=r"ct\.file 'missing_ct\.yaml'"):
             df.sdtm.from_spec(spec, dataset="DM")
 

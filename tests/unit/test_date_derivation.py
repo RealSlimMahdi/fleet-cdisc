@@ -13,27 +13,37 @@ import fleet  # noqa: F401 — triggers namespace registration
 @pytest.fixture
 def dtc_frame():
     """Frame with various --DTC completeness levels."""
-    return pl.DataFrame(
-        {
-            "USUBJID": ["S01", "S02", "S03", "S04", "S05"],
-            "AESTDTC": ["2014-07-15", "2014-07", "2014", "2014-07-15T08:30:00", None],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬─────────────────────┐
+│ USUBJID ┆ AESTDTC             │
+│ ---     ┆ ---                 │
+│ str     ┆ str                 │
+╞═════════╪═════════════════════╡
+│ S01     ┆ 2014-07-15          │
+│ S02     ┆ 2014-07             │
+│ S03     ┆ 2014                │
+│ S04     ┆ 2014-07-15T08:30:00 │
+│ S05     ┆ null                │
+└─────────┴─────────────────────┘
+""")
 
 
 @pytest.fixture
 def vs_dtc_frame():
     """Frame with complete dates for merge/flag scenarios."""
-    return pl.DataFrame(
-        {
-            "USUBJID": ["S01", "S01", "S01", "S02", "S02"],
-            "PARAMCD": ["SYSBP", "SYSBP", "SYSBP", "SYSBP", "SYSBP"],
-            "VSDTC": ["2014-01-01", "2014-01-15", "2014-02-01", "2014-01-01", "2014-01-15"],
-            "AVAL": [120.0, 130.0, 125.0, 118.0, 115.0],
-            "TRTSDT": ["2014-01-10", "2014-01-10", "2014-01-10", "2014-01-05", "2014-01-05"],
-            "TRTEDT": ["2014-02-10", "2014-02-10", "2014-02-10", "2014-02-10", "2014-02-10"],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬─────────┬────────────┬───────┬────────────┬────────────┐
+│ USUBJID ┆ PARAMCD ┆ VSDTC      ┆ AVAL  ┆ TRTSDT     ┆ TRTEDT     │
+│ ---     ┆ ---     ┆ ---        ┆ ---   ┆ ---        ┆ ---        │
+│ str     ┆ str     ┆ str        ┆ f64   ┆ str        ┆ str        │
+╞═════════╪═════════╪════════════╪═══════╪════════════╪════════════╡
+│ S01     ┆ SYSBP   ┆ 2014-01-01 ┆ 120.0 ┆ 2014-01-10 ┆ 2014-02-10 │
+│ S01     ┆ SYSBP   ┆ 2014-01-15 ┆ 130.0 ┆ 2014-01-10 ┆ 2014-02-10 │
+│ S01     ┆ SYSBP   ┆ 2014-02-01 ┆ 125.0 ┆ 2014-01-10 ┆ 2014-02-10 │
+│ S02     ┆ SYSBP   ┆ 2014-01-01 ┆ 118.0 ┆ 2014-01-05 ┆ 2014-02-10 │
+│ S02     ┆ SYSBP   ┆ 2014-01-15 ┆ 115.0 ┆ 2014-01-05 ┆ 2014-02-10 │
+└─────────┴─────────┴────────────┴───────┴────────────┴────────────┘
+""")
 
 
 # ------------------------------------------------------------------ #
@@ -114,7 +124,15 @@ class TestDeriveDt:
 
 class TestDeriveDtm:
     def test_complete_datetime(self):
-        df = pl.DataFrame({"DTC": ["2014-07-15T08:30:00"]})
+        df = pl.from_repr("""\
+┌─────────────────────┐
+│ DTC                 │
+│ ---                 │
+│ str                 │
+╞═════════════════════╡
+│ 2014-07-15T08:30:00 │
+└─────────────────────┘
+""")
         result = df.adam.date("ADTM", source="DTC").to_frame()
         assert result["ADTM"].dtype.is_(pl.Datetime) or str(result["ADTM"].dtype).startswith(
             "Datetime"
@@ -124,14 +142,30 @@ class TestDeriveDtm:
         assert dtm.minute == 30
 
     def test_date_only_time_imputed_first(self):
-        df = pl.DataFrame({"DTC": ["2014-07-15"]})
+        df = pl.from_repr("""\
+┌────────────┐
+│ DTC        │
+│ ---        │
+│ str        │
+╞════════════╡
+│ 2014-07-15 │
+└────────────┘
+""")
         result = df.adam.date("ADTM", source="DTC", impute_time="first").to_frame()
         dtm = result["ADTM"][0]
         assert dtm.hour == 0
         assert dtm.minute == 0
 
     def test_date_only_time_imputed_last(self):
-        df = pl.DataFrame({"DTC": ["2014-07-15"]})
+        df = pl.from_repr("""\
+┌────────────┐
+│ DTC        │
+│ ---        │
+│ str        │
+╞════════════╡
+│ 2014-07-15 │
+└────────────┘
+""")
         result = df.adam.date("ADTM", source="DTC", impute_time="last").to_frame()
         dtm = result["ADTM"][0]
         assert dtm.hour == 23
@@ -139,13 +173,31 @@ class TestDeriveDtm:
         assert dtm.second == 59
 
     def test_date_only_time_imputed_mid(self):
-        df = pl.DataFrame({"DTC": ["2014-07-15"]})
+        df = pl.from_repr("""\
+┌────────────┐
+│ DTC        │
+│ ---        │
+│ str        │
+╞════════════╡
+│ 2014-07-15 │
+└────────────┘
+""")
         result = df.adam.date("ADTM", source="DTC", impute_time="mid").to_frame()
         dtm = result["ADTM"][0]
         assert dtm.hour == 12
 
     def test_tmf_flag_generated(self):
-        df = pl.DataFrame({"DTC": ["2014-07-15T08:30:00", "2014-07-15", None]})
+        df = pl.from_repr("""\
+┌─────────────────────┐
+│ DTC                 │
+│ ---                 │
+│ str                 │
+╞═════════════════════╡
+│ 2014-07-15T08:30:00 │
+│ 2014-07-15          │
+│ null                │
+└─────────────────────┘
+""")
         result = df.adam.date("ADTM", source="DTC", flag=True).to_frame()
         assert "ATMF" in result.columns
         assert result["ATMF"][0] is None  # complete datetime → null
@@ -153,7 +205,15 @@ class TestDeriveDtm:
         assert result["ATMF"][2] is None  # null → null
 
     def test_null_input(self):
-        df = pl.DataFrame({"DTC": pl.Series([None], dtype=pl.String)})
+        df = pl.from_repr("""\
+┌──────┐
+│ DTC  │
+│ ---  │
+│ str  │
+╞══════╡
+│ null │
+└──────┘
+""")
         result = df.adam.date("ADTM", source="DTC").to_frame()
         assert result["ADTM"][0] is None
 
@@ -165,7 +225,15 @@ class TestDeriveDtm:
 
 class TestFormatIso:
     def test_date_to_iso(self):
-        df = pl.DataFrame({"DTC": ["2014-07-15"]})
+        df = pl.from_repr("""\
+┌────────────┐
+│ DTC        │
+│ ---        │
+│ str        │
+╞════════════╡
+│ 2014-07-15 │
+└────────────┘
+""")
         result = (
             df.adam.date("ADT", source="DTC")
             .derivation("ADTC", expression='pl.col("ADT").dt.to_string("%Y-%m-%d")')
@@ -175,7 +243,15 @@ class TestFormatIso:
         assert result["ADTC"].dtype == pl.String
 
     def test_datetime_to_iso(self):
-        df = pl.DataFrame({"DTC": ["2014-07-15T08:30:00"]})
+        df = pl.from_repr("""\
+┌─────────────────────┐
+│ DTC                 │
+│ ---                 │
+│ str                 │
+╞═════════════════════╡
+│ 2014-07-15T08:30:00 │
+└─────────────────────┘
+""")
         result = (
             df.adam.date("ADTM", source="DTC")
             .derivation("ADTMC", expression='pl.col("ADTM").dt.to_string("%Y-%m-%dT%H:%M:%S")')
@@ -192,13 +268,15 @@ class TestFormatIso:
 
 class TestOnTreatmentOpenEnded:
     def test_null_trtedt_open_ended_true(self):
-        df = pl.DataFrame(
-            {
-                "ADT": ["2024-01-15"],
-                "TRTSDT": ["2024-01-10"],
-                "TRTEDT": [None],
-            }
-        )
+        df = pl.from_repr("""\
+┌────────────┬────────────┬────────┐
+│ ADT        ┆ TRTSDT     ┆ TRTEDT │
+│ ---        ┆ ---        ┆ ---    │
+│ str        ┆ str        ┆ null   │
+╞════════════╪════════════╪════════╡
+│ 2024-01-15 ┆ 2024-01-10 ┆ null   │
+└────────────┴────────────┴────────┘
+""")
         result = df.adam.on_treatment(
             "ONTRTFL",
             adt="ADT",
@@ -209,13 +287,15 @@ class TestOnTreatmentOpenEnded:
         assert result["ONTRTFL"][0] == "Y"
 
     def test_null_trtedt_open_ended_false(self):
-        df = pl.DataFrame(
-            {
-                "ADT": ["2024-01-15"],
-                "TRTSDT": ["2024-01-10"],
-                "TRTEDT": [None],
-            }
-        )
+        df = pl.from_repr("""\
+┌────────────┬────────────┬────────┐
+│ ADT        ┆ TRTSDT     ┆ TRTEDT │
+│ ---        ┆ ---        ┆ ---    │
+│ str        ┆ str        ┆ null   │
+╞════════════╪════════════╪════════╡
+│ 2024-01-15 ┆ 2024-01-10 ┆ null   │
+└────────────┴────────────┴────────┘
+""")
         result = df.adam.on_treatment(
             "ONTRTFL",
             adt="ADT",
@@ -233,12 +313,16 @@ class TestOnTreatmentOpenEnded:
 
 class TestFlagFalseValue:
     def test_yn_convention(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S02"],
-                "EXDOSE": [54, 0],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬────────┐
+│ USUBJID ┆ EXDOSE │
+│ ---     ┆ ---    │
+│ str     ┆ i64    │
+╞═════════╪════════╡
+│ S01     ┆ 54     │
+│ S02     ┆ 0      │
+└─────────┴────────┘
+""")
         result = df.adam.adsl.flag(
             "SAFFL", criteria='pl.col("EXDOSE") > 0', false_value="N"
         ).to_frame()
@@ -246,12 +330,16 @@ class TestFlagFalseValue:
         assert result["SAFFL"][1] == "N"
 
     def test_default_y_null(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S02"],
-                "EXDOSE": [54, 0],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬────────┐
+│ USUBJID ┆ EXDOSE │
+│ ---     ┆ ---    │
+│ str     ┆ i64    │
+╞═════════╪════════╡
+│ S01     ┆ 54     │
+│ S02     ┆ 0      │
+└─────────┴────────┘
+""")
         result = df.adam.adsl.flag("SAFFL", criteria='pl.col("EXDOSE") > 0').to_frame()
         assert result["SAFFL"][0] == "Y"
         assert result["SAFFL"][1] is None
@@ -265,14 +353,17 @@ class TestFlagFalseValue:
 class TestFlagMaxSeverity:
     def test_max_severity_flags_worst(self):
         """Use flag(criteria='max') with numeric-encoded severity."""
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S01", "S01"],
-                "AESEV": ["SEVERE", "SEVERE", "MILD"],
-                "AESEVN": [3, 3, 1],
-                "AEBODSYS": ["Nervous", "Nervous", "Nervous"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬────────┬────────┬──────────┐
+│ USUBJID ┆ AESEV  ┆ AESEVN ┆ AEBODSYS │
+│ ---     ┆ ---    ┆ ---    ┆ ---      │
+│ str     ┆ str    ┆ i64    ┆ str      │
+╞═════════╪════════╪════════╪══════════╡
+│ S01     ┆ SEVERE ┆ 3      ┆ Nervous  │
+│ S01     ┆ SEVERE ┆ 3      ┆ Nervous  │
+│ S01     ┆ MILD   ┆ 1      ┆ Nervous  │
+└─────────┴────────┴────────┴──────────┘
+""")
         result = df.adam.occds.flag(
             "AOCSFL",
             criteria="max",
@@ -286,13 +377,17 @@ class TestFlagMaxSeverity:
 
     def test_max_with_expression_filter(self):
         """Flag worst severity using expression-based criteria."""
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S01", "S01"],
-                "AESEV": ["SEVERE", "SEVERE", "MILD"],
-                "AESEVN": [3, 3, 1],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬────────┬────────┐
+│ USUBJID ┆ AESEV  ┆ AESEVN │
+│ ---     ┆ ---    ┆ ---    │
+│ str     ┆ str    ┆ i64    │
+╞═════════╪════════╪════════╡
+│ S01     ┆ SEVERE ┆ 3      │
+│ S01     ┆ SEVERE ┆ 3      │
+│ S01     ┆ MILD   ┆ 1      │
+└─────────┴────────┴────────┘
+""")
         result = df.adam.occds.flag(
             "AOCSFL",
             criteria="max",
@@ -311,14 +406,18 @@ class TestFlagMaxSeverity:
 class TestFlagWherePreFilter:
     def test_last_within_where_subset(self):
         """Ranking should be scoped to rows matching where clause."""
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S01", "S01", "S01"],
-                "PARAMCD": ["BP", "BP", "BP", "BP"],
-                "ADT": ["2024-01-01", "2024-01-15", "2024-01-20", "2024-02-01"],
-                "ONTRTFL": ["Y", "Y", None, None],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬─────────┬────────────┬─────────┐
+│ USUBJID ┆ PARAMCD ┆ ADT        ┆ ONTRTFL │
+│ ---     ┆ ---     ┆ ---        ┆ ---     │
+│ str     ┆ str     ┆ str        ┆ str     │
+╞═════════╪═════════╪════════════╪═════════╡
+│ S01     ┆ BP      ┆ 2024-01-01 ┆ Y       │
+│ S01     ┆ BP      ┆ 2024-01-15 ┆ Y       │
+│ S01     ┆ BP      ┆ 2024-01-20 ┆ null    │
+│ S01     ┆ BP      ┆ 2024-02-01 ┆ null    │
+└─────────┴─────────┴────────────┴─────────┘
+""")
         result = df.adam.flag(
             "LSTOBSFL",
             criteria="last",
@@ -341,13 +440,15 @@ class TestFlagWherePreFilter:
 
 class TestAgeFromDates:
     def test_basic_age_calculation(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S01"],
-                "BRTHDT": ["1950-06-15"],
-                "RANDDT": ["2014-01-15"],
-            }
-        ).with_columns(
+        df = pl.from_repr("""\
+┌─────────┬────────────┬────────────┐
+│ USUBJID ┆ BRTHDT     ┆ RANDDT     │
+│ ---     ┆ ---        ┆ ---        │
+│ str     ┆ str        ┆ str        │
+╞═════════╪════════════╪════════════╡
+│ S01     ┆ 1950-06-15 ┆ 2014-01-15 │
+└─────────┴────────────┴────────────┘
+""").with_columns(
             pl.col("BRTHDT").str.to_date("%Y-%m-%d"),
             pl.col("RANDDT").str.to_date("%Y-%m-%d"),
         )
@@ -358,13 +459,15 @@ class TestAgeFromDates:
         assert 63.0 <= age <= 64.0  # approximately 63.6
 
     def test_null_date_returns_null(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S01"],
-                "BRTHDT": [None],
-                "RANDDT": ["2014-01-15"],
-            }
-        ).with_columns(
+        df = pl.from_repr("""\
+┌─────────┬────────┬────────────┐
+│ USUBJID ┆ BRTHDT ┆ RANDDT     │
+│ ---     ┆ ---    ┆ ---        │
+│ str     ┆ null   ┆ str        │
+╞═════════╪════════╪════════════╡
+│ S01     ┆ null   ┆ 2014-01-15 │
+└─────────┴────────┴────────────┘
+""").with_columns(
             pl.col("BRTHDT").cast(pl.Date),
             pl.col("RANDDT").str.to_date("%Y-%m-%d"),
         )

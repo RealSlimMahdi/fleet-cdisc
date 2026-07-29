@@ -183,7 +183,18 @@ class TestAssignCTWithMessyData:
 
     def test_unmapped_value_propagates_as_null_or_passthrough(self):
         """Source value not in ct_mapping should not silently map to wrong term."""
-        df = pl.DataFrame({"sex": ["F", "M", "UNKNOWN", None]})
+        df = pl.from_repr("""\
+┌─────────┐
+│ sex     │
+│ ---     │
+│ str     │
+╞═════════╡
+│ F       │
+│ M       │
+│ UNKNOWN │
+│ null    │
+└─────────┘
+""")
         result = df.sdtm.assign(
             "SEX",
             source="sex",
@@ -221,7 +232,17 @@ class TestAssignCTValidateValues:
         validator = CTValidator.get_instance()
         validator.load_ct_file(ct_sample_path)
 
-        df = pl.DataFrame({"sex": ["M", "Female", "f"]})
+        df = pl.from_repr("""\
+┌────────┐
+│ sex    │
+│ ---    │
+│ str    │
+╞════════╡
+│ M      │
+│ Female │
+│ f      │
+└────────┘
+""")
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             result = df.sdtm.assign(
@@ -248,7 +269,17 @@ class TestAssignCTValidateValues:
         validator = CTValidator.get_instance()
         validator.load_ct_file(ct_sample_path)
 
-        df = pl.DataFrame({"sex": ["M", "F", "U"]})
+        df = pl.from_repr("""\
+┌─────┐
+│ sex │
+│ --- │
+│ str │
+╞═════╡
+│ M   │
+│ F   │
+│ U   │
+└─────┘
+""")
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             df.sdtm.assign(
@@ -270,7 +301,15 @@ class TestAssignCTValidateValues:
         validator = CTValidator.get_instance()
         validator.load_ct_file(ct_sample_path)
 
-        df = pl.DataFrame({"sex": ["Invalid"]})
+        df = pl.from_repr("""\
+┌─────────┐
+│ sex     │
+│ ---     │
+│ str     │
+╞═════════╡
+│ Invalid │
+└─────────┘
+""")
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             df.sdtm.assign(
@@ -292,7 +331,17 @@ class TestAssignCTValidateValues:
         validator = CTValidator.get_instance()
         validator.load_ct_file(ct_sample_path)
 
-        df = pl.DataFrame({"sex": ["M", None, "F"]})
+        df = pl.from_repr("""\
+┌──────┐
+│ sex  │
+│ ---  │
+│ str  │
+╞══════╡
+│ M    │
+│ null │
+│ F    │
+└──────┘
+""")
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             df.sdtm.assign(
@@ -326,7 +375,17 @@ class TestAssignCTValidateValues:
                 INTRAVENOUS = "INTRAVENOUS"
                 SUBCUTANEOUS = "SUBCUTANEOUS"
 
-            df = pl.DataFrame({"route": ["Oral", "ORAL", "IV"]})
+            df = pl.from_repr("""\
+┌───────┐
+│ route │
+│ ---   │
+│ str   │
+╞═══════╡
+│ Oral  │
+│ ORAL  │
+│ IV    │
+└───────┘
+""")
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 result = df.sdtm.assign(

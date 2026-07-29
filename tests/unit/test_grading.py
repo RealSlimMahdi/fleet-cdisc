@@ -7,7 +7,6 @@ combine-grades logic, and the ``atoxgr`` / ``combine_grades`` namespace verbs.
 from __future__ import annotations
 
 import json
-from datetime import date
 from pathlib import Path
 
 import polars as pl
@@ -64,15 +63,19 @@ def anemia_criteria() -> TermCriteria:
 @pytest.fixture()
 def anemia_df() -> pl.DataFrame:
     """Lab rows exercising every Anemia grade boundary."""
-    return pl.DataFrame(
-        {
-            "USUBJID": ["S1", "S2", "S3", "S4", "S5"],
-            "PARAMCD": ["Anemia"] * 5,
-            "AVAL": [75.0, 90.0, 130.0, 150.0, None],
-            "ANRLO": [140.0, 140.0, 140.0, 140.0, 140.0],
-            "AVALU": ["g/L"] * 5,
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬─────────┬───────┬───────┬───────┐
+│ USUBJID ┆ PARAMCD ┆ AVAL  ┆ ANRLO ┆ AVALU │
+│ ---     ┆ ---     ┆ ---   ┆ ---   ┆ ---   │
+│ str     ┆ str     ┆ f64   ┆ f64   ┆ str   │
+╞═════════╪═════════╪═══════╪═══════╪═══════╡
+│ S1      ┆ Anemia  ┆ 75.0  ┆ 140.0 ┆ g/L   │
+│ S2      ┆ Anemia  ┆ 90.0  ┆ 140.0 ┆ g/L   │
+│ S3      ┆ Anemia  ┆ 130.0 ┆ 140.0 ┆ g/L   │
+│ S4      ┆ Anemia  ┆ 150.0 ┆ 140.0 ┆ g/L   │
+│ S5      ┆ Anemia  ┆ null  ┆ 140.0 ┆ g/L   │
+└─────────┴─────────┴───────┴───────┴───────┘
+""")
 
 
 @pytest.fixture()
@@ -230,46 +233,75 @@ class TestCompiler:
     def test_simple_literal_comparison(self, anemia_criteria):
         """AVAL < 80 → grade 3."""
         expr = compile_term_expr(anemia_criteria)
-        df = pl.DataFrame({"AVAL": [75.0], "ANRLO": [140.0]})
+        df = pl.from_repr("""\
+┌──────┬───────┐
+│ AVAL ┆ ANRLO │
+│ ---  ┆ ---   │
+│ f64  ┆ f64   │
+╞══════╪═══════╡
+│ 75.0 ┆ 140.0 │
+└──────┴───────┘
+""")
         result = df.with_columns(expr.alias("GR"))
         assert result["GR"][0] == "3"
 
     def test_variable_comparison(self, anemia_criteria):
         """AVAL < ANRLO → grade 1 (when above literal thresholds)."""
         expr = compile_term_expr(anemia_criteria)
-        df = pl.DataFrame({"AVAL": [130.0], "ANRLO": [140.0]})
+        df = pl.from_repr("""\
+┌───────┬───────┐
+│ AVAL  ┆ ANRLO │
+│ ---   ┆ ---   │
+│ f64   ┆ f64   │
+╞═══════╪═══════╡
+│ 130.0 ┆ 140.0 │
+└───────┴───────┘
+""")
         result = df.with_columns(expr.alias("GR"))
         assert result["GR"][0] == "1"
 
     def test_multiplier_comparison(self, alt_criteria, indicators):
         """AVAL > 5*ANRHI → grade 3 (baseline normal)."""
         expr = compile_term_expr(alt_criteria, indicators=indicators)
-        df = pl.DataFrame(
-            {
-                "AVAL": [300.0],
-                "ANRHI": [40.0],
-                "BASE": [35.0],
-                "BNRIND": ["NORMAL"],
-            }
-        )
+        df = pl.from_repr("""\
+┌───────┬───────┬──────┬────────┐
+│ AVAL  ┆ ANRHI ┆ BASE ┆ BNRIND │
+│ ---   ┆ ---   ┆ ---  ┆ ---    │
+│ f64   ┆ f64   ┆ f64  ┆ str    │
+╞═══════╪═══════╪══════╪════════╡
+│ 300.0 ┆ 40.0  ┆ 35.0 ┆ NORMAL │
+└───────┴───────┴──────┴────────┘
+""")
         result = df.with_columns(expr.alias("GR"))
         assert result["GR"][0] == "3"
 
     def test_na_check_produces_null(self, anemia_criteria):
         """Null AVAL triggers global na_check → null grade."""
         expr = compile_term_expr(anemia_criteria)
-        df = pl.DataFrame(
-            {"AVAL": [None], "ANRLO": [140.0]}, schema={"AVAL": pl.Float64, "ANRLO": pl.Float64}
-        )
+        df = pl.from_repr("""\
+┌──────┬───────┐
+│ AVAL ┆ ANRLO │
+│ ---  ┆ ---   │
+│ f64  ┆ f64   │
+╞══════╪═══════╡
+│ null ┆ 140.0 │
+└──────┴───────┘
+""")
         result = df.with_columns(expr.alias("GR"))
         assert result["GR"][0] is None
 
     def test_na_guard_per_grade(self, anemia_criteria):
         """Null ANRLO → null (via na_guard on grade 1) instead of grade 0."""
         expr = compile_term_expr(anemia_criteria)
-        df = pl.DataFrame(
-            {"AVAL": [130.0], "ANRLO": [None]}, schema={"AVAL": pl.Float64, "ANRLO": pl.Float64}
-        )
+        df = pl.from_repr("""\
+┌───────┬───────┐
+│ AVAL  ┆ ANRLO │
+│ ---   ┆ ---   │
+│ f64   ┆ f64   │
+╞═══════╪═══════╡
+│ 130.0 ┆ null  │
+└───────┴───────┘
+""")
         result = df.with_columns(expr.alias("GR"))
         assert result["GR"][0] is None
 
@@ -278,105 +310,130 @@ class TestCompiler:
         expr = compile_term_expr(alt_criteria, indicators=indicators)
 
         # NORMAL baseline: 300 > 5*40 → grade 3
-        normal = pl.DataFrame(
-            {
-                "AVAL": [300.0],
-                "ANRHI": [40.0],
-                "BASE": [35.0],
-                "BNRIND": ["NORMAL"],
-            }
-        ).with_columns(expr.alias("GR"))
+        normal = pl.from_repr("""\
+┌───────┬───────┬──────┬────────┐
+│ AVAL  ┆ ANRHI ┆ BASE ┆ BNRIND │
+│ ---   ┆ ---   ┆ ---  ┆ ---    │
+│ f64   ┆ f64   ┆ f64  ┆ str    │
+╞═══════╪═══════╪══════╪════════╡
+│ 300.0 ┆ 40.0  ┆ 35.0 ┆ NORMAL │
+└───────┴───────┴──────┴────────┘
+""").with_columns(expr.alias("GR"))
         assert normal["GR"][0] == "3"
 
         # HIGH baseline: 300 > 5*35=175 → grade 3 (via BASE branch)
-        high = pl.DataFrame(
-            {
-                "AVAL": [300.0],
-                "ANRHI": [40.0],
-                "BASE": [35.0],
-                "BNRIND": ["HIGH"],
-            }
-        ).with_columns(expr.alias("GR"))
+        high = pl.from_repr("""\
+┌───────┬───────┬──────┬────────┐
+│ AVAL  ┆ ANRHI ┆ BASE ┆ BNRIND │
+│ ---   ┆ ---   ┆ ---  ┆ ---    │
+│ f64   ┆ f64   ┆ f64  ┆ str    │
+╞═══════╪═══════╪══════╪════════╡
+│ 300.0 ┆ 40.0  ┆ 35.0 ┆ HIGH   │
+└───────┴───────┴──────┴────────┘
+""").with_columns(expr.alias("GR"))
         assert high["GR"][0] == "3"
 
         # HIGH baseline, low AVAL: 10 vs 1.5*35=52.5 → grade 0
-        high_low = pl.DataFrame(
-            {
-                "AVAL": [10.0],
-                "ANRHI": [40.0],
-                "BASE": [35.0],
-                "BNRIND": ["HIGH"],
-            }
-        ).with_columns(expr.alias("GR"))
+        high_low = pl.from_repr("""\
+┌──────┬───────┬──────┬────────┐
+│ AVAL ┆ ANRHI ┆ BASE ┆ BNRIND │
+│ ---  ┆ ---   ┆ ---  ┆ ---    │
+│ f64  ┆ f64   ┆ f64  ┆ str    │
+╞══════╪═══════╪══════╪════════╡
+│ 10.0 ┆ 40.0  ┆ 35.0 ┆ HIGH   │
+└──────┴───────┴──────┴────────┘
+""").with_columns(expr.alias("GR"))
         assert high_low["GR"][0] == "0"
 
     def test_compile_filter_age_days(self):
         """Parse age_days(BRTHDT, ADT) > 28 and evaluate."""
         expr = compile_filter_expr("age_days(BRTHDT, ADT) > 28")
-        df = pl.DataFrame(
-            {
-                "BRTHDT": [date(2024, 1, 1), date(2024, 1, 1)],
-                "ADT": [date(2024, 3, 1), date(2024, 1, 20)],
-            }
-        )
+        df = pl.from_repr("""\
+┌────────────┬────────────┐
+│ BRTHDT     ┆ ADT        │
+│ ---        ┆ ---        │
+│ date       ┆ date       │
+╞════════════╪════════════╡
+│ 2024-01-01 ┆ 2024-03-01 │
+│ 2024-01-01 ┆ 2024-01-20 │
+└────────────┴────────────┘
+""")
         result = df.with_columns(expr.alias("PASS"))
         assert result["PASS"].to_list() == [True, False]
 
     def test_compile_filter_age_years(self):
         """Parse age_years(BRTHDT, ADT) >= 18."""
         expr = compile_filter_expr("age_years(BRTHDT, ADT) >= 18")
-        df = pl.DataFrame(
-            {
-                "BRTHDT": [date(2000, 6, 15), date(2015, 6, 15)],
-                "ADT": [date(2024, 6, 15), date(2024, 6, 15)],
-            }
-        )
+        df = pl.from_repr("""\
+┌────────────┬────────────┐
+│ BRTHDT     ┆ ADT        │
+│ ---        ┆ ---        │
+│ date       ┆ date       │
+╞════════════╪════════════╡
+│ 2000-06-15 ┆ 2024-06-15 │
+│ 2015-06-15 ┆ 2024-06-15 │
+└────────────┴────────────┘
+""")
         result = df.with_columns(expr.alias("PASS"))
         assert result["PASS"].to_list() == [True, False]
 
     def test_combine_grades_low_positive(self):
         """Low grade present → negative string (e.g. "-3")."""
         expr = combine_grades_expr("ATOXGRL", "ATOXGRH")
-        df = pl.DataFrame(
-            {
-                "ATOXGRL": ["3"],
-                "ATOXGRH": [None],
-            },
-            schema={"ATOXGRL": pl.Utf8, "ATOXGRH": pl.Utf8},
-        )
+        df = pl.from_repr("""\
+┌─────────┬─────────┐
+│ ATOXGRL ┆ ATOXGRH │
+│ ---     ┆ ---     │
+│ str     ┆ str     │
+╞═════════╪═════════╡
+│ 3       ┆ null    │
+└─────────┴─────────┘
+""")
         result = df.with_columns(expr.alias("ATOXGR"))
         assert result["ATOXGR"][0] == "-3"
 
     def test_combine_grades_high_positive(self):
         """High grade present → positive string (e.g. "3")."""
         expr = combine_grades_expr("ATOXGRL", "ATOXGRH")
-        df = pl.DataFrame(
-            {
-                "ATOXGRL": [None],
-                "ATOXGRH": ["3"],
-            },
-            schema={"ATOXGRL": pl.Utf8, "ATOXGRH": pl.Utf8},
-        )
+        df = pl.from_repr("""\
+┌─────────┬─────────┐
+│ ATOXGRL ┆ ATOXGRH │
+│ ---     ┆ ---     │
+│ str     ┆ str     │
+╞═════════╪═════════╡
+│ null    ┆ 3       │
+└─────────┴─────────┘
+""")
         result = df.with_columns(expr.alias("ATOXGR"))
         assert result["ATOXGR"][0] == "3"
 
     def test_combine_grades_both_zero(self):
         """Both sides zero → "0"."""
         expr = combine_grades_expr("ATOXGRL", "ATOXGRH")
-        df = pl.DataFrame({"ATOXGRL": ["0"], "ATOXGRH": ["0"]})
+        df = pl.from_repr("""\
+┌─────────┬─────────┐
+│ ATOXGRL ┆ ATOXGRH │
+│ ---     ┆ ---     │
+│ str     ┆ str     │
+╞═════════╪═════════╡
+│ 0       ┆ 0       │
+└─────────┴─────────┘
+""")
         result = df.with_columns(expr.alias("ATOXGR"))
         assert result["ATOXGR"][0] == "0"
 
     def test_combine_grades_both_null(self):
         """Both sides null → null."""
         expr = combine_grades_expr("ATOXGRL", "ATOXGRH")
-        df = pl.DataFrame(
-            {
-                "ATOXGRL": [None],
-                "ATOXGRH": [None],
-            },
-            schema={"ATOXGRL": pl.Utf8, "ATOXGRH": pl.Utf8},
-        )
+        df = pl.from_repr("""\
+┌─────────┬─────────┐
+│ ATOXGRL ┆ ATOXGRH │
+│ ---     ┆ ---     │
+│ str     ┆ str     │
+╞═════════╪═════════╡
+│ null    ┆ null    │
+└─────────┴─────────┘
+""")
         result = df.with_columns(expr.alias("ATOXGR"))
         assert result["ATOXGR"][0] is None
 
@@ -407,16 +464,16 @@ class TestAtoxgrVerb:
 
     def test_ctcae_v5_alt_increased(self):
         """ALT with BNRIND branching: 300/40/NORMAL → grade 3."""
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["A1", "A2"],
-                "PARAMCD": ["Alanine aminotransferase increased"] * 2,
-                "AVAL": [300.0, 10.0],
-                "ANRHI": [40.0, 40.0],
-                "BASE": [35.0, 35.0],
-                "BNRIND": ["NORMAL", "NORMAL"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬────────────────────────────────────┬───────┬───────┬──────┬────────┐
+│ USUBJID ┆ PARAMCD                            ┆ AVAL  ┆ ANRHI ┆ BASE ┆ BNRIND │
+│ ---     ┆ ---                                ┆ ---   ┆ ---   ┆ ---  ┆ ---    │
+│ str     ┆ str                                ┆ f64   ┆ f64   ┆ f64  ┆ str    │
+╞═════════╪════════════════════════════════════╪═══════╪═══════╪══════╪════════╡
+│ A1      ┆ Alanine aminotransferase increased ┆ 300.0 ┆ 40.0  ┆ 35.0 ┆ NORMAL │
+│ A2      ┆ Alanine aminotransferase increased ┆ 10.0  ┆ 40.0  ┆ 35.0 ┆ NORMAL │
+└─────────┴────────────────────────────────────┴───────┴───────┴──────┴────────┘
+""")
         result = (
             df.adam.atoxgr(
                 "ATOXGRH",
@@ -455,15 +512,16 @@ class TestAtoxgrVerb:
 
     def test_multiple_terms_in_one_dataset(self):
         """Dataset with Anemia + Platelet count decreased graded together."""
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S1", "S2"],
-                "PARAMCD": ["Anemia", "Platelet count decreased"],
-                "AVAL": [75.0, 40.0],
-                "ANRLO": [140.0, 150.0],
-                "AVALU": ["g/L", "10^9/L"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬──────────────────────────┬──────┬───────┬────────┐
+│ USUBJID ┆ PARAMCD                  ┆ AVAL ┆ ANRLO ┆ AVALU  │
+│ ---     ┆ ---                      ┆ ---  ┆ ---   ┆ ---    │
+│ str     ┆ str                      ┆ f64  ┆ f64   ┆ str    │
+╞═════════╪══════════════════════════╪══════╪═══════╪════════╡
+│ S1      ┆ Anemia                   ┆ 75.0 ┆ 140.0 ┆ g/L    │
+│ S2      ┆ Platelet count decreased ┆ 40.0 ┆ 150.0 ┆ 10^9/L │
+└─────────┴──────────────────────────┴──────┴───────┴────────┘
+""")
         result = (
             df.adam.atoxgr(
                 "ATOXGRL",
@@ -505,14 +563,15 @@ class TestAtoxgrVerb:
 
     def test_unmatched_term_gets_null(self):
         """A term not in the criteria file receives null grade."""
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["U1"],
-                "PARAMCD": ["Completely Made Up Term"],
-                "AVAL": [999.0],
-                "ANRLO": [10.0],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬─────────────────────────┬───────┬───────┐
+│ USUBJID ┆ PARAMCD                 ┆ AVAL  ┆ ANRLO │
+│ ---     ┆ ---                     ┆ ---   ┆ ---   │
+│ str     ┆ str                     ┆ f64   ┆ f64   │
+╞═════════╪═════════════════════════╪═══════╪═══════╡
+│ U1      ┆ Completely Made Up Term ┆ 999.0 ┆ 10.0  │
+└─────────┴─────────────────────────┴───────┴───────┘
+""")
         result = df.adam.atoxgr(
             "ATOXGRL",
             system="ctcae_v5",
@@ -526,14 +585,16 @@ class TestAtoxgrVerb:
         cf = load_criteria("daids")
         assert cf.version == "daids"
 
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["D1", "D2"],
-                "PARAMCD": ["Acidosis", "Acidosis"],
-                "AVAL": [7.2, 7.4],
-                "ANRLO": [7.35, 7.35],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬──────────┬──────┬───────┐
+│ USUBJID ┆ PARAMCD  ┆ AVAL ┆ ANRLO │
+│ ---     ┆ ---      ┆ ---  ┆ ---   │
+│ str     ┆ str      ┆ f64  ┆ f64   │
+╞═════════╪══════════╪══════╪═══════╡
+│ D1      ┆ Acidosis ┆ 7.2  ┆ 7.35  │
+│ D2      ┆ Acidosis ┆ 7.4  ┆ 7.35  │
+└─────────┴──────────┴──────┴───────┘
+""")
         result = (
             df.adam.atoxgr(
                 "ATOXGRL",
@@ -551,15 +612,18 @@ class TestAtoxgrVerb:
 
     def test_combine_grades_full_pipeline(self):
         """Both directions graded, then combined into signed ATOXGR."""
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S1", "S2", "S3", "S4"],
-                "PARAMCD": ["Anemia", "Anemia", "Anemia", "Anemia"],
-                "AVAL": [75.0, 150.0, 150.0, 130.0],
-                "ANRLO": [140.0, 140.0, 140.0, 140.0],
-                "AVALU": ["g/L"] * 4,
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬─────────┬───────┬───────┬───────┐
+│ USUBJID ┆ PARAMCD ┆ AVAL  ┆ ANRLO ┆ AVALU │
+│ ---     ┆ ---     ┆ ---   ┆ ---   ┆ ---   │
+│ str     ┆ str     ┆ f64   ┆ f64   ┆ str   │
+╞═════════╪═════════╪═══════╪═══════╪═══════╡
+│ S1      ┆ Anemia  ┆ 75.0  ┆ 140.0 ┆ g/L   │
+│ S2      ┆ Anemia  ┆ 150.0 ┆ 140.0 ┆ g/L   │
+│ S3      ┆ Anemia  ┆ 150.0 ┆ 140.0 ┆ g/L   │
+│ S4      ┆ Anemia  ┆ 130.0 ┆ 140.0 ┆ g/L   │
+└─────────┴─────────┴───────┴───────┴───────┘
+""")
         graded = df.adam.atoxgr(
             "ATOXGRL",
             system="ctcae_v5",
@@ -611,13 +675,17 @@ class TestAtoxgrVerb:
         p = tmp_path / "custom_grading.json"
         p.write_text(json.dumps(custom))
 
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["C1", "C2", "C3"],
-                "PARAMCD": ["MyParam"] * 3,
-                "AVAL": [150.0, 75.0, 30.0],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬─────────┬───────┐
+│ USUBJID ┆ PARAMCD ┆ AVAL  │
+│ ---     ┆ ---     ┆ ---   │
+│ str     ┆ str     ┆ f64   │
+╞═════════╪═════════╪═══════╡
+│ C1      ┆ MyParam ┆ 150.0 │
+│ C2      ┆ MyParam ┆ 75.0  │
+│ C3      ┆ MyParam ┆ 30.0  │
+└─────────┴─────────┴───────┘
+""")
         result = (
             df.adam.atoxgr(
                 "ATOXGRH",

@@ -570,7 +570,15 @@ def test_validate_defaults_resolve_from_config(
 
     sdtm_dir = study / "data" / "sdtm"
     sdtm_dir.mkdir(parents=True)
-    pl.DataFrame({"USUBJID": ["1"]}).write_parquet(sdtm_dir / "dm.parquet")
+    pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ 1       │
+└─────────┘
+""").write_parquet(sdtm_dir / "dm.parquet")
     rules_dir = study / "metadata" / "custom_rules"
     rules_dir.mkdir(parents=True)
     (study / "study_config.yaml").write_text(

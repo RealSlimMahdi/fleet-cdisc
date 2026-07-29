@@ -34,88 +34,41 @@ from fleet.tlg._ard import (
 @pytest.fixture()
 def adsl() -> pl.DataFrame:
     """Minimal ADSL with 6 subjects across 3 arms."""
-    return pl.DataFrame(
-        {
-            "USUBJID": [
-                "SUBJ-01",
-                "SUBJ-02",
-                "SUBJ-03",
-                "SUBJ-04",
-                "SUBJ-05",
-                "SUBJ-06",
-            ],
-            "TRTA": [
-                "Placebo",
-                "Placebo",
-                "Drug A",
-                "Drug A",
-                "Drug B",
-                "Drug B",
-            ],
-            "SAFFL": ["Y", "Y", "Y", "Y", "Y", "N"],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬─────────┬───────┐
+│ USUBJID ┆ TRTA    ┆ SAFFL │
+│ ---     ┆ ---     ┆ ---   │
+│ str     ┆ str     ┆ str   │
+╞═════════╪═════════╪═══════╡
+│ SUBJ-01 ┆ Placebo ┆ Y     │
+│ SUBJ-02 ┆ Placebo ┆ Y     │
+│ SUBJ-03 ┆ Drug A  ┆ Y     │
+│ SUBJ-04 ┆ Drug A  ┆ Y     │
+│ SUBJ-05 ┆ Drug B  ┆ Y     │
+│ SUBJ-06 ┆ Drug B  ┆ N     │
+└─────────┴─────────┴───────┘
+""")
 
 
 @pytest.fixture()
 def adae() -> pl.DataFrame:
     """Minimal ADAE-like DataFrame for AE summary tests."""
-    return pl.DataFrame(
-        {
-            "USUBJID": [
-                "SUBJ-01",
-                "SUBJ-01",
-                "SUBJ-02",
-                "SUBJ-03",
-                "SUBJ-03",
-                "SUBJ-03",
-                "SUBJ-04",
-                "SUBJ-05",
-            ],
-            "TRTA": [
-                "Placebo",
-                "Placebo",
-                "Placebo",
-                "Drug A",
-                "Drug A",
-                "Drug A",
-                "Drug A",
-                "Drug B",
-            ],
-            "AEBODSYS": [
-                "NERVOUS",
-                "GASTRO",
-                "NERVOUS",
-                "NERVOUS",
-                "NERVOUS",
-                "GASTRO",
-                "GASTRO",
-                "NERVOUS",
-            ],
-            "AEDECOD": [
-                "HEADACHE",
-                "NAUSEA",
-                "HEADACHE",
-                "HEADACHE",
-                "DIZZINESS",
-                "NAUSEA",
-                "NAUSEA",
-                "HEADACHE",
-            ],
-            "AESEV": [
-                "MILD",
-                "MODERATE",
-                "MILD",
-                "MILD",
-                "MILD",
-                "MODERATE",
-                "MILD",
-                "MILD",
-            ],
-            "AESER": ["N", "N", "N", "N", "N", "Y", "N", "N"],
-            "SAFFL": ["Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y"],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬─────────┬──────────┬───────────┬──────────┬───────┬───────┐
+│ USUBJID ┆ TRTA    ┆ AEBODSYS ┆ AEDECOD   ┆ AESEV    ┆ AESER ┆ SAFFL │
+│ ---     ┆ ---     ┆ ---      ┆ ---       ┆ ---      ┆ ---   ┆ ---   │
+│ str     ┆ str     ┆ str      ┆ str       ┆ str      ┆ str   ┆ str   │
+╞═════════╪═════════╪══════════╪═══════════╪══════════╪═══════╪═══════╡
+│ SUBJ-01 ┆ Placebo ┆ NERVOUS  ┆ HEADACHE  ┆ MILD     ┆ N     ┆ Y     │
+│ SUBJ-01 ┆ Placebo ┆ GASTRO   ┆ NAUSEA    ┆ MODERATE ┆ N     ┆ Y     │
+│ SUBJ-02 ┆ Placebo ┆ NERVOUS  ┆ HEADACHE  ┆ MILD     ┆ N     ┆ Y     │
+│ SUBJ-03 ┆ Drug A  ┆ NERVOUS  ┆ HEADACHE  ┆ MILD     ┆ N     ┆ Y     │
+│ SUBJ-03 ┆ Drug A  ┆ NERVOUS  ┆ DIZZINESS ┆ MILD     ┆ N     ┆ Y     │
+│ SUBJ-03 ┆ Drug A  ┆ GASTRO   ┆ NAUSEA    ┆ MODERATE ┆ Y     ┆ Y     │
+│ SUBJ-04 ┆ Drug A  ┆ GASTRO   ┆ NAUSEA    ┆ MILD     ┆ N     ┆ Y     │
+│ SUBJ-05 ┆ Drug B  ┆ NERVOUS  ┆ HEADACHE  ┆ MILD     ┆ N     ┆ Y     │
+└─────────┴─────────┴──────────┴───────────┴──────────┴───────┴───────┘
+""")
 
 
 # ================================================================== #
@@ -127,7 +80,15 @@ class TestStructuralValidation:
     """Missing columns → SchemaError."""
 
     def test_missing_required_columns_raises(self) -> None:
-        df = pl.DataFrame({"USUBJID": ["A"], "TRTA": ["Placebo"]})
+        df = pl.from_repr("""\
+┌─────────┬─────────┐
+│ USUBJID ┆ TRTA    │
+│ ---     ┆ ---     │
+│ str     ┆ str     │
+╞═════════╪═════════╡
+│ A       ┆ Placebo │
+└─────────┴─────────┘
+""")
         with pytest.raises(SchemaError, match="missing.*AEDECOD"):
             df.tlg.ae.t_summary(groupby="TRTA")
 
@@ -143,7 +104,15 @@ class TestStructuralValidation:
             adae.tlg.ae.t_summary(groupby="TRTA")
 
     def test_listing_missing_columns_raises(self) -> None:
-        df = pl.DataFrame({"USUBJID": ["A"]})
+        df = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ A       │
+└─────────┘
+""")
         with pytest.raises(SchemaError, match="missing.*TRTA"):
             df.tlg.ae.l_listing()
 
@@ -161,7 +130,16 @@ class TestContentValidation:
             required_columns=["FLAG"],
             required_flags={"FLAG": ["Y"]},
         )
-        df = pl.DataFrame({"FLAG": ["N", "N"]})
+        df = pl.from_repr("""\
+┌──────┐
+│ FLAG │
+│ ---  │
+│ str  │
+╞══════╡
+│ N    │
+│ N    │
+└──────┘
+""")
         with pytest.raises(SchemaError, match="missing.*Y"):
             spec.validate_dataframe(df)
 
@@ -170,7 +148,16 @@ class TestContentValidation:
             required_columns=["FLAG"],
             required_flags={"FLAG": ["Y"]},
         )
-        df = pl.DataFrame({"FLAG": ["Y", "N"]})
+        df = pl.from_repr("""\
+┌──────┐
+│ FLAG │
+│ ---  │
+│ str  │
+╞══════╡
+│ Y    │
+│ N    │
+└──────┘
+""")
         spec.validate_dataframe(df)  # Should not raise
 
     def test_missing_flag_column_raises(self) -> None:
@@ -178,7 +165,15 @@ class TestContentValidation:
             required_columns=[],
             required_flags={"MISSING_COL": ["Y"]},
         )
-        df = pl.DataFrame({"OTHER": [1]})
+        df = pl.from_repr("""\
+┌───────┐
+│ OTHER │
+│ ---   │
+│ i64   │
+╞═══════╡
+│ 1     │
+└───────┘
+""")
         with pytest.raises(SchemaError, match="MISSING_COL"):
             spec.validate_dataframe(df)
 
@@ -234,14 +229,17 @@ class TestPoolStacking:
 
     def test_n_unique_dedup_in_pool(self) -> None:
         """Subject in 2 arms counted once in a pool encompassing both."""
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S1", "S1", "S2"],
-                "TRTA": ["Arm A", "Arm B", "Arm A"],
-                "AEDECOD": ["AE1", "AE2", "AE1"],
-                "AEBODSYS": ["SOC1", "SOC1", "SOC1"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬───────┬─────────┬──────────┐
+│ USUBJID ┆ TRTA  ┆ AEDECOD ┆ AEBODSYS │
+│ ---     ┆ ---   ┆ ---     ┆ ---      │
+│ str     ┆ str   ┆ str     ┆ str      │
+╞═════════╪═══════╪═════════╪══════════╡
+│ S1      ┆ Arm A ┆ AE1     ┆ SOC1     │
+│ S1      ┆ Arm B ┆ AE2     ┆ SOC1     │
+│ S2      ┆ Arm A ┆ AE1     ┆ SOC1     │
+└─────────┴───────┴─────────┴──────────┘
+""")
         pool = GroupPool(label="Both", arms=["Arm A", "Arm B"])
         expanded = expand_pools(df, [pool], "TRTA")
         both_df = expanded.filter(pl.col("TRTA") == "Both")
@@ -251,14 +249,18 @@ class TestPoolStacking:
 
     def test_event_counts_sum_across_pool(self) -> None:
         """Event counts in pool = sum of events from constituent arms."""
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S1", "S1", "S2", "S3"],
-                "TRTA": ["A", "A", "B", "B"],
-                "AEDECOD": ["AE1", "AE2", "AE1", "AE1"],
-                "AEBODSYS": ["SOC", "SOC", "SOC", "SOC"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬──────┬─────────┬──────────┐
+│ USUBJID ┆ TRTA ┆ AEDECOD ┆ AEBODSYS │
+│ ---     ┆ ---  ┆ ---     ┆ ---      │
+│ str     ┆ str  ┆ str     ┆ str      │
+╞═════════╪══════╪═════════╪══════════╡
+│ S1      ┆ A    ┆ AE1     ┆ SOC      │
+│ S1      ┆ A    ┆ AE2     ┆ SOC      │
+│ S2      ┆ B    ┆ AE1     ┆ SOC      │
+│ S3      ┆ B    ┆ AE1     ┆ SOC      │
+└─────────┴──────┴─────────┴──────────┘
+""")
         pool = GroupPool(label="All", arms=["A", "B"])
         expanded = expand_pools(df, [pool], "TRTA")
         all_df = expanded.filter(pl.col("TRTA") == "All")
@@ -341,14 +343,15 @@ class TestARDStructure:
 
     def test_empty_ard_has_correct_schema(self) -> None:
         # DataFrame with columns but no matching data
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S1"],
-                "TRTA": ["Arm A"],
-                "AEBODSYS": ["SOC"],
-                "AEDECOD": ["PT"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬───────┬──────────┬─────────┐
+│ USUBJID ┆ TRTA  ┆ AEBODSYS ┆ AEDECOD │
+│ ---     ┆ ---   ┆ ---      ┆ ---     │
+│ str     ┆ str   ┆ str      ┆ str     │
+╞═════════╪═══════╪══════════╪═════════╡
+│ S1      ┆ Arm A ┆ SOC      ┆ PT      │
+└─────────┴───────┴──────────┴─────────┘
+""")
         ard = df.tlg.ae.t_summary(groupby="TRTA", adsl=df)
         assert set(ard.columns) == self.EXPECTED_COLUMNS
 
@@ -367,7 +370,15 @@ class TestARDValidation:
         assert issues == []
 
     def test_missing_column_detected(self) -> None:
-        bad = pl.DataFrame({"group1": ["TRTA"], "stat": [1.0]})
+        bad = pl.from_repr("""\
+┌────────┬──────┐
+│ group1 ┆ stat │
+│ ---    ┆ ---  │
+│ str    ┆ f64  │
+╞════════╪══════╡
+│ TRTA   ┆ 1.0  │
+└────────┴──────┘
+""")
         issues = validate_ard(bad)
         assert any("Missing required ARD columns" in i for i in issues)
 
@@ -395,17 +406,16 @@ class TestARDValidation:
         assert any("Unexpected columns" in i for i in issues)
 
     def test_wrong_dtype_detected(self) -> None:
-        bad = pl.DataFrame(
-            {
-                "variable": ["X"],
-                "stat_name": ["n"],
-                "stat_label": ["n"],
-                "stat": ["not_a_float"],  # wrong type
-                "fmt_fn": ["xx"],
-                "warning": [None],
-                "error": [None],
-            }
-        )
+        # stat: wrong type (str, not Float64)
+        bad = pl.from_repr("""\
+┌──────────┬───────────┬────────────┬─────────────┬────────┬─────────┬───────┐
+│ variable ┆ stat_name ┆ stat_label ┆ stat        ┆ fmt_fn ┆ warning ┆ error │
+│ ---      ┆ ---       ┆ ---        ┆ ---         ┆ ---    ┆ ---     ┆ ---   │
+│ str      ┆ str       ┆ str        ┆ str         ┆ str    ┆ null    ┆ null  │
+╞══════════╪═══════════╪════════════╪═════════════╪════════╪═════════╪═══════╡
+│ X        ┆ n         ┆ n          ┆ not_a_float ┆ xx     ┆ null    ┆ null  │
+└──────────┴───────────┴────────────┴─────────────┴────────┴─────────┴───────┘
+""")
         issues = validate_ard(bad)
         assert any("stat" in i and "Float64" in i for i in issues)
 
@@ -550,7 +560,15 @@ class TestCheck:
     """Pre-validation diagnostics without computing."""
 
     def test_check_returns_warnings_for_missing_cols(self) -> None:
-        df = pl.DataFrame({"USUBJID": ["A"], "TRTA": ["Placebo"]})
+        df = pl.from_repr("""\
+┌─────────┬─────────┐
+│ USUBJID ┆ TRTA    │
+│ ---     ┆ ---     │
+│ str     ┆ str     │
+╞═════════╪═════════╡
+│ A       ┆ Placebo │
+└─────────┴─────────┘
+""")
         report = df.tlg.ae.check()
         assert any("AEDECOD" in msg for msg in report)
         assert any("AEBODSYS" in msg for msg in report)
@@ -828,50 +846,22 @@ class TestBuilderAPI:
 @pytest.fixture()
 def advs() -> pl.DataFrame:
     """Minimal ADVS-like DataFrame for VS summary tests."""
-    return pl.DataFrame(
-        {
-            "USUBJID": [
-                "SUBJ-01",
-                "SUBJ-01",
-                "SUBJ-02",
-                "SUBJ-02",
-                "SUBJ-03",
-                "SUBJ-03",
-                "SUBJ-04",
-                "SUBJ-04",
-            ],
-            "TRTA": [
-                "Placebo",
-                "Placebo",
-                "Placebo",
-                "Placebo",
-                "Drug A",
-                "Drug A",
-                "Drug A",
-                "Drug A",
-            ],
-            "PARAMCD": [
-                "SYSBP",
-                "DIABP",
-                "SYSBP",
-                "DIABP",
-                "SYSBP",
-                "DIABP",
-                "SYSBP",
-                "DIABP",
-            ],
-            "AVAL": [
-                120.0,
-                80.0,
-                130.0,
-                85.0,
-                115.0,
-                75.0,
-                125.0,
-                78.0,
-            ],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬─────────┬─────────┬───────┐
+│ USUBJID ┆ TRTA    ┆ PARAMCD ┆ AVAL  │
+│ ---     ┆ ---     ┆ ---     ┆ ---   │
+│ str     ┆ str     ┆ str     ┆ f64   │
+╞═════════╪═════════╪═════════╪═══════╡
+│ SUBJ-01 ┆ Placebo ┆ SYSBP   ┆ 120.0 │
+│ SUBJ-01 ┆ Placebo ┆ DIABP   ┆ 80.0  │
+│ SUBJ-02 ┆ Placebo ┆ SYSBP   ┆ 130.0 │
+│ SUBJ-02 ┆ Placebo ┆ DIABP   ┆ 85.0  │
+│ SUBJ-03 ┆ Drug A  ┆ SYSBP   ┆ 115.0 │
+│ SUBJ-03 ┆ Drug A  ┆ DIABP   ┆ 75.0  │
+│ SUBJ-04 ┆ Drug A  ┆ SYSBP   ┆ 125.0 │
+│ SUBJ-04 ┆ Drug A  ┆ DIABP   ┆ 78.0  │
+└─────────┴─────────┴─────────┴───────┘
+""")
 
 
 class TestVSNamespace:

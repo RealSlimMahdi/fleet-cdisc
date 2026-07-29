@@ -31,74 +31,41 @@ from fleet.tlg.render._models import ColumnHeader, TableRow, _merge_n_pct
 @pytest.fixture()
 def adsl() -> pl.DataFrame:
     """Minimal ADSL with 6 subjects across 3 arms."""
-    return pl.DataFrame(
-        {
-            "USUBJID": ["SUBJ-01", "SUBJ-02", "SUBJ-03", "SUBJ-04", "SUBJ-05", "SUBJ-06"],
-            "TRTA": ["Placebo", "Placebo", "Drug A", "Drug A", "Drug B", "Drug B"],
-            "SAFFL": ["Y", "Y", "Y", "Y", "Y", "N"],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬─────────┬───────┐
+│ USUBJID ┆ TRTA    ┆ SAFFL │
+│ ---     ┆ ---     ┆ ---   │
+│ str     ┆ str     ┆ str   │
+╞═════════╪═════════╪═══════╡
+│ SUBJ-01 ┆ Placebo ┆ Y     │
+│ SUBJ-02 ┆ Placebo ┆ Y     │
+│ SUBJ-03 ┆ Drug A  ┆ Y     │
+│ SUBJ-04 ┆ Drug A  ┆ Y     │
+│ SUBJ-05 ┆ Drug B  ┆ Y     │
+│ SUBJ-06 ┆ Drug B  ┆ N     │
+└─────────┴─────────┴───────┘
+""")
 
 
 @pytest.fixture()
 def adae() -> pl.DataFrame:
     """Minimal ADAE-like DataFrame for AE summary tests."""
-    return pl.DataFrame(
-        {
-            "USUBJID": [
-                "SUBJ-01",
-                "SUBJ-01",
-                "SUBJ-02",
-                "SUBJ-03",
-                "SUBJ-03",
-                "SUBJ-03",
-                "SUBJ-04",
-                "SUBJ-05",
-            ],
-            "TRTA": [
-                "Placebo",
-                "Placebo",
-                "Placebo",
-                "Drug A",
-                "Drug A",
-                "Drug A",
-                "Drug A",
-                "Drug B",
-            ],
-            "AEBODSYS": [
-                "NERVOUS",
-                "GASTRO",
-                "NERVOUS",
-                "NERVOUS",
-                "NERVOUS",
-                "GASTRO",
-                "GASTRO",
-                "NERVOUS",
-            ],
-            "AEDECOD": [
-                "HEADACHE",
-                "NAUSEA",
-                "HEADACHE",
-                "HEADACHE",
-                "DIZZINESS",
-                "NAUSEA",
-                "NAUSEA",
-                "HEADACHE",
-            ],
-            "AESEV": [
-                "MILD",
-                "MODERATE",
-                "MILD",
-                "MILD",
-                "MILD",
-                "MODERATE",
-                "MILD",
-                "MILD",
-            ],
-            "AESER": ["N", "N", "N", "N", "N", "Y", "N", "N"],
-            "SAFFL": ["Y", "Y", "Y", "Y", "Y", "Y", "Y", "Y"],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬─────────┬──────────┬───────────┬──────────┬───────┬───────┐
+│ USUBJID ┆ TRTA    ┆ AEBODSYS ┆ AEDECOD   ┆ AESEV    ┆ AESER ┆ SAFFL │
+│ ---     ┆ ---     ┆ ---      ┆ ---       ┆ ---      ┆ ---   ┆ ---   │
+│ str     ┆ str     ┆ str      ┆ str       ┆ str      ┆ str   ┆ str   │
+╞═════════╪═════════╪══════════╪═══════════╪══════════╪═══════╪═══════╡
+│ SUBJ-01 ┆ Placebo ┆ NERVOUS  ┆ HEADACHE  ┆ MILD     ┆ N     ┆ Y     │
+│ SUBJ-01 ┆ Placebo ┆ GASTRO   ┆ NAUSEA    ┆ MODERATE ┆ N     ┆ Y     │
+│ SUBJ-02 ┆ Placebo ┆ NERVOUS  ┆ HEADACHE  ┆ MILD     ┆ N     ┆ Y     │
+│ SUBJ-03 ┆ Drug A  ┆ NERVOUS  ┆ HEADACHE  ┆ MILD     ┆ N     ┆ Y     │
+│ SUBJ-03 ┆ Drug A  ┆ NERVOUS  ┆ DIZZINESS ┆ MILD     ┆ N     ┆ Y     │
+│ SUBJ-03 ┆ Drug A  ┆ GASTRO   ┆ NAUSEA    ┆ MODERATE ┆ Y     ┆ Y     │
+│ SUBJ-04 ┆ Drug A  ┆ GASTRO   ┆ NAUSEA    ┆ MILD     ┆ N     ┆ Y     │
+│ SUBJ-05 ┆ Drug B  ┆ NERVOUS  ┆ HEADACHE  ┆ MILD     ┆ N     ┆ Y     │
+└─────────┴─────────┴──────────┴───────────┴──────────┴───────┴───────┘
+""")
 
 
 @pytest.fixture()

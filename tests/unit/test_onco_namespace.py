@@ -23,13 +23,17 @@ _RECIST_MAPPING = [
 @pytest.fixture
 def onco_frame():
     """Minimal frame for shared verb tests on the onco namespace."""
-    return pl.DataFrame(
-        {
-            "USUBJID": ["01-001", "01-002", "01-003"],
-            "RSSTRESC": ["CR", "PR", "PD"],
-            "AGE": [55, 68, 42],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬──────────┬─────┐
+│ USUBJID ┆ RSSTRESC ┆ AGE │
+│ ---     ┆ ---      ┆ --- │
+│ str     ┆ str      ┆ i64 │
+╞═════════╪══════════╪═════╡
+│ 01-001  ┆ CR       ┆ 55  │
+│ 01-002  ┆ PR       ┆ 68  │
+│ 01-003  ┆ PD       ┆ 42  │
+└─────────┴──────────┴─────┘
+""")
 
 
 class TestBaseVerbs:
@@ -99,13 +103,29 @@ class TestAvalResp:
         assert result["AVAL"].to_list() == expected_aval
 
     def test_null_input_maps_to_null(self):
-        df = pl.DataFrame({"R": [None]}, schema={"R": pl.Utf8})
+        df = pl.from_repr("""\
+┌──────┐
+│ R    │
+│ ---  │
+│ str  │
+╞══════╡
+│ null │
+└──────┘
+""")
         result = df.adam.onco.aval_resp("N", source="R").to_frame()
         assert result["N"][0] is None
 
     def test_non_derived_columns_preserved(self):
         """Input columns not named AVAL must survive the derivation."""
-        df = pl.DataFrame({"USUBJID": ["01-701-1015"], "OVRLRESP": ["CR"]})
+        df = pl.from_repr("""\
+┌─────────────┬──────────┐
+│ USUBJID     ┆ OVRLRESP │
+│ ---         ┆ ---      │
+│ str         ┆ str      │
+╞═════════════╪══════════╡
+│ 01-701-1015 ┆ CR       │
+└─────────────┴──────────┘
+""")
         result = df.adam.onco.aval_resp("AVAL", source="OVRLRESP").to_frame()
         assert "USUBJID" in result.columns
         assert result["USUBJID"][0] == "01-701-1015"
@@ -115,12 +135,34 @@ class TestTumorResponseFlag:
     """Test 2: Flagging responders."""
 
     def test_cr_pr_flagged_by_default(self):
-        df = pl.DataFrame({"RESP": ["CR", "PR", "SD", "PD"]})
+        df = pl.from_repr("""\
+┌──────┐
+│ RESP │
+│ ---  │
+│ str  │
+╞══════╡
+│ CR   │
+│ PR   │
+│ SD   │
+│ PD   │
+└──────┘
+""")
         result = df.adam.onco.tumor_response_flag("RSPFL", source="RESP").to_frame()
         assert result["RSPFL"].to_list() == ["Y", "Y", None, None]
 
     def test_custom_responses(self):
-        df = pl.DataFrame({"RESP": ["CR", "PR", "SD", "PD"]})
+        df = pl.from_repr("""\
+┌──────┐
+│ RESP │
+│ ---  │
+│ str  │
+╞══════╡
+│ CR   │
+│ PR   │
+│ SD   │
+│ PD   │
+└──────┘
+""")
         result = df.adam.onco.tumor_response_flag(
             "CBFL", source="RESP", responses=["CR", "PR", "SD"]
         ).to_frame()
@@ -128,12 +170,30 @@ class TestTumorResponseFlag:
 
     def test_pd_never_flagged(self):
         """PD must never be a responder under default settings."""
-        df = pl.DataFrame({"RESP": ["PD", "NE", "MISSING"]})
+        df = pl.from_repr("""\
+┌─────────┐
+│ RESP    │
+│ ---     │
+│ str     │
+╞═════════╡
+│ PD      │
+│ NE      │
+│ MISSING │
+└─────────┘
+""")
         result = df.adam.onco.tumor_response_flag("RSPFL", source="RESP").to_frame()
         assert all(v is None for v in result["RSPFL"].to_list())
 
     def test_custom_flag_value(self):
-        df = pl.DataFrame({"RESP": ["CR"]})
+        df = pl.from_repr("""\
+┌──────┐
+│ RESP │
+│ ---  │
+│ str  │
+╞══════╡
+│ CR   │
+└──────┘
+""")
         result = df.adam.onco.tumor_response_flag("RSPFL", source="RESP", flag_value="1").to_frame()
         assert result["RSPFL"][0] == "1"
 
@@ -148,12 +208,17 @@ class TestBestOverallResponse:
     """
 
     def test_best_response_is_pr(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S01", "S01"],
-                "OVRLRESP": ["SD", "PR", "PD"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬──────────┐
+│ USUBJID ┆ OVRLRESP │
+│ ---     ┆ ---      │
+│ str     ┆ str      │
+╞═════════╪══════════╡
+│ S01     ┆ SD       │
+│ S01     ┆ PR       │
+│ S01     ┆ PD       │
+└─────────┴──────────┘
+""")
         result = df.adam.onco.best_overall_response(
             "BOR", source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
@@ -161,12 +226,16 @@ class TestBestOverallResponse:
         assert all(r == "PR" for r in result["BOR"].to_list())
 
     def test_no_response_gives_ne(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S02", "S02"],
-                "OVRLRESP": ["NE", "NE"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬──────────┐
+│ USUBJID ┆ OVRLRESP │
+│ ---     ┆ ---      │
+│ str     ┆ str      │
+╞═════════╪══════════╡
+│ S02     ┆ NE       │
+│ S02     ┆ NE       │
+└─────────┴──────────┘
+""")
         result = df.adam.onco.best_overall_response(
             "BOR", source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
@@ -174,13 +243,18 @@ class TestBestOverallResponse:
 
     def test_multi_subject_independent_bor(self):
         """BOR must be computed independently per subject — core admiral pattern."""
-        df = pl.DataFrame(
-            {
-                "STUDYID": ["CDISCPILOT01"] * 4,
-                "USUBJID": ["01-701-1015", "01-701-1015", "01-701-1023", "01-701-1023"],
-                "OVRLRESP": ["SD", "CR", "PD", "PR"],
-            }
-        )
+        df = pl.from_repr("""\
+┌──────────────┬─────────────┬──────────┐
+│ STUDYID      ┆ USUBJID     ┆ OVRLRESP │
+│ ---          ┆ ---         ┆ ---      │
+│ str          ┆ str         ┆ str      │
+╞══════════════╪═════════════╪══════════╡
+│ CDISCPILOT01 ┆ 01-701-1015 ┆ SD       │
+│ CDISCPILOT01 ┆ 01-701-1015 ┆ CR       │
+│ CDISCPILOT01 ┆ 01-701-1023 ┆ PD       │
+│ CDISCPILOT01 ┆ 01-701-1023 ┆ PR       │
+└──────────────┴─────────────┴──────────┘
+""")
         result = df.adam.onco.best_overall_response(
             "BOR", source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
@@ -189,12 +263,16 @@ class TestBestOverallResponse:
         assert bor["01-701-1023"] == "PR"  # PR beats PD
 
     def test_subject_with_only_pd(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S03", "S03"],
-                "OVRLRESP": ["PD", "PD"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬──────────┐
+│ USUBJID ┆ OVRLRESP │
+│ ---     ┆ ---      │
+│ str     ┆ str      │
+╞═════════╪══════════╡
+│ S03     ┆ PD       │
+│ S03     ┆ PD       │
+└─────────┴──────────┘
+""")
         result = df.adam.onco.best_overall_response(
             "BOR", source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
@@ -212,13 +290,18 @@ class TestFilterPD:
     """
 
     def test_records_after_pd_dropped(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S01", "S01", "S01"],
-                "ADT": ["2024-01-01", "2024-02-01", "2024-03-01", "2024-04-01"],
-                "OVRLRESP": ["SD", "PD", "PD", "NE"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬────────────┬──────────┐
+│ USUBJID ┆ ADT        ┆ OVRLRESP │
+│ ---     ┆ ---        ┆ ---      │
+│ str     ┆ str        ┆ str      │
+╞═════════╪════════════╪══════════╡
+│ S01     ┆ 2024-01-01 ┆ SD       │
+│ S01     ┆ 2024-02-01 ┆ PD       │
+│ S01     ┆ 2024-03-01 ┆ PD       │
+│ S01     ┆ 2024-04-01 ┆ NE       │
+└─────────┴────────────┴──────────┘
+""")
         result = df.adam.onco.filter_pd(
             response_col="OVRLRESP", date_col="ADT", by=["USUBJID"]
         ).to_frame()
@@ -227,13 +310,16 @@ class TestFilterPD:
         assert result["ADT"].to_list() == ["2024-01-01", "2024-02-01"]
 
     def test_no_pd_retains_all(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S02", "S02"],
-                "ADT": ["2024-01-01", "2024-02-01"],
-                "OVRLRESP": ["SD", "PR"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬────────────┬──────────┐
+│ USUBJID ┆ ADT        ┆ OVRLRESP │
+│ ---     ┆ ---        ┆ ---      │
+│ str     ┆ str        ┆ str      │
+╞═════════╪════════════╪══════════╡
+│ S02     ┆ 2024-01-01 ┆ SD       │
+│ S02     ┆ 2024-02-01 ┆ PR       │
+└─────────┴────────────┴──────────┘
+""")
         result = df.adam.onco.filter_pd(
             response_col="OVRLRESP", date_col="ADT", by=["USUBJID"]
         ).to_frame()
@@ -246,26 +332,19 @@ class TestFilterPD:
         01-701-1015: PD at 2024-02-01 → only 2 rows kept
         01-701-1023: no PD            → all 3 rows kept
         """
-        df = pl.DataFrame(
-            {
-                "STUDYID": ["CDISCPILOT01"] * 5,
-                "USUBJID": [
-                    "01-701-1015",
-                    "01-701-1015",
-                    "01-701-1015",
-                    "01-701-1023",
-                    "01-701-1023",
-                ],
-                "ADT": [
-                    "2024-01-01",
-                    "2024-02-01",
-                    "2024-03-01",
-                    "2024-01-01",
-                    "2024-02-01",
-                ],
-                "OVRLRESP": ["CR", "PD", "NE", "SD", "PR"],
-            }
-        )
+        df = pl.from_repr("""\
+┌──────────────┬─────────────┬────────────┬──────────┐
+│ STUDYID      ┆ USUBJID     ┆ ADT        ┆ OVRLRESP │
+│ ---          ┆ ---         ┆ ---        ┆ ---      │
+│ str          ┆ str         ┆ str        ┆ str      │
+╞══════════════╪═════════════╪════════════╪══════════╡
+│ CDISCPILOT01 ┆ 01-701-1015 ┆ 2024-01-01 ┆ CR       │
+│ CDISCPILOT01 ┆ 01-701-1015 ┆ 2024-02-01 ┆ PD       │
+│ CDISCPILOT01 ┆ 01-701-1015 ┆ 2024-03-01 ┆ NE       │
+│ CDISCPILOT01 ┆ 01-701-1023 ┆ 2024-01-01 ┆ SD       │
+│ CDISCPILOT01 ┆ 01-701-1023 ┆ 2024-02-01 ┆ PR       │
+└──────────────┴─────────────┴────────────┴──────────┘
+""")
         result = df.adam.onco.filter_pd(
             response_col="OVRLRESP", date_col="ADT", by=["USUBJID"]
         ).to_frame()
@@ -286,13 +365,17 @@ class TestConfirmedResponseFlag:
     """
 
     def test_confirmed_with_sufficient_gap(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["01-701-1015", "01-701-1015"],
-                "OVRLRESP": ["CR", "CR"],
-                "ADT": ["2024-01-01", "2024-03-15"],  # 74 days apart
-            }
-        )
+        # ADT dates 74 days apart
+        df = pl.from_repr("""\
+┌─────────────┬──────────┬────────────┐
+│ USUBJID     ┆ OVRLRESP ┆ ADT        │
+│ ---         ┆ ---      ┆ ---        │
+│ str         ┆ str      ┆ str        │
+╞═════════════╪══════════╪════════════╡
+│ 01-701-1015 ┆ CR       ┆ 2024-01-01 │
+│ 01-701-1015 ┆ CR       ┆ 2024-03-15 │
+└─────────────┴──────────┴────────────┘
+""")
         result = df.adam.onco.confirmed_response_flag(
             "CNFFL", source="OVRLRESP", date_col="ADT", confirmation_days=28, by=["USUBJID"]
         ).to_frame()
@@ -300,13 +383,17 @@ class TestConfirmedResponseFlag:
         assert "Y" in result["CNFFL"].to_list()
 
     def test_gap_too_short_gives_null(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S02", "S02"],
-                "OVRLRESP": ["PR", "PR"],
-                "ADT": ["2024-01-01", "2024-01-20"],  # only 19 days
-            }
-        )
+        # ADT dates only 19 days apart
+        df = pl.from_repr("""\
+┌─────────┬──────────┬────────────┐
+│ USUBJID ┆ OVRLRESP ┆ ADT        │
+│ ---     ┆ ---      ┆ ---        │
+│ str     ┆ str      ┆ str        │
+╞═════════╪══════════╪════════════╡
+│ S02     ┆ PR       ┆ 2024-01-01 │
+│ S02     ┆ PR       ┆ 2024-01-20 │
+└─────────┴──────────┴────────────┘
+""")
         result = df.adam.onco.confirmed_response_flag(
             "CNFFL", source="OVRLRESP", date_col="ADT", confirmation_days=28, by=["USUBJID"]
         ).to_frame()
@@ -314,13 +401,16 @@ class TestConfirmedResponseFlag:
 
     def test_no_matching_response_gives_null(self):
         """PD records should not be considered for confirmation."""
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S03", "S03"],
-                "OVRLRESP": ["PD", "PD"],
-                "ADT": ["2024-01-01", "2024-03-01"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬──────────┬────────────┐
+│ USUBJID ┆ OVRLRESP ┆ ADT        │
+│ ---     ┆ ---      ┆ ---        │
+│ str     ┆ str      ┆ str        │
+╞═════════╪══════════╪════════════╡
+│ S03     ┆ PD       ┆ 2024-01-01 │
+│ S03     ┆ PD       ┆ 2024-03-01 │
+└─────────┴──────────┴────────────┘
+""")
         result = df.adam.onco.confirmed_response_flag(
             "CNFFL", source="OVRLRESP", date_col="ADT", by=["USUBJID"]
         ).to_frame()
@@ -331,12 +421,17 @@ class TestChaining:
     """Test 6: multi-verb chaining produces all derived columns."""
 
     def test_full_onco_chain(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S01", "S02"],
-                "OVRLRESP": ["CR", "PD", "PR"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬──────────┐
+│ USUBJID ┆ OVRLRESP │
+│ ---     ┆ ---      │
+│ str     ┆ str      │
+╞═════════╪══════════╡
+│ S01     ┆ CR       │
+│ S01     ┆ PD       │
+│ S02     ┆ PR       │
+└─────────┴──────────┘
+""")
         result = (
             df.adam.onco.aval_resp("AVAL", source="OVRLRESP")
             .tumor_response_flag("RSPFL", source="OVRLRESP")
@@ -361,13 +456,17 @@ class TestOncoProgressionAmbiguity:
 
     def test_all_ne_responses_bor_is_ne(self):
         """Subject with only NE responses should get BOR = NE."""
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S01", "S01"],
-                "OVRLRESP": ["NE", "NE", "NE"],
-                "ADT": ["2020-01-01", "2020-02-01", "2020-03-01"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬──────────┬────────────┐
+│ USUBJID ┆ OVRLRESP ┆ ADT        │
+│ ---     ┆ ---      ┆ ---        │
+│ str     ┆ str      ┆ str        │
+╞═════════╪══════════╪════════════╡
+│ S01     ┆ NE       ┆ 2020-01-01 │
+│ S01     ┆ NE       ┆ 2020-02-01 │
+│ S01     ┆ NE       ┆ 2020-03-01 │
+└─────────┴──────────┴────────────┘
+""")
         result = df.adam.onco.best_overall_response(
             "BOR", source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
@@ -375,13 +474,17 @@ class TestOncoProgressionAmbiguity:
 
     def test_null_response_excluded_from_bor(self):
         """Null responses should not count toward BOR."""
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S01", "S01"],
-                "OVRLRESP": ["CR", None, "SD"],
-                "ADT": ["2020-01-01", "2020-02-01", "2020-03-01"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬──────────┬────────────┐
+│ USUBJID ┆ OVRLRESP ┆ ADT        │
+│ ---     ┆ ---      ┆ ---        │
+│ str     ┆ str      ┆ str        │
+╞═════════╪══════════╪════════════╡
+│ S01     ┆ CR       ┆ 2020-01-01 │
+│ S01     ┆ null     ┆ 2020-02-01 │
+│ S01     ┆ SD       ┆ 2020-03-01 │
+└─────────┴──────────┴────────────┘
+""")
         result = df.adam.onco.best_overall_response(
             "BOR", source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
@@ -391,13 +494,16 @@ class TestOncoProgressionAmbiguity:
 
     def test_pd_after_cr_still_yields_cr_bor(self):
         """CR followed by PD — BOR should still be CR."""
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S01"],
-                "OVRLRESP": ["CR", "PD"],
-                "ADT": ["2020-01-01", "2020-02-01"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬──────────┬────────────┐
+│ USUBJID ┆ OVRLRESP ┆ ADT        │
+│ ---     ┆ ---      ┆ ---        │
+│ str     ┆ str      ┆ str        │
+╞═════════╪══════════╪════════════╡
+│ S01     ┆ CR       ┆ 2020-01-01 │
+│ S01     ┆ PD       ┆ 2020-02-01 │
+└─────────┴──────────┴────────────┘
+""")
         result = df.adam.onco.best_overall_response(
             "BOR", source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
@@ -406,22 +512,30 @@ class TestOncoProgressionAmbiguity:
 
     def test_aval_resp_unknown_maps_to_none(self):
         """UNKNOWN response should map to None in AVAL."""
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S01"],
-                "RSSTRESC": ["UNKNOWN"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬──────────┐
+│ USUBJID ┆ RSSTRESC │
+│ ---     ┆ ---      │
+│ str     ┆ str      │
+╞═════════╪══════════╡
+│ S01     ┆ UNKNOWN  │
+└─────────┴──────────┘
+""")
         result = df.adam.onco.aval_resp("AVAL", source="RSSTRESC").to_frame()
         assert result["AVAL"][0] is None
 
     def test_tumor_response_flag_with_nulls(self):
         """Null responses should not be flagged as responders."""
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S02", "S03"],
-                "RSSTRESC": ["CR", None, "PD"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬──────────┐
+│ USUBJID ┆ RSSTRESC │
+│ ---     ┆ ---      │
+│ str     ┆ str      │
+╞═════════╪══════════╡
+│ S01     ┆ CR       │
+│ S02     ┆ null     │
+│ S03     ┆ PD       │
+└─────────┴──────────┘
+""")
         result = df.adam.onco.tumor_response_flag("RSPFL", source="RSSTRESC").to_frame()
         assert result["RSPFL"][1] is None or result["RSPFL"][1] != "Y"

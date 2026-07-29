@@ -196,7 +196,15 @@ class TestSpecDrivenRoundTrip:
             """Round-trip fixture column."""
             return pl.lit("Y").alias("RTCOL")
 
-        df = pl.DataFrame({"USUBJID": ["S1"]})
+        df = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ S1      │
+└─────────┘
+""")
         ns = df.adam.derivation(RTCOL)
         data = yaml.safe_load(ns.to_spec_yaml(dataset="ADSL"))
         (var,) = [v for v in data["datasets"][0]["variables"] if v["name"] == "RTCOL"]

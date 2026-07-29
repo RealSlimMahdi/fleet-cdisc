@@ -10,26 +10,32 @@ import fleet  # noqa: F401 — triggers namespace registration
 
 @pytest.fixture
 def adsl_df():
-    return pl.DataFrame(
-        {
-            "USUBJID": ["S001", "S002", "S003"],
-            "TRTSDT": ["2014-01-02", "2014-01-03", "2014-01-04"],
-            "TRTEDT": ["2014-07-02", "2014-07-03", "2014-07-04"],
-            "SAFFL": ["Y", "Y", "Y"],
-            "TRT01P": ["Placebo", "Low Dose", "High Dose"],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬────────────┬────────────┬───────┬───────────┐
+│ USUBJID ┆ TRTSDT     ┆ TRTEDT     ┆ SAFFL ┆ TRT01P    │
+│ ---     ┆ ---        ┆ ---        ┆ ---   ┆ ---       │
+│ str     ┆ str        ┆ str        ┆ str   ┆ str       │
+╞═════════╪════════════╪════════════╪═══════╪═══════════╡
+│ S001    ┆ 2014-01-02 ┆ 2014-07-02 ┆ Y     ┆ Placebo   │
+│ S002    ┆ 2014-01-03 ┆ 2014-07-03 ┆ Y     ┆ Low Dose  │
+│ S003    ┆ 2014-01-04 ┆ 2014-07-04 ┆ Y     ┆ High Dose │
+└─────────┴────────────┴────────────┴───────┴───────────┘
+""")
 
 
 @pytest.fixture
 def ae_df():
-    return pl.DataFrame(
-        {
-            "USUBJID": ["S001", "S001", "S002"],
-            "AETERM": ["HEADACHE", "NAUSEA", "RASH"],
-            "AESTDTC": ["2014-01-10", "2014-01-01", "2014-02-15"],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬──────────┬────────────┐
+│ USUBJID ┆ AETERM   ┆ AESTDTC    │
+│ ---     ┆ ---      ┆ ---        │
+│ str     ┆ str      ┆ str        │
+╞═════════╪══════════╪════════════╡
+│ S001    ┆ HEADACHE ┆ 2014-01-10 │
+│ S001    ┆ NAUSEA   ┆ 2014-01-01 │
+│ S002    ┆ RASH     ┆ 2014-02-15 │
+└─────────┴──────────┴────────────┘
+""")
 
 
 # ── join_adsl ────────────────────────────────────────────────────────── #
@@ -84,13 +90,15 @@ class TestADaMStudyDay:
 
     def test_study_day_ref_already_in_frame(self, adsl_df):
         """When TRTSDT is in the frame, no pin needed."""
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S001"],
-                "TRTSDT": ["2014-01-02"],
-                "ASTDT": ["2014-01-10"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬────────────┬────────────┐
+│ USUBJID ┆ TRTSDT     ┆ ASTDT      │
+│ ---     ┆ ---        ┆ ---        │
+│ str     ┆ str        ┆ str        │
+╞═════════╪════════════╪════════════╡
+│ S001    ┆ 2014-01-02 ┆ 2014-01-10 │
+└─────────┴────────────┴────────────┘
+""")
         result = (
             df.adam.adsl.source("USUBJID")
             .source("TRTSDT")
@@ -111,13 +119,15 @@ class TestADaMStudyDay:
 
     def test_study_day_same_day_is_one(self, adsl_df):
         """Same day → study day 1 (no day 0)."""
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["S001"],
-                "TRTSDT": ["2014-01-02"],
-                "ASTDT": ["2014-01-02"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬────────────┬────────────┐
+│ USUBJID ┆ TRTSDT     ┆ ASTDT      │
+│ ---     ┆ ---        ┆ ---        │
+│ str     ┆ str        ┆ str        │
+╞═════════╪════════════╪════════════╡
+│ S001    ┆ 2014-01-02 ┆ 2014-01-02 │
+└─────────┴────────────┴────────────┘
+""")
         result = (
             df.adam.adsl.source("USUBJID")
             .source("TRTSDT")
