@@ -659,12 +659,17 @@ class TestProtocolReferencePipelines:
 
 class TestStudyDay:
     def test_basic_study_day(self):
-        raw = pl.DataFrame(
-            {
-                "SVSTDTC": ["2014-01-05", "2014-01-01", "2013-12-30"],
-                "RFSTDTC": ["2014-01-02", "2014-01-02", "2014-01-02"],
-            }
-        )
+        raw = pl.from_repr("""\
+┌────────────┬────────────┐
+│ SVSTDTC    ┆ RFSTDTC    │
+│ ---        ┆ ---        │
+│ str        ┆ str        │
+╞════════════╪════════════╡
+│ 2014-01-05 ┆ 2014-01-02 │
+│ 2014-01-01 ┆ 2014-01-02 │
+│ 2013-12-30 ┆ 2014-01-02 │
+└────────────┴────────────┘
+""")
         result = raw.sdtm.duration("SVSTDY", start="RFSTDTC", end="SVSTDTC").to_frame()
         assert "SVSTDY" in result.columns
         # 2014-01-05 - 2014-01-02 = 3 days, >= 0 so +1 = 4
@@ -679,23 +684,29 @@ class TestStudyDayCDISC:
     """Verify CDISC study day convention: no day 0."""
 
     def test_ref_date_is_day_1(self):
-        raw = pl.DataFrame(
-            {
-                "DTC": ["2014-01-02"],
-                "REF": ["2014-01-02"],
-            }
-        )
+        raw = pl.from_repr("""\
+┌────────────┬────────────┐
+│ DTC        ┆ REF        │
+│ ---        ┆ ---        │
+│ str        ┆ str        │
+╞════════════╪════════════╡
+│ 2014-01-02 ┆ 2014-01-02 │
+└────────────┴────────────┘
+""")
         result = raw.sdtm.duration("DY", start="REF", end="DTC").to_frame()
         # Same day: diff=0, >=0 so +1 → day 1
         assert result["DY"][0] == 1
 
     def test_day_before_ref_is_minus_1(self):
-        raw = pl.DataFrame(
-            {
-                "DTC": ["2014-01-01"],
-                "REF": ["2014-01-02"],
-            }
-        )
+        raw = pl.from_repr("""\
+┌────────────┬────────────┐
+│ DTC        ┆ REF        │
+│ ---        ┆ ---        │
+│ str        ┆ str        │
+╞════════════╪════════════╡
+│ 2014-01-01 ┆ 2014-01-02 │
+└────────────┴────────────┘
+""")
         result = raw.sdtm.duration("DY", start="REF", end="DTC").to_frame()
         # Diff = -1, negative so no +1 → -1
         assert result["DY"][0] == -1
@@ -703,11 +714,17 @@ class TestStudyDayCDISC:
 
 class TestEpochAssign:
     def test_basic_epoch_assignment(self):
-        raw = pl.DataFrame(
-            {
-                "SVSTDTC": ["2014-01-05", "2014-02-01", "2014-05-01"],
-            }
-        )
+        raw = pl.from_repr("""\
+┌────────────┐
+│ SVSTDTC    │
+│ ---        │
+│ str        │
+╞════════════╡
+│ 2014-01-05 │
+│ 2014-02-01 │
+│ 2014-05-01 │
+└────────────┘
+""")
         result = raw.sdtm.epoch_assign(
             "EPOCH",
             date_col="SVSTDTC",
@@ -720,7 +737,15 @@ class TestEpochAssign:
         assert result["EPOCH"].to_list() == ["SCREENING", "TREATMENT", "FOLLOW-UP"]
 
     def test_no_match_returns_null(self):
-        raw = pl.DataFrame({"DTC": ["2020-01-01"]})
+        raw = pl.from_repr("""\
+┌────────────┐
+│ DTC        │
+│ ---        │
+│ str        │
+╞════════════╡
+│ 2020-01-01 │
+└────────────┘
+""")
         result = raw.sdtm.epoch_assign(
             "EPOCH",
             date_col="DTC",
@@ -733,15 +758,17 @@ class TestEpochAssign:
 
 class TestElementBoundaries:
     def test_basic_boundaries(self):
-        raw = pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S01", "S01"],
-                "ETCD": ["SCRN", "TRT", "FU"],
-                "screening_date": ["2014-01-01", "2014-01-01", "2014-01-01"],
-                "first_dose_date": ["2014-01-15", "2014-01-15", "2014-01-15"],
-                "last_visit_date": ["2014-05-01", "2014-05-01", "2014-05-01"],
-            }
-        )
+        raw = pl.from_repr("""\
+┌─────────┬──────┬────────────────┬─────────────────┬─────────────────┐
+│ USUBJID ┆ ETCD ┆ screening_date ┆ first_dose_date ┆ last_visit_date │
+│ ---     ┆ ---  ┆ ---            ┆ ---             ┆ ---             │
+│ str     ┆ str  ┆ str            ┆ str             ┆ str             │
+╞═════════╪══════╪════════════════╪═════════════════╪═════════════════╡
+│ S01     ┆ SCRN ┆ 2014-01-01     ┆ 2014-01-15      ┆ 2014-05-01      │
+│ S01     ┆ TRT  ┆ 2014-01-01     ┆ 2014-01-15      ┆ 2014-05-01      │
+│ S01     ┆ FU   ┆ 2014-01-01     ┆ 2014-01-15      ┆ 2014-05-01      │
+└─────────┴──────┴────────────────┴─────────────────┴─────────────────┘
+""")
         result = raw.sdtm.element_boundaries(
             "SESTDTC",
             "SEENDTC",
@@ -760,12 +787,16 @@ class TestElementBoundaries:
 
 class TestVisitMap:
     def test_basic_visit_mapping(self, tv_rows):
-        raw = pl.DataFrame(
-            {
-                "SVSTDTC": ["2014-01-03", "2014-01-15"],
-                "RFSTDTC": ["2014-01-01", "2014-01-01"],
-            }
-        )
+        raw = pl.from_repr("""\
+┌────────────┬────────────┐
+│ SVSTDTC    ┆ RFSTDTC    │
+│ ---        ┆ ---        │
+│ str        ┆ str        │
+╞════════════╪════════════╡
+│ 2014-01-03 ┆ 2014-01-01 │
+│ 2014-01-15 ┆ 2014-01-01 │
+└────────────┴────────────┘
+""")
         result = raw.sdtm.visit_map(
             "VISITNUM", "VISIT", date_col="SVSTDTC", planned_visits=tv_rows, ref_date="RFSTDTC"
         ).to_frame()
@@ -779,7 +810,15 @@ class TestVisitMap:
     def test_equidistant_tie_resolves_to_earlier_visitnum(self, tv_rows):
         # tv_rows: VISITDY 1 and 14 → day 8 is equidistant (diff 7 / 7 with
         # the no-day-zero shift: 2014-01-08 is day 8).
-        raw = pl.DataFrame({"SVSTDTC": ["2014-01-08"], "RFSTDTC": ["2014-01-01"]})
+        raw = pl.from_repr("""\
+┌────────────┬────────────┐
+│ SVSTDTC    ┆ RFSTDTC    │
+│ ---        ┆ ---        │
+│ str        ┆ str        │
+╞════════════╪════════════╡
+│ 2014-01-08 ┆ 2014-01-01 │
+└────────────┴────────────┘
+""")
         result = raw.sdtm.visit_map(
             "VISITNUM", "VISIT", date_col="SVSTDTC", planned_visits=tv_rows, ref_date="RFSTDTC"
         ).to_frame()
@@ -788,8 +827,25 @@ class TestVisitMap:
         # 1/15 spacing via a custom TV to construct an exact tie.
         assert result["VISITNUM"][0] == 2
 
-        tv = pl.DataFrame({"VISITNUM": [1, 2], "VISIT": ["V1", "V2"], "VISITDY": [1, 15]})
-        tie = pl.DataFrame({"SVSTDTC": ["2014-01-08"], "RFSTDTC": ["2014-01-01"]})
+        tv = pl.from_repr("""\
+┌──────────┬───────┬─────────┐
+│ VISITNUM ┆ VISIT ┆ VISITDY │
+│ ---      ┆ ---   ┆ ---     │
+│ i64      ┆ str   ┆ i64     │
+╞══════════╪═══════╪═════════╡
+│ 1        ┆ V1    ┆ 1       │
+│ 2        ┆ V2    ┆ 15      │
+└──────────┴───────┴─────────┘
+""")
+        tie = pl.from_repr("""\
+┌────────────┬────────────┐
+│ SVSTDTC    ┆ RFSTDTC    │
+│ ---        ┆ ---        │
+│ str        ┆ str        │
+╞════════════╪════════════╡
+│ 2014-01-08 ┆ 2014-01-01 │
+└────────────┴────────────┘
+""")
         result = tie.sdtm.visit_map(
             "VISITNUM", "VISIT", date_col="SVSTDTC", planned_visits=tv, ref_date="RFSTDTC"
         ).to_frame()
@@ -797,14 +853,27 @@ class TestVisitMap:
         assert result["VISITNUM"][0] == 1
 
     def test_tolerance_window_boundaries_inclusive(self, tv_rows):
-        tv = pl.DataFrame({"VISITNUM": [1], "VISIT": ["Baseline"], "VISITDY": [10]})
-        raw = pl.DataFrame(
-            {
-                # days 7, 13, 14 relative to 2014-01-01 (no-day-zero: +1)
-                "SVSTDTC": ["2014-01-07", "2014-01-13", "2014-01-14"],
-                "RFSTDTC": ["2014-01-01", "2014-01-01", "2014-01-01"],
-            }
-        )
+        tv = pl.from_repr("""\
+┌──────────┬──────────┬─────────┐
+│ VISITNUM ┆ VISIT    ┆ VISITDY │
+│ ---      ┆ ---      ┆ ---     │
+│ i64      ┆ str      ┆ i64     │
+╞══════════╪══════════╪═════════╡
+│ 1        ┆ Baseline ┆ 10      │
+└──────────┴──────────┴─────────┘
+""")
+        # SVSTDTC: days 7, 13, 14 relative to 2014-01-01 (no-day-zero: +1)
+        raw = pl.from_repr("""\
+┌────────────┬────────────┐
+│ SVSTDTC    ┆ RFSTDTC    │
+│ ---        ┆ ---        │
+│ str        ┆ str        │
+╞════════════╪════════════╡
+│ 2014-01-07 ┆ 2014-01-01 │
+│ 2014-01-13 ┆ 2014-01-01 │
+│ 2014-01-14 ┆ 2014-01-01 │
+└────────────┴────────────┘
+""")
         result = raw.sdtm.visit_map(
             "VISITNUM",
             "VISIT",
@@ -818,12 +887,16 @@ class TestVisitMap:
         assert result["VISITNUM"].to_list() == [1, 1, None]
 
     def test_unparsable_date_maps_to_null_not_arbitrary_visit(self, tv_rows):
-        raw = pl.DataFrame(
-            {
-                "SVSTDTC": ["NOT-A-DATE", "2014-01-15"],
-                "RFSTDTC": ["2014-01-01", "2014-01-01"],
-            }
-        )
+        raw = pl.from_repr("""\
+┌────────────┬────────────┐
+│ SVSTDTC    ┆ RFSTDTC    │
+│ ---        ┆ ---        │
+│ str        ┆ str        │
+╞════════════╪════════════╡
+│ NOT-A-DATE ┆ 2014-01-01 │
+│ 2014-01-15 ┆ 2014-01-01 │
+└────────────┴────────────┘
+""")
         result = raw.sdtm.visit_map(
             "VISITNUM", "VISIT", date_col="SVSTDTC", planned_visits=tv_rows, ref_date="RFSTDTC"
         ).to_frame()
@@ -920,22 +993,44 @@ class TestSDTMRegression:
     """Ensure TDD mixin doesn't break existing SDTM namespace verbs."""
 
     def test_assign_no_ct(self):
-        raw = pl.DataFrame({"patient_number": ["01-001"]})
+        raw = pl.from_repr("""\
+┌────────────────┐
+│ patient_number │
+│ ---            │
+│ str            │
+╞════════════════╡
+│ 01-001         │
+└────────────────┘
+""")
         result = raw.sdtm.assign("USUBJID", source="patient_number").to_frame()
         assert result["USUBJID"][0] == "01-001"
 
     def test_hardcode_no_ct(self):
-        raw = pl.DataFrame({"x": [1, 2, 3]})
+        raw = pl.from_repr("""\
+┌─────┐
+│ x   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+│ 2   │
+│ 3   │
+└─────┘
+""")
         result = raw.sdtm.assign("DOMAIN", value="DM").to_frame()
         assert result["DOMAIN"].to_list() == ["DM", "DM", "DM"]
 
     def test_chain_multiple_verbs(self):
-        raw = pl.DataFrame(
-            {
-                "patient_number": ["01-001", "01-002"],
-                "site_id": ["701", "702"],
-            }
-        )
+        raw = pl.from_repr("""\
+┌────────────────┬─────────┐
+│ patient_number ┆ site_id │
+│ ---            ┆ ---     │
+│ str            ┆ str     │
+╞════════════════╪═════════╡
+│ 01-001         ┆ 701     │
+│ 01-002         ┆ 702     │
+└────────────────┴─────────┘
+""")
         result = (
             raw.sdtm.assign("USUBJID", source="patient_number")
             .assign("SITEID", source="site_id")
@@ -945,6 +1040,14 @@ class TestSDTMRegression:
         assert set(result.columns) >= {"USUBJID", "SITEID", "DOMAIN", "patient_number", "site_id"}
 
     def test_to_frame_produces_dataframe(self):
-        raw = pl.DataFrame({"x": [1]})
+        raw = pl.from_repr("""\
+┌─────┐
+│ x   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
         result = raw.sdtm.to_frame()
         assert isinstance(result, pl.DataFrame)

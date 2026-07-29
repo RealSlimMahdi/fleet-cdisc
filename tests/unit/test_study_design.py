@@ -377,7 +377,15 @@ class TestEpochFromSE:
         assert result["EPOCH"].to_list() == ["SCREENING", "TREATMENT", None]
 
     def test_requires_exactly_one_source(self):
-        df = pl.DataFrame({"DTC": ["2014-01-01"]})
+        df = pl.from_repr("""\
+┌────────────┐
+│ DTC        │
+│ ---        │
+│ str        │
+╞════════════╡
+│ 2014-01-01 │
+└────────────┘
+""")
         with pytest.raises(ValueError, match="exactly one"):
             df.sdtm.epoch_assign("EPOCH", date_col="DTC")
 

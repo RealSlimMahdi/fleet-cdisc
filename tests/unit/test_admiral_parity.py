@@ -30,25 +30,57 @@ class TestBSA:
     """Body Surface Area calculation tests."""
 
     def test_mosteller(self):
-        df = pl.DataFrame({"WEIGHT": [70.0], "HEIGHT": [170.0]})
+        df = pl.from_repr("""\
+┌────────┬────────┐
+│ WEIGHT ┆ HEIGHT │
+│ ---    ┆ ---    │
+│ f64    ┆ f64    │
+╞════════╪════════╡
+│ 70.0   ┆ 170.0  │
+└────────┴────────┘
+""")
         result = df.select(bsa("WEIGHT", "HEIGHT", method="Mosteller"))
         expected = math.sqrt(170.0 * 70.0 / 3600.0)
         assert result["BSA"][0] == pytest.approx(round(expected, 4))
 
     def test_dubois(self):
-        df = pl.DataFrame({"WEIGHT": [70.0], "HEIGHT": [170.0]})
+        df = pl.from_repr("""\
+┌────────┬────────┐
+│ WEIGHT ┆ HEIGHT │
+│ ---    ┆ ---    │
+│ f64    ┆ f64    │
+╞════════╪════════╡
+│ 70.0   ┆ 170.0  │
+└────────┴────────┘
+""")
         result = df.select(bsa("WEIGHT", "HEIGHT", method="DuBois"))
         expected = 0.007184 * (170.0**0.725) * (70.0**0.425)
         assert result["BSA"][0] == pytest.approx(round(expected, 4))
 
     def test_haycock(self):
-        df = pl.DataFrame({"WEIGHT": [70.0], "HEIGHT": [170.0]})
+        df = pl.from_repr("""\
+┌────────┬────────┐
+│ WEIGHT ┆ HEIGHT │
+│ ---    ┆ ---    │
+│ f64    ┆ f64    │
+╞════════╪════════╡
+│ 70.0   ┆ 170.0  │
+└────────┴────────┘
+""")
         result = df.select(bsa("WEIGHT", "HEIGHT", method="Haycock"))
         expected = 0.024265 * (170.0**0.3964) * (70.0**0.5378)
         assert result["BSA"][0] == pytest.approx(round(expected, 4))
 
     def test_gehan_george(self):
-        df = pl.DataFrame({"WEIGHT": [70.0], "HEIGHT": [170.0]})
+        df = pl.from_repr("""\
+┌────────┬────────┐
+│ WEIGHT ┆ HEIGHT │
+│ ---    ┆ ---    │
+│ f64    ┆ f64    │
+╞════════╪════════╡
+│ 70.0   ┆ 170.0  │
+└────────┴────────┘
+""")
         result = df.select(bsa("WEIGHT", "HEIGHT", method="Gehan-George"))
         expected = 0.0235 * (170.0**0.42246) * (70.0**0.51456)
         assert result["BSA"][0] == pytest.approx(round(expected, 4))
@@ -58,20 +90,45 @@ class TestBSA:
             bsa("WEIGHT", "HEIGHT", method="Invalid")
 
     def test_null_propagation(self):
-        df = pl.DataFrame({"WEIGHT": [None], "HEIGHT": [170.0]})
+        df = pl.from_repr("""\
+┌────────┬────────┐
+│ WEIGHT ┆ HEIGHT │
+│ ---    ┆ ---    │
+│ null   ┆ f64    │
+╞════════╪════════╡
+│ null   ┆ 170.0  │
+└────────┴────────┘
+""")
         result = df.select(bsa("WEIGHT", "HEIGHT"))
         assert result["BSA"][0] is None
 
 
 class TestMeanArterialPressure:
     def test_basic(self):
-        df = pl.DataFrame({"SYSBP": [120.0], "DIABP": [80.0]})
+        df = pl.from_repr("""\
+┌───────┬───────┐
+│ SYSBP ┆ DIABP │
+│ ---   ┆ ---   │
+│ f64   ┆ f64   │
+╞═══════╪═══════╡
+│ 120.0 ┆ 80.0  │
+└───────┴───────┘
+""")
         result = df.select(mean_arterial_pressure("SYSBP", "DIABP"))
         # MAP = 80 + (120 - 80) / 3 = 80 + 13.33 = 93.33
         assert result["MAP"][0] == pytest.approx(93.33, abs=0.01)
 
     def test_multiple_rows(self):
-        df = pl.DataFrame({"SYSBP": [120.0, 140.0], "DIABP": [80.0, 90.0]})
+        df = pl.from_repr("""\
+┌───────┬───────┐
+│ SYSBP ┆ DIABP │
+│ ---   ┆ ---   │
+│ f64   ┆ f64   │
+╞═══════╪═══════╡
+│ 120.0 ┆ 80.0  │
+│ 140.0 ┆ 90.0  │
+└───────┴───────┘
+""")
         result = df.select(mean_arterial_pressure("SYSBP", "DIABP"))
         assert result["MAP"][0] == pytest.approx(93.33, abs=0.01)
         assert result["MAP"][1] == pytest.approx(106.67, abs=0.01)
@@ -79,18 +136,42 @@ class TestMeanArterialPressure:
 
 class TestQTc:
     def test_fridericia(self):
-        df = pl.DataFrame({"QT": [400.0], "RR": [1.0]})
+        df = pl.from_repr("""\
+┌───────┬─────┐
+│ QT    ┆ RR  │
+│ ---   ┆ --- │
+│ f64   ┆ f64 │
+╞═══════╪═════╡
+│ 400.0 ┆ 1.0 │
+└───────┴─────┘
+""")
         result = df.select(qtc("QT", "RR", method="Fridericia"))
         # QT / RR^(1/3) = 400 / 1.0 = 400
         assert result["QTC"][0] == pytest.approx(400.0)
 
     def test_bazett(self):
-        df = pl.DataFrame({"QT": [400.0], "RR": [1.0]})
+        df = pl.from_repr("""\
+┌───────┬─────┐
+│ QT    ┆ RR  │
+│ ---   ┆ --- │
+│ f64   ┆ f64 │
+╞═══════╪═════╡
+│ 400.0 ┆ 1.0 │
+└───────┴─────┘
+""")
         result = df.select(qtc("QT", "RR", method="Bazett"))
         assert result["QTC"][0] == pytest.approx(400.0)
 
     def test_fridericia_nonunit_rr(self):
-        df = pl.DataFrame({"QT": [400.0], "RR": [0.8]})
+        df = pl.from_repr("""\
+┌───────┬─────┐
+│ QT    ┆ RR  │
+│ ---   ┆ --- │
+│ f64   ┆ f64 │
+╞═══════╪═════╡
+│ 400.0 ┆ 0.8 │
+└───────┴─────┘
+""")
         result = df.select(qtc("QT", "RR", method="Fridericia"))
         expected = 400.0 / (0.8 ** (1.0 / 3.0))
         assert result["QTC"][0] == pytest.approx(round(expected, 2))
@@ -102,32 +183,80 @@ class TestQTc:
 
 class TestAgeInYears:
     def test_years(self):
-        df = pl.DataFrame({"AGE": [45.0], "AGEU": ["YEARS"]})
+        df = pl.from_repr("""\
+┌──────┬───────┐
+│ AGE  ┆ AGEU  │
+│ ---  ┆ ---   │
+│ f64  ┆ str   │
+╞══════╪═══════╡
+│ 45.0 ┆ YEARS │
+└──────┴───────┘
+""")
         result = df.select(age_in_years("AGE", "AGEU"))
         assert result["AAGE"][0] == pytest.approx(45.0)
 
     def test_months(self):
-        df = pl.DataFrame({"AGE": [24.0], "AGEU": ["MONTHS"]})
+        df = pl.from_repr("""\
+┌──────┬────────┐
+│ AGE  ┆ AGEU   │
+│ ---  ┆ ---    │
+│ f64  ┆ str    │
+╞══════╪════════╡
+│ 24.0 ┆ MONTHS │
+└──────┴────────┘
+""")
         result = df.select(age_in_years("AGE", "AGEU"))
         assert result["AAGE"][0] == pytest.approx(2.0)
 
     def test_days(self):
-        df = pl.DataFrame({"AGE": [365.25], "AGEU": ["DAYS"]})
+        df = pl.from_repr("""\
+┌────────┬──────┐
+│ AGE    ┆ AGEU │
+│ ---    ┆ ---  │
+│ f64    ┆ str  │
+╞════════╪══════╡
+│ 365.25 ┆ DAYS │
+└────────┴──────┘
+""")
         result = df.select(age_in_years("AGE", "AGEU"))
         assert result["AAGE"][0] == pytest.approx(1.0)
 
     def test_weeks(self):
-        df = pl.DataFrame({"AGE": [52.1775], "AGEU": ["WEEKS"]})
+        df = pl.from_repr("""\
+┌─────────┬───────┐
+│ AGE     ┆ AGEU  │
+│ ---     ┆ ---   │
+│ f64     ┆ str   │
+╞═════════╪═══════╡
+│ 52.1775 ┆ WEEKS │
+└─────────┴───────┘
+""")
         result = df.select(age_in_years("AGE", "AGEU"))
         assert result["AAGE"][0] == pytest.approx(1.0)
 
     def test_case_insensitive(self):
-        df = pl.DataFrame({"AGE": [45.0], "AGEU": ["years"]})
+        df = pl.from_repr("""\
+┌──────┬───────┐
+│ AGE  ┆ AGEU  │
+│ ---  ┆ ---   │
+│ f64  ┆ str   │
+╞══════╪═══════╡
+│ 45.0 ┆ years │
+└──────┴───────┘
+""")
         result = df.select(age_in_years("AGE", "AGEU"))
         assert result["AAGE"][0] == pytest.approx(45.0)
 
     def test_unknown_unit_returns_null(self):
-        df = pl.DataFrame({"AGE": [45.0], "AGEU": ["CENTURIES"]})
+        df = pl.from_repr("""\
+┌──────┬───────────┐
+│ AGE  ┆ AGEU      │
+│ ---  ┆ ---       │
+│ f64  ┆ str       │
+╞══════╪═══════════╡
+│ 45.0 ┆ CENTURIES │
+└──────┴───────────┘
+""")
         result = df.select(age_in_years("AGE", "AGEU"))
         assert result["AAGE"][0] is None
 
@@ -140,28 +269,32 @@ class TestAgeInYears:
 @pytest.fixture
 def vs_bds():
     """Vital Signs BDS-like frame."""
-    return pl.DataFrame(
-        {
-            "USUBJID": ["01", "01", "01", "02", "02"],
-            "PARAMCD": ["SYSBP", "DIABP", "SYSBP", "SYSBP", "DIABP"],
-            "PARAM": ["Systolic BP", "Diastolic BP", "Systolic BP", "Systolic BP", "Diastolic BP"],
-            "AVAL": [120.0, 80.0, 130.0, 118.0, 76.0],
-            "ADT": ["2014-01-02", "2014-01-02", "2014-01-03", "2014-01-02", "2014-01-02"],
-            "TRTSDT": ["2014-01-01"] * 5,
-            "ABLFL": ["Y", "Y", None, "Y", "Y"],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬─────────┬──────────────┬───────┬────────────┬────────────┬───────┐
+│ USUBJID ┆ PARAMCD ┆ PARAM        ┆ AVAL  ┆ ADT        ┆ TRTSDT     ┆ ABLFL │
+│ ---     ┆ ---     ┆ ---          ┆ ---   ┆ ---        ┆ ---        ┆ ---   │
+│ str     ┆ str     ┆ str          ┆ f64   ┆ str        ┆ str        ┆ str   │
+╞═════════╪═════════╪══════════════╪═══════╪════════════╪════════════╪═══════╡
+│ 01      ┆ SYSBP   ┆ Systolic BP  ┆ 120.0 ┆ 2014-01-02 ┆ 2014-01-01 ┆ Y     │
+│ 01      ┆ DIABP   ┆ Diastolic BP ┆ 80.0  ┆ 2014-01-02 ┆ 2014-01-01 ┆ Y     │
+│ 01      ┆ SYSBP   ┆ Systolic BP  ┆ 130.0 ┆ 2014-01-03 ┆ 2014-01-01 ┆ null  │
+│ 02      ┆ SYSBP   ┆ Systolic BP  ┆ 118.0 ┆ 2014-01-02 ┆ 2014-01-01 ┆ Y     │
+│ 02      ┆ DIABP   ┆ Diastolic BP ┆ 76.0  ┆ 2014-01-02 ┆ 2014-01-01 ┆ Y     │
+└─────────┴─────────┴──────────────┴───────┴────────────┴────────────┴───────┘
+""")
 
 
 class TestNamespaceBSA:
     def test_bsa_verb(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["01"],
-                "WEIGHT": [70.0],
-                "HEIGHT": [170.0],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬────────┬────────┐
+│ USUBJID ┆ WEIGHT ┆ HEIGHT │
+│ ---     ┆ ---    ┆ ---    │
+│ str     ┆ f64    ┆ f64    │
+╞═════════╪════════╪════════╡
+│ 01      ┆ 70.0   ┆ 170.0  │
+└─────────┴────────┴────────┘
+""")
         result = df.adam.bsa("BSA", weight="WEIGHT", height="HEIGHT").to_frame()
         expected = math.sqrt(170.0 * 70.0 / 3600.0)
         assert result["BSA"][0] == pytest.approx(round(expected, 4))
@@ -169,26 +302,30 @@ class TestNamespaceBSA:
 
 class TestNamespaceMAP:
     def test_map_verb(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["01"],
-                "SYSBP": [120.0],
-                "DIABP": [80.0],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬───────┬───────┐
+│ USUBJID ┆ SYSBP ┆ DIABP │
+│ ---     ┆ ---   ┆ ---   │
+│ str     ┆ f64   ┆ f64   │
+╞═════════╪═══════╪═══════╡
+│ 01      ┆ 120.0 ┆ 80.0  │
+└─────────┴───────┴───────┘
+""")
         result = df.adam.map("MAP", systolic="SYSBP", diastolic="DIABP").to_frame()
         assert result["MAP"][0] == pytest.approx(93.33, abs=0.01)
 
 
 class TestNamespaceQTc:
     def test_qtc_verb(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["01"],
-                "QT": [400.0],
-                "RR": [0.85],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬───────┬──────┐
+│ USUBJID ┆ QT    ┆ RR   │
+│ ---     ┆ ---   ┆ ---  │
+│ str     ┆ f64   ┆ f64  │
+╞═════════╪═══════╪══════╡
+│ 01      ┆ 400.0 ┆ 0.85 │
+└─────────┴───────┴──────┘
+""")
         result = df.adam.qtc("QTCF", qt="QT", rr="RR").to_frame()
         expected = 400.0 / (0.85 ** (1.0 / 3.0))
         assert result["QTCF"][0] == pytest.approx(round(expected, 2))
@@ -232,14 +369,19 @@ class TestDeriveSummaryRecords:
 
 class TestDeriveLOCFRecords:
     def test_forward_fill(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["01", "01", "01", "02", "02"],
-                "PARAMCD": ["SBP", "SBP", "SBP", "SBP", "SBP"],
-                "AVAL": [120.0, None, None, 110.0, None],
-                "ADT": ["2014-01-01", "2014-01-02", "2014-01-03", "2014-01-01", "2014-01-02"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬─────────┬───────┬────────────┐
+│ USUBJID ┆ PARAMCD ┆ AVAL  ┆ ADT        │
+│ ---     ┆ ---     ┆ ---   ┆ ---        │
+│ str     ┆ str     ┆ f64   ┆ str        │
+╞═════════╪═════════╪═══════╪════════════╡
+│ 01      ┆ SBP     ┆ 120.0 ┆ 2014-01-01 │
+│ 01      ┆ SBP     ┆ null  ┆ 2014-01-02 │
+│ 01      ┆ SBP     ┆ null  ┆ 2014-01-03 │
+│ 02      ┆ SBP     ┆ 110.0 ┆ 2014-01-01 │
+│ 02      ┆ SBP     ┆ null  ┆ 2014-01-02 │
+└─────────┴─────────┴───────┴────────────┘
+""")
         result = df.adam.derive_locf_records(
             by=["USUBJID", "PARAMCD"],
             analysis_var="AVAL",
@@ -252,15 +394,18 @@ class TestDeriveLOCFRecords:
 
 class TestDeriveParam:
     def test_derive_bmi_param(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["01", "01", "02", "02"],
-                "PARAMCD": ["WEIGHT", "HEIGHT", "WEIGHT", "HEIGHT"],
-                "PARAM": ["Weight", "Height", "Weight", "Height"],
-                "AVAL": [70.0, 170.0, 80.0, 180.0],
-                "ADT": ["2014-01-01", "2014-01-01", "2014-01-01", "2014-01-01"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬─────────┬────────┬───────┬────────────┐
+│ USUBJID ┆ PARAMCD ┆ PARAM  ┆ AVAL  ┆ ADT        │
+│ ---     ┆ ---     ┆ ---    ┆ ---   ┆ ---        │
+│ str     ┆ str     ┆ str    ┆ f64   ┆ str        │
+╞═════════╪═════════╪════════╪═══════╪════════════╡
+│ 01      ┆ WEIGHT  ┆ Weight ┆ 70.0  ┆ 2014-01-01 │
+│ 01      ┆ HEIGHT  ┆ Height ┆ 170.0 ┆ 2014-01-01 │
+│ 02      ┆ WEIGHT  ┆ Weight ┆ 80.0  ┆ 2014-01-01 │
+│ 02      ┆ HEIGHT  ┆ Height ┆ 180.0 ┆ 2014-01-01 │
+└─────────┴─────────┴────────┴───────┴────────────┘
+""")
         result = df.adam.derive_param(
             by=["USUBJID"],
             set_values_to={"PARAMCD": "BMI", "PARAM": "Body Mass Index"},
@@ -412,8 +557,24 @@ class TestDeriveParam:
             )
 
     def test_from_dataset_missing_bds_columns_raises(self):
-        advs = pl.DataFrame({"USUBJID": ["01"], "PARAMCD": ["SYSBP"], "AVAL": [120.0]})
-        not_bds = pl.DataFrame({"USUBJID": ["01"], "CREAT": [1.0]})
+        advs = pl.from_repr("""\
+┌─────────┬─────────┬───────┐
+│ USUBJID ┆ PARAMCD ┆ AVAL  │
+│ ---     ┆ ---     ┆ ---   │
+│ str     ┆ str     ┆ f64   │
+╞═════════╪═════════╪═══════╡
+│ 01      ┆ SYSBP   ┆ 120.0 │
+└─────────┴─────────┴───────┘
+""")
+        not_bds = pl.from_repr("""\
+┌─────────┬───────┐
+│ USUBJID ┆ CREAT │
+│ ---     ┆ ---   │
+│ str     ┆ f64   │
+╞═════════╪═══════╡
+│ 01      ┆ 1.0   │
+└─────────┴───────┘
+""")
         with pytest.raises(Exception, match="BDS-shaped"):
             advs.adam.derive_param(
                 by=["USUBJID"],
@@ -431,13 +592,16 @@ class TestDeriveParam:
 
 class TestADSLAgeYears:
     def test_years_passthrough(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["01", "02"],
-                "AGE": [45.0, 62.0],
-                "AGEU": ["YEARS", "MONTHS"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬──────┬────────┐
+│ USUBJID ┆ AGE  ┆ AGEU   │
+│ ---     ┆ ---  ┆ ---    │
+│ str     ┆ f64  ┆ str    │
+╞═════════╪══════╪════════╡
+│ 01      ┆ 45.0 ┆ YEARS  │
+│ 02      ┆ 62.0 ┆ MONTHS │
+└─────────┴──────┴────────┘
+""")
         result = df.adam.adsl.age_years("AAGE", age_col="AGE", age_unit_col="AGEU").to_frame()
         assert result["AAGE"][0] == pytest.approx(45.0)
         # 62 months → ~5.2 years
@@ -446,17 +610,15 @@ class TestADSLAgeYears:
 
 class TestADSLDerivePeriod:
     def test_creates_period_columns(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["01"],
-                "AP01SDT": ["2014-01-01"],
-                "AP01EDT": ["2014-06-30"],
-                "TRT01P": ["Active"],
-                "AP02SDT": ["2014-07-01"],
-                "AP02EDT": ["2014-12-31"],
-                "TRT02P": ["Placebo"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬────────────┬────────────┬────────┬────────────┬────────────┬─────────┐
+│ USUBJID ┆ AP01SDT    ┆ AP01EDT    ┆ TRT01P ┆ AP02SDT    ┆ AP02EDT    ┆ TRT02P  │
+│ ---     ┆ ---        ┆ ---        ┆ ---    ┆ ---        ┆ ---        ┆ ---     │
+│ str     ┆ str        ┆ str        ┆ str    ┆ str        ┆ str        ┆ str     │
+╞═════════╪════════════╪════════════╪════════╪════════════╪════════════╪═════════╡
+│ 01      ┆ 2014-01-01 ┆ 2014-06-30 ┆ Active ┆ 2014-07-01 ┆ 2014-12-31 ┆ Placebo │
+└─────────┴────────────┴────────────┴────────┴────────────┴────────────┴─────────┘
+""")
         result = df.adam.adsl.derive_period(
             periods=[
                 {"number": 1, "start": "AP01SDT", "end": "AP01EDT", "treatment": "TRT01P"},
@@ -528,42 +690,20 @@ class TestANL01FLAdmiralParity:
         - Null AVAL → excluded by restrict_derivation filter
         - Single-record group → trivially flagged "Y"
         """
-        return pl.DataFrame(
-            {
-                "USUBJID": [
-                    "01",
-                    "01",
-                    "01",  # SYSBP: 3 records, one has null AVAL
-                    "01",  # DIABP: 1 record
-                    "02",
-                    "02",  # SYSBP: 2 records, both valid
-                ],
-                "PARAMCD": [
-                    "SYSBP",
-                    "SYSBP",
-                    "SYSBP",
-                    "DIABP",
-                    "SYSBP",
-                    "SYSBP",
-                ],
-                "AVAL": [
-                    120.0,
-                    130.0,
-                    None,  # 01/SYSBP: null at latest date
-                    80.0,  # 01/DIABP: single record
-                    118.0,
-                    125.0,  # 02/SYSBP: both valid
-                ],
-                "ADT": [
-                    "2014-01-02",
-                    "2014-01-05",
-                    "2014-01-10",
-                    "2014-01-02",
-                    "2014-01-03",
-                    "2014-01-07",
-                ],
-            }
-        )
+        return pl.from_repr("""\
+┌─────────┬─────────┬───────┬────────────┐
+│ USUBJID ┆ PARAMCD ┆ AVAL  ┆ ADT        │
+│ ---     ┆ ---     ┆ ---   ┆ ---        │
+│ str     ┆ str     ┆ f64   ┆ str        │
+╞═════════╪═════════╪═══════╪════════════╡
+│ 01      ┆ SYSBP   ┆ 120.0 ┆ 2014-01-02 │
+│ 01      ┆ SYSBP   ┆ 130.0 ┆ 2014-01-05 │
+│ 01      ┆ SYSBP   ┆ null  ┆ 2014-01-10 │
+│ 01      ┆ DIABP   ┆ 80.0  ┆ 2014-01-02 │
+│ 02      ┆ SYSBP   ┆ 118.0 ┆ 2014-01-03 │
+│ 02      ┆ SYSBP   ┆ 125.0 ┆ 2014-01-07 │
+└─────────┴─────────┴───────┴────────────┘
+""")
 
     def test_last_valid_flagged(self, bds_multi_record):
         """Last non-null-AVAL record per group gets ANL01FL = 'Y'."""
@@ -588,14 +728,16 @@ class TestANL01FLAdmiralParity:
 
     def test_all_valid_single_record_groups(self):
         """Every group has exactly one record → all get ANL01FL = 'Y'."""
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["01", "02"],
-                "PARAMCD": ["SYSBP", "SYSBP"],
-                "AVAL": [120.0, 118.0],
-                "ADT": ["2014-01-02", "2014-01-03"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬─────────┬───────┬────────────┐
+│ USUBJID ┆ PARAMCD ┆ AVAL  ┆ ADT        │
+│ ---     ┆ ---     ┆ ---   ┆ ---        │
+│ str     ┆ str     ┆ f64   ┆ str        │
+╞═════════╪═════════╪═══════╪════════════╡
+│ 01      ┆ SYSBP   ┆ 120.0 ┆ 2014-01-02 │
+│ 02      ┆ SYSBP   ┆ 118.0 ┆ 2014-01-03 │
+└─────────┴─────────┴───────┴────────────┘
+""")
         result = df.adam.flag(
             "ANL01FL",
             criteria="last",
@@ -607,14 +749,16 @@ class TestANL01FLAdmiralParity:
 
     def test_all_null_aval_group(self):
         """Group where all AVAL are null → no records flagged."""
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["01", "01"],
-                "PARAMCD": ["SYSBP", "SYSBP"],
-                "AVAL": [None, None],
-                "ADT": ["2014-01-02", "2014-01-05"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬─────────┬──────┬────────────┐
+│ USUBJID ┆ PARAMCD ┆ AVAL ┆ ADT        │
+│ ---     ┆ ---     ┆ ---  ┆ ---        │
+│ str     ┆ str     ┆ null ┆ str        │
+╞═════════╪═════════╪══════╪════════════╡
+│ 01      ┆ SYSBP   ┆ null ┆ 2014-01-02 │
+│ 01      ┆ SYSBP   ┆ null ┆ 2014-01-05 │
+└─────────┴─────────┴──────┴────────────┘
+""")
         result = df.adam.flag(
             "ANL01FL",
             criteria="last",
@@ -639,15 +783,18 @@ class TestANL01FLAdmiralParity:
               filter = !is.na(AVAL)
             )
         """
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["01", "01", "01", "01"],
-                "PARAMCD": ["SYSBP", "SYSBP", "SYSBP", "SYSBP"],
-                "AVISIT": ["Week 2", "Week 2", "Week 4", "Week 4"],
-                "AVAL": [120.0, 125.0, 130.0, None],
-                "ADT": ["2014-01-10", "2014-01-12", "2014-01-24", "2014-01-26"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬─────────┬────────┬───────┬────────────┐
+│ USUBJID ┆ PARAMCD ┆ AVISIT ┆ AVAL  ┆ ADT        │
+│ ---     ┆ ---     ┆ ---    ┆ ---   ┆ ---        │
+│ str     ┆ str     ┆ str    ┆ f64   ┆ str        │
+╞═════════╪═════════╪════════╪═══════╪════════════╡
+│ 01      ┆ SYSBP   ┆ Week 2 ┆ 120.0 ┆ 2014-01-10 │
+│ 01      ┆ SYSBP   ┆ Week 2 ┆ 125.0 ┆ 2014-01-12 │
+│ 01      ┆ SYSBP   ┆ Week 4 ┆ 130.0 ┆ 2014-01-24 │
+│ 01      ┆ SYSBP   ┆ Week 4 ┆ null  ┆ 2014-01-26 │
+└─────────┴─────────┴────────┴───────┴────────────┘
+""")
         result = df.adam.flag(
             "ANL01FL",
             criteria="last",

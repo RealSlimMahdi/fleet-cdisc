@@ -21,14 +21,17 @@ import fleet  # noqa: F401 — triggers namespace registration
 @pytest.fixture
 def base_frame():
     """Minimal DataFrame that every namespace can work with."""
-    return pl.DataFrame(
-        {
-            "USUBJID": ["01-001", "01-002", "01-003"],
-            "AGE": [45, 62, 38],
-            "SEX": ["F", "M", "F"],
-            "ARM": ["Placebo", "Active", "Active"],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬─────┬─────┬─────────┐
+│ USUBJID ┆ AGE ┆ SEX ┆ ARM     │
+│ ---     ┆ --- ┆ --- ┆ ---     │
+│ str     ┆ i64 ┆ str ┆ str     │
+╞═════════╪═════╪═════╪═════════╡
+│ 01-001  ┆ 45  ┆ F   ┆ Placebo │
+│ 01-002  ┆ 62  ┆ M   ┆ Active  │
+│ 01-003  ┆ 38  ┆ F   ┆ Active  │
+└─────────┴─────┴─────┴─────────┘
+""")
 
 
 # ── Namespace accessor helpers ────────────────────────────────────────────────

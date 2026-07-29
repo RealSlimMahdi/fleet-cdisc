@@ -9,18 +9,18 @@ import fleet  # noqa: F401 — triggers namespace registration
 @pytest.fixture
 def ae_frame():
     """Minimal AE SDTM-like event frame."""
-    return pl.DataFrame(
-        {
-            "USUBJID": ["01-001", "01-001", "01-001", "01-002"],
-            "AETERM": ["Headache", "Nausea", "Fatigue", "Dizziness"],
-            "AEBODSYS": ["Nervous", "GI", "General", "Nervous"],
-            "AESEV": ["MILD", "SEVERE", "MODERATE", "MILD"],
-            "AESTDTC": ["2024-01-15", "2024-01-20", "2024-01-25", "2024-01-16"],
-            "AEENDTC": ["2024-01-17", None, "2024-01-26", "2024-01-18"],
-            "TRTSDT": ["2024-01-10", "2024-01-10", "2024-01-10", "2024-01-11"],
-            "TRTEDT": ["2024-03-10", "2024-03-10", "2024-03-10", "2024-03-11"],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬───────────┬──────────┬──────────┬────────────┬────────────┬────────────┬────────────┐
+│ USUBJID ┆ AETERM    ┆ AEBODSYS ┆ AESEV    ┆ AESTDTC    ┆ AEENDTC    ┆ TRTSDT     ┆ TRTEDT     │
+│ ---     ┆ ---       ┆ ---      ┆ ---      ┆ ---        ┆ ---        ┆ ---        ┆ ---        │
+│ str     ┆ str       ┆ str      ┆ str      ┆ str        ┆ str        ┆ str        ┆ str        │
+╞═════════╪═══════════╪══════════╪══════════╪════════════╪════════════╪════════════╪════════════╡
+│ 01-001  ┆ Headache  ┆ Nervous  ┆ MILD     ┆ 2024-01-15 ┆ 2024-01-17 ┆ 2024-01-10 ┆ 2024-03-10 │
+│ 01-001  ┆ Nausea    ┆ GI       ┆ SEVERE   ┆ 2024-01-20 ┆ null       ┆ 2024-01-10 ┆ 2024-03-10 │
+│ 01-001  ┆ Fatigue   ┆ General  ┆ MODERATE ┆ 2024-01-25 ┆ 2024-01-26 ┆ 2024-01-10 ┆ 2024-03-10 │
+│ 01-002  ┆ Dizziness ┆ Nervous  ┆ MILD     ┆ 2024-01-16 ┆ 2024-01-18 ┆ 2024-01-11 ┆ 2024-03-11 │
+└─────────┴───────────┴──────────┴──────────┴────────────┴────────────┴────────────┴────────────┘
+""")
 
 
 class TestBaseVerbs:
@@ -125,13 +125,15 @@ class TestTreatmentEmergent:
         assert all(f == "Y" for f in result["TRTEMFL"].to_list())
 
     def test_pre_treatment_not_flagged(self):
-        df = pl.DataFrame(
-            {
-                "AESTDTC": ["2024-01-05"],
-                "TRTSDT": ["2024-01-10"],
-                "TRTEDT": ["2024-03-10"],
-            }
-        )
+        df = pl.from_repr("""\
+┌────────────┬────────────┬────────────┐
+│ AESTDTC    ┆ TRTSDT     ┆ TRTEDT     │
+│ ---        ┆ ---        ┆ ---        │
+│ str        ┆ str        ┆ str        │
+╞════════════╪════════════╪════════════╡
+│ 2024-01-05 ┆ 2024-01-10 ┆ 2024-03-10 │
+└────────────┴────────────┴────────────┘
+""")
         result = df.adam.occds.treatment_emergent(
             "TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT"
         ).to_frame()

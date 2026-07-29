@@ -31,17 +31,19 @@ ADSL = pl.from_repr("""
 
 # S01 has a MILD and a SEVERE event in the same SOC (worst-case probe);
 # S04's event is uncoded (null SOC/PT).
-ADAE = pl.DataFrame(
-    {
-        "USUBJID": ["S01", "S01", "S02", "S03", "S04"],
-        "TRTA": ["Placebo", "Placebo", "Placebo", "Drug A", "Drug A"],
-        "AEBODSYS": ["NERVOUS", "NERVOUS", "NERVOUS", "NERVOUS", None],
-        "AEDECOD": ["HEADACHE", "MIGRAINE", "HEADACHE", "HEADACHE", None],
-        "AESEV": ["MILD", "SEVERE", "MILD", "MODERATE", "MILD"],
-        "AEREL": ["N", "Y", "N", "N", "N"],
-        "AETOXGR": ["1", "3", "1", "2", "1"],
-    }
-)
+ADAE = pl.from_repr("""\
+┌─────────┬─────────┬──────────┬──────────┬──────────┬───────┬─────────┐
+│ USUBJID ┆ TRTA    ┆ AEBODSYS ┆ AEDECOD  ┆ AESEV    ┆ AEREL ┆ AETOXGR │
+│ ---     ┆ ---     ┆ ---      ┆ ---      ┆ ---      ┆ ---   ┆ ---     │
+│ str     ┆ str     ┆ str      ┆ str      ┆ str      ┆ str   ┆ str     │
+╞═════════╪═════════╪══════════╪══════════╪══════════╪═══════╪═════════╡
+│ S01     ┆ Placebo ┆ NERVOUS  ┆ HEADACHE ┆ MILD     ┆ N     ┆ 1       │
+│ S01     ┆ Placebo ┆ NERVOUS  ┆ MIGRAINE ┆ SEVERE   ┆ Y     ┆ 3       │
+│ S02     ┆ Placebo ┆ NERVOUS  ┆ HEADACHE ┆ MILD     ┆ N     ┆ 1       │
+│ S03     ┆ Drug A  ┆ NERVOUS  ┆ HEADACHE ┆ MODERATE ┆ N     ┆ 2       │
+│ S04     ┆ Drug A  ┆ null     ┆ null     ┆ MILD     ┆ N     ┆ 1       │
+└─────────┴─────────┴──────────┴──────────┴──────────┴───────┴─────────┘
+""")
 
 
 def _stat(ard: pl.DataFrame, **eq: str) -> list[float | None]:
@@ -142,14 +144,16 @@ class TestNoCodingAvailable:
         ) == [1.0]
 
     def test_cm_subject_with_only_uncoded_meds_counted(self) -> None:
-        adcm = pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S02"],
-                "TRTA": ["Placebo", "Placebo"],
-                "CMCLAS": ["NSAID", None],
-                "CMDECOD": ["ASPIRIN", None],
-            }
-        )
+        adcm = pl.from_repr("""\
+┌─────────┬─────────┬────────┬─────────┐
+│ USUBJID ┆ TRTA    ┆ CMCLAS ┆ CMDECOD │
+│ ---     ┆ ---     ┆ ---    ┆ ---     │
+│ str     ┆ str     ┆ str    ┆ str     │
+╞═════════╪═════════╪════════╪═════════╡
+│ S01     ┆ Placebo ┆ NSAID  ┆ ASPIRIN │
+│ S02     ┆ Placebo ┆ null   ┆ null    │
+└─────────┴─────────┴────────┴─────────┘
+""")
         ard = adcm.tlg.cm.t_summary(groupby="TRTA", adsl=ADSL)
         assert _stat(
             ard,
@@ -160,20 +164,15 @@ class TestNoCodingAvailable:
         ) == [1.0]
 
     def test_mh_uncoded_terms_visible(self) -> None:
-        admh = pl.DataFrame(
-            {
-                "USUBJID": ["S01"],
-                "TRTA": ["Placebo"],
-                "MHBODSYS": [None],
-                "MHDECOD": [None],
-            },
-            schema={
-                "USUBJID": pl.Utf8,
-                "TRTA": pl.Utf8,
-                "MHBODSYS": pl.Utf8,
-                "MHDECOD": pl.Utf8,
-            },
-        )
+        admh = pl.from_repr("""\
+┌─────────┬─────────┬──────────┬─────────┐
+│ USUBJID ┆ TRTA    ┆ MHBODSYS ┆ MHDECOD │
+│ ---     ┆ ---     ┆ ---      ┆ ---     │
+│ str     ┆ str     ┆ str      ┆ str     │
+╞═════════╪═════════╪══════════╪═════════╡
+│ S01     ┆ Placebo ┆ null     ┆ null    │
+└─────────┴─────────┴──────────┴─────────┘
+""")
         ard = admh.tlg.mh.t_summary(groupby="TRTA", adsl=ADSL)
         assert _stat(
             ard,
@@ -184,17 +183,19 @@ class TestNoCodingAvailable:
         ) == [1.0]
 
 
-ADLB_CHG = pl.DataFrame(
-    {
-        "USUBJID": ["S01", "S01", "S02", "S02"],
-        "TRTA": ["Placebo"] * 4,
-        "PARAMCD": ["ALT"] * 4,
-        "AVISIT": ["BASELINE", "WEEK 1", "BASELINE", "WEEK 1"],
-        "ABLFL": ["Y", None, "Y", None],  # ADaM-standard Y / null coding
-        "AVAL": [10.0, 16.0, 20.0, 22.0],
-        "CHG": [None, 6.0, None, 2.0],
-    }
-)
+# ABLFL: ADaM-standard Y / null coding
+ADLB_CHG = pl.from_repr("""\
+┌─────────┬─────────┬─────────┬──────────┬───────┬──────┬──────┐
+│ USUBJID ┆ TRTA    ┆ PARAMCD ┆ AVISIT   ┆ ABLFL ┆ AVAL ┆ CHG  │
+│ ---     ┆ ---     ┆ ---     ┆ ---      ┆ ---   ┆ ---  ┆ ---  │
+│ str     ┆ str     ┆ str     ┆ str      ┆ str   ┆ f64  ┆ f64  │
+╞═════════╪═════════╪═════════╪══════════╪═══════╪══════╪══════╡
+│ S01     ┆ Placebo ┆ ALT     ┆ BASELINE ┆ Y     ┆ 10.0 ┆ null │
+│ S01     ┆ Placebo ┆ ALT     ┆ WEEK 1   ┆ null  ┆ 16.0 ┆ 6.0  │
+│ S02     ┆ Placebo ┆ ALT     ┆ BASELINE ┆ Y     ┆ 20.0 ┆ null │
+│ S02     ┆ Placebo ┆ ALT     ┆ WEEK 1   ┆ null  ┆ 22.0 ┆ 2.0  │
+└─────────┴─────────┴─────────┴──────────┴───────┴──────┴──────┘
+""")
 
 
 class TestLabChange:
@@ -221,16 +222,18 @@ class TestLabChange:
 
 
 class TestLabShift:
-    ADLB = pl.DataFrame(
-        {
-            "USUBJID": ["S01", "S01", "S01", "S02"],
-            "TRTA": ["Placebo"] * 4,
-            "PARAMCD": ["ALT"] * 4,
-            "ABLFL": ["Y", None, None, None],
-            "BNRIND": ["NORMAL", "NORMAL", "NORMAL", "LOW"],
-            "ANRIND": ["NORMAL", "HIGH", "NORMAL", "NORMAL"],
-        }
-    )
+    ADLB = pl.from_repr("""\
+┌─────────┬─────────┬─────────┬───────┬────────┬────────┐
+│ USUBJID ┆ TRTA    ┆ PARAMCD ┆ ABLFL ┆ BNRIND ┆ ANRIND │
+│ ---     ┆ ---     ┆ ---     ┆ ---   ┆ ---    ┆ ---    │
+│ str     ┆ str     ┆ str     ┆ str   ┆ str    ┆ str    │
+╞═════════╪═════════╪═════════╪═══════╪════════╪════════╡
+│ S01     ┆ Placebo ┆ ALT     ┆ Y     ┆ NORMAL ┆ NORMAL │
+│ S01     ┆ Placebo ┆ ALT     ┆ null  ┆ NORMAL ┆ HIGH   │
+│ S01     ┆ Placebo ┆ ALT     ┆ null  ┆ NORMAL ┆ NORMAL │
+│ S02     ┆ Placebo ┆ ALT     ┆ null  ┆ LOW    ┆ NORMAL │
+└─────────┴─────────┴─────────┴───────┴────────┴────────┘
+""")
 
     def test_true_cross_tab_at_worst_post_baseline(self) -> None:
         ard = self.ADLB.tlg.lb.t_shift(groupby="TRTA", adsl=ADSL)
@@ -250,17 +253,31 @@ class TestLabShift:
 
 
 class TestLabAbnormal:
-    ADLB = pl.DataFrame(
-        {
-            "USUBJID": ["S01", "S01", "S02", "S02", "S03", "S03"],
-            "TRTA": ["Placebo"] * 6,
-            "PARAMCD": ["ALT"] * 6,
-            "ABLFL": ["Y", None, "Y", None, "Y", None],
-            "BNRIND": ["NORMAL", "NORMAL", "HIGH", "HIGH", "NORMAL", "NORMAL"],
-            "ANRIND": ["NORMAL", "HIGH", "HIGH", "HIGH", "NORMAL", "NORMAL"],
-        }
-    )
-    ADSL3 = pl.DataFrame({"USUBJID": ["S01", "S02", "S03"], "TRTA": ["Placebo"] * 3})
+    ADLB = pl.from_repr("""\
+┌─────────┬─────────┬─────────┬───────┬────────┬────────┐
+│ USUBJID ┆ TRTA    ┆ PARAMCD ┆ ABLFL ┆ BNRIND ┆ ANRIND │
+│ ---     ┆ ---     ┆ ---     ┆ ---   ┆ ---    ┆ ---    │
+│ str     ┆ str     ┆ str     ┆ str   ┆ str    ┆ str    │
+╞═════════╪═════════╪═════════╪═══════╪════════╪════════╡
+│ S01     ┆ Placebo ┆ ALT     ┆ Y     ┆ NORMAL ┆ NORMAL │
+│ S01     ┆ Placebo ┆ ALT     ┆ null  ┆ NORMAL ┆ HIGH   │
+│ S02     ┆ Placebo ┆ ALT     ┆ Y     ┆ HIGH   ┆ HIGH   │
+│ S02     ┆ Placebo ┆ ALT     ┆ null  ┆ HIGH   ┆ HIGH   │
+│ S03     ┆ Placebo ┆ ALT     ┆ Y     ┆ NORMAL ┆ NORMAL │
+│ S03     ┆ Placebo ┆ ALT     ┆ null  ┆ NORMAL ┆ NORMAL │
+└─────────┴─────────┴─────────┴───────┴────────┴────────┘
+""")
+    ADSL3 = pl.from_repr("""\
+┌─────────┬─────────┐
+│ USUBJID ┆ TRTA    │
+│ ---     ┆ ---     │
+│ str     ┆ str     │
+╞═════════╪═════════╡
+│ S01     ┆ Placebo │
+│ S02     ┆ Placebo │
+│ S03     ┆ Placebo │
+└─────────┴─────────┘
+""")
 
     def test_baseline_abnormal_excluded_from_both_sides(self) -> None:
         ard = self.ADLB.tlg.lb.t_abnormal(groupby="TRTA", adsl=self.ADSL3)
@@ -294,15 +311,17 @@ class TestDMPopulationFilter:
     def test_filter_applies_to_numerators_and_age(self) -> None:
         from fleet.tlg.dm_namespace import DMSummarySpec
 
-        adsl = pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S02", "S03"],
-                "TRTA": ["Placebo"] * 3,
-                "SAFFL": ["Y", "Y", "N"],
-                "AGE": [60, 70, 80],
-                "SEX": ["M", "F", "F"],
-            }
-        )
+        adsl = pl.from_repr("""\
+┌─────────┬─────────┬───────┬─────┬─────┐
+│ USUBJID ┆ TRTA    ┆ SAFFL ┆ AGE ┆ SEX │
+│ ---     ┆ ---     ┆ ---   ┆ --- ┆ --- │
+│ str     ┆ str     ┆ str   ┆ i64 ┆ str │
+╞═════════╪═════════╪═══════╪═════╪═════╡
+│ S01     ┆ Placebo ┆ Y     ┆ 60  ┆ M   │
+│ S02     ┆ Placebo ┆ Y     ┆ 70  ┆ F   │
+│ S03     ┆ Placebo ┆ N     ┆ 80  ┆ F   │
+└─────────┴─────────┴───────┴─────┴─────┘
+""")
         spec = DMSummarySpec(adsl_filter='pl.col("SAFFL") == "Y"')
         ard = adsl.tlg.dm.t_summary(groupby="TRTA", spec=spec)
         assert _stat(ard, stat_name="N", group1_level="Placebo") == [2.0]
@@ -318,15 +337,20 @@ class TestDMPopulationFilter:
 
 class TestEXOverallBlock:
     def test_interval_records_excluded(self) -> None:
-        adex = pl.DataFrame(
-            {
-                "USUBJID": ["S01"] * 5 + ["S02"],
-                "TRTA": ["Placebo"] * 6,
-                "PARAMCD": ["TDOSE"] * 6,
-                "PARCAT1": ["OVERALL", "WEEK", "WEEK", "WEEK", "WEEK", "OVERALL"],
-                "AVAL": [100.0, 25.0, 25.0, 25.0, 25.0, 200.0],
-            }
-        )
+        adex = pl.from_repr("""\
+┌─────────┬─────────┬─────────┬─────────┬───────┐
+│ USUBJID ┆ TRTA    ┆ PARAMCD ┆ PARCAT1 ┆ AVAL  │
+│ ---     ┆ ---     ┆ ---     ┆ ---     ┆ ---   │
+│ str     ┆ str     ┆ str     ┆ str     ┆ f64   │
+╞═════════╪═════════╪═════════╪═════════╪═══════╡
+│ S01     ┆ Placebo ┆ TDOSE   ┆ OVERALL ┆ 100.0 │
+│ S01     ┆ Placebo ┆ TDOSE   ┆ WEEK    ┆ 25.0  │
+│ S01     ┆ Placebo ┆ TDOSE   ┆ WEEK    ┆ 25.0  │
+│ S01     ┆ Placebo ┆ TDOSE   ┆ WEEK    ┆ 25.0  │
+│ S01     ┆ Placebo ┆ TDOSE   ┆ WEEK    ┆ 25.0  │
+│ S02     ┆ Placebo ┆ TDOSE   ┆ OVERALL ┆ 200.0 │
+└─────────┴─────────┴─────────┴─────────┴───────┘
+""")
         ard = adex.tlg.ex.t_summary(groupby="TRTA", adsl=ADSL)
         cell = ard.filter((pl.col("variable") == "PARAMCD") & (pl.col("group1_level") == "Placebo"))
         stats = dict(zip(cell["stat_name"].to_list(), cell["stat"].to_list()))
@@ -334,27 +358,33 @@ class TestEXOverallBlock:
         assert stats["n"] == 2.0
 
     def test_check_warns_on_duplicate_records(self) -> None:
-        adex = pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S01"],
-                "TRTA": ["Placebo"] * 2,
-                "PARAMCD": ["TDOSE"] * 2,
-                "AVAL": [50.0, 60.0],
-            }
-        )
+        adex = pl.from_repr("""\
+┌─────────┬─────────┬─────────┬──────┐
+│ USUBJID ┆ TRTA    ┆ PARAMCD ┆ AVAL │
+│ ---     ┆ ---     ┆ ---     ┆ ---  │
+│ str     ┆ str     ┆ str     ┆ f64  │
+╞═════════╪═════════╪═════════╪══════╡
+│ S01     ┆ Placebo ┆ TDOSE   ┆ 50.0 │
+│ S01     ┆ Placebo ┆ TDOSE   ┆ 60.0 │
+└─────────┴─────────┴─────────┴──────┘
+""")
         report = adex.tlg.ex.check()
         assert any("record-weighted" in msg for msg in report)
 
 
 class TestDeaths:
-    ADSL_DTH = pl.DataFrame(
-        {
-            "USUBJID": ["S01", "S02", "S03", "S04"],
-            "TRTA": ["Placebo"] * 4,
-            "DTHFL": ["Y", "Y", "N", "N"],
-            "DTHCAT": ["ADVERSE EVENT", None, None, None],
-        }
-    )
+    ADSL_DTH = pl.from_repr("""\
+┌─────────┬─────────┬───────┬───────────────┐
+│ USUBJID ┆ TRTA    ┆ DTHFL ┆ DTHCAT        │
+│ ---     ┆ ---     ┆ ---   ┆ ---           │
+│ str     ┆ str     ┆ str   ┆ str           │
+╞═════════╪═════════╪═══════╪═══════════════╡
+│ S01     ┆ Placebo ┆ Y     ┆ ADVERSE EVENT │
+│ S02     ┆ Placebo ┆ Y     ┆ null          │
+│ S03     ┆ Placebo ┆ N     ┆ null          │
+│ S04     ┆ Placebo ┆ N     ┆ null          │
+└─────────┴─────────┴───────┴───────────────┘
+""")
 
     def test_total_deaths_uses_population_denominator(self) -> None:
         ard = self.ADSL_DTH.tlg.ds.t_deaths(groupby="TRTA")
@@ -408,15 +438,18 @@ class TestReviewRoundTwo:
         assert grades == {"1", "2", "3"}  # not "1.0"/"3.0"
 
     def test_deaths_dataset_filter_applies_to_death_ids(self) -> None:
-        adsl = pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S02", "S03", "S04"],
-                "TRTA": ["Placebo"] * 4,
-                "DTHFL": ["Y", "Y", "N", "N"],
-                "DTHCAT": ["ADVERSE EVENT", "OTHER", None, None],
-                "ANL01FL": ["Y", "N", "Y", "Y"],
-            }
-        )
+        adsl = pl.from_repr("""\
+┌─────────┬─────────┬───────┬───────────────┬─────────┐
+│ USUBJID ┆ TRTA    ┆ DTHFL ┆ DTHCAT        ┆ ANL01FL │
+│ ---     ┆ ---     ┆ ---   ┆ ---           ┆ ---     │
+│ str     ┆ str     ┆ str   ┆ str           ┆ str     │
+╞═════════╪═════════╪═══════╪═══════════════╪═════════╡
+│ S01     ┆ Placebo ┆ Y     ┆ ADVERSE EVENT ┆ Y       │
+│ S02     ┆ Placebo ┆ Y     ┆ OTHER         ┆ N       │
+│ S03     ┆ Placebo ┆ N     ┆ null          ┆ Y       │
+│ S04     ┆ Placebo ┆ N     ┆ null          ┆ Y       │
+└─────────┴─────────┴───────┴───────────────┴─────────┘
+""")
         from fleet.tlg import DSDeathsSpec
 
         spec = DSDeathsSpec(dataset_filter='pl.col("ANL01FL") == "Y"')
@@ -432,14 +465,18 @@ class TestReviewRoundTwo:
     def test_deaths_pool_with_zero_death_arm_does_not_crash(self) -> None:
         from fleet.tlg import DSDeathsSpec, GroupPool
 
-        adsl = pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S02", "S03", "S04"],
-                "TRTA": ["Placebo", "Placebo", "Drug A", "Drug A"],
-                "DTHFL": ["Y", "N", "N", "N"],
-                "DTHCAT": ["ADVERSE EVENT", None, None, None],
-            }
-        )
+        adsl = pl.from_repr("""\
+┌─────────┬─────────┬───────┬───────────────┐
+│ USUBJID ┆ TRTA    ┆ DTHFL ┆ DTHCAT        │
+│ ---     ┆ ---     ┆ ---   ┆ ---           │
+│ str     ┆ str     ┆ str   ┆ str           │
+╞═════════╪═════════╪═══════╪═══════════════╡
+│ S01     ┆ Placebo ┆ Y     ┆ ADVERSE EVENT │
+│ S02     ┆ Placebo ┆ N     ┆ null          │
+│ S03     ┆ Drug A  ┆ N     ┆ null          │
+│ S04     ┆ Drug A  ┆ N     ┆ null          │
+└─────────┴─────────┴───────┴───────────────┘
+""")
         spec = DSDeathsSpec(pools=[GroupPool(label="Both", arms=["Placebo", "Drug A"])])
         ard = adsl.tlg.ds.t_deaths(groupby="TRTA", spec=spec)
         # Headline carries the pool; the cause block drops it (no deaths in

@@ -205,7 +205,15 @@ class TestOverwriteGuard:
 
     def test_sdtm_gets_only_and_omit(self, write_spec):
         """SDTM from_spec now has the same only=/omit= affordances as ADaM."""
-        raw = pl.DataFrame({"subject_id": ["A"]})
+        raw = pl.from_repr("""\
+┌────────────┐
+│ subject_id │
+│ ---        │
+│ str        │
+╞════════════╡
+│ A          │
+└────────────┘
+""")
         spec = write_spec(
             _define(
                 [

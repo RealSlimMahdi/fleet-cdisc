@@ -114,7 +114,15 @@ class TestPinLineage:
         assert len(pl_entries) == 1
 
     def test_no_pin_lineage_without_pin(self):
-        df = pl.DataFrame({"USUBJID": ["S001"]})
+        df = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ S001    │
+└─────────┘
+""")
         ns = df.sdtm.assign("SUBJID", source="USUBJID")
         assert pin_lineage_of(ns) == []
 

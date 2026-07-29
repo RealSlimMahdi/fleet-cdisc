@@ -318,13 +318,16 @@ class TestPickEdgeCases:
     def test_global_order_on_non_target_column_does_not_crash(self, adsl_base):
         """order= may name a source column that is not a target — within-event
         selection uses it; the cross-event winner is decided by priority."""
-        ae = pl.DataFrame(
-            {
-                "USUBJID": ["SUBJ-01", "SUBJ-01"],
-                "AEENDTC": [date(2024, 1, 5), date(2024, 2, 1)],
-                "ASEQ": [1, 2],
-            }
-        )
+        ae = pl.from_repr("""\
+┌─────────┬────────────┬──────┐
+│ USUBJID ┆ AEENDTC    ┆ ASEQ │
+│ ---     ┆ ---        ┆ ---  │
+│ str     ┆ date       ┆ i64  │
+╞═════════╪════════════╪══════╡
+│ SUBJ-01 ┆ 2024-01-05 ┆ 1    │
+│ SUBJ-01 ┆ 2024-02-01 ┆ 2    │
+└─────────┴────────────┴──────┘
+""")
         result = adsl_base.adam.adsl.pick(  # type: ignore[attr-defined]
             "LSTALVDT",
             events=[
@@ -468,7 +471,15 @@ class TestPickEdgeCases:
 
     def test_no_by_var_in_source_raises_cleanly(self, adsl_base):
         """Source missing the by-var column should raise during execution."""
-        bad_source = pl.DataFrame({"WRONG_COL": ["A"], "VAL": [1]})
+        bad_source = pl.from_repr("""\
+┌───────────┬─────┐
+│ WRONG_COL ┆ VAL │
+│ ---       ┆ --- │
+│ str       ┆ i64 │
+╞═══════════╪═════╡
+│ A         ┆ 1   │
+└───────────┴─────┘
+""")
         with pytest.raises(Exception):
             (
                 adsl_base.adam.adsl.pick(  # type: ignore[attr-defined]
@@ -615,41 +626,47 @@ class TestPickVerbSpecEquivalence:
     @pytest.fixture()
     def base_df(self):
         """Minimal ADSL-like frame with USUBJID + dates."""
-        return pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S02", "S03"],
-                "DTHDT": [date(2024, 5, 1), None, None],
-                "TRTEDT": [date(2024, 4, 15), date(2024, 6, 10), None],
-            }
-        )
+        return pl.from_repr("""\
+┌─────────┬────────────┬────────────┐
+│ USUBJID ┆ DTHDT      ┆ TRTEDT     │
+│ ---     ┆ ---        ┆ ---        │
+│ str     ┆ date       ┆ date       │
+╞═════════╪════════════╪════════════╡
+│ S01     ┆ 2024-05-01 ┆ 2024-04-15 │
+│ S02     ┆ null       ┆ 2024-06-10 │
+│ S03     ┆ null       ┆ null       │
+└─────────┴────────────┴────────────┘
+""")
 
     @pytest.fixture()
     def ae_source(self):
         """AE-like source with fatal outcome and string term."""
-        return pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S01", "S02", "S02"],
-                "AEOUT": ["FATAL", "RECOVERED", "RECOVERED", "RECOVERED"],
-                "AEDECOD": ["CARDIAC ARREST", "HEADACHE", "RASH", "NAUSEA"],
-                "AEENDTC": [
-                    date(2024, 4, 28),
-                    date(2024, 3, 1),
-                    date(2024, 5, 20),
-                    date(2024, 6, 1),
-                ],
-            }
-        )
+        return pl.from_repr("""\
+┌─────────┬───────────┬────────────────┬────────────┐
+│ USUBJID ┆ AEOUT     ┆ AEDECOD        ┆ AEENDTC    │
+│ ---     ┆ ---       ┆ ---            ┆ ---        │
+│ str     ┆ str       ┆ str            ┆ date       │
+╞═════════╪═══════════╪════════════════╪════════════╡
+│ S01     ┆ FATAL     ┆ CARDIAC ARREST ┆ 2024-04-28 │
+│ S01     ┆ RECOVERED ┆ HEADACHE       ┆ 2024-03-01 │
+│ S02     ┆ RECOVERED ┆ RASH           ┆ 2024-05-20 │
+│ S02     ┆ RECOVERED ┆ NAUSEA         ┆ 2024-06-01 │
+└─────────┴───────────┴────────────────┴────────────┘
+""")
 
     @pytest.fixture()
     def ds_source(self):
         """DS-like source with death decode."""
-        return pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S02"],
-                "DSDECOD": ["DEATH", "COMPLETED"],
-                "DSTERM": ["CARDIAC FAILURE", "PROTOCOL COMPLETED"],
-            }
-        )
+        return pl.from_repr("""\
+┌─────────┬───────────┬────────────────────┐
+│ USUBJID ┆ DSDECOD   ┆ DSTERM             │
+│ ---     ┆ ---       ┆ ---                │
+│ str     ┆ str       ┆ str                │
+╞═════════╪═══════════╪════════════════════╡
+│ S01     ┆ DEATH     ┆ CARDIAC FAILURE    │
+│ S02     ┆ COMPLETED ┆ PROTOCOL COMPLETED │
+└─────────┴───────────┴────────────────────┘
+""")
 
     def test_string_dthcaus_verb_vs_spec(self, base_df, ae_source, ds_source):
         """DTHCAUS (string target) produces same results via verb and from_spec."""

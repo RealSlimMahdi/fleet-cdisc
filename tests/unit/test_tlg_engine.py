@@ -93,9 +93,15 @@ class TestLoudDenominators:
             ADAE.tlg.ae.t_summary(groupby="TRT01A", adsl=ADSL)
 
     def test_deviations_without_adsl_raises(self) -> None:
-        addv = pl.DataFrame(
-            {"USUBJID": ["S01"], "TRTA": ["Placebo"], "DVDECOD": ["VISIT OUT OF WINDOW"]}
-        )
+        addv = pl.from_repr("""\
+┌─────────┬─────────┬─────────────────────┐
+│ USUBJID ┆ TRTA    ┆ DVDECOD             │
+│ ---     ┆ ---     ┆ ---                 │
+│ str     ┆ str     ┆ str                 │
+╞═════════╪═════════╪═════════════════════╡
+│ S01     ┆ Placebo ┆ VISIT OUT OF WINDOW │
+└─────────┴─────────┴─────────────────────┘
+""")
         with pytest.raises(SchemaError, match="adsl"):
             addv.tlg.ds.t_deviations(groupby="TRTA")
 
@@ -216,14 +222,16 @@ class TestNesting:
 
 class TestHeaderRowsEverywhere:
     def test_cm_header_row_now_honoured(self) -> None:
-        adcm = pl.DataFrame(
-            {
-                "USUBJID": ["S01", "S03"],
-                "TRTA": ["Placebo", "Drug A"],
-                "CMCLAS": ["NSAID", "NSAID"],
-                "CMDECOD": ["ASPIRIN", "ASPIRIN"],
-            }
-        )
+        adcm = pl.from_repr("""\
+┌─────────┬─────────┬────────┬─────────┐
+│ USUBJID ┆ TRTA    ┆ CMCLAS ┆ CMDECOD │
+│ ---     ┆ ---     ┆ ---    ┆ ---     │
+│ str     ┆ str     ┆ str    ┆ str     │
+╞═════════╪═════════╪════════╪═════════╡
+│ S01     ┆ Placebo ┆ NSAID  ┆ ASPIRIN │
+│ S03     ┆ Drug A  ┆ NSAID  ┆ ASPIRIN │
+└─────────┴─────────┴────────┴─────────┘
+""")
         spec = CMSummarySpec(
             header_rows=[
                 OverallStat(
@@ -374,9 +382,16 @@ class TestReviewRegressions:
             ADAE.tlg.ae.t_summary(groupby="TRTA", adsl=ADSL, spec=spec)
 
     def test_arm_emptied_by_adsl_filter_keeps_n_zero_column(self) -> None:
-        adsl = pl.concat(
-            [ADSL, pl.DataFrame({"USUBJID": ["S07"], "TRTA": ["Drug C"], "SAFFL": ["N"]})]
-        )
+        extra_arm = pl.from_repr("""\
+┌─────────┬────────┬───────┐
+│ USUBJID ┆ TRTA   ┆ SAFFL │
+│ ---     ┆ ---    ┆ ---   │
+│ str     ┆ str    ┆ str   │
+╞═════════╪════════╪═══════╡
+│ S07     ┆ Drug C ┆ N     │
+└─────────┴────────┴───────┘
+""")
+        adsl = pl.concat([ADSL, extra_arm])
         spec = AESummarySpec(adsl_filter='pl.col("SAFFL") == "Y"')
         ard = ADAE.tlg.ae.t_summary(groupby="TRTA", adsl=adsl, spec=spec)
         assert _stat(ard, stat_name="N", group1_level="Drug C") == [0.0]

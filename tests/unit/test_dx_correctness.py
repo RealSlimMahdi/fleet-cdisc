@@ -115,13 +115,31 @@ class TestNrindNullGuard:
 
 class TestAssignCTDegradeWarning:
     def test_unknown_codelist_warns_unvalidated(self):
-        df = pl.DataFrame({"sex": ["M", "F"]})
+        df = pl.from_repr("""\
+┌─────┐
+│ sex │
+│ --- │
+│ str │
+╞═════╡
+│ M   │
+│ F   │
+└─────┘
+""")
         with pytest.warns(UserWarning, match="copied unvalidated"):
             result = df.sdtm.assign("SEX", source="sex", ct="C_DOES_NOT_EXIST").to_frame()
         assert result["SEX"].to_list() == ["M", "F"]
 
     def test_validate_values_false_opts_out_silently(self):
-        df = pl.DataFrame({"sex": ["M", "F"]})
+        df = pl.from_repr("""\
+┌─────┐
+│ sex │
+│ --- │
+│ str │
+╞═════╡
+│ M   │
+│ F   │
+└─────┘
+""")
         with warnings.catch_warnings():
             warnings.simplefilter("error")
             result = df.sdtm.assign(
@@ -138,7 +156,16 @@ class TestAssignCTDegradeWarning:
         validator = get_validator()
         validator._ct_cache["C_TEST_ASSIGN"] = {"M": {}, "F": {}}
         try:
-            df = pl.DataFrame({"sex": ["M", "BAD"]})
+            df = pl.from_repr("""\
+┌─────┐
+│ sex │
+│ --- │
+│ str │
+╞═════╡
+│ M   │
+│ BAD │
+└─────┘
+""")
             with pytest.warns(UserWarning, match="not in codelist"):
                 df.sdtm.assign("SEX", source="sex", ct="C_TEST_ASSIGN").to_frame()
         finally:
@@ -165,14 +192,32 @@ class TestAssignCTNoDecode:
             "F": {"preferred_term": "Female"},
         }
         try:
-            df = pl.DataFrame({"sex": ["M", "F"]})
+            df = pl.from_repr("""\
+┌─────┐
+│ sex │
+│ --- │
+│ str │
+╞═════╡
+│ M   │
+│ F   │
+└─────┘
+""")
             result = df.sdtm.assign("SEX", source="sex", ct="C_TEST_SEX").to_frame()
             assert result["SEX"].to_list() == ["M", "F"]
         finally:
             validator._ct_cache.pop("C_TEST_SEX", None)
 
     def test_explicit_mapping_still_translates(self):
-        df = pl.DataFrame({"sex": ["1", "2"]})
+        df = pl.from_repr("""\
+┌─────┐
+│ sex │
+│ --- │
+│ str │
+╞═════╡
+│ 1   │
+│ 2   │
+└─────┘
+""")
         result = df.sdtm.assign(
             "SEX", source="sex", ct="C66731", ct_map={"1": "M", "2": "F"}
         ).to_frame()

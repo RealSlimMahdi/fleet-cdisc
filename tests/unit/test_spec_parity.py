@@ -204,13 +204,31 @@ def _register_adam_callable() -> None:
 SDTM_CASES: list[Case] = [
     Case(
         "assign_no_ct",
-        lambda: pl.DataFrame({"subject_id": ["A", "B"]}),
+        lambda: pl.from_repr("""\
+┌────────────┐
+│ subject_id │
+│ ---        │
+│ str        │
+╞════════════╡
+│ A          │
+│ B          │
+└────────────┘
+"""),
         [{"target": "USUBJID", "algorithm": "assign_no_ct", "source": "subject_id"}],
         lambda df: df["USUBJID"].to_list() == ["A", "B"],
     ),
     Case(
         "assign_ct",
-        lambda: pl.DataFrame({"sex_raw": ["male", "female"]}),
+        lambda: pl.from_repr("""\
+┌─────────┐
+│ sex_raw │
+│ ---     │
+│ str     │
+╞═════════╡
+│ male    │
+│ female  │
+└─────────┘
+"""),
         [
             {
                 "target": "SEX",
@@ -223,7 +241,15 @@ SDTM_CASES: list[Case] = [
     ),
     Case(
         "date",
-        lambda: pl.DataFrame({"birth_date": ["2024-01-02"]}),
+        lambda: pl.from_repr("""\
+┌────────────┐
+│ birth_date │
+│ ---        │
+│ str        │
+╞════════════╡
+│ 2024-01-02 │
+└────────────┘
+"""),
         [{"target": "BRTHDTC", "algorithm": "assign_dtc", "source": "birth_date"}],
         lambda df: df["BRTHDTC"].to_list() == ["2024-01-02"],
     ),
@@ -267,7 +293,15 @@ SDTM_CASES: list[Case] = [
     ),
     Case(
         "ae_aerel",
-        lambda: pl.DataFrame({"ae_relationship": ["related"]}),
+        lambda: pl.from_repr("""\
+┌─────────────────┐
+│ ae_relationship │
+│ ---             │
+│ str             │
+╞═════════════════╡
+│ related         │
+└─────────────────┘
+"""),
         [
             {
                 "target": "AEREL",
@@ -320,7 +354,16 @@ SDTM_CASES: list[Case] = [
     ),
     Case(
         "notsubmitted",
-        lambda: pl.DataFrame({"scratch": ["a", "b"]}),
+        lambda: pl.from_repr("""\
+┌─────────┐
+│ scratch │
+│ ---     │
+│ str     │
+╞═════════╡
+│ a       │
+│ b       │
+└─────────┘
+"""),
         [{"target": "scratch", "algorithm": "notsubmitted"}],
         lambda df: df["scratch"].to_list() == [None, None],
     ),
@@ -347,7 +390,17 @@ SDTM_CASES: list[Case] = [
     ),
     Case(
         "seq",
-        lambda: pl.DataFrame({"USUBJID": ["S1", "S1", "S2"]}),
+        lambda: pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ S1      │
+│ S1      │
+│ S2      │
+└─────────┘
+"""),
         [
             {
                 "target": "AESEQ",
@@ -427,13 +480,29 @@ def _vs_frame() -> pl.DataFrame:
 ADAM_CASES: list[Case] = [
     Case(
         "source",
-        lambda: pl.DataFrame({"subject_id": ["A"]}),
+        lambda: pl.from_repr("""\
+┌────────────┐
+│ subject_id │
+│ ---        │
+│ str        │
+╞════════════╡
+│ A          │
+└────────────┘
+"""),
         [{"target": "USUBJID", "algorithm": "source", "source": "subject_id"}],
         lambda df: df["USUBJID"].to_list() == ["A"],
     ),
     Case(
         "derivation",
-        lambda: pl.DataFrame({"vs_value": [2.0]}),
+        lambda: pl.from_repr("""\
+┌──────────┐
+│ vs_value │
+│ ---      │
+│ f64      │
+╞══════════╡
+│ 2.0      │
+└──────────┘
+"""),
         [{"target": "AVAL", "algorithm": "derivation", "expression": "pl.col('vs_value') * 2"}],
         lambda df: df["AVAL"].to_list() == [4.0],
     ),
@@ -445,7 +514,16 @@ ADAM_CASES: list[Case] = [
     ),
     Case(
         "recode",
-        lambda: pl.DataFrame({"sex": ["M", "F"]}),
+        lambda: pl.from_repr("""\
+┌─────┐
+│ sex │
+│ --- │
+│ str │
+╞═════╡
+│ M   │
+│ F   │
+└─────┘
+"""),
         [
             {
                 "target": "SEXN",
@@ -458,7 +536,15 @@ ADAM_CASES: list[Case] = [
     ),
     Case(
         "rename",
-        lambda: pl.DataFrame({"vsdtc": ["2024-01-01"]}),
+        lambda: pl.from_repr("""\
+┌────────────┐
+│ vsdtc      │
+│ ---        │
+│ str        │
+╞════════════╡
+│ 2024-01-01 │
+└────────────┘
+"""),
         [{"target": "ADTC", "algorithm": "rename", "source": "vsdtc"}],
         lambda df: df["ADTC"].to_list() == ["2024-01-01"],
     ),
@@ -488,9 +574,16 @@ ADAM_CASES: list[Case] = [
         ],
         lambda df: "TRTSDT" in df.columns,
         pins={
-            "ADSL": lambda: pl.DataFrame(
-                {"USUBJID": ["S1", "S2"], "TRTSDT": [date(2024, 1, 1), date(2024, 1, 2)]}
-            )
+            "ADSL": lambda: pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ TRTSDT     │
+│ ---     ┆ ---        │
+│ str     ┆ date       │
+╞═════════╪════════════╡
+│ S1      ┆ 2024-01-01 │
+│ S2      ┆ 2024-01-02 │
+└─────────┴────────────┘
+""")
         },
     ),
     Case(
@@ -501,7 +594,15 @@ ADAM_CASES: list[Case] = [
     ),
     Case(
         "study_day",
-        lambda: pl.DataFrame({"ADT": [date(2024, 1, 10)], "TRTSDT": [date(2024, 1, 1)]}),
+        lambda: pl.from_repr("""\
+┌────────────┬────────────┐
+│ ADT        ┆ TRTSDT     │
+│ ---        ┆ ---        │
+│ date       ┆ date       │
+╞════════════╪════════════╡
+│ 2024-01-10 ┆ 2024-01-01 │
+└────────────┴────────────┘
+"""),
         [
             {
                 "target": "ADY",
@@ -599,13 +700,16 @@ ADAM_CASES: list[Case] = [
     ),
     Case(
         "on_treatment",
-        lambda: pl.DataFrame(
-            {
-                "ADT": [date(2024, 1, 5), date(2024, 3, 1)],
-                "TRTSDT": [date(2024, 1, 1)] * 2,
-                "TRTEDT": [date(2024, 2, 1)] * 2,
-            }
-        ),
+        lambda: pl.from_repr("""\
+┌────────────┬────────────┬────────────┐
+│ ADT        ┆ TRTSDT     ┆ TRTEDT     │
+│ ---        ┆ ---        ┆ ---        │
+│ date       ┆ date       ┆ date       │
+╞════════════╪════════════╪════════════╡
+│ 2024-01-05 ┆ 2024-01-01 ┆ 2024-02-01 │
+│ 2024-03-01 ┆ 2024-01-01 ┆ 2024-02-01 │
+└────────────┴────────────┴────────────┘
+"""),
         [{"target": "ONTRTFL", "algorithm": "on_treatment"}],
         lambda df: df["ONTRTFL"].to_list() == ["Y", None],
     ),
@@ -632,7 +736,16 @@ ADAM_CASES: list[Case] = [
     ),
     Case(
         "seq",
-        lambda: pl.DataFrame({"USUBJID": ["S1", "S1"]}),
+        lambda: pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ S1      │
+│ S1      │
+└─────────┘
+"""),
         [{"target": "ASEQ", "algorithm": "seq", "groups": ["USUBJID"]}],
         lambda df: df["ASEQ"].to_list() == [1, 2],
     ),
@@ -716,13 +829,29 @@ ADAM_CASES: list[Case] = [
     ),
     Case(
         "date",
-        lambda: pl.DataFrame({"vsdtc": ["2024-01-02"]}),
+        lambda: pl.from_repr("""\
+┌────────────┐
+│ vsdtc      │
+│ ---        │
+│ str        │
+╞════════════╡
+│ 2024-01-02 │
+└────────────┘
+"""),
         [{"target": "ADT", "algorithm": "date", "source": "vsdtc"}],
         lambda df: df["ADT"].to_list() == [date(2024, 1, 2)],
     ),
     Case(
         "duration",
-        lambda: pl.DataFrame({"TRTSDT": [date(2024, 1, 1)], "TRTEDT": [date(2024, 1, 10)]}),
+        lambda: pl.from_repr("""\
+┌────────────┬────────────┐
+│ TRTSDT     ┆ TRTEDT     │
+│ ---        ┆ ---        │
+│ date       ┆ date       │
+╞════════════╪════════════╡
+│ 2024-01-01 ┆ 2024-01-10 │
+└────────────┴────────────┘
+"""),
         [
             {
                 "target": "TRTDURD",
@@ -735,7 +864,16 @@ ADAM_CASES: list[Case] = [
     ),
     Case(
         "pick",
-        lambda: pl.DataFrame({"USUBJID": ["S1", "S2"], "DTHDT": [date(2024, 1, 1), None]}),
+        lambda: pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ DTHDT      │
+│ ---     ┆ ---        │
+│ str     ┆ date       │
+╞═════════╪════════════╡
+│ S1      ┆ 2024-01-01 │
+│ S2      ┆ null       │
+└─────────┴────────────┘
+"""),
         [
             {
                 "target": "LSTALVDT",

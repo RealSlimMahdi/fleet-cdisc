@@ -76,7 +76,15 @@ class TestChainColumnValidation:
 
 class TestToFrameTranslation:
     def test_lazy_column_error_translated_with_lineage(self):
-        df = pl.DataFrame({"a": [1]})
+        df = pl.from_repr("""\
+┌─────┐
+│ a   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
         ns = df.sdtm.assign("DOMAIN", value="DM")
         # Bypass _chain validation to simulate a lazily-surfacing error.
         ns._lazy = ns._lazy.with_columns(pl.col("DOMAIN").alias("COPY")).drop("DOMAIN")
@@ -123,14 +131,30 @@ class TestExceptionHierarchy:
             df.adam.study_day("ASTDY", date_col="ASTDT")
 
     def test_verb_type_error_catchable_both_ways(self):
-        df = pl.DataFrame({"a": [1]})
+        df = pl.from_repr("""\
+┌─────┐
+│ a   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
         with pytest.raises(VerbUsageError):
             df.sdtm.duration("ADUR", start=123, end="a")
         with pytest.raises(TypeError):
             df.sdtm.duration("ADUR", start=123, end="a")
 
     def test_fleet_error_catches_verb_value_errors(self):
-        df = pl.DataFrame({"a": [1]})
+        df = pl.from_repr("""\
+┌─────┐
+│ a   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
         with pytest.raises(FleetError):
             df.sdtm.duration("ADUR", start="a", end="a", unit="fortnights")
 
@@ -195,7 +219,16 @@ class TestParseExpressionBareNames:
     def test_bare_name_arithmetic_works(self):
         from fleet.sdtm.utils import parse_expression
 
-        df = pl.DataFrame({"AVAL": [1.0, 2.0]})
+        df = pl.from_repr("""\
+┌──────┐
+│ AVAL │
+│ ---  │
+│ f64  │
+╞══════╡
+│ 1.0  │
+│ 2.0  │
+└──────┘
+""")
         result = df.select(parse_expression("AVAL * 2").alias("OUT"))
         assert result["OUT"].to_list() == [2.0, 4.0]
 
@@ -215,7 +248,15 @@ class TestParseExpressionBareNames:
         assert result["OUT"].to_list() == [True]
 
     def test_verb_level_bare_name_expression(self):
-        df = pl.DataFrame({"VSSTRESN": [10.0]})
+        df = pl.from_repr("""\
+┌──────────┐
+│ VSSTRESN │
+│ ---      │
+│ f64      │
+╞══════════╡
+│ 10.0     │
+└──────────┘
+""")
         result = df.adam.derivation("AVAL", expression="VSSTRESN * 2").to_frame()
         assert result["AVAL"].to_list() == [20.0]
 
@@ -244,12 +285,29 @@ class TestParseExpressionBareNames:
 class TestFleetLogging:
     def test_default_console_output_visible(self, capsys):
         """Interactive UX preserved: diagnostics reach stdout by default."""
-        df = pl.DataFrame({"a": [1]})
+        df = pl.from_repr("""\
+┌─────┐
+│ a   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
         df.sdtm.nodup(subset=["a"])
         assert "NODUP" in capsys.readouterr().out
 
     def test_diagnostics_route_through_fleet_logger(self, caplog):
-        df = pl.DataFrame({"a": [1, 1]})
+        df = pl.from_repr("""\
+┌─────┐
+│ a   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+│ 1   │
+└─────┘
+""")
         with caplog.at_level(logging.INFO, logger="fleet"):
             df.sdtm.nodup(subset=["a"])
         assert any("NODUP" in message for message in caplog.messages)
@@ -293,13 +351,30 @@ class TestNodupReport:
         assert ns.to_frame().height == 3
 
     def test_no_duplicates_gives_empty_report(self):
-        df = pl.DataFrame({"USUBJID": ["S1", "S2"]})
+        df = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ S1      │
+│ S2      │
+└─────────┘
+""")
         ns = df.sdtm.nodup(subset=["USUBJID"])
         assert ns.last_nodup_report is not None
         assert ns.last_nodup_report.height == 0
 
     def test_before_nodup_report_is_none(self):
-        df = pl.DataFrame({"USUBJID": ["S1"]})
+        df = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ S1      │
+└─────────┘
+""")
         assert df.sdtm.last_nodup_report is None
 
 
@@ -327,7 +402,15 @@ class TestValidateResultAccess:
         # plumbing, not the engine).
         monkeypatch.setattr(ValidationService, "__init__", lambda self, **kw: None)
         monkeypatch.setattr(ValidationService, "validate_sdtm", lambda self, df, **kw: result)
-        df = pl.DataFrame({"USUBJID": ["S1"]})
+        df = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ S1      │
+└─────────┘
+""")
         return df.sdtm.assign("DOMAIN", value="DM")
 
     def test_on_fail_warn_default_keeps_chain_and_stashes_result(self, failing_ns):
@@ -353,5 +436,13 @@ class TestValidateResultAccess:
             failing_ns.validate("DM", on_fail="explode")
 
     def test_last_validation_none_before_validate(self):
-        df = pl.DataFrame({"USUBJID": ["S1"]})
+        df = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ S1      │
+└─────────┘
+""")
         assert df.sdtm.last_validation is None

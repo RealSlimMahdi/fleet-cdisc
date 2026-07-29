@@ -72,13 +72,17 @@ def pc_frame():
 @pytest.fixture
 def adsl_frame():
     """Minimal ADSL-like subject-level frame."""
-    return pl.DataFrame(
-        {
-            "USUBJID": ["01-001", "01-002", "01-003"],
-            "TRT01P": ["Drug A", "Placebo", "Drug A"],
-            "TRTSDT": ["2014-01-17", "2014-02-10", "2014-03-05"],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬─────────┬────────────┐
+│ USUBJID ┆ TRT01P  ┆ TRTSDT     │
+│ ---     ┆ ---     ┆ ---        │
+│ str     ┆ str     ┆ str        │
+╞═════════╪═════════╪════════════╡
+│ 01-001  ┆ Drug A  ┆ 2014-01-17 │
+│ 01-002  ┆ Placebo ┆ 2014-02-10 │
+│ 01-003  ┆ Drug A  ┆ 2014-03-05 │
+└─────────┴─────────┴────────────┘
+""")
 
 
 # ---------------------------------------------------------------------------
@@ -100,18 +104,26 @@ class TestMergeAdsl:
 
     def test_custom_by_key(self, adsl_frame):
         """Merge using a different join key."""
-        left = pl.DataFrame(
-            {
-                "SUBJID": ["01-001", "01-002"],
-                "AVAL": [1.0, 2.0],
-            }
-        )
-        right = pl.DataFrame(
-            {
-                "SUBJID": ["01-001", "01-002"],
-                "TRT": ["A", "B"],
-            }
-        )
+        left = pl.from_repr("""\
+┌────────┬──────┐
+│ SUBJID ┆ AVAL │
+│ ---    ┆ ---  │
+│ str    ┆ f64  │
+╞════════╪══════╡
+│ 01-001 ┆ 1.0  │
+│ 01-002 ┆ 2.0  │
+└────────┴──────┘
+""")
+        right = pl.from_repr("""\
+┌────────┬─────┐
+│ SUBJID ┆ TRT │
+│ ---    ┆ --- │
+│ str    ┆ str │
+╞════════╪═════╡
+│ 01-001 ┆ A   │
+│ 01-002 ┆ B   │
+└────────┴─────┘
+""")
         result = left.adam.pk.merge_adsl(right, by=["SUBJID"]).to_frame()
         assert "TRT" in result.columns
 
@@ -287,12 +299,18 @@ class TestActualTime:
 
 class TestPredoseFlag:
     def _frame_with_atime(self):
-        return pl.DataFrame(
-            {
-                "USUBJID": ["01-001", "01-001", "01-001", "01-001"],
-                "ATIME": [-0.5, 0.0, 1.0, 4.0],
-            }
-        )
+        return pl.from_repr("""\
+┌─────────┬───────┐
+│ USUBJID ┆ ATIME │
+│ ---     ┆ ---   │
+│ str     ┆ f64   │
+╞═════════╪═══════╡
+│ 01-001  ┆ -0.5  │
+│ 01-001  ┆ 0.0   │
+│ 01-001  ┆ 1.0   │
+│ 01-001  ┆ 4.0   │
+└─────────┴───────┘
+""")
 
     def test_predose_within_window(self):
         df = self._frame_with_atime()
@@ -312,7 +330,15 @@ class TestPredoseFlag:
         assert result.filter(pl.col("ATIME") == 4.0)["PREDFL"][0] is None
 
     def test_outside_window_not_flagged(self):
-        df = pl.DataFrame({"USUBJID": ["01-001"], "ATIME": [-2.0]})
+        df = pl.from_repr("""\
+┌─────────┬───────┐
+│ USUBJID ┆ ATIME │
+│ ---     ┆ ---   │
+│ str     ┆ f64   │
+╞═════════╪═══════╡
+│ 01-001  ┆ -2.0  │
+└─────────┴───────┘
+""")
         result = df.adam.pk.predose_flag("PREDFL", time_col="ATIME", window_hrs=1.0).to_frame()
         # -2.0 < -1.0 → outside window → null
         assert result["PREDFL"][0] is None
@@ -334,23 +360,30 @@ class TestDoseNormalized:
         assert row["AVALDNM"][0] == pytest.approx(22.31 / 100.0)
 
     def test_zero_dose_returns_null(self):
-        df = pl.DataFrame(
-            {
-                "AVAL": [10.0, 5.0],
-                "DOSE": [0.0, 100.0],
-            }
-        )
+        df = pl.from_repr("""\
+┌──────┬───────┐
+│ AVAL ┆ DOSE  │
+│ ---  ┆ ---   │
+│ f64  ┆ f64   │
+╞══════╪═══════╡
+│ 10.0 ┆ 0.0   │
+│ 5.0  ┆ 100.0 │
+└──────┴───────┘
+""")
         result = df.adam.pk.dose_normalized("AVALDNM", conc_col="AVAL", dose_col="DOSE").to_frame()
         assert result["AVALDNM"][0] is None
         assert result["AVALDNM"][1] == pytest.approx(0.05)
 
     def test_null_dose_returns_null(self):
-        df = pl.DataFrame(
-            {
-                "AVAL": [10.0],
-                "DOSE": [None],
-            }
-        ).cast({"DOSE": pl.Float64})
+        df = pl.from_repr("""\
+┌──────┬──────┐
+│ AVAL ┆ DOSE │
+│ ---  ┆ ---  │
+│ f64  ┆ f64  │
+╞══════╪══════╡
+│ 10.0 ┆ null │
+└──────┴──────┘
+""")
         result = df.adam.pk.dose_normalized("AVALDNM", conc_col="AVAL", dose_col="DOSE").to_frame()
         assert result["AVALDNM"][0] is None
 
@@ -362,12 +395,30 @@ class TestDoseNormalized:
 
 class TestEvid:
     def test_default_all_zeros(self):
-        df = pl.DataFrame({"USUBJID": ["01-001", "01-001"], "PCSTRESN": [10.0, 5.0]})
+        df = pl.from_repr("""\
+┌─────────┬──────────┐
+│ USUBJID ┆ PCSTRESN │
+│ ---     ┆ ---      │
+│ str     ┆ f64      │
+╞═════════╪══════════╡
+│ 01-001  ┆ 10.0     │
+│ 01-001  ┆ 5.0      │
+└─────────┴──────────┘
+""")
         result = df.adam.pk.evid("EVID").to_frame()
         assert result["EVID"].to_list() == [0, 0]
 
     def test_from_col_cast(self):
-        df = pl.DataFrame({"USUBJID": ["01-001", "01-001"], "IS_DOSE": [0, 1]})
+        df = pl.from_repr("""\
+┌─────────┬─────────┐
+│ USUBJID ┆ IS_DOSE │
+│ ---     ┆ ---     │
+│ str     ┆ i64     │
+╞═════════╪═════════╡
+│ 01-001  ┆ 0       │
+│ 01-001  ┆ 1       │
+└─────────┴─────────┘
+""")
         result = df.adam.pk.evid("EVID", from_col="IS_DOSE").to_frame()
         assert result["EVID"].to_list() == [0, 1]
         assert result["EVID"].dtype == pl.Int64
@@ -380,12 +431,18 @@ class TestEvid:
 
 class TestMrrlt:
     def _frame(self):
-        return pl.DataFrame(
-            {
-                "USUBJID": ["01-001"] * 4,
-                "ARRLT": [-1.0, 0.0, 1.0, 4.0],
-            }
-        )
+        return pl.from_repr("""\
+┌─────────┬───────┐
+│ USUBJID ┆ ARRLT │
+│ ---     ┆ ---   │
+│ str     ┆ f64   │
+╞═════════╪═══════╡
+│ 01-001  ┆ -1.0  │
+│ 01-001  ┆ 0.0   │
+│ 01-001  ┆ 1.0   │
+│ 01-001  ┆ 4.0   │
+└─────────┴───────┘
+""")
 
     def test_negative_clipped_to_zero(self):
         result = self._frame().adam.pk.mrrlt("MRRLT", arrlt_col="ARRLT").to_frame()
@@ -437,20 +494,47 @@ class TestLogConc:
         assert result["DVL"][1] == pytest.approx(1.0, abs=1e-6)
 
     def test_log10(self):
-        df = pl.DataFrame({"DV": [1.0, 10.0, 100.0]})
+        df = pl.from_repr("""\
+┌───────┐
+│ DV    │
+│ ---   │
+│ f64   │
+╞═══════╡
+│ 1.0   │
+│ 10.0  │
+│ 100.0 │
+└───────┘
+""")
         result = df.adam.pk.log_conc("DVL", conc_col="DV", base="10").to_frame()
         assert result["DVL"][0] == pytest.approx(0.0, abs=1e-6)
         assert result["DVL"][1] == pytest.approx(1.0, abs=1e-6)
         assert result["DVL"][2] == pytest.approx(2.0, abs=1e-6)
 
     def test_zero_or_null_returns_null(self):
-        df = pl.DataFrame({"DV": [0.0, None]}).cast({"DV": pl.Float64})
+        df = pl.from_repr("""\
+┌──────┐
+│ DV   │
+│ ---  │
+│ f64  │
+╞══════╡
+│ 0.0  │
+│ null │
+└──────┘
+""")
         result = df.adam.pk.log_conc("DVL", conc_col="DV").to_frame()
         assert result["DVL"][0] is None
         assert result["DVL"][1] is None
 
     def test_invalid_base_raises(self):
-        df = pl.DataFrame({"DV": [1.0]})
+        df = pl.from_repr("""\
+┌─────┐
+│ DV  │
+│ --- │
+│ f64 │
+╞═════╡
+│ 1.0 │
+└─────┘
+""")
         with pytest.raises(ValueError, match="base="):
             df.adam.pk.log_conc("DVL", conc_col="DV", base="3")
 
@@ -462,37 +546,61 @@ class TestLogConc:
 
 class TestMdv:
     def test_mdv_from_evid(self):
-        df = pl.DataFrame(
-            {
-                "EVID": [0, 1, 0],
-                "DV": [10.0, None, 5.0],
-            }
-        )
+        df = pl.from_repr("""\
+┌──────┬──────┐
+│ EVID ┆ DV   │
+│ ---  ┆ ---  │
+│ i64  ┆ f64  │
+╞══════╪══════╡
+│ 0    ┆ 10.0 │
+│ 1    ┆ null │
+│ 0    ┆ 5.0  │
+└──────┴──────┘
+""")
         result = df.adam.pk.mdv("MDV", evid_col="EVID").to_frame()
         assert result["MDV"].to_list() == [0, 1, 0]
 
     def test_mdv_from_null_conc(self):
-        df = pl.DataFrame(
-            {
-                "EVID": [0, 0, 0],
-                "DV": [10.0, None, 5.0],
-            }
-        )
+        df = pl.from_repr("""\
+┌──────┬──────┐
+│ EVID ┆ DV   │
+│ ---  ┆ ---  │
+│ i64  ┆ f64  │
+╞══════╪══════╡
+│ 0    ┆ 10.0 │
+│ 0    ┆ null │
+│ 0    ┆ 5.0  │
+└──────┴──────┘
+""")
         result = df.adam.pk.mdv("MDV", conc_col="DV").to_frame()
         assert result["MDV"].to_list() == [0, 1, 0]
 
     def test_mdv_combined(self):
-        df = pl.DataFrame(
-            {
-                "EVID": [0, 1, 0],
-                "DV": [10.0, None, None],
-            }
-        )
+        df = pl.from_repr("""\
+┌──────┬──────┐
+│ EVID ┆ DV   │
+│ ---  ┆ ---  │
+│ i64  ┆ f64  │
+╞══════╪══════╡
+│ 0    ┆ 10.0 │
+│ 1    ┆ null │
+│ 0    ┆ null │
+└──────┴──────┘
+""")
         result = df.adam.pk.mdv("MDV", conc_col="DV", evid_col="EVID").to_frame()
         assert result["MDV"].to_list() == [0, 1, 1]
 
     def test_mdv_no_condition(self):
-        df = pl.DataFrame({"EVID": [0, 1]})
+        df = pl.from_repr("""\
+┌──────┐
+│ EVID │
+│ ---  │
+│ i64  │
+╞══════╡
+│ 0    │
+│ 1    │
+└──────┘
+""")
         result = df.adam.pk.mdv("MDV").to_frame()
         assert result["MDV"].to_list() == [0, 0]
 
@@ -504,12 +612,17 @@ class TestMdv:
 
 class TestAmt:
     def test_dose_on_evid1_null_otherwise(self):
-        df = pl.DataFrame(
-            {
-                "EVID": [0, 1, 0],
-                "EXDOSE": [100.0, 100.0, 100.0],
-            }
-        )
+        df = pl.from_repr("""\
+┌──────┬────────┐
+│ EVID ┆ EXDOSE │
+│ ---  ┆ ---    │
+│ i64  ┆ f64    │
+╞══════╪════════╡
+│ 0    ┆ 100.0  │
+│ 1    ┆ 100.0  │
+│ 0    ┆ 100.0  │
+└──────┴────────┘
+""")
         result = df.adam.pk.amt("AMT", dose_col="EXDOSE", evid_col="EVID").to_frame()
         assert result["AMT"][0] is None
         assert result["AMT"][1] == pytest.approx(100.0)
@@ -523,12 +636,31 @@ class TestAmt:
 
 class TestCmt:
     def test_dose_cmt_and_conc_cmt(self):
-        df = pl.DataFrame({"EVID": [0, 1, 0]})
+        df = pl.from_repr("""\
+┌──────┐
+│ EVID │
+│ ---  │
+│ i64  │
+╞══════╡
+│ 0    │
+│ 1    │
+│ 0    │
+└──────┘
+""")
         result = df.adam.pk.cmt("CMT", evid_col="EVID", dose_cmt=1, conc_cmt=2).to_frame()
         assert result["CMT"].to_list() == [2, 1, 2]
 
     def test_default_compartments(self):
-        df = pl.DataFrame({"EVID": [1, 0]})
+        df = pl.from_repr("""\
+┌──────┐
+│ EVID │
+│ ---  │
+│ i64  │
+╞══════╡
+│ 1    │
+│ 0    │
+└──────┘
+""")
         result = df.adam.pk.cmt().to_frame()
         assert result["CMT"].to_list() == [1, 2]
 
@@ -570,26 +702,44 @@ class TestAvalcat:
 
 class TestAnlFlag:
     def test_anl01fl_all_y(self):
-        df = pl.DataFrame({"USUBJID": ["01-001", "01-002"]})
+        df = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ 01-001  │
+│ 01-002  │
+└─────────┘
+""")
         result = df.adam.pk.anl_flag("ANL01FL").to_frame()
         assert result["ANL01FL"].to_list() == ["Y", "Y"]
 
     def test_anl02fl_excludes_dtype(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["01-001", "01-001", "01-001"],
-                "DTYPE": [None, "COPY", "HALFLLOQ"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬──────────┐
+│ USUBJID ┆ DTYPE    │
+│ ---     ┆ ---      │
+│ str     ┆ str      │
+╞═════════╪══════════╡
+│ 01-001  ┆ null     │
+│ 01-001  ┆ COPY     │
+│ 01-001  ┆ HALFLLOQ │
+└─────────┴──────────┘
+""")
         result = df.adam.pk.anl_flag("ANL02FL", exclude_dtype=True).to_frame()
         assert result["ANL02FL"].to_list() == ["Y", None, None]
 
     def test_anl02fl_all_null_dtype_all_y(self):
-        df = pl.DataFrame(
-            {
-                "USUBJID": ["01-001", "01-002"],
-                "DTYPE": [None, None],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬───────┐
+│ USUBJID ┆ DTYPE │
+│ ---     ┆ ---   │
+│ str     ┆ null  │
+╞═════════╪═══════╡
+│ 01-001  ┆ null  │
+│ 01-002  ┆ null  │
+└─────────┴───────┘
+""")
         result = df.adam.pk.anl_flag("ANL02FL", exclude_dtype=True).to_frame()
         assert result["ANL02FL"].to_list() == ["Y", "Y"]

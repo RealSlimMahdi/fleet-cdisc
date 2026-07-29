@@ -307,6 +307,15 @@ class TestRootNamespace:
         assert ADSL.tlg.check() == []
 
     def test_check_reports_when_nothing_applies(self) -> None:
-        report = pl.DataFrame({"X": [1]}).tlg.check()
+        df = pl.from_repr("""\
+┌─────┐
+│ X   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
+        report = df.tlg.check()
         assert len(report) == 1
         assert "NO APPLICABLE NAMESPACE" in report[0]

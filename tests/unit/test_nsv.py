@@ -18,31 +18,34 @@ import fleet  # noqa: F401 — triggers namespace registration
 @pytest.fixture
 def dm_raw_with_flags() -> pl.DataFrame:
     """3-row DM with population flag columns suitable for NSV derivation."""
-    return pl.DataFrame(
-        {
-            "STUDYID": ["CDISCPILOT01"] * 3,
-            "DOMAIN": ["DM"] * 3,
-            "USUBJID": ["01-701-1015", "01-701-1023", "01-701-1028"],
-            "AGE": [63, 64, 71],
-            "safety_flag": ["Y", "Y", "Y"],
-            "itt_flag": ["Y", "Y", None],
-            "efficacy_flag": ["Y", None, "Y"],
-        }
-    )
+    return pl.from_repr("""\
+┌──────────────┬────────┬─────────────┬─────┬─────────────┬──────────┬───────────────┐
+│ STUDYID      ┆ DOMAIN ┆ USUBJID     ┆ AGE ┆ safety_flag ┆ itt_flag ┆ efficacy_flag │
+│ ---          ┆ ---    ┆ ---         ┆ --- ┆ ---         ┆ ---      ┆ ---           │
+│ str          ┆ str    ┆ str         ┆ i64 ┆ str         ┆ str      ┆ str           │
+╞══════════════╪════════╪═════════════╪═════╪═════════════╪══════════╪═══════════════╡
+│ CDISCPILOT01 ┆ DM     ┆ 01-701-1015 ┆ 63  ┆ Y           ┆ Y        ┆ Y             │
+│ CDISCPILOT01 ┆ DM     ┆ 01-701-1023 ┆ 64  ┆ Y           ┆ Y        ┆ null          │
+│ CDISCPILOT01 ┆ DM     ┆ 01-701-1028 ┆ 71  ┆ Y           ┆ null     ┆ Y             │
+└──────────────┴────────┴─────────────┴─────┴─────────────┴──────────┴───────────────┘
+""")
 
 
 @pytest.fixture
 def ae_raw_with_seq() -> pl.DataFrame:
     """AE domain with AESEQ to test IDVAR handling."""
-    return pl.DataFrame(
-        {
-            "STUDYID": ["CDISCPILOT01"] * 4,
-            "DOMAIN": ["AE"] * 4,
-            "USUBJID": ["01-701-1015", "01-701-1015", "01-701-1023", "01-701-1023"],
-            "AESEQ": [1, 2, 1, 2],
-            "ae_toxgr": ["1", "2", "3", "1"],
-        }
-    )
+    return pl.from_repr("""\
+┌──────────────┬────────┬─────────────┬───────┬──────────┐
+│ STUDYID      ┆ DOMAIN ┆ USUBJID     ┆ AESEQ ┆ ae_toxgr │
+│ ---          ┆ ---    ┆ ---         ┆ ---   ┆ ---      │
+│ str          ┆ str    ┆ str         ┆ i64   ┆ str      │
+╞══════════════╪════════╪═════════════╪═══════╪══════════╡
+│ CDISCPILOT01 ┆ AE     ┆ 01-701-1015 ┆ 1     ┆ 1        │
+│ CDISCPILOT01 ┆ AE     ┆ 01-701-1015 ┆ 2     ┆ 2        │
+│ CDISCPILOT01 ┆ AE     ┆ 01-701-1023 ┆ 1     ┆ 3        │
+│ CDISCPILOT01 ┆ AE     ┆ 01-701-1023 ┆ 2     ┆ 1        │
+└──────────────┴────────┴─────────────┴───────┴──────────┘
+""")
 
 
 @pytest.fixture
@@ -470,26 +473,32 @@ class TestNSVFromSpec:
     """from_spec() dispatches algorithm: nsv and populates _nsv_meta."""
 
     def test_from_spec_creates_nsv_columns(self, dm_raw_with_flags, nsv_spec_yaml):
-        raw = pl.DataFrame(
-            {
-                "patient_number": ["01-701-1015", "01-701-1023", "01-701-1028"],
-                "safety_flag": ["Y", "Y", "Y"],
-                "itt_flag": ["Y", "Y", None],
-            }
-        )
+        raw = pl.from_repr("""\
+┌────────────────┬─────────────┬──────────┐
+│ patient_number ┆ safety_flag ┆ itt_flag │
+│ ---            ┆ ---         ┆ ---      │
+│ str            ┆ str         ┆ str      │
+╞════════════════╪═════════════╪══════════╡
+│ 01-701-1015    ┆ Y           ┆ Y        │
+│ 01-701-1023    ┆ Y           ┆ Y        │
+│ 01-701-1028    ┆ Y           ┆ null     │
+└────────────────┴─────────────┴──────────┘
+""")
         ns = raw.sdtm.from_spec(str(nsv_spec_yaml), dataset="DM")
         result = ns.to_frame()
         assert "SAFETY" in result.columns
         assert "ITT" in result.columns
 
     def test_from_spec_populates_nsv_meta(self, nsv_spec_yaml):
-        raw = pl.DataFrame(
-            {
-                "patient_number": ["01-701-1015"],
-                "safety_flag": ["Y"],
-                "itt_flag": ["Y"],
-            }
-        )
+        raw = pl.from_repr("""\
+┌────────────────┬─────────────┬──────────┐
+│ patient_number ┆ safety_flag ┆ itt_flag │
+│ ---            ┆ ---         ┆ ---      │
+│ str            ┆ str         ┆ str      │
+╞════════════════╪═════════════╪══════════╡
+│ 01-701-1015    ┆ Y           ┆ Y        │
+└────────────────┴─────────────┴──────────┘
+""")
         ns = raw.sdtm.from_spec(str(nsv_spec_yaml), dataset="DM")
         assert len(ns._nsv_meta) == 2
         targets = [m.target for m in ns._nsv_meta]
@@ -497,13 +506,16 @@ class TestNSVFromSpec:
         assert "ITT" in targets
 
     def test_from_spec_then_export_supp(self, nsv_spec_yaml):
-        raw = pl.DataFrame(
-            {
-                "patient_number": ["01-701-1015", "01-701-1023"],
-                "safety_flag": ["Y", "Y"],
-                "itt_flag": ["Y", None],
-            }
-        )
+        raw = pl.from_repr("""\
+┌────────────────┬─────────────┬──────────┐
+│ patient_number ┆ safety_flag ┆ itt_flag │
+│ ---            ┆ ---         ┆ ---      │
+│ str            ┆ str         ┆ str      │
+╞════════════════╪═════════════╪══════════╡
+│ 01-701-1015    ┆ Y           ┆ Y        │
+│ 01-701-1023    ┆ Y           ┆ null     │
+└────────────────┴─────────────┴──────────┘
+""")
         ns = raw.sdtm.from_spec(str(nsv_spec_yaml), dataset="DM")
         supp = ns.export_supp()
         assert supp.height == 3  # 2 SAFETY + 1 ITT (one null dropped)

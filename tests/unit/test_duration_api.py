@@ -10,21 +10,17 @@ import fleet  # noqa: F401  — register namespaces
 
 @pytest.fixture()
 def date_df() -> pl.DataFrame:
-    return pl.DataFrame(
-        {
-            "USUBJID": ["S01", "S02", "S03"],
-            "TRTSDT": [
-                "2024-01-01",
-                "2024-02-15",
-                "2024-03-10",
-            ],
-            "ADT": [
-                "2024-01-10",
-                "2024-02-15",
-                "2024-03-08",
-            ],
-        }
-    ).with_columns(
+    return pl.from_repr("""\
+┌─────────┬────────────┬────────────┐
+│ USUBJID ┆ TRTSDT     ┆ ADT        │
+│ ---     ┆ ---        ┆ ---        │
+│ str     ┆ str        ┆ str        │
+╞═════════╪════════════╪════════════╡
+│ S01     ┆ 2024-01-01 ┆ 2024-01-10 │
+│ S02     ┆ 2024-02-15 ┆ 2024-02-15 │
+│ S03     ┆ 2024-03-10 ┆ 2024-03-08 │
+└─────────┴────────────┴────────────┘
+""").with_columns(
         pl.col("TRTSDT").str.to_date().alias("TRTSDT"),
         pl.col("ADT").str.to_date().alias("ADT"),
     )
@@ -32,13 +28,16 @@ def date_df() -> pl.DataFrame:
 
 @pytest.fixture()
 def sdtm_date_df() -> pl.DataFrame:
-    return pl.DataFrame(
-        {
-            "USUBJID": ["S01", "S02"],
-            "SVSTDTC": ["2024-01-05", "2024-02-20"],
-            "RFSTDTC": ["2024-01-01", "2024-02-15"],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬────────────┬────────────┐
+│ USUBJID ┆ SVSTDTC    ┆ RFSTDTC    │
+│ ---     ┆ ---        ┆ ---        │
+│ str     ┆ str        ┆ str        │
+╞═════════╪════════════╪════════════╡
+│ S01     ┆ 2024-01-05 ┆ 2024-01-01 │
+│ S02     ┆ 2024-02-20 ┆ 2024-02-15 │
+└─────────┴────────────┴────────────┘
+""")
 
 
 # ── ADaM .duration() ─────────────────────────────────────────────────
@@ -65,12 +64,15 @@ class TestAdamDuration:
         assert "TRTDURD" in result.columns
 
     def test_hours(self) -> None:
-        df = pl.DataFrame(
-            {
-                "START": ["2024-01-01T00:00:00"],
-                "END": ["2024-01-01T06:00:00"],
-            }
-        ).with_columns(
+        df = pl.from_repr("""\
+┌─────────────────────┬─────────────────────┐
+│ START               ┆ END                 │
+│ ---                 ┆ ---                 │
+│ str                 ┆ str                 │
+╞═════════════════════╪═════════════════════╡
+│ 2024-01-01T00:00:00 ┆ 2024-01-01T06:00:00 │
+└─────────────────────┴─────────────────────┘
+""").with_columns(
             pl.col("START").str.to_datetime(),
             pl.col("END").str.to_datetime(),
         )

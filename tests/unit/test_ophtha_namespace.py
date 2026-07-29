@@ -34,13 +34,16 @@ _EYE_CODE_MAPPING = [
 @pytest.fixture
 def ophtha_frame():
     """Minimal frame for shared verb tests on the ophtha namespace."""
-    return pl.DataFrame(
-        {
-            "USUBJID": ["01-001", "01-002"],
-            "ETDRS": [85.0, 30.0],
-            "FOCID": ["OS", "OD"],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬───────┬───────┐
+│ USUBJID ┆ ETDRS ┆ FOCID │
+│ ---     ┆ ---   ┆ ---   │
+│ str     ┆ f64   ┆ str   │
+╞═════════╪═══════╪═══════╡
+│ 01-001  ┆ 85.0  ┆ OS    │
+│ 01-002  ┆ 30.0  ┆ OD    │
+└─────────┴───────┴───────┘
+""")
 
 
 class TestBaseVerbs:
@@ -108,7 +111,15 @@ class TestEtdrsToLogmar:
             assert got == pytest.approx(exp, abs=1e-4)
 
     def test_non_derived_columns_preserved(self):
-        df = pl.DataFrame({"USUBJID": ["01-701-1015"], "ETDRS": [50.0]})
+        df = pl.from_repr("""\
+┌─────────────┬───────┐
+│ USUBJID     ┆ ETDRS │
+│ ---         ┆ ---   │
+│ str         ┆ f64   │
+╞═════════════╪═══════╡
+│ 01-701-1015 ┆ 50.0  │
+└─────────────┴───────┘
+""")
         result = df.adam.ophtha.etdrs_to_logmar("LOGMAR", source="ETDRS").to_frame()
         assert "USUBJID" in result.columns
 
@@ -117,18 +128,44 @@ class TestLogmarToEtdrs:
     """Test 2: LogMAR → ETDRS conversion and roundtrip."""
 
     def test_logmar_07_gives_50(self):
-        df = pl.DataFrame({"LOGMAR": [0.7]})
+        df = pl.from_repr("""\
+┌────────┐
+│ LOGMAR │
+│ ---    │
+│ f64    │
+╞════════╡
+│ 0.7    │
+└────────┘
+""")
         result = df.adam.ophtha.logmar_to_etdrs("ETDRS", source="LOGMAR").to_frame()
         assert result["ETDRS"][0] == pytest.approx(50.0, abs=0.1)
 
     def test_logmar_0_gives_85(self):
-        df = pl.DataFrame({"LOGMAR": [0.0]})
+        df = pl.from_repr("""\
+┌────────┐
+│ LOGMAR │
+│ ---    │
+│ f64    │
+╞════════╡
+│ 0.0    │
+└────────┘
+""")
         result = df.adam.ophtha.logmar_to_etdrs("ETDRS", source="LOGMAR").to_frame()
         assert result["ETDRS"][0] == pytest.approx(85.0, abs=0.1)
 
     def test_roundtrip(self):
         """ETDRS → LogMAR → ETDRS must recover original values within rounding."""
-        df = pl.DataFrame({"ETDRS": [55.0, 70.0, 20.0]})
+        df = pl.from_repr("""\
+┌───────┐
+│ ETDRS │
+│ ---   │
+│ f64   │
+╞═══════╡
+│ 55.0  │
+│ 70.0  │
+│ 20.0  │
+└───────┘
+""")
         logmar_df = df.adam.ophtha.etdrs_to_logmar("LOGMAR", source="ETDRS").to_frame()
         result = logmar_df.adam.ophtha.logmar_to_etdrs("ETDRS_RT", source="LOGMAR").to_frame()
         for orig, rt in zip(df["ETDRS"].to_list(), result["ETDRS_RT"].to_list()):
@@ -151,19 +188,35 @@ class TestStudyEye:
 
     def test_case_insensitive_full_vector(self):
         """admiral tests case-insensitive parsing — lower/mixed case must work."""
-        df = pl.DataFrame({"SCSTRESC": ["os", "Od", "oU", "op"]})
+        df = pl.from_repr("""\
+┌──────────┐
+│ SCSTRESC │
+│ ---      │
+│ str      │
+╞══════════╡
+│ os       │
+│ Od       │
+│ oU       │
+│ op       │
+└──────────┘
+""")
         result = df.adam.ophtha.study_eye("STUDYEYE", source="SCSTRESC").to_frame()
         assert result["STUDYEYE"].to_list() == ["LEFT", "RIGHT", "BILATERAL", None]
 
     def test_multi_subject_realistic(self):
         """Multi-subject frame matching admiral's test-derive_var_studyeye.R layout."""
-        df = pl.DataFrame(
-            {
-                "STUDYID": ["XXX001"] * 4,
-                "USUBJID": ["P01", "P02", "P04", "P05"],
-                "SCSTRESC": ["OS", "OD", "OU", "OD"],
-            }
-        )
+        df = pl.from_repr("""\
+┌─────────┬─────────┬──────────┐
+│ STUDYID ┆ USUBJID ┆ SCSTRESC │
+│ ---     ┆ ---     ┆ ---      │
+│ str     ┆ str     ┆ str      │
+╞═════════╪═════════╪══════════╡
+│ XXX001  ┆ P01     ┆ OS       │
+│ XXX001  ┆ P02     ┆ OD       │
+│ XXX001  ┆ P04     ┆ OU       │
+│ XXX001  ┆ P05     ┆ OD       │
+└─────────┴─────────┴──────────┘
+""")
         result = df.adam.ophtha.study_eye("STUDYEYE", source="SCSTRESC").to_frame()
         eyes = dict(zip(result["USUBJID"].to_list(), result["STUDYEYE"].to_list()))
         assert eyes["P01"] == "LEFT"
@@ -174,46 +227,54 @@ class TestStudyEye:
 
 class TestAffectedEye:
     def test_bilateral_lat_gives_both_eyes(self):
-        df = pl.DataFrame(
-            {
-                "STUDYEYE": ["RIGHT"],
-                "AELOC": ["EYE"],
-                "AELAT": ["BILATERAL"],
-            }
-        )
+        df = pl.from_repr("""\
+┌──────────┬───────┬───────────┐
+│ STUDYEYE ┆ AELOC ┆ AELAT     │
+│ ---      ┆ ---   ┆ ---       │
+│ str      ┆ str   ┆ str       │
+╞══════════╪═══════╪═══════════╡
+│ RIGHT    ┆ EYE   ┆ BILATERAL │
+└──────────┴───────┴───────────┘
+""")
         result = df.adam.ophtha.affected_eye("AFEYE", loc_col="AELOC", lat_col="AELAT").to_frame()
         assert result["AFEYE"][0] == "Both Eyes"
 
     def test_matching_lat_gives_study_eye(self):
-        df = pl.DataFrame(
-            {
-                "STUDYEYE": ["RIGHT"],
-                "AELOC": ["EYE"],
-                "AELAT": ["RIGHT"],
-            }
-        )
+        df = pl.from_repr("""\
+┌──────────┬───────┬───────┐
+│ STUDYEYE ┆ AELOC ┆ AELAT │
+│ ---      ┆ ---   ┆ ---   │
+│ str      ┆ str   ┆ str   │
+╞══════════╪═══════╪═══════╡
+│ RIGHT    ┆ EYE   ┆ RIGHT │
+└──────────┴───────┴───────┘
+""")
         result = df.adam.ophtha.affected_eye("AFEYE", loc_col="AELOC", lat_col="AELAT").to_frame()
         assert result["AFEYE"][0] == "Study Eye"
 
     def test_opposite_lat_gives_fellow_eye(self):
-        df = pl.DataFrame(
-            {
-                "STUDYEYE": ["RIGHT"],
-                "AELOC": ["EYE"],
-                "AELAT": ["LEFT"],
-            }
-        )
+        df = pl.from_repr("""\
+┌──────────┬───────┬───────┐
+│ STUDYEYE ┆ AELOC ┆ AELAT │
+│ ---      ┆ ---   ┆ ---   │
+│ str      ┆ str   ┆ str   │
+╞══════════╪═══════╪═══════╡
+│ RIGHT    ┆ EYE   ┆ LEFT  │
+└──────────┴───────┴───────┘
+""")
         result = df.adam.ophtha.affected_eye("AFEYE", loc_col="AELOC", lat_col="AELAT").to_frame()
         assert result["AFEYE"][0] == "Fellow Eye"
 
     def test_invalid_loc_gives_null(self):
-        df = pl.DataFrame(
-            {
-                "STUDYEYE": ["RIGHT"],
-                "AELOC": ["NOSE"],
-                "AELAT": ["RIGHT"],
-            }
-        )
+        df = pl.from_repr("""\
+┌──────────┬───────┬───────┐
+│ STUDYEYE ┆ AELOC ┆ AELAT │
+│ ---      ┆ ---   ┆ ---   │
+│ str      ┆ str   ┆ str   │
+╞══════════╪═══════╪═══════╡
+│ RIGHT    ┆ NOSE  ┆ RIGHT │
+└──────────┴───────┴───────┘
+""")
         result = df.adam.ophtha.affected_eye("AFEYE", loc_col="AELOC", lat_col="AELAT").to_frame()
         assert result["AFEYE"][0] is None
 
@@ -243,7 +304,15 @@ class TestBcvaCriterion:
 
     def test_at_exact_ge_threshold_flagged(self):
         """At exactly the ge threshold → must flag (inclusive)."""
-        df = pl.DataFrame({"ETDRS": [70.0]})
+        df = pl.from_repr("""\
+┌───────┐
+│ ETDRS │
+│ ---   │
+│ f64   │
+╞═══════╡
+│ 70.0  │
+└───────┘
+""")
         result = df.adam.ophtha.bcva_criterion(
             "FL", value_col="ETDRS", threshold=70.0, direction="ge"
         ).to_frame()
@@ -251,14 +320,30 @@ class TestBcvaCriterion:
 
     def test_at_exact_gt_threshold_not_flagged(self):
         """At exactly the gt threshold → must NOT flag (exclusive)."""
-        df = pl.DataFrame({"ETDRS": [70.0]})
+        df = pl.from_repr("""\
+┌───────┐
+│ ETDRS │
+│ ---   │
+│ f64   │
+╞═══════╡
+│ 70.0  │
+└───────┘
+""")
         result = df.adam.ophtha.bcva_criterion(
             "FL", value_col="ETDRS", threshold=70.0, direction="gt"
         ).to_frame()
         assert result["FL"][0] is None
 
     def test_invalid_direction_raises(self):
-        df = pl.DataFrame({"ETDRS": [50.0]})
+        df = pl.from_repr("""\
+┌───────┐
+│ ETDRS │
+│ ---   │
+│ f64   │
+╞═══════╡
+│ 50.0  │
+└───────┘
+""")
         with pytest.raises(ValueError, match="direction"):
             df.adam.ophtha.bcva_criterion(
                 "X", value_col="ETDRS", threshold=50, direction="eq"

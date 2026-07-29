@@ -172,7 +172,16 @@ class TestDerivationCall:
         def add_col(df: pl.DataFrame) -> pl.DataFrame:
             return df.with_columns(pl.lit(1).alias("NEW_COL"))
 
-        df = pl.DataFrame({"X": [1, 2]})
+        df = pl.from_repr("""\
+┌─────┐
+│ X   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+│ 2   │
+└─────┘
+""")
         result = add_col(df)
         assert isinstance(result, pl.DataFrame)
         assert "NEW_COL" in result.columns
@@ -182,6 +191,14 @@ class TestDerivationCall:
         def my_param_fn(df: pl.DataFrame) -> pl.DataFrame:
             return df.with_columns(pl.lit(99).alias("AVAL"))
 
-        df = pl.DataFrame({"X": [1]})
+        df = pl.from_repr("""\
+┌─────┐
+│ X   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
         result = my_param_fn(df)
         assert "AVAL" in result.columns

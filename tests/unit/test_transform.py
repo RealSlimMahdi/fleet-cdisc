@@ -23,13 +23,17 @@ def _clean_registry():
 @pytest.fixture
 def dm_frame():
     """Minimal DM-like frame."""
-    return pl.DataFrame(
-        {
-            "USUBJID": ["01-001", "01-002", "01-003"],
-            "AGE": [45, 72, 30],
-            "SEX": ["M", "F", "M"],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬─────┬─────┐
+│ USUBJID ┆ AGE ┆ SEX │
+│ ---     ┆ --- ┆ --- │
+│ str     ┆ i64 ┆ str │
+╞═════════╪═════╪═════╡
+│ 01-001  ┆ 45  ┆ M   │
+│ 01-002  ┆ 72  ┆ F   │
+│ 01-003  ┆ 30  ┆ M   │
+└─────────┴─────┴─────┘
+""")
 
 
 # ── Registry tests ────────────────────────────────────────────────────────
@@ -185,11 +189,16 @@ class TestFromSpecOmit:
 
     @pytest.fixture
     def base_frame(self):
-        return pl.DataFrame(
-            {
-                "USUBJID": ["SUBJ-001", "SUBJ-002"],
-            }
-        )
+        return pl.from_repr("""\
+┌──────────┐
+│ USUBJID  │
+│ ---      │
+│ str      │
+╞══════════╡
+│ SUBJ-001 │
+│ SUBJ-002 │
+└──────────┘
+""")
 
     def test_omit_skips_variable(self, base_frame, spec_path):
         """Omitted variables are not derived by from_spec."""

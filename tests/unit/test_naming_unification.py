@@ -22,35 +22,86 @@ from fleet.core.exceptions import DerivationError, VerbUsageError
 
 class TestAssign:
     def test_assign_source(self):
-        df = pl.DataFrame({"sid": ["A", "B"]})
+        df = pl.from_repr("""\
+┌─────┐
+│ sid │
+│ --- │
+│ str │
+╞═════╡
+│ A   │
+│ B   │
+└─────┘
+""")
         out = df.sdtm.assign("USUBJID", source="sid").to_frame()
         assert out["USUBJID"].to_list() == ["A", "B"]
 
     def test_assign_value_sets_domain(self):
-        df = pl.DataFrame({"a": [1]})
+        df = pl.from_repr("""\
+┌─────┐
+│ a   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
         ns = df.sdtm.assign("DOMAIN", value="DM")
         assert ns._domain == "DM"
         assert ns.to_frame()["DOMAIN"].to_list() == ["DM"]
 
     def test_assign_ct_map(self):
-        df = pl.DataFrame({"sex": ["1", "2"]})
+        df = pl.from_repr("""\
+┌─────┐
+│ sex │
+│ --- │
+│ str │
+╞═════╡
+│ 1   │
+│ 2   │
+└─────┘
+""")
         out = df.sdtm.assign("SEX", source="sex", ct_map={"1": "M", "2": "F"}).to_frame()
         assert out["SEX"].to_list() == ["M", "F"]
 
     def test_assign_requires_exactly_one_of_source_value(self):
-        df = pl.DataFrame({"a": [1]})
+        df = pl.from_repr("""\
+┌─────┐
+│ a   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
         with pytest.raises(DerivationError, match="exactly one"):
             df.sdtm.assign("X")
         with pytest.raises(DerivationError, match="exactly one"):
             df.sdtm.assign("X", source="a", value=1)
 
     def test_assign_value_with_ct_map_rejected(self):
-        df = pl.DataFrame({"a": [1]})
+        df = pl.from_repr("""\
+┌─────┐
+│ a   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
         with pytest.raises(VerbUsageError, match="ct_map"):
             df.sdtm.assign("X", value="M", ct_map={"M": "M"})
 
     def test_adam_assign_value(self):
-        df = pl.DataFrame({"a": [1, 2]})
+        df = pl.from_repr("""\
+┌─────┐
+│ a   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+│ 2   │
+└─────┘
+""")
         out = df.adam.assign("STUDYID", value="S01").to_frame()
         assert out["STUDYID"].to_list() == ["S01", "S01"]
 
@@ -62,7 +113,16 @@ class TestAssign:
 
 class TestCaseWhen:
     def test_case_when_branches(self):
-        df = pl.DataFrame({"AGE": [70, 50]})
+        df = pl.from_repr("""\
+┌─────┐
+│ AGE │
+│ --- │
+│ i64 │
+╞═════╡
+│ 70  │
+│ 50  │
+└─────┘
+""")
         out = df.adam.case_when(
             "AGEGR1",
             when=[{"condition": 'pl.col("AGE") >= 65', "value": ">=65"}],
@@ -71,7 +131,15 @@ class TestCaseWhen:
         assert out["AGEGR1"].to_list() == [">=65", "<65"]
 
     def test_empty_when_uses_else(self):
-        df = pl.DataFrame({"a": [1]})
+        df = pl.from_repr("""\
+┌─────┐
+│ a   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
         out = df.sdtm.case_when("X", when=[], else_="z").to_frame()
         assert out["X"].to_list() == ["z"]
 
@@ -83,7 +151,16 @@ class TestCaseWhen:
 
 class TestMergeKeep:
     def test_merge_positional_dataset_and_keep(self):
-        base = pl.DataFrame({"USUBJID": ["S1", "S2"]})
+        base = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ S1      │
+│ S2      │
+└─────────┘
+""")
         ref = pl.from_repr("""\
 ┌─────────┬────────┬─────┐
 │ USUBJID ┆ TRTSDT ┆ X   │
@@ -98,7 +175,16 @@ class TestMergeKeep:
         assert out.columns == ["USUBJID", "TRTSDT"]
 
     def test_merge_where_filters_right(self):
-        base = pl.DataFrame({"USUBJID": ["S1", "S2"]})
+        base = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ S1      │
+│ S2      │
+└─────────┘
+""")
         ref = pl.from_repr("""\
 ┌─────────┬─────┬─────┐
 │ USUBJID ┆ FL  ┆ V   │
@@ -113,7 +199,15 @@ class TestMergeKeep:
         assert out.sort("USUBJID")["V"].to_list() == [1, None]
 
     def test_merge_stays_lazy(self):
-        base = pl.DataFrame({"USUBJID": ["S1"]})
+        base = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ S1      │
+└─────────┘
+""")
         ref = pl.from_repr("""\
 ┌─────────┬─────┐
 │ USUBJID ┆ V   │
@@ -153,7 +247,15 @@ class TestMergeKeep:
         assert out.columns == ["B", "A"]
 
     def test_keep_unknown_column_suggests(self):
-        df = pl.DataFrame({"USUBJID": [1]})
+        df = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ i64     │
+╞═════════╡
+│ 1       │
+└─────────┘
+""")
         with pytest.raises(DerivationError, match="USUBJID"):
             df.sdtm.keep("USUBJIX")
 
@@ -176,13 +278,29 @@ class TestOldSpellingsRemoved:
         ],
     )
     def test_sdtm_old_verbs_gone(self, verb):
-        df = pl.DataFrame({"a": [1]})
+        df = pl.from_repr("""\
+┌─────┐
+│ a   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
         with pytest.raises(AttributeError):
             getattr(df.sdtm, verb)
 
     @pytest.mark.parametrize("verb", ["assigned", "rename", "condderivation", "lookup"])
     def test_adam_old_verbs_gone(self, verb):
-        df = pl.DataFrame({"a": [1]})
+        df = pl.from_repr("""\
+┌─────┐
+│ a   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
         with pytest.raises(AttributeError):
             getattr(df.adam, verb)
 
@@ -213,7 +331,15 @@ class TestOldSpellingsRemoved:
             df.adam.derive_summary_records(by_vars=["USUBJID"], set_values_to={"DTYPE": "AVERAGE"})
 
     def test_merge_positional_column_list_gone(self):
-        base = pl.DataFrame({"USUBJID": ["S1"]})
+        base = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ S1      │
+└─────────┘
+""")
         with pytest.raises(VerbUsageError, match="DataFrame"):
             base.sdtm.merge(["V"], on="USUBJID")
 
@@ -238,7 +364,15 @@ class TestVariadicSource:
         assert out.columns == ["STUDYID", "USUBJID", "AETERM"]
 
     def test_single_from_col_still_works(self):
-        df = pl.DataFrame({"vst": ["BP"]})
+        df = pl.from_repr("""\
+┌─────┐
+│ vst │
+│ --- │
+│ str │
+╞═════╡
+│ BP  │
+└─────┘
+""")
         out = df.adam.source("PARAM", from_col="vst").to_frame()
         assert out["PARAM"].to_list() == ["BP"]
 
@@ -289,8 +423,27 @@ class TestFlagFamily:
         assert out["F"].to_list() == ["Y", None, "Y"]
 
     def test_flag_exists(self):
-        adsl = pl.DataFrame({"USUBJID": ["1", "2", "3"]})
-        ae = pl.DataFrame({"USUBJID": ["1", "3"]})
+        adsl = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ 1       │
+│ 2       │
+│ 3       │
+└─────────┘
+""")
+        ae = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ 1       │
+│ 3       │
+└─────────┘
+""")
         out = adsl.adam.adsl.flag_exists("AEFL", from_dataset=ae, on=["USUBJID"]).to_frame()
         assert out["AEFL"].to_list() == ["Y", None, "Y"]
 
@@ -344,7 +497,15 @@ class TestFlagFamily:
         assert out["SAFFL"].to_list() == ["Y", None]
 
     def test_sdtm_flag_family_present(self):
-        dm = pl.DataFrame({"USUBJID": ["A"]})
+        dm = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ A       │
+└─────────┘
+""")
         assert hasattr(dm.sdtm, "flag_first")
         assert hasattr(dm.sdtm, "criterion")
 
@@ -390,25 +551,57 @@ class TestLazyEntry:
 
 class TestVerbsListing:
     def test_sdtm_verbs_frame_shape(self):
-        df = pl.DataFrame({"a": [1]})
+        df = pl.from_repr("""\
+┌─────┐
+│ a   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
         v = df.sdtm.verbs()
         assert v.columns == ["verb", "summary"]
         assert v.height > 0
 
     def test_canonical_verbs_present(self):
-        df = pl.DataFrame({"a": [1]})
+        df = pl.from_repr("""\
+┌─────┐
+│ a   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
         names = set(df.sdtm.verbs()["verb"].to_list())
         assert {"assign", "case_when", "merge", "keep", "flag"} <= names
 
     def test_removed_spellings_not_listed(self):
-        df = pl.DataFrame({"a": [1]})
+        df = pl.from_repr("""\
+┌─────┐
+│ a   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
         names = set(df.sdtm.verbs()["verb"].to_list())
         assert "assign_no_ct" not in names
         assert "hardcode_no_ct" not in names
         assert "if_then_else" not in names
 
     def test_adam_verbs_exclude_removed_spellings(self):
-        df = pl.DataFrame({"a": [1]})
+        df = pl.from_repr("""\
+┌─────┐
+│ a   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
         names = set(df.adam.verbs()["verb"].to_list())
         assert "assign" in names
         assert "assigned" not in names
@@ -416,7 +609,15 @@ class TestVerbsListing:
         assert "lookup" not in names
 
     def test_verbs_summary_is_first_sentence(self):
-        df = pl.DataFrame({"a": [1]})
+        df = pl.from_repr("""\
+┌─────┐
+│ a   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
         v = df.sdtm.verbs().filter(pl.col("verb") == "assign")
         assert v["summary"][0].startswith("Assign")
 

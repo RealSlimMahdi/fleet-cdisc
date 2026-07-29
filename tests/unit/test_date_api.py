@@ -12,24 +12,32 @@ import fleet  # noqa: F401  — register namespaces
 
 @pytest.fixture()
 def raw_df() -> pl.DataFrame:
-    return pl.DataFrame(
-        {
-            "subject": ["S01", "S02", "S03"],
-            "ae_start": ["2024-01-15", "2024-03-20", "2024-06"],
-            "ae_end": ["2024-02-01", "2024-04", ""],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬────────────┬────────────┐
+│ subject ┆ ae_start   ┆ ae_end     │
+│ ---     ┆ ---        ┆ ---        │
+│ str     ┆ str        ┆ str        │
+╞═════════╪════════════╪════════════╡
+│ S01     ┆ 2024-01-15 ┆ 2024-02-01 │
+│ S02     ┆ 2024-03-20 ┆ 2024-04    │
+│ S03     ┆ 2024-06    ┆            │
+└─────────┴────────────┴────────────┘
+""")
 
 
 @pytest.fixture()
 def dtc_df() -> pl.DataFrame:
-    return pl.DataFrame(
-        {
-            "USUBJID": ["S01", "S02", "S03"],
-            "AESTDTC": ["2024-01-15", "2024-03-20", "2024-06"],
-            "AEENDTC": ["2024-02-01T10:30:00", "2024-04", ""],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬────────────┬─────────────────────┐
+│ USUBJID ┆ AESTDTC    ┆ AEENDTC             │
+│ ---     ┆ ---        ┆ ---                 │
+│ str     ┆ str        ┆ str                 │
+╞═════════╪════════════╪═════════════════════╡
+│ S01     ┆ 2024-01-15 ┆ 2024-02-01T10:30:00 │
+│ S02     ┆ 2024-03-20 ┆ 2024-04             │
+│ S03     ┆ 2024-06    ┆                     │
+└─────────┴────────────┴─────────────────────┘
+""")
 
 
 # ── SDTM .date() tests ───────────────────────────────────────────────
@@ -43,7 +51,16 @@ class TestSdtmDateDtc:
         assert "AESTDTC" in result.columns
 
     def test_dtc_with_format(self) -> None:
-        df = pl.DataFrame({"raw": ["15/01/2024", "20/03/2024"]})
+        df = pl.from_repr("""\
+┌────────────┐
+│ raw        │
+│ ---        │
+│ str        │
+╞════════════╡
+│ 15/01/2024 │
+│ 20/03/2024 │
+└────────────┘
+""")
         result = df.sdtm.date("AESTDTC", source="raw", format="%d/%m/%Y").to_frame()
         assert "AESTDTC" in result.columns
 
@@ -134,36 +151,48 @@ class TestSdtmDateDtmTime:
     @pytest.fixture()
     def raw_ex(self) -> pl.DataFrame:
         """Raw EX-like data with separate date/time columns (complete)."""
-        return pl.DataFrame(
-            {
-                "subject_id": ["101-001", "101-002", "101-003", "101-004"],
-                "ex_start_date": ["2024-02-15", "2024-03-01", "2024-04-10", "2024-05-22"],
-                "ex_start_time": ["08:59", "14:30", "09:07", "11:40"],
-                "ex_end_date": ["2024-02-15", "2024-03-01", "2024-04-10", "2024-05-22"],
-                "ex_end_time": ["09:30", "15:00", "09:45", "12:10"],
-            }
-        )
+        return pl.from_repr("""\
+┌────────────┬───────────────┬───────────────┬─────────────┬─────────────┐
+│ subject_id ┆ ex_start_date ┆ ex_start_time ┆ ex_end_date ┆ ex_end_time │
+│ ---        ┆ ---           ┆ ---           ┆ ---         ┆ ---         │
+│ str        ┆ str           ┆ str           ┆ str         ┆ str         │
+╞════════════╪═══════════════╪═══════════════╪═════════════╪═════════════╡
+│ 101-001    ┆ 2024-02-15    ┆ 08:59         ┆ 2024-02-15  ┆ 09:30       │
+│ 101-002    ┆ 2024-03-01    ┆ 14:30         ┆ 2024-03-01  ┆ 15:00       │
+│ 101-003    ┆ 2024-04-10    ┆ 09:07         ┆ 2024-04-10  ┆ 09:45       │
+│ 101-004    ┆ 2024-05-22    ┆ 11:40         ┆ 2024-05-22  ┆ 12:10       │
+└────────────┴───────────────┴───────────────┴─────────────┴─────────────┘
+""")
 
     @pytest.fixture()
     def raw_ex_partial_time(self) -> pl.DataFrame:
         """Raw EX data with missing time for some records."""
-        return pl.DataFrame(
-            {
-                "subject_id": ["101-001", "101-002", "101-003", "101-004"],
-                "ex_start_date": ["2024-02-15", "2024-03-01", "2024-04-10", "2024-05-22"],
-                "ex_start_time": ["08:59", None, "09:07", None],
-            }
-        )
+        return pl.from_repr("""\
+┌────────────┬───────────────┬───────────────┐
+│ subject_id ┆ ex_start_date ┆ ex_start_time │
+│ ---        ┆ ---           ┆ ---           │
+│ str        ┆ str           ┆ str           │
+╞════════════╪═══════════════╪═══════════════╡
+│ 101-001    ┆ 2024-02-15    ┆ 08:59         │
+│ 101-002    ┆ 2024-03-01    ┆ null          │
+│ 101-003    ┆ 2024-04-10    ┆ 09:07         │
+│ 101-004    ┆ 2024-05-22    ┆ null          │
+└────────────┴───────────────┴───────────────┘
+""")
 
     @pytest.fixture()
     def raw_ex_no_time_col(self) -> pl.DataFrame:
         """Raw EX data without a time column at all."""
-        return pl.DataFrame(
-            {
-                "subject_id": ["101-001", "101-002"],
-                "ex_start_date": ["2024-02-15", "2024-03-01"],
-            }
-        )
+        return pl.from_repr("""\
+┌────────────┬───────────────┐
+│ subject_id ┆ ex_start_date │
+│ ---        ┆ ---           │
+│ str        ┆ str           │
+╞════════════╪═══════════════╡
+│ 101-001    ┆ 2024-02-15    │
+│ 101-002    ┆ 2024-03-01    │
+└────────────┴───────────────┘
+""")
 
     # ── DTM with time= column (the original bug scenario) ────────────
 

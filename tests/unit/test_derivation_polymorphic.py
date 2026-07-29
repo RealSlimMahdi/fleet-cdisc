@@ -20,13 +20,17 @@ def _clean_registry():
 @pytest.fixture
 def simple_df():
     """Minimal frame for derivation tests."""
-    return pl.DataFrame(
-        {
-            "USUBJID": ["01-001", "01-002", "01-003"],
-            "AGE": [45, 72, 30],
-            "VSSTRESN": [120.0, 130.0, 115.0],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬─────┬──────────┐
+│ USUBJID ┆ AGE ┆ VSSTRESN │
+│ ---     ┆ --- ┆ ---      │
+│ str     ┆ i64 ┆ f64      │
+╞═════════╪═════╪══════════╡
+│ 01-001  ┆ 45  ┆ 120.0    │
+│ 01-002  ┆ 72  ┆ 130.0    │
+│ 01-003  ┆ 30  ┆ 115.0    │
+└─────────┴─────┴──────────┘
+""")
 
 
 # ── Case 1: string expression ─────────────────────────────────────────────

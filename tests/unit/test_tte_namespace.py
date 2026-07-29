@@ -178,14 +178,16 @@ class TestSelection:
     def test_same_date_dup_without_order_warns_but_deterministic(self, adsl):
         """admiral #14 (check_type='warning') improved: warn AND stay
         deterministic regardless of input order."""
-        adae = pl.DataFrame(
-            {
-                "USUBJID": ["01", "01"],
-                "TRTEMFL": ["Y", "Y"],
-                "ASTDT": [date(2023, 1, 10), date(2023, 1, 10)],
-                "AEDECOD": ["B", "A"],
-            }
-        )
+        adae = pl.from_repr("""
+┌─────────┬─────────┬────────────┬─────────┐
+│ USUBJID ┆ TRTEMFL ┆ ASTDT      ┆ AEDECOD │
+│ ---     ┆ ---     ┆ ---        ┆ ---     │
+│ str     ┆ str     ┆ date       ┆ str     │
+╞═════════╪═════════╪════════════╪═════════╡
+│ 01      ┆ Y       ┆ 2023-01-10 ┆ B       │
+│ 01      ┆ Y       ┆ 2023-01-10 ┆ A       │
+└─────────┴─────────┴────────────┴─────────┘
+""")
         src = EventSource(
             dataset="ADAE", where='pl.col("TRTEMFL") == "Y"', date="ASTDT", set={"EVNTDESC": "AE"}
         )
@@ -447,16 +449,15 @@ class TestAccumulation:
 
     def test_preexisting_rows_preserved(self, adsl):
         """admiral #12: rows already in the input dataset are kept."""
-        base = pl.DataFrame(
-            {
-                "USUBJID": ["01"],
-                "PARAMCD": ["XYZ"],
-                "PARAM": ["Existing"],
-                "STARTDT": [date(2023, 1, 1)],
-                "ADT": [date(2023, 2, 1)],
-                "CNSR": [0],
-            }
-        )
+        base = pl.from_repr("""
+┌─────────┬─────────┬──────────┬────────────┬────────────┬──────┐
+│ USUBJID ┆ PARAMCD ┆ PARAM    ┆ STARTDT    ┆ ADT        ┆ CNSR │
+│ ---     ┆ ---     ┆ ---      ┆ ---        ┆ ---        ┆ ---  │
+│ str     ┆ str     ┆ str      ┆ date       ┆ date       ┆ i64  │
+╞═════════╪═════════╪══════════╪════════════╪════════════╪══════╡
+│ 01      ┆ XYZ     ┆ Existing ┆ 2023-01-01 ┆ 2023-02-01 ┆ 0    │
+└─────────┴─────────┴──────────┴────────────┴────────────┴──────┘
+""")
         result = _os(base.adam.tte.pin("ADSL", adsl), retain="censor_at_start").to_frame()
         assert set(result["PARAMCD"].to_list()) == {"XYZ", "OS"}
         assert result.filter(pl.col("PARAMCD") == "XYZ").height == 1

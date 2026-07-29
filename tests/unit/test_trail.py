@@ -8,23 +8,30 @@ import fleet  # noqa: F401 — triggers namespace registration
 
 @pytest.fixture
 def dm_df() -> pl.DataFrame:
-    return pl.DataFrame(
-        {
-            "USUBJID": ["S001", "S002"],
-            "RFSTDTC": ["2014-01-02", "2014-01-03"],
-        }
-    )
+    return pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ RFSTDTC    │
+│ ---     ┆ ---        │
+│ str     ┆ str        │
+╞═════════╪════════════╡
+│ S001    ┆ 2014-01-02 │
+│ S002    ┆ 2014-01-03 │
+└─────────┴────────────┘
+""")
 
 
 @pytest.fixture
 def ae_raw() -> pl.DataFrame:
-    return pl.DataFrame(
-        {
-            "patient_number": ["S001", "S002"],
-            "ae_term": ["HEADACHE", "NAUSEA"],
-            "ae_start_date": ["2014-01-10", "2014-01-12"],
-        }
-    )
+    return pl.from_repr("""\
+┌────────────────┬──────────┬───────────────┐
+│ patient_number ┆ ae_term  ┆ ae_start_date │
+│ ---            ┆ ---      ┆ ---           │
+│ str            ┆ str      ┆ str           │
+╞════════════════╪══════════╪═══════════════╡
+│ S001           ┆ HEADACHE ┆ 2014-01-10    │
+│ S002           ┆ NAUSEA   ┆ 2014-01-12    │
+└────────────────┴──────────┴───────────────┘
+""")
 
 
 class TestTrail:
@@ -81,7 +88,16 @@ class TestTrail:
         assert out.count("USUBJID") >= 2
 
     def test_domain_column_present_for_adam(self, capsys):
-        adsl_raw = pl.DataFrame({"USUBJID": ["S001", "S002"]})
+        adsl_raw = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ S001    │
+│ S002    │
+└─────────┘
+""")
         adsl_raw.adam.adsl.source("USUBJID").trail()
         out = capsys.readouterr().out
         assert "Domain" in out

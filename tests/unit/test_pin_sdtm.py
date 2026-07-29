@@ -196,6 +196,15 @@ class TestAutoFKCheck:
 
     def test_auto_fk_triggers_with_pin(self, dm_df):
         """FK check fires when pin exists and orphan values are found."""
-        bad_df = pl.DataFrame({"patient_number": ["S001", "ORPHAN_SUBJ"]})
+        bad_df = pl.from_repr("""\
+┌────────────────┐
+│ patient_number │
+│ ---            │
+│ str            │
+╞════════════════╡
+│ S001           │
+│ ORPHAN_SUBJ    │
+└────────────────┘
+""")
         with pytest.warns(UserWarning, match="FK check"):
             bad_df.sdtm.pin("DM", dm_df).assign("USUBJID", source="patient_number").to_frame()

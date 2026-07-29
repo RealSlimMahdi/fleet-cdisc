@@ -428,9 +428,16 @@ class TestInlineParity:
 
     def test_inline_and_spec_routes_render_identical_text(self, tmp_path):
         raw = fleet.frame(
-            pl.DataFrame(
-                {"subject_id": ["01-701", "01-702"], "visit_date": ["2024-01-02", "2024-01-05"]}
-            )
+            pl.from_repr("""\
+┌────────────┬────────────┐
+│ subject_id ┆ visit_date │
+│ ---        ┆ ---        │
+│ str        ┆ str        │
+╞════════════╪════════════╡
+│ 01-701     ┆ 2024-01-02 │
+│ 01-702     ┆ 2024-01-05 │
+└────────────┴────────────┘
+""")
         )
         ns = (
             raw.sdtm.assign("DOMAIN", value="DM")
@@ -481,7 +488,17 @@ class TestInlineParity:
         assert inline_texts["USUBJID"] == "Direct copy of subject_id."
 
     def test_stub_variables_warn_at_authoring_time(self):
-        raw = fleet.frame(pl.DataFrame({"subject_id": ["01-701"]}))
+        raw = fleet.frame(
+            pl.from_repr("""\
+┌────────────┐
+│ subject_id │
+│ ---        │
+│ str        │
+╞════════════╡
+│ 01-701     │
+└────────────┘
+""")
+        )
         ns = raw.sdtm.assign("USUBJID", source="subject_id").derivation(
             "SITEID", expression=pl.col("subject_id").str.slice(0, 2)
         )
@@ -497,15 +514,15 @@ class TestInlineParity:
 class TestPredecessorPopulate:
     def _adsl_ns(self):
         dm = fleet.frame(
-            pl.DataFrame(
-                {
-                    "USUBJID": ["01-701"],
-                    "AGE": [30],
-                    "COUNTRY": ["USA"],
-                    "ARM": ["A"],
-                    "patient_number": ["P1"],
-                }
-            )
+            pl.from_repr("""\
+┌─────────┬─────┬─────────┬─────┬────────────────┐
+│ USUBJID ┆ AGE ┆ COUNTRY ┆ ARM ┆ patient_number │
+│ ---     ┆ --- ┆ ---     ┆ --- ┆ ---            │
+│ str     ┆ i64 ┆ str     ┆ str ┆ str            │
+╞═════════╪═════╪═════════╪═════╪════════════════╡
+│ 01-701  ┆ 30  ┆ USA     ┆ A   ┆ P1             │
+└─────────┴─────┴─────────┴─────┴────────────────┘
+""")
         )
         return (
             dm.adam.assign("AGE", source="AGE")
@@ -536,7 +553,15 @@ class TestPredecessorPopulate:
         assert _origin_desc(root, "COUNTRY") == "DM.COUNTRY"
 
     def test_merge_ambiguity_gets_a_review_note(self):
-        ex = pl.DataFrame({"USUBJID": ["01-701"], "TRTSDT": ["2024-01-02"]})
+        ex = pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ TRTSDT     │
+│ ---     ┆ ---        │
+│ str     ┆ str        │
+╞═════════╪════════════╡
+│ 01-701  ┆ 2024-01-02 │
+└─────────┴────────────┘
+""")
         ns = self._adsl_ns().merge(ex, on="USUBJID")
         text = ns.to_spec_yaml(dataset="ADSL", predecessor="DM")
         assert "merges other datasets" in text
@@ -546,7 +571,17 @@ class TestPredecessorPopulate:
         )
 
     def test_sdtm_pipeline_rejects_predecessor(self):
-        raw = fleet.frame(pl.DataFrame({"subject_id": ["01-701"]}))
+        raw = fleet.frame(
+            pl.from_repr("""\
+┌────────────┐
+│ subject_id │
+│ ---        │
+│ str        │
+╞════════════╡
+│ 01-701     │
+└────────────┘
+""")
+        )
         ns = raw.sdtm.assign("USUBJID", source="subject_id")
         with pytest.raises(Exception, match="ADaM pipelines only"):
             ns.to_spec_yaml(dataset="DM", predecessor="DM")
