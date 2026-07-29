@@ -75,7 +75,7 @@ def nsv_spec_yaml(tmp_path: Path) -> Path:
               - name: USUBJID
                 label: Unique Subject Identifier
                 type: text
-                origin: CRF
+                origin: Collected
                 derivation:
                   algorithm: assign_no_ct
                   source: patient_number
@@ -84,7 +84,7 @@ def nsv_spec_yaml(tmp_path: Path) -> Path:
                 label: Safety Population Flag
                 type: text
                 role: qualifier
-                origin: DERIVED
+                origin: Derived
                 derivation:
                   algorithm: nsv
                   source: safety_flag
@@ -93,7 +93,7 @@ def nsv_spec_yaml(tmp_path: Path) -> Path:
                 label: Intent to Treat Population Flag
                 type: text
                 role: qualifier
-                origin: DERIVED
+                origin: Derived
                 derivation:
                   algorithm: nsv
                   source: itt_flag
@@ -160,15 +160,15 @@ class TestNSVMetadataCapture:
         assert len(ns._nsv_meta) == 1
         assert ns._nsv_meta[0].target == "SAFETY"
         assert ns._nsv_meta[0].label == "Safety Population Flag"
-        assert ns._nsv_meta[0].origin == "DERIVED"
+        assert ns._nsv_meta[0].origin == "Derived"
 
     def test_multiple_nsv_meta(self, dm_raw_with_flags):
         ns = dm_raw_with_flags.sdtm.nsv("SAFETY", source="safety_flag", label="Safety Flag").nsv(
-            "ITT", source="itt_flag", label="ITT Flag", origin="CRF"
+            "ITT", source="itt_flag", label="ITT Flag", origin="Collected"
         )
         assert len(ns._nsv_meta) == 2
         assert ns._nsv_meta[1].target == "ITT"
-        assert ns._nsv_meta[1].origin == "CRF"
+        assert ns._nsv_meta[1].origin == "Collected"
 
     def test_evaluator_captured(self, dm_raw_with_flags):
         ns = dm_raw_with_flags.sdtm.nsv(
@@ -311,10 +311,10 @@ class TestExportSuppContent:
 
     def test_qorig_from_metadata(self, dm_raw_with_flags):
         ns = dm_raw_with_flags.sdtm.nsv(
-            "SAFETY", source="safety_flag", label="Safety Flag", origin="CRF"
+            "SAFETY", source="safety_flag", label="Safety Flag", origin="Collected"
         )
         supp = ns.export_supp()
-        assert all(v == "CRF" for v in supp["QORIG"].to_list())
+        assert all(v == "Collected" for v in supp["QORIG"].to_list())
 
     def test_qeval_from_metadata(self, dm_raw_with_flags):
         ns = dm_raw_with_flags.sdtm.nsv(
@@ -376,8 +376,8 @@ class TestExportSuppPostHocDict:
         # No nsv() calls — use explicit dict on an existing frame
         supp = dm_raw_with_flags.sdtm.export_supp(
             qualifiers={
-                "safety_flag": {"label": "Safety Population Flag", "origin": "DERIVED"},
-                "itt_flag": {"label": "ITT Population Flag", "origin": "DERIVED"},
+                "safety_flag": {"label": "Safety Population Flag", "origin": "Derived"},
+                "itt_flag": {"label": "ITT Population Flag", "origin": "Derived"},
             },
         )
         assert supp.columns == [
@@ -400,7 +400,7 @@ class TestExportSuppPostHocDict:
         ns = dm_raw_with_flags.sdtm.nsv("SAFETY", source="safety_flag", label="Safety Flag")
         # qualifiers dict should override _nsv_meta
         supp = ns.export_supp(
-            qualifiers={"efficacy_flag": {"label": "Efficacy Flag", "origin": "DERIVED"}}
+            qualifiers={"efficacy_flag": {"label": "Efficacy Flag", "origin": "Derived"}}
         )
         assert set(supp["QNAM"].to_list()) == {"efficacy_flag"}
 

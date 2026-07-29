@@ -122,7 +122,7 @@ datasets:
         type: text
         length: 20
         mandatory: true
-        origin: CRF
+        origin: Collected
         crf_pages: "6"
         derivation:
           algorithm: assign_no_ct
@@ -132,7 +132,7 @@ datasets:
         label: Subject Reference Start Date/Time
         type: datetime
         mandatory: true
-        origin: CRF
+        origin: Collected
         crf_pages: "7"
         derivation:
           algorithm: assign_dtc
@@ -142,7 +142,7 @@ datasets:
         label: Subject Reference End Date/Time
         type: datetime
         mandatory: false
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: assign_dtc
           source: last_dose_date
@@ -152,19 +152,21 @@ datasets:
         type: datetime
         mandatory: false
         origin: Derived
+        comment: Earliest EX.EXSTDTC for the subject
 
       - name: RFXENDTC
         label: Date/Time of Last Study Treatment
         type: datetime
         mandatory: false
         origin: Derived
+        comment: Latest EX.EXENDTC for the subject
 
       - name: SITEID
         label: Study Site Identifier
         type: text
         length: 20
         mandatory: true
-        origin: CRF
+        origin: Collected
         crf_pages: "6"
         derivation:
           algorithm: assign_no_ct
@@ -174,7 +176,7 @@ datasets:
         label: Age
         type: integer
         mandatory: true
-        origin: CRF
+        origin: Collected
         crf_pages: "8"
         derivation:
           algorithm: assign_no_ct
@@ -195,7 +197,7 @@ datasets:
         type: text
         length: 2
         mandatory: true
-        origin: CRF
+        origin: Collected
         crf_pages: "8"
         codelist: C66731
         derivation:
@@ -211,7 +213,7 @@ datasets:
         type: text
         length: 60
         mandatory: false
-        origin: CRF
+        origin: Collected
         crf_pages: "8 9"
         codelist: C74457
         derivation:
@@ -224,7 +226,7 @@ datasets:
         type: text
         length: 60
         mandatory: false
-        origin: CRF
+        origin: Collected
         codelist: C66790
         derivation:
           algorithm: assign_ct
@@ -275,7 +277,7 @@ datasets:
         label: Date/Time of Informed Consent
         type: datetime
         mandatory: false
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: assign_dtc
           source: informed_consent_date
@@ -333,7 +335,7 @@ datasets:
         type: text
         length: 200
         mandatory: true
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: assign_no_ct
           source: ae_term
@@ -352,7 +354,7 @@ datasets:
         label: Start Date/Time of Adverse Event
         type: datetime
         mandatory: true
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: assign_dtc
           source: ae_start_date
@@ -361,7 +363,7 @@ datasets:
         label: End Date/Time of Adverse Event
         type: datetime
         mandatory: false
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: assign_dtc
           source: ae_end_date
@@ -371,7 +373,7 @@ datasets:
         type: text
         length: 20
         mandatory: false
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: assign_no_ct
           source: ae_severity
@@ -381,7 +383,7 @@ datasets:
         type: text
         length: 2
         mandatory: false
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: assign_no_ct
           source: ae_serious
@@ -391,7 +393,7 @@ datasets:
         type: text
         length: 60
         mandatory: false
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: assign_no_ct
           source: ae_outcome
@@ -401,7 +403,7 @@ datasets:
         type: text
         length: 60
         mandatory: false
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: assign_no_ct
           source: ae_action
@@ -411,7 +413,7 @@ datasets:
         type: text
         length: 60
         mandatory: false
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: ae_aerel
           aerel_source: ae_relationship
@@ -463,7 +465,7 @@ datasets:
         type: text
         length: 8
         mandatory: true
-        origin: CRF
+        origin: Collected
         codelist: CL.VSTEST
         derivation:
           algorithm: assign_no_ct
@@ -474,7 +476,7 @@ datasets:
         type: text
         length: 40
         mandatory: true
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: assign_no_ct
           source: vstest
@@ -484,7 +486,7 @@ datasets:
         type: text
         length: 20
         mandatory: true
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: assign_no_ct
           source: vs_result
@@ -494,7 +496,7 @@ datasets:
         type: text
         length: 20
         mandatory: true
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: assign_no_ct
           source: vsorresu
@@ -541,7 +543,7 @@ datasets:
         label: Date/Time of Measurements
         type: datetime
         mandatory: true
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: assign_dtc
           source: vs_date
@@ -608,7 +610,7 @@ datasets:
         label: Dose per Administration
         type: float
         mandatory: false
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: assign_no_ct
           source: ex_dose
@@ -627,7 +629,7 @@ datasets:
         label: Start Date/Time of Treatment
         type: datetime
         mandatory: true
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: assign_dtc
           source: ex_start_date
@@ -636,7 +638,7 @@ datasets:
         label: End Date/Time of Treatment
         type: datetime
         mandatory: false
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: assign_dtc
           source: ex_end_date

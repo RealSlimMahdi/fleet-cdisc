@@ -113,7 +113,7 @@ def parse_ig_variable(var: dict[str, Any]) -> dict[str, Any]:
     if name in ("STUDYID", "DOMAIN"):
         result["origin"] = "Assigned"
     elif core in ("Req", "Required"):
-        result["origin"] = "CRF"
+        result["origin"] = "Collected"
     else:
         result["origin"] = "Derived"
 

@@ -4,9 +4,20 @@
   "title": "Fleet Define Specification",
   "description": "Simplified JSON Schema for defining SDTM or ADaM dataset metadata in Fleet. Enforces structure, types, and codelist references. Generates Define-XML 2.1 and powers post-dataset checks.",
   "type": "object",
-  "required": [
-    "study",
-    "datasets"
+  "anyOf": [
+    {
+      "title": "Define format",
+      "required": [
+        "study",
+        "datasets"
+      ]
+    },
+    {
+      "title": "Simplified single-dataset format",
+      "required": [
+        "variables"
+      ]
+    }
   ],
   "additionalProperties": false,
   "properties": {
@@ -66,6 +77,21 @@
         "dataset-json"
       ],
       "default": "parquet"
+    },
+    "domain": {
+      "type": "string",
+      "description": "Simplified single-dataset format: SDTM domain this spec derives (e.g. 'DM'). Mutually exclusive with datasets:."
+    },
+    "dataset": {
+      "type": "string",
+      "description": "Simplified single-dataset format: ADaM dataset this spec derives (e.g. 'ADSL'). Mutually exclusive with datasets:."
+    },
+    "variables": {
+      "type": "array",
+      "description": "Simplified single-dataset format: derivations with inline algorithm fields and a target:/name: key, executed by from_spec(). Algorithm names and their parameters are validated by the spec registry rather than this schema.",
+      "items": {
+        "type": "object"
+      }
     }
   },
   "$defs": {
@@ -365,19 +391,45 @@
         },
         "origin": {
           "type": "string",
-          "description": "How the value originates.",
+          "description": "How the value originates \u2014 the Define-XML 2.1 Origin Type vocabulary, shared with QORIG in generated SUPPQUAL datasets. Use 'Collected' (with origin_source) for CRF/eDT data; Define-XML 2.0 spellings such as 'CRF' and 'eDT' are not valid here.",
           "enum": [
-            "Assigned",
+            "Collected",
             "Derived",
-            "CRF",
+            "Assigned",
             "Protocol",
-            "eDT",
-            "Other"
+            "Predecessor"
           ]
+        },
+        "origin_source": {
+          "type": "string",
+          "description": "Who provided a collected value \u2014 emitted as def:Source alongside Origin. Only meaningful when origin is 'Collected', where it defaults to 'Investigator' (CRF data).",
+          "enum": [
+            "Investigator",
+            "Sponsor",
+            "Vendor",
+            "Subject"
+          ],
+          "default": "Investigator"
+        },
+        "predecessor": {
+          "type": "string",
+          "description": "DATASET.VARIABLE the value is carried from (e.g. 'DM.COUNTRY') \u2014 becomes the Origin description so the define renders 'Predecessor: DM.COUNTRY'. Required when origin is 'Predecessor'.",
+          "pattern": "^[A-Z_][A-Z0-9_]{0,7}\\.[A-Z_][A-Z0-9_]{0,7}$"
         },
         "codelist": {
           "type": "string",
           "description": "OID of the codelist this variable references (must match a codelist oid in this define)."
+        },
+        "role": {
+          "type": "string",
+          "description": "Marks the variable as a Non-Standard Variable (qualifier) so supp() can build SUPPQUAL from this spec. Read by SDTMNamespace.supp(spec=...); 'qualifier' is the only value Fleet acts on.",
+          "enum": [
+            "qualifier"
+          ]
+        },
+        "evaluator": {
+          "type": "string",
+          "description": "Evaluator for a Non-Standard Variable \u2014 becomes QEVAL in the generated SUPPQUAL dataset (e.g. 'INVESTIGATOR')."
         },
         "comment": {
           "type": "string",
@@ -394,12 +446,27 @@
               "description": "Rich CRF page reference with explicit document, page type, and range."
             }
           ],
-          "description": "CRF page reference(s) for variables with origin=CRF. Simple string form uses PhysicalRef against the default annotated CRF. Dict form allows NamedDestination and multi-document references."
+          "description": "CRF page reference(s) for collected variables. Simple string form uses PhysicalRef against the default annotated CRF. Dict form allows NamedDestination and multi-document references."
         },
         "derivation": {
           "$ref": "#/$defs/derivation",
           "description": "Derivation rule that drives the pipeline when from_spec() is called. Omit for columns that are not programmatically derived (e.g. carry-through columns)."
         }
+      },
+      "if": {
+        "properties": {
+          "origin": {
+            "const": "Predecessor"
+          }
+        },
+        "required": [
+          "origin"
+        ]
+      },
+      "then": {
+        "required": [
+          "predecessor"
+        ]
       }
     },
     "documents": {
@@ -410,7 +477,7 @@
       "properties": {
         "annotated_crf": {
           "type": "object",
-          "description": "Annotated Case Report Form PDF referenced from CRF-origin variables.",
+          "description": "Annotated Case Report Form PDF referenced from collected variables.",
           "required": [
             "href"
           ],

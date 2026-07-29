@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import copy
 import warnings
-from typing import TYPE_CHECKING, Any, ClassVar, Self
+from typing import TYPE_CHECKING, Any, ClassVar, Self, overload
 
 import polars as pl
 
@@ -54,25 +54,63 @@ class PinMixin:
     # Public verbs                                                         #
     # ------------------------------------------------------------------ #
 
+    @overload
     def pin(
         self,
         domain: str,
         df: pl.DataFrame,
+        /,
         *,
         join_on: str | list[str] = "USUBJID",
+        **frames: pl.DataFrame,
+    ) -> Self: ...
+
+    @overload
+    def pin(
+        self,
+        /,
+        *,
+        join_on: str | list[str] = "USUBJID",
+        **frames: pl.DataFrame,
+    ) -> Self: ...
+
+    def pin(
+        self,
+        domain: str | None = None,
+        df: pl.DataFrame | None = None,
+        /,
+        *,
+        join_on: str | list[str] = "USUBJID",
+        **frames: pl.DataFrame,
     ) -> Self:
-        """Attach a reference domain to this pipeline.
+        """Attach one or more reference domains to this pipeline.
+
+        Two equivalent forms, usable together — the keyword form declares
+        every upstream dataset in one call (kwarg name = dataset name),
+        mirroring the define.yaml ``inputs:`` block:
+
+        * ``pin("DM", dm_df)`` — one pin, positional.
+        * ``pin(DM=dm_df, ADSL=adsl_df)`` — several pins, one call.
+
+        The name/frame pair is positional-only, so *every* keyword except
+        ``join_on`` is a dataset pin — no dataset name is reserved.
 
         Args:
             domain: Logical name (e.g. ``"DM"``, ``"ADSL"``, ``"TV"``).
-            df: The materialised reference DataFrame.
-            join_on: Column(s) used to join this reference into the
-                pipeline.  Stored and reused by all downstream verbs
-                that consume this pin.
+            df: The materialised reference DataFrame for *domain*.
+            join_on: Column(s) used to join these references into the
+                pipeline.  Applies to every pin in this call; pin
+                separately for per-domain join keys.
+            **frames: ``NAME=frame`` pins (names are upper-cased).
 
         Returns:
-            Self: A shallow copy with the pin attached; call
+            Self: A shallow copy with the pin(s) attached; call
                 ``.to_frame()`` to materialise.
+
+        Raises:
+            DerivationError: When called with no pins, a name without its
+                frame (or vice versa), or a pinned value that is not a
+                DataFrame/LazyFrame.
 
         Examples:
             Pin DM to an AE pipeline for study-day derivation::
@@ -84,16 +122,45 @@ class PinMixin:
                     .study_day("AESTDY", date_col="AESTDTC")
                     .to_frame()
                 )
+
+            Declare every upstream dataset of an ADaM pipeline at once::
+
+                adae = (
+                    ae_df.adam.occds("ADAE")
+                    .pin(ADSL=adsl_df, EX=ex_df)
+                    .join_adsl("TRTSDT", "SAFFL")
+                    .to_frame()
+                )
         """
-        new = copy.copy(self)
-        key = domain.upper()
-        pinned: dict[str, tuple[pl.DataFrame, list[str]]] = dict(getattr(self, "_pinned", {}))
-        if key in pinned:
-            warnings.warn(
-                f"Pin '{key}' replaced. Use .repin() to suppress this warning.",
-                stacklevel=2,
+        pins: dict[str, pl.DataFrame] = {}
+        if domain is not None or df is not None:
+            if domain is None or df is None:
+                raise DerivationError(
+                    "pin() requires both a domain name and a DataFrame — "
+                    'pin("DM", dm_df) — or keyword pins: pin(DM=dm_df).'
+                )
+            pins[domain] = df
+        pins.update(frames)
+        if not pins:
+            raise DerivationError(
+                'pin() requires at least one pin: pin("DM", dm_df) or pin(DM=dm_df, ADSL=adsl_df).'
             )
-        pinned[key] = (df, _normalize_key(join_on))
+
+        new = copy.copy(self)
+        pinned: dict[str, tuple[pl.DataFrame, list[str]]] = dict(getattr(self, "_pinned", {}))
+        for name, frame in pins.items():
+            if not isinstance(frame, (pl.DataFrame, pl.LazyFrame)):
+                raise DerivationError(
+                    f"pin '{name.upper()}': expected a DataFrame or LazyFrame, "
+                    f"got {type(frame).__name__}."
+                )
+            key = name.upper()
+            if key in pinned:
+                warnings.warn(
+                    f"Pin '{key}' replaced. Use .repin() to suppress this warning.",
+                    stacklevel=2,
+                )
+            pinned[key] = (frame, _normalize_key(join_on))
         new._pinned = pinned
         return new
 

@@ -54,7 +54,7 @@ class NSVMeta:
 
     target: str
     label: str
-    origin: str = "DERIVED"
+    origin: str = "Derived"
     evaluator: str | None = None
 
 

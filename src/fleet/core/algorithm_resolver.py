@@ -84,6 +84,7 @@ def _candidate_namespaces() -> list[type]:
             classes.append(cls)
 
     _try("fleet.sdtm.namespace", "SDTMNamespace")
+    _try("fleet.adam.namespace", "AdamNamespace")
     _try("fleet.adam._mixins", "SharedADaMVerbsMixin")
     _try("fleet.adam.adsl_namespace", "ADSLNamespace")
     _try("fleet.adam.occds_namespace", "OCCDSNamespace")

@@ -67,21 +67,21 @@ _DM_DATASET = {
             "type": "text",
             "length": 2,
             "mandatory": True,
-            "origin": "CRF",
+            "origin": "Collected",
         },
         {
             "name": "AGE",
             "label": "Age",
             "type": "integer",
             "mandatory": True,
-            "origin": "CRF",
+            "origin": "Collected",
         },
         {
             "name": "RACE",
             "label": "Race",
             "type": "text",
             "length": 60,
-            "origin": "CRF",
+            "origin": "Collected",
         },
     ],
 }
@@ -168,7 +168,8 @@ class TestLayer1SimpleCRFPages:
 
         origin = _find_origin(item)
         assert origin is not None
-        assert origin.get("Type") == "CRF"
+        assert origin.get("Type") == "Collected"
+        assert origin.get("Source") == "Investigator"
 
         doc_ref = _find_doc_ref(origin)
         assert doc_ref is not None
@@ -178,6 +179,23 @@ class TestLayer1SimpleCRFPages:
         assert pdf_ref is not None
         assert pdf_ref.get("PageRefs") == "7"
         assert pdf_ref.get("Type") == "PhysicalRef"
+
+    def test_origin_source_overrides_investigator_default(self, tmp_path):
+        """Non-CRF collected data (e.g. a central lab) declares its own source."""
+        spec = _build_spec(variables_patch={"SEX": {"origin_source": "Vendor"}})
+        origin = _find_origin(
+            _find_item_def(_parse_xml(_write_and_generate(spec, tmp_path)), "SEX")
+        )
+        assert origin.get("Type") == "Collected"
+        assert origin.get("Source") == "Vendor"
+
+    def test_derived_origin_carries_no_source(self, tmp_path):
+        """def:Source is only meaningful for collected values."""
+        origin = _find_origin(
+            _find_item_def(_parse_xml(_write_and_generate(_build_spec(), tmp_path)), "USUBJID")
+        )
+        assert origin.get("Type") == "Derived"
+        assert origin.get("Source") is None
 
     def test_multiple_pages(self, tmp_path):
         """Space-separated pages are passed through to PageRefs."""

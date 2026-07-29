@@ -262,7 +262,7 @@ uv run fleet add-acrf --href blankcrf.pdf --standard both
 ```
 
 Tag CRF-collected variables with their page numbers in the define.yaml
-(`origin: CRF` + `crf_pages: "8"` — see
+(`origin: Collected` + `crf_pages: "8"` — see
 [CRF Page References](../concepts/define-yaml.md#crf-page-references)),
 then generate:
 

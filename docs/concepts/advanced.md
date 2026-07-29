@@ -302,6 +302,18 @@ ae = (
 )
 ```
 
+Datasets sharing a join key can be declared in one call — the keyword
+form mirrors the define.yaml `inputs:` block (kwarg name = dataset name):
+
+```python
+adae = (
+    ae_df.adam.occds("ADAE")
+    .pin(ADSL=adsl_df, EX=ex_df)  # both join on USUBJID (default)
+    .join_adsl("TRTSDT", "SAFFL")
+    .to_frame()
+)
+```
+
 Each verb names the pin it consumes (or falls back to its default
 `ref_pin`), and the join uses **that pin's** stored `join_on` — so the TV
 and EX pins above sit untouched until a visit- or exposure-consuming verb

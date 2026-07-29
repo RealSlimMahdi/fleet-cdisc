@@ -89,6 +89,17 @@ class TestDiagnostics:
         diags = compute_diagnostics(text)
         assert any("'chg' is a adam algorithm" in d["message"] for d in diags)
 
+    def test_simplified_format_is_clean(self):
+        """The single-dataset shape from_spec() accepts is a valid spec, not an error."""
+        text = "domain: DM\nvariables:\n  - target: USUBJID\n    algorithm: assign_no_ct\n    source: subject_id\n"
+        assert compute_diagnostics(text) == []
+
+    def test_simplified_format_still_catches_unknown_algorithm(self):
+        text = "domain: DM\nvariables:\n  - target: USUBJID\n    algorithm: asign_no_ct\n    source: subject_id\n"
+        diags = compute_diagnostics(text)
+        assert any("Did you mean 'assign_no_ct'?" in d["message"] for d in diags)
+        assert diags[0]["line"] == 3  # the `algorithm:` line, 0-based
+
 
 class TestCompletions:
     def _algo_items(self, text: str) -> list[str]:

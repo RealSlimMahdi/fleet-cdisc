@@ -167,11 +167,24 @@ dotted path. Declare `derivations_module:` at the top of the spec and
 
 Both `algorithm:` and `callable:` plug into Define-XML method enrichment:
 running `DefineSpecGenerator(spec, enrich_methods=True)` (or
-`fleet define-xml --enrich-methods`) emits a `<MethodDef>` whose
-`<Description>` is taken from the **docstring** of the callable. When the
-callable is a `@derivation`-decorated object, its `dotted_path` is used as
-the `<FormalExpression>` context, giving a verifiable link between the
-regulatory submission and the exact code that produced the data.
+`fleet define-xml --enrich-methods`) emits one `<MethodDef>` per
+**Derived** variable, named `Algorithm for <VARIABLE>`. The
+`<Description>` is submission text, resolved in this order:
+
+1. the variable's **`comment:`** — always wins;
+2. for `callable:` derivations, the **study callable's docstring**
+   (`@derivation` objects use their own `fn` docstring) — this is
+   study-authored text; reST markup is stripped;
+3. the registry's **submission-facing template** for the algorithm,
+   with the spec params filled in (e.g. `chg` renders
+   `Change from baseline: AVAL - BASE.`).
+
+Fleet's *verb docstrings* are never used — they are API documentation,
+identical across studies and unstable across Fleet versions. The
+`<FormalExpression Context="Python/Fleet">` carries the faithful call
+(dotted verb path plus the spec params, or the callable's
+`dotted_path`), giving a verifiable link between the regulatory
+submission and the exact code that produced the data.
 
 ### Example — TRTSDT (date of first dose)
 
@@ -297,8 +310,14 @@ gen.generate(Path("outputs/cdiscpilot01/define_adam.xml"))
 ```
 
 `DefineSpecGenerator(spec, enrich_methods=True).generate(out)` additionally emits
-a `<MethodDef>` per derivation, populated from the referenced verb / callable
-docstring. Both generators honour the same new spec keys:
+a `<MethodDef>` per **Derived** variable (see *Define-XML method enrichment*
+above for the text-source rule); variables with `origin: Collected`,
+`Assigned`, `Protocol`, or `Predecessor` never reference a method. Generated
+documents are validated on the way out — against the vendored CDISC XSDs
+*and* a semantic lint (`fleet.define_xml.semantic_errors`) that rejects
+reviewer-facing defects such as a `MethodOID` on a non-Derived variable or
+API markup inside `TranslatedText`; `validate_xml=False` bypasses both.
+Both generators honour the same new spec keys:
 
 - **`fleet_spec_version: 1`** — spec dialect version (checked on load).
 - **`derivations_module:`** — a dotted module that `from_spec` imports itself, so
@@ -496,10 +515,45 @@ VS Code or any LSP-enabled editor:
 
 ## CRF Page References
 
-Variables with `origin: CRF` can include page references to the annotated
+Variables with `origin: Collected` can include page references to the annotated
 Case Report Form PDF. Fleet emits these as `<def:DocumentRef>` /
 `<def:PDFPageRef>` elements inside `<def:Origin>` in the Define-XML, and
 the standard `define2-1.xsl` stylesheet renders them as clickable links.
+
+!!! note "One origin vocabulary"
+
+    `origin:` uses the Define-XML 2.1 Origin Types — `Collected`,
+    `Derived`, `Assigned`, `Protocol`, `Predecessor` — and the same
+    values flow into `QORIG` in generated SUPPQUAL datasets. Collected
+    values also carry `def:Source`, which defaults to `Investigator`
+    (CRF data); override it with `origin_source: Vendor | Sponsor |
+    Subject`. The Define-XML 2.0 spellings `CRF` and `eDT` are not valid.
+
+How the Origin **description** renders, per origin type:
+
+- **`Predecessor`** requires `predecessor: DATASET.VARIABLE` (schema-enforced);
+  the define renders `Predecessor: DM.COUNTRY`. In an ADaM spec, a variable
+  carried with `algorithm: source` but still marked `Collected` triggers a
+  generation-time warning suggesting the Predecessor form. When freezing an
+  inline pipeline, `to_spec_yaml(dataset="ADSL", predecessor="DM")` pre-fills
+  these entries for carry-through columns and pure `source` copies — the
+  emitted YAML stays the explicit, reviewable source of truth.
+- **`Derived`** describes the derivation in its `MethodDef` (or in the Origin
+  description via `comment:` when method enrichment is off).
+- **`Assigned` / `Protocol`** show the `comment:` — e.g.
+  `comment: DM.ARM` renders `Assigned: DM.ARM`.
+- **`Collected`** with CRF pages renders the page links; Investigator-collected
+  variables without pages fall back to a `Case Report Form` description.
+- A variable with value-level metadata and no `comment:` renders
+  `See Value Level Metadata`.
+
+```yaml
+- name: COUNTRY
+  label: Country
+  type: text
+  origin: Predecessor
+  predecessor: DM.COUNTRY
+```
 
 ### Setup: declare the aCRF document
 
@@ -529,14 +583,14 @@ This emits the top-level `<def:AnnotatedCRF>` container and the
 
 ### Layer 1 — Simple page strings (most common)
 
-Add `crf_pages` to any CRF-origin variable:
+Add `crf_pages` to any collected variable:
 
 ```yaml
 variables:
   - name: SEX
     label: Sex
     type: text
-    origin: CRF
+    origin: Collected
     crf_pages: "8" # single page
     derivation:
       algorithm: assign_ct
@@ -545,7 +599,7 @@ variables:
   - name: RACE
     label: Race
     type: text
-    origin: CRF
+    origin: Collected
     crf_pages: "8 9" # space-separated multiple pages
 ```
 
@@ -558,13 +612,13 @@ For PDF bookmarks or page ranges, use the dict form:
 
 ```yaml
 - name: SEX
-  origin: CRF
+  origin: Collected
   crf_pages:
     pages: "DM_SEX" # PDF bookmark name
     type: NamedDestination # or PhysicalRef (default)
 
 - name: RACE
-  origin: CRF
+  origin: Collected
   crf_pages:
     pages: "8 9"
     type: PhysicalRef
@@ -621,5 +675,5 @@ These emit `<def:SupplementalDoc>` and corresponding `<def:leaf>` elements.
 ## Tips
 
 - The `inputs` block declares which upstream datasets the pipeline should join/merge.
-- Variables with no `derivation` block are expected to flow in via the `source` dataset — they appear in Define-XML as `origin: CRF`.
+- Variables with no `derivation` block are expected to flow in via the `source` dataset — they appear in Define-XML as `origin: Collected`.
 - Run `DefineValidator("...").validate(Path("specs/.../define.yaml"))` to catch schema and business rule errors before generating Define-XML or running pipelines.

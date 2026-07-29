@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import yaml
+from fleet.core.define_spec import load_define_spec
 
 #: File extension per supported export format (spec key ``output_format``).
 _OUTPUT_FORMAT_EXT: dict[str, str] = {
@@ -693,18 +693,17 @@ def build_dag(
     nodes: dict[str, PipelineNode] = {}
 
     for spec_path in resolved:
-        with spec_path.open("r", encoding="utf-8") as fh:
-            spec = yaml.safe_load(fh)
+        spec = load_define_spec(spec_path)
 
-        standard = spec.get("study", {}).get("standard", "")
+        standard = spec.study.get("standard", "")
         node_type = _standard_to_node_type(standard)
-        spec_format: str = spec.get("output_format", "parquet")
+        spec_format: str = spec.output_format
 
-        for dataset in spec.get("datasets", []):
-            ds_name: str = dataset["name"]
+        for dataset in spec.datasets or []:
+            ds_name: str = dataset.name
             ds_inputs: list[str] = []
 
-            for inp in dataset.get("inputs", []):
+            for inp in dataset.inputs:
                 inp_name: str = inp["name"]
                 inp_type: str = inp.get("type", "dataset")
                 inp_path: str | None = inp.get("path")
@@ -720,12 +719,12 @@ def build_dag(
 
                 ds_inputs.append(inp_name)
 
-            declared_output: str | None = dataset.get("output")
+            declared_output: str | None = dataset.output
             if declared_output:
                 declared = Path(declared_output)
                 output_path = str(declared if declared.is_absolute() else out_dir / declared)
             else:
-                fmt = dataset.get("output_format", spec_format)
+                fmt = dataset.output_format or spec_format
                 ext = _OUTPUT_FORMAT_EXT.get(fmt, ".parquet")
                 output_path = str(out_dir / f"{ds_name.lower()}{ext}")
             nodes[ds_name] = PipelineNode(

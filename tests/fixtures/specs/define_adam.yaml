@@ -78,7 +78,7 @@ datasets:
         type: text
         length: 20
         mandatory: true
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: source
           source: SUBJID
@@ -88,7 +88,7 @@ datasets:
         type: text
         length: 20
         mandatory: true
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: source
           source: SITEID
@@ -97,7 +97,7 @@ datasets:
         label: Age
         type: integer
         mandatory: true
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: source
           source: AGE
@@ -117,7 +117,7 @@ datasets:
         type: text
         length: 2
         mandatory: true
-        origin: CRF
+        origin: Collected
         codelist: C66731
         derivation:
           algorithm: source
@@ -128,7 +128,7 @@ datasets:
         type: text
         length: 60
         mandatory: false
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: source
           source: RACE
@@ -138,7 +138,7 @@ datasets:
         type: text
         length: 60
         mandatory: false
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: source
           source: ETHNIC
@@ -225,7 +225,7 @@ datasets:
         label: Subject Reference Start Date/Time
         type: datetime
         mandatory: false
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: source
           source: RFSTDTC
@@ -234,7 +234,7 @@ datasets:
         label: Subject Reference End Date/Time
         type: datetime
         mandatory: false
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: source
           source: RFENDTC
@@ -243,7 +243,7 @@ datasets:
         label: Date/Time of Informed Consent
         type: datetime
         mandatory: false
-        origin: CRF
+        origin: Collected
         derivation:
           algorithm: source
           source: RFICDTC
@@ -422,20 +422,20 @@ datasets:
         type: text
         length: 20
         mandatory: true
-        origin: CRF
+        origin: Collected
 
       - name: SITEID
         label: Study Site Identifier
         type: text
         length: 20
         mandatory: true
-        origin: CRF
+        origin: Collected
 
       - name: AGE
         label: Age
         type: integer
         mandatory: true
-        origin: CRF
+        origin: Collected
 
       - name: AGEU
         label: Age Units
@@ -449,7 +449,7 @@ datasets:
         type: text
         length: 2
         mandatory: true
-        origin: CRF
+        origin: Collected
         codelist: C66731
 
       - name: RACE
@@ -457,14 +457,14 @@ datasets:
         type: text
         length: 60
         mandatory: false
-        origin: CRF
+        origin: Collected
 
       - name: ETHNIC
         label: Ethnicity
         type: text
         length: 60
         mandatory: false
-        origin: CRF
+        origin: Collected
 
       - name: ARMCD
         label: Planned Arm Code
@@ -524,19 +524,19 @@ datasets:
         label: Subject Reference Start Date/Time
         type: datetime
         mandatory: false
-        origin: CRF
+        origin: Collected
 
       - name: RFENDTC
         label: Subject Reference End Date/Time
         type: datetime
         mandatory: false
-        origin: CRF
+        origin: Collected
 
       - name: RFICDTC
         label: Date/Time of Informed Consent
         type: datetime
         mandatory: false
-        origin: CRF
+        origin: Collected
 
       - name: DTHFL
         label: Subject Death Flag

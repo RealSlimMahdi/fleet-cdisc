@@ -125,18 +125,33 @@ def infer_standards(data: dict[str, Any], path: str = "") -> tuple[str, ...]:
 
 
 def _iter_algorithms(data: dict[str, Any]):
-    """Yield ``(derivation_path, algorithm)`` for every derivation block."""
+    """Yield ``(derivation_path, algorithm)`` for every derivation block.
+
+    Covers both spec shapes: the define.yaml ``datasets`` tree and the
+    simplified single-dataset ``variables`` list whose entries carry
+    inline algorithm fields.
+    """
     datasets = data.get("datasets")
-    if not isinstance(datasets, list):
+    if isinstance(datasets, list):
+        for di, ds in enumerate(datasets):
+            variables = ds.get("variables") if isinstance(ds, dict) else None
+            if not isinstance(variables, list):
+                continue
+            for vi, var in enumerate(variables):
+                derivation = var.get("derivation") if isinstance(var, dict) else None
+                if isinstance(derivation, dict) and isinstance(derivation.get("algorithm"), str):
+                    yield (
+                        ("datasets", di, "variables", vi, "derivation"),
+                        derivation["algorithm"],
+                    )
         return
-    for di, ds in enumerate(datasets):
-        variables = ds.get("variables") if isinstance(ds, dict) else None
-        if not isinstance(variables, list):
-            continue
-        for vi, var in enumerate(variables):
-            derivation = var.get("derivation") if isinstance(var, dict) else None
-            if isinstance(derivation, dict) and isinstance(derivation.get("algorithm"), str):
-                yield (("datasets", di, "variables", vi, "derivation"), derivation["algorithm"])
+
+    flat = data.get("variables")
+    if not isinstance(flat, list):
+        return
+    for vi, var in enumerate(flat):
+        if isinstance(var, dict) and isinstance(var.get("algorithm"), str):
+            yield (("variables", vi), var["algorithm"])
 
 
 def compute_diagnostics(text: str, path: str = "") -> list[dict[str, Any]]:
