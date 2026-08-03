@@ -66,3 +66,14 @@ def assert_subset_columns(df: pl.DataFrame, required: list[str]) -> None:
     """Assert that all required columns exist in the DataFrame."""
     missing = set(required) - set(df.columns)
     assert not missing, f"Missing columns: {missing}"
+
+def assert_valid_cdisc_refs(nodes: list) -> None:
+    """Assert every VariableNode has a well-formed cdisc_ref string.
+
+    Format: ``[DOMAIN].VAR ← verb(...)`` when domain is set, ``VAR ← verb(...)`` otherwise.
+    """
+    for node in nodes:
+        ref = node.cdisc_ref
+        assert "←" in ref, f"cdisc_ref missing arrow: {ref!r}"
+        expected_prefix = f"[{node.domain}].{node.name}" if node.domain else node.name
+        assert ref.startswith(expected_prefix), f"cdisc_ref has wrong prefix: {ref!r}"

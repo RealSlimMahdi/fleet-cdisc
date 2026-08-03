@@ -25,6 +25,7 @@ import yaml
 import fleet  # noqa: F401 — triggers namespace registration
 from fleet.core.dag import PipelineDAG, PipelineNode, VariableNode, build_dag
 from fleet.core.lineage import latest_lineage_of, lineage_of
+from tests.assertions import assert_valid_cdisc_refs
 
 
 def _node(name: str, verb: str, sources: list[str]) -> VariableNode:
@@ -333,3 +334,14 @@ class TestOrchestrationExports:
         # AE's inputs include DM's output file, so Snakemake re-runs on change.
         assert repr(str(dag.nodes["DM"].path)) in text
         assert (tmp_path / "Snakefile").read_text(encoding="utf-8") == text
+
+
+class TestCdiscRefs:
+    def test_cdisc_refs_are_well_formed(self, dm_raw):
+        """Every VariableNode produced by a namespace pipeline has a valid cdisc_ref."""
+        ns = (
+            dm_raw.sdtm.assign("DOMAIN", value="DM")
+            .assign("USUBJID", source="patient_number")
+            .date("RFSTDTC", source="first_dose_date")
+        )
+        assert_valid_cdisc_refs(list(latest_lineage_of(ns)))

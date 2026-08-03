@@ -2,6 +2,7 @@
 
 import polars as pl
 import pytest
+import warnings
 
 import fleet  # noqa: F401 — triggers namespace registration
 
@@ -131,3 +132,29 @@ class TestTrail:
                 return
         
         pytest.fail("AESTDY node not found in lineage")
+
+    def test_keep_does_not_prune_lineage(self):
+        """keep() removes columns from the frame but not from lineage.
+
+        Both lineage_of() and latest_lineage_of() include dropped columns —
+        filtering to surviving columns only happens in to_spec_yaml(), which
+        iterates schema.names(), not the lineage list.
+        """
+        from fleet.core.lineage import lineage_of, latest_lineage_of
+
+        df = pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ a   │
+│ ---     ┆ --- │
+│ str     ┆ str │
+╞═════════╪═════╡
+│ S001    ┆ x   │
+└─────────┴─────┘
+""")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ns = df.sdtm.assign("TMP", source="a").keep("USUBJID")
+
+        assert "TMP" not in ns.to_frame().columns
+        assert any(n.name == "TMP" for n in lineage_of(ns))
+        assert any(n.name == "TMP" for n in latest_lineage_of(ns))  # not frame-aware by design
