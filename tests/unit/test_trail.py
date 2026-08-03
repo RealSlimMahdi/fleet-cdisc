@@ -107,7 +107,7 @@ class TestTrail:
 
     def test_pin_sources_populated_on_namespace_lineage(self, ae_raw, dm_df):
         """pin_sources should be available on nodes before inject_lineage() is called.
-        
+
         This tests that record_pin_lineage() immediately populates the VariableNode's
         pin_sources field, not just the separate _pin_lineage list. This makes pin
         information available to users inspecting lineage_of()/latest_lineage_of()
