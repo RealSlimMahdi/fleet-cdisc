@@ -102,3 +102,32 @@ class TestTrail:
         out = capsys.readouterr().out
         assert "Domain" in out
         assert "ADSL" in out
+
+
+    def test_pin_sources_populated_on_namespace_lineage(self, ae_raw, dm_df):
+        """pin_sources should be available on nodes before inject_lineage() is called.
+        
+        This tests that record_pin_lineage() immediately populates the VariableNode's
+        pin_sources field, not just the separate _pin_lineage list. This makes pin
+        information available to users inspecting lineage_of()/latest_lineage_of()
+        without needing to build a DAG.
+        """
+
+        ns = (
+            ae_raw.sdtm.assign("DOMAIN", value="AE")
+            .assign("USUBJID", source="patient_number")
+            .assign("AESTDTC", source="ae_start_date")
+            .pin("DM", dm_df)
+            .study_day("AESTDY", date_col="AESTDTC")
+        )
+        
+        # Check pin_sources directly from latest_lineage_of (before any DAG)
+        for node in fleet.core.lineage.latest_lineage_of(ns):
+            if node.name == "AESTDY":
+                # pin_sources should be populated immediately
+                assert len(node.pin_sources) > 0, "pin_sources is empty — fix not applied"
+                assert node.pin_sources[0].source_domain == "DM"
+                assert "RFSTDTC" in node.pin_sources[0].source_cols
+                return
+        
+        pytest.fail("AESTDY node not found in lineage")
