@@ -312,7 +312,7 @@ def record_pin_lineage(
         join_key=join_key,
         relationship=relationship,
     )
-    
+
     # Append to the separate pin lineage list
     pin_lineage: list[PinDependency] = list(getattr(owner, "_pin_lineage", []))
     pin_lineage.append(pin_dep)
