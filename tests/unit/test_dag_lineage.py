@@ -323,7 +323,7 @@ class TestOrchestrationExports:
         ast.parse(text)  # must be a valid Python module
         assert "BashOperator(task_id='DM', bash_command='fleet run --dataset DM')" in text
         assert "dm >> ae" in text  # dependency wiring from inputs:
-        assert (tmp_path / "s1_dag.py").read_text() == text
+        assert (tmp_path / "s1_dag.py").read_text(encoding="utf-8") == text
 
     def test_snakefile_has_runnable_rules(self, dag: PipelineDAG, tmp_path: Path):
         text = dag.to_snakefile(path=tmp_path / "Snakefile")
@@ -331,5 +331,5 @@ class TestOrchestrationExports:
         assert "rule ae:" in text
         assert '"fleet run --dataset AE"' in text
         # AE's inputs include DM's output file, so Snakemake re-runs on change.
-        assert str(dag.nodes["DM"].path) in text
-        assert (tmp_path / "Snakefile").read_text() == text
+        assert repr(str(dag.nodes["DM"].path)) in text
+        assert (tmp_path / "Snakefile").read_text(encoding="utf-8") == text
