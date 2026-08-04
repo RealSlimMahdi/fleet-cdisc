@@ -260,7 +260,7 @@ class TestAdamInlineRoundTrip:
 
         # Re-execute and compare.
         p = tmp_path / "define_advs.yaml"
-        p.write_text(text)
+        p.write_text(text, encoding="utf-8")
         redo = vs.adam.from_spec(p, dataset="ADVS").to_frame()
         original = ns.to_frame()
         cols = ["ADT", "ADY", "ABLFL", "BASE", "CHG", "PCHG"]
@@ -319,3 +319,147 @@ class TestDedupAndEdgeCases:
         data = yaml.safe_load(ns.to_spec_yaml())
         jsonschema.Draft202012Validator(_schema()).validate(data)
         assert data["datasets"][0]["name"] == "DATASET"
+
+
+@pytest.fixture(autouse=True)
+def _clean_registry():
+    yield
+    from fleet.adam.transforms import clear_transforms
+    clear_transforms()
+
+
+class TestDerivationCallableRoundTrip:
+    """A @derivation round-trips: inline → callable: block → from_spec() → equal frame."""
+
+    def test_callable_block_emitted_verbatim(self):
+        """to_spec_yaml() sets algorithm:callable for a @derivation object."""
+        from fleet.core.derivation import derivation
+
+        @derivation
+        def AGEGR1_rt() -> pl.Expr:
+            """Classify age into two groups for round-trip test.
+
+            Assigns '<65' for subjects under 65, '>=65' otherwise.
+            """
+            return (
+                pl.when(pl.col("AGE") < 65)
+                .then(pl.lit("<65"))
+                .otherwise(pl.lit(">=65"))
+                .alias("AGEGR1_rt")
+            )
+
+        df = pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ AGE │
+│ ---     ┆ --- │
+│ str     ┆ i64 │
+╞═════════╪═════╡
+│ S1      ┆ 52  │
+│ S2      ┆ 68  │
+└─────────┴─────┘
+""")
+        ns = df.adam.derivation(AGEGR1_rt)
+        data = yaml.safe_load(ns.to_spec_yaml(dataset="ADSL"))
+        by_name = {v["name"]: v.get("derivation")
+                   for v in data["datasets"][0]["variables"]}
+
+        assert by_name["AGEGR1_rt"]["algorithm"] == "callable"
+        assert by_name["AGEGR1_rt"]["callable"].endswith("AGEGR1_rt")
+
+    def test_full_round_trip_produces_equal_frame(self, tmp_path):
+        """from_spec() re-executing a callable: block yields the same data."""
+        from fleet.core.derivation import derivation
+
+        @derivation
+        def AGEGR1_rt2() -> pl.Expr:
+            """Two-group age classification for round-trip equality test."""
+            return (
+                pl.when(pl.col("AGE") < 65)
+                .then(pl.lit("<65"))
+                .otherwise(pl.lit(">=65"))
+                .alias("AGEGR1_rt2")
+            )
+
+        df = pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ AGE │
+│ ---     ┆ --- │
+│ str     ┆ i64 │
+╞═════════╪═════╡
+│ S1      ┆ 52  │
+│ S2      ┆ 68  │
+└─────────┴─────┘
+""")
+        ns = df.adam.assign("AGE", source="AGE").derivation(AGEGR1_rt2)
+        # The dotted_path for a locally-scoped function includes the enclosing
+        # class and method in __qualname__, making it non-importable.  Override
+        # node.spec to use the short registered name so resolve_callable() takes
+        # the registry-lookup path instead of the import-path branch.
+        for node in ns._lineage:
+            if node.name == "AGEGR1_rt2":
+                node.spec["callable"] = AGEGR1_rt2.name
+
+        spec_path = tmp_path / "define_rt.yaml"
+        ns.to_spec_yaml(dataset="ADSL", path=spec_path)
+
+        redo = df.adam.from_spec(spec_path, dataset="ADSL").to_frame()
+        original = ns.to_frame()
+
+        assert redo["AGEGR1_rt2"].equals(original["AGEGR1_rt2"])
+
+    def test_methoddef_description_matches_docstring(self, tmp_path):
+        """The @derivation docstring's first sentence appears in MethodDef Description."""
+        from fleet.core.derivation import derivation
+        from fleet.define_xml.spec_generator import DefineSpecGenerator
+
+        @derivation
+        def BMIGRP() -> pl.Expr:
+            """Classify BMI into WHO standard groups for Define-XML method test.
+
+            Assigns 'Underweight' below 18.5, 'Normal' 18.5-24.9,
+            'Overweight' 25-29.9, and 'Obese' 30 or above.
+            """
+            return (
+                pl.when(pl.col("BMI") < 18.5).then(pl.lit("Underweight"))
+                .when(pl.col("BMI") < 25.0).then(pl.lit("Normal"))
+                .when(pl.col("BMI") < 30.0).then(pl.lit("Overweight"))
+                .otherwise(pl.lit("Obese"))
+                .alias("BMIGRP")
+            )
+
+        spec = {
+            "fleet_spec_version": 1,
+            "study": {
+                "id": "TEST01",
+                "name": "Test Study",
+                "description": "Unit test for MethodDef docstring flow.",
+                "protocol_name": "TEST01",
+                "originator": "Fleet",
+                "standard": "ADAMIG",
+                "standard_version": "1.3",
+            },
+            "datasets": [{
+                "name": "ADSL",
+                "label": "Subject Level",
+                "structure": "One record per subject",
+                "repeating": False,
+                "keys": ["USUBJID"],
+                "variables": [
+                    {"name": "USUBJID", "label": "Subject ID",
+                     "type": "text",  "origin": "Collected"},
+                    {"name": "BMIGRP", "label": "BMI Group",
+                     "type": "text",  "origin": "Derived",
+                     "derivation": {"algorithm": "callable", "callable": "BMIGRP"}},
+                ],
+            }],
+        }
+        define_path = tmp_path / "define_bmi.yaml"
+        define_path.write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
+
+        gen = DefineSpecGenerator(
+            define_path, validate_xml=False, enrich_methods=True
+        )
+        xml_text = gen.to_xml_string()
+
+        assert "Classify BMI into WHO standard groups" in xml_text
+        assert "BMIGRP" in xml_text
