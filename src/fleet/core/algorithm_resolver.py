@@ -168,5 +168,15 @@ def resolve_callable_docstring(
     obj: Any = getattr(mod, attr, None)
     if obj is None:
         return (None, None)
-    summary = _first_sentence(getattr(obj, "__doc__", None))
-    return (summary, dotted)
+    
+    doc_owner: Any = obj
+    resolved_dotted = dotted
+
+    # @derivation-decorated objects expose the original function at .fn.
+    fn = getattr(obj, "fn", None)
+    if callable(fn):
+        doc_owner = fn
+        resolved_dotted = getattr(obj, "dotted_path", dotted) or dotted
+
+    summary = _first_sentence(getattr(doc_owner, "__doc__", None))
+    return (summary, resolved_dotted)

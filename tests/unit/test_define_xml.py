@@ -23,6 +23,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+import copy
 
 import fleet  # noqa: F401
 from fleet.core.exceptions import SpecError
@@ -245,6 +246,69 @@ class TestMethodPlacement:
         vl = next(v for v in root.iter(f"{DEF}ValueListDef") if v.get("OID") == "VL.ADVS.AVAL")
         oids = [r.get("MethodOID") for r in vl.findall(f"{ODM}ItemRef")]
         assert len(oids) == len(set(oids)) == 2
+
+
+class TestDoscstringXML:
+    def test_callable_derivation_uses_wrapped_function_docstring(self, tmp_path, monkeypatch):
+        module_path = tmp_path / "tmp_derivations.py"
+        module_path.write_text(
+            "\n".join(
+                [
+                    "from __future__ import annotations",
+                    "",
+                    "import polars as pl",
+                    "",
+                    "from fleet.core.derivation import derivation",
+                    "",
+                    "",
+                    "@derivation",
+                    "def AGE65FL() -> pl.Expr:",
+                    "    \"\"\"Flag subjects aged 65 years or older as 'Y' and younger subjects as null.\"\"\"",
+                    "    return (",
+                    "        pl.when(pl.col('AGE') >= 65)",
+                    "        .then(pl.lit('Y'))",
+                    "        .otherwise(None)",
+                    "        .alias('AGE65FL')",
+                    "    )",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.syspath_prepend(str(tmp_path))
+
+        spec = copy.deepcopy(FIXTURE_SPEC)
+        spec["datasets"][0]["variables"].append(
+            {
+                "name": "AGE65FL",
+                "label": "Age 65+ Flag",
+                "type": "text",
+                "derivation": {
+                    "algorithm": "callable",
+                    "callable": "tmp_derivations.AGE65FL",
+                },
+            }
+        )
+        spec_file = tmp_path / "define.yaml"
+        spec_file.write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
+
+        root = ET.fromstring(DefineSpecGenerator(spec_file, enrich_methods=True).to_xml_string())
+        methods = {
+            method.get("OID"): method
+            for method in root.iter(f"{ODM}MethodDef")
+            if method.get("OID") is not None
+        }
+        method = methods["MT.ADVS.AGE65FL"]
+        translated = method.find(f"{ODM}Description/{ODM}TranslatedText")
+        assert translated is not None
+        assert (
+            translated.text
+            == "Flag subjects aged 65 years or older as 'Y' and younger subjects as null."
+        )
+        formal = method.find(f"{ODM}FormalExpression")
+        assert formal is not None
+        assert formal.get("Context") == "Python"
+        assert formal.text == "tmp_derivations.AGE65FL"
 
 
 class TestValueLevelMetadata:
