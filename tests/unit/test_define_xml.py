@@ -20,10 +20,10 @@ from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 from pathlib import Path
+import copy
 
 import pytest
 import yaml
-import copy
 
 import fleet  # noqa: F401
 from fleet.core.exceptions import SpecError
@@ -248,7 +248,7 @@ class TestMethodPlacement:
         assert len(oids) == len(set(oids)) == 2
 
 
-class TestDoscstringXML:
+class TestDocstringXML:
     def test_callable_derivation_uses_wrapped_function_docstring(self, tmp_path, monkeypatch):
         module_path = tmp_path / "tmp_derivations.py"
         module_path.write_text(
