@@ -18,9 +18,9 @@ stand in (do NOT add a network fetch here).
 
 from __future__ import annotations
 
+import copy
 import xml.etree.ElementTree as ET
 from pathlib import Path
-import copy
 
 import pytest
 import yaml
@@ -263,7 +263,8 @@ class TestDocstringXML:
                     "",
                     "@derivation",
                     "def AGE65FL() -> pl.Expr:",
-                    "    \"\"\"Flag subjects aged 65 years or older as 'Y' and younger subjects as null.\"\"\"",
+                    '    """Flag subjects aged 65 years or older as \'Y\'',
+                    '    and younger subjects as null."""',
                     "    return (",
                     "        pl.when(pl.col('AGE') >= 65)",
                     "        .then(pl.lit('Y'))",
@@ -309,6 +310,13 @@ class TestDocstringXML:
         assert formal is not None
         assert formal.get("Context") == "Python"
         assert formal.text == "tmp_derivations.AGE65FL"
+
+        expected = (
+            "Flag subjects aged 65 years or older as 'Y' and younger subjects as null.",
+            "tmp_derivations.AGE65FL",
+        )
+        assert DefineSpecGenerator._resolve_callable("AGE65FL") == expected
+        assert DefineSpecGenerator._resolve_callable("tmp_derivations.AGE65FL") == expected
 
 
 class TestValueLevelMetadata:

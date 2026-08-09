@@ -1023,7 +1023,7 @@ class SharedVerbsMixin:
                 catalog = raw_df.sdtm.verbs()
                 print(catalog)
         """
-        from fleet.core.algorithm_resolver import first_sentence
+        from fleet.core.algorithm_resolver import docstring_summary
 
         rows: list[dict[str, str]] = []
         seen: set[str] = set(self._VERBS_EXCLUDE)
@@ -1038,7 +1038,7 @@ class SharedVerbsMixin:
                     continue
                 if not callable(attr):
                     continue
-                rows.append({"verb": name, "summary": first_sentence(attr.__doc__)})
+                rows.append({"verb": name, "summary": docstring_summary(attr.__doc__)})
         rows.sort(key=lambda r: r["verb"])
         return pl.DataFrame(rows, schema={"verb": pl.String, "summary": pl.String})
 
