@@ -82,3 +82,17 @@ Do NOT update for new verbs or changed signatures — those are resolved from th
 ## CLI Reference
 
 See `.github/instructions/cli.instructions.md` for full CLI command reference.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `RealSlimMahdi/fleet-cdisc`, driven by the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles, each label string equal to its name. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.

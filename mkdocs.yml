@@ -5,6 +5,10 @@ repo_url: https://github.com/RealSlimMahdi/fleet-cdisc
 repo_name: RealSlimMahdi/fleet-cdisc
 edit_uri: edit/main/docs/
 
+# Agent-facing config consumed by .agents/skills; not part of the published site.
+exclude_docs: |
+  agents/
+
 theme:
   name: material
   favicon: img/favicon.png
