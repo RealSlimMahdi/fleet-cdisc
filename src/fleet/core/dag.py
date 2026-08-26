@@ -283,7 +283,8 @@ class PipelineDAG:
             runtime_domains.add(pdep.source_domain)
             if pdep.target_col in node.variables:
                 vnode = node.variables[pdep.target_col]
-                vnode.pin_sources.append(pdep)
+                if pdep not in vnode.pin_sources:
+                    vnode.pin_sources.append(pdep)
             # Ensure the source domain is an input edge
             if pdep.source_domain in self.nodes and pdep.source_domain not in node.inputs:
                 warnings.warn(

@@ -303,19 +303,28 @@ def record_pin_lineage(
     """
     from fleet.core.dag import PinDependency
 
-    pin_lineage: list[PinDependency] = list(getattr(owner, "_pin_lineage", []))
-    pin_lineage.append(
-        PinDependency(
-            target_col=target_col,
-            target_domain=getattr(owner, "_domain", None),
-            verb=verb,
-            source_domain=source_domain,
-            source_cols=source_cols,
-            join_key=join_key,
-            relationship=relationship,
-        )
+    pin_dep = PinDependency(
+        target_col=target_col,
+        target_domain=getattr(owner, "_domain", None),
+        verb=verb,
+        source_domain=source_domain,
+        source_cols=source_cols,
+        join_key=join_key,
+        relationship=relationship,
     )
+
+    # Append to the separate pin lineage list
+    pin_lineage: list[PinDependency] = list(getattr(owner, "_pin_lineage", []))
+    pin_lineage.append(pin_dep)
     owner._pin_lineage = pin_lineage
+
+    # Also populate pin_sources on the matching VariableNode in _lineage
+    # so it's available immediately without needing inject_lineage()
+    existing_lineage: list = list(getattr(owner, "_lineage", []))
+    for vnode in reversed(existing_lineage):  # last-write-wins
+        if vnode.name == target_col:
+            vnode.pin_sources.append(pin_dep)
+            break
 
 
 def pin_lineage_of(namespace: Any) -> list:
