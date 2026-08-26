@@ -34,7 +34,7 @@ import inspect
 from typing import Any
 
 
-def first_sentence(doc: str | None) -> str:
+def docstring_summary(doc: str | None) -> str:
     """Return the first sentence of a docstring, stripped and dedented.
 
     Args:
@@ -46,9 +46,9 @@ def first_sentence(doc: str | None) -> str:
     Examples:
         Summarise a verb for a catalogue listing::
 
-            from fleet.core.algorithm_resolver import first_sentence
+            from fleet.core.algorithm_resolver import docstring_summary
 
-            summary = first_sentence(SDTMNamespace.assign.__doc__)
+            summary = docstring_summary(SDTMNamespace.assign.__doc__)
     """
     if not doc:
         return ""
@@ -62,8 +62,9 @@ def first_sentence(doc: str | None) -> str:
     return head
 
 
-#: Backward-compatible internal alias.
-_first_sentence = first_sentence
+#: Backward-compatible aliases.
+first_sentence = docstring_summary
+_first_sentence = docstring_summary
 
 
 def _candidate_namespaces() -> list[type]:
@@ -134,7 +135,7 @@ def resolve_algorithm_docstring(
             method = getattr(cls, name, None)
             if method is None or not callable(method):
                 continue
-            summary = _first_sentence(method.__doc__)
+            summary = docstring_summary(method.__doc__)
             dotted = f"{cls.__module__}.{cls.__qualname__}.{name}"
             return (summary, dotted)
     return (None, None)
@@ -168,5 +169,13 @@ def resolve_callable_docstring(
     obj: Any = getattr(mod, attr, None)
     if obj is None:
         return (None, None)
-    summary = _first_sentence(getattr(obj, "__doc__", None))
+
+    doc_owner: Any = obj
+
+    # @derivation-decorated objects expose the original function at .fn.
+    fn = getattr(obj, "fn", None)
+    if callable(fn):
+        doc_owner = fn
+
+    summary = docstring_summary(getattr(doc_owner, "__doc__", None))
     return (summary, dotted)

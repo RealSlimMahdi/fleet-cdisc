@@ -31,7 +31,7 @@ import yaml
 from lxml import etree as lxml_etree
 
 from fleet.core import spec_registry
-from fleet.core.algorithm_resolver import resolve_callable_docstring
+from fleet.core.algorithm_resolver import docstring_summary, resolve_callable_docstring
 from fleet.core.exceptions import SpecError
 
 _SCHEMA_PATH = Path(__file__).parent / "schemas" / "define_spec_schema.json"
@@ -698,7 +698,7 @@ class DefineSpecGenerator:
 
             obj = get_transform(callable_path)
             if hasattr(obj, "dotted_path"):
-                return ((obj.fn.__doc__ or "").splitlines()[0].strip(), obj.dotted_path)
+                return (docstring_summary(obj.fn.__doc__), obj.dotted_path)
         except Exception:
             pass
         return resolve_callable_docstring(callable_path)
