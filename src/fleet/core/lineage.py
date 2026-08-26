@@ -317,7 +317,7 @@ def record_pin_lineage(
     pin_lineage: list[PinDependency] = list(getattr(owner, "_pin_lineage", []))
     pin_lineage.append(pin_dep)
     owner._pin_lineage = pin_lineage
-    
+
     # Also populate pin_sources on the matching VariableNode in _lineage
     # so it's available immediately without needing inject_lineage()
     existing_lineage: list = list(getattr(owner, "_lineage", []))

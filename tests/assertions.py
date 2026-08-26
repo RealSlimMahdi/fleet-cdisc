@@ -67,6 +67,7 @@ def assert_subset_columns(df: pl.DataFrame, required: list[str]) -> None:
     missing = set(required) - set(df.columns)
     assert not missing, f"Missing columns: {missing}"
 
+
 def assert_valid_cdisc_refs(nodes: list) -> None:
     """Assert every VariableNode has a well-formed cdisc_ref string.
 

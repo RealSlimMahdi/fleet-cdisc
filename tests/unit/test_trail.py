@@ -105,7 +105,6 @@ class TestTrail:
         assert "Domain" in out
         assert "ADSL" in out
 
-
     def test_pin_sources_populated_on_namespace_lineage(self, ae_raw, dm_df):
         """pin_sources should be available on nodes before inject_lineage() is called.
 
@@ -122,7 +121,7 @@ class TestTrail:
             .pin("DM", dm_df)
             .study_day("AESTDY", date_col="AESTDTC")
         )
-        
+
         # Check pin_sources directly from latest_lineage_of (before any DAG)
         for node in fleet.core.lineage.latest_lineage_of(ns):
             if node.name == "AESTDY":
@@ -131,7 +130,7 @@ class TestTrail:
                 assert node.pin_sources[0].source_domain == "DM"
                 assert "RFSTDTC" in node.pin_sources[0].source_cols
                 return
-        
+
         pytest.fail("AESTDY node not found in lineage")
 
     def test_keep_does_not_prune_lineage(self):
