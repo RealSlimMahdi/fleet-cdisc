@@ -1,8 +1,9 @@
 """Unit tests for the ``.trail()`` variable-lineage display verb."""
 
+import warnings
+
 import polars as pl
 import pytest
-import warnings
 
 import fleet  # noqa: F401 — triggers namespace registration
 
@@ -140,7 +141,7 @@ class TestTrail:
         filtering to surviving columns only happens in to_spec_yaml(), which
         iterates schema.names(), not the lineage list.
         """
-        from fleet.core.lineage import lineage_of, latest_lineage_of
+        from fleet.core.lineage import latest_lineage_of, lineage_of
 
         df = pl.from_repr("""\
 ┌─────────┬─────┐
