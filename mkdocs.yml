@@ -5,6 +5,10 @@ repo_url: https://github.com/RealSlimMahdi/fleet-cdisc
 repo_name: RealSlimMahdi/fleet-cdisc
 edit_uri: edit/main/docs/
 
+# Agent-facing config consumed by .agents/skills; not part of the published site.
+exclude_docs: |
+  agents/
+
 theme:
   name: material
   favicon: img/favicon.png
@@ -134,6 +138,7 @@ nav:
       - Define-XML: api/define_xml.md
       - Controlled Terminology: api/ct.md
       - Study Codelists (CDISCPILOT01): api/codelists.md
+      - Tooling Introspection: api/introspect.md
       - Core: api/core.md
   - Quality & Compliance:
       - Validation Strategy: validation-strategy.md

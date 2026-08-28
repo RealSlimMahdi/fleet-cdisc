@@ -446,3 +446,36 @@ class TestValidateResultAccess:
 └─────────┘
 """)
         assert df.sdtm.last_validation is None
+
+    def test_issues_are_enriched_with_producing_verb(self, monkeypatch):
+        from fleet.validation.models import Severity, ValidationIssue, ValidationResult
+        from fleet.validation.service import ValidationService
+
+        result = ValidationResult(
+            dataset_name="DM",
+            dataset_type="SDTM",
+            model_version="3.4",
+            total_issues=2,
+            errors=[
+                ValidationIssue(Severity.ERROR, "X1", "bad DOMAIN", variable="DOMAIN"),
+                ValidationIssue(Severity.ERROR, "X2", "missing AGE", variable="AGE"),
+            ],
+        )
+        monkeypatch.setattr(ValidationService, "__init__", lambda self, **kw: None)
+        monkeypatch.setattr(ValidationService, "validate_sdtm", lambda self, df, **kw: result)
+        df = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ S1      │
+└─────────┘
+""")
+        with pytest.warns(UserWarning, match="validation failed"):
+            ns = df.sdtm.assign("DOMAIN", value="DM").validate("DM")
+
+        derived, underived = ns.last_validation.errors
+        assert derived.producing_verb == "assign"
+        assert derived.verb_method.endswith(".assign")
+        assert underived.producing_verb is None  # AGE is not derived by this chain

@@ -47,6 +47,7 @@ __all__ = [
     "SpecAlgorithm",
     "SpecVariableBase",
     "algorithm_names",
+    "algorithms",
     "coverage_matrix",
     "derivation_from_lineage",
     "execute_variable",

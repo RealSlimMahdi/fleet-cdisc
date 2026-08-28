@@ -6,15 +6,16 @@ variable, the issue is enriched with the verb that produced the column
 plus a dotted Python path so reviewers can navigate straight from the
 validation report to the source code (or its docstring on the docs site).
 
-Examples:
-    Run validation, then enrich issues with lineage::
+The ``validate()`` verb applies this automatically using the chain's own
+lineage, so the ``Producing verb`` line appears without extra wiring.
+Call it directly only when the result and the lineage come from
+different places (e.g. a spec-driven run reporting against a
+``define.yaml`` reference)::
 
-        from fleet.core.lineage import lineage_of
-        from fleet.validation.lineage_join import enrich_with_lineage
+    from fleet.core.lineage import lineage_of
+    from fleet.validation.lineage_join import enrich_with_lineage
 
-        ns = raw_df.sdtm.assign("USUBJID", source="subject_id")
-        result = run_validation(ns.to_frame(), ...)  # produces ValidationResult
-        enrich_with_lineage(result, lineage_of(ns), spec_ref="define.yaml -> DM")
+    enrich_with_lineage(result, lineage_of(ns), spec_ref="define.yaml -> DM")
 """
 
 from __future__ import annotations

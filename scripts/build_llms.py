@@ -709,6 +709,7 @@ Full docs: https://realslimmahdi.github.io/fleet-cdisc/
 - define.yaml guide: https://realslimmahdi.github.io/fleet-cdisc/concepts/define-yaml/
 - Trial Design Domains: https://realslimmahdi.github.io/fleet-cdisc/concepts/tdd/
 - API reference: https://realslimmahdi.github.io/fleet-cdisc/api/
+- Tooling introspection API: https://realslimmahdi.github.io/fleet-cdisc/api/introspect/
 - ADSL example notebook: https://realslimmahdi.github.io/fleet-cdisc/examples/adsl_pipeline/\
 """
 

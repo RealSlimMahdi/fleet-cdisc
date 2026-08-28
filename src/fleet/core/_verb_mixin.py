@@ -1676,6 +1676,11 @@ class SharedVerbsMixin:
         Dispatches to either SDTM or ADaM validation based on the
         ``_VALIDATE_STANDARD`` class constant.
 
+        Issues are cross-linked to the chain's own variable lineage, so a
+        finding on a column this pipeline derived also reports the verb
+        that produced it (see
+        :func:`fleet.validation.lineage_join.enrich_with_lineage`).
+
         Args:
             dataset_or_domain: Domain code (SDTM: e.g. ``"DM"``) or
                 dataset name (ADaM: e.g. ``"ADSL"``).
@@ -1721,6 +1726,8 @@ class SharedVerbsMixin:
                     .to_frame()
                 )
         """
+        from fleet.core.lineage import latest_lineage_of
+        from fleet.validation.lineage_join import enrich_with_lineage
         from fleet.validation.service import ValidationService
 
         if on_fail not in ("warn", "raise", "ignore"):
@@ -1741,6 +1748,7 @@ class SharedVerbsMixin:
                 self.to_frame(), domain=dataset_or_domain, version=ver, custom_rules=custom_rules
             )
 
+        enrich_with_lineage(result, latest_lineage_of(self))
         result.print_report(report_type=report)
 
         new = copy.copy(self)

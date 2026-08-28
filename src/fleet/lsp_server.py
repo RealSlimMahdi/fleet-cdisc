@@ -1,11 +1,16 @@
 """Fleet language server for ``define.yaml`` files (``fleet lsp --stdio``).
 
 Requires the ``lsp`` extra (``pygls``).  Everything the server knows is
-discovered from the installed Fleet package — the generated JSON schema
-(``fleet.define_xml.schemas``), the spec-algorithm registry
-(``fleet.core.spec_registry``), and verb docstrings
-(``fleet.core.algorithm_resolver``) — never hardcoded, so new algorithms
-appear in completions the moment they are registered.
+discovered from the installed Fleet package through :mod:`fleet.introspect`
+— the generated JSON schema, the spec-algorithm registry, and verb
+docstrings — never hardcoded, so new algorithms appear in completions the
+moment they are registered.
+
+This module is a **protocol adapter**: it translates LSP into calls on
+that surface and holds no clinical knowledge of its own.  Reaching past
+:mod:`fleet.introspect` into Fleet's internals is a test failure
+(ADR-0001), because the shipped VS Code client versions against the
+surface alone.
 
 Capabilities:
 
@@ -26,32 +31,24 @@ without a running server.
 
 from __future__ import annotations
 
-import json
 import re
-from functools import lru_cache
-from typing import Any
+from typing import Any, get_args
 
 import yaml
+
+from fleet.introspect import Standard
 
 #: Seconds to wait after the last keystroke before re-validating.
 _DEBOUNCE_S = 0.3
 
 #: Diagnostics scan both standards when neither the file nor its path
 #: pins one down.
-_STANDARDS = ("sdtm", "adam")
+_STANDARDS = get_args(Standard)
 
 
 # ────────────────────────────────────────────────────────────────────── #
 # Pure helpers (no pygls dependency)                                      #
 # ────────────────────────────────────────────────────────────────────── #
-
-
-@lru_cache(maxsize=1)
-def _schema() -> dict[str, Any]:
-    """Load the generated define-spec JSON schema shipped with Fleet."""
-    from fleet.define_xml.schema_builder import SCHEMA_PATH
-
-    return json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 
 
 def _safe_load(text: str) -> dict[str, Any]:
@@ -181,7 +178,7 @@ def compute_diagnostics(text: str, path: str = "") -> list[dict[str, Any]]:
     import jsonschema
     from jsonschema.exceptions import best_match
 
-    from fleet.core.spec_registry import get_algorithm, suggest_algorithm
+    from fleet.introspect import define_schema, get_algorithm, suggest_algorithm
 
     try:
         data = yaml.safe_load(text)
@@ -235,7 +232,7 @@ def compute_diagnostics(text: str, path: str = "") -> list[dict[str, Any]]:
         diagnostics.append({"line": line, "message": message, "severity": "error"})
 
     # Pass 2 — generated JSON schema (whole document).
-    validator = jsonschema.Draft202012Validator(_schema())
+    validator = jsonschema.Draft202012Validator(define_schema())
     for error in validator.iter_errors(data):
         best = best_match([error]) or error
         error_path = tuple(best.absolute_path)
@@ -297,7 +294,7 @@ def compute_completions(
             items = compute_completions("derivation:\\n  algorithm: ", 1, 13)
             assert any(i["label"] == "assign_ct" for i in items)
     """
-    from fleet.core import spec_registry
+    from fleet import introspect
 
     lines = text.splitlines()
     if line >= len(lines):
@@ -309,7 +306,7 @@ def compute_completions(
     if re.match(r"^(-\s+)?algorithm:", stripped):
         seen: dict[str, dict[str, Any]] = {}
         for std in infer_standards(data, path):
-            for algo in spec_registry.algorithms(std):
+            for algo in introspect.algorithms(std):
                 seen.setdefault(
                     algo.name,
                     {
@@ -332,7 +329,7 @@ def compute_completions(
         algo_name = _enclosing_algorithm(lines, line)
         if algo_name:
             for std in infer_standards(data, path):
-                algo = spec_registry.get_algorithm(std, algo_name)
+                algo = introspect.get_algorithm(std, algo_name)
                 if algo is None:
                     continue
                 return [
@@ -380,8 +377,7 @@ def compute_hover(text: str, line: int, character: int, path: str = "") -> str |
             md = compute_hover("derivation:\\n  algorithm: assign_ct", 1, 15)
             assert "assign_ct" in md
     """
-    from fleet.core import spec_registry
-    from fleet.core.algorithm_resolver import resolve_algorithm_docstring
+    from fleet import introspect
 
     lines = text.splitlines()
     if line >= len(lines):
@@ -393,15 +389,16 @@ def compute_hover(text: str, line: int, character: int, path: str = "") -> str |
 
     if lines[line].strip().startswith("algorithm:"):
         for std in infer_standards(data, path):
-            algo = spec_registry.get_algorithm(std, word)
+            algo = introspect.get_algorithm(std, word)
             if algo is None:
                 continue
-            summary, dotted = resolve_algorithm_docstring(algo.name)
+            doc = introspect.algorithm_doc(algo.name)
+            summary = doc.summary if doc else ""
             parts = [f"**{algo.name}** ({std}) — {algo.description or summary or ''}".rstrip(" —")]
             if summary and summary != algo.description:
                 parts.append(summary)
-            if dotted:
-                parts.append(f"Verb: `{dotted}`")
+            if doc:
+                parts.append(f"Verb: `{doc.verb_path}`")
             if algo.params:
                 rows = "\n".join(
                     f"- `{p.name}`{' *(required)*' if p.required else ''}"
@@ -438,7 +435,7 @@ def create_server():
     from lsprotocol import types
     from pygls.lsp.server import LanguageServer
 
-    from fleet._version import __version__
+    from fleet import __version__
 
     server = LanguageServer("fleet-lsp", __version__)
 

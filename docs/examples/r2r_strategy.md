@@ -235,17 +235,17 @@ CDISC Validation Report: AE
 Dataset Type: SDTM 3.4
 Status: FAIL
 Total Issues: 2
+  Errors: 2, Warnings: 0, Info: 0
 ----------------------------------------------------------------------
 
-ERRORS (2):
+ERRORS (2 unique, 2 total):
 
-1. [Error] SDTM.AE.R0001: AESEQ is required but missing
+1. [SDTM.AE.R0001] AESEQ is required but missing
    Variable: AESEQ
 
-2. [Error] SDTM.AE.R0014: AEBODSYS must be populated when AEDECOD is present
+2. [SDTM.AE.R0014] AEBODSYS must be populated when AEDECOD is present
    Variable: AEBODSYS
-   Rows: 43
-   Producing verb: assign (AETERM)
+   Rows affected: 1-43 (43 occurrences)
    Suggested fix: Map AEBODSYS from MedDRA lookup or hardcode domain SOC
 
 ======================================================================
@@ -256,13 +256,46 @@ CDISC Validation Report: ADAE
 Dataset Type: ADaM 1.3
 Status: PASS
 Total Issues: 0
+  Errors: 0, Warnings: 0, Info: 0
 ----------------------------------------------------------------------
+
+  No issues found.
 
 ======================================================================
 ```
 
-The `Producing verb` field traces an error directly back to the Fleet verb that
-created the offending column — no manual variable hunting required.
+### Layer 3b — Trace an issue back to its verb
+
+`.validate()` cross-links each finding to the chain's own variable lineage, so
+the report says not just *what* failed but *which verb produced it*. Nothing
+extra to call — `.trail()` shows the same lineage on demand:
+
+```python
+ae = (
+    ae_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
+    .assign("DOMAIN", value="AE")
+    .assign("USUBJID", source="patient_number")
+    .assign("AETERM", source="ae_term")
+    .trail()  # ← the lineage .validate() reads from
+    .validate("AE")
+    .to_frame()
+)
+```
+
+The join is **name-exact**: `ValidationIssue.variable` is matched against
+`VariableNode.name`, so an issue only gains a `Producing verb` when the chain
+derived that same column. A finding on `AETERM` carries its origin — the verb
+name plus the dotted path to its implementation:
+
+```
+2. [SDTM.AE.R0004] AETERM must not be empty
+   Variable: AETERM
+   Rows affected: 7 (1 occurrences)
+   Producing verb: assign (fleet.core._verb_mixin.SharedVerbsMixin.assign)
+```
+
+`AEBODSYS` above stays bare: nothing in the chain derives it, so there is no
+lineage node to match.
 
 ### Layer 4 — Render (`.tlg.ae` namespace)
 
