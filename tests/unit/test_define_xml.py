@@ -318,6 +318,81 @@ class TestDocstringXML:
         assert DefineSpecGenerator._resolve_callable("AGE65FL") == expected
         assert DefineSpecGenerator._resolve_callable("tmp_derivations.AGE65FL") == expected
 
+    def test_short_name_callable_needs_derivations_module_import(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """generate() imports the spec's ``derivations_module`` first.
+
+        Regression guard. A ``callable:`` referenced by its *short* registry
+        name (``POP_FLAG``, not a dotted path) only resolves if the spec's
+        ``derivations_module`` has been imported so the ``@derivation``
+        registration has run. ``from_spec()`` did this; the Define-XML
+        generator did not, so the study's own MethodDef was silently dropped.
+
+        The module is written to a fresh, never-imported name and the short
+        name is asserted *unregistered* up front, so this fails (no
+        MT.ADSL.POPFL MethodDef) unless ``generate()`` performs the import.
+        """
+        import sys
+        import textwrap
+
+        from fleet.adam.transforms import _TRANSFORMS
+
+        modname = "regr_derivations_module_probe"
+        (tmp_path / f"{modname}.py").write_text(
+            textwrap.dedent(
+                '''
+                import polars as pl
+
+                from fleet.core.derivation import derivation
+
+
+                @derivation
+                def POP_FLAG() -> pl.Expr:
+                    """Flag subjects in the safety population as 'Y'."""
+                    return pl.lit("Y").alias("POP_FLAG")
+                '''
+            ),
+            encoding="utf-8",
+        )
+        # Preconditions that make the assertion meaningful: neither the module
+        # nor the short registry name exists before the generator runs.
+        assert modname not in sys.modules
+        assert "POP_FLAG" not in _TRANSFORMS
+        monkeypatch.syspath_prepend(str(tmp_path))
+
+        spec = copy.deepcopy(FIXTURE_SPEC)
+        spec["derivations_module"] = modname
+        # Append to ADSL (datasets[1]); reference by SHORT name, not dotted path.
+        spec["datasets"][1]["variables"].append(
+            {
+                "name": "POPFL",
+                "label": "Population Flag",
+                "type": "text",
+                "derivation": {"algorithm": "callable", "callable": "POP_FLAG"},
+            }
+        )
+        spec_file = tmp_path / "define.yaml"
+        spec_file.write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
+
+        out = tmp_path / "define.xml"
+        DefineSpecGenerator(str(spec_file), enrich_methods=True).generate(
+            str(out), html_preview=False
+        )
+        root = ET.fromstring(out.read_text(encoding="utf-8"))
+        methods = {
+            method.get("OID"): method
+            for method in root.iter(f"{ODM}MethodDef")
+            if method.get("OID") is not None
+        }
+        assert "MT.ADSL.POPFL" in methods, (
+            "generate() did not import derivations_module: the short-name "
+            "callable POP_FLAG never registered, so its MethodDef was dropped."
+        )
+        translated = methods["MT.ADSL.POPFL"].find(f"{ODM}Description/{ODM}TranslatedText")
+        assert translated is not None
+        assert translated.text == "Flag subjects in the safety population as 'Y'."
+
 
 class TestValueLevelMetadata:
     """Item 10: ValueListDef + WhereClauseDef wiring (BDS ADaM core)."""

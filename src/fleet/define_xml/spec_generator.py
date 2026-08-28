@@ -31,7 +31,9 @@ import yaml
 from lxml import etree as lxml_etree
 
 from fleet.core import spec_registry
+from fleet.core._verb_mixin import _import_derivations_module
 from fleet.core.algorithm_resolver import docstring_summary, resolve_callable_docstring
+from fleet.core.define_spec import load_define_spec
 from fleet.core.exceptions import SpecError
 
 _SCHEMA_PATH = Path(__file__).parent / "schemas" / "define_spec_schema.json"
@@ -172,6 +174,13 @@ class DefineSpecGenerator:
             ``define2-1.xsl`` in the same directory as *output_path*, which
             is the standard layout used by Fleet.
         """
+        # Import the spec's derivations_module so short-name `callable:`
+        # derivations are registered before their MethodDefs are resolved
+        # (from_spec does this too; without it the study's MethodDef is
+        # silently dropped).
+        spec = load_define_spec(self._path)
+        _import_derivations_module(spec, source="define-xml")
+
         root = self._build_odm()
         xml_str = self._serialise(root)
         out = Path(output_path)
