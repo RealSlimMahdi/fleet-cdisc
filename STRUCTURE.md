@@ -291,7 +291,7 @@ Use `algorithm:` (Fleet verb) or `callable:` (study-specific dotted path) inside
 | `providers.py`      | `ValidationProvider` ABC, `OfficialRulesEngineProvider` (engine wrapper)                                                                                                                                                  |
 | `service.py`        | `ValidationService` — high-level `.validate_sdtm()` and `.validate_adam()` methods with optional `custom_rules` parameter                                                                                                                                |
 | `rule_scaffolder.py`| `scaffold_rule()` — generates schema-valid custom rule YAML skeletons; `_scan_existing_ids()` / `_next_sequence()` for ID uniqueness and auto-increment                                                                                                  |
-| `lineage_join.py`   | `enrich_with_lineage(result, lineage, *, spec_ref=None)` — joins `ValidationIssue.variable` with the pipeline `VariableNode` lineage so each issue carries `producing_verb`, `verb_method`, and `spec_ref` (cross-link from rule failure to source verb) |
+| `lineage_join.py`   | `enrich_with_lineage(result, lineage, *, spec_ref=None)` — joins `ValidationIssue.variable` with the pipeline `VariableNode` lineage so each issue carries `producing_verb`, `verb_method`, and `spec_ref` (cross-link from rule failure to source verb). Applied automatically by the `validate()` verb |
 | `schemas/`          | Vendored CDISC rule JSON Schema (`cdisc_rule_schema.json`) for validating custom rule YAML before engine execution                                                                                                                                       |
 
 ---
