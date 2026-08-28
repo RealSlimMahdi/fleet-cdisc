@@ -1,6 +1,6 @@
 [project]
 name = "fleet-cdisc"
-version = "0.1.0"
+dynamic = ["version"]
 description = "An opinionated framework to create CDISC SDTM/ADaM using Polars DataFrames via namespace extension"
 requires-python = ">=3.12"
 license = { text = "MIT" }
@@ -101,8 +101,15 @@ Repository = "https://github.com/RealSlimMahdi/fleet-cdisc"
 fleet = "fleet.cli:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+# PyPI rejects the ``+g1234567`` hatch-vcs appends to untagged builds.
+local_scheme = "no-local-version"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/fleet"]
