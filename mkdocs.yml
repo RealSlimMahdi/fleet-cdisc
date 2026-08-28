@@ -138,6 +138,7 @@ nav:
       - Define-XML: api/define_xml.md
       - Controlled Terminology: api/ct.md
       - Study Codelists (CDISCPILOT01): api/codelists.md
+      - Tooling Introspection: api/introspect.md
       - Core: api/core.md
   - Quality & Compliance:
       - Validation Strategy: validation-strategy.md
