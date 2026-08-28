@@ -2803,6 +2803,13 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
+    # Make project-local modules (e.g. a spec's `derivations_module:
+    # fixtures.derivations`) importable when Fleet is invoked as the bare
+    # `fleet` console script, which — unlike `python -m fleet.cli` — does not
+    # put the current working directory on sys.path.
+    if "" not in sys.path and os.getcwd() not in sys.path:
+        sys.path.insert(0, os.getcwd())
+
     # Load a study .env (walking up from the cwd) before any handler reads
     # CDISC_API_KEY & co. — commands must work from any study subdirectory.
     from fleet.ct.api import try_load_dotenv

@@ -458,6 +458,119 @@ def test_define_xml_missing_spec_errors(capsys: pytest.CaptureFixture) -> None:
     assert "spec file not found" in capsys.readouterr().err
 
 
+def test_define_xml_enriches_project_local_callable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`fleet define-xml --enrich-methods` resolves a project-local callable.
+
+    Regression guard for the bare-``fleet`` console script. Unlike
+    ``python -m fleet.cli``, the console-script wrapper does not put the
+    current working directory on ``sys.path``, so a spec whose
+    ``derivations_module`` is a project-local module (e.g.
+    ``fixtures.derivations``) failed to import — and the study's own
+    ``callable:`` MethodDef was dropped.
+
+    ``main()`` now prepends the cwd to ``sys.path``. This test runs the CLI
+    from a project directory whose derivations module is importable *only*
+    via the cwd, and asserts the callable's docstring reaches the MethodDef.
+    It fails without the fix (the import raises ``SpecError`` → exit 1).
+    """
+    import sys
+    import textwrap
+    import xml.etree.ElementTree as ET
+
+    odm = "{http://www.cdisc.org/ns/odm/v1.3}"
+
+    project = tmp_path / "study"
+    (project / "house").mkdir(parents=True)
+    (project / "house" / "__init__.py").write_text("", encoding="utf-8")
+    (project / "house" / "derivations.py").write_text(
+        textwrap.dedent(
+            '''
+            import polars as pl
+
+            from fleet.core.derivation import derivation
+
+
+            @derivation
+            def SAFFL_house() -> pl.Expr:
+                """Safety population flag: 'Y' for treated subjects."""
+                return pl.lit("Y").alias("SAFFL")
+            '''
+        ),
+        encoding="utf-8",
+    )
+
+    spec = """\
+study:
+  id: HOUSE
+  name: House Study
+  description: CLI project-local callable regression
+  protocol_name: HOUSE
+  originator: House Co
+  standard: ADAMIG
+  standard_version: "1.1"
+  ct_version: "2023-12-15"
+derivations_module: house.derivations
+datasets:
+  - name: ADSL
+    label: Subject-Level Analysis
+    structure: One record per subject
+    class: SUBJECT LEVEL ANALYSIS DATASET
+    keys: [STUDYID, USUBJID]
+    inputs:
+      - name: adsl_in
+        type: dataset
+    variables:
+      - name: STUDYID
+        label: Study Identifier
+        type: text
+        mandatory: true
+        derivation:
+          algorithm: assigned
+          value: HOUSE
+      - name: USUBJID
+        label: Unique Subject Identifier
+        type: text
+        mandatory: true
+        derivation:
+          algorithm: source
+          source: usubjid
+      - name: SAFFL
+        label: Safety Population Flag
+        type: text
+        derivation:
+          algorithm: callable
+          callable: SAFFL_house
+"""
+    (project / "define.yaml").write_text(spec, encoding="utf-8")
+
+    # Precondition: the project-local module is not importable from the
+    # current sys.path — only main()'s cwd insert can make it resolvable.
+    assert "house.derivations" not in sys.modules
+    monkeypatch.chdir(project)
+
+    code = _run(
+        [
+            "define-xml",
+            "--spec",
+            "define.yaml",
+            "--output",
+            "define.xml",
+            "--no-preview",
+            "--enrich-methods",
+        ]
+    )
+    assert code == 0, "CLI could not import the project-local derivations_module"
+
+    root = ET.fromstring((project / "define.xml").read_text(encoding="utf-8"))
+    methods = {m.get("OID"): m for m in root.iter(f"{odm}MethodDef") if m.get("OID") is not None}
+    assert "MT.ADSL.SAFFL" in methods
+    translated = methods["MT.ADSL.SAFFL"].find(f"{odm}Description/{odm}TranslatedText")
+    assert translated is not None
+    assert translated.text == "Safety population flag: 'Y' for treated subjects."
+
+
 def test_check_rule_missing_file_errors(capsys: pytest.CaptureFixture) -> None:
     code = _run(["check-rule", "nope.yaml"])
     assert code == 1
