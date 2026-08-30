@@ -36,7 +36,14 @@ from ._registry import (
     register_template,
     unregister_template,
 )
-from ._runner import NAMESPACE_CLASSES, load_spec, run_spec, spec_schema
+from ._runner import (
+    GROUPBY_CANDIDATES,
+    NAMESPACE_CLASSES,
+    detect_groupby,
+    load_spec,
+    run_spec,
+    spec_schema,
+)
 from ._specs import (
     AEListingSpec,
     AESummarySpec,
@@ -166,6 +173,8 @@ __all__ = [
     "unregister_template",
     # YAML workflow
     "NAMESPACE_CLASSES",
+    "GROUPBY_CANDIDATES",
+    "detect_groupby",
     "load_spec",
     "run_spec",
     "spec_schema",
