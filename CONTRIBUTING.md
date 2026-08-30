@@ -30,6 +30,13 @@ uv run python -c "import sysconfig; from pathlib import Path; (Path(sysconfig.ge
 
 > **Never** use `pip`, `poetry`, `conda`, or `pipenv`.
 
+### Where the VS Code extension lives
+
+This repository holds the Python side of the editor tooling — `fleet lsp --stdio` and the
+`fleet.introspect` contract it consumes. The VS Code client is a separate project with its
+own release cadence: [`RealSlimMahdi/fleet-vscode`](https://github.com/RealSlimMahdi/fleet-vscode).
+Open TypeScript, packaging, and Marketplace pull requests there.
+
 ---
 
 ## API Shape & Conventions

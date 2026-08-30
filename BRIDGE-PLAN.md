@@ -151,8 +151,8 @@ mutually exclusive — the recommendation is a portfolio.
 The `--watch` loop already exists (`cli.py:214`). Add HTML auto-reload (a
 1-line meta-refresh or SSE ping) and a `--serve-preview` flag that opens the
 rendered output. The workflow becomes: edit YAML in your editor → table
-re-renders on save. With the VS Code extension (`editors/vscode`) and the
-existing LSP groundwork, spec editing gets completion + preview like a
+re-renders on save. With the [VS Code extension](https://github.com/RealSlimMahdi/fleet-vscode)
+and the existing LSP groundwork, spec editing gets completion + preview like a
 static-site generator (`mkdocs serve` feel).
 
 - **Create:** zero new concepts — the spec is the artifact, the editor is

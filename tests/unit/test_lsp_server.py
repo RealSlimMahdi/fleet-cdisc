@@ -20,6 +20,7 @@ from fleet.lsp_server import (  # noqa: E402
     compute_completions,
     compute_diagnostics,
     compute_hover,
+    infer_standards,
 )
 
 EXAMPLE_SPEC = (
@@ -59,6 +60,26 @@ datasets:
           algorithm: assign_ct
           source: sex
           ct_codelist: C66731
+"""
+
+#: Simplified single-dataset shape: two entries, only the first derived.
+FLAT_SPEC = """\
+study:
+  standard: SDTMIG
+variables:
+  - target: DUR
+    algorithm: duration
+    start: a
+  - target: SEX
+"""
+
+#: The same block with ``algorithm`` opening the list entry.
+INLINE_ALGO_SPEC = """\
+study:
+  standard: SDTMIG
+variables:
+  - algorithm: duration
+    start: a
 """
 
 
@@ -134,6 +155,18 @@ class TestCompletions:
         items = compute_completions(CODELIST_SPEC, line, char)
         assert items == [{"label": "C66731", "detail": "Sex"}]
 
+    def test_param_completions_when_algorithm_opens_the_list_entry(self):
+        text = INLINE_ALGO_SPEC + "    "
+        lines = text.splitlines()
+        labels = [i["label"] for i in compute_completions(text, len(lines) - 1, 4)]
+        assert set(labels) == {p.name for p in get_algorithm("sdtm", "duration").params}
+
+    def test_param_completions_stop_at_the_next_variable_entry(self):
+        """A fresh entry has no algorithm yet, so the previous one's params must not leak."""
+        text = FLAT_SPEC + "    "
+        lines = text.splitlines()
+        assert compute_completions(text, len(lines) - 1, 4) == []
+
 
 class TestHover:
     def test_algorithm_hover_has_docstring_and_params(self):
@@ -144,6 +177,7 @@ class TestHover:
         assert md is not None
         assert "assign_ct" in md
         assert "controlled-terminology" in md  # registry description
+        assert "Verb: `fleet." in md  # summary source: introspect.algorithm_doc()
         assert "ct_codelist" in md  # param table
 
     def test_codelist_hover_shows_name_and_terms(self):
@@ -154,5 +188,37 @@ class TestHover:
         assert "Sex" in md
         assert "M" in md and "F" in md
 
+    def test_algorithm_hover_when_algorithm_opens_the_list_entry(self):
+        lines = INLINE_ALGO_SPEC.splitlines()
+        line = next(i for i, ln in enumerate(lines) if "algorithm:" in ln)
+        md = compute_hover(INLINE_ALGO_SPEC, line, lines[line].index("duration") + 1)
+        assert md is not None
+        assert "duration" in md
+        assert "`start`" in md  # param table
+
     def test_hover_on_plain_text_is_none(self):
         assert compute_hover(CODELIST_SPEC, 0, 1) is None
+
+
+class TestStandardInference:
+    @pytest.mark.parametrize(
+        ("declared", "expected"),
+        [("SDTMIG", ("sdtm",)), ("SENDIG", ("sdtm",)), ("ADaMIG", ("adam",))],
+    )
+    def test_declared_standard_wins(self, declared, expected):
+        assert infer_standards({"study": {"standard": declared}}) == expected
+
+    @pytest.mark.parametrize(
+        "path",
+        ["/study/metadata/adam/define.yaml", "C:\\study\\metadata\\adam\\define.yaml"],
+        ids=["posix", "windows"],
+    )
+    def test_path_is_the_fallback_hint(self, path):
+        assert infer_standards({}, path) == ("adam",)
+
+    def test_declared_standard_beats_the_path(self):
+        spec = {"study": {"standard": "SDTMIG"}}
+        assert infer_standards(spec, "/study/metadata/adam/define.yaml") == ("sdtm",)
+
+    def test_both_standards_when_nothing_says(self):
+        assert infer_standards({}) == ("sdtm", "adam")

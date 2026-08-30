@@ -83,6 +83,12 @@ Do NOT update for new verbs or changed signatures — those are resolved from th
 
 See `.github/instructions/cli.instructions.md` for full CLI command reference.
 
+## Editor tooling boundary
+
+Fleet owns the Python protocol adapters (`src/fleet/lsp_server.py`, `src/fleet/mcp_server.py`) and the `fleet.introspect` contract they consume. The VS Code client is **not** in this repository — it lives in [`RealSlimMahdi/fleet-vscode`](https://github.com/RealSlimMahdi/fleet-vscode) and ships on its own cadence. Send TypeScript, packaging, and Marketplace changes there.
+
+`fleet.introspect` is additive-only within a major version, because that client declares a minimum Fleet version and no ceiling.
+
 ## Agent skills
 
 ### Issue tracker

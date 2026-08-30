@@ -44,9 +44,11 @@ Fleet package (never hardcoded):
 | Completions: codelist OIDs | the file's own `codelists:` section |
 | Hover: algorithm docs, codelist name + terms | verb docstrings / inline codelists |
 
-**VS Code:** a ready extension lives in [`editors/vscode/`](https://github.com/RealSlimMahdi/fleet-cdisc/tree/main/editors/vscode)
-(see its README for F5 debugging and packaging). It finds the server via the
-`FLEET_LSP` env var, then `.venv/bin/fleet`, then `uv run fleet`.
+**VS Code:** the client ships from its own repository,
+[`RealSlimMahdi/fleet-vscode`](https://github.com/RealSlimMahdi/fleet-vscode)
+(installation, settings, and the development loop are documented there). It
+finds the server via the `fleet.server.path` setting, then the `FLEET_LSP` env
+var, then `.venv/bin/fleet`, then `uv run fleet`.
 **Other editors:** point any LSP client at `fleet lsp --stdio` for YAML files.
 
 ## AI assistants — `fleet mcp` (Model Context Protocol)

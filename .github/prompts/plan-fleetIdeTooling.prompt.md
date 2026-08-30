@@ -1,4 +1,4 @@
-> **Status (2026-07): Tier 1 LSP + MCP + VS Code scaffold shipped (`fleet lsp --stdio`, `fleet mcp --stdio`, `editors/vscode/`); Tiers 2b/3/4 open.**
+> **Status (2026-08): Tier 1 LSP + MCP shipped (`fleet lsp --stdio`, `fleet mcp --stdio`); the VS Code client now ships from [`RealSlimMahdi/fleet-vscode`](https://github.com/RealSlimMahdi/fleet-vscode); Tiers 2b/3/4 open.**
 
 # Companion VS Code Extension & Language Server for Fleet — Updated Plan (May 2026)
 
@@ -263,12 +263,14 @@ TypeScript extension shell + Python LSP backend.
 | Python LSP        | Semantic logic: define.yaml validation, verb completions, DAG analysis, CDISC API                         | Python (`pygls`) |
 | Fleet package     | All business logic: `build_dag()`, `lineage_of()`, `CTValidator`, `DatasetChecker`, `DefineSpecGenerator` | Python           |
 
-**LSP discovery order:**
+**LSP discovery order** — as shipped by [`fleet-vscode`](https://github.com/RealSlimMahdi/fleet-vscode), which is now the source of truth:
 
-1. `FLEET_LSP` env var (overrides everything)
-2. `.venv/bin/fleet lsp` in the workspace root (standard `uv sync` install)
-3. `uv run fleet lsp` (fallback if no venv detected)
-4. Bundled minimal LSP (no Fleet import — only YAML syntax, no semantic features)
+1. The `fleet.server.path` setting (an explicit `fleet` executable)
+2. `FLEET_LSP` env var (the worktree escape hatch)
+3. `.venv/bin/fleet lsp` in the workspace root (standard `uv sync` install)
+4. `uv run fleet lsp` (resolves the project environment)
+
+The planned bundled fallback LSP was dropped: the client reports a startup failure instead of degrading to YAML-only syntax checking.
 
 **Forward-compatibility principle:** The LSP imports Fleet dynamically at startup. It calls `importlib.import_module("fleet")` and inspects the live package for verb lists, algorithm enums, namespace exports, and Pydantic model fields. When Fleet releases a new version, the LSP capabilities update automatically without a VS Code extension update.
 

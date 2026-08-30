@@ -251,18 +251,27 @@ def compute_diagnostics(text: str, path: str = "") -> list[dict[str, Any]]:
 _KEY_PREFIX_RE = re.compile(r"^\s*[\w-]*$")
 _WORD_RE = re.compile(r"[A-Za-z0-9_.\-]+")
 
+#: ``algorithm:`` as a plain key or as the opening key of a list entry
+#: (``- algorithm: duration``), which both spec shapes allow.
+_ALGORITHM_RE = re.compile(r"^-?\s*algorithm:\s*([\w-]*)")
+
+#: Any other ``- key:`` starts a new variable entry.
+_ENTRY_RE = re.compile(r"^-\s+[\w-]+:")
+
 
 def _enclosing_algorithm(lines: list[str], line: int) -> str | None:
     """Best-effort: the ``algorithm:`` value governing *line*'s block.
 
-    Scans upward until a new variable entry (``- name:``) is crossed.
+    Scans upward until a new variable entry is crossed, so an entry that
+    has not named an algorithm yet offers no parameters at all rather
+    than the previous entry's.
     """
     for i in range(line - 1, max(-1, line - 40), -1):
         stripped = lines[i].strip()
-        match = re.match(r"^algorithm:\s*([\w-]+)", stripped)
+        match = _ALGORITHM_RE.match(stripped)
         if match:
-            return match.group(1)
-        if stripped.startswith("- name:"):
+            return match.group(1) or None
+        if _ENTRY_RE.match(stripped):
             return None
     return None
 
@@ -303,7 +312,7 @@ def compute_completions(
     stripped = prefix.strip()
     data = _safe_load(text)
 
-    if re.match(r"^(-\s+)?algorithm:", stripped):
+    if _ALGORITHM_RE.match(stripped):
         seen: dict[str, dict[str, Any]] = {}
         for std in infer_standards(data, path):
             for algo in introspect.algorithms(std):
@@ -387,7 +396,7 @@ def compute_hover(text: str, line: int, character: int, path: str = "") -> str |
         return None
     data = _safe_load(text)
 
-    if lines[line].strip().startswith("algorithm:"):
+    if _ALGORITHM_RE.match(lines[line].strip()):
         for std in infer_standards(data, path):
             algo = introspect.get_algorithm(std, word)
             if algo is None:
