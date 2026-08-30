@@ -55,8 +55,9 @@ watch = [
 ]
 
 # LSP: `fleet lsp --stdio` language server for define.yaml files
+# 2.0 is the floor: `pygls.lsp.server` does not exist on 1.x.
 lsp = [
-    "pygls>=1.3",
+    "pygls>=2.0",
 ]
 
 # MCP: `fleet mcp --stdio` Model Context Protocol server

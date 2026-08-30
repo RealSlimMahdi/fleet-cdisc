@@ -841,3 +841,59 @@ def test_add_acrf_updates_define_yaml(
     assert acrf["href"] == "blankcrf.pdf"
     assert acrf["title"] == "Annotated Case Report Form"
     assert acrf["page_map"] == "acrf_pages.yaml"
+
+
+# ------------------------------------------------------------------ #
+# Optional-extra guards (fleet lsp / fleet mcp)                        #
+# ------------------------------------------------------------------ #
+
+
+class TestRequireExtra:
+    """`_require_extra` guards the dotted module the server really imports.
+
+    A distribution that is present but too old to expose that module has
+    to fail here, with the install hint, rather than as a bare
+    ModuleNotFoundError raised from inside the server.
+    """
+
+    def test_present_module_passes(self) -> None:
+        cli._require_extra("json.decoder", "lsp", "lsp")
+
+    def test_missing_distribution_names_the_extra(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
+        monkeypatch.setattr(cli.importlib.util, "find_spec", lambda name: None)
+
+        with pytest.raises(SystemExit) as exc:
+            cli._require_extra("pygls.lsp.server", "lsp", "lsp")
+
+        assert exc.value.code == 1
+        err = capsys.readouterr().err
+        assert "pygls is required for `fleet lsp`" in err
+        assert "uv pip install 'fleet-cdisc[lsp]'" in err
+
+    def test_too_old_distribution_reports_the_version_it_found(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    ) -> None:
+        """pygls 1.x has no ``pygls.lsp.server``; say so instead of importing it."""
+        monkeypatch.setattr(
+            cli.importlib.util,
+            "find_spec",
+            lambda name: None if "." in name else object(),
+        )
+        monkeypatch.setattr(cli, "_distribution_version", lambda dist: "1.3.1")
+
+        with pytest.raises(SystemExit):
+            cli._require_extra("pygls.lsp.server", "lsp", "lsp")
+
+        assert "found pygls 1.3.1" in capsys.readouterr().err
+
+    @pytest.mark.parametrize(
+        ("command", "module"),
+        [("lsp", "pygls.lsp.server"), ("mcp", "mcp.server.fastmcp")],
+    )
+    def test_guards_the_module_the_server_imports(self, command: str, module: str) -> None:
+        """The guard must track the real import, or it waves through a broken env."""
+        source = (Path(cli.__file__).parent / f"{command}_server.py").read_text(encoding="utf-8")
+
+        assert f"from {module} import" in source
