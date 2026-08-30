@@ -15,7 +15,7 @@ description: "Use when working with Fleet CLI commands, bootstrapping studies, C
 - **Define-XML:** `fleet define-xml` (also `--watch`)
 - **CT:** `fleet add-ct` (bootstraps or extends codelists.py); prefer the `fleet init` pipeline for full studies
 - **Rules:** `fleet add-rule`, `fleet check-rule`, `fleet install-engine`, `fleet uninstall-engine`, `fleet doctor`
-- **Tooling servers:** `fleet mcp --stdio`, `fleet lsp --stdio` (require the `mcp` / `lsp` extras)
+- **Tooling servers:** `fleet mcp --stdio`, `fleet lsp --stdio` (require the `mcp` / `lsp` extras). The VS Code client for `fleet lsp` lives in its own repository, `RealSlimMahdi/fleet-vscode` — Fleet owns only the Python side.
 - **Misc:** `fleet derivation`, `fleet --version`
 
 ## Conventions

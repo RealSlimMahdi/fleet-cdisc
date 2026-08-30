@@ -291,7 +291,7 @@ live — **[verified]** `fleet --help` lists 19 subcommands including `mcp` and 
 README also omits `new`, `add-acrf`, `check-rule`, `uninstall-engine`, `doctor`, and
 `derivation`.
 
-The LSP and MCP servers plus the `editors/vscode/` extension are among the most
+The LSP and MCP servers plus the VS Code extension are among the most
 differentiating things Fleet has for a pre-alpha announcement, and the README does not
 mention them once.
 
