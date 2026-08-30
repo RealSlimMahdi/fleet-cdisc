@@ -41,10 +41,17 @@ Datasets like ADVS have `inputs: [VS, ADSL]`. The LSP must:
 
 ### 1.4 Pin system in define.yaml
 
-The `pin:` pattern (cross-domain data access) is currently an inline Python verb, not representable in define.yaml. However, when a dataset's `inputs:` lists multiple datasets, the spec-driven executor uses that as its equivalent. The LSP should:
+The `pin:` pattern (cross-domain data access) **is** representable: `inputs:` declares
+the edge, and `merge` / `lookup` / `first_date` / `last_date` / `count_events` carry
+the join itself, resolving the pinned frame through a `convert="pin"` param. The LSP
+should:
 
 - Treat multiple `inputs:` as a semantic signal that cross-domain joins occur
+- Flag a `dataset:` / `from_dataset:` value that is not declared in the enclosing
+  dataset's `inputs:` — the same reconciliation `DependencyGraph.inject_lineage`
+  performs at runtime, moved to author time
 - Flag when a `source:` variable name exists only in a secondary input (not the primary), and annotate: _"Derived from input dataset [ADSL], not the primary input [VS]."_
+- Warn that a bare `on:` key is a YAML boolean and must be quoted (#87)
 
 ### 1.5 Codelist hover and completion
 
@@ -103,24 +110,66 @@ One-time cache per (standard, version) pair, stored in `.fleet/ig_cache/`. On ho
 
 ### 2b. "Convert to spec-driven" Code Action
 
-Three-pass approach:
+**Do not hand-maintain a representability table.** Fleet already computes one, and a
+test keeps it honest — `tests/unit/test_spec_parity.py` fails when a public verb is
+neither registered nor explicitly allowlisted:
+
+- `fleet.core.spec_registry.coverage_matrix()` — every spec algorithm with its target
+  verb, params and required params. **16 SDTM, 30 ADaM** as of 2026-08.
+- `fleet.core.spec_registry.SPEC_UNSUPPORTED` — the verbs that deliberately have no
+  spec form, each with the reason inline. **24 SDTM, 15 ADaM**.
+
+⚠️ **Know the limit of that guarantee.** The parity test parametrises over
+`SDTMNamespace` and `AdamNamespace` only, so the sub-namespaces reached through
+`df.adam.occds`, `.adsl`, `.tte`, `.onco`, `.pk`, … are outside it — **51 distinct
+verbs** with no spec story either way. `occds.treatment_emergent` is one: a real verb,
+absent from both the registry and `SPEC_UNSUPPORTED`. The code action must treat
+"not in either list" as *unknown*, not as *supported*.
+
+The code action must read both at runtime, exactly like the LSP reads the registry.
+
+**Cross-domain derivations are representable.** Five algorithms resolve a pinned
+dataset through a `convert="pin"` param — `_resolve_param` calls `ns._require_pin()`
+with the declared name, so the join is expressed entirely in YAML:
+
+| Standard | Algorithm | Dataset param | Join semantics |
+| -------- | ------------- | -------------- | -------------------------------- |
+| sdtm     | `merge`       | `dataset`      | `on`, `how`, `target_cols`       |
+| adam     | `lookup`      | `dataset`      | `on`, `how`, `target_cols`, `where` |
+| adam     | `first_date`  | `from_dataset` | `date_col`, `where`, `groups`    |
+| adam     | `last_date`   | `from_dataset` | `date_col`, `where`, `groups`    |
+| adam     | `count_events`| `from_dataset` | `date_col`, `where`, `groups`    |
+
+So `.pin("DM", dm).merge(...)` round-trips to an `inputs:` entry plus a `merge`
+derivation. `DependencyGraph.inject_lineage` already reconciles `pin()` against
+`inputs:` in both directions, warning on an undeclared pin and on a declared input
+nothing consumed — the two are one fact, not two.
+
+⚠️ Two live defects the code action must not paper over: `fleet run` never calls
+`.pin()`, so pin-consuming specs are unrunnable from the CLI (#86); and `on:` is a
+YAML 1.1 boolean, so the join key needs quoting (#87).
+
+**What genuinely has no spec form** is `SPEC_UNSUPPORTED`, and it falls into four
+kinds — worth knowing because the right fallback differs:
+
+| Kind | Examples | What the action should emit |
+| ---- | -------- | --------------------------- |
+| Pin sugar with a spec equivalent | `join_adsl`, `merge_adsl`, `study_day` | rewrite as `lookup` / `duration` — **not** a TODO |
+| Multi-column or frame-reshaping output | `criterion`, `derive_param`, `derive_summary_records`, `derive_locf_records` | `# NOTE: derive inline after from_spec()` — no single target to attach to |
+| Per-mode wrappers | `flag_first`, `flag_last`, `flag_extreme`, `flag_exists`, `flag_relative` | the underlying `flag` algorithm with the mode as a param (ADaM); inline on SDTM |
+| Not derivations at all | `keep`, `verbs`, `export_supp`, the `TrialDesignMixin` scaffolding | omit — these are pipeline plumbing, not variable derivations |
 
 **Pass 1 — AST parsing (instant, no I/O):**
 
-Walk the Python AST of the selected pipeline chain. For each verb call, extract keyword arguments:
-
-| Verb class                                | What AST gives you                       | define.yaml field                                                             |
-| ----------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------- |
-| `hardcode_no_ct`, `hardcode_ct`           | `value=` literal                         | `algorithm: hardcode_no_ct`, `value:` ✅                                      |
-| `assign_no_ct`, `assign_ct`, `assign_dtc` | `source=`, `ct_codelist=`, `ct_mapping=` | Full `derivation:` block ✅                                                   |
-| `date`                                    | `source=`, `impute=`, `output=`          | `algorithm: date` + params ✅                                                 |
-| `first_date`, `last_date`                 | `from_dataset=`, `date_col=`, `where=`   | `algorithm: derivation`, `expression: # TODO` ⚠️                              |
-| `baseline`, `chg`, `pchg`                 | `aval=`, `baseline_flag=`                | `algorithm: derivation`, `depends_on:` inferred ⚠️                            |
-| `derivation(expression=...)`              | expression string/expr object            | `algorithm: derivation`, `expression:` if string literal ✅ / stub if Expr ⚠️ |
-| `pin(...)` + any join verb                | nothing recoverable                      | `inputs:` entry suggested, join logic as `# TODO` ❌                          |
-| `treatment_emergent`, `seq`, `flag`       | verb name + args                         | `# TODO: not representable in spec` ❌                                        |
+Walk the Python AST of the selected pipeline chain. For each verb call, extract keyword arguments. `coverage_matrix()` gives the algorithm and its param names; the AST gives the values.
 
 `ct_codelist=SEX` → resolved to OID `C66731` via a local lookup of `codelists.py` in the project (no API call).
+
+**Prior art:** `spec_registry.derivation_from_lineage()` already turns a materialised
+`VariableNode` into an `(algorithm, block, extras)` triple. It works from **runtime
+lineage** rather than the AST, so it needs the pipeline to have run — but it is the
+same mapping problem, already solved once. Reuse it or mirror its logic rather than
+inventing a second one.
 
 **Pass 2 — CDISC Library API (one batch call per domain, cached):**
 
@@ -139,10 +188,11 @@ Fills the metadata fields that are invisible in code: `label`, `type`, `length`,
 
 - Variables with complete AST + IG metadata → full stanza, ready to use
 - Variables with partial derivation (complex verbs) → stanza with `# TODO: fill expression` inline
-- Variables not representable in spec (pin joins, treatment_emergent, seq) → full metadata stanza + `derivation:` block replaced with a prominently commented `# NOTE: derive inline after from_spec()`
+- Cross-domain joins (`pin` + `merge`/`lookup`/`first_date`/…) → an `inputs:` entry plus the full derivation. **These are representable; do not stub them.**
+- Variables in `SPEC_UNSUPPORTED` → full metadata stanza + `derivation:` replaced with a prominently commented `# NOTE: derive inline after from_spec()`
 - Order variables in output YAML to match the order they appear in the pipeline chain
 
-**Completeness note:** For a typical SDTM DM pipeline (~14 variables, mostly `assign_no_ct` / `assign_ct` / `hardcode_no_ct`), the action generates a fully-populated define.yaml stanza with zero manual edits. For ADAE or ADVS with event-level verbs and joins, expect 50–60% automation with clearly marked TODOs for the rest.
+**Completeness note:** For a typical SDTM DM pipeline (~14 variables, mostly `assign_no_ct` / `assign_ct` / `hardcode_no_ct`), the action generates a fully-populated define.yaml stanza with zero manual edits. Coverage for event-level datasets is higher than an earlier draft of this plan assumed, because cross-domain joins turned out to be expressible; the honest floor is whatever `SPEC_UNSUPPORTED` says at the time, so measure it rather than quoting a percentage.
 
 ### 2c. Reverse direction: define.yaml → skeleton inline pipeline
 
@@ -240,7 +290,7 @@ Drift detection on every Python file save:
 
 **"Push to spec" quick-fix:** Inserts a generated stanza into define.yaml at the correct position (after the last variable in the dataset block). Uses Pass 1 AST analysis + Pass 2 CDISC API (if key available).
 
-**Edge case:** Variables derived by `treatment_emergent`, `seq`, `flag` — these cannot be pushed to spec. The guardian marks them with a distinct icon: _"Inline-only derivation — spec representation not supported."_
+**Edge case:** Variables whose verb is in `SPEC_UNSUPPORTED` cannot be pushed to spec. Read that set at runtime rather than hardcoding names — `seq` and ADaM `flag` *are* registered algorithms, so a hardcoded list would wrongly refuse them (SDTM `flag` genuinely is not: the standards differ). Sub-namespace verbs such as `occds.treatment_emergent` are in neither list and should be reported as unknown rather than guessed. The guardian marks the genuine ones with a distinct icon: _"Inline-only derivation — spec representation not supported."_
 
 ### 4c. Test & Example Runner
 
