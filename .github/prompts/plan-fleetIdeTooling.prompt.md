@@ -122,9 +122,9 @@ neither registered nor explicitly allowlisted:
 ⚠️ **Know the limit of that guarantee.** The parity test parametrises over
 `SDTMNamespace` and `AdamNamespace` only, so the sub-namespaces reached through
 `df.adam.occds`, `.adsl`, `.tte`, `.onco`, `.pk`, … are outside it — **51 distinct
-verbs** with no spec story either way. `occds.treatment_emergent` is one: a real verb,
-absent from both the registry and `SPEC_UNSUPPORTED`. The code action must treat
-"not in either list" as *unknown*, not as *supported*.
+verbs** with no spec story either way (#89). `occds.treatment_emergent` is one: a real
+verb, absent from both the registry and `SPEC_UNSUPPORTED`. Until that closes, the code
+action must treat "not in either list" as *unknown*, not as *supported*.
 
 The code action must read both at runtime, exactly like the LSP reads the registry.
 
