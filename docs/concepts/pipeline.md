@@ -1,6 +1,6 @@
 # Namespace Pipeline Architecture
 
-When using Fleet, you have two primary ways to create datasets: **Code-driven** (writing Python pipelines manually) or **Spec-driven** (authoring a `define.yaml` and having Fleet write the pipelines for you).
+Fleet lets you write the same pipeline in two notations: **Code-driven** (chaining verbs in Python) or **Spec-driven** (declaring the same verbs in a `define.yaml` that Fleet executes for you). Verb names and argument names are identical in both, so a step can move between them.
 
 ## The Recommended Approach: Spec-First with Custom Extensions
 

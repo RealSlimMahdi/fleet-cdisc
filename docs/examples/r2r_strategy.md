@@ -334,7 +334,9 @@ Path("outputs/ae_r2r.html").write_text(html)
 
 ## R2R and Agentic Coding
 
-The R2R strategy is **purpose-built for AI agents**. Here's why:
+R2R was designed for a reviewable human workflow — one file, one reading order, one
+visible output. AI agents happen to need exactly the same things, which is why they
+do well with it:
 
 1. **Single-context reasoning** — The entire derivation fits in one file (and one
    prompt). An agent doesn't need to discover dependencies across a file tree.

@@ -6,6 +6,8 @@ Fleet adds chainable verb pipelines directly onto every Polars DataFrame so you 
 
 ## Rules for AI Agents
 
+Fleet optimises for workflow quality: one obvious path from raw data to submission artefact. That is why these rules exist and why they are narrow — following them keeps you on the path the library was designed around, which is the single biggest factor in getting a pipeline right on the first pass. When a rule seems to forbid a shortcut, the rule wins.
+
 1. **Fleet-first verb priority** — Always reach for a named Fleet verb (`duration`, `baseline`, `chg`, `treatment_emergent`, …) before falling back to a raw `derivation(expression=...)` call. Named verbs encode CDISC semantics, enforce correct argument names, and appear in Define-XML traceability. Use `derivation` only as a last resort for logic not yet covered by a typed verb.
 
 2. **Polars-only** — Fleet pipelines are built on Polars. Never introduce Pandas, NumPy array operations, or any other DataFrame library. All expressions must be `pl.Expr` objects or expression strings that Fleet will evaluate with `eval()`.

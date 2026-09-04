@@ -6,6 +6,8 @@ While traditional tools (like SAS or SQL) or general-purpose Python libraries (l
 
 Fleet solves this by extending [Polars](https://pola.rs/) with **chainable, domain-specific verbs**.
 
+The organising principle is workflow quality: one obvious path from raw data to submission artefact. Everything below — including how well Fleet works with AI coding assistants — falls out of that.
+
 ## The Fleet Advantage
 
 ### 1. Simplicity: Intent-Driven Syntax
@@ -56,7 +58,7 @@ When you call `.to_frame()`, Polars executes the pipeline in one pass, leveragin
 
 Fleet natively understands the `define.yaml` specification. You can define your metadata, controlled terminology, and derivation rules in a single, human-readable file.
 
-Fleet can read this YAML to automatically apply derivations, validate data, and generate CDISC-compliant `define.xml` exports, ensuring your documentation and your code are never out of sync. You can choose to be fully code-driven, fully spec-driven, or a hybrid of both.
+Fleet can read this YAML to automatically apply derivations, validate data, and generate CDISC-compliant `define.xml` exports, ensuring your documentation and your code are never out of sync. A spec entry and an inline call are the same step written two ways — `algorithm: chg` with `aval: AVAL` and `base: BASE` is `.chg("CHG", aval="AVAL", base="BASE")` — so you can be fully code-driven, fully spec-driven, or a hybrid, and move a step between the two without re-deriving it.
 
 ### 4. Flexibility: Built for Extension
 
@@ -64,16 +66,20 @@ Fleet comes with built-in namespaces for core SDTM (`df.sdtm`), ADaM BDS (`df.ad
 
 If you have proprietary study requirements, Fleet is designed to be easily extended with custom verbs using standard Polars expressions via the `.derivation()` method, or by subclassing the namespaces to add your own company-specific logic.
 
-### 5. AI-Native Architecture
+### 5. Predictability: AI-Native by Consequence
 
-Fleet was built with AI code generation in mind from day one. You can stop wrestling with niche SAS macros or fragmented statistical R packages that trip up modern Large Language Models (LLMs).
+Workflow quality is a promise to human reviewers first. For the same reasons, it is why Fleet works well with AI coding agents.
 
-- **Standardised Foundation:** Built entirely on Python and Polars, two of the most widely represented tools in LLM training data.
-- **Unified Package:** No need to juggle 10 different sub-packages. One import (`import fleet`) gives agents everything they need.
-- **Clear Intent-Driven API:** Because derivations are simple verbs (`.study_day()`, `.baseline()`), an AI code agent naturally scripts correct, readable pipelines with fewer token hallucinations.
-- **Tight AI Feedback Loops:** Fleet drastically accelerates the developer and agent feedback cycle. The `define.yaml` structure is validated through bundled JSON schemas, and CDISC core data validations output structured error arrays. This allows coding agents to course-correct immediately.
-- **Readable Specs:** The declarative, YAML-based approach limits token overhead and naturally reflects clinical data specification standards, making it the perfect bridge between LLMs and regulatory outputs.
-- **Built-in `llms.txt`:** Fleet natively provides structured AI context (like `llms.txt` and schemas) so your coding agents always know precisely how to write and validate Fleet pipelines.
+Coding assistants fail in the same places human newcomers fail. Point one at a codebase with a weak, ambiguous workflow — three ways to derive a baseline, macro names that don't say what they compute, errors that surface three steps later — and it produces plausible code with the wrong derivation. Point the same model at a codebase where the workflow is unambiguous and the search space collapses: the structure itself guides the agent toward the expected outcome, which is what actually raises the probability of a correct first pass.
+
+So Fleet is AI-native by consequence, not by bolt-on. Every property below started as a workflow decision:
+
+- **Standardised Foundation:** Built entirely on Python and Polars, two of the most widely represented tools in LLM training data — chosen because they are the ones your team already reads, not to please a model.
+- **Unified Package:** No need to juggle 10 different sub-packages. One import (`import fleet`) means there is one place to look, for a person and for an agent.
+- **Clear Intent-Driven API:** Because derivations are simple verbs (`.study_day()`, `.baseline()`), there is usually exactly one right way to express a step. That is what removes the guesswork — and with it, the hallucinations.
+- **Tight Feedback Loops:** The `define.yaml` structure is validated through bundled JSON schemas, and CDISC core data validations output structured error arrays. Fast, specific, machine-readable failures let a programmer *or* an agent course-correct immediately instead of compounding a wrong assumption.
+- **Readable Specs:** The declarative, YAML-based approach reflects clinical data specification standards, so the artefact a reviewer signs off on and the artefact a model reads are the same file.
+- **Built-in `llms.txt`:** Fleet ships structured context (`llms.txt`, JSON schemas, an MCP server, a `define.yaml` language server) so the workflow is legible to tooling, not just to people.
 
 ### 6. Native CDISC Library Integration
 

@@ -131,6 +131,11 @@ def _rules_section() -> str:
     return """\
 ## Rules for AI Agents
 
+Fleet optimises for workflow quality: one obvious path from raw data to submission artefact. \
+That is why these rules exist and why they are narrow — following them keeps you on the path \
+the library was designed around, which is the single biggest factor in getting a pipeline \
+right on the first pass. When a rule seems to forbid a shortcut, the rule wins.
+
 1. **Fleet-first verb priority** — Always reach for a named Fleet verb (`duration`, \
 `baseline`, `chg`, `treatment_emergent`, …) before falling back to a raw \
 `derivation(expression=...)` call. Named verbs encode CDISC semantics, enforce correct \

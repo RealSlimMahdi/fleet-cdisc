@@ -7,100 +7,254 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
       import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
-      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: "neutral",
+        securityLevel: "loose",
+      });
     </script>
     <style>
-      .seam { stroke-dasharray: 5 4; }
-      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .seam {
+        stroke-dasharray: 5 4;
+      }
+      .deep {
+        background: linear-gradient(135deg, #0f172a, #1e293b);
+      }
       .hatch {
         background-image: repeating-linear-gradient(
-          45deg, transparent, transparent 5px, rgba(15,23,42,.07) 5px, rgba(15,23,42,.07) 10px
+          45deg,
+          transparent,
+          transparent 5px,
+          rgba(15, 23, 42, 0.07) 5px,
+          rgba(15, 23, 42, 0.07) 10px
         );
       }
-      .label { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
-      pre.mermaid { background: transparent; }
+      .label {
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      pre.mermaid {
+        background: transparent;
+      }
     </style>
   </head>
   <body class="bg-stone-50 text-slate-900 antialiased">
     <main class="max-w-5xl mx-auto px-6 py-14 space-y-14">
-
       <!-- ─────────────────────────── header ─────────────────────────── -->
       <header class="space-y-6">
-        <div class="flex items-baseline justify-between border-b border-slate-300 pb-4">
-          <h1 class="font-serif text-4xl tracking-tight">Architecture review — Fleet</h1>
-          <span class="font-mono text-xs text-slate-500">2026-08-30 · branch <span class="text-slate-700">docs/plan-spec-representability</span></span>
+        <div
+          class="flex items-baseline justify-between border-b border-slate-300 pb-4"
+        >
+          <h1 class="font-serif text-4xl tracking-tight">
+            Architecture review — Fleet
+          </h1>
+          <span class="font-mono text-xs text-slate-500"
+            >2026-08-30 · branch
+            <span class="text-slate-700"
+              >docs/plan-spec-representability</span
+            ></span
+          >
         </div>
         <div class="flex flex-wrap gap-x-7 gap-y-2 label text-slate-500">
-          <span class="flex items-center gap-2"><span class="inline-block w-5 h-3 border border-slate-500"></span> module</span>
-          <span class="flex items-center gap-2"><svg width="22" height="8"><line class="seam" x1="0" y1="4" x2="22" y2="4" stroke="#475569" stroke-width="1.5"/></svg> seam</span>
-          <span class="flex items-center gap-2"><svg width="22" height="8"><line x1="0" y1="4" x2="22" y2="4" stroke="#dc2626" stroke-width="2"/></svg> leakage</span>
-          <span class="flex items-center gap-2"><span class="inline-block w-5 h-3 deep"></span> deep module</span>
-          <span class="flex items-center gap-2"><span class="inline-block w-5 h-3 bg-amber-200 border border-amber-400"></span> interface surface</span>
+          <span class="flex items-center gap-2"
+            ><span class="inline-block w-5 h-3 border border-slate-500"></span>
+            module</span
+          >
+          <span class="flex items-center gap-2"
+            ><svg width="22" height="8">
+              <line
+                class="seam"
+                x1="0"
+                y1="4"
+                x2="22"
+                y2="4"
+                stroke="#475569"
+                stroke-width="1.5"
+              />
+            </svg>
+            seam</span
+          >
+          <span class="flex items-center gap-2"
+            ><svg width="22" height="8">
+              <line
+                x1="0"
+                y1="4"
+                x2="22"
+                y2="4"
+                stroke="#dc2626"
+                stroke-width="2"
+              />
+            </svg>
+            leakage</span
+          >
+          <span class="flex items-center gap-2"
+            ><span class="inline-block w-5 h-3 deep"></span> deep module</span
+          >
+          <span class="flex items-center gap-2"
+            ><span
+              class="inline-block w-5 h-3 bg-amber-200 border border-amber-400"
+            ></span>
+            interface surface</span
+          >
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
-          <div class="border border-slate-200 bg-white p-3"><div class="text-2xl font-sans font-semibold">128</div><div class="text-slate-500 mt-1">distinct verb names an analyst can type</div></div>
-          <div class="border border-slate-200 bg-white p-3"><div class="text-2xl font-sans font-semibold">13.6</div><div class="text-slate-500 mt-1">avg kwargs forwarded per TLG dispatch</div></div>
-          <div class="border border-slate-200 bg-white p-3"><div class="text-2xl font-sans font-semibold">1,078</div><div class="text-slate-500 mt-1">lines inside 28 CLI command bodies</div></div>
-          <div class="border border-slate-200 bg-white p-3"><div class="text-2xl font-sans font-semibold">827</div><div class="text-slate-500 mt-1">lines of hand-kept registry entries</div></div>
+          <div class="border border-slate-200 bg-white p-3">
+            <div class="text-2xl font-sans font-semibold">128</div>
+            <div class="text-slate-500 mt-1">
+              distinct verb names an analyst can type
+            </div>
+          </div>
+          <div class="border border-slate-200 bg-white p-3">
+            <div class="text-2xl font-sans font-semibold">13.6</div>
+            <div class="text-slate-500 mt-1">
+              avg kwargs forwarded per TLG dispatch
+            </div>
+          </div>
+          <div class="border border-slate-200 bg-white p-3">
+            <div class="text-2xl font-sans font-semibold">1,078</div>
+            <div class="text-slate-500 mt-1">
+              lines inside 28 CLI command bodies
+            </div>
+          </div>
+          <div class="border border-slate-200 bg-white p-3">
+            <div class="text-2xl font-sans font-semibold">827</div>
+            <div class="text-slate-500 mt-1">
+              lines of hand-kept registry entries
+            </div>
+          </div>
         </div>
-        <div class="bg-sky-50 border border-sky-300 px-4 py-3 text-xs leading-relaxed text-sky-900">
-          <span class="label text-sky-800">Revised 2026-08-31</span> — two corrections since first generation, both verified against the working tree:
-          candidate 4's evidence quoted the wrong registry entry (the real one uses <span class="font-mono">default=</span>, not <span class="font-mono">required=True</span>);
-          candidate 3 conflated two problems that pull in opposite directions, and has been re-cut.
+        <div
+          class="bg-sky-50 border border-sky-300 px-4 py-3 text-xs leading-relaxed text-sky-900"
+        >
+          <span class="label text-sky-800">Revised 2026-08-31</span> — two
+          corrections since first generation, both verified against the working
+          tree: candidate 4's evidence quoted the wrong registry entry (the real
+          one uses <span class="font-mono">default=</span>, not
+          <span class="font-mono">required=True</span>); candidate 3 conflated
+          two problems that pull in opposite directions, and has been re-cut.
         </div>
       </header>
 
       <!-- ─────────────────────────── candidates ─────────────────────── -->
       <section id="candidates" class="space-y-12">
-
         <!-- ══════════════ 1 ══════════════ -->
         <article id="c1" class="border border-slate-200 bg-white shadow-sm">
           <div class="px-7 pt-7 pb-5 space-y-4">
             <div class="flex items-start justify-between gap-6">
-              <h2 class="font-serif text-2xl">1 · Collapse the TLG namespace modules onto the spec seam</h2>
+              <h2 class="font-serif text-2xl">
+                1 · Collapse the TLG namespace modules onto the spec seam
+              </h2>
               <div class="flex gap-2 shrink-0">
-                <span class="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-1 label">Strong</span>
-                <span class="bg-slate-100 text-slate-600 border border-slate-300 px-2 py-1 label">in-process</span>
+                <span
+                  class="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-1 label"
+                  >Strong</span
+                >
+                <span
+                  class="bg-slate-100 text-slate-600 border border-slate-300 px-2 py-1 label"
+                  >in-process</span
+                >
               </div>
             </div>
             <p class="font-mono text-xs text-slate-500 leading-relaxed">
-              src/fleet/tlg/{ae,lb,ds,eg,dm,cm,mh,ex,vs}_namespace.py · src/fleet/tlg/_ard.py · _specs.py · _registry.py
+              src/fleet/tlg/{ae,lb,ds,eg,dm,cm,mh,ex,vs}_namespace.py ·
+              src/fleet/tlg/_ard.py · _specs.py · _registry.py
             </p>
           </div>
 
-          <div class="grid md:grid-cols-2 gap-px bg-slate-200 border-y border-slate-200">
+          <div
+            class="grid md:grid-cols-2 gap-px bg-slate-200 border-y border-slate-200"
+          >
             <div class="bg-white p-6">
               <div class="label text-slate-400 mb-4">Before — shallow</div>
               <div class="space-y-2">
                 <div class="flex items-stretch gap-2">
-                  <div class="w-24 shrink-0 label text-slate-500 flex items-center">mh · 91 ln</div>
-                  <div class="flex-1 bg-amber-200 border border-amber-400 h-9 flex items-center px-2 label text-amber-900">interface · 14 kwargs</div>
-                  <div class="w-10 bg-slate-100 border border-slate-300 h-9"></div>
+                  <div
+                    class="w-24 shrink-0 label text-slate-500 flex items-center"
+                  >
+                    mh · 91 ln
+                  </div>
+                  <div
+                    class="flex-1 bg-amber-200 border border-amber-400 h-9 flex items-center px-2 label text-amber-900"
+                  >
+                    interface · 14 kwargs
+                  </div>
+                  <div
+                    class="w-10 bg-slate-100 border border-slate-300 h-9"
+                  ></div>
                 </div>
                 <div class="flex items-stretch gap-2">
-                  <div class="w-24 shrink-0 label text-slate-500 flex items-center">vs · 127 ln</div>
-                  <div class="flex-1 bg-amber-200 border border-amber-400 h-9 flex items-center px-2 label text-amber-900">interface · 14 kwargs</div>
-                  <div class="w-10 bg-slate-100 border border-slate-300 h-9"></div>
+                  <div
+                    class="w-24 shrink-0 label text-slate-500 flex items-center"
+                  >
+                    vs · 127 ln
+                  </div>
+                  <div
+                    class="flex-1 bg-amber-200 border border-amber-400 h-9 flex items-center px-2 label text-amber-900"
+                  >
+                    interface · 14 kwargs
+                  </div>
+                  <div
+                    class="w-10 bg-slate-100 border border-slate-300 h-9"
+                  ></div>
                 </div>
                 <div class="flex items-stretch gap-2">
-                  <div class="w-24 shrink-0 label text-slate-500 flex items-center">ex · 189 ln</div>
-                  <div class="flex-1 bg-amber-200 border border-amber-400 h-9 flex items-center px-2 label text-amber-900">interface · 13 kwargs</div>
-                  <div class="w-10 bg-slate-100 border border-slate-300 h-9"></div>
+                  <div
+                    class="w-24 shrink-0 label text-slate-500 flex items-center"
+                  >
+                    ex · 189 ln
+                  </div>
+                  <div
+                    class="flex-1 bg-amber-200 border border-amber-400 h-9 flex items-center px-2 label text-amber-900"
+                  >
+                    interface · 13 kwargs
+                  </div>
+                  <div
+                    class="w-10 bg-slate-100 border border-slate-300 h-9"
+                  ></div>
                 </div>
                 <div class="flex items-stretch gap-2">
-                  <div class="w-24 shrink-0 label text-slate-500 flex items-center">cm · 223 ln</div>
-                  <div class="flex-1 bg-amber-200 border border-amber-400 h-9 flex items-center px-2 label text-amber-900">interface · 14 kwargs</div>
-                  <div class="w-10 bg-slate-100 border border-slate-300 h-9"></div>
+                  <div
+                    class="w-24 shrink-0 label text-slate-500 flex items-center"
+                  >
+                    cm · 223 ln
+                  </div>
+                  <div
+                    class="flex-1 bg-amber-200 border border-amber-400 h-9 flex items-center px-2 label text-amber-900"
+                  >
+                    interface · 14 kwargs
+                  </div>
+                  <div
+                    class="w-10 bg-slate-100 border border-slate-300 h-9"
+                  ></div>
                 </div>
-                <div class="flex gap-2"><div class="w-24"></div><div class="flex-1 text-center text-slate-400 text-lg leading-none">⋮</div></div>
+                <div class="flex gap-2">
+                  <div class="w-24"></div>
+                  <div
+                    class="flex-1 text-center text-slate-400 text-lg leading-none"
+                  >
+                    ⋮
+                  </div>
+                </div>
                 <div class="flex items-stretch gap-2">
-                  <div class="w-24 shrink-0 label text-slate-500 flex items-center">ae · 590 ln</div>
-                  <div class="flex-1 bg-amber-200 border border-amber-400 h-9 flex items-center px-2 label text-amber-900">interface · 14 kwargs ×6</div>
-                  <div class="w-10 bg-slate-100 border border-slate-300 h-9"></div>
+                  <div
+                    class="w-24 shrink-0 label text-slate-500 flex items-center"
+                  >
+                    ae · 590 ln
+                  </div>
+                  <div
+                    class="flex-1 bg-amber-200 border border-amber-400 h-9 flex items-center px-2 label text-amber-900"
+                  >
+                    interface · 14 kwargs ×6
+                  </div>
+                  <div
+                    class="w-10 bg-slate-100 border border-slate-300 h-9"
+                  ></div>
                 </div>
               </div>
               <p class="mt-5 text-xs text-slate-500 leading-relaxed">
-                21 dispatch sites · 8 distinct kwarg sets · the amber interface bar is nearly the whole module.
+                21 dispatch sites · 8 distinct kwarg sets · the amber interface
+                bar is nearly the whole module.
               </p>
             </div>
 
@@ -108,28 +262,57 @@
               <div class="label text-slate-400 mb-4">After — deep</div>
               <div class="space-y-2">
                 <div class="flex items-stretch gap-2">
-                  <div class="w-24 shrink-0 label text-slate-500 flex items-center">mh</div>
-                  <div class="w-20 bg-amber-200 border border-amber-400 h-6 flex items-center px-2 label text-amber-900">spec</div>
+                  <div
+                    class="w-24 shrink-0 label text-slate-500 flex items-center"
+                  >
+                    mh
+                  </div>
+                  <div
+                    class="w-20 bg-amber-200 border border-amber-400 h-6 flex items-center px-2 label text-amber-900"
+                  >
+                    spec
+                  </div>
                   <div class="flex-1 hatch border border-slate-200 h-6"></div>
                 </div>
                 <div class="flex items-stretch gap-2">
-                  <div class="w-24 shrink-0 label text-slate-500 flex items-center">vs</div>
-                  <div class="w-20 bg-amber-200 border border-amber-400 h-6 flex items-center px-2 label text-amber-900">spec</div>
+                  <div
+                    class="w-24 shrink-0 label text-slate-500 flex items-center"
+                  >
+                    vs
+                  </div>
+                  <div
+                    class="w-20 bg-amber-200 border border-amber-400 h-6 flex items-center px-2 label text-amber-900"
+                  >
+                    spec
+                  </div>
                   <div class="flex-1 hatch border border-slate-200 h-6"></div>
                 </div>
                 <div class="flex items-stretch gap-2">
-                  <div class="w-24 shrink-0 label text-slate-500 flex items-center">ex · cm · ae …</div>
-                  <div class="w-20 bg-amber-200 border border-amber-400 h-6 flex items-center px-2 label text-amber-900">spec</div>
+                  <div
+                    class="w-24 shrink-0 label text-slate-500 flex items-center"
+                  >
+                    ex · cm · ae …
+                  </div>
+                  <div
+                    class="w-20 bg-amber-200 border border-amber-400 h-6 flex items-center px-2 label text-amber-900"
+                  >
+                    spec
+                  </div>
                   <div class="flex-1 hatch border border-slate-200 h-6"></div>
                 </div>
               </div>
-              <div class="mt-6 deep text-stone-100 p-5 border-4 border-slate-900">
+              <div
+                class="mt-6 deep text-stone-100 p-5 border-4 border-slate-900"
+              >
                 <div class="label text-slate-400">summarize_ard · _ard.py</div>
-                <div class="mt-2 font-mono text-sm">summarize_ard(df, spec, *, groupby, adsl)</div>
+                <div class="mt-2 font-mono text-sm">
+                  summarize_ard(df, spec, *, groupby, adsl)
+                </div>
                 <div class="mt-3 text-xs text-slate-400 leading-relaxed">
-                  The 14-argument contract stops being restated 21 times. Prefilters
-                  (<span class="font-mono">fill_uncoded</span>, the <span class="font-mono">ABLFL</span> guard)
-                  become spec fields instead of method bodies.
+                  The 14-argument contract stops being restated 21 times.
+                  Prefilters (<span class="font-mono">fill_uncoded</span>, the
+                  <span class="font-mono">ABLFL</span> guard) become spec fields
+                  instead of method bodies.
                 </div>
               </div>
             </div>
@@ -139,20 +322,38 @@
             <div class="space-y-4">
               <div>
                 <div class="label text-slate-400 mb-1">Problem</div>
-                <p class="text-sm leading-relaxed">24 public methods over 9 modules and 2,863 lines forward 13.6 keyword arguments each into one engine, in only 8 distinct shapes.</p>
+                <p class="text-sm leading-relaxed">
+                  24 public methods over 9 modules and 2,863 lines forward 13.6
+                  keyword arguments each into one engine, in only 8 distinct
+                  shapes.
+                </p>
               </div>
               <div>
                 <div class="label text-slate-400 mb-1">Solution</div>
-                <p class="text-sm leading-relaxed">The spec already holds every one of those arguments. Pass the spec, not its fields; each method names its spec class and hands over <span class="font-mono text-xs">groupby</span> and <span class="font-mono text-xs">adsl</span>.</p>
+                <p class="text-sm leading-relaxed">
+                  The spec already holds every one of those arguments. Pass the
+                  spec, not its fields; each method names its spec class and
+                  hands over <span class="font-mono text-xs">groupby</span> and
+                  <span class="font-mono text-xs">adsl</span>.
+                </p>
               </div>
               <div>
                 <div class="label text-slate-400 mb-1">Deletion test</div>
-                <p class="text-sm leading-relaxed">Delete <span class="font-mono text-xs">mh_namespace.py</span>: the SOC→PT row definition concentrates into <span class="font-mono text-xs">_specs.py</span>. Concentrates.</p>
+                <p class="text-sm leading-relaxed">
+                  Delete <span class="font-mono text-xs">mh_namespace.py</span>:
+                  the SOC→PT row definition concentrates into
+                  <span class="font-mono text-xs">_specs.py</span>.
+                  Concentrates.
+                </p>
               </div>
             </div>
             <div>
-              <div class="label text-slate-400 mb-2">Evidence — mh_namespace.py L63-81</div>
-              <pre class="bg-slate-900 text-slate-200 text-[11px] leading-snug p-4 overflow-x-auto"><code>spec = spec or MHSummarySpec()
+              <div class="label text-slate-400 mb-2">
+                Evidence — mh_namespace.py L63-81
+              </div>
+              <pre
+                class="bg-slate-900 text-slate-200 text-[11px] leading-snug p-4 overflow-x-auto"
+              ><code>spec = spec or MHSummarySpec()
 group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
 spec.validate_dataframe(self._df, group_col=group_col)
 return summarize_ard(
@@ -167,10 +368,22 @@ return summarize_ard(
     decimals=spec.decimals,
 )</code></pre>
               <ul class="mt-4 space-y-1 text-sm">
-                <li class="flex gap-2"><span class="text-emerald-600">▸</span> interface: 14 kwargs → 3</li>
-                <li class="flex gap-2"><span class="text-emerald-600">▸</span> locality: engine contract in one module</li>
-                <li class="flex gap-2"><span class="text-emerald-600">▸</span> new template: one spec + one registry entry</li>
-                <li class="flex gap-2"><span class="text-emerald-600">▸</span> prefilters stop hiding in method bodies</li>
+                <li class="flex gap-2">
+                  <span class="text-emerald-600">▸</span> interface: 14 kwargs →
+                  3
+                </li>
+                <li class="flex gap-2">
+                  <span class="text-emerald-600">▸</span> locality: engine
+                  contract in one module
+                </li>
+                <li class="flex gap-2">
+                  <span class="text-emerald-600">▸</span> new template: one spec
+                  + one registry entry
+                </li>
+                <li class="flex gap-2">
+                  <span class="text-emerald-600">▸</span> prefilters stop hiding
+                  in method bodies
+                </li>
               </ul>
             </div>
           </div>
@@ -180,20 +393,34 @@ return summarize_ard(
         <article id="c2" class="border-2 border-slate-900 bg-white shadow-sm">
           <div class="px-7 pt-7 pb-5 space-y-4">
             <div class="flex items-start justify-between gap-6">
-              <h2 class="font-serif text-2xl">2 · A study-run module behind <span class="font-mono text-xl">fleet run</span></h2>
+              <h2 class="font-serif text-2xl">
+                2 · A study-run module behind
+                <span class="font-mono text-xl">fleet run</span>
+              </h2>
               <div class="flex gap-2 shrink-0">
-                <span class="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-1 label">Strong</span>
-                <span class="bg-slate-100 text-slate-600 border border-slate-300 px-2 py-1 label">ports &amp; adapters</span>
+                <span
+                  class="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-1 label"
+                  >Strong</span
+                >
+                <span
+                  class="bg-slate-100 text-slate-600 border border-slate-300 px-2 py-1 label"
+                  >ports &amp; adapters</span
+                >
               </div>
             </div>
             <p class="font-mono text-xs text-slate-500 leading-relaxed">
-              src/fleet/cli.py L763-900 (_load_run_input · _compose_run_frame · _run_run) · src/fleet/mcp_server.py L215
+              src/fleet/cli.py L763-900 (_load_run_input · _compose_run_frame ·
+              _run_run) · src/fleet/mcp_server.py L215
             </p>
           </div>
 
-          <div class="grid md:grid-cols-2 gap-px bg-slate-200 border-y border-slate-200">
+          <div
+            class="grid md:grid-cols-2 gap-px bg-slate-200 border-y border-slate-200"
+          >
             <div class="bg-white p-5">
-              <div class="label text-slate-400 mb-3">Before — the algorithm is inside a command handler</div>
+              <div class="label text-slate-400 mb-3">
+                Before — the algorithm is inside a command handler
+              </div>
               <pre class="mermaid">
 flowchart TB
   CLI["fleet run · argparse.Namespace"]
@@ -210,7 +437,9 @@ flowchart TB
               </pre>
             </div>
             <div class="bg-white p-5">
-              <div class="label text-slate-400 mb-3">After — one interface, three adapters</div>
+              <div class="label text-slate-400 mb-3">
+                After — one interface, three adapters
+              </div>
               <pre class="mermaid">
 flowchart TB
   RUN["run_study(ctx, datasets=None, strict=False)<br/>→ Iterator[DatasetResult]"]
@@ -228,20 +457,44 @@ flowchart TB
             <div class="space-y-4">
               <div>
                 <div class="label text-slate-400 mb-1">Problem</div>
-                <p class="text-sm leading-relaxed">The only implementation of “execute a study” — read both defines, compose each dataset’s inputs, left-join the declared ADSL columns, carry built frames forward, write — is reachable only through an <span class="font-mono text-xs">argparse.Namespace</span>. Fleet’s philosophy is that the Python surface is the product; this algorithm is not on it.</p>
+                <p class="text-sm leading-relaxed">
+                  The only implementation of “execute a study” — read both
+                  defines, compose each dataset’s inputs, left-join the declared
+                  ADSL columns, carry built frames forward, write — is reachable
+                  only through an
+                  <span class="font-mono text-xs">argparse.Namespace</span>.
+                  Fleet’s philosophy is that the Python surface is the product;
+                  this algorithm is not on it.
+                </p>
               </div>
               <div>
                 <div class="label text-slate-400 mb-1">Solution</div>
-                <p class="text-sm leading-relaxed">Lift it into a module that takes a <span class="font-mono text-xs">StudyContext</span> and yields per-dataset results. <span class="font-mono text-xs">cli.py</span> keeps the printing and the exit codes and nothing else.</p>
+                <p class="text-sm leading-relaxed">
+                  Lift it into a module that takes a
+                  <span class="font-mono text-xs">StudyContext</span> and yields
+                  per-dataset results.
+                  <span class="font-mono text-xs">cli.py</span> keeps the
+                  printing and the exit codes and nothing else.
+                </p>
               </div>
               <div class="bg-amber-50 border border-amber-300 px-4 py-3">
                 <div class="label text-amber-800 mb-1">Touches ADR-0001</div>
-                <p class="text-xs leading-relaxed text-amber-900">ADR-0001 leaves <span class="font-mono">mcp_server.py</span> alone because it reaches into <span class="font-mono">fleet.cli</span>. It does not contradict this candidate — it names the missing module that would let that reach stop. No re-litigation needed.</p>
+                <p class="text-xs leading-relaxed text-amber-900">
+                  ADR-0001 leaves
+                  <span class="font-mono">mcp_server.py</span> alone because it
+                  reaches into <span class="font-mono">fleet.cli</span>. It does
+                  not contradict this candidate — it names the missing module
+                  that would let that reach stop. No re-litigation needed.
+                </p>
               </div>
             </div>
             <div>
-              <div class="label text-slate-400 mb-2">Evidence — the leak is already live</div>
-              <pre class="bg-slate-900 text-slate-200 text-[11px] leading-snug p-4 overflow-x-auto"><code># src/fleet/mcp_server.py:215
+              <div class="label text-slate-400 mb-2">
+                Evidence — the leak is already live
+              </div>
+              <pre
+                class="bg-slate-900 text-slate-200 text-[11px] leading-snug p-4 overflow-x-auto"
+              ><code># src/fleet/mcp_server.py:215
 from fleet.cli import _GROUPBY_CANDIDATES
 
 # src/fleet/cli.py:880 — the whole study-run algorithm
@@ -254,11 +507,26 @@ result = (
 )
 built[name] = result</code></pre>
               <ul class="mt-4 space-y-1 text-sm">
-                <li class="flex gap-2"><span class="text-emerald-600">▸</span> leverage: one interface, three adapters</li>
-                <li class="flex gap-2"><span class="text-emerald-600">▸</span> the interface becomes the test surface</li>
-                <li class="flex gap-2"><span class="text-emerald-600">▸</span> mcp_server stops importing cli internals</li>
-                <li class="flex gap-2"><span class="text-emerald-600">▸</span> notebook users can run a study</li>
-                <li class="flex gap-2"><span class="text-emerald-600">▸</span> 1,078 lines of command bodies start shrinking</li>
+                <li class="flex gap-2">
+                  <span class="text-emerald-600">▸</span> leverage: one
+                  interface, three adapters
+                </li>
+                <li class="flex gap-2">
+                  <span class="text-emerald-600">▸</span> the interface becomes
+                  the test surface
+                </li>
+                <li class="flex gap-2">
+                  <span class="text-emerald-600">▸</span> mcp_server stops
+                  importing cli internals
+                </li>
+                <li class="flex gap-2">
+                  <span class="text-emerald-600">▸</span> notebook users can run
+                  a study
+                </li>
+                <li class="flex gap-2">
+                  <span class="text-emerald-600">▸</span> 1,078 lines of command
+                  bodies start shrinking
+                </li>
               </ul>
             </div>
           </div>
@@ -268,56 +536,143 @@ built[name] = result</code></pre>
         <article id="c3" class="border border-slate-200 bg-white shadow-sm">
           <div class="px-7 pt-7 pb-5 space-y-4">
             <div class="flex items-start justify-between gap-6">
-              <h2 class="font-serif text-2xl">3 · Two problems wearing one costume: the therapeutic-area surface</h2>
+              <h2 class="font-serif text-2xl">
+                3 · Two problems wearing one costume: the therapeutic-area
+                surface
+              </h2>
               <div class="flex gap-2 shrink-0">
-                <span class="bg-slate-200 text-slate-700 border border-slate-400 px-2 py-1 label">Speculative</span>
-                <span class="bg-slate-100 text-slate-600 border border-slate-300 px-2 py-1 label">needs grilling</span>
+                <span
+                  class="bg-slate-200 text-slate-700 border border-slate-400 px-2 py-1 label"
+                  >Speculative</span
+                >
+                <span
+                  class="bg-slate-100 text-slate-600 border border-slate-300 px-2 py-1 label"
+                  >needs grilling</span
+                >
               </div>
             </div>
             <p class="font-mono text-xs text-slate-500 leading-relaxed">
-              src/fleet/adam/{onco,ophtha,peds,vaccine,metabolic,neuro}_namespace.py · core/_verb_mixin.py L1006 verbs() · tools/migrate.py L58
+              src/fleet/adam/{onco,ophtha,peds,vaccine,metabolic,neuro}_namespace.py
+              · core/_verb_mixin.py L1006 verbs() · tools/migrate.py L58
             </p>
           </div>
 
           <!-- the arithmetic trap -->
           <div class="border-y border-slate-200 bg-white p-7">
-            <div class="label text-slate-400 mb-5">The arithmetic that separates the two problems</div>
+            <div class="label text-slate-400 mb-5">
+              The arithmetic that separates the two problems
+            </div>
             <div class="grid md:grid-cols-3 gap-5 items-center">
               <div class="border border-slate-300 p-4">
                 <div class="label text-slate-400 mb-2">today</div>
                 <div class="flex items-end gap-1 h-28">
-                  <div class="flex-1 bg-slate-300" style="height:100%"></div>
-                  <div class="w-6 bg-emerald-500" style="height:9%"></div>
+                  <div class="flex-1 bg-slate-300" style="height: 100%"></div>
+                  <div class="w-6 bg-emerald-500" style="height: 9%"></div>
                 </div>
-                <div class="mt-3 text-xs"><span class="font-semibold">45</span> completions<br/><span class="text-emerald-700 font-semibold">4</span> are metabolic</div>
+                <div class="mt-3 text-xs">
+                  <span class="font-semibold">45</span> completions<br /><span
+                    class="text-emerald-700 font-semibold"
+                    >4</span
+                  >
+                  are metabolic
+                </div>
               </div>
               <div class="text-center">
-                <div class="label text-red-600 mb-2">delete the 4 weak verbs</div>
-                <svg width="100%" height="34" viewBox="0 0 120 34"><line x1="4" y1="17" x2="108" y2="17" stroke="#dc2626" stroke-width="1.5"/><path d="M108 17 L100 12 L100 22 Z" fill="#dc2626"/></svg>
-                <div class="text-xs text-slate-500 mt-1 leading-relaxed">the shared verbs are what fill the list, and they are load-bearing</div>
+                <div class="label text-red-600 mb-2">
+                  delete the 4 weak verbs
+                </div>
+                <svg width="100%" height="34" viewBox="0 0 120 34">
+                  <line
+                    x1="4"
+                    y1="17"
+                    x2="108"
+                    y2="17"
+                    stroke="#dc2626"
+                    stroke-width="1.5"
+                  />
+                  <path d="M108 17 L100 12 L100 22 Z" fill="#dc2626" />
+                </svg>
+                <div class="text-xs text-slate-500 mt-1 leading-relaxed">
+                  the shared verbs are what fill the list, and they are
+                  load-bearing
+                </div>
               </div>
               <div class="border-2 border-red-400 p-4 bg-red-50/40">
                 <div class="label text-red-600 mb-2">worse</div>
                 <div class="flex items-end gap-1 h-28">
-                  <div class="flex-1 bg-slate-300" style="height:100%"></div>
+                  <div class="flex-1 bg-slate-300" style="height: 100%"></div>
                 </div>
-                <div class="mt-3 text-xs"><span class="font-semibold">41</span> completions<br/><span class="text-red-700 font-semibold">0</span> are metabolic</div>
+                <div class="mt-3 text-xs">
+                  <span class="font-semibold">41</span> completions<br /><span
+                    class="text-red-700 font-semibold"
+                    >0</span
+                  >
+                  are metabolic
+                </div>
               </div>
             </div>
 
             <div class="grid md:grid-cols-2 gap-5 mt-8">
               <div class="border-l-4 border-slate-700 bg-slate-50 p-4">
-                <div class="label text-slate-500 mb-2">Problem A — discovery</div>
-                <p class="text-sm leading-relaxed">41 inherited verbs drown 4 domain verbs. <strong>Cannot be fixed by deleting anything</strong>: the chain needs <span class="font-mono text-xs">.derivation()</span>, <span class="font-mono text-xs">.pin()</span>, <span class="font-mono text-xs">.to_frame()</span> to still be there after a TA verb.</p>
-                <p class="text-xs text-slate-500 mt-3 leading-relaxed"><strong>Dead end:</strong> overriding <span class="font-mono">__dir__</span> won’t help — Pylance builds completions statically and never calls it at runtime.</p>
-                <p class="text-xs text-slate-600 mt-3 leading-relaxed"><strong>Live option:</strong> <span class="font-mono">verbs()</span> already exists as a discovery module returning a frame of verb + summary, and already filters through <span class="font-mono">_VERBS_EXCLUDE</span>. The open question is whether discovery is <em>supposed</em> to happen in autocomplete at all.</p>
+                <div class="label text-slate-500 mb-2">
+                  Problem A — discovery
+                </div>
+                <p class="text-sm leading-relaxed">
+                  41 inherited verbs drown 4 domain verbs.
+                  <strong>Cannot be fixed by deleting anything</strong>: the
+                  chain needs
+                  <span class="font-mono text-xs">.derivation()</span>,
+                  <span class="font-mono text-xs">.pin()</span>,
+                  <span class="font-mono text-xs">.to_frame()</span> to still be
+                  there after a TA verb.
+                </p>
+                <p class="text-xs text-slate-500 mt-3 leading-relaxed">
+                  <strong>Dead end:</strong> overriding
+                  <span class="font-mono">__dir__</span> won’t help — Pylance
+                  builds completions statically and never calls it at runtime.
+                </p>
+                <p class="text-xs text-slate-600 mt-3 leading-relaxed">
+                  <strong>Live option:</strong>
+                  <span class="font-mono">verbs()</span> already exists as a
+                  discovery module returning a frame of verb + summary, and
+                  already filters through
+                  <span class="font-mono">_VERBS_EXCLUDE</span>. The open
+                  question is whether discovery is <em>supposed</em> to happen
+                  in autocomplete at all.
+                </p>
               </div>
               <div class="border-l-4 border-slate-700 bg-slate-50 p-4">
-                <div class="label text-slate-500 mb-2">Problem B — admission</div>
-                <p class="text-sm leading-relaxed">No stated bar for what earns a verb. The test: <em>if I delete this, does a user get the wrong answer, or just type more?</em></p>
+                <div class="label text-slate-500 mb-2">
+                  Problem B — admission
+                </div>
+                <p class="text-sm leading-relaxed">
+                  No stated bar for what earns a verb. The test:
+                  <em
+                    >if I delete this, does a user get the wrong answer, or just
+                    type more?</em
+                  >
+                </p>
                 <div class="mt-3 space-y-2">
-                  <div class="text-xs bg-red-50 border border-red-200 p-2 leading-relaxed"><span class="font-mono font-semibold">metabolic.waist_hip_ratio</span> → <span class="font-mono">waist / hip</span>, rounded. Types more. <strong>Didn’t earn it.</strong></div>
-                  <div class="text-xs bg-emerald-50 border border-emerald-200 p-2 leading-relaxed"><span class="font-mono font-semibold">vaccine.seroconversion_flag</span> → the <span class="font-mono">4.0</span> is the WHO threshold, the <span class="font-mono">!= 0</span> is a divide-by-zero trap. Wrong answer. <strong>Earned it.</strong></div>
+                  <div
+                    class="text-xs bg-red-50 border border-red-200 p-2 leading-relaxed"
+                  >
+                    <span class="font-mono font-semibold"
+                      >metabolic.waist_hip_ratio</span
+                    >
+                    → <span class="font-mono">waist / hip</span>, rounded. Types
+                    more. <strong>Didn’t earn it.</strong>
+                  </div>
+                  <div
+                    class="text-xs bg-emerald-50 border border-emerald-200 p-2 leading-relaxed"
+                  >
+                    <span class="font-mono font-semibold"
+                      >vaccine.seroconversion_flag</span
+                    >
+                    → the <span class="font-mono">4.0</span> is the WHO
+                    threshold, the <span class="font-mono">!= 0</span> is a
+                    divide-by-zero trap. Wrong answer.
+                    <strong>Earned it.</strong>
+                  </div>
                 </div>
               </div>
             </div>
@@ -326,8 +681,12 @@ built[name] = result</code></pre>
           <div class="px-7 py-6 grid md:grid-cols-2 gap-7">
             <div class="space-y-4">
               <div>
-                <div class="label text-slate-400 mb-1">Precedent — this has been done before</div>
-                <pre class="bg-slate-900 text-slate-200 text-[11px] leading-snug p-4 overflow-x-auto"><code># src/fleet/tools/migrate.py:58
+                <div class="label text-slate-400 mb-1">
+                  Precedent — this has been done before
+                </div>
+                <pre
+                  class="bg-slate-900 text-slate-200 text-[11px] leading-snug p-4 overflow-x-auto"
+                ><code># src/fleet/tools/migrate.py:58
 VERB_RENAMES = {
     "assign_no_ct": "assign",   "assign_ct": "assign",
     "hardcode_no_ct": "assign", "hardcode_ct": "assign",
@@ -336,21 +695,53 @@ VERB_RENAMES = {
     "condderivation": "case_when",
     "lookup": "merge",
 }</code></pre>
-                <p class="text-xs text-slate-500 mt-2 leading-relaxed">Six verbs became <span class="font-mono">assign</span>, and a libcst codemod rewrote users’ pipelines. “You can’t remove a verb in a regulated industry” already has an answer in this repo.</p>
+                <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+                  Six verbs became <span class="font-mono">assign</span>, and a
+                  libcst codemod rewrote users’ pipelines. “You can’t remove a
+                  verb in a regulated industry” already has an answer in this
+                  repo.
+                </p>
               </div>
             </div>
             <div class="space-y-4">
               <div>
-                <div class="label text-slate-400 mb-1">Proposal — three parts, only one is cheap</div>
-                <ol class="text-sm space-y-2 list-decimal list-inside leading-relaxed">
-                  <li><strong>Write the admission bar down.</strong> Applies forwards only. Costs nothing, stops the surface growing.</li>
-                  <li><strong>Decide what <span class="font-mono text-xs">verbs()</span> is for.</strong> If it’s the discovery seam, make it namespace-aware and point the docs at it. If not, interface width is a constraint you accept.</li>
-                  <li><strong>Leave existing verbs alone.</strong> Revisit under the migrate precedent only if the surface keeps growing.</li>
+                <div class="label text-slate-400 mb-1">
+                  Proposal — three parts, only one is cheap
+                </div>
+                <ol
+                  class="text-sm space-y-2 list-decimal list-inside leading-relaxed"
+                >
+                  <li>
+                    <strong>Write the admission bar down.</strong> Applies
+                    forwards only. Costs nothing, stops the surface growing.
+                  </li>
+                  <li>
+                    <strong
+                      >Decide what
+                      <span class="font-mono text-xs">verbs()</span> is
+                      for.</strong
+                    >
+                    If it’s the discovery seam, make it namespace-aware and
+                    point the docs at it. If not, interface width is a
+                    constraint you accept.
+                  </li>
+                  <li>
+                    <strong>Leave existing verbs alone.</strong> Revisit under
+                    the migrate precedent only if the surface keeps growing.
+                  </li>
                 </ol>
               </div>
               <div>
-                <div class="label text-slate-400 mb-1">Confirmed non-problem</div>
-                <p class="text-sm leading-relaxed"><span class="font-mono text-xs">_sub_namespace</span> passes <span class="font-mono text-xs">_lazy</span> through unchanged and copies pins, pin lineage, variable lineage, pending FK checks and domain. The property hop does <em>not</em> materialise and drops no state.</p>
+                <div class="label text-slate-400 mb-1">
+                  Confirmed non-problem
+                </div>
+                <p class="text-sm leading-relaxed">
+                  <span class="font-mono text-xs">_sub_namespace</span> passes
+                  <span class="font-mono text-xs">_lazy</span> through unchanged
+                  and copies pins, pin lineage, variable lineage, pending FK
+                  checks and domain. The property hop does
+                  <em>not</em> materialise and drops no state.
+                </p>
               </div>
             </div>
           </div>
@@ -360,41 +751,106 @@ VERB_RENAMES = {
         <article id="c4" class="border border-slate-200 bg-white shadow-sm">
           <div class="px-7 pt-7 pb-5 space-y-4">
             <div class="flex items-start justify-between gap-6">
-              <h2 class="font-serif text-2xl">4 · Derive spec parameters from the verb signature</h2>
+              <h2 class="font-serif text-2xl">
+                4 · Derive spec parameters from the verb signature
+              </h2>
               <div class="flex gap-2 shrink-0">
-                <span class="bg-amber-100 text-amber-800 border border-amber-300 px-2 py-1 label">Worth exploring</span>
-                <span class="bg-slate-100 text-slate-600 border border-slate-300 px-2 py-1 label">in-process</span>
+                <span
+                  class="bg-amber-100 text-amber-800 border border-amber-300 px-2 py-1 label"
+                  >Worth exploring</span
+                >
+                <span
+                  class="bg-slate-100 text-slate-600 border border-slate-300 px-2 py-1 label"
+                  >in-process</span
+                >
               </div>
             </div>
             <p class="font-mono text-xs text-slate-500 leading-relaxed">
-              src/fleet/core/spec_registry.py · adam/models.py · sdtm/models.py · define_xml/spec_generator.py · tests/unit/test_spec_parity.py
+              src/fleet/core/spec_registry.py · adam/models.py · sdtm/models.py
+              · define_xml/spec_generator.py · tests/unit/test_spec_parity.py
             </p>
           </div>
 
-          <div class="grid md:grid-cols-2 gap-px bg-slate-200 border-y border-slate-200">
+          <div
+            class="grid md:grid-cols-2 gap-px bg-slate-200 border-y border-slate-200"
+          >
             <div class="bg-white p-6">
-              <div class="label text-slate-400 mb-4">Before — one verb, five files</div>
+              <div class="label text-slate-400 mb-4">
+                Before — one verb, five files
+              </div>
               <div class="space-y-1.5">
-                <div class="h-11 border-l-4 border-slate-700 bg-slate-100 flex items-center px-3 font-mono text-xs">adam/namespace.py <span class="ml-auto text-slate-500">def chg(…, aval="AVAL", base="BASE")</span></div>
-                <div class="h-11 border-l-4 border-red-400 bg-red-50 flex items-center px-3 font-mono text-xs">core/spec_registry.py <span class="ml-auto text-red-700">Param("aval", str, default="AVAL")</span></div>
-                <div class="h-11 border-l-4 border-red-400 bg-red-50 flex items-center px-3 font-mono text-xs">adam/models.py <span class="ml-auto text-red-700">CHG = "chg"</span></div>
-                <div class="h-11 border-l-4 border-slate-400 bg-slate-50 flex items-center px-3 font-mono text-xs">tests/test_spec_parity.py <span class="ml-auto text-slate-500">Case(…)</span></div>
-                <div class="h-11 border-l-4 border-slate-400 bg-slate-50 flex items-center px-3 font-mono text-xs">define_spec_schema.json <span class="ml-auto text-slate-500">regenerated</span></div>
+                <div
+                  class="h-11 border-l-4 border-slate-700 bg-slate-100 flex items-center px-3 font-mono text-xs"
+                >
+                  adam/namespace.py
+                  <span class="ml-auto text-slate-500"
+                    >def chg(…, aval="AVAL", base="BASE")</span
+                  >
+                </div>
+                <div
+                  class="h-11 border-l-4 border-red-400 bg-red-50 flex items-center px-3 font-mono text-xs"
+                >
+                  core/spec_registry.py
+                  <span class="ml-auto text-red-700"
+                    >Param("aval", str, default="AVAL")</span
+                  >
+                </div>
+                <div
+                  class="h-11 border-l-4 border-red-400 bg-red-50 flex items-center px-3 font-mono text-xs"
+                >
+                  adam/models.py
+                  <span class="ml-auto text-red-700">CHG = "chg"</span>
+                </div>
+                <div
+                  class="h-11 border-l-4 border-slate-400 bg-slate-50 flex items-center px-3 font-mono text-xs"
+                >
+                  tests/test_spec_parity.py
+                  <span class="ml-auto text-slate-500">Case(…)</span>
+                </div>
+                <div
+                  class="h-11 border-l-4 border-slate-400 bg-slate-50 flex items-center px-3 font-mono text-xs"
+                >
+                  define_spec_schema.json
+                  <span class="ml-auto text-slate-500">regenerated</span>
+                </div>
               </div>
               <p class="mt-5 text-xs text-slate-500 leading-relaxed">
-                46 entries · 827 lines · red bands restate what the signature already declares.
+                46 entries · 827 lines · red bands restate what the signature
+                already declares.
               </p>
             </div>
             <div class="bg-white p-6">
-              <div class="label text-slate-400 mb-4">After — the signature is the declaration</div>
+              <div class="label text-slate-400 mb-4">
+                After — the signature is the declaration
+              </div>
               <div class="space-y-1.5">
-                <div class="h-[104px] deep border-l-4 border-slate-900 flex flex-col justify-center px-4 text-stone-100">
+                <div
+                  class="h-[104px] deep border-l-4 border-slate-900 flex flex-col justify-center px-4 text-stone-100"
+                >
                   <div class="font-mono text-xs">adam/namespace.py</div>
-                  <div class="font-mono text-[11px] text-slate-400 mt-1">def chg(self, target, *, aval: str = "AVAL", base: str = "BASE")</div>
-                  <div class="text-[11px] text-slate-400 mt-2 leading-relaxed">name · type · default · required-ness — read once via inspect.signature</div>
+                  <div class="font-mono text-[11px] text-slate-400 mt-1">
+                    def chg(self, target, *, aval: str = "AVAL", base: str =
+                    "BASE")
+                  </div>
+                  <div class="text-[11px] text-slate-400 mt-2 leading-relaxed">
+                    name · type · default · required-ness — read once via
+                    inspect.signature
+                  </div>
                 </div>
-                <div class="h-11 border-l-4 border-amber-400 bg-amber-50 flex items-center px-3 font-mono text-xs">spec_registry.py <span class="ml-auto text-amber-800">define_template · kwarg · convert · alias</span></div>
-                <div class="h-11 border-l-4 border-slate-300 bg-slate-50 flex items-center px-3 font-mono text-xs text-slate-400">enum · schema · introspect <span class="ml-auto">derived</span></div>
+                <div
+                  class="h-11 border-l-4 border-amber-400 bg-amber-50 flex items-center px-3 font-mono text-xs"
+                >
+                  spec_registry.py
+                  <span class="ml-auto text-amber-800"
+                    >define_template · kwarg · convert · alias</span
+                  >
+                </div>
+                <div
+                  class="h-11 border-l-4 border-slate-300 bg-slate-50 flex items-center px-3 font-mono text-xs text-slate-400"
+                >
+                  enum · schema · introspect
+                  <span class="ml-auto">derived</span>
+                </div>
               </div>
               <p class="mt-5 text-xs text-slate-500 leading-relaxed">
                 The registry declares only what a signature cannot say.
@@ -406,20 +862,44 @@ VERB_RENAMES = {
             <div class="space-y-4">
               <div>
                 <div class="label text-slate-400 mb-1">Problem</div>
-                <p class="text-sm leading-relaxed">46 hand-kept registry entries restate parameter names, types and defaults that the verb signature already declares. The parity test catches a missing verb or a stale enum; it does not compare the parameter tables, so a renamed keyword or a changed default passes green.</p>
+                <p class="text-sm leading-relaxed">
+                  46 hand-kept registry entries restate parameter names, types
+                  and defaults that the verb signature already declares. The
+                  parity test catches a missing verb or a stale enum; it does
+                  not compare the parameter tables, so a renamed keyword or a
+                  changed default passes green.
+                </p>
               </div>
               <div>
                 <div class="label text-slate-400 mb-1">The bug this allows</div>
-                <p class="text-sm leading-relaxed">Change <span class="font-mono text-xs">base="BASE"</span> to something else in the method and forget the registry: the Python form and the <span class="font-mono text-xs">define.yaml</span> form of the same derivation now produce different numbers, and the Define-XML you filed describes neither.</p>
+                <p class="text-sm leading-relaxed">
+                  Change <span class="font-mono text-xs">base="BASE"</span> to
+                  something else in the method and forget the registry: the
+                  Python form and the
+                  <span class="font-mono text-xs">define.yaml</span> form of the
+                  same derivation now produce different numbers, and the
+                  Define-XML you filed describes neither.
+                </p>
               </div>
               <div class="bg-amber-50 border border-amber-300 px-4 py-3">
                 <div class="label text-amber-800 mb-1">Respects ADR-0001</div>
-                <p class="text-xs leading-relaxed text-amber-900"><span class="font-mono">fleet.introspect</span> stays the surface and its frozen DTOs stay the contract. This changes only where the registry gets its facts — precisely the freedom ADR-0001 bought. Guardrails: the AST sweep in <span class="font-mono">test_introspect.py</span> and <span class="font-mono">test_spec_parity.py</span>.</p>
+                <p class="text-xs leading-relaxed text-amber-900">
+                  <span class="font-mono">fleet.introspect</span> stays the
+                  surface and its frozen DTOs stay the contract. This changes
+                  only where the registry gets its facts — precisely the freedom
+                  ADR-0001 bought. Guardrails: the AST sweep in
+                  <span class="font-mono">test_introspect.py</span> and
+                  <span class="font-mono">test_spec_parity.py</span>.
+                </p>
               </div>
             </div>
             <div>
-              <div class="label text-slate-400 mb-2">Evidence — the same four facts, twice</div>
-              <pre class="bg-slate-900 text-slate-200 text-[11px] leading-snug p-4 overflow-x-auto"><code># core/spec_registry.py:1316
+              <div class="label text-slate-400 mb-2">
+                Evidence — the same four facts, twice
+              </div>
+              <pre
+                class="bg-slate-900 text-slate-200 text-[11px] leading-snug p-4 overflow-x-auto"
+              ><code># core/spec_registry.py:1316
 spec_algorithm(
     "chg", standard="adam", verb="chg",
     params=(
@@ -433,18 +913,41 @@ spec_algorithm(
 # adam/namespace.py:200 — the thing that actually runs
 def chg(self, target: str, *, aval: str = "AVAL",
         base: str = "BASE") -> AdamNamespace: ...</code></pre>
-              <div class="mt-3 bg-slate-100 border border-slate-300 p-3 font-mono text-[10px] leading-snug">
-                <div class="text-slate-500">$ inspect.signature(AdamNamespace.chg)</div>
-                <div>name='aval' annotation='str' default='AVAL' required=False</div>
-                <div>name='base' annotation='str' default='BASE' required=False</div>
-                <div class="text-slate-500 mt-1">$ spec_registry.get_algorithm("adam", "chg")</div>
-                <div>name='aval' annotation='str' default='AVAL' required=False</div>
-                <div>name='base' annotation='str' default='BASE' required=False</div>
+              <div
+                class="mt-3 bg-slate-100 border border-slate-300 p-3 font-mono text-[10px] leading-snug"
+              >
+                <div class="text-slate-500">
+                  $ inspect.signature(AdamNamespace.chg)
+                </div>
+                <div>
+                  name='aval' annotation='str' default='AVAL' required=False
+                </div>
+                <div>
+                  name='base' annotation='str' default='BASE' required=False
+                </div>
+                <div class="text-slate-500 mt-1">
+                  $ spec_registry.get_algorithm("adam", "chg")
+                </div>
+                <div>
+                  name='aval' annotation='str' default='AVAL' required=False
+                </div>
+                <div>
+                  name='base' annotation='str' default='BASE' required=False
+                </div>
               </div>
               <ul class="mt-4 space-y-1 text-sm">
-                <li class="flex gap-2"><span class="text-emerald-600">▸</span> drift becomes impossible, not tested-for</li>
-                <li class="flex gap-2"><span class="text-emerald-600">▸</span> 5 of Param’s 10 fields become derived</li>
-                <li class="flex gap-2"><span class="text-emerald-600">▸</span> locality: one source for parameter facts</li>
+                <li class="flex gap-2">
+                  <span class="text-emerald-600">▸</span> drift becomes
+                  impossible, not tested-for
+                </li>
+                <li class="flex gap-2">
+                  <span class="text-emerald-600">▸</span> 5 of Param’s 10 fields
+                  become derived
+                </li>
+                <li class="flex gap-2">
+                  <span class="text-emerald-600">▸</span> locality: one source
+                  for parameter facts
+                </li>
               </ul>
             </div>
           </div>
@@ -454,67 +957,175 @@ def chg(self, target: str, *, aval: str = "AVAL",
         <article id="c5" class="border border-slate-200 bg-white shadow-sm">
           <div class="px-7 pt-7 pb-5 space-y-4">
             <div class="flex items-start justify-between gap-6">
-              <h2 class="font-serif text-2xl">5 · One module owns how Fleet phrases a problem</h2>
+              <h2 class="font-serif text-2xl">
+                5 · One module owns how Fleet phrases a problem
+              </h2>
               <div class="flex gap-2 shrink-0">
-                <span class="bg-amber-100 text-amber-800 border border-amber-300 px-2 py-1 label">Worth exploring</span>
-                <span class="bg-slate-100 text-slate-600 border border-slate-300 px-2 py-1 label">in-process</span>
+                <span
+                  class="bg-amber-100 text-amber-800 border border-amber-300 px-2 py-1 label"
+                  >Worth exploring</span
+                >
+                <span
+                  class="bg-slate-100 text-slate-600 border border-slate-300 px-2 py-1 label"
+                  >in-process</span
+                >
               </div>
             </div>
             <p class="font-mono text-xs text-slate-500 leading-relaxed">
-              src/fleet/core/exceptions.py · _verb_mixin.py (37 raises) · _flag_mixin.py (11) · _pin_mixin.py (10) · adam/namespace.py (10) · cli.py
+              src/fleet/core/exceptions.py · _verb_mixin.py (37 raises) ·
+              _flag_mixin.py (11) · _pin_mixin.py (10) · adam/namespace.py (10)
+              · cli.py
             </p>
           </div>
 
-          <div class="grid md:grid-cols-2 gap-px bg-slate-200 border-y border-slate-200">
+          <div
+            class="grid md:grid-cols-2 gap-px bg-slate-200 border-y border-slate-200"
+          >
             <div class="bg-white p-6">
-              <div class="label text-slate-400 mb-4">Before — 81 raise sites, each phrasing its own</div>
+              <div class="label text-slate-400 mb-4">
+                Before — 81 raise sites, each phrasing its own
+              </div>
               <svg viewBox="0 0 320 230" class="w-full h-[230px]">
-                <rect x="4" y="4" width="312" height="222" fill="none" stroke="#cbd5e1"/>
+                <rect
+                  x="4"
+                  y="4"
+                  width="312"
+                  height="222"
+                  fill="none"
+                  stroke="#cbd5e1"
+                />
                 <g fill="#dc2626" opacity="0.75">
-                  <circle cx="38" cy="34" r="3.5"/><circle cx="72" cy="52" r="3.5"/><circle cx="55" cy="88" r="3.5"/>
-                  <circle cx="104" cy="30" r="3.5"/><circle cx="132" cy="70" r="3.5"/><circle cx="96" cy="106" r="3.5"/>
-                  <circle cx="168" cy="44" r="3.5"/><circle cx="196" cy="92" r="3.5"/><circle cx="148" cy="126" r="3.5"/>
-                  <circle cx="232" cy="36" r="3.5"/><circle cx="264" cy="78" r="3.5"/><circle cx="212" cy="140" r="3.5"/>
-                  <circle cx="286" cy="118" r="3.5"/><circle cx="42" cy="150" r="3.5"/><circle cx="80" cy="176" r="3.5"/>
-                  <circle cx="124" cy="192" r="3.5"/><circle cx="176" cy="172" r="3.5"/><circle cx="228" cy="196" r="3.5"/>
-                  <circle cx="272" cy="166" r="3.5"/><circle cx="62" cy="120" r="3.5"/><circle cx="252" cy="112" r="3.5"/>
-                  <circle cx="110" cy="152" r="3.5"/><circle cx="196" cy="60" r="3.5"/><circle cx="292" cy="48" r="3.5"/>
+                  <circle cx="38" cy="34" r="3.5" />
+                  <circle cx="72" cy="52" r="3.5" />
+                  <circle cx="55" cy="88" r="3.5" />
+                  <circle cx="104" cy="30" r="3.5" />
+                  <circle cx="132" cy="70" r="3.5" />
+                  <circle cx="96" cy="106" r="3.5" />
+                  <circle cx="168" cy="44" r="3.5" />
+                  <circle cx="196" cy="92" r="3.5" />
+                  <circle cx="148" cy="126" r="3.5" />
+                  <circle cx="232" cy="36" r="3.5" />
+                  <circle cx="264" cy="78" r="3.5" />
+                  <circle cx="212" cy="140" r="3.5" />
+                  <circle cx="286" cy="118" r="3.5" />
+                  <circle cx="42" cy="150" r="3.5" />
+                  <circle cx="80" cy="176" r="3.5" />
+                  <circle cx="124" cy="192" r="3.5" />
+                  <circle cx="176" cy="172" r="3.5" />
+                  <circle cx="228" cy="196" r="3.5" />
+                  <circle cx="272" cy="166" r="3.5" />
+                  <circle cx="62" cy="120" r="3.5" />
+                  <circle cx="252" cy="112" r="3.5" />
+                  <circle cx="110" cy="152" r="3.5" />
+                  <circle cx="196" cy="60" r="3.5" />
+                  <circle cx="292" cy="48" r="3.5" />
                 </g>
-                <text x="14" y="218" fill="#94a3b8" font-family="ui-sans-serif" font-size="9">each dot = a hand-written f-string</text>
+                <text
+                  x="14"
+                  y="218"
+                  fill="#94a3b8"
+                  font-family="ui-sans-serif"
+                  font-size="9"
+                >
+                  each dot = a hand-written f-string
+                </text>
               </svg>
-              <div class="mt-3 font-mono text-[11px] text-slate-600 leading-relaxed bg-slate-50 border border-slate-200 p-3">
-                "no dataset paths given and no study_config.yaml found…"<br/>
-                "no study_config.yaml found in the current directory or any parent…"<br/>
-                "no study_config.yaml found in the current directory or any parent…"<br/>
-                <span class="text-slate-400">— cli.py, three commands, three phrasings</span>
+              <div
+                class="mt-3 font-mono text-[11px] text-slate-600 leading-relaxed bg-slate-50 border border-slate-200 p-3"
+              >
+                "no dataset paths given and no study_config.yaml found…"<br />
+                "no study_config.yaml found in the current directory or any
+                parent…"<br />
+                "no study_config.yaml found in the current directory or any
+                parent…"<br />
+                <span class="text-slate-400"
+                  >— cli.py, three commands, three phrasings</span
+                >
               </div>
             </div>
             <div class="bg-white p-6">
-              <div class="label text-slate-400 mb-4">After — the phrasing concentrates</div>
+              <div class="label text-slate-400 mb-4">
+                After — the phrasing concentrates
+              </div>
               <svg viewBox="0 0 320 230" class="w-full h-[230px]">
-                <rect x="4" y="4" width="312" height="222" fill="none" stroke="#cbd5e1"/>
+                <rect
+                  x="4"
+                  y="4"
+                  width="312"
+                  height="222"
+                  fill="none"
+                  stroke="#cbd5e1"
+                />
                 <g fill="#94a3b8" opacity="0.35">
-                  <circle cx="38" cy="34" r="3"/><circle cx="72" cy="52" r="3"/><circle cx="104" cy="30" r="3"/>
-                  <circle cx="232" cy="36" r="3"/><circle cx="286" cy="30" r="3"/><circle cx="168" cy="44" r="3"/>
-                  <circle cx="42" cy="196" r="3"/><circle cx="124" cy="204" r="3"/><circle cx="228" cy="200" r="3"/>
-                  <circle cx="286" cy="196" r="3"/><circle cx="80" cy="200" r="3"/><circle cx="176" cy="198" r="3"/>
+                  <circle cx="38" cy="34" r="3" />
+                  <circle cx="72" cy="52" r="3" />
+                  <circle cx="104" cy="30" r="3" />
+                  <circle cx="232" cy="36" r="3" />
+                  <circle cx="286" cy="30" r="3" />
+                  <circle cx="168" cy="44" r="3" />
+                  <circle cx="42" cy="196" r="3" />
+                  <circle cx="124" cy="204" r="3" />
+                  <circle cx="228" cy="200" r="3" />
+                  <circle cx="286" cy="196" r="3" />
+                  <circle cx="80" cy="200" r="3" />
+                  <circle cx="176" cy="198" r="3" />
                 </g>
                 <g stroke="#94a3b8" stroke-width="0.8" opacity="0.5">
-                  <line x1="38" y1="38" x2="150" y2="98"/><line x1="104" y1="34" x2="150" y2="98"/>
-                  <line x1="232" y1="40" x2="176" y2="98"/><line x1="286" y1="34" x2="176" y2="98"/>
-                  <line x1="42" y1="192" x2="150" y2="140"/><line x1="228" y1="196" x2="176" y2="140"/>
-                  <line x1="124" y1="200" x2="150" y2="140"/><line x1="286" y1="192" x2="176" y2="140"/>
+                  <line x1="38" y1="38" x2="150" y2="98" />
+                  <line x1="104" y1="34" x2="150" y2="98" />
+                  <line x1="232" y1="40" x2="176" y2="98" />
+                  <line x1="286" y1="34" x2="176" y2="98" />
+                  <line x1="42" y1="192" x2="150" y2="140" />
+                  <line x1="228" y1="196" x2="176" y2="140" />
+                  <line x1="124" y1="200" x2="150" y2="140" />
+                  <line x1="286" y1="192" x2="176" y2="140" />
                 </g>
-                <rect x="86" y="96" width="150" height="46" fill="#0f172a"/>
-                <text x="161" y="116" text-anchor="middle" fill="#f8fafc" font-family="ui-monospace" font-size="11">problem()</text>
-                <text x="161" y="132" text-anchor="middle" fill="#94a3b8" font-family="ui-sans-serif" font-size="8.5">verb · target · what · available · hint</text>
-                <line class="seam" x1="20" y1="72" x2="300" y2="72" stroke="#475569" stroke-width="1.2"/>
-                <line class="seam" x1="20" y1="166" x2="300" y2="166" stroke="#475569" stroke-width="1.2"/>
+                <rect x="86" y="96" width="150" height="46" fill="#0f172a" />
+                <text
+                  x="161"
+                  y="116"
+                  text-anchor="middle"
+                  fill="#f8fafc"
+                  font-family="ui-monospace"
+                  font-size="11"
+                >
+                  problem()
+                </text>
+                <text
+                  x="161"
+                  y="132"
+                  text-anchor="middle"
+                  fill="#94a3b8"
+                  font-family="ui-sans-serif"
+                  font-size="8.5"
+                >
+                  verb · target · what · available · hint
+                </text>
+                <line
+                  class="seam"
+                  x1="20"
+                  y1="72"
+                  x2="300"
+                  y2="72"
+                  stroke="#475569"
+                  stroke-width="1.2"
+                />
+                <line
+                  class="seam"
+                  x1="20"
+                  y1="166"
+                  x2="300"
+                  y2="166"
+                  stroke="#475569"
+                  stroke-width="1.2"
+                />
               </svg>
               <p class="mt-3 text-xs text-slate-500 leading-relaxed">
-                <span class="font-mono">_validate_chain_exprs</span> already produces the right shape — verb, target,
-                offending column, “Did you mean…”, available columns, truncated at 25. That shape is hard-coded inside
-                one method instead of being the module every raise site calls.
+                <span class="font-mono">_validate_chain_exprs</span> already
+                produces the right shape — verb, target, offending column, “Did
+                you mean…”, available columns, truncated at 25. That shape is
+                hard-coded inside one method instead of being the module every
+                raise site calls.
               </p>
             </div>
           </div>
@@ -523,26 +1134,45 @@ def chg(self, target: str, *, aval: str = "AVAL",
             <div class="space-y-4">
               <div>
                 <div class="label text-slate-400 mb-1">Problem</div>
-                <p class="text-sm leading-relaxed">Message quality is a property of whoever wrote the raise. The good shape exists in exactly one method; ~70 other sites improvise, and the CLI says “config not found” three different ways.</p>
+                <p class="text-sm leading-relaxed">
+                  Message quality is a property of whoever wrote the raise. The
+                  good shape exists in exactly one method; ~70 other sites
+                  improvise, and the CLI says “config not found” three different
+                  ways.
+                </p>
               </div>
               <div>
                 <div class="label text-slate-400 mb-1">Solution</div>
-                <p class="text-sm leading-relaxed">A module that owns the phrasing — verb, target, what went wrong, what was available, the suggestion, the truncation. Raise sites supply facts, not prose.</p>
+                <p class="text-sm leading-relaxed">
+                  A module that owns the phrasing — verb, target, what went
+                  wrong, what was available, the suggestion, the truncation.
+                  Raise sites supply facts, not prose.
+                </p>
               </div>
             </div>
             <div class="space-y-4">
               <div>
                 <div class="label text-slate-400 mb-1">Deletion test</div>
-                <p class="text-sm leading-relaxed">Delete it and the difflib suggestion, the column listing and the 25-column truncation reappear at every site that wants them. Concentrates.</p>
+                <p class="text-sm leading-relaxed">
+                  Delete it and the difflib suggestion, the column listing and
+                  the 25-column truncation reappear at every site that wants
+                  them. Concentrates.
+                </p>
               </div>
               <div class="bg-amber-50 border border-amber-300 px-4 py-3">
-                <div class="label text-amber-800 mb-1">Sequencing constraint</div>
-                <p class="text-xs leading-relaxed text-amber-900">This edits raise sites in the same files candidates 1, 2 and 4 rewrite. Do it early — so new code uses <span class="font-mono">problem()</span> from birth — or last. Not in the middle.</p>
+                <div class="label text-amber-800 mb-1">
+                  Sequencing constraint
+                </div>
+                <p class="text-xs leading-relaxed text-amber-900">
+                  This edits raise sites in the same files candidates 1, 2 and 4
+                  rewrite. Do it early — so new code uses
+                  <span class="font-mono">problem()</span> from birth — or last.
+                  Not in the middle.
+                </p>
               </div>
             </div>
           </div>
         </article>
-
       </section>
 
       <!-- ─────────────────────── top recommendation ─────────────────── -->
@@ -550,32 +1180,47 @@ def chg(self, target: str, *, aval: str = "AVAL",
         <div class="deep text-stone-100 p-8 border-4 border-slate-900">
           <div class="label text-slate-400 mb-3">Top recommendation</div>
           <h2 class="font-serif text-3xl mb-4">
-            <a href="#c2" class="underline decoration-slate-600 underline-offset-4 hover:decoration-stone-100">2 · A study-run module behind <span class="font-mono text-2xl">fleet run</span></a>
+            <a
+              href="#c2"
+              class="underline decoration-slate-600 underline-offset-4 hover:decoration-stone-100"
+              >2 · A study-run module behind
+              <span class="font-mono text-2xl">fleet run</span></a
+            >
           </h2>
           <p class="text-slate-300 leading-relaxed max-w-3xl">
-            Fleet’s premise is that a clinical derivation is Python you can read, chain and test. Running a whole study
-            is the one derivation that isn’t: it exists only inside a command handler, which is why
-            <span class="font-mono text-slate-100">mcp_server.py</span> already imports a private name out of
-            <span class="font-mono text-slate-100">cli.py</span> and why a notebook user has to shell out. It is also
-            the smallest of the five: the algorithm is already written and already correct — it just has the wrong
-            interface. One module, three adapters, and the tests stop needing a filesystem.
+            Fleet’s premise is that a clinical derivation is Python you can
+            read, chain and test. Running a whole study is the one derivation
+            that isn’t: it exists only inside a command handler, which is why
+            <span class="font-mono text-slate-100">mcp_server.py</span> already
+            imports a private name out of
+            <span class="font-mono text-slate-100">cli.py</span> and why a
+            notebook user has to shell out. It is also the smallest of the five:
+            the algorithm is already written and already correct — it just has
+            the wrong interface. One module, three adapters, and the tests stop
+            needing a filesystem.
           </p>
           <div class="mt-6 pt-5 border-t border-slate-700">
             <div class="label text-slate-400 mb-2">Suggested order</div>
             <p class="text-slate-300 text-sm leading-relaxed">
-              <span class="font-mono text-slate-100">#2</span> (smallest, sets the “move the algorithm, keep the surface” precedent) →
-              <span class="font-mono text-slate-100">#5</span> (small, and everything after inherits the phrasing) →
-              <span class="font-mono text-slate-100">#1</span> (biggest mass, highest churn) →
-              <span class="font-mono text-slate-100">#4</span> (correctness payoff).
-              <span class="font-mono text-slate-100">#3</span> is a grilling track, not a build: its likely output is an ADR.
+              <span class="font-mono text-slate-100">#2</span> (smallest, sets
+              the “move the algorithm, keep the surface” precedent) →
+              <span class="font-mono text-slate-100">#5</span> (small, and
+              everything after inherits the phrasing) →
+              <span class="font-mono text-slate-100">#1</span> (biggest mass,
+              highest churn) →
+              <span class="font-mono text-slate-100">#4</span> (correctness
+              payoff). <span class="font-mono text-slate-100">#3</span> is a
+              grilling track, not a build: its likely output is an ADR.
             </p>
           </div>
         </div>
       </section>
 
       <footer class="text-xs text-slate-400 font-mono pt-2 leading-relaxed">
-        Counts measured on the working tree at 2026-08-30 · verb counts by reflection over the registered namespaces ·
-        dispatch counts by AST over src/fleet · revised 2026-08-31 (candidate 4 evidence corrected, candidate 3 re-cut).
+        Counts measured on the working tree at 2026-08-30 · verb counts by
+        reflection over the registered namespaces · dispatch counts by AST over
+        src/fleet · revised 2026-08-31 (candidate 4 evidence corrected,
+        candidate 3 re-cut).
       </footer>
     </main>
   </body>

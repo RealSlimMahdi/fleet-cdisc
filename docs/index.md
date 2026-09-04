@@ -40,12 +40,12 @@
 
     [:octicons-arrow-right-24: Validation strategy](validation-strategy.md)
 
-- :material-robot-happy-outline:{ .lg .middle } **AI-first**
+- :material-robot-happy-outline:{ .lg .middle } **AI-native by consequence**
 
     ---
 
-    MCP server, define.yaml language server, and `llms.txt` — assistants can
-    write *and* verify Fleet pipelines.
+    A sharp workflow is what makes assistants reliable. MCP server, define.yaml
+    language server and `llms.txt` expose it — so they write *and* verify.
 
     [:octicons-arrow-right-24: IDE & AI tooling](getting-started/ide-tooling.md)
 
