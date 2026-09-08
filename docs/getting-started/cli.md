@@ -20,6 +20,8 @@ CDISC_API_KEY=your-api-key-here
   `--config <path>` to override.
 - **Exit codes** — `0` success, `1` on a Fleet error (a single clean message
   on stderr), `2` on a usage error (missing/unknown command or flag).
+  `fleet compare` turns its verdict into the exit code: `0` equal, `1`
+  different, `2` the comparison could not run.
 - **Errors** go to **stderr**; results go to stdout.
 - `fleet --version` prints the installed version.
 
@@ -33,6 +35,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | [`fleet run`](#fleet-run) | Execute define.yaml derivation pipelines and write datasets. |
 | [`fleet validate`](#fleet-validate) | Validate datasets with the CDISC Rules Engine (exit 1 on errors). |
 | [`fleet check`](#fleet-check) | CI gate: config parse + define.yaml schema + custom-rule YAMLs. |
+| [`fleet compare`](#fleet-compare) | Compare a candidate dataset against a base on keys (exit 0 equal, 1 different, 2 could not run). |
 | [`fleet new`](#fleet-new) | Bootstrap a study: init cfg → define → ct → rules, one confirmation. |
 | [`fleet migrate`](#fleet-migrate) | Rewrite removed pre-alpha verb/kwarg spellings to canonical ones (libcst). |
 | [`fleet tdd`](#fleet-tdd) | Trial design workflow: build/audit TDD datasets from trial_design.yaml. |
@@ -127,6 +130,32 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | Option | Default | Description |
 | ------ | ------- | ----------- |
 | `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
+
+---
+
+## `fleet compare`
+
+PROC COMPARE analogue: pair the two datasets on --keys, match variables by name and print the comparison report. --pairs compares variables named differently on each side and --variables restricts the comparison to the ones that matter. Equality is exact unless --abs-tol, --rel-tol or --ignore-trailing-whitespace widens it. --by sections the report per group and --allow-duplicates pairs duplicate keys by position. Exit 0 when the datasets are equal, 1 when they differ, 2 when the comparison could not run (unreadable file, missing keys, duplicate keys without --allow-duplicates, a negative tolerance, no comparable variables, --out or --report not writable).
+
+| Argument | Description |
+| -------- | ----------- |
+| `base` | The reference dataset (parquet / csv / xpt / sas7bdat; SAS formats need the io extra). |
+| `candidate` | The dataset measured against the base (same formats). |
+
+| Option | Default | Description |
+| ------ | ------- | ----------- |
+| `--keys` | _(required)_ | Comma-separated variables that identify one observation on each side, e.g. USUBJID,AESEQ. Required; keys are never looked up. |
+| `--by` | _(none)_ | Comma-separated variables to section the report by, e.g. TRT01P. They are prepended to --keys automatically, so they need not be repeated there. The observation and values summaries are also reported per group, and a group present on one side only is flagged and listed; the verdict stays global. |
+| `--pairs` | _(none)_ | Comma-separated variable pairs whose sides carry different names, e.g. WEIGHT=WT. Applied on top of the automatic name matching, so a renamed column is compared rather than reported missing; the report names it after the base. A pair whose candidate variable is absent reports the base one as missing from the candidate. |
+| `--variables` | _(none)_ | Comma-separated variables to restrict the comparison to, in base names, so a work-in-progress candidate is checked on the columns that are finished. A variable outside the list is ignored on both sides: neither compared nor reported as missing. |
+| `--abs-tol` | `0.0` | Absolute tolerance on the numeric variables (default: 0, exact). A numeric pair differs when the absolute difference exceeds max(--abs-tol, --rel-tol x \|base\|). |
+| `--rel-tol` | `0.0` | Relative tolerance on the numeric variables, as a fraction of the base value (default: 0, exact). It anchors on the base because the base is the reference, as in SAS: 0.01 is one percent of the base. |
+| `--ignore-trailing-whitespace` | _(none)_ | Strip trailing whitespace from both sides of a string before comparing, so a legacy SAS dataset's padded character values equal Fleet's stripped ones. Leading whitespace still differs. |
+| `--allow-duplicates` | _(none)_ | Pair duplicate keys by their position within each key group instead of refusing to run. The report then counts the duplicates per side, raises the duplicate_keys flag and warns at the top: order within a key group decides which observations pair. |
+| `--all` | _(none)_ | Print every unequal value (default: 50 per variable, 500 overall). |
+| `--format` | `text` | Output format: the text report, or one JSON document (verdict, flags, summaries, listing within the print limits, settings, Fleet version) and nothing else on stdout (default: text). Choices: `text`, `json`. |
+| `--out` | _(none)_ | Also write the complete value listing (never truncated) to PATH as parquet, e.g. differences.parquet. |
+| `--report` | _(none)_ | Also write a self-contained HTML report to PATH for a reviewer without Python: structural findings as chips, then every mismatched observation with the base and candidate values side by side, one collapsible block per variable. |
 
 ---
 

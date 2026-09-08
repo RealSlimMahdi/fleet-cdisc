@@ -6,11 +6,14 @@ Thank you for your interest in Fleet! This guide explains our philosophy, API co
 
 ## Project Philosophy
 
-Fleet is a **minimalistic, simple, yet powerful** CDISC SDTM/ADaM derivation toolkit built entirely on [Polars](https://pola.rs) DataFrame namespace extensions. Every design decision follows from three principles:
+Fleet is a **minimalistic, simple, yet powerful** CDISC SDTM/ADaM derivation toolkit built entirely on [Polars](https://pola.rs) DataFrame namespace extensions. Every design decision follows from four principles:
 
-1. **Intent-driven syntax.** Code should read like a specification. A verb like `.baseline()` communicates clinical intent; ten lines of manual join logic do not.
-2. **Zero-cost lazy evaluation.** Every verb accumulates a `pl.Expr` into an internal plan. Nothing executes until `.to_frame()`. One Polars `with_columns` pass, no intermediate DataFrames.
-3. **Single import, batteries included.** `import fleet` registers all namespaces (`df.sdtm`, `df.adam`, `df.adam.adsl`, `df.adam.occds`, `df.adam.onco`, …). No sub-package juggling.
+1. **Workflow quality first.** The workflow is the product: one obvious path from raw data to submission artefact. A step is chained inline or declared in `define.yaml` — same verb name, same argument names either way — and the two round-trip. Ambiguity is the defect: two verbs for the same derivation, or a failure that surfaces three steps late, forces the next reader to guess.
+2. **Intent-driven syntax.** Code should read like a specification. A verb like `.baseline()` communicates clinical intent; ten lines of manual join logic do not.
+3. **Zero-cost lazy evaluation.** Every verb accumulates a `pl.Expr` into an internal plan. Nothing executes until `.to_frame()`. One Polars `with_columns` pass, no intermediate DataFrames.
+4. **Single import, batteries included.** `import fleet` registers all namespaces (`df.sdtm`, `df.adam`, `df.adam.adsl`, `df.adam.occds`, `df.adam.onco`, …). No sub-package juggling.
+
+Principle 1 is why Fleet works well with AI coding agents — not the other way round. A codebase with a weak or ambiguous workflow gives an agent nothing to steer by, and it fails the same way a new human programmer does: plausible code, wrong derivation. A sharp workflow constrains the search space and points at the expected outcome, so the agent's chance of getting it right on the first pass goes up. We do not add features *for* AI. We invest in workflow clarity, and AI effectiveness follows.
 
 If your contribution doesn't make the library simpler for the end user, reconsider whether it belongs.
 
@@ -157,6 +160,7 @@ uv run python examples/cdiscpilot01_inline.py
 uv run python examples/cdiscpilot01_spec_driven.py
 uv run python examples/adnca_example.py
 uv run python examples/tdd_example.py
+uv run python examples/r2r_ae_example.py
 
 # 4. Docs build (if you touched docs/ or docstrings)
 uv run mkdocs build --clean

@@ -5,7 +5,7 @@ Demonstrates the **R2R strategy**: one self-contained script that takes
 raw adverse-event data all the way to a rendered HTML table, traversing
 every CDISC layer in sequence:
 
-    Raw AE CSV  →  SDTM AE  →  ADaM ADAE  →  Validate  →  TLG (HTML)
+    Raw AE CSV  →  SDTM AE  →  ADaM ADAE  →  QC  →  Validate  →  TLG (HTML)
 
 DM and ADSL are assumed to already exist (produced by separate governed
 programs).  This script focuses on **one domain end-to-end**: AE → ADAE →
@@ -204,9 +204,80 @@ for node in _all_lineage:
 
 
 # ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-# ┃  LAYER 3 — Validate: pre-flight checks before table generation        ┃
+# ┃  LAYER 3 — QC: independent re-derivation, then compare                ┃
+# ┃                                                                       ┃
+# ┃  This is `adae_qc.sas`.  A second programmer starts from the same     ┃
+# ┃  SDTM AE + ADSL inputs, writes the analysis variables from scratch    ┃
+# ┃  in plain Polars, and ends the chain in `.compare()` — Fleet's        ┃
+# ┃  PROC COMPARE.  Nothing is read from the production chain above.      ┃
 # ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-print("\n━━ Layer 3 · Validate ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("\n━━ Layer 3 · QC ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+# The QC codes terms against a MedDRA extract instead of title-casing them.
+QC_MEDDRA = {
+    "HEADACHE": ("Headache", "NERVOUS SYSTEM DISORDERS"),
+    "NAUSEA": ("Nausea", "GASTROINTESTINAL DISORDERS"),
+    "DIZZINESS": ("Dizziness", "NERVOUS SYSTEM DISORDERS"),
+    "FATIGUE": ("Fatigue", "GENERAL DISORDERS"),
+    "APPLICATION SITE ERYTHEMA": ("Application Site Erythema", "OTHER"),
+}
+
+_qc_start = pl.col("AESTDTC").str.to_date(strict=False)
+_qc_trtsdt = pl.col("TRTSDT").str.to_date(strict=False)
+_qc_offset = (_qc_start - _qc_trtsdt).dt.total_days()
+# Severity ranked inline, so ANL01FL never depends on production's AESEVN.
+_qc_sevn = pl.col("AESEV").replace_strict(
+    {"MILD": 1, "MODERATE": 2, "SEVERE": 3}, default=None, return_dtype=pl.Int64
+)
+
+adae_qc_ns = (
+    ae_with_trt.adam.occds("ADAE")
+    .derivation("ASTDT", expression=_qc_start)
+    .derivation("AENDT", expression=pl.col("AEENDTC").str.to_date(strict=False))
+    .derivation(
+        "ADY",
+        expression=pl.when(_qc_offset >= 0)  # CDISC study day has no day 0
+        .then(_qc_offset + 1)
+        .otherwise(_qc_offset)
+        .cast(pl.Int64),
+    )
+    .derivation(
+        "TRTEMFL",
+        expression=pl.when(
+            _qc_start.is_between(_qc_trtsdt, pl.col("TRTEDT").str.to_date(strict=False))
+        ).then(pl.lit("Y")),
+    )
+    .derivation(
+        "ANL01FL",
+        expression=pl.when(_qc_sevn == _qc_sevn.max().over(["USUBJID", "AETERM"])).then(
+            pl.lit("Y")
+        ),
+    )
+    .derivation("ASEQ", expression=pl.col("ASTDT").rank("ordinal").over("USUBJID").cast(pl.Int64))
+    .recode("AEDECOD", source="AETERM", recode_map={k: v[0] for k, v in QC_MEDDRA.items()})
+    .recode("AEBODSYS", source="AETERM", recode_map={k: v[1] for k, v in QC_MEDDRA.items()})
+    .compare(
+        adae,
+        keys=["USUBJID", "AESEQ"],
+        # The QC scope: every analysis variable it re-derived.  Production's
+        # imputation flags and its AESEVN intermediate are out of scope.
+        variables=["ASTDT", "AENDT", "ADY", "TRTEMFL", "ANL01FL", "ASEQ", "AEDECOD", "AEBODSYS"],
+        base_name="ADAE (production)",
+        candidate_name="ADAE (QC)",
+        on_fail="raise",  # the QC gate: a difference stops the script
+    )
+)
+
+adae_qc = adae_qc_ns.to_frame()
+_qc_report = adae_qc_ns.last_comparison
+assert _qc_report is not None
+print(f"  ADAE (QC) : {adae_qc.shape[0]} records × {adae_qc.shape[1]} variables")
+
+
+# ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+# ┃  LAYER 4 — Validate: pre-flight checks before table generation        ┃
+# ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+print("\n━━ Layer 4 · Validate ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 # TLG-level pre-validation (lightweight, no engine required)
 ae_spec = AESummarySpec(
@@ -254,9 +325,9 @@ except (FileNotFoundError, ImportError) as exc:
 
 
 # ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-# ┃  LAYER 4 — TLG: produce the analysis results & render to HTML         ┃
+# ┃  LAYER 5 — TLG: produce the analysis results & render to HTML         ┃
 # ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-print("\n━━ Layer 4 · Render ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("\n━━ Layer 5 · Render ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 # Compute the Analysis Results Dataset (ARD)
 ard = adae.tlg.ae.t_summary(spec=ae_spec, adsl=adsl)
@@ -312,6 +383,10 @@ print("\n━━ R2R Complete ━━━━━━━━━━━━━━━━━
 print(f"  ADSL (input)     : {adsl.shape[0]} subjects (pre-built)")
 print(f"  Raw  → SDTM AE   : {ae_raw.shape[0]} raw rows → {ae.shape[0]} SDTM records")
 print(f"  SDTM → ADaM ADAE : {ae.shape[0]} records → {adae.shape[0]} analysis records")
+print(
+    f"  ADaM → QC        : {len(_qc_report.variables.compared)} variables compared → "
+    f"{'EQUAL' if _qc_report.is_equal else 'NOT EQUAL'}"
+)
 print(f"  ADaM → ARD       : {adae.shape[0]} records → {ard.shape[0]} result rows")
 print(f"  ARD  → HTML      : {len(html):,} characters → {html_path}")
 print()

@@ -68,11 +68,12 @@ Clinical statistical programming often requires hundreds of lines of boilerplate
 
 **Why Fleet?**
 
+- **Workflow quality first** — one obvious path from raw data to submission artefact; one verb vocabulary whether a step is chained inline or declared in `define.yaml`
 - **Intent-driven syntax** — your code reads like the CDISC spec itself
 - **Lazy-first evaluation** — most verbs accumulate into a single Polars `with_columns` pass; window verbs (`baseline`, cross-domain joins) checkpoint internally without breaking the chain, and `pl.scan_parquet(...).sdtm` keeps a whole pipeline lazy
 - **Zero Pandas** — built entirely on Polars for blazing-fast, multi-threaded execution
-- **AI-first design** — structured API surface optimized for LLM-assisted programming
-- **Dual workflow** — inline Python pipeline chaining _or_ metadata-driven `define.yaml` approach
+- **AI-native by consequence** — a sharp workflow is what makes LLM-assisted programming reliable; the MCP server, language server and `llms.txt` just expose it
+- **Dual workflow** — the same pipeline chained inline in Python _or_ declared in `define.yaml`, and round-trippable between the two
 - **Six core dependencies** — minimal footprint (`polars`, `pydantic`, `pyyaml`, `httpx`, `jsonschema`, `lxml`); everything else is an opt-in extra
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>

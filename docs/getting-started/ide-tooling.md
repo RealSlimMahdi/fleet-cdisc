@@ -1,7 +1,10 @@
 # IDE & AI Tooling
 
-Fleet ships three optional layers of editor/assistant integration. None of them
-change runtime behavior — pipelines run identically with or without them.
+Fleet ships three optional layers of editor/assistant integration. None of them change
+what a pipeline does: each one exposes the workflow Fleet already has — its verbs,
+arguments and validation — to the editor or to an assistant, so the intended path is
+more obvious and the wrong path fails sooner. Pipelines run identically with or
+without them.
 
 ## Typed entry — `fleet.frame()` (optional)
 

@@ -19,7 +19,8 @@ Fleet/
 │   ├── tlg/                # TLG namespace — tables, listings, template registry, render
 │   ├── tools/              # migrate codemod (old → canonical spellings)
 │   ├── define_xml/         # Define-XML validation + generation + schema_builder
-│   └── validation/         # CDISC rules-engine integration
+│   ├── validation/         # CDISC rules-engine integration
+│   └── comparison/         # fleet.compare — PROC COMPARE analogue in pure Polars
 │
 ├── datasets/               # Example raw data (CDISCPILOT01)
 ├── specs/                  # YAML derivation specs per study/domain
@@ -278,6 +279,22 @@ Registers `df.tlg` on every Polars DataFrame. Produces Analysis Results Datasets
 | `checker.py`                         | `DatasetChecker(spec, check_ct=True)` — runtime conformance check of a built dataset against its spec (columns, types, CT via inline codelists)  |
 
 Use `algorithm:` (Fleet verb) or `callable:` (study-specific dotted path) inside `derivation:` to drive execution and `enrich_methods` enrichment.
+
+---
+
+### `comparison/` — Dataset Comparison (`fleet.compare`)
+
+PROC COMPARE analogue in pure Polars (ADR 0002): pairs a **candidate** against a **base** on **keys**, matches variables by name, and returns a **comparison report** (vocabulary in `CONTEXT.md`). One join, one collect; differences never raise.
+
+| File        | Purpose                                                                                                                                                                                                                                                      |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `engine.py` | `compare(base, candidate, *, keys, by=None, pairs=None, variables=None, abs_tol=0.0, rel_tol=0.0, ignore_trailing_whitespace=False, allow_duplicates=False, max_print=50, base_name=None, candidate_name=None)` — keyed matching (BY variables prepended to the keys), variable matching by name plus the declared pairs and narrowed to the restriction, kind classification (numeric / string / temporal / boolean / other), dtype supertypes, the null-equals-null / NaN-equals-NaN rule, the equality modes (exact, base-anchored tolerance on the numeric variables, trailing-whitespace stripping on the string ones), duplicate pairing by position within a key group, the per-group summaries, the long value listing, the per-variable summary statistics |
+| `report.py` | `ComparisonSettings` (the options a run used, with `.equality` naming the rule in effect) and the `ComparisonReport` frozen dataclass — `datasets`, `variables`, `observations`, `values`, `listing`, `statistics` (see `STATISTICS_COLUMNS`), `flags` (named, see `FLAGS`), `settings`, `version`; `.is_equal`, `.summary`, `.warnings`, `.to_text()`, `.print_report()`, `.to_json()`, `.save_json()`, `.to_html()`, `.save_html_report()`, `.save_listing()` |
+| `text.py`   | Plain-text renderer in PROC COMPARE section order, warnings above the report, summary statistics per differing variable, listing grouped per observation and sectioned per BY group, `max_print` limits (50 per variable, 500 overall by default)                                                                             |
+| `json.py`   | JSON renderer: one document whose keys (`JSON_KEYS`) mirror the report attributes, additive-only within a major version; listing and one-sided key lists truncated to the print limits with a `truncated` marker                                        |
+| `html.py`   | Self-contained HTML renderer for a reviewer without Python: raised flags as chips, per-BY-group counts, then only the mismatched observations with base and candidate side by side, one collapsible block per differing variable opening on its summary statistics, one section per group; never truncated |
+
+Three surfaces over the one engine: `fleet.compare(base, candidate, keys=...)`; the `.compare(base, keys=..., on_fail="warn")` verb on `SharedVerbsMixin` (`core/_verb_mixin.py`), where the chain is the candidate and the report stays on the namespace as `last_comparison`; and `fleet compare BASE CANDIDATE --keys K1,K2 [--by B1,B2] [--pairs BASE=CAND,...] [--variables V1,V2] [--abs-tol N] [--rel-tol N] [--ignore-trailing-whitespace] [--allow-duplicates] [--all] [--format text|json] [--out differences.parquet] [--report compare.html]` (`cli.py`), whose exit code is the verdict — 0 equal, 1 different, 2 the comparison could not run. Concepts page: `docs/concepts/comparison.md`.
 
 ---
 

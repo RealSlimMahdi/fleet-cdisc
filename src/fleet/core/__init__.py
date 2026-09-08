@@ -3,6 +3,7 @@
 from .dag import PinDependency, PipelineDAG, PipelineNode, build_dag
 from .exceptions import (
     ADAMError,
+    ComparisonError,
     CTError,
     DerivationError,
     FleetError,
@@ -40,6 +41,7 @@ __all__ = [
     "TLGError",
     "SchemaError",
     "ValidationError",
+    "ComparisonError",
     "StudyConfig",
     "StudyPathConfig",
     "SDTMConfig",

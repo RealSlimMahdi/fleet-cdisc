@@ -27,6 +27,7 @@ uv run python examples/cdiscpilot01_inline.py
 uv run python examples/cdiscpilot01_spec_driven.py
 uv run python examples/adnca_example.py
 uv run python examples/tdd_example.py
+uv run python examples/r2r_ae_example.py
 ```
 
 ## Verification Order
@@ -37,7 +38,7 @@ After every feature or fix: lint → tests → examples → `llms.txt` → docs 
 uv run ruff check && uv run ruff format --check
 uv run blacken-docs --check --line-length 100 $(find docs -name '*.md')  # CI gate — run after ANY docs edit; drop --check to auto-fix
 uv run pytest
-uv run python examples/full_pipeline_example.py && uv run python examples/cdiscpilot01_inline.py && uv run python examples/cdiscpilot01_spec_driven.py && uv run python examples/adnca_example.py && uv run python examples/tdd_example.py
+uv run python examples/full_pipeline_example.py && uv run python examples/cdiscpilot01_inline.py && uv run python examples/cdiscpilot01_spec_driven.py && uv run python examples/adnca_example.py && uv run python examples/tdd_example.py && uv run python examples/r2r_ae_example.py
 ```
 
 If user-facing API changed (new verbs, signatures, CLI commands):

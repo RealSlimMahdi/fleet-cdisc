@@ -11,13 +11,14 @@ flowchart LR
     RAW["Raw AE CSV"] --> SDTM["SDTM AE<br/>df.sdtm"]
     SDTM --> ADAE["ADaM ADAE<br/>df.adam · df.adam.occds"]
     ADSL[("ADSL<br/>pre-built, governed")] -.-> ADAE
-    ADAE --> VAL["Validate<br/>.validate()"]
+    ADAE --> QC["QC<br/>.compare()"]
+    QC --> VAL["Validate<br/>.validate()"]
     VAL --> TLG["AE summary table<br/>df.tlg.ae → HTML"]
 ```
 
 DM and ADSL are assumed to already exist — they are **governed, shared artefacts**
 produced by separate programs. The R2R script focuses on **one domain end-to-end**:
-raw AE data through SDTM, ADaM, validation, and table rendering.
+raw AE data through SDTM, ADaM, QC, validation, and table rendering.
 
 Instead of maintaining separate programs for each layer — with hand-offs, naming
 conventions to remember, and scattered data lineage — an R2R script keeps the
@@ -30,14 +31,15 @@ conventions to remember, and scattered data lineage — an R2R script keeps the
 ### The traditional model
 
 In conventional clinical programming, the AE deliverable involves at least
-**four separate programs**, often written by different people:
+**four separate programs**, often written by different people. The last column
+is the R2R layer that replaces each:
 
-| Program       | Input          | Output           | Owner      |
-| ------------- | -------------- | ---------------- | ---------- |
-| `ae.sas`      | Raw AE extract | SDTM AE          | SDTM prog. |
-| `adae.sas`    | SDTM AE + ADSL | ADaM ADAE        | ADaM prog. |
-| `adae_qc.sas` | ADAE           | Validation log   | QC prog.   |
-| `t_ae.sas`    | ADAE + ADSL    | AE summary table | TLG prog.  |
+| Program       | Input          | Output               | Owner      | R2R layer           |
+| ------------- | -------------- | -------------------- | ---------- | ------------------- |
+| `ae.sas`      | Raw AE extract | SDTM AE              | SDTM prog. | 1 — `df.sdtm`       |
+| `adae.sas`    | SDTM AE + ADSL | ADaM ADAE            | ADaM prog. | 2 — `df.adam.occds` |
+| `adae_qc.sas` | SDTM AE + ADSL | PROC COMPARE listing | QC prog.   | 3 — `.compare()`    |
+| `t_ae.sas`    | ADAE + ADSL    | AE summary table     | TLG prog.  | 5 — `df.tlg.ae`     |
 
 Each program runs independently. Context about _why_ a particular derivation
 exists often lives only in the developer's head or in a Word document. When the
@@ -51,8 +53,9 @@ flowchart LR
     subgraph R2R["r2r_ae.py — one script, one review"]
         direction LR
         L1["Layer 1<br/>SDTM AE"] --> L2["Layer 2<br/>ADAE"]
-        L2 --> L3["Layer 3<br/>Validate"]
-        L3 --> L4["Layer 4<br/>Render HTML"]
+        L2 --> L3["Layer 3<br/>QC compare"]
+        L3 --> L4["Layer 4<br/>Validate"]
+        L4 --> L5["Layer 5<br/>Render HTML"]
     end
     RAWAE["Raw AE"] --> L1
     ADSL[("ADSL<br/>pre-built input")] -.-> L2
@@ -179,7 +182,65 @@ adae = (
 )
 ```
 
-### Layer 3 — Validate
+### Layer 3 — QC (`.compare()`)
+
+This is `adae_qc.sas`. A second programmer re-derives the analysis variables
+from the same SDTM AE and ADSL inputs — in plain Polars expressions rather
+than the first-class verbs the production chain used — and ends the chain in
+[`.compare()`](../concepts/comparison.md), Fleet's PROC COMPARE. The chain is
+the candidate, the production ADAE is the base, and `on_fail="raise"` turns a
+difference into a stopped script:
+
+```python
+adae_qc = (
+    ae_with_trt.adam.occds("ADAE")
+    .derivation("ASTDT", expression=pl.col("AESTDTC").str.to_date(strict=False))
+    .derivation(
+        "TRTEMFL",
+        expression=pl.when(
+            pl.col("AESTDTC")
+            .str.to_date(strict=False)
+            .is_between(
+                pl.col("TRTSDT").str.to_date(strict=False),
+                pl.col("TRTEDT").str.to_date(strict=False),
+            )
+        ).then(pl.lit("Y")),
+    )
+    # ... AENDT, ADY, ANL01FL, ASEQ, AEDECOD and AEBODSYS likewise
+    .compare(
+        adae,
+        keys=["USUBJID", "AESEQ"],
+        variables=["ASTDT", "AENDT", "ADY", "TRTEMFL", "ANL01FL", "ASEQ", "AEDECOD", "AEBODSYS"],
+        base_name="ADAE (production)",
+        candidate_name="ADAE (QC)",
+        on_fail="raise",
+    )
+    .to_frame()
+)
+```
+
+`variables=` states the QC scope, so production's imputation-flag by-products
+are neither compared nor reported as missing. The report is printed and kept on
+the namespace as `last_comparison`:
+
+```
+Comparison report: ADAE (production) vs ADAE (QC)
+======================================================================
+
+Data set summary
+----------------------------------------------------------------------
+  Base:      ADAE (production)  (5 observations, 37 variables)
+  Candidate: ADAE (QC)  (5 observations, 34 variables)
+  Keys:      USUBJID, AESEQ
+  Variables: ASTDT, AENDT, ADY, TRTEMFL, ANL01FL, ASEQ, AEDECOD, AEBODSYS  (restricted)
+  Settings:  exact
+
+Verdict
+----------------------------------------------------------------------
+  EQUAL: no differences found.
+```
+
+### Layer 4 — Validate
 
 Call `.validate()` directly in the pipeline chain — it prints the conformance
 report and returns the namespace unchanged so derivations can continue:
@@ -264,7 +325,7 @@ Total Issues: 0
 ======================================================================
 ```
 
-### Layer 3b — Trace an issue back to its verb
+### Layer 4b — Trace an issue back to its verb
 
 `.validate()` cross-links each finding to the chain's own variable lineage, so
 the report says not just *what* failed but *which verb produced it*. Nothing
@@ -297,7 +358,7 @@ name plus the dotted path to its implementation:
 `AEBODSYS` above stays bare: nothing in the chain derives it, so there is no
 lineage node to match.
 
-### Layer 4 — Render (`.tlg.ae` namespace)
+### Layer 5 — Render (`.tlg.ae` namespace)
 
 Compute the Analysis Results Dataset and render to HTML:
 
@@ -334,7 +395,9 @@ Path("outputs/ae_r2r.html").write_text(html)
 
 ## R2R and Agentic Coding
 
-The R2R strategy is **purpose-built for AI agents**. Here's why:
+R2R was designed for a reviewable human workflow — one file, one reading order, one
+visible output. AI agents happen to need exactly the same things, which is why they
+do well with it:
 
 1. **Single-context reasoning** — The entire derivation fits in one file (and one
    prompt). An agent doesn't need to discover dependencies across a file tree.
@@ -383,14 +446,18 @@ Output:
   AE : 5 records × 21 variables
 
 ━━ Layer 2 · ADaM ADAE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  ADAE : 5 records × 34 variables
+  ADAE : 5 records × 37 variables
 
-━━ Layer 3 · Validate ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━ Layer 3 · QC ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  EQUAL: no differences found.
+
+━━ Layer 4 · Validate ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   ✓ TLG pre-validation passed
 
-━━ Layer 4 · Render ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  ARD: 155 rows × 14 cols → ae_r2r.html
+━━ Layer 5 · Render ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ARD: 155 rows × 15 cols → ae_r2r.html
 
 ━━ R2R Complete ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ADaM → QC        : 8 variables compared → EQUAL
   One file. One domain. Raw to Render.
 ```
