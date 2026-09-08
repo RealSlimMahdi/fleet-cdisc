@@ -160,6 +160,7 @@ uv run python examples/cdiscpilot01_inline.py
 uv run python examples/cdiscpilot01_spec_driven.py
 uv run python examples/adnca_example.py
 uv run python examples/tdd_example.py
+uv run python examples/r2r_ae_example.py
 
 # 4. Docs build (if you touched docs/ or docstrings)
 uv run mkdocs build --clean
