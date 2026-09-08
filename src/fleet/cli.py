@@ -1050,6 +1050,20 @@ def _scan_comparison_side(path_str: str, side: str) -> pl.LazyFrame:
         )
 
 
+def _parse_variable_pairs(text: str) -> dict[str, str]:
+    """``BASE=CANDIDATE,...`` as a mapping; anything else is exit 2."""
+    pairs: dict[str, str] = {}
+    for item in (i.strip() for i in text.split(",") if i.strip()):
+        base, _, candidate = item.partition("=")
+        if not base.strip() or not candidate.strip():
+            _fail(
+                f"--pairs expects BASE=CANDIDATE pairs separated by commas, got {item!r}",
+                code=_COMPARE_IMPOSSIBLE,
+            )
+        pairs[base.strip()] = candidate.strip()
+    return pairs
+
+
 def _run_compare(args: argparse.Namespace) -> None:
     """Compare a candidate file against a base file on keys; exit 0 / 1 / 2."""
     import polars as pl
@@ -1059,6 +1073,10 @@ def _run_compare(args: argparse.Namespace) -> None:
 
     keys = [k.strip() for k in args.keys.split(",") if k.strip()]
     by = [b.strip() for b in args.by.split(",") if b.strip()] if args.by else None
+    pairs = _parse_variable_pairs(args.pairs) if args.pairs else None
+    variables = (
+        [v.strip() for v in args.variables.split(",") if v.strip()] if args.variables else None
+    )
     base = _scan_comparison_side(args.base, "base")
     candidate = _scan_comparison_side(args.candidate, "candidate")
     try:
@@ -1067,6 +1085,8 @@ def _run_compare(args: argparse.Namespace) -> None:
             candidate,
             keys=keys,
             by=by,
+            pairs=pairs,
+            variables=variables,
             abs_tol=args.abs_tol,
             rel_tol=args.rel_tol,
             ignore_trailing_whitespace=args.ignore_trailing_whitespace,
@@ -2407,7 +2427,9 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         ),
         description=(
             "PROC COMPARE analogue: pair the two datasets on --keys, match variables by "
-            "name and print the comparison report. Equality is exact unless --abs-tol, "
+            "name and print the comparison report. --pairs compares variables named "
+            "differently on each side and --variables restricts the comparison to the ones "
+            "that matter. Equality is exact unless --abs-tol, "
             "--rel-tol or --ignore-trailing-whitespace widens it. --by sections the report "
             "per group and --allow-duplicates pairs duplicate keys by position. Exit 0 when "
             "the datasets are equal, 1 when they differ, 2 when the comparison could not run "
@@ -2440,6 +2462,27 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
             "prepended to --keys automatically, so they need not be repeated there. The "
             "observation and values summaries are also reported per group, and a group "
             "present on one side only is flagged and listed; the verdict stays global."
+        ),
+    )
+    compare_parser.add_argument(
+        "--pairs",
+        metavar="BASE=CAND,...",
+        help=(
+            "Comma-separated variable pairs whose sides carry different names, e.g. "
+            "WEIGHT=WT. Applied on top of the automatic name matching, so a renamed "
+            "column is compared rather than reported missing; the report names it after "
+            "the base. A pair whose candidate variable is absent reports the base one as "
+            "missing from the candidate."
+        ),
+    )
+    compare_parser.add_argument(
+        "--variables",
+        metavar="V1,V2",
+        help=(
+            "Comma-separated variables to restrict the comparison to, in base names, so a "
+            "work-in-progress candidate is checked on the columns that are finished. A "
+            "variable outside the list is ignored on both sides: neither compared nor "
+            "reported as missing."
         ),
     )
     compare_parser.add_argument(

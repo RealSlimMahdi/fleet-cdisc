@@ -14,7 +14,7 @@ Pure Polars: no numpy, no pandas.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 import polars as pl
 
@@ -60,6 +60,8 @@ def compare(
     *,
     keys: str | Sequence[str],
     by: str | Sequence[str] | None = None,
+    pairs: Mapping[str, str] | None = None,
+    variables: str | Sequence[str] | None = None,
     abs_tol: float = 0.0,
     rel_tol: float = 0.0,
     ignore_trailing_whitespace: bool = False,
@@ -94,6 +96,16 @@ def compare(
             and values summaries are additionally reported per group.  A
             group present on one side only raises ``base_only_groups`` or
             ``candidate_only_groups``; the verdict stays global.
+        pairs: Base variable names mapped to the candidate names that carry
+            them, applied on top of the automatic name matching, so a
+            renamed column is compared rather than reported missing.  The
+            report names a paired variable by its **base** name.  A pair
+            whose candidate name is absent reports the base variable as
+            missing from the candidate.
+        variables: Restrict the comparison to these variables, in **base**
+            names.  A variable outside the restriction is ignored on both
+            sides: it is neither compared nor reported as missing.  The
+            default compares every variable that is not a key.
         abs_tol: Absolute tolerance on the numeric variables.  ``0.0`` (the
             default) is exact.
         rel_tol: Relative tolerance on the numeric variables, as a fraction
@@ -128,8 +140,8 @@ def compare(
     Raises:
         ComparisonError: A key or BY variable is missing, duplicated (without
             ``allow_duplicates``) or of an incompatible type on one side, a
-            key reuses a listing column name, or a tolerance is negative or
-            not finite.
+            key reuses a listing column name, a pair or a restriction names a
+            variable no side carries, or a tolerance is negative or not finite.
         VerbUsageError: An input is not a Polars frame, or an argument has
             the wrong type.
 
@@ -151,17 +163,33 @@ def compare(
 
             report = fleet.compare(adsl_prod, adsl_qc, keys="USUBJID", by="TRT01P")
             report.observations.per_group
+
+        Compare a legacy dataset that named two variables differently, on
+        the variables that are finished::
+
+            report = fleet.compare(
+                advs_legacy,
+                advs_wip,
+                keys=["USUBJID", "PARAMCD"],
+                pairs={"AVAL": "RESULT"},
+                variables=["AVAL", "AVISIT"],
+            )
     """
     base_lf = _as_lazy(base, "base")
     candidate_lf = _as_lazy(candidate, "candidate")
     by_list = _normalise_by(by)
     key_list = _normalise_keys(keys, by_list)
     _normalise_max_print(max_print)  # validate early, before any work
-    # The settings are both the record of the run and the equality rule the
-    # join evaluates, so every option is checked as they are built.
+    base_schema = base_lf.collect_schema()
+    candidate_schema = candidate_lf.collect_schema()
+    _check_keys_present(key_list, base_schema, candidate_schema)
+    # The settings are both the record of the run and the rule the join
+    # evaluates, so every option is checked as they are built.
     settings = ComparisonSettings(
         keys=tuple(key_list),
         by=tuple(by_list),
+        pairs=_normalise_pairs(pairs, key_list, base_schema),
+        variables=_normalise_variables(variables, base_schema, candidate_schema),
         abs_tol=_normalise_tolerance(abs_tol, "abs_tol"),
         rel_tol=_normalise_tolerance(rel_tol, "rel_tol"),
         ignore_trailing_whitespace=_normalise_flag(
@@ -173,15 +201,17 @@ def compare(
         candidate_name=candidate_name,
     )
 
-    base_schema = base_lf.collect_schema()
-    candidate_schema = candidate_lf.collect_schema()
-    _check_keys_present(key_list, base_schema, candidate_schema)
     key_casts = _key_casts(key_list, base_schema, candidate_schema)
-    variables, casts = _classify_variables(key_list, base_schema, candidate_schema)
-    compared = list(variables.compared)
+    variables_summary, casts = _classify_variables(
+        key_list, base_schema, candidate_schema, settings
+    )
+    compared = list(variables_summary.compared)
     #: The dtype each compared variable was compared under: the common
     #: supertype where the sides disagreed, the base dtype otherwise.
     compared_dtypes = {c: casts.get(c, base_schema[c]) for c in compared}
+    #: The dtype each side stores a compared variable in, before any cast.
+    base_dtypes = {c: base_schema[c] for c in compared}
+    candidate_dtypes = {c: candidate_schema[settings.pairs.get(c, c)] for c in compared}
 
     frame = _join(base_lf, candidate_lf, key_list, compared, key_casts, compared_dtypes, settings)
     in_base = pl.col(_IN_BASE).fill_null(False)
@@ -193,16 +223,16 @@ def compare(
     candidate_only_keys = frame.filter(~in_base & in_candidate).select(key_list).sort(key_list)
     per_variable, observations_with_differences = _values_summary(matched, compared)
     listing = _listing(
-        matched, key_list, by_list, per_variable, compared_dtypes, base_schema, candidate_schema
+        matched, key_list, by_list, per_variable, compared_dtypes, base_dtypes, candidate_dtypes
     )
     base_only_groups, candidate_only_groups = _one_sided_groups(
         frame, by_list, in_base, in_candidate
     )
 
     flags = {
-        "base_only_variables": bool(variables.base_only),
-        "candidate_only_variables": bool(variables.candidate_only),
-        "type_conflicts": bool(variables.type_conflicts),
+        "base_only_variables": bool(variables_summary.base_only),
+        "candidate_only_variables": bool(variables_summary.candidate_only),
+        "type_conflicts": bool(variables_summary.type_conflicts),
         "base_only_observations": base_only_keys.height > 0,
         "candidate_only_observations": candidate_only_keys.height > 0,
         "values_differ": listing.height > 0,
@@ -217,7 +247,7 @@ def compare(
                 candidate_name, frame.filter(in_candidate).height, len(candidate_schema)
             ),
         ),
-        variables=variables,
+        variables=variables_summary,
         observations=ObservationSummary(
             matched=matched.height,
             base_only=base_only_keys.height,
@@ -297,6 +327,63 @@ def _as_names(value: object, argument: str) -> list[str]:
     if isinstance(value, Sequence) and all(isinstance(name, str) for name in value):
         return list(value)
     raise VerbUsageError(f"{argument} must be a variable name or a sequence of variable names")
+
+
+def _normalise_pairs(pairs: object, keys: list[str], base: pl.Schema) -> dict[str, str]:
+    """The base names mapped to the candidate names carrying them, checked against the base.
+
+    A pair is stated in the base's vocabulary, so its left-hand side must be
+    a base variable that is compared; its right-hand side is checked against
+    the candidate later, where an absent one reports the base variable as
+    missing rather than stopping the compare.
+    """
+    if pairs is None:
+        return {}
+    if not isinstance(pairs, Mapping) or not all(
+        isinstance(name, str) for pair in pairs.items() for name in pair
+    ):
+        raise VerbUsageError(
+            "pairs must be a mapping of base variable names to candidate variable names"
+        )
+    unknown = [b for b in pairs if b not in base]
+    if unknown:
+        raise ComparisonError(f"pairs names variable(s) absent from the base: {', '.join(unknown)}")
+    renamed_keys = [b for b in pairs if b in keys]
+    if renamed_keys:
+        raise ComparisonError(
+            f"pairs may not rename a key: {', '.join(renamed_keys)}; "
+            "observations pair on keys of the same name on both sides"
+        )
+    targets = list(pairs.values())
+    repeated = sorted({c for c in targets if targets.count(c) > 1})
+    if repeated:
+        raise ComparisonError(
+            f"pairs maps more than one base variable to candidate variable(s): {', '.join(repeated)}"
+        )
+    return dict(pairs)
+
+
+def _normalise_variables(
+    variables: object, base: pl.Schema, candidate: pl.Schema
+) -> tuple[str, ...] | None:
+    """The variables the comparison is restricted to; ``None`` compares them all.
+
+    A name no side carries is refused, because a restriction that silently
+    compares nothing would report a dataset as equal.
+    """
+    if variables is None:
+        return None
+    names = _as_names(variables, "variables")
+    if not names:
+        raise ComparisonError(
+            "variables must name at least one variable; omit it to compare them all"
+        )
+    unknown = [v for v in names if v not in base and v not in candidate]
+    if unknown:
+        raise ComparisonError(
+            f"variables names variable(s) present on neither side: {', '.join(unknown)}"
+        )
+    return tuple(dict.fromkeys(names))
 
 
 def _check_keys_present(keys: list[str], base: pl.Schema, candidate: pl.Schema) -> None:
@@ -386,14 +473,25 @@ def _finest(units: Iterable[str]) -> str:
 
 
 def _classify_variables(
-    keys: list[str], base: pl.Schema, candidate: pl.Schema
+    keys: list[str], base: pl.Schema, candidate: pl.Schema, settings: ComparisonSettings
 ) -> tuple[VariablesSummary, dict[str, pl.DataType]]:
-    common = [c for c in base if c in candidate and c not in keys]
+    """Sort the variables into common, one-sided, conflicting and differently typed.
+
+    The universe is the base's variables less the keys, narrowed to the
+    restriction when one was given: what is outside it is ignored on both
+    sides and raises no flag.  A variable is common when the candidate
+    carries the name the pairs give it, its own otherwise, and is named
+    after the base throughout the report.
+    """
+    restriction, pairs = settings.variables, settings.pairs
+    universe = [c for c in base if c not in keys and (restriction is None or c in restriction)]
+    common = [c for c in universe if pairs.get(c, c) in candidate]
+    paired = {pairs.get(c, c) for c in common}
     conflicts: list[VariableDtypes] = []
     dtype_differences: list[VariableDtypes] = []
     casts: dict[str, pl.DataType] = {}
     for c in common:
-        a, b = base[c], candidate[c]
+        a, b = base[c], candidate[pairs.get(c, c)]
         if a == b:
             continue
         supertype = _supertype(a, b)
@@ -404,8 +502,12 @@ def _classify_variables(
             casts[c] = supertype
     summary = VariablesSummary(
         common=tuple(common),
-        base_only=tuple(c for c in base if c not in candidate),
-        candidate_only=tuple(c for c in candidate if c not in base),
+        base_only=tuple(c for c in universe if c not in common),
+        candidate_only=tuple(
+            c
+            for c in candidate
+            if c not in base and c not in paired and (restriction is None or c in restriction)
+        ),
         type_conflicts=tuple(conflicts),
         dtype_differences=tuple(dtype_differences),
     )
@@ -418,12 +520,13 @@ def _classify_variables(
 def _prepare(
     lf: pl.LazyFrame,
     keys: list[str],
-    compared: list[str],
+    compared: Mapping[str, str],
     key_casts: dict[str, pl.DataType],
     marker: str,
 ) -> pl.LazyFrame:
+    """One side, presenting every compared variable under its base name; *compared* maps that name to this side's column."""
     columns = [pl.col(k).cast(key_casts[k]) if k in key_casts else pl.col(k) for k in keys]
-    columns += [pl.col(c) for c in compared]
+    columns += [pl.col(source).alias(name) for name, source in compared.items()]
     return lf.select(columns).with_columns(
         pl.int_range(pl.len()).over(keys).alias(_IDX),
         pl.lit(True).alias(marker),
@@ -440,8 +543,14 @@ def _join(
     settings: ComparisonSettings,
 ) -> pl.DataFrame:
     """Full-join both sides on the keys and evaluate the inequality flags; the one collect."""
-    joined = _prepare(base, keys, compared, key_casts, _IN_BASE).join(
-        _prepare(candidate, keys, compared, key_casts, _IN_CANDIDATE),
+    joined = _prepare(base, keys, {c: c for c in compared}, key_casts, _IN_BASE).join(
+        _prepare(
+            candidate,
+            keys,
+            {c: settings.pairs.get(c, c) for c in compared},
+            key_casts,
+            _IN_CANDIDATE,
+        ),
         on=[*keys, _IDX],
         how="full",
         coalesce=True,
@@ -650,10 +759,10 @@ def _listing(
     by: list[str],
     per_variable: pl.DataFrame,
     compared_dtypes: dict[str, pl.DataType],
-    base_schema: pl.Schema,
-    candidate_schema: pl.Schema,
+    base_dtypes: dict[str, pl.DataType],
+    candidate_dtypes: dict[str, pl.DataType],
 ) -> pl.DataFrame:
-    """Long frame of every differing value, sorted by keys (BY variables first); ``compared_dtypes`` is the dtype each variable was compared under."""
+    """Long frame of every differing value, sorted by keys (BY variables first); ``compared_dtypes`` is the dtype each variable was compared under, ``base_dtypes`` and ``candidate_dtypes`` the dtypes the sides store it in."""
     group = _group_label(by) if by else pl.lit(None, pl.String)
     differing = per_variable.filter(pl.col("differences") > 0)["variable"].to_list()
     parts = []
@@ -674,8 +783,8 @@ def _listing(
                 *[pl.col(k) for k in keys],
                 group.alias("group"),
                 pl.lit(c, pl.String).alias("variable"),
-                _as_string(base_value, base_schema[c]).alias("base"),
-                _as_string(candidate_value, candidate_schema[c]).alias("candidate"),
+                _as_string(base_value, base_dtypes[c]).alias("base"),
+                _as_string(candidate_value, candidate_dtypes[c]).alias("candidate"),
                 difference.cast(pl.Float64).alias("difference"),
                 percent.cast(pl.Float64).alias("percent_difference"),
             )

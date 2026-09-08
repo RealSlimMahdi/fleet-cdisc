@@ -62,7 +62,9 @@ uv run fleet compare legacy/adae.xpt outputs/adam/adae.parquet --keys USUBJID,AE
 
 `--keys` is required. `--by TRT01P` sections the report per
 [BY group](#by-groups) and `--allow-duplicates` pairs
-[duplicate keys](#duplicate-keys) by position. `--abs-tol`, `--rel-tol` and
+[duplicate keys](#duplicate-keys) by position. `--pairs` and `--variables`
+[rename and restrict](#variable-pairs-and-restriction) what is compared.
+`--abs-tol`, `--rel-tol` and
 `--ignore-trailing-whitespace` widen equality (see
 [tolerances and whitespace](#tolerances-and-trailing-whitespace)). `--all`
 lifts the print limits so every unequal value is
@@ -158,7 +160,7 @@ version and no ceiling. The top-level keys, in order (`fleet.comparison.JSON_KEY
 | `values` | `per_variable` as `{variable, differences}`, `variables_with_differences`, `observations_with_differences`, `total_differences`, and `per_group`. |
 | `statistics` | Summary statistics per numeric variable that differs; an empty list until they land. |
 | `listing` | `columns`, `rows` (one object per differing value, within the print limits), `shown`, `total` and `truncated`. |
-| `settings` | Every option the comparison ran with: `keys`, `by`, `abs_tol`, `rel_tol`, `ignore_trailing_whitespace`, `allow_duplicates`, `max_print`, `base_name`, `candidate_name`. |
+| `settings` | Every option the comparison ran with: `keys`, `by`, `pairs`, `variables`, `abs_tol`, `rel_tol`, `ignore_trailing_whitespace`, `allow_duplicates`, `max_print`, `base_name`, `candidate_name`. |
 | `version` | The Fleet version that produced the report. |
 
 The document is strict JSON: non-finite numbers are `null` and temporal key
@@ -326,6 +328,56 @@ from that:
   missing arm rather than as a thousand missing observations.
 - **The verdict stays global.** `is_equal` is still true only when no flag is
   raised anywhere.
+
+## Variable pairs and restriction
+
+Two datasets rarely line up by name alone. A legacy extract calls a variable
+`WEIGHT` where the candidate calls it `WT`, and a candidate that is still
+being written has columns nobody wants compared yet. `pairs` and `variables`
+say so:
+
+```python
+report = fleet.compare(
+    advs_legacy,
+    advs_wip,
+    keys=["USUBJID", "PARAMCD"],
+    pairs={"WEIGHT": "WT"},  # base name: candidate name
+    variables=["WEIGHT", "AVISIT"],  # base names
+)
+```
+
+```bash
+uv run fleet compare legacy/advs.xpt outputs/adam/advs.parquet \
+  --keys USUBJID,PARAMCD --pairs WEIGHT=WT --variables WEIGHT,AVISIT
+```
+
+**`pairs` maps base names to candidate names**, on top of the automatic name
+matching rather than instead of it: everything not named in `pairs` still
+matches by name. A paired variable is compared by value and no longer reported
+missing on either side, and the report — the values summary, the listing, the
+HTML blocks — names it by its **base** name throughout. A pair is otherwise an
+ordinary common variable: same kind but a different dtype is a dtype
+difference, a different kind is a type conflict.
+
+A pair whose candidate variable is **absent** reports the base one as missing
+from the candidate, exactly as an unpaired variable would. A pair whose base
+variable the base does not carry, one that renames a key, and two pairs
+pointing at the same candidate variable are refused with a `ComparisonError`:
+the pairing could not be honoured as written.
+
+**`variables` restricts the universe**, in base names. What is outside the list
+is ignored entirely, on both sides: not compared, and not reported as missing
+or extra either — a work-in-progress candidate is checked on the columns that
+are finished without its unfinished ones raising a flag. What *is* on the list
+still is: a restricted variable the candidate does not carry is still reported
+as missing from it. Keys are never restricted; they pair observations whatever
+the list says. A restriction naming a variable neither side carries is refused,
+because a comparison that silently compares nothing would report two datasets
+as equal.
+
+Both options are recorded in `report.settings` (`pairs` and `variables`) and
+shown wherever a run is described: the data set summary of the text report,
+the header of the HTML page, and the `settings` block of the JSON document.
 
 ## Gating a pipeline on the outcome
 

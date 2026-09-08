@@ -57,7 +57,7 @@ def _table(headings: Sequence[str], frame: pl.DataFrame) -> list[str]:
 
 
 def _datasets_section(report: ComparisonReport) -> list[str]:
-    d = report.datasets
+    d, s = report.datasets, report.settings
     return [
         "Data set summary",
         _RULE,
@@ -65,8 +65,10 @@ def _datasets_section(report: ComparisonReport) -> list[str]:
         f"({d.base.rows} observations, {d.base.variables} variables)",
         f"  Candidate: {report.candidate_label}  "
         f"({d.candidate.rows} observations, {d.candidate.variables} variables)",
-        f"  Keys:      {', '.join(report.settings.keys)}",
-        f"  Settings:  {report.settings.equality}",
+        f"  Keys:      {', '.join(s.keys)}",
+        *([f"  Pairs:     {s.pair_labels}  (base = candidate)"] if s.pairs else []),
+        *([f"  Variables: {', '.join(s.variables)}  (restricted)"] if s.variables else []),
+        f"  Settings:  {s.equality}",
         "",
     ]
 

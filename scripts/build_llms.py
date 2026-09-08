@@ -737,6 +737,9 @@ report = fleet.compare(adsl_prod, adsl_qc, keys="USUBJID", by="TRT01P", allow_du
 report.observations.per_group  # group, matched, base_only, candidate_only
 report.values.per_group  # group, variables_with_differences, observations_with_differences, differences
 report.warnings  # lines every renderer prints above the report (duplicate keys today)
+
+# Compare a variable the two sides name differently, on the variables that are finished
+report = fleet.compare(advs_legacy, advs_wip, keys=["USUBJID", "PARAMCD"], pairs={{"WEIGHT": "WT"}}, variables=["WEIGHT", "AVISIT"])
 ```
 
 Rules: equality is exact by default; null equals null, NaN equals NaN, null against NaN differs. \
@@ -751,7 +754,12 @@ compared after casting and listed as dtype differences without a flag; different
 / string) are type conflicts, listed and not compared. Row and column order are ignored. A \
 missing key raises `ComparisonError` naming the side, and so does a duplicated one unless \
 `allow_duplicates` pairs duplicates by their position within each key group (counted per side, \
-flagged and warned about; an unpaired one becomes a one-sided observation). `by` prepends the BY \
+flagged and warned about; an unpaired one becomes a one-sided observation). `pairs` maps base \
+names to candidate names on top of the name matching, so a renamed column is compared rather \
+than reported missing and is named after the **base** throughout the report; a pair whose \
+candidate name is absent reports the base variable as missing from the candidate. `variables` \
+restricts the universe, in base names: what is outside it is ignored on both sides and raises no \
+missing-variable flag. `by` prepends the BY \
 variables to the keys — they need not be repeated there — labels each difference `TRT01P=A` in \
 the listing's `group` column, adds per-group observation and values counts to every renderer, \
 and flags groups found on one side only; the verdict stays global. \
@@ -799,6 +807,7 @@ uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID,AESEQ --re
 uv run fleet compare legacy/advs.xpt outputs/adam/advs.parquet --keys USUBJID,PARAMCD --rel-tol 1e-9 --ignore-trailing-whitespace   # absorb legacy engine noise
 uv run fleet compare adsl_prod.parquet adsl_qc.parquet --keys USUBJID --by TRT01P   # section the report per treatment arm
 uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID --allow-duplicates   # pair duplicate keys by position instead of refusing
+uv run fleet compare legacy/advs.xpt outputs/adam/advs.parquet --keys USUBJID,PARAMCD --pairs WEIGHT=WT --variables WEIGHT,AVISIT   # renamed column, and only the variables that are finished
 ```
 
 The exit code is the verdict: `0` equal, `1` different (report on stdout), `2` the comparison \

@@ -208,3 +208,26 @@ class TestGroupAndDuplicateKeywords:
         assert ns.last_comparison.settings.allow_duplicates is True
         assert ns.last_comparison.flags == {"duplicate_keys"}
         assert ns.last_comparison.observations.base_duplicates == 1
+
+
+class TestPairAndRestrictionKeywords:
+    """``pairs`` and ``variables`` reach the engine; the pairs are read base to chain."""
+
+    def test_a_variable_the_chain_renamed_compares_through_a_pair(self):
+        base = _dm().rename({"AGE": "AGEN"})
+        chain = _dm().sdtm
+        assert chain.compare(base, keys="USUBJID", on_fail="ignore").last_comparison.flags == {
+            "base_only_variables",
+            "candidate_only_variables",
+        }
+
+        ns = chain.compare(base, keys="USUBJID", pairs={"AGEN": "AGE"}, on_fail="raise")
+        assert ns.last_comparison.is_equal is True
+        assert ns.last_comparison.settings.pairs == {"AGEN": "AGE"}
+
+    def test_variables_narrows_the_comparison_to_what_is_finished(self):
+        base = _dm().with_columns(pl.lit(99).alias("AGE"))
+        ns = _dm().sdtm.compare(base, keys="USUBJID", variables=["SEX"], on_fail="raise")
+        assert ns.last_comparison.is_equal is True
+        assert ns.last_comparison.settings.variables == ("SEX",)
+        assert ns.last_comparison.variables.compared == ("SEX",)

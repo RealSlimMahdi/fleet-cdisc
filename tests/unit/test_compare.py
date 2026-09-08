@@ -1309,6 +1309,172 @@ class TestSettingsOnEverySurface:
         assert "exact" in compare(base, candidate, keys="USUBJID").to_html()
 
 
+# ── Variable pairs and restriction ────────────────────────────────────────────
+
+
+class TestVariablePairs:
+    """``pairs`` compares two variables under different names, on top of name matching."""
+
+    def test_a_renamed_variable_is_missing_on_both_sides_until_it_is_paired(self, base):
+        renamed = base.rename({"WT": "WEIGHT"})
+        unpaired = compare(base, renamed, keys="USUBJID")
+        assert unpaired.variables.base_only == ("WT",)
+        assert unpaired.variables.candidate_only == ("WEIGHT",)
+        assert unpaired.raised_flags == ("base_only_variables", "candidate_only_variables")
+
+        paired = compare(base, renamed, keys="USUBJID", pairs={"WT": "WEIGHT"})
+        assert paired.is_equal is True
+        assert paired.variables.base_only == () and paired.variables.candidate_only == ()
+        assert paired.variables.compared == ("AGE", "SEX", "WT")
+
+    def test_a_paired_variable_is_listed_under_its_base_name(self, base):
+        candidate = base.rename({"WT": "WEIGHT"}).with_columns(pl.lit(99.0).alias("WEIGHT"))
+        report = compare(base, candidate, keys="USUBJID", pairs={"WT": "WEIGHT"})
+        assert report.flags == {"values_differ"}
+        assert report.listing["variable"].to_list() == ["WT"] * 4
+        assert report.listing["base"].to_list() == ["70.1", "55.2", "60.3", "80.0"]
+        assert report.listing["candidate"].to_list() == ["99.0"] * 4
+        assert dict(report.values.per_variable.iter_rows())["WT"] == 4
+
+    def test_name_matching_still_applies_to_the_unpaired_variables(self, base):
+        candidate = base.rename({"WT": "WEIGHT"}).with_columns(pl.lit(99).alias("AGE"))
+        report = compare(base, candidate, keys="USUBJID", pairs={"WT": "WEIGHT"})
+        assert report.variables.compared == ("AGE", "SEX", "WT")
+        assert report.listing["variable"].unique().to_list() == ["AGE"]
+
+    def test_a_pair_target_absent_from_the_candidate_is_reported_as_missing(self, base):
+        report = compare(base, base.drop("WT"), keys="USUBJID", pairs={"WT": "WEIGHT"})
+        assert report.variables.base_only == ("WT",)
+        assert "WT" not in report.variables.compared
+        assert "base_only_variables" in report.flags
+
+    def test_a_paired_variable_of_another_dtype_is_compared_after_casting(self, base):
+        candidate = base.rename({"AGE": "AGEN"}).with_columns(pl.col("AGEN").cast(pl.Float64))
+        report = compare(base, candidate, keys="USUBJID", pairs={"AGE": "AGEN"})
+        assert report.is_equal is True
+        assert [
+            (d.variable, str(d.base_dtype), str(d.candidate_dtype))
+            for d in report.variables.dtype_differences
+        ] == [("AGE", "Int64", "Float64")]
+
+    def test_a_paired_variable_of_another_kind_is_a_type_conflict(self, base):
+        candidate = base.rename({"AGE": "AGEC"}).with_columns(pl.col("AGEC").cast(pl.String))
+        report = compare(base, candidate, keys="USUBJID", pairs={"AGE": "AGEC"})
+        assert [c.variable for c in report.variables.type_conflicts] == ["AGE"]
+        assert "AGE" not in report.variables.compared
+        assert "type_conflicts" in report.flags
+
+    @pytest.mark.parametrize(
+        "pairs, message",
+        [
+            pytest.param({"FOO": "WEIGHT"}, "absent from the base", id="unknown-base-variable"),
+            pytest.param({"USUBJID": "SUBJID"}, "may not rename a key", id="key"),
+            pytest.param({"AGE": "X", "WT": "X"}, "more than one", id="two-pairs-one-target"),
+        ],
+    )
+    def test_a_pair_that_cannot_be_honoured_is_refused(self, base, pairs, message):
+        with pytest.raises(ComparisonError, match=message):
+            compare(base, base, keys="USUBJID", pairs=pairs)
+
+    @pytest.mark.parametrize("pairs", [["WT", "WEIGHT"], {"WT": 1}, "WT=WEIGHT"])
+    def test_pairs_must_be_a_mapping_of_names(self, base, pairs):
+        with pytest.raises(VerbUsageError, match="pairs"):
+            compare(base, base, keys="USUBJID", pairs=pairs)
+
+
+class TestVariableRestriction:
+    """``variables`` narrows the universe; what is outside it neither compares nor flags."""
+
+    def test_the_restriction_narrows_what_is_compared(self, base, candidate):
+        report = compare(base, candidate, keys="USUBJID", variables=["AGE"])
+        assert report.variables.common == ("AGE",)
+        assert report.variables.compared == ("AGE",)
+        assert report.listing["variable"].unique().to_list() == ["AGE"]
+
+    def test_a_candidate_column_outside_the_restriction_raises_no_flag(self, base, candidate):
+        report = compare(base, candidate, keys="USUBJID", variables=["AGE", "SEX"])
+        assert report.variables.candidate_only == ()  # RACE is ignored entirely
+        assert "candidate_only_variables" not in report.flags
+
+    def test_a_base_column_outside_the_restriction_raises_no_flag(self, base):
+        candidate = base.drop("WT")
+        assert compare(base, candidate, keys="USUBJID").flags == {"base_only_variables"}
+        assert compare(base, candidate, keys="USUBJID", variables=["AGE", "SEX"]).is_equal is True
+
+    def test_a_restricted_variable_absent_from_the_candidate_is_still_reported(self, base):
+        report = compare(base, base.drop("WT"), keys="USUBJID", variables=["WT"])
+        assert report.variables.base_only == ("WT",)
+        assert "base_only_variables" in report.flags
+
+    def test_a_restricted_variable_absent_from_the_base_is_still_reported(self, base, candidate):
+        report = compare(base, candidate, keys="USUBJID", variables=["RACE"])
+        assert report.variables.candidate_only == ("RACE",)
+        assert "candidate_only_variables" in report.flags
+
+    def test_the_restriction_accepts_one_name(self, base, candidate):
+        report = compare(base, candidate, keys="USUBJID", variables="AGE")
+        assert report.settings.variables == ("AGE",)
+        assert report.variables.compared == ("AGE",)
+
+    def test_a_restriction_composes_with_a_pair(self, base):
+        candidate = base.rename({"WT": "WEIGHT"}).with_columns(pl.lit(99).alias("AGE"))
+        report = compare(base, candidate, keys="USUBJID", pairs={"WT": "WEIGHT"}, variables=["WT"])
+        assert report.is_equal is True  # AGE differs, but it is outside the restriction
+        assert report.variables.compared == ("WT",)
+
+    def test_an_empty_restriction_is_refused(self, base):
+        with pytest.raises(ComparisonError, match="variables"):
+            compare(base, base, keys="USUBJID", variables=[])
+
+    def test_a_restriction_naming_a_variable_on_neither_side_is_refused(self, base, candidate):
+        with pytest.raises(ComparisonError, match="FOO"):
+            compare(base, candidate, keys="USUBJID", variables=["AGE", "FOO"])
+
+    def test_the_restriction_must_be_a_name_or_a_sequence_of_names(self, base):
+        with pytest.raises(VerbUsageError, match="variables"):
+            compare(base, base, keys="USUBJID", variables=42)
+
+
+class TestMatchingSettingsOnEverySurface:
+    """Both matching options reach the report and every renderer says they were in effect."""
+
+    @pytest.fixture
+    def report(self, base) -> ComparisonReport:
+        candidate = base.rename({"WT": "WEIGHT"})
+        return compare(
+            base, candidate, keys="USUBJID", pairs={"WT": "WEIGHT"}, variables=["AGE", "WT"]
+        )
+
+    def test_the_settings_record_both_options(self, report):
+        assert report.settings.pairs == {"WT": "WEIGHT"}
+        assert report.settings.variables == ("AGE", "WT")
+
+    def test_the_text_report_names_the_pairs_and_the_restriction(self, report):
+        text = report.to_text()
+        assert "Pairs:     WT = WEIGHT" in text
+        assert "Variables: AGE, WT" in text
+
+    def test_an_ordinary_comparison_says_nothing_about_either(self, base):
+        text = compare(base, base, keys="USUBJID").to_text()
+        assert "Pairs:" not in text and "Variables: " not in text
+
+    def test_the_json_settings_block_carries_both_options(self, report):
+        settings = json.loads(report.to_json())["settings"]
+        assert settings["pairs"] == {"WT": "WEIGHT"}
+        assert settings["variables"] == ["AGE", "WT"]
+        assert list(settings) == [f.name for f in dataclasses.fields(ComparisonSettings)]
+
+    def test_the_json_settings_are_empty_without_them(self, base):
+        settings = json.loads(compare(base, base, keys="USUBJID").to_json())["settings"]
+        assert settings["pairs"] == {}
+        assert settings["variables"] is None
+
+    def test_the_html_report_names_the_pairs_and_the_restriction(self, report):
+        page = report.to_html()
+        assert "Pairs: WT = WEIGHT" in page
+        assert "Restricted to: AGE, WT" in page
+
+
 # ── Text report ───────────────────────────────────────────────────────────────
 
 
@@ -1511,6 +1677,8 @@ class TestJsonReport:
         assert document["settings"] == {
             "keys": ["USUBJID"],
             "by": [],
+            "pairs": {},
+            "variables": None,
             "abs_tol": 0.0,
             "rel_tol": 0.0,
             "ignore_trailing_whitespace": False,

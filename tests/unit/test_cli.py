@@ -1429,3 +1429,82 @@ def test_compare_by_sections_the_report_per_group(
             "differences": 0,
         },
     ]
+
+
+def test_compare_pairs_compare_a_renamed_variable_instead_of_reporting_it_missing(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base, candidate = tmp_path / "adsl_prod.parquet", tmp_path / "adsl_qc.parquet"
+    _adsl().write_parquet(base)
+    _adsl().rename({"AGE": "AGEN"}).write_parquet(candidate)
+
+    assert _run(["compare", str(base), str(candidate), "--keys", "USUBJID"]) == 1
+    capsys.readouterr()
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "USUBJID", "--pairs", "AGE=AGEN"])
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "Pairs:     AGE = AGEN" in captured.out
+    assert captured.err == ""
+
+
+def test_compare_pairs_that_are_not_pairs_exit_2(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base = tmp_path / "adsl.parquet"
+    _adsl().write_parquet(base)
+
+    code = _run(["compare", str(base), str(base), "--keys", "USUBJID", "--pairs", "AGE"])
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "--pairs" in captured.err
+    assert captured.out == ""
+
+
+def test_compare_variables_restricts_the_comparison(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base, candidate = tmp_path / "adsl_prod.parquet", tmp_path / "adsl_qc.parquet"
+    _adsl().write_parquet(base)
+    _adsl().with_columns(pl.lit(99).alias("AGE")).write_parquet(candidate)
+
+    assert _run(["compare", str(base), str(candidate), "--keys", "USUBJID"]) == 1
+    capsys.readouterr()
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "USUBJID", "--variables", "SEX"])
+
+    captured = capsys.readouterr()
+    assert code == 0  # AGE differs, but it is outside the restriction
+    assert "Variables: SEX" in captured.out
+    assert captured.err == ""
+
+
+def test_compare_json_settings_carry_the_pairs_and_the_restriction(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base, candidate = tmp_path / "adsl_prod.parquet", tmp_path / "adsl_qc.parquet"
+    _adsl().write_parquet(base)
+    _adsl().rename({"AGE": "AGEN"}).write_parquet(candidate)
+
+    code = _run(
+        [
+            "compare",
+            str(base),
+            str(candidate),
+            "--keys",
+            "USUBJID",
+            "--format",
+            "json",
+            "--pairs",
+            "AGE=AGEN",
+            "--variables",
+            "AGE, SEX",
+        ]
+    )
+
+    settings = json.loads(capsys.readouterr().out)["settings"]
+    assert code == 0
+    assert settings["pairs"] == {"AGE": "AGEN"}
+    assert settings["variables"] == ["AGE", "SEX"]

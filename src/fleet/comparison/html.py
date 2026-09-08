@@ -181,7 +181,12 @@ def _dtype_detail(entries: tuple[VariableDtypes, ...]) -> str:
 
 
 def _summary_section(report: ComparisonReport) -> list[str]:
-    d, v, o = report.datasets, report.variables, report.observations
+    d, v, o, s = report.datasets, report.variables, report.observations, report.settings
+    matching = [f"Keys: {escape(', '.join(s.keys))}."]
+    if s.pairs:
+        matching.append(f"Pairs: {escape(s.pair_labels)} (base = candidate).")
+    if s.variables:
+        matching.append(f"Restricted to: {escape(', '.join(s.variables))}.")
     return [
         "<h2>Summary</h2>",
         "<table>",
@@ -191,8 +196,8 @@ def _summary_section(report: ComparisonReport) -> list[str]:
         f"<tr><td>Candidate</td>{_td(d.candidate.name)}{_td(d.candidate.rows, 'number')}"
         f"{_td(d.candidate.variables, 'number')}</tr>",
         "</table>",
-        f"<p>Keys: {escape(', '.join(report.settings.keys))}. "
-        f"Settings: {escape(report.settings.equality)}. "
+        f"<p>{' '.join(matching)} "
+        f"Settings: {escape(s.equality)}. "
         f"Variables in common: {len(v.common)} (compared: {len(v.compared)}). "
         f"Matched observations: {o.matched}.</p>",
     ]

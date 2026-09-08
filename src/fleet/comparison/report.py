@@ -294,6 +294,12 @@ class ComparisonSettings:
     keys: tuple[str, ...]
     #: The variables the report is sectioned by; they are part of :attr:`keys`.
     by: tuple[str, ...]
+    #: Base variable names mapped to the candidate names carrying them, on top
+    #: of the automatic name matching; empty when every variable matched by name.
+    pairs: dict[str, str]
+    #: The variables the comparison was restricted to, in base names; ``None``
+    #: when every variable that is not a key was compared.
+    variables: tuple[str, ...] | None
     #: Absolute tolerance on the numeric variables; ``0.0`` is exact.
     abs_tol: float
     #: Relative tolerance on the numeric variables, as a fraction of the **base**
@@ -312,6 +318,11 @@ class ComparisonSettings:
     def tolerant(self) -> bool:
         """True when either tolerance is set, so numeric values compare within it."""
         return bool(self.abs_tol or self.rel_tol)
+
+    @property
+    def pair_labels(self) -> str:
+        """The variable pairs as ``BASE = CANDIDATE``, for the report headers; empty when none."""
+        return ", ".join(f"{b} = {c}" for b, c in self.pairs.items())
 
     @property
     def equality(self) -> str:

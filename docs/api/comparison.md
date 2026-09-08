@@ -45,7 +45,7 @@ filters: ["!^_"]
 
 ## Settings
 
-The options a comparison ran with, so a run can be reproduced. `abs_tol`, `rel_tol` and `ignore_trailing_whitespace` are the three that change what counts as equal — see [tolerances and trailing whitespace](../concepts/comparison.md#tolerances-and-trailing-whitespace). `by` sections the report per [BY group](../concepts/comparison.md#by-groups) and `allow_duplicates` pairs [duplicate keys](../concepts/comparison.md#duplicate-keys) by position.
+The options a comparison ran with, so a run can be reproduced. `abs_tol`, `rel_tol` and `ignore_trailing_whitespace` are the three that change what counts as equal — see [tolerances and trailing whitespace](../concepts/comparison.md#tolerances-and-trailing-whitespace). `by` sections the report per [BY group](../concepts/comparison.md#by-groups), `allow_duplicates` pairs [duplicate keys](../concepts/comparison.md#duplicate-keys) by position, and `pairs` and `variables` rename and restrict what is compared — see [variable pairs and restriction](../concepts/comparison.md#variable-pairs-and-restriction).
 
 ::: fleet.comparison.ComparisonSettings
 options:

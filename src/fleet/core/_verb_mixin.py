@@ -44,7 +44,7 @@ from fleet.core.exceptions import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
     from fleet.comparison import ComparisonReport
     from fleet.comparison.report import MaxPrint
@@ -1813,6 +1813,8 @@ class SharedVerbsMixin:
         *,
         keys: str | Sequence[str],
         by: str | Sequence[str] | None = None,
+        pairs: Mapping[str, str] | None = None,
+        variables: str | Sequence[str] | None = None,
         abs_tol: float = 0.0,
         rel_tol: float = 0.0,
         ignore_trailing_whitespace: bool = False,
@@ -1843,6 +1845,14 @@ class SharedVerbsMixin:
                 column, and give the observation and values summaries a
                 per-group breakdown.  A group present on one side only
                 raises a flag; the verdict stays global.
+            pairs: Base variable names mapped to the names the chain gives
+                them, on top of the automatic name matching, so a renamed
+                column is compared rather than reported missing.  The report
+                names a paired variable by its **base** name.
+            variables: Restrict the comparison to these variables, in
+                **base** names, so a work-in-progress chain is checked on
+                the columns that are finished.  What is outside the
+                restriction is neither compared nor reported as missing.
             abs_tol: Absolute tolerance on the numeric variables; ``0.0``
                 (the default) is exact.
             rel_tol: Relative tolerance on the numeric variables, as a
@@ -1922,6 +1932,21 @@ class SharedVerbsMixin:
                     .compare(adsl_prod, keys="USUBJID", by="TRT01P")
                     .to_frame()
                 )
+
+            Check a work-in-progress chain on the variables that are
+            finished, one of which the base names differently::
+
+                advs = (
+                    vs_df.adam
+                    .source("USUBJID")
+                    .compare(
+                        advs_prod,
+                        keys=["USUBJID", "PARAMCD"],
+                        pairs={"AVAL": "RESULT"},
+                        variables=["AVAL", "AVISIT"],
+                    )
+                    .to_frame()
+                )
         """
         from fleet.comparison import compare as compare_frames
 
@@ -1931,6 +1956,8 @@ class SharedVerbsMixin:
             self.to_frame(),
             keys=keys,
             by=by,
+            pairs=pairs,
+            variables=variables,
             abs_tol=abs_tol,
             rel_tol=rel_tol,
             ignore_trailing_whitespace=ignore_trailing_whitespace,
