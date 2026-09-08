@@ -1,22 +1,32 @@
 """Plain-text renderer for the comparison report, in PROC COMPARE section order.
 
 Sections: data set summary, variables summary, observation summary, values
-summary, value listing, verdict.  The listing is grouped per observation so
-one subject's differences read together, and truncated to the print limits
-(per variable within a group first, then overall).  The listing frame on
-the report is never truncated; only what is printed is.  A comparison with
-BY variables reports the observation and values summaries per group as well
-and sections the listing per group.
+summary, summary statistics, value listing, verdict.  The listing is grouped
+per observation so one subject's differences read together, and truncated to
+the print limits (per variable within a group first, then overall).  The
+listing frame on the report is never truncated; only what is printed is.  A
+comparison with BY variables reports the observation and values summaries per
+group as well and sections the listing per group.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
-from .report import PrintLimits, VariableDtypes, _cap, _key_label, _truncate_listing
+from .report import (
+    _MEASURE_LABELS,
+    _SIDE_LABELS,
+    PrintLimits,
+    VariableDtypes,
+    _cap,
+    _has_measures,
+    _key_label,
+    _plural,
+    _truncate_listing,
+)
 
 if TYPE_CHECKING:
     from .report import ComparisonReport
@@ -39,21 +49,24 @@ def _render_text(report: ComparisonReport, limits: PrintLimits) -> str:
     lines += _variables_section(report)
     lines += _observations_section(report, limits.per_variable)
     lines += _values_section(report)
+    lines += _statistics_section(report)
     lines += _listing_section(report, limits)
     lines += _verdict_section(report)
     return "\n".join(lines)
 
 
-def _table(headings: Sequence[str], frame: pl.DataFrame) -> list[str]:
-    """A small summary frame as fixed-width columns: the label left, the counts right."""
-    rows = [[str(value) for value in row] for row in frame.iter_rows()]
-    widths = [max([len(h), *(len(r[i]) for r in rows)]) for i, h in enumerate(headings)]
+def _table(
+    headings: Sequence[str], rows: Iterable[Sequence[object]], indent: str = "  "
+) -> list[str]:
+    """A small table as fixed-width columns: the label left, everything after it right."""
+    cells = [[str(value) for value in row] for row in rows]
+    widths = [max([len(h), *(len(r[i]) for r in cells)]) for i, h in enumerate(headings)]
 
-    def line(cells: Sequence[str]) -> str:
-        counts = "  ".join(f"{c:>{w}}" for c, w in zip(cells[1:], widths[1:]))
-        return f"  {cells[0]:<{widths[0]}}  {counts}".rstrip()
+    def line(row: Sequence[str]) -> str:
+        rest = "  ".join(f"{c:>{w}}" for c, w in zip(row[1:], widths[1:]))
+        return f"{indent}{row[0]:<{widths[0]}}  {rest}".rstrip()
 
-    return [line(headings), *(line(row) for row in rows)]
+    return [line(headings), *(line(row) for row in cells)]
 
 
 def _datasets_section(report: ComparisonReport) -> list[str]:
@@ -142,7 +155,11 @@ def _groups_block(report: ComparisonReport) -> list[str]:
         )
         if groups
     ]
-    return [*lines, "", *_table(["Group", "Matched", "Base only", "Candidate only"], o.per_group)]
+    return [
+        *lines,
+        "",
+        *_table(["Group", "Matched", "Base only", "Candidate only"], o.per_group.iter_rows()),
+    ]
 
 
 def _key_rows(keys: tuple[str, ...], frame: pl.DataFrame, limit: int | None) -> list[str]:
@@ -174,8 +191,39 @@ def _values_section(report: ComparisonReport) -> list[str]:
         if report.settings.by:
             lines += [
                 "",
-                *_table(["Group", "Variables", "Observations", "Unequal"], values.per_group),
+                *_table(
+                    ["Group", "Variables", "Observations", "Unequal"],
+                    values.per_group.iter_rows(),
+                ),
             ]
+    lines.append("")
+    return lines
+
+
+def _statistics_section(report: ComparisonReport) -> list[str]:
+    """One block per differing variable: its count, and its measures when it is numeric."""
+    statistics = report.statistics
+    lines = ["Summary statistics", _RULE]
+    if statistics.height == 0:
+        return [*lines, "  No unequal values.", ""]
+    lines.append("  Over the matched observations where both sides are non-null.")
+    for row in statistics.iter_rows(named=True):
+        count = _plural(row["differences"], "unequal value")
+        if not _has_measures(row):
+            lines += ["", f"  {row['variable']}  ({count}; not numeric, no statistics)"]
+            continue
+        lines += [
+            "",
+            f"  {row['variable']}  ({count})",
+            *_table(
+                ["Statistic", *_MEASURE_LABELS.values()],
+                (
+                    [label, *(_number(row[f"{side}_{m}"]) for m in _MEASURE_LABELS)]
+                    for side, label in _SIDE_LABELS.items()
+                ),
+                indent="    ",
+            ),
+        ]
     lines.append("")
     return lines
 

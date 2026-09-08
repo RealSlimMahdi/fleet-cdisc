@@ -722,9 +722,10 @@ surface and are never looked up (not from define.yaml, not from study_config.yam
 import fleet
 
 report = fleet.compare(adae_prod, adae_qc, keys=["USUBJID", "AESEQ"])
-report.print_report()  # data set, variables, observation and values summaries, value listing, verdict
+report.print_report()  # data set, variables, observation and values summaries, summary statistics, value listing, verdict
 assert report.is_equal, report.raised_flags
 report.listing  # long frame: keys, group, variable, base, candidate, difference, percent_difference
+report.statistics  # one row per differing variable: differences, then n/mean/std/min/max of base, candidate, difference, percent_difference (numeric variables only)
 report.to_json()  # one JSON document for agents / editors; report.save_json(path) writes it
 report.save_listing("differences.parquet")  # the complete listing as parquet, never truncated
 report.save_html_report("compare.html")  # self-contained page for a reviewer: flags as chips, mismatched observations side by side, never truncated
@@ -765,6 +766,11 @@ the listing's `group` column, adds per-group observation and values counts to ev
 and flags groups found on one side only; the verdict stays global. \
 `max_print` (50 per variable, 500 overall; `None` prints all) caps only what the text report \
 and the JSON document show; the listing frame and the parquet are always complete. \
+`report.statistics` carries one row per differing variable (`fleet.comparison.STATISTICS_COLUMNS`): \
+its count of differing observations, then the n, mean, std, min and max of the base, the \
+candidate, their difference and its percent, over the matched observations where both sides are \
+non-null — so a systematic offset reads differently from noise; a variable that is not numeric \
+contributes its count alone. No correlation, R squared or t statistic. \
 `report.flags` holds the raised names among `base_only_variables`, `candidate_only_variables`, \
 `type_conflicts`, `base_only_observations`, `candidate_only_observations`, `values_differ`, \
 `duplicate_keys`, `base_only_groups`, `candidate_only_groups`; \
@@ -773,8 +779,8 @@ and the JSON document show; the listing frame and the parquet are always complet
 JSON contract (`fleet.comparison.JSON_KEYS`, additive-only within a major version — keys are \
 added, never removed or renamed): `is_equal`, `summary`, `flags`, `warnings`, `datasets`, \
 `variables`, `observations` (with `per_group`, `base_only_groups`, `candidate_only_groups` and \
-the duplicate counts), `values` (with `per_group`), `statistics` (empty until summary statistics \
-land), `listing` (`columns`, `rows`, `shown`, `total`, `truncated` — truncated to the print \
+the duplicate counts), `values` (with `per_group`), `statistics` (one record per differing \
+variable), `listing` (`columns`, `rows`, `shown`, `total`, `truncated` — truncated to the print \
 limits, unlike the parquet), `settings` (every option in effect), `version`. Strict JSON: \
 non-finite numbers are null, temporal keys are ISO 8601 strings.
 

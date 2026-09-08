@@ -84,12 +84,14 @@ reads it without a legend:
 2. **Variables summary** — variables in common, in the base only, in the candidate only, type conflicts, dtype differences.
 3. **Observation summary** — matched observations and the key values of the ones found on one side only.
 4. **Values summary** — how many values differ, per variable.
-5. **Value listing** — every unequal value, grouped per observation so one subject's differences read together, with the base value, the candidate value, and the difference and percent difference for numeric variables.
-6. **Verdict** — `EQUAL`, or `NOT EQUAL` followed by the raised flags.
+5. **Summary statistics** — for each differing numeric variable, how far apart the two sides are (see [summary statistics](#summary-statistics)).
+6. **Value listing** — every unequal value, grouped per observation so one subject's differences read together, with the base value, the candidate value, and the difference and percent difference for numeric variables.
+7. **Verdict** — `EQUAL`, or `NOT EQUAL` followed by the raised flags.
 
 The report object carries the same content as data: `report.listing` is a long
 Polars frame (keys, `group`, `variable`, `base`, `candidate`, `difference`,
-`percent_difference`) that is never truncated, and `report.flags` replaces
+`percent_difference`) that is never truncated, `report.statistics` is the
+[summary statistics](#summary-statistics) frame, and `report.flags` replaces
 SAS's `SYSINFO` integer with names — `base_only_variables`,
 `candidate_only_variables`, `type_conflicts`, `base_only_observations`,
 `candidate_only_observations`, `values_differ`, `duplicate_keys`,
@@ -97,6 +99,50 @@ SAS's `SYSINFO` integer with names — `base_only_variables`,
 when no flag is raised. `report.warnings` holds the lines every renderer
 prints above the report — today only the
 [duplicate-key](#duplicate-keys) one.
+
+## Summary statistics
+
+Counting differences says *how many*, not whether the candidate runs
+systematically a little high or scatters at random. `report.statistics` says
+which: one row per differing variable and, for a numeric one, the shape of
+both sides, of their difference, and of that difference as a percentage of the
+base.
+
+```python
+report = fleet.compare(advs_prod, advs_qc, keys=["USUBJID", "PARAMCD", "AVISITN"])
+offset = report.statistics.filter(pl.col("difference_mean").abs() > 0.5)
+```
+
+| Column | Content |
+| --- | --- |
+| `variable` | The differing variable, by its base name, in compared order. |
+| `differences` | How many matched observations differ on it. |
+| `base_n`, `base_mean`, `base_std`, `base_min`, `base_max` | The base values. |
+| `candidate_n` … `candidate_max` | The same five, of the candidate values. |
+| `difference_n` … `difference_max` | The same five, of `candidate − base`. |
+| `percent_difference_n` … `percent_difference_max` | The same five, of `(candidate − base) ÷ base × 100`. |
+
+Two things decide what the numbers mean:
+
+- **The measures span every matched observation, not only the unequal ones.**
+  A mean difference near zero over a thousand observations with three
+  differences reads as noise; a mean difference of exactly `0.5` across all of
+  them reads as an offset. Only observations **null on either side** are
+  dropped, because a difference needs two values — which is why `n` can be
+  smaller than the matched count, and smaller again for the percent, which
+  drops a zero base as the listing does.
+- **Only numeric variables carry them.** A string, a date or a boolean
+  contributes its `differences` count and nulls for the rest; there is no mean
+  of `"F"` against `"M"`.
+
+The statistics are on every surface: their own section in the text report
+after the values summary, the `statistics` key of the JSON document, and a
+table at the top of each variable's block in the HTML page. An equal
+comparison has an empty frame and an empty section.
+
+Deliberately absent are `PROC COMPARE`'s correlation, R² and t statistic: they
+answer a modelling question rather than a QC one, and the value listing
+answers the QC one exactly.
 
 ## The HTML report
 
@@ -116,7 +162,7 @@ or image. It reads top-down the way a review goes:
 2. **Chips** — one per raised flag, so structural problems are visible before value details: the variables found on one side only, the type conflicts with their dtypes, the observations on one side only (the first few named by their key values), how many values differ. Dtype differences appear as an information chip, never as a finding.
 3. **Summary** — name, observations and variables per side, the keys, the equality rule in effect, and how many observations matched.
 4. **Observations on one side only** — the key values of every observation found only in the base or only in the candidate.
-5. **Unequal values** — only the mismatched observations, one collapsible block per differing variable, each row showing the key values, the base value and the candidate value side by side with both cells highlighted, and the difference and percent difference for numeric variables. Blocks start open when there are five or fewer, closed beyond that, so a report over fifty variables stays navigable.
+5. **Unequal values** — only the mismatched observations, one collapsible block per differing variable. Each block opens on the variable's [summary statistics](#summary-statistics), then lists every unequal row: the key values, the base value and the candidate value side by side with both cells highlighted, and the difference and percent difference for numeric variables. Blocks start open when there are five or fewer, closed beyond that, so a report over fifty variables stays navigable.
 
 The page is never truncated: every unequal value is on it, whatever
 `max_print` the comparison ran with. With [BY groups](#by-groups) it gains a
@@ -158,7 +204,7 @@ version and no ceiling. The top-level keys, in order (`fleet.comparison.JSON_KEY
 | `variables` | `common`, `compared`, `base_only`, `candidate_only`, then `type_conflicts` and `dtype_differences` as `{variable, base_dtype, candidate_dtype}` with the dtypes as text. |
 | `observations` | `matched`, `base_only`, `candidate_only`, the one-sided key values as `base_only_keys` and `candidate_only_keys` (capped at the per-variable print limit; `truncated` says whether a cap applied), `base_duplicates` and `candidate_duplicates`, the per-group counts as `per_group`, and the one-sided group labels as `base_only_groups` and `candidate_only_groups`. |
 | `values` | `per_variable` as `{variable, differences}`, `variables_with_differences`, `observations_with_differences`, `total_differences`, and `per_group`. |
-| `statistics` | Summary statistics per numeric variable that differs; an empty list until they land. |
+| `statistics` | One object per differing variable, with the columns of `fleet.comparison.STATISTICS_COLUMNS`; the measures are `null` for a variable that is not numeric. See [summary statistics](#summary-statistics). |
 | `listing` | `columns`, `rows` (one object per differing value, within the print limits), `shown`, `total` and `truncated`. |
 | `settings` | Every option the comparison ran with: `keys`, `by`, `pairs`, `variables`, `abs_tol`, `rel_tol`, `ignore_trailing_whitespace`, `allow_duplicates`, `max_print`, `base_name`, `candidate_name`. |
 | `version` | The Fleet version that produced the report. |
@@ -403,9 +449,11 @@ does.
 
 ## Where it stops today
 
-The engine compares by name, with exact equality or within the tolerances
-above. Variable pairs for renamed columns, restriction to a list of variables
-and summary statistics are specified and tracked in the
-[compare spec](https://github.com/RealSlimMahdi/fleet-cdisc/issues/99); they
-build on the same engine and report without changing what is documented here,
-and they only add keys to the JSON document.
+The engine compares **values**, not metadata: a Polars frame carries no
+labels, formats or lengths, so comparing those would need a define.yaml-aware
+mode. Keys are mandatory on all three surfaces — there is no positional
+matching, and no lookup of keys from define.yaml or the study configuration.
+A comparison takes exactly two datasets, never a batch of directories. The
+[compare spec](https://github.com/RealSlimMahdi/fleet-cdisc/issues/99) tracks
+what is deliberately left out and what may follow it, including an MCP tool
+and a diff view in the editor extension built on the JSON contract above.

@@ -25,6 +25,7 @@ from .report import (
     FLAGS,
     JSON_KEYS,
     LISTING_COLUMNS,
+    STATISTICS_COLUMNS,
     ComparisonReport,
     ComparisonSettings,
     DatasetSummary,
@@ -49,6 +50,7 @@ __all__ = [
     "FLAGS",
     "JSON_KEYS",
     "LISTING_COLUMNS",
+    "STATISTICS_COLUMNS",
     "DEFAULT_MAX_PRINT",
     "DEFAULT_MAX_PRINT_TOTAL",
 ]

@@ -25,6 +25,7 @@ from .report import (
     GROUP_OBSERVATIONS,
     GROUP_VALUES,
     LISTING_COLUMNS,
+    STATISTICS,
     ComparisonReport,
     ComparisonSettings,
     DatasetSummary,
@@ -225,6 +226,7 @@ def compare(
     listing = _listing(
         matched, key_list, by_list, per_variable, compared_dtypes, base_dtypes, candidate_dtypes
     )
+    statistics = _statistics(matched, per_variable, compared_dtypes)
     base_only_groups, candidate_only_groups = _one_sided_groups(
         frame, by_list, in_base, in_candidate
     )
@@ -266,6 +268,7 @@ def compare(
             per_group=_values_per_group(matched, by_list, compared),
         ),
         listing=listing,
+        statistics=statistics,
         flags=frozenset(name for name, raised in flags.items() if raised),
         settings=settings,
         version=__version__,
@@ -814,6 +817,58 @@ def _as_string(expr: pl.Expr, dtype: pl.DataType) -> pl.Expr:
         )
         return pl.when(expr.is_null()).then(pl.lit(None, pl.String)).otherwise(encoded)
     return expr.cast(pl.String, strict=False)
+
+
+def _statistics(
+    matched: pl.DataFrame, per_variable: pl.DataFrame, compared_dtypes: dict[str, pl.DataType]
+) -> pl.DataFrame:
+    """One row per differing variable: how many observations differ, and how far apart they are.
+
+    A numeric variable also carries the distribution of both sides, of their
+    difference and of that difference as a percentage of the base, so a
+    systematic offset reads differently from random noise.  Every other kind
+    contributes its count alone.  All of it is aggregated in one pass.
+    """
+    counts = dict(per_variable.filter(pl.col("differences") > 0).iter_rows())
+    numeric = [c for c in counts if _kind(compared_dtypes[c]) == "numeric"]
+    measured = (
+        matched.select(_variable_statistics(c).alias(c) for c in numeric).row(0, named=True)
+        if numeric
+        else {}
+    )
+    rows = [{"variable": c, "differences": n, **measured.get(c, {})} for c, n in counts.items()]
+    return pl.DataFrame(rows, schema=STATISTICS)
+
+
+def _variable_statistics(variable: str) -> pl.Expr:
+    """The measures of one numeric variable as a struct, over the observations both sides carry.
+
+    An observation null on either side has no difference to describe, so it
+    is dropped from all four series at once; the percent drops a zero base
+    as well, exactly as the listing does.  ``count`` is what makes each
+    ``n`` its own number rather than the height of the frame.
+    """
+    base = pl.col(variable).cast(pl.Float64)
+    candidate = pl.col(variable + _SUFFIX).cast(pl.Float64)
+    both = base.is_not_null() & candidate.is_not_null()
+    difference = candidate - base
+    percent = pl.when(base == 0).then(pl.lit(None, pl.Float64)).otherwise(difference / base * 100)
+    fields = []
+    for side, value in (
+        ("base", base),
+        ("candidate", candidate),
+        ("difference", difference),
+        ("percent_difference", percent),
+    ):
+        kept = value.filter(both)
+        fields += [
+            kept.count().cast(pl.Int64).alias(f"{side}_n"),
+            kept.mean().alias(f"{side}_mean"),
+            kept.std().alias(f"{side}_std"),
+            kept.min().alias(f"{side}_min"),
+            kept.max().alias(f"{side}_max"),
+        ]
+    return pl.struct(fields)
 
 
 __all__ = ["compare"]

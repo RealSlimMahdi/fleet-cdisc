@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -69,6 +69,46 @@ GROUP_VALUES: dict[str, pl.DataType] = {
     "observations_with_differences": pl.Int64(),
     "differences": pl.Int64(),
 }
+
+#: What the summary statistics describe, and how the renderers label it: each
+#: side, then the candidate minus the base and that difference as a percentage
+#: of the base.
+_SIDE_LABELS: dict[str, str] = {
+    "base": "Base",
+    "candidate": "Candidate",
+    "difference": "Difference",
+    "percent_difference": "% difference",
+}
+
+#: What is measured of each of them, and how the renderers label it.
+_MEASURE_LABELS: dict[str, str] = {
+    "n": "N",
+    "mean": "Mean",
+    "std": "Std",
+    "min": "Min",
+    "max": "Max",
+}
+
+#: Schema of :attr:`ComparisonReport.statistics`: one row per differing
+#: variable, its count of differing observations, then ``<side>_<measure>``
+#: for every combination above.  Only a numeric variable carries the measures.
+STATISTICS: dict[str, pl.DataType] = {
+    "variable": pl.String(),
+    "differences": pl.Int64(),
+    **{
+        f"{side}_{measure}": pl.Int64() if measure == "n" else pl.Float64()
+        for side in _SIDE_LABELS
+        for measure in _MEASURE_LABELS
+    },
+}
+
+#: Columns of the statistics frame, in order.
+STATISTICS_COLUMNS: tuple[str, ...] = tuple(STATISTICS)
+
+
+def _has_measures(row: Mapping[str, Any]) -> bool:
+    """True when a statistics row carries the measures, which only a numeric variable does."""
+    return row["base_n"] is not None
 
 
 def _empty(schema: dict[str, pl.DataType]) -> pl.DataFrame:
@@ -373,6 +413,13 @@ class ComparisonReport:
             (null otherwise; percent is null when the base is zero or null).
             Never truncated; ``max_print`` only governs what the text and
             JSON renderers show.
+        statistics: One row per differing variable, in compared order, with
+            the columns of :data:`STATISTICS_COLUMNS`: ``differences``, its
+            count of differing observations, then the ``n``, ``mean``,
+            ``std``, ``min`` and ``max`` of the base, the candidate, their
+            difference and its percent, over the matched observations where
+            both sides are non-null.  Only a numeric variable carries the
+            measures; every other kind contributes its count alone.
         flags: The subset of :data:`FLAGS` this comparison raised.
         settings: The settings the comparison ran with.
         version: The Fleet version that produced the report.
@@ -383,6 +430,7 @@ class ComparisonReport:
     observations: ObservationSummary
     values: ValuesSummary
     listing: pl.DataFrame
+    statistics: pl.DataFrame
     flags: frozenset[str]
     settings: ComparisonSettings
     version: str
@@ -441,10 +489,10 @@ class ComparisonReport:
         """Render the report as plain text in PROC COMPARE section order.
 
         Sections: data set summary, variables summary, observation summary,
-        values summary, value listing grouped per observation, verdict.
-        The print limits cap the value listing (per variable first, then
-        overall) and the one-sided observation lists; the report's own
-        ``listing`` frame is never truncated.
+        values summary, summary statistics, value listing grouped per
+        observation, verdict.  The print limits cap the value listing (per
+        variable first, then overall) and the one-sided observation lists;
+        the report's own ``listing`` frame is never truncated.
 
         Args:
             max_print: Differences to print per variable, a
@@ -539,8 +587,9 @@ class ComparisonReport:
         raised flags: one-sided variables and observations, type conflicts,
         ...) are chips at the top; below, only the mismatched observations
         are listed, base and candidate side by side with both cells
-        highlighted, one collapsible block per differing variable, and one
-        section per BY group when the comparison ran with ``by``.
+        highlighted, one collapsible block per differing variable opening on
+        that variable's summary statistics, and one section per BY group when
+        the comparison ran with ``by``.
         Nothing is truncated: every unequal value is on the page, whatever
         ``max_print`` the comparison ran with.  For listings beyond a few
         thousand rows, :meth:`save_listing` is the better archive.

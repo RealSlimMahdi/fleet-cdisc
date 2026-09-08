@@ -23,6 +23,7 @@ from fleet.comparison import (
     FLAGS,
     JSON_KEYS,
     LISTING_COLUMNS,
+    STATISTICS_COLUMNS,
     ComparisonError,
     ComparisonReport,
     ComparisonSettings,
@@ -742,6 +743,166 @@ class TestValues:
 """)
         with pytest.raises(ComparisonError, match="variable"):
             compare(b, b, keys=["variable"])
+
+
+# ── Summary statistics ────────────────────────────────────────────────────────
+
+#: The columns of the statistics frame, in order, as documented on the concepts page.
+_STATISTICS_COLUMNS = [
+    "variable",
+    "differences",
+    "base_n",
+    "base_mean",
+    "base_std",
+    "base_min",
+    "base_max",
+    "candidate_n",
+    "candidate_mean",
+    "candidate_std",
+    "candidate_min",
+    "candidate_max",
+    "difference_n",
+    "difference_mean",
+    "difference_std",
+    "difference_min",
+    "difference_max",
+    "percent_difference_n",
+    "percent_difference_mean",
+    "percent_difference_std",
+    "percent_difference_min",
+    "percent_difference_max",
+]
+
+#: Everything after the count of differences: what only a numeric variable carries.
+_MEASURES = _STATISTICS_COLUMNS[2:]
+
+
+class TestStatistics:
+    """A reviewer tells a systematic offset from random noise (ticket #107)."""
+
+    def test_frame_has_the_documented_columns_and_one_row_per_differing_variable(
+        self, base, candidate
+    ):
+        statistics = compare(base, candidate, keys="USUBJID").statistics
+        assert statistics.columns == _STATISTICS_COLUMNS
+        assert list(STATISTICS_COLUMNS) == _STATISTICS_COLUMNS
+        assert statistics["variable"].to_list() == ["AGE", "SEX", "WT"]
+        assert statistics["differences"].to_list() == [1, 1, 1]
+        assert statistics.schema["differences"] == pl.Int64
+        assert statistics.schema["base_n"] == pl.Int64
+        assert all(statistics.schema[m] == pl.Float64 for m in _MEASURES if not m.endswith("_n"))
+
+    def test_values_match_hand_computed_expectations(self, base, candidate):
+        """AGE over the matched observations 01, 02 and 03: 34, 45, 52 against 34, 46, 52."""
+        statistics = compare(base, candidate, keys="USUBJID").statistics
+        age = statistics.filter(pl.col("variable") == "AGE").row(0, named=True)
+        assert (age["base_n"], age["base_mean"]) == (3, pytest.approx(131 / 3))
+        assert age["base_std"] == pytest.approx(math.sqrt(741 / 9))
+        assert (age["base_min"], age["base_max"]) == (34.0, 52.0)
+        assert (age["candidate_n"], age["candidate_mean"]) == (3, 44.0)
+        assert age["candidate_std"] == pytest.approx(math.sqrt(84))
+        assert (age["candidate_min"], age["candidate_max"]) == (34.0, 52.0)
+        assert (age["difference_n"], age["difference_mean"]) == (3, pytest.approx(1 / 3))
+        assert age["difference_std"] == pytest.approx(math.sqrt(1 / 3))
+        assert (age["difference_min"], age["difference_max"]) == (0.0, 1.0)
+        assert age["percent_difference_n"] == 3
+        assert age["percent_difference_mean"] == pytest.approx(100 / 45 / 3)
+        assert age["percent_difference_std"] == pytest.approx(math.sqrt(1 / 3) * 100 / 45)
+        assert age["percent_difference_min"] == 0.0
+        assert age["percent_difference_max"] == pytest.approx(100 / 45)
+
+    def test_statistics_span_the_matched_observations_where_both_sides_are_non_null(self):
+        b = pl.from_repr("""\
+┌─────┬──────┐
+│ ID  ┆ X    │
+│ --- ┆ ---  │
+│ i64 ┆ f64  │
+╞═════╪══════╡
+│ 1   ┆ 10.0 │
+│ 2   ┆ null │
+│ 3   ┆ 20.0 │
+│ 4   ┆ 30.0 │
+└─────┴──────┘
+""")
+        c = pl.from_repr("""\
+┌─────┬──────┐
+│ ID  ┆ X    │
+│ --- ┆ ---  │
+│ i64 ┆ f64  │
+╞═════╪══════╡
+│ 1   ┆ 12.0 │
+│ 2   ┆ 5.0  │
+│ 3   ┆ null │
+│ 4   ┆ 30.0 │
+└─────┴──────┘
+""")
+        row = compare(b, c, keys="ID").statistics.row(0, named=True)
+        # three observations differ, but only 1 and 4 have a value on both sides
+        assert row["differences"] == 3
+        assert (row["base_n"], row["base_mean"]) == (2, 20.0)
+        assert (row["base_min"], row["base_max"]) == (10.0, 30.0)
+        assert (row["candidate_n"], row["candidate_mean"]) == (2, 21.0)
+        assert (row["difference_min"], row["difference_max"]) == (0.0, 2.0)
+        assert (row["percent_difference_n"], row["percent_difference_mean"]) == (2, 10.0)
+
+    def test_percent_difference_skips_a_zero_base(self):
+        b = pl.from_repr("""\
+┌─────┬─────┐
+│ ID  ┆ X   │
+│ --- ┆ --- │
+│ i64 ┆ f64 │
+╞═════╪═════╡
+│ 1   ┆ 0.0 │
+│ 2   ┆ 4.0 │
+└─────┴─────┘
+""")
+        c = pl.from_repr("""\
+┌─────┬─────┐
+│ ID  ┆ X   │
+│ --- ┆ --- │
+│ i64 ┆ f64 │
+╞═════╪═════╡
+│ 1   ┆ 1.0 │
+│ 2   ┆ 5.0 │
+└─────┴─────┘
+""")
+        row = compare(b, c, keys="ID").statistics.row(0, named=True)
+        assert (row["differences"], row["base_n"], row["difference_n"]) == (2, 2, 2)
+        assert (row["percent_difference_n"], row["percent_difference_mean"]) == (1, 25.0)
+
+    def test_a_non_numeric_variable_contributes_only_a_count(self):
+        b = pl.from_repr("""\
+┌─────┬─────┬────────────┐
+│ ID  ┆ S   ┆ D          │
+│ --- ┆ --- ┆ ---        │
+│ i64 ┆ str ┆ date       │
+╞═════╪═════╪════════════╡
+│ 1   ┆ F   ┆ 2024-01-01 │
+└─────┴─────┴────────────┘
+""")
+        c = pl.from_repr("""\
+┌─────┬─────┬────────────┐
+│ ID  ┆ S   ┆ D          │
+│ --- ┆ --- ┆ ---        │
+│ i64 ┆ str ┆ date       │
+╞═════╪═════╪════════════╡
+│ 1   ┆ M   ┆ 2024-01-02 │
+└─────┴─────┴────────────┘
+""")
+        statistics = compare(b, c, keys="ID").statistics
+        assert statistics["variable"].to_list() == ["S", "D"]
+        assert statistics["differences"].to_list() == [1, 1]
+        for row in statistics.iter_rows(named=True):
+            assert all(row[m] is None for m in _MEASURES)
+
+    def test_only_differing_variables_get_a_row(self, base):
+        c = base.with_columns(pl.col("AGE") + 1)
+        assert compare(base, c, keys="USUBJID").statistics["variable"].to_list() == ["AGE"]
+
+    def test_an_equal_comparison_keeps_the_schema(self, base):
+        statistics = compare(base, base, keys="USUBJID").statistics
+        assert statistics.height == 0
+        assert statistics.columns == _STATISTICS_COLUMNS
 
 
 # ── Tolerances and trailing whitespace ────────────────────────────────────────
@@ -1483,6 +1644,7 @@ _SECTIONS = [
     "Variables summary",
     "Observation summary",
     "Values summary",
+    "Summary statistics",
     "Value listing",
     "Verdict",
 ]
@@ -1532,6 +1694,20 @@ class TestTextReport:
         variables = text.split("Variables summary")[1].split("Observation summary")[0]
         assert "WT" in variables and "String" in variables
         assert "AGE" in variables and "Float64" in variables
+
+    def test_statistics_render_between_the_values_summary_and_the_listing(self, base, candidate):
+        text = compare(base, candidate, keys="USUBJID").to_text()
+        statistics = text[text.index("Summary statistics") : text.index("Value listing")]
+        assert "AGE" in statistics
+        assert "43.6667" in statistics and "9.07377" in statistics  # base mean and std
+        for label in ("Base", "Candidate", "Difference", "% difference"):
+            assert label in statistics
+        assert "SEX" in statistics  # a string contributes only its count
+
+    def test_an_equal_comparison_shows_an_empty_statistics_section(self, base):
+        text = compare(base, base, keys="USUBJID").to_text()
+        statistics = text[text.index("Summary statistics") : text.index("Value listing")]
+        assert "No unequal values" in statistics
 
     def test_default_limits_are_50_per_variable_and_500_overall(self):
         n = 120
@@ -1673,7 +1849,7 @@ class TestJsonReport:
             "total_differences": 3,
             "per_group": [],
         }
-        assert document["statistics"] == []
+        assert [r["variable"] for r in document["statistics"]] == ["AGE", "SEX", "WT"]
         assert document["settings"] == {
             "keys": ["USUBJID"],
             "by": [],
@@ -1709,6 +1885,17 @@ class TestJsonReport:
             ("03", "SEX"),
             ("03", "WT"),
         ]
+
+    def test_statistics_carry_one_record_per_differing_variable(self, base, candidate):
+        report = compare(base, candidate, keys="USUBJID")
+        statistics = json.loads(report.to_json())["statistics"]
+        assert [list(r) for r in statistics] == [_STATISTICS_COLUMNS] * 3
+        age = statistics[0]
+        assert (age["variable"], age["differences"], age["base_n"]) == ("AGE", 1, 3)
+        assert age["base_mean"] == pytest.approx(131 / 3)
+        assert statistics[1]["variable"] == "SEX"
+        assert all(statistics[1][m] is None for m in _MEASURES)  # a string, only a count
+        assert json.loads(compare(base, base, keys="USUBJID").to_json())["statistics"] == []
 
     def test_type_conflicts_and_dtype_differences_name_dtypes_as_text(self, base):
         c = base.with_columns(pl.col("AGE").cast(pl.Float64), pl.col("WT").cast(pl.String))
@@ -1846,7 +2033,7 @@ class TestHtmlReport:
         for row in _listing_rows(report):
             assert row["base"] in page and row["candidate"] in page, row
             assert row["USUBJID"] in page
-        assert "70.1" not in page  # subject 01 is equal on both sides and is not listed
+        assert "<td>01</td>" not in page  # subject 01 is equal on both sides and is not listed
         assert "2.22222" in page  # AGE 45 -> 46: percent difference, as in the text report
 
     def test_page_is_self_contained_and_escapes_values(self, base, candidate):
@@ -1947,6 +2134,16 @@ class TestHtmlReport:
         assert "2 unequal values in 1 observation" in arm_b
         assert page.count("<details") == 3
         assert "ARM A" not in report.to_html()  # the ungrouped report has no group sections
+
+    def test_statistics_appear_inside_each_variable_block(self, base, candidate):
+        page = compare(base, candidate, keys="USUBJID").to_html()
+        age = page[page.index("<summary>AGE") : page.index("<summary>SEX")]
+        assert "Summary statistics" in age
+        assert "43.6667" in age and "9.07377" in age  # base mean and std
+        for label in ("Base", "Candidate", "Difference", "% difference"):
+            assert label in age
+        sex = page[page.index("<summary>SEX") : page.index("<summary>WT")]
+        assert "Summary statistics" not in sex  # a string contributes only its count
 
     def test_save_html_report_writes_the_page(self, base, candidate, tmp_path):
         c = candidate.with_columns(pl.col("SEX").str.replace("M", "Mâle"))

@@ -4,10 +4,11 @@ One page a reviewer without Python opens and sees where two datasets differ.
 Structural findings (one-sided variables and observations, type conflicts,
 and any other raised flag) are chips at the top.  Below, only the mismatched
 observations are listed, base and candidate side by side with both cells
-highlighted, one collapsible block per differing variable.  Sections appear
-per group as soon as the listing's ``group`` column is populated.  The page
-carries every difference (it is never truncated) and embeds its own style;
-it fetches no script, stylesheet, font or image.
+highlighted, one collapsible block per differing variable, each opening on
+that variable's summary statistics.  Sections appear per group as soon as the
+listing's ``group`` column is populated.  The page carries every difference
+(it is never truncated) and embeds its own style; it fetches no script,
+stylesheet, font or image.
 """
 
 from __future__ import annotations
@@ -17,7 +18,14 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
-from .report import VariableDtypes, _key_label, _plural
+from .report import (
+    _MEASURE_LABELS,
+    _SIDE_LABELS,
+    VariableDtypes,
+    _has_measures,
+    _key_label,
+    _plural,
+)
 
 if TYPE_CHECKING:
     from .report import ComparisonReport
@@ -76,6 +84,7 @@ details { margin: 10px 0; background: #fff; border: 1px solid #d0d7de; border-ra
 summary { padding: 8px 12px; cursor: pointer; font-weight: 600; }
 summary .count { margin-left: 8px; color: #57606a; font-weight: 400; }
 details > div { padding: 0 12px 12px; overflow-x: auto; }
+caption { padding: 8px 0 4px; color: #57606a; text-align: left; }
 footer { margin-top: 32px; color: #8c959f; font-size: 12px; }
 """
 
@@ -304,10 +313,40 @@ def _variable_blocks(report: ComparisonReport, rows: pl.DataFrame) -> list[str]:
             f"<summary>{escape(variable)}"
             f'<span class="count">{_plural(block.height, "unequal value")}</span></summary>',
             "<div>",
+            *_statistics_table(report, variable),
             *_block_table(report, block),
             "</div>",
             "</details>",
         ]
+    return lines
+
+
+def _statistics_table(report: ComparisonReport, variable: str) -> list[str]:
+    """How far apart the two sides are on *variable*; nothing unless it is numeric.
+
+    The measures span every matched observation, not only the unequal ones
+    the block below lists, which is what lets a reviewer read a systematic
+    offset out of them.  The caption says so, because with BY groups the
+    same table appears in each group's block.
+    """
+    row = report.statistics.filter(pl.col("variable") == variable)
+    if row.height == 0:
+        return []
+    measures = row.row(0, named=True)
+    if not _has_measures(measures):
+        return []
+    lines = [
+        "<table>",
+        "<caption>Summary statistics over the matched observations where both sides "
+        "are non-null</caption>",
+        "<tr><th>Statistic</th>"
+        + "".join(f"<th>{escape(m)}</th>" for m in _MEASURE_LABELS.values())
+        + "</tr>",
+    ]
+    for side, label in _SIDE_LABELS.items():
+        cells = "".join(_td(_number(measures[f"{side}_{m}"]), "number") for m in _MEASURE_LABELS)
+        lines.append(f"<tr><td>{escape(label)}</td>{cells}</tr>")
+    lines.append("</table>")
     return lines
 
 

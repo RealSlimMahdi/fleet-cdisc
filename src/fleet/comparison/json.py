@@ -40,7 +40,7 @@ def _render_dict(report: ComparisonReport, limits: PrintLimits) -> dict[str, Any
         "variables": _variables(report),
         "observations": _observations(report, limits.per_variable),
         "values": _values(report),
-        "statistics": [],  # per-variable records once summary statistics land
+        "statistics": report.statistics.to_dicts(),
         "listing": _listing(report, limits),
         "settings": asdict(report.settings),
         "version": report.version,
