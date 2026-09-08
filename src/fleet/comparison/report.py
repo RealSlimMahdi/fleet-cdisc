@@ -6,7 +6,8 @@ SAS programmer expects from PROC COMPARE (data sets, variables,
 observations, values), the long value listing as a Polars frame, the set
 of named flags that replaces SAS's SYSINFO integer, the settings the
 comparison ran with, and the Fleet version.  Rendering lives in
-:mod:`fleet.comparison.text` and :mod:`fleet.comparison.json`.
+:mod:`fleet.comparison.text`, :mod:`fleet.comparison.json` and
+:mod:`fleet.comparison.html`.
 """
 
 from __future__ import annotations
@@ -389,6 +390,47 @@ class ComparisonReport:
                 report.save_json("build/adsl_compare.json")
         """
         Path(path).write_text(self.to_json(max_print) + "\n", encoding="utf-8")
+
+    def to_html(self) -> str:
+        """Render the report as one self-contained HTML page for a reviewer.
+
+        The page needs no Python and fetches nothing: its style is embedded
+        and there is no script, font or image.  Structural findings (the
+        raised flags: one-sided variables and observations, type conflicts,
+        ...) are chips at the top; below, only the mismatched observations
+        are listed, base and candidate side by side with both cells
+        highlighted, one collapsible block per differing variable, and one
+        section per group once the listing's ``group`` column is populated.
+        Nothing is truncated: every unequal value is on the page, whatever
+        ``max_print`` the comparison ran with.  For listings beyond a few
+        thousand rows, :meth:`save_listing` is the better archive.
+
+        Returns:
+            str: The HTML document.
+
+        Examples:
+            Hand a reviewer the page instead of a terminal transcript::
+
+                report = fleet.compare(adae_prod, adae_qc, keys=["USUBJID", "AESEQ"])
+                Path("adae_compare.html").write_text(report.to_html(), encoding="utf-8")
+        """
+        from .html import _render_html
+
+        return _render_html(self)
+
+    def save_html_report(self, path: str | Path) -> None:
+        """Write :meth:`to_html` to *path* (UTF-8).
+
+        Args:
+            path: Where to write the page.
+
+        Examples:
+            Produce the sign-off page at the end of a QC comparison::
+
+                report = fleet.compare(adae_prod, adae_qc, keys=["USUBJID", "AESEQ"])
+                report.save_html_report("build/adae_compare.html")
+        """
+        Path(path).write_text(self.to_html(), encoding="utf-8")
 
     def save_listing(self, path: str | Path) -> None:
         """Write the complete value listing to *path* as parquet.

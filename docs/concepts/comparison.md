@@ -58,12 +58,14 @@ uv run fleet compare legacy/adae.xpt outputs/adam/adae.parquet --keys USUBJID,AE
 | --- | --- |
 | `0` | The datasets are equal. |
 | `1` | The datasets differ; the report on stdout says where. |
-| `2` | The comparison could not run: unreadable file, missing or duplicate keys, no comparable variables, or an `--out` path that cannot be written. The reason is on stderr. |
+| `2` | The comparison could not run: unreadable file, missing or duplicate keys, no comparable variables, or an `--out` or `--report` path that cannot be written. The reason is on stderr. |
 
 `--keys` is required. `--all` lifts the print limits so every unequal value is
-listed. `--format json` prints one JSON document and nothing else on stdout,
-and `--out differences.parquet` writes the complete value listing; both are
-described under [machine-readable outputs](#machine-readable-outputs). See the
+listed. `--report adae_compare.html` writes the
+[HTML report](#the-html-report) for a reviewer. `--format json` prints one
+JSON document and nothing else on stdout, and `--out differences.parquet`
+writes the complete value listing; both are described under
+[machine-readable outputs](#machine-readable-outputs). See the
 [CLI reference](../getting-started/cli.md#fleet-compare) for the full usage.
 
 ## What the report contains
@@ -85,6 +87,32 @@ SAS's `SYSINFO` integer with names — `base_only_variables`,
 `candidate_only_variables`, `type_conflicts`, `base_only_observations`,
 `candidate_only_observations`, `values_differ`. `report.is_equal` is true only
 when no flag is raised.
+
+## The HTML report
+
+A study lead reviews without a Python environment. `report.to_html()` renders
+one self-contained page and `report.save_html_report(path)` writes it; from
+the shell, `fleet compare --report adae_compare.html` does the same next to
+the text report:
+
+```bash
+uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID,AESEQ --report build/adae_compare.html
+```
+
+The page opens offline: its style is embedded and it fetches no script, font
+or image. It reads top-down the way a review goes:
+
+1. **Verdict** — `EQUAL` or `NOT EQUAL`, with the one-line summary and the raised flags.
+2. **Chips** — one per raised flag, so structural problems are visible before value details: the variables found on one side only, the type conflicts with their dtypes, the observations on one side only (the first few named by their key values), how many values differ. Dtype differences appear as an information chip, never as a finding.
+3. **Summary** — name, observations and variables per side, the keys, and how many observations matched.
+4. **Observations on one side only** — the key values of every observation found only in the base or only in the candidate.
+5. **Unequal values** — only the mismatched observations, one collapsible block per differing variable, each row showing the key values, the base value and the candidate value side by side with both cells highlighted, and the difference and percent difference for numeric variables. Blocks start open when there are five or fewer, closed beyond that, so a report over fifty variables stays navigable.
+
+The page is never truncated: every unequal value is on it, whatever
+`max_print` the comparison ran with. Once BY groups land, the listing's
+`group` column is populated and the unequal values are sectioned per group
+with their own counts. For listings beyond a few thousand rows, the
+[parquet listing](#the-parquet-listing) is the better archive.
 
 ## Machine-readable outputs
 
@@ -191,8 +219,7 @@ does.
 
 The engine compares by name with exact equality. Tolerances, BY groups,
 variable pairs for renamed columns, restriction to a list of variables,
-duplicate-key pairing, summary statistics and the HTML report are specified
-and tracked in the
+duplicate-key pairing and summary statistics are specified and tracked in the
 [compare spec](https://github.com/RealSlimMahdi/fleet-cdisc/issues/99); they
 build on the same engine and report without changing what is documented here,
 and they only add keys to the JSON document.

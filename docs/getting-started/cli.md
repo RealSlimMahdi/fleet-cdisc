@@ -135,7 +135,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 
 ## `fleet compare`
 
-PROC COMPARE analogue: pair the two datasets on --keys, match variables by name and print the comparison report. Exit 0 when the datasets are equal, 1 when they differ, 2 when the comparison could not run (unreadable file, missing or duplicate keys, no comparable variables, --out not writable).
+PROC COMPARE analogue: pair the two datasets on --keys, match variables by name and print the comparison report. Exit 0 when the datasets are equal, 1 when they differ, 2 when the comparison could not run (unreadable file, missing or duplicate keys, no comparable variables, --out or --report not writable).
 
 | Argument | Description |
 | -------- | ----------- |
@@ -148,6 +148,7 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | `--all` | _(none)_ | Print every unequal value (default: 50 per variable, 500 overall). |
 | `--format` | `text` | Output format: the text report, or one JSON document (verdict, flags, summaries, listing within the print limits, settings, Fleet version) and nothing else on stdout (default: text). Choices: `text`, `json`. |
 | `--out` | _(none)_ | Also write the complete value listing (never truncated) to PATH as parquet, e.g. differences.parquet. |
+| `--report` | _(none)_ | Also write a self-contained HTML report to PATH for a reviewer without Python: structural findings as chips, then every mismatched observation with the base and candidate values side by side, one collapsible block per variable. |
 
 ---
 

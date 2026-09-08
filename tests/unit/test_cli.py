@@ -1179,6 +1179,73 @@ def test_compare_out_that_cannot_be_written_exits_2(
     assert str(out) in captured.err
 
 
+def test_compare_report_writes_a_self_contained_html_page(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base, candidate = tmp_path / "adsl_prod.parquet", tmp_path / "adsl_qc.parquet"
+    _adsl().write_parquet(base)
+    _adsl().with_columns(pl.lit(99).alias("AGE")).write_parquet(candidate)
+    report = tmp_path / "build" / "adsl_compare.html"  # parent directory created on the way
+
+    code = _run(
+        ["compare", str(base), str(candidate), "--keys", "USUBJID", "--report", str(report)]
+    )
+
+    captured = capsys.readouterr()
+    assert code == 1
+    page = report.read_text(encoding="utf-8")
+    assert "NOT EQUAL" in page
+    assert "S01" in page and "34" in page and "99" in page
+    assert "http" not in page and "<script" not in page and "<link" not in page
+    assert "NOT EQUAL" in captured.out
+    assert f"HTML report → {report}" in captured.out
+    assert captured.err == ""
+
+
+def test_compare_report_with_format_json_prints_only_the_document(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base, candidate = _sixty_rows(tmp_path)
+    report = tmp_path / "compare.html"
+
+    code = _run(
+        [
+            "compare",
+            str(base),
+            str(candidate),
+            "--keys",
+            "ID",
+            "--format",
+            "json",
+            "--report",
+            str(report),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert json.loads(captured.out)["is_equal"] is False
+    page = report.read_text(encoding="utf-8")
+    assert "NOT EQUAL" in page and "X" in page
+    assert captured.err == ""
+
+
+def test_compare_report_that_cannot_be_written_exits_2(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base, candidate = _sixty_rows(tmp_path)
+    blocker = tmp_path / "build"
+    blocker.write_text("a file where the output directory should be", encoding="utf-8")
+    report = blocker / "compare.html"
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "ID", "--report", str(report)])
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert captured.out == ""
+    assert str(report) in captured.err
+
+
 def test_compare_reads_xpt_through_the_io_extra(
     tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:

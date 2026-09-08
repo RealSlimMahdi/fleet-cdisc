@@ -1090,6 +1090,128 @@ class TestSavedOutputs:
         assert reloaded.schema["USUBJID"] == pl.String
 
 
+class TestHtmlReport:
+    """The self-contained page a reviewer without Python opens (ticket #103)."""
+
+    def test_every_mismatched_value_is_on_the_page_and_equal_observations_are_not(
+        self, base, candidate
+    ):
+        report = compare(base, candidate, keys="USUBJID")
+        page = report.to_html()
+        for row in _listing_rows(report):
+            assert row["base"] in page and row["candidate"] in page, row
+            assert row["USUBJID"] in page
+        assert "70.1" not in page  # subject 01 is equal on both sides and is not listed
+        assert "2.22222" in page  # AGE 45 -> 46: percent difference, as in the text report
+
+    def test_page_is_self_contained_and_escapes_values(self, base, candidate):
+        c = candidate.with_columns(pl.col("SEX").str.replace("M", "<M&F>"))
+        page = compare(base, c, keys="USUBJID", base_name="a<b").to_html()
+        assert not re.search(r"https?://|<link|<script|@import|url\(", page)
+        assert "&lt;M&amp;F&gt;" in page and "<M&F>" not in page
+        assert "a&lt;b" in page and "a<b" not in page
+
+    def test_equal_comparison_renders_a_clear_equal_page(self, base):
+        page = compare(base, base, keys="USUBJID", base_name="prod", candidate_name="qc").to_html()
+        assert "EQUAL" in page and "NOT EQUAL" not in page
+        assert "No unequal values" in page
+        assert "prod" in page and "qc" in page
+        for flag in FLAGS:
+            assert flag not in page
+
+    def test_chips_reflect_the_flags(self, base, candidate):
+        c = candidate.with_columns(pl.col("WT").cast(pl.String))
+        page = compare(base, c, keys="USUBJID").to_html()
+        chips = page[page.index("NOT EQUAL") : page.index("Summary")]
+        assert "Variables in candidate only" in chips and "RACE" in chips
+        assert "Type conflicts" in chips and "WT" in chips
+        assert "Float64" in chips and "String" in chips
+        assert "Observations in base only" in chips and "USUBJID=04" in chips
+        assert "Observations in candidate only" in chips and "USUBJID=05" in chips
+        assert "Values differ" in chips
+        assert "Variables in base only" not in chips
+        assert "Duplicate keys" not in chips
+
+    def test_every_flag_has_a_chip(self, base, candidate):
+        report = compare(base, candidate, keys="USUBJID")
+        page = dataclasses.replace(report, flags=frozenset(FLAGS)).to_html()
+        chips = page[page.index("NOT EQUAL") : page.index("Summary")]
+        for label in (
+            "Variables in base only",
+            "Variables in candidate only",
+            "Type conflicts",
+            "Observations in base only",
+            "Observations in candidate only",
+            "Values differ",
+            "Duplicate keys",
+            "Groups in base only",
+            "Groups in candidate only",
+        ):
+            assert label in chips
+
+    def test_one_sided_observation_chips_name_the_first_few_and_the_page_lists_all(self):
+        b = pl.DataFrame({"ID": range(20), "A": [0] * 20})
+        page = compare(b, b.head(0), keys="ID").to_html()
+        chips = page[page.index("NOT EQUAL") : page.index("Summary")]
+        assert "20 observations" in chips and "ID=4" in chips and "ID=5" not in chips
+        assert "and 15 more" in chips
+        listed = page[page.index("Observations in base only (20)") :]
+        assert all(f"<td>{i}</td>" in listed for i in range(20))
+
+    def test_dtype_differences_are_information_not_findings(self, base):
+        c = base.with_columns(pl.col("AGE").cast(pl.Float64))
+        page = compare(base, c, keys="USUBJID").to_html()
+        assert "EQUAL" in page and "NOT EQUAL" not in page
+        assert "Dtype differences" in page and "AGE" in page
+        assert "Int64" in page and "Float64" in page
+
+    def test_one_collapsible_block_per_differing_variable(self, base, candidate):
+        page = compare(base, candidate, keys="USUBJID").to_html()
+        assert page.count("<details") == 3  # AGE, SEX and WT differ; nothing else gets a block
+        listing = page[page.index("Unequal values") :]
+        positions = _positions(listing, ["AGE", "SEX", "WT"])
+        assert positions == sorted(positions)
+        assert compare(base, base, keys="USUBJID").to_html().count("<details") == 0
+
+    def test_blocks_follow_the_listing_even_for_a_variable_the_summary_does_not_know(
+        self, base, candidate
+    ):
+        report = compare(base, candidate, keys="USUBJID")
+        renamed = report.listing.with_columns(pl.col("variable").str.replace("WT", "WTKG"))
+        page = dataclasses.replace(report, listing=renamed).to_html()
+        assert page.count("<details") == 3 and "WTKG" in page and "60.5" in page
+
+    def test_renders_one_section_per_group_when_the_group_column_is_populated(
+        self, base, candidate
+    ):
+        report = compare(base, candidate, keys="USUBJID")
+        grouped = report.listing.with_columns(
+            pl.when(pl.col("USUBJID") == "02")
+            .then(pl.lit("ARM A"))
+            .otherwise(pl.lit("ARM B"))
+            .alias("group")
+        )
+        page = dataclasses.replace(report, listing=grouped).to_html()
+
+        listing = page[page.index("Unequal values") :]
+        arm_a = listing[listing.index("ARM A") : listing.index("ARM B")]
+        arm_b = listing[listing.index("ARM B") :]
+        assert "AGE" in arm_a and "SEX" not in arm_a and "WT" not in arm_a
+        assert "SEX" in arm_b and "WT" in arm_b and "AGE" not in arm_b
+        assert "1 unequal value in 1 observation" in arm_a
+        assert "2 unequal values in 1 observation" in arm_b
+        assert page.count("<details") == 3
+        assert "ARM A" not in report.to_html()  # the ungrouped report has no group sections
+
+    def test_save_html_report_writes_the_page(self, base, candidate, tmp_path):
+        c = candidate.with_columns(pl.col("SEX").str.replace("M", "Mâle"))
+        report = compare(base, c, keys="USUBJID")
+        path = tmp_path / "compare.html"
+        report.save_html_report(str(path))
+        assert path.read_text(encoding="utf-8") == report.to_html()
+        assert "Mâle" in path.read_text(encoding="utf-8")
+
+
 # ── Purity ────────────────────────────────────────────────────────────────────
 
 

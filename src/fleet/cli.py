@@ -1092,12 +1092,9 @@ def _run_compare(args: argparse.Namespace) -> None:
         )
 
     if args.out:
-        out = Path(args.out)
-        try:
-            out.parent.mkdir(parents=True, exist_ok=True)
-            report.save_listing(out)
-        except OSError as exc:
-            _fail(f"cannot write the value listing {out}: {exc}", code=_COMPARE_IMPOSSIBLE)
+        _save_comparison_file(args.out, report.save_listing, "value listing")
+    if args.report:
+        _save_comparison_file(args.report, report.save_html_report, "HTML report")
 
     if args.format == "json":
         print(report.to_json())  # the whole of stdout is the document
@@ -1105,8 +1102,20 @@ def _run_compare(args: argparse.Namespace) -> None:
         print(report.to_text())
         if args.out:
             print(f"Value listing → {args.out}")
+        if args.report:
+            print(f"HTML report → {args.report}")
     if not report.is_equal:
         sys.exit(_COMPARE_DIFFERENT)
+
+
+def _save_comparison_file(path_str: str, save: Callable[[Path], None], what: str) -> None:
+    """Write one comparison output, creating parent directories; an unwritable path is exit 2."""
+    path = Path(path_str)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        save(path)
+    except OSError as exc:
+        _fail(f"cannot write the {what} {path}: {exc}", code=_COMPARE_IMPOSSIBLE)
 
 
 # ────────────────────────────────────────────────────────────────────── #
@@ -2393,7 +2402,8 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
             "PROC COMPARE analogue: pair the two datasets on --keys, match variables by "
             "name and print the comparison report. Exit 0 when the datasets are equal, "
             "1 when they differ, 2 when the comparison could not run (unreadable file, "
-            "missing or duplicate keys, no comparable variables, --out not writable)."
+            "missing or duplicate keys, no comparable variables, --out or --report not "
+            "writable)."
         ),
     )
     compare_parser.add_argument(
@@ -2434,6 +2444,15 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         help=(
             "Also write the complete value listing (never truncated) to PATH as parquet, "
             "e.g. differences.parquet."
+        ),
+    )
+    compare_parser.add_argument(
+        "--report",
+        metavar="PATH",
+        help=(
+            "Also write a self-contained HTML report to PATH for a reviewer without Python: "
+            "structural findings as chips, then every mismatched observation with the base "
+            "and candidate values side by side, one collapsible block per variable."
         ),
     )
     compare_parser.set_defaults(func=_run_compare)

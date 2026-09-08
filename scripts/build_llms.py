@@ -727,6 +727,7 @@ assert report.is_equal, report.raised_flags
 report.listing  # long frame: keys, group, variable, base, candidate, difference, percent_difference
 report.to_json()  # one JSON document for agents / editors; report.save_json(path) writes it
 report.save_listing("differences.parquet")  # the complete listing as parquet, never truncated
+report.save_html_report("compare.html")  # self-contained page for a reviewer: flags as chips, mismatched observations side by side, never truncated
 ```
 
 Rules: equality is exact; null equals null, NaN equals NaN, null against NaN differs. Same-kind \
@@ -773,11 +774,12 @@ uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID,AESEQ   # 
 uv run fleet compare legacy/adae.xpt outputs/adam/adae.parquet --keys USUBJID,AESEQ --all   # print every unequal value
 uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID,AESEQ --format json   # one JSON document, nothing else on stdout
 uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID,AESEQ --out build/adae_differences.parquet   # complete listing as parquet
+uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID,AESEQ --report build/adae_compare.html   # self-contained HTML report for a reviewer
 ```
 
 The exit code is the verdict: `0` equal, `1` different (report on stdout), `2` the comparison \
-could not run (unreadable file, missing or duplicate keys, no comparable variables, `--out` not \
-writable — the reason is on stderr). `--keys` is required.\
+could not run (unreadable file, missing or duplicate keys, no comparable variables, `--out` or \
+`--report` not writable — the reason is on stderr). `--keys` is required.\
 """
 
 
