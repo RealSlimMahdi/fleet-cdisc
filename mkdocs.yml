@@ -114,6 +114,7 @@ nav:
       - Trial Design Domains: concepts/tdd.md
       - Validation with CORE: concepts/validation-core.md
       - Custom Validation Rules: concepts/custom-rules.md
+      - Comparing Datasets: concepts/comparison.md
       - Exporting Datasets: concepts/exports.md
       - Advanced Patterns: concepts/advanced.md
       - Interactive Explorer: concepts/interactive-explorer.md
@@ -139,6 +140,7 @@ nav:
       - Controlled Terminology: api/ct.md
       - Study Codelists (CDISCPILOT01): api/codelists.md
       - Tooling Introspection: api/introspect.md
+      - Comparison: api/comparison.md
       - Core: api/core.md
   - Quality & Compliance:
       - Validation Strategy: validation-strategy.md

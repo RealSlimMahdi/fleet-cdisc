@@ -14,6 +14,7 @@ Execution commands:
 
 - ``fleet run``      — execute define.yaml derivations and write datasets.
 - ``fleet validate`` — validate datasets with the CDISC Rules Engine.
+- ``fleet compare``  — compare a candidate dataset against a base on keys.
 - ``fleet check``    — one CI gate: config + define schema + rule YAMLs.
 - ``fleet tlg``      — list / run / export TLG templates (``tlg --help``).
 - ``fleet migrate``  — rewrite removed pre-alpha verb spellings to canonical ones.
@@ -24,7 +25,9 @@ Every command that needs ``study_config.yaml`` discovers it git-style: the
 current directory first, then each parent.  Pass ``--config`` to override.
 
 Errors print a single clean message to **stderr** and exit ``1``; missing
-or unknown (sub)commands print usage to stderr and exit ``2``.
+or unknown (sub)commands print usage to stderr and exit ``2``.  ``fleet
+compare`` is the one command whose exit code is a verdict: ``0`` equal,
+``1`` different, ``2`` the comparison could not run.
 """
 
 from __future__ import annotations
@@ -34,7 +37,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -69,10 +72,10 @@ def _err(msg: str) -> None:
     print(msg, file=sys.stderr)
 
 
-def _fail(msg: str) -> None:
-    """Print an error to stderr and exit 1."""
+def _fail(msg: str, *, code: int = 1) -> NoReturn:
+    """Print an error to stderr and exit — ``1`` unless *code* says otherwise."""
     _err(f"Error: {msg}")
-    sys.exit(1)
+    sys.exit(code)
 
 
 # ────────────────────────────────────────────────────────────────────── #
@@ -1022,6 +1025,75 @@ def _run_validate(args: argparse.Namespace) -> None:
     print(f"Validated {len(files)} dataset(s): {len(files) - failed} passed, {failed} failed.")
     if failed:
         sys.exit(1)
+
+
+# ────────────────────────────────────────────────────────────────────── #
+# fleet compare — the exit code is the verdict                           #
+# ────────────────────────────────────────────────────────────────────── #
+
+#: ``fleet compare`` exit codes: the job status is the verdict.
+_COMPARE_DIFFERENT = 1
+_COMPARE_IMPOSSIBLE = 2
+
+
+def _scan_comparison_side(path_str: str, side: str) -> pl.LazyFrame:
+    """Open one side through the raw-data loader; an unreadable file is exit 2."""
+    from fleet.core.exceptions import FleetError
+    from fleet.io import load_raw_data
+
+    try:
+        return load_raw_data(Path(path_str))
+    except (FleetError, ImportError) as exc:
+        _fail(
+            f"cannot read the {side} {path_str}: {' '.join(str(exc).split())}",
+            code=_COMPARE_IMPOSSIBLE,
+        )
+
+
+def _run_compare(args: argparse.Namespace) -> None:
+    """Compare a candidate file against a base file on keys; exit 0 / 1 / 2."""
+    import polars as pl
+
+    from fleet.comparison import DEFAULT_MAX_PRINT, compare
+    from fleet.core.exceptions import FleetError
+
+    keys = [k.strip() for k in args.keys.split(",") if k.strip()]
+    base = _scan_comparison_side(args.base, "base")
+    candidate = _scan_comparison_side(args.candidate, "candidate")
+    try:
+        report = compare(
+            base,
+            candidate,
+            keys=keys,
+            max_print=None if args.all else DEFAULT_MAX_PRINT,
+            base_name=args.base,
+            candidate_name=args.candidate,
+        )
+    except (FleetError, pl.exceptions.PolarsError) as exc:
+        # Keys missing, duplicated or incompatible; or a file that scanned
+        # but could not be read.  Differences never raise.
+        _fail(" ".join(str(exc).split()), code=_COMPARE_IMPOSSIBLE)
+
+    if not report.variables.compared:
+        v = report.variables
+        details = [
+            f"{label}: {', '.join(names)}"
+            for label, names in (
+                ("base only", v.base_only),
+                ("candidate only", v.candidate_only),
+                ("type conflicts", tuple(t.variable for t in v.type_conflicts)),
+            )
+            if names
+        ]
+        _fail(
+            f"no comparable variables besides the keys ({', '.join(keys)})"
+            + (f"; {'; '.join(details)}" if details else ""),
+            code=_COMPARE_IMPOSSIBLE,
+        )
+
+    print(report.to_text())
+    if not report.is_equal:
+        sys.exit(_COMPARE_DIFFERENT)
 
 
 # ────────────────────────────────────────────────────────────────────── #
@@ -2296,6 +2368,44 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     )
     _add_config_flag(check)
     check.set_defaults(func=_run_check)
+
+    # -- compare ------------------------------------------------------------ #
+    compare_parser = sub.add_parser(
+        "compare",
+        help=(
+            "Compare a candidate dataset against a base on keys "
+            "(exit 0 equal, 1 different, 2 could not run)."
+        ),
+        description=(
+            "PROC COMPARE analogue: pair the two datasets on --keys, match variables by "
+            "name and print the comparison report. Exit 0 when the datasets are equal, "
+            "1 when they differ, 2 when the comparison could not run (unreadable file, "
+            "missing or duplicate keys, no comparable variables)."
+        ),
+    )
+    compare_parser.add_argument(
+        "base",
+        help="The reference dataset (parquet / csv / xpt / sas7bdat; SAS formats need the io extra).",
+    )
+    compare_parser.add_argument(
+        "candidate",
+        help="The dataset measured against the base (same formats).",
+    )
+    compare_parser.add_argument(
+        "--keys",
+        required=True,
+        metavar="K1,K2",
+        help=(
+            "Comma-separated variables that identify one observation on each side, "
+            "e.g. USUBJID,AESEQ. Required; keys are never looked up."
+        ),
+    )
+    compare_parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Print every unequal value (default: 50 per variable, 500 overall).",
+    )
+    compare_parser.set_defaults(func=_run_compare)
 
     # -- new ---------------------------------------------------------------- #
     new = sub.add_parser(

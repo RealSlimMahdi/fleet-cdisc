@@ -292,6 +292,8 @@ PROC COMPARE analogue in pure Polars (ADR 0002): pairs a **candidate** against a
 | `report.py` | `ComparisonReport` frozen dataclass — `datasets`, `variables`, `observations`, `values`, `listing`, `flags` (named, see `FLAGS`), `settings`, `version`; `.is_equal`, `.summary`, `.to_text()`, `.print_report()`                                              |
 | `text.py`   | Plain-text renderer in PROC COMPARE section order, listing grouped per observation, `max_print` limits (50 per variable, 500 overall by default)                                                                                                             |
 
+Three surfaces over the one engine: `fleet.compare(base, candidate, keys=...)`; the `.compare(base, keys=..., on_fail="warn")` verb on `SharedVerbsMixin` (`core/_verb_mixin.py`), where the chain is the candidate and the report stays on the namespace as `last_comparison`; and `fleet compare BASE CANDIDATE --keys K1,K2 [--all]` (`cli.py`), whose exit code is the verdict — 0 equal, 1 different, 2 the comparison could not run. Concepts page: `docs/concepts/comparison.md`.
+
 ---
 
 ### `validation/` — CDISC Rules Engine Integration

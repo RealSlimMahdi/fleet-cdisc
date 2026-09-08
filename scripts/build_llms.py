@@ -704,6 +704,71 @@ ok, msg = ct.validate_value("C66731", "M")
 """
 
 
+def _compare_section() -> str:
+    from fleet.core._verb_mixin import SharedVerbsMixin
+
+    verb = _render_verb_bullets(SharedVerbsMixin, ["compare"])
+    return f"""\
+## Dataset comparison (PROC COMPARE analogue)
+
+`fleet.compare` pairs a **candidate** dataset against a **base** on **keys**, matches variables \
+by name and returns a **comparison report**. Differences never raise from the function; the \
+report says what was found. Pure Polars, no extra dependency. Keys are mandatory on every \
+surface and are never looked up (not from define.yaml, not from study_config.yaml).
+
+### Python API
+
+```python
+import fleet
+
+report = fleet.compare(adae_prod, adae_qc, keys=["USUBJID", "AESEQ"])
+report.print_report()  # data set, variables, observation and values summaries, value listing, verdict
+assert report.is_equal, report.raised_flags
+report.listing  # long frame: keys, group, variable, base, candidate, difference, percent_difference
+```
+
+Rules: equality is exact; null equals null, NaN equals NaN, null against NaN differs. Same-kind \
+variables with different dtypes (Int64 / Float64, String / Categorical, Date / Datetime) are \
+compared after casting and listed as dtype differences without a flag; different kinds (numeric \
+/ string) are type conflicts, listed and not compared. Row and column order are ignored. A \
+missing or duplicated key raises `ComparisonError` naming the side and the key values. \
+`max_print` (50 per variable, 500 overall; `None` prints all) caps only the text report. \
+`report.flags` holds the raised names among `base_only_variables`, `candidate_only_variables`, \
+`type_conflicts`, `base_only_observations`, `candidate_only_observations`, `values_differ` \
+(`duplicate_keys`, `base_only_groups`, `candidate_only_groups` are reserved for later options); \
+`report.is_equal` is true only when none is raised.
+
+### Pipeline verb (every namespace: `df.sdtm`, `df.adam`, `df.adam.adsl`, `df.adam.occds`, …)
+
+The chain is the candidate, the argument is the base. `on_fail` is `"warn"` (default, \
+`UserWarning`), `"raise"` (`ComparisonError`) or `"ignore"`, exactly as for `.validate()`; the \
+report stays on the namespace as `.last_comparison` and the chain continues.
+
+{verb}
+
+```python
+adae_qc = (
+    ae_df.adam.occds
+    .source("USUBJID")
+    .source("AESEQ")
+    .compare(adae_prod, keys=["USUBJID", "AESEQ"], on_fail="raise")
+    .to_frame()
+)
+```
+
+### CLI
+
+```bash
+uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID,AESEQ   # parquet / csv / xpt / sas7bdat
+uv run fleet compare legacy/adae.xpt outputs/adam/adae.parquet --keys USUBJID,AESEQ --all   # print every unequal value
+```
+
+The exit code is the verdict: `0` equal, `1` different (report on stdout), `2` the comparison \
+could not run (unreadable file, missing or duplicate keys, no comparable variables — the reason \
+is on stderr). `--keys` is required.\
+"""
+
+
 def _docs_section() -> str:
     return """\
 ## Documentation
@@ -1169,6 +1234,7 @@ def build() -> str:
         _ct_section(),
         _rules_caching_section(),
         _custom_rules_section(),
+        _compare_section(),
         _docs_section(),
     ]
     return "\n\n".join(sections) + "\n"

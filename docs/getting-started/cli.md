@@ -20,6 +20,8 @@ CDISC_API_KEY=your-api-key-here
   `--config <path>` to override.
 - **Exit codes** — `0` success, `1` on a Fleet error (a single clean message
   on stderr), `2` on a usage error (missing/unknown command or flag).
+  `fleet compare` turns its verdict into the exit code: `0` equal, `1`
+  different, `2` the comparison could not run.
 - **Errors** go to **stderr**; results go to stdout.
 - `fleet --version` prints the installed version.
 
@@ -33,6 +35,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | [`fleet run`](#fleet-run) | Execute define.yaml derivation pipelines and write datasets. |
 | [`fleet validate`](#fleet-validate) | Validate datasets with the CDISC Rules Engine (exit 1 on errors). |
 | [`fleet check`](#fleet-check) | CI gate: config parse + define.yaml schema + custom-rule YAMLs. |
+| [`fleet compare`](#fleet-compare) | Compare a candidate dataset against a base on keys (exit 0 equal, 1 different, 2 could not run). |
 | [`fleet new`](#fleet-new) | Bootstrap a study: init cfg → define → ct → rules, one confirmation. |
 | [`fleet migrate`](#fleet-migrate) | Rewrite removed pre-alpha verb/kwarg spellings to canonical ones (libcst). |
 | [`fleet tdd`](#fleet-tdd) | Trial design workflow: build/audit TDD datasets from trial_design.yaml. |
@@ -127,6 +130,22 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | Option | Default | Description |
 | ------ | ------- | ----------- |
 | `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
+
+---
+
+## `fleet compare`
+
+PROC COMPARE analogue: pair the two datasets on --keys, match variables by name and print the comparison report. Exit 0 when the datasets are equal, 1 when they differ, 2 when the comparison could not run (unreadable file, missing or duplicate keys, no comparable variables).
+
+| Argument | Description |
+| -------- | ----------- |
+| `base` | The reference dataset (parquet / csv / xpt / sas7bdat; SAS formats need the io extra). |
+| `candidate` | The dataset measured against the base (same formats). |
+
+| Option | Default | Description |
+| ------ | ------- | ----------- |
+| `--keys` | _(required)_ | Comma-separated variables that identify one observation on each side, e.g. USUBJID,AESEQ. Required; keys are never looked up. |
+| `--all` | _(none)_ | Print every unequal value (default: 50 per variable, 500 overall). |
 
 ---
 

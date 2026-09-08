@@ -52,6 +52,8 @@ CDISC_API_KEY=your-api-key-here
   `--config <path>` to override.
 - **Exit codes** — `0` success, `1` on a Fleet error (a single clean message
   on stderr), `2` on a usage error (missing/unknown command or flag).
+  `fleet compare` turns its verdict into the exit code: `0` equal, `1`
+  different, `2` the comparison could not run.
 - **Errors** go to **stderr**; results go to stdout.
 - `fleet --version` prints the installed version.
 

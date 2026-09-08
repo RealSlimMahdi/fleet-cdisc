@@ -71,9 +71,11 @@ class ComparisonError(FleetError, ValueError):
     """Raised when a comparison cannot run: keys missing, duplicated or
     incompatible between the base and the candidate.
 
-    Differences between the two datasets never raise; they are reported.
-    Dual-inherits from ``ValueError`` so ``except ValueError`` handlers
-    keep working.
+    Differences between the two datasets never raise from
+    :func:`fleet.compare`; they are reported.  The pipeline verb
+    ``.compare(..., on_fail="raise")`` is the one place that turns a
+    difference into this error, on request.  Dual-inherits from
+    ``ValueError`` so ``except ValueError`` handlers keep working.
     """
 
 

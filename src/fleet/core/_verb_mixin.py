@@ -35,11 +35,19 @@ import yaml
 
 from fleet.core import log as fleet_log
 from fleet.core.define_spec import DefineSpec, load_define_spec
-from fleet.core.exceptions import DerivationError, SpecError, ValidationError, VerbUsageError
+from fleet.core.exceptions import (
+    ComparisonError,
+    DerivationError,
+    SpecError,
+    ValidationError,
+    VerbUsageError,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
+    from fleet.comparison import ComparisonReport
+    from fleet.comparison.report import MaxPrint
     from fleet.core.derivation import Derivation
     from fleet.core.frames import DataFrame
     from fleet.ct.validator import CTValidator
@@ -50,6 +58,29 @@ logger = fleet_log.get_logger(__name__)
 # Valid Implementation Guide versions supported by the CDISC Rules Engine.
 _VALID_SDTM_VERSIONS = {"3.1.2", "3.1.3", "3.2", "3.3", "3.4"}
 _VALID_ADAM_VERSIONS = {"1.0", "1.1", "1.2", "1.3"}
+
+
+#: What ``on_fail`` accepts on the checking verbs (``validate``, ``compare``).
+_ON_FAIL_VALUES = ("warn", "raise", "ignore")
+
+
+def _check_on_fail(verb: str, on_fail: str) -> None:
+    """Raise ``DerivationError`` if *on_fail* is not one of :data:`_ON_FAIL_VALUES`."""
+    if on_fail not in _ON_FAIL_VALUES:
+        raise DerivationError(
+            f"{verb} on_fail={on_fail!r} is not supported. Choose 'warn', 'raise', or 'ignore'."
+        )
+
+
+def _settle_on_fail(on_fail: str, summary: str, error: type[Exception]) -> None:
+    """Apply *on_fail* to a failed check: raise *error*, warn, or stay silent.
+
+    The warning points at the verb's caller, two frames up from here.
+    """
+    if on_fail == "raise":
+        raise error(summary)
+    if on_fail == "warn":
+        warnings.warn(summary, stacklevel=3)
 
 
 def _check_ig_version(version: str, *, standard: str) -> None:
@@ -1730,11 +1761,7 @@ class SharedVerbsMixin:
         from fleet.validation.lineage_join import enrich_with_lineage
         from fleet.validation.service import ValidationService
 
-        if on_fail not in ("warn", "raise", "ignore"):
-            raise DerivationError(
-                f"validate on_fail={on_fail!r} is not supported. "
-                "Choose 'warn', 'raise', or 'ignore'."
-            )
+        _check_on_fail("validate", on_fail)
         ver = version if version is not None else self._VALIDATE_DEFAULT_VERSION
         _check_ig_version(ver, standard=self._VALIDATE_STANDARD)
         svc = ValidationService(rules_engine_path=rules_engine_path)
@@ -1759,10 +1786,113 @@ class SharedVerbsMixin:
                 f"{len(result.errors)} error(s), {len(result.warnings)} warning(s). "
                 "Access details via .last_validation."
             )
-            if on_fail == "raise":
-                raise ValidationError(summary)
-            if on_fail == "warn":
-                warnings.warn(summary, stacklevel=2)
+            _settle_on_fail(on_fail, summary, ValidationError)
+        return new
+
+    # ------------------------------------------------------------------ #
+    # compare                                                              #
+    # ------------------------------------------------------------------ #
+
+    @property
+    def last_comparison(self) -> ComparisonReport | None:
+        """The most recent comparison report produced by ``compare()``.
+
+        ``None`` when ``compare()`` has not run on this chain.  Use it to
+        gate a script on the comparison outcome without breaking the
+        fluent chain::
+
+            ns = qc_df.adam.source("USUBJID").compare(adsl_prod, keys="USUBJID")
+            assert ns.last_comparison is not None
+            assert ns.last_comparison.is_equal, ns.last_comparison.raised_flags
+        """
+        return getattr(self, "_last_comparison", None)
+
+    def compare(
+        self,
+        base: pl.DataFrame | pl.LazyFrame,
+        *,
+        keys: str | Sequence[str],
+        max_print: MaxPrint = 50,
+        base_name: str | None = None,
+        candidate_name: str | None = None,
+        on_fail: Literal["warn", "raise", "ignore"] = "warn",
+    ) -> Self:
+        """Compare the chain against a base dataset, PROC COMPARE style.
+
+        The chain is the **candidate** and *base* is the reference it is
+        measured against.  The chain is materialised, paired with the base
+        on *keys* through :func:`fleet.compare`, and the report is printed
+        through the ``"fleet.comparison"`` logger (stdout by default — see
+        :mod:`fleet.core.log`).  Differences never stop the chain by
+        default: the verb returns a namespace copy carrying the
+        :class:`~fleet.comparison.ComparisonReport` as
+        :attr:`last_comparison`, so the pipeline continues.
+
+        Args:
+            base: The reference dataset, as a DataFrame or LazyFrame.
+            keys: Variable(s) that identify one observation on each side.
+                Required; the compare refuses to run when a key is missing
+                or not unique on either side.
+            max_print: Print limits for the text report (differences per
+                variable, a ``(per_variable, total)`` pair, or ``None`` for
+                everything).  The report's listing is never truncated.
+            base_name: Label for the base in the report, when known.
+            candidate_name: Label for the chain in the report, when known.
+            on_fail: What to do when the datasets differ — ``"warn"``
+                (default) emits a ``UserWarning`` and continues,
+                ``"raise"`` raises
+                :class:`~fleet.core.exceptions.ComparisonError`,
+                ``"ignore"`` continues silently.
+
+        Returns:
+            Self: A namespace copy carrying the report in
+                ``last_comparison`` (for continued chaining).
+
+        Raises:
+            ComparisonError: When the datasets differ and
+                ``on_fail="raise"``, or when the comparison cannot run
+                (a key missing, duplicated or of an incompatible type).
+            DerivationError: On an invalid *on_fail* value.
+
+        Examples:
+            Prove an independently programmed ADAE matches its base, and
+            keep chaining::
+
+                adae_qc = (
+                    ae_df.adam.occds
+                    .source("USUBJID")
+                    .source("AESEQ")
+                    .compare(adae_prod, keys=["USUBJID", "AESEQ"])
+                    .to_frame()
+                )
+
+            Gate a CI script on the comparison outcome::
+
+                adsl = (
+                    dm_df.adam.adsl
+                    .source("USUBJID")
+                    .compare(adsl_prod, keys="USUBJID", on_fail="raise")
+                    .to_frame()
+                )
+        """
+        from fleet.comparison import compare as compare_frames
+
+        _check_on_fail("compare", on_fail)
+        report = compare_frames(
+            base,
+            self.to_frame(),
+            keys=keys,
+            max_print=max_print,
+            base_name=base_name,
+            candidate_name=candidate_name,
+        )
+        report.print_report()
+
+        new = copy.copy(self)
+        new._last_comparison = report
+        if not report.is_equal:
+            summary = f"{report.summary}. Access details via .last_comparison."
+            _settle_on_fail(on_fail, summary, ComparisonError)
         return new
 
     # ------------------------------------------------------------------ #

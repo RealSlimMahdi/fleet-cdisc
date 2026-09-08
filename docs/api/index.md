@@ -21,6 +21,7 @@ Every module page below is rendered live from the Python docstrings in the packa
 | [`define_xml`](define_xml.md) | Define-XML generation, validation, spec generation                                   |
 | [`ct`](ct.md)                 | Controlled terminology — CDISC Library API, code generation, validation              |
 | [`tlg`](tlg.md)               | TLG namespace (`df.tlg`) — summary tables, listings, ARD generation, HTML/PDF export |
+| [`comparison`](comparison.md) | `fleet.compare` — PROC COMPARE analogue: keyed matching, comparison report, flags     |
 | [`core`](core.md)             | `StudyContext`, `PipelineDAG`, exceptions                                            |
 
 ## Namespace registration

@@ -841,3 +841,214 @@ def test_add_acrf_updates_define_yaml(
     assert acrf["href"] == "blankcrf.pdf"
     assert acrf["title"] == "Annotated Case Report Form"
     assert acrf["page_map"] == "acrf_pages.yaml"
+
+
+# ------------------------------------------------------------------ #
+# fleet compare — exit code is the verdict                            #
+# ------------------------------------------------------------------ #
+
+
+def _adsl() -> pl.DataFrame:
+    return pl.from_repr("""\
+┌─────────┬─────┬─────┐
+│ USUBJID ┆ AGE ┆ SEX │
+│ ---     ┆ --- ┆ --- │
+│ str     ┆ i64 ┆ str │
+╞═════════╪═════╪═════╡
+│ S01     ┆ 34  ┆ M   │
+│ S02     ┆ 45  ┆ F   │
+│ S03     ┆ 52  ┆ F   │
+└─────────┴─────┴─────┘
+""")
+
+
+def test_compare_equal_parquet_files_exit_0_and_print_the_report(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base, candidate = tmp_path / "adsl_prod.parquet", tmp_path / "adsl_qc.parquet"
+    _adsl().write_parquet(base)
+    _adsl().write_parquet(candidate)
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "USUBJID"])
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "EQUAL: no differences found." in captured.out
+    assert captured.err == ""
+
+
+def test_compare_different_csv_files_exit_1_and_list_the_difference(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base, candidate = tmp_path / "adsl_prod.csv", tmp_path / "adsl_qc.csv"
+    _adsl().write_csv(base)
+    _adsl().with_columns(pl.lit(99).alias("AGE")).write_csv(candidate)
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "USUBJID"])
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert "NOT EQUAL: values_differ" in captured.out
+    assert "USUBJID=S01" in captured.out and "34" in captured.out and "99" in captured.out
+    assert captured.err == ""
+
+
+def test_compare_names_each_side_after_its_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base, candidate = tmp_path / "adsl_prod.parquet", tmp_path / "adsl_qc.parquet"
+    _adsl().write_parquet(base)
+    _adsl().write_parquet(candidate)
+
+    _run(["compare", str(base), str(candidate), "--keys", "USUBJID"])
+
+    out = capsys.readouterr().out
+    assert f"Base:      {base}" in out
+    assert f"Candidate: {candidate}" in out
+
+
+def test_compare_keys_are_required(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    base = tmp_path / "adsl.parquet"
+    _adsl().write_parquet(base)
+
+    code = _run(["compare", str(base), str(base)])
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "--keys" in captured.err and "required" in captured.err
+    assert captured.out == ""
+
+
+def test_compare_accepts_composite_keys_with_spaces(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    adae = pl.from_repr("""\
+┌─────────┬───────┬────────┐
+│ USUBJID ┆ AESEQ ┆ AETERM │
+│ ---     ┆ ---   ┆ ---    │
+│ str     ┆ i64   ┆ str    │
+╞═════════╪═══════╪════════╡
+│ 01      ┆ 1     ┆ a      │
+│ 01      ┆ 2     ┆ b      │
+└─────────┴───────┴────────┘
+""")
+    base, candidate = tmp_path / "adae_prod.parquet", tmp_path / "adae_qc.parquet"
+    adae.write_parquet(base)
+    adae.write_parquet(candidate)
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "USUBJID, AESEQ"])
+
+    assert code == 0
+    assert "Keys:      USUBJID, AESEQ" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "candidate_frame, expected_reason",
+    [
+        pytest.param(_adsl().rename({"USUBJID": "SUBJID"}), "USUBJID", id="key-absent"),
+        pytest.param(pl.concat([_adsl(), _adsl().head(1)]), "USUBJID=S01", id="duplicate-key"),
+    ],
+)
+def test_compare_exits_2_with_the_reason_on_stderr_when_keys_cannot_pair(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
+    candidate_frame: pl.DataFrame,
+    expected_reason: str,
+) -> None:
+    base, candidate = tmp_path / "adsl_prod.parquet", tmp_path / "adsl_qc.parquet"
+    _adsl().write_parquet(base)
+    candidate_frame.write_parquet(candidate)
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "USUBJID"])
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "candidate" in captured.err and expected_reason in captured.err
+    assert captured.out == ""
+
+
+def test_compare_empty_keys_exit_2(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    base = tmp_path / "adsl.parquet"
+    _adsl().write_parquet(base)
+
+    code = _run(["compare", str(base), str(base), "--keys", " , "])
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "keys" in captured.err
+    assert captured.out == ""
+
+
+@pytest.mark.parametrize(
+    "candidate_name, expected_reason",
+    [
+        pytest.param("missing.parquet", "missing.parquet", id="file-not-found"),
+        pytest.param("adsl.txt", ".txt", id="unsupported-format"),
+    ],
+)
+def test_compare_unreadable_file_exits_2_and_names_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture, candidate_name: str, expected_reason: str
+) -> None:
+    base = tmp_path / "adsl_prod.parquet"
+    _adsl().write_parquet(base)
+    candidate = tmp_path / candidate_name
+    if candidate.suffix == ".txt":
+        candidate.write_text("not a dataset", encoding="utf-8")
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "USUBJID"])
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert expected_reason in captured.err
+    assert captured.out == ""
+
+
+def test_compare_with_no_comparable_variables_exits_2(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Only the keys in common: nothing to compare, so no verdict either way."""
+    base, candidate = tmp_path / "adsl_prod.parquet", tmp_path / "adsl_qc.parquet"
+    _adsl().select("USUBJID", "AGE").write_parquet(base)
+    _adsl().select("USUBJID", "SEX").write_parquet(candidate)
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "USUBJID"])
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "no comparable variables" in captured.err
+    assert "AGE" in captured.err and "SEX" in captured.err
+    assert captured.out == ""
+
+
+def test_compare_all_lifts_the_print_limits(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    n = 60
+    base_frame = pl.DataFrame({"ID": range(n), "X": [0] * n})
+    base, candidate = tmp_path / "base.parquet", tmp_path / "candidate.parquet"
+    base_frame.write_parquet(base)
+    base_frame.with_columns(pl.lit(1).alias("X")).write_parquet(candidate)
+
+    assert _run(["compare", str(base), str(candidate), "--keys", "ID"]) == 1
+    assert "showing 50 of 60 unequal values" in capsys.readouterr().out
+
+    assert _run(["compare", str(base), str(candidate), "--keys", "ID", "--all"]) == 1
+    assert "showing all 60 unequal values" in capsys.readouterr().out
+
+
+def test_compare_reads_xpt_through_the_io_extra(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    pyreadstat = pytest.importorskip("pyreadstat")
+    import pandas as pd
+
+    # The fixture is written with pyreadstat directly: ``fleet.io.save_xpt``
+    # goes through ``DataFrame.to_pandas()``, which needs pyarrow, and the
+    # ``io`` extra does not declare it.  pandas is pyreadstat's own dependency.
+    base, candidate = tmp_path / "adsl_prod.xpt", tmp_path / "adsl_qc.parquet"
+    pyreadstat.write_xport(pd.DataFrame(_adsl().to_dict(as_series=False)), str(base))
+    _adsl().with_columns(pl.col("AGE").cast(pl.Float64)).write_parquet(candidate)
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "USUBJID"])
+
+    captured = capsys.readouterr()
+    assert code == 0, captured
+    assert "EQUAL: no differences found." in captured.out

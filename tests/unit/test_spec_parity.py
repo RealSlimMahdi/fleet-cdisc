@@ -98,6 +98,7 @@ _INFRASTRUCTURE: set[str] = {
     "explain",
     "trail",
     "validate",
+    "compare",  # QC step: reports against a base, derives nothing
     "select",
     "nodup",
     "from_spec",

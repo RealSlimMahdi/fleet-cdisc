@@ -20,6 +20,8 @@ from fleet.core.exceptions import ComparisonError
 
 from .engine import compare
 from .report import (
+    DEFAULT_MAX_PRINT,
+    DEFAULT_MAX_PRINT_TOTAL,
     FLAGS,
     LISTING_COLUMNS,
     ComparisonReport,
@@ -45,4 +47,6 @@ __all__ = [
     "ValuesSummary",
     "FLAGS",
     "LISTING_COLUMNS",
+    "DEFAULT_MAX_PRINT",
+    "DEFAULT_MAX_PRINT_TOTAL",
 ]

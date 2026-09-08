@@ -15,6 +15,7 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 | [`.assign()`][fleet.core._verb_mixin.SharedVerbsMixin.assign]         | Copy a column (`source=`) or hardcode a literal (`value=`).                   | `.assign("DOMAIN", value="DM")`                                     |
 | [`.inspect()`][fleet.core._verb_mixin.SharedVerbsMixin.inspect]       | Hard checkpoint — materialises and prints schema/shape/head.                  | `.inspect("after rename")`                                          |
 | [`.explain()`][fleet.core._verb_mixin.SharedVerbsMixin.explain]       | Prints the Polars query plan without materialising.                           | `.explain()`                                                        |
+| [`.compare()`][fleet.core._verb_mixin.SharedVerbsMixin.compare]       | Compares the chain (candidate) against a base on keys; keeps chaining.        | `.compare(adsl_prod, keys="USUBJID", on_fail="raise")`              |
 
 ## SDTM namespace (`df.sdtm`)
 
