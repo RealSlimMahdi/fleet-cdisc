@@ -6,13 +6,14 @@ SAS programmer expects from PROC COMPARE (data sets, variables,
 observations, values), the long value listing as a Polars frame, the set
 of named flags that replaces SAS's SYSINFO integer, the settings the
 comparison ran with, and the Fleet version.  Rendering lives in
-:mod:`fleet.comparison.text`.
+:mod:`fleet.comparison.text` and :mod:`fleet.comparison.json`.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, NamedTuple
 
 import polars as pl
@@ -49,7 +50,24 @@ LISTING_COLUMNS: tuple[str, ...] = (
     "percent_difference",
 )
 
-#: Default print limits of the text renderer: differences per variable, and overall.
+#: Top-level keys of the JSON document (:meth:`ComparisonReport.to_json`), in
+#: order.  Additive-only within a major version: keys may be added, never
+#: removed or renamed, because the editor extension consumes them.
+JSON_KEYS: tuple[str, ...] = (
+    "is_equal",
+    "summary",
+    "flags",
+    "datasets",
+    "variables",
+    "observations",
+    "values",
+    "statistics",
+    "listing",
+    "settings",
+    "version",
+)
+
+#: Default print limits of the renderers: differences per variable, and overall.
 DEFAULT_MAX_PRINT = 50
 DEFAULT_MAX_PRINT_TOTAL = 500
 
@@ -90,6 +108,22 @@ def _normalise_max_print(max_print: MaxPrint) -> PrintLimits:
             raise ComparisonError("max_print limits must not be negative")
         return PrintLimits(per_variable, total)
     raise VerbUsageError("max_print must be an int, a (per_variable, total) pair or None")
+
+
+def _cap(frame: pl.DataFrame, limit: int | None) -> pl.DataFrame:
+    """The first *limit* rows of *frame*; all of them when *limit* is ``None``."""
+    return frame if limit is None else frame.head(limit)
+
+
+def _truncate_listing(listing: pl.DataFrame, limits: PrintLimits) -> pl.DataFrame:
+    """Keep the first ``per_variable`` differences of each variable within its group, then the first ``total``."""
+    shown = listing
+    if limits.per_variable is not None:
+        rank = pl.int_range(pl.len()).over("group", "variable")
+        shown = shown.filter(rank < limits.per_variable)
+    if limits.total is not None:
+        shown = shown.head(limits.total)
+    return shown
 
 
 def _key_label(keys: Iterable[str], values: Iterable[Any]) -> str:
@@ -213,7 +247,8 @@ class ComparisonReport:
             land), ``variable``, ``base`` and ``candidate`` as strings,
             ``difference`` and ``percent_difference`` for numeric variables
             (null otherwise; percent is null when the base is zero or null).
-            Never truncated; ``max_print`` only governs the text renderer.
+            Never truncated; ``max_print`` only governs what the text and
+            JSON renderers show.
         flags: The subset of :data:`FLAGS` this comparison raised.
         settings: The settings the comparison ran with.
         version: The Fleet version that produced the report.
@@ -286,8 +321,7 @@ class ComparisonReport:
         """
         from .text import _render_text
 
-        limit = self.settings.max_print if isinstance(max_print, _Unset) else max_print
-        return _render_text(self, _normalise_max_print(limit))
+        return _render_text(self, self._print_limits(max_print))
 
     def print_report(self, max_print: MaxPrint | _Unset = _USE_SETTINGS) -> None:
         """Emit :meth:`to_text` through the ``fleet.comparison`` logger.
@@ -308,6 +342,81 @@ class ComparisonReport:
         """
         fleet_log.ensure_default_handler()
         _logger.info(self.to_text(max_print))
+
+    def to_json(
+        self, max_print: MaxPrint | _Unset = _USE_SETTINGS, *, indent: int | None = 2
+    ) -> str:
+        """Render the report as one JSON document for agents, CI jobs and editors.
+
+        Top-level keys, in order: :data:`JSON_KEYS`.  Field names mirror the
+        report attributes and the contract is additive-only within a major
+        version (keys are added, never removed or renamed).  The value
+        listing and the one-sided key lists are truncated to the print
+        limits and carry a ``truncated`` marker; :meth:`save_listing` writes
+        the complete listing.  Strict JSON: non-finite numbers are null,
+        temporal values are ISO 8601 strings.
+
+        Args:
+            max_print: As for :meth:`to_text`; governs the listing inside
+                the document.
+            indent: Passed to :func:`json.dumps`; ``None`` for one line.
+
+        Returns:
+            str: The JSON document.
+
+        Examples:
+            Let an agent reason about the differences without parsing prose::
+
+                report = fleet.compare(adsl_prod, adsl_qc, keys=["USUBJID"])
+                document = json.loads(report.to_json())
+                assert document["is_equal"], document["flags"]
+        """
+        from .json import _render_json
+
+        return _render_json(self, self._print_limits(max_print), indent)
+
+    def save_json(self, path: str | Path, max_print: MaxPrint | _Unset = _USE_SETTINGS) -> None:
+        """Write :meth:`to_json` to *path* (UTF-8, trailing newline).
+
+        Args:
+            path: Where to write the document.
+            max_print: As for :meth:`to_json`.
+
+        Examples:
+            Archive the outcome of a QC comparison next to the build::
+
+                report = fleet.compare(adsl_prod, adsl_qc, keys=["USUBJID"])
+                report.save_json("build/adsl_compare.json")
+        """
+        Path(path).write_text(self.to_json(max_print) + "\n", encoding="utf-8")
+
+    def save_listing(self, path: str | Path) -> None:
+        """Write the complete value listing to *path* as parquet.
+
+        Never truncated: every differing value, with the key columns in their
+        own dtypes followed by :data:`LISTING_COLUMNS` (``group``,
+        ``variable``, ``base`` and ``candidate`` as strings, ``difference``
+        and ``percent_difference`` as floats).  An equal comparison writes an
+        empty frame with the same schema.
+
+        Args:
+            path: Where to write the parquet file.
+
+        Examples:
+            Keep every difference for a reviewer, then query it lazily::
+
+                report = fleet.compare(adae_prod, adae_qc, keys=["USUBJID", "AESEQ"])
+                report.save_listing("build/adae_differences.parquet")
+                worst = pl.scan_parquet("build/adae_differences.parquet").filter(
+                    pl.col("percent_difference").abs() > 10
+                )
+        """
+        self.listing.write_parquet(path)
+
+    def _print_limits(self, max_print: MaxPrint | _Unset) -> PrintLimits:
+        """Resolve a renderer's ``max_print`` argument, defaulting to the settings'."""
+        limit = self.settings.max_print if isinstance(max_print, _Unset) else max_print
+        return _normalise_max_print(limit)
 
     def __str__(self) -> str:
         """The text report with the settings' print limits, so ``print(report)`` reads."""

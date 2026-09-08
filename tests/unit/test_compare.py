@@ -8,15 +8,26 @@ its internal columns are called.
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import math
 import re
+from datetime import date
 from pathlib import Path
 
 import polars as pl
 import pytest
 
 import fleet
-from fleet.comparison import FLAGS, ComparisonError, ComparisonReport, compare
+from fleet.comparison import (
+    FLAGS,
+    JSON_KEYS,
+    LISTING_COLUMNS,
+    ComparisonError,
+    ComparisonReport,
+    ComparisonSettings,
+    compare,
+)
 from fleet.core.exceptions import FleetError, VerbUsageError
 from tests.helpers import shuffle_rows
 
@@ -856,6 +867,227 @@ class TestTextReport:
         assert "\n" not in summary
         assert "NOT EQUAL" in summary
         assert "EQUAL" in compare(base, base, keys="USUBJID").summary
+
+
+# ── JSON and parquet ──────────────────────────────────────────────────────────
+
+#: The top-level keys of the JSON document, in order, as documented on the
+#: concepts page.  Additive-only within a major version.
+_JSON_KEYS = [
+    "is_equal",
+    "summary",
+    "flags",
+    "datasets",
+    "variables",
+    "observations",
+    "values",
+    "statistics",
+    "listing",
+    "settings",
+    "version",
+]
+
+
+class TestJsonReport:
+    def test_json_round_trips_with_every_documented_top_level_key(self, base, candidate):
+        document = json.loads(compare(base, candidate, keys="USUBJID").to_json())
+        assert list(document) == _JSON_KEYS
+        assert list(JSON_KEYS) == _JSON_KEYS
+
+    def test_document_mirrors_the_report(self, base, candidate):
+        report = compare(base, candidate, keys="USUBJID", base_name="prod", candidate_name="qc")
+        document = json.loads(report.to_json())
+        assert document["is_equal"] is False
+        assert document["summary"] == report.summary
+        assert document["flags"] == [
+            "candidate_only_variables",
+            "base_only_observations",
+            "candidate_only_observations",
+            "values_differ",
+        ]
+        assert document["datasets"] == {
+            "base": {"name": "prod", "rows": 4, "variables": 4},
+            "candidate": {"name": "qc", "rows": 4, "variables": 5},
+        }
+        assert document["variables"] == {
+            "common": ["AGE", "SEX", "WT"],
+            "compared": ["AGE", "SEX", "WT"],
+            "base_only": [],
+            "candidate_only": ["RACE"],
+            "type_conflicts": [],
+            "dtype_differences": [],
+        }
+        assert document["observations"] == {
+            "matched": 3,
+            "base_only": 1,
+            "candidate_only": 1,
+            "base_only_keys": [{"USUBJID": "04"}],
+            "candidate_only_keys": [{"USUBJID": "05"}],
+            "truncated": False,
+        }
+        assert document["values"] == {
+            "per_variable": [
+                {"variable": "AGE", "differences": 1},
+                {"variable": "SEX", "differences": 1},
+                {"variable": "WT", "differences": 1},
+            ],
+            "variables_with_differences": 3,
+            "observations_with_differences": 2,
+            "total_differences": 3,
+        }
+        assert document["statistics"] == []
+        assert document["settings"] == {
+            "keys": ["USUBJID"],
+            "max_print": 50,
+            "base_name": "prod",
+            "candidate_name": "qc",
+        }
+        assert document["version"] == fleet.__version__
+
+    def test_listing_rows_carry_the_listing_columns(self, base, candidate):
+        listing = json.loads(compare(base, candidate, keys="USUBJID").to_json())["listing"]
+        assert listing["columns"] == ["USUBJID", *LISTING_COLUMNS]
+        assert (listing["shown"], listing["total"], listing["truncated"]) == (3, 3, False)
+        first = listing["rows"][0]
+        assert first["percent_difference"] == pytest.approx(2.2222, abs=1e-3)
+        del first["percent_difference"]
+        assert first == {
+            "USUBJID": "02",
+            "group": None,
+            "variable": "AGE",
+            "base": "45",
+            "candidate": "46",
+            "difference": 1.0,
+        }
+        assert [(r["USUBJID"], r["variable"]) for r in listing["rows"]] == [
+            ("02", "AGE"),
+            ("03", "SEX"),
+            ("03", "WT"),
+        ]
+
+    def test_type_conflicts_and_dtype_differences_name_dtypes_as_text(self, base):
+        c = base.with_columns(pl.col("AGE").cast(pl.Float64), pl.col("WT").cast(pl.String))
+        variables = json.loads(compare(base, c, keys="USUBJID").to_json())["variables"]
+        assert variables["type_conflicts"] == [
+            {"variable": "WT", "base_dtype": "Float64", "candidate_dtype": "String"}
+        ]
+        assert variables["dtype_differences"] == [
+            {"variable": "AGE", "base_dtype": "Int64", "candidate_dtype": "Float64"}
+        ]
+        assert variables["compared"] == ["AGE", "SEX"]
+
+    def test_listing_is_truncated_to_the_print_limits_with_a_marker(self):
+        n = 120
+        b = pl.DataFrame({"ID": range(n), "A": [0] * n, "B": [0] * n})
+        c = pl.DataFrame({"ID": range(n), "A": [1] * n, "B": [1] * n})
+        report = compare(b, c, keys="ID")
+
+        listing = json.loads(report.to_json())["listing"]
+        assert (listing["shown"], listing["total"], listing["truncated"]) == (100, 240, True)
+        assert len(listing["rows"]) == 100
+        assert sum(r["variable"] == "A" for r in listing["rows"]) == 50
+
+        everything = json.loads(report.to_json(max_print=None))["listing"]
+        assert (everything["shown"], everything["total"], everything["truncated"]) == (
+            240,
+            240,
+            False,
+        )
+        assert len(everything["rows"]) == 240
+
+        settings = json.loads(compare(b, c, keys="ID", max_print=None).to_json())
+        assert settings["listing"]["truncated"] is False
+        assert settings["settings"]["max_print"] is None
+
+    def test_one_sided_key_lists_are_capped_like_the_text(self):
+        b = pl.DataFrame({"ID": range(60), "A": [0] * 60})
+        observations = json.loads(compare(b, b.head(0), keys="ID", max_print=10).to_json())[
+            "observations"
+        ]
+        assert observations["base_only"] == 60
+        assert observations["base_only_keys"] == [{"ID": i} for i in range(10)]
+        assert observations["truncated"] is True
+
+    def test_settings_record_every_option(self, base):
+        settings = json.loads(compare(base, base, keys="USUBJID", max_print=(30, 45)).to_json())[
+            "settings"
+        ]
+        assert settings["max_print"] == [30, 45]
+        assert list(settings) == [f.name for f in dataclasses.fields(ComparisonSettings)]
+
+    def test_strict_json_for_temporal_keys_and_non_finite_differences(self):
+        b = pl.DataFrame({"DT": [date(2026, 1, 1), date(2026, 1, 2)], "X": [1.0, 2.0]})
+        c = pl.DataFrame({"DT": [date(2026, 1, 1), date(2026, 1, 2)], "X": [NAN, 3.0]})
+        text = compare(b, c, keys="DT").to_json()
+
+        def reject(constant: str) -> None:
+            raise AssertionError(f"non-standard JSON constant {constant}")
+
+        rows = json.loads(text, parse_constant=reject)["listing"]["rows"]
+        assert rows[0] == {
+            "DT": "2026-01-01",
+            "group": None,
+            "variable": "X",
+            "base": "1.0",
+            "candidate": "NaN",
+            "difference": None,
+            "percent_difference": None,
+        }
+        assert rows[1]["difference"] == 1.0
+
+    def test_indent_none_renders_one_line(self, base):
+        text = compare(base, base, keys="USUBJID").to_json(indent=None)
+        assert "\n" not in text
+        assert json.loads(text)["is_equal"] is True
+
+
+class TestSavedOutputs:
+    def test_save_json_writes_the_same_document(self, base, candidate, tmp_path):
+        report = compare(base, candidate, keys="USUBJID")
+        path = tmp_path / "compare.json"
+        report.save_json(path)
+        assert json.loads(path.read_text(encoding="utf-8")) == json.loads(report.to_json())
+
+    def test_save_json_honours_max_print_and_accepts_a_string_path(self, tmp_path):
+        n = 120
+        b = pl.DataFrame({"ID": range(n), "A": [0] * n})
+        c = pl.DataFrame({"ID": range(n), "A": [1] * n})
+        path = tmp_path / "compare.json"
+        compare(b, c, keys="ID").save_json(str(path), max_print=None)
+        listing = json.loads(path.read_text(encoding="utf-8"))["listing"]
+        assert (listing["shown"], listing["truncated"]) == (n, False)
+
+    def test_save_listing_writes_the_complete_listing_as_parquet(self, tmp_path):
+        n = 120
+        b = pl.DataFrame({"ID": range(n), "A": [0] * n, "B": [0] * n})
+        c = pl.DataFrame({"ID": range(n), "A": [1] * n, "B": [1] * n})
+        report = compare(b, c, keys="ID")
+        path = tmp_path / "differences.parquet"
+        report.save_listing(path)
+
+        reloaded = pl.read_parquet(path)
+        assert reloaded.schema == pl.Schema(
+            {
+                "ID": pl.Int64,
+                "group": pl.String,
+                "variable": pl.String,
+                "base": pl.String,
+                "candidate": pl.String,
+                "difference": pl.Float64,
+                "percent_difference": pl.Float64,
+            }
+        )
+        assert reloaded.height == 240  # complete, while the JSON listing is truncated
+        assert json.loads(report.to_json())["listing"]["truncated"] is True
+        assert reloaded.equals(report.listing)
+
+    def test_save_listing_of_an_equal_report_keeps_the_schema(self, base, tmp_path):
+        path = tmp_path / "none.parquet"
+        compare(base, base, keys="USUBJID").save_listing(str(path))
+        reloaded = pl.read_parquet(path)
+        assert reloaded.height == 0
+        assert reloaded.columns == ["USUBJID", *LISTING_COLUMNS]
+        assert reloaded.schema["USUBJID"] == pl.String
 
 
 # ── Purity ────────────────────────────────────────────────────────────────────

@@ -725,6 +725,8 @@ report = fleet.compare(adae_prod, adae_qc, keys=["USUBJID", "AESEQ"])
 report.print_report()  # data set, variables, observation and values summaries, value listing, verdict
 assert report.is_equal, report.raised_flags
 report.listing  # long frame: keys, group, variable, base, candidate, difference, percent_difference
+report.to_json()  # one JSON document for agents / editors; report.save_json(path) writes it
+report.save_listing("differences.parquet")  # the complete listing as parquet, never truncated
 ```
 
 Rules: equality is exact; null equals null, NaN equals NaN, null against NaN differs. Same-kind \
@@ -732,11 +734,19 @@ variables with different dtypes (Int64 / Float64, String / Categorical, Date / D
 compared after casting and listed as dtype differences without a flag; different kinds (numeric \
 / string) are type conflicts, listed and not compared. Row and column order are ignored. A \
 missing or duplicated key raises `ComparisonError` naming the side and the key values. \
-`max_print` (50 per variable, 500 overall; `None` prints all) caps only the text report. \
+`max_print` (50 per variable, 500 overall; `None` prints all) caps only what the text report \
+and the JSON document show; the listing frame and the parquet are always complete. \
 `report.flags` holds the raised names among `base_only_variables`, `candidate_only_variables`, \
 `type_conflicts`, `base_only_observations`, `candidate_only_observations`, `values_differ` \
 (`duplicate_keys`, `base_only_groups`, `candidate_only_groups` are reserved for later options); \
 `report.is_equal` is true only when none is raised.
+
+JSON contract (`fleet.comparison.JSON_KEYS`, additive-only within a major version — keys are \
+added, never removed or renamed): `is_equal`, `summary`, `flags`, `datasets`, `variables`, \
+`observations`, `values`, `statistics` (empty until summary statistics land), `listing` \
+(`columns`, `rows`, `shown`, `total`, `truncated` — truncated to the print limits, unlike the \
+parquet), `settings` (every option in effect), `version`. Strict JSON: non-finite numbers are \
+null, temporal keys are ISO 8601 strings.
 
 ### Pipeline verb (every namespace: `df.sdtm`, `df.adam`, `df.adam.adsl`, `df.adam.occds`, …)
 
@@ -761,11 +771,13 @@ adae_qc = (
 ```bash
 uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID,AESEQ   # parquet / csv / xpt / sas7bdat
 uv run fleet compare legacy/adae.xpt outputs/adam/adae.parquet --keys USUBJID,AESEQ --all   # print every unequal value
+uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID,AESEQ --format json   # one JSON document, nothing else on stdout
+uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID,AESEQ --out build/adae_differences.parquet   # complete listing as parquet
 ```
 
 The exit code is the verdict: `0` equal, `1` different (report on stdout), `2` the comparison \
-could not run (unreadable file, missing or duplicate keys, no comparable variables — the reason \
-is on stderr). `--keys` is required.\
+could not run (unreadable file, missing or duplicate keys, no comparable variables, `--out` not \
+writable — the reason is on stderr). `--keys` is required.\
 """
 
 

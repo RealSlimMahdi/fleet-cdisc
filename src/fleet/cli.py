@@ -1091,7 +1091,20 @@ def _run_compare(args: argparse.Namespace) -> None:
             code=_COMPARE_IMPOSSIBLE,
         )
 
-    print(report.to_text())
+    if args.out:
+        out = Path(args.out)
+        try:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            report.save_listing(out)
+        except OSError as exc:
+            _fail(f"cannot write the value listing {out}: {exc}", code=_COMPARE_IMPOSSIBLE)
+
+    if args.format == "json":
+        print(report.to_json())  # the whole of stdout is the document
+    else:
+        print(report.to_text())
+        if args.out:
+            print(f"Value listing → {args.out}")
     if not report.is_equal:
         sys.exit(_COMPARE_DIFFERENT)
 
@@ -2380,7 +2393,7 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
             "PROC COMPARE analogue: pair the two datasets on --keys, match variables by "
             "name and print the comparison report. Exit 0 when the datasets are equal, "
             "1 when they differ, 2 when the comparison could not run (unreadable file, "
-            "missing or duplicate keys, no comparable variables)."
+            "missing or duplicate keys, no comparable variables, --out not writable)."
         ),
     )
     compare_parser.add_argument(
@@ -2404,6 +2417,24 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         "--all",
         action="store_true",
         help="Print every unequal value (default: 50 per variable, 500 overall).",
+    )
+    compare_parser.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help=(
+            "Output format: the text report, or one JSON document (verdict, flags, "
+            "summaries, listing within the print limits, settings, Fleet version) and "
+            "nothing else on stdout (default: text)."
+        ),
+    )
+    compare_parser.add_argument(
+        "--out",
+        metavar="PATH",
+        help=(
+            "Also write the complete value listing (never truncated) to PATH as parquet, "
+            "e.g. differences.parquet."
+        ),
     )
     compare_parser.set_defaults(func=_run_compare)
 

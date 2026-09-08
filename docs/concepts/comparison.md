@@ -58,11 +58,13 @@ uv run fleet compare legacy/adae.xpt outputs/adam/adae.parquet --keys USUBJID,AE
 | --- | --- |
 | `0` | The datasets are equal. |
 | `1` | The datasets differ; the report on stdout says where. |
-| `2` | The comparison could not run: unreadable file, missing or duplicate keys, no comparable variables. The reason is on stderr. |
+| `2` | The comparison could not run: unreadable file, missing or duplicate keys, no comparable variables, or an `--out` path that cannot be written. The reason is on stderr. |
 
 `--keys` is required. `--all` lifts the print limits so every unequal value is
-listed. See the [CLI reference](../getting-started/cli.md#fleet-compare) for
-the full usage.
+listed. `--format json` prints one JSON document and nothing else on stdout,
+and `--out differences.parquet` writes the complete value listing; both are
+described under [machine-readable outputs](#machine-readable-outputs). See the
+[CLI reference](../getting-started/cli.md#fleet-compare) for the full usage.
 
 ## What the report contains
 
@@ -84,6 +86,66 @@ SAS's `SYSINFO` integer with names — `base_only_variables`,
 `candidate_only_observations`, `values_differ`. `report.is_equal` is true only
 when no flag is raised.
 
+## Machine-readable outputs
+
+An agent or a CI job consumes the comparison without parsing prose.
+`report.to_json()` renders one JSON document, `report.save_json(path)` writes
+it, and `report.save_listing(path)` writes the complete value listing as
+parquet. From the shell, `fleet compare --format json` prints the document and
+nothing else on stdout (the exit code is still the verdict, and a comparison
+that could not run still leaves stdout empty with the reason on stderr), and
+`--out` writes the listing:
+
+```bash
+uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID,AESEQ --format json > adae_compare.json
+uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID,AESEQ --out build/adae_differences.parquet
+```
+
+### The JSON contract
+
+Field names mirror the report attributes. The document is **additive-only
+within a major version**, in the spirit of
+[ADR 0001](../adr/0001-introspection-surface-for-protocol-adapters.md): keys
+may be added, never removed or renamed, so a comparison view built on them
+(the editor extension is the intended consumer) declares a minimum Fleet
+version and no ceiling. The top-level keys, in order (`fleet.comparison.JSON_KEYS`):
+
+| Key | Content |
+| --- | --- |
+| `is_equal` | The verdict: `true` only when no flag is raised. |
+| `summary` | The one-line summary, as `report.summary`. |
+| `flags` | The raised flags, in their documented order. |
+| `datasets` | `base` and `candidate`, each with `name`, `rows` and `variables`. |
+| `variables` | `common`, `compared`, `base_only`, `candidate_only`, then `type_conflicts` and `dtype_differences` as `{variable, base_dtype, candidate_dtype}` with the dtypes as text. |
+| `observations` | `matched`, `base_only`, `candidate_only`, the one-sided key values as `base_only_keys` and `candidate_only_keys` (capped at the per-variable print limit; `truncated` says whether a cap applied). |
+| `values` | `per_variable` as `{variable, differences}`, `variables_with_differences`, `observations_with_differences`, `total_differences`. |
+| `statistics` | Summary statistics per numeric variable that differs; an empty list until they land. |
+| `listing` | `columns`, `rows` (one object per differing value, within the print limits), `shown`, `total` and `truncated`. |
+| `settings` | Every option the comparison ran with: `keys`, `max_print`, `base_name`, `candidate_name`. |
+| `version` | The Fleet version that produced the report. |
+
+The document is strict JSON: non-finite numbers are `null` and temporal key
+values are ISO 8601 strings. `max_print` governs the listing inside the
+document exactly as it governs the text (`--all` or `max_print=None` lifts
+it); the parquet listing is never truncated.
+
+```python
+import json
+
+document = json.loads(report.to_json())
+if not document["is_equal"]:
+    for row in document["listing"]["rows"]:
+        print(row["USUBJID"], row["variable"], row["base"], "->", row["candidate"])
+```
+
+### The parquet listing
+
+`save_listing` writes `report.listing` as is: the key columns in their own
+dtypes, then `group` (`String`, reserved for BY groups), `variable`, `base`
+and `candidate` (`String`), `difference` and `percent_difference`
+(`Float64`). An equal comparison writes an empty frame with the same schema,
+so a downstream `scan_parquet` always finds the documented columns.
+
 ## Rules of equality
 
 - **Keys are mandatory and must be unique** on each side. A missing or
@@ -98,9 +160,10 @@ when no flag is raised.
   listed, not compared.
 - **Row order and column order are ignored.** A re-sorted or re-ordered
   dataset is not a different dataset.
-- **Print limits only affect the text.** By default the report prints 50
-  differences per variable and 500 overall; `max_print=None` (or `--all`)
-  prints everything. The listing frame always holds every difference.
+- **Print limits only affect what is rendered.** By default the text report
+  and the JSON document show 50 differences per variable and 500 overall;
+  `max_print=None` (or `--all`) shows everything. The listing frame and the
+  parquet always hold every difference.
 
 ## Gating a pipeline on the outcome
 
@@ -128,7 +191,8 @@ does.
 
 The engine compares by name with exact equality. Tolerances, BY groups,
 variable pairs for renamed columns, restriction to a list of variables,
-duplicate-key pairing, summary statistics, and the HTML, JSON and parquet
-renderers are specified and tracked in the
+duplicate-key pairing, summary statistics and the HTML report are specified
+and tracked in the
 [compare spec](https://github.com/RealSlimMahdi/fleet-cdisc/issues/99); they
-build on the same engine and report without changing what is documented here.
+build on the same engine and report without changing what is documented here,
+and they only add keys to the JSON document.

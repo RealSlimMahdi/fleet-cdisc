@@ -9,6 +9,7 @@ built in ``tmp_path``.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import polars as pl
@@ -1032,6 +1033,150 @@ def test_compare_all_lifts_the_print_limits(tmp_path: Path, capsys: pytest.Captu
 
     assert _run(["compare", str(base), str(candidate), "--keys", "ID", "--all"]) == 1
     assert "showing all 60 unequal values" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "new_age, expected_code, expected_flags",
+    [
+        pytest.param(None, 0, [], id="equal"),
+        pytest.param(99, 1, ["values_differ"], id="different"),
+    ],
+)
+def test_compare_format_json_prints_one_document_and_nothing_else(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture,
+    new_age: int | None,
+    expected_code: int,
+    expected_flags: list[str],
+) -> None:
+    base, candidate = tmp_path / "adsl_prod.parquet", tmp_path / "adsl_qc.parquet"
+    _adsl().write_parquet(base)
+    candidate_frame = (
+        _adsl() if new_age is None else _adsl().with_columns(pl.lit(new_age).alias("AGE"))
+    )
+    candidate_frame.write_parquet(candidate)
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "USUBJID", "--format", "json"])
+
+    captured = capsys.readouterr()
+    assert code == expected_code
+    document = json.loads(captured.out)  # the whole of stdout is the document
+    assert document["is_equal"] is (expected_code == 0)
+    assert document["flags"] == expected_flags
+    assert document["settings"]["keys"] == ["USUBJID"]
+    assert document["datasets"]["base"]["name"] == str(base)
+    assert document["datasets"]["candidate"]["name"] == str(candidate)
+    assert captured.err == ""
+
+
+def test_compare_format_json_keeps_stdout_empty_when_the_comparison_cannot_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base, candidate = tmp_path / "adsl_prod.parquet", tmp_path / "adsl_qc.parquet"
+    _adsl().write_parquet(base)
+    _adsl().rename({"USUBJID": "SUBJID"}).write_parquet(candidate)
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "USUBJID", "--format", "json"])
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert captured.out == ""
+    assert "USUBJID" in captured.err
+
+
+def _sixty_rows(tmp_path: Path) -> tuple[Path, Path]:
+    """Base and candidate parquet files that differ on every one of 60 rows."""
+    n = 60
+    base_frame = pl.DataFrame({"ID": range(n), "X": [0] * n})
+    base, candidate = tmp_path / "base.parquet", tmp_path / "candidate.parquet"
+    base_frame.write_parquet(base)
+    base_frame.with_columns(pl.lit(1).alias("X")).write_parquet(candidate)
+    return base, candidate
+
+
+def test_compare_out_writes_the_complete_parquet_listing(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base, candidate = _sixty_rows(tmp_path)
+    out = tmp_path / "build" / "differences.parquet"  # parent directory created on the way
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "ID", "--out", str(out)])
+
+    captured = capsys.readouterr()
+    assert code == 1
+    listing = pl.read_parquet(out)
+    assert listing.columns == [
+        "ID",
+        "group",
+        "variable",
+        "base",
+        "candidate",
+        "difference",
+        "percent_difference",
+    ]
+    assert listing.schema["ID"] == pl.Int64 and listing.schema["difference"] == pl.Float64
+    assert listing.height == 60  # complete, while the printed report is truncated
+    assert "showing 50 of 60 unequal values" in captured.out
+    assert f"Value listing → {out}" in captured.out
+    assert captured.err == ""
+
+
+def test_compare_out_with_format_json_prints_only_the_document(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base, candidate = _sixty_rows(tmp_path)
+    out = tmp_path / "differences.parquet"
+
+    code = _run(
+        [
+            "compare",
+            str(base),
+            str(candidate),
+            "--keys",
+            "ID",
+            "--format",
+            "json",
+            "--out",
+            str(out),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert code == 1
+    document = json.loads(captured.out)
+    assert (document["listing"]["shown"], document["listing"]["truncated"]) == (50, True)
+    assert pl.read_parquet(out).height == 60
+    assert captured.err == ""
+
+
+def test_compare_all_lifts_the_json_listing_truncation(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base, candidate = _sixty_rows(tmp_path)
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "ID", "--format", "json", "--all"])
+
+    assert code == 1
+    document = json.loads(capsys.readouterr().out)
+    listing = document["listing"]
+    assert (listing["shown"], listing["total"], listing["truncated"]) == (60, 60, False)
+    assert document["settings"]["max_print"] is None
+
+
+def test_compare_out_that_cannot_be_written_exits_2(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base, candidate = _sixty_rows(tmp_path)
+    blocker = tmp_path / "build"
+    blocker.write_text("a file where the output directory should be", encoding="utf-8")
+    out = blocker / "differences.parquet"
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "ID", "--out", str(out)])
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert captured.out == ""
+    assert str(out) in captured.err
 
 
 def test_compare_reads_xpt_through_the_io_extra(

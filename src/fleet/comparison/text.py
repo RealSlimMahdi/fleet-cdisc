@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
-from .report import PrintLimits, VariableDtypes, _key_label
+from .report import PrintLimits, VariableDtypes, _cap, _key_label, _truncate_listing
 
 if TYPE_CHECKING:
     from .report import ComparisonReport
@@ -98,7 +98,7 @@ def _observations_section(report: ComparisonReport, limit: int | None) -> list[s
 
 
 def _key_rows(keys: tuple[str, ...], frame: pl.DataFrame, limit: int | None) -> list[str]:
-    shown = frame if limit is None else frame.head(limit)
+    shown = _cap(frame, limit)
     lines = [f"    {_key_label(keys, row)}" for row in shown.iter_rows()]
     if shown.height < frame.height:
         lines.append(f"    ... and {frame.height - shown.height} more")
@@ -170,17 +170,6 @@ def _listing_section(report: ComparisonReport, limits: PrintLimits) -> list[str]
         lines.append(line.rstrip())
     lines.append("")
     return lines
-
-
-def _truncate_listing(listing: pl.DataFrame, limits: PrintLimits) -> pl.DataFrame:
-    """Keep the first ``per_variable`` differences of each variable within its group, then the first ``total``."""
-    shown = listing
-    if limits.per_variable is not None:
-        rank = pl.int_range(pl.len()).over("group", "variable")
-        shown = shown.filter(rank < limits.per_variable)
-    if limits.total is not None:
-        shown = shown.head(limits.total)
-    return shown
 
 
 def _verdict_section(report: ComparisonReport) -> list[str]:
