@@ -19,7 +19,8 @@ Fleet/
 │   ├── tlg/                # TLG namespace — tables, listings, template registry, render
 │   ├── tools/              # migrate codemod (old → canonical spellings)
 │   ├── define_xml/         # Define-XML validation + generation + schema_builder
-│   └── validation/         # CDISC rules-engine integration
+│   ├── validation/         # CDISC rules-engine integration
+│   └── comparison/         # fleet.compare — PROC COMPARE analogue in pure Polars
 │
 ├── datasets/               # Example raw data (CDISCPILOT01)
 ├── specs/                  # YAML derivation specs per study/domain
@@ -278,6 +279,18 @@ Registers `df.tlg` on every Polars DataFrame. Produces Analysis Results Datasets
 | `checker.py`                         | `DatasetChecker(spec, check_ct=True)` — runtime conformance check of a built dataset against its spec (columns, types, CT via inline codelists)  |
 
 Use `algorithm:` (Fleet verb) or `callable:` (study-specific dotted path) inside `derivation:` to drive execution and `enrich_methods` enrichment.
+
+---
+
+### `comparison/` — Dataset Comparison (`fleet.compare`)
+
+PROC COMPARE analogue in pure Polars (ADR 0002): pairs a **candidate** against a **base** on **keys**, matches variables by name, and returns a **comparison report** (vocabulary in `CONTEXT.md`). One join, one collect; differences never raise.
+
+| File        | Purpose                                                                                                                                                                                                                                                      |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `engine.py` | `compare(base, candidate, *, keys, max_print=50, base_name=None, candidate_name=None)` — keyed matching, kind classification (numeric / string / temporal / boolean / other), dtype supertypes, the null-equals-null / NaN-equals-NaN rule, the long value listing |
+| `report.py` | `ComparisonReport` frozen dataclass — `datasets`, `variables`, `observations`, `values`, `listing`, `flags` (named, see `FLAGS`), `settings`, `version`; `.is_equal`, `.summary`, `.to_text()`, `.print_report()`                                              |
+| `text.py`   | Plain-text renderer in PROC COMPARE section order, listing grouped per observation, `max_print` limits (50 per variable, 500 overall by default)                                                                                                             |
 
 ---
 

@@ -62,6 +62,7 @@ from .adam import (
     PedsNamespace,
     VaccineNamespace,
 )
+from .comparison import ComparisonReport, compare
 from .core import (
     PipelineDAG,
     PipelineNode,
@@ -165,6 +166,9 @@ __all__ = [
     # Validation
     "ValidationResult",
     "ValidationService",
+    # Comparison (PROC COMPARE analogue)
+    "compare",
+    "ComparisonReport",
     # Utilities
     "to_repr",
 ]

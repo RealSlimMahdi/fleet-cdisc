@@ -67,6 +67,16 @@ class ValidationError(FleetError):
     """Raised when CDISC validation encounters a fatal error."""
 
 
+class ComparisonError(FleetError, ValueError):
+    """Raised when a comparison cannot run: keys missing, duplicated or
+    incompatible between the base and the candidate.
+
+    Differences between the two datasets never raise; they are reported.
+    Dual-inherits from ``ValueError`` so ``except ValueError`` handlers
+    keep working.
+    """
+
+
 class TLGError(FleetError):
     """Raised when TLG namespace operations fail."""
 
