@@ -912,6 +912,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../concepts/comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparing Datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../concepts/exports/" class="md-nav__link">
         
   
@@ -1678,6 +1706,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../api/comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api/core/" class="md-nav__link">
         
   
@@ -2081,7 +2137,20 @@
 <h2 id="unreleased">[Unreleased]<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
 <h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>CDISC Library API integration</strong> — native client (<code>CDISCClient</code>) for downloading Controlled Terminology directly from the authoritative CDISC Library REST API</li>
+<li><strong>Dataset comparison</strong> — a <code>PROC COMPARE</code> analogue in pure Polars (no new dependency), reachable three ways over one engine:</li>
+<li><code>fleet.compare(base, candidate, keys=...)</code> pairs observations on keys and variables by name, and returns a <code>ComparisonReport</code> with the data set, variables, observation and values summaries, the long value listing, named flags (<code>values_differ</code>, <code>base_only_observations</code>, …) and <code>is_equal</code></li>
+<li><code>.compare(base, keys=..., on_fail="warn")</code> on every namespace (<code>sdtm</code>, <code>adam</code>, <code>adsl</code>, <code>occds</code>, …) — the chain is the candidate, the report stays on <code>last_comparison</code>, and <code>on_fail</code> speaks the same vocabulary as <code>.validate()</code></li>
+<li><code>fleet compare BASE CANDIDATE --keys K1,K2 [--all]</code> — exit <code>0</code> equal, <code>1</code> different, <code>2</code> the comparison could not run</li>
+<li>machine-readable outputs: <code>report.to_json()</code> / <code>save_json(path)</code> render one JSON document whose keys mirror the report and are additive-only within a major version; <code>save_listing(path)</code> writes the complete value listing as parquet; <code>fleet compare --format json</code> prints the document and nothing else, <code>--out differences.parquet</code> writes the listing</li>
+<li>tolerances and trailing whitespace: <code>abs_tol</code> / <code>rel_tol</code> widen equality on the numeric variables (a pair differs when the absolute difference exceeds <code>max(abs_tol, rel_tol × |base|)</code>, anchored on the <strong>base</strong> as in SAS), <code>ignore_trailing_whitespace</code> makes a legacy SAS dataset's padded character values equal Fleet's stripped ones; exact stays the default, nulls and NaN keep their rule, and the rule in effect shows on the text settings line, the HTML header and the JSON <code>settings</code> block. Same three options on every surface: <code>fleet.compare(...)</code>, <code>.compare(...)</code> and <code>fleet compare --abs-tol --rel-tol --ignore-trailing-whitespace</code></li>
+<li>HTML report for a reviewer without Python: <code>report.to_html()</code> / <code>save_html_report(path)</code> render one self-contained page — raised flags as chips, then only the mismatched observations with the base and candidate values side by side, one collapsible block per differing variable, sectioned per group once the listing's <code>group</code> column is populated; <code>fleet compare --report compare.html</code> writes it</li>
+<li>duplicate-key override and BY groups: <code>allow_duplicates</code> pairs duplicate keys by their position within each key group instead of refusing to run — counting them per side, raising <code>duplicate_keys</code> and warning above every report — and <code>by</code> prepends the BY variables to the keys, labels every difference with its group, reports the observation and values summaries per group in text, JSON and HTML, and flags the groups found on one side only while the verdict stays global. On every surface: <code>fleet.compare(...)</code>, <code>.compare(...)</code> and <code>fleet compare --by TRT01P --allow-duplicates</code></li>
+<li>
+<p>variable pairs and restriction: <code>pairs={"WEIGHT": "WT"}</code> compares two variables named differently on each side, on top of the automatic name matching, and names them after the base throughout the report; <code>variables=["WEIGHT", "AVISIT"]</code> narrows the comparison to the variables that matter, ignoring the rest on both sides so a work-in-progress candidate raises no missing-variable flag. On every surface: <code>fleet.compare(...)</code>, <code>.compare(...)</code> and <code>fleet compare --pairs WEIGHT=WT --variables WEIGHT,AVISIT</code></p>
+</li>
+<li>
+<p><strong>CDISC Library API integration</strong> — native client (<code>CDISCClient</code>) for downloading Controlled Terminology directly from the authoritative CDISC Library REST API</p>
+</li>
 <li><code>CDISCClient.get_packages()</code> — list available CT versions (SDTM, ADaM)</li>
 <li><code>CDISCClient.get_codelist()</code> — download a single codelist by NCI concept ID with version pinning</li>
 <li>Credentials via <code>.env</code> file or <code>CDISC_API_KEY</code> environment variable</li>
@@ -2166,7 +2235,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 9, 2026 15:11:23 UTC">July 9, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 8, 2026 20:27:13 UTC">September 8, 2026</span>
   </span>
 
     

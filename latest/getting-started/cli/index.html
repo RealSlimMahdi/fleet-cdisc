@@ -780,6 +780,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#fleet-compare" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet compare
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#fleet-new" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1342,6 +1353,34 @@
     
   
     Custom Validation Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparing Datasets
   
 
     
@@ -2128,6 +2167,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../api/comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../api/core/" class="md-nav__link">
         
   
@@ -2435,6 +2502,17 @@
     <span class="md-ellipsis">
       
         fleet check
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fleet-compare" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fleet compare
       
     </span>
   </a>
@@ -2760,7 +2838,9 @@ set it in a <code>.env</code> file at your project root or as an environment var
   it git-style: the current directory first, then each parent. Pass
   <code>--config &lt;path&gt;</code> to override.</li>
 <li><strong>Exit codes</strong> — <code>0</code> success, <code>1</code> on a Fleet error (a single clean message
-  on stderr), <code>2</code> on a usage error (missing/unknown command or flag).</li>
+  on stderr), <code>2</code> on a usage error (missing/unknown command or flag).
+  <code>fleet compare</code> turns its verdict into the exit code: <code>0</code> equal, <code>1</code>
+  different, <code>2</code> the comparison could not run.</li>
 <li><strong>Errors</strong> go to <strong>stderr</strong>; results go to stdout.</li>
 <li><code>fleet --version</code> prints the installed version.</li>
 </ul>
@@ -2789,6 +2869,10 @@ set it in a <code>.env</code> file at your project root or as an environment var
 <tr>
 <td><a href="#fleet-check"><code>fleet check</code></a></td>
 <td>CI gate: config parse + define.yaml schema + custom-rule YAMLs.</td>
+</tr>
+<tr>
+<td><a href="#fleet-compare"><code>fleet compare</code></a></td>
+<td>Compare a candidate dataset against a base on keys (exit 0 equal, 1 different, 2 could not run).</td>
 </tr>
 <tr>
 <td><a href="#fleet-new"><code>fleet new</code></a></td>
@@ -3102,6 +3186,98 @@ set it in a <code>.env</code> file at your project root or as an environment var
 <td><code>--config</code> / <code>-c</code></td>
 <td><em>(none)</em></td>
 <td>Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style).</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="fleet-compare"><code>fleet compare</code><a class="headerlink" href="#fleet-compare" title="Permanent link">&para;</a></h2>
+<p>PROC COMPARE analogue: pair the two datasets on --keys, match variables by name and print the comparison report. --pairs compares variables named differently on each side and --variables restricts the comparison to the ones that matter. Equality is exact unless --abs-tol, --rel-tol or --ignore-trailing-whitespace widens it. --by sections the report per group and --allow-duplicates pairs duplicate keys by position. Exit 0 when the datasets are equal, 1 when they differ, 2 when the comparison could not run (unreadable file, missing keys, duplicate keys without --allow-duplicates, a negative tolerance, no comparable variables, --out or --report not writable).</p>
+<table>
+<thead>
+<tr>
+<th>Argument</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>base</code></td>
+<td>The reference dataset (parquet / csv / xpt / sas7bdat; SAS formats need the io extra).</td>
+</tr>
+<tr>
+<td><code>candidate</code></td>
+<td>The dataset measured against the base (same formats).</td>
+</tr>
+</tbody>
+</table>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--keys</code></td>
+<td><em>(required)</em></td>
+<td>Comma-separated variables that identify one observation on each side, e.g. USUBJID,AESEQ. Required; keys are never looked up.</td>
+</tr>
+<tr>
+<td><code>--by</code></td>
+<td><em>(none)</em></td>
+<td>Comma-separated variables to section the report by, e.g. TRT01P. They are prepended to --keys automatically, so they need not be repeated there. The observation and values summaries are also reported per group, and a group present on one side only is flagged and listed; the verdict stays global.</td>
+</tr>
+<tr>
+<td><code>--pairs</code></td>
+<td><em>(none)</em></td>
+<td>Comma-separated variable pairs whose sides carry different names, e.g. WEIGHT=WT. Applied on top of the automatic name matching, so a renamed column is compared rather than reported missing; the report names it after the base. A pair whose candidate variable is absent reports the base one as missing from the candidate.</td>
+</tr>
+<tr>
+<td><code>--variables</code></td>
+<td><em>(none)</em></td>
+<td>Comma-separated variables to restrict the comparison to, in base names, so a work-in-progress candidate is checked on the columns that are finished. A variable outside the list is ignored on both sides: neither compared nor reported as missing.</td>
+</tr>
+<tr>
+<td><code>--abs-tol</code></td>
+<td><code>0.0</code></td>
+<td>Absolute tolerance on the numeric variables (default: 0, exact). A numeric pair differs when the absolute difference exceeds max(--abs-tol, --rel-tol x |base|).</td>
+</tr>
+<tr>
+<td><code>--rel-tol</code></td>
+<td><code>0.0</code></td>
+<td>Relative tolerance on the numeric variables, as a fraction of the base value (default: 0, exact). It anchors on the base because the base is the reference, as in SAS: 0.01 is one percent of the base.</td>
+</tr>
+<tr>
+<td><code>--ignore-trailing-whitespace</code></td>
+<td><em>(none)</em></td>
+<td>Strip trailing whitespace from both sides of a string before comparing, so a legacy SAS dataset's padded character values equal Fleet's stripped ones. Leading whitespace still differs.</td>
+</tr>
+<tr>
+<td><code>--allow-duplicates</code></td>
+<td><em>(none)</em></td>
+<td>Pair duplicate keys by their position within each key group instead of refusing to run. The report then counts the duplicates per side, raises the duplicate_keys flag and warns at the top: order within a key group decides which observations pair.</td>
+</tr>
+<tr>
+<td><code>--all</code></td>
+<td><em>(none)</em></td>
+<td>Print every unequal value (default: 50 per variable, 500 overall).</td>
+</tr>
+<tr>
+<td><code>--format</code></td>
+<td><code>text</code></td>
+<td>Output format: the text report, or one JSON document (verdict, flags, summaries, listing within the print limits, settings, Fleet version) and nothing else on stdout (default: text). Choices: <code>text</code>, <code>json</code>.</td>
+</tr>
+<tr>
+<td><code>--out</code></td>
+<td><em>(none)</em></td>
+<td>Also write the complete value listing (never truncated) to PATH as parquet, e.g. differences.parquet.</td>
+</tr>
+<tr>
+<td><code>--report</code></td>
+<td><em>(none)</em></td>
+<td>Also write a self-contained HTML report to PATH for a reviewer without Python: structural findings as chips, then every mismatched observation with the base and candidate values side by side, one collapsible block per variable.</td>
 </tr>
 </tbody>
 </table>
@@ -3871,7 +4047,7 @@ set it in a <code>.env</code> file at your project root or as an environment var
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="August 28, 2026 15:28:43 UTC">August 28, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 8, 2026 20:27:13 UTC">September 8, 2026</span>
   </span>
 
     

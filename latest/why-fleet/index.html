@@ -636,10 +636,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#5-ai-native-architecture" class="md-nav__link">
+  <a href="#5-predictability-ai-native-by-consequence" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5. AI-Native Architecture
+        5. Predictability: AI-Native by Consequence
       
     </span>
   </a>
@@ -1027,6 +1027,34 @@
     
   
     Custom Validation Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparing Datasets
   
 
     
@@ -1813,6 +1841,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../api/comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../api/core/" class="md-nav__link">
         
   
@@ -2067,10 +2123,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#5-ai-native-architecture" class="md-nav__link">
+  <a href="#5-predictability-ai-native-by-consequence" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5. AI-Native Architecture
+        5. Predictability: AI-Native by Consequence
       
     </span>
   </a>
@@ -2117,6 +2173,7 @@
 <p>Fleet is designed to bridge the gap between modern, high-performance data engineering and the specialized business logic of clinical statistical programming (SDTM and ADaM).</p>
 <p>While traditional tools (like SAS or SQL) or general-purpose Python libraries (like Pandas or plain Polars) are capable of building clinical datasets, they often require writing hundreds of lines of boilerplate code to handle common CDISC requirements: merging controlled terminology, calculating study days, deriving baselines, and maintaining traceability.</p>
 <p>Fleet solves this by extending <a href="https://pola.rs/">Polars</a> with <strong>chainable, domain-specific verbs</strong>.</p>
+<p>The organising principle is workflow quality: one obvious path from raw data to submission artefact. Everything below — including how well Fleet works with AI coding assistants — falls out of that.</p>
 <h2 id="the-fleet-advantage">The Fleet Advantage<a class="headerlink" href="#the-fleet-advantage" title="Permanent link">&para;</a></h2>
 <h3 id="1-simplicity-intent-driven-syntax">1. Simplicity: Intent-Driven Syntax<a class="headerlink" href="#1-simplicity-intent-driven-syntax" title="Permanent link">&para;</a></h3>
 <p>With Fleet, your code reads like a specification. Instead of writing complex join logic and conditional expressions, you use verbs that exactly match CDISC concepts.</p>
@@ -2154,19 +2211,21 @@
 </ul>
 <h3 id="3-clarity-specification-driven-development">3. Clarity: Specification-Driven Development<a class="headerlink" href="#3-clarity-specification-driven-development" title="Permanent link">&para;</a></h3>
 <p>Fleet natively understands the <code>define.yaml</code> specification. You can define your metadata, controlled terminology, and derivation rules in a single, human-readable file.</p>
-<p>Fleet can read this YAML to automatically apply derivations, validate data, and generate CDISC-compliant <code>define.xml</code> exports, ensuring your documentation and your code are never out of sync. You can choose to be fully code-driven, fully spec-driven, or a hybrid of both.</p>
+<p>Fleet can read this YAML to automatically apply derivations, validate data, and generate CDISC-compliant <code>define.xml</code> exports, ensuring your documentation and your code are never out of sync. A spec entry and an inline call are the same step written two ways — <code>algorithm: chg</code> with <code>aval: AVAL</code> and <code>base: BASE</code> is <code>.chg("CHG", aval="AVAL", base="BASE")</code> — so you can be fully code-driven, fully spec-driven, or a hybrid, and move a step between the two without re-deriving it.</p>
 <h3 id="4-flexibility-built-for-extension">4. Flexibility: Built for Extension<a class="headerlink" href="#4-flexibility-built-for-extension" title="Permanent link">&para;</a></h3>
 <p>Fleet comes with built-in namespaces for core SDTM (<code>df.sdtm</code>), ADaM BDS (<code>df.adam</code>), ADSL (<code>df.adam.adsl</code>), OCCDS (<code>df.adam.occds</code>), and specialized therapeutic areas (Oncology, Ophthalmology, Vaccines, etc.). Fleet also includes verbs for Body Surface Area (<code>bsa</code>), Mean Arterial Pressure (<code>map</code>), corrected QT (<code>qtc</code>), LOCF imputation, summary record derivation, and parameter-level record generation.</p>
 <p>If you have proprietary study requirements, Fleet is designed to be easily extended with custom verbs using standard Polars expressions via the <code>.derivation()</code> method, or by subclassing the namespaces to add your own company-specific logic.</p>
-<h3 id="5-ai-native-architecture">5. AI-Native Architecture<a class="headerlink" href="#5-ai-native-architecture" title="Permanent link">&para;</a></h3>
-<p>Fleet was built with AI code generation in mind from day one. You can stop wrestling with niche SAS macros or fragmented statistical R packages that trip up modern Large Language Models (LLMs).</p>
+<h3 id="5-predictability-ai-native-by-consequence">5. Predictability: AI-Native by Consequence<a class="headerlink" href="#5-predictability-ai-native-by-consequence" title="Permanent link">&para;</a></h3>
+<p>Workflow quality is a promise to human reviewers first. For the same reasons, it is why Fleet works well with AI coding agents.</p>
+<p>Coding assistants fail in the same places human newcomers fail. Point one at a codebase with a weak, ambiguous workflow — three ways to derive a baseline, macro names that don't say what they compute, errors that surface three steps later — and it produces plausible code with the wrong derivation. Point the same model at a codebase where the workflow is unambiguous and the search space collapses: the structure itself guides the agent toward the expected outcome, which is what actually raises the probability of a correct first pass.</p>
+<p>So Fleet is AI-native by consequence, not by bolt-on. Every property below started as a workflow decision:</p>
 <ul>
-<li><strong>Standardised Foundation:</strong> Built entirely on Python and Polars, two of the most widely represented tools in LLM training data.</li>
-<li><strong>Unified Package:</strong> No need to juggle 10 different sub-packages. One import (<code>import fleet</code>) gives agents everything they need.</li>
-<li><strong>Clear Intent-Driven API:</strong> Because derivations are simple verbs (<code>.study_day()</code>, <code>.baseline()</code>), an AI code agent naturally scripts correct, readable pipelines with fewer token hallucinations.</li>
-<li><strong>Tight AI Feedback Loops:</strong> Fleet drastically accelerates the developer and agent feedback cycle. The <code>define.yaml</code> structure is validated through bundled JSON schemas, and CDISC core data validations output structured error arrays. This allows coding agents to course-correct immediately.</li>
-<li><strong>Readable Specs:</strong> The declarative, YAML-based approach limits token overhead and naturally reflects clinical data specification standards, making it the perfect bridge between LLMs and regulatory outputs.</li>
-<li><strong>Built-in <code>llms.txt</code>:</strong> Fleet natively provides structured AI context (like <code>llms.txt</code> and schemas) so your coding agents always know precisely how to write and validate Fleet pipelines.</li>
+<li><strong>Standardised Foundation:</strong> Built entirely on Python and Polars, two of the most widely represented tools in LLM training data — chosen because they are the ones your team already reads, not to please a model.</li>
+<li><strong>Unified Package:</strong> No need to juggle 10 different sub-packages. One import (<code>import fleet</code>) means there is one place to look, for a person and for an agent.</li>
+<li><strong>Clear Intent-Driven API:</strong> Because derivations are simple verbs (<code>.study_day()</code>, <code>.baseline()</code>), there is usually exactly one right way to express a step. That is what removes the guesswork — and with it, the hallucinations.</li>
+<li><strong>Tight Feedback Loops:</strong> The <code>define.yaml</code> structure is validated through bundled JSON schemas, and CDISC core data validations output structured error arrays. Fast, specific, machine-readable failures let a programmer <em>or</em> an agent course-correct immediately instead of compounding a wrong assumption.</li>
+<li><strong>Readable Specs:</strong> The declarative, YAML-based approach reflects clinical data specification standards, so the artefact a reviewer signs off on and the artefact a model reads are the same file.</li>
+<li><strong>Built-in <code>llms.txt</code>:</strong> Fleet ships structured context (<code>llms.txt</code>, JSON schemas, an MCP server, a <code>define.yaml</code> language server) so the workflow is legible to tooling, not just to people.</li>
 </ul>
 <h3 id="6-native-cdisc-library-integration">6. Native CDISC Library Integration<a class="headerlink" href="#6-native-cdisc-library-integration" title="Permanent link">&para;</a></h3>
 <p>Fleet is the first open-source clinical toolkit with <strong>built-in CDISC Library API support</strong>. Instead of manually downloading PDF terminology files or maintaining hand-curated codelist dictionaries, Fleet connects directly to the authoritative source.</p>
@@ -2215,7 +2274,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 10, 2026 15:35:40 UTC">July 10, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 4, 2026 14:38:31 UTC">September 4, 2026</span>
   </span>
 
     

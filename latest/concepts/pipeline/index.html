@@ -1080,6 +1080,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparing Datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../exports/" class="md-nav__link">
         
   
@@ -1846,6 +1874,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../api/comparison/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../api/core/" class="md-nav__link">
         
   
@@ -2180,7 +2236,7 @@
 
 
 <h1 id="namespace-pipeline-architecture">Namespace Pipeline Architecture<a class="headerlink" href="#namespace-pipeline-architecture" title="Permanent link">&para;</a></h1>
-<p>When using Fleet, you have two primary ways to create datasets: <strong>Code-driven</strong> (writing Python pipelines manually) or <strong>Spec-driven</strong> (authoring a <code>define.yaml</code> and having Fleet write the pipelines for you).</p>
+<p>Fleet lets you write the same pipeline in two notations: <strong>Code-driven</strong> (chaining verbs in Python) or <strong>Spec-driven</strong> (declaring the same verbs in a <code>define.yaml</code> that Fleet executes for you). Verb names and argument names are identical in both, so a step can move between them.</p>
 <h2 id="the-recommended-approach-spec-first-with-custom-extensions">The Recommended Approach: Spec-First with Custom Extensions<a class="headerlink" href="#the-recommended-approach-spec-first-with-custom-extensions" title="Permanent link">&para;</a></h2>
 <p>For the majority of modern statistical programming tasks, we highly recommend a hybrid "<strong>Spec-First</strong>" workflow.</p>
 <p>In this approach, you let AI or your documentation team generate the <code>define.yaml</code>. Fleet consumes this YAML to automatically manage 90% of the derivations, dependencies, traceability, and Define-XML generation. Then, for the 10% of highly complex, proprietary derivations that do not fit neatly into a YAML file, you apply a thin layer of manual Polars python code on top of the built data step.</p>
@@ -2530,7 +2586,7 @@ the subsequent pipeline steps (<code>fleet init define</code>, <code>fleet init 
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 10, 2026 15:35:40 UTC">July 10, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 4, 2026 14:38:31 UTC">September 4, 2026</span>
   </span>
 
     
