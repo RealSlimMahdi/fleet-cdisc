@@ -1367,3 +1367,65 @@ def test_compare_a_negative_tolerance_exits_2(
     assert code == 2
     assert "abs_tol" in captured.err
     assert captured.out == ""
+
+
+def test_compare_allow_duplicates_pairs_by_position_instead_of_exiting_2(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base, candidate = tmp_path / "adsl_prod.parquet", tmp_path / "adsl_qc.parquet"
+    _adsl().write_parquet(base)
+    pl.concat([_adsl(), _adsl().head(1)]).write_parquet(candidate)
+
+    assert _run(["compare", str(base), str(candidate), "--keys", "USUBJID"]) == 2
+    assert "allow_duplicates" in capsys.readouterr().err
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "USUBJID", "--allow-duplicates"])
+
+    captured = capsys.readouterr()
+    assert code == 1  # the extra observation is now a candidate-only one, not a refusal
+    assert "Duplicate keys were paired by position" in captured.out
+    assert "Duplicate observations in candidate: 1" in captured.out
+    assert captured.err == ""
+
+
+def test_compare_by_sections_the_report_per_group(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base, candidate = tmp_path / "adsl_prod.parquet", tmp_path / "adsl_qc.parquet"
+    _adsl().write_parquet(base)
+    _adsl().with_columns(
+        pl.when(pl.col("SEX") == "F").then(99).otherwise(pl.col("AGE")).alias("AGE")
+    ).write_parquet(candidate)
+
+    code = _run(
+        [
+            "compare",
+            str(base),
+            str(candidate),
+            "--keys",
+            "USUBJID",
+            "--by",
+            "SEX",
+            "--format",
+            "json",
+        ]
+    )
+
+    document = json.loads(capsys.readouterr().out)
+    assert code == 1
+    assert document["settings"]["by"] == ["SEX"]
+    assert document["settings"]["keys"] == ["SEX", "USUBJID"]
+    assert document["values"]["per_group"] == [
+        {
+            "group": "SEX=F",
+            "variables_with_differences": 1,
+            "observations_with_differences": 2,
+            "differences": 2,
+        },
+        {
+            "group": "SEX=M",
+            "variables_with_differences": 0,
+            "observations_with_differences": 0,
+            "differences": 0,
+        },
+    ]

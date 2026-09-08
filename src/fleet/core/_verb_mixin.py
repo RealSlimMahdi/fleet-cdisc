@@ -1812,9 +1812,11 @@ class SharedVerbsMixin:
         base: pl.DataFrame | pl.LazyFrame,
         *,
         keys: str | Sequence[str],
+        by: str | Sequence[str] | None = None,
         abs_tol: float = 0.0,
         rel_tol: float = 0.0,
         ignore_trailing_whitespace: bool = False,
+        allow_duplicates: bool = False,
         max_print: MaxPrint = 50,
         base_name: str | None = None,
         candidate_name: str | None = None,
@@ -1836,6 +1838,11 @@ class SharedVerbsMixin:
             keys: Variable(s) that identify one observation on each side.
                 Required; the compare refuses to run when a key is missing
                 or not unique on either side.
+            by: Variable(s) the report is sectioned by.  They are prepended
+                to *keys* automatically, label the listing's ``group``
+                column, and give the observation and values summaries a
+                per-group breakdown.  A group present on one side only
+                raises a flag; the verdict stays global.
             abs_tol: Absolute tolerance on the numeric variables; ``0.0``
                 (the default) is exact.
             rel_tol: Relative tolerance on the numeric variables, as a
@@ -1846,6 +1853,9 @@ class SharedVerbsMixin:
                 sides of a string before comparing, so a legacy SAS dataset's
                 padded values equal the chain's stripped ones.  Leading
                 whitespace still differs.
+            allow_duplicates: Pair duplicate keys by their position within
+                each key group instead of refusing to run; the report then
+                counts them, raises ``duplicate_keys`` and warns.
             max_print: Print limits for the text report (differences per
                 variable, a ``(per_variable, total)`` pair, or ``None`` for
                 everything).  The report's listing is never truncated.
@@ -1902,6 +1912,16 @@ class SharedVerbsMixin:
                     )
                     .to_frame()
                 )
+
+            Section the comparison by treatment arm, so a difference in one
+            arm stands out::
+
+                adsl = (
+                    dm_df.adam.adsl
+                    .source("USUBJID")
+                    .compare(adsl_prod, keys="USUBJID", by="TRT01P")
+                    .to_frame()
+                )
         """
         from fleet.comparison import compare as compare_frames
 
@@ -1910,9 +1930,11 @@ class SharedVerbsMixin:
             base,
             self.to_frame(),
             keys=keys,
+            by=by,
             abs_tol=abs_tol,
             rel_tol=rel_tol,
             ignore_trailing_whitespace=ignore_trailing_whitespace,
+            allow_duplicates=allow_duplicates,
             max_print=max_print,
             base_name=base_name,
             candidate_name=candidate_name,

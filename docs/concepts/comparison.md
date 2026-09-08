@@ -60,7 +60,9 @@ uv run fleet compare legacy/adae.xpt outputs/adam/adae.parquet --keys USUBJID,AE
 | `1` | The datasets differ; the report on stdout says where. |
 | `2` | The comparison could not run: unreadable file, missing or duplicate keys, a negative tolerance, no comparable variables, or an `--out` or `--report` path that cannot be written. The reason is on stderr. |
 
-`--keys` is required. `--abs-tol`, `--rel-tol` and
+`--keys` is required. `--by TRT01P` sections the report per
+[BY group](#by-groups) and `--allow-duplicates` pairs
+[duplicate keys](#duplicate-keys) by position. `--abs-tol`, `--rel-tol` and
 `--ignore-trailing-whitespace` widen equality (see
 [tolerances and whitespace](#tolerances-and-trailing-whitespace)). `--all`
 lifts the print limits so every unequal value is
@@ -88,8 +90,11 @@ Polars frame (keys, `group`, `variable`, `base`, `candidate`, `difference`,
 `percent_difference`) that is never truncated, and `report.flags` replaces
 SAS's `SYSINFO` integer with names — `base_only_variables`,
 `candidate_only_variables`, `type_conflicts`, `base_only_observations`,
-`candidate_only_observations`, `values_differ`. `report.is_equal` is true only
-when no flag is raised.
+`candidate_only_observations`, `values_differ`, `duplicate_keys`,
+`base_only_groups`, `candidate_only_groups`. `report.is_equal` is true only
+when no flag is raised. `report.warnings` holds the lines every renderer
+prints above the report — today only the
+[duplicate-key](#duplicate-keys) one.
 
 ## The HTML report
 
@@ -112,9 +117,9 @@ or image. It reads top-down the way a review goes:
 5. **Unequal values** — only the mismatched observations, one collapsible block per differing variable, each row showing the key values, the base value and the candidate value side by side with both cells highlighted, and the difference and percent difference for numeric variables. Blocks start open when there are five or fewer, closed beyond that, so a report over fifty variables stays navigable.
 
 The page is never truncated: every unequal value is on it, whatever
-`max_print` the comparison ran with. Once BY groups land, the listing's
-`group` column is populated and the unequal values are sectioned per group
-with their own counts. For listings beyond a few thousand rows, the
+`max_print` the comparison ran with. With [BY groups](#by-groups) it gains a
+**Groups** section with the per-group counts and sections the unequal values
+per group. For listings beyond a few thousand rows, the
 [parquet listing](#the-parquet-listing) is the better archive.
 
 ## Machine-readable outputs
@@ -146,13 +151,14 @@ version and no ceiling. The top-level keys, in order (`fleet.comparison.JSON_KEY
 | `is_equal` | The verdict: `true` only when no flag is raised. |
 | `summary` | The one-line summary, as `report.summary`. |
 | `flags` | The raised flags, in their documented order. |
+| `warnings` | The lines every renderer prints above the report; empty on an ordinary comparison. |
 | `datasets` | `base` and `candidate`, each with `name`, `rows` and `variables`. |
 | `variables` | `common`, `compared`, `base_only`, `candidate_only`, then `type_conflicts` and `dtype_differences` as `{variable, base_dtype, candidate_dtype}` with the dtypes as text. |
-| `observations` | `matched`, `base_only`, `candidate_only`, the one-sided key values as `base_only_keys` and `candidate_only_keys` (capped at the per-variable print limit; `truncated` says whether a cap applied). |
-| `values` | `per_variable` as `{variable, differences}`, `variables_with_differences`, `observations_with_differences`, `total_differences`. |
+| `observations` | `matched`, `base_only`, `candidate_only`, the one-sided key values as `base_only_keys` and `candidate_only_keys` (capped at the per-variable print limit; `truncated` says whether a cap applied), `base_duplicates` and `candidate_duplicates`, the per-group counts as `per_group`, and the one-sided group labels as `base_only_groups` and `candidate_only_groups`. |
+| `values` | `per_variable` as `{variable, differences}`, `variables_with_differences`, `observations_with_differences`, `total_differences`, and `per_group`. |
 | `statistics` | Summary statistics per numeric variable that differs; an empty list until they land. |
 | `listing` | `columns`, `rows` (one object per differing value, within the print limits), `shown`, `total` and `truncated`. |
-| `settings` | Every option the comparison ran with: `keys`, `abs_tol`, `rel_tol`, `ignore_trailing_whitespace`, `max_print`, `base_name`, `candidate_name`. |
+| `settings` | Every option the comparison ran with: `keys`, `by`, `abs_tol`, `rel_tol`, `ignore_trailing_whitespace`, `allow_duplicates`, `max_print`, `base_name`, `candidate_name`. |
 | `version` | The Fleet version that produced the report. |
 
 The document is strict JSON: non-finite numbers are `null` and temporal key
@@ -172,16 +178,18 @@ if not document["is_equal"]:
 ### The parquet listing
 
 `save_listing` writes `report.listing` as is: the key columns in their own
-dtypes, then `group` (`String`, reserved for BY groups), `variable`, `base`
-and `candidate` (`String`), `difference` and `percent_difference`
-(`Float64`). An equal comparison writes an empty frame with the same schema,
-so a downstream `scan_parquet` always finds the documented columns.
+dtypes, then `group` (`String`, the [BY group](#by-groups) label or null),
+`variable`, `base` and `candidate` (`String`), `difference` and
+`percent_difference` (`Float64`). An equal comparison writes an empty frame
+with the same schema, so a downstream `scan_parquet` always finds the
+documented columns.
 
 ## Rules of equality
 
 - **Keys are mandatory and must be unique** on each side. A missing or
   duplicated key stops the compare with a `ComparisonError` that names the side
   and the offending key values, because a broken key is the first thing to fix.
+  [`allow_duplicates`](#duplicate-keys) is the deliberate way past it.
 - **Equality is exact by default.** Null equals null, NaN equals NaN, and null
   against NaN differs, so a missing value that became a NaN is surfaced.
   [Tolerances](#tolerances-and-trailing-whitespace) widen it on the numeric
@@ -258,6 +266,67 @@ The rule in effect is on every surface: the settings line of the text report
 `Settings:  exact`), the header of the HTML report, and the `settings` block of
 the JSON document as the three raw fields.
 
+## Duplicate keys
+
+Keys that do not identify one observation per side stop the compare, because a
+broken key is usually the bug. When the duplication is expected — a dataset
+with no sequence variable, a legacy extract — `allow_duplicates` forces the
+comparison through:
+
+```python
+report = fleet.compare(adae_prod, adae_qc, keys=["USUBJID"], allow_duplicates=True)
+```
+
+```bash
+uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID --allow-duplicates
+```
+
+Duplicates then pair by **their position within each key group**: the first
+base observation for `USUBJID=01` against the first candidate one, the second
+against the second, and so on. An unpaired one — three on the base, two on the
+candidate — is reported as an observation found on one side only.
+
+That is a weaker guarantee than pairing on keys, so it is never silent:
+
+- the observation summary counts the duplicates per side;
+- the `duplicate_keys` flag is raised, so the comparison is never `is_equal`;
+- `report.warnings` carries a line every renderer prints above the report, and
+  the JSON document repeats it under `warnings`.
+
+Row order stops being irrelevant under the override, and only within a
+duplicated key group: which base observation meets which candidate one is
+decided by the order the two datasets arrive in.
+
+## BY groups
+
+A reviewer looking at a study with several treatment arms wants to know
+*where* the differences are, not just how many. `by` sections the report:
+
+```python
+report = fleet.compare(adsl_prod, adsl_qc, keys="USUBJID", by="TRT01P")
+report.observations.per_group  # group, matched, base_only, candidate_only
+report.values.per_group  # group, variables_with_differences, observations_with_differences, differences
+```
+
+```bash
+uv run fleet compare adsl_prod.parquet adsl_qc.parquet --keys USUBJID --by TRT01P
+```
+
+The BY variables are **prepended to the keys automatically**, so they need not
+be repeated in `keys` (repeating them is harmless). Everything else follows
+from that:
+
+- Every difference carries its group in the listing's `group` column, labelled
+  `TRT01P=A` (and `TRT01P=A, AVISIT=2` with several BY variables), and the
+  listing is sorted by group first.
+- The observation summary and the values summary are reported per group as
+  well as in total, in the text report, the JSON document and the HTML page.
+- A group present on one side only raises `base_only_groups` or
+  `candidate_only_groups` and is listed by name, so a missing arm reads as a
+  missing arm rather than as a thousand missing observations.
+- **The verdict stays global.** `is_equal` is still true only when no flag is
+  raised anywhere.
+
 ## Gating a pipeline on the outcome
 
 The verb speaks the same failure vocabulary as `.validate()`:
@@ -283,9 +352,8 @@ does.
 ## Where it stops today
 
 The engine compares by name, with exact equality or within the tolerances
-above. BY groups, variable pairs for renamed columns, restriction to a list of
-variables, duplicate-key pairing and summary statistics are specified and
-tracked in the
+above. Variable pairs for renamed columns, restriction to a list of variables
+and summary statistics are specified and tracked in the
 [compare spec](https://github.com/RealSlimMahdi/fleet-cdisc/issues/99); they
 build on the same engine and report without changing what is documented here,
 and they only add keys to the JSON document.

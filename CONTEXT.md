@@ -36,6 +36,10 @@ _Avoid_: diff, comparison result, compare output
 The variables that together identify one observation within a dataset. A compare pairs observations on them and refuses to run without them.
 _Avoid_: ID variables, join columns, primary key
 
+**BY group**:
+The observations sharing one combination of values of the BY variables. A compare given `by` prepends those variables to the keys, labels every difference with its group, and reports the observation and values summaries per group; the verdict stays global.
+_Avoid_: stratum, cohort, partition, split, subgroup
+
 **Variable pair**:
 A base variable and a candidate variable compared under different names, on top of the variables matched automatically by name.
 _Avoid_: VAR/WITH, rename map, column mapping

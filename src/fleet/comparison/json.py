@@ -35,6 +35,7 @@ def _render_dict(report: ComparisonReport, limits: PrintLimits) -> dict[str, Any
         "is_equal": report.is_equal,
         "summary": report.summary,
         "flags": list(report.raised_flags),
+        "warnings": list(report.warnings),
         "datasets": asdict(report.datasets),
         "variables": _variables(report),
         "observations": _observations(report, limits.per_variable),
@@ -78,6 +79,11 @@ def _observations(report: ComparisonReport, limit: int | None) -> dict[str, Any]
         "candidate_only": o.candidate_only,
         "base_only_keys": base_keys.to_dicts(),
         "candidate_only_keys": candidate_keys.to_dicts(),
+        "base_duplicates": o.base_duplicates,
+        "candidate_duplicates": o.candidate_duplicates,
+        "per_group": o.per_group.to_dicts(),
+        "base_only_groups": list(o.base_only_groups),
+        "candidate_only_groups": list(o.candidate_only_groups),
         "truncated": (
             base_keys.height < o.base_only_keys.height
             or candidate_keys.height < o.candidate_only_keys.height
@@ -92,6 +98,7 @@ def _values(report: ComparisonReport) -> dict[str, Any]:
         "variables_with_differences": values.variables_with_differences,
         "observations_with_differences": values.observations_with_differences,
         "total_differences": values.total_differences,
+        "per_group": values.per_group.to_dicts(),
     }
 
 

@@ -4,11 +4,14 @@ Sections: data set summary, variables summary, observation summary, values
 summary, value listing, verdict.  The listing is grouped per observation so
 one subject's differences read together, and truncated to the print limits
 (per variable within a group first, then overall).  The listing frame on
-the report is never truncated; only what is printed is.
+the report is never truncated; only what is printed is.  A comparison with
+BY variables reports the observation and values summaries per group as well
+and sections the listing per group.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
@@ -29,6 +32,8 @@ def _render_text(report: ComparisonReport, limits: PrintLimits) -> str:
         f"Comparison report: {report.base_label} vs {report.candidate_label}",
         _HEADER_RULE,
         "",
+        *(f"WARNING: {warning}" for warning in report.warnings),
+        *([""] if report.warnings else []),
     ]
     lines += _datasets_section(report)
     lines += _variables_section(report)
@@ -37,6 +42,18 @@ def _render_text(report: ComparisonReport, limits: PrintLimits) -> str:
     lines += _listing_section(report, limits)
     lines += _verdict_section(report)
     return "\n".join(lines)
+
+
+def _table(headings: Sequence[str], frame: pl.DataFrame) -> list[str]:
+    """A small summary frame as fixed-width columns: the label left, the counts right."""
+    rows = [[str(value) for value in row] for row in frame.iter_rows()]
+    widths = [max([len(h), *(len(r[i]) for r in rows)]) for i, h in enumerate(headings)]
+
+    def line(cells: Sequence[str]) -> str:
+        counts = "  ".join(f"{c:>{w}}" for c, w in zip(cells[1:], widths[1:]))
+        return f"  {cells[0]:<{widths[0]}}  {counts}".rstrip()
+
+    return [line(headings), *(line(row) for row in rows)]
 
 
 def _datasets_section(report: ComparisonReport) -> list[str]:
@@ -86,16 +103,44 @@ def _dtype_lines(entries: tuple[VariableDtypes, ...], width: int) -> list[str]:
 def _observations_section(report: ComparisonReport, limit: int | None) -> list[str]:
     o = report.observations
     keys = report.settings.keys
-    return [
+    lines = [
         "Observation summary",
         _RULE,
-        f"  Matched observations:            {o.matched}",
-        f"  Observations in base only:       {o.base_only}",
+        _line("Matched observations", o.matched),
+        _line("Observations in base only", o.base_only),
         *_key_rows(keys, o.base_only_keys, limit),
-        f"  Observations in candidate only:  {o.candidate_only}",
+        _line("Observations in candidate only", o.candidate_only),
         *_key_rows(keys, o.candidate_only_keys, limit),
-        "",
     ]
+    if report.settings.allow_duplicates:
+        lines += [
+            _line("Duplicate observations in base", o.base_duplicates),
+            _line("Duplicate observations in candidate", o.candidate_duplicates),
+        ]
+    lines += _groups_block(report)
+    lines.append("")
+    return lines
+
+
+def _line(label: str, value: object) -> str:
+    """One summary line, its value in the section's value column."""
+    return f"  {label + ':':<32} {value}"
+
+
+def _groups_block(report: ComparisonReport) -> list[str]:
+    """The one-sided groups and the per-group observation counts; nothing without BY variables."""
+    o = report.observations
+    if not report.settings.by:
+        return []
+    lines = [
+        _line(label, "; ".join(groups))
+        for label, groups in (
+            ("Groups in base only", o.base_only_groups),
+            ("Groups in candidate only", o.candidate_only_groups),
+        )
+        if groups
+    ]
+    return [*lines, "", *_table(["Group", "Matched", "Base only", "Candidate only"], o.per_group)]
 
 
 def _key_rows(keys: tuple[str, ...], frame: pl.DataFrame, limit: int | None) -> list[str]:
@@ -124,6 +169,11 @@ def _values_section(report: ComparisonReport) -> list[str]:
             f"  {'Variable':<{width}}  Unequal",
         ]
         lines += [f"  {variable:<{width}}  {n}" for variable, n in unequal.iter_rows()]
+        if report.settings.by:
+            lines += [
+                "",
+                *_table(["Group", "Variables", "Observations", "Unequal"], values.per_group),
+            ]
     lines.append("")
     return lines
 
@@ -146,6 +196,10 @@ def _listing_section(report: ComparisonReport, limits: PrintLimits) -> list[str]
         lines.append(f"  (showing all {listing.height} unequal values)")
 
     keys = report.settings.keys
+    by = report.settings.by
+    # Inside a group section the BY values are already on its heading, so an
+    # observation is named by what is left of the keys.
+    detail_keys = keys[len(by) :] or keys
     rows = shown.to_dicts()
     width = max([_MIN_VARIABLE_WIDTH, *(len(r["variable"]) for r in rows)])
     base_width = max([4, *(len(_cell(r["base"])) for r in rows)])
@@ -156,11 +210,15 @@ def _listing_section(report: ComparisonReport, limits: PrintLimits) -> list[str]
         header += "  Difference  % Difference"
     lines.append(header)
 
+    group: str | None = None
     current: tuple[Any, ...] | None = None
     for row in rows:
-        key = tuple(row[k] for k in keys)
+        if by and row["group"] != group:
+            lines += ([""] if group is not None else []) + [f"  Group {row['group']}"]
+            group, current = row["group"], None
+        key = tuple(row[k] for k in detail_keys)
         if key != current:
-            lines.append(f"  {_key_label(keys, key)}")
+            lines.append(f"  {_key_label(detail_keys, key)}")
             current = key
         line = (
             f"    {row['variable']:<{width}}  {_cell(row['base']):<{base_width}}"

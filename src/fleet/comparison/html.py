@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 import polars as pl
 
-from .report import VariableDtypes, _key_label
+from .report import VariableDtypes, _key_label, _plural
 
 if TYPE_CHECKING:
     from .report import ComparisonReport
@@ -56,6 +56,8 @@ h3 .count { margin-left: 8px; color: #57606a; font-weight: 400; }
 .verdict.equal { background: #1a7f37; }
 .verdict.unequal { background: #cf222e; }
 .summary-line { margin: 10px 0 16px; color: #57606a; }
+.warning { margin: 12px 0; padding: 8px 12px; border: 1px solid #d4a72c; border-radius: 6px;
+  background: #fff8c5; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .chip { padding: 4px 12px; border: 1px solid #d0d7de; border-radius: 16px; background: #fff; }
 .chip.flag { border-color: #cf222e; background: #ffebe9; }
@@ -84,8 +86,10 @@ def _render_html(report: ComparisonReport) -> str:
     body = [
         f"<h1>{escape(title)}</h1>",
         *_verdict(report),
+        *_warnings(report),
         *_chips(report),
         *_summary_section(report),
+        *_groups_section(report),
         *_one_sided_observations(report),
         *_listing_sections(report),
         f"<footer>Produced by Fleet {escape(report.version)}</footer>",
@@ -105,6 +109,11 @@ def _verdict(report: ComparisonReport) -> list[str]:
         f'<p><span class="verdict {css_class}">{text}</span></p>',
         f'<p class="summary-line">{escape(report.summary)}</p>',
     ]
+
+
+def _warnings(report: ComparisonReport) -> list[str]:
+    """What the reader is told before the first number; empty on an ordinary report."""
+    return [f'<p class="warning">{escape(warning)}</p>' for warning in report.warnings]
 
 
 def _chips(report: ComparisonReport) -> list[str]:
@@ -145,6 +154,12 @@ def _flag_detail(report: ComparisonReport, flag: str) -> str:
             f"{_plural(values.observations_with_differences, 'observation')}, "
             f"{_plural(values.variables_with_differences, 'variable')}"
         ),
+        "duplicate_keys": lambda: (
+            f"{_plural(o.base_duplicates, 'observation')} in the base, "
+            f"{o.candidate_duplicates} in the candidate"
+        ),
+        "base_only_groups": lambda: "; ".join(o.base_only_groups),
+        "candidate_only_groups": lambda: "; ".join(o.candidate_only_groups),
     }
     return details.get(flag, lambda: "")()
 
@@ -181,6 +196,35 @@ def _summary_section(report: ComparisonReport) -> list[str]:
         f"Variables in common: {len(v.common)} (compared: {len(v.compared)}). "
         f"Matched observations: {o.matched}.</p>",
     ]
+
+
+def _groups_section(report: ComparisonReport) -> list[str]:
+    """Per-BY-group observation and values counts; nothing without BY variables."""
+    if not report.settings.by:
+        return []
+    return [
+        "<h2>Groups</h2>",
+        f"<p>By: {escape(', '.join(report.settings.by))}.</p>",
+        "<h3>Observations per group</h3>",
+        *_frame_table(
+            report.observations.per_group, ["Group", "Matched", "Base only", "Candidate only"]
+        ),
+        "<h3>Unequal values per group</h3>",
+        *_frame_table(
+            report.values.per_group,
+            ["Group", "Variables", "Observations", "Unequal values"],
+        ),
+    ]
+
+
+def _frame_table(frame: pl.DataFrame, headings: list[str]) -> list[str]:
+    """A small summary frame as a table, the label left and the counts right."""
+    lines = ["<table>", "<tr>" + "".join(f"<th>{escape(h)}</th>" for h in headings) + "</tr>"]
+    for label, *counts in frame.iter_rows():
+        cells = _td(label) + "".join(_td(count, "number") for count in counts)
+        lines.append(f"<tr>{cells}</tr>")
+    lines.append("</table>")
+    return lines
 
 
 def _one_sided_observations(report: ComparisonReport) -> list[str]:
@@ -292,7 +336,3 @@ def _td(value: Any, css_class: str = "") -> str:
 
 def _number(value: float | None) -> str | None:
     return None if value is None else f"{value:g}"
-
-
-def _plural(count: int, noun: str) -> str:
-    return f"{count} {noun}" + ("" if count == 1 else "s")

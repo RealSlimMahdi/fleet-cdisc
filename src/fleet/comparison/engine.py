@@ -3,8 +3,11 @@
 One join, one collect.  Each side gets a position-within-key-group index and
 a presence marker, the two are full-joined on the keys plus that index, and
 the per-variable inequality flags are evaluated in the same plan.  Every
-summary, the duplicate-key check and the value listing derive from that
-single collected frame, so the inputs are scanned exactly once.
+summary, the duplicate-key check, the per-BY-group breakdowns and the value
+listing derive from that single collected frame, so the inputs are scanned
+exactly once.  BY variables are simply the first of the keys, which is what
+makes sectioning cost nothing extra: the index is already per group and the
+listing already sorts by group first.
 
 Pure Polars: no numpy, no pandas.
 """
@@ -19,6 +22,8 @@ from fleet._version import __version__
 from fleet.core.exceptions import ComparisonError, VerbUsageError
 
 from .report import (
+    GROUP_OBSERVATIONS,
+    GROUP_VALUES,
     LISTING_COLUMNS,
     ComparisonReport,
     ComparisonSettings,
@@ -29,6 +34,7 @@ from .report import (
     ValuesSummary,
     VariableDtypes,
     VariablesSummary,
+    _empty,
     _key_label,
     _normalise_flag,
     _normalise_max_print,
@@ -53,9 +59,11 @@ def compare(
     candidate: pl.DataFrame | pl.LazyFrame,
     *,
     keys: str | Sequence[str],
+    by: str | Sequence[str] | None = None,
     abs_tol: float = 0.0,
     rel_tol: float = 0.0,
     ignore_trailing_whitespace: bool = False,
+    allow_duplicates: bool = False,
     max_print: MaxPrint = 50,
     base_name: str | None = None,
     candidate_name: str | None = None,
@@ -80,6 +88,12 @@ def compare(
         keys: Variable(s) that identify one observation on each side.
             Required; the compare refuses to run when a key is missing or
             not unique on either side.
+        by: Variable(s) the report is sectioned by.  They are prepended to
+            ``keys`` automatically, so they need not be repeated there,
+            they label the listing's ``group`` column, and the observation
+            and values summaries are additionally reported per group.  A
+            group present on one side only raises ``base_only_groups`` or
+            ``candidate_only_groups``; the verdict stays global.
         abs_tol: Absolute tolerance on the numeric variables.  ``0.0`` (the
             default) is exact.
         rel_tol: Relative tolerance on the numeric variables, as a fraction
@@ -95,6 +109,12 @@ def compare(
             sides of a string before comparing, so SAS's padded character
             values equal Fleet's stripped ones.  Leading whitespace still
             differs.
+        allow_duplicates: Pair duplicate keys by their position within each
+            key group instead of refusing to run.  The observation summary
+            then counts the duplicates per side, the ``duplicate_keys`` flag
+            is raised and every renderer warns.  Order within a key group
+            decides which observations pair, so it is a weaker guarantee
+            than pairing on keys.
         max_print: Print limits for the text renderer (differences per
             variable, or a ``(per_variable, total)`` pair, or ``None`` for
             everything).  The listing on the report is never truncated.
@@ -106,9 +126,10 @@ def compare(
         raise; check ``report.is_equal`` and ``report.flags``.
 
     Raises:
-        ComparisonError: A key is missing, duplicated or of an incompatible
-            type on one side, a key reuses a listing column name, or a
-            tolerance is negative or not finite.
+        ComparisonError: A key or BY variable is missing, duplicated (without
+            ``allow_duplicates``) or of an incompatible type on one side, a
+            key reuses a listing column name, or a tolerance is negative or
+            not finite.
         VerbUsageError: An input is not a Polars frame, or an argument has
             the wrong type.
 
@@ -124,20 +145,29 @@ def compare(
             )
             report.print_report()
             assert report.is_equal, report.raised_flags
+
+        Section the report by treatment arm, so a difference in one arm
+        stands out::
+
+            report = fleet.compare(adsl_prod, adsl_qc, keys="USUBJID", by="TRT01P")
+            report.observations.per_group
     """
     base_lf = _as_lazy(base, "base")
     candidate_lf = _as_lazy(candidate, "candidate")
-    key_list = _normalise_keys(keys)
+    by_list = _normalise_by(by)
+    key_list = _normalise_keys(keys, by_list)
     _normalise_max_print(max_print)  # validate early, before any work
     # The settings are both the record of the run and the equality rule the
     # join evaluates, so every option is checked as they are built.
     settings = ComparisonSettings(
         keys=tuple(key_list),
+        by=tuple(by_list),
         abs_tol=_normalise_tolerance(abs_tol, "abs_tol"),
         rel_tol=_normalise_tolerance(rel_tol, "rel_tol"),
         ignore_trailing_whitespace=_normalise_flag(
             ignore_trailing_whitespace, "ignore_trailing_whitespace"
         ),
+        allow_duplicates=_normalise_flag(allow_duplicates, "allow_duplicates"),
         max_print=max_print,
         base_name=base_name,
         candidate_name=candidate_name,
@@ -156,14 +186,17 @@ def compare(
     frame = _join(base_lf, candidate_lf, key_list, compared, key_casts, compared_dtypes, settings)
     in_base = pl.col(_IN_BASE).fill_null(False)
     in_candidate = pl.col(_IN_CANDIDATE).fill_null(False)
-    _check_duplicates(frame, key_list, in_base, in_candidate)
+    duplicates = _duplicates(frame, key_list, in_base, in_candidate, settings.allow_duplicates)
 
     matched = frame.filter(in_base & in_candidate)
     base_only_keys = frame.filter(in_base & ~in_candidate).select(key_list).sort(key_list)
     candidate_only_keys = frame.filter(~in_base & in_candidate).select(key_list).sort(key_list)
     per_variable, observations_with_differences = _values_summary(matched, compared)
     listing = _listing(
-        matched, key_list, per_variable, compared_dtypes, base_schema, candidate_schema
+        matched, key_list, by_list, per_variable, compared_dtypes, base_schema, candidate_schema
+    )
+    base_only_groups, candidate_only_groups = _one_sided_groups(
+        frame, by_list, in_base, in_candidate
     )
 
     flags = {
@@ -173,6 +206,9 @@ def compare(
         "base_only_observations": base_only_keys.height > 0,
         "candidate_only_observations": candidate_only_keys.height > 0,
         "values_differ": listing.height > 0,
+        "duplicate_keys": any(duplicates),
+        "base_only_groups": bool(base_only_groups),
+        "candidate_only_groups": bool(candidate_only_groups),
     }
     return ComparisonReport(
         datasets=DatasetSummary(
@@ -188,8 +224,17 @@ def compare(
             candidate_only=candidate_only_keys.height,
             base_only_keys=base_only_keys,
             candidate_only_keys=candidate_only_keys,
+            base_duplicates=duplicates[0],
+            candidate_duplicates=duplicates[1],
+            per_group=_observations_per_group(frame, by_list, in_base, in_candidate),
+            base_only_groups=base_only_groups,
+            candidate_only_groups=candidate_only_groups,
         ),
-        values=ValuesSummary(per_variable, observations_with_differences),
+        values=ValuesSummary(
+            per_variable,
+            observations_with_differences,
+            per_group=_values_per_group(matched, by_list, compared),
+        ),
         listing=listing,
         flags=frozenset(name for name, raised in flags.items() if raised),
         settings=settings,
@@ -210,25 +255,48 @@ def _as_lazy(frame: object, side: str) -> pl.LazyFrame:
     )
 
 
-def _normalise_keys(keys: object) -> list[str]:
-    if isinstance(keys, str):
-        key_list = [keys]
-    elif isinstance(keys, Sequence) and all(isinstance(k, str) for k in keys):
-        key_list = list(keys)
-    else:
-        raise VerbUsageError("keys must be a variable name or a sequence of variable names")
+def _normalise_by(by: object) -> list[str]:
+    """The BY variables as a list; ``None`` means no sectioning."""
+    if by is None:
+        return []
+    by_list = _as_names(by, "by")
+    if not by_list:
+        return []
+    repeated = sorted({b for b in by_list if by_list.count(b) > 1})
+    if repeated:
+        raise ComparisonError(f"by repeats a variable: {', '.join(repeated)}")
+    return by_list
+
+
+def _normalise_keys(keys: object, by: list[str]) -> list[str]:
+    """The variables observations pair on: the BY variables first, then the keys.
+
+    A BY variable repeated among the keys is dropped rather than refused,
+    because prepending is automatic and the user need not know it happened.
+    """
+    key_list = _as_names(keys, "keys")
     if not key_list:
         raise ComparisonError("keys must name at least one variable; a compare needs keys to run")
     repeated = sorted({k for k in key_list if key_list.count(k) > 1})
     if repeated:
         raise ComparisonError(f"keys repeat a variable: {', '.join(repeated)}")
-    reserved = [k for k in key_list if k in LISTING_COLUMNS]
+    pairing = [*by, *(k for k in key_list if k not in by)]
+    reserved = [k for k in pairing if k in LISTING_COLUMNS]
     if reserved:
         raise ComparisonError(
             f"keys may not reuse a listing column name: {', '.join(reserved)} "
             f"(reserved: {', '.join(LISTING_COLUMNS)})"
         )
-    return key_list
+    return pairing
+
+
+def _as_names(value: object, argument: str) -> list[str]:
+    """One variable name or a sequence of them, as a list."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, Sequence) and all(isinstance(name, str) for name in value):
+        return list(value)
+    raise VerbUsageError(f"{argument} must be a variable name or a sequence of variable names")
 
 
 def _check_keys_present(keys: list[str], base: pl.Schema, candidate: pl.Schema) -> None:
@@ -451,15 +519,27 @@ def _stripped(value: pl.Expr) -> pl.Expr:
 # ── Derived from the collected frame ──────────────────────────────────────────
 
 
-def _check_duplicates(
-    frame: pl.DataFrame, keys: list[str], in_base: pl.Expr, in_candidate: pl.Expr
-) -> None:
+def _duplicates(
+    frame: pl.DataFrame,
+    keys: list[str],
+    in_base: pl.Expr,
+    in_candidate: pl.Expr,
+    allowed: bool,
+) -> tuple[int, int]:
+    """Duplicated observations per side; without ``allow_duplicates`` they stop the compare.
+
+    A duplicate is an observation beyond the first in its key group.  The
+    join already pairs them by that position, so allowing them is only a
+    matter of counting instead of refusing.
+    """
     duplicated = pl.col(_IDX) > 0
-    problems = []
+    counts, problems = [], []
     for side, present in (("base", in_base), ("candidate", in_candidate)):
-        dups = frame.filter(present & duplicated).select(keys).unique().sort(keys)
-        if dups.height == 0:
+        rows = frame.filter(present & duplicated)
+        counts.append(rows.height)
+        if allowed or rows.height == 0:
             continue
+        dups = rows.select(keys).unique().sort(keys)
         shown = "; ".join(
             _key_label(keys, row) for row in dups.head(_MAX_REPORTED_DUPLICATES).iter_rows()
         )
@@ -471,8 +551,55 @@ def _check_duplicates(
         problems.append(f"{side} has {dups.height} duplicated key value(s): {shown}{more}")
     if problems:
         raise ComparisonError(
-            "keys must identify one observation per side, but " + " | ".join(problems)
+            "keys must identify one observation per side, but "
+            + " | ".join(problems)
+            + " (pass allow_duplicates=True to pair them by position instead)"
         )
+    return counts[0], counts[1]
+
+
+def _group_label(by: list[str]) -> pl.Expr:
+    """The ``group`` column: ``B1=v1, B2=v2`` over the BY variables, ``null`` for a null value."""
+    return pl.concat_str(
+        [pl.concat_str(pl.lit(f"{b}="), pl.col(b).cast(pl.String).fill_null("null")) for b in by],
+        separator=", ",
+    )
+
+
+def _observations_per_group(
+    frame: pl.DataFrame, by: list[str], in_base: pl.Expr, in_candidate: pl.Expr
+) -> pl.DataFrame:
+    """How observations paired within each BY group, in group order."""
+    if not by:
+        return _empty(GROUP_OBSERVATIONS)
+    return (
+        frame.group_by(by)
+        .agg(
+            (in_base & in_candidate).sum().alias("matched"),
+            (in_base & ~in_candidate).sum().alias("base_only"),
+            (~in_base & in_candidate).sum().alias("candidate_only"),
+        )
+        .sort(by)
+        .select(_group_label(by).alias("group"), pl.exclude(by).cast(pl.Int64))
+    )
+
+
+def _one_sided_groups(
+    frame: pl.DataFrame, by: list[str], in_base: pl.Expr, in_candidate: pl.Expr
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Labels of the BY groups present in one dataset only, in group order."""
+    if not by:
+        return (), ()
+    presence = (
+        frame.group_by(by)
+        .agg(in_base.any().alias("base"), in_candidate.any().alias("candidate"))
+        .sort(by)
+        .select(_group_label(by).alias("group"), "base", "candidate")
+    )
+    return (
+        tuple(presence.filter(pl.col("base") & ~pl.col("candidate"))["group"]),
+        tuple(presence.filter(~pl.col("base") & pl.col("candidate"))["group"]),
+    )
 
 
 def _values_summary(matched: pl.DataFrame, compared: list[str]) -> tuple[pl.DataFrame, int]:
@@ -486,15 +613,48 @@ def _values_summary(matched: pl.DataFrame, compared: list[str]) -> tuple[pl.Data
     return per_variable, int(with_differences or 0)
 
 
+def _values_per_group(matched: pl.DataFrame, by: list[str], compared: list[str]) -> pl.DataFrame:
+    """What differed within each BY group, over its matched observations, in group order.
+
+    Only groups with matched observations appear: a group present on one
+    side only has nothing to compare and is reported as a one-sided group
+    instead.
+    """
+    if not by:
+        return _empty(GROUP_VALUES)
+    zero = pl.lit(0, pl.Int64)
+    unequal = [pl.col(_NEQ + c) for c in compared]
+    grouped = (
+        matched.group_by(by)
+        .agg(
+            *[u.sum().alias(_NEQ + c) for u, c in zip(unequal, compared)],
+            (pl.any_horizontal(unequal).sum() if compared else zero).alias(
+                "observations_with_differences"
+            ),
+        )
+        .sort(by)
+    )
+    return grouped.select(
+        _group_label(by).alias("group"),
+        pl.sum_horizontal([u > 0 for u in unequal] or [zero])
+        .cast(pl.Int64)
+        .alias("variables_with_differences"),
+        pl.col("observations_with_differences").cast(pl.Int64),
+        pl.sum_horizontal(unequal or [zero]).cast(pl.Int64).alias("differences"),
+    )
+
+
 def _listing(
     matched: pl.DataFrame,
     keys: list[str],
+    by: list[str],
     per_variable: pl.DataFrame,
     compared_dtypes: dict[str, pl.DataType],
     base_schema: pl.Schema,
     candidate_schema: pl.Schema,
 ) -> pl.DataFrame:
-    """Long frame of every differing value, sorted by keys; ``compared_dtypes`` is the dtype each variable was compared under."""
+    """Long frame of every differing value, sorted by keys (BY variables first); ``compared_dtypes`` is the dtype each variable was compared under."""
+    group = _group_label(by) if by else pl.lit(None, pl.String)
     differing = per_variable.filter(pl.col("differences") > 0)["variable"].to_list()
     parts = []
     for c in differing:
@@ -512,7 +672,7 @@ def _listing(
         parts.append(
             matched.filter(pl.col(_NEQ + c)).select(
                 *[pl.col(k) for k in keys],
-                pl.lit(None, pl.String).alias("group"),
+                group.alias("group"),
                 pl.lit(c, pl.String).alias("variable"),
                 _as_string(base_value, base_schema[c]).alias("base"),
                 _as_string(candidate_value, candidate_schema[c]).alias("candidate"),

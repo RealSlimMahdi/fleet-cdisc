@@ -12,6 +12,7 @@ comparison ran with, and the Fleet version.  Rendering lives in
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -52,6 +53,29 @@ LISTING_COLUMNS: tuple[str, ...] = (
     "percent_difference",
 )
 
+#: Schema of :attr:`ObservationSummary.per_group`: how observations paired
+#: within one BY group.
+GROUP_OBSERVATIONS: dict[str, pl.DataType] = {
+    "group": pl.String(),
+    "matched": pl.Int64(),
+    "base_only": pl.Int64(),
+    "candidate_only": pl.Int64(),
+}
+
+#: Schema of :attr:`ValuesSummary.per_group`: what differed within one BY group.
+GROUP_VALUES: dict[str, pl.DataType] = {
+    "group": pl.String(),
+    "variables_with_differences": pl.Int64(),
+    "observations_with_differences": pl.Int64(),
+    "differences": pl.Int64(),
+}
+
+
+def _empty(schema: dict[str, pl.DataType]) -> pl.DataFrame:
+    """A frame with no rows and the given columns, so renderers never branch on ``None``."""
+    return pl.DataFrame(schema=schema)
+
+
 #: Top-level keys of the JSON document (:meth:`ComparisonReport.to_json`), in
 #: order.  Additive-only within a major version: keys may be added, never
 #: removed or renamed, because the editor extension consumes them.
@@ -59,6 +83,7 @@ JSON_KEYS: tuple[str, ...] = (
     "is_equal",
     "summary",
     "flags",
+    "warnings",
     "datasets",
     "variables",
     "observations",
@@ -157,6 +182,11 @@ def _key_label(keys: Iterable[str], values: Iterable[Any]) -> str:
     return ", ".join(f"{k}={'null' if v is None else v}" for k, v in zip(keys, values))
 
 
+def _plural(count: int, noun: str) -> str:
+    """``1 observation`` / ``2 observations``."""
+    return f"{count} {noun}" + ("" if count == 1 else "s")
+
+
 @dataclass(frozen=True)
 class SideSummary:
     """One side of the data set summary."""
@@ -217,6 +247,16 @@ class ObservationSummary:
     base_only_keys: pl.DataFrame
     #: Key values of the observations found only in the candidate, sorted by keys.
     candidate_only_keys: pl.DataFrame
+    #: Observations beyond the first in their key group, per side; non-zero only
+    #: under ``allow_duplicates``, since duplicates otherwise stop the compare.
+    base_duplicates: int = 0
+    candidate_duplicates: int = 0
+    #: One row per BY group, in group order: ``group`` (str), ``matched``,
+    #: ``base_only``, ``candidate_only`` (int).  Empty without BY variables.
+    per_group: pl.DataFrame = dataclasses.field(default_factory=lambda: _empty(GROUP_OBSERVATIONS))
+    #: Labels of the groups found on one side only.
+    base_only_groups: tuple[str, ...] = ()
+    candidate_only_groups: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, eq=False)
@@ -226,6 +266,10 @@ class ValuesSummary:
     #: One row per compared variable: ``variable`` (str), ``differences`` (int).
     per_variable: pl.DataFrame
     observations_with_differences: int
+    #: One row per BY group with matched observations, in group order: ``group``
+    #: (str), ``variables_with_differences``, ``observations_with_differences``,
+    #: ``differences`` (int).  Empty without BY variables.
+    per_group: pl.DataFrame = dataclasses.field(default_factory=lambda: _empty(GROUP_VALUES))
 
     @property
     def variables_with_differences(self) -> int:
@@ -246,7 +290,10 @@ class ComparisonSettings:
     renderers read the rule in effect from (:attr:`equality`).
     """
 
+    #: The variables observations paired on, BY variables first.
     keys: tuple[str, ...]
+    #: The variables the report is sectioned by; they are part of :attr:`keys`.
+    by: tuple[str, ...]
     #: Absolute tolerance on the numeric variables; ``0.0`` is exact.
     abs_tol: float
     #: Relative tolerance on the numeric variables, as a fraction of the **base**
@@ -255,6 +302,8 @@ class ComparisonSettings:
     #: Whether trailing whitespace was stripped from both sides of a string
     #: before comparing.
     ignore_trailing_whitespace: bool
+    #: Whether duplicate keys were paired by position instead of stopping the compare.
+    allow_duplicates: bool
     max_print: MaxPrint
     base_name: str | None
     candidate_name: str | None
@@ -303,11 +352,12 @@ class ComparisonReport:
         datasets: Name, rows and variables per side.
         variables: Common, one-sided, conflicting and differently typed variables.
         observations: Matched and one-sided observation counts, with the
-            key values of the one-sided observations.
-        values: Differences per compared variable.
+            key values of the one-sided observations, the duplicate counts
+            per side and the per-BY-group breakdown.
+        values: Differences per compared variable, and per BY group.
         listing: Long frame of every differing value, sorted by keys: the key
-            columns, then ``group`` (reserved for BY groups, null until they
-            land), ``variable``, ``base`` and ``candidate`` as strings,
+            columns, then ``group`` (the BY group label, null without BY
+            variables), ``variable``, ``base`` and ``candidate`` as strings,
             ``difference`` and ``percent_difference`` for numeric variables
             (null otherwise; percent is null when the base is zero or null).
             Never truncated; ``max_print`` only governs what the text and
@@ -358,6 +408,23 @@ class ComparisonReport:
         if self.flags:
             line += f"; flags: {', '.join(self.raised_flags)}"
         return line
+
+    @property
+    def warnings(self) -> tuple[str, ...]:
+        """What every renderer says above the report; empty when nothing needs saying.
+
+        Today only the duplicate-key override warns: pairing by position is a
+        weaker guarantee than pairing on keys, so a reader is told before the
+        first number.
+        """
+        if "duplicate_keys" not in self.flags:
+            return ()
+        o = self.observations
+        return (
+            "Duplicate keys were paired by position within each key group: "
+            f"{_plural(o.base_duplicates, 'duplicate observation')} in the base, "
+            f"{o.candidate_duplicates} in the candidate.",
+        )
 
     def to_text(self, max_print: MaxPrint | _Unset = _USE_SETTINGS) -> str:
         """Render the report as plain text in PROC COMPARE section order.
@@ -462,7 +529,7 @@ class ComparisonReport:
         ...) are chips at the top; below, only the mismatched observations
         are listed, base and candidate side by side with both cells
         highlighted, one collapsible block per differing variable, and one
-        section per group once the listing's ``group`` column is populated.
+        section per BY group when the comparison ran with ``by``.
         Nothing is truncated: every unequal value is on the page, whatever
         ``max_print`` the comparison ran with.  For listings beyond a few
         thousand rows, :meth:`save_listing` is the better archive.

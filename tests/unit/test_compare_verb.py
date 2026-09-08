@@ -184,3 +184,27 @@ class TestToleranceKeywords:
         )
         assert ns.last_comparison.is_equal is True
         assert ns.last_comparison.settings.ignore_trailing_whitespace is True
+
+
+class TestGroupAndDuplicateKeywords:
+    """``by`` and ``allow_duplicates`` reach the engine."""
+
+    def test_by_sections_the_report_and_is_prepended_to_the_keys(self, base):
+        ns = _dm().sdtm.assign("DOMAIN", value="DM").compare(base, keys="USUBJID", by="SEX")
+        report = ns.last_comparison
+        assert report.settings.by == ("SEX",)
+        assert report.settings.keys == ("SEX", "USUBJID")
+        assert report.observations.per_group["group"].to_list() == ["SEX=F", "SEX=M"]
+
+    def test_allow_duplicates_pairs_by_position_instead_of_raising(self):
+        from fleet.core.exceptions import ComparisonError
+
+        base = pl.concat([_dm(), _dm().head(1)])
+        chain = pl.concat([_dm(), _dm().head(1)]).sdtm
+        with pytest.raises(ComparisonError, match="allow_duplicates"):
+            chain.compare(base, keys="USUBJID")
+
+        ns = chain.compare(base, keys="USUBJID", allow_duplicates=True, on_fail="ignore")
+        assert ns.last_comparison.settings.allow_duplicates is True
+        assert ns.last_comparison.flags == {"duplicate_keys"}
+        assert ns.last_comparison.observations.base_duplicates == 1

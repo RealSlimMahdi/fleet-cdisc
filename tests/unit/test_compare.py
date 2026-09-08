@@ -927,6 +927,339 @@ class TestTrailingWhitespace:
             compare(base, base, keys="USUBJID", ignore_trailing_whitespace="yes")
 
 
+# ── Duplicate keys under the override ─────────────────────────────────────────
+
+
+def _duplicated() -> pl.DataFrame:
+    """Subject ``01`` has two observations; ``AVAL`` tells them apart."""
+    return pl.from_repr("""\
+┌─────────┬──────┐
+│ USUBJID ┆ AVAL │
+│ ---     ┆ ---  │
+│ str     ┆ i64  │
+╞═════════╪══════╡
+│ 01      ┆ 1    │
+│ 01      ┆ 2    │
+│ 02      ┆ 3    │
+└─────────┴──────┘
+""")
+
+
+class TestAllowDuplicates:
+    """Without the override duplicates refuse; with it they pair by position."""
+
+    def test_duplicates_still_refuse_and_the_message_names_the_override(self, base):
+        with pytest.raises(ComparisonError, match="allow_duplicates") as exc:
+            compare(pl.concat([base, base.head(1)]), base, keys="USUBJID")
+        assert "USUBJID=01" in str(exc.value)
+
+    def test_duplicates_pair_by_position_within_each_key_group(self):
+        candidate = _duplicated().with_columns(
+            pl.when(pl.col("AVAL") == 2).then(9).otherwise(pl.col("AVAL")).alias("AVAL")
+        )
+        report = compare(_duplicated(), candidate, keys="USUBJID", allow_duplicates=True)
+        assert report.observations.matched == 3
+        assert _listing_rows(report) == [
+            {
+                "USUBJID": "01",
+                "group": None,
+                "variable": "AVAL",
+                "base": "2",
+                "candidate": "9",
+                "difference": 7.0,
+                "percent_difference": 350.0,
+            }
+        ]
+
+    def test_the_order_within_a_key_group_decides_which_observations_pair(self):
+        reversed_group = _duplicated()[[1, 0, 2]]
+        report = compare(_duplicated(), reversed_group, keys="USUBJID", allow_duplicates=True)
+        assert report.values.total_differences == 2  # 1 against 2, then 2 against 1
+
+    def test_the_observation_summary_counts_the_duplicates_per_side(self):
+        base = pl.concat([_duplicated(), _duplicated().head(1)])  # 01 three times
+        report = compare(base, _duplicated(), keys="USUBJID", allow_duplicates=True)
+        assert report.observations.base_duplicates == 2
+        assert report.observations.candidate_duplicates == 1
+
+    def test_an_unpaired_duplicate_is_an_observation_on_one_side_only(self):
+        base = pl.concat([_duplicated(), _duplicated().head(1)])  # 01 three times
+        report = compare(base, _duplicated(), keys="USUBJID", allow_duplicates=True)
+        assert report.observations.matched == 3
+        assert report.observations.base_only == 1
+        assert report.observations.base_only_keys["USUBJID"].to_list() == ["01"]
+
+    def test_the_flag_is_raised_only_under_the_override_and_only_when_duplicated(self, base):
+        assert "duplicate_keys" not in compare(base, base, keys="USUBJID").flags
+        assert (
+            "duplicate_keys" not in compare(base, base, keys="USUBJID", allow_duplicates=True).flags
+        )
+        report = compare(_duplicated(), _duplicated(), keys="USUBJID", allow_duplicates=True)
+        assert report.flags == {"duplicate_keys"}
+        assert report.is_equal is False  # a raised flag is never equal
+
+    def test_the_override_is_recorded_in_the_settings(self, base):
+        assert compare(base, base, keys="USUBJID").settings.allow_duplicates is False
+        settings = compare(base, base, keys="USUBJID", allow_duplicates=True).settings
+        assert settings.allow_duplicates is True
+
+    def test_the_option_must_be_a_boolean(self, base):
+        with pytest.raises(VerbUsageError, match="allow_duplicates"):
+            compare(base, base, keys="USUBJID", allow_duplicates="yes")
+
+    def test_every_renderer_warns_at_the_top(self):
+        report = compare(_duplicated(), _duplicated(), keys="USUBJID", allow_duplicates=True)
+        assert len(report.warnings) == 1
+        warning = report.warnings[0]
+        assert "1 duplicate observation in the base" in warning
+        assert "1 in the candidate" in warning
+
+        text = report.to_text()
+        assert warning in text
+        assert text.index(warning) < text.index("Data set summary")
+
+        page = report.to_html()
+        assert warning in page
+        assert page.index(warning) < page.index("<h2>Summary</h2>")
+
+        assert json.loads(report.to_json())["warnings"] == [warning]
+
+    def test_an_ordinary_report_warns_about_nothing(self, base, candidate):
+        report = compare(base, candidate, keys="USUBJID")
+        assert report.warnings == ()
+        assert "WARNING" not in report.to_text()
+        assert json.loads(report.to_json())["warnings"] == []
+
+
+# ── BY groups ─────────────────────────────────────────────────────────────────
+
+
+def _by_base() -> pl.DataFrame:
+    return pl.from_repr("""\
+┌─────────┬────────┬─────┬──────┐
+│ USUBJID ┆ TRT01P ┆ AGE ┆ WT   │
+│ ---     ┆ ---    ┆ --- ┆ ---  │
+│ str     ┆ str    ┆ i64 ┆ f64  │
+╞═════════╪════════╪═════╪══════╡
+│ 01      ┆ A      ┆ 34  ┆ 70.1 │
+│ 02      ┆ A      ┆ 45  ┆ 55.2 │
+│ 03      ┆ B      ┆ 52  ┆ 60.3 │
+│ 04      ┆ C      ┆ 61  ┆ 80.0 │
+└─────────┴────────┴─────┴──────┘
+""")
+
+
+def _by_candidate() -> pl.DataFrame:
+    """Subject 02's AGE and subject 03's WT differ; arm C is gone and arm D is new."""
+    return pl.from_repr("""\
+┌─────────┬────────┬─────┬──────┐
+│ USUBJID ┆ TRT01P ┆ AGE ┆ WT   │
+│ ---     ┆ ---    ┆ --- ┆ ---  │
+│ str     ┆ str    ┆ i64 ┆ f64  │
+╞═════════╪════════╪═════╪══════╡
+│ 01      ┆ A      ┆ 34  ┆ 70.1 │
+│ 02      ┆ A      ┆ 46  ┆ 55.2 │
+│ 03      ┆ B      ┆ 52  ┆ 61.0 │
+│ 05      ┆ D      ┆ 70  ┆ 75.0 │
+└─────────┴────────┴─────┴──────┘
+""")
+
+
+@pytest.fixture
+def grouped() -> ComparisonReport:
+    return compare(_by_base(), _by_candidate(), keys="USUBJID", by="TRT01P")
+
+
+class TestByGroups:
+    def test_by_variables_are_prepended_to_the_keys_and_need_not_be_repeated(self, grouped):
+        assert grouped.settings.by == ("TRT01P",)
+        assert grouped.settings.keys == ("TRT01P", "USUBJID")
+
+    def test_repeating_a_by_variable_among_the_keys_is_harmless(self):
+        report = compare(_by_base(), _by_base(), keys=["USUBJID", "TRT01P"], by=["TRT01P"])
+        assert report.settings.keys == ("TRT01P", "USUBJID")
+        assert report.is_equal is True
+
+    def test_a_by_variable_is_not_a_compared_variable(self, grouped):
+        assert "TRT01P" not in grouped.variables.common
+
+    def test_the_listing_carries_the_group_label_and_is_sorted_by_group_first(self, grouped):
+        assert [(r["group"], r["variable"]) for r in _listing_rows(grouped)] == [
+            ("TRT01P=A", "AGE"),
+            ("TRT01P=B", "WT"),
+        ]
+
+    def test_the_observation_summary_is_reported_per_group(self, grouped):
+        per_group = grouped.observations.per_group
+        assert per_group.columns == ["group", "matched", "base_only", "candidate_only"]
+        assert per_group.rows() == [
+            ("TRT01P=A", 2, 0, 0),
+            ("TRT01P=B", 1, 0, 0),
+            ("TRT01P=C", 0, 1, 0),
+            ("TRT01P=D", 0, 0, 1),
+        ]
+
+    def test_the_values_summary_is_reported_per_group(self, grouped):
+        per_group = grouped.values.per_group
+        assert per_group.columns == [
+            "group",
+            "variables_with_differences",
+            "observations_with_differences",
+            "differences",
+        ]
+        assert per_group.rows() == [("TRT01P=A", 1, 1, 1), ("TRT01P=B", 1, 1, 1)]
+
+    def test_a_group_on_one_side_only_raises_its_flag_and_is_listed(self, grouped):
+        assert {"base_only_groups", "candidate_only_groups"} <= grouped.flags
+        assert grouped.observations.base_only_groups == ("TRT01P=C",)
+        assert grouped.observations.candidate_only_groups == ("TRT01P=D",)
+
+    def test_the_verdict_stays_global(self):
+        assert compare(_by_base(), _by_base(), keys="USUBJID", by="TRT01P").is_equal is True
+        one_arm_differs = _by_base().with_columns(
+            pl.when(pl.col("TRT01P") == "B").then(0).otherwise(pl.col("AGE")).alias("AGE")
+        )
+        report = compare(_by_base(), one_arm_differs, keys="USUBJID", by="TRT01P")
+        assert report.is_equal is False
+        assert report.values.per_group.rows() == [
+            ("TRT01P=A", 0, 0, 0),
+            ("TRT01P=B", 1, 1, 1),
+            ("TRT01P=C", 0, 0, 0),
+        ]
+
+    def test_without_by_the_per_group_frames_are_empty_and_the_group_column_null(self, base):
+        report = compare(base, base, keys="USUBJID")
+        assert report.settings.by == ()
+        assert report.observations.per_group.height == 0
+        assert report.values.per_group.height == 0
+        assert report.observations.base_only_groups == ()
+        assert report.listing["group"].is_null().all()
+
+    def test_several_by_variables_label_the_group_with_each(self):
+        b = pl.from_repr("""\
+┌─────┬────────┬───────┬─────┐
+│ ID  ┆ TRT01P ┆ AVISIT┆ X   │
+│ --- ┆ ---    ┆ ---   ┆ --- │
+│ i64 ┆ str    ┆ i64   ┆ i64 │
+╞═════╪════════╪═══════╪═════╡
+│ 1   ┆ A      ┆ 1     ┆ 10  │
+│ 2   ┆ A      ┆ 2     ┆ 20  │
+└─────┴────────┴───────┴─────┘
+""")
+        c = b.with_columns(pl.col("X") + 1)
+        report = compare(b, c, keys="ID", by=["TRT01P", "AVISIT"])
+        assert report.settings.keys == ("TRT01P", "AVISIT", "ID")
+        assert report.listing["group"].to_list() == [
+            "TRT01P=A, AVISIT=1",
+            "TRT01P=A, AVISIT=2",
+        ]
+
+    def test_a_null_group_value_reads_as_null(self):
+        b = pl.DataFrame({"ID": [1], "G": [None], "X": [1]})
+        c = pl.DataFrame({"ID": [1], "G": [None], "X": [2]})
+        report = compare(b, c, keys="ID", by="G")
+        assert report.listing["group"].to_list() == ["G=null"]
+
+    def test_groups_are_still_counted_when_nothing_is_comparable(self):
+        b = _by_base().select("USUBJID", "TRT01P", "AGE")
+        c = _by_base().select("USUBJID", "TRT01P", "WT")
+        report = compare(b, c, keys="USUBJID", by="TRT01P")
+        assert report.variables.compared == ()
+        assert report.observations.per_group["matched"].to_list() == [2, 1, 1]
+        assert report.values.per_group.rows() == [
+            ("TRT01P=A", 0, 0, 0),
+            ("TRT01P=B", 0, 0, 0),
+            ("TRT01P=C", 0, 0, 0),
+        ]
+
+    def test_a_missing_by_variable_stops_the_compare(self, base):
+        with pytest.raises(ComparisonError, match="TRT01P"):
+            compare(base, base, keys="USUBJID", by="TRT01P")
+
+    def test_by_may_not_reuse_a_listing_column_name(self):
+        b = pl.DataFrame({"ID": [1], "group": ["A"], "X": [1]})
+        with pytest.raises(ComparisonError, match="group"):
+            compare(b, b, keys="ID", by="group")
+
+    def test_by_must_be_a_name_or_a_sequence_of_names(self, base):
+        with pytest.raises(VerbUsageError, match="by"):
+            compare(base, base, keys="USUBJID", by=1)
+
+    def test_by_may_not_repeat_a_variable(self, base):
+        with pytest.raises(ComparisonError, match="SEX"):
+            compare(base, base, keys="USUBJID", by=["SEX", "SEX"])
+
+
+class TestGroupedRenderers:
+    """Per-group counts reach the text, JSON and HTML renderers."""
+
+    def test_the_text_report_sections_the_listing_per_group(self, grouped):
+        listing = grouped.to_text().split("Value listing")[1]
+        assert "Group TRT01P=A" in listing and "Group TRT01P=B" in listing
+        arm_a = listing[listing.index("Group TRT01P=A") : listing.index("Group TRT01P=B")]
+        assert "USUBJID=02" in arm_a and "AGE" in arm_a and "WT" not in arm_a
+        assert "TRT01P=A, USUBJID=02" not in arm_a  # the group heading carries the BY value
+
+    def test_the_text_report_shows_per_group_counts_in_both_summaries(self, grouped):
+        text = grouped.to_text()
+        observations = text.split("Observation summary")[1].split("Values summary")[0]
+        assert "Groups in base only:" in observations and "TRT01P=C" in observations
+        assert "Groups in candidate only:" in observations and "TRT01P=D" in observations
+        assert "TRT01P=A" in observations
+
+        values = text.split("Values summary")[1].split("Value listing")[0]
+        assert "Group" in values and "TRT01P=A" in values and "TRT01P=B" in values
+
+    def test_an_ungrouped_text_report_has_no_group_sections(self, base, candidate):
+        text = compare(base, candidate, keys="USUBJID").to_text()
+        assert "Group" not in text
+
+    def test_the_json_document_carries_the_per_group_counts_and_the_one_sided_groups(self, grouped):
+        document = json.loads(grouped.to_json())
+        observations = document["observations"]
+        assert observations["base_only_groups"] == ["TRT01P=C"]
+        assert observations["candidate_only_groups"] == ["TRT01P=D"]
+        assert observations["base_duplicates"] == 0
+        assert observations["candidate_duplicates"] == 0
+        assert observations["per_group"][0] == {
+            "group": "TRT01P=A",
+            "matched": 2,
+            "base_only": 0,
+            "candidate_only": 0,
+        }
+        assert document["values"]["per_group"] == [
+            {
+                "group": "TRT01P=A",
+                "variables_with_differences": 1,
+                "observations_with_differences": 1,
+                "differences": 1,
+            },
+            {
+                "group": "TRT01P=B",
+                "variables_with_differences": 1,
+                "observations_with_differences": 1,
+                "differences": 1,
+            },
+        ]
+        assert document["settings"]["by"] == ["TRT01P"]
+        assert document["settings"]["allow_duplicates"] is False
+
+    def test_the_html_report_shows_the_group_sections_and_counts(self, grouped):
+        page = grouped.to_html()
+        chips = page[page.index("NOT EQUAL") : page.index("<h2>Summary</h2>")]
+        assert "Groups in base only" in chips and "TRT01P=C" in chips
+        assert "Groups in candidate only" in chips and "TRT01P=D" in chips
+
+        groups = page[page.index("<h2>Groups</h2>") : page.index("<h2>Unequal values</h2>")]
+        assert "TRT01P=A" in groups and "TRT01P=D" in groups
+
+        listing = page[page.index("<h2>Unequal values</h2>") :]
+        assert "Group TRT01P=A" in listing and "Group TRT01P=B" in listing
+
+    def test_an_ungrouped_html_report_has_no_groups_section(self, base, candidate):
+        assert "<h2>Groups</h2>" not in compare(base, candidate, keys="USUBJID").to_html()
+
+
 class TestSettingsOnEverySurface:
     """The three options reach the report and every renderer shows what was in effect."""
 
@@ -1109,6 +1442,7 @@ _JSON_KEYS = [
     "is_equal",
     "summary",
     "flags",
+    "warnings",
     "datasets",
     "variables",
     "observations",
@@ -1155,6 +1489,11 @@ class TestJsonReport:
             "candidate_only": 1,
             "base_only_keys": [{"USUBJID": "04"}],
             "candidate_only_keys": [{"USUBJID": "05"}],
+            "base_duplicates": 0,
+            "candidate_duplicates": 0,
+            "per_group": [],
+            "base_only_groups": [],
+            "candidate_only_groups": [],
             "truncated": False,
         }
         assert document["values"] == {
@@ -1166,13 +1505,16 @@ class TestJsonReport:
             "variables_with_differences": 3,
             "observations_with_differences": 2,
             "total_differences": 3,
+            "per_group": [],
         }
         assert document["statistics"] == []
         assert document["settings"] == {
             "keys": ["USUBJID"],
+            "by": [],
             "abs_tol": 0.0,
             "rel_tol": 0.0,
             "ignore_trailing_whitespace": False,
+            "allow_duplicates": False,
             "max_print": 50,
             "base_name": "prod",
             "candidate_name": "qc",

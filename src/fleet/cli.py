@@ -1058,6 +1058,7 @@ def _run_compare(args: argparse.Namespace) -> None:
     from fleet.core.exceptions import FleetError
 
     keys = [k.strip() for k in args.keys.split(",") if k.strip()]
+    by = [b.strip() for b in args.by.split(",") if b.strip()] if args.by else None
     base = _scan_comparison_side(args.base, "base")
     candidate = _scan_comparison_side(args.candidate, "candidate")
     try:
@@ -1065,9 +1066,11 @@ def _run_compare(args: argparse.Namespace) -> None:
             base,
             candidate,
             keys=keys,
+            by=by,
             abs_tol=args.abs_tol,
             rel_tol=args.rel_tol,
             ignore_trailing_whitespace=args.ignore_trailing_whitespace,
+            allow_duplicates=args.allow_duplicates,
             max_print=None if args.all else DEFAULT_MAX_PRINT,
             base_name=args.base,
             candidate_name=args.candidate,
@@ -2405,10 +2408,11 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         description=(
             "PROC COMPARE analogue: pair the two datasets on --keys, match variables by "
             "name and print the comparison report. Equality is exact unless --abs-tol, "
-            "--rel-tol or --ignore-trailing-whitespace widens it. Exit 0 when the datasets "
-            "are equal, 1 when they differ, 2 when the comparison could not run (unreadable "
-            "file, missing or duplicate keys, a negative tolerance, no comparable variables, "
-            "--out or --report not writable)."
+            "--rel-tol or --ignore-trailing-whitespace widens it. --by sections the report "
+            "per group and --allow-duplicates pairs duplicate keys by position. Exit 0 when "
+            "the datasets are equal, 1 when they differ, 2 when the comparison could not run "
+            "(unreadable file, missing keys, duplicate keys without --allow-duplicates, a "
+            "negative tolerance, no comparable variables, --out or --report not writable)."
         ),
     )
     compare_parser.add_argument(
@@ -2426,6 +2430,16 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         help=(
             "Comma-separated variables that identify one observation on each side, "
             "e.g. USUBJID,AESEQ. Required; keys are never looked up."
+        ),
+    )
+    compare_parser.add_argument(
+        "--by",
+        metavar="B1,B2",
+        help=(
+            "Comma-separated variables to section the report by, e.g. TRT01P. They are "
+            "prepended to --keys automatically, so they need not be repeated there. The "
+            "observation and values summaries are also reported per group, and a group "
+            "present on one side only is flagged and listed; the verdict stays global."
         ),
     )
     compare_parser.add_argument(
@@ -2457,6 +2471,16 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
             "Strip trailing whitespace from both sides of a string before comparing, so a "
             "legacy SAS dataset's padded character values equal Fleet's stripped ones. "
             "Leading whitespace still differs."
+        ),
+    )
+    compare_parser.add_argument(
+        "--allow-duplicates",
+        action="store_true",
+        help=(
+            "Pair duplicate keys by their position within each key group instead of "
+            "refusing to run. The report then counts the duplicates per side, raises the "
+            "duplicate_keys flag and warns at the top: order within a key group decides "
+            "which observations pair."
         ),
     )
     compare_parser.add_argument(
