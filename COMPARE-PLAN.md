@@ -75,14 +75,35 @@ The report is reachable as a Python object from `fleet.compare(base, candidate, 
 ### Equality
 
 - Exact by default. With tolerances, a numeric pair differs when the absolute difference exceeds `max(abs_tol, rel_tol × |base|)`. The relative tolerance anchors on the base because the base is the reference; this deliberately follows SAS rather than Polars' testing helper, which anchors on the right-hand frame.
-- Null equals null. NaN equals NaN. Null versus NaN differs. The prototype encoded the rule as a single expression per variable and the spec keeps it, because it fixes all three cases at once:
+- Null equals null. NaN equals NaN. Null versus NaN differs. Exact and tolerant equality promise the same four answers, and no tolerance changes one of them:
+
+  | `l` | `r` | Verdict |
+  | --- | --- | --- |
+  | `null` | `null` | equal |
+  | `NaN` | `NaN` | equal |
+  | `NaN` | `1.0` | differs |
+  | `1.0` | `NaN` | differs |
+
+- The null half is settled once per variable, outside the equality mode, so no mode has to carry it:
 
   ```python
-  neq = (l - r).abs() > tol if tolerant else (l != r)
   neq = pl.when(l.is_null() & r.is_null()).then(False).otherwise(neq.fill_null(True))
   ```
 
-  Polars' `!=` yields false for NaN against NaN and null for null against anything, so `fill_null(True)` is what makes null versus non-null, including NaN, a difference.
+  Polars' `!=` yields false for NaN against NaN and null for null against anything, so exact equality needs nothing further: `fill_null(True)` is what makes null versus non-null, including NaN, a difference, and the outer `when` is what keeps two nulls equal.
+- Tolerant equality needs NaN settled *before* the subtraction, because Polars orders NaN as the largest float: `NaN - NaN` is NaN and `NaN > tol` is true, so an unguarded `(l - r).abs() > tol` reports NaN against NaN as differing under every tolerance, contradicting the second row above. The guard restores it:
+
+  ```python
+  neq = (
+      pl.when(l.is_nan() & r.is_nan())
+      .then(False)
+      .when(l.is_nan() | r.is_nan())
+      .then(True)
+      .otherwise((l - r).abs() > tol)
+  )
+  ```
+
+  The second branch states the other half of the rule, that a NaN is never within a tolerance of a number. The same ordering happens to give it anyway; it is written out so the guarantee does not rest on how Polars chooses to order NaN.
 - Strings compare exactly; `ignore_trailing_whitespace` strips the right side of both before comparing.
 - Row order and column order are ignored. Listings are always sorted by keys, BY variables first.
 
