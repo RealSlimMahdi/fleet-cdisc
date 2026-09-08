@@ -1812,6 +1812,9 @@ class SharedVerbsMixin:
         base: pl.DataFrame | pl.LazyFrame,
         *,
         keys: str | Sequence[str],
+        abs_tol: float = 0.0,
+        rel_tol: float = 0.0,
+        ignore_trailing_whitespace: bool = False,
         max_print: MaxPrint = 50,
         base_name: str | None = None,
         candidate_name: str | None = None,
@@ -1833,6 +1836,16 @@ class SharedVerbsMixin:
             keys: Variable(s) that identify one observation on each side.
                 Required; the compare refuses to run when a key is missing
                 or not unique on either side.
+            abs_tol: Absolute tolerance on the numeric variables; ``0.0``
+                (the default) is exact.
+            rel_tol: Relative tolerance on the numeric variables, as a
+                fraction of the **base** value; ``0.0`` (the default) is
+                exact.  A numeric pair differs when the absolute difference
+                exceeds ``max(abs_tol, rel_tol * abs(base))``.
+            ignore_trailing_whitespace: Strip trailing whitespace from both
+                sides of a string before comparing, so a legacy SAS dataset's
+                padded values equal the chain's stripped ones.  Leading
+                whitespace still differs.
             max_print: Print limits for the text report (differences per
                 variable, a ``(per_variable, total)`` pair, or ``None`` for
                 everything).  The report's listing is never truncated.
@@ -1874,6 +1887,21 @@ class SharedVerbsMixin:
                     .compare(adsl_prod, keys="USUBJID", on_fail="raise")
                     .to_frame()
                 )
+
+            Absorb the engine noise of a legacy SAS dataset without hiding
+            a real difference::
+
+                advs = (
+                    vs_df.adam
+                    .source("USUBJID")
+                    .compare(
+                        advs_legacy,
+                        keys=["USUBJID", "PARAMCD", "AVISITN"],
+                        rel_tol=1e-9,
+                        ignore_trailing_whitespace=True,
+                    )
+                    .to_frame()
+                )
         """
         from fleet.comparison import compare as compare_frames
 
@@ -1882,6 +1910,9 @@ class SharedVerbsMixin:
             base,
             self.to_frame(),
             keys=keys,
+            abs_tol=abs_tol,
+            rel_tol=rel_tol,
+            ignore_trailing_whitespace=ignore_trailing_whitespace,
             max_print=max_print,
             base_name=base_name,
             candidate_name=candidate_name,

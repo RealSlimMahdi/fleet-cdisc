@@ -1065,13 +1065,17 @@ def _run_compare(args: argparse.Namespace) -> None:
             base,
             candidate,
             keys=keys,
+            abs_tol=args.abs_tol,
+            rel_tol=args.rel_tol,
+            ignore_trailing_whitespace=args.ignore_trailing_whitespace,
             max_print=None if args.all else DEFAULT_MAX_PRINT,
             base_name=args.base,
             candidate_name=args.candidate,
         )
     except (FleetError, pl.exceptions.PolarsError) as exc:
-        # Keys missing, duplicated or incompatible; or a file that scanned
-        # but could not be read.  Differences never raise.
+        # Keys missing, duplicated or incompatible; a tolerance that is not
+        # a tolerance; or a file that scanned but could not be read.
+        # Differences never raise.
         _fail(" ".join(str(exc).split()), code=_COMPARE_IMPOSSIBLE)
 
     if not report.variables.compared:
@@ -2400,10 +2404,11 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         ),
         description=(
             "PROC COMPARE analogue: pair the two datasets on --keys, match variables by "
-            "name and print the comparison report. Exit 0 when the datasets are equal, "
-            "1 when they differ, 2 when the comparison could not run (unreadable file, "
-            "missing or duplicate keys, no comparable variables, --out or --report not "
-            "writable)."
+            "name and print the comparison report. Equality is exact unless --abs-tol, "
+            "--rel-tol or --ignore-trailing-whitespace widens it. Exit 0 when the datasets "
+            "are equal, 1 when they differ, 2 when the comparison could not run (unreadable "
+            "file, missing or duplicate keys, a negative tolerance, no comparable variables, "
+            "--out or --report not writable)."
         ),
     )
     compare_parser.add_argument(
@@ -2421,6 +2426,37 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         help=(
             "Comma-separated variables that identify one observation on each side, "
             "e.g. USUBJID,AESEQ. Required; keys are never looked up."
+        ),
+    )
+    compare_parser.add_argument(
+        "--abs-tol",
+        type=float,
+        default=0.0,
+        metavar="TOL",
+        help=(
+            "Absolute tolerance on the numeric variables (default: 0, exact). A numeric "
+            "pair differs when the absolute difference exceeds max(--abs-tol, --rel-tol x "
+            "|base|)."
+        ),
+    )
+    compare_parser.add_argument(
+        "--rel-tol",
+        type=float,
+        default=0.0,
+        metavar="TOL",
+        help=(
+            "Relative tolerance on the numeric variables, as a fraction of the base value "
+            "(default: 0, exact). It anchors on the base because the base is the reference, "
+            "as in SAS: 0.01 is one percent of the base."
+        ),
+    )
+    compare_parser.add_argument(
+        "--ignore-trailing-whitespace",
+        action="store_true",
+        help=(
+            "Strip trailing whitespace from both sides of a string before comparing, so a "
+            "legacy SAS dataset's padded character values equal Fleet's stripped ones. "
+            "Leading whitespace still differs."
         ),
     )
     compare_parser.add_argument(

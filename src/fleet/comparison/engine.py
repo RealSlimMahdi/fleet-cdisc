@@ -30,7 +30,9 @@ from .report import (
     VariableDtypes,
     VariablesSummary,
     _key_label,
+    _normalise_flag,
     _normalise_max_print,
+    _normalise_tolerance,
 )
 
 # Internal column names.  Tests never see them; the listing never carries them.
@@ -51,6 +53,9 @@ def compare(
     candidate: pl.DataFrame | pl.LazyFrame,
     *,
     keys: str | Sequence[str],
+    abs_tol: float = 0.0,
+    rel_tol: float = 0.0,
+    ignore_trailing_whitespace: bool = False,
     max_print: MaxPrint = 50,
     base_name: str | None = None,
     candidate_name: str | None = None,
@@ -58,14 +63,16 @@ def compare(
     """Compare a candidate dataset against a base, PROC COMPARE style.
 
     Observations pair on ``keys``; variables match by name.  Equality is
-    exact: null equals null, NaN equals NaN, null against NaN differs.
-    Variables of the same kind (numeric, string, temporal, boolean) but a
-    different dtype compare by value after casting to a common supertype
-    and are listed as dtype differences; variables of different kinds are
-    type conflicts, listed and not compared.  An all-null column, which
-    Polars types ``Null``, adopts the other side's dtype.  Keys of one kind
-    but different dtypes are cast the same way before pairing.  Row order
-    and column order are ignored.
+    exact by default: null equals null, NaN equals NaN, null against NaN
+    differs.  ``abs_tol`` and ``rel_tol`` widen it on the numeric variables
+    and ``ignore_trailing_whitespace`` on the string ones; nulls and NaN
+    keep their rule under both.  Variables of the same kind (numeric,
+    string, temporal, boolean) but a different dtype compare by value after
+    casting to a common supertype and are listed as dtype differences;
+    variables of different kinds are type conflicts, listed and not
+    compared.  An all-null column, which Polars types ``Null``, adopts the
+    other side's dtype.  Keys of one kind but different dtypes are cast the
+    same way before pairing.  Row order and column order are ignored.
 
     Args:
         base: The reference dataset, as a DataFrame or LazyFrame.
@@ -73,6 +80,21 @@ def compare(
         keys: Variable(s) that identify one observation on each side.
             Required; the compare refuses to run when a key is missing or
             not unique on either side.
+        abs_tol: Absolute tolerance on the numeric variables.  ``0.0`` (the
+            default) is exact.
+        rel_tol: Relative tolerance on the numeric variables, as a fraction
+            of the **base** value.  ``0.0`` (the default) is exact.  A numeric
+            pair differs when the absolute difference exceeds
+            ``max(abs_tol, rel_tol * abs(base))``; the relative tolerance
+            anchors on the base because the base is the reference, as in
+            SAS and unlike Polars' testing helper.
+            A tolerant comparison is done in ``Float64``, so integers and
+            decimals beyond ``2**53`` are compared at that precision;
+            the exact default compares them in their own dtype.
+        ignore_trailing_whitespace: Strip trailing whitespace from both
+            sides of a string before comparing, so SAS's padded character
+            values equal Fleet's stripped ones.  Leading whitespace still
+            differs.
         max_print: Print limits for the text renderer (differences per
             variable, or a ``(per_variable, total)`` pair, or ``None`` for
             everything).  The listing on the report is never truncated.
@@ -85,7 +107,8 @@ def compare(
 
     Raises:
         ComparisonError: A key is missing, duplicated or of an incompatible
-            type on one side, or a key reuses a listing column name.
+            type on one side, a key reuses a listing column name, or a
+            tolerance is negative or not finite.
         VerbUsageError: An input is not a Polars frame, or an argument has
             the wrong type.
 
@@ -106,6 +129,19 @@ def compare(
     candidate_lf = _as_lazy(candidate, "candidate")
     key_list = _normalise_keys(keys)
     _normalise_max_print(max_print)  # validate early, before any work
+    # The settings are both the record of the run and the equality rule the
+    # join evaluates, so every option is checked as they are built.
+    settings = ComparisonSettings(
+        keys=tuple(key_list),
+        abs_tol=_normalise_tolerance(abs_tol, "abs_tol"),
+        rel_tol=_normalise_tolerance(rel_tol, "rel_tol"),
+        ignore_trailing_whitespace=_normalise_flag(
+            ignore_trailing_whitespace, "ignore_trailing_whitespace"
+        ),
+        max_print=max_print,
+        base_name=base_name,
+        candidate_name=candidate_name,
+    )
 
     base_schema = base_lf.collect_schema()
     candidate_schema = candidate_lf.collect_schema()
@@ -113,8 +149,11 @@ def compare(
     key_casts = _key_casts(key_list, base_schema, candidate_schema)
     variables, casts = _classify_variables(key_list, base_schema, candidate_schema)
     compared = list(variables.compared)
+    #: The dtype each compared variable was compared under: the common
+    #: supertype where the sides disagreed, the base dtype otherwise.
+    compared_dtypes = {c: casts.get(c, base_schema[c]) for c in compared}
 
-    frame = _join(base_lf, candidate_lf, key_list, compared, key_casts, casts)
+    frame = _join(base_lf, candidate_lf, key_list, compared, key_casts, compared_dtypes, settings)
     in_base = pl.col(_IN_BASE).fill_null(False)
     in_candidate = pl.col(_IN_CANDIDATE).fill_null(False)
     _check_duplicates(frame, key_list, in_base, in_candidate)
@@ -123,7 +162,6 @@ def compare(
     base_only_keys = frame.filter(in_base & ~in_candidate).select(key_list).sort(key_list)
     candidate_only_keys = frame.filter(~in_base & in_candidate).select(key_list).sort(key_list)
     per_variable, observations_with_differences = _values_summary(matched, compared)
-    compared_dtypes = {c: casts.get(c, base_schema[c]) for c in compared}
     listing = _listing(
         matched, key_list, per_variable, compared_dtypes, base_schema, candidate_schema
     )
@@ -154,12 +192,7 @@ def compare(
         values=ValuesSummary(per_variable, observations_with_differences),
         listing=listing,
         flags=frozenset(name for name, raised in flags.items() if raised),
-        settings=ComparisonSettings(
-            keys=tuple(key_list),
-            max_print=max_print,
-            base_name=base_name,
-            candidate_name=candidate_name,
-        ),
+        settings=settings,
         version=__version__,
     )
 
@@ -335,7 +368,8 @@ def _join(
     keys: list[str],
     compared: list[str],
     key_casts: dict[str, pl.DataType],
-    casts: dict[str, pl.DataType],
+    compared_dtypes: dict[str, pl.DataType],
+    settings: ComparisonSettings,
 ) -> pl.DataFrame:
     """Full-join both sides on the keys and evaluate the inequality flags; the one collect."""
     joined = _prepare(base, keys, compared, key_casts, _IN_BASE).join(
@@ -346,27 +380,72 @@ def _join(
         suffix=_SUFFIX,
         nulls_equal=True,
     )
-    return joined.with_columns([_unequal(c, casts.get(c)) for c in compared]).collect()
+    unequal = [_unequal(c, compared_dtypes[c], settings) for c in compared]
+    return joined.with_columns(unequal).collect()
 
 
-def _unequal(variable: str, cast_to: pl.DataType | None) -> pl.Expr:
-    """True where the base and candidate values differ.
+def _unequal(variable: str, dtype: pl.DataType, settings: ComparisonSettings) -> pl.Expr:
+    """True where the base and candidate values differ under *settings*.
 
     Null equals null, NaN equals NaN, null against anything else (NaN
-    included) differs: ``!=`` is false for NaN against NaN and null when
-    either side is null, so ``fill_null(True)`` is what makes a one-sided
-    null a difference.
+    included) differs.  The rule survives every equality mode because it is
+    settled here rather than inside them: ``fill_null(True)`` is what makes
+    a one-sided null a difference, and the outer ``when`` is what keeps two
+    nulls equal.
     """
-    base_value, candidate_value = pl.col(variable), pl.col(variable + _SUFFIX)
-    if cast_to is not None:
-        base_value, candidate_value = base_value.cast(cast_to), candidate_value.cast(cast_to)
-    unequal = base_value != candidate_value
-    unequal = (
+    base_value = pl.col(variable).cast(dtype)
+    candidate_value = pl.col(variable + _SUFFIX).cast(dtype)
+    kind = _kind(dtype)
+    if kind == "numeric" and settings.tolerant:
+        unequal = _outside_tolerance(base_value, candidate_value, settings)
+    elif kind == "string" and settings.ignore_trailing_whitespace:
+        unequal = _stripped(base_value) != _stripped(candidate_value)
+    else:
+        unequal = base_value != candidate_value
+    return (
         pl.when(base_value.is_null() & candidate_value.is_null())
         .then(False)
         .otherwise(unequal.fill_null(True))
+        .alias(_NEQ + variable)
     )
-    return unequal.alias(_NEQ + variable)
+
+
+def _outside_tolerance(
+    base_value: pl.Expr, candidate_value: pl.Expr, settings: ComparisonSettings
+) -> pl.Expr:
+    """True where two numbers differ by more than ``max(abs_tol, rel_tol * |base|)``.
+
+    The relative tolerance anchors on the base because the base is the
+    reference; this follows SAS and deliberately not Polars' testing helper,
+    which anchors on the right-hand frame.
+
+    NaN is settled before the subtraction, because Polars orders NaN as the
+    largest float: ``NaN - NaN`` is NaN and ``NaN > tol`` is *true*, so
+    without the first branch two NaNs would be reported as differing, against
+    the rule that NaN equals NaN.  The second branch states the other half of
+    that rule — a NaN is never within a tolerance of a number — which the same
+    ordering happens to give anyway; it is written out so the guarantee does
+    not rest on how Polars chooses to order NaN.
+    """
+    # Float64 is the arithmetic a tolerance is expressed in; an integer or a
+    # decimal beyond 2**53 loses precision on the way in (see the compare docstring).
+    base_number, candidate_number = base_value.cast(pl.Float64), candidate_value.cast(pl.Float64)
+    tolerance = pl.max_horizontal(
+        pl.lit(settings.abs_tol, pl.Float64), base_number.abs() * settings.rel_tol
+    )
+    base_nan, candidate_nan = base_number.is_nan(), candidate_number.is_nan()
+    return (
+        pl.when(base_nan & candidate_nan)
+        .then(False)
+        .when(base_nan | candidate_nan)
+        .then(True)
+        .otherwise((base_number - candidate_number).abs() > tolerance)
+    )
+
+
+def _stripped(value: pl.Expr) -> pl.Expr:
+    """A string without its trailing whitespace; what leads it still counts."""
+    return value.cast(pl.String).str.strip_chars_end()
 
 
 # ── Derived from the collected frame ──────────────────────────────────────────

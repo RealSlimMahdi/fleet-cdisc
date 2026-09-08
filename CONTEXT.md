@@ -39,3 +39,11 @@ _Avoid_: ID variables, join columns, primary key
 **Variable pair**:
 A base variable and a candidate variable compared under different names, on top of the variables matched automatically by name.
 _Avoid_: VAR/WITH, rename map, column mapping
+
+**Kind**:
+The family a variable's dtype belongs to for comparison purposes: numeric, string, temporal, boolean or other. Two variables of one kind but different dtypes are compared after casting; two of different kinds are a type conflict.
+_Avoid_: type, class, category
+
+**Tolerance**:
+How far two numeric values may drift and still count as equal: absolute (`abs_tol`), or relative to the base value (`rel_tol`). A compare is exact unless a tolerance is given.
+_Avoid_: precision, epsilon, fuzz, approximate equality

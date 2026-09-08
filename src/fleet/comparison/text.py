@@ -49,6 +49,7 @@ def _datasets_section(report: ComparisonReport) -> list[str]:
         f"  Candidate: {report.candidate_label}  "
         f"({d.candidate.rows} observations, {d.candidate.variables} variables)",
         f"  Keys:      {', '.join(report.settings.keys)}",
+        f"  Settings:  {report.settings.equality}",
         "",
     ]
 

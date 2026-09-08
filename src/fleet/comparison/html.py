@@ -177,6 +177,7 @@ def _summary_section(report: ComparisonReport) -> list[str]:
         f"{_td(d.candidate.variables, 'number')}</tr>",
         "</table>",
         f"<p>Keys: {escape(', '.join(report.settings.keys))}. "
+        f"Settings: {escape(report.settings.equality)}. "
         f"Variables in common: {len(v.common)} (compared: {len(v.compared)}). "
         f"Matched observations: {o.matched}.</p>",
     ]

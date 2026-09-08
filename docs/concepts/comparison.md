@@ -58,9 +58,12 @@ uv run fleet compare legacy/adae.xpt outputs/adam/adae.parquet --keys USUBJID,AE
 | --- | --- |
 | `0` | The datasets are equal. |
 | `1` | The datasets differ; the report on stdout says where. |
-| `2` | The comparison could not run: unreadable file, missing or duplicate keys, no comparable variables, or an `--out` or `--report` path that cannot be written. The reason is on stderr. |
+| `2` | The comparison could not run: unreadable file, missing or duplicate keys, a negative tolerance, no comparable variables, or an `--out` or `--report` path that cannot be written. The reason is on stderr. |
 
-`--keys` is required. `--all` lifts the print limits so every unequal value is
+`--keys` is required. `--abs-tol`, `--rel-tol` and
+`--ignore-trailing-whitespace` widen equality (see
+[tolerances and whitespace](#tolerances-and-trailing-whitespace)). `--all`
+lifts the print limits so every unequal value is
 listed. `--report adae_compare.html` writes the
 [HTML report](#the-html-report) for a reviewer. `--format json` prints one
 JSON document and nothing else on stdout, and `--out differences.parquet`
@@ -73,7 +76,7 @@ writes the complete value listing; both are described under
 The text report follows the `PROC COMPARE` section order, so a SAS programmer
 reads it without a legend:
 
-1. **Data set summary** — name, observations and variables per side, and the keys.
+1. **Data set summary** — name, observations and variables per side, the keys, and the settings line naming the equality rule in effect (`exact`, or the tolerances and the whitespace rule).
 2. **Variables summary** — variables in common, in the base only, in the candidate only, type conflicts, dtype differences.
 3. **Observation summary** — matched observations and the key values of the ones found on one side only.
 4. **Values summary** — how many values differ, per variable.
@@ -104,7 +107,7 @@ or image. It reads top-down the way a review goes:
 
 1. **Verdict** — `EQUAL` or `NOT EQUAL`, with the one-line summary and the raised flags.
 2. **Chips** — one per raised flag, so structural problems are visible before value details: the variables found on one side only, the type conflicts with their dtypes, the observations on one side only (the first few named by their key values), how many values differ. Dtype differences appear as an information chip, never as a finding.
-3. **Summary** — name, observations and variables per side, the keys, and how many observations matched.
+3. **Summary** — name, observations and variables per side, the keys, the equality rule in effect, and how many observations matched.
 4. **Observations on one side only** — the key values of every observation found only in the base or only in the candidate.
 5. **Unequal values** — only the mismatched observations, one collapsible block per differing variable, each row showing the key values, the base value and the candidate value side by side with both cells highlighted, and the difference and percent difference for numeric variables. Blocks start open when there are five or fewer, closed beyond that, so a report over fifty variables stays navigable.
 
@@ -149,7 +152,7 @@ version and no ceiling. The top-level keys, in order (`fleet.comparison.JSON_KEY
 | `values` | `per_variable` as `{variable, differences}`, `variables_with_differences`, `observations_with_differences`, `total_differences`. |
 | `statistics` | Summary statistics per numeric variable that differs; an empty list until they land. |
 | `listing` | `columns`, `rows` (one object per differing value, within the print limits), `shown`, `total` and `truncated`. |
-| `settings` | Every option the comparison ran with: `keys`, `max_print`, `base_name`, `candidate_name`. |
+| `settings` | Every option the comparison ran with: `keys`, `abs_tol`, `rel_tol`, `ignore_trailing_whitespace`, `max_print`, `base_name`, `candidate_name`. |
 | `version` | The Fleet version that produced the report. |
 
 The document is strict JSON: non-finite numbers are `null` and temporal key
@@ -179,8 +182,11 @@ so a downstream `scan_parquet` always finds the documented columns.
 - **Keys are mandatory and must be unique** on each side. A missing or
   duplicated key stops the compare with a `ComparisonError` that names the side
   and the offending key values, because a broken key is the first thing to fix.
-- **Equality is exact.** Null equals null, NaN equals NaN, and null against
-  NaN differs, so a missing value that became a NaN is surfaced.
+- **Equality is exact by default.** Null equals null, NaN equals NaN, and null
+  against NaN differs, so a missing value that became a NaN is surfaced.
+  [Tolerances](#tolerances-and-trailing-whitespace) widen it on the numeric
+  variables and trailing-whitespace stripping on the strings; the null and NaN
+  rule holds under both.
 - **Same kind, different dtype is information, not a failure.** An `Int64`
   next to a `Float64`, a `String` next to a `Categorical`, or a `Date` next to
   a `Datetime` is compared by value after casting to a common type and listed
@@ -192,6 +198,65 @@ so a downstream `scan_parquet` always finds the documented columns.
   and the JSON document show 50 differences per variable and 500 overall;
   `max_print=None` (or `--all`) shows everything. The listing frame and the
   parquet always hold every difference.
+
+## Tolerances and trailing whitespace
+
+A migration programmer comparing Fleet output against a legacy SAS dataset has
+to absorb engine noise without hiding a real difference. Three options do that,
+and they are the same three on every surface:
+
+| Option | Applies to | Effect |
+| --- | --- | --- |
+| `abs_tol` / `--abs-tol` | Numeric variables | Absolute tolerance. Default `0.0` — exact. |
+| `rel_tol` / `--rel-tol` | Numeric variables | Relative tolerance, as a fraction of the **base** value. Default `0.0` — exact. |
+| `ignore_trailing_whitespace` / `--ignore-trailing-whitespace` | String variables | Strip trailing whitespace from both sides before comparing. Default `False`. |
+
+A numeric pair differs when the absolute difference exceeds
+`max(abs_tol, rel_tol × |base|)`, so the wider of the two tolerances is the one
+that decides. The relative tolerance **anchors on the base**, because the base
+is the reference the candidate is measured against — this follows
+`PROC COMPARE` and deliberately not Polars' testing helper, which anchors on
+its right-hand frame. The choice is visible: at `rel_tol=0.095` a base of `100`
+against a candidate of `110` differs (`10 > 9.5`), while the same pair with the
+sides swapped is equal (`10 ≤ 10.45`).
+
+```python
+report = fleet.compare(
+    advs_legacy,
+    advs_fleet,
+    keys=["USUBJID", "PARAMCD", "AVISITN"],
+    rel_tol=1e-9,
+    ignore_trailing_whitespace=True,
+)
+```
+
+```bash
+uv run fleet compare legacy/advs.xpt outputs/adam/advs.parquet \
+  --keys USUBJID,PARAMCD,AVISITN --rel-tol 1e-9 --ignore-trailing-whitespace
+```
+
+What the options do **not** change:
+
+- **Exact stays the default.** Both tolerances are `0.0` and whitespace counts
+  until you say otherwise.
+- **Tolerances only reach the numeric variables.** A string, a date or a
+  boolean is compared exactly however wide `abs_tol` is, and stripping only
+  reaches the string ones.
+- **Nulls and NaN keep their rule.** Null still equals null, NaN still equals
+  NaN, and null against NaN — or NaN against a number — still differs, however
+  wide the tolerance. A NaN is never *within* a tolerance of a number.
+- **Only trailing whitespace is ignored.** `"M "` equals `"M"` when asked;
+  `" M"` never does.
+- **The listing shows the values as they are.** A difference that survives the
+  tolerance is reported with the original base and candidate values, unstripped.
+- **A tolerant comparison is arithmetic in `Float64`.** Integers and decimals
+  beyond `2**53` are therefore compared at that precision; the exact default
+  compares them in their own dtype.
+
+The rule in effect is on every surface: the settings line of the text report
+(`Settings:  abs_tol=1e-09, rel_tol=0, ignoring trailing whitespace`, or
+`Settings:  exact`), the header of the HTML report, and the `settings` block of
+the JSON document as the three raw fields.
 
 ## Gating a pipeline on the outcome
 
@@ -217,9 +282,10 @@ does.
 
 ## Where it stops today
 
-The engine compares by name with exact equality. Tolerances, BY groups,
-variable pairs for renamed columns, restriction to a list of variables,
-duplicate-key pairing and summary statistics are specified and tracked in the
+The engine compares by name, with exact equality or within the tolerances
+above. BY groups, variable pairs for renamed columns, restriction to a list of
+variables, duplicate-key pairing and summary statistics are specified and
+tracked in the
 [compare spec](https://github.com/RealSlimMahdi/fleet-cdisc/issues/99); they
 build on the same engine and report without changing what is documented here,
 and they only add keys to the JSON document.

@@ -135,7 +135,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 
 ## `fleet compare`
 
-PROC COMPARE analogue: pair the two datasets on --keys, match variables by name and print the comparison report. Exit 0 when the datasets are equal, 1 when they differ, 2 when the comparison could not run (unreadable file, missing or duplicate keys, no comparable variables, --out or --report not writable).
+PROC COMPARE analogue: pair the two datasets on --keys, match variables by name and print the comparison report. Equality is exact unless --abs-tol, --rel-tol or --ignore-trailing-whitespace widens it. Exit 0 when the datasets are equal, 1 when they differ, 2 when the comparison could not run (unreadable file, missing or duplicate keys, a negative tolerance, no comparable variables, --out or --report not writable).
 
 | Argument | Description |
 | -------- | ----------- |
@@ -145,6 +145,9 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
 | `--keys` | _(required)_ | Comma-separated variables that identify one observation on each side, e.g. USUBJID,AESEQ. Required; keys are never looked up. |
+| `--abs-tol` | `0.0` | Absolute tolerance on the numeric variables (default: 0, exact). A numeric pair differs when the absolute difference exceeds max(--abs-tol, --rel-tol x \|base\|). |
+| `--rel-tol` | `0.0` | Relative tolerance on the numeric variables, as a fraction of the base value (default: 0, exact). It anchors on the base because the base is the reference, as in SAS: 0.01 is one percent of the base. |
+| `--ignore-trailing-whitespace` | _(none)_ | Strip trailing whitespace from both sides of a string before comparing, so a legacy SAS dataset's padded character values equal Fleet's stripped ones. Leading whitespace still differs. |
 | `--all` | _(none)_ | Print every unequal value (default: 50 per variable, 500 overall). |
 | `--format` | `text` | Output format: the text report, or one JSON document (verdict, flags, summaries, listing within the print limits, settings, Fleet version) and nothing else on stdout (default: text). Choices: `text`, `json`. |
 | `--out` | _(none)_ | Also write the complete value listing (never truncated) to PATH as parquet, e.g. differences.parquet. |

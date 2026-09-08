@@ -744,6 +744,238 @@ class TestValues:
             compare(b, b, keys=["variable"])
 
 
+# ── Tolerances and trailing whitespace ────────────────────────────────────────
+
+
+def _numeric(base_value: float, candidate_value: float) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Two one-row frames whose only compared variable is ``X``."""
+    b = pl.DataFrame({"ID": [1], "X": pl.Series([base_value], dtype=pl.Float64)})
+    c = pl.DataFrame({"ID": [1], "X": pl.Series([candidate_value], dtype=pl.Float64)})
+    return b, c
+
+
+class TestTolerances:
+    """``abs_tol`` and ``rel_tol`` on the numeric kinds; the rule is base-anchored."""
+
+    def test_exact_is_the_default(self, base):
+        c = base.with_columns(pl.col("WT") + 1e-9)
+        report = compare(base, c, keys="USUBJID")
+        assert report.settings.abs_tol == 0.0
+        assert report.settings.rel_tol == 0.0
+        assert report.is_equal is False
+        assert report.values.total_differences == 4
+
+    def test_absolute_tolerance_absorbs_a_difference_at_or_below_it(self):
+        b, c = _numeric(10.0, 10.5)
+        assert compare(b, c, keys="ID", abs_tol=0.5).is_equal is True
+        assert compare(b, c, keys="ID", abs_tol=0.25).is_equal is False
+
+    def test_relative_tolerance_is_a_fraction_of_the_base(self):
+        b, c = _numeric(200.0, 202.0)  # 1% out
+        assert compare(b, c, keys="ID", rel_tol=0.01).is_equal is True
+        assert compare(b, c, keys="ID", rel_tol=0.009).is_equal is False
+
+    def test_the_wider_of_the_two_tolerances_wins(self):
+        b, c = _numeric(1000.0, 1001.0)
+        assert compare(b, c, keys="ID", abs_tol=2.0, rel_tol=0.0001).is_equal is True
+        assert compare(b, c, keys="ID", abs_tol=0.0001, rel_tol=0.002).is_equal is True
+        assert compare(b, c, keys="ID", abs_tol=0.5, rel_tol=0.0005).is_equal is False
+
+    def test_relative_tolerance_anchors_on_the_base_not_the_candidate(self):
+        """100 → 110 at 9.5%: 9.5 of the base is too tight, 10.45 of the candidate would not be."""
+        b, c = _numeric(100.0, 110.0)
+        assert compare(b, c, keys="ID", rel_tol=0.095).is_equal is False
+        # The mirror run proves the anchor: with the sides swapped the same
+        # tolerance now measures 9.5% of 110 and the difference passes.
+        assert compare(c, b, keys="ID", rel_tol=0.095).is_equal is True
+
+    def test_relative_tolerance_uses_the_magnitude_of_a_negative_base(self):
+        b, c = _numeric(-200.0, -202.0)
+        assert compare(b, c, keys="ID", rel_tol=0.01).is_equal is True
+        assert compare(b, c, keys="ID", rel_tol=0.009).is_equal is False
+
+    def test_a_zero_base_leaves_only_the_absolute_tolerance(self):
+        b, c = _numeric(0.0, 0.5)
+        assert compare(b, c, keys="ID", rel_tol=0.99).is_equal is False
+        assert compare(b, c, keys="ID", rel_tol=0.99, abs_tol=0.5).is_equal is True
+
+    def test_tolerances_apply_to_integer_and_decimal_variables(self):
+        b = pl.DataFrame({"ID": [1], "N": pl.Series([100], dtype=pl.Int64)})
+        c = pl.DataFrame({"ID": [1], "N": pl.Series([101], dtype=pl.Int64)})
+        assert compare(b, c, keys="ID", abs_tol=1.0).is_equal is True
+        assert compare(b, c, keys="ID", abs_tol=0.5).is_equal is False
+
+    def test_tolerances_survive_a_numeric_dtype_difference(self, base):
+        c = base.with_columns((pl.col("AGE").cast(pl.Float64) + 0.4).alias("AGE"))
+        report = compare(base, c, keys="USUBJID", abs_tol=0.5)
+        assert report.is_equal is True
+        assert [t.variable for t in report.variables.dtype_differences] == ["AGE"]
+
+    def test_tolerances_leave_the_string_kinds_alone(self, base):
+        c = base.with_columns(pl.lit("X").alias("SEX"))
+        report = compare(base, c, keys="USUBJID", abs_tol=1e9, rel_tol=1e9)
+        assert report.is_equal is False
+        assert report.values.per_variable.filter(pl.col("variable") == "SEX")["differences"][0] == 4
+
+    def test_tolerances_leave_the_temporal_kinds_alone(self):
+        b = pl.DataFrame({"ID": [1], "D": [date(2026, 1, 1)]})
+        c = pl.DataFrame({"ID": [1], "D": [date(2026, 1, 2)]})
+        assert compare(b, c, keys="ID", abs_tol=1e9, rel_tol=1e9).is_equal is False
+
+    @pytest.mark.parametrize(
+        "base_value, candidate_value, differs",
+        [
+            (None, None, False),
+            (NAN, NAN, False),
+            (None, NAN, True),
+            (NAN, None, True),
+            (1.0, None, True),
+            (None, 1.0, True),
+            (1.0, NAN, True),
+            (NAN, 1.0, True),
+            (1.0, 1.0, False),
+        ],
+        ids=lambda v: "nan" if isinstance(v, float) and math.isnan(v) else repr(v),
+    )
+    def test_nulls_and_nan_keep_their_rule_under_tolerance(
+        self, base_value, candidate_value, differs
+    ):
+        b, c = _numeric(base_value, candidate_value)
+        report = compare(b, c, keys="ID", abs_tol=1e9, rel_tol=1e9)
+        assert report.is_equal is (not differs)
+        assert report.listing.height == (1 if differs else 0)
+
+    def test_the_listing_reports_the_values_that_survived_the_tolerance(self):
+        b, c = _numeric(10.0, 12.0)
+        row = compare(b, c, keys="ID", abs_tol=1.0).listing.to_dicts()[0]
+        assert (row["base"], row["candidate"]) == ("10.0", "12.0")
+        assert row["difference"] == pytest.approx(2.0)
+        assert row["percent_difference"] == pytest.approx(20.0)
+
+    @pytest.mark.parametrize("option", ["abs_tol", "rel_tol"])
+    def test_negative_tolerances_are_refused(self, base, option):
+        with pytest.raises(ComparisonError, match=option):
+            compare(base, base, keys="USUBJID", **{option: -1.0})
+
+    @pytest.mark.parametrize("value", ["0.1", NAN, float("inf"), True])
+    def test_tolerances_must_be_finite_numbers(self, base, value):
+        with pytest.raises((VerbUsageError, ComparisonError), match="abs_tol"):
+            compare(base, base, keys="USUBJID", abs_tol=value)
+
+
+class TestTrailingWhitespace:
+    """``ignore_trailing_whitespace`` on the string kinds; the left side still counts."""
+
+    @staticmethod
+    def _strings(base_value: str, candidate_value: str) -> tuple[pl.DataFrame, pl.DataFrame]:
+        b = pl.DataFrame({"ID": [1], "S": [base_value]})
+        c = pl.DataFrame({"ID": [1], "S": [candidate_value]})
+        return b, c
+
+    def test_trailing_whitespace_differs_by_default(self):
+        b, c = self._strings("M", "M   ")
+        report = compare(b, c, keys="ID")
+        assert report.settings.ignore_trailing_whitespace is False
+        assert report.is_equal is False
+
+    @pytest.mark.parametrize("padded", ["M ", "M   ", "M\t", "M\n"])
+    def test_trailing_whitespace_is_ignored_when_requested(self, padded):
+        b, c = self._strings("M", padded)
+        assert compare(b, c, keys="ID", ignore_trailing_whitespace=True).is_equal is True
+
+    def test_padding_on_the_base_side_is_stripped_too(self):
+        b, c = self._strings("M   ", "M")
+        assert compare(b, c, keys="ID", ignore_trailing_whitespace=True).is_equal is True
+
+    def test_leading_whitespace_still_differs(self):
+        b, c = self._strings("M", " M")
+        assert compare(b, c, keys="ID", ignore_trailing_whitespace=True).is_equal is False
+
+    def test_a_real_difference_still_differs(self):
+        b, c = self._strings("M  ", "F  ")
+        assert compare(b, c, keys="ID", ignore_trailing_whitespace=True).is_equal is False
+
+    @pytest.mark.parametrize(
+        "dtype",
+        [pl.Categorical, pl.Enum(["M", "M  "]), pl.String],
+        ids=["categorical", "enum", "string"],
+    )
+    def test_every_string_kind_is_stripped(self, dtype):
+        b = pl.DataFrame({"ID": [1], "S": pl.Series(["M"], dtype=dtype)})
+        c = pl.DataFrame({"ID": [1], "S": pl.Series(["M  "], dtype=dtype)})
+        assert compare(b, c, keys="ID").is_equal is False
+        assert compare(b, c, keys="ID", ignore_trailing_whitespace=True).is_equal is True
+
+    def test_nulls_keep_their_rule_under_stripping(self):
+        b = pl.DataFrame({"ID": [1, 2], "S": ["M  ", None]})
+        c = pl.DataFrame({"ID": [1, 2], "S": ["M", "  "]})
+        report = compare(b, c, keys="ID", ignore_trailing_whitespace=True)
+        assert report.listing["ID"].to_list() == [2]  # null against "  " still differs
+
+    def test_stripping_leaves_the_other_kinds_alone(self, base):
+        c = base.with_columns(pl.col("AGE") + 1)
+        report = compare(base, c, keys="USUBJID", ignore_trailing_whitespace=True)
+        assert report.values.per_variable.filter(pl.col("variable") == "AGE")["differences"][0] == 4
+
+    def test_the_listing_shows_the_unstripped_values(self):
+        b, c = self._strings("M  ", "F")
+        row = compare(b, c, keys="ID", ignore_trailing_whitespace=True).listing.to_dicts()[0]
+        assert (row["base"], row["candidate"]) == ("M  ", "F")
+
+    def test_the_option_must_be_a_boolean(self, base):
+        with pytest.raises(VerbUsageError, match="ignore_trailing_whitespace"):
+            compare(base, base, keys="USUBJID", ignore_trailing_whitespace="yes")
+
+
+class TestSettingsOnEverySurface:
+    """The three options reach the report and every renderer shows what was in effect."""
+
+    def test_settings_record_the_three_options(self, base):
+        report = compare(
+            base, base, keys="USUBJID", abs_tol=0.5, rel_tol=0.01, ignore_trailing_whitespace=True
+        )
+        assert report.settings.abs_tol == 0.5
+        assert report.settings.rel_tol == 0.01
+        assert report.settings.ignore_trailing_whitespace is True
+
+    def test_the_default_equality_phrase_is_exact(self, base):
+        assert compare(base, base, keys="USUBJID").settings.equality == "exact"
+
+    def test_the_equality_phrase_names_both_tolerances_and_the_whitespace_rule(self, base):
+        settings = compare(
+            base, base, keys="USUBJID", abs_tol=0.001, rel_tol=0.01, ignore_trailing_whitespace=True
+        ).settings
+        assert settings.equality == "abs_tol=0.001, rel_tol=0.01, ignoring trailing whitespace"
+
+    def test_the_text_report_carries_a_settings_line(self, base):
+        text = compare(base, base, keys="USUBJID", abs_tol=0.001).to_text()
+        settings_line = next(line for line in text.splitlines() if "Settings:" in line)
+        assert "abs_tol=0.001" in settings_line and "rel_tol=0" in settings_line
+        assert "Settings:  exact" in compare(base, base, keys="USUBJID").to_text()
+
+    def test_the_json_settings_block_carries_the_three_options(self, base):
+        settings = json.loads(
+            compare(
+                base,
+                base,
+                keys="USUBJID",
+                abs_tol=0.5,
+                rel_tol=0.01,
+                ignore_trailing_whitespace=True,
+            ).to_json()
+        )["settings"]
+        assert settings["abs_tol"] == 0.5
+        assert settings["rel_tol"] == 0.01
+        assert settings["ignore_trailing_whitespace"] is True
+        assert list(settings) == [f.name for f in dataclasses.fields(ComparisonSettings)]
+
+    def test_the_html_header_shows_the_settings(self, base, candidate):
+        html = compare(base, candidate, keys="USUBJID", abs_tol=0.25, rel_tol=0.1).to_html()
+        header = html[: html.index("<h2>Observations")]
+        assert "abs_tol=0.25, rel_tol=0.1" in header
+        assert "exact" in compare(base, candidate, keys="USUBJID").to_html()
+
+
 # ── Text report ───────────────────────────────────────────────────────────────
 
 
@@ -938,6 +1170,9 @@ class TestJsonReport:
         assert document["statistics"] == []
         assert document["settings"] == {
             "keys": ["USUBJID"],
+            "abs_tol": 0.0,
+            "rel_tol": 0.0,
+            "ignore_trailing_whitespace": False,
             "max_print": 50,
             "base_name": "prod",
             "candidate_name": "qc",

@@ -160,3 +160,27 @@ class TestNamespaces:
         chain = _dm().sdtm.assign("DOMAIN", value="DM")
         chain.compare(base, keys="USUBJID")
         assert chain.last_comparison is None
+
+
+class TestToleranceKeywords:
+    """``abs_tol``, ``rel_tol`` and ``ignore_trailing_whitespace`` reach the engine."""
+
+    def test_tolerances_absorb_float_noise_and_are_recorded(self):
+        base = _dm().with_columns((pl.col("AGE").cast(pl.Float64) + 0.0004).alias("AGE"))
+        ns = _dm().sdtm.compare(base, keys="USUBJID", abs_tol=0.001, rel_tol=0.01, on_fail="raise")
+        assert ns.last_comparison.is_equal is True
+        assert ns.last_comparison.settings.abs_tol == 0.001
+        assert ns.last_comparison.settings.rel_tol == 0.01
+
+    def test_trailing_whitespace_is_ignored_when_asked(self):
+        base = _dm().with_columns(pl.lit("M   ").alias("SEX"))
+        ns = _dm().sdtm.assign("SEX", value="M").compare(base, keys="USUBJID", on_fail="ignore")
+        assert ns.last_comparison.is_equal is False
+
+        ns = (
+            _dm()
+            .sdtm.assign("SEX", value="M")
+            .compare(base, keys="USUBJID", ignore_trailing_whitespace=True, on_fail="raise")
+        )
+        assert ns.last_comparison.is_equal is True
+        assert ns.last_comparison.settings.ignore_trailing_whitespace is True

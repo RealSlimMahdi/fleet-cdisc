@@ -12,6 +12,7 @@ comparison ran with, and the Fleet version.  Rendering lives in
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -109,6 +110,30 @@ def _normalise_max_print(max_print: MaxPrint) -> PrintLimits:
             raise ComparisonError("max_print limits must not be negative")
         return PrintLimits(per_variable, total)
     raise VerbUsageError("max_print must be an int, a (per_variable, total) pair or None")
+
+
+def _normalise_tolerance(value: object, name: str) -> float:
+    """Check one tolerance argument and return it as a float.
+
+    A tolerance is a finite, non-negative number.  Zero on both means exact,
+    which is the default; ``True`` is not a tolerance, however numeric
+    Python considers it.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise VerbUsageError(f"{name} must be a non-negative number, got {type(value).__name__}")
+    tolerance = float(value)
+    if not math.isfinite(tolerance):
+        raise ComparisonError(f"{name} must be a finite number, got {value}")
+    if tolerance < 0:
+        raise ComparisonError(f"{name} must not be negative, got {value}")
+    return tolerance
+
+
+def _normalise_flag(value: object, name: str) -> bool:
+    """Check one switch argument and return it; only a real boolean passes."""
+    if not isinstance(value, bool):
+        raise VerbUsageError(f"{name} must be True or False, got {type(value).__name__}")
+    return value
 
 
 def _cap(frame: pl.DataFrame, limit: int | None) -> pl.DataFrame:
@@ -215,12 +240,49 @@ class ValuesSummary:
 
 @dataclass(frozen=True)
 class ComparisonSettings:
-    """The settings a comparison ran with, so a run can be reproduced."""
+    """The settings a comparison ran with, so a run can be reproduced.
+
+    Three of them decide what counts as equal, so this is also where the
+    renderers read the rule in effect from (:attr:`equality`).
+    """
 
     keys: tuple[str, ...]
+    #: Absolute tolerance on the numeric variables; ``0.0`` is exact.
+    abs_tol: float
+    #: Relative tolerance on the numeric variables, as a fraction of the **base**
+    #: value; ``0.0`` is exact.
+    rel_tol: float
+    #: Whether trailing whitespace was stripped from both sides of a string
+    #: before comparing.
+    ignore_trailing_whitespace: bool
     max_print: MaxPrint
     base_name: str | None
     candidate_name: str | None
+
+    @property
+    def tolerant(self) -> bool:
+        """True when either tolerance is set, so numeric values compare within it."""
+        return bool(self.abs_tol or self.rel_tol)
+
+    @property
+    def equality(self) -> str:
+        """The equality rule in effect, as one phrase for the report headers.
+
+        ``"exact"`` by default, otherwise the tolerances in effect, followed
+        by ``"ignoring trailing whitespace"`` when strings were stripped —
+        a qualifier rather than a second verdict, so the phrase reads as one
+        rule::
+
+            "exact"
+            "abs_tol=1e-06, rel_tol=0.001"
+            "exact, ignoring trailing whitespace"
+        """
+        parts = [
+            f"abs_tol={self.abs_tol:g}, rel_tol={self.rel_tol:g}" if self.tolerant else "exact"
+        ]
+        if self.ignore_trailing_whitespace:
+            parts.append("ignoring trailing whitespace")
+        return ", ".join(parts)
 
 
 class _Unset:

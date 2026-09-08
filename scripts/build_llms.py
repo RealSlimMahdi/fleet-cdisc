@@ -728,9 +728,18 @@ report.listing  # long frame: keys, group, variable, base, candidate, difference
 report.to_json()  # one JSON document for agents / editors; report.save_json(path) writes it
 report.save_listing("differences.parquet")  # the complete listing as parquet, never truncated
 report.save_html_report("compare.html")  # self-contained page for a reviewer: flags as chips, mismatched observations side by side, never truncated
+
+# Absorb a legacy engine's noise without hiding a real difference
+report = fleet.compare(advs_legacy, advs_fleet, keys=["USUBJID", "PARAMCD"], rel_tol=1e-9, ignore_trailing_whitespace=True)
 ```
 
-Rules: equality is exact; null equals null, NaN equals NaN, null against NaN differs. Same-kind \
+Rules: equality is exact by default; null equals null, NaN equals NaN, null against NaN differs. \
+`abs_tol` and `rel_tol` widen equality on the numeric variables only — a pair differs when the \
+absolute difference exceeds `max(abs_tol, rel_tol * abs(base))`, anchored on the **base** as in \
+SAS (not on the candidate, as Polars' testing helper does), in `Float64` arithmetic — and \
+`ignore_trailing_whitespace` strips the right of both strings, leaving leading whitespace a \
+difference. Nulls and NaN keep their rule under both: a NaN is never within a tolerance of a \
+number, and NaN still equals NaN. Same-kind \
 variables with different dtypes (Int64 / Float64, String / Categorical, Date / Datetime) are \
 compared after casting and listed as dtype differences without a flag; different kinds (numeric \
 / string) are type conflicts, listed and not compared. Row and column order are ignored. A \
@@ -775,11 +784,12 @@ uv run fleet compare legacy/adae.xpt outputs/adam/adae.parquet --keys USUBJID,AE
 uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID,AESEQ --format json   # one JSON document, nothing else on stdout
 uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID,AESEQ --out build/adae_differences.parquet   # complete listing as parquet
 uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID,AESEQ --report build/adae_compare.html   # self-contained HTML report for a reviewer
+uv run fleet compare legacy/advs.xpt outputs/adam/advs.parquet --keys USUBJID,PARAMCD --rel-tol 1e-9 --ignore-trailing-whitespace   # absorb legacy engine noise
 ```
 
 The exit code is the verdict: `0` equal, `1` different (report on stdout), `2` the comparison \
-could not run (unreadable file, missing or duplicate keys, no comparable variables, `--out` or \
-`--report` not writable — the reason is on stderr). `--keys` is required.\
+could not run (unreadable file, missing or duplicate keys, a negative tolerance, no comparable \
+variables, `--out` or `--report` not writable — the reason is on stderr). `--keys` is required.\
 """
 
 

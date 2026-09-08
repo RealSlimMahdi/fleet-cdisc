@@ -1264,3 +1264,106 @@ def test_compare_reads_xpt_through_the_io_extra(
     captured = capsys.readouterr()
     assert code == 0, captured
     assert "EQUAL: no differences found." in captured.out
+
+
+def test_compare_tolerance_flags_reach_the_engine(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """Float noise between two engines is absorbed by --abs-tol; the settings line says so."""
+    base, candidate = tmp_path / "adsl_prod.parquet", tmp_path / "adsl_qc.parquet"
+    _adsl().with_columns(pl.col("AGE").cast(pl.Float64)).write_parquet(base)
+    _adsl().with_columns(pl.col("AGE").cast(pl.Float64) + 0.0004).write_parquet(candidate)
+
+    assert _run(["compare", str(base), str(candidate), "--keys", "USUBJID"]) == 1
+    capsys.readouterr()
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "USUBJID", "--abs-tol", "0.001"])
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "EQUAL: no differences found." in captured.out
+    assert "abs_tol=0.001" in captured.out
+
+
+def test_compare_rel_tol_flag_reaches_the_engine(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base, candidate = tmp_path / "prod.parquet", tmp_path / "qc.parquet"
+    pl.DataFrame({"ID": [1], "X": [200.0]}).write_parquet(base)
+    pl.DataFrame({"ID": [1], "X": [202.0]}).write_parquet(candidate)
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "ID", "--rel-tol", "0.01"])
+
+    assert code == 0
+    assert "rel_tol=0.01" in capsys.readouterr().out
+
+
+def test_compare_ignore_trailing_whitespace_flag_reaches_the_engine(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """SAS pads character values; Fleet strips them, and the flag makes the two compare equal."""
+    base, candidate = tmp_path / "prod.parquet", tmp_path / "qc.parquet"
+    pl.DataFrame({"USUBJID": ["S01"], "SEX": ["M   "]}).write_parquet(base)
+    pl.DataFrame({"USUBJID": ["S01"], "SEX": ["M"]}).write_parquet(candidate)
+
+    assert _run(["compare", str(base), str(candidate), "--keys", "USUBJID"]) == 1
+    capsys.readouterr()
+
+    code = _run(
+        [
+            "compare",
+            str(base),
+            str(candidate),
+            "--keys",
+            "USUBJID",
+            "--ignore-trailing-whitespace",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "ignoring trailing whitespace" in captured.out
+
+
+def test_compare_json_settings_carry_the_three_options(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base = tmp_path / "adsl.parquet"
+    _adsl().write_parquet(base)
+
+    code = _run(
+        [
+            "compare",
+            str(base),
+            str(base),
+            "--keys",
+            "USUBJID",
+            "--format",
+            "json",
+            "--abs-tol",
+            "0.5",
+            "--rel-tol",
+            "0.01",
+            "--ignore-trailing-whitespace",
+        ]
+    )
+
+    settings = json.loads(capsys.readouterr().out)["settings"]
+    assert code == 0
+    assert settings["abs_tol"] == 0.5
+    assert settings["rel_tol"] == 0.01
+    assert settings["ignore_trailing_whitespace"] is True
+
+
+def test_compare_a_negative_tolerance_exits_2(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base = tmp_path / "adsl.parquet"
+    _adsl().write_parquet(base)
+
+    code = _run(["compare", str(base), str(base), "--keys", "USUBJID", "--abs-tol", "-1"])
+
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "abs_tol" in captured.err
+    assert captured.out == ""
