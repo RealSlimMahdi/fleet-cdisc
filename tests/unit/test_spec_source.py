@@ -74,6 +74,74 @@ def test_positional_and_star_arguments_are_stubs():
     assert "kwargs" in rows[1]["reason"]
 
 
+DERIVATIONS = """
+from programs.derivations import TRTDURD, add_pop_flags
+import programs.derivations as drv
+from fleet.core.derivation import derivation
+import polars as pl
+
+
+@derivation
+def AGEGR1() -> pl.Expr:
+    return pl.lit("x").alias("AGEGR1")
+
+
+adsl = (
+    dm.adam.pin("EX", ex)
+    .derivation(TRTDURD)
+    .derivation(drv.BMI)
+    .derivation(add_pop_flags)
+    .derivation(AGEGR1)
+    .derivation("TRTSDT2", expression=TRTDURD)
+    .to_frame()
+)
+"""
+
+
+def test_study_derivation_objects_become_callable_blocks():
+    rows = derivations_from_source(DERIVATIONS)
+    # pin() is plumbing, not a derivation.
+    assert [r["name"] for r in rows] == ["TRTDURD", "BMI", "add_pop_flags", "AGEGR1", "TRTSDT2"]
+    by = {r["name"]: r for r in rows}
+    assert by["TRTDURD"]["status"] == "ok"
+    assert by["TRTDURD"]["block"] == {
+        "algorithm": "callable",
+        "callable": "programs.derivations.TRTDURD",
+    }
+    assert by["BMI"]["block"] == {"algorithm": "callable", "callable": "programs.derivations.BMI"}
+    assert by["add_pop_flags"]["status"] == "stub"
+    assert "runtime" in by["add_pop_flags"]["reason"]
+    assert by["AGEGR1"]["status"] == "stub"
+    assert "defined in this file" in by["AGEGR1"]["reason"]
+    # expression=<name> may be a Derivation or a plain callable: not decided statically.
+    assert by["TRTSDT2"]["status"] == "stub"
+
+
+def test_program_from_spec_imports_study_callables(tmp_path):
+    spec = tmp_path / "define.yaml"
+    spec.write_text(
+        "study:\n  id: X\n  standard: ADAMIG\nderivations_module: programs.derivations\n"
+        "datasets:\n  - name: ADSL\n    variables:\n"
+        "      - name: AGEGR1\n        derivation:\n          callable: AGEGR1\n"
+        "          algorithm: callable\n"
+        "      - name: BMI\n        derivation:\n          algorithm: callable\n"
+        "          callable: study.derivs.BMI\n",
+        encoding="utf-8",
+    )
+    code = program_from_spec(spec, "ADSL")
+    assert "from programs.derivations import AGEGR1\n" in code
+    assert "from study.derivs import BMI\n" in code
+    assert "    .derivation(AGEGR1)\n    .derivation(BMI)\n    .to_frame()" in code
+
+    spec.write_text(
+        "study:\n  id: X\n  standard: ADAMIG\ndatasets:\n  - name: ADSL\n    variables:\n"
+        "      - name: AGEGR1\n        derivation:\n          algorithm: callable\n"
+        "          callable: AGEGR1\n",
+        encoding="utf-8",
+    )
+    assert "    .derivation(AGEGR1)  # TODO: import AGEGR1" in program_from_spec(spec, "ADSL")
+
+
 def test_program_from_spec_renders_one_call_per_derivation():
     code = program_from_spec(ADAM_SPEC, "adsl")
     assert code.startswith("# ADSL")
