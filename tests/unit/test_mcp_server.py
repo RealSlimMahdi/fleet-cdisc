@@ -21,11 +21,13 @@ from fleet.core.dag import build_dag  # noqa: E402
 from fleet.mcp_server import (  # noqa: E402
     TOOLS,
     create_server,
+    fleet_code_to_spec,
     fleet_ct_terms,
     fleet_dataset_check,
     fleet_execution_order,
     fleet_impacted_by,
     fleet_lineage,
+    fleet_spec_to_code,
     fleet_tlg_catalog,
     fleet_tlg_run,
     fleet_validate,
@@ -265,3 +267,29 @@ class TestServerWiring:
         server = create_server()
         registered = {tool.name for tool in asyncio.run(server.list_tools())}
         assert registered == {fn.__name__ for fn in TOOLS}
+
+
+def test_code_to_spec_rows_carry_registry_blocks():
+    rows = fleet_code_to_spec('dm = raw.sdtm.assign("DOMAIN", value="DM")')
+    assert rows == [
+        {
+            "name": "DOMAIN",
+            "verb": "assign",
+            "standard": "sdtm",
+            "line": 1,
+            "status": "ok",
+            "block": {"algorithm": "hardcode_no_ct", "value": "DM"},
+            "reason": "",
+            "meta": {},
+        }
+    ]
+
+
+def test_spec_to_code_renders_a_program_for_the_dataset():
+    code = fleet_spec_to_code(SPECS[1], "ADSL")
+    assert code.startswith("# ADSL")
+    assert ".to_frame()" in code
+
+
+def test_conversion_tools_are_registered():
+    assert {fleet_code_to_spec, fleet_spec_to_code} <= set(TOOLS)

@@ -330,6 +330,47 @@ def fleet_dataset_check(data_path: str, define_yaml: str, dataset: str) -> dict[
     }
 
 
+def fleet_code_to_spec(source: str) -> list[dict[str, Any]]:
+    """Reverse-map the Fleet verb calls in a Python program to define.yaml derivation blocks.
+
+    Static: the program is parsed, never run. Every namespace verb call
+    with a CDISC-named target becomes one row, in call order, carrying
+    the registry's ``derivation:`` block when the call is spec-expressible.
+
+    Args:
+        source: Python source of a program (a whole file or a selection).
+
+    Returns:
+        list[dict]: ``{"name", "verb", "standard", "line", "status",
+            "block", "reason", "meta"}`` per call. *status* is ``"ok"``
+            (``block`` usable), ``"stub"`` (non-literal or unmatched
+            arguments), ``"unsupported"`` (the verb has no spec form) or
+            ``"unknown"`` (not a registered verb).
+    """
+    from fleet.core.spec_source import derivations_from_source
+
+    return derivations_from_source(source)
+
+
+def fleet_spec_to_code(define_yaml: str, dataset: str) -> str:
+    """Render one dataset's define.yaml derivations as an inline Fleet program skeleton.
+
+    One chained call per variable with a ``derivation:`` block, in spec
+    order, plus placeholder loads for declared inputs and ``.pin()`` calls
+    for datasets the derivations look up.
+
+    Args:
+        define_yaml: Path to the ``define.yaml``.
+        dataset: Dataset name declared in it (e.g. ``"ADSL"``).
+
+    Returns:
+        str: A Python program to review before running.
+    """
+    from fleet.core.spec_source import program_from_spec
+
+    return program_from_spec(define_yaml, dataset)
+
+
 #: Every function exposed as an MCP tool (docstring = tool description).
 TOOLS = (
     fleet_execution_order,
@@ -340,6 +381,8 @@ TOOLS = (
     fleet_tlg_catalog,
     fleet_tlg_run,
     fleet_dataset_check,
+    fleet_code_to_spec,
+    fleet_spec_to_code,
 )
 
 
@@ -353,7 +396,8 @@ def create_server() -> FastMCP:
         "fleet",
         instructions=(
             "Fleet CDISC toolkit: pipeline DAG queries, dataset validation, "
-            "controlled-terminology lookups, and TLG spec execution."
+            "controlled-terminology lookups, TLG spec execution, and static "
+            "conversion between inline programs and define.yaml derivations."
         ),
     )
     for fn in TOOLS:
