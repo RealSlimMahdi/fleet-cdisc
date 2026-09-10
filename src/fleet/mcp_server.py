@@ -27,7 +27,10 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
-from mcp.server.fastmcp import FastMCP
+try:  # mcp >= 2 renamed FastMCP; the three calls made here are unchanged.
+    from mcp.server.mcpserver import MCPServer as FastMCP
+except ImportError:  # mcp 1.x
+    from mcp.server.fastmcp import FastMCP
 
 if TYPE_CHECKING:
     import polars as pl
