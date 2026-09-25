@@ -272,3 +272,19 @@ def test_doctor_prints_the_engine_of_the_run_setup(
     out = capsys.readouterr().out
     assert f"{study / 'bin' / 'core'} (study config)" in out
     assert "version: 0.15.0" in out
+
+
+def test_doctor_still_prints_the_engine_when_the_run_setup_is_refused(
+    study: Path, engine: FakeEngine, capsys: pytest.CaptureFixture
+) -> None:
+    (study / "study_config.yaml").write_text(
+        "study_id: S01\nvalidation:\n  engine_path: bin/core\n  custom_rules: nowhere\n",
+        encoding="utf-8",
+    )
+
+    _run(["doctor"])
+
+    out = capsys.readouterr().out
+    assert "run setup" in out
+    assert "nowhere" in out
+    assert str(study / "bin" / "core") in out

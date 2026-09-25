@@ -28,7 +28,6 @@ import stat
 import subprocess
 import sys
 import tempfile
-from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -125,31 +124,40 @@ def engine_version(executable: Path) -> str:
     """Return the version of the engine at *executable*.
 
     The version comes from the engine's own ``version`` command, else from
-    the :data:`VERSION_MARKER` file next to the executable, else it is
-    ``"unknown"``.  The result is kept per executable and modification
-    time, so a sweep asks the engine once.
+    the :data:`VERSION_MARKER` file next to the executable (the release tag
+    without its ``v``), else it is ``"unknown"``.  A version the command
+    gave is kept per executable and modification time, so a sweep asks the
+    engine once.
 
     Args:
         executable: The engine binary, or the legacy ``core.py``.
 
     Returns:
-        str: The version (``"0.15.0"``), the release tag (``"v0.15.0"``),
-        or ``"unknown"``.
+        str: The version (``"0.15.0"``), or ``"unknown"``.
 
     Examples:
-        The managed install after ``fleet install-engine``::
+        The version that the report header prints for the managed install::
+
+            from fleet.validation.engine import engine_path, engine_version
 
             engine_version(engine_path())  # "0.15.0"
     """
     try:
-        mtime = executable.stat().st_mtime_ns
+        key = (executable, executable.stat().st_mtime_ns)
     except OSError:
         return "unknown"
-    return _engine_version(executable, mtime)
+    if key not in _VERSIONS:
+        found = _version_command(executable)
+        if found is None:
+            return _version_marker(executable)
+        _VERSIONS[key] = found
+    return _VERSIONS[key]
 
 
-@lru_cache(maxsize=16)
-def _engine_version(executable: Path, _mtime: int) -> str:
+_VERSIONS: dict[tuple[Path, int], str] = {}
+
+
+def _version_command(executable: Path) -> str | None:
     cmd = [str(executable), "version"]
     if executable.suffix == ".py":
         cmd.insert(0, "python")
@@ -157,16 +165,18 @@ def _engine_version(executable: Path, _mtime: int) -> str:
         result = subprocess.run(
             cmd, capture_output=True, text=True, timeout=30, cwd=str(executable.parent)
         )
-        lines = result.stdout.strip().splitlines() if result.returncode == 0 else []
     except (OSError, subprocess.SubprocessError):
-        lines = []
-    if lines:
-        return lines[-1].strip()
+        return None
+    lines = result.stdout.strip().splitlines()
+    return lines[-1].strip() if result.returncode == 0 and lines else None
+
+
+def _version_marker(executable: Path) -> str:
     try:
         tag = (executable.parent / VERSION_MARKER).read_text(encoding="utf-8").strip()
     except OSError:
         tag = ""
-    return tag or "unknown"
+    return tag.removeprefix("v") or "unknown"
 
 
 def discover_engine(study_root: Path | None = None) -> Path | None:

@@ -234,7 +234,7 @@ class TestEngineVersion:
         self._version_command(monkeypatch, 2)
         (engine.parent / VERSION_MARKER).write_text("v0.14.2\n", encoding="utf-8")
 
-        assert self._setup(engine, tmp_path).engine_version == "v0.14.2"
+        assert self._setup(engine, tmp_path).engine_version == "0.14.2"
 
     def test_unknown_when_both_fail(
         self, engine: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

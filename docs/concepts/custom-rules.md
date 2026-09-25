@@ -10,8 +10,8 @@ author **custom rules** and run them next to the official rules.
 
 ## Official and custom rules both run
 
-CORE runs only the `-lr` rules when it gets a local rules directory: one AE
-file ran 430 official rules without `-lr` and 2 local rules with it. So
+CORE runs only the `-lr` rules when it gets a rules directory: one AE file
+ran 430 official rules without `-lr` and only the 2 custom rules with it. So
 Fleet runs the engine twice per standard when custom rules are set:
 
 1. one run without `-lr`: the official CDISC rules,

@@ -452,7 +452,7 @@ def _parse_report(
 def _join_sources(
     runs: Iterable[tuple[RuleSource, dict[str, ValidationResult]]],
 ) -> dict[str, ValidationResult]:
-    """Join the results of the official and custom runs; each finding keeps its source.
+    """Join the results of the official and custom runs, tagging each finding with its run.
 
     The type and version of a dataset come from its first run, the official one.
     """

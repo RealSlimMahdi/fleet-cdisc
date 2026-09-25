@@ -31,7 +31,7 @@ first source that gives it:
 
 1. the engine's own `core version` command (`0.15.0`),
 2. the `fleet-release-tag.txt` file that `fleet install-engine` writes next
-   to the managed binary (`v0.15.0`),
+   to the managed binary (tag `v0.15.0`, printed as `0.15.0`),
 3. else `unknown`.
 
 ## Running validation

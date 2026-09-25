@@ -631,7 +631,7 @@ def _check_extras() -> list[tuple[str, bool, str]]:
 def _run_doctor(args: argparse.Namespace) -> None:
     from fleet.core.exceptions import ValidationSetupError
     from fleet.validation import build_run_setup
-    from fleet.validation.engine import doctor
+    from fleet.validation.engine import discover_engine, doctor, engine_version
 
     config_path = Path(args.config) if getattr(args, "config", None) else find_study_config()
 
@@ -646,17 +646,18 @@ def _run_doctor(args: argparse.Namespace) -> None:
     # A run setup with no datasets: the standard only fills the record.
     try:
         setup = build_run_setup(standard="sdtm", config=config_path)
+        engine, where = setup.engine.value, f" ({setup.engine.source})"
     except ValidationSetupError as exc:
-        setup = None
         print(f"  ✗ run setup .......... {exc}")
+        study_root = config_path.parent if config_path and config_path.is_file() else None
+        engine, where = discover_engine(study_root), ""
 
-    engine = setup.engine.value if setup is not None else None
-    if setup is not None and engine is None:
+    if engine is None:
         print("  ✗ rules engine ....... NOT FOUND — run `fleet install-engine`")
-    elif setup is not None and engine is not None:
+    else:
         checks = doctor(engine=engine)
-        print(f"  ✓ rules engine ....... {engine} ({setup.engine.source})")
-        print(f"      version: {setup.engine_version}")
+        print(f"  ✓ rules engine ....... {engine}{where}")
+        print(f"      version: {engine_version(engine)}")
         print(f"      type: {checks['type']}")
         status_mark = "✓" if checks["status"].startswith("OK") else "✗"
         print(f"  {status_mark} engine status ...... {checks['status']}")
