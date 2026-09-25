@@ -2165,7 +2165,7 @@ Order matters in a Fleet pipeline! Make sure that a dependency variable is deriv
 <h3 id="valueerror-unknown-algorithm-in-defineyaml"><code>ValueError: Unknown algorithm in define.yaml</code><a class="headerlink" href="#valueerror-unknown-algorithm-in-defineyaml" title="Permanent link">&para;</a></h3>
 <p><strong>What it means:</strong> In a spec-driven pipeline, your <code>define.yaml</code> uses an algorithm name under a <code>derivation</code> block that doesn't match any recognised namespace verbs.</p>
 <p><strong>How to fix it:</strong>
-Check your spelling against the supported lists of verbs in the <a href="../../concepts/pipeline/">Namespace Pipeline</a> or the API Reference. The JSON Schema (<code>define_spec_schema.json</code>) enforces a strict <code>enum</code> of valid algorithm names — if you include the <code># yaml-language-server: $schema=...</code> directive at the top of your YAML file, your editor will flag invalid algorithms and empty <code>derivation: {}</code> blocks before you even run the pipeline.</p>
+Check your spelling against the supported lists of verbs in the <a href="../../concepts/pipeline/">Namespace Pipeline</a> or the API Reference. The JSON Schema (<code>define_spec_schema.json</code>) enforces a strict <code>enum</code> of valid algorithm names, so an editor validating against it flags invalid algorithms and empty <code>derivation: {}</code> blocks before you even run the pipeline — see <a href="#validating-defineyaml">Validating <code>define.yaml</code></a> below.</p>
 <h2 id="debugging-lazy-evaluation">Debugging Lazy Evaluation<a class="headerlink" href="#debugging-lazy-evaluation" title="Permanent link">&para;</a></h2>
 <p>Because Fleet builds pipelines conceptually and executes them lazily via Polars, a python stack trace might sometimes point to <code>.to_frame()</code> rather than the specific verb that caused an issue.</p>
 <p>To inspect what expressions have been queued up before running:</p>
@@ -2185,10 +2185,11 @@ Check your spelling against the supported lists of verbs in the <a href="../../c
 </span></code></pre></div>
 <h2 id="validating-defineyaml">Validating <code>define.yaml</code><a class="headerlink" href="#validating-defineyaml" title="Permanent link">&para;</a></h2>
 <p>If you are using the spec-driven approach, validate your <code>define.yaml</code> file against the Fleet schema <em>before</em> running pipelines. This ensures you don't waste time tracing runtime errors that are actually typos in the specification.</p>
-<p>If you have configured the schema comment in your YAML file:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json</span>
+<p>The <a href="https://github.com/RealSlimMahdi/fleet-vscode">Fleet VS Code extension</a> does this with no setup: <code>fleet lsp</code> loads the schema from the installed package, so it can never drift from the Fleet that runs your pipeline.</p>
+<p>Without the extension, a generic YAML language server can read the same schema from a comment at the top of the file:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># yaml-language-server: $schema=&lt;path to define_spec_schema.json&gt;</span>
 </span></code></pre></div>
-<p>Your editor (like VS Code) should highlight structural or naming errors automatically.</p>
+<p><code>fleet init define</code> prints that line with the path already resolved against your install. Scaffolded specs no longer carry it by default, because running both validators reports every schema error twice.</p>
 
 
 
@@ -2211,7 +2212,7 @@ Check your spelling against the supported lists of verbs in the <a href="../../c
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 9, 2026 15:11:23 UTC">July 9, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="August 30, 2026 12:33:38 UTC">August 30, 2026</span>
   </span>
 
     
