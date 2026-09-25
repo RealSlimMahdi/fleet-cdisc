@@ -1,8 +1,9 @@
 """Run setup: the resolved inputs of one validation, with the source of each.
 
-Every surface that validates (the ``.validate()`` verb today; ``fleet
-validate``, the MCP tool and ``fleet check`` in later steps) builds a
+Every surface that validates (the ``.validate()`` verb and ``fleet validate``
+today; the MCP tool and ``fleet check`` in later steps) builds a
 :class:`RunSetup` with :func:`build_run_setup` and resolves nothing itself.
+``fleet validate`` builds one per dataset through :func:`build_sweep`.
 See ADR 0003.
 
 Each input is taken from the first source that gives it: an explicit
@@ -29,7 +30,7 @@ from fleet.core.study_context import (
 from fleet.validation.engine import find_engine
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
 Standard = Literal["sdtm", "adam"]
 
@@ -110,6 +111,7 @@ def build_run_setup(
     version: str | None = None,
     custom_rules: str | Path | None = None,
     engine: str | Path | None = None,
+    config: Path | None = None,
     start: Path | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> RunSetup:
@@ -125,6 +127,7 @@ def build_run_setup(
         version: IG version, ``"3-4"`` or ``"3.4"``.
         custom_rules: Directory of custom CORE rules.
         engine: Engine executable.
+        config: Study config file; replaces the search from *start*.
         start: Directory the study config is looked for from
             (default: the working directory).
         environ: Environment for ``FLEET_RULES_ENGINE``
@@ -146,7 +149,7 @@ def build_run_setup(
             setup.ig_version.value  # "1.1" when adam.ig_version is 1-1
             setup.ig_version.source  # "study config"
     """
-    config_path = find_study_config(start)
+    config_path = config if config is not None else find_study_config(start)
     ctx = _load(config_path) if config_path is not None else None
 
     std = _resolve_standard(standard, namespace, name, path, ctx)
@@ -159,11 +162,170 @@ def build_run_setup(
     )
 
 
+#: Dataset file types a sweep picks up from a directory.
+DATA_EXTENSIONS: tuple[str, ...] = (".parquet", ".csv", ".xpt", ".sas7bdat")
+
+
+@dataclass(frozen=True)
+class SweepDataset:
+    """One dataset of a sweep: its run setup, or why it could not run.
+
+    Attributes:
+        path: The dataset file.
+        setup: The resolved inputs, or ``None`` when the dataset could not run.
+        reason: Why the dataset could not run, or ``None``.
+    """
+
+    path: Path
+    setup: RunSetup | None
+    reason: str | None = None
+
+    @property
+    def name(self) -> str:
+        """The dataset name: the upper-case file stem (``"ADSL"``)."""
+        return self.path.stem.upper()
+
+
+@dataclass(frozen=True)
+class Sweep:
+    """The datasets of one ``fleet validate`` call, fixed before the engine starts."""
+
+    datasets: tuple[SweepDataset, ...]
+
+    @property
+    def could_not_run(self) -> list[SweepDataset]:
+        """The datasets whose run setup was refused."""
+        return [d for d in self.datasets if d.setup is None]
+
+    def runs(self) -> dict[Standard, list[SweepDataset]]:
+        """The datasets that can run, grouped by standard: one engine run each."""
+        runs: dict[Standard, list[SweepDataset]] = {}
+        for d in self.datasets:
+            if d.setup is not None:
+                runs.setdefault(d.setup.standard.value, []).append(d)
+        return runs
+
+
+def build_sweep(
+    paths: Sequence[str | Path] = (),
+    *,
+    standard: Standard | None = None,
+    version: str | None = None,
+    custom_rules: str | Path | None = None,
+    engine: str | Path | None = None,
+    config: Path | None = None,
+    start: Path | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> Sweep:
+    """Resolve the run setup of every dataset a ``fleet validate`` call names.
+
+    With no *paths*, the sweep takes every dataset file in the configured
+    SDTM and ADaM data directories.  Each dataset gets its own run setup
+    from :func:`build_run_setup`; a refused dataset is kept with its
+    reason, and the other datasets still run.
+
+    Args:
+        paths: Dataset files or directories.  Default: the configured data
+            directories.
+        standard: Forces the standard of every dataset.
+        version: IG version, ``"3-4"`` or ``"3.4"``.
+        custom_rules: Directory of custom CORE rules.
+        engine: Engine executable.
+        config: Study config file; replaces the search from *start*.
+        start: Directory the study config is looked for from
+            (default: the working directory).
+        environ: Environment for ``FLEET_RULES_ENGINE``
+            (default: ``os.environ``).
+
+    Returns:
+        Sweep: Every dataset with its run setup or its reason.
+
+    Raises:
+        ValidationSetupError: No dataset to validate: a path does not
+            exist, no file was found, or no paths were given outside a study.
+
+    Examples:
+        The sweep ``fleet validate`` runs inside a study::
+
+            sweep = build_sweep()
+            for standard, datasets in sweep.runs().items():
+                print(standard, [d.name for d in datasets])
+    """
+    config_path = config if config is not None else find_study_config(start)
+    files = _collect_files(paths or _data_dirs(config_path))
+
+    datasets: list[SweepDataset] = []
+    seen: set[tuple[Standard, str]] = set()
+    for path in files:
+        try:
+            setup = build_run_setup(
+                path=path,
+                standard=standard,
+                version=version,
+                custom_rules=custom_rules,
+                engine=engine,
+                config=config_path,
+                environ=environ,
+            )
+        except ValidationSetupError as exc:
+            datasets.append(SweepDataset(path, None, str(exc)))
+            continue
+        key = (setup.standard.value, path.stem.upper())
+        if setup.engine.value is None:
+            reason = (
+                "Could not run: CDISC Rules Engine not found. Install it with "
+                "`fleet install-engine` or set validation.engine_path / FLEET_RULES_ENGINE."
+            )
+            datasets.append(SweepDataset(path, None, reason))
+        elif key in seen:
+            reason = f"Could not run: another file in the sweep is already dataset {key[1]}."
+            datasets.append(SweepDataset(path, None, reason))
+        else:
+            seen.add(key)
+            datasets.append(SweepDataset(path, setup))
+    return Sweep(tuple(datasets))
+
+
+def _data_dirs(config_path: Path | None) -> list[Path]:
+    if config_path is None:
+        raise _refuse(
+            "no dataset paths given and no study_config.yaml found. "
+            "Pass files or directories, or run inside a study workspace."
+        )
+    ctx = _load(config_path)
+    dirs = [d for d in (ctx.sdtm_data_dir, ctx.adam_data_dir) if d.is_dir()]
+    if not dirs:
+        raise _refuse(
+            f"no data directories found under {ctx.study_root} "
+            f"({ctx.config.paths.sdtm_data}, {ctx.config.paths.adam_data}). "
+            "Run `fleet run` first or pass explicit paths."
+        )
+    return dirs
+
+
+def _collect_files(paths: Sequence[str | Path]) -> list[Path]:
+    files: list[Path] = []
+    for raw in paths:
+        p = Path(raw)
+        if p.is_dir():
+            for ext in DATA_EXTENSIONS:
+                files.extend(sorted(p.glob(f"*{ext}")))
+        elif p.is_file():
+            files.append(p)
+        else:
+            raise _refuse(f"path not found: {p}")
+    if not files:
+        raise _refuse(f"no dataset files found. Pass {', '.join(DATA_EXTENSIONS)} files.")
+    return files
+
+
 def _refuse(reason: str) -> ValidationSetupError:
     return ValidationSetupError(f"Could not run: {reason}")
 
 
 def _load(config_path: Path) -> StudyContext:
+    if not config_path.is_file():
+        raise _refuse(f"the study config {config_path} does not exist.")
     try:
         return load_study_context(config_path)
     except StudyConfigError as exc:
@@ -202,10 +364,11 @@ def _resolve_standard(
         raise _refuse("standard unclear: no dataset and no standard given.")
     for other in claims[1:]:
         if other.value != claims[0].value:
+            hint = " Pass --standard to force it." if path is not None else ""
             raise _refuse(
                 f"standard unclear for {dataset or path}: the {claims[0].source} says "
                 f"{_IG_LABELS[claims[0].value]}, the {other.source} says "
-                f"{_IG_LABELS[other.value]}."
+                f"{_IG_LABELS[other.value]}.{hint}"
             )
     return claims[0]
 

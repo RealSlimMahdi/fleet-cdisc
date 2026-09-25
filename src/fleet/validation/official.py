@@ -4,6 +4,7 @@ import ast
 import json
 import subprocess
 import tempfile
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import polars as pl
@@ -159,104 +160,144 @@ class OfficialCDISCValidator:
         timeout: float = 300,
     ) -> ValidationResult:
         """Run CDISC rules engine validation on a Polars DataFrame."""
+        name = domain or "unknown"
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
             dataset_path = tmpdir_path / f"{dataset_name}.json"
             self._write_dataset_json(data, dataset_path, domain=domain or dataset_name)
-
-            output_file = tmpdir_path / "validation_result"
-            cmd = self._build_cmd(
-                "validate",
-                "-s",
-                standard,
-                "-v",
-                version,
-                "-dp",
-                str(dataset_path),
-                "-o",
-                str(output_file),
-                "-of",
-                "JSON",
-                "-rr",
+            outcome = self._run_engine(
+                ["-dp", str(dataset_path)], standard, version, custom_rules, timeout, tmpdir_path
             )
+        if isinstance(outcome, dict):
+            return self._parse_validation_result(outcome, data, domain)
+        return _result_from_issues(name, standard, version, outcome)
 
-            if custom_rules is not None:
-                rules_path = Path(custom_rules)
-                if not rules_path.exists():
-                    raise FileNotFoundError(f"Custom rules path does not exist: {rules_path}")
-                if not rules_path.is_dir():
-                    raise NotADirectoryError(f"Custom rules path must be a directory: {rules_path}")
-                cmd.extend(["-lr", str(rules_path)])
+    def validate_datasets(
+        self,
+        datasets: Mapping[str, pl.DataFrame],
+        standard: str,
+        version: str,
+        custom_rules: Path | None = None,
+        timeout: float = 300,
+    ) -> dict[str, ValidationResult]:
+        """Validate several datasets of one standard in one engine run.
 
-            try:
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    cwd=self._cwd,
-                    timeout=timeout,
-                )
-                json_output = output_file.with_suffix(".json")
-                if json_output.exists():
-                    validation_data = json.loads(json_output.read_text())
-                    return self._parse_validation_result(validation_data, data, domain)
+        All datasets are written to one directory, so rules that span
+        several datasets can execute.  The one engine report is split into
+        one result per dataset.
 
-                # No output file — engine may have crashed.
-                stderr_snippet = result.stderr.strip()[:500]
-                msg = f"Engine exited (rc={result.returncode}) but produced no report."
-                if stderr_snippet:
-                    msg += f" stderr: {stderr_snippet}"
-                return _build_result(
-                    dataset_name=domain or "unknown",
-                    dataset_type=standard,
-                    model_version=version,
-                    errors=[
-                        ValidationIssue(
-                            severity=Severity.ERROR,
-                            rule_id="ENGINE-001",
-                            message=msg,
-                        )
-                    ]
-                    if result.returncode != 0
-                    else [],
-                    infos=[
-                        ValidationIssue(
-                            severity=Severity.INFO,
-                            rule_id="INFO-000",
-                            message=f"Validation completed with no issues. {result.stdout.strip()}",
-                        )
-                    ]
-                    if result.returncode == 0
-                    else [],
-                )
+        Args:
+            datasets: Dataset name (``"AE"``) to its frame.
+            standard: Engine standard, ``"sdtmig"`` or ``"adamig"``.
+            version: Engine IG version, dashed (``"3-4"``).
+            custom_rules: Directory of custom CORE rules.
+            timeout: Seconds before the engine run is stopped.
 
-            except subprocess.TimeoutExpired:
-                return _build_result(
-                    dataset_name=domain or "unknown",
-                    dataset_type=standard,
-                    model_version=version,
-                    errors=[
-                        ValidationIssue(
-                            severity=Severity.ERROR,
-                            rule_id="TIMEOUT-001",
-                            message=f"Validation timed out after {timeout:.0f}s.",
-                            suggested_fix="Try a smaller dataset or increase the timeout.",
-                        )
-                    ],
+        Returns:
+            dict[str, ValidationResult]: One result per dataset name.  A
+            finding the report attributes to no given dataset gets its own
+            result under the name the report uses.
+
+        Examples:
+            Validate DM and AE together, then read the AE result::
+
+                validator = OfficialCDISCValidator(Path("~/.fleet/core"))
+                results = validator.validate_datasets(
+                    {"DM": dm, "AE": ae}, standard="sdtmig", version="3-4"
                 )
-            except Exception as exc:
-                return _build_result(
-                    dataset_name=domain or "unknown",
-                    dataset_type=standard,
-                    model_version=version,
-                    errors=[
-                        ValidationIssue(
-                            severity=Severity.ERROR,
-                            rule_id="ERROR-001",
-                            message=f"Validation error: {exc}",
-                        )
-                    ],
+                results["AE"].is_valid
+        """
+        names = list(datasets)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            data_dir = tmpdir_path / "data"
+            data_dir.mkdir()
+            for name, df in datasets.items():
+                self._write_dataset_json(df, data_dir / f"{name}.json", domain=name)
+            outcome = self._run_engine(
+                ["-d", str(data_dir)], standard, version, custom_rules, timeout, tmpdir_path
+            )
+        if isinstance(outcome, dict):
+            return _split_validation_result(outcome, names)
+        return {name: _result_from_issues(name, standard, version, outcome) for name in names}
+
+    def _run_engine(
+        self,
+        data_args: list[str],
+        standard: str,
+        version: str,
+        custom_rules: Path | None,
+        timeout: float,
+        workdir: Path,
+    ) -> dict | list[ValidationIssue]:
+        """Run the engine once: the raw JSON report, or the issues that replace it."""
+        output_file = workdir / "validation_result"
+        cmd = self._build_cmd(
+            "validate",
+            "-s",
+            standard,
+            "-v",
+            version,
+            *data_args,
+            "-o",
+            str(output_file),
+            "-of",
+            "JSON",
+            "-rr",
+        )
+
+        if custom_rules is not None:
+            rules_path = Path(custom_rules)
+            if not rules_path.exists():
+                raise FileNotFoundError(f"Custom rules path does not exist: {rules_path}")
+            if not rules_path.is_dir():
+                raise NotADirectoryError(f"Custom rules path must be a directory: {rules_path}")
+            cmd.extend(["-lr", str(rules_path)])
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                cwd=self._cwd,
+                timeout=timeout,
+            )
+            json_output = output_file.with_suffix(".json")
+            if json_output.exists():
+                return json.loads(json_output.read_text())
+
+            if result.returncode == 0:
+                return [
+                    ValidationIssue(
+                        severity=Severity.INFO,
+                        rule_id="INFO-000",
+                        message=f"Validation completed with no issues. {result.stdout.strip()}",
+                    )
+                ]
+            # No output file — engine may have crashed.
+            stderr_snippet = result.stderr.strip()[:500]
+            msg = f"Engine exited (rc={result.returncode}) but produced no report."
+            if stderr_snippet:
+                msg += f" stderr: {stderr_snippet}"
+            return [ValidationIssue(severity=Severity.ERROR, rule_id="ENGINE-001", message=msg)]
+
+        except subprocess.TimeoutExpired:
+            return [
+                ValidationIssue(
+                    severity=Severity.ERROR,
+                    rule_id="TIMEOUT-001",
+                    message=f"Validation timed out after {timeout:.0f}s.",
+                    suggested_fix="Try a smaller dataset or increase the timeout.",
                 )
+            ]
+        except Exception as exc:
+            return [
+                ValidationIssue(
+                    severity=Severity.ERROR,
+                    rule_id="ERROR-001",
+                    message=f"Validation error: {exc}",
+                )
+            ]
 
     @staticmethod
     def _write_dataset_json(df: pl.DataFrame, path: Path, *, domain: str) -> None:
@@ -290,76 +331,94 @@ class OfficialCDISCValidator:
         - SKIPPED rules from ``Rules_Report`` (rules for other domains
           that couldn't fire — expected in single-dataset validation).
         """
-        conformance = data.get("Conformance_Details", {})
-        dataset_type = conformance.get("Standard", "unknown").lower()
-        model_version = conformance.get("Version", "unknown").lower()
+        name = domain or "unknown"
+        return _parse_report(data, [name], lambda _item: name)[name]
 
-        errors: list[ValidationIssue] = []
-        warnings: list[ValidationIssue] = []
-        infos: list[ValidationIssue] = []
 
-        # ── Issue_Details: one entry per individual finding ──────────
-        for item in data.get("Issue_Details", []):
-            rule_id = item.get("core_id", item.get("Rule", "UNKNOWN"))
-            message = item.get("message", item.get("Message", "No message"))
-            variable = _resolve_variable_field(item)
-            rows = _safe_int(item.get("row", item.get("Rows")))
+def _split_validation_result(data: dict, names: list[str]) -> dict[str, ValidationResult]:
+    """Split one multi-dataset engine report into one result per dataset.
 
-            # Suppress engine-internal noise entirely
-            if _is_engine_noise(message):
-                continue
+    The engine names the dataset of each finding in its ``dataset`` field,
+    as the file name (``ae.json``) or the dataset name (``AE``).
+    """
+    known = {name.upper(): name for name in names}
 
-            severity_str = item.get("Severity", item.get("severity", "WARNING")).upper()
-            try:
-                severity = Severity[severity_str]
-            except KeyError:
-                severity = Severity.WARNING
+    def dataset_of(item: dict) -> str:
+        raw = item.get("dataset", item.get("Dataset"))
+        stem = Path(str(raw)).stem.upper() if raw else "UNKNOWN"
+        return known.get(stem, stem)
 
-            issue = ValidationIssue(
+    return _parse_report(data, names, dataset_of)
+
+
+def _parse_report(
+    data: dict, names: list[str], dataset_of: Callable[[dict], str]
+) -> dict[str, ValidationResult]:
+    """Parse a raw engine report into one result per dataset *dataset_of* names."""
+    conformance = data.get("Conformance_Details", {})
+    dataset_type = conformance.get("Standard", "unknown").lower()
+    model_version = conformance.get("Version", "unknown").lower()
+
+    issues: dict[str, list[ValidationIssue]] = {name: [] for name in names}
+
+    # ── Issue_Details: one entry per individual finding ──────────
+    for item in data.get("Issue_Details", []):
+        message = item.get("message", item.get("Message", "No message"))
+        if _is_engine_noise(message):
+            continue
+
+        severity_str = item.get("Severity", item.get("severity", "WARNING")).upper()
+        try:
+            severity = Severity[severity_str]
+        except KeyError:
+            severity = Severity.WARNING
+
+        issues.setdefault(dataset_of(item), []).append(
+            ValidationIssue(
                 severity=severity,
-                rule_id=rule_id,
+                rule_id=item.get("core_id", item.get("Rule", "UNKNOWN")),
                 message=message,
-                variable=variable,
-                rows_affected=rows,
+                variable=_resolve_variable_field(item),
+                rows_affected=_safe_int(item.get("row", item.get("Rows"))),
             )
-            if severity == Severity.ERROR:
-                errors.append(issue)
-            elif severity == Severity.WARNING:
-                warnings.append(issue)
-            else:
-                infos.append(issue)
-
-        # ── Issue_Summary: real findings aggregated per rule ─────────
-        for item in data.get("Issue_Summary", []):
-            rule_id = item.get("core_id", "UNKNOWN")
-            message = item.get("message", "")
-            if _is_engine_noise(message):
-                continue
-            # Deduplicate: Issue_Summary is a rollup of Issue_Details,
-            # only add if this rule_id wasn't already seen.
-            seen_ids = {i.rule_id for i in errors + warnings}
-            if rule_id not in seen_ids:
-                issue = ValidationIssue(
-                    severity=Severity.WARNING,
-                    rule_id=rule_id,
-                    message=message,
-                )
-                warnings.append(issue)
-
-        # ── Rules_Report: intentionally NOT surfacing SKIPPED rules ──
-        # When validating a single dataset, hundreds of rules for other
-        # domains are skipped. Surfacing them would flood the report with
-        # irrelevant noise.  Structural issues (missing required variables)
-        # are already captured via Issue_Details (CORE-000334, CORE-000355).
-
-        return _build_result(
-            dataset_name=domain or "unknown",
-            dataset_type=dataset_type,
-            model_version=model_version,
-            errors=errors,
-            warnings=warnings,
-            infos=infos,
         )
+
+    # ── Issue_Summary: real findings aggregated per rule ─────────
+    for item in data.get("Issue_Summary", []):
+        rule_id = item.get("core_id", "UNKNOWN")
+        message = item.get("message", "")
+        if _is_engine_noise(message):
+            continue
+        # Issue_Summary is a rollup of Issue_Details: add a rule only once.
+        found = issues.setdefault(dataset_of(item), [])
+        if rule_id not in {i.rule_id for i in found if i.severity != Severity.INFO}:
+            found.append(
+                ValidationIssue(severity=Severity.WARNING, rule_id=rule_id, message=message)
+            )
+
+    # ── Rules_Report: intentionally NOT surfacing SKIPPED rules ──
+    # When validating a single dataset, hundreds of rules for other
+    # domains are skipped. Surfacing them would flood the report with
+    # irrelevant noise.  Structural issues (missing required variables)
+    # are already captured via Issue_Details (CORE-000334, CORE-000355).
+
+    return {
+        name: _result_from_issues(name, dataset_type, model_version, found)
+        for name, found in issues.items()
+    }
+
+
+def _result_from_issues(
+    dataset_name: str, dataset_type: str, model_version: str, issues: list[ValidationIssue]
+) -> ValidationResult:
+    return _build_result(
+        dataset_name=dataset_name,
+        dataset_type=dataset_type,
+        model_version=model_version,
+        errors=[i for i in issues if i.severity == Severity.ERROR],
+        warnings=[i for i in issues if i.severity == Severity.WARNING],
+        infos=[i for i in issues if i.severity == Severity.INFO],
+    )
 
 
 def _safe_int(val: object) -> int | None:

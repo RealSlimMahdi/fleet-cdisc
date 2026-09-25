@@ -10,7 +10,10 @@ from fleet.validation.run_setup import (
     DEFAULT_IG_VERSIONS,
     SUPPORTED_IG_VERSIONS,
     RunSetup,
+    Sweep,
+    SweepDataset,
     build_run_setup,
+    build_sweep,
 )
 from fleet.validation.service import ValidationService
 
@@ -23,6 +26,9 @@ __all__ = [
     "ValidationService",
     "RunSetup",
     "build_run_setup",
+    "Sweep",
+    "SweepDataset",
+    "build_sweep",
     "DEFAULT_IG_VERSIONS",
     "SUPPORTED_IG_VERSIONS",
     "discover_engine",

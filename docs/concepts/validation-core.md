@@ -29,15 +29,25 @@ uv run fleet validate data/sdtm/ae.parquet     # one dataset
 uv run fleet validate --report findings.html   # HTML findings report
 ```
 
-- **Standard detection**: `AD*` datasets validate as ADaM, everything else
-  as SDTM (`--standard` overrides).
+- **Sweep**: the engine runs once for all SDTM datasets and once for all
+  ADaM datasets, so rules that span several datasets of one standard can
+  execute. The report shows one result per dataset.
+- **Standard detection**: a dataset in the configured `sdtm_data` or
+  `adam_data` directory takes the standard of that directory. For any other
+  path, `AD*` datasets validate as ADaM and everything else as SDTM.
+  `--standard` overrides both.
 - **IG versions** come from the config's `sdtm.ig_version` /
   `adam.ig_version` (`--version` overrides).
 - **Custom rules** load automatically from `validation.custom_rules`
   (`--custom-rules` overrides) — see
   [Custom Validation Rules](custom-rules.md).
-- Exit code is 1 when any dataset has errors, so `fleet validate` drops
-  straight into CI.
+- The report header of each dataset shows every input with its source, as on
+  the verb.
+- **Could not run**: a dataset whose directory and file name disagree
+  (`data/sdtm/adsl.parquet`), or an unsupported IG version, is not validated.
+  The reason is printed, and the other datasets still run.
+- Exit codes: 0 no errors, 1 any dataset has errors, 2 any dataset could not
+  run. So `fleet validate` drops straight into CI.
 
 The same run from Python, chainable at the end of a pipeline:
 

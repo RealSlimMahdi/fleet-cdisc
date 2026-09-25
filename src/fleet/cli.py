@@ -908,28 +908,24 @@ def _run_run(args: argparse.Namespace) -> None:
 # fleet validate — CDISC Rules Engine wrapper                             #
 # ────────────────────────────────────────────────────────────────────── #
 
-_DATA_EXTENSIONS = (".parquet", ".csv", ".xpt", ".sas7bdat")
+#: ``fleet validate`` exit codes: 0 no errors, 1 errors found, 2 a dataset could not run.
+_VALIDATE_ERRORS = 1
+_VALIDATE_COULD_NOT_RUN = 2
 
 
-def _collect_data_files(paths: Sequence[str]) -> list[Path]:
-    files: list[Path] = []
-    for raw in paths:
-        p = Path(raw)
-        if p.is_dir():
-            for ext in _DATA_EXTENSIONS:
-                files.extend(sorted(p.glob(f"*{ext}")))
-        elif p.is_file():
-            files.append(p)
-        else:
-            _fail(f"path not found: {p}")
-    return files
-
-
-def _write_validation_report(path: Path, results: list[Any]) -> None:
+def _write_validation_report(
+    path: Path, results: list[Any], could_not_run: Sequence[Any] = ()
+) -> None:
     """Write a minimal self-contained HTML report of validation findings."""
     from html import escape
 
-    rows: list[str] = []
+    rows: list[str] = [
+        "<tr>"
+        f"<td>{escape(d.name)}</td><td>Could not run</td><td></td><td></td>"
+        f"<td>{escape(d.reason or '')}</td>"
+        "</tr>"
+        for d in could_not_run
+    ]
     for res in results:
         for issue in (*res.errors, *res.warnings, *res.infos):
             rows.append(
@@ -957,81 +953,58 @@ def _write_validation_report(path: Path, results: list[Any]) -> None:
 
 
 def _run_validate(args: argparse.Namespace) -> None:
-    from fleet.validation import ValidationService
-    from fleet.validation.engine import discover_engine
+    from fleet.core.exceptions import ValidationSetupError
+    from fleet.validation import ValidationService, build_sweep
 
-    ctx = _try_ctx(args.config)
-
-    # No paths given → validate the study's configured data directories.
-    paths = args.paths
-    if not paths:
-        if ctx is None:
-            _fail(
-                "no dataset paths given and no study_config.yaml found. "
-                "Pass files/directories, or run inside a study workspace."
-            )
-        paths = [str(d) for d in (ctx.sdtm_data_dir, ctx.adam_data_dir) if d.is_dir()]
-        if not paths:
-            _fail(
-                f"no data directories found under {ctx.study_root} "
-                f"({ctx.config.paths.sdtm_data}, {ctx.config.paths.adam_data}). "
-                "Run `fleet run` first or pass explicit paths."
-            )
-
-    files = _collect_data_files(paths)
-    if not files:
-        _fail(
-            "no dataset files found. Pass files or a directory containing "
-            f"{', '.join(_DATA_EXTENSIONS)} files."
+    try:
+        sweep = build_sweep(
+            args.paths,
+            standard=args.standard,
+            version=args.standard_version,
+            custom_rules=args.custom_rules,
+            config=Path(args.config) if args.config else None,
         )
+    except ValidationSetupError as exc:
+        _fail(str(exc), code=_VALIDATE_COULD_NOT_RUN)
 
-    # Custom CORE rules: explicit flag, else validation.custom_rules from the config.
-    custom_rules = args.custom_rules
-    if custom_rules is None and ctx is not None and ctx.custom_rules_dir is not None:
-        custom_rules = str(ctx.custom_rules_dir)
-
-    engine = discover_engine(ctx.study_root if ctx else None)
-    if engine is None:
-        _fail(
-            "CDISC Rules Engine not found. Install it with `fleet install-engine` "
-            "or set FLEET_RULES_ENGINE / validation.engine_path."
-        )
-
-    service = ValidationService(rules_engine_path=engine)
     results = []
-    failed = 0
+    for standard, datasets in sweep.runs().items():
+        setup = datasets[0].setup
+        assert setup is not None  # runs() holds only datasets with a setup
+        print(f"Validating {len(datasets)} {standard} dataset(s) in one engine run:")
+        for d in datasets:
+            print(f"  {d.name} — {d.path}")
+        by_name = ValidationService(rules_engine_path=setup.engine.value).validate_datasets(
+            {d.name: _load_dataset(str(d.path)) for d in datasets},
+            standard=standard,
+            version=setup.ig_version.value,
+            custom_rules=setup.custom_rules.value,
+        )
+        setups = {d.name: d.setup for d in datasets}
+        for name, result in by_name.items():
+            result.setup = setups.get(name, setup)
+            result.print_report()
+            results.append(result)
 
-    for f in files:
-        df = _load_dataset(str(f))
-        name = f.stem.upper()
-        standard = args.standard or ("adam" if name.startswith("AD") else "sdtm")
-        version = args.standard_version
-        if version is None and ctx is not None:
-            # The config's declared IG versions drive validation ("3-4" → "3.4").
-            declared = ctx.config.adam if standard == "adam" else ctx.config.sdtm
-            version = declared.ig_version
-        version = (version or _default_ig(standard)).replace("-", ".")
-        kwargs: dict[str, Any] = {"custom_rules": custom_rules, "version": version}
-
-        print(f"Validating {name} ({standard}) — {f}")
-        if standard == "adam":
-            result = service.validate_adam(df, name, **kwargs)
-        else:
-            result = service.validate_sdtm(df, name, **kwargs)
-        results.append(result)
-        result.print_report()
-        if result.errors:
-            failed += 1
+    could_not_run = sweep.could_not_run
+    for d in could_not_run:
+        _err(f"{d.name} ({d.path}): {d.reason}")
 
     if args.report:
         report_path = Path(args.report)
-        _write_validation_report(report_path, results)
+        _write_validation_report(report_path, results, could_not_run)
         print(f"HTML report → {report_path}")
 
+    failed = sum(1 for r in results if r.errors)
     print()
-    print(f"Validated {len(files)} dataset(s): {len(files) - failed} passed, {failed} failed.")
+    print(
+        f"Validated {len(results)} dataset(s): {len(results) - failed} passed, "
+        f"{failed} failed, {len(could_not_run)} could not run."
+    )
+    if could_not_run:
+        sys.exit(_VALIDATE_COULD_NOT_RUN)
     if failed:
-        sys.exit(1)
+        sys.exit(_VALIDATE_ERRORS)
 
 
 # ────────────────────────────────────────────────────────────────────── #
@@ -2358,7 +2331,10 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     # -- validate ---------------------------------------------------------- #
     validate = sub.add_parser(
         "validate",
-        help="Validate datasets with the CDISC Rules Engine (exit 1 on errors).",
+        help=(
+            "Validate datasets with the CDISC Rules Engine, one engine run per standard "
+            "(exit 0 no errors, 1 errors, 2 a dataset could not run)."
+        ),
     )
     validate.add_argument(
         "paths",
@@ -2373,7 +2349,10 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         "--standard",
         choices=["sdtm", "adam"],
         default=None,
-        help="Force the standard. Default: AD* datasets → adam, others → sdtm.",
+        help=(
+            "Force the standard. Default: the configured data directory that holds "
+            "the dataset, else AD* datasets → adam, others → sdtm."
+        ),
     )
     validate.add_argument(
         "--version",

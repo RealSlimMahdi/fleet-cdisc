@@ -33,7 +33,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | ------- | ------------ |
 | [`fleet init`](#fleet-init) | Bootstrapping pipeline: cfg → define → ct → rules. |
 | [`fleet run`](#fleet-run) | Execute define.yaml derivation pipelines and write datasets. |
-| [`fleet validate`](#fleet-validate) | Validate datasets with the CDISC Rules Engine (exit 1 on errors). |
+| [`fleet validate`](#fleet-validate) | Validate datasets with the CDISC Rules Engine, one engine run per standard (exit 0 no errors, 1 errors, 2 a dataset could not run). |
 | [`fleet check`](#fleet-check) | CI gate: config parse + define.yaml schema + custom-rule YAMLs. |
 | [`fleet compare`](#fleet-compare) | Compare a candidate dataset against a base on keys (exit 0 equal, 1 different, 2 could not run). |
 | [`fleet new`](#fleet-new) | Bootstrap a study: init cfg → define → ct → rules, one confirmation. |
@@ -118,7 +118,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | Option | Default | Description |
 | ------ | ------- | ----------- |
 | `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
-| `--standard` | _(none)_ | Force the standard. Default: AD* datasets → adam, others → sdtm. Choices: `sdtm`, `adam`. |
+| `--standard` | _(none)_ | Force the standard. Default: the configured data directory that holds the dataset, else AD* datasets → adam, others → sdtm. Choices: `sdtm`, `adam`. |
 | `--version` | _(none)_ | IG version. Default: the sdtm/adam ig_version declared in the discovered study_config.yaml (3.4 / 1.3 outside a study). |
 | `--custom-rules` | _(none)_ | Directory of custom validation rule YAML files. Default: validation.custom_rules from the discovered study_config.yaml. |
 | `--report` | _(none)_ | Write an HTML findings report to PATH. |

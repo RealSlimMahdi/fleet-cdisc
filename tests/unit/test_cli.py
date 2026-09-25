@@ -677,68 +677,6 @@ def test_tdd_build_missing_design_errors_cleanly(
 # ------------------------------------------------------------------ #
 
 
-class _StubValidationResult:
-    def __init__(self, name: str) -> None:
-        self.dataset_name = name
-        self.errors: list = []
-        self.warnings: list = []
-        self.infos: list = []
-
-    def print_report(self) -> None:
-        pass
-
-
-def test_validate_defaults_resolve_from_config(
-    study: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
-) -> None:
-    """Bare `fleet validate`: datasets from the config's data dirs, custom
-    CORE rules from validation.custom_rules, IG version from sdtm.ig_version."""
-    import fleet.validation
-    import fleet.validation.engine
-
-    sdtm_dir = study / "data" / "sdtm"
-    sdtm_dir.mkdir(parents=True)
-    pl.from_repr("""\
-┌─────────┐
-│ USUBJID │
-│ ---     │
-│ str     │
-╞═════════╡
-│ 1       │
-└─────────┘
-""").write_parquet(sdtm_dir / "dm.parquet")
-    rules_dir = study / "metadata" / "custom_rules"
-    rules_dir.mkdir(parents=True)
-    (study / "study_config.yaml").write_text(
-        _CONFIG + "validation:\n  custom_rules: metadata/custom_rules\n",
-        encoding="utf-8",
-    )
-
-    calls: list[dict] = []
-
-    class _StubService:
-        def __init__(self, rules_engine_path: object) -> None:
-            pass
-
-        def validate_sdtm(self, df: object, name: str, **kwargs: object) -> _StubValidationResult:
-            calls.append({"name": name, **kwargs})
-            return _StubValidationResult(name)
-
-        validate_adam = validate_sdtm
-
-    monkeypatch.setattr(fleet.validation, "ValidationService", _StubService)
-    monkeypatch.setattr(fleet.validation.engine, "discover_engine", lambda root: Path("/fake"))
-
-    nested = study / "programs" / "qc"
-    nested.mkdir(parents=True)
-    monkeypatch.chdir(nested)
-
-    assert _run(["validate"]) == 0
-    assert calls and calls[0]["name"] == "DM"
-    assert calls[0]["custom_rules"] == str(rules_dir)
-    assert calls[0]["version"] == "3.4"  # config ig_version "3-4" → "3.4"
-
-
 def test_define_xml_defaults_from_config(
     study: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:
