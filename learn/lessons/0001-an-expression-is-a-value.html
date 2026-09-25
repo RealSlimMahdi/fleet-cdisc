@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lesson 01. An expression is a value</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+<main class="sheet">
+
+<header class="lesson-head">
+  <p class="kicker">Lesson 01 · Polars in Fleet</p>
+  <h1>An expression is a value</h1>
+  <p class="deck">Why every function in <code>fleet/adam/utils.py</code> returns
+  <code>pl.Expr</code>, and never receives a DataFrame.</p>
+  <p class="meta">
+    <span><b>Time</b> 30 minutes</span>
+    <span><b>Polars</b> 1.41.0</span>
+    <span><b>Mission</b> read <code>adam/utils.py</code> and explain every expression</span>
+    <span><b>Card</b> <a href="../reference/expressions-and-contexts.html">Expressions and contexts</a></span>
+  </p>
+</header>
+
+<p class="lede">There is one idea behind the whole of Polars, and therefore behind the
+whole of Fleet. <strong>A derivation is a value you can hold in a variable.</strong>
+Once that lands, the shape of Fleet stops being a design choice and starts being the
+only sensible option.</p>
+
+<h2><span class="num">01</span>What SAS will not let you do</h2>
+
+<p>In SAS, a derivation cannot exist on its own. This is legal:</p>
+
+<figure class="code">
+<figcaption><span>SAS</span></figcaption>
+<pre><code>data adlb;
+  set adlb;
+  chg = aval - base;
+run;</code></pre>
+</figure>
+
+<p>But <code>chg = aval - base;</code> is a <b>statement</b>. It only means something
+inside a DATA step. You cannot put it in a macro variable and get back a derivation.
+You can put the <i>text</i> in a macro variable, which is why every SAS shop ends up
+with macro code that pastes strings together. Text is not a derivation. Nothing checks
+it until it is pasted in and run.</p>
+
+<p class="sidenote"><b>Why this matters for Fleet.</b> A tool that stores derivations as
+text has to re-parse them, and cannot answer "which columns does this read" without
+guessing. Fleet answers that question exactly, because it holds objects, not strings.</p>
+
+<h2><span class="num">02</span>In Polars, the derivation is an object</h2>
+
+<p>Write the same derivation in Polars and assign it to a name:</p>
+
+<figure class="code">
+<figcaption><span>Python</span></figcaption>
+<pre><code>import polars as pl
+
+chg_expr = pl.col("AVAL") - pl.col("BASE")
+print(chg_expr)</code></pre>
+</figure>
+
+<figure class="code">
+<figcaption><span>output</span></figcaption>
+<pre class="out"><code>[(col("AVAL")) - (col("BASE"))]</code></pre>
+</figure>
+
+<p>Read that carefully. There is no data. There is no ADLB. There is no error about a
+missing <code>BASE</code> column, even though no frame has been mentioned. Polars printed
+back a <b>plan</b>: subtract the column named BASE from the column named AVAL, whenever
+someone gets around to it.</p>
+
+<div class="callout callout--key">
+  <span class="tag">The definition</span>
+  <p>The Polars user guide calls an expression "a lazy representation of a data
+  transformation". Lazy means <b>nothing has happened yet</b>. The object describes work.
+  It does not do work.</p>
+</div>
+
+<p>This is the part that has no SAS equivalent. <code>chg_expr</code> is a normal Python
+value. You can put it in a list, return it from a function, store it in a dictionary,
+pass it to another function, or reuse it in five different pipelines.</p>
+
+<h2><span class="num">03</span>A context is where the expression runs</h2>
+
+<p>An expression needs somewhere to run. That place is called a <b>context</b>. There are
+four you will meet in Fleet:</p>
+
+<table>
+<thead><tr><th>Context</th><th>What comes back</th><th>Closest SAS</th></tr></thead>
+<tbody>
+<tr><td><code>df.select(...)</code></td><td>Only the columns you name</td><td><code>PROC SQL</code> select list</td></tr>
+<tr><td><code>df.with_columns(...)</code></td><td>Everything you had, plus the new columns</td><td>DATA step assignment</td></tr>
+<tr><td><code>df.filter(...)</code></td><td>Same columns, fewer rows</td><td><code>WHERE</code> or subsetting <code>IF</code></td></tr>
+<tr><td><code>df.group_by(...).agg(...)</code></td><td>One row per group</td><td><code>PROC SUMMARY</code></td></tr>
+</tbody>
+</table>
+
+<p class="sidenote"><b>Keep this.</b> The full table, with the rules and the traps, is on
+the <a href="../reference/expressions-and-contexts.html">Expressions and contexts</a>
+reference card. Print that one. You will not print this lesson twice.</p>
+
+<h2><span class="num">04</span>Same expression, two contexts, two answers</h2>
+
+<p>This is the point that proves the expression is not the computation. Take a five-row
+ADLB and one expression, <code>pl.col("AVAL").mean()</code>.</p>
+
+<figure class="code">
+<figcaption><span>the data</span></figcaption>
+<pre class="out"><code>shape: (5, 5)
+┌─────────┬─────────┬─────────┬───────┬──────┐
+│ USUBJID ┆ PARAMCD ┆ AVISITN ┆ ABLFL ┆ AVAL │
+│ ---     ┆ ---     ┆ ---     ┆ ---   ┆ ---  │
+│ str     ┆ str     ┆ i64     ┆ str   ┆ f64  │
+╞═════════╪═════════╪═════════╪═══════╪══════╡
+│ S001    ┆ ALT     ┆ 0       ┆ Y     ┆ 30.0 │
+│ S001    ┆ ALT     ┆ 1       ┆ null  ┆ 45.0 │
+│ S001    ┆ ALT     ┆ 2       ┆ null  ┆ 52.0 │
+│ S002    ┆ ALT     ┆ 0       ┆ Y     ┆ 28.0 │
+│ S002    ┆ ALT     ┆ 1       ┆ null  ┆ 26.0 │
+└─────────┴─────────┴─────────┴───────┴──────┘</code></pre>
+</figure>
+
+<div class="compare">
+  <div>
+    <h4>select</h4>
+<pre><code>mean_expr = pl.col("AVAL").mean()
+adlb.select(mean_expr)</code></pre>
+<pre class="out"><code>shape: (1, 1)
+┌──────┐
+│ AVAL │
+│ ---  │
+│ f64  │
+╞══════╡
+│ 36.2 │
+└──────┘</code></pre>
+  </div>
+  <div>
+    <h4>with_columns</h4>
+<pre><code>adlb.with_columns(
+    mean_expr.alias("MEAN"))</code></pre>
+<pre class="out"><code>shape: (5, 6)
+│ ... ┆ AVAL ┆ MEAN │
+╞═════╪══════╪══════╡
+│ ... ┆ 30.0 ┆ 36.2 │
+│ ... ┆ 45.0 ┆ 36.2 │
+│ ... ┆ 52.0 ┆ 36.2 │
+│ ... ┆ 28.0 ┆ 36.2 │
+│ ... ┆ 26.0 ┆ 36.2 │</code></pre>
+  </div>
+</div>
+
+<p>One expression. One frame. Five rows on the right, one row on the left. The expression
+did not decide that. <b>The context decided it.</b></p>
+
+<div class="callout callout--sas">
+  <span class="tag">In SAS terms</span>
+  <p>The left is <code>PROC MEANS</code>. The right is <code>PROC SQL</code> remerging a
+  summary statistic back onto the detail rows, or a <code>MERGE</code> of a summary
+  dataset back onto the original. Same statistic, different shape. In SAS you choose the
+  shape by choosing a different procedure. In Polars you choose it by choosing a different
+  context, and keep the same expression.</p>
+</div>
+
+<h2><span class="num">05</span>This is why Fleet looks the way it does</h2>
+
+<p>Now open the real thing. This is <code>chg()</code>, unmodified, from
+<a href="../../src/fleet/adam/utils.py">src/fleet/adam/utils.py</a>:</p>
+
+<figure class="code">
+<figcaption><span>src/fleet/adam/utils.py</span><a href="../../src/fleet/adam/utils.py">open the file</a></figcaption>
+<pre><code>def chg(aval: str = "AVAL", base: str = "BASE", target: str = "CHG") -> pl.Expr:
+    """Change from baseline: CHG = AVAL - BASE."""
+    return (pl.col(aval) - pl.col(base)).alias(target)</code></pre>
+</figure>
+
+<p>Look at what is missing. There is no DataFrame argument. There is no return of data.
+The return type is <code>pl.Expr</code>. This function cannot compute a change from
+baseline, and is not trying to. It <b>builds a derivation and hands it back</b>. Someone
+else supplies the data and the context.</p>
+
+<p>That someone else is <code>_chain()</code>, in
+<a href="../../src/fleet/core/_verb_mixin.py">src/fleet/core/_verb_mixin.py</a>:</p>
+
+<figure class="code">
+<figcaption><span>src/fleet/core/_verb_mixin.py, line 254</span></figcaption>
+<pre><code>new = copy.copy(self)
+new._lazy = self._lazy.with_columns(list(exprs))</code></pre>
+</figure>
+
+<p>There is the context: <code>with_columns</code>. Every Fleet verb you have ever called
+ends here, adding its expressions to a growing plan. And still nothing runs, because
+<code>_lazy</code> is a <code>LazyFrame</code>, not a <code>DataFrame</code>. Work happens
+in exactly one place, <code>to_frame()</code>:</p>
+
+<figure class="code">
+<figcaption><span>src/fleet/core/_verb_mixin.py, line 313</span></figcaption>
+<pre><code>def to_frame(self) -> DataFrame:
+    ...
+    return self._lazy.collect()</code></pre>
+</figure>
+
+<div class="callout callout--key">
+  <span class="tag">The whole architecture, in one sentence</span>
+  <p>A Fleet verb chain is not a sequence of DATA steps. It is <b>one DATA step that you
+  are still writing</b>. <code>to_frame()</code> is the <code>run;</code>.</p>
+</div>
+
+<p>This also explains two things you have probably noticed and not questioned. Fleet can
+tell you that a column is missing <i>before</i> collecting anything, because it can ask an
+expression which columns it reads. And Fleet can record lineage without you logging
+anything, because the expression object is still available to inspect after the verb has
+returned.</p>
+
+<h2><span class="num">06</span>Do it now</h2>
+
+<div class="callout callout--try">
+  <span class="tag">Hands on, 10 minutes</span>
+  <p>A scratch file is waiting for you. Run it, then change it.</p>
+<pre><code>cd /Users/aboutm/Code/Python/Fleet
+uv run python learn/scratch/lesson01.py</code></pre>
+  <p>Then make these three edits, one at a time, and predict the output <b>before</b> you
+  rerun:</p>
+  <ol>
+    <li>Change <code>select</code> to <code>with_columns</code> in step 3. How many rows?</li>
+    <li>Delete the <code>.alias("MEAN")</code> in step 3. What is the column called, and why?</li>
+    <li>In step 2, print <code>chg_expr.meta.root_names()</code>. What does Fleet use that for?</li>
+  </ol>
+</div>
+
+<h2><span class="num">07</span>Drill</h2>
+
+<p>Answer from memory. Do not scroll up. Each question locks after one click, because
+guessing until the box turns green teaches nothing.</p>
+
+<div class="quiz" data-quiz>
+<ol>
+
+  <li class="q" data-answer="1">
+    <p class="q-stem">This line runs. What now exists in memory?</p>
+    <pre><code>base_expr = pl.col("AVAL").max().over("USUBJID")</code></pre>
+    <ul class="q-opts">
+      <li><button class="opt">A recipe that has not been run</button></li>
+      <li><button class="opt">A column holding the computed maximum values</button></li>
+      <li><button class="opt">A frame with one row per subject</button></li>
+      <li><button class="opt">An error, because no data was given</button></li>
+    </ul>
+    <p class="q-feedback" hidden>An expression is a lazy description. No frame was named,
+    so no data could have been read. Polars will not complain about a missing column
+    either, because it has not yet been shown a schema.</p>
+  </li>
+
+  <li class="q" data-answer="1">
+    <p class="q-stem">ADLB has five rows. What do these two lines return?</p>
+    <pre><code>adlb.select(pl.col("AVAL").mean())
+adlb.with_columns(pl.col("AVAL").mean().alias("MEAN"))</code></pre>
+    <ul class="q-opts">
+      <li><button class="opt">One row, then five rows with broadcast</button></li>
+      <li><button class="opt">Five rows, then one row after aggregating</button></li>
+      <li><button class="opt">One row each, because mean always aggregates</button></li>
+      <li><button class="opt">Five rows each, because mean preserves length</button></li>
+    </ul>
+    <p class="q-feedback" hidden><code>select</code> returns only what you asked for, and
+    a mean is one value. <code>with_columns</code> must match the original row count, so
+    the single value is broadcast down all five rows. Same expression, different context.</p>
+  </li>
+
+  <li class="q" data-answer="1">
+    <p class="q-stem">Why can this Fleet function work without a DataFrame argument?</p>
+    <pre><code>def chg(aval="AVAL", base="BASE", target="CHG") -> pl.Expr:
+    return (pl.col(aval) - pl.col(base)).alias(target)</code></pre>
+    <ul class="q-opts">
+      <li><button class="opt">Because it builds an expression, and the caller supplies data</button></li>
+      <li><button class="opt">Because Polars finds the current frame in the enclosing scope</button></li>
+      <li><button class="opt">Because the default column names make the frame argument unnecessary</button></li>
+      <li><button class="opt">Because Fleet keeps the working frame in a global variable</button></li>
+    </ul>
+    <p class="q-feedback" hidden>The return type says it: <code>pl.Expr</code>. The
+    function is an expression factory. Data arrives later, when a context in
+    <code>_chain()</code> runs the expression against a real frame.</p>
+  </li>
+
+  <li class="q" data-answer="2">
+    <p class="q-stem">This is Fleet's <code>_chain()</code>. When does the arithmetic
+    actually happen?</p>
+    <pre><code>new._lazy = self._lazy.with_columns(list(exprs))</code></pre>
+    <ul class="q-opts">
+      <li><button class="opt">On this line, once for each verb</button></li>
+      <li><button class="opt">Later, when to_frame collects the plan</button></li>
+      <li><button class="opt">Immediately, because with_columns is eager</button></li>
+      <li><button class="opt">Never, unless a validation rule forces it</button></li>
+    </ul>
+    <p class="q-feedback" hidden><code>_lazy</code> is a <code>LazyFrame</code>. Calling
+    <code>with_columns</code> on a lazy plan extends the plan and returns a new plan. The
+    only <code>collect()</code> is in <code>to_frame()</code>. That is why a chain of
+    twenty verbs costs nothing until the last line.</p>
+  </li>
+
+  <li class="q" data-answer="1">
+    <p class="q-stem">Fleet's <code>baseline()</code>. There is exactly one baseline record
+    per subject and parameter. So why is <code>.max()</code> in there?</p>
+    <pre><code>pl.when(pl.col("ABLFL") == "Y")
+  .then(pl.col("AVAL"))
+  .otherwise(None)
+  .max()
+  .over(["USUBJID", "PARAMCD"])</code></pre>
+    <ul class="q-opts">
+      <li><button class="opt">Every other row became null, and max skips null values</button></li>
+      <li><button class="opt">It takes the largest AVAL across all visits, for safety</button></li>
+      <li><button class="opt">Polars requires an aggregate before over, and max is cheapest</button></li>
+      <li><button class="opt">It guards against a subject with two baseline flags set</button></li>
+    </ul>
+    <p class="q-feedback" hidden>The <code>when / then / otherwise(None)</code> blanks
+    every non-baseline row. Inside each subject and parameter, exactly one value survives.
+    Aggregations in Polars skip <code>null</code>, so <code>max()</code> of one surviving
+    value and four nulls is that one value. <code>max()</code> is not picking a maximum
+    here. It is picking <b>the only one left</b>. This is a common Polars idiom and you
+    will see it again.</p>
+  </li>
+
+</ol>
+<p class="quiz-score" data-score></p>
+</div>
+
+<h2><span class="num">08</span>Say it without looking</h2>
+
+<p>Close the lesson and answer out loud. Retrieval is what makes this stick, not rereading.</p>
+
+<details class="recall">
+  <summary>Name the four contexts, and what each returns.</summary>
+  <p><code>select</code>: only the columns named. <code>with_columns</code>: everything,
+  plus the new columns. <code>filter</code>: same columns, fewer rows.
+  <code>group_by().agg()</code>: one row per group.</p>
+</details>
+
+<details class="recall">
+  <summary>What does <code>print(pl.col("AVAL") - pl.col("BASE"))</code> show, and why?</summary>
+  <p><code>[(col("AVAL")) - (col("BASE"))]</code>. It shows the plan, not a result, because
+  an expression is a description of work and no context has run it.</p>
+</details>
+
+<details class="recall">
+  <summary>Where, exactly, does a Fleet pipeline do its work?</summary>
+  <p>In <code>to_frame()</code>, which calls <code>self._lazy.collect()</code>. Every verb
+  before that only extends a lazy plan.</p>
+</details>
+
+<section class="source">
+  <span class="tag">Read this before lesson 02</span>
+  <h3><a href="https://docs.pola.rs/user-guide/concepts/expressions-and-contexts/">Polars user guide: Expressions and contexts</a></h3>
+  <p>The primary source for everything above, written by the Polars team. About ten
+  minutes. Read as far as "Expression expansion", then stop. Expansion is lesson 03.</p>
+</section>
+
+<section class="ask">
+  <p><b>Your teacher is one message away.</b> If any of this was unclear, ask. Good
+  questions for right now:</p>
+  <ul>
+    <li>"Show me a Fleet verb where the context is not <code>with_columns</code>."</li>
+    <li>"What happens if I pass an expression to the wrong context?"</li>
+    <li>"Why does Fleet use <code>LazyFrame</code> internally but hand me a <code>DataFrame</code>?"</li>
+  </ul>
+  <p>Tell me your drill score. It sets what lesson 02 covers.</p>
+</section>
+
+<section class="footer-nav">
+  <h4>This lesson</h4>
+  <ul>
+    <li>Reference card: <a href="../reference/expressions-and-contexts.html">Expressions and contexts</a></li>
+    <li>Scratch file: <code>learn/scratch/lesson01.py</code></li>
+    <li>Fleet source: <a href="../../src/fleet/adam/utils.py">adam/utils.py</a>,
+        <a href="../../src/fleet/core/_verb_mixin.py">core/_verb_mixin.py</a></li>
+  </ul>
+  <h4>Next</h4>
+  <ul>
+    <li class="next">Lesson 02: <code>over()</code>, and why <code>group_by</code> is not the same thing.
+        Built on question 5 above.</li>
+  </ul>
+  <h4>Workspace</h4>
+  <ul>
+    <li><a href="../MISSION.md">MISSION.md</a> ·
+        <a href="../RESOURCES.md">RESOURCES.md</a> ·
+        <a href="../GLOSSARY.md">GLOSSARY.md</a></li>
+  </ul>
+</section>
+
+</main>
+</body>
+</html>

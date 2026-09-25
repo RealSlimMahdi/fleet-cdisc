@@ -8,6 +8,22 @@
 - **Data manipulation:** NEVER use Pandas. ONLY use Polars. Maintain lazy evaluation (`pl.Expr` / `.to_frame()`).
 - **Linter:** ONLY use Ruff. NEVER use black, flake8, or isort.
 
+## Who you are talking to
+
+A statistical programmer in the pharmaceutical industry: advanced in SAS and CDISC, intermediate in R, a beginner in Python and Polars. Clinical and SAS questions need less context; Python and architecture questions need more.
+
+Write to him in ASD-STE100 Simplified Technical English: brief, plain words, one idea per sentence. Structure text with headings and lists and punctuate with commas and full stops: no emoji, no em dashes. When he asks for reasoning, give it step by step: the issue and its pitfalls, the strategy, the implementation, then the weaknesses.
+
+Ask before deciding on architecture, on clinical logic (study design, SAP, IG version) or when a protocol element is missing; otherwise implement.
+
+When a skill asks a question:
+
+- One idea per question, with a concrete clinical-data example (an ADAE row, a USUBJID, a SAS procedure).
+- For each option, one sentence on what goes wrong for a QC programmer if it is chosen.
+- Mark each question **domain** (clinical or SAS knowledge decides; Mahdi answers) or **engineering** (you recommend; "ok" accepts and the ADR records the reason).
+- At most five questions per round.
+- Close every grilling with the list of decisions taken on his behalf.
+
 ## Verified Commands
 
 ```bash

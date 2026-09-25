@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reference: Expressions and Contexts</title>
+<link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+<main class="sheet">
+
+<header class="lesson-head">
+  <p class="kicker">Reference card</p>
+  <h1>Expressions and contexts</h1>
+  <p class="deck">The four places a Polars expression can run, and what Fleet does in each.</p>
+  <p class="meta">
+    <span><b>Polars</b> 1.41.0</span>
+    <span><b>Fleet</b> src/fleet/core/_verb_mixin.py</span>
+    <span><b>Print</b> two sides</span>
+  </p>
+</header>
+
+<h2><span class="num">Definition</span>The two words</h2>
+
+<dl>
+  <dt>Expression</dt>
+  <dd>A lazy description of a data transformation. A Python object. It holds no data
+  and computes nothing. <code>pl.col("AVAL") - pl.col("BASE")</code> is an expression.</dd>
+  <dt>Context</dt>
+  <dd>The place an expression is run. The same expression gives a different result in a
+  different context.</dd>
+</dl>
+
+<p class="sidenote"><b>Source.</b> Both definitions are from the Polars user guide,
+<a href="https://docs.pola.rs/user-guide/concepts/expressions-and-contexts/">Expressions and contexts</a>.</p>
+
+<h2><span class="num">Table</span>The four contexts</h2>
+
+<table>
+<thead>
+<tr><th>Context</th><th>Result shape</th><th>Rule</th><th>Closest SAS</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>df.select(...)</code></td>
+  <td>Only the columns you name</td>
+  <td>All results must share one length, or be a scalar that broadcasts</td>
+  <td><code>PROC SQL</code> select list</td>
+</tr>
+<tr>
+  <td><code>df.with_columns(...)</code></td>
+  <td>All original columns, plus the new ones</td>
+  <td>Results must match the original row count</td>
+  <td>DATA step assignment</td>
+</tr>
+<tr>
+  <td><code>df.filter(...)</code></td>
+  <td>Same columns, fewer rows</td>
+  <td>Expressions must evaluate to Boolean</td>
+  <td><code>WHERE</code> or subsetting <code>IF</code></td>
+</tr>
+<tr>
+  <td><code>df.group_by(...).agg(...)</code></td>
+  <td>One row per group</td>
+  <td>Grouping columns first, then one column per aggregate</td>
+  <td><code>PROC SUMMARY</code></td>
+</tr>
+</tbody>
+</table>
+
+<div class="callout callout--key">
+  <span class="tag">The one that is not a context</span>
+  <p><code>.over(...)</code> is not a context. It is a modifier on an expression. It
+  computes per group but gives back <b>one row per input row</b>, not one row per group.
+  This is the SAS <code>PROC SQL</code> remerge, where a summary statistic is joined
+  back onto the detail rows.</p>
+</div>
+
+<h2><span class="num">Anatomy</span>How an expression is built</h2>
+
+<figure class="code">
+<figcaption><span>read left to right</span></figcaption>
+<pre><code>pl.col("AVAL")              # 1. start: name a column
+  .cast(pl.Float64)         # 2. transform: returns a new expression
+  .max()                    # 3. aggregate: many values become one
+  .over(["USUBJID"])        # 4. scope: do 1 to 3 inside each subject
+  .alias("BASE")            # 5. name: what the output column is called</code></pre>
+</figure>
+
+<p>Every step returns a new expression. Nothing runs. The object is only a plan until a
+context receives it.</p>
+
+<h2><span class="num">Starters</span>Where an expression begins</h2>
+
+<div class="card-grid">
+  <div class="card">
+    <h4>pl.col</h4>
+    <pre><code>pl.col("AVAL")
+pl.col("AVAL", "BASE")
+pl.col(pl.Float64)</code></pre>
+    <p>Name one column, several columns, or every column of a dtype. The last two
+    <b>expand</b> into several expressions.</p>
+  </div>
+  <div class="card">
+    <h4>pl.lit</h4>
+    <pre><code>pl.lit("Y")
+pl.lit(None, dtype=pl.String)</code></pre>
+    <p>A constant. Needed when the value is not a column. Give a dtype for a typed null.</p>
+  </div>
+  <div class="card">
+    <h4>pl.when</h4>
+    <pre><code>pl.when(cond).then(a)
+  .when(cond2).then(b)
+  .otherwise(c)</code></pre>
+    <p>Branching. Chain several <code>.when()</code> calls for an if / else if ladder.
+    First match wins.</p>
+  </div>
+  <div class="card">
+    <h4>pl.len</h4>
+    <pre><code>pl.len()</code></pre>
+    <p>Row count. Useful inside <code>.agg()</code> and <code>.over()</code>.</p>
+  </div>
+</div>
+
+<h2><span class="num">Fleet</span>Where each context lives in the codebase</h2>
+
+<table>
+<thead><tr><th>Fleet code</th><th>What it does</th></tr></thead>
+<tbody>
+<tr>
+  <td><code>fleet/adam/utils.py</code></td>
+  <td>Pure expression factories. Every function returns <code>pl.Expr</code>. No context,
+      no data, no frame argument.</td>
+</tr>
+<tr>
+  <td><code>_chain(*exprs)</code><br>
+      <code>core/_verb_mixin.py:254</code></td>
+  <td><code>new._lazy = self._lazy.with_columns(list(exprs))</code>.
+      The <code>with_columns</code> context, applied to a <b>lazy</b> plan. Still nothing runs.</td>
+</tr>
+<tr>
+  <td><code>to_frame()</code><br><code>core/_verb_mixin.py:313</code></td>
+  <td><code>self._lazy.collect()</code>. The only place work happens.</td>
+</tr>
+<tr>
+  <td><code>_materialise_then(df)</code></td>
+  <td>Forces a collect, then starts a fresh lazy plan. Used by verbs that need real data,
+      such as joins.</td>
+</tr>
+</tbody>
+</table>
+
+<div class="callout callout--sas">
+  <span class="tag">Mental model for a SAS programmer</span>
+  <p>A Fleet verb chain is not a series of DATA steps. It is one DATA step that you are
+  still writing. <code>to_frame()</code> is the <code>run;</code>.</p>
+</div>
+
+<h2><span class="num">Traps</span>Things that will catch you</h2>
+
+<div class="callout callout--trap">
+  <span class="tag">Null is not NaN</span>
+  <p>Missing data is always <code>null</code>, for every dtype. <code>NaN</code> is a
+  valid float, not missing. Aggregations such as <code>mean</code> and <code>sum</code>
+  <b>skip null</b> but <b>propagate NaN</b>. <code>null_count()</code> does not count
+  <code>NaN</code>. See
+  <a href="https://docs.pola.rs/user-guide/expressions/missing-data/">Missing data</a>.</p>
+</div>
+
+<div class="callout callout--trap">
+  <span class="tag">and / or / not do not work</span>
+  <p>Use <code>&amp;</code>, <code>|</code>, <code>~</code>, and parenthesise every
+  operand: <code>(a &gt; 1) &amp; (b &lt; 2)</code>. Python's <code>and</code> tries to
+  reduce an expression to a single true or false value, which an expression is not.</p>
+</div>
+
+<div class="callout callout--trap">
+  <span class="tag">group_by is not over</span>
+  <p><code>group_by</code> collapses to one row per group. <code>over</code> keeps every
+  row. If a Fleet verb returns fewer rows than you expected, this is the first thing to
+  check. See
+  <a href="https://docs.pola.rs/user-guide/expressions/window-functions/">Window functions</a>.</p>
+</div>
+
+<div class="callout callout--trap">
+  <span class="tag">select needs equal lengths</span>
+  <p>In <code>select</code>, every expression must produce the same length, or a scalar
+  that broadcasts. Mixing a 5-row column and a 2-row column raises an error.</p>
+</div>
+
+<h2><span class="num">Inspect</span>Seeing an expression without running it</h2>
+
+<figure class="code">
+<pre><code>print(expr)                 # the expression tree, as text
+expr.meta.root_names()      # which input columns it reads
+expr.meta.output_name()     # which column it writes
+lf.explain()                # the whole optimised query plan
+df.adam.explain()           # the same, through Fleet</code></pre>
+</figure>
+
+<p><code>root_names()</code> and <code>output_name()</code> are exactly what Fleet's
+<code>_validate_chain_exprs</code> uses to tell you that a column is missing before
+anything is collected.</p>
+
+<section class="footer-nav">
+  <h4>Lessons that use this card</h4>
+  <ul>
+    <li><a href="../lessons/0001-an-expression-is-a-value.html">Lesson 01: An expression is a value</a></li>
+  </ul>
+  <h4>Primary sources</h4>
+  <ul>
+    <li><a href="https://docs.pola.rs/user-guide/concepts/expressions-and-contexts/">Expressions and contexts</a></li>
+    <li><a href="https://docs.pola.rs/user-guide/concepts/lazy-api/">Lazy API</a></li>
+    <li><a href="https://docs.pola.rs/user-guide/expressions/window-functions/">Window functions</a></li>
+    <li><a href="https://docs.pola.rs/user-guide/expressions/missing-data/">Missing data</a></li>
+  </ul>
+</section>
+
+</main>
+</body>
+</html>
