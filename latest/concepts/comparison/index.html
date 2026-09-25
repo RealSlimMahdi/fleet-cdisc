@@ -2403,10 +2403,16 @@ and turns the verdict into the exit code:</p>
 </tr>
 <tr>
 <td><code>2</code></td>
-<td>The comparison could not run: unreadable file, missing or duplicate keys, a negative tolerance, no comparable variables, or an <code>--out</code> or <code>--report</code> path that cannot be written. The reason is on stderr.</td>
+<td>The comparison could not run: unreadable file, missing or duplicate keys, a negative tolerance, a <code>--variables</code> list that names only keys, or an <code>--out</code> or <code>--report</code> path that cannot be written. The reason is on stderr.</td>
 </tr>
 </tbody>
 </table>
+<p>A compare that checks no values still gives a verdict. When the two sides
+share only their keys, the verdict follows the observations: the same key
+values on both sides are EQUAL, a one-sided key or variable is NOT EQUAL.
+When both sides have no observations, the verdict is EQUAL. In both cases the
+report warns above the first number, so an EQUAL that checked no values
+never reads as a full pass (<a href="../../adr/0004-a-compare-that-checks-no-values-keeps-the-two-value-verdict/">ADR-0004</a>).</p>
 <p><code>--keys</code> is required. <code>--by TRT01P</code> sections the report per
 <a href="#by-groups">BY group</a> and <code>--allow-duplicates</code> pairs
 <a href="#duplicate-keys">duplicate keys</a> by position. <code>--pairs</code> and <code>--variables</code>
@@ -2867,7 +2873,7 @@ and a diff view in the editor extension built on the JSON contract above.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 8, 2026 20:52:14 UTC">September 8, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 25, 2026 19:42:45 UTC">September 25, 2026</span>
   </span>
 
     
