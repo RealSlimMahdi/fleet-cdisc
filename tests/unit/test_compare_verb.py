@@ -80,6 +80,11 @@ class TestOnFail:
         chain.compare(base, keys="USUBJID", on_fail="warn")
         assert not recwarn.list
 
+    def test_a_report_warning_alone_never_triggers_on_fail(self, base):
+        ns = base.clear().sdtm.compare(base.clear(), keys="USUBJID", on_fail="raise")
+        assert ns.last_comparison.is_equal is True
+        assert ns.last_comparison.warnings
+
     def test_unknown_on_fail_fails_fast_like_validate(self, base):
         from fleet.core.exceptions import DerivationError
 

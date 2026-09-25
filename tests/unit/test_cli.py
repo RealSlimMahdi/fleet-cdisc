@@ -1004,10 +1004,10 @@ def test_compare_unreadable_file_exits_2_and_names_it(
     assert captured.out == ""
 
 
-def test_compare_with_no_comparable_variables_exits_2(
+def test_compare_with_only_the_keys_in_common_exits_1_and_prints_the_report(
     tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:
-    """Only the keys in common: nothing to compare, so no verdict either way."""
+    """One-sided variables are a difference, reported like any other (ADR-0004)."""
     base, candidate = tmp_path / "adsl_prod.parquet", tmp_path / "adsl_qc.parquet"
     _adsl().select("USUBJID", "AGE").write_parquet(base)
     _adsl().select("USUBJID", "SEX").write_parquet(candidate)
@@ -1015,9 +1015,49 @@ def test_compare_with_no_comparable_variables_exits_2(
     code = _run(["compare", str(base), str(candidate), "--keys", "USUBJID"])
 
     captured = capsys.readouterr()
+    assert code == 1
+    assert "No variables were compared besides the keys." in captured.out
+    assert "AGE" in captured.out and "SEX" in captured.out
+    assert captured.err == ""
+
+
+def test_compare_key_only_files_with_the_same_keys_exit_0_and_warn(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base = tmp_path / "adsl.parquet"
+    _adsl().select("USUBJID").write_parquet(base)
+
+    code = _run(["compare", str(base), str(base), "--keys", "USUBJID"])
+
+    assert code == 0
+    assert "No variables were compared besides the keys." in capsys.readouterr().out
+
+
+def test_compare_two_empty_files_exit_0_and_warn_in_json(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base = tmp_path / "adae.parquet"
+    _adsl().clear().write_parquet(base)
+
+    code = _run(["compare", str(base), str(base), "--keys", "USUBJID", "--format", "json"])
+
+    document = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert document["is_equal"] is True
+    assert document["warnings"] == ["Both datasets have no observations."]
+
+
+def test_compare_variables_of_keys_only_exits_2(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    base = tmp_path / "adsl.parquet"
+    _adsl().write_parquet(base)
+
+    code = _run(["compare", str(base), str(base), "--keys", "USUBJID", "--variables", "USUBJID"])
+
+    captured = capsys.readouterr()
     assert code == 2
-    assert "no comparable variables" in captured.err
-    assert "AGE" in captured.err and "SEX" in captured.err
+    assert "only key variables" in captured.err
     assert captured.out == ""
 
 

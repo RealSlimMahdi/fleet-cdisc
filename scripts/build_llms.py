@@ -818,8 +818,8 @@ uv run fleet compare legacy/advs.xpt outputs/adam/advs.parquet --keys USUBJID,PA
 
 The exit code is the verdict: `0` equal, `1` different (report on stdout), `2` the comparison \
 could not run (unreadable file, missing keys, duplicate keys without `--allow-duplicates`, a \
-negative tolerance, no comparable variables, `--out` or `--report` not writable — the reason is \
-on stderr). `--keys` is required.\
+negative tolerance, a `--variables` list of keys only, `--out` or `--report` not writable — the \
+reason is on stderr). `--keys` is required.\
 """
 
 

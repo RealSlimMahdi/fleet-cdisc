@@ -32,6 +32,10 @@ _Avoid_: compare (as a noun), right, actual, QC dataset
 The outcome of a compare: which variables and observations were common, which were missing from either side, and every value that differed.
 _Avoid_: diff, comparison result, compare output
 
+**Verdict**:
+The single answer a comparison report gives: EQUAL when the compare found no difference, NOT EQUAL otherwise. Every way of running a compare gives the same verdict for the same two datasets.
+_Avoid_: pass/fail, result, status
+
 **Keys**:
 The variables that together identify one observation within a dataset. A compare pairs observations on them and refuses to run without them.
 _Avoid_: ID variables, join columns, primary key

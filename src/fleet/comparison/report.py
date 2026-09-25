@@ -472,18 +472,23 @@ class ComparisonReport:
     def warnings(self) -> tuple[str, ...]:
         """What every renderer says above the report; empty when nothing needs saying.
 
-        Today only the duplicate-key override warns: pairing by position is a
-        weaker guarantee than pairing on keys, so a reader is told before the
-        first number.
+        Pairing duplicate keys by position is a weaker guarantee than pairing
+        on keys, and a compare that checked no values can still be EQUAL
+        (ADR-0004), so a reader is told before the first number.
         """
-        if "duplicate_keys" not in self.flags:
-            return ()
-        o = self.observations
-        return (
-            "Duplicate keys were paired by position within each key group: "
-            f"{_plural(o.base_duplicates, 'duplicate observation')} in the base, "
-            f"{o.candidate_duplicates} in the candidate.",
-        )
+        warnings: list[str] = []
+        if "duplicate_keys" in self.flags:
+            o = self.observations
+            warnings.append(
+                "Duplicate keys were paired by position within each key group: "
+                f"{_plural(o.base_duplicates, 'duplicate observation')} in the base, "
+                f"{o.candidate_duplicates} in the candidate."
+            )
+        if not self.variables.compared:
+            warnings.append("No variables were compared besides the keys.")
+        if self.datasets.base.rows == 0 and self.datasets.candidate.rows == 0:
+            warnings.append("Both datasets have no observations.")
+        return tuple(warnings)
 
     def to_text(self, max_print: MaxPrint | _Unset = _USE_SETTINGS) -> str:
         """Render the report as plain text in PROC COMPARE section order.

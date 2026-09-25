@@ -2157,7 +2157,7 @@ uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID --allow-du
 uv run fleet compare legacy/advs.xpt outputs/adam/advs.parquet --keys USUBJID,PARAMCD --pairs WEIGHT=WT --variables WEIGHT,AVISIT   # renamed column, and only the variables that are finished
 ```
 
-The exit code is the verdict: `0` equal, `1` different (report on stdout), `2` the comparison could not run (unreadable file, missing keys, duplicate keys without `--allow-duplicates`, a negative tolerance, no comparable variables, `--out` or `--report` not writable — the reason is on stderr). `--keys` is required.
+The exit code is the verdict: `0` equal, `1` different (report on stdout), `2` the comparison could not run (unreadable file, missing keys, duplicate keys without `--allow-duplicates`, a negative tolerance, a `--variables` list of keys only, `--out` or `--report` not writable — the reason is on stderr). `--keys` is required.
 
 ## Documentation
 

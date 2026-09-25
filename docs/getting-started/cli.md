@@ -135,7 +135,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 
 ## `fleet compare`
 
-PROC COMPARE analogue: pair the two datasets on --keys, match variables by name and print the comparison report. --pairs compares variables named differently on each side and --variables restricts the comparison to the ones that matter. Equality is exact unless --abs-tol, --rel-tol or --ignore-trailing-whitespace widens it. --by sections the report per group and --allow-duplicates pairs duplicate keys by position. Exit 0 when the datasets are equal, 1 when they differ, 2 when the comparison could not run (unreadable file, missing keys, duplicate keys without --allow-duplicates, a negative tolerance, no comparable variables, --out or --report not writable).
+PROC COMPARE analogue: pair the two datasets on --keys, match variables by name and print the comparison report. --pairs compares variables named differently on each side and --variables restricts the comparison to the ones that matter. Equality is exact unless --abs-tol, --rel-tol or --ignore-trailing-whitespace widens it. --by sections the report per group and --allow-duplicates pairs duplicate keys by position. Exit 0 when the datasets are equal, 1 when they differ, 2 when the comparison could not run (unreadable file, missing keys, duplicate keys without --allow-duplicates, a negative tolerance, a --variables list of keys only, --out or --report not writable).
 
 | Argument | Description |
 | -------- | ----------- |
