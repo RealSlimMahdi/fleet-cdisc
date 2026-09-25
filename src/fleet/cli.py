@@ -1101,23 +1101,6 @@ def _run_compare(args: argparse.Namespace) -> None:
         # Differences never raise.
         _fail(" ".join(str(exc).split()), code=_COMPARE_IMPOSSIBLE)
 
-    if not report.variables.compared:
-        v = report.variables
-        details = [
-            f"{label}: {', '.join(names)}"
-            for label, names in (
-                ("base only", v.base_only),
-                ("candidate only", v.candidate_only),
-                ("type conflicts", tuple(t.variable for t in v.type_conflicts)),
-            )
-            if names
-        ]
-        _fail(
-            f"no comparable variables besides the keys ({', '.join(keys)})"
-            + (f"; {'; '.join(details)}" if details else ""),
-            code=_COMPARE_IMPOSSIBLE,
-        )
-
     if args.out:
         _save_comparison_file(args.out, report.save_listing, "value listing")
     if args.report:
@@ -2434,7 +2417,8 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
             "per group and --allow-duplicates pairs duplicate keys by position. Exit 0 when "
             "the datasets are equal, 1 when they differ, 2 when the comparison could not run "
             "(unreadable file, missing keys, duplicate keys without --allow-duplicates, a "
-            "negative tolerance, no comparable variables, --out or --report not writable)."
+            "negative tolerance, a --variables list of keys only, --out or --report not "
+            "writable)."
         ),
     )
     compare_parser.add_argument(

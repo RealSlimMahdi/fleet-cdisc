@@ -58,6 +58,9 @@ claude/
 # temp clones for reference (do not commit)
 /tmp-clones/
 
+# personal teaching workspace (lessons, learning records, notes)
+/learn/
+
 # benchmark/outputs folder
 benchmark/outputs/
 

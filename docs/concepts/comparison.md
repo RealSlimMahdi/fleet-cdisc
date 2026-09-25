@@ -58,7 +58,14 @@ uv run fleet compare legacy/adae.xpt outputs/adam/adae.parquet --keys USUBJID,AE
 | --- | --- |
 | `0` | The datasets are equal. |
 | `1` | The datasets differ; the report on stdout says where. |
-| `2` | The comparison could not run: unreadable file, missing or duplicate keys, a negative tolerance, no comparable variables, or an `--out` or `--report` path that cannot be written. The reason is on stderr. |
+| `2` | The comparison could not run: unreadable file, missing or duplicate keys, a negative tolerance, a `--variables` list that names only keys, or an `--out` or `--report` path that cannot be written. The reason is on stderr. |
+
+A compare that checks no values still gives a verdict. When the two sides
+share only their keys, the verdict follows the observations: the same key
+values on both sides are EQUAL, a one-sided key or variable is NOT EQUAL.
+When both sides have no observations, the verdict is EQUAL. In both cases the
+report warns above the first number, so an EQUAL that checked no values
+never reads as a full pass ([ADR-0004](../adr/0004-a-compare-that-checks-no-values-keeps-the-two-value-verdict.md)).
 
 `--keys` is required. `--by TRT01P` sections the report per
 [BY group](#by-groups) and `--allow-duplicates` pairs

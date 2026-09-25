@@ -724,12 +724,26 @@ class TestValues:
         assert report.observations.matched == 4
         assert report.values.per_variable.height == 0
         assert report.flags == {"base_only_variables", "candidate_only_variables"}
+        assert "No variables were compared besides the keys." in report.warnings
+
+    def test_key_only_sides_with_the_same_keys_are_equal_and_warn(self, base):
+        report = compare(base.select("USUBJID"), base.select("USUBJID"), keys=["USUBJID"])
+        assert report.is_equal is True
+        assert report.warnings == ("No variables were compared besides the keys.",)
+        assert report.warnings[0] in report.to_text()
+
+    def test_key_only_sides_with_different_keys_are_not_equal(self, base):
+        report = compare(base.select("USUBJID"), base.select("USUBJID").head(3), keys="USUBJID")
+        assert report.is_equal is False
+        assert report.flags == {"base_only_observations"}
+        assert "No variables were compared besides the keys." in report.warnings
 
     def test_empty_frames_compare_equal(self, base):
         report = compare(base.clear(), base.clear(), keys=["USUBJID"])
         assert report.is_equal is True
         assert report.observations.matched == 0
         assert report.datasets.base.rows == 0
+        assert report.warnings == ("Both datasets have no observations.",)
 
     def test_a_key_may_not_reuse_a_listing_column_name(self):
         b = pl.from_repr("""\
@@ -1590,6 +1604,10 @@ class TestVariableRestriction:
     def test_a_restriction_naming_a_variable_on_neither_side_is_refused(self, base, candidate):
         with pytest.raises(ComparisonError, match="FOO"):
             compare(base, candidate, keys="USUBJID", variables=["AGE", "FOO"])
+
+    def test_a_restriction_naming_only_keys_is_refused(self, base):
+        with pytest.raises(ComparisonError, match="only key variables"):
+            compare(base, base, keys="USUBJID", variables=["USUBJID"])
 
     def test_the_restriction_must_be_a_name_or_a_sequence_of_names(self, base):
         with pytest.raises(VerbUsageError, match="variables"):

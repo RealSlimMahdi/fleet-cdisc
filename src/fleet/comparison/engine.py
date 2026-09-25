@@ -106,7 +106,8 @@ def compare(
         variables: Restrict the comparison to these variables, in **base**
             names.  A variable outside the restriction is ignored on both
             sides: it is neither compared nor reported as missing.  The
-            default compares every variable that is not a key.
+            default compares every variable that is not a key.  A
+            restriction that names only keys is refused.
         abs_tol: Absolute tolerance on the numeric variables.  ``0.0`` (the
             default) is exact.
         rel_tol: Relative tolerance on the numeric variables, as a fraction
@@ -142,7 +143,8 @@ def compare(
         ComparisonError: A key or BY variable is missing, duplicated (without
             ``allow_duplicates``) or of an incompatible type on one side, a
             key reuses a listing column name, a pair or a restriction names a
-            variable no side carries, or a tolerance is negative or not finite.
+            variable no side carries, a restriction names only keys, or a
+            tolerance is negative or not finite.
         VerbUsageError: An input is not a Polars frame, or an argument has
             the wrong type.
 
@@ -190,7 +192,7 @@ def compare(
         keys=tuple(key_list),
         by=tuple(by_list),
         pairs=_normalise_pairs(pairs, key_list, base_schema),
-        variables=_normalise_variables(variables, base_schema, candidate_schema),
+        variables=_normalise_variables(variables, key_list, base_schema, candidate_schema),
         abs_tol=_normalise_tolerance(abs_tol, "abs_tol"),
         rel_tol=_normalise_tolerance(rel_tol, "rel_tol"),
         ignore_trailing_whitespace=_normalise_flag(
@@ -367,12 +369,13 @@ def _normalise_pairs(pairs: object, keys: list[str], base: pl.Schema) -> dict[st
 
 
 def _normalise_variables(
-    variables: object, base: pl.Schema, candidate: pl.Schema
+    variables: object, keys: list[str], base: pl.Schema, candidate: pl.Schema
 ) -> tuple[str, ...] | None:
     """The variables the comparison is restricted to; ``None`` compares them all.
 
-    A name no side carries is refused, because a restriction that silently
-    compares nothing would report a dataset as equal.
+    A name no side carries, or a restriction of keys only, is refused,
+    because a restriction that silently compares nothing would report a
+    dataset as equal.
     """
     if variables is None:
         return None
@@ -385,6 +388,11 @@ def _normalise_variables(
     if unknown:
         raise ComparisonError(
             f"variables names variable(s) present on neither side: {', '.join(unknown)}"
+        )
+    if all(v in keys for v in names):
+        raise ComparisonError(
+            f"variables names only key variables ({', '.join(names)}); "
+            "keys pair the observations and are never compared"
         )
     return tuple(dict.fromkeys(names))
 
