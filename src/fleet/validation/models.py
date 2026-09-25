@@ -3,8 +3,12 @@
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from fleet.core import log as fleet_log
+
+if TYPE_CHECKING:
+    from fleet.validation.run_setup import RunSetup
 
 #: Validation reports emit through this logger (INFO level, stdout by
 #: default — see :mod:`fleet.core.log` to route or silence them).
@@ -67,6 +71,8 @@ class ValidationResult:
     errors: list[ValidationIssue] = field(default_factory=list)
     warnings: list[ValidationIssue] = field(default_factory=list)
     infos: list[ValidationIssue] = field(default_factory=list)
+    #: The inputs this result was validated with, when the surface used a run setup.
+    setup: "RunSetup | None" = None
 
     @property
     def is_valid(self) -> bool:
@@ -98,6 +104,8 @@ class ValidationResult:
         _logger.info("\n" + "=" * 70)
         _logger.info(f"CDISC Validation Report: {self.dataset_name}")
         _logger.info("=" * 70)
+        for line in self.setup.header_lines() if self.setup is not None else ():
+            _logger.info(line)
         _logger.info(f"Dataset Type: {self.dataset_type} {self.model_version}")
         _logger.info(f"Status: {'PASS' if self.is_valid else 'FAIL'}")
         _logger.info(f"Total Issues: {self.total_issues}")

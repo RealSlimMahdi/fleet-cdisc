@@ -173,14 +173,28 @@ def test_unknown_command_exits_2(capsys: pytest.CaptureFixture) -> None:
 
 
 def test_find_study_config_walks_parents(study: Path) -> None:
+    from fleet.core.study_context import find_study_config
+
     nested = study / "programs" / "adam"
     nested.mkdir(parents=True)
-    found = cli.find_study_config(start=nested)
+    found = find_study_config(start=nested)
     assert found == study / "study_config.yaml"
 
 
 def test_find_study_config_absent(tmp_path: Path) -> None:
-    assert cli.find_study_config(start=tmp_path) is None
+    from fleet.core.study_context import find_study_config
+
+    assert find_study_config(start=tmp_path) is None
+
+
+def test_init_cfg_writes_both_ig_versions(tmp_path: Path) -> None:
+    import yaml
+
+    assert _run(["init", "cfg", "--study-id", "S01", "--root", str(tmp_path)]) == 0
+
+    written = yaml.safe_load((tmp_path / "study_config.yaml").read_text(encoding="utf-8"))
+    assert written["sdtm"]["ig_version"] == "3-4"
+    assert written["adam"]["ig_version"] == "1-3"
 
 
 def test_config_missing_errors_to_stderr(

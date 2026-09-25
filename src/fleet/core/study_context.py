@@ -28,16 +28,24 @@ class StudyPathConfig(BaseModel):
 
 
 class SDTMConfig(BaseModel):
-    """SDTM Implementation Guide configuration."""
+    """SDTM Implementation Guide configuration.
 
-    ig_version: str = Field(default="3-4")
+    ``ig_version`` is ``None`` when the study does not declare it; the
+    validation run setup then applies the built-in default.
+    """
+
+    ig_version: str | None = Field(default=None)
     domains: list[str] = Field(default_factory=list)
 
 
 class ADAMConfig(BaseModel):
-    """ADaM Implementation Guide configuration."""
+    """ADaM Implementation Guide configuration.
 
-    ig_version: str = Field(default="1-1")
+    ``ig_version`` is ``None`` when the study does not declare it; the
+    validation run setup then applies the built-in default.
+    """
+
+    ig_version: str | None = Field(default=None)
     datasets: list[str] = Field(default_factory=list)
 
 
@@ -88,6 +96,26 @@ class StudyConfig(BaseModel):
 
 class StudyConfigError(Exception):
     """Raised when study configuration cannot be loaded or validated."""
+
+
+def find_study_config(start: Path | None = None) -> Path | None:
+    """Locate ``study_config.yaml`` by walking up parent directories.
+
+    Git-style discovery: the start directory is checked first, then each
+    parent up to the filesystem root.
+
+    Args:
+        start: Directory to start from (default: current working directory).
+
+    Returns:
+        Path | None: The first ``study_config.yaml`` found, or ``None``.
+    """
+    current = (start or Path.cwd()).resolve()
+    for candidate in (current, *current.parents):
+        cfg = candidate / "study_config.yaml"
+        if cfg.is_file():
+            return cfg
+    return None
 
 
 class StudyContext:
@@ -168,6 +196,13 @@ class StudyContext:
         if self.config.validation.custom_rules is None:
             return None
         return self.resolve(self.config.validation.custom_rules)
+
+    @property
+    def engine_file(self) -> Path | None:
+        """Resolve ``validation.engine_path``, or None if not configured."""
+        if self.config.validation.engine_path is None:
+            return None
+        return self.resolve(self.config.validation.engine_path)
 
     def raw_file(self, file_name: str) -> Path:
         return self.raw_data_dir / file_name
@@ -269,6 +304,7 @@ class StudyContext:
             ctx.programs_adam_dir,
             ctx.programs_tlg_dir,
             ctx.programs_misc_dir,
+            *([ctx.custom_rules_dir] if ctx.custom_rules_dir is not None else []),
         ):
             dir_path.mkdir(parents=True, exist_ok=True)
 

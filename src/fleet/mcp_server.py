@@ -124,7 +124,7 @@ def fleet_validate(
         dict: ``{"dataset", "standard", "is_valid", "issues": [{severity,
             rule_id, message, variable}, ...]}``.
     """
-    from fleet.validation import ValidationService, discover_engine
+    from fleet.validation import DEFAULT_IG_VERSIONS, ValidationService, discover_engine
 
     engine = discover_engine()
     if engine is None:
@@ -135,11 +135,11 @@ def fleet_validate(
     df = _load_frame(dataset_path)
     name = Path(dataset_path).stem.upper()
     service = ValidationService(rules_engine_path=engine)
-    kwargs: dict[str, Any] = {} if version is None else {"version": version}
+    ig = version or DEFAULT_IG_VERSIONS["adam" if standard == "adam" else "sdtm"]
     if standard == "adam":
-        result = service.validate_adam(df, name, **kwargs)
+        result = service.validate_adam(df, name, version=ig)
     else:
-        result = service.validate_sdtm(df, name, **kwargs)
+        result = service.validate_sdtm(df, name, version=ig)
     return {
         "dataset": result.dataset_name,
         "standard": standard,

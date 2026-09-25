@@ -65,7 +65,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | `--domains` | _(none)_ | Comma-separated SDTM domains (e.g. DM,AE,VS,EX). |
 | `--adam-datasets` | _(none)_ | Comma-separated ADaM datasets (e.g. ADSL,ADVS,ADAE). |
 | `--ig` | `3-4` | SDTM IG version (default: 3-4). |
-| `--adam-ig` | `1-1` | ADaM IG version (default: 1-1). |
+| `--adam-ig` | `1-3` | ADaM IG version (default: 1-3). |
 | `--package` | `sdtmct-2023-12-15` | CT package version (default: sdtmct-2023-12-15). |
 | `--root` / `-r` | `.` | Study root directory (default: current directory). |
 
@@ -171,7 +171,7 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | `--adam-datasets` | _(none)_ | Comma-separated ADaM datasets (e.g. ADSL,ADVS,ADAE). |
 | `--company` | _(none)_ | Originator / company name. |
 | `--ig` | `3-4` | SDTM IG version (default: 3-4). |
-| `--adam-ig` | `1-1` | ADaM IG version (default: 1-1). |
+| `--adam-ig` | `1-3` | ADaM IG version (default: 1-3). |
 | `--package` | `sdtmct-2023-12-15` | CT package version (default: sdtmct-2023-12-15). |
 | `--root` / `-r` | `.` | Study root directory (default: current directory). |
 | `--yes` / `-y` | _(none)_ | Skip the confirmation prompt. |

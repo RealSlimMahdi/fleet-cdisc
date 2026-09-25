@@ -15,7 +15,9 @@ uv run fleet doctor             # confirms engine + extras are healthy
 ```
 
 Teams can pin a shared engine instead via `validation.engine_path` in
-`study_config.yaml` or the `FLEET_RULES_ENGINE` environment variable.
+`study_config.yaml`. Inside a study, `validation.engine_path` beats the
+`FLEET_RULES_ENGINE` environment variable, so that every programmer runs the
+same engine build. Outside a study, `FLEET_RULES_ENGINE` still applies.
 
 ## Running validation
 
@@ -43,9 +45,46 @@ The same run from Python, chainable at the end of a pipeline:
 result = (
     raw_df.sdtm.assign("DOMAIN", value="AE")
     # ... derivations ...
-    .validate(domain="AE")  # runs CORE on the materialised frame
+    .validate("AE")  # runs CORE on the materialised frame
 )
 ```
+
+### Where the verb takes its inputs
+
+The verb builds a **run setup** before the engine starts. Each input comes
+from the first source that gives it:
+
+| Input | Argument | Study config | Environment | Default |
+| --- | --- | --- | --- | --- |
+| Standard | (none) | (none) | (none) | the namespace: `.sdtm` or `.adam` |
+| IG version | `version=` | `sdtm.ig_version` / `adam.ig_version` | (none) | SDTMIG 3.4, ADaMIG 1.3 |
+| Custom rules | `custom_rules=` | `validation.custom_rules` | (none) | none |
+| Engine | `rules_engine_path=` | `validation.engine_path` | `FLEET_RULES_ENGINE` | managed install |
+
+The verb looks for `study_config.yaml` from the working directory, then
+each parent. `version=` accepts `"3-4"` and `"3.4"`. The supported versions
+are SDTMIG 3.2, 3.3, 3.4 and ADaMIG 1.0, 1.1, 1.2, 1.3.
+
+The report header prints each input with its source and the study config
+used:
+
+```text
+Standard:     SDTMIG (namespace)
+IG version:   3.3 (study config)
+Custom rules: /study/metadata/custom_rules (study config)
+Engine:       /study/tools/core/core (study config)
+Study config: /study/study_config.yaml
+```
+
+### Could not run
+
+Some setups are refused before the engine starts. The verb then raises
+`ValidationSetupError` in every `on_fail` mode, because no rule ran:
+
+- the dataset name belongs to the other standard: `adae.adam.validate("AE")`
+  or `ae.sdtm.validate("ADAE")`,
+- the IG version is not supported, for example SDTMIG 3.1.3,
+- the custom rules directory does not exist.
 
 ## Which rules actually exist upstream
 

@@ -6,6 +6,12 @@ from fleet.validation.providers import (
     OfficialRulesEngineProvider,
     ValidationProvider,
 )
+from fleet.validation.run_setup import (
+    DEFAULT_IG_VERSIONS,
+    SUPPORTED_IG_VERSIONS,
+    RunSetup,
+    build_run_setup,
+)
 from fleet.validation.service import ValidationService
 
 __all__ = [
@@ -15,6 +21,10 @@ __all__ = [
     "ValidationProvider",
     "OfficialRulesEngineProvider",
     "ValidationService",
+    "RunSetup",
+    "build_run_setup",
+    "DEFAULT_IG_VERSIONS",
+    "SUPPORTED_IG_VERSIONS",
     "discover_engine",
     "install_engine",
     "uninstall_engine",

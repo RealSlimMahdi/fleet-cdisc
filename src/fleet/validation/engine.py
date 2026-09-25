@@ -11,10 +11,13 @@ Install locations:
 
 Discovery order:
 
-1. ``FLEET_RULES_ENGINE`` environment variable (explicit executable path).
-2. ``validation.engine_path`` from ``study_config.yaml`` (team-shared).
+1. ``validation.engine_path`` from ``study_config.yaml`` (team-shared).
+2. ``FLEET_RULES_ENGINE`` environment variable (explicit executable path).
 3. Managed install from ``fleet install-engine``.
 4. Legacy ``../cdisc-rules-engine/core.py`` (development fallback).
+
+The study config comes first so that a team lead's pinned engine is not
+overridden by a stale environment variable on one machine (ADR 0003).
 """
 
 from __future__ import annotations
@@ -25,6 +28,10 @@ import stat
 import sys
 import tempfile
 from pathlib import Path
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 # GitHub repository for the CDISC Rules Engine releases.
 _GITHUB_REPO = "cdisc-org/cdisc-rules-engine"
@@ -73,14 +80,50 @@ def engine_path() -> Path:
     return ENGINE_DIR / "core" / _engine_filename()
 
 
+def find_engine(
+    configured: Path | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> tuple[Path, Literal["study config", "environment", "default"]] | None:
+    """Find the CDISC Rules Engine executable and say where it came from.
+
+    Order: *configured* (``validation.engine_path``), then
+    ``FLEET_RULES_ENGINE``, then the managed install, then the legacy
+    sibling checkout.  A candidate that is not a file is skipped.
+
+    Args:
+        configured: The engine path from the study config, already resolved.
+        environ: Environment to read ``FLEET_RULES_ENGINE`` from
+            (default: ``os.environ``).
+
+    Returns:
+        ``(path, source)``, or ``None`` when no engine is found.
+    """
+    if configured is not None and configured.is_file():
+        return configured, "study config"
+
+    env = (os.environ if environ is None else environ).get("FLEET_RULES_ENGINE")
+    if env and Path(env).is_file():
+        return Path(env), "environment"
+
+    managed = engine_path()
+    if managed.is_file():
+        return managed, "default"
+
+    legacy = Path(__file__).parent.parent.parent.parent / "cdisc-rules-engine" / "core.py"
+    if legacy.is_file():
+        return legacy, "default"
+
+    return None
+
+
 def discover_engine(study_root: Path | None = None) -> Path | None:
     """Find the CDISC Rules Engine executable.
 
     Discovery order:
 
-    1. ``FLEET_RULES_ENGINE`` environment variable.
-    2. ``validation.engine_path`` from ``study_config.yaml`` (if *study_root* given).
-    3. Managed install (``~/.fleet/bin/core``).
+    1. ``validation.engine_path`` from ``study_config.yaml`` (if *study_root* given).
+    2. ``FLEET_RULES_ENGINE`` environment variable.
+    3. Managed install (``~/.fleet/cdisc-rules-engine/core/core``).
     4. Legacy ``../cdisc-rules-engine/core.py`` (development fallback).
 
     Args:
@@ -90,30 +133,9 @@ def discover_engine(study_root: Path | None = None) -> Path | None:
     Returns:
         Path to the engine executable, or ``None`` if not found.
     """
-    # 1. Explicit env var (highest priority — always overrides)
-    env = os.environ.get("FLEET_RULES_ENGINE")
-    if env:
-        p = Path(env)
-        if p.is_file():
-            return p
-
-    # 2. Project-level config (study_config.yaml → validation.engine_path)
-    if study_root is not None:
-        cfg_path = _engine_path_from_study_config(study_root)
-        if cfg_path is not None and cfg_path.is_file():
-            return cfg_path
-
-    # 3. Managed install
-    managed = engine_path()
-    if managed.is_file():
-        return managed
-
-    # 4. Legacy: ../cdisc-rules-engine/core.py (dev layout)
-    legacy = Path(__file__).parent.parent.parent.parent / "cdisc-rules-engine" / "core.py"
-    if legacy.is_file():
-        return legacy
-
-    return None
+    configured = _engine_path_from_study_config(study_root) if study_root is not None else None
+    found = find_engine(configured)
+    return found[0] if found is not None else None
 
 
 def _engine_path_from_study_config(study_root: Path) -> Path | None:

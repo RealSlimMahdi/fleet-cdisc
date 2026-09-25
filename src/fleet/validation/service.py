@@ -25,7 +25,7 @@ class ValidationService:
         self,
         df: pl.DataFrame | pl.LazyFrame,
         domain: str,
-        version: str = "3.4",
+        version: str,
         custom_rules: Path | str | None = None,
     ) -> ValidationResult:
         if isinstance(df, pl.LazyFrame):
@@ -39,7 +39,7 @@ class ValidationService:
         self,
         df: pl.DataFrame | pl.LazyFrame,
         dataset: str,
-        version: str = "1.3",
+        version: str,
         custom_rules: Path | str | None = None,
     ) -> ValidationResult:
         if isinstance(df, pl.LazyFrame):

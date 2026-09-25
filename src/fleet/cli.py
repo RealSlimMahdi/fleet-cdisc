@@ -39,6 +39,8 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn
 
+from fleet.core.study_context import find_study_config
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
@@ -78,27 +80,6 @@ def _fail(msg: str, *, code: int = 1) -> NoReturn:
 # ────────────────────────────────────────────────────────────────────── #
 # Config discovery                                                        #
 # ────────────────────────────────────────────────────────────────────── #
-
-
-def find_study_config(start: Path | None = None) -> Path | None:
-    """Locate ``study_config.yaml`` by walking up parent directories.
-
-    Git-style discovery: the start directory is checked first, then each
-    parent up to the filesystem root.  Every CLI command that needs study
-    configuration resolves it through this single function.
-
-    Args:
-        start: Directory to start from (default: current working directory).
-
-    Returns:
-        Path | None: The first ``study_config.yaml`` found, or ``None``.
-    """
-    current = (start or Path.cwd()).resolve()
-    for candidate in (current, *current.parents):
-        cfg = candidate / "study_config.yaml"
-        if cfg.is_file():
-            return cfg
-    return None
 
 
 def _resolve_config(config_arg: str | None) -> Path:
@@ -174,6 +155,13 @@ def _config_flag_hint(config_path: Path) -> str:
 
 def _parse_domains(raw: str) -> list[str]:
     return [d.strip().upper() for d in raw.split(",") if d.strip()]
+
+
+def _default_ig(standard: str) -> str:
+    """The built-in IG version for *standard*, in the config's dashed form."""
+    from fleet.validation.run_setup import DEFAULT_IG_VERSIONS
+
+    return DEFAULT_IG_VERSIONS[standard].replace(".", "-")
 
 
 def _load_dataset(path_str: str) -> pl.DataFrame:
@@ -321,7 +309,7 @@ def _run_init_define(args: argparse.Namespace) -> None:
                 dest = scaffolder.scaffold_sdtm(
                     study_id=cfg.study_id,
                     company=cfg.company or "",
-                    ig_version=cfg.sdtm.ig_version,
+                    ig_version=cfg.sdtm.ig_version or _default_ig("sdtm"),
                     ct_version=ct_version,
                     domains=cfg.sdtm.domains,
                     output_path=sdtm_path,
@@ -337,7 +325,7 @@ def _run_init_define(args: argparse.Namespace) -> None:
                 dest = scaffolder.scaffold_adam(
                     study_id=cfg.study_id,
                     company=cfg.company or "",
-                    ig_version=cfg.adam.ig_version,
+                    ig_version=cfg.adam.ig_version or _default_ig("adam"),
                     ct_version=ct_version,
                     datasets=cfg.adam.datasets,
                     output_path=adam_path,
@@ -472,7 +460,7 @@ def _run_add_ct(args: argparse.Namespace) -> None:
     # discovered study config, then the hard default. Regenerating existing
     # codelists against a different CT package than the study pins would
     # silently change already-reviewed terms.
-    ig = args.ig or (ctx.config.sdtm.ig_version if ctx else "3-4")
+    ig = args.ig or (ctx.config.sdtm.ig_version if ctx else None) or _default_ig("sdtm")
     package = args.package or (ctx.config.ct.package if ctx else "sdtmct-2023-12-15")
     existing = existing_concept_ids(output)
 
@@ -1017,14 +1005,13 @@ def _run_validate(args: argparse.Namespace) -> None:
         df = _load_dataset(str(f))
         name = f.stem.upper()
         standard = args.standard or ("adam" if name.startswith("AD") else "sdtm")
-        kwargs: dict[str, Any] = {"custom_rules": custom_rules}
         version = args.standard_version
         if version is None and ctx is not None:
             # The config's declared IG versions drive validation ("3-4" → "3.4").
             declared = ctx.config.adam if standard == "adam" else ctx.config.sdtm
-            version = declared.ig_version.replace("-", ".")
-        if version:
-            kwargs["version"] = version
+            version = declared.ig_version
+        version = (version or _default_ig(standard)).replace("-", ".")
+        kwargs: dict[str, Any] = {"custom_rules": custom_rules, "version": version}
 
         print(f"Validating {name} ({standard}) — {f}")
         if standard == "adam":
@@ -2035,13 +2022,13 @@ def _add_init_parsers(sub: argparse._SubParsersAction) -> None:
     )
     cfg.add_argument(
         "--ig",
-        default="3-4",
-        help="SDTM IG version (default: 3-4).",
+        default=_default_ig("sdtm"),
+        help=f"SDTM IG version (default: {_default_ig('sdtm')}).",
     )
     cfg.add_argument(
         "--adam-ig",
-        default="1-1",
-        help="ADaM IG version (default: 1-1).",
+        default=_default_ig("adam"),
+        help=f"ADaM IG version (default: {_default_ig('adam')}).",
     )
     cfg.add_argument(
         "--package",
@@ -2590,13 +2577,13 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     )
     new.add_argument(
         "--ig",
-        default="3-4",
-        help="SDTM IG version (default: 3-4).",
+        default=_default_ig("sdtm"),
+        help=f"SDTM IG version (default: {_default_ig('sdtm')}).",
     )
     new.add_argument(
         "--adam-ig",
-        default="1-1",
-        help="ADaM IG version (default: 1-1).",
+        default=_default_ig("adam"),
+        help=f"ADaM IG version (default: {_default_ig('adam')}).",
     )
     new.add_argument(
         "--package",

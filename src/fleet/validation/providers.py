@@ -17,7 +17,7 @@ class ValidationProvider(ABC):
         self,
         df: pl.DataFrame,
         domain: str,
-        version: str = "3.4",
+        version: str,
         custom_rules: Path | None = None,
     ) -> ValidationResult:
         pass
@@ -27,7 +27,7 @@ class ValidationProvider(ABC):
         self,
         df: pl.DataFrame,
         dataset: str,
-        version: str = "1.3",
+        version: str,
         custom_rules: Path | None = None,
     ) -> ValidationResult:
         pass
@@ -43,7 +43,7 @@ class OfficialRulesEngineProvider(ValidationProvider):
         self,
         df: pl.DataFrame,
         domain: str,
-        version: str = "3.4",
+        version: str,
         custom_rules: Path | None = None,
     ) -> ValidationResult:
         return self.validator.validate_dataset(
@@ -59,7 +59,7 @@ class OfficialRulesEngineProvider(ValidationProvider):
         self,
         df: pl.DataFrame,
         dataset: str,
-        version: str = "1.3",
+        version: str,
         custom_rules: Path | None = None,
     ) -> ValidationResult:
         return self.validator.validate_dataset(

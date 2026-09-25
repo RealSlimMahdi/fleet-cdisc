@@ -67,7 +67,10 @@ Check:
 ### 4. Run validation
 
 ```python
-# Inline in a pipeline
+# Inline in a pipeline: inside the study, validation.custom_rules applies
+ae = raw_df.sdtm.assign("DOMAIN", value="AE").validate("AE").to_frame()
+
+# Or name the directory explicitly
 ae = (
     raw_df.sdtm.assign("DOMAIN", value="AE")
     .validate("AE", custom_rules="metadata/custom_rules")
@@ -78,7 +81,7 @@ ae = (
 from fleet.validation.service import ValidationService
 
 svc = ValidationService()
-result = svc.validate_sdtm(ae, domain="AE", custom_rules="metadata/custom_rules")
+result = svc.validate_sdtm(ae, domain="AE", version="3.4", custom_rules="metadata/custom_rules")
 result.print_report()
 ```
 
@@ -186,8 +189,13 @@ For the full operator reference, see the [CDISC CORE Rule Editor](https://rule-e
 Fleet resolves custom rules from multiple sources. The first match wins:
 
 1. **Explicit `custom_rules=` parameter** on `.validate()` or `ValidationService` methods.
-2. **`validation.custom_rules`** in `study_config.yaml` (team-wide default).
+2. **`validation.custom_rules`** in `study_config.yaml` (team-wide default). The
+   `.validate()` verb finds the study config from the working directory.
 3. **None** — no custom rules are loaded.
+
+A directory that does not exist is refused before the engine starts: the
+verb raises `ValidationSetupError`. The report header shows the directory
+used and its source.
 
 ---
 

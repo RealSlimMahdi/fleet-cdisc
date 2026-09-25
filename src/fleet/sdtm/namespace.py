@@ -56,8 +56,6 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
     _STUDY_DAY_REF_COL: str = "RFSTDTC"
     _STUDY_DAY_REF_PIN: str = "DM"
     _SEQ_DEFAULT_GROUPS: list[str] = ["STUDYID", "USUBJID"]
-    _VALIDATE_STANDARD: str = "sdtm"
-    _VALIDATE_DEFAULT_VERSION: str = "3.4"
 
     _FK_RULES: dict[str, dict[str, str]] = {
         "USUBJID": {"pin": "DM", "ref_col": "USUBJID"},

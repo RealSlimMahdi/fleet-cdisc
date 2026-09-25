@@ -153,10 +153,14 @@ The `ValidationResult` object exposes `.is_valid` (bool), `.print_report(report_
 
 Fleet resolves the engine path at runtime via a four-tier chain (first match wins):
 
-1. `FLEET_RULES_ENGINE` environment variable (`.env` at project root)
-2. `validation.engine_path` in `study_config.yaml` (committable to VCS for team reuse)
+1. `validation.engine_path` in `study_config.yaml` (committable to VCS for team reuse)
+2. `FLEET_RULES_ENGINE` environment variable (`.env` at project root)
 3. Managed install under `~/.fleet/cdisc-rules-engine/core/`
 4. Legacy `../cdisc-rules-engine/core.py` (development fallback)
+
+The study config comes first, so a stale environment variable on one machine
+cannot replace the engine the team pinned. An explicit `rules_engine_path=` on
+`.validate()` beats all four.
 
 ---
 

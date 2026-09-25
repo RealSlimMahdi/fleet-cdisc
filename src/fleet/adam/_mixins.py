@@ -117,8 +117,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
     _STUDY_DAY_REF_COL: str = "TRTSDT"
     _STUDY_DAY_REF_PIN: str = "ADSL"
     _SEQ_DEFAULT_GROUPS: list[str] = ["USUBJID"]
-    _VALIDATE_STANDARD: str = "adam"
-    _VALIDATE_DEFAULT_VERSION: str = "1.3"
+    _VALIDATE_STANDARD = "adam"
 
     # ------------------------------------------------------------------ #
     # Lifecycle                                                            #
