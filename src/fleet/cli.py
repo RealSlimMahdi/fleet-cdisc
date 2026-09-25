@@ -46,9 +46,6 @@ if TYPE_CHECKING:
 
     from fleet.core.study_context import StudyContext
 
-#: Treatment-arm columns tried (in order) when ``--groupby`` is not given.
-_GROUPBY_CANDIDATES: tuple[str, ...] = ("TRTA", "TRT01A", "TRT01P")
-
 #: Optional-dependency probes for ``fleet doctor`` / ``fleet check``:
 #: import name → (extra name, what it enables).
 _OPTIONAL_EXTRAS: dict[str, tuple[str, str]] = {
@@ -203,12 +200,14 @@ def _detect_groupby(df: pl.DataFrame, explicit: str | None) -> str:
                 f"Available columns: {', '.join(df.columns)}"
             )
         return explicit
-    for cand in _GROUPBY_CANDIDATES:
-        if cand in df.columns:
-            return cand
+    from fleet.tlg import GROUPBY_CANDIDATES, detect_groupby
+
+    detected = detect_groupby(df.columns)
+    if detected is not None:
+        return detected
     _fail(
         "could not auto-detect a treatment-arm column "
-        f"(tried {', '.join(_GROUPBY_CANDIDATES)}). Pass --groupby <column>. "
+        f"(tried {', '.join(GROUPBY_CANDIDATES)}). Pass --groupby <column>. "
         f"Columns present in the data: {', '.join(df.columns)}"
     )
     raise AssertionError("unreachable")

@@ -124,8 +124,7 @@ def fleet_validate(
         dict: ``{"dataset", "standard", "is_valid", "issues": [{severity,
             rule_id, message, variable}, ...]}``.
     """
-    from fleet.validation import ValidationService
-    from fleet.validation.engine import discover_engine
+    from fleet.validation import ValidationService, discover_engine
 
     engine = discover_engine()
     if engine is None:
@@ -212,12 +211,13 @@ def fleet_tlg_run(
     Returns:
         str: The rendered HTML table or listing.
     """
-    from fleet.cli import _GROUPBY_CANDIDATES
     from fleet.tlg import (
+        GROUPBY_CANDIDATES,
         TEMPLATES,
         OutputType,
         RenderMetadata,
         ard_to_table_model,
+        detect_groupby,
         listing_to_model,
         load_spec,
         render_html,
@@ -233,11 +233,11 @@ def fleet_tlg_run(
     if adsl is None and meta.domains and meta.domains[-1] == "ADSL":
         adsl = df
     if not is_listing and groupby is None:
-        groupby = next((c for c in _GROUPBY_CANDIDATES if c in df.columns), None)
+        groupby = detect_groupby(df.columns)
         if groupby is None:
             raise ValueError(
                 "could not auto-detect a treatment-arm column "
-                f"(tried {', '.join(_GROUPBY_CANDIDATES)}). Pass groupby=<column>."
+                f"(tried {', '.join(GROUPBY_CANDIDATES)}). Pass groupby=<column>."
             )
     result = run_spec(spec, df, adsl=adsl, groupby=None if is_listing else groupby)
     rmeta = RenderMetadata(title=meta.title)
