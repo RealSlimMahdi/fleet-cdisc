@@ -54,10 +54,16 @@ datasets:
 The spec is validated against the bundled JSON Schema (`define_spec_schema.json`),
 which is **generated from the algorithm registry** — its `algorithm:` enum and
 per-algorithm required fields always match what `from_spec()` actually executes
-(a CI sync test enforces this). Editors with a YAML language server give
-auto-complete and inline error highlighting straight from that schema. The
-top-level `fleet_spec_version: 1` pins the spec dialect; a future incompatible
-version is rejected with a clear message rather than silently misinterpreted.
+(a CI sync test enforces this). The top-level `fleet_spec_version: 1` pins the
+spec dialect; a future incompatible version is rejected with a clear message
+rather than silently misinterpreted.
+
+`fleet lsp` reads that schema straight from the installed package, so the
+[Fleet VS Code extension](https://github.com/RealSlimMahdi/fleet-vscode) gives
+you inline errors with no setup. Without it, a generic YAML language server can
+read the same schema from a `$schema` comment — `fleet init define` prints the
+exact line, resolved against your install. Adding it *alongside* the Fleet
+extension reports every schema error twice, so use one or the other.
 
 ---
 

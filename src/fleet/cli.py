@@ -312,6 +312,7 @@ def _run_init_define(args: argparse.Namespace) -> None:
         scaffolder = DefineScaffolder(client)
 
         force = getattr(args, "force", False)
+        written: list[Path] = []
 
         if do_sdtm:
             sdtm_path = ctx.metadata_sdtm_dir / "define.yaml"
@@ -326,6 +327,7 @@ def _run_init_define(args: argparse.Namespace) -> None:
                     domains=cfg.sdtm.domains,
                     output_path=sdtm_path,
                 )
+                written.append(dest)
                 print(f"SDTM define → {dest}")
 
         if do_adam:
@@ -341,11 +343,30 @@ def _run_init_define(args: argparse.Namespace) -> None:
                     datasets=cfg.adam.datasets,
                     output_path=adam_path,
                 )
+                written.append(dest)
                 print(f"ADaM define → {dest}")
 
     hint = _config_flag_hint(ctx.study_root / "study_config.yaml")
     print()
+    _print_schema_optin(written)
     print(f"Next step: fleet init ct{hint}")
+
+
+def _print_schema_optin(specs: list[Path]) -> None:
+    """Offer the `$schema` directive to editors without the Fleet extension.
+
+    Scaffolded specs no longer carry it (#71): `fleet lsp` reads the schema
+    from the installed package, so a second validator double-reports.
+    """
+    if not specs:
+        return
+    from fleet.core.scaffolder import schema_directive
+
+    print("`fleet lsp` validates these against the installed schema already.")
+    print("Without the Fleet extension, paste this at the top of each spec:")
+    for spec in specs:
+        print(f"  {spec}:\n    {schema_directive(spec)}")
+    print()
 
 
 def _run_init_rules(args: argparse.Namespace) -> None:
