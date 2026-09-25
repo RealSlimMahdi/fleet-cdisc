@@ -14,10 +14,25 @@ uv run fleet install-engine     # downloads the CORE binary to ~/.fleet
 uv run fleet doctor             # confirms engine + extras are healthy
 ```
 
+`fleet doctor` prints the engine that validation will use, where it came
+from, and its version. It takes them from the same run setup as the verb and
+`fleet validate`.
+
 Teams can pin a shared engine instead via `validation.engine_path` in
 `study_config.yaml`. Inside a study, `validation.engine_path` beats the
 `FLEET_RULES_ENGINE` environment variable, so that every programmer runs the
 same engine build. Outside a study, `FLEET_RULES_ENGINE` still applies.
+
+### Engine version
+
+Every report header prints the engine version, so a QC programmer can check
+that two runs used the same rule build. Fleet takes the version from the
+first source that gives it:
+
+1. the engine's own `core version` command (`0.15.0`),
+2. the `fleet-release-tag.txt` file that `fleet install-engine` writes next
+   to the managed binary (`v0.15.0`),
+3. else `unknown`.
 
 ## Running validation
 
@@ -39,8 +54,9 @@ uv run fleet validate --report findings.html   # HTML findings report
 - **IG versions** come from the config's `sdtm.ig_version` /
   `adam.ig_version` (`--version` overrides).
 - **Custom rules** load automatically from `validation.custom_rules`
-  (`--custom-rules` overrides) — see
-  [Custom Validation Rules](custom-rules.md).
+  (`--custom-rules` overrides). They run in a second engine run next to the
+  official rules, so a sweep of both standards with custom rules makes four
+  engine runs. See [Custom Validation Rules](custom-rules.md).
 - The report header of each dataset shows every input with its source, as on
   the verb.
 - **Could not run**: a dataset whose directory and file name disagree
@@ -83,6 +99,7 @@ Standard:     SDTMIG (namespace)
 IG version:   3.3 (study config)
 Custom rules: /study/metadata/custom_rules (study config)
 Engine:       /study/tools/core/core (study config)
+CORE version: 0.15.0
 Study config: /study/study_config.yaml
 ```
 
@@ -129,5 +146,6 @@ different error class:
 | **CORE (`fleet validate`)** | after datasets materialise | official CDISC conformance rules against the data itself |
 
 See [Custom Validation Rules](custom-rules.md) for extending CORE with
-sponsor-, study-, or TCG-specific checks — they run in the same engine,
-report in the same format, and live in version control next to the study.
+sponsor-, study-, or TCG-specific checks — they run next to the official
+rules, report in the same format with their source, and live in version
+control next to the study.

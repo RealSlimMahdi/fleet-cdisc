@@ -122,7 +122,7 @@ def fleet_validate(
 
     Returns:
         dict: ``{"dataset", "standard", "is_valid", "issues": [{severity,
-            rule_id, message, variable}, ...]}``.
+            rule_id, message, variable, source}, ...]}``.
     """
     from fleet.validation import DEFAULT_IG_VERSIONS, ValidationService, discover_engine
 
@@ -150,6 +150,7 @@ def fleet_validate(
                 "rule_id": issue.rule_id,
                 "message": issue.message,
                 "variable": issue.variable,
+                "source": issue.source,
             }
             for issue in (*result.errors, *result.warnings, *result.infos)
         ],

@@ -629,13 +629,11 @@ def _check_extras() -> list[tuple[str, bool, str]]:
 
 
 def _run_doctor(args: argparse.Namespace) -> None:
+    from fleet.core.exceptions import ValidationSetupError
+    from fleet.validation import build_run_setup
     from fleet.validation.engine import doctor
 
-    # Honour validation.engine_path from the discovered study config.
     config_path = Path(args.config) if getattr(args, "config", None) else find_study_config()
-    study_root = config_path.parent if config_path and config_path.is_file() else None
-
-    checks = doctor(study_root=study_root)
 
     print("Fleet Doctor")
     print("=" * 52)
@@ -645,16 +643,23 @@ def _run_doctor(args: argparse.Namespace) -> None:
     else:
         print("  ✗ study config ....... not found (run `fleet init cfg`)")
 
-    engine = checks.get("engine", "")
-    engine_ok = not engine.startswith("NOT FOUND")
-    mark = "✓" if engine_ok else "✗"
-    print(f"  {mark} rules engine ....... {engine}")
-    if engine_ok:
-        if "type" in checks:
-            print(f"      type: {checks['type']}")
-        if "status" in checks:
-            status_mark = "✓" if checks["status"].startswith("OK") else "✗"
-            print(f"  {status_mark} engine status ...... {checks['status']}")
+    # A run setup with no datasets: the standard only fills the record.
+    try:
+        setup = build_run_setup(standard="sdtm", config=config_path)
+    except ValidationSetupError as exc:
+        setup = None
+        print(f"  ✗ run setup .......... {exc}")
+
+    engine = setup.engine.value if setup is not None else None
+    if setup is not None and engine is None:
+        print("  ✗ rules engine ....... NOT FOUND — run `fleet install-engine`")
+    elif setup is not None and engine is not None:
+        checks = doctor(engine=engine)
+        print(f"  ✓ rules engine ....... {engine} ({setup.engine.source})")
+        print(f"      version: {setup.engine_version}")
+        print(f"      type: {checks['type']}")
+        status_mark = "✓" if checks["status"].startswith("OK") else "✗"
+        print(f"  {status_mark} engine status ...... {checks['status']}")
 
     api_key_set = bool(os.environ.get("CDISC_API_KEY"))
     if api_key_set:
@@ -921,7 +926,7 @@ def _write_validation_report(
 
     rows: list[str] = [
         "<tr>"
-        f"<td>{escape(d.name)}</td><td>Could not run</td><td></td><td></td>"
+        f"<td>{escape(d.name)}</td><td>Could not run</td><td></td><td></td><td></td>"
         f"<td>{escape(d.reason or '')}</td>"
         "</tr>"
         for d in could_not_run
@@ -933,19 +938,24 @@ def _write_validation_report(
                 f"<td>{escape(res.dataset_name)}</td>"
                 f"<td>{escape(issue.severity.value)}</td>"
                 f"<td>{escape(issue.rule_id)}</td>"
+                f"<td>{escape(issue.source)}</td>"
                 f"<td>{escape(issue.variable or '')}</td>"
                 f"<td>{escape(issue.message)}</td>"
                 "</tr>"
             )
+    headers = dict.fromkeys(
+        "\n".join(res.setup.header_lines()) for res in results if res.setup is not None
+    )
+    setups = "".join(f"<pre>{escape(h)}</pre>" for h in headers)
     html = (
         "<!DOCTYPE html><html><head><meta charset='utf-8'>"
         "<title>Fleet validation report</title>"
         "<style>body{font-family:sans-serif}table{border-collapse:collapse}"
         "td,th{border:1px solid #999;padding:4px 8px;font-size:13px}</style>"
-        "</head><body><h1>Fleet validation report</h1>"
-        "<table><tr><th>Dataset</th><th>Severity</th><th>Rule</th>"
+        f"</head><body><h1>Fleet validation report</h1>{setups}"
+        "<table><tr><th>Dataset</th><th>Severity</th><th>Rule</th><th>Source</th>"
         "<th>Variable</th><th>Message</th></tr>"
-        f"{''.join(rows) or '<tr><td colspan=5>No findings.</td></tr>'}"
+        f"{''.join(rows) or '<tr><td colspan=6>No findings.</td></tr>'}"
         "</table></body></html>"
     )
     path.parent.mkdir(parents=True, exist_ok=True)

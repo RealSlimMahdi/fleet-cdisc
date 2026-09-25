@@ -7,6 +7,7 @@ fake engine: ``subprocess.run`` is captured, the engine path is a plain file.
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -14,6 +15,7 @@ import polars as pl
 import pytest
 
 from fleet.core.exceptions import ValidationError, ValidationSetupError
+from fleet.validation.engine import VERSION_MARKER
 from fleet.validation.run_setup import Resolved, build_run_setup
 
 
@@ -192,6 +194,89 @@ class TestStandard:
         assert setup.standard == Resolved("sdtm", "argument")
 
 
+class TestEngineVersion:
+    @pytest.fixture
+    def engine(self, tmp_path: Path) -> Path:
+        exe = tmp_path / "core" / "core"
+        exe.parent.mkdir()
+        exe.touch()
+        return exe
+
+    def _version_command(
+        self, monkeypatch: pytest.MonkeyPatch, rc: int, stdout: str = ""
+    ) -> list[list[str]]:
+        calls: list[list[str]] = []
+
+        def run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            calls.append(cmd)
+            return subprocess.CompletedProcess(cmd, rc, stdout, "")
+
+        monkeypatch.setattr("fleet.validation.engine.subprocess.run", run)
+        return calls
+
+    def _setup(self, engine: Path, tmp_path: Path):
+        return build_run_setup(name="AE", engine=engine, start=tmp_path, environ={})
+
+    def test_from_the_version_command(
+        self, engine: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls = self._version_command(monkeypatch, 0, "0.15.0\n")
+
+        setup = self._setup(engine, tmp_path)
+
+        assert calls == [[str(engine), "version"]]
+        assert setup.engine_version == "0.15.0"
+        assert "CORE version: 0.15.0" in setup.header_lines()
+
+    def test_from_the_marker_file_when_the_command_fails(
+        self, engine: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._version_command(monkeypatch, 2)
+        (engine.parent / VERSION_MARKER).write_text("v0.14.2\n", encoding="utf-8")
+
+        assert self._setup(engine, tmp_path).engine_version == "v0.14.2"
+
+    def test_unknown_when_both_fail(
+        self, engine: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._version_command(monkeypatch, 2)
+
+        assert self._setup(engine, tmp_path).engine_version == "unknown"
+
+    def test_install_engine_writes_the_release_tag_marker(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        httpx = pytest.importorskip("httpx")
+        from fleet.validation import engine as eng
+
+        monkeypatch.setattr(eng, "ENGINE_DIR", tmp_path / "cdisc-rules-engine")
+        keyword = eng._platform_asset_keywords()[0]
+        release = {
+            "tag_name": "v0.15.0",
+            "assets": [{"name": f"core-{keyword}.zip", "browser_download_url": "https://x"}],
+        }
+
+        class Client:
+            def __init__(self, **kwargs: object) -> None: ...
+            def __enter__(self) -> Client:
+                return self
+
+            def __exit__(self, *exc: object) -> None: ...
+            def get(self, url: str, **kwargs: object) -> object:
+                return httpx.Response(200, json=release, request=httpx.Request("GET", url))
+
+        def download(url: str, asset_name: str) -> None:
+            eng.engine_path().parent.mkdir(parents=True)
+            eng.engine_path().touch()
+
+        monkeypatch.setattr(httpx, "Client", Client)
+        monkeypatch.setattr(eng, "_download_and_install", download)
+
+        dest = eng.install_engine()
+
+        assert (dest.parent / VERSION_MARKER).read_text(encoding="utf-8").strip() == "v0.15.0"
+
+
 def test_header_prints_each_input_with_its_source(tmp_path: Path) -> None:
     setup = build_run_setup(name="ADSL", namespace="adam", start=tmp_path, environ={})
 
@@ -220,10 +305,12 @@ _ADAE = """\
 
 @pytest.fixture
 def fake_engine(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
-    """Capture each engine command; the engine writes no report and exits 0."""
+    """Capture each validate command; the engine writes no report and exits 0."""
     commands: list[list[str]] = []
 
     def run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if "validate" not in cmd:
+            return subprocess.CompletedProcess(cmd, 0, "0.15.0\n", "")
         commands.append(cmd)
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
@@ -255,10 +342,11 @@ class TestVerb:
     ) -> None:
         pl.from_repr(_ADAE).adam.validate("ADAE")
 
-        (cmd,) = fake_engine
-        assert Path(cmd[0]) == (study / "bin" / "core").resolve()
-        assert _flag(cmd, "-v") == "1-1"
-        assert Path(_flag(cmd, "-lr") or "") == (study / "rules").resolve()
+        official, custom = fake_engine
+        assert Path(official[0]) == (study / "bin" / "core").resolve()
+        assert _flag(official, "-v") == "1-1"
+        assert "-lr" not in official
+        assert Path(_flag(custom, "-lr") or "") == (study / "rules").resolve()
 
     def test_arguments_override_the_study_config(
         self, study: Path, fake_engine: list[list[str]]
@@ -273,10 +361,32 @@ class TestVerb:
             rules_engine_path=study / "other-core",
         )
 
-        (cmd,) = fake_engine
-        assert Path(cmd[0]) == study / "other-core"
-        assert _flag(cmd, "-v") == "1-3"
-        assert Path(_flag(cmd, "-lr") or "") == study / "other_rules"
+        official, custom = fake_engine
+        assert Path(official[0]) == study / "other-core"
+        assert _flag(official, "-v") == "1-3"
+        assert Path(_flag(custom, "-lr") or "") == study / "other_rules"
+
+    def test_custom_findings_join_the_official_ones_with_their_source(
+        self, study: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            if "validate" in cmd:
+                rule = "FLEET-AE-001" if "-lr" in cmd else "CORE-000001"
+                report = {"Issue_Details": [{"core_id": rule, "message": "m", "Severity": "Error"}]}
+                out = Path(_flag(cmd, "-o") or "").with_suffix(".json")
+                out.write_text(json.dumps(report), encoding="utf-8")
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        monkeypatch.setattr("fleet.validation.official.subprocess.run", run)
+
+        ns = pl.from_repr(_ADAE).adam.validate("ADAE", on_fail="ignore")
+
+        result = ns.last_validation
+        assert result is not None
+        assert [(i.rule_id, i.source) for i in result.errors] == [
+            ("CORE-000001", "official"),
+            ("FLEET-AE-001", "custom"),
+        ]
 
     def test_report_names_the_study_config(
         self, study: Path, fake_engine: list[list[str]], capsys: pytest.CaptureFixture

@@ -25,8 +25,10 @@ from __future__ import annotations
 import os
 import platform
 import stat
+import subprocess
 import sys
 import tempfile
+from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -52,6 +54,9 @@ def _fleet_home() -> Path:
 
 FLEET_HOME = _fleet_home()
 ENGINE_DIR = FLEET_HOME / "cdisc-rules-engine"
+
+#: File next to the managed binary that holds the release tag ``fleet install-engine`` installed.
+VERSION_MARKER = "fleet-release-tag.txt"
 
 
 def _platform_asset_keywords() -> list[str]:
@@ -114,6 +119,54 @@ def find_engine(
         return legacy, "default"
 
     return None
+
+
+def engine_version(executable: Path) -> str:
+    """Return the version of the engine at *executable*.
+
+    The version comes from the engine's own ``version`` command, else from
+    the :data:`VERSION_MARKER` file next to the executable, else it is
+    ``"unknown"``.  The result is kept per executable and modification
+    time, so a sweep asks the engine once.
+
+    Args:
+        executable: The engine binary, or the legacy ``core.py``.
+
+    Returns:
+        str: The version (``"0.15.0"``), the release tag (``"v0.15.0"``),
+        or ``"unknown"``.
+
+    Examples:
+        The managed install after ``fleet install-engine``::
+
+            engine_version(engine_path())  # "0.15.0"
+    """
+    try:
+        mtime = executable.stat().st_mtime_ns
+    except OSError:
+        return "unknown"
+    return _engine_version(executable, mtime)
+
+
+@lru_cache(maxsize=16)
+def _engine_version(executable: Path, _mtime: int) -> str:
+    cmd = [str(executable), "version"]
+    if executable.suffix == ".py":
+        cmd.insert(0, "python")
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=30, cwd=str(executable.parent)
+        )
+        lines = result.stdout.strip().splitlines() if result.returncode == 0 else []
+    except (OSError, subprocess.SubprocessError):
+        lines = []
+    if lines:
+        return lines[-1].strip()
+    try:
+        tag = (executable.parent / VERSION_MARKER).read_text(encoding="utf-8").strip()
+    except OSError:
+        tag = ""
+    return tag or "unknown"
 
 
 def discover_engine(study_root: Path | None = None) -> Path | None:
@@ -240,7 +293,8 @@ def install_engine(*, version: str = "latest", force: bool = False) -> Path:
     if platform.system().lower() != "windows":
         dest.chmod(dest.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
-    print(f"Installed CDISC Rules Engine → {dest}")
+    (dest.parent / VERSION_MARKER).write_text(f"{tag_name}\n", encoding="utf-8")
+    print(f"Installed CDISC Rules Engine {tag_name} → {dest}")
     return dest
 
 
@@ -372,23 +426,23 @@ def uninstall_engine() -> bool:
     return False
 
 
-def doctor(study_root: Path | None = None) -> dict[str, str]:
+def doctor(study_root: Path | None = None, engine: Path | None = None) -> dict[str, str]:
     """Check the health of the CDISC Rules Engine installation.
 
     Args:
         study_root: Optional study root directory; when given,
             ``validation.engine_path`` from its ``study_config.yaml`` is
             honoured during engine discovery.
+        engine: The engine to check, as a run setup resolved it; skips
+            the discovery.
 
     Returns:
         A dict of check names to status strings.
     """
-    import subprocess
-
     checks: dict[str, str] = {}
 
     # Engine discovery
-    found = discover_engine(study_root)
+    found = engine if engine is not None else discover_engine(study_root)
     if found is None:
         checks["engine"] = "NOT FOUND — run `fleet install-engine`"
         checks["version"] = "N/A"

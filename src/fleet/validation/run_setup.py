@@ -27,7 +27,7 @@ from fleet.core.study_context import (
     find_study_config,
     load_study_context,
 )
-from fleet.validation.engine import find_engine
+from fleet.validation.engine import engine_version, find_engine
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -76,6 +76,8 @@ class RunSetup:
         custom_rules: Directory of custom CORE rules, or ``None``.
         engine: Engine executable, or ``None`` when none was found.
         study_config: The ``study_config.yaml`` used, or ``None``.
+        engine_version: The engine version (see
+            :func:`~fleet.validation.engine.engine_version`), or ``"unknown"``.
     """
 
     standard: Resolved[Standard]
@@ -83,6 +85,7 @@ class RunSetup:
     custom_rules: Resolved[Path | None]
     engine: Resolved[Path | None]
     study_config: Path | None
+    engine_version: str = "unknown"
 
     @property
     def engine_ig_version(self) -> str:
@@ -98,6 +101,7 @@ class RunSetup:
             f"IG version:   {self.ig_version.value} ({self.ig_version.source})",
             f"Custom rules: {rules if rules is not None else 'none'} ({self.custom_rules.source})",
             f"Engine:       {engine if engine is not None else 'not found'} ({self.engine.source})",
+            f"CORE version: {self.engine_version}",
             f"Study config: {self.study_config or 'no study config'}",
         ]
 
@@ -153,12 +157,16 @@ def build_run_setup(
     ctx = _load(config_path) if config_path is not None else None
 
     std = _resolve_standard(standard, namespace, name, path, ctx)
+    ig_version = _resolve_ig_version(version, std.value, ctx)
+    rules = _resolve_custom_rules(custom_rules, ctx)
+    exe = _resolve_engine(engine, ctx, os.environ if environ is None else environ)
     return RunSetup(
         standard=std,
-        ig_version=_resolve_ig_version(version, std.value, ctx),
-        custom_rules=_resolve_custom_rules(custom_rules, ctx),
-        engine=_resolve_engine(engine, ctx, os.environ if environ is None else environ),
+        ig_version=ig_version,
+        custom_rules=rules,
+        engine=exe,
         study_config=config_path,
+        engine_version=engine_version(exe.value) if exe.value is not None else "unknown",
     )
 
 

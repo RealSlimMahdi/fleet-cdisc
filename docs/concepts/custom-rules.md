@@ -6,8 +6,28 @@ official rule sets. When the standard CDISC CORE conformance rules do not
 cover a study-specific requirement — a sponsor SOP constraint, an FDA
 Technical Conformance Guide (TCG) gap, a protocol-specific range check, or
 ADaM checks while the official ADaMIG rule set remains unpublished — you
-author **custom rules** and run them alongside (and in the same engine as)
-the official rules.
+author **custom rules** and run them next to the official rules.
+
+## Official and custom rules both run
+
+CORE runs only the `-lr` rules when it gets a local rules directory: one AE
+file ran 430 official rules without `-lr` and 2 local rules with it. So
+Fleet runs the engine twice per standard when custom rules are set:
+
+1. one run without `-lr`: the official CDISC rules,
+2. one run with `-lr`: the custom rules only.
+
+The findings of both runs join into one report per dataset. Each finding
+names its source, `official` or `custom`:
+
+```text
+1. [CORE-000001] (official) AESTDTC is after AEENDTC
+2. [FLEET-AE-001] (custom) AESEV is missing for a serious AE
+```
+
+The source is also on `ValidationIssue.source`, in the HTML reports, and in
+the MCP `fleet_validate` output. Without custom rules, the engine runs once
+per standard.
 
 ---
 

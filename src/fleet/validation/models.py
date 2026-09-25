@@ -2,8 +2,9 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
+from html import escape
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from fleet.core import log as fleet_log
 
@@ -13,6 +14,9 @@ if TYPE_CHECKING:
 #: Validation reports emit through this logger (INFO level, stdout by
 #: default — see :mod:`fleet.core.log` to route or silence them).
 _logger = fleet_log.get_logger("fleet.validation")
+
+#: Which engine run a finding came from: the CDISC rules, or the study's custom rules.
+RuleSource = Literal["official", "custom"]
 
 
 class Severity(Enum):
@@ -44,9 +48,10 @@ class ValidationIssue:
     producing_verb: str | None = None
     verb_method: str | None = None
     spec_ref: str | None = None
+    source: RuleSource = "official"
 
     def __str__(self) -> str:
-        parts = [f"[{self.severity.value}] {self.rule_id}: {self.message}"]
+        parts = [f"[{self.severity.value}] {self.rule_id} ({self.source}): {self.message}"]
         if self.variable:
             parts.append(f"Variable: {self.variable}")
         if self.rows_affected:
@@ -128,14 +133,14 @@ class ValidationResult:
         if self.errors:
             _logger.info(f"\nERRORS ({len(self.errors)}):")
             for issue in self.errors:
-                label = f"  [{issue.rule_id}]"
+                label = f"  [{issue.rule_id}] ({issue.source})"
                 if issue.variable:
                     label += f" {issue.variable}:"
                 _logger.info(f"{label} {issue.message}")
         if self.warnings:
             _logger.info(f"\nWARNINGS ({len(self.warnings)}):")
             for issue in self.warnings:
-                label = f"  [{issue.rule_id}]"
+                label = f"  [{issue.rule_id}] ({issue.source})"
                 if issue.variable:
                     label += f" {issue.variable}:"
                 _logger.info(f"{label} {issue.message}")
@@ -169,7 +174,7 @@ class ValidationResult:
             """Group issues by (rule_id, message, variable) and consolidate rows."""
             groups: dict[tuple, dict] = {}
             for issue in issues:
-                key = (issue.rule_id, issue.message, issue.variable or "")
+                key = (issue.rule_id, issue.message, issue.variable or "", issue.source)
                 if key not in groups:
                     groups[key] = {
                         "issue": issue,
@@ -208,7 +213,7 @@ class ValidationResult:
                 issue = grp["issue"]
                 count = grp["count"]
                 rows = grp["rows"]
-                _logger.info(f"\n{i}. [{issue.rule_id}] {issue.message}")
+                _logger.info(f"\n{i}. [{issue.rule_id}] ({issue.source}) {issue.message}")
                 if issue.variable:
                     _logger.info(f"   Variable: {issue.variable}")
                 if rows:
@@ -268,6 +273,7 @@ class ValidationResult:
                     f"<div class='issue-card {css_class}'>"
                     f"<div class='issue-header'>{i}. {issue.message}</div>"
                     f"<div class='issue-detail'><strong>Rule ID:</strong> <span class='rule-id'>{issue.rule_id}</span></div>"
+                    f"<div class='issue-detail'><strong>Source:</strong> {issue.source}</div>"
                     f"{extra}</div>"
                 )
             return "\n".join(cards)
@@ -283,6 +289,9 @@ class ValidationResult:
             f"{issue_cards(self.warnings, 'warning')}</div>"
             if self.warnings
             else ""
+        )
+        setup_html = "".join(
+            f"{escape(line)}<br>\n" for line in (self.setup.header_lines() if self.setup else ())
         )
 
         return f"""<!DOCTYPE html>
@@ -309,7 +318,7 @@ h1 {{ color: #2c3e50; border-bottom: 3px solid {status_color}; padding-bottom: 1
 <div class="container">
 <h1>CDISC Validation Report</h1>
 <div class="summary">
-<strong>Dataset:</strong> {self.dataset_name}<br>
+{setup_html}<strong>Dataset:</strong> {self.dataset_name}<br>
 <strong>Type:</strong> {self.dataset_type} {self.model_version}<br>
 <strong>Status:</strong> <span class="status">{status_text}</span><br>
 <strong>Errors:</strong> {len(self.errors)} | <strong>Warnings:</strong> {len(self.warnings)} | <strong>Info:</strong> {len(self.infos)}

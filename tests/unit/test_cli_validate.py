@@ -30,11 +30,16 @@ _SUBJECTS = pl.from_repr("""\
 
 @dataclass
 class FakeEngine:
-    """Captured engine calls; *report* is written as the engine's raw JSON report."""
+    """Captured validate calls; *report* is written as the engine's raw JSON report.
+
+    A call with ``-lr`` writes *custom_report* instead.  Other commands
+    (``version``, ``validate --help``) are answered and not recorded.
+    """
 
     calls: list[list[str]] = field(default_factory=list)
     datasets: list[list[str]] = field(default_factory=list)
     report: dict | None = None
+    custom_report: dict | None = None
 
     def standards(self) -> list[str]:
         return [cmd[cmd.index("-s") + 1] for cmd in self.calls]
@@ -45,12 +50,15 @@ def engine(monkeypatch: pytest.MonkeyPatch) -> FakeEngine:
     fake = FakeEngine()
 
     def run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if "validate" not in cmd or "--help" in cmd:
+            return subprocess.CompletedProcess(cmd, 0, "0.15.0\n", "")
         fake.calls.append(cmd)
         data_dir = Path(cmd[cmd.index("-d") + 1])
         fake.datasets.append(sorted(p.name for p in data_dir.iterdir()))
-        if fake.report is not None:
+        report = fake.custom_report if "-lr" in cmd else fake.report
+        if report is not None:
             out = Path(cmd[cmd.index("-o") + 1]).with_suffix(".json")
-            out.write_text(json.dumps(fake.report), encoding="utf-8")
+            out.write_text(json.dumps(report), encoding="utf-8")
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     monkeypatch.setattr("fleet.validation.official.subprocess.run", run)
@@ -104,6 +112,7 @@ class TestSweep:
         assert "Standard:     SDTMIG (data directory)" in out
         assert "Standard:     ADaMIG (data directory)" in out
         assert f"Engine:       {study / 'bin' / 'core'} (study config)" in out
+        assert "CORE version: 0.15.0" in out
         assert f"Study config: {study / 'study_config.yaml'}" in out
 
     def test_findings_are_split_to_their_dataset(
@@ -191,3 +200,75 @@ def test_no_paths_outside_a_study_could_not_run(
 
     assert _run(["validate"]) == 2
     assert engine.calls == []
+
+
+def _finding(rule: str, dataset: str) -> dict:
+    return {"core_id": rule, "message": f"{rule} fired", "dataset": dataset, "Severity": "Error"}
+
+
+class TestCustomRules:
+    """CORE runs only the ``-lr`` rules when given, so custom rules get their own run."""
+
+    @pytest.fixture
+    def rules_study(self, study: Path) -> Path:
+        (study / "rules").mkdir()
+        (study / "study_config.yaml").write_text(
+            "study_id: S01\nvalidation:\n  engine_path: bin/core\n  custom_rules: rules\n",
+            encoding="utf-8",
+        )
+        return study
+
+    def test_one_dataset_makes_an_official_and_a_custom_run(
+        self, rules_study: Path, engine: FakeEngine
+    ) -> None:
+        assert _run(["validate", "data/sdtm/ae.parquet"]) == 0
+
+        official, custom = engine.calls
+        assert "-lr" not in official
+        assert Path(custom[custom.index("-lr") + 1]) == (rules_study / "rules").resolve()
+
+    def test_findings_of_both_runs_join_in_one_report_with_their_source(
+        self, rules_study: Path, engine: FakeEngine, capsys: pytest.CaptureFixture
+    ) -> None:
+        engine.report = {"Issue_Details": [_finding("CORE-000001", "ae.json")]}
+        engine.custom_report = {"Issue_Details": [_finding("FLEET-AE-001", "ae.json")]}
+        report = rules_study / "report.html"
+
+        assert _run(["validate", "data/sdtm/ae.parquet", "--report", str(report)]) == 1
+
+        out = capsys.readouterr().out
+        assert out.count("CDISC Validation Report: AE") == 1
+        assert "[CORE-000001] (official)" in out
+        assert "[FLEET-AE-001] (custom)" in out
+        html = report.read_text(encoding="utf-8")
+        assert "<td>FLEET-AE-001</td><td>custom</td>" in html
+        assert "CORE version: 0.15.0" in html
+
+    def test_a_sweep_of_both_standards_makes_four_runs(
+        self, rules_study: Path, engine: FakeEngine, capsys: pytest.CaptureFixture
+    ) -> None:
+        assert _run(["validate"]) == 0
+
+        assert engine.standards() == ["sdtmig", "sdtmig", "adamig", "adamig"]
+        assert ["-lr" in cmd for cmd in engine.calls] == [False, True, False, True]
+        out = capsys.readouterr().out
+        assert out.count("CDISC Validation Report:") == 5
+        assert "5 passed, 0 failed, 0 could not run" in out
+
+    def test_without_custom_rules_one_run_per_standard(
+        self, study: Path, engine: FakeEngine
+    ) -> None:
+        _run(["validate"])
+
+        assert len(engine.calls) == 2
+        assert not any("-lr" in cmd for cmd in engine.calls)
+
+
+def test_doctor_prints_the_engine_of_the_run_setup(
+    study: Path, engine: FakeEngine, capsys: pytest.CaptureFixture
+) -> None:
+    _run(["doctor"])
+
+    out = capsys.readouterr().out
+    assert f"{study / 'bin' / 'core'} (study config)" in out
+    assert "version: 0.15.0" in out

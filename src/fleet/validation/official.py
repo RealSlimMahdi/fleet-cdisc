@@ -4,13 +4,13 @@ import ast
 import json
 import subprocess
 import tempfile
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 
 import polars as pl
 
 from fleet.validation.engine import discover_engine
-from fleet.validation.models import Severity, ValidationIssue, ValidationResult
+from fleet.validation.models import RuleSource, Severity, ValidationIssue, ValidationResult
 
 
 def _resolve_variable_field(item: dict) -> str | None:
@@ -159,18 +159,28 @@ class OfficialCDISCValidator:
         custom_rules: Path | None = None,
         timeout: float = 300,
     ) -> ValidationResult:
-        """Run CDISC rules engine validation on a Polars DataFrame."""
+        """Run CDISC rules engine validation on a Polars DataFrame.
+
+        With *custom_rules*, the official and the custom rules run in two
+        engine runs, because CORE runs only the ``-lr`` rules when given.
+        """
         name = domain or "unknown"
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
             dataset_path = tmpdir_path / f"{dataset_name}.json"
             self._write_dataset_json(data, dataset_path, domain=domain or dataset_name)
-            outcome = self._run_engine(
+            outcomes = self._run_sources(
                 ["-dp", str(dataset_path)], standard, version, custom_rules, timeout, tmpdir_path
             )
-        if isinstance(outcome, dict):
-            return self._parse_validation_result(outcome, data, domain)
-        return _result_from_issues(name, standard, version, outcome)
+        return _join_sources(
+            (
+                source,
+                {name: self._parse_validation_result(outcome, data, domain)}
+                if isinstance(outcome, dict)
+                else {name: _result_from_issues(name, standard, version, outcome)},
+            )
+            for source, outcome in outcomes
+        )[name]
 
     def validate_datasets(
         self,
@@ -184,7 +194,8 @@ class OfficialCDISCValidator:
 
         All datasets are written to one directory, so rules that span
         several datasets can execute.  The one engine report is split into
-        one result per dataset.
+        one result per dataset.  With *custom_rules*, a second engine run
+        executes the custom rules, and its findings join the same results.
 
         Args:
             datasets: Dataset name (``"AE"``) to its frame.
@@ -214,12 +225,41 @@ class OfficialCDISCValidator:
             data_dir.mkdir()
             for name, df in datasets.items():
                 self._write_dataset_json(df, data_dir / f"{name}.json", domain=name)
-            outcome = self._run_engine(
+            outcomes = self._run_sources(
                 ["-d", str(data_dir)], standard, version, custom_rules, timeout, tmpdir_path
             )
-        if isinstance(outcome, dict):
-            return _split_validation_result(outcome, names)
-        return {name: _result_from_issues(name, standard, version, outcome) for name in names}
+        return _join_sources(
+            (
+                source,
+                _split_validation_result(outcome, names)
+                if isinstance(outcome, dict)
+                else {
+                    name: _result_from_issues(name, standard, version, outcome) for name in names
+                },
+            )
+            for source, outcome in outcomes
+        )
+
+    def _run_sources(
+        self,
+        data_args: list[str],
+        standard: str,
+        version: str,
+        custom_rules: Path | None,
+        timeout: float,
+        workdir: Path,
+    ) -> list[tuple[RuleSource, dict | list[ValidationIssue]]]:
+        """Run the official rules, then the custom rules when given: one engine run each."""
+        runs: list[tuple[RuleSource, Path | None]] = [("official", None)]
+        if custom_rules is not None:
+            runs.append(("custom", custom_rules))
+        return [
+            (
+                source,
+                self._run_engine(data_args, standard, version, rules, timeout, workdir, source),
+            )
+            for source, rules in runs
+        ]
 
     def _run_engine(
         self,
@@ -229,9 +269,10 @@ class OfficialCDISCValidator:
         custom_rules: Path | None,
         timeout: float,
         workdir: Path,
+        source: RuleSource = "official",
     ) -> dict | list[ValidationIssue]:
         """Run the engine once: the raw JSON report, or the issues that replace it."""
-        output_file = workdir / "validation_result"
+        output_file = workdir / f"validation_result_{source}"
         cmd = self._build_cmd(
             "validate",
             "-s",
@@ -406,6 +447,24 @@ def _parse_report(
         name: _result_from_issues(name, dataset_type, model_version, found)
         for name, found in issues.items()
     }
+
+
+def _join_sources(
+    runs: Iterable[tuple[RuleSource, dict[str, ValidationResult]]],
+) -> dict[str, ValidationResult]:
+    """Join the results of the official and custom runs; each finding keeps its source.
+
+    The type and version of a dataset come from its first run, the official one.
+    """
+    found: dict[str, list[ValidationIssue]] = {}
+    meta: dict[str, tuple[str, str]] = {}
+    for source, results in runs:
+        for name, result in results.items():
+            meta.setdefault(name, (result.dataset_type, result.model_version))
+            for issue in (*result.errors, *result.warnings, *result.infos):
+                issue.source = source
+                found.setdefault(name, []).append(issue)
+    return {name: _result_from_issues(name, *meta[name], found.get(name, [])) for name in meta}
 
 
 def _result_from_issues(
