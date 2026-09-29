@@ -929,6 +929,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="One-time setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#engine-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Engine version
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -939,6 +956,56 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Running validation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-ci-gate-fleet-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The CI gate: fleet check
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-mcp-tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The MCP tool
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#where-the-verb-takes-its-inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the verb takes its inputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#could-not-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Could not run
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2036,6 +2103,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="One-time setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#engine-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Engine version
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2046,6 +2130,56 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Running validation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-ci-gate-fleet-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The CI gate: fleet check
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-mcp-tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The MCP tool
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#where-the-verb-takes-its-inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the verb takes its inputs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#could-not-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Could not run
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2102,8 +2236,23 @@ with the same rules a regulator's reviewer tooling references.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>install-engine<span class="w">     </span><span class="c1"># downloads the CORE binary to ~/.fleet</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>doctor<span class="w">             </span><span class="c1"># confirms engine + extras are healthy</span>
 </span></code></pre></div>
+<p><code>fleet doctor</code> prints the engine that validation will use, where it came
+from, and its version. It takes them from the same run setup as the verb and
+<code>fleet validate</code>.</p>
 <p>Teams can pin a shared engine instead via <code>validation.engine_path</code> in
-<code>study_config.yaml</code> or the <code>FLEET_RULES_ENGINE</code> environment variable.</p>
+<code>study_config.yaml</code>. Inside a study, <code>validation.engine_path</code> beats the
+<code>FLEET_RULES_ENGINE</code> environment variable, so that every programmer runs the
+same engine build. Outside a study, <code>FLEET_RULES_ENGINE</code> still applies.</p>
+<h3 id="engine-version">Engine version<a class="headerlink" href="#engine-version" title="Permanent link">&para;</a></h3>
+<p>Every report header prints the engine version, so a QC programmer can check
+that two runs used the same rule build. Fleet takes the version from the
+first source that gives it:</p>
+<ol>
+<li>the engine's own <code>core version</code> command (<code>0.15.0</code>),</li>
+<li>the <code>fleet-release-tag.txt</code> file that <code>fleet install-engine</code> writes next
+   to the managed binary (tag <code>v0.15.0</code>, printed as <code>0.15.0</code>),</li>
+<li>else <code>unknown</code>.</li>
+</ol>
 <h2 id="running-validation">Running validation<a class="headerlink" href="#running-validation" title="Permanent link">&para;</a></h2>
 <p>Everything resolves from the discovered <code>study_config.yaml</code>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>validate<span class="w">                          </span><span class="c1"># all datasets in &lt;sdtm_data&gt; and &lt;adam_data&gt;</span>
@@ -2111,23 +2260,114 @@ with the same rules a regulator's reviewer tooling references.</p>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>validate<span class="w"> </span>--report<span class="w"> </span>findings.html<span class="w">   </span><span class="c1"># HTML findings report</span>
 </span></code></pre></div>
 <ul>
-<li><strong>Standard detection</strong>: <code>AD*</code> datasets validate as ADaM, everything else
-  as SDTM (<code>--standard</code> overrides).</li>
+<li><strong>Sweep</strong>: the engine runs once for all SDTM datasets and once for all
+  ADaM datasets, so rules that span several datasets of one standard can
+  execute. The report shows one result per dataset.</li>
+<li><strong>Standard detection</strong>: a dataset in the configured <code>sdtm_data</code> or
+  <code>adam_data</code> directory takes the standard of that directory. For any other
+  path, <code>AD*</code> datasets validate as ADaM and everything else as SDTM.
+  <code>--standard</code> overrides both.</li>
 <li><strong>IG versions</strong> come from the config's <code>sdtm.ig_version</code> /
   <code>adam.ig_version</code> (<code>--version</code> overrides).</li>
 <li><strong>Custom rules</strong> load automatically from <code>validation.custom_rules</code>
-  (<code>--custom-rules</code> overrides) — see
-  <a href="../custom-rules/">Custom Validation Rules</a>.</li>
-<li>Exit code is 1 when any dataset has errors, so <code>fleet validate</code> drops
-  straight into CI.</li>
+  (<code>--custom-rules</code> overrides). They run in a second engine run next to the
+  official rules, so a sweep of both standards with custom rules makes four
+  engine runs. See <a href="../custom-rules/">Custom Validation Rules</a>.</li>
+<li>The report header of each dataset shows every input with its source, as on
+  the verb.</li>
+<li><strong>Could not run</strong>: a dataset whose directory and file name disagree
+  (<code>data/sdtm/adsl.parquet</code>), or an unsupported IG version, is not validated.
+  The reason is printed, and the other datasets still run.</li>
+<li>Exit codes: 0 no errors, 1 any dataset has errors, 2 any dataset could not
+  run. So <code>fleet validate</code> drops straight into CI.</li>
 </ul>
+<h3 id="the-ci-gate-fleet-check">The CI gate: <code>fleet check</code><a class="headerlink" href="#the-ci-gate-fleet-check" title="Permanent link">&para;</a></h3>
+<p><code>fleet check</code> builds the same run setup for SDTM and ADaM, with no datasets.
+It catches a setup error before delivery, without an engine:</p>
+<ul>
+<li><code>sdtm.ig_version: 3-5</code>, or any IG version not in the supported list, fails
+  the gate.</li>
+<li>A <code>validation.custom_rules</code> directory that does not exist fails the gate.</li>
+<li>No engine found is a warning only, because CI installs no engine.</li>
+</ul>
+<h3 id="the-mcp-tool">The MCP tool<a class="headerlink" href="#the-mcp-tool" title="Permanent link">&para;</a></h3>
+<p><code>fleet_validate(dataset_path, standard=None, version=None, custom_rules=None)</code>
+builds the same run setup. It looks for <code>study_config.yaml</code> from the
+directory of the dataset, not from the working directory of the server. A
+refused setup returns <code>{"outcome": "could not run", "reason": ...}</code> and does
+not raise. See <a href="../../getting-started/ide-tooling/">IDE tooling</a>.</p>
 <p>The same run from Python, chainable at the end of a pipeline:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">result</span> <span class="o">=</span> <span class="p">(</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">raw_df</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;DOMAIN&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">&quot;AE&quot;</span><span class="p">)</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="c1"># ... derivations ...</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">domain</span><span class="o">=</span><span class="s2">&quot;AE&quot;</span><span class="p">)</span>  <span class="c1"># runs CORE on the materialised frame</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">&quot;AE&quot;</span><span class="p">)</span>  <span class="c1"># runs CORE on the materialised frame</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="p">)</span>
 </span></code></pre></div>
+<h3 id="where-the-verb-takes-its-inputs">Where the verb takes its inputs<a class="headerlink" href="#where-the-verb-takes-its-inputs" title="Permanent link">&para;</a></h3>
+<p>The verb builds a <strong>run setup</strong> before the engine starts. Each input comes
+from the first source that gives it:</p>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Argument</th>
+<th>Study config</th>
+<th>Environment</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Standard</td>
+<td>(none)</td>
+<td>(none)</td>
+<td>(none)</td>
+<td>the namespace: <code>.sdtm</code> or <code>.adam</code></td>
+</tr>
+<tr>
+<td>IG version</td>
+<td><code>version=</code></td>
+<td><code>sdtm.ig_version</code> / <code>adam.ig_version</code></td>
+<td>(none)</td>
+<td>SDTMIG 3.4, ADaMIG 1.3</td>
+</tr>
+<tr>
+<td>Custom rules</td>
+<td><code>custom_rules=</code></td>
+<td><code>validation.custom_rules</code></td>
+<td>(none)</td>
+<td>none</td>
+</tr>
+<tr>
+<td>Engine</td>
+<td><code>rules_engine_path=</code></td>
+<td><code>validation.engine_path</code></td>
+<td><code>FLEET_RULES_ENGINE</code></td>
+<td>managed install</td>
+</tr>
+</tbody>
+</table>
+<p>The verb looks for <code>study_config.yaml</code> from the working directory, then
+each parent. <code>version=</code> accepts <code>"3-4"</code> and <code>"3.4"</code>. The supported versions
+are SDTMIG 3.2, 3.3, 3.4 and ADaMIG 1.0, 1.1, 1.2, 1.3.</p>
+<p>The report header prints each input with its source and the study config
+used:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>Standard:     SDTMIG (namespace)
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>IG version:   3.3 (study config)
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>Custom rules: /study/metadata/custom_rules (study config)
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>Engine:       /study/tools/core/core (study config)
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>CORE version: 0.15.0
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>Study config: /study/study_config.yaml
+</span></code></pre></div>
+<h3 id="could-not-run">Could not run<a class="headerlink" href="#could-not-run" title="Permanent link">&para;</a></h3>
+<p>Some setups are refused before the engine starts. The verb then raises
+<code>ValidationSetupError</code> in every <code>on_fail</code> mode, because no rule ran:</p>
+<ul>
+<li>the dataset name belongs to the other standard: <code>adae.adam.validate("AE")</code>
+  or <code>ae.sdtm.validate("ADAE")</code>,</li>
+<li>the IG version is not supported, for example SDTMIG 3.1.3,</li>
+<li>the custom rules directory does not exist.</li>
+</ul>
 <h2 id="which-rules-actually-exist-upstream">Which rules actually exist upstream<a class="headerlink" href="#which-rules-actually-exist-upstream" title="Permanent link">&para;</a></h2>
 <p>CORE executes the rule sets CDISC has published to its Library. As of
 mid-2026 that means:</p>
@@ -2190,7 +2430,7 @@ different error class:</p>
 <tr>
 <td><code>DefineValidator</code> / <code>fleet check</code></td>
 <td>on demand / CI gate</td>
-<td>define.yaml schema + business rules</td>
+<td>define.yaml schema + business rules, run setup (IG versions, custom rules directory)</td>
 </tr>
 <tr>
 <td>Trial-design audit (<code>fleet tdd audit</code>)</td>
@@ -2205,8 +2445,9 @@ different error class:</p>
 </tbody>
 </table>
 <p>See <a href="../custom-rules/">Custom Validation Rules</a> for extending CORE with
-sponsor-, study-, or TCG-specific checks — they run in the same engine,
-report in the same format, and live in version control next to the study.</p>
+sponsor-, study-, or TCG-specific checks — they run next to the official
+rules, report in the same format with their source, and live in version
+control next to the study.</p>
 
 
 
@@ -2229,7 +2470,7 @@ report in the same format, and live in version control next to the study.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 10, 2026 15:35:40 UTC">July 10, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 29, 2026 09:28:54 UTC">September 29, 2026</span>
   </span>
 
     

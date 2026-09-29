@@ -2592,11 +2592,14 @@
 <h4 id="engine-discovery-order">Engine discovery order<a class="headerlink" href="#engine-discovery-order" title="Permanent link">&para;</a></h4>
 <p>Fleet resolves the engine path at runtime via a four-tier chain (first match wins):</p>
 <ol>
-<li><code>FLEET_RULES_ENGINE</code> environment variable (<code>.env</code> at project root)</li>
 <li><code>validation.engine_path</code> in <code>study_config.yaml</code> (committable to VCS for team reuse)</li>
+<li><code>FLEET_RULES_ENGINE</code> environment variable (<code>.env</code> at project root)</li>
 <li>Managed install under <code>~/.fleet/cdisc-rules-engine/core/</code></li>
 <li>Legacy <code>../cdisc-rules-engine/core.py</code> (development fallback)</li>
 </ol>
+<p>The study config comes first, so a stale environment variable on one machine
+cannot replace the engine the team pinned. An explicit <code>rules_engine_path=</code> on
+<code>.validate()</code> beats all four.</p>
 <hr />
 <h3 id="pillar-4-automated-test-suite-and-static-analysis">Pillar 4 — Automated Test Suite and Static Analysis<a class="headerlink" href="#pillar-4-automated-test-suite-and-static-analysis" title="Permanent link">&para;</a></h3>
 <p>Fleet maintains a comprehensive automated test suite executed on every change:</p>
@@ -2798,7 +2801,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 10, 2026 15:35:40 UTC">July 10, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 25, 2026 20:41:46 UTC">September 25, 2026</span>
   </span>
 
     
