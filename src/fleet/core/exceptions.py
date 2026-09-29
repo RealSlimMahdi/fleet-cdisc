@@ -67,6 +67,15 @@ class ValidationError(FleetError):
     """Raised when CDISC validation encounters a fatal error."""
 
 
+class ValidationSetupError(FleetError, ValueError):
+    """Raised when a validation could not run: its run setup was refused.
+
+    Examples: the namespace and the dataset name point to different
+    standards, or the IG version is not supported.  The verb raises it in
+    every ``on_fail`` mode, because no rule was reached.
+    """
+
+
 class ComparisonError(FleetError, ValueError):
     """Raised when a comparison cannot run: keys missing, duplicated or
     incompatible between the base and the candidate.

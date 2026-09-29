@@ -9,7 +9,7 @@ description: "Use when working with Fleet CLI commands, bootstrapping studies, C
 ## Command map (names only)
 
 - **Bootstrap:** `fleet init cfg|define|ct|rules` (pipeline), `fleet new` (all four, one confirmation)
-- **Pipeline:** `fleet run` (execute define.yaml), `fleet check` (CI gate), `fleet validate` (CDISC Rules Engine, exit 1 on errors), `fleet compare` (PROC COMPARE analogue; exit 0 equal, 1 different, 2 could not run)
+- **Pipeline:** `fleet run` (execute define.yaml), `fleet check` (CI gate; builds the run setup with no datasets: bad IG version or missing custom rules dir FAIL, missing engine WARN), `fleet validate` (CDISC Rules Engine, one engine run per standard; exit 0 no errors, 1 errors, 2 could not run), `fleet compare` (PROC COMPARE analogue; exit 0 equal, 1 different, 2 could not run)
 - **Migration:** `fleet migrate` (libcst codemod: removed pre-alpha verb/kwarg spellings → canonical)
 - **TLG:** `fleet tlg list|schema|run|explore|export` (`run`/`explore` take `--watch`, needs the `watch` extra)
 - **Define-XML:** `fleet define-xml` (also `--watch`)

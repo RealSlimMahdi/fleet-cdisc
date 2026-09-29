@@ -37,7 +37,7 @@ A sponsor rule written in the CORE rule schema and kept in the study's custom ru
 _Avoid_: local rule, sponsor check, SOP rule
 
 **Sweep**:
-A validation of every dataset in the study's data directories, in one engine run per standard, so that rules spanning several datasets of that standard can execute. The SDTM and ADaM results are joined into one report with one verdict. The verb validates one dataset and cannot run those rules.
+A validation of every dataset in the study's data directories, in one engine run per standard (two with custom rules), so that rules spanning several datasets of that standard can execute. The SDTM and ADaM results are joined into one report with one verdict. The verb validates one dataset and cannot run those rules.
 _Avoid_: batch, bulk validation, study run
 
 ### Comparison

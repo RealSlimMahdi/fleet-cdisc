@@ -55,10 +55,6 @@ if TYPE_CHECKING:
 
 logger = fleet_log.get_logger(__name__)
 
-# Valid Implementation Guide versions supported by the CDISC Rules Engine.
-_VALID_SDTM_VERSIONS = {"3.1.2", "3.1.3", "3.2", "3.3", "3.4"}
-_VALID_ADAM_VERSIONS = {"1.0", "1.1", "1.2", "1.3"}
-
 
 #: What ``on_fail`` accepts on the checking verbs (``validate``, ``compare``).
 _ON_FAIL_VALUES = ("warn", "raise", "ignore")
@@ -81,21 +77,6 @@ def _settle_on_fail(on_fail: str, summary: str, error: type[Exception]) -> None:
         raise error(summary)
     if on_fail == "warn":
         warnings.warn(summary, stacklevel=3)
-
-
-def _check_ig_version(version: str, *, standard: str) -> None:
-    """Raise ``DerivationError`` if *version* is not a valid IG version for *standard*."""
-    if standard == "adam":
-        valid = _VALID_ADAM_VERSIONS
-        label = "ADaM IG"
-    else:
-        valid = _VALID_SDTM_VERSIONS
-        label = "SDTM IG"
-    if version not in valid:
-        sorted_versions = sorted(valid, key=lambda v: [int(x) for x in v.split(".")])
-        raise DerivationError(
-            f"Invalid {label} version '{version}'. Supported versions: {', '.join(sorted_versions)}"
-        )
 
 
 #: Spec-format version this Fleet build understands (``fleet_spec_version``).
@@ -204,7 +185,6 @@ class SharedVerbsMixin:
         - ``_STUDY_DAY_REF_PIN``: default pinned domain name (e.g. ``"DM"`` or ``"ADSL"``)
         - ``_SEQ_DEFAULT_GROUPS``: default grouping columns for ``seq()``
         - ``_VALIDATE_STANDARD``: ``"sdtm"`` or ``"adam"``
-        - ``_VALIDATE_DEFAULT_VERSION``: default IG version string
     """
 
     _lazy: pl.LazyFrame
@@ -213,8 +193,7 @@ class SharedVerbsMixin:
     _STUDY_DAY_REF_COL: ClassVar[str] = "RFSTDTC"
     _STUDY_DAY_REF_PIN: ClassVar[str] = "DM"
     _SEQ_DEFAULT_GROUPS: ClassVar[list[str]] = ["STUDYID", "USUBJID"]
-    _VALIDATE_STANDARD: ClassVar[str] = "sdtm"
-    _VALIDATE_DEFAULT_VERSION: ClassVar[str] = "3.4"
+    _VALIDATE_STANDARD: ClassVar[Literal["sdtm", "adam"]] = "sdtm"
 
     # ------------------------------------------------------------------ #
     # Infrastructure (Group A)                                             #
@@ -1704,8 +1683,12 @@ class SharedVerbsMixin:
         report is emitted through the ``"fleet.validation"`` logger
         (stdout by default — see :mod:`fleet.core.log`).
 
-        Dispatches to either SDTM or ADaM validation based on the
-        ``_VALIDATE_STANDARD`` class constant.
+        Every input comes from a run setup
+        (:func:`fleet.validation.run_setup.build_run_setup`): an explicit
+        argument, then the study config found from the working directory,
+        then ``FLEET_RULES_ENGINE`` (engine only), then the built-in
+        default (SDTMIG 3.4, ADaMIG 1.3).  The namespace gives the
+        standard.  The report header prints each input with its source.
 
         Issues are cross-linked to the chain's own variable lineage, so a
         finding on a column this pipeline derived also reports the verb
@@ -1715,11 +1698,15 @@ class SharedVerbsMixin:
         Args:
             dataset_or_domain: Domain code (SDTM: e.g. ``"DM"``) or
                 dataset name (ADaM: e.g. ``"ADSL"``).
-            version: IG version to validate against.  Defaults to
-                ``_VALIDATE_DEFAULT_VERSION``.
-            rules_engine_path: Optional path to a custom rules engine.
-            custom_rules: Optional path to a directory containing custom
-                validation rule YAML files. Passed to the engine via ``-lr``.
+            version: IG version, ``"3-4"`` or ``"3.4"``.  Defaults to
+                ``sdtm.ig_version`` / ``adam.ig_version`` in the study
+                config, else the built-in default.
+            rules_engine_path: Engine executable.  Defaults to
+                ``validation.engine_path``, then ``FLEET_RULES_ENGINE``,
+                then the managed install.
+            custom_rules: Directory of custom rule YAML files, passed to
+                the engine via ``-lr``.  Defaults to
+                ``validation.custom_rules``.
             report: Report detail level — ``"smart"`` (default) for a
                 deduplicated view grouping identical findings with row
                 ranges, ``"summary"`` for one line per issue, ``"full"``
@@ -1735,9 +1722,13 @@ class SharedVerbsMixin:
                 ``last_validation`` (for continued chaining).
 
         Raises:
+            ValidationSetupError: The validation could not run, in every
+                *on_fail* mode: the dataset name belongs to the other
+                standard (``adae.adam.validate("AE")``), the IG version is
+                not supported, or the custom rules directory is missing.
             ValidationError: When errors are found and
                 ``on_fail="raise"``.
-            DerivationError: On an invalid *on_fail* or *version* value.
+            DerivationError: On an invalid *on_fail* value.
 
         Examples:
             Validate an SDTM domain::
@@ -1759,22 +1750,35 @@ class SharedVerbsMixin:
         """
         from fleet.core.lineage import latest_lineage_of
         from fleet.validation.lineage_join import enrich_with_lineage
+        from fleet.validation.run_setup import build_run_setup
         from fleet.validation.service import ValidationService
 
         _check_on_fail("validate", on_fail)
-        ver = version if version is not None else self._VALIDATE_DEFAULT_VERSION
-        _check_ig_version(ver, standard=self._VALIDATE_STANDARD)
-        svc = ValidationService(rules_engine_path=rules_engine_path)
+        setup = build_run_setup(
+            name=dataset_or_domain,
+            namespace=self._VALIDATE_STANDARD,
+            version=version,
+            custom_rules=custom_rules,
+            engine=rules_engine_path,
+        )
+        svc = ValidationService(rules_engine_path=setup.engine.value)
 
-        if self._VALIDATE_STANDARD == "adam":
+        if setup.standard.value == "adam":
             result = svc.validate_adam(
-                self.to_frame(), dataset=dataset_or_domain, version=ver, custom_rules=custom_rules
+                self.to_frame(),
+                dataset=dataset_or_domain,
+                version=setup.ig_version.value,
+                custom_rules=setup.custom_rules.value,
             )
         else:
             result = svc.validate_sdtm(
-                self.to_frame(), domain=dataset_or_domain, version=ver, custom_rules=custom_rules
+                self.to_frame(),
+                domain=dataset_or_domain,
+                version=setup.ig_version.value,
+                custom_rules=setup.custom_rules.value,
             )
 
+        result.setup = setup
         enrich_with_lineage(result, latest_lineage_of(self))
         result.print_report(report_type=report)
 
@@ -2336,6 +2340,7 @@ class SharedVerbsMixin:
         """
         from fleet.core import spec_registry
         from fleet.core.lineage import latest_lineage_of
+        from fleet.validation.run_setup import DEFAULT_IG_VERSIONS
 
         standard = self._VALIDATE_STANDARD
         ds_name = (dataset or getattr(self, "_domain", None) or "DATASET").upper()
@@ -2435,7 +2440,7 @@ class SharedVerbsMixin:
             "protocol_name": "STUDY",
             "originator": "Fleet",
             "standard": "SDTMIG" if standard == "sdtm" else "ADAMIG",
-            "standard_version": self._VALIDATE_DEFAULT_VERSION,
+            "standard_version": DEFAULT_IG_VERSIONS[standard],
         }
         head = {"fleet_spec_version": SUPPORTED_SPEC_VERSION, "study": study}
         ds_head = {

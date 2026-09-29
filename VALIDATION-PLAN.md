@@ -108,7 +108,7 @@ All items in this section are **AS BUILT** unless marked OPEN.
 
 ### The MCP tool
 
-- `fleet_validate(dataset_path, standard, version=None)`. The file stem is the dataset name. Engine discovery runs without a study root. No custom rules, no study config version. Returns the dataset name, the standard, the valid flag, and the flat list of findings with severity, rule ID, message and variable.
+- `fleet_validate(dataset_path, standard=None, version=None, custom_rules=None)`. The file stem is the dataset name. The inputs come from the run setup; the study config is looked for from the dataset's directory. Returns `outcome` (pass or fail), the dataset name, the standard, the valid flag, each run-setup input with its source, and the flat list of findings with severity, rule ID, message, variable and source. A refused setup, a missing file or a missing engine returns `{"outcome": "could not run", "reason": ...}`.
 
 ### Study configuration
 
@@ -120,7 +120,7 @@ All items in this section are **AS BUILT** unless marked OPEN.
 
 - `fleet add-rule` writes a schema-valid skeleton with a `Check` placeholder, a `yaml-language-server` schema comment, an ID of the form `PREFIX-DOMAIN-NNN` auto-incremented per directory, and refuses an existing ID.
 - `fleet check-rule` runs three levels: YAML parse, required top-level keys and a few structural checks, then full JSON Schema validation against the vendored CORE schema.
-- `fleet check` runs the same check on every rule file in the configured directory and fails the gate on the first error per file.
+- `fleet check` runs the same check on every rule file in the configured directory and fails the gate on the first error per file. It also builds the run setup for SDTM and ADaM with no datasets: an unsupported IG version or a missing custom rules directory fails the gate, a missing engine is a warning.
 - The CORE rule schema has no severity field. A custom rule cannot declare one.
 
 ### Reports

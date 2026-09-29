@@ -388,7 +388,7 @@ uv run fleet init ct        # codelists.py from define.yaml
 ```bash
 uv run fleet run --dataset ADVS --out outputs/          # define.yaml -> from_spec -> writers
 uv run fleet validate data/sdtm --custom-rules metadata/custom_rules
-uv run fleet check                                       # one CI gate: config + define.yaml schema + custom rules (engine/API key as warnings)
+uv run fleet check                                       # one CI gate: config + define.yaml schema + run setup (IG versions, rules dir) + custom rules (engine/API key as warnings)
 uv run fleet tlg list                                    # registered TLG templates
 uv run fleet tlg run specs/aet01.yaml --data ADAE=adae.parquet --adsl adsl.parquet --format rtf --rows-per-page 40
 uv run fleet tdd build                                   # trial design datasets + conformance audit (paths from study_config.yaml)

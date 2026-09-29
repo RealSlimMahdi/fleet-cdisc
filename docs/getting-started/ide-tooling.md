@@ -98,11 +98,41 @@ Each is a thin wrapper over a public Fleet API:
 | `fleet_execution_order(spec_paths)` | topological dataset build order from define.yaml |
 | `fleet_impacted_by(spec_paths, node)` | what must re-run if a dataset changes |
 | `fleet_lineage(dag_json_path, dataset)` | variable-level lineage from a pipeline DAG export |
-| `fleet_validate(dataset_path, standard, ...)` | CDISC Rules Engine validation |
+| `fleet_validate(dataset_path, standard?, version?, custom_rules?)` | CDISC Rules Engine validation from the run setup |
 | `fleet_ct_terms(codelist, ct_path?)` | valid terms for a codelist |
 | `fleet_tlg_catalog()` | all registered TLG templates |
 | `fleet_tlg_run(spec_path, data_path, adsl_path?, groupby?)` | run a TLG spec YAML, return rendered HTML |
 | `fleet_dataset_check(data_path, define_yaml, dataset)` | conformance check against the spec |
+
+`fleet_validate` builds the same run setup as `fleet validate`. It looks for
+the `study_config.yaml` from the directory of the dataset, not from the
+working directory of the server. So a dataset inside a study uses the study's
+IG version, custom rules and engine. When `standard` is not given, the
+configured data directory that holds the file names it, else the file stem
+(`adsl.parquet` is ADaM). The result lists each input with its source:
+
+```json
+{
+  "outcome": "pass",
+  "dataset": "ADSL",
+  "standard": "adam",
+  "is_valid": true,
+  "setup": {
+    "standard": {"value": "adam", "source": "data directory"},
+    "ig_version": {"value": "1.3", "source": "study config"},
+    "custom_rules": {"value": "/study/metadata/custom_rules", "source": "study config"},
+    "engine": {"value": "/home/me/.fleet/cdisc-rules-engine/core/core", "source": "default"},
+    "engine_version": "0.15.0",
+    "study_config": "/study/study_config.yaml"
+  },
+  "issues": []
+}
+```
+
+A refused run setup does not raise. The tool returns
+`{"outcome": "could not run", "reason": ...}`: for example a standard
+conflict (`data/adam/dm.parquet`), an unsupported IG version, a custom rules
+directory that does not exist, or no engine found.
 
 ### What to ask your assistant
 

@@ -6,8 +6,28 @@ official rule sets. When the standard CDISC CORE conformance rules do not
 cover a study-specific requirement — a sponsor SOP constraint, an FDA
 Technical Conformance Guide (TCG) gap, a protocol-specific range check, or
 ADaM checks while the official ADaMIG rule set remains unpublished — you
-author **custom rules** and run them alongside (and in the same engine as)
-the official rules.
+author **custom rules** and run them next to the official rules.
+
+## Official and custom rules both run
+
+CORE runs only the `-lr` rules when it gets a rules directory: one AE file
+ran 430 official rules without `-lr` and only the 2 custom rules with it. So
+Fleet runs the engine twice per standard when custom rules are set:
+
+1. one run without `-lr`: the official CDISC rules,
+2. one run with `-lr`: the custom rules only.
+
+The findings of both runs join into one report per dataset. Each finding
+names its source, `official` or `custom`:
+
+```text
+1. [CORE-000001] (official) AESTDTC is after AEENDTC
+2. [FLEET-AE-001] (custom) AESEV is missing for a serious AE
+```
+
+The source is also on `ValidationIssue.source`, in the HTML reports, and in
+the MCP `fleet_validate` output. Without custom rules, the engine runs once
+per standard.
 
 ---
 
@@ -67,7 +87,10 @@ Check:
 ### 4. Run validation
 
 ```python
-# Inline in a pipeline
+# Inline in a pipeline: inside the study, validation.custom_rules applies
+ae = raw_df.sdtm.assign("DOMAIN", value="AE").validate("AE").to_frame()
+
+# Or name the directory explicitly
 ae = (
     raw_df.sdtm.assign("DOMAIN", value="AE")
     .validate("AE", custom_rules="metadata/custom_rules")
@@ -78,7 +101,7 @@ ae = (
 from fleet.validation.service import ValidationService
 
 svc = ValidationService()
-result = svc.validate_sdtm(ae, domain="AE", custom_rules="metadata/custom_rules")
+result = svc.validate_sdtm(ae, domain="AE", version="3.4", custom_rules="metadata/custom_rules")
 result.print_report()
 ```
 
@@ -186,8 +209,13 @@ For the full operator reference, see the [CDISC CORE Rule Editor](https://rule-e
 Fleet resolves custom rules from multiple sources. The first match wins:
 
 1. **Explicit `custom_rules=` parameter** on `.validate()` or `ValidationService` methods.
-2. **`validation.custom_rules`** in `study_config.yaml` (team-wide default).
+2. **`validation.custom_rules`** in `study_config.yaml` (team-wide default). The
+   `.validate()` verb finds the study config from the working directory.
 3. **None** — no custom rules are loaded.
+
+A directory that does not exist is refused before the engine starts: the
+verb raises `ValidationSetupError`. The report header shows the directory
+used and its source.
 
 ---
 

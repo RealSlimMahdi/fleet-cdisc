@@ -2,12 +2,13 @@
 
 The MCP tools are thin wrappers over existing public APIs, so they are
 called directly (no running server) against the repo's example specs and
-fixtures.  ``fleet_validate`` is not covered — it needs the external
-CDISC Rules Engine binary.
+fixtures.  ``fleet_validate`` runs on a fake engine: ``subprocess.run`` is
+captured, and the engine path is a plain file.
 """
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -27,6 +28,7 @@ from fleet.mcp_server import (  # noqa: E402
     fleet_lineage,
     fleet_tlg_catalog,
     fleet_tlg_run,
+    fleet_validate,
 )
 
 REPO = Path(__file__).parent.parent.parent
@@ -115,6 +117,145 @@ class TestDatasetCheck:
         assert result["is_valid"] is False
         assert "AGE" in result["missing_columns"]
         assert result["extra_columns"] == []
+
+
+_SUBJECTS = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ S01-001 │
+└─────────┘
+""")
+
+
+@pytest.fixture
+def engine_calls(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
+    """Capture each validate command; the engine writes no report and exits 0."""
+    calls: list[list[str]] = []
+
+    def run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if "validate" in cmd and "--help" not in cmd:
+            calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "0.15.0\n", "")
+
+    monkeypatch.setattr("fleet.validation.official.subprocess.run", run)
+    monkeypatch.delenv("FLEET_RULES_ENGINE", raising=False)
+    return calls
+
+
+def _flag(cmd: list[str], flag: str) -> str | None:
+    return cmd[cmd.index(flag) + 1] if flag in cmd else None
+
+
+class TestValidate:
+    @pytest.fixture
+    def study(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+        """A study with its own IG version, rules and engine; the server runs elsewhere."""
+        root = tmp_path / "study"
+        (root / "rules").mkdir(parents=True)
+        (root / "bin").mkdir()
+        (root / "bin" / "core").touch()
+        (root / "study_config.yaml").write_text(
+            "study_id: S01\nadam:\n  ig_version: 1-1\n"
+            "validation:\n  custom_rules: rules\n  engine_path: bin/core\n",
+            encoding="utf-8",
+        )
+        for sub, name in (("sdtm", "dm"), ("adam", "adsl")):
+            (root / "data" / sub).mkdir(parents=True)
+            _SUBJECTS.write_parquet(root / "data" / sub / f"{name}.parquet")
+        elsewhere = tmp_path / "server"
+        elsewhere.mkdir()
+        monkeypatch.chdir(elsewhere)
+        return root
+
+    def test_the_dataset_study_drives_the_engine_from_outside_it(
+        self, study: Path, engine_calls: list[list[str]]
+    ) -> None:
+        result = fleet_validate(str(study / "data" / "adam" / "adsl.parquet"))
+
+        official, custom = engine_calls
+        assert Path(official[0]).resolve() == (study / "bin" / "core").resolve()
+        assert _flag(official, "-s") == "adamig"
+        assert _flag(official, "-v") == "1-1"
+        assert Path(_flag(custom, "-lr") or "").resolve() == (study / "rules").resolve()
+        assert result["outcome"] == "pass"
+
+    def test_result_lists_each_input_with_its_source(
+        self, study: Path, engine_calls: list[list[str]]
+    ) -> None:
+        result = fleet_validate(str(study / "data" / "adam" / "adsl.parquet"))
+
+        setup = result["setup"]
+        assert setup["standard"] == {"value": "adam", "source": "data directory"}
+        assert setup["ig_version"] == {"value": "1.1", "source": "study config"}
+        assert setup["custom_rules"] == {"value": str(study / "rules"), "source": "study config"}
+        assert setup["engine"] == {"value": str(study / "bin" / "core"), "source": "study config"}
+        assert setup["engine_version"] == "0.15.0"
+        assert setup["study_config"] == str(study / "study_config.yaml")
+
+    def test_adsl_without_standard_validates_as_adam(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, engine_calls: list[list[str]]
+    ) -> None:
+        engine = tmp_path / "core"
+        engine.touch()
+        monkeypatch.setenv("FLEET_RULES_ENGINE", str(engine))
+        adsl = tmp_path / "adsl.parquet"
+        _SUBJECTS.write_parquet(adsl)
+
+        result = fleet_validate(str(adsl))
+
+        (cmd,) = engine_calls
+        assert _flag(cmd, "-s") == "adamig"
+        assert result["setup"]["standard"] == {"value": "adam", "source": "dataset name"}
+
+    def test_custom_rules_argument_reaches_the_engine(
+        self, study: Path, engine_calls: list[list[str]]
+    ) -> None:
+        own = study / "my_rules"
+        own.mkdir()
+
+        result = fleet_validate(str(study / "data" / "sdtm" / "dm.parquet"), custom_rules=str(own))
+
+        _, custom = engine_calls
+        assert Path(_flag(custom, "-lr") or "").resolve() == own.resolve()
+        assert result["setup"]["custom_rules"] == {"value": str(own), "source": "argument"}
+
+    def test_standard_conflict_could_not_run(
+        self, study: Path, engine_calls: list[list[str]]
+    ) -> None:
+        _SUBJECTS.write_parquet(study / "data" / "adam" / "dm.parquet")
+
+        result = fleet_validate(str(study / "data" / "adam" / "dm.parquet"))
+
+        assert result["outcome"] == "could not run"
+        assert "standard unclear" in result["reason"]
+        assert engine_calls == []
+
+    def test_unsupported_version_could_not_run(
+        self, study: Path, engine_calls: list[list[str]]
+    ) -> None:
+        result = fleet_validate(str(study / "data" / "sdtm" / "dm.parquet"), version="3.1.3")
+
+        assert result == {
+            "outcome": "could not run",
+            "reason": result["reason"],
+        }
+        assert "3.2, 3.3, 3.4" in result["reason"]
+        assert engine_calls == []
+
+    def test_missing_engine_could_not_run(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, engine_calls: list[list[str]]
+    ) -> None:
+        monkeypatch.setattr("fleet.validation.engine.ENGINE_DIR", tmp_path / "no-engine")
+        ae = tmp_path / "ae.parquet"
+        _SUBJECTS.write_parquet(ae)
+
+        result = fleet_validate(str(ae))
+
+        assert result["outcome"] == "could not run"
+        assert "fleet install-engine" in result["reason"]
 
 
 class TestServerWiring:

@@ -39,6 +39,8 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn
 
+from fleet.core.study_context import find_study_config
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
@@ -78,27 +80,6 @@ def _fail(msg: str, *, code: int = 1) -> NoReturn:
 # ────────────────────────────────────────────────────────────────────── #
 # Config discovery                                                        #
 # ────────────────────────────────────────────────────────────────────── #
-
-
-def find_study_config(start: Path | None = None) -> Path | None:
-    """Locate ``study_config.yaml`` by walking up parent directories.
-
-    Git-style discovery: the start directory is checked first, then each
-    parent up to the filesystem root.  Every CLI command that needs study
-    configuration resolves it through this single function.
-
-    Args:
-        start: Directory to start from (default: current working directory).
-
-    Returns:
-        Path | None: The first ``study_config.yaml`` found, or ``None``.
-    """
-    current = (start or Path.cwd()).resolve()
-    for candidate in (current, *current.parents):
-        cfg = candidate / "study_config.yaml"
-        if cfg.is_file():
-            return cfg
-    return None
 
 
 def _resolve_config(config_arg: str | None) -> Path:
@@ -174,6 +155,13 @@ def _config_flag_hint(config_path: Path) -> str:
 
 def _parse_domains(raw: str) -> list[str]:
     return [d.strip().upper() for d in raw.split(",") if d.strip()]
+
+
+def _default_ig(standard: str) -> str:
+    """The built-in IG version for *standard*, in the config's dashed form."""
+    from fleet.validation.run_setup import DEFAULT_IG_VERSIONS
+
+    return DEFAULT_IG_VERSIONS[standard].replace(".", "-")
 
 
 def _load_dataset(path_str: str) -> pl.DataFrame:
@@ -321,7 +309,7 @@ def _run_init_define(args: argparse.Namespace) -> None:
                 dest = scaffolder.scaffold_sdtm(
                     study_id=cfg.study_id,
                     company=cfg.company or "",
-                    ig_version=cfg.sdtm.ig_version,
+                    ig_version=cfg.sdtm.ig_version or _default_ig("sdtm"),
                     ct_version=ct_version,
                     domains=cfg.sdtm.domains,
                     output_path=sdtm_path,
@@ -337,7 +325,7 @@ def _run_init_define(args: argparse.Namespace) -> None:
                 dest = scaffolder.scaffold_adam(
                     study_id=cfg.study_id,
                     company=cfg.company or "",
-                    ig_version=cfg.adam.ig_version,
+                    ig_version=cfg.adam.ig_version or _default_ig("adam"),
                     ct_version=ct_version,
                     datasets=cfg.adam.datasets,
                     output_path=adam_path,
@@ -472,7 +460,7 @@ def _run_add_ct(args: argparse.Namespace) -> None:
     # discovered study config, then the hard default. Regenerating existing
     # codelists against a different CT package than the study pins would
     # silently change already-reviewed terms.
-    ig = args.ig or (ctx.config.sdtm.ig_version if ctx else "3-4")
+    ig = args.ig or (ctx.config.sdtm.ig_version if ctx else None) or _default_ig("sdtm")
     package = args.package or (ctx.config.ct.package if ctx else "sdtmct-2023-12-15")
     existing = existing_concept_ids(output)
 
@@ -641,13 +629,11 @@ def _check_extras() -> list[tuple[str, bool, str]]:
 
 
 def _run_doctor(args: argparse.Namespace) -> None:
-    from fleet.validation.engine import doctor
+    from fleet.core.exceptions import ValidationSetupError
+    from fleet.validation import build_run_setup
+    from fleet.validation.engine import discover_engine, doctor, engine_version
 
-    # Honour validation.engine_path from the discovered study config.
     config_path = Path(args.config) if getattr(args, "config", None) else find_study_config()
-    study_root = config_path.parent if config_path and config_path.is_file() else None
-
-    checks = doctor(study_root=study_root)
 
     print("Fleet Doctor")
     print("=" * 52)
@@ -657,16 +643,24 @@ def _run_doctor(args: argparse.Namespace) -> None:
     else:
         print("  ✗ study config ....... not found (run `fleet init cfg`)")
 
-    engine = checks.get("engine", "")
-    engine_ok = not engine.startswith("NOT FOUND")
-    mark = "✓" if engine_ok else "✗"
-    print(f"  {mark} rules engine ....... {engine}")
-    if engine_ok:
-        if "type" in checks:
-            print(f"      type: {checks['type']}")
-        if "status" in checks:
-            status_mark = "✓" if checks["status"].startswith("OK") else "✗"
-            print(f"  {status_mark} engine status ...... {checks['status']}")
+    # A run setup with no datasets: the standard only fills the record.
+    try:
+        setup = build_run_setup(standard="sdtm", config=config_path)
+        engine, where = setup.engine.value, f" ({setup.engine.source})"
+    except ValidationSetupError as exc:
+        print(f"  ✗ run setup .......... {exc}")
+        study_root = config_path.parent if config_path and config_path.is_file() else None
+        engine, where = discover_engine(study_root), ""
+
+    if engine is None:
+        print("  ✗ rules engine ....... NOT FOUND — run `fleet install-engine`")
+    else:
+        checks = doctor(engine=engine)
+        print(f"  ✓ rules engine ....... {engine}{where}")
+        print(f"      version: {engine_version(engine)}")
+        print(f"      type: {checks['type']}")
+        status_mark = "✓" if checks["status"].startswith("OK") else "✗"
+        print(f"  {status_mark} engine status ...... {checks['status']}")
 
     api_key_set = bool(os.environ.get("CDISC_API_KEY"))
     if api_key_set:
@@ -920,28 +914,24 @@ def _run_run(args: argparse.Namespace) -> None:
 # fleet validate — CDISC Rules Engine wrapper                             #
 # ────────────────────────────────────────────────────────────────────── #
 
-_DATA_EXTENSIONS = (".parquet", ".csv", ".xpt", ".sas7bdat")
+#: ``fleet validate`` exit codes: 0 no errors, 1 errors found, 2 a dataset could not run.
+_VALIDATE_ERRORS = 1
+_VALIDATE_COULD_NOT_RUN = 2
 
 
-def _collect_data_files(paths: Sequence[str]) -> list[Path]:
-    files: list[Path] = []
-    for raw in paths:
-        p = Path(raw)
-        if p.is_dir():
-            for ext in _DATA_EXTENSIONS:
-                files.extend(sorted(p.glob(f"*{ext}")))
-        elif p.is_file():
-            files.append(p)
-        else:
-            _fail(f"path not found: {p}")
-    return files
-
-
-def _write_validation_report(path: Path, results: list[Any]) -> None:
+def _write_validation_report(
+    path: Path, results: list[Any], could_not_run: Sequence[Any] = ()
+) -> None:
     """Write a minimal self-contained HTML report of validation findings."""
     from html import escape
 
-    rows: list[str] = []
+    rows: list[str] = [
+        "<tr>"
+        f"<td>{escape(d.name)}</td><td>Could not run</td><td></td><td></td><td></td>"
+        f"<td>{escape(d.reason or '')}</td>"
+        "</tr>"
+        for d in could_not_run
+    ]
     for res in results:
         for issue in (*res.errors, *res.warnings, *res.infos):
             rows.append(
@@ -949,19 +939,24 @@ def _write_validation_report(path: Path, results: list[Any]) -> None:
                 f"<td>{escape(res.dataset_name)}</td>"
                 f"<td>{escape(issue.severity.value)}</td>"
                 f"<td>{escape(issue.rule_id)}</td>"
+                f"<td>{escape(issue.source)}</td>"
                 f"<td>{escape(issue.variable or '')}</td>"
                 f"<td>{escape(issue.message)}</td>"
                 "</tr>"
             )
+    headers = dict.fromkeys(
+        "\n".join(res.setup.header_lines()) for res in results if res.setup is not None
+    )
+    setups = "".join(f"<pre>{escape(h)}</pre>" for h in headers)
     html = (
         "<!DOCTYPE html><html><head><meta charset='utf-8'>"
         "<title>Fleet validation report</title>"
         "<style>body{font-family:sans-serif}table{border-collapse:collapse}"
         "td,th{border:1px solid #999;padding:4px 8px;font-size:13px}</style>"
-        "</head><body><h1>Fleet validation report</h1>"
-        "<table><tr><th>Dataset</th><th>Severity</th><th>Rule</th>"
+        f"</head><body><h1>Fleet validation report</h1>{setups}"
+        "<table><tr><th>Dataset</th><th>Severity</th><th>Rule</th><th>Source</th>"
         "<th>Variable</th><th>Message</th></tr>"
-        f"{''.join(rows) or '<tr><td colspan=5>No findings.</td></tr>'}"
+        f"{''.join(rows) or '<tr><td colspan=6>No findings.</td></tr>'}"
         "</table></body></html>"
     )
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -969,82 +964,58 @@ def _write_validation_report(path: Path, results: list[Any]) -> None:
 
 
 def _run_validate(args: argparse.Namespace) -> None:
-    from fleet.validation import ValidationService
-    from fleet.validation.engine import discover_engine
+    from fleet.core.exceptions import ValidationSetupError
+    from fleet.validation import ValidationService, build_sweep
 
-    ctx = _try_ctx(args.config)
-
-    # No paths given → validate the study's configured data directories.
-    paths = args.paths
-    if not paths:
-        if ctx is None:
-            _fail(
-                "no dataset paths given and no study_config.yaml found. "
-                "Pass files/directories, or run inside a study workspace."
-            )
-        paths = [str(d) for d in (ctx.sdtm_data_dir, ctx.adam_data_dir) if d.is_dir()]
-        if not paths:
-            _fail(
-                f"no data directories found under {ctx.study_root} "
-                f"({ctx.config.paths.sdtm_data}, {ctx.config.paths.adam_data}). "
-                "Run `fleet run` first or pass explicit paths."
-            )
-
-    files = _collect_data_files(paths)
-    if not files:
-        _fail(
-            "no dataset files found. Pass files or a directory containing "
-            f"{', '.join(_DATA_EXTENSIONS)} files."
+    try:
+        sweep = build_sweep(
+            args.paths,
+            standard=args.standard,
+            version=args.standard_version,
+            custom_rules=args.custom_rules,
+            config=Path(args.config) if args.config else None,
         )
+    except ValidationSetupError as exc:
+        _fail(str(exc), code=_VALIDATE_COULD_NOT_RUN)
 
-    # Custom CORE rules: explicit flag, else validation.custom_rules from the config.
-    custom_rules = args.custom_rules
-    if custom_rules is None and ctx is not None and ctx.custom_rules_dir is not None:
-        custom_rules = str(ctx.custom_rules_dir)
-
-    engine = discover_engine(ctx.study_root if ctx else None)
-    if engine is None:
-        _fail(
-            "CDISC Rules Engine not found. Install it with `fleet install-engine` "
-            "or set FLEET_RULES_ENGINE / validation.engine_path."
-        )
-
-    service = ValidationService(rules_engine_path=engine)
     results = []
-    failed = 0
+    for standard, datasets in sweep.runs().items():
+        setup = datasets[0].setup
+        assert setup is not None  # runs() holds only datasets with a setup
+        print(f"Validating {len(datasets)} {standard} dataset(s) in one engine run:")
+        for d in datasets:
+            print(f"  {d.name} — {d.path}")
+        by_name = ValidationService(rules_engine_path=setup.engine.value).validate_datasets(
+            {d.name: _load_dataset(str(d.path)) for d in datasets},
+            standard=standard,
+            version=setup.ig_version.value,
+            custom_rules=setup.custom_rules.value,
+        )
+        setups = {d.name: d.setup for d in datasets}
+        for name, result in by_name.items():
+            result.setup = setups.get(name, setup)
+            result.print_report()
+            results.append(result)
 
-    for f in files:
-        df = _load_dataset(str(f))
-        name = f.stem.upper()
-        standard = args.standard or ("adam" if name.startswith("AD") else "sdtm")
-        kwargs: dict[str, Any] = {"custom_rules": custom_rules}
-        version = args.standard_version
-        if version is None and ctx is not None:
-            # The config's declared IG versions drive validation ("3-4" → "3.4").
-            declared = ctx.config.adam if standard == "adam" else ctx.config.sdtm
-            version = declared.ig_version.replace("-", ".")
-        if version:
-            kwargs["version"] = version
-
-        print(f"Validating {name} ({standard}) — {f}")
-        if standard == "adam":
-            result = service.validate_adam(df, name, **kwargs)
-        else:
-            result = service.validate_sdtm(df, name, **kwargs)
-        results.append(result)
-        result.print_report()
-        if result.errors:
-            failed += 1
+    could_not_run = sweep.could_not_run
+    for d in could_not_run:
+        _err(f"{d.name} ({d.path}): {d.reason}")
 
     if args.report:
         report_path = Path(args.report)
-        _write_validation_report(report_path, results)
+        _write_validation_report(report_path, results, could_not_run)
         print(f"HTML report → {report_path}")
 
+    failed = sum(1 for r in results if r.errors)
     print()
-    print(f"Validated {len(files)} dataset(s): {len(files) - failed} passed, {failed} failed.")
+    print(
+        f"Validated {len(results)} dataset(s): {len(results) - failed} passed, "
+        f"{failed} failed, {len(could_not_run)} could not run."
+    )
+    if could_not_run:
+        sys.exit(_VALIDATE_COULD_NOT_RUN)
     if failed:
-        sys.exit(1)
+        sys.exit(_VALIDATE_ERRORS)
 
 
 # ────────────────────────────────────────────────────────────────────── #
@@ -1154,7 +1125,7 @@ def _save_comparison_file(path_str: str, save: Callable[[Path], None], what: str
 
 
 def _run_check(args: argparse.Namespace) -> None:
-    """Run the CI gate: config + define schema + rule YAMLs + essentials."""
+    """Run the CI gate: config + define schema + run setup + rule YAMLs + essentials."""
     from fleet.core.study_context import StudyConfigError, load_study_context
 
     rows: list[tuple[str, str, str]] = []  # (status, name, detail)
@@ -1193,12 +1164,31 @@ def _run_check(args: argparse.Namespace) -> None:
                 ("WARN", "define.yaml", "no define.yaml files found (run `fleet init define`)")
             )
 
-    # ── 3. Custom-rule YAML checks ──
+    # ── 3. Run setup with no datasets: IG versions, custom rules, engine ──
+    setups = []
+    if ctx is not None:
+        from fleet.core.exceptions import ValidationSetupError
+        from fleet.validation import build_run_setup
+
+        refusals: dict[str, None] = {}
+        for std in ("sdtm", "adam"):
+            try:
+                setups.append(build_run_setup(standard=std, config=config_path))
+            except ValidationSetupError as exc:
+                refusals[str(exc)] = None
+        # A missing rules directory refuses both standards with the same reason.
+        rows.extend(("FAIL", "run setup", reason) for reason in refusals)
+        for setup in setups:
+            label = "SDTMIG" if setup.standard.value == "sdtm" else "ADaMIG"
+            detail = f"{label} {setup.ig_version.value} ({setup.ig_version.source})"
+            rows.append(("PASS", "run setup", detail))
+
+    # ── 4. Custom-rule YAML checks ──
     if ctx is not None:
         rules_dir = ctx.custom_rules_dir
-        if rules_dir is None or not rules_dir.is_dir():
+        if rules_dir is None:
             rows.append(("WARN", "custom rules", "no validation.custom_rules directory configured"))
-        else:
+        elif rules_dir.is_dir():
             from fleet.validation.rule_scaffolder import check_rule
 
             rule_files = sorted([*rules_dir.glob("*.yaml"), *rules_dir.glob("*.yml")])
@@ -1211,13 +1201,15 @@ def _run_check(args: argparse.Namespace) -> None:
             if not bad:
                 rows.append(("PASS", "custom rules", f"{len(rule_files)} rule file(s) valid"))
 
-    # ── 4. Doctor essentials (informational — never fail the gate) ──
-    from fleet.validation.engine import discover_engine
+    # ── 5. Doctor essentials (informational — never fail the gate) ──
+    if setups:
+        engine, where = setups[0].engine.value, f" ({setups[0].engine.source})"
+    else:
+        from fleet.validation.engine import discover_engine
 
-    study_root = ctx.study_root if ctx is not None else None
-    engine = discover_engine(study_root)
+        engine, where = discover_engine(ctx.study_root if ctx is not None else None), ""
     if engine is not None:
-        rows.append(("PASS", "rules engine", str(engine)))
+        rows.append(("PASS", "rules engine", f"{engine}{where}"))
     else:
         rows.append(("WARN", "rules engine", "not found (run `fleet install-engine`)"))
 
@@ -2035,13 +2027,13 @@ def _add_init_parsers(sub: argparse._SubParsersAction) -> None:
     )
     cfg.add_argument(
         "--ig",
-        default="3-4",
-        help="SDTM IG version (default: 3-4).",
+        default=_default_ig("sdtm"),
+        help=f"SDTM IG version (default: {_default_ig('sdtm')}).",
     )
     cfg.add_argument(
         "--adam-ig",
-        default="1-1",
-        help="ADaM IG version (default: 1-1).",
+        default=_default_ig("adam"),
+        help=f"ADaM IG version (default: {_default_ig('adam')}).",
     )
     cfg.add_argument(
         "--package",
@@ -2371,7 +2363,10 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     # -- validate ---------------------------------------------------------- #
     validate = sub.add_parser(
         "validate",
-        help="Validate datasets with the CDISC Rules Engine (exit 1 on errors).",
+        help=(
+            "Validate datasets with the CDISC Rules Engine, one engine run per standard "
+            "(exit 0 no errors, 1 errors, 2 a dataset could not run)."
+        ),
     )
     validate.add_argument(
         "paths",
@@ -2386,7 +2381,10 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         "--standard",
         choices=["sdtm", "adam"],
         default=None,
-        help="Force the standard. Default: AD* datasets → adam, others → sdtm.",
+        help=(
+            "Force the standard. Default: the configured data directory that holds "
+            "the dataset, else AD* datasets → adam, others → sdtm."
+        ),
     )
     validate.add_argument(
         "--version",
@@ -2416,7 +2414,15 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     # -- check -------------------------------------------------------------- #
     check = sub.add_parser(
         "check",
-        help="CI gate: config parse + define.yaml schema + custom-rule YAMLs.",
+        help="CI gate: config parse + define.yaml schema + run setup + custom-rule YAMLs.",
+        description=(
+            "CI gate: parse the study config, check each define.yaml against its schema, "
+            "build the validation run setup for SDTM and ADaM with no datasets, and check "
+            "each custom rule YAML. An unsupported sdtm.ig_version or adam.ig_version and a "
+            "configured validation.custom_rules directory that does not exist fail the gate. "
+            "A missing rules engine and an unset CDISC_API_KEY are warnings only, because CI "
+            "installs no engine. Exit 1 on any failure, else 0."
+        ),
     )
     _add_config_flag(check)
     check.set_defaults(func=_run_check)
@@ -2590,13 +2596,13 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     )
     new.add_argument(
         "--ig",
-        default="3-4",
-        help="SDTM IG version (default: 3-4).",
+        default=_default_ig("sdtm"),
+        help=f"SDTM IG version (default: {_default_ig('sdtm')}).",
     )
     new.add_argument(
         "--adam-ig",
-        default="1-1",
-        help="ADaM IG version (default: 1-1).",
+        default=_default_ig("adam"),
+        help=f"ADaM IG version (default: {_default_ig('adam')}).",
     )
     new.add_argument(
         "--package",

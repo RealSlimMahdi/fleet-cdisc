@@ -237,7 +237,7 @@ class DefineScaffolder:
         study_id: str,
         *,
         company: str = "",
-        ig_version: str = "1-1",
+        ig_version: str = "1-3",
         ct_version: str = "2023-12-15",
         datasets: list[str],
         output_path: str | Path,

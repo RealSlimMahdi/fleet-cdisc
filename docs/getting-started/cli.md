@@ -33,8 +33,8 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | ------- | ------------ |
 | [`fleet init`](#fleet-init) | Bootstrapping pipeline: cfg → define → ct → rules. |
 | [`fleet run`](#fleet-run) | Execute define.yaml derivation pipelines and write datasets. |
-| [`fleet validate`](#fleet-validate) | Validate datasets with the CDISC Rules Engine (exit 1 on errors). |
-| [`fleet check`](#fleet-check) | CI gate: config parse + define.yaml schema + custom-rule YAMLs. |
+| [`fleet validate`](#fleet-validate) | Validate datasets with the CDISC Rules Engine, one engine run per standard (exit 0 no errors, 1 errors, 2 a dataset could not run). |
+| [`fleet check`](#fleet-check) | CI gate: config parse + define.yaml schema + run setup + custom-rule YAMLs. |
 | [`fleet compare`](#fleet-compare) | Compare a candidate dataset against a base on keys (exit 0 equal, 1 different, 2 could not run). |
 | [`fleet new`](#fleet-new) | Bootstrap a study: init cfg → define → ct → rules, one confirmation. |
 | [`fleet migrate`](#fleet-migrate) | Rewrite removed pre-alpha verb/kwarg spellings to canonical ones (libcst). |
@@ -65,7 +65,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | `--domains` | _(none)_ | Comma-separated SDTM domains (e.g. DM,AE,VS,EX). |
 | `--adam-datasets` | _(none)_ | Comma-separated ADaM datasets (e.g. ADSL,ADVS,ADAE). |
 | `--ig` | `3-4` | SDTM IG version (default: 3-4). |
-| `--adam-ig` | `1-1` | ADaM IG version (default: 1-1). |
+| `--adam-ig` | `1-3` | ADaM IG version (default: 1-3). |
 | `--package` | `sdtmct-2023-12-15` | CT package version (default: sdtmct-2023-12-15). |
 | `--root` / `-r` | `.` | Study root directory (default: current directory). |
 
@@ -118,7 +118,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | Option | Default | Description |
 | ------ | ------- | ----------- |
 | `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
-| `--standard` | _(none)_ | Force the standard. Default: AD* datasets → adam, others → sdtm. Choices: `sdtm`, `adam`. |
+| `--standard` | _(none)_ | Force the standard. Default: the configured data directory that holds the dataset, else AD* datasets → adam, others → sdtm. Choices: `sdtm`, `adam`. |
 | `--version` | _(none)_ | IG version. Default: the sdtm/adam ig_version declared in the discovered study_config.yaml (3.4 / 1.3 outside a study). |
 | `--custom-rules` | _(none)_ | Directory of custom validation rule YAML files. Default: validation.custom_rules from the discovered study_config.yaml. |
 | `--report` | _(none)_ | Write an HTML findings report to PATH. |
@@ -126,6 +126,8 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 ---
 
 ## `fleet check`
+
+CI gate: parse the study config, check each define.yaml against its schema, build the validation run setup for SDTM and ADaM with no datasets, and check each custom rule YAML. An unsupported sdtm.ig_version or adam.ig_version and a configured validation.custom_rules directory that does not exist fail the gate. A missing rules engine and an unset CDISC_API_KEY are warnings only, because CI installs no engine. Exit 1 on any failure, else 0.
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
@@ -171,7 +173,7 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | `--adam-datasets` | _(none)_ | Comma-separated ADaM datasets (e.g. ADSL,ADVS,ADAE). |
 | `--company` | _(none)_ | Originator / company name. |
 | `--ig` | `3-4` | SDTM IG version (default: 3-4). |
-| `--adam-ig` | `1-1` | ADaM IG version (default: 1-1). |
+| `--adam-ig` | `1-3` | ADaM IG version (default: 1-3). |
 | `--package` | `sdtmct-2023-12-15` | CT package version (default: sdtmct-2023-12-15). |
 | `--root` / `-r` | `.` | Study root directory (default: current directory). |
 | `--yes` / `-y` | _(none)_ | Skip the confirmation prompt. |
