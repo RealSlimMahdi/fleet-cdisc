@@ -1,5 +1,6 @@
 """Validation module for Fleet."""
 
+from fleet.core.exceptions import ValidationSetupError
 from fleet.validation.engine import discover_engine, doctor, install_engine, uninstall_engine
 from fleet.validation.models import Severity, ValidationIssue, ValidationResult
 from fleet.validation.providers import (
@@ -25,6 +26,7 @@ __all__ = [
     "OfficialRulesEngineProvider",
     "ValidationService",
     "RunSetup",
+    "ValidationSetupError",
     "build_run_setup",
     "Sweep",
     "SweepDataset",

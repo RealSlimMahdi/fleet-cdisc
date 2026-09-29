@@ -1125,7 +1125,7 @@ def _save_comparison_file(path_str: str, save: Callable[[Path], None], what: str
 
 
 def _run_check(args: argparse.Namespace) -> None:
-    """Run the CI gate: config + define schema + rule YAMLs + essentials."""
+    """Run the CI gate: config + define schema + run setup + rule YAMLs + essentials."""
     from fleet.core.study_context import StudyConfigError, load_study_context
 
     rows: list[tuple[str, str, str]] = []  # (status, name, detail)
@@ -1164,12 +1164,31 @@ def _run_check(args: argparse.Namespace) -> None:
                 ("WARN", "define.yaml", "no define.yaml files found (run `fleet init define`)")
             )
 
-    # ── 3. Custom-rule YAML checks ──
+    # ── 3. Run setup with no datasets: IG versions, custom rules, engine ──
+    setups = []
+    if ctx is not None:
+        from fleet.core.exceptions import ValidationSetupError
+        from fleet.validation import build_run_setup
+
+        refusals: dict[str, None] = {}
+        for std in ("sdtm", "adam"):
+            try:
+                setups.append(build_run_setup(standard=std, config=config_path))
+            except ValidationSetupError as exc:
+                refusals[str(exc)] = None
+        # A missing rules directory refuses both standards with the same reason.
+        rows.extend(("FAIL", "run setup", reason) for reason in refusals)
+        for setup in setups:
+            label = "SDTMIG" if setup.standard.value == "sdtm" else "ADaMIG"
+            detail = f"{label} {setup.ig_version.value} ({setup.ig_version.source})"
+            rows.append(("PASS", "run setup", detail))
+
+    # ── 4. Custom-rule YAML checks ──
     if ctx is not None:
         rules_dir = ctx.custom_rules_dir
-        if rules_dir is None or not rules_dir.is_dir():
+        if rules_dir is None:
             rows.append(("WARN", "custom rules", "no validation.custom_rules directory configured"))
-        else:
+        elif rules_dir.is_dir():
             from fleet.validation.rule_scaffolder import check_rule
 
             rule_files = sorted([*rules_dir.glob("*.yaml"), *rules_dir.glob("*.yml")])
@@ -1182,13 +1201,15 @@ def _run_check(args: argparse.Namespace) -> None:
             if not bad:
                 rows.append(("PASS", "custom rules", f"{len(rule_files)} rule file(s) valid"))
 
-    # ── 4. Doctor essentials (informational — never fail the gate) ──
-    from fleet.validation.engine import discover_engine
+    # ── 5. Doctor essentials (informational — never fail the gate) ──
+    if setups:
+        engine, where = setups[0].engine.value, f" ({setups[0].engine.source})"
+    else:
+        from fleet.validation.engine import discover_engine
 
-    study_root = ctx.study_root if ctx is not None else None
-    engine = discover_engine(study_root)
+        engine, where = discover_engine(ctx.study_root if ctx is not None else None), ""
     if engine is not None:
-        rows.append(("PASS", "rules engine", str(engine)))
+        rows.append(("PASS", "rules engine", f"{engine}{where}"))
     else:
         rows.append(("WARN", "rules engine", "not found (run `fleet install-engine`)"))
 
@@ -2393,7 +2414,15 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     # -- check -------------------------------------------------------------- #
     check = sub.add_parser(
         "check",
-        help="CI gate: config parse + define.yaml schema + custom-rule YAMLs.",
+        help="CI gate: config parse + define.yaml schema + run setup + custom-rule YAMLs.",
+        description=(
+            "CI gate: parse the study config, check each define.yaml against its schema, "
+            "build the validation run setup for SDTM and ADaM with no datasets, and check "
+            "each custom rule YAML. An unsupported sdtm.ig_version or adam.ig_version and a "
+            "configured validation.custom_rules directory that does not exist fail the gate. "
+            "A missing rules engine and an unset CDISC_API_KEY are warnings only, because CI "
+            "installs no engine. Exit 1 on any failure, else 0."
+        ),
     )
     _add_config_flag(check)
     check.set_defaults(func=_run_check)

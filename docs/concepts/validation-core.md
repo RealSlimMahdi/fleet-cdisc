@@ -65,6 +65,24 @@ uv run fleet validate --report findings.html   # HTML findings report
 - Exit codes: 0 no errors, 1 any dataset has errors, 2 any dataset could not
   run. So `fleet validate` drops straight into CI.
 
+### The CI gate: `fleet check`
+
+`fleet check` builds the same run setup for SDTM and ADaM, with no datasets.
+It catches a setup error before delivery, without an engine:
+
+- `sdtm.ig_version: 3-5`, or any IG version not in the supported list, fails
+  the gate.
+- A `validation.custom_rules` directory that does not exist fails the gate.
+- No engine found is a warning only, because CI installs no engine.
+
+### The MCP tool
+
+`fleet_validate(dataset_path, standard=None, version=None, custom_rules=None)`
+builds the same run setup. It looks for `study_config.yaml` from the
+directory of the dataset, not from the working directory of the server. A
+refused setup returns `{"outcome": "could not run", "reason": ...}` and does
+not raise. See [IDE tooling](../getting-started/ide-tooling.md).
+
 The same run from Python, chainable at the end of a pipeline:
 
 ```python
@@ -141,7 +159,7 @@ different error class:
 | Layer | When | What it catches |
 | --- | --- | --- |
 | Spec registry models | `from_spec()` load time | unknown algorithms, misspelled/missing derivation fields |
-| `DefineValidator` / `fleet check` | on demand / CI gate | define.yaml schema + business rules |
+| `DefineValidator` / `fleet check` | on demand / CI gate | define.yaml schema + business rules, run setup (IG versions, custom rules directory) |
 | Trial-design audit (`fleet tdd audit`) | on demand, offline | P21-style SD-series + FDA TS profile for TDD domains |
 | **CORE (`fleet validate`)** | after datasets materialise | official CDISC conformance rules against the data itself |
 

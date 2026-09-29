@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from mcp.server.fastmcp import FastMCP
 
@@ -106,44 +106,88 @@ def fleet_lineage(dag_json_path: str, dataset: str) -> dict[str, Any]:
 
 def fleet_validate(
     dataset_path: str,
-    standard: str,
+    standard: Literal["sdtm", "adam"] | None = None,
     version: str | None = None,
+    custom_rules: str | None = None,
 ) -> dict[str, Any]:
     """Validate a dataset file with the CDISC Rules Engine.
 
-    Requires the engine binary (``fleet install-engine`` or the
-    ``FLEET_RULES_ENGINE`` environment variable).
+    The inputs come from the run setup, the same as ``fleet validate``.
+    The study config is looked for from the dataset's directory, so a
+    dataset inside a study uses its IG version, custom rules and engine.
+    An explicit argument overrides the study config.
 
     Args:
         dataset_path: Dataset file (parquet / csv / xpt / sas7bdat); the
-            file stem is used as the domain/dataset name.
-        standard: ``"sdtm"`` or ``"adam"``.
-        version: IG version override (default: 3.4 for SDTM, 1.3 for ADaM).
+            file stem is the dataset name.
+        standard: ``"sdtm"`` or ``"adam"``.  Default: the configured data
+            directory that holds the file, else the file stem (``AD*`` is
+            ADaM).
+        version: IG version, ``"3-4"`` or ``"3.4"``.  Default: the study
+            config, else 3.4 for SDTM and 1.3 for ADaM.
+        custom_rules: Directory of custom CORE rules.  Default:
+            ``validation.custom_rules`` in the study config.
 
     Returns:
-        dict: ``{"dataset", "standard", "is_valid", "issues": [{severity,
-            rule_id, message, variable, source}, ...]}``.
-    """
-    from fleet.validation import DEFAULT_IG_VERSIONS, ValidationService, discover_engine
+        dict: ``{"outcome": "pass" | "fail", "dataset", "standard",
+            "is_valid", "setup": {input: {value, source}, ...},
+            "issues": [{severity, rule_id, message, variable, source}, ...]}``,
+            or ``{"outcome": "could not run", "reason"}`` when the run
+            setup is refused or no engine is found.
 
-    engine = discover_engine()
-    if engine is None:
-        raise RuntimeError(
-            "CDISC Rules Engine not found. Install it with `fleet install-engine` "
-            "or set FLEET_RULES_ENGINE."
+    Examples:
+        Validate an ADaM dataset of a study from any working directory::
+
+            result = fleet_validate("/study/data/adam/adsl.parquet")
+            result["setup"]["ig_version"]  # {"value": "1.3", "source": "study config"}
+    """
+    from fleet.validation import ValidationService, ValidationSetupError, build_run_setup
+
+    path = Path(dataset_path)
+    if not path.is_file():
+        return _could_not_run(f"dataset file not found: {path}")
+    try:
+        setup = build_run_setup(
+            path=path,
+            standard=standard,
+            version=version,
+            custom_rules=custom_rules,
+            start=path.resolve().parent,
         )
-    df = _load_frame(dataset_path)
-    name = Path(dataset_path).stem.upper()
-    service = ValidationService(rules_engine_path=engine)
-    ig = version or DEFAULT_IG_VERSIONS["adam" if standard == "adam" else "sdtm"]
-    if standard == "adam":
-        result = service.validate_adam(df, name, version=ig)
-    else:
-        result = service.validate_sdtm(df, name, version=ig)
+    except ValidationSetupError as exc:
+        return _could_not_run(str(exc))
+    if setup.engine.value is None:
+        return _could_not_run(
+            "CDISC Rules Engine not found. Install it with `fleet install-engine` "
+            "or set validation.engine_path / FLEET_RULES_ENGINE."
+        )
+
+    name = path.stem.upper()
+    result = ValidationService(rules_engine_path=setup.engine.value).validate_datasets(
+        {name: _load_frame(dataset_path)},
+        standard=setup.standard.value,
+        version=setup.ig_version.value,
+        custom_rules=setup.custom_rules.value,
+    )[name]
+    inputs = {
+        "standard": setup.standard,
+        "ig_version": setup.ig_version,
+        "custom_rules": setup.custom_rules,
+        "engine": setup.engine,
+    }
     return {
+        "outcome": "pass" if result.is_valid else "fail",
         "dataset": result.dataset_name,
-        "standard": standard,
+        "standard": setup.standard.value,
         "is_valid": result.is_valid,
+        "setup": {
+            **{
+                key: {"value": None if r.value is None else str(r.value), "source": r.source}
+                for key, r in inputs.items()
+            },
+            "engine_version": setup.engine_version,
+            "study_config": None if setup.study_config is None else str(setup.study_config),
+        },
         "issues": [
             {
                 "severity": issue.severity.value,
@@ -155,6 +199,10 @@ def fleet_validate(
             for issue in (*result.errors, *result.warnings, *result.infos)
         ],
     }
+
+
+def _could_not_run(reason: str) -> dict[str, Any]:
+    return {"outcome": "could not run", "reason": reason}
 
 
 def fleet_ct_terms(codelist: str, ct_path: str | None = None) -> list[str]:

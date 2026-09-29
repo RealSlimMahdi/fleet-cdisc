@@ -1,5 +1,6 @@
 """``fleet validate``: a sweep built from the run setup, one engine run per standard.
 
+``fleet doctor`` and ``fleet check`` build the same run setup with no datasets.
 The tests drive the CLI entry point in a temporary study with a fake engine:
 ``subprocess.run`` is captured, and the engine path is a plain file.  The fake
 engine records the datasets it received and can write a raw report.
@@ -288,3 +289,61 @@ def test_doctor_still_prints_the_engine_when_the_run_setup_is_refused(
     assert "run setup" in out
     assert "nowhere" in out
     assert str(study / "bin" / "core") in out
+
+
+class TestCheck:
+    """``fleet check`` builds a run setup with no datasets and gates on its refusals."""
+
+    def _config(self, study: Path, body: str) -> None:
+        (study / "study_config.yaml").write_text(
+            f"study_id: S01\nvalidation:\n  engine_path: bin/core\n{body}", encoding="utf-8"
+        )
+
+    def test_a_valid_setup_passes_with_the_engine_of_the_run_setup(
+        self, study: Path, engine: FakeEngine, capsys: pytest.CaptureFixture
+    ) -> None:
+        assert _run(["check"]) == 0
+
+        out = capsys.readouterr().out
+        assert "SDTMIG 3.4 (default)" in out
+        assert "ADaMIG 1.3 (default)" in out
+        assert f"{study / 'bin' / 'core'} (study config)" in out
+
+    def test_unsupported_ig_version_fails(
+        self, study: Path, engine: FakeEngine, capsys: pytest.CaptureFixture
+    ) -> None:
+        self._config(study, "sdtm:\n  ig_version: 3-5\n")
+
+        assert _run(["check"]) == 1
+
+        out = capsys.readouterr().out
+        assert "[FAIL] run setup" in out
+        assert "SDTMIG 3-5" in out
+        assert "3.2, 3.3, 3.4" in out
+
+    def test_missing_custom_rules_directory_fails_once(
+        self, study: Path, engine: FakeEngine, capsys: pytest.CaptureFixture
+    ) -> None:
+        self._config(study, "  custom_rules: nowhere\n")
+
+        assert _run(["check"]) == 1
+
+        out = capsys.readouterr().out
+        assert out.count("nowhere") == 1
+        assert "1 failure(s)" in out
+
+    def test_missing_engine_warns_and_does_not_fail(
+        self,
+        study: Path,
+        engine: FakeEngine,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture,
+    ) -> None:
+        (study / "bin" / "core").unlink()
+        monkeypatch.setattr("fleet.validation.engine.ENGINE_DIR", study / "no-engine")
+
+        assert _run(["check"]) == 0
+
+        out = capsys.readouterr().out
+        assert "[WARN] rules engine" in out
+        assert "0 failure(s)" in out

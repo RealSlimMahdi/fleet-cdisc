@@ -34,7 +34,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | [`fleet init`](#fleet-init) | Bootstrapping pipeline: cfg → define → ct → rules. |
 | [`fleet run`](#fleet-run) | Execute define.yaml derivation pipelines and write datasets. |
 | [`fleet validate`](#fleet-validate) | Validate datasets with the CDISC Rules Engine, one engine run per standard (exit 0 no errors, 1 errors, 2 a dataset could not run). |
-| [`fleet check`](#fleet-check) | CI gate: config parse + define.yaml schema + custom-rule YAMLs. |
+| [`fleet check`](#fleet-check) | CI gate: config parse + define.yaml schema + run setup + custom-rule YAMLs. |
 | [`fleet compare`](#fleet-compare) | Compare a candidate dataset against a base on keys (exit 0 equal, 1 different, 2 could not run). |
 | [`fleet new`](#fleet-new) | Bootstrap a study: init cfg → define → ct → rules, one confirmation. |
 | [`fleet migrate`](#fleet-migrate) | Rewrite removed pre-alpha verb/kwarg spellings to canonical ones (libcst). |
@@ -126,6 +126,8 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 ---
 
 ## `fleet check`
+
+CI gate: parse the study config, check each define.yaml against its schema, build the validation run setup for SDTM and ADaM with no datasets, and check each custom rule YAML. An unsupported sdtm.ig_version or adam.ig_version and a configured validation.custom_rules directory that does not exist fail the gate. A missing rules engine and an unset CDISC_API_KEY are warnings only, because CI installs no engine. Exit 1 on any failure, else 0.
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
