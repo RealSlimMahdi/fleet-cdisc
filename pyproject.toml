@@ -2,6 +2,7 @@
 name = "fleet-cdisc"
 dynamic = ["version"]
 description = "An opinionated framework to create CDISC SDTM/ADaM using Polars DataFrames via namespace extension"
+readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [
@@ -9,7 +10,7 @@ authors = [
 ]
 keywords = ["polars", "cdisc", "sdtm", "adam", "define.xml", "clinical-trials", "pharma", "namespace"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "License :: OSI Approved :: MIT License",
@@ -95,7 +96,11 @@ docs = [
 ]
 
 [project.urls]
+Homepage = "https://realslimmahdi.github.io/fleet-cdisc/"
+Documentation = "https://realslimmahdi.github.io/fleet-cdisc/"
+Changelog = "https://realslimmahdi.github.io/fleet-cdisc/changelog/"
 Repository = "https://github.com/RealSlimMahdi/fleet-cdisc"
+Issues = "https://github.com/RealSlimMahdi/fleet-cdisc/issues"
 
 [project.scripts]
 fleet = "fleet.cli:main"
@@ -113,6 +118,9 @@ local_scheme = "no-local-version"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/fleet"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/fleet", "tests", "README.md", "LICENSE", "pyproject.toml"]
 
 
 [tool.ruff]

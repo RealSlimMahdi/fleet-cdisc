@@ -4,6 +4,10 @@ All notable changes to Fleet are documented here.
 
 ## [Unreleased]
 
+## [0.2.0a1] — pre-alpha
+
+First pre-alpha on PyPI. It replaces 0.1.0, which is yanked. Install with `pip install --pre fleet-cdisc`.
+
 ### Added
 
 - **Dataset comparison** — a `PROC COMPARE` analogue in pure Polars (no new dependency), reachable three ways over one engine:
