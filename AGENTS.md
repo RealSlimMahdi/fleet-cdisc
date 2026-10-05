@@ -119,3 +119,12 @@ The five canonical triage roles, each label string equal to its name. See `docs/
 ### Domain docs
 
 Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## Pull requests
+
+Every PR description ends with two lines:
+
+- `Tool:` the AI tool that helped write the PR. Claude Code adds `🤖 Generated with Claude Code` by itself, and that line counts.
+- `Verified:` the commands from Verification Order that you ran, followed by the last line of the `pytest` output.
+
+A PR without both lines is closed without review.
