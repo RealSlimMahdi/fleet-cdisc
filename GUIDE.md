@@ -14,16 +14,16 @@
 
 ## Part 1 — Installation
 
-### From TestPyPI (pre-release)
+### From PyPI (pre-alpha)
+
+```bash
+uv add fleet-cdisc --prerelease=allow
+```
+
+### From TestPyPI (development builds)
 
 ```bash
 uv pip install -i https://test.pypi.org/simple/ fleet-cdisc
-```
-
-### From PyPI (stable release)
-
-```bash
-uv pip install fleet-cdisc
 ```
 
 ### For development (source checkout)

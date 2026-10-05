@@ -85,7 +85,7 @@ Exception: empty DataFrames for TDD scaffolding, programmatic/random data.
 
 ## Publishing
 
-Distribution name: `fleet-cdisc` (import: `fleet`). Version comes from git tags — never edit version strings manually.
+Distribution name: `fleet-cdisc` (import: `fleet`). Version comes from git tags — never edit version strings manually. Release steps and PyPI/GitHub configuration: `CONTRIBUTING.md`, section "Releasing (maintainers)".
 
 ## Typed Entry (IDE Autocomplete)
 
