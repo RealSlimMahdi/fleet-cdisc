@@ -134,10 +134,12 @@ Two things decide what the numbers mean:
 - **The measures span every matched observation, not only the unequal ones.**
   A mean difference near zero over a thousand observations with three
   differences reads as noise; a mean difference of exactly `0.5` across all of
-  them reads as an offset. Only observations **null on either side** are
-  dropped, because a difference needs two values — which is why `n` can be
-  smaller than the matched count, and smaller again for the percent, which
-  drops a zero base as the listing does.
+  them reads as an offset. Only observations **null, NaN or infinite on either
+  side** are dropped, because a difference needs two finite values — which is
+  why `n` can be smaller than the matched count, and smaller again for the
+  percent, which drops a zero base as the listing does. No measure is ever NaN
+  or infinite, so the text report, the HTML page and the JSON document show
+  the same numbers.
 - **Only numeric variables carry them.** A string, a date or a boolean
   contributes its `differences` count and nulls for the rest; there is no mean
   of `"F"` against `"M"`.
