@@ -48,6 +48,7 @@ class TestMcpImportBoundary:
     ALLOWED = {
         "fleet",
         "fleet.core.dag",
+        "fleet.core.spec_source",  # static spec <-> code conversion tools (#139)
         "fleet.ct.validator",
         "fleet.define_xml",
         "fleet.io",
