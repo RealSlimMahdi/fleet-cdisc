@@ -2275,6 +2275,10 @@ first source that gives it:</p>
   engine runs. See <a href="../custom-rules/">Custom Validation Rules</a>.</li>
 <li>The report header of each dataset shows every input with its source, as on
   the verb.</li>
+<li><strong>HTML report</strong>: <code>--report findings.html</code> writes one page: a status row
+  per dataset, then one row per finding and per dataset that could not run.
+  <code>ValidationResult.save_html_report()</code> writes the same page for one
+  dataset. Every cell is HTML-escaped.</li>
 <li><strong>Could not run</strong>: a dataset whose directory and file name disagree
   (<code>data/sdtm/adsl.parquet</code>), or an unsupported IG version, is not validated.
   The reason is printed, and the other datasets still run.</li>

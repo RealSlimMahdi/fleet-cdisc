@@ -2588,7 +2588,7 @@
 </span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="n">adsl_result</span> <span class="o">=</span> <span class="n">svc</span><span class="o">.</span><span class="n">validate_adam</span><span class="p">(</span><span class="n">adsl</span><span class="p">,</span> <span class="n">dataset</span><span class="o">=</span><span class="s2">&quot;ADSL&quot;</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="s2">&quot;1.3&quot;</span><span class="p">)</span>
 </span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="k">assert</span> <span class="n">adsl_result</span><span class="o">.</span><span class="n">is_valid</span>
 </span></code></pre></div>
-<p>The <code>ValidationResult</code> object exposes <code>.is_valid</code> (bool), <code>.print_report(report_type="summary")</code> (or <code>"full"</code> for expanded details including INFO-level engine noise), and <code>.save_html_report(path)</code> — a styled HTML artefact with rule-level error and warning cards, suitable for archiving as a validation deliverable.</p>
+<p>The <code>ValidationResult</code> object exposes <code>.is_valid</code> (bool), <code>.print_report(report_type="summary")</code> (or <code>"full"</code> for expanded details including INFO-level engine noise), and <code>.save_html_report(path)</code> — an HTML page with the dataset status and one table row per error, warning and info finding, suitable for archiving as a validation deliverable. Every cell is HTML-escaped, because messages carry data values and the text of custom rules. <code>fleet validate --report</code> writes the same page for a sweep.</p>
 <h4 id="engine-discovery-order">Engine discovery order<a class="headerlink" href="#engine-discovery-order" title="Permanent link">&para;</a></h4>
 <p>Fleet resolves the engine path at runtime via a four-tier chain (first match wins):</p>
 <ol>
@@ -2801,7 +2801,7 @@ cannot replace the engine the team pinned. An explicit <code>rules_engine_path=<
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 25, 2026 20:41:46 UTC">September 25, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 9, 2026 14:00:50 UTC">October 9, 2026</span>
   </span>
 
     

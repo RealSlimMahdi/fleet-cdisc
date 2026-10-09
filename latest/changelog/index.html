@@ -1978,6 +1978,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#fixed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2073,6 +2084,17 @@
     <span class="md-ellipsis">
       
         Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fixed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixed
       
     </span>
   </a>
@@ -2207,7 +2229,16 @@
 </ul>
 <h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>API simplification</strong>: therapeutic-area namespaces (<code>onco</code>, <code>ophtha</code>, <code>peds</code>, <code>vaccine</code>, <code>metabolic</code>, <code>neuro</code>) and ADaM sub-structures (<code>adsl</code>, <code>occds</code>) are now accessed via <code>df.adam.&lt;name&gt;</code> instead of <code>df.&lt;name&gt;</code> — reduces registered namespaces from 10 to 2 (<code>df.sdtm</code> and <code>df.adam</code>)</li>
+<li>
+<p><strong>One validation HTML page</strong>: <code>fleet validate --report</code> and <code>ValidationResult.save_html_report()</code> write the same page (<code>fleet.validation.models.write_html_report()</code>): a status row per dataset, then one row per finding. Every cell is HTML-escaped, so a <code>&lt;</code> in a data value or a custom rule message no longer breaks the page or injects markup; <code>rows_affected=0</code> is shown (#119)</p>
+</li>
+<li>
+<p><strong>API simplification</strong>: therapeutic-area namespaces (<code>onco</code>, <code>ophtha</code>, <code>peds</code>, <code>vaccine</code>, <code>metabolic</code>, <code>neuro</code>) and ADaM sub-structures (<code>adsl</code>, <code>occds</code>) are now accessed via <code>df.adam.&lt;name&gt;</code> instead of <code>df.&lt;name&gt;</code> — reduces registered namespaces from 10 to 2 (<code>df.sdtm</code> and <code>df.adam</code>)</p>
+</li>
+</ul>
+<h3 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Define-XML <code>FormalExpression</code> names the method the run records</strong>: the verb the algorithm dispatches to, by the class that defines it on the define's own namespace, as <code>VariableNode.method</code> does (the <code>fleet lsp</code> hover names the defining class too). ADaM defines named <code>SDTMNamespace</code> and rendered calls that do not exist, such as <code>study_day('ADY', end=..., start=...)</code>; ADY now reads <code>fleet.core._verb_mixin.SharedVerbsMixin.duration('ADY', end='ASTDT', start='TRTSDT')</code> (#93)</li>
 </ul>
 <h2 id="010-2025-01-01">[0.1.0] — 2025-01-01<a class="headerlink" href="#010-2025-01-01" title="Permanent link">&para;</a></h2>
 <h3 id="added_1">Added<a class="headerlink" href="#added_1" title="Permanent link">&para;</a></h3>
