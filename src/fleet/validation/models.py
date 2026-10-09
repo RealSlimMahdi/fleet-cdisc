@@ -1,5 +1,6 @@
 """Validation result models for CDISC conformance checking."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from html import escape
@@ -9,7 +10,7 @@ from typing import TYPE_CHECKING, Literal
 from fleet.core import log as fleet_log
 
 if TYPE_CHECKING:
-    from fleet.validation.run_setup import RunSetup
+    from fleet.validation.run_setup import RunSetup, SweepDataset
 
 #: Validation reports emit through this logger (INFO level, stdout by
 #: default — see :mod:`fleet.core.log` to route or silence them).
@@ -54,7 +55,7 @@ class ValidationIssue:
         parts = [f"[{self.severity.value}] {self.rule_id} ({self.source}): {self.message}"]
         if self.variable:
             parts.append(f"Variable: {self.variable}")
-        if self.rows_affected:
+        if self.rows_affected is not None:
             parts.append(f"Rows: {self.rows_affected}")
         if self.producing_verb:
             parts.append(f"Producing verb: {self.producing_verb} ({self.verb_method})")
@@ -233,98 +234,190 @@ class ValidationResult:
             _logger.info("\n  No issues found.")
 
     def save_html_report(self, output_path: str | Path) -> str:
-        """Save validation report as HTML file."""
-        output_file = Path(output_path)
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        html = self._build_html()
-        output_file.write_text(html, encoding="utf-8")
-        return str(output_file.absolute())
+        """Write this result as a self-contained HTML page and return its absolute path.
 
-    def _build_html(self) -> str:
-        status_color = "#28a745" if self.is_valid else "#dc3545"
-        status_text = "PASS" if self.is_valid else "FAIL"
+        The page is the one ``fleet validate --report`` writes for a sweep
+        (see :func:`write_html_report`), with this dataset only.
 
-        def issue_cards(issues: list[ValidationIssue], css_class: str = "") -> str:
-            cards = []
-            for i, issue in enumerate(issues, 1):
-                extra = ""
-                if issue.variable:
-                    extra += f"<div class='issue-detail'><strong>Variable:</strong> {issue.variable}</div>\n"
-                if issue.rows_affected:
-                    extra += f"<div class='issue-detail'><strong>Rows Affected:</strong> {issue.rows_affected}</div>\n"
-                if issue.producing_verb:
-                    verb_html = (
-                        f"<a href='#{issue.verb_method}' class='verb-link'>"
-                        f"{issue.producing_verb}</a>"
-                        if issue.verb_method
-                        else issue.producing_verb
-                    )
-                    extra += (
-                        f"<div class='issue-detail'><strong>Producing verb:</strong> "
-                        f"{verb_html}"
-                        f"{(' &middot; ' + issue.verb_method) if issue.verb_method else ''}"
-                        f"</div>\n"
-                    )
-                if issue.spec_ref:
-                    extra += f"<div class='issue-detail'><strong>Spec reference:</strong> {issue.spec_ref}</div>\n"
-                if issue.suggested_fix:
-                    extra += f"<div class='suggested-fix'><strong>Suggested Fix:</strong> {issue.suggested_fix}</div>\n"
-                cards.append(
-                    f"<div class='issue-card {css_class}'>"
-                    f"<div class='issue-header'>{i}. {issue.message}</div>"
-                    f"<div class='issue-detail'><strong>Rule ID:</strong> <span class='rule-id'>{issue.rule_id}</span></div>"
-                    f"<div class='issue-detail'><strong>Source:</strong> {issue.source}</div>"
-                    f"{extra}</div>"
-                )
-            return "\n".join(cards)
+        Args:
+            output_path: Destination ``.html`` file; parent directories are
+                created.
 
-        errors_html = (
-            f"<div class='section'><div class='section-title'>Errors ({len(self.errors)})</div>"
-            f"{issue_cards(self.errors)}</div>"
-            if self.errors
-            else ""
+        Returns:
+            str: The absolute path of the written file.
+
+        Examples:
+            Archive the findings of one dataset::
+
+                result = ValidationService().validate_sdtm(dm, domain="DM")
+                result.save_html_report("outputs/dm_validation.html")
+        """
+        return write_html_report([self], output_path)
+
+
+#: Status label of a dataset section, by the CSS class that colours it.
+_STATUS_LABELS: dict[str, str] = {"pass": "PASS", "fail": "FAIL", "could-not-run": "COULD NOT RUN"}
+
+#: Section title and card CSS class per severity, in page order.
+_SEVERITY_SECTIONS: tuple[tuple[str, str, str], ...] = (
+    ("errors", "Errors", "issue-card"),
+    ("warnings", "Warnings", "issue-card warning"),
+    ("infos", "Info", "issue-card info"),
+)
+
+_STYLE = """\
+body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+.container { background: white; padding: 30px; border-radius: 5px; max-width: 1200px; margin: 0 auto; }
+h1 { color: #2c3e50; border-bottom: 3px solid #28a745; padding-bottom: 10px; }
+h1.fail { border-bottom-color: #dc3545; }
+.status { display: inline-block; padding: 5px 15px; background: #28a745; color: white; border-radius: 3px; font-weight: bold; }
+.status.fail { background: #dc3545; }
+.status.could-not-run { background: #6c757d; }
+.summary { background: #f8f9fa; padding: 15px; border-left: 4px solid #28a745; margin: 20px 0; }
+.summary.fail { border-left-color: #dc3545; }
+.summary.could-not-run { border-left-color: #6c757d; }
+.section-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; border-bottom: 2px solid #e0e0e0; padding-bottom: 5px; }
+.issue-card { border: 1px solid #ddd; border-left: 4px solid #dc3545; padding: 15px; margin-bottom: 15px; border-radius: 3px; }
+.issue-card.warning { border-left-color: #ffc107; }
+.issue-card.info { border-left-color: #17a2b8; }
+.issue-header { font-weight: bold; margin-bottom: 8px; }
+.issue-detail { margin: 5px 0; font-size: 14px; color: #555; }
+.rule-id { background: #e9ecef; padding: 2px 8px; border-radius: 3px; font-family: monospace; }
+.suggested-fix { background: #e7f3ff; border-left: 3px solid #0066cc; padding: 10px; margin-top: 10px; font-style: italic; }
+"""
+
+
+def write_html_report(
+    results: Sequence[ValidationResult],
+    output_path: str | Path,
+    *,
+    could_not_run: "Sequence[SweepDataset]" = (),
+) -> str:
+    """Write validation results as one self-contained HTML page; return its absolute path.
+
+    One section per dataset: the run setup, the status and the counts, then
+    one card per error, warning and info finding.  A dataset that could not
+    run gets a section with the reason.  Every value is HTML-escaped: a
+    message carries data values and the text of custom rules.  Both
+    ``fleet validate --report`` and :meth:`ValidationResult.save_html_report`
+    write this page.
+
+    Args:
+        results: The validation results, one per dataset.
+        output_path: Destination ``.html`` file; parent directories are
+            created.
+        could_not_run: The datasets of a sweep whose run setup was refused.
+
+    Returns:
+        str: The absolute path of the written file.
+
+    Examples:
+        One page for every dataset of one engine run::
+
+            results = ValidationService().validate_datasets(frames, standard="sdtm")
+            write_html_report(list(results.values()), "outputs/validation.html")
+    """
+    sections = [_dataset_section(r) for r in results]
+    sections += [_could_not_run_section(d) for d in could_not_run]
+    names = [r.dataset_name for r in results] + [d.name for d in could_not_run]
+    title = names[0] if len(names) == 1 else f"{len(names)} datasets"
+    failed = bool(could_not_run) or not all(r.is_valid for r in results)
+    html = "\n".join(
+        [
+            "<!DOCTYPE html>",
+            "<html>",
+            "<head>",
+            '<meta charset="UTF-8">',
+            f"<title>CDISC Validation Report - {escape(title)}</title>",
+            f"<style>\n{_STYLE}</style>",
+            "</head>",
+            "<body>",
+            '<div class="container">',
+            f"<h1 class='{'fail' if failed else 'pass'}'>CDISC Validation Report</h1>",
+            *sections,
+            *([] if sections else ["<p>No datasets were validated.</p>"]),
+            "</div>",
+            "</body>",
+            "</html>",
+        ]
+    )
+    output_file = Path(output_path)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_file.write_text(html, encoding="utf-8")
+    return str(output_file.absolute())
+
+
+def _dataset_section(result: ValidationResult) -> str:
+    """The summary block of one dataset, then its findings as cards."""
+    status = "pass" if result.is_valid else "fail"
+    setup = result.setup.header_lines() if result.setup is not None else []
+    lines = [
+        f"<div class='summary {status}'>",
+        *(f"{escape(line)}<br>" for line in setup),
+        f"<strong>Dataset:</strong> {escape(result.dataset_name)}<br>",
+        f"<strong>Type:</strong> {escape(result.dataset_type)} {escape(result.model_version)}<br>",
+        f"<strong>Status:</strong> <span class='status {status}'>{_STATUS_LABELS[status]}</span><br>",
+        f"<strong>Errors:</strong> {len(result.errors)} | "
+        f"<strong>Warnings:</strong> {len(result.warnings)} | "
+        f"<strong>Info:</strong> {len(result.infos)}",
+        "</div>",
+    ]
+    for attribute, title, card_class in _SEVERITY_SECTIONS:
+        issues: list[ValidationIssue] = getattr(result, attribute)
+        if not issues:
+            continue
+        lines.append(
+            f"<div class='section'><div class='section-title'>{title} ({len(issues)})</div>"
         )
-        warnings_html = (
-            f"<div class='section'><div class='section-title'>Warnings ({len(self.warnings)})</div>"
-            f"{issue_cards(self.warnings, 'warning')}</div>"
-            if self.warnings
-            else ""
-        )
-        setup_html = "".join(
-            f"{escape(line)}<br>\n" for line in (self.setup.header_lines() if self.setup else ())
-        )
+        lines += [_issue_card(i, issue, card_class) for i, issue in enumerate(issues, 1)]
+        lines.append("</div>")
+    return "\n".join(lines)
 
-        return f"""<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>CDISC Validation Report - {self.dataset_name}</title>
-<style>
-body {{ font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }}
-.container {{ background: white; padding: 30px; border-radius: 5px; max-width: 1200px; margin: 0 auto; }}
-h1 {{ color: #2c3e50; border-bottom: 3px solid {status_color}; padding-bottom: 10px; }}
-.status {{ display: inline-block; padding: 5px 15px; background: {status_color}; color: white; border-radius: 3px; font-weight: bold; }}
-.summary {{ background: #f8f9fa; padding: 15px; border-left: 4px solid {status_color}; margin: 20px 0; }}
-.section-title {{ font-size: 18px; font-weight: bold; margin-bottom: 15px; border-bottom: 2px solid #e0e0e0; padding-bottom: 5px; }}
-.issue-card {{ border: 1px solid #ddd; border-left: 4px solid #dc3545; padding: 15px; margin-bottom: 15px; border-radius: 3px; }}
-.issue-card.warning {{ border-left-color: #ffc107; }}
-.issue-header {{ font-weight: bold; margin-bottom: 8px; }}
-.issue-detail {{ margin: 5px 0; font-size: 14px; color: #555; }}
-.rule-id {{ background: #e9ecef; padding: 2px 8px; border-radius: 3px; font-family: monospace; }}
-.suggested-fix {{ background: #e7f3ff; border-left: 3px solid #0066cc; padding: 10px; margin-top: 10px; font-style: italic; }}
-</style>
-</head>
-<body>
-<div class="container">
-<h1>CDISC Validation Report</h1>
-<div class="summary">
-{setup_html}<strong>Dataset:</strong> {self.dataset_name}<br>
-<strong>Type:</strong> {self.dataset_type} {self.model_version}<br>
-<strong>Status:</strong> <span class="status">{status_text}</span><br>
-<strong>Errors:</strong> {len(self.errors)} | <strong>Warnings:</strong> {len(self.warnings)} | <strong>Info:</strong> {len(self.infos)}
-</div>
-{errors_html}
-{warnings_html}
-</div>
-</body>
-</html>"""
+
+def _issue_card(number: int, issue: ValidationIssue, card_class: str) -> str:
+    """One finding: its message, then each detail it carries."""
+    details = [
+        ("Rule ID", f"<span class='rule-id'>{escape(issue.rule_id)}</span>"),
+        ("Source", escape(issue.source)),
+    ]
+    if issue.variable:
+        details.append(("Variable", escape(issue.variable)))
+    if issue.rows_affected is not None:
+        details.append(("Rows Affected", escape(str(issue.rows_affected))))
+    if issue.producing_verb:
+        verb = escape(issue.producing_verb)
+        if issue.verb_method:
+            method = escape(issue.verb_method)
+            verb = f"<a href='#{method}' class='verb-link'>{verb}</a> &middot; {method}"
+        details.append(("Producing verb", verb))
+    if issue.spec_ref:
+        details.append(("Spec reference", escape(issue.spec_ref)))
+    lines = [
+        f"<div class='{card_class}'>",
+        f"<div class='issue-header'>{number}. {escape(issue.message)}</div>",
+        *(
+            f"<div class='issue-detail'><strong>{label}:</strong> {value}</div>"
+            for label, value in details
+        ),
+    ]
+    if issue.suggested_fix:
+        lines.append(
+            "<div class='suggested-fix'><strong>Suggested Fix:</strong> "
+            f"{escape(issue.suggested_fix)}</div>"
+        )
+    lines.append("</div>")
+    return "\n".join(lines)
+
+
+def _could_not_run_section(dataset: "SweepDataset") -> str:
+    """A dataset of a sweep whose run setup was refused, with the reason."""
+    return "\n".join(
+        [
+            "<div class='summary could-not-run'>",
+            f"<strong>Dataset:</strong> {escape(dataset.name)}<br>",
+            "<strong>Status:</strong> "
+            f"<span class='status could-not-run'>{_STATUS_LABELS['could-not-run']}</span><br>",
+            f"<strong>Reason:</strong> {escape(dataset.reason or '')}",
+            "</div>",
+        ]
+    )
