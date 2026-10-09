@@ -660,6 +660,10 @@ class SharedVerbsMixin:
 
         ct_mode = ct is not None or ct_map is not None
         ct_cls: type | None = ct if (ct is not None and not isinstance(ct, str)) else None
+        if ct_cls is not None:
+            from fleet.ct.study_codelists import warn_if_class_stale
+
+            warn_if_class_stale(ct_cls, stacklevel=3)
         ct_id: str | None = None
         if ct is not None:
             ct_id = ct if isinstance(ct, str) else (getattr(ct, "_concept_id", None) or ct.__name__)
@@ -2126,8 +2130,16 @@ class SharedVerbsMixin:
         With ``validate: true`` every assign-family derivation that
         declares a codelist (``assign_ct`` / ``hardcode_ct``) runs with
         ``validate_values=True``: out-of-codelist values emit the
-        standard warning naming dataset, variable, and codelist.  Specs
-        without a ``ct:`` block behave exactly as before.
+        standard warning naming dataset, variable, and codelist.
+
+        Inside a study, a ``ct_codelist:`` ID resolves to the class of
+        that ID in the study's generated ``codelists.py`` (found from the
+        first ``study_config.yaml`` above the spec's folder), so a spec
+        step checks the same terms as ``assign(..., ct=<class>)``; an ID
+        the file lacks falls back to the CT loaded in
+        :func:`fleet.get_validator`.  A ``codelists.py`` that disagrees
+        with the study warns once per process (see
+        :mod:`fleet.ct.study_codelists`).
 
         Args:
             spec_path: Path to the YAML specification file.
@@ -2210,6 +2222,15 @@ class SharedVerbsMixin:
                     ) from err
             ns = copy.copy(ns)
             ns._spec_ct_validate = True
+
+        # ct_codelist IDs resolve to the study's codelists.py classes, as ct=<class> inline.
+        if any(drv.get("ct_codelist") for _, drv in raw_vars):
+            from fleet.ct.study_codelists import spec_codelists
+
+            codelists = spec_codelists(path, stacklevel=2)
+            if codelists:
+                ns = copy.copy(ns)
+                ns._spec_codelists = codelists
         for var_name, drv in raw_vars:
             if only is not None and var_name not in only:
                 continue

@@ -102,6 +102,9 @@ This reads all codelist concept IDs referenced in the define.yaml files, fetches
 
 ```python
 # Generated codelists.py — example excerpt
+__ct_package__ = "sdtmct-2023-12-15"  # the CT package of every class below
+
+
 class C66731:
     """SEX (C66731)."""
 
@@ -114,6 +117,12 @@ class C66731:
 SEX = C66731  # Human-readable alias
 RACE = C74457  # ...
 ```
+
+The spec path uses these classes too: `from_spec` resolves `ct_codelist: C66731`
+to the `C66731` class, so a spec step checks the same terms as the inline
+`.assign("SEX", source="sex", ct=SEX)`. A `codelists.py` generated from another
+CT package than `ct.package`, or missing a codelist a `define.yaml` references,
+warns in `from_spec` and fails `fleet check`.
 
 ### Standalone codelist commands
 
@@ -131,6 +140,11 @@ uv run fleet add-ct --domains LB,CM --output examples/cdiscpilot01/sdtm/codelist
 # Pin to a specific IG version and CT package
 uv run fleet add-ct --domains DM,AE --ig 3-4 --package sdtmct-2025-09-26 --output codelists.py
 ```
+
+`fleet add-ct` never changes the CT package of an existing `codelists.py`: a
+`--package` other than the one the file was generated from is refused. To move
+the study to a new package, set `ct.package` in `study_config.yaml` and run
+`fleet init ct --force`.
 
 ---
 

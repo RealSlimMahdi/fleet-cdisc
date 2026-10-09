@@ -15,7 +15,7 @@ Execution commands:
 - ``fleet run``      — execute define.yaml derivations and write datasets.
 - ``fleet validate`` — validate datasets with the CDISC Rules Engine.
 - ``fleet compare``  — compare a candidate dataset against a base on keys.
-- ``fleet check``    — one CI gate: config + define schema + rule YAMLs.
+- ``fleet check``    — one CI gate: config + define schema + codelists.py + rule YAMLs.
 - ``fleet tlg``      — list / run / export TLG templates (``tlg --help``).
 - ``fleet migrate``  — rewrite removed pre-alpha verb spellings to canonical ones.
 - ``fleet mcp``      — MCP server for AI assistants (``mcp`` extra).
@@ -462,6 +462,16 @@ def _run_add_ct(args: argparse.Namespace) -> None:
     # silently change already-reviewed terms.
     ig = args.ig or (ctx.config.sdtm.ig_version if ctx else None) or _default_ig("sdtm")
     package = args.package or (ctx.config.ct.package if ctx else "sdtmct-2023-12-15")
+    if args.package and output.is_file():
+        from fleet.ct.study_codelists import read_codelists_file
+
+        current = read_codelists_file(output).package
+        if current is not None and current != args.package:
+            _fail(
+                f"{output} was generated from {current}, not {args.package}; "
+                "fleet add-ct does not change the CT package of existing codelists. "
+                "Set ct.package in study_config.yaml, then run: fleet init ct --force"
+            )
     existing = existing_concept_ids(output)
 
     print(f"Adding domains: {', '.join(domains)}")
@@ -628,6 +638,27 @@ def _check_extras() -> list[tuple[str, bool, str]]:
     return results
 
 
+def _print_codelists_status(config_path: Path) -> None:
+    """The doctor line of the study's codelists.py: its CT package, or each problem."""
+    from fleet.core.study_context import StudyConfigError, load_study_context
+    from fleet.ct.study_codelists import check_codelists, read_codelists_file
+
+    try:
+        ctx = load_study_context(config_path)
+    except StudyConfigError:
+        return  # fleet check reports the invalid config
+    problems = check_codelists(ctx)
+    for problem in problems:
+        print(f"  ✗ codelists.py ....... {problem}")
+    if problems or not ctx.codelists_file.is_file():
+        return
+    package = read_codelists_file(ctx.codelists_file).package
+    if package is None:
+        print(f"  ✓ codelists.py ....... {ctx.codelists_file} (no CT package recorded)")
+    else:
+        print(f"  ✓ codelists.py ....... {package} (matches study_config)")
+
+
 def _run_doctor(args: argparse.Namespace) -> None:
     from fleet.core.exceptions import ValidationSetupError
     from fleet.validation import build_run_setup
@@ -640,6 +671,7 @@ def _run_doctor(args: argparse.Namespace) -> None:
 
     if config_path and config_path.is_file():
         print(f"  ✓ study config ....... {config_path}")
+        _print_codelists_status(config_path)
     else:
         print("  ✗ study config ....... not found (run `fleet init cfg`)")
 
@@ -1125,7 +1157,7 @@ def _save_comparison_file(path_str: str, save: Callable[[Path], None], what: str
 
 
 def _run_check(args: argparse.Namespace) -> None:
-    """Run the CI gate: config + define schema + run setup + rule YAMLs + essentials."""
+    """Run the CI gate: config + define schema + codelists + run setup + rule YAMLs + essentials."""
     from fleet.core.study_context import StudyConfigError, load_study_context
 
     rows: list[tuple[str, str, str]] = []  # (status, name, detail)
@@ -1163,6 +1195,16 @@ def _run_check(args: argparse.Namespace) -> None:
             rows.append(
                 ("WARN", "define.yaml", "no define.yaml files found (run `fleet init define`)")
             )
+
+    # ── 2b. codelists.py against the study: package, mixed packages, missing classes or file ──
+    if ctx is not None:
+        from fleet.ct.study_codelists import check_codelists, read_codelists_file
+
+        problems = check_codelists(ctx, references=True)
+        rows.extend(("FAIL", "codelists", problem) for problem in problems)
+        if not problems and ctx.codelists_file.is_file():
+            package = read_codelists_file(ctx.codelists_file).package or "no CT package recorded"
+            rows.append(("PASS", "codelists", f"{ctx.codelists_file} ({package})"))
 
     # ── 3. Run setup with no datasets: IG versions, custom rules, engine ──
     setups = []
@@ -2137,7 +2179,8 @@ def _add_ct_parsers(sub: argparse._SubParsersAction) -> None:
         default=None,
         help=(
             "CT package version. Default: ct.package from the discovered "
-            "study_config.yaml (sdtmct-2023-12-15 outside a study)."
+            "study_config.yaml (sdtmct-2023-12-15 outside a study). Refused when it "
+            "differs from the package an existing codelists.py was generated from."
         ),
     )
     add.add_argument(
@@ -2315,7 +2358,7 @@ def _add_engine_parsers(sub: argparse._SubParsersAction) -> None:
 
     doctor = sub.add_parser(
         "doctor",
-        help="Check Fleet setup: engine, API key, optional extras.",
+        help="Check Fleet setup: engine, API key, codelists.py, optional extras.",
     )
     _add_config_flag(doctor)
     doctor.set_defaults(func=_run_doctor)
@@ -2414,11 +2457,18 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     # -- check -------------------------------------------------------------- #
     check = sub.add_parser(
         "check",
-        help="CI gate: config parse + define.yaml schema + run setup + custom-rule YAMLs.",
+        help=(
+            "CI gate: config parse + define.yaml schema + codelists.py + run setup + "
+            "custom-rule YAMLs."
+        ),
         description=(
             "CI gate: parse the study config, check each define.yaml against its schema, "
+            "check codelists.py against the study, "
             "build the validation run setup for SDTM and ADaM with no datasets, and check "
-            "each custom rule YAML. An unsupported sdtm.ig_version or adam.ig_version and a "
+            "each custom rule YAML. A codelists.py generated from another CT package than "
+            "ct.package, mixing packages, missing a codelist a define.yaml references, or "
+            "missing while the define.yaml files reference codelists fails the gate. "
+            "An unsupported sdtm.ig_version or adam.ig_version and a "
             "configured validation.custom_rules directory that does not exist fail the gate. "
             "A missing rules engine and an unset CDISC_API_KEY are warnings only, because CI "
             "installs no engine. Exit 1 on any failure, else 0."

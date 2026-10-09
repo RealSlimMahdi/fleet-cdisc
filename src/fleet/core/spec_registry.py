@@ -419,6 +419,10 @@ def _default_dispatch(ns: Any, var: SpecVariableBase) -> Any:
         (p.kwarg or p.name) == "ct" for p in algo.params
     ):
         kwargs.setdefault("validate_values", True)
+    # from_spec put the study's codelists.py classes here; an ID they lack stays a string.
+    codelists = getattr(ns, "_spec_codelists", None)
+    if codelists and isinstance(kwargs.get("ct"), str):
+        kwargs["ct"] = codelists.get(kwargs["ct"], kwargs["ct"])
     method = getattr(ns, algo.verb)
     if algo.takes_target:
         return method(var.target, **kwargs)

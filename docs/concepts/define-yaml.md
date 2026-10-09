@@ -351,12 +351,67 @@ Variables can reference codelists declared in the `codelists` block:
     source: SEX
 ```
 
+### Controlled terminology in the spec path
+
+A spec step and its inline call check the same terms. Inside a study, a
+`ct_codelist:` ID resolves to the class of that ID in the study's
+`codelists.py`, the module `fleet init ct` generates. So this entry:
+
+<!-- docs:no-run -->
+
+```yaml
+- name: AESEV
+  codelist: C66769
+  derivation:
+    algorithm: assign_ct
+    source: ae_severity
+    ct_codelist: C66769
+```
+
+runs as `.assign("AESEV", source="ae_severity", ct=AESEV)` with the `AESEV`
+class of `codelists.py`, and a raw `Mild` gives the same warning in both
+notations:
+`AE.AESEV: column 'ae_severity' contains values not in codelist 'C66769': ['Mild']`.
+
+- `from_spec` finds the study from the first `study_config.yaml` above the
+  folder of the `define.yaml`, never from the working directory, and takes
+  the file from `paths.metadata_sdtm`.
+- The values are checked as the inline call checks them. A copied column
+  (`assign_ct`) is checked against the CT loaded in `fleet.get_validator()`
+  when it holds the codelist (for example through `ct: file:`, below), else
+  against the class. A literal (`hardcode_ct`) is checked against the loaded
+  CT only, in both notations. An ID without a class in `codelists.py` stays
+  a string, and needs the loaded CT.
+- Outside a study, or before `fleet init ct`, the spec path works as
+  before: only the loaded CT can check the values.
+
+Because both notations then trust `codelists.py`, Fleet checks the file
+against the study:
+
+| Check | Problem | Fix |
+| --- | --- | --- |
+| Package | The `__ct_package__` marker of the file (for older files, the package in each class's `_cdisc_url`) is not `ct.package` in `study_config.yaml`. | `fleet init ct --force` |
+| Mixed packages | The classes name different CT packages. | `fleet init ct --force` |
+| Missing codelist | A `codelist:` or `ct_codelist:` ID of a `define.yaml` has no class in the file. | `fleet add-ct --domains AE` (SDTM), `fleet init ct --force` (ADaM) |
+| Missing file | The `define.yaml` files reference codelists, but the file does not exist. | `fleet init ct` |
+
+`from_spec` warns once per process about the package, mixed-package and
+missing-file problems, and still checks the values against the terms in the
+file: the warning names the fix, and CORE stays the authority. An inline
+`ct=` class whose package is not `ct.package` gives the package warning too;
+the study is found above the module of the class. `fleet check` fails on all
+four problems and `fleet doctor` prints one `codelists.py` line.
+`fleet add-ct --package` refuses a package other than the one the file was
+generated from: to change the CT package, set `ct.package` and run
+`fleet init ct --force`.
+
 ### Opting the spec into CT validation
 
-By default the spec path does not validate values against codelists — it copies
-them through. Add a top-level `ct:` block to turn validation on for the whole
-spec; every `assign_ct` / `hardcode_ct` derivation then validates its values, and
-out-of-codelist values emit a warning naming the dataset, variable, and codelist:
+Without a `ct:` block, an `assign_ct` without `ct_mapping` checks its values
+(pass-through), and one with `ct_mapping` maps them without a check. Add a
+top-level `ct:` block to check every `assign_ct` / `hardcode_ct` derivation
+of the spec, mapped ones included; out-of-codelist values emit a warning
+naming the dataset, variable, and codelist:
 
 <!-- docs:no-run -->
 

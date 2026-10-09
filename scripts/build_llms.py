@@ -658,7 +658,8 @@ user-authored `define.yaml`. The CLI queries the IG model to find every codelist
 by variables in the requested domains.
 
 Generated `codelists.py` provides classes with `_concept_id`, term attributes, human-readable \
-aliases (e.g. `SEX = C66731`), and `__all__` for clean imports.
+aliases (e.g. `SEX = C66731`), `__all__` for clean imports, and a `__ct_package__` marker \
+naming the CT package every class came from.
 
 ### Using generated codelists in pipelines
 
@@ -677,6 +678,17 @@ dm = (
 string (e.g. `"C66731"`). Prefer the class form for IDE auto-completion and readability. \
 When raw data already matches the standard, `ct_map` can be omitted (values are validated and \
 passed through).
+
+The spec path checks the same terms: inside a study, `from_spec` resolves a `ct_codelist:` ID \
+to the class of that ID in the study's `codelists.py` (found from the first \
+`study_config.yaml` above the define.yaml folder, never the working directory), so \
+`algorithm: assign_ct` with `ct_codelist: C66769` warns exactly like \
+`.assign("AESEV", source="ae_severity", ct=AESEV)`. A `codelists.py` generated from another \
+package than `ct.package`, mixing packages, missing a referenced codelist, or missing while \
+the defines reference codelists warns once per process in `from_spec` (an inline class from \
+another package warns too) and fails `fleet check`; `fleet doctor` prints one `codelists.py` \
+line; `fleet add-ct --package` refuses a package other than the file's \
+(`fleet init ct --force` regenerates).
 
 ### Programmatic API
 

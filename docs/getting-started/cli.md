@@ -34,7 +34,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | [`fleet init`](#fleet-init) | Bootstrapping pipeline: cfg → define → ct → rules. |
 | [`fleet run`](#fleet-run) | Execute define.yaml derivation pipelines and write datasets. |
 | [`fleet validate`](#fleet-validate) | Validate datasets with the CDISC Rules Engine, one engine run per standard (exit 0 no errors, 1 errors, 2 a dataset could not run). |
-| [`fleet check`](#fleet-check) | CI gate: config parse + define.yaml schema + run setup + custom-rule YAMLs. |
+| [`fleet check`](#fleet-check) | CI gate: config parse + define.yaml schema + codelists.py + run setup + custom-rule YAMLs. |
 | [`fleet compare`](#fleet-compare) | Compare a candidate dataset against a base on keys (exit 0 equal, 1 different, 2 could not run). |
 | [`fleet new`](#fleet-new) | Bootstrap a study: init cfg → define → ct → rules, one confirmation. |
 | [`fleet migrate`](#fleet-migrate) | Rewrite removed pre-alpha verb/kwarg spellings to canonical ones (libcst). |
@@ -47,7 +47,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | [`fleet check-rule`](#fleet-check-rule) | Validate a custom rule YAML (syntax, structure, schema). |
 | [`fleet install-engine`](#fleet-install-engine) | Download the CDISC Rules Engine binary for validation. |
 | [`fleet uninstall-engine`](#fleet-uninstall-engine) | Remove the managed CDISC Rules Engine binary. |
-| [`fleet doctor`](#fleet-doctor) | Check Fleet setup: engine, API key, optional extras. |
+| [`fleet doctor`](#fleet-doctor) | Check Fleet setup: engine, API key, codelists.py, optional extras. |
 | [`fleet derivation`](#fleet-derivation) | Scaffold and manage study-specific derivations. |
 | [`fleet mcp`](#fleet-mcp) | Serve Fleet tools to MCP-capable assistants (requires the 'mcp' extra). |
 | [`fleet lsp`](#fleet-lsp) | Language server for define.yaml files (requires the 'lsp' extra). |
@@ -127,7 +127,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 
 ## `fleet check`
 
-CI gate: parse the study config, check each define.yaml against its schema, build the validation run setup for SDTM and ADaM with no datasets, and check each custom rule YAML. An unsupported sdtm.ig_version or adam.ig_version and a configured validation.custom_rules directory that does not exist fail the gate. A missing rules engine and an unset CDISC_API_KEY are warnings only, because CI installs no engine. Exit 1 on any failure, else 0.
+CI gate: parse the study config, check each define.yaml against its schema, check codelists.py against the study, build the validation run setup for SDTM and ADaM with no datasets, and check each custom rule YAML. A codelists.py generated from another CT package than ct.package, mixing packages, missing a codelist a define.yaml references, or missing while the define.yaml files reference codelists fails the gate. An unsupported sdtm.ig_version or adam.ig_version and a configured validation.custom_rules directory that does not exist fail the gate. A missing rules engine and an unset CDISC_API_KEY are warnings only, because CI installs no engine. Exit 1 on any failure, else 0.
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
@@ -323,7 +323,7 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | ------ | ------- | ----------- |
 | `--domains` | _(required)_ | Comma-separated SDTM domain abbreviations to add. |
 | `--ig` | _(none)_ | SDTM IG version. Default: sdtm.ig_version from the discovered study_config.yaml (3-4 outside a study). |
-| `--package` | _(none)_ | CT package version. Default: ct.package from the discovered study_config.yaml (sdtmct-2023-12-15 outside a study). |
+| `--package` | _(none)_ | CT package version. Default: ct.package from the discovered study_config.yaml (sdtmct-2023-12-15 outside a study). Refused when it differs from the package an existing codelists.py was generated from. |
 | `--output` / `-o` | _(none)_ | Path to the existing codelists.py. Default: <metadata_sdtm>/codelists.py from the discovered study_config.yaml (./codelists.py outside a study). |
 | `--no-docs` | _(none)_ | Omit definitions and preferred terms from generated code. |
 

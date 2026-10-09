@@ -97,6 +97,16 @@ The generated `codelists.py` contains:
   from codelists import *
   ```
 
+- **`__ct_package__`** at the top, naming the CT package every class came from:
+
+  ```python
+  __ct_package__ = "sdtmct-2025-09-26"
+  ```
+
+  The [stale checks](../concepts/define-yaml.md#controlled-terminology-in-the-spec-path)
+  compare it with `ct.package` in `study_config.yaml`. A file generated before the
+  marker existed is read from the package in the `_cdisc_url` of each class.
+
 ### Importing codelists in standalone study projects
 
 When your study lives in its own directory (not inside the Fleet repo), the
@@ -160,6 +170,20 @@ manipulation or package-relative imports.
 options:
 show_root_heading: true
 heading_level: 3
+
+---
+
+## Study codelists
+
+`from_spec` resolves a `ct_codelist:` ID to the class of that ID in the study's
+`codelists.py`, and `fleet check` compares the file with the study. See
+[controlled terminology in the spec path](../concepts/define-yaml.md#controlled-terminology-in-the-spec-path).
+
+::: fleet.ct.study_codelists
+options:
+show_root_heading: true
+heading_level: 3
+filters: ["!^_"]
 
 ---
 
