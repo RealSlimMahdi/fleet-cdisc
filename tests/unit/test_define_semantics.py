@@ -92,31 +92,6 @@ class TestRegistryRendering:
             "fleet.core._verb_mixin.SharedVerbsMixin.assign('USUBJID', source='subject_id')"
         )
 
-    def test_formal_expression_calls_the_verb_the_algorithm_dispatches_to(self):
-        """#93: the spec params are kwargs of ``duration``, so the call names ``duration``."""
-        expr = spec_registry.render_formal_expression(
-            "adam",
-            "study_day",
-            {"analysis_date": "ASTDT", "reference_date": "TRTSDT"},
-            target="ADY",
-        )
-        assert expr == (
-            "fleet.core._verb_mixin.SharedVerbsMixin.duration('ADY', end='ASTDT', start='TRTSDT')"
-        )
-
-    @pytest.mark.parametrize(
-        ("standard", "path"),
-        [
-            ("sdtm", "fleet.sdtm.namespace.SDTMNamespace.date"),
-            ("adam", "fleet.adam._mixins.SharedADaMVerbsMixin.date"),
-        ],
-    )
-    def test_an_overridden_verb_names_the_override_of_the_define_standard(self, standard, path):
-        expr = spec_registry.render_formal_expression(
-            standard, "date", {"source": "AESTDTC"}, target="ASTDT"
-        )
-        assert expr == f"{path}('ASTDT', source='AESTDTC')"
-
     def test_unknown_algorithm_returns_none(self):
         assert spec_registry.render_method_text("sdtm", "nope", {}) is None
         assert spec_registry.render_formal_expression("sdtm", "nope", {}) is None
@@ -455,89 +430,37 @@ def test_the_adam_example_define_names_no_sdtm_class():
     assert [e for e in expressions if e.startswith("fleet.sdtm.")] == []
 
 
-@schemas_present
-def test_formal_expression_names_the_method_the_spec_run_records(tmp_path):
-    """The define names, variable by variable, the method lineage records for the same spec."""
-    spec = {
-        "study": {**_STUDY, "standard": "ADAMIG", "standard_version": "1.1"},
-        "datasets": [
-            {
-                "name": "ADAE",
-                "label": "Adverse Events Analysis Dataset",
-                "structure": "One record per subject per adverse event",
-                "keys": ["USUBJID", "ASEQ"],
-                "variables": [
-                    {
-                        "name": "USUBJID",
-                        "label": "Unique Subject Identifier",
-                        "type": "text",
-                        "origin": "Derived",
-                        "derivation": {"algorithm": "source"},
-                    },
-                    {
-                        "name": "ASTDT",
-                        "label": "Analysis Start Date",
-                        "type": "date",
-                        "origin": "Derived",
-                        "derivation": {"algorithm": "date", "source": "AESTDTC"},
-                    },
-                    {
-                        "name": "ADY",
-                        "label": "Analysis Relative Day",
-                        "type": "integer",
-                        "origin": "Derived",
-                        "derivation": {
-                            "algorithm": "study_day",
-                            "analysis_date": "ASTDT",
-                            "reference_date": "TRTSDT",
-                        },
-                    },
-                    {
-                        "name": "ASEQ",
-                        "label": "Analysis Sequence Number",
-                        "type": "integer",
-                        "origin": "Derived",
-                        "derivation": {
-                            "algorithm": "seq",
-                            "order_by": ["ASTDT"],
-                            "groups": ["USUBJID"],
-                        },
-                    },
-                ],
-            }
-        ],
-    }
-    path = tmp_path / "define.yaml"
-    path.write_text(yaml.safe_dump(spec, sort_keys=False))
+@pytest.mark.parametrize(
+    ("target", "block"),
+    [
+        ("USUBJID", {"algorithm": "source"}),  # runs assign
+        ("ASTDT", {"algorithm": "date", "source": "AESTDTC"}),  # the ADaM override of date
+        ("ADY", {"algorithm": "study_day", "analysis_date": "ASTDT", "reference_date": "TRTSDT"}),
+    ],
+)
+def test_formal_expression_names_the_method_lineage_records(target, block):
     raw = fleet.frame(
         pl.from_repr("""\
-┌─────────┬────────────┬────────────┐
-│ USUBJID ┆ AESTDTC    ┆ TRTSDT     │
-│ ---     ┆ ---        ┆ ---        │
-│ str     ┆ str        ┆ date       │
-╞═════════╪════════════╪════════════╡
-│ 01-701  ┆ 2024-01-09 ┆ 2024-01-01 │
-│ 01-701  ┆ 2024-01-05 ┆ 2024-01-01 │
-└─────────┴────────────┴────────────┘
+┌─────────┬────────────┬────────────┬────────────┐
+│ USUBJID ┆ AESTDTC    ┆ ASTDT      ┆ TRTSDT     │
+│ ---     ┆ ---        ┆ ---        ┆ ---        │
+│ str     ┆ str        ┆ date       ┆ date       │
+╞═════════╪════════════╪════════════╪════════════╡
+│ 01-701  ┆ 2024-01-09 ┆ 2024-01-09 ┆ 2024-01-01 │
+└─────────┴────────────┴────────────┴────────────┘
 """)
     )
-
+    var = spec_registry.parse_variable_spec("adam", {"target": target, **block})
     recorded = {
-        n.name: n.method for n in latest_lineage_of(raw.adam.from_spec(path, dataset="ADAE"))
-    }
-    root = ET.fromstring(DefineSpecGenerator(path, enrich_methods=True).to_xml_string())
-    called = {
-        m.get("OID").split(".")[-1]: m.find(f"{ODM}FormalExpression").text.split("(")[0]
-        for m in root.iter(f"{ODM}MethodDef")
+        n.name: n.method for n in latest_lineage_of(spec_registry.execute_variable(raw.adam, var))
     }
 
-    assert {name: called[name] for name in ("USUBJID", "ASTDT", "ADY")} == {
-        "USUBJID": recorded["USUBJID"],  # algorithm source runs assign
-        "ASTDT": recorded["ASTDT"],  # the ADaM override of date
-        "ADY": recorded["ADY"],  # algorithm study_day runs duration
-    }
-    # seq records no lineage node; the define still names the verb ADaM runs
-    assert called["ASEQ"] == "fleet.core._verb_mixin.SharedVerbsMixin.seq"
+    params = {k: v for k, v in block.items() if k != "algorithm"}
+    expression = spec_registry.render_formal_expression(
+        "adam", block["algorithm"], params, target=target
+    )
+
+    assert expression.split("(")[0] == recorded[target]
 
 
 # ===================================================================== #

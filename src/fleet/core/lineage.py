@@ -75,21 +75,18 @@ def _expr_sources(expr: pl.Expr) -> list[str]:
 
 
 def defining_method_path(cls: type, verb: str) -> str:
-    """Return the dotted path of *verb* on *cls*, named after the class that defines it.
+    """Return ``module.Class.verb`` of the class in the MRO of *cls* that defines *verb*.
 
-    Walks the MRO so a verb defined on a mixin (e.g. ``SharedVerbsMixin``)
-    is reported with its *defining* module, matching how mkdocstrings
-    anchors it in the rendered docs.  Lineage records this path in
-    ``VariableNode.method``, and the Define-XML ``FormalExpression`` names
-    the same one.
+    Lineage records this path in ``VariableNode.method``, and the Define-XML
+    ``FormalExpression`` names the same one.
 
     Args:
         cls: The namespace class the verb runs on.
         verb: The method name.
 
     Returns:
-        str: ``module.Class.verb`` of the defining class, or of *cls* when
-            no class in the MRO defines *verb*.
+        str: The dotted path of the defining class, or of *cls* when no
+            class in the MRO defines *verb*.
 
     Examples:
         Name the method an ADaM pipeline runs for ``.duration()``::

@@ -18,13 +18,6 @@ Examples:
         # summary -> first sentence of SharedVerbsMixin.assign.__doc__
         # dotted  -> "fleet.core._verb_mixin.SharedVerbsMixin.assign"
 
-    Name the method a spec algorithm runs, as lineage records it::
-
-        from fleet.core.algorithm_resolver import resolve_verb_path
-
-        resolve_verb_path("adam", "duration")  # the verb of algorithm study_day
-        # "fleet.core._verb_mixin.SharedVerbsMixin.duration"
-
     Resolve a study-specific callable::
 
         from fleet.core.algorithm_resolver import resolve_callable_docstring
@@ -99,50 +92,6 @@ def _candidate_namespaces() -> list[type]:
     _try("fleet.adam.pk_namespace", "PKNamespace")
     _try("fleet.sdtm._tdd_mixin", "TrialDesignMixin")
     return classes
-
-
-#: The namespace class a spec of each standard runs on (``fleet run`` uses
-#: ``frame.sdtm`` / ``frame.adam``).
-_SPEC_NAMESPACES: dict[str, tuple[str, str]] = {
-    "sdtm": ("fleet.sdtm.namespace", "SDTMNamespace"),
-    "adam": ("fleet.adam.namespace", "AdamNamespace"),
-}
-
-
-def resolve_verb_path(standard: str, verb: str) -> str | None:
-    """Return the dotted path of *verb* as a spec of *standard* runs it.
-
-    The path names the class that defines the method, the way lineage
-    records it in ``VariableNode.method``: a Define-XML ``FormalExpression``
-    and the lineage of the run it documents name the same method.  A verb
-    inherited from ``SharedVerbsMixin`` therefore names that mixin in an
-    SDTM and an ADaM define alike, and a verb a namespace overrides (such
-    as ``date``) names the override of the define's own standard.
-
-    Args:
-        standard: ``"sdtm"`` or ``"adam"``.
-        verb: The method a spec algorithm dispatches to
-            (``SpecAlgorithm.verb``).
-
-    Returns:
-        str | None: ``module.Class.verb`` of the defining class, or ``None``
-            when the namespace has no such method.
-
-    Examples:
-        Name the method an ADaM ``study_day`` derivation runs::
-
-            from fleet.core.algorithm_resolver import resolve_verb_path
-
-            resolve_verb_path("adam", "duration")
-            # "fleet.core._verb_mixin.SharedVerbsMixin.duration"
-    """
-    from fleet.core.lineage import defining_method_path
-
-    module, name = _SPEC_NAMESPACES[standard]
-    cls = getattr(importlib.import_module(module), name)
-    if not callable(getattr(cls, verb, None)):
-        return None
-    return defining_method_path(cls, verb)
 
 
 def resolve_algorithm_docstring(

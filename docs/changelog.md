@@ -66,7 +66,7 @@ All notable changes to Fleet are documented here.
 
 ### Fixed
 
-- **Define-XML `FormalExpression` names the method the run records**: it named `fleet.sdtm.namespace.SDTMNamespace` for every shared verb, ADaM defines included, and called the algorithm's name with its verb's arguments (`SDTMNamespace.study_day('ADY', end=..., start=...)`, `AdamNamespace.source('USUBJID', source=...)`, neither a valid call). It now calls the verb the algorithm dispatches to, named after the class that defines it on the define's own namespace, which is the path lineage records in `VariableNode.method`: `fleet.core._verb_mixin.SharedVerbsMixin.duration('ADY', end='ASTDT', start='TRTSDT')`. `introspect.algorithm_doc()` reports the defining class too (#93)
+- **Define-XML `FormalExpression` names the method the run records**: the verb the algorithm dispatches to, by the class that defines it on the define's own namespace, as `VariableNode.method` does (the `fleet lsp` hover names the defining class too). ADaM defines named `SDTMNamespace` and rendered calls that do not exist, such as `study_day('ADY', end=..., start=...)`; ADY now reads `fleet.core._verb_mixin.SharedVerbsMixin.duration('ADY', end='ASTDT', start='TRTSDT')` (#93)
 
 ## [0.1.0] — 2025-01-01
 

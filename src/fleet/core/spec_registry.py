@@ -766,9 +766,13 @@ def render_formal_expression(
     algo = get_algorithm(standard, algorithm)
     if algo is None:
         return None
-    from fleet.core.algorithm_resolver import resolve_verb_path
+    from fleet.adam.namespace import AdamNamespace
+    from fleet.core.lineage import defining_method_path
+    from fleet.sdtm.namespace import SDTMNamespace
 
-    dotted = resolve_verb_path(standard, algo.verb)
+    # The class from_spec runs on, so the path is the one lineage records.
+    namespace = AdamNamespace if standard == "adam" else SDTMNamespace
+    dotted = defining_method_path(namespace, algo.verb)
     args: list[str] = []
     if target and algo.takes_target:
         args.append(repr(target))
@@ -776,7 +780,7 @@ def render_formal_expression(
         value = _given_param(params, p)
         if value is not None:
             args.append(f"{p.kwarg or p.name}={value!r}")
-    return f"{dotted or algo.verb}({', '.join(args)})"
+    return f"{dotted}({', '.join(args)})"
 
 
 # --------------------------------------------------------------------- #
