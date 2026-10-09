@@ -147,7 +147,7 @@ adsl_result = svc.validate_adam(adsl, dataset="ADSL", version="1.3")
 assert adsl_result.is_valid
 ```
 
-The `ValidationResult` object exposes `.is_valid` (bool), `.print_report(report_type="summary")` (or `"full"` for expanded details including INFO-level engine noise), and `.save_html_report(path)` — a styled HTML artefact with rule-level error and warning cards, suitable for archiving as a validation deliverable.
+The `ValidationResult` object exposes `.is_valid` (bool), `.print_report(report_type="summary")` (or `"full"` for expanded details including INFO-level engine noise), and `.save_html_report(path)` — an HTML page with the dataset status and one table row per error, warning and info finding, suitable for archiving as a validation deliverable. Every cell is HTML-escaped, because messages carry data values and the text of custom rules. `fleet validate --report` writes the same page for a sweep.
 
 #### Engine discovery order
 

@@ -951,53 +951,10 @@ _VALIDATE_ERRORS = 1
 _VALIDATE_COULD_NOT_RUN = 2
 
 
-def _write_validation_report(
-    path: Path, results: list[Any], could_not_run: Sequence[Any] = ()
-) -> None:
-    """Write a minimal self-contained HTML report of validation findings."""
-    from html import escape
-
-    rows: list[str] = [
-        "<tr>"
-        f"<td>{escape(d.name)}</td><td>Could not run</td><td></td><td></td><td></td>"
-        f"<td>{escape(d.reason or '')}</td>"
-        "</tr>"
-        for d in could_not_run
-    ]
-    for res in results:
-        for issue in (*res.errors, *res.warnings, *res.infos):
-            rows.append(
-                "<tr>"
-                f"<td>{escape(res.dataset_name)}</td>"
-                f"<td>{escape(issue.severity.value)}</td>"
-                f"<td>{escape(issue.rule_id)}</td>"
-                f"<td>{escape(issue.source)}</td>"
-                f"<td>{escape(issue.variable or '')}</td>"
-                f"<td>{escape(issue.message)}</td>"
-                "</tr>"
-            )
-    headers = dict.fromkeys(
-        "\n".join(res.setup.header_lines()) for res in results if res.setup is not None
-    )
-    setups = "".join(f"<pre>{escape(h)}</pre>" for h in headers)
-    html = (
-        "<!DOCTYPE html><html><head><meta charset='utf-8'>"
-        "<title>Fleet validation report</title>"
-        "<style>body{font-family:sans-serif}table{border-collapse:collapse}"
-        "td,th{border:1px solid #999;padding:4px 8px;font-size:13px}</style>"
-        f"</head><body><h1>Fleet validation report</h1>{setups}"
-        "<table><tr><th>Dataset</th><th>Severity</th><th>Rule</th><th>Source</th>"
-        "<th>Variable</th><th>Message</th></tr>"
-        f"{''.join(rows) or '<tr><td colspan=6>No findings.</td></tr>'}"
-        "</table></body></html>"
-    )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(html, encoding="utf-8")
-
-
 def _run_validate(args: argparse.Namespace) -> None:
     from fleet.core.exceptions import ValidationSetupError
     from fleet.validation import ValidationService, build_sweep
+    from fleet.validation.models import write_html_report
 
     try:
         sweep = build_sweep(
@@ -1035,7 +992,7 @@ def _run_validate(args: argparse.Namespace) -> None:
 
     if args.report:
         report_path = Path(args.report)
-        _write_validation_report(report_path, results, could_not_run)
+        write_html_report(results, report_path, could_not_run=could_not_run)
         print(f"HTML report → {report_path}")
 
     failed = sum(1 for r in results if r.errors)
