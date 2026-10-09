@@ -59,11 +59,10 @@ uv run fleet validate --report findings.html   # HTML findings report
   engine runs. See [Custom Validation Rules](custom-rules.md).
 - The report header of each dataset shows every input with its source, as on
   the verb.
-- **HTML report**: `--report findings.html` writes one page with a section
-  per dataset (its inputs, status and counts, then one card per error,
-  warning and info finding) and a section per dataset that could not run.
-  It is the page `ValidationResult.save_html_report()` writes for one
-  dataset, and every value on it is HTML-escaped.
+- **HTML report**: `--report findings.html` writes one page: a status row
+  per dataset, then one row per finding and per dataset that could not run.
+  `ValidationResult.save_html_report()` writes the same page for one
+  dataset. Every cell is HTML-escaped.
 - **Could not run**: a dataset whose directory and file name disagree
   (`data/sdtm/adsl.parquet`), or an unsupported IG version, is not validated.
   The reason is printed, and the other datasets still run.

@@ -249,42 +249,10 @@ class ValidationResult:
         Examples:
             Archive the findings of one dataset::
 
-                result = ValidationService().validate_sdtm(dm, domain="DM")
+                result = ValidationService().validate_sdtm(dm, domain="DM", version="3.4")
                 result.save_html_report("outputs/dm_validation.html")
         """
         return write_html_report([self], output_path)
-
-
-#: Status label of a dataset section, by the CSS class that colours it.
-_STATUS_LABELS: dict[str, str] = {"pass": "PASS", "fail": "FAIL", "could-not-run": "COULD NOT RUN"}
-
-#: Section title and card CSS class per severity, in page order.
-_SEVERITY_SECTIONS: tuple[tuple[str, str, str], ...] = (
-    ("errors", "Errors", "issue-card"),
-    ("warnings", "Warnings", "issue-card warning"),
-    ("infos", "Info", "issue-card info"),
-)
-
-_STYLE = """\
-body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
-.container { background: white; padding: 30px; border-radius: 5px; max-width: 1200px; margin: 0 auto; }
-h1 { color: #2c3e50; border-bottom: 3px solid #28a745; padding-bottom: 10px; }
-h1.fail { border-bottom-color: #dc3545; }
-.status { display: inline-block; padding: 5px 15px; background: #28a745; color: white; border-radius: 3px; font-weight: bold; }
-.status.fail { background: #dc3545; }
-.status.could-not-run { background: #6c757d; }
-.summary { background: #f8f9fa; padding: 15px; border-left: 4px solid #28a745; margin: 20px 0; }
-.summary.fail { border-left-color: #dc3545; }
-.summary.could-not-run { border-left-color: #6c757d; }
-.section-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; border-bottom: 2px solid #e0e0e0; padding-bottom: 5px; }
-.issue-card { border: 1px solid #ddd; border-left: 4px solid #dc3545; padding: 15px; margin-bottom: 15px; border-radius: 3px; }
-.issue-card.warning { border-left-color: #ffc107; }
-.issue-card.info { border-left-color: #17a2b8; }
-.issue-header { font-weight: bold; margin-bottom: 8px; }
-.issue-detail { margin: 5px 0; font-size: 14px; color: #555; }
-.rule-id { background: #e9ecef; padding: 2px 8px; border-radius: 3px; font-family: monospace; }
-.suggested-fix { background: #e7f3ff; border-left: 3px solid #0066cc; padding: 10px; margin-top: 10px; font-style: italic; }
-"""
 
 
 def write_html_report(
@@ -295,12 +263,11 @@ def write_html_report(
 ) -> str:
     """Write validation results as one self-contained HTML page; return its absolute path.
 
-    One section per dataset: the run setup, the status and the counts, then
-    one card per error, warning and info finding.  A dataset that could not
-    run gets a section with the reason.  Every value is HTML-escaped: a
-    message carries data values and the text of custom rules.  Both
-    ``fleet validate --report`` and :meth:`ValidationResult.save_html_report`
-    write this page.
+    A status row per dataset, then one row per error, warning and info
+    finding, and per dataset that could not run.  Every cell is escaped:
+    messages carry data values and the text of custom rules.
+    Both ``fleet validate --report`` and
+    :meth:`ValidationResult.save_html_report` write this page.
 
     Args:
         results: The validation results, one per dataset.
@@ -314,110 +281,80 @@ def write_html_report(
     Examples:
         One page for every dataset of one engine run::
 
-            results = ValidationService().validate_datasets(frames, standard="sdtm")
+            results = ValidationService().validate_datasets(
+                {"DM": dm, "AE": ae}, standard="sdtm", version="3.4"
+            )
             write_html_report(list(results.values()), "outputs/validation.html")
     """
-    sections = [_dataset_section(r) for r in results]
-    sections += [_could_not_run_section(d) for d in could_not_run]
+    status = [
+        _row(
+            r.dataset_name,
+            f"{r.dataset_type} {r.model_version}",
+            "PASS" if r.is_valid else "FAIL",
+            len(r.errors),
+            len(r.warnings),
+            len(r.infos),
+        )
+        for r in results
+    ]
+    findings = [
+        _row(
+            r.dataset_name,
+            i.severity.value,
+            i.rule_id,
+            i.source,
+            i.variable or "",
+            "" if i.rows_affected is None else i.rows_affected,
+            i.message,
+            i.suggested_fix or "",
+            f"{i.producing_verb} ({i.verb_method})" if i.producing_verb else "",
+            i.spec_ref or "",
+        )
+        for r in results
+        for i in (*r.errors, *r.warnings, *r.infos)
+    ]
+    findings += [
+        _row(d.name, "Could not run", "", "", "", "", d.reason or "", "", "", "")
+        for d in could_not_run
+    ]
+    setups = dict.fromkeys(
+        "\n".join(r.setup.header_lines()) for r in results if r.setup is not None
+    )
     names = [r.dataset_name for r in results] + [d.name for d in could_not_run]
     title = names[0] if len(names) == 1 else f"{len(names)} datasets"
-    failed = bool(could_not_run) or not all(r.is_valid for r in results)
-    html = "\n".join(
-        [
-            "<!DOCTYPE html>",
-            "<html>",
-            "<head>",
-            '<meta charset="UTF-8">',
-            f"<title>CDISC Validation Report - {escape(title)}</title>",
-            f"<style>\n{_STYLE}</style>",
-            "</head>",
-            "<body>",
-            '<div class="container">',
-            f"<h1 class='{'fail' if failed else 'pass'}'>CDISC Validation Report</h1>",
-            *sections,
-            *([] if sections else ["<p>No datasets were validated.</p>"]),
-            "</div>",
-            "</body>",
-            "</html>",
-        ]
-    )
-    output_file = Path(output_path)
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    output_file.write_text(html, encoding="utf-8")
-    return str(output_file.absolute())
-
-
-def _dataset_section(result: ValidationResult) -> str:
-    """The summary block of one dataset, then its findings as cards."""
-    status = "pass" if result.is_valid else "fail"
-    setup = result.setup.header_lines() if result.setup is not None else []
-    lines = [
-        f"<div class='summary {status}'>",
-        *(f"{escape(line)}<br>" for line in setup),
-        f"<strong>Dataset:</strong> {escape(result.dataset_name)}<br>",
-        f"<strong>Type:</strong> {escape(result.dataset_type)} {escape(result.model_version)}<br>",
-        f"<strong>Status:</strong> <span class='status {status}'>{_STATUS_LABELS[status]}</span><br>",
-        f"<strong>Errors:</strong> {len(result.errors)} | "
-        f"<strong>Warnings:</strong> {len(result.warnings)} | "
-        f"<strong>Info:</strong> {len(result.infos)}",
-        "</div>",
-    ]
-    for attribute, title, card_class in _SEVERITY_SECTIONS:
-        issues: list[ValidationIssue] = getattr(result, attribute)
-        if not issues:
-            continue
-        lines.append(
-            f"<div class='section'><div class='section-title'>{title} ({len(issues)})</div>"
+    html = (
+        "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+        f"<title>CDISC Validation Report - {escape(title)}</title>"
+        "<style>body{font-family:sans-serif}table{border-collapse:collapse;margin:1em 0}"
+        "td,th{border:1px solid #999;padding:4px 8px;font-size:13px;text-align:left}</style>"
+        "</head><body><h1>CDISC Validation Report</h1>"
+        + "".join(f"<pre>{escape(s)}</pre>" for s in setups)
+        + "<table>"
+        + _row("Dataset", "Standard", "Status", "Errors", "Warnings", "Info", tag="th")
+        + "".join(status)
+        + "</table><table>"
+        + _row(
+            "Dataset",
+            "Severity",
+            "Rule",
+            "Source",
+            "Variable",
+            "Rows",
+            "Message",
+            "Suggested fix",
+            "Producing verb",
+            "Spec reference",
+            tag="th",
         )
-        lines += [_issue_card(i, issue, card_class) for i, issue in enumerate(issues, 1)]
-        lines.append("</div>")
-    return "\n".join(lines)
-
-
-def _issue_card(number: int, issue: ValidationIssue, card_class: str) -> str:
-    """One finding: its message, then each detail it carries."""
-    details = [
-        ("Rule ID", f"<span class='rule-id'>{escape(issue.rule_id)}</span>"),
-        ("Source", escape(issue.source)),
-    ]
-    if issue.variable:
-        details.append(("Variable", escape(issue.variable)))
-    if issue.rows_affected is not None:
-        details.append(("Rows Affected", escape(str(issue.rows_affected))))
-    if issue.producing_verb:
-        verb = escape(issue.producing_verb)
-        if issue.verb_method:
-            method = escape(issue.verb_method)
-            verb = f"<a href='#{method}' class='verb-link'>{verb}</a> &middot; {method}"
-        details.append(("Producing verb", verb))
-    if issue.spec_ref:
-        details.append(("Spec reference", escape(issue.spec_ref)))
-    lines = [
-        f"<div class='{card_class}'>",
-        f"<div class='issue-header'>{number}. {escape(issue.message)}</div>",
-        *(
-            f"<div class='issue-detail'><strong>{label}:</strong> {value}</div>"
-            for label, value in details
-        ),
-    ]
-    if issue.suggested_fix:
-        lines.append(
-            "<div class='suggested-fix'><strong>Suggested Fix:</strong> "
-            f"{escape(issue.suggested_fix)}</div>"
-        )
-    lines.append("</div>")
-    return "\n".join(lines)
-
-
-def _could_not_run_section(dataset: "SweepDataset") -> str:
-    """A dataset of a sweep whose run setup was refused, with the reason."""
-    return "\n".join(
-        [
-            "<div class='summary could-not-run'>",
-            f"<strong>Dataset:</strong> {escape(dataset.name)}<br>",
-            "<strong>Status:</strong> "
-            f"<span class='status could-not-run'>{_STATUS_LABELS['could-not-run']}</span><br>",
-            f"<strong>Reason:</strong> {escape(dataset.reason or '')}",
-            "</div>",
-        ]
+        + ("".join(findings) or "<tr><td colspan=10>No findings.</td></tr>")
+        + "</table></body></html>"
     )
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(html, encoding="utf-8")
+    return str(path.absolute())
+
+
+def _row(*cells: object, tag: str = "td") -> str:
+    """One table row; every cell is escaped here and nowhere else."""
+    return "<tr>" + "".join(f"<{tag}>{escape(str(c))}</{tag}>" for c in cells) + "</tr>"

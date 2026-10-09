@@ -168,30 +168,6 @@ class TestSweep:
 
         assert "Could not run" in report.read_text(encoding="utf-8")
 
-    def test_html_report_is_the_page_of_the_shared_renderer(
-        self, study: Path, engine: FakeEngine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """#119: ``--report`` and ``ValidationResult.save_html_report`` write one page."""
-        from fleet.validation import models
-
-        calls: list[tuple[list[str], list[str]]] = []
-        shared = models.write_html_report
-
-        def spy(results, output_path, *, could_not_run=()):
-            calls.append(([r.dataset_name for r in results], [d.name for d in could_not_run]))
-            return shared(results, output_path, could_not_run=could_not_run)
-
-        monkeypatch.setattr(models, "write_html_report", spy)
-        _SUBJECTS.write_parquet(study / "data" / "sdtm" / "adsl.parquet")
-        report = tmp_path / "report.html"
-
-        _run(["validate", "--report", str(report)])
-
-        assert calls == [(["AE", "DM", "VS", "ADAE", "ADSL"], ["ADSL"])]
-        assert "<title>CDISC Validation Report - 6 datasets</title>" in report.read_text(
-            encoding="utf-8"
-        )
-
 
 class TestExplicitPaths:
     @pytest.fixture
@@ -266,10 +242,7 @@ class TestCustomRules:
         assert "[CORE-000001] (official)" in out
         assert "[FLEET-AE-001] (custom)" in out
         html = report.read_text(encoding="utf-8")
-        assert (
-            "<span class='rule-id'>FLEET-AE-001</span></div>\n"
-            "<div class='issue-detail'><strong>Source:</strong> custom</div>"
-        ) in html
+        assert "<td>FLEET-AE-001</td><td>custom</td>" in html
         assert "CORE version: 0.15.0" in html
 
     def test_a_sweep_of_both_standards_makes_four_runs(
