@@ -769,7 +769,8 @@ and the JSON document show; the listing frame and the parquet are always complet
 `report.statistics` carries one row per differing variable (`fleet.comparison.STATISTICS_COLUMNS`): \
 its count of differing observations, then the n, mean, std, min and max of the base, the \
 candidate, their difference and its percent, over the matched observations where both sides are \
-non-null — so a systematic offset reads differently from noise; a variable that is not numeric \
+finite (null, NaN and infinite values are left out, and no measure is NaN) — so a systematic \
+offset reads differently from noise; a variable that is not numeric \
 contributes its count alone. No correlation, R squared or t statistic. \
 `report.flags` holds the raised names among `base_only_variables`, `candidate_only_variables`, \
 `type_conflicts`, `base_only_observations`, `candidate_only_observations`, `values_differ`, \

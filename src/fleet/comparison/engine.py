@@ -851,14 +851,16 @@ def _statistics(
 def _variable_statistics(variable: str) -> pl.Expr:
     """The measures of one numeric variable as a struct, over the observations both sides carry.
 
-    An observation null on either side has no difference to describe, so it
-    is dropped from all four series at once; the percent drops a zero base
-    as well, exactly as the listing does.  ``count`` is what makes each
-    ``n`` its own number rather than the height of the frame.
+    An observation null, NaN or infinite on either side has no finite
+    difference to describe, so it is dropped from all four series at once,
+    and every measure stays finite; the percent drops a zero base as well,
+    exactly as the listing does.  ``count`` is what makes each ``n`` its own
+    number rather than the height of the frame.
     """
     base = pl.col(variable).cast(pl.Float64)
     candidate = pl.col(variable + _SUFFIX).cast(pl.Float64)
-    both = base.is_not_null() & candidate.is_not_null()
+    # is_finite() is null on a null value, and filter() drops null as well as false.
+    both = base.is_finite() & candidate.is_finite()
     difference = candidate - base
     percent = pl.when(base == 0).then(pl.lit(None, pl.Float64)).otherwise(difference / base * 100)
     fields = []

@@ -418,8 +418,11 @@ class ComparisonReport:
             count of differing observations, then the ``n``, ``mean``,
             ``std``, ``min`` and ``max`` of the base, the candidate, their
             difference and its percent, over the matched observations where
-            both sides are non-null.  Only a numeric variable carries the
-            measures; every other kind contributes its count alone.
+            both sides are finite.  An observation null, NaN or infinite on
+            either side is left out the same way, so ``n`` counts finite
+            pairs and no measure is NaN or infinite.  Only a numeric
+            variable carries the measures; every other kind contributes its
+            count alone.
         flags: The subset of :data:`FLAGS` this comparison raised.
         settings: The settings the comparison ran with.
         version: The Fleet version that produced the report.

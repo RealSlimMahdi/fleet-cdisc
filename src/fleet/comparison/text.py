@@ -206,7 +206,9 @@ def _statistics_section(report: ComparisonReport) -> list[str]:
     lines = ["Summary statistics", _RULE]
     if statistics.height == 0:
         return [*lines, "  No unequal values.", ""]
-    lines.append("  Over the matched observations where both sides are non-null.")
+    lines.append(
+        "  Over the matched observations where both sides are finite (not null, NaN or inf)."
+    )
     for row in statistics.iter_rows(named=True):
         count = _plural(row["differences"], "unequal value")
         if not _has_measures(row):
