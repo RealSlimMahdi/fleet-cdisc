@@ -2146,8 +2146,9 @@
 <li>HTML report for a reviewer without Python: <code>report.to_html()</code> / <code>save_html_report(path)</code> render one self-contained page — raised flags as chips, then only the mismatched observations with the base and candidate values side by side, one collapsible block per differing variable, sectioned per group once the listing's <code>group</code> column is populated; <code>fleet compare --report compare.html</code> writes it</li>
 <li>duplicate-key override and BY groups: <code>allow_duplicates</code> pairs duplicate keys by their position within each key group instead of refusing to run — counting them per side, raising <code>duplicate_keys</code> and warning above every report — and <code>by</code> prepends the BY variables to the keys, labels every difference with its group, reports the observation and values summaries per group in text, JSON and HTML, and flags the groups found on one side only while the verdict stays global. On every surface: <code>fleet.compare(...)</code>, <code>.compare(...)</code> and <code>fleet compare --by TRT01P --allow-duplicates</code></li>
 <li>variable pairs and restriction: <code>pairs={"WEIGHT": "WT"}</code> compares two variables named differently on each side, on top of the automatic name matching, and names them after the base throughout the report; <code>variables=["WEIGHT", "AVISIT"]</code> narrows the comparison to the variables that matter, ignoring the rest on both sides so a work-in-progress candidate raises no missing-variable flag. On every surface: <code>fleet.compare(...)</code>, <code>.compare(...)</code> and <code>fleet compare --pairs WEIGHT=WT --variables WEIGHT,AVISIT</code></li>
+<li>a compare that checks no values keeps the two-value verdict (ADR-0004): sides that share only their keys follow the observations, two empty sides are EQUAL, and the report warns in both cases; <code>fleet compare</code> now prints the report and exits <code>1</code> for one-sided variables instead of exiting <code>2</code>, and a <code>variables=</code> list of keys only is refused</li>
 <li>
-<p>a compare that checks no values keeps the two-value verdict (ADR-0004): sides that share only their keys follow the observations, two empty sides are EQUAL, and the report warns in both cases; <code>fleet compare</code> now prints the report and exits <code>1</code> for one-sided variables instead of exiting <code>2</code>, and a <code>variables=</code> list of keys only is refused</p>
+<p>summary statistics: <code>report.statistics</code> gives, per differing numeric variable, the n, mean, std, min and max of the base, the candidate, their difference and its percent, over the matched observations where both sides are finite. A null, NaN or infinite value on either side is left out, so no measure is NaN and the text report, the HTML page and the JSON document show the same numbers (#112)</p>
 </li>
 <li>
 <p><strong>CDISC Library API integration</strong> — native client (<code>CDISCClient</code>) for downloading Controlled Terminology directly from the authoritative CDISC Library REST API</p>
@@ -2236,7 +2237,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 25, 2026 19:42:45 UTC">September 25, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 9, 2026 13:10:56 UTC">October 9, 2026</span>
   </span>
 
     

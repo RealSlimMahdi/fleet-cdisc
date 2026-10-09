@@ -2498,10 +2498,12 @@ base.</p>
 <li><strong>The measures span every matched observation, not only the unequal ones.</strong>
   A mean difference near zero over a thousand observations with three
   differences reads as noise; a mean difference of exactly <code>0.5</code> across all of
-  them reads as an offset. Only observations <strong>null on either side</strong> are
-  dropped, because a difference needs two values — which is why <code>n</code> can be
-  smaller than the matched count, and smaller again for the percent, which
-  drops a zero base as the listing does.</li>
+  them reads as an offset. Only observations <strong>null, NaN or infinite on either
+  side</strong> are dropped, because a difference needs two finite values — which is
+  why <code>n</code> can be smaller than the matched count, and smaller again for the
+  percent, which drops a zero base as the listing does. No measure is ever NaN
+  or infinite, so the text report, the HTML page and the JSON document show
+  the same numbers.</li>
 <li><strong>Only numeric variables carry them.</strong> A string, a date or a boolean
   contributes its <code>differences</code> count and nulls for the rest; there is no mean
   of <code>"F"</code> against <code>"M"</code>.</li>
@@ -2873,7 +2875,7 @@ and a diff view in the editor extension built on the JSON contract above.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="September 25, 2026 19:42:45 UTC">September 25, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 9, 2026 13:10:56 UTC">October 9, 2026</span>
   </span>
 
     
