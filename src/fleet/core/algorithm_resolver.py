@@ -18,6 +18,13 @@ Examples:
         # summary -> first sentence of SharedVerbsMixin.assign.__doc__
         # dotted  -> "fleet.core._verb_mixin.SharedVerbsMixin.assign"
 
+    Name the method a spec algorithm runs, as lineage records it::
+
+        from fleet.core.algorithm_resolver import resolve_verb_path
+
+        resolve_verb_path("adam", "duration")  # the verb of algorithm study_day
+        # "fleet.core._verb_mixin.SharedVerbsMixin.duration"
+
     Resolve a study-specific callable::
 
         from fleet.core.algorithm_resolver import resolve_callable_docstring
@@ -94,6 +101,50 @@ def _candidate_namespaces() -> list[type]:
     return classes
 
 
+#: The namespace class a spec of each standard runs on (``fleet run`` uses
+#: ``frame.sdtm`` / ``frame.adam``).
+_SPEC_NAMESPACES: dict[str, tuple[str, str]] = {
+    "sdtm": ("fleet.sdtm.namespace", "SDTMNamespace"),
+    "adam": ("fleet.adam.namespace", "AdamNamespace"),
+}
+
+
+def resolve_verb_path(standard: str, verb: str) -> str | None:
+    """Return the dotted path of *verb* as a spec of *standard* runs it.
+
+    The path names the class that defines the method, the way lineage
+    records it in ``VariableNode.method``: a Define-XML ``FormalExpression``
+    and the lineage of the run it documents name the same method.  A verb
+    inherited from ``SharedVerbsMixin`` therefore names that mixin in an
+    SDTM and an ADaM define alike, and a verb a namespace overrides (such
+    as ``date``) names the override of the define's own standard.
+
+    Args:
+        standard: ``"sdtm"`` or ``"adam"``.
+        verb: The method a spec algorithm dispatches to
+            (``SpecAlgorithm.verb``).
+
+    Returns:
+        str | None: ``module.Class.verb`` of the defining class, or ``None``
+            when the namespace has no such method.
+
+    Examples:
+        Name the method an ADaM ``study_day`` derivation runs::
+
+            from fleet.core.algorithm_resolver import resolve_verb_path
+
+            resolve_verb_path("adam", "duration")
+            # "fleet.core._verb_mixin.SharedVerbsMixin.duration"
+    """
+    from fleet.core.lineage import defining_method_path
+
+    module, name = _SPEC_NAMESPACES[standard]
+    cls = getattr(importlib.import_module(module), name)
+    if not callable(getattr(cls, verb, None)):
+        return None
+    return defining_method_path(cls, verb)
+
+
 def resolve_algorithm_docstring(
     algorithm: str,
 ) -> tuple[str, str] | tuple[None, None]:
@@ -110,12 +161,13 @@ def resolve_algorithm_docstring(
     Returns:
         Tuple of ``(summary, dotted_path)`` if a match is found, or
         ``(None, None)`` otherwise.  ``summary`` is the first sentence of
-        the verb docstring; ``dotted_path`` is the fully-qualified
-        ``module.Class.method`` path suitable for use as a Define-XML
-        ``MethodDef`` reference.
+        the verb docstring; ``dotted_path`` is the ``module.Class.method``
+        path of the class that defines the method, as lineage records it.
     """
     if not algorithm:
         return (None, None)
+
+    from fleet.core.lineage import defining_method_path
 
     # Resolve through the spec registry first: algorithm names are not
     # always method names (e.g. study_day executes via duration()).
@@ -136,8 +188,7 @@ def resolve_algorithm_docstring(
             if method is None or not callable(method):
                 continue
             summary = docstring_summary(method.__doc__)
-            dotted = f"{cls.__module__}.{cls.__qualname__}.{name}"
-            return (summary, dotted)
+            return (summary, defining_method_path(cls, name))
     return (None, None)
 
 

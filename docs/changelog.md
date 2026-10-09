@@ -64,6 +64,10 @@ All notable changes to Fleet are documented here.
 
 - **API simplification**: therapeutic-area namespaces (`onco`, `ophtha`, `peds`, `vaccine`, `metabolic`, `neuro`) and ADaM sub-structures (`adsl`, `occds`) are now accessed via `df.adam.<name>` instead of `df.<name>` — reduces registered namespaces from 10 to 2 (`df.sdtm` and `df.adam`)
 
+### Fixed
+
+- **Define-XML `FormalExpression` names the method the run records**: it named `fleet.sdtm.namespace.SDTMNamespace` for every shared verb, ADaM defines included, and called the algorithm's name with its verb's arguments (`SDTMNamespace.study_day('ADY', end=..., start=...)`, `AdamNamespace.source('USUBJID', source=...)`, neither a valid call). It now calls the verb the algorithm dispatches to, named after the class that defines it on the define's own namespace, which is the path lineage records in `VariableNode.method`: `fleet.core._verb_mixin.SharedVerbsMixin.duration('ADY', end='ASTDT', start='TRTSDT')`. `introspect.algorithm_doc()` reports the defining class too (#93)
+
 ## [0.1.0] — 2025-01-01
 
 ### Added

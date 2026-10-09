@@ -74,14 +74,32 @@ def _expr_sources(expr: pl.Expr) -> list[str]:
         return []
 
 
-def _resolve_method_path(owner: object, verb: str) -> str:
-    """Resolve ``ClassName.verb`` to its dotted import path.
+def defining_method_path(cls: type, verb: str) -> str:
+    """Return the dotted path of *verb* on *cls*, named after the class that defines it.
 
-    Walks the MRO so verbs defined on a mixin (e.g. ``SharedADaMVerbsMixin``)
-    are reported with their *defining* module — matching how mkdocstrings
-    anchors them in the rendered docs.
+    Walks the MRO so a verb defined on a mixin (e.g. ``SharedVerbsMixin``)
+    is reported with its *defining* module, matching how mkdocstrings
+    anchors it in the rendered docs.  Lineage records this path in
+    ``VariableNode.method``, and the Define-XML ``FormalExpression`` names
+    the same one.
+
+    Args:
+        cls: The namespace class the verb runs on.
+        verb: The method name.
+
+    Returns:
+        str: ``module.Class.verb`` of the defining class, or of *cls* when
+            no class in the MRO defines *verb*.
+
+    Examples:
+        Name the method an ADaM pipeline runs for ``.duration()``::
+
+            from fleet.adam.namespace import AdamNamespace
+            from fleet.core.lineage import defining_method_path
+
+            defining_method_path(AdamNamespace, "duration")
+            # "fleet.core._verb_mixin.SharedVerbsMixin.duration"
     """
-    cls = owner.__class__
     for klass in cls.__mro__:
         if verb in klass.__dict__:
             return f"{klass.__module__}.{klass.__qualname__}.{verb}"
@@ -227,7 +245,7 @@ def record_lineage(
     else:
         params = sanitise_params(params)
 
-    method_path = _resolve_method_path(owner, verb)
+    method_path = defining_method_path(type(owner), verb)
     domain: str | None = getattr(owner, "_domain", None)
     lineage: list[VariableNode] = list(getattr(owner, "_lineage", []))
     for expr in exprs:

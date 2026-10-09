@@ -745,10 +745,12 @@ def render_formal_expression(
 ) -> str | None:
     """Machine-readable provenance for ``FormalExpression Context="Python/Fleet"``.
 
-    Renders the faithful Fleet call — dotted verb path plus the spec
-    params as keyword arguments in declared (deterministic) order — so a
-    reviewer can reproduce the derivation, unlike the former
-    ``.verb(...)`` stub.
+    Renders the faithful Fleet call — the method the spec dispatches to,
+    plus the spec params as keyword arguments in declared (deterministic)
+    order — so a reviewer can reproduce the derivation, unlike the former
+    ``.verb(...)`` stub.  The method is named after the class that defines
+    it on the *standard*'s namespace, so the path is the one runtime
+    lineage records in ``VariableNode.method`` for the same derivation.
 
     Args:
         standard: ``"sdtm"`` or ``"adam"``.
@@ -764,9 +766,9 @@ def render_formal_expression(
     algo = get_algorithm(standard, algorithm)
     if algo is None:
         return None
-    from fleet.core.algorithm_resolver import resolve_algorithm_docstring
+    from fleet.core.algorithm_resolver import resolve_verb_path
 
-    _, dotted = resolve_algorithm_docstring(algo.name)
+    dotted = resolve_verb_path(standard, algo.verb)
     args: list[str] = []
     if target and algo.takes_target:
         args.append(repr(target))
