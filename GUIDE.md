@@ -102,6 +102,9 @@ This reads all codelist concept IDs referenced in the define.yaml files, fetches
 
 ```python
 # Generated codelists.py — example excerpt
+__ct_package__ = "sdtmct-2023-12-15"  # the CT package of every class below
+
+
 class C66731:
     """SEX (C66731)."""
 
