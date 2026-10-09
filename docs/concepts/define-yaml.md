@@ -188,9 +188,13 @@ running `DefineSpecGenerator(spec, enrich_methods=True)` (or
 Fleet's *verb docstrings* are never used — they are API documentation,
 identical across studies and unstable across Fleet versions. The
 `<FormalExpression Context="Python/Fleet">` carries the faithful call
-(dotted verb path plus the spec params, or the callable's
+(the verb the algorithm runs plus the spec params, or the callable's
 `dotted_path`), giving a verifiable link between the regulatory
-submission and the exact code that produced the data.
+submission and the exact code that produced the data. The verb is named
+after the class that defines it, the way the run's lineage records it in
+`VariableNode.method`, so an ADaM `study_day` reads
+`fleet.core._verb_mixin.SharedVerbsMixin.duration('ADY', end='ASTDT', start='TRTSDT')`
+in the define and in the lineage of the dataset it documents.
 
 ### Example — TRTSDT (date of first dose)
 
