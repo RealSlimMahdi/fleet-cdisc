@@ -663,7 +663,7 @@ class SharedVerbsMixin:
         if ct_cls is not None:
             from fleet.ct.study_codelists import warn_if_class_stale
 
-            warn_if_class_stale(ct_cls, stacklevel=3)
+            warn_if_class_stale(ct_cls)
         ct_id: str | None = None
         if ct is not None:
             ct_id = ct if isinstance(ct, str) else (getattr(ct, "_concept_id", None) or ct.__name__)
@@ -2227,7 +2227,7 @@ class SharedVerbsMixin:
         if any(drv.get("ct_codelist") for _, drv in raw_vars):
             from fleet.ct.study_codelists import spec_codelists
 
-            codelists = spec_codelists(path, stacklevel=2)
+            codelists = spec_codelists(path)
             if codelists:
                 ns = copy.copy(ns)
                 ns._spec_codelists = codelists

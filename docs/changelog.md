@@ -43,10 +43,8 @@ All notable changes to Fleet are documented here.
 
 - **CT assignment now accepts codelist classes** (today: `assign(ct=...)`) — pass a generated class (e.g. `SEX`) instead of a raw NCI string; `ct_map` is optional when raw data already matches CDISC submission values
 
-- **Spec-driven CT checks use the study's `codelists.py`** — inside a study, `from_spec` resolves a `ct_codelist:` ID to the class of that ID in the generated `codelists.py` (found from the first `study_config.yaml` above the define.yaml folder), so `algorithm: assign_ct` gives the same "values not in codelist" warning as `.assign(..., ct=<class>)`; before, the spec copied values unvalidated unless a CT file was loaded (#131)
-  - `fleet init ct` / `fleet add-ct` write a `__ct_package__` marker naming the CT package of the file
-  - stale detection: a `codelists.py` generated from another package than `ct.package`, mixing packages, missing a codelist a `define.yaml` references, or missing while the defines reference codelists warns once per process in `from_spec` (an inline class from another package warns too), fails `fleet check` with the fix command, and shows on a `fleet doctor` line
-  - `fleet add-ct --package` refuses a package other than the one an existing `codelists.py` was generated from; `fleet init ct --force` regenerates
+- **Spec-driven CT checks use the study's `codelists.py`** — inside a study, `from_spec` resolves a `ct_codelist:` ID to the class of that ID in the generated `codelists.py`, so `algorithm: assign_ct` gives the same "values not in codelist" warning as `.assign(..., ct=<class>)`; before, the spec copied values unvalidated unless a CT file was loaded (#131)
+  - stale detection: `codelists.py` gets a `__ct_package__` marker; a file from another package than `ct.package`, mixing packages, missing a referenced codelist, or missing warns once in `from_spec`, fails `fleet check` and shows in `fleet doctor`; `fleet add-ct --package` refuses another package
 
 - **Admiral-parity expansion** — new core computations and record-generating verbs:
   - `utils.py`: `bsa()` (Body Surface Area, 4 methods), `mean_arterial_pressure()`, `qtc()` (Fridericia/Bazett), `age_in_years()` (unit-aware), `extreme_flag()` (min/max per group)

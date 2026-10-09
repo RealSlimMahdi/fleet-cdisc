@@ -463,9 +463,9 @@ def _run_add_ct(args: argparse.Namespace) -> None:
     ig = args.ig or (ctx.config.sdtm.ig_version if ctx else None) or _default_ig("sdtm")
     package = args.package or (ctx.config.ct.package if ctx else "sdtmct-2023-12-15")
     if args.package and output.is_file():
-        from fleet.ct.study_codelists import read_codelists_file
+        from fleet.ct.study_codelists import load_codelists
 
-        current = read_codelists_file(output).package
+        current = load_codelists(output)[0]
         if current is not None and current != args.package:
             _fail(
                 f"{output} was generated from {current}, not {args.package}; "
@@ -641,7 +641,7 @@ def _check_extras() -> list[tuple[str, bool, str]]:
 def _print_codelists_status(config_path: Path) -> None:
     """The doctor line of the study's codelists.py: its CT package, or each problem."""
     from fleet.core.study_context import StudyConfigError, load_study_context
-    from fleet.ct.study_codelists import check_codelists, read_codelists_file
+    from fleet.ct.study_codelists import check_codelists, load_codelists
 
     try:
         ctx = load_study_context(config_path)
@@ -652,7 +652,7 @@ def _print_codelists_status(config_path: Path) -> None:
         print(f"  ✗ codelists.py ....... {problem}")
     if problems or not ctx.codelists_file.is_file():
         return
-    package = read_codelists_file(ctx.codelists_file).package
+    package = load_codelists(ctx.codelists_file)[0]
     if package is None:
         print(f"  ✓ codelists.py ....... {ctx.codelists_file} (no CT package recorded)")
     else:
@@ -1198,13 +1198,15 @@ def _run_check(args: argparse.Namespace) -> None:
 
     # ── 2b. codelists.py against the study: package, mixed packages, missing classes or file ──
     if ctx is not None:
-        from fleet.ct.study_codelists import check_codelists, read_codelists_file
+        from fleet.ct.study_codelists import check_codelists
 
-        problems = check_codelists(ctx, references=True)
+        try:
+            problems = check_codelists(ctx, references=True)
+        except Exception as exc:  # a codelists.py or define.yaml that does not load
+            problems = [str(exc)]
         rows.extend(("FAIL", "codelists", problem) for problem in problems)
         if not problems and ctx.codelists_file.is_file():
-            package = read_codelists_file(ctx.codelists_file).package or "no CT package recorded"
-            rows.append(("PASS", "codelists", f"{ctx.codelists_file} ({package})"))
+            rows.append(("PASS", "codelists", str(ctx.codelists_file)))
 
     # ── 3. Run setup with no datasets: IG versions, custom rules, engine ──
     setups = []
@@ -2463,12 +2465,9 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         ),
         description=(
             "CI gate: parse the study config, check each define.yaml against its schema, "
-            "check codelists.py against the study, "
+            "check codelists.py against ct.package and the define.yaml files, "
             "build the validation run setup for SDTM and ADaM with no datasets, and check "
-            "each custom rule YAML. A codelists.py generated from another CT package than "
-            "ct.package, mixing packages, missing a codelist a define.yaml references, or "
-            "missing while the define.yaml files reference codelists fails the gate. "
-            "An unsupported sdtm.ig_version or adam.ig_version and a "
+            "each custom rule YAML. An unsupported sdtm.ig_version or adam.ig_version and a "
             "configured validation.custom_rules directory that does not exist fail the gate. "
             "A missing rules engine and an unset CDISC_API_KEY are warnings only, because CI "
             "installs no engine. Exit 1 on any failure, else 0."

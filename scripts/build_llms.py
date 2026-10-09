@@ -680,15 +680,10 @@ When raw data already matches the standard, `ct_map` can be omitted (values are 
 passed through).
 
 The spec path checks the same terms: inside a study, `from_spec` resolves a `ct_codelist:` ID \
-to the class of that ID in the study's `codelists.py` (found from the first \
-`study_config.yaml` above the define.yaml folder, never the working directory), so \
-`algorithm: assign_ct` with `ct_codelist: C66769` warns exactly like \
-`.assign("AESEV", source="ae_severity", ct=AESEV)`. A `codelists.py` generated from another \
-package than `ct.package`, mixing packages, missing a referenced codelist, or missing while \
-the defines reference codelists warns once per process in `from_spec` (an inline class from \
-another package warns too) and fails `fleet check`; `fleet doctor` prints one `codelists.py` \
-line; `fleet add-ct --package` refuses a package other than the file's \
-(`fleet init ct --force` regenerates).
+to the class of that ID in the study's `codelists.py`, so `algorithm: assign_ct` with \
+`ct_codelist: C66769` warns exactly like `.assign("AESEV", source="ae_severity", ct=AESEV)`. \
+A `codelists.py` that disagrees with `ct.package` or the define.yaml files warns once in \
+`from_spec` and fails `fleet check`.
 
 ### Programmatic API
 

@@ -127,7 +127,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 
 ## `fleet check`
 
-CI gate: parse the study config, check each define.yaml against its schema, check codelists.py against the study, build the validation run setup for SDTM and ADaM with no datasets, and check each custom rule YAML. A codelists.py generated from another CT package than ct.package, mixing packages, missing a codelist a define.yaml references, or missing while the define.yaml files reference codelists fails the gate. An unsupported sdtm.ig_version or adam.ig_version and a configured validation.custom_rules directory that does not exist fail the gate. A missing rules engine and an unset CDISC_API_KEY are warnings only, because CI installs no engine. Exit 1 on any failure, else 0.
+CI gate: parse the study config, check each define.yaml against its schema, check codelists.py against ct.package and the define.yaml files, build the validation run setup for SDTM and ADaM with no datasets, and check each custom rule YAML. An unsupported sdtm.ig_version or adam.ig_version and a configured validation.custom_rules directory that does not exist fail the gate. A missing rules engine and an unset CDISC_API_KEY are warnings only, because CI installs no engine. Exit 1 on any failure, else 0.
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |

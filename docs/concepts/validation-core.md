@@ -73,11 +73,9 @@ It catches a setup error before delivery, without an engine:
 - `sdtm.ig_version: 3-5`, or any IG version not in the supported list, fails
   the gate.
 - A `validation.custom_rules` directory that does not exist fails the gate.
-- A `codelists.py` that disagrees with the study fails the gate: generated
-  from another CT package than `ct.package`, mixing packages, missing a
-  codelist that a `define.yaml` references, or missing while the
-  `define.yaml` files reference codelists. Each row names the fix command.
-  See [controlled terminology in the spec path](define-yaml.md#controlled-terminology-in-the-spec-path).
+- A `codelists.py` that disagrees with `ct.package` or the `define.yaml`
+  files fails the gate; each row names the fix command. See
+  [controlled terminology in the spec path](define-yaml.md#controlled-terminology-in-the-spec-path).
 - No engine found is a warning only, because CI installs no engine.
 
 ### The MCP tool
