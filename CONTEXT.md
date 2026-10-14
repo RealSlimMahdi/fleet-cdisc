@@ -81,3 +81,9 @@ _Avoid_: type, class, category
 **Tolerance**:
 How far two numeric values may drift and still count as equal: absolute (`abs_tol`), or relative to the base value (`rel_tol`). A compare is exact unless a tolerance is given.
 _Avoid_: precision, epsilon, fuzz, approximate equality
+
+### Spec
+
+**Spec algorithm**:
+The name a define.yaml gives to one way of calling one verb, with the spec fields that call accepts. Several spec algorithms may drive one verb, each with its own required fields, and the spec fields may be fewer than the verb's arguments.
+_Avoid_: algorithm, derivation type, spec verb, dialect
