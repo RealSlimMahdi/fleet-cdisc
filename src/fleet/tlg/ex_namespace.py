@@ -13,7 +13,7 @@ from typing import Any, ClassVar
 import polars as pl
 from pydantic import Field
 
-from ._ard import summarize_ard
+from ._ard import summarize_spec
 from ._builder import BuilderVerbsMixin
 from ._specs import (
     Row,
@@ -125,31 +125,7 @@ class EXTLGNamespace(BuilderVerbsMixin):
                 )
                 ard = adex.tlg.ex.t_summary(spec=spec, adsl=adsl)
         """
-        spec = spec or EXSummarySpec()
-        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df, group_col=group_col)
-        # GDSR EXT01 summarizes the overall-exposure block: restrict to
-        # PARCAT1 == "OVERALL" when the column exists so per-interval
-        # dose records are not averaged into subject-level statistics.
-        prefilter = pl.col("PARCAT1") == "OVERALL" if "PARCAT1" in self._df.columns else None
-        return summarize_ard(
-            self._df,
-            rows=spec.rows,
-            stats=spec.statistics,
-            context="t_ex_summary",
-            group_col=group_col,
-            pools=spec.pools,
-            column_order=spec.column_order,
-            adsl=adsl,
-            adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
-            prefilter=prefilter,
-            header_rows=spec.header_rows,
-            nested=True,
-            value_col=spec.value_col,
-            label_col=spec.label_col,
-            decimals=spec.decimals,
-        )
+        return summarize_spec(self._df, spec or EXSummarySpec(), groupby=groupby, adsl=adsl)
 
     # ------------------------------------------------------------------ #
     # Pre-validation diagnostic                                            #

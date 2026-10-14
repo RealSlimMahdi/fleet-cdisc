@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import polars as pl
 
-from ._ard import summarize_ard
+from ._ard import summarize_spec
 from ._builder import BuilderVerbsMixin
 from ._specs import VSSummarySpec
 
@@ -70,26 +70,7 @@ class VSTLGNamespace(BuilderVerbsMixin):
                 )
                 ard = advs.tlg.vs.t_summary(spec=spec, adsl=adsl)
         """
-        spec = spec or VSSummarySpec()
-        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df, group_col=group_col)
-        return summarize_ard(
-            self._df,
-            rows=spec.rows,
-            stats=spec.statistics,
-            context="t_vs_summary",
-            group_col=group_col,
-            pools=spec.pools,
-            column_order=spec.column_order,
-            adsl=adsl,
-            adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
-            header_rows=spec.header_rows,
-            nested=True,
-            value_col=spec.value_col,
-            label_col=spec.label_col,
-            decimals=spec.decimals,
-        )
+        return summarize_spec(self._df, spec or VSSummarySpec(), groupby=groupby, adsl=adsl)
 
     # ------------------------------------------------------------------ #
     # Pre-validation diagnostic                                            #

@@ -15,24 +15,25 @@ All tables emit a long-format {cards}-compatible ARD.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import polars as pl
 from pydantic import Field
 
-from ._ard import summarize_ard
+from ._ard import prepare_frame, summarize_ard, summarize_spec
 from ._builder import BuilderVerbsMixin
 from ._specs import (
-    GroupPool,
     OverallStat,
     Row,
-    Statistic,
     SummarySpecBase,
     TLGSpec,
-    resolve_filter,
 )
 
 
 class DSDispositionSpec(SummarySpecBase):
     """Spec for subject disposition (DST01: EOSSTT → DCSREAS)."""
+
+    context: ClassVar[str] = "t_ds_disposition"
 
     rows: list[Row] = Field(default_factory=lambda: [Row(field="EOSSTT"), Row(field="DCSREAS")])
     required_columns: list[str] = Field(
@@ -43,6 +44,8 @@ class DSDispositionSpec(SummarySpecBase):
 class DSDeathsSpec(SummarySpecBase):
     """Spec for deaths and primary cause of death (DTHT01)."""
 
+    context: ClassVar[str] = "t_ds_deaths"
+
     rows: list[Row] = Field(default_factory=lambda: [Row(field="DTHCAT")])
     required_columns: list[str] = Field(
         default_factory=lambda: ["USUBJID", "TRTA", "DTHFL", "DTHCAT"]
@@ -52,12 +55,16 @@ class DSDeathsSpec(SummarySpecBase):
 class DSEnrollmentSpec(SummarySpecBase):
     """Spec for enrollment by site (ENT01: REGION1 → COUNTRY → SITEID)."""
 
+    context: ClassVar[str] = "t_ds_enrollment"
+
     rows: list[Row] = Field(default_factory=lambda: [Row(field="SITEID")])
     required_columns: list[str] = Field(default_factory=lambda: ["USUBJID", "TRTA", "SITEID"])
 
 
 class DSDeviationsSpec(SummarySpecBase):
     """Spec for major protocol deviations (PDT01: DVDECOD)."""
+
+    context: ClassVar[str] = "t_ds_deviations"
 
     rows: list[Row] = Field(default_factory=lambda: [Row(field="DVDECOD")])
     required_columns: list[str] = Field(default_factory=lambda: ["USUBJID", "TRTA", "DVDECOD"])
@@ -86,65 +93,6 @@ class DSTLGNamespace(BuilderVerbsMixin):
 
     def __init__(self, df: pl.DataFrame) -> None:
         self._df = df
-
-    # ------------------------------------------------------------------ #
-    # Shared count engine                                                  #
-    # ------------------------------------------------------------------ #
-
-    def _count_summary(
-        self,
-        *,
-        groupby: str | None,
-        adsl: pl.DataFrame | None,
-        spec: TLGSpec,
-        context: str,
-        prefilter: pl.Expr | None = None,
-    ) -> pl.DataFrame:
-        """Build a categorical n / % subject-count ARD over the row hierarchy.
-
-        Args:
-            groupby: Treatment arm column; overrides ``spec.columns[0]``.
-            adsl: ADSL DataFrame supplying big-N denominators.  ``None``
-                is passed through — the engine raises when percentages
-                are requested without a population.
-            spec: A disposition spec carrying ``rows``, ``statistics``,
-                ``pools``, and ``column_order``.
-            context: TLG context tag written to every ARD row.
-            prefilter: Optional Polars expression applied to the analysis
-                DataFrame before counting (e.g. ``DTHFL == "Y"``).
-
-        Returns:
-            pl.DataFrame: A {cards}-compatible ARD.
-
-        Raises:
-            SchemaError: If pools reference missing arms or the ARD fails
-                schema validation.
-        """
-        rows: list[str] = getattr(spec, "rows", [])
-        stats: list[Statistic] = getattr(spec, "statistics", [])
-        pools: list[GroupPool] = getattr(spec, "pools", [])
-        order: list[str] = getattr(spec, "column_order", [])
-        group_col = groupby or (spec.columns[0] if getattr(spec, "columns", None) else "TRTA")
-
-        spec.validate_dataframe(self._df, group_col=group_col)
-
-        return summarize_ard(
-            self._df,
-            rows=rows,
-            stats=stats,
-            context=context,
-            group_col=group_col,
-            pools=pools,
-            column_order=order,
-            adsl=adsl,
-            adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
-            prefilter=prefilter,
-            header_rows=spec.header_rows,
-            value_col=getattr(spec, "value_col", "AVAL"),
-            label_col=getattr(spec, "label_col", None),
-            decimals=getattr(spec, "decimals", None),
-        )
 
     # ------------------------------------------------------------------ #
     # DST01 — disposition                                                  #
@@ -176,11 +124,11 @@ class DSTLGNamespace(BuilderVerbsMixin):
 
                 ard = adsl.tlg.ds.t_summary(groupby="TRTA", adsl=adsl)
         """
-        return self._count_summary(
+        return summarize_spec(
+            self._df,
+            spec or DSDispositionSpec(),
             groupby=groupby,
             adsl=adsl if adsl is not None else self._df,
-            spec=spec or DSDispositionSpec(),
-            context="t_ds_disposition",
         )
 
     # ------------------------------------------------------------------ #
@@ -225,10 +173,7 @@ class DSTLGNamespace(BuilderVerbsMixin):
         population = adsl if adsl is not None else self._df
         # The dataset filter must bite before deaths are identified, so the
         # numerators, the deaths denominator, and the cause rows agree.
-        analysis = self._df
-        dataset_filter = resolve_filter(spec.dataset_filter)
-        if dataset_filter is not None:
-            analysis = analysis.filter(dataset_filter)
+        analysis = prepare_frame(self._df, spec)
         deaths_filter = pl.col("DTHFL") == "Y" if "DTHFL" in analysis.columns else None
         deaths = analysis.filter(deaths_filter) if deaths_filter is not None else analysis
 
@@ -237,7 +182,7 @@ class DSTLGNamespace(BuilderVerbsMixin):
             analysis,
             rows=[],
             stats=spec.statistics,
-            context="t_ds_deaths",
+            context=spec.context,
             group_col=group_col,
             pools=spec.pools,
             column_order=spec.column_order,
@@ -267,9 +212,9 @@ class DSTLGNamespace(BuilderVerbsMixin):
             cause_df = cause_df.with_columns(pl.col("DTHCAT").fill_null("Unknown"))
         causes = summarize_ard(
             cause_df,
-            rows=getattr(spec, "rows", []),
+            rows=spec.rows,
             stats=spec.statistics,
-            context="t_ds_deaths",
+            context=spec.context,
             group_col=group_col,
             pools=cause_pools,
             column_order=spec.column_order,
@@ -316,11 +261,11 @@ class DSTLGNamespace(BuilderVerbsMixin):
 
                 ard = adsl.tlg.ds.t_enrollment(groupby="TRTA", adsl=adsl)
         """
-        return self._count_summary(
+        return summarize_spec(
+            self._df,
+            spec or DSEnrollmentSpec(),
             groupby=groupby,
             adsl=adsl if adsl is not None else self._df,
-            spec=spec or DSEnrollmentSpec(),
-            context="t_ds_enrollment",
         )
 
     # ------------------------------------------------------------------ #
@@ -355,12 +300,7 @@ class DSTLGNamespace(BuilderVerbsMixin):
 
                 ard = addv.tlg.ds.t_deviations(groupby="TRTA", adsl=adsl)
         """
-        return self._count_summary(
-            groupby=groupby,
-            adsl=adsl,
-            spec=spec or DSDeviationsSpec(),
-            context="t_ds_deviations",
-        )
+        return summarize_spec(self._df, spec or DSDeviationsSpec(), groupby=groupby, adsl=adsl)
 
     # ------------------------------------------------------------------ #
     # Pre-validation diagnostic                                            #

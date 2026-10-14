@@ -6,10 +6,12 @@ Accessed via ``df.tlg.ae`` on any Polars DataFrame containing ADaM AE data.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import polars as pl
 from pydantic import Field
 
-from ._ard import fill_uncoded, summarize_ard, worst_case
+from ._ard import prepare_frame, summarize_ard, summarize_spec, worst_case
 from ._builder import BuilderVerbsMixin
 from ._specs import (
     AEListingSpec,
@@ -28,6 +30,8 @@ class AEOverviewSpec(AESummarySpec):
     **empty** row hierarchy — the SOC→PT breakdown is AET02
     (:class:`AESocPtSpec`), not this table.
     """
+
+    context: ClassVar[str] = "t_ae_overview"
 
     rows: list[Row] = Field(default_factory=list)
     header_rows: list[OverallStat] = Field(
@@ -55,6 +59,8 @@ class AEOverviewSpec(AESummarySpec):
 class AESocPtSpec(AESummarySpec):
     """Spec for AE by SOC → PT (AET02): n / % subjects by SOC → PT."""
 
+    context: ClassVar[str] = "t_ae_soc_pt"
+
     rows: list[Row] = Field(
         default_factory=lambda: [
             Row(field="AEBODSYS", label="MedDRA System Organ Class"),
@@ -72,6 +78,8 @@ class AESeveritySpec(AESummarySpec):
     a third lineage slot (group3) and is deferred until the ARD schema
     grows one.
     """
+
+    context: ClassVar[str] = "t_ae_severity"
 
     rows: list[Row] = Field(
         default_factory=lambda: [
@@ -98,6 +106,8 @@ class AEGradeSpec(AESummarySpec):
     (``grade_order`` rank).
     """
 
+    context: ClassVar[str] = "t_ae_grade"
+
     rows: list[Row] = Field(
         default_factory=lambda: [
             Row(field="AEBODSYS", label="MedDRA System Organ Class"),
@@ -119,6 +129,8 @@ class AERelationshipSpec(AESummarySpec):
     Each subject is counted once per SOC — related if any of their
     events in the SOC is related (``relationship_order`` rank).
     """
+
+    context: ClassVar[str] = "t_ae_relationship"
 
     rows: list[Row] = Field(
         default_factory=lambda: [
@@ -205,26 +217,7 @@ class AETLGNamespace(BuilderVerbsMixin):
                 )
                 ard = adae.tlg.ae.t_summary(spec=spec, adsl=adsl)
         """
-        spec = spec or AESummarySpec()
-        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df, group_col=group_col)
-        return summarize_ard(
-            fill_uncoded(self._df, ["AEBODSYS", "AEDECOD"]),
-            rows=spec.rows,
-            stats=spec.statistics,
-            context="t_ae_summary",
-            group_col=group_col,
-            pools=spec.pools,
-            column_order=spec.column_order,
-            adsl=adsl,
-            adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
-            header_rows=spec.header_rows,
-            nested=True,
-            value_col=spec.value_col,
-            label_col=spec.label_col,
-            decimals=spec.decimals,
-        )
+        return summarize_spec(self._df, spec or AESummarySpec(), groupby=groupby, adsl=adsl)
 
     # ------------------------------------------------------------------ #
     # Overview (AET01)                                                     #
@@ -256,26 +249,7 @@ class AETLGNamespace(BuilderVerbsMixin):
         Examples:
             ``ard = adae.tlg.ae.t_overview(groupby="TRTA", adsl=adsl)``
         """
-        spec = spec or AEOverviewSpec()
-        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df, group_col=group_col)
-        return summarize_ard(
-            self._df,
-            rows=spec.rows,
-            stats=spec.statistics,
-            context="t_ae_overview",
-            group_col=group_col,
-            pools=spec.pools,
-            column_order=spec.column_order,
-            adsl=adsl,
-            adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
-            header_rows=spec.header_rows,
-            nested=True,
-            value_col=spec.value_col,
-            label_col=spec.label_col,
-            decimals=spec.decimals,
-        )
+        return summarize_spec(self._df, spec or AEOverviewSpec(), groupby=groupby, adsl=adsl)
 
     # ------------------------------------------------------------------ #
     # Hierarchical variants (AET02 / AET03 / AET04)                        #
@@ -301,26 +275,7 @@ class AETLGNamespace(BuilderVerbsMixin):
         Examples:
             ``ard = adae.tlg.ae.t_soc_pt(groupby="TRTA", adsl=adsl)``
         """
-        spec = spec or AESocPtSpec()
-        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df, group_col=group_col)
-        return summarize_ard(
-            fill_uncoded(self._df, ["AEBODSYS", "AEDECOD"]),
-            rows=spec.rows,
-            stats=spec.statistics,
-            context="t_ae_soc_pt",
-            group_col=group_col,
-            pools=spec.pools,
-            column_order=spec.column_order,
-            adsl=adsl,
-            adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
-            header_rows=spec.header_rows,
-            nested=True,
-            value_col=spec.value_col,
-            label_col=spec.label_col,
-            decimals=spec.decimals,
-        )
+        return summarize_spec(self._df, spec or AESocPtSpec(), groupby=groupby, adsl=adsl)
 
     def t_severity(
         self,
@@ -350,12 +305,9 @@ class AETLGNamespace(BuilderVerbsMixin):
         spec = spec or AESeveritySpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
         spec.validate_dataframe(self._df, group_col=group_col)
-        df = fill_uncoded(self._df, ["AEBODSYS", "AEDECOD"])
         # The dataset filter must bite before the worst-case reduction:
         # a filtered-out record must not decide a subject's worst level.
-        dataset_filter = resolve_filter(spec.dataset_filter)
-        if dataset_filter is not None:
-            df = df.filter(dataset_filter)
+        df = prepare_frame(self._df, spec)
         df = worst_case(
             df,
             by=["USUBJID", group_col, "AEBODSYS"],
@@ -366,14 +318,14 @@ class AETLGNamespace(BuilderVerbsMixin):
             df,
             rows=spec.rows,
             stats=spec.statistics,
-            context="t_ae_severity",
+            context=spec.context,
             group_col=group_col,
             pools=spec.pools,
             column_order=spec.column_order,
             adsl=adsl,
             adsl_filter=spec.adsl_filter,
             header_rows=spec.header_rows,
-            nested=True,
+            nested=spec.nested,
             value_col=spec.value_col,
             label_col=spec.label_col,
             decimals=spec.decimals,
@@ -405,10 +357,7 @@ class AETLGNamespace(BuilderVerbsMixin):
         spec = spec or AEGradeSpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
         spec.validate_dataframe(self._df, group_col=group_col)
-        df = fill_uncoded(self._df, ["AEBODSYS", "AEDECOD"])
-        dataset_filter = resolve_filter(spec.dataset_filter)
-        if dataset_filter is not None:
-            df = df.filter(dataset_filter)
+        df = prepare_frame(self._df, spec)
         df = df.with_columns(pl.col("AETOXGR").cast(pl.Utf8).str.replace(r"\.0$", ""))
         df = worst_case(
             df,
@@ -420,14 +369,14 @@ class AETLGNamespace(BuilderVerbsMixin):
             df,
             rows=spec.rows,
             stats=spec.statistics,
-            context="t_ae_grade",
+            context=spec.context,
             group_col=group_col,
             pools=spec.pools,
             column_order=spec.column_order,
             adsl=adsl,
             adsl_filter=spec.adsl_filter,
             header_rows=spec.header_rows,
-            nested=True,
+            nested=spec.nested,
             value_col=spec.value_col,
             label_col=spec.label_col,
             decimals=spec.decimals,
@@ -459,10 +408,7 @@ class AETLGNamespace(BuilderVerbsMixin):
         spec = spec or AERelationshipSpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
         spec.validate_dataframe(self._df, group_col=group_col)
-        df = fill_uncoded(self._df, ["AEBODSYS", "AEDECOD"])
-        dataset_filter = resolve_filter(spec.dataset_filter)
-        if dataset_filter is not None:
-            df = df.filter(dataset_filter)
+        df = prepare_frame(self._df, spec)
         df = worst_case(
             df,
             by=["USUBJID", group_col, "AEBODSYS"],
@@ -473,14 +419,14 @@ class AETLGNamespace(BuilderVerbsMixin):
             df,
             rows=spec.rows,
             stats=spec.statistics,
-            context="t_ae_relationship",
+            context=spec.context,
             group_col=group_col,
             pools=spec.pools,
             column_order=spec.column_order,
             adsl=adsl,
             adsl_filter=spec.adsl_filter,
             header_rows=spec.header_rows,
-            nested=True,
+            nested=spec.nested,
             value_col=spec.value_col,
             label_col=spec.label_col,
             decimals=spec.decimals,

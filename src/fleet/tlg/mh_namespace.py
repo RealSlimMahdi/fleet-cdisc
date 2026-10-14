@@ -8,17 +8,29 @@ percentages by MedDRA System Organ Class → Preferred Term.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import polars as pl
 from pydantic import Field
 
-from ._ard import fill_uncoded, summarize_ard
+from ._ard import summarize_spec
 from ._builder import BuilderVerbsMixin
-from ._specs import Row, SummarySpecBase
+from ._specs import Row, SummarySpecBase, Uncoded
 
 
 class MHSummarySpec(SummarySpecBase):
-    """Spec for a medical-history summary table (MHT01): n / % by SOC → PT."""
+    """Spec for a medical-history summary table (MHT01): n / % by SOC → PT.
 
+    Uncoded rule: a null ``MHBODSYS`` or ``MHDECOD`` is counted under
+    ``"No Coding Available"``.
+    """
+
+    context: ClassVar[str] = "t_mh_summary"
+    nested: ClassVar[bool] = True
+
+    uncoded: Uncoded | None = Field(
+        default_factory=lambda: Uncoded(columns=["MHBODSYS", "MHDECOD"]),
+    )
     rows: list[Row] = Field(
         default_factory=lambda: [
             Row(field="MHBODSYS", label="MedDRA System Organ Class"),
@@ -59,26 +71,7 @@ class MHTLGNamespace(BuilderVerbsMixin):
         Examples:
             ``ard = admh.tlg.mh.t_summary(groupby="TRTA", adsl=adsl)``
         """
-        spec = spec or MHSummarySpec()
-        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df, group_col=group_col)
-        return summarize_ard(
-            fill_uncoded(self._df, ["MHBODSYS", "MHDECOD"]),
-            rows=spec.rows,
-            stats=spec.statistics,
-            context="t_mh_summary",
-            group_col=group_col,
-            pools=spec.pools,
-            column_order=spec.column_order,
-            adsl=adsl,
-            adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
-            header_rows=spec.header_rows,
-            nested=True,
-            value_col=spec.value_col,
-            label_col=spec.label_col,
-            decimals=spec.decimals,
-        )
+        return summarize_spec(self._df, spec or MHSummarySpec(), groupby=groupby, adsl=adsl)
 
     def check(self, *, spec: MHSummarySpec | None = None) -> list[str]:
         """Run pre-validation diagnostics without computing."""

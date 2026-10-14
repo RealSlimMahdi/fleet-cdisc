@@ -8,7 +8,7 @@ modelled on the GDSR ``dmt01`` Roche demographics layout.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 import polars as pl
 from pydantic import Field
@@ -18,6 +18,7 @@ from ._ard import (
 )
 from ._ard import (
     expand_pools,
+    prepare_frame,
     summarize_ard,
 )
 from ._ard import (
@@ -51,6 +52,8 @@ class DMSummarySpec(SummarySpecBase):
     ``Args:`` section would duplicate them and confuse griffe, since
     Pydantic fields are not ``__init__`` parameters.
     """
+
+    context: ClassVar[str] = "t_dm_summary"
 
     age_var: str = Field(
         default="AGE",
@@ -140,6 +143,7 @@ class DMTLGNamespace(BuilderVerbsMixin):
         population_filter = resolve_filter(spec.adsl_filter)
         if population_filter is not None:
             analysis_df = analysis_df.filter(population_filter)
+        analysis_df = prepare_frame(analysis_df, spec)
 
         # --- Categorical breakdowns (big-N + n / %) via shared engine ---
         # Each categorical variable carries its display label so the
@@ -149,13 +153,12 @@ class DMTLGNamespace(BuilderVerbsMixin):
             analysis_df,
             rows=cat_rows,
             stats=spec.statistics,
-            context="t_dm_summary",
+            context=spec.context,
             group_col=group_col,
             pools=spec.pools,
             column_order=spec.column_order,
             adsl=denom_src,
             adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
             header_rows=spec.header_rows,
             value_col=spec.value_col,
             label_col=spec.label_col,
@@ -163,11 +166,7 @@ class DMTLGNamespace(BuilderVerbsMixin):
         )
 
         # --- Continuous age statistics ---
-        df = analysis_df
-        dataset_filter = resolve_filter(spec.dataset_filter)
-        if dataset_filter is not None:
-            df = df.filter(dataset_filter)
-        df = expand_pools(df, spec.pools, group_col, strict=False)
+        df = expand_pools(analysis_df, spec.pools, group_col, strict=False)
 
         # Same arm universe (and order) as the engine's big-N rows, so an
         # arm without analysis records keeps its column in the age block.
@@ -192,7 +191,7 @@ class DMTLGNamespace(BuilderVerbsMixin):
                         stat_name,
                         stat_label,
                         value,
-                        "t_dm_summary",
+                        spec.context,
                         fmt_fn=fmt.get(stat_name),
                     )
                 )

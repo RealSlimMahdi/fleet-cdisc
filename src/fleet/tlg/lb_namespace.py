@@ -16,8 +16,10 @@ from pydantic import Field, model_validator
 from ._ard import (
     ard_row,
     compute_big_n,
+    prepare_frame,
     rows_to_ard,
     summarize_ard,
+    summarize_spec,
     validate_ard,
     worst_case,
 )
@@ -41,6 +43,9 @@ class LBSummarySpec(SummarySpecBase):
     parameter (``PARAMCD``) at each analysis visit (``AVISIT``),
     mirroring the GDSR ``LBT01`` baseline/change layout.
     """
+
+    context: ClassVar[str] = "t_lb_summary"
+    nested: ClassVar[bool] = True
 
     rows: list[Row] = Field(
         default_factory=lambda: [
@@ -140,6 +145,9 @@ class LBShiftSpec(SummarySpecBase):
     rank (``anrind_order``).
     """
 
+    context: ClassVar[str] = "t_lb_shift"
+    nested: ClassVar[bool] = True
+
     _unconsumed_spec_fields: ClassVar[frozenset[str]] = frozenset(
         {"rows", "header_rows", "value_col"}
     )
@@ -158,6 +166,8 @@ class LBShiftSpec(SummarySpecBase):
 
 class LBAbnormalSpec(SummarySpecBase):
     """Spec for laboratory abnormalities not present at baseline (lbt04)."""
+
+    context: ClassVar[str] = "t_lb_abnormal"
 
     _unconsumed_spec_fields: ClassVar[frozenset[str]] = frozenset(
         {"rows", "statistics", "header_rows", "pools", "value_col", "label_col"}
@@ -243,26 +253,7 @@ class LBTLGNamespace(BuilderVerbsMixin):
                 spec = LBSummarySpec(pools=[GroupPool(label="Total", arms="*")])
                 ard = adlb.tlg.lb.t_summary(spec=spec, adsl=adsl)
         """
-        spec = spec or LBSummarySpec()
-        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df, group_col=group_col)
-        return summarize_ard(
-            self._df,
-            rows=spec.rows,
-            stats=spec.statistics,
-            context="t_lb_summary",
-            group_col=group_col,
-            pools=spec.pools,
-            column_order=spec.column_order,
-            adsl=adsl,
-            adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
-            header_rows=spec.header_rows,
-            nested=True,
-            value_col=spec.value_col,
-            label_col=spec.label_col,
-            decimals=spec.decimals,
-        )
+        return summarize_spec(self._df, spec or LBSummarySpec(), groupby=groupby, adsl=adsl)
 
     # ------------------------------------------------------------------ #
     # Change from baseline (LBT02/LBT03)                                   #
@@ -281,7 +272,8 @@ class LBTLGNamespace(BuilderVerbsMixin):
         ``AVAL``) for post-baseline records, nested per parameter ×
         visit.  The paired n counts only subjects with a non-missing
         change value at the visit; baseline records are excluded
-        null-safely (ADaM codes ``ABLFL`` as Y / null).
+        null-safely (ADaM codes ``ABLFL`` as Y / null).  Both rules are
+        the spec's prefilter, so ``ABLFL`` is a required column.
 
         Args:
             groupby: Treatment-arm column.
@@ -294,30 +286,7 @@ class LBTLGNamespace(BuilderVerbsMixin):
         Examples:
             ``ard = adlb.tlg.lb.t_chg(groupby="TRTA", adsl=adsl)``
         """
-        spec = spec or LBChgSpec()
-        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df, group_col=group_col)
-        prefilter = pl.col(spec.value_col).is_not_null()
-        if "ABLFL" in self._df.columns:
-            prefilter = prefilter & pl.col("ABLFL").ne_missing("Y")
-        return summarize_ard(
-            self._df,
-            rows=spec.rows,
-            stats=spec.statistics,
-            context="t_lb_chg",
-            group_col=group_col,
-            pools=spec.pools,
-            column_order=spec.column_order,
-            adsl=adsl,
-            adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
-            prefilter=prefilter,
-            header_rows=spec.header_rows,
-            nested=True,
-            value_col=spec.value_col,
-            label_col=spec.label_col,
-            decimals=spec.decimals,
-        )
+        return summarize_spec(self._df, spec or LBChgSpec(), groupby=groupby, adsl=adsl)
 
     # ------------------------------------------------------------------ #
     # Shift counts (LBT03)                                                 #
@@ -372,7 +341,9 @@ class LBTLGNamespace(BuilderVerbsMixin):
             )
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
         spec.validate_dataframe(self._df, group_col=group_col)
-        post = self._df.filter(pl.col("ANRIND").is_not_null())
+        # The dataset filter must bite before the worst-case reduction:
+        # a filtered-out record must not decide a subject's worst level.
+        post = prepare_frame(self._df, spec).filter(pl.col("ANRIND").is_not_null())
         if "ONTRTFL" in post.columns:
             post = post.filter(pl.col("ONTRTFL") == "Y")
         elif "ABLFL" in post.columns:
@@ -392,14 +363,13 @@ class LBTLGNamespace(BuilderVerbsMixin):
             shift,
             rows=["PARAMCD", "SHIFT"],
             stats=spec.statistics,
-            context="t_lb_shift",
+            context=spec.context,
             group_col=group_col,
             pools=spec.pools,
             column_order=spec.column_order,
             adsl=adsl,
             adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
-            nested=True,
+            nested=spec.nested,
             label_col=spec.label_col,
             decimals=spec.decimals,
         )
@@ -454,9 +424,7 @@ class LBTLGNamespace(BuilderVerbsMixin):
                 f"Group column '{group_col}' not found in the analysis dataset. "
                 f"Available: {sorted(source.columns)}"
             )
-        dataset_filter = resolve_filter(spec.dataset_filter)
-        if dataset_filter is not None:
-            source = source.filter(dataset_filter)
+        source = prepare_frame(source, spec)
         post = source.filter(pl.col("ANRIND").is_not_null())
         if "ONTRTFL" in post.columns:
             post = post.filter(pl.col("ONTRTFL") == "Y")
@@ -464,7 +432,7 @@ class LBTLGNamespace(BuilderVerbsMixin):
             post = post.filter(pl.col("ABLFL").ne_missing("Y"))
         post = post.with_columns(pl.col("ANRIND").str.to_uppercase().alias("__anrind"))
 
-        context = "t_lb_abnormal"
+        context = spec.context
         if adsl is not None:
             if group_col not in adsl.columns:
                 raise SchemaError(f"Group column '{group_col}' not found in adsl.")

@@ -152,3 +152,35 @@ class TestPrefilter:
 
         report = LBChgSpec().check(ADLB.drop("ABLFL"))
         assert any("ABLFL" in line for line in report)
+
+
+class TestCompositesSharePreparation:
+    """The seven composites run prepare_frame before their own logic."""
+
+    def test_ae_severity_honours_uncoded_none(self) -> None:
+        from fleet.tlg import AESeveritySpec
+
+        adae = ADAE.with_columns(pl.Series("AESEV", ["MILD", "SEVERE", "MILD"]))
+        default = adae.tlg.ae.t_severity(groupby="TRTA", adsl=ADSL)
+        assert "No Coding Available" in _levels(default, "AEBODSYS")
+        off = adae.tlg.ae.t_severity(groupby="TRTA", adsl=ADSL, spec=AESeveritySpec(uncoded=None))
+        assert "No Coding Available" not in _levels(off, "AEBODSYS")
+
+    def test_lb_shift_dataset_filter_bites_before_the_worst_case_reduction(self) -> None:
+        from fleet.tlg import LBShiftSpec
+
+        # S01: HIGH at Week 2, back to NORMAL at Week 4.  A Week 4 table must
+        # report NORMAL to NORMAL, not the Week 2 HIGH.
+        adlb = pl.from_repr("""\
+        ┌─────────┬─────────┬─────────┬────────┬───────┬────────┬────────┐
+        │ USUBJID ┆ TRTA    ┆ PARAMCD ┆ AVISIT ┆ ABLFL ┆ BNRIND ┆ ANRIND │
+        │ ---     ┆ ---     ┆ ---     ┆ ---    ┆ ---   ┆ ---    ┆ ---    │
+        │ str     ┆ str     ┆ str     ┆ str    ┆ str   ┆ str    ┆ str    │
+        ╞═════════╪═════════╪═════════╪════════╪═══════╪════════╪════════╡
+        │ S01     ┆ Placebo ┆ ALT     ┆ WEEK 2 ┆ null  ┆ NORMAL ┆ HIGH   │
+        │ S01     ┆ Placebo ┆ ALT     ┆ WEEK 4 ┆ null  ┆ NORMAL ┆ NORMAL │
+        └─────────┴─────────┴─────────┴────────┴───────┴────────┴────────┘
+        """)
+        spec = LBShiftSpec(dataset_filter='pl.col("AVISIT") == "WEEK 4"')
+        ard = adlb.tlg.lb.t_shift(groupby="TRTA", adsl=ADSL, spec=spec)
+        assert _levels(ard, "SHIFT") == {"NORMAL to NORMAL"}
