@@ -170,13 +170,14 @@ def test_coverage_matrix_shape() -> None:
 _NAMESPACES: dict[str, type] = {"sdtm": SDTMNamespace, "adam": AdamNamespace}
 
 
-def _default_dispatch_algorithms() -> list[spec_registry.SpecAlgorithm]:
-    return [
-        algo
-        for standard in ("sdtm", "adam")
-        for algo in spec_registry.algorithms(standard)
-        if algo.dispatch is None
-    ]
+def _declared_default_dispatch_algorithms() -> list[spec_registry.SpecAlgorithm]:
+    """The entries as ``spec_algorithm()`` received them, before resolution."""
+    seen: dict[tuple[str, str], spec_registry.SpecAlgorithm] = {}
+    for standard in ("sdtm", "adam"):
+        for algo in spec_registry._REGISTRY[standard].values():
+            if algo.dispatch is None:
+                seen.setdefault((standard, algo.name), algo)
+    return list(seen.values())
 
 
 def _signature_facts(algo: spec_registry.SpecAlgorithm) -> dict[str, inspect.Parameter]:
@@ -189,47 +190,83 @@ def _signature_facts(algo: spec_registry.SpecAlgorithm) -> dict[str, inspect.Par
 
 
 @pytest.mark.parametrize(
-    "algo",
-    _default_dispatch_algorithms(),
+    "declared",
+    _declared_default_dispatch_algorithms(),
     ids=lambda a: f"{a.standard}.{a.name}",
 )
-def test_param_table_matches_verb_signature(algo: spec_registry.SpecAlgorithm) -> None:
+def test_param_table_matches_verb_signature(declared: spec_registry.SpecAlgorithm) -> None:
     """ADR-0007: the spec may be stricter than the verb, never looser.
 
+    On the declaration:
+
     1. Every ``Param`` keyword exists in the verb signature.
-    2. A default-to-target ``Param`` skips the default check.
-    3. ``required=True`` where the signature has a default is allowed
-       (stricter). A spec default where the signature requires a value, or
-       a spec default that differs from the signature's, is not (looser).
-    4. When both sides are optional, the defaults are equal.
+    2. A default-to-target ``Param`` is exempt from the default rules.
+    3. No ``Param`` declares a ``default``: it is read from the signature,
+       and a declared one is a restatement that can drift.
+    4. ``required=True`` is declared only where it makes the spec stricter
+       (the signature has a default). Where the verb requires the keyword
+       the flag is derived, so declaring it is a restatement too.
+
+    On the resolved entry: ``required`` and ``default`` equal the
+    signature facts, except for a declared ``required=True``.
+
     5. Signature arguments absent from the registry are ignored: the spec
        surface is a curated subset.
     """
-    sig = _signature_facts(algo)
+    sig = _signature_facts(declared)
+    resolved = spec_registry.get_algorithm(declared.standard, declared.name)
+    assert resolved is not None
     problems: list[str] = []
-    for p in algo.params:
+    for p, r in zip(declared.params, resolved.params, strict=True):
         kwarg = p.kwarg or p.name
         if kwarg not in sig:  # rule 1
-            problems.append(f"{p.name}: kwarg {kwarg!r} is not a parameter of .{algo.verb}()")
+            problems.append(f"{p.name}: kwarg {kwarg!r} is not a parameter of .{declared.verb}()")
             continue
         if p.default_to_target:  # rule 2
             continue
         sig_param = sig[kwarg]
         sig_required = sig_param.default is inspect.Parameter.empty
-        if p.required:  # rule 3, stricter side: always fine
-            continue
-        if sig_required:  # rule 3, looser side
+        if p.default is not None:  # rule 3
+            problems.append(f"{p.name}: declares default {p.default!r}; the verb signature owns it")
+        if p.required and sig_required:  # rule 4
+            problems.append(f"{p.name}: declares required=True; .{declared.verb}() requires it")
+        # resolved facts
+        if p.required:
+            if not r.required or r.default is not None:
+                problems.append(f"{p.name}: declared required=True but resolved to optional")
+        elif r.required != sig_required:
             problems.append(
-                f"{p.name}: spec default {p.default!r} but .{algo.verb}() requires {kwarg!r}"
+                f"{p.name}: resolved required={r.required} but verb says {sig_required}"
             )
-        elif p.default != sig_param.default:  # rule 4
+        elif not sig_required and r.default != sig_param.default:
             problems.append(
-                f"{p.name}: spec default {p.default!r} != verb default {sig_param.default!r}"
+                f"{p.name}: resolved default {r.default!r} != verb {sig_param.default!r}"
             )
     assert not problems, (
-        f"{algo.standard}.{algo.name} → .{algo.verb}(): Param table drifted from the verb "
-        "signature (ADR-0007):\n  " + "\n  ".join(problems)
+        f"{declared.standard}.{declared.name} → .{declared.verb}(): Param table drifted from the "
+        "verb signature (ADR-0007):\n  " + "\n  ".join(problems)
     )
+
+
+def test_description_falls_back_to_the_verb_docstring() -> None:
+    """A Param without a description takes the verb's ``Args:`` line."""
+    algo = spec_registry.get_algorithm("sdtm", "merge")
+    assert algo is not None
+    how = next(p for p in algo.params if p.name == "how")
+    assert how.description == "Join strategy."  # declared wins
+    docs = spec_registry._docstring_arg_descriptions(SDTMNamespace.merge)
+    assert docs["on"].endswith(".")
+    assert "on" in docs and "dataset" in docs
+
+
+def test_resolution_is_lazy_and_cached() -> None:
+    """The declared entry stays as written; lookups return one resolved copy."""
+    declared = spec_registry._REGISTRY["adam"]["nrind"]
+    assert all(not p.required and p.default is None for p in declared.params)
+    first = spec_registry.get_algorithm("adam", "nrind")
+    assert first is spec_registry.get_algorithm("adam", "nrind")
+    assert first is not declared
+    assert all(p.required for p in first.params)
 
 
 # ──────────────────────────────────────────────────────────────────────
