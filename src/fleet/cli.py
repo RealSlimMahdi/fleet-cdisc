@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn
 
 from fleet.core.study_context import find_study_config
+from fleet.run import find_dataset_file
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -124,21 +125,6 @@ def _try_ctx(config_arg: str | None = None) -> StudyContext | None:
         return load_study_context(cfg)
     except StudyConfigError:
         return None
-
-
-#: Dataset file extensions searched by name-based dataset resolution.
-_DATASET_EXTENSIONS = (".parquet", ".csv", ".xpt", ".sas7bdat")
-
-
-def _find_dataset_file(name: str, dirs: Sequence[Path]) -> Path | None:
-    """Find ``<name>.<ext>`` (lower/upper stem) in the given directories."""
-    for directory in dirs:
-        for stem in (name.lower(), name.upper()):
-            for ext in _DATASET_EXTENSIONS:
-                candidate = directory / f"{stem}{ext}"
-                if candidate.is_file():
-                    return candidate
-    return None
 
 
 def _config_flag_hint(config_path: Path) -> str:
@@ -777,103 +763,19 @@ def _run_define_xml(args: argparse.Namespace) -> None:
 # ────────────────────────────────────────────────────────────────────── #
 
 
-def _load_run_input(ctx: StudyContext, name: str, built: dict[str, pl.DataFrame]) -> pl.DataFrame:
-    """Resolve one ``inputs:`` entry: in-memory result first, then files."""
-    from fleet.io import load_raw_data
-
-    key = name.upper()
-    if key in built:
-        return built[key]
-
-    search_dirs = [ctx.raw_data_dir, ctx.sdtm_data_dir, ctx.adam_data_dir]
-    candidate = _find_dataset_file(name, search_dirs)
-    if candidate is not None:
-        return load_raw_data(candidate).collect()
-
-    _fail(
-        f"input dataset '{name}' not found. Searched for {name.lower()}/{name.upper()} "
-        f"with extensions {', '.join(_DATASET_EXTENSIONS)} under: "
-        f"{', '.join(str(d) for d in search_dirs)}. "
-        "Run the upstream dataset first (fleet run --dataset ...) or place the file "
-        "in one of those directories."
-    )
-    raise AssertionError("unreachable")
-
-
-def _compose_run_frame(
-    ctx: StudyContext,
-    ds: dict[str, Any],
-    built: dict[str, pl.DataFrame],
-) -> pl.DataFrame:
-    """Build the input frame for one dataset from its ``inputs:`` block.
-
-    The first input is the base frame; every additional input is
-    left-joined on ``USUBJID``, restricted to the spec-declared columns
-    the base does not already carry (the standard ADSL-into-BDS merge).
-    """
-    name = ds.get("name", "?")
-    inputs = [i["name"] for i in ds.get("inputs", []) if i.get("type", "dataset") == "dataset"]
-    if not inputs:
-        _fail(
-            f"dataset {name}: the define declares no `inputs:` — "
-            "fleet run cannot determine the source data. Add an inputs: block."
-        )
-
-    base = _load_run_input(ctx, inputs[0], built)
-    declared = {v["name"] for v in ds.get("variables", [])}
-
-    for extra_name in inputs[1:]:
-        extra = _load_run_input(ctx, extra_name, built)
-        if "USUBJID" not in base.columns or "USUBJID" not in extra.columns:
-            _fail(
-                f"dataset {name}: cannot merge input '{extra_name}' — "
-                "both frames must carry USUBJID."
-            )
-        cols = [
-            c for c in extra.columns if c != "USUBJID" and c in declared and c not in base.columns
-        ]
-        base = base.join(extra.select(["USUBJID", *cols]), on="USUBJID", how="left")
-
-    return base
-
-
 def _run_run(args: argparse.Namespace) -> None:
-    import yaml
+    """``fleet run``: print the study plan, build it, write each dataset.
 
-    import fleet  # noqa: F401 — registers .sdtm / .adam namespaces
+    The study run itself lives in :mod:`fleet.run`; this command only
+    chooses the writer, prints progress and sets the exit code.  A
+    :class:`~fleet.core.exceptions.StudyRunError` is turned into exit 1
+    by :func:`main`.
+    """
     from fleet.io import save_dataset_json, save_parquet, save_xpt
+    from fleet.run import plan_study, run_study
 
     ctx = _load_ctx(args.config)
-
-    defines: list[tuple[Path, str]] = []
-    for path, standard in (
-        (ctx.metadata_sdtm_dir / "define.yaml", "sdtm"),
-        (ctx.metadata_adam_dir / "define.yaml", "adam"),
-    ):
-        if path.is_file():
-            defines.append((path, standard))
-    if not defines:
-        _fail(
-            f"no define.yaml found under {ctx.metadata_sdtm_dir} or "
-            f"{ctx.metadata_adam_dir}. Run `fleet init define` first."
-        )
-
-    plan: list[tuple[Path, str, dict[str, Any]]] = []
-    for path, standard in defines:
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        for ds in data.get("datasets", []):
-            plan.append((path, standard, ds))
-
-    if args.dataset:
-        wanted = {d.upper() for d in args.dataset}
-        known = {ds["name"].upper() for _, _, ds in plan}
-        unknown = sorted(wanted - known)
-        if unknown:
-            _fail(
-                f"unknown dataset(s): {', '.join(unknown)}. "
-                f"Datasets in the define files: {', '.join(sorted(known))}"
-            )
-        plan = [entry for entry in plan if entry[2]["name"].upper() in wanted]
+    plan = plan_study(ctx, datasets=args.dataset)
 
     writers: dict[str, Callable[[pl.DataFrame, Path, str], Path]] = {
         "parquet": lambda df, d, n: save_parquet(df, d / f"{n.lower()}.parquet"),
@@ -881,33 +783,25 @@ def _run_run(args: argparse.Namespace) -> None:
         "dataset-json": lambda df, d, n: save_dataset_json(df, d / f"{n.lower()}.json", domain=n),
     }
     writer = writers[args.format]
-
-    built: dict[str, pl.DataFrame] = {}
     out_override = Path(args.out) if args.out else None
+    total = len(plan.steps)
 
     print(f"Config:  {ctx.study_root / 'study_config.yaml'}")
     print(f"Format:  {args.format}")
+    print(f"Plan:    {total} dataset(s)")
+    for i, step in enumerate(plan.steps, start=1):
+        print(f"  [{i}/{total}] {step.dataset} ({step.standard}, {step.define.name})")
     print()
 
-    for i, (path, standard, ds) in enumerate(plan, start=1):
-        name = ds["name"].upper()
-        print(f"[{i}/{len(plan)}] {name} ({standard}, {path.name}) ...")
-
-        frame = _compose_run_frame(ctx, ds, built)
-        ns = frame.sdtm if standard == "sdtm" else frame.adam  # type: ignore[attr-defined]
-        result = (
-            ns.from_spec(path, dataset=name, strict=args.strict)
-            .select(spec=path, dataset=name)
-            .to_frame()
-        )
-        built[name] = result
-
-        out_dir = out_override or (ctx.sdtm_data_dir if standard == "sdtm" else ctx.adam_data_dir)
-        out_path = writer(result, out_dir, name)
-        print(f"        {result.shape[0]} rows × {result.shape[1]} cols → {out_path}")
+    for i, built in enumerate(run_study(plan, strict=args.strict), start=1):
+        step = built.step
+        out_dir = out_override or ctx.data_dir(step.standard)
+        out_path = writer(built.frame, out_dir, step.dataset)
+        rows, cols = built.frame.shape
+        print(f"[{i}/{total}] {step.dataset}: {rows} rows × {cols} cols → {out_path}")
 
     print()
-    print(f"Done — {len(plan)} dataset(s) written.")
+    print(f"Done — {total} dataset(s) written.")
 
 
 # ────────────────────────────────────────────────────────────────────── #
@@ -1449,7 +1343,7 @@ def _resolve_spec_frames(
     if data_path is None and analysis_domain == "ADSL" and adsl_arg:
         data_path = Path(adsl_arg)
     if data_path is None and ctx is not None and analysis_domain:
-        data_path = _find_dataset_file(analysis_domain, [ctx.adam_data_dir, ctx.sdtm_data_dir])
+        data_path = find_dataset_file(analysis_domain, [ctx.adam_data_dir, ctx.sdtm_data_dir])
     if data_path is None:
         _fail(
             f"{spec_path}: template '{meta.id}' needs the {analysis_domain} dataset. "
@@ -1466,7 +1360,7 @@ def _resolve_spec_frames(
     if population is None and analysis_domain == "ADSL":
         population = data_df
     if population is None and not is_listing and "ADSL" in meta.domains and ctx is not None:
-        adsl_path = _find_dataset_file("ADSL", [ctx.adam_data_dir])
+        adsl_path = find_dataset_file("ADSL", [ctx.adam_data_dir])
         if adsl_path is not None:
             population = _load_dataset(str(adsl_path))
     if population is None and not is_listing and "ADSL" in meta.domains:
@@ -1614,7 +1508,7 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
     )
     data_arg = args.data
     if data_arg is None and ctx is not None:
-        found = _find_dataset_file(dataset_name, [ctx.adam_data_dir, ctx.sdtm_data_dir])
+        found = find_dataset_file(dataset_name, [ctx.adam_data_dir, ctx.sdtm_data_dir])
         data_arg = str(found) if found else None
     if data_arg is None:
         _fail(
@@ -1623,7 +1517,7 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
         )
     adsl_arg = args.adsl
     if adsl_arg is None and ctx is not None:
-        found = _find_dataset_file("ADSL", [ctx.adam_data_dir])
+        found = find_dataset_file("ADSL", [ctx.adam_data_dir])
         adsl_arg = str(found) if found else None
     if adsl_arg is None:
         _fail(

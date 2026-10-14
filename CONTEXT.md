@@ -40,6 +40,28 @@ _Avoid_: local rule, sponsor check, SOP rule
 A validation of every dataset in the study's data directories, in one engine run per standard (two with custom rules), so that rules spanning several datasets of that standard can execute. The SDTM and ADaM results are joined into one report with one verdict. The verb validates one dataset and cannot run those rules.
 _Avoid_: batch, bulk validation, study run
 
+### Running a study
+
+**Study run**:
+The operation that reads the study's define files, builds every dataset they declare from its inputs, and hands each built dataset forward to the datasets that take it as an input. The CLI, a notebook and a protocol adapter all start the same study run. Distinct from a sweep, which validates datasets already built.
+_Avoid_: run (alone), execution, build, pipeline run
+
+**Study plan**:
+The ordered list of steps a study run will take, fixed before the first dataset builds: for each step, the define file, the standard and the dataset name. A caller can read the plan without running it.
+_Avoid_: queue, schedule, run list
+
+**Step**:
+One dataset of a study plan, built from its declared inputs in its turn.
+_Avoid_: task, job, stage
+
+**Built dataset**:
+What a study run yields for one step: the dataset name, its standard, the define file it came from, the frame, and where each input came from.
+_Avoid_: result, output, run result
+
+**Carry-through column**:
+A variable a define declares with no derivation. A study run takes it from the dataset's inputs, unchanged. A variable with a derivation never comes from an input, only from its algorithm.
+_Avoid_: pass-through, copied column, merged column
+
 ### Comparison
 
 **Compare**:
