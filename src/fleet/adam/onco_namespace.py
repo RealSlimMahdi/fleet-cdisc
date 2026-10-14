@@ -90,6 +90,11 @@ class OncoNamespace(SharedADaMVerbsMixin):
                     .aval_resp("AVAL", source="OVRLRESP")
                     .to_frame()
                 )
+
+        References:
+            RECIST 1.1: Eisenhauer EA et al. New response evaluation criteria in solid
+            tumours. Eur J Cancer. 2009;45(2):228-247. The numeric ranks follow
+            admiralonco ``aval_resp`` (pharmaverse).
         """
         return self._chain(_resp_num_expr(source).cast(pl.Float64).alias(target))
 
@@ -166,6 +171,12 @@ class OncoNamespace(SharedADaMVerbsMixin):
                                            by=["USUBJID"])
                     .to_frame()
                 )
+
+        References:
+            RECIST 1.1 (Eisenhauer EA et al. Eur J Cancer. 2009;45(2):228-247), best
+            overall response. The ordering CR < PR < SD < NON-CR/NON-PD < PD < NE
+            follows admiralonco ``derive_param_bor``. This verb does not apply the
+            confirmation requirement; see ``confirmed_response_flag``.
         """
         grps = by or ["USUBJID"]
         num_expr = _resp_num_expr(source)
@@ -214,6 +225,11 @@ class OncoNamespace(SharedADaMVerbsMixin):
                         confirmation_days=28, by=["USUBJID"])
                     .to_frame()
                 )
+
+        References:
+            RECIST 1.1 (Eisenhauer EA et al. Eur J Cancer. 2009;45(2):228-247): a CR
+            or PR is confirmed by a repeat assessment no less than 4 weeks after the
+            first. The 28-day default is that interval.
         """
         rsp = responses if responses is not None else ["CR", "PR"]
         grps = by or ["USUBJID"]
@@ -284,6 +300,10 @@ class OncoNamespace(SharedADaMVerbsMixin):
                                by=["USUBJID"])
                     .to_frame()
                 )
+
+        References:
+            admiralonco ``filter_pd`` (pharmaverse): records up to and including the
+            first progressive disease, as RECIST 1.1 uses for response endpoints.
         """
         grps = by or ["USUBJID"]
         df = self.to_frame()

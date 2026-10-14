@@ -6,6 +6,9 @@ All notable changes to Fleet are documented here.
 
 ### Added
 
+- **`verbs()` reports where each verb comes from** — a third column, `origin`, holds the path you type to reach the namespace that defines the verb (`sdtm`, `adam`, `adam.onco`) or `core` for the verbs every namespace shares. A therapeutic-area namespace inherits about 41 verbs; `df.adam.onco.verbs().filter(pl.col("origin") == "adam.onco")` lists the few it adds. Every row stays, so existing readers of the frame are unchanged (#160)
+- **Admission bar for clinical verbs** — ADR-0005 writes down when a verb that encodes a clinical rule earns its place: deleting it must let a programmer get a wrong answer, not only type more, and its docstring must cite the rule under `References`. The rule applies to new verbs only; the eight existing verbs that fail it are named in the ADR and kept. The 20 therapeutic-area verbs that pass now carry their references. Glossary terms: verb, chain verb, clinical verb, admission bar (#160)
+
 - **Dataset comparison** — a `PROC COMPARE` analogue in pure Polars (no new dependency), reachable three ways over one engine:
   - `fleet.compare(base, candidate, keys=...)` pairs observations on keys and variables by name, and returns a `ComparisonReport` with the data set, variables, observation and values summaries, the long value listing, named flags (`values_differ`, `base_only_observations`, …) and `is_equal`
   - `.compare(base, keys=..., on_fail="warn")` on every namespace (`sdtm`, `adam`, `adsl`, `occds`, …) — the chain is the candidate, the report stays on `last_comparison`, and `on_fail` speaks the same vocabulary as `.validate()`

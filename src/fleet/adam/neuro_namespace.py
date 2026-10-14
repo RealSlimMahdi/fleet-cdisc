@@ -97,6 +97,12 @@ class NeuroNamespace(SharedADaMVerbsMixin):
                                slope=183.07, intercept=-177.26)
                     .to_frame()
                 )
+
+        References:
+            Klunk WE et al. The Centiloid Project: standardizing quantitative amyloid
+            plaque estimation by PET. Alzheimers Dement. 2015;11(1):1-15. The built-in
+            tracer and pipeline calibrations follow admiralneuro
+            ``derive_param_centiloid`` (pharmaverse).
         """
         if slope is not None and intercept is not None:
             s, i = slope, intercept
@@ -147,6 +153,12 @@ class NeuroNamespace(SharedADaMVerbsMixin):
                     .mmse_category("MMSECG", score_col="AVAL")
                     .to_frame()
                 )
+
+        References:
+            Folstein MF, Folstein SE, McHugh PR. Mini-mental state. J Psychiatr Res.
+            1975;12:189-198 (the instrument). No single standard fixes the severity
+            bands: NICE TA217 (2011) uses 21-26 mild, 10-20 moderate and below 10
+            severe. Check the SAP before relying on the bands above.
         """
         score = pl.col(score_col)
         return self._chain(
@@ -235,6 +247,11 @@ class NeuroNamespace(SharedADaMVerbsMixin):
                     .moca_category("MOACG", score_col="AVAL")
                     .to_frame()
                 )
+
+        References:
+            Nasreddine ZS et al. The Montreal Cognitive Assessment, MoCA. J Am Geriatr
+            Soc. 2005;53:695-699: a total of 26 or more is normal. The MCI lower
+            bound of 18 is not fixed by the instrument; check the SAP.
         """
         score = pl.col(score_col)
         return self._chain(

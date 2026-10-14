@@ -561,7 +561,7 @@ class TestVerbsListing:
 └─────┘
 """)
         v = df.sdtm.verbs()
-        assert v.columns == ["verb", "summary"]
+        assert v.columns == ["verb", "summary", "origin"]
         assert v.height > 0
 
     def test_canonical_verbs_present(self):
@@ -620,6 +620,40 @@ class TestVerbsListing:
 """)
         v = df.sdtm.verbs().filter(pl.col("verb") == "assign")
         assert v["summary"][0].startswith("Assign")
+
+    def test_origin_is_the_path_the_programmer_types(self):
+        df = pl.from_repr("""\
+┌─────┐
+│ a   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
+        v = df.adam.metabolic.verbs()
+        own = v.filter(pl.col("origin") == "adam.metabolic")["verb"].to_list()
+        assert own == ["body_fat_pct", "visceral_fat_flag", "waist_height_ratio", "waist_hip_ratio"]
+        origins = set(v["origin"].to_list())
+        assert origins == {"core", "adam", "adam.metabolic"}
+        assert v.filter(pl.col("verb") == "derivation")["origin"][0] == "core"
+        assert v.filter(pl.col("verb") == "join_adsl")["origin"][0] == "adam"
+
+    def test_origin_on_a_top_level_namespace(self):
+        df = pl.from_repr("""\
+┌─────┐
+│ a   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+""")
+        sdtm = df.sdtm.verbs()
+        assert set(sdtm["origin"].to_list()) == {"core", "sdtm"}
+        assert sdtm.filter(pl.col("verb") == "assign")["origin"][0] == "core"
+        adam = df.adam.verbs()
+        assert set(adam["origin"].to_list()) == {"core", "adam"}
 
 
 # ------------------------------------------------------------------ #

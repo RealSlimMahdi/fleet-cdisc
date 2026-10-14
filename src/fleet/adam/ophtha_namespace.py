@@ -72,6 +72,11 @@ class OphthaNamespace(SharedADaMVerbsMixin):
                     .etdrs_to_logmar("LOGMAR", source="ETDRS")
                     .to_frame()
                 )
+
+        References:
+            Beck RW et al. A computerized method of visual acuity testing. Am J
+            Ophthalmol. 2003;135(2):194-205. admiralophtha
+            ``convert_etdrs_to_logmar`` (pharmaverse) applies the same formula.
         """
         expr = -0.02 * pl.col(source) + 1.7
         if round_digits is not None:
@@ -109,6 +114,11 @@ class OphthaNamespace(SharedADaMVerbsMixin):
                     .logmar_to_etdrs("ETDRS", source="LOGMAR")
                     .to_frame()
                 )
+
+        References:
+            Beck RW et al. A computerized method of visual acuity testing. Am J
+            Ophthalmol. 2003;135(2):194-205. admiralophtha
+            ``convert_logmar_to_etdrs`` (pharmaverse) applies the same formula.
         """
         expr = (1.7 - pl.col(source)) / 0.02
         if round_digits is not None:
@@ -144,6 +154,12 @@ class OphthaNamespace(SharedADaMVerbsMixin):
                     .study_eye("STUDYEYE", source="SCSTRESC")
                     .to_frame()
                 )
+
+        References:
+            Ophthalmic convention: OD = oculus dexter (right), OS = oculus sinister
+            (left), OU = oculus uterque (both). CDISC SDTM controlled terminology for
+            laterality uses LEFT, RIGHT and BILATERAL. admiralophtha
+            ``derive_var_studyeye`` (pharmaverse) applies the same mapping.
         """
         return self._chain(
             pl.when(pl.col(source).str.to_uppercase() == "OS")
@@ -193,6 +209,10 @@ class OphthaNamespace(SharedADaMVerbsMixin):
                                   lat_col="AELAT")
                     .to_frame()
                 )
+
+        References:
+            admiralophtha ``derive_var_afeye`` (pharmaverse): the Study Eye, Fellow
+            Eye and Both Eyes rule from laterality, location and study eye.
         """
         locs = [v.upper() for v in (loc_values or ["EYE"])]
         valid_lat = ["LEFT", "RIGHT", "BILATERAL"]

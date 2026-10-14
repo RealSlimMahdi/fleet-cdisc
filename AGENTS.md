@@ -7,6 +7,7 @@
 - **Package manager:** ALWAYS use `uv`. NEVER use `pip`, `poetry`, `conda`, `pipenv`.
 - **Data manipulation:** NEVER use Pandas. ONLY use Polars. Maintain lazy evaluation (`pl.Expr` / `.to_frame()`).
 - **Linter:** ONLY use Ruff. NEVER use black, flake8, or isort.
+- **Clinical verbs:** a new verb that encodes a clinical rule (a threshold, a constant, a guard, a mapping) must pass the admission bar of `docs/adr/0005-an-admission-bar-for-clinical-verbs.md`: deleting it must let a programmer get a wrong answer, not only type more. Its docstring must cite the rule under `References:`. Chain verbs (`derivation`, `case_when`, `merge`) are not clinical verbs. Terms: `CONTEXT.md`.
 
 ## Who you are talking to
 

@@ -40,6 +40,24 @@ _Avoid_: local rule, sponsor check, SOP rule
 A validation of every dataset in the study's data directories, in one engine run per standard (two with custom rules), so that rules spanning several datasets of that standard can execute. The SDTM and ADaM results are joined into one report with one verdict. The verb validates one dataset and cannot run those rules.
 _Avoid_: batch, bulk validation, study run
 
+### Verbs
+
+**Verb**:
+A method on a Fleet namespace that a programmer chains to derive, reshape or inspect a frame. Every verb is a chain verb or a clinical verb.
+_Avoid_: function, helper, step, operation
+
+**Chain verb**:
+A verb that supplies a mechanism and encodes no clinical rule: `derivation`, `case_when`, `merge`, `pin`, `to_frame`. The programmer brings the rule.
+_Avoid_: core verb, shared verb, generic verb, utility
+
+**Clinical verb**:
+A verb that encodes a rule a programmer would otherwise copy from a standard or an SAP: a threshold, a constant, a guard, a mapping or an ordering, such as `seroconversion_flag`, `bsa` or `study_day`. A clinical verb cites the rule it encodes.
+_Avoid_: TA verb, domain verb, derivation verb, convenience verb
+
+**Admission bar**:
+The test a new clinical verb must pass before it is added: if the verb were deleted, a programmer who rewrites it inline must be able to get a wrong answer, not only type more. A verb that fails the bar is not added.
+_Avoid_: criteria, guideline, policy
+
 ### Comparison
 
 **Compare**:
