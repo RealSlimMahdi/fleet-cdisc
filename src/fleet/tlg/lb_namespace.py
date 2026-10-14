@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 import polars as pl
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from ._ard import (
     ard_row,
@@ -29,6 +29,7 @@ from ._specs import (
     Statistic,
     SummarySpecBase,
     TLGSpec,
+    change_from_baseline_prefilter,
     resolve_filter,
 )
 
@@ -106,7 +107,15 @@ class LBListingSpec(TLGSpec):
 
 
 class LBChgSpec(LBSummarySpec):
-    """Spec for lab change from baseline (lbt02): CHG stats per PARAM × visit."""
+    """Spec for lab change from baseline (lbt02): CHG stats per PARAM × visit.
+
+    Prefilter rule: the baseline record (``ABLFL`` = Y) and records
+    with no change value are dropped before summarising, so ``ABLFL``
+    is a required column.  Unless set, the prefilter follows
+    ``value_col``; ``prefilter=None`` switches the rule off.
+    """
+
+    context: ClassVar[str] = "t_lb_chg"
 
     value_col: str = Field(
         default="CHG",
@@ -115,6 +124,12 @@ class LBChgSpec(LBSummarySpec):
     required_columns: list[str] = Field(
         default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVISIT", "CHG"],
     )
+
+    @model_validator(mode="after")
+    def _default_prefilter_follows_value_col(self) -> LBChgSpec:
+        if "prefilter" not in self.model_fields_set:
+            self.prefilter = change_from_baseline_prefilter(self.value_col)
+        return self
 
 
 class LBShiftSpec(SummarySpecBase):

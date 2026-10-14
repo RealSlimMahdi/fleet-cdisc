@@ -195,6 +195,35 @@ class OverallStat(BaseModel):
     _validate_filter = field_validator("filter")(_check_filter_field)
 
 
+#: GDSR label for a coding term that is still null at analysis time.
+NO_CODING_LABEL = "No Coding Available"
+
+
+class Uncoded(BaseModel):
+    """The uncoded rule: give a null coding term a visible level.
+
+    GDSR templates recode a missing MedDRA or ATC term to
+    ``"No Coding Available"`` instead of dropping the record, so a
+    subject whose only events are uncoded is still counted.  A spec
+    carries one ``Uncoded`` (or ``None`` to switch the rule off); set
+    inline via [`TLGBuilder.uncoded()`][fleet.tlg.TLGBuilder.uncoded].
+    """
+
+    columns: list[str] = Field(
+        ...,
+        description=(
+            "Coding columns to fill when null (e.g. ``AEBODSYS`` and "
+            "``AEDECOD``).  Names absent from the dataset are skipped."
+        ),
+    )
+    label: str = Field(
+        default=NO_CODING_LABEL,
+        description="Replacement level written into every null coding column.",
+    )
+
+    model_config = {"extra": "forbid"}
+
+
 class ChoiceOption(BaseModel):
     """One selectable value for an ``interactive:`` axis.
 
@@ -486,6 +515,26 @@ class TLGSpec(BaseModel):
                 f"but DataFrame is missing {missing}. "
                 f"Available: {sorted(available)}"
             )
+        prefilter_missing = [c for c in self.prefilter_columns() if c not in available]
+        if prefilter_missing:
+            raise SchemaError(
+                f"{self.__class__.__name__}'s prefilter names columns "
+                f"{self.prefilter_columns()} but DataFrame is missing "
+                f"{prefilter_missing}. Add the column, or set prefilter=None "
+                "to switch the rule off (visible in the spec). "
+                f"Available: {sorted(available)}"
+            )
+
+    def prefilter_columns(self) -> list[str]:
+        """Columns the spec's prefilter names, in first-seen order.
+
+        Specs without a ``prefilter`` field (listings) have none.
+        Every one of them is a required column of the template.
+        """
+        expr = resolve_filter(getattr(self, "prefilter", None))
+        if expr is None:
+            return []
+        return list(dict.fromkeys(expr.meta.root_names()))
 
     def _validate_content(self, df: pl.DataFrame) -> None:
         """Tier 2: check required flag/PARAMCD values exist in data."""
@@ -520,6 +569,12 @@ class TLGSpec(BaseModel):
             diagnostics.append(
                 f"MISSING COLUMNS: {missing} required by {self.__class__.__name__} are not present."
             )
+        prefilter_missing = [c for c in self.prefilter_columns() if c not in available]
+        if prefilter_missing:
+            diagnostics.append(
+                f"MISSING PREFILTER COLUMNS: {prefilter_missing} named by the "
+                f"{self.__class__.__name__} prefilter are not present."
+            )
         for col, required_vals in self.required_flags.items():
             if col not in available:
                 diagnostics.append(f"MISSING FLAG COLUMN: '{col}' not in DataFrame.")
@@ -533,8 +588,8 @@ class TLGSpec(BaseModel):
     def to_yaml(self) -> str:
         """Serialize this spec to a YAML string.
 
-        Filters (``adsl_filter``, ``dataset_filter``, header-row
-        ``filter``) serialize only in their string-expression form.  A
+        Filters (``adsl_filter``, ``dataset_filter``, ``prefilter``,
+        header-row ``filter``) serialize only in their string-expression form.  A
         live ``pl.Expr`` cannot be serialized faithfully, and silently
         dropping it would change the numbers a reloaded spec computes —
         so it raises instead.
@@ -546,7 +601,7 @@ class TLGSpec(BaseModel):
             ValueError: If any filter field holds a ``pl.Expr``.  Pass
                 the filter as a string, e.g. ``'pl.col("SAFFL") == "Y"'``.
         """
-        for field_name in ("adsl_filter", "dataset_filter"):
+        for field_name in ("adsl_filter", "dataset_filter", "prefilter"):
             value = getattr(self, field_name, None)
             if value is not None and not isinstance(value, str):
                 raise ValueError(
@@ -589,6 +644,14 @@ class SummarySpecBase(TLGSpec):
     inline through [`TLGBuilder`][fleet.tlg.TLGBuilder].
     """
 
+    #: The cards ``context`` tag written to every ARD row.  One spec
+    #: class serves one template method, so the tag is a class fact,
+    #: not a YAML field.
+    context: ClassVar[str] = ""
+    #: ``True`` when ``rows`` is a hierarchy (SOC → PT, PARAM → visit);
+    #: ``False`` when each row field is an independent flat breakdown.
+    nested: ClassVar[bool] = False
+
     output_type: str = "summary"
     rows: list[Row] = Field(
         default_factory=list,
@@ -597,6 +660,29 @@ class SummarySpecBase(TLGSpec):
             "via [`TLGBuilder.rows()`][fleet.tlg.TLGBuilder.rows]."
         ),
     )
+    uncoded: Uncoded | None = Field(
+        default=None,
+        description=(
+            "The uncoded rule: coding columns whose nulls become a "
+            "visible level before counting.  Each template sets its own "
+            "default; ``null`` switches the rule off.  Set inline via "
+            "[`TLGBuilder.uncoded()`][fleet.tlg.TLGBuilder.uncoded]."
+        ),
+    )
+    prefilter: Any | None = Field(
+        default=None,
+        description=(
+            "The template's own record filter, applied after "
+            "``dataset_filter`` — a ``pl.Expr`` or a string expression "
+            '(e.g. ``\'pl.col("ABLFL").ne_missing("Y")\'`` on a '
+            "change-from-baseline table).  Each template sets its own "
+            "default; ``null`` switches it off.  Every column it names "
+            "is a required column.  Set inline via "
+            "[`TLGBuilder.prefilter()`][fleet.tlg.TLGBuilder.prefilter]."
+        ),
+    )
+
+    _validate_prefilter = field_validator("prefilter")(_check_filter_field)
     columns: list[str] = Field(
         default_factory=lambda: ["TRTA"],
         description=(
@@ -681,9 +767,16 @@ class AESummarySpec(SummarySpecBase):
     """Spec for an AE summary table (t_ae_summary).
 
     Defaults provide zero-config convenience for a standard SOC→PT
-    table.
+    table.  Uncoded rule: a null ``AEBODSYS`` or ``AEDECOD`` is counted
+    under ``"No Coding Available"``.
     """
 
+    context: ClassVar[str] = "t_ae_summary"
+    nested: ClassVar[bool] = True
+
+    uncoded: Uncoded | None = Field(
+        default_factory=lambda: Uncoded(columns=["AEBODSYS", "AEDECOD"]),
+    )
     rows: list[Row] = Field(
         default_factory=lambda: [
             Row(field="AEBODSYS", label="System Organ Class"),
@@ -725,6 +818,9 @@ class AEListingSpec(TLGSpec):
 class VSSummarySpec(SummarySpecBase):
     """Spec for a vital-signs summary table."""
 
+    context: ClassVar[str] = "t_vs_summary"
+    nested: ClassVar[bool] = True
+
     rows: list[Row] = Field(
         default_factory=lambda: [Row(field="PARAMCD", label="Parameter")],
     )
@@ -741,6 +837,16 @@ class VSSummarySpec(SummarySpecBase):
     required_columns: list[str] = Field(
         default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVAL"],
     )
+
+
+def change_from_baseline_prefilter(value_col: str) -> str:
+    """The prefilter every change-from-baseline table starts from.
+
+    Drops the baseline record (``ABLFL`` is ``Y``; ADaM codes the flag
+    as Y / null, so the test is null-safe) and records with no change
+    value, so the paired n counts subjects with a change at the visit.
+    """
+    return f'pl.col("ABLFL").ne_missing("Y") & pl.col("{value_col}").is_not_null()'
 
 
 def _enum_to_value(obj: Any) -> Any:

@@ -23,6 +23,9 @@ from ._ard import (
     build_ard_row,
     default_fmt_fn,
     format_ard,
+    prepare_frame,
+    summarize_ard,
+    summarize_spec,
     validate_ard,
 )
 from ._builder import TLGBuilder
@@ -57,6 +60,7 @@ from ._specs import (
     Statistic,
     SummarySpecBase,
     TLGSpec,
+    Uncoded,
     VSSummarySpec,
     resolve_filter,
 )
@@ -153,6 +157,7 @@ __all__ = [
     "LBListingSpec",
     "MHSummarySpec",
     "OverallStat",
+    "Uncoded",
     "resolve_filter",
     # Interactive explorer
     "ChoiceOption",
@@ -183,6 +188,10 @@ __all__ = [
     "Column",
     "Statistic",
     "GroupPool",
+    # Engine
+    "summarize_spec",
+    "summarize_ard",
+    "prepare_frame",
     # ARD
     "ARD_SCHEMA",
     "ARD_COLUMNS",

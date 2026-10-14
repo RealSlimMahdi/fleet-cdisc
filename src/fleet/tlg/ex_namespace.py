@@ -8,6 +8,8 @@ per exposure parameter, aligned to the {cards} ARD layout.
 
 from __future__ import annotations
 
+from typing import Any, ClassVar
+
 import polars as pl
 from pydantic import Field
 
@@ -27,8 +29,18 @@ class EXSummarySpec(SummarySpecBase):
     median, min, max) per ``PARAMCD``, grouped by treatment arm.  Every
     field is also settable inline through
     [`TLGBuilder`][fleet.tlg.TLGBuilder].
+
+    Prefilter rule: GDSR EXT01 summarises the overall-exposure block,
+    so only ``PARCAT1`` = OVERALL records are kept and per-interval dose
+    records are not averaged into subject-level statistics.  ``PARCAT1``
+    is therefore a required column; ``prefilter=None`` switches the rule
+    off.
     """
 
+    context: ClassVar[str] = "t_ex_summary"
+    nested: ClassVar[bool] = True
+
+    prefilter: Any | None = Field(default='pl.col("PARCAT1") == "OVERALL"')
     rows: list[Row] = Field(
         default_factory=lambda: [Row(field="PARAMCD", label="Parameter")],
         description=(

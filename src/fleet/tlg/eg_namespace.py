@@ -6,8 +6,10 @@ Accessed via ``df.tlg.eg`` on any Polars DataFrame containing ADaM ADEG data.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import polars as pl
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from ._ard import summarize_ard
 from ._builder import BuilderVerbsMixin
@@ -16,6 +18,7 @@ from ._specs import (
     SchemaError,
     Statistic,
     SummarySpecBase,
+    change_from_baseline_prefilter,
 )
 
 
@@ -58,7 +61,15 @@ class EGSummarySpec(SummarySpecBase):
 
 
 class EGChgSpec(EGSummarySpec):
-    """Spec for ECG change from baseline (egt03): CHG stats per PARAM × visit."""
+    """Spec for ECG change from baseline (egt03): CHG stats per PARAM × visit.
+
+    Prefilter rule: the baseline record (``ABLFL`` = Y) and records
+    with no change value are dropped before summarising, so ``ABLFL``
+    is a required column.  Unless set, the prefilter follows
+    ``value_col``; ``prefilter=None`` switches the rule off.
+    """
+
+    context: ClassVar[str] = "t_eg_chg"
 
     value_col: str = Field(
         default="CHG",
@@ -67,6 +78,12 @@ class EGChgSpec(EGSummarySpec):
     required_columns: list[str] = Field(
         default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVISIT", "CHG"],
     )
+
+    @model_validator(mode="after")
+    def _default_prefilter_follows_value_col(self) -> EGChgSpec:
+        if "prefilter" not in self.model_fields_set:
+            self.prefilter = change_from_baseline_prefilter(self.value_col)
+        return self
 
 
 class EGQtcatSpec(SummarySpecBase):
