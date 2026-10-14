@@ -1,6 +1,6 @@
 # TLG Spec Seam — Plan
 
-> **Status:** plan, pre-implementation. Produced from the grilling session of 2026-10-14 on case 1 of the architecture review of 2026-08-30. Nothing here is built. Vocabulary follows `CONTEXT.md` (template, spec, ARD, population filter, dataset filter, prefilter, uncoded). Decision record: `docs/adr/0005-summary-specs-are-the-engine-contract.md`. Timing: first change after the 0.2.0a1 tag.
+> **Status:** implemented on branch `refactor/tlg-spec-seam` (2026-10-14); see `docs/changelog.md` under Unreleased. Originally a plan, pre-implementation. Produced from the grilling session of 2026-10-14 on case 1 of the architecture review of 2026-08-30. Nothing here is built. Vocabulary follows `CONTEXT.md` (template, spec, ARD, population filter, dataset filter, prefilter, uncoded). Decision record: `docs/adr/0005-summary-specs-are-the-engine-contract.md`. Timing: first change after the 0.2.0a1 tag.
 
 ## Problem statement
 

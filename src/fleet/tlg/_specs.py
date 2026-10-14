@@ -1,9 +1,10 @@
 """
 TLG specification models — Vega-Lite-inspired declarative specs.
 
-Each TLG output (AE summary, AE listing, VS summary, etc.) is defined by
-a Pydantic model that declares field→role mappings, statistics, and data
-requirements.  The spec carries both structural validation (column
+Each TLG output is defined by a Pydantic model that declares field→role
+mappings, statistics, and data requirements.  This module holds the base
+classes and the building blocks; each domain's spec classes live in its
+own namespace module, next to the method that consumes them.  The spec carries both structural validation (column
 presence/types) and content validation (required PARAM/PARAMCD values,
 flag values, pool arm existence).
 """
@@ -639,9 +640,12 @@ class SummarySpecBase(TLGSpec):
     """Shared fields for every summary-table spec.
 
     Domain specs subclass this and override only their defaults (rows,
-    statistics, required columns) — one declaration of the shared shape
-    instead of nine divergent copies.  Every field is also settable
-    inline through [`TLGBuilder`][fleet.tlg.TLGBuilder].
+    statistics, required columns, the uncoded rule, the prefilter) —
+    one declaration of the shared shape instead of nine divergent
+    copies.  Every field is also settable inline through
+    [`TLGBuilder`][fleet.tlg.TLGBuilder].  The spec is the whole engine
+    contract: [`summarize_spec()`][fleet.tlg.summarize_spec] reads every
+    engine argument from it (ADR-0005).
     """
 
     #: The cards ``context`` tag written to every ARD row.  One spec
@@ -744,6 +748,20 @@ class SummarySpecBase(TLGSpec):
         ),
     )
 
+    def check(self, df: pl.DataFrame) -> list[str]:
+        """Pre-validation diagnostic — the base checks plus one line per
+        row field that is absent from *df* (its sub-analysis is skipped).
+        """
+        diagnostics = super().check(df)
+        available = set(df.columns)
+        for row_def in self.rows:
+            if row_def.field not in available:
+                diagnostics.append(
+                    f"WARNING: Column '{row_def.field}' not present — "
+                    f"'{row_def.label or row_def.field}' sub-analysis will be skipped."
+                )
+        return diagnostics
+
     @field_validator("columns")
     @classmethod
     def _single_group_column(cls, value: list[str]) -> list[str]:
@@ -761,82 +779,6 @@ class SummarySpecBase(TLGSpec):
                 "or file a feature request."
             )
         return value
-
-
-class AESummarySpec(SummarySpecBase):
-    """Spec for an AE summary table (t_ae_summary).
-
-    Defaults provide zero-config convenience for a standard SOC→PT
-    table.  Uncoded rule: a null ``AEBODSYS`` or ``AEDECOD`` is counted
-    under ``"No Coding Available"``.
-    """
-
-    context: ClassVar[str] = "t_ae_summary"
-    nested: ClassVar[bool] = True
-
-    uncoded: Uncoded | None = Field(
-        default_factory=lambda: Uncoded(columns=["AEBODSYS", "AEDECOD"]),
-    )
-    rows: list[Row] = Field(
-        default_factory=lambda: [
-            Row(field="AEBODSYS", label="System Organ Class"),
-            Row(field="AEDECOD", label="Preferred Term"),
-        ],
-    )
-    required_columns: list[str] = Field(
-        default_factory=lambda: ["USUBJID", "TRTA", "AEDECOD", "AEBODSYS"],
-    )
-
-
-class AEListingSpec(TLGSpec):
-    """Spec for an AE listing (l_ae_listing)."""
-
-    _unconsumed_spec_fields: ClassVar[frozenset[str]] = frozenset({"adsl_filter", "header_rows"})
-
-    output_type: str = "listing"
-    columns: list[Column] = Field(
-        default_factory=lambda: [
-            Column(field="USUBJID", label="Subject"),
-            Column(field="TRTA", label="Treatment"),
-            Column(field="AEBODSYS", label="SOC"),
-            Column(field="AEDECOD", label="Preferred Term"),
-            Column(field="AESEV", label="Severity"),
-            Column(field="AESER", label="Serious"),
-        ],
-        description="Ordered list of columns to include in the listing.",
-    )
-    sort_by: list[str] = Field(
-        default_factory=lambda: ["USUBJID", "AEBODSYS", "AEDECOD"],
-        description="Sort order applied before rendering.",
-    )
-    required_columns: list[str] = Field(
-        default_factory=lambda: ["USUBJID", "TRTA", "AEDECOD"],
-        description="Columns required in the analysis dataset for this spec.",
-    )
-
-
-class VSSummarySpec(SummarySpecBase):
-    """Spec for a vital-signs summary table."""
-
-    context: ClassVar[str] = "t_vs_summary"
-    nested: ClassVar[bool] = True
-
-    rows: list[Row] = Field(
-        default_factory=lambda: [Row(field="PARAMCD", label="Parameter")],
-    )
-    statistics: list[Statistic] = Field(
-        default_factory=lambda: [
-            Statistic.N_SUBJECTS,
-            Statistic.MEAN,
-            Statistic.SD,
-            Statistic.MEDIAN,
-            Statistic.MIN,
-            Statistic.MAX,
-        ],
-    )
-    required_columns: list[str] = Field(
-        default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVAL"],
-    )
 
 
 def change_from_baseline_prefilter(value_col: str) -> str:

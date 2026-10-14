@@ -73,7 +73,6 @@ class CMTLGNamespace(BuilderVerbsMixin):
         df: A Polars DataFrame containing ADaM CM-level data.
     """
 
-    _builder_context = "t_cm_summary"
     _builder_specs = {"t_summary": CMSummarySpec, "t_by_pt": CMByPTSpec}
 
     def __init__(self, df: pl.DataFrame) -> None:
@@ -181,15 +180,4 @@ class CMTLGNamespace(BuilderVerbsMixin):
                 report = adcm.tlg.cm.check()
         """
         spec = spec or CMSummarySpec()
-        diagnostics = spec.check(self._df)
-
-        # Additional CM-specific checks
-        available = set(self._df.columns)
-        for row_def in spec.rows:
-            if row_def.field not in available:
-                diagnostics.append(
-                    f"WARNING: Column '{row_def.field}' not present — "
-                    f"'{row_def.label or row_def.field}' sub-analysis will be skipped."
-                )
-
-        return diagnostics
+        return spec.check(self._df)

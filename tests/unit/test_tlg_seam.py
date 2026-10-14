@@ -184,3 +184,34 @@ class TestCompositesSharePreparation:
         spec = LBShiftSpec(dataset_filter='pl.col("AVISIT") == "WEEK 4"')
         ard = adlb.tlg.lb.t_shift(groupby="TRTA", adsl=ADSL, spec=spec)
         assert _levels(ard, "SHIFT") == {"NORMAL to NORMAL"}
+
+
+class TestBuilderVerbs:
+    """Every spec field is settable inline: uncoded() and prefilter() included."""
+
+    def test_uncoded_verb_lands_on_the_spec(self) -> None:
+        spec = (
+            ADAE.tlg.ae.population(ADSL)
+            .by("TRTA")
+            .uncoded(["AEBODSYS", "AEDECOD"], label="UNCODED")
+            .to_spec()
+        )
+        assert spec.uncoded == Uncoded(columns=["AEBODSYS", "AEDECOD"], label="UNCODED")
+
+    def test_uncoded_none_switches_the_rule_off_inline(self) -> None:
+        ard = ADAE.tlg.ae.population(ADSL).by("TRTA").uncoded(None).to_ard()
+        assert "No Coding Available" not in _levels(ard, "AEBODSYS")
+
+    def test_prefilter_verb_lands_on_the_spec(self) -> None:
+        spec = (
+            ADLB.tlg.lb.population(ADSL)
+            .by("TRTA")
+            .template("lbt02")
+            .prefilter('pl.col("ABLFL").ne_missing("Y")')
+            .to_spec()
+        )
+        assert spec.prefilter == 'pl.col("ABLFL").ne_missing("Y")'
+
+    def test_prefilter_verb_is_refused_on_a_listing(self) -> None:
+        with pytest.raises(SchemaError, match="prefilter"):
+            ADAE.tlg.ae.template("ael01").prefilter('pl.col("AESER") == "Y"').to_spec()

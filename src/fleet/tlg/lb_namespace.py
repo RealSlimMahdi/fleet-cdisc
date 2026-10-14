@@ -196,7 +196,6 @@ class LBTLGNamespace(BuilderVerbsMixin):
         df: A Polars DataFrame containing ADaM ADLB-level data.
     """
 
-    _builder_context = "t_lb_summary"
     _builder_specs = {
         "t_summary": LBSummarySpec,
         "t_chg": LBChgSpec,
@@ -637,14 +636,4 @@ class LBTLGNamespace(BuilderVerbsMixin):
                 report = adlb.tlg.lb.check()
         """
         spec = spec or LBSummarySpec()
-        diagnostics = spec.check(self._df)
-
-        available = set(self._df.columns)
-        for row_def in spec.rows:
-            if row_def.field not in available:
-                diagnostics.append(
-                    f"WARNING: Column '{row_def.field}' not present — "
-                    f"'{row_def.label or row_def.field}' sub-analysis will be skipped."
-                )
-
-        return diagnostics
+        return spec.check(self._df)

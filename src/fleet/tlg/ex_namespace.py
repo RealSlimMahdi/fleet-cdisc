@@ -79,7 +79,6 @@ class EXTLGNamespace(BuilderVerbsMixin):
         df: A Polars DataFrame containing ADaM ADEX-level data.
     """
 
-    _builder_context = "t_ex_summary"
     _builder_specs = {"t_summary": EXSummarySpec}
 
     def __init__(self, df: pl.DataFrame) -> None:

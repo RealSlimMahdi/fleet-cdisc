@@ -89,7 +89,6 @@ class DMTLGNamespace(BuilderVerbsMixin):
         df: A Polars DataFrame containing ADSL-level demographic data.
     """
 
-    _builder_context = "t_dm_summary"
     _builder_specs = {"t_summary": DMSummarySpec}
 
     def __init__(self, df: pl.DataFrame) -> None:

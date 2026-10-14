@@ -83,7 +83,6 @@ class DSTLGNamespace(BuilderVerbsMixin):
             deviations) subject-level data.
     """
 
-    _builder_context = "t_ds_disposition"
     _builder_specs = {
         "t_summary": DSDispositionSpec,
         "t_deaths": DSDeathsSpec,
@@ -326,13 +325,4 @@ class DSTLGNamespace(BuilderVerbsMixin):
                 report = adsl.tlg.ds.check()
         """
         spec = spec or DSDispositionSpec()
-        diagnostics = spec.check(self._df)
-
-        available = set(self._df.columns)
-        row_fields = [getattr(r, "field", r) for r in getattr(spec, "rows", [])]
-        for field in row_fields:
-            if field not in available:
-                diagnostics.append(
-                    f"WARNING: Column '{field}' not present — its sub-analysis will be skipped."
-                )
-        return diagnostics
+        return spec.check(self._df)

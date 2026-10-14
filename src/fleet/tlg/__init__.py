@@ -48,8 +48,6 @@ from ._runner import (
     spec_schema,
 )
 from ._specs import (
-    AEListingSpec,
-    AESummarySpec,
     ChoiceOption,
     Column,
     GroupbyChoice,
@@ -61,16 +59,17 @@ from ._specs import (
     SummarySpecBase,
     TLGSpec,
     Uncoded,
-    VSSummarySpec,
     resolve_filter,
 )
 from ._variants import Variant, enumerate_variants
 from .ae_namespace import (
     AEGradeSpec,
+    AEListingSpec,
     AEOverviewSpec,
     AERelationshipSpec,
     AESeveritySpec,
     AESocPtSpec,
+    AESummarySpec,
     AETLGNamespace,
 )
 from .cm_namespace import CMByPTSpec, CMSummarySpec, CMTLGNamespace
@@ -113,7 +112,7 @@ from .render import (
     render_pptx,
     render_rtf,
 )
-from .vs_namespace import VSTLGNamespace
+from .vs_namespace import VSSummarySpec, VSTLGNamespace
 
 __all__ = [
     # Namespace

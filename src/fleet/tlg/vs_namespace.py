@@ -6,11 +6,38 @@ Accessed via ``df.tlg.vs`` on any Polars DataFrame containing ADaM VS data.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import polars as pl
+from pydantic import Field
 
 from ._ard import summarize_spec
 from ._builder import BuilderVerbsMixin
-from ._specs import VSSummarySpec
+from ._specs import Row, Statistic, SummarySpecBase
+
+
+class VSSummarySpec(SummarySpecBase):
+    """Spec for a vital-signs summary table."""
+
+    context: ClassVar[str] = "t_vs_summary"
+    nested: ClassVar[bool] = True
+
+    rows: list[Row] = Field(
+        default_factory=lambda: [Row(field="PARAMCD", label="Parameter")],
+    )
+    statistics: list[Statistic] = Field(
+        default_factory=lambda: [
+            Statistic.N_SUBJECTS,
+            Statistic.MEAN,
+            Statistic.SD,
+            Statistic.MEDIAN,
+            Statistic.MIN,
+            Statistic.MAX,
+        ],
+    )
+    required_columns: list[str] = Field(
+        default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVAL"],
+    )
 
 
 class VSTLGNamespace(BuilderVerbsMixin):
@@ -24,7 +51,6 @@ class VSTLGNamespace(BuilderVerbsMixin):
         df: A Polars DataFrame containing ADaM VS-level data.
     """
 
-    _builder_context = "t_vs_summary"
     _builder_specs = {"t_summary": VSSummarySpec}
 
     def __init__(self, df: pl.DataFrame) -> None:
@@ -95,14 +121,4 @@ class VSTLGNamespace(BuilderVerbsMixin):
                 report = advs.tlg.vs.check()
         """
         spec = spec or VSSummarySpec()
-        diagnostics = spec.check(self._df)
-
-        available = set(self._df.columns)
-        for row_def in spec.rows:
-            if row_def.field not in available:
-                diagnostics.append(
-                    f"WARNING: Column '{row_def.field}' not present — "
-                    f"'{row_def.label or row_def.field}' sub-analysis will be skipped."
-                )
-
-        return diagnostics
+        return spec.check(self._df)

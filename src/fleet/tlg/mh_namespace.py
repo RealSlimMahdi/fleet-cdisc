@@ -45,7 +45,6 @@ class MHSummarySpec(SummarySpecBase):
 class MHTLGNamespace(BuilderVerbsMixin):
     """Medical-history tables, accessed as ``df.tlg.mh``."""
 
-    _builder_context = "t_mh_summary"
     _builder_specs = {"t_summary": MHSummarySpec}
 
     def __init__(self, df: pl.DataFrame) -> None:
@@ -76,9 +75,4 @@ class MHTLGNamespace(BuilderVerbsMixin):
     def check(self, *, spec: MHSummarySpec | None = None) -> list[str]:
         """Run pre-validation diagnostics without computing."""
         spec = spec or MHSummarySpec()
-        diagnostics = spec.check(self._df)
-        available = set(self._df.columns)
-        for row_def in spec.rows:
-            if row_def.field not in available:
-                diagnostics.append(f"WARNING: Column '{row_def.field}' not present — skipped.")
-        return diagnostics
+        return spec.check(self._df)

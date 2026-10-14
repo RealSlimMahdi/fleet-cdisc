@@ -117,7 +117,6 @@ class EGTLGNamespace(BuilderVerbsMixin):
         df: A Polars DataFrame containing ADaM ADEG-level data.
     """
 
-    _builder_context = "t_eg_summary"
     _builder_specs = {"t_summary": EGSummarySpec, "t_chg": EGChgSpec, "t_qtcat": EGQtcatSpec}
 
     def __init__(self, df: pl.DataFrame) -> None:
@@ -247,14 +246,4 @@ class EGTLGNamespace(BuilderVerbsMixin):
                 report = adeg.tlg.eg.check()
         """
         spec = spec or EGSummarySpec()
-        diagnostics = spec.check(self._df)
-
-        available = set(self._df.columns)
-        for row_def in spec.rows:
-            if row_def.field not in available:
-                diagnostics.append(
-                    f"WARNING: Column '{row_def.field}' not present — "
-                    f"'{row_def.label or row_def.field}' sub-analysis will be skipped."
-                )
-
-        return diagnostics
+        return spec.check(self._df)

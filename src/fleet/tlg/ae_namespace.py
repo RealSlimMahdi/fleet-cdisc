@@ -14,12 +14,66 @@ from pydantic import Field
 from ._ard import prepare_frame, summarize_ard, summarize_spec, worst_case
 from ._builder import BuilderVerbsMixin
 from ._specs import (
-    AEListingSpec,
-    AESummarySpec,
+    Column,
     OverallStat,
     Row,
+    SummarySpecBase,
+    TLGSpec,
+    Uncoded,
     resolve_filter,
 )
+
+
+class AESummarySpec(SummarySpecBase):
+    """Spec for an AE summary table (t_ae_summary).
+
+    Defaults provide zero-config convenience for a standard SOC→PT
+    table.  Uncoded rule: a null ``AEBODSYS`` or ``AEDECOD`` is counted
+    under ``"No Coding Available"``.
+    """
+
+    context: ClassVar[str] = "t_ae_summary"
+    nested: ClassVar[bool] = True
+
+    uncoded: Uncoded | None = Field(
+        default_factory=lambda: Uncoded(columns=["AEBODSYS", "AEDECOD"]),
+    )
+    rows: list[Row] = Field(
+        default_factory=lambda: [
+            Row(field="AEBODSYS", label="System Organ Class"),
+            Row(field="AEDECOD", label="Preferred Term"),
+        ],
+    )
+    required_columns: list[str] = Field(
+        default_factory=lambda: ["USUBJID", "TRTA", "AEDECOD", "AEBODSYS"],
+    )
+
+
+class AEListingSpec(TLGSpec):
+    """Spec for an AE listing (l_ae_listing)."""
+
+    _unconsumed_spec_fields: ClassVar[frozenset[str]] = frozenset({"adsl_filter", "header_rows"})
+
+    output_type: str = "listing"
+    columns: list[Column] = Field(
+        default_factory=lambda: [
+            Column(field="USUBJID", label="Subject"),
+            Column(field="TRTA", label="Treatment"),
+            Column(field="AEBODSYS", label="SOC"),
+            Column(field="AEDECOD", label="Preferred Term"),
+            Column(field="AESEV", label="Severity"),
+            Column(field="AESER", label="Serious"),
+        ],
+        description="Ordered list of columns to include in the listing.",
+    )
+    sort_by: list[str] = Field(
+        default_factory=lambda: ["USUBJID", "AEBODSYS", "AEDECOD"],
+        description="Sort order applied before rendering.",
+    )
+    required_columns: list[str] = Field(
+        default_factory=lambda: ["USUBJID", "TRTA", "AEDECOD"],
+        description="Columns required in the analysis dataset for this spec.",
+    )
 
 
 class AEOverviewSpec(AESummarySpec):
@@ -158,7 +212,6 @@ class AETLGNamespace(BuilderVerbsMixin):
         df: A Polars DataFrame containing ADaM AE-level data.
     """
 
-    _builder_context = "t_ae_summary"
     _builder_specs = {
         "t_summary": AESummarySpec,
         "t_overview": AEOverviewSpec,
@@ -522,15 +575,4 @@ class AETLGNamespace(BuilderVerbsMixin):
                 report = adae.tlg.ae.check()
         """
         spec = spec or AESummarySpec()
-        diagnostics = spec.check(self._df)
-
-        # Additional AE-specific checks
-        available = set(self._df.columns)
-        for row_def in spec.rows:
-            if row_def.field not in available:
-                diagnostics.append(
-                    f"WARNING: Column '{row_def.field}' not present — "
-                    f"'{row_def.label or row_def.field}' sub-analysis will be skipped."
-                )
-
-        return diagnostics
+        return spec.check(self._df)
