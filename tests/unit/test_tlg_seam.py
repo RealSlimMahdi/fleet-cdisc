@@ -11,7 +11,15 @@ import pytest
 
 import fleet  # noqa: F401 — registers df.tlg
 from fleet.core.exceptions import SchemaError
-from fleet.tlg import AESummarySpec, Uncoded, summarize_spec
+from fleet.tlg import (
+    AESeveritySpec,
+    AESummarySpec,
+    EXSummarySpec,
+    LBChgSpec,
+    LBShiftSpec,
+    Uncoded,
+    summarize_spec,
+)
 
 ADSL = pl.from_repr("""\
 ┌─────────┬─────────┐
@@ -102,39 +110,27 @@ def _stat(ard: pl.DataFrame, arm: str, level: str, stat: str) -> float | None:
 
 class TestPrefilter:
     def test_change_table_prefilter_is_visible_on_the_spec(self) -> None:
-        from fleet.tlg import LBChgSpec
-
         assert "ABLFL" in LBChgSpec().prefilter
 
     def test_default_prefilter_drops_baseline_and_missing_change(self) -> None:
-        from fleet.tlg import LBChgSpec
-
         ard = summarize_spec(ADLB, LBChgSpec(), groupby="TRTA", adsl=ADSL)
         assert "BASELINE" not in _levels(ard, "AVISIT")
         assert _stat(ard, "Placebo", "WEEK 2", "n") == 1
         assert _stat(ard, "Placebo", "WEEK 2", "mean") == 5.0
 
     def test_prefilter_follows_the_value_column(self) -> None:
-        from fleet.tlg import LBChgSpec
-
         assert "PCHG" in LBChgSpec(value_col="PCHG").prefilter
 
     def test_change_table_without_baseline_flag_is_refused(self) -> None:
-        from fleet.tlg import LBChgSpec
-
         with pytest.raises(SchemaError, match="ABLFL"):
             summarize_spec(ADLB.drop("ABLFL"), LBChgSpec(), groupby="TRTA", adsl=ADSL)
 
     def test_prefilter_none_is_the_visible_escape_hatch(self) -> None:
-        from fleet.tlg import LBChgSpec
-
         spec = LBChgSpec(prefilter=None)
         ard = summarize_spec(ADLB.drop("ABLFL"), spec, groupby="TRTA", adsl=ADSL)
         assert "BASELINE" in _levels(ard, "AVISIT")
 
     def test_exposure_table_without_parcat1_is_refused(self) -> None:
-        from fleet.tlg import EXSummarySpec
-
         adex = pl.from_repr("""\
         ┌─────────┬─────────┬─────────┬──────┐
         │ USUBJID ┆ TRTA    ┆ PARAMCD ┆ AVAL │
@@ -148,8 +144,6 @@ class TestPrefilter:
             summarize_spec(adex, EXSummarySpec(), groupby="TRTA", adsl=ADSL)
 
     def test_check_reports_the_missing_prefilter_column(self) -> None:
-        from fleet.tlg import LBChgSpec
-
         report = LBChgSpec().check(ADLB.drop("ABLFL"))
         assert any("ABLFL" in line for line in report)
 
@@ -158,8 +152,6 @@ class TestCompositesSharePreparation:
     """The seven composites run prepare_frame before their own logic."""
 
     def test_ae_severity_honours_uncoded_none(self) -> None:
-        from fleet.tlg import AESeveritySpec
-
         adae = ADAE.with_columns(pl.Series("AESEV", ["MILD", "SEVERE", "MILD"]))
         default = adae.tlg.ae.t_severity(groupby="TRTA", adsl=ADSL)
         assert "No Coding Available" in _levels(default, "AEBODSYS")
@@ -167,8 +159,6 @@ class TestCompositesSharePreparation:
         assert "No Coding Available" not in _levels(off, "AEBODSYS")
 
     def test_lb_shift_dataset_filter_bites_before_the_worst_case_reduction(self) -> None:
-        from fleet.tlg import LBShiftSpec
-
         # S01: HIGH at Week 2, back to NORMAL at Week 4.  A Week 4 table must
         # report NORMAL to NORMAL, not the Week 2 HIGH.
         adlb = pl.from_repr("""\

@@ -59,7 +59,7 @@ The spec's filter on ADSL that decides who is in the denominator, for example th
 _Avoid_: adsl filter, subset, big-N filter
 
 **Dataset filter**:
-The spec's filter on the analysis dataset that decides which records are counted, for example treatment-emergent events only. Applied after the template's own prefilter rules have run. An analyst sets it per study.
+The spec's filter on the analysis dataset that decides which records are counted, for example treatment-emergent events only. Applied after the uncoded rule and before the template's prefilter. An analyst sets it per study.
 _Avoid_: where clause, subset, record filter
 
 **Prefilter**:

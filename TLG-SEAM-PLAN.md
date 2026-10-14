@@ -1,6 +1,6 @@
 # TLG Spec Seam — Plan
 
-> **Status:** implemented on branch `refactor/tlg-spec-seam` (2026-10-14); see `docs/changelog.md` under Unreleased. Originally a plan, pre-implementation. Produced from the grilling session of 2026-10-14 on case 1 of the architecture review of 2026-08-30. Nothing here is built. Vocabulary follows `CONTEXT.md` (template, spec, ARD, population filter, dataset filter, prefilter, uncoded). Decision record: `docs/adr/0005-summary-specs-are-the-engine-contract.md`. Timing: first change after the 0.2.0a1 tag.
+> **Status:** implemented on branch `refactor/tlg-spec-seam` (2026-10-14); see `docs/changelog.md` under Unreleased. Produced from the grilling session of 2026-10-14 on case 1 of the architecture review of 2026-08-30, and amended after the code review with the deviations noted inline. Vocabulary follows `CONTEXT.md` (template, spec, ARD, population filter, dataset filter, prefilter, uncoded). Decision record: `docs/adr/0005-summary-specs-are-the-engine-contract.md`. Timing: first change after the 0.2.0a1 tag.
 
 ## Problem statement
 
@@ -50,7 +50,7 @@ Order is fixed: uncoded fill, then dataset filter, then prefilter. A composite t
 ### Two new spec fields on the summary base
 
 - `uncoded: Uncoded | None`. `Uncoded` is a Pydantic model with `columns: list[str]` and `label: str`. Default per domain spec class, for example `Uncoded(columns=["AEBODSYS", "AEDECOD"], label="No Coding Available")` on AE, `None` on LB. `uncoded: null` in YAML switches it off.
-- `prefilter: str | pl.Expr | None`. Same format and parser as `dataset_filter`. Default per spec class, for example `'pl.col("ABLFL").ne_missing("Y") & pl.col("CHG").is_not_null()'` on the change tables and `'pl.col("PARCAT1") == "OVERALL"'` on exposure. Every column the default names joins that spec's `required_columns`. The docstring of each spec class states the default rule in plain words next to the expression.
+- `prefilter: str | pl.Expr | None`. Same format and parser as `dataset_filter`. Default per spec class, for example `'pl.col("ABLFL").ne_missing("Y") & pl.col("CHG").is_not_null()'` on the change tables and `'pl.col("PARCAT1") == "OVERALL"'` on exposure. Every column the prefilter names is a required column: `spec.prefilter_columns()` reads them from the expression at validation time, so `prefilter: null` lifts the requirement with the rule and the static `required_columns` list stays the analyst-facing contract. On the change tables the default follows `value_col` unless the analyst sets the prefilter. The docstring of each spec class states the default rule in plain words next to the expression.
 
 ### Two class attributes on each spec class
 
@@ -76,23 +76,25 @@ def t_summary(self, *, groupby=None, adsl=None, spec=None):
     return summarize_spec(self._df, spec or MHSummarySpec(), groupby=groupby, adsl=adsl)
 ```
 
-The `check()` loop over spec rows, identical in nine modules, moves into `TLGSpec.check`.
+The `check()` loop over spec rows, identical in nine modules, moves into `SummarySpecBase.check` (listings have no rows).
 
 ## Behaviour changes
 
-Only two, and both turn a silent result into a refusal:
+Two refusals and one ordering fix:
 
 1. `lb.t_chg` and `eg.t_chg` on a dataset without ABLFL raise `SchemaError`. Before, baseline records were counted without a message.
 2. `ex.t_summary` on a dataset without PARCAT1 raises `SchemaError`. Before, every record was counted.
+3. `lb.t_shift` applies the dataset filter before the worst-case reduction, as the AE tables already did. Before, the filter ran on the reduced frame, so a filtered-out record could decide a subject's worst range indicator. Only a spec with a `dataset_filter` on lbt03 sees a difference.
 
-Every other ARD must be identical.
+`ae.t_overview` now inherits the AE uncoded rule. Its ARD has no row hierarchy, so the numbers do not change.
+
+Every other ARD is identical.
 
 ## Verification
 
-1. Before any code change, write the ARD of every DONE template on the CDISC pilot data to parquet under a fixture directory.
-2. After the change, regenerate and compare each pair with the compare verb. Expected verdict: EQUAL for every template. The two refusals above are tested as raised errors, not as differences.
-3. Keep the parquet snapshots as a regression fixture.
-4. The usual order: `ruff check`, `ruff format --check`, `pytest`, the six examples, `build_llms.py --check` (new verbs and a new public function), docs build.
+1. The repo already held the snapshot: one golden ARD parquet per DONE table template under `tests/fixtures/goldens/tlg`, computed on the frozen fixture study, compared cell for cell by `test_table_matches_golden`. The fixture study carries null coding terms, ABLFL baseline rows and PARCAT1, so all three moved rules are exercised. The goldens were left untouched and every one still matches. This is the equality proof; no pilot-scale snapshot and no compare-verb run were added.
+2. The two refusals above are tested as raised errors, not as differences (`tests/unit/test_tlg_seam.py`).
+3. The usual order was run green: `ruff check`, `ruff format --check`, `blacken-docs`, `pytest` (2447 passed), the six examples plus the two TLG examples, `build_llms.py --check`, `mkdocs build`.
 
 ## Out of scope
 
@@ -104,6 +106,7 @@ Every other ARD must be identical.
 
 - Group-column fallback and `validate_dataframe` move into the seam.
 - Preparation order: uncoded, dataset filter, prefilter.
-- `check()` row loop moves into the spec base class.
+- `check()` row loop moves into the summary spec base class.
+- The composites keep their two-line preamble (group column, validation) and their keyword engine call, as decided; a shared `engine_kwargs()` helper was noted in review and left for a later case.
 - Default prefilter rule stated in plain words in each spec class docstring.
 - Seam named `summarize_spec`, helper named `prepare_frame`, model named `Uncoded`.

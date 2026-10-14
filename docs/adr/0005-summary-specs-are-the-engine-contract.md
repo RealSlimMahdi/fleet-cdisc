@@ -13,4 +13,6 @@ Every summary table in `fleet.tlg` goes through one engine, `summarize_ard`, and
 
 - Every column a prefilter names is a required column of the template. A change-from-baseline table on an ADLB or ADEG without ABLFL, and an exposure table on an ADEX without PARCAT1, now refuse to run. Before, the guard was skipped without a message and baseline or per-period records were counted. `prefilter: null` in the spec is the visible escape hatch.
 - The order of the preparation step is fixed: uncoded fill, then dataset filter, then prefilter. A dataset filter may therefore reference the uncoded label.
+- A composite applies the dataset filter before its own reduction. On the lab shift table the filter used to run after the worst-case reduction, so a filtered-out record could decide a subject's worst range indicator; it no longer can.
+- Every column a prefilter names is required through `prefilter_columns()`, read from the expression at validation time, not through the static `required_columns` list. Setting `prefilter=None` lifts the requirement with the rule.
 - A user-registered template keeps its signature, `fn(df, *, adsl, spec, groupby)`, and may call the seam or the engine.

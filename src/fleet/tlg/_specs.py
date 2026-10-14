@@ -527,15 +527,19 @@ class TLGSpec(BaseModel):
             )
 
     def prefilter_columns(self) -> list[str]:
-        """Columns the spec's prefilter names, in first-seen order.
+        """Return the columns the spec's prefilter names.
 
-        Specs without a ``prefilter`` field (listings) have none.
-        Every one of them is a required column of the template.
+        Every one of them is a required column of the template.  A
+        listing has no prefilter, so the base returns none; summary
+        specs override this.
+
+        Returns:
+            list[str]: Column names in first-seen order; empty here.
+
+        Examples:
+            ``AEListingSpec().prefilter_columns() == []``
         """
-        expr = resolve_filter(getattr(self, "prefilter", None))
-        if expr is None:
-            return []
-        return list(dict.fromkeys(expr.meta.root_names()))
+        return []
 
     def _validate_content(self, df: pl.DataFrame) -> None:
         """Tier 2: check required flag/PARAMCD values exist in data."""
@@ -748,9 +752,40 @@ class SummarySpecBase(TLGSpec):
         ),
     )
 
+    def prefilter_columns(self) -> list[str]:
+        """Return the columns the spec's prefilter names.
+
+        Every one of them is a required column of the template, so a
+        change table's ``ABLFL`` guard makes ``ABLFL`` required and
+        ``prefilter=None`` lifts that requirement with it.
+
+        Returns:
+            list[str]: Column names in first-seen order; empty when the
+                prefilter is ``None``.
+
+        Examples:
+            ``LBChgSpec().prefilter_columns() == ["ABLFL", "CHG"]``
+        """
+        expr = resolve_filter(self.prefilter)
+        if expr is None:
+            return []
+        return list(dict.fromkeys(expr.meta.root_names()))
+
     def check(self, df: pl.DataFrame) -> list[str]:
-        """Pre-validation diagnostic — the base checks plus one line per
-        row field that is absent from *df* (its sub-analysis is skipped).
+        """Run the pre-validation diagnostic without computing.
+
+        The base checks (required columns, prefilter columns, required
+        flag values) plus one warning per row field absent from *df*,
+        whose sub-analysis the engine would skip.
+
+        Args:
+            df: The DataFrame to check.
+
+        Returns:
+            list[str]: Diagnostic messages (empty if all checks pass).
+
+        Examples:
+            ``MHSummarySpec().check(admh)``
         """
         diagnostics = super().check(df)
         available = set(df.columns)
@@ -782,11 +817,22 @@ class SummarySpecBase(TLGSpec):
 
 
 def change_from_baseline_prefilter(value_col: str) -> str:
-    """The prefilter every change-from-baseline table starts from.
+    """Return the prefilter every change-from-baseline table starts from.
 
     Drops the baseline record (``ABLFL`` is ``Y``; ADaM codes the flag
     as Y / null, so the test is null-safe) and records with no change
     value, so the paired n counts subjects with a change at the visit.
+
+    Args:
+        value_col: The change column the table summarises (``CHG``,
+            ``PCHG``).
+
+    Returns:
+        str: The expression string, YAML-serialisable.
+
+    Examples:
+        ``change_from_baseline_prefilter("CHG")`` gives
+        ``'pl.col("ABLFL").ne_missing("Y") & pl.col("CHG").is_not_null()'``.
     """
     return f'pl.col("ABLFL").ne_missing("Y") & pl.col("{value_col}").is_not_null()'
 

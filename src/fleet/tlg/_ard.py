@@ -426,7 +426,6 @@ def compute_big_n(
 # ------------------------------------------------------------------ #
 
 
-#: Label used for uncoded terms, mirroring the GDSR templates' NA level.
 def fill_uncoded(
     df: pl.DataFrame,
     columns: Sequence[str],
@@ -1074,13 +1073,19 @@ def prepare_frame(df: pl.DataFrame, spec: SummarySpecBase) -> pl.DataFrame:
 
     Returns:
         pl.DataFrame: *df* with the three rules applied.
+
+    Examples:
+        A composite table prepares its frame, then does its own work::
+
+            df = prepare_frame(adae, spec)
+            df = worst_case(df, by=["USUBJID", "TRTA", "AEBODSYS"], order_col="AESEV")
     """
     if spec.uncoded is not None:
         df = fill_uncoded(df, spec.uncoded.columns, spec.uncoded.label)
     dataset_filter = resolve_filter(spec.dataset_filter)
     if dataset_filter is not None:
         df = df.filter(dataset_filter)
-    prefilter = resolve_filter(getattr(spec, "prefilter", None))
+    prefilter = resolve_filter(spec.prefilter)
     if prefilter is not None:
         df = df.filter(prefilter)
     return df
@@ -1123,14 +1128,14 @@ def summarize_spec(
         prepare_frame(df, spec),
         rows=spec.rows,
         stats=spec.statistics,
-        context=type(spec).context,
+        context=spec.context,
         group_col=group_col,
         pools=spec.pools,
         column_order=spec.column_order,
         adsl=adsl,
         adsl_filter=spec.adsl_filter,
         header_rows=spec.header_rows,
-        nested=type(spec).nested,
+        nested=spec.nested,
         value_col=spec.value_col,
         label_col=spec.label_col,
         decimals=spec.decimals,
