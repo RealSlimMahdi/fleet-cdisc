@@ -133,14 +133,22 @@ class NeuroNamespace(SharedADaMVerbsMixin):
         target: str,
         *,
         score_col: str,
+        normal_threshold: int = 24,
+        mild_threshold: int = 19,
+        moderate_threshold: int = 10,
     ) -> Self:
         """Categorise MMSE total score into severity levels.
 
-        27–30 = Normal, 18–26 = Mild, 10–17 = Moderate, 0–9 = Severe.
+        Defaults: Normal >= 24, Mild 19-23, Moderate 10-18, Severe 0-9.
+        Each lower bound is an argument, so a SAP that uses other bands
+        passes its own cut-offs.
 
         Args:
             target: Name of the output column.
             score_col: Column containing the MMSE total score.
+            normal_threshold: Lower bound for Normal (default ``24``).
+            mild_threshold: Lower bound for Mild (default ``19``).
+            moderate_threshold: Lower bound for Moderate (default ``10``).
 
         Returns:
             Self: The namespace with *target* appended.
@@ -154,19 +162,30 @@ class NeuroNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
 
+            Use the bands of a SAP that puts Mild at 21-26::
+
+                adcog = (
+                    cog_raw.adam.neuro
+                    .mmse_category("MMSECG", score_col="AVAL",
+                                   normal_threshold=27, mild_threshold=21)
+                    .to_frame()
+                )
+
         References:
             Folstein MF, Folstein SE, McHugh PR. Mini-mental state. J Psychiatr Res.
-            1975;12:189-198 (the instrument). No single standard fixes the severity
-            bands: NICE TA217 (2011) uses 21-26 mild, 10-20 moderate and below 10
-            severe. Check the SAP before relying on the bands above.
+            1975;12:189-198 (the instrument). Default bands: Tombaugh TN, McIntyre
+            NJ. The Mini-Mental State Examination: a comprehensive review. J Am
+            Geriatr Soc. 1992;40:922-935 (24-30 normal, 19-23 mild, 10-18 moderate,
+            9 and below severe). Other schemes are in use, for example mild 21-26
+            and moderate 10-20; take the cut-offs from the SAP.
         """
         score = pl.col(score_col)
         return self._chain(
-            pl.when(score >= 27)
+            pl.when(score >= normal_threshold)
             .then(pl.lit("Normal"))
-            .when(score >= 18)
+            .when(score >= mild_threshold)
             .then(pl.lit("Mild"))
-            .when(score >= 10)
+            .when(score >= moderate_threshold)
             .then(pl.lit("Moderate"))
             .when(score >= 0)
             .then(pl.lit("Severe"))
