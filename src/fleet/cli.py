@@ -2185,7 +2185,7 @@ def _add_rule_parsers(sub: argparse._SubParsersAction) -> None:
         "--id",
         default=None,
         dest="rule_id",
-        help="Explicit rule ID (e.g. ROCHE-AE-042). Skips auto-increment.",
+        help="Explicit rule ID (e.g. ACME-AE-042). Skips auto-increment.",
     )
     add_rule.add_argument(
         "--output",

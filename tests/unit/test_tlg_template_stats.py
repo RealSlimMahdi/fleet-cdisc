@@ -2,7 +2,7 @@
 
 Every assertion is hand-recomputable from the fixture: worst-case
 severity/grade/relationship dedup, No-Coding-Available levels, CHG-based
-lab change tables, true shift cross-tabs, GDSR abnormality denominators,
+lab change tables, true shift cross-tabs, Company's Metadata abnormality denominators,
 DM population filtering, EX overall-block selection, and DTHT01 deaths
 denominators.
 """

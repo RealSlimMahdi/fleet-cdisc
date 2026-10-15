@@ -2,7 +2,7 @@
 MH TLG sub-namespace — Medical-history summary tables.
 
 Accessed via ``df.tlg.mh`` on any Polars DataFrame containing ADaM MH
-(ADMH) data.  Mirrors the GDSR MHT01 layout: subject counts and
+(ADMH) data.  Mirrors the Company's Metadata MHT01 layout: subject counts and
 percentages by MedDRA System Organ Class → Preferred Term.
 """
 

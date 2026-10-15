@@ -50,5 +50,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_dm_actarm_arm
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: DM Domain

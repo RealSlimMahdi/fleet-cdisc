@@ -14,6 +14,16 @@ declaration Fleet derives:
 * the machine-checked **coverage matrix** (algorithm ↔ namespace verb ↔
   ``SPEC_UNSUPPORTED`` allowlist) used by the parity tests.
 
+For an algorithm with the default dispatch, the facts a verb signature
+already states are **derived**, not restated (ADR-0007): whether a spec
+field is required and what its default is come from
+``inspect.signature()`` of the verb, read on first lookup, and a missing
+``description`` falls back to the verb docstring's ``Args:`` line.  A
+``Param`` declares only what a signature cannot say: the spec field name
+when it differs from the keyword, the YAML type, an alias, a dispatch-time
+conversion, and ``required=True`` where the spec is stricter than the verb.
+The spec may be stricter than the verb, never looser.
+
 The ``SDTMAlgorithm`` / ``ADAMAlgorithm`` enums remain literal source
 code in ``fleet.sdtm.models`` / ``fleet.adam.models`` for import
 stability; a sync test asserts they always match this registry.
@@ -34,9 +44,10 @@ Examples:
 from __future__ import annotations
 
 import difflib
+import inspect
 import re
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Annotated, Any, ClassVar, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, create_model, model_validator
@@ -77,10 +88,14 @@ class Param:
         annotation: Type annotation for the generated Pydantic field.
         kwarg: Verb keyword argument the value is passed to (defaults to
             *name*).
-        default: Live default applied when the field is omitted.  This is
-            the value the verb actually receives — no more unreachable
-            ``getattr(var, "low", "LBSTNRLO")`` fallbacks.
+        default: Live default applied when the field is omitted.  Declared
+            only for algorithms with a custom ``dispatch``; with the default
+            dispatch it is read from the verb signature (ADR-0007) and a
+            declared value is a restatement the parity test rejects.
         required: When ``True`` the field must be present in the spec.
+            Declare it only where the spec is stricter than the verb (the
+            keyword has a default in the signature); where the verb itself
+            requires the keyword it is derived.
         alias: Additional accepted YAML key (Pydantic alias), e.g.
             ``callable`` for ``callable_ref``.
         default_to_target: When the field is omitted (``None``), use the
@@ -93,7 +108,8 @@ class Param:
             a pinned dataset name via ``_require_pin``; ``"exprs"`` parses
             a list of expression strings via ``parse_expression``.
         description: Short human-readable description (surfaces in the
-            generated JSON schema).
+            generated JSON schema).  Falls back to the verb docstring's
+            ``Args:`` line for the keyword.
     """
 
     name: str
@@ -224,9 +240,94 @@ def _build_model(algo: SpecAlgorithm) -> type[SpecVariableBase]:
 # Registry storage & registration                                         #
 # --------------------------------------------------------------------- #
 
+#: Declared entries, exactly as ``spec_algorithm()`` received them.
 _REGISTRY: dict[str, dict[str, SpecAlgorithm]] = {"sdtm": {}, "adam": {}}
+#: Entries with the signature facts filled in, built on first lookup.
+_RESOLVED: dict[tuple[str, str], SpecAlgorithm] = {}
 _MODELS: dict[tuple[str, str], type[SpecVariableBase]] = {}
 _ADAPTERS: dict[str, TypeAdapter] = {}
+
+_SECTION_RE = re.compile(r"^[A-Z][A-Za-z ]*:\s*$")
+_ARG_RE = re.compile(r"^(\*{0,2}\w+)(?:\s*\([^)]*\))?:\s*(.*)$")
+
+
+def _namespace_class(standard: str) -> type | None:
+    """The namespace class whose methods the *standard*'s verbs are.
+
+    Imported here, not at module load: the namespaces import this module.
+    """
+    if standard == "sdtm":
+        from fleet.sdtm.namespace import SDTMNamespace
+
+        return SDTMNamespace
+    if standard == "adam":
+        from fleet.adam.namespace import AdamNamespace
+
+        return AdamNamespace
+    return None
+
+
+def _docstring_arg_descriptions(fn: Any) -> dict[str, str]:
+    """First sentence of each ``Args:`` entry of a Google-style docstring."""
+    doc = inspect.getdoc(fn) or ""
+    out: dict[str, str] = {}
+    in_args = False
+    current: str | None = None
+    for line in doc.splitlines():
+        stripped = line.strip()
+        if _SECTION_RE.match(stripped):
+            in_args = stripped == "Args:"
+            current = None
+            continue
+        if not in_args or not stripped:
+            continue
+        indent = len(line) - len(line.lstrip())
+        m = _ARG_RE.match(stripped)
+        if m and indent <= 4:
+            current = m.group(1).lstrip("*")
+            out[current] = m.group(2).strip()
+        elif current is not None:
+            out[current] = f"{out[current]} {stripped}".strip()
+    for name, text in out.items():
+        head, sep, _ = text.partition(". ")
+        out[name] = f"{head}." if sep else text
+    return out
+
+
+def _resolve(algo: SpecAlgorithm) -> SpecAlgorithm:
+    """Fill ``default``, ``required`` and ``description`` from the verb.
+
+    Only for the default dispatch: a custom dispatcher has no verb
+    signature to read.  A verb or keyword the namespace does not have
+    leaves the declaration as written; the parity test reports it.
+    """
+    if algo.dispatch is not None:
+        return algo
+    cls = _namespace_class(algo.standard)
+    fn = getattr(cls, algo.verb, None) if cls is not None else None
+    if fn is None:
+        return algo
+    sig = inspect.signature(fn).parameters
+    docs = _docstring_arg_descriptions(fn)
+    params: list[Param] = []
+    for p in algo.params:
+        kwarg = p.kwarg or p.name
+        sp = sig.get(kwarg)
+        description = p.description or docs.get(kwarg, "")
+        if sp is None or p.default_to_target:
+            params.append(replace(p, description=description))
+            continue
+        required = p.required or sp.default is inspect.Parameter.empty
+        default = None if required else sp.default
+        params.append(replace(p, default=default, required=required, description=description))
+    return replace(algo, params=tuple(params))
+
+
+def _resolved(declared: SpecAlgorithm) -> SpecAlgorithm:
+    key = (declared.standard, declared.name)
+    if key not in _RESOLVED:
+        _RESOLVED[key] = _resolve(declared)
+    return _RESOLVED[key]
 
 
 def spec_algorithm(
@@ -270,13 +371,14 @@ def spec_algorithm(
             *standard*.
 
     Examples:
-        Declare a spec algorithm executing the ``chg`` verb::
+        Declare a spec algorithm executing the ``chg`` verb. The defaults
+        ``"AVAL"`` and ``"BASE"`` and the descriptions come from the verb::
 
             spec_algorithm(
                 "chg", standard="adam", verb="chg",
                 params=(
-                    Param("aval", annotation=str, default="AVAL"),
-                    Param("base", annotation=str, default="BASE"),
+                    Param("aval", annotation=str),
+                    Param("base", annotation=str),
                 ),
             )
     """
@@ -298,7 +400,9 @@ def spec_algorithm(
         if spelling in table:
             raise ValueError(f"Algorithm '{spelling}' is already registered for {standard}.")
         table[spelling] = algo
-    _MODELS[(standard, name)] = _build_model(algo)
+    # The model and the signature facts are built on first lookup, so this
+    # module never imports the namespaces at load time.
+    _ADAPTERS.pop(standard, None)
     return algo
 
 
@@ -308,16 +412,22 @@ def spec_algorithm(
 
 
 def get_algorithm(standard: str, name: str) -> SpecAlgorithm | None:
-    """Return the algorithm registered under *name* (or alias), else None."""
-    return _REGISTRY.get(standard, {}).get(name)
+    """Return the algorithm registered under *name* (or alias), else None.
+
+    The entry carries the signature facts (ADR-0007): ``required`` and
+    ``default`` as the verb states them, and a ``description`` filled from
+    the verb docstring where the declaration gave none.
+    """
+    declared = _REGISTRY.get(standard, {}).get(name)
+    return None if declared is None else _resolved(declared)
 
 
 def algorithms(standard: str) -> list[SpecAlgorithm]:
-    """Return the canonical algorithm declarations for *standard*."""
+    """Return the canonical algorithm declarations for *standard*, resolved."""
     seen: dict[str, SpecAlgorithm] = {}
     for algo in _REGISTRY[standard].values():
         seen.setdefault(algo.name, algo)
-    return list(seen.values())
+    return [_resolved(a) for a in seen.values()]
 
 
 def algorithm_names(standard: str, *, include_aliases: bool = False) -> list[str]:
@@ -340,12 +450,15 @@ def model_for(standard: str, name: str) -> type[SpecVariableBase]:
     algo = get_algorithm(standard, name)
     if algo is None:
         raise KeyError(f"No {standard} spec algorithm named '{name}'.")
-    return _MODELS[(standard, algo.name)]
+    key = (standard, algo.name)
+    if key not in _MODELS:
+        _MODELS[key] = _build_model(algo)
+    return _MODELS[key]
 
 
 def variable_spec_union(standard: str) -> Any:
     """Return the discriminated union of all algorithm models for *standard*."""
-    models = tuple(_MODELS[(standard, a.name)] for a in algorithms(standard))
+    models = tuple(model_for(standard, a.name) for a in algorithms(standard))
     return Annotated[Union[models], Field(discriminator="algorithm")]  # noqa: UP007
 
 
@@ -956,11 +1069,10 @@ spec_algorithm(
     standard="sdtm",
     verb="condition_add",
     params=(
-        Param("condition", annotation=str, required=True, description="Boolean expression."),
+        Param("condition", annotation=str, description="Boolean expression."),
         Param(
             "then_value",
             annotation=Any,
-            required=True,
             description="Value emitted when the condition is true.",
         ),
     ),
@@ -976,7 +1088,6 @@ spec_algorithm(
         Param(
             "when",
             annotation=list[dict[str, Any]],
-            required=True,
             description="Ordered when/then clause dicts.",
         ),
         Param(
@@ -998,7 +1109,6 @@ spec_algorithm(
             "aerel_source",
             annotation=str,
             kwarg="source",
-            default="ae_relationship",
             description="Raw relationship column.",
         ),
         Param(
@@ -1030,7 +1140,7 @@ spec_algorithm(
             required=True,
             description="Join key column(s).",
         ),
-        Param("how", annotation=str, default="left", description="Join strategy."),
+        Param("how", annotation=str, description="Join strategy."),
         Param(
             "target_cols",
             annotation=_LIST_OR_NONE,
@@ -1052,13 +1162,11 @@ spec_algorithm(
             "group_cols",
             annotation=list[str],
             kwarg="by",
-            required=True,
             description="Grouping columns.",
         ),
         Param(
             "agg",
             annotation=list[str],
-            required=True,
             convert="exprs",
             description="Aggregation expression strings.",
         ),
@@ -1080,7 +1188,7 @@ spec_algorithm(
     verb="multiple_responses",
     params=(
         Param("source", default_to_target=True, identity_source=True),
-        Param("delimiter", annotation=str, default="|", description="Response separator."),
+        Param("delimiter", annotation=str, description="Response separator."),
     ),
     description="Explode a delimited multi-response field into rows.",
 )
@@ -1096,7 +1204,7 @@ spec_algorithm(
             description="Sort column(s) for sequence order.",
         ),
         Param("groups", annotation=_LIST_OR_NONE, kwarg="by", description="Partition columns."),
-        Param("start_at", annotation=int, default=1, description="First sequence number."),
+        Param("start_at", annotation=int, description="First sequence number."),
     ),
     description="Assign the --SEQ sequence number within each group.",
 )
@@ -1119,14 +1227,13 @@ spec_algorithm(
     verb="duration",
     legacy_keys={"source": "start"},
     params=(
-        Param("start", annotation=str, required=True, description="Start date column."),
-        Param("end", annotation=str, required=True, description="End date column."),
-        Param("unit", annotation=str, default="days", description="Output unit."),
+        Param("start", annotation=str, description="Start date column."),
+        Param("end", annotation=str, description="End date column."),
+        Param("unit", annotation=str, description="Output unit."),
         Param("add_one", annotation=bool | None, description="CDISC +1 day convention."),
         Param(
             "out",
             annotation=str,
-            default="numeric",
             description="Output style: numeric or iso8601.",
         ),
     ),
@@ -1206,7 +1313,6 @@ spec_algorithm(
         Param(
             "recode_map",
             annotation=dict[Any, Any],
-            required=True,
             description="Old-value → new-value mapping.",
         ),
         Param("default", annotation=Any, description="Fallback for unmapped values."),
@@ -1233,7 +1339,6 @@ spec_algorithm(
             "conditions",
             annotation=list[dict[str, Any]],
             kwarg="when",
-            required=True,
             description="Ordered when/then condition dicts.",
         ),
         Param(
@@ -1266,7 +1371,7 @@ spec_algorithm(
             required=True,
             description="Join key column(s).",
         ),
-        Param("how", annotation=str, default="left", description="Join strategy."),
+        Param("how", annotation=str, description="Join strategy."),
         Param(
             "target_cols",
             annotation=_LIST_OR_NONE,
@@ -1284,7 +1389,7 @@ spec_algorithm(
     standard="adam",
     verb="whereclauses",
     takes_target=False,
-    params=(Param("where", annotation=str, required=True, description="Row filter expression."),),
+    params=(Param("where", annotation=str, description="Row filter expression."),),
     description="Filter rows by a boolean expression.",
 )
 
@@ -1297,14 +1402,12 @@ spec_algorithm(
             "analysis_date",
             annotation=str,
             kwarg="end",
-            required=True,
             description="Analysis date column (e.g. ADT).",
         ),
         Param(
             "reference_date",
             annotation=str,
             kwarg="start",
-            required=True,
             description="Reference date column (e.g. TRTSDT).",
         ),
     ),
@@ -1317,11 +1420,10 @@ spec_algorithm(
     standard="adam",
     verb="baseline",
     params=(
-        Param("aval", annotation=str, default="AVAL", description="Analysis value column."),
+        Param("aval", annotation=str, description="Analysis value column."),
         Param(
             "baseline_flag",
             annotation=str,
-            default="ABLFL",
             description="Baseline record flag column.",
         ),
         Param("groups", annotation=_LIST_OR_NONE, kwarg="by", description="Partition columns."),
@@ -1335,8 +1437,14 @@ spec_algorithm(
     standard="adam",
     verb="chg",
     params=(
-        Param("aval", annotation=str, default="AVAL"),
-        Param("base", annotation=str, default="BASE"),
+        Param(
+            "aval",
+            annotation=str,
+        ),
+        Param(
+            "base",
+            annotation=str,
+        ),
     ),
     description="Change from baseline (AVAL - BASE).",
     define_template="Change from baseline: {aval} - {base}.",
@@ -1347,8 +1455,14 @@ spec_algorithm(
     standard="adam",
     verb="pchg",
     params=(
-        Param("aval", annotation=str, default="AVAL"),
-        Param("base", annotation=str, default="BASE"),
+        Param(
+            "aval",
+            annotation=str,
+        ),
+        Param(
+            "base",
+            annotation=str,
+        ),
     ),
     description="Percent change from baseline.",
     define_template="Percent change from baseline: 100 * ({aval} - {base}) / {base}.",
@@ -1367,7 +1481,6 @@ spec_algorithm(
         Param(
             "criteria",
             annotation=str,
-            required=True,
             description="Row expression or sentinel: first/last/max/min.",
         ),
         Param("groups", annotation=_LIST_OR_NONE, kwarg="by", description="Partition columns."),
@@ -1381,7 +1494,6 @@ spec_algorithm(
         Param(
             "flag_value",
             annotation=str,
-            default="Y",
             description="Value emitted when the flag condition is met.",
         ),
     ),
@@ -1393,8 +1505,8 @@ spec_algorithm(
     standard="adam",
     verb="bmi",
     params=(
-        Param("weight", annotation=str, required=True, description="Weight column (kg)."),
-        Param("height", annotation=str, required=True, description="Height column (cm)."),
+        Param("weight", annotation=str, description="Weight column (kg)."),
+        Param("height", annotation=str, description="Height column (cm)."),
     ),
     description="Body Mass Index from weight and height.",
     define_template="Body Mass Index (kg/m2) from {weight} and {height}.",
@@ -1410,19 +1522,16 @@ spec_algorithm(
             "aval",
             annotation=str,
             kwarg="value",
-            required=True,
             description="Analysis value column.",
         ),
         Param(
             "low",
             annotation=str,
-            required=True,
             description="Lower normal range column.",
         ),
         Param(
             "high",
             annotation=str,
-            required=True,
             description="Upper normal range column.",
         ),
     ),
@@ -1440,26 +1549,22 @@ spec_algorithm(
             "analysis_date",
             annotation=str,
             kwarg="adt",
-            required=True,
             description="Analysis date column.",
         ),
         Param(
             "reference_date",
             annotation=str,
             kwarg="trtsdt",
-            required=True,
             description="Treatment start date column.",
         ),
         Param(
             "trtedt",
             annotation=str,
-            required=True,
             description="Treatment end date column.",
         ),
         Param(
             "open_ended",
             annotation=bool,
-            default=True,
             description="Treat a missing end date as still on treatment.",
         ),
     ),
@@ -1475,16 +1580,14 @@ spec_algorithm(
         Param(
             "baseline_cat",
             annotation=str,
-            required=True,
             description="Baseline category column.",
         ),
         Param(
             "post_cat",
             annotation=str,
-            required=True,
             description="Post-baseline category column.",
         ),
-        Param("sep", annotation=str, default=" to ", description="Join separator."),
+        Param("sep", annotation=str, description="Join separator."),
     ),
     description="Shift-table category ('NORMAL to HIGH').",
     define_template="Shift from {baseline_cat} to {post_cat}.",
@@ -1501,7 +1604,7 @@ spec_algorithm(
             description="Sort column(s) for sequence order.",
         ),
         Param("groups", annotation=_LIST_OR_NONE, kwarg="by", description="Partition columns."),
-        Param("start_at", annotation=int, default=1, description="First sequence number."),
+        Param("start_at", annotation=int, description="First sequence number."),
     ),
     description="Assign the ASEQ sequence number within each group.",
 )
@@ -1511,9 +1614,9 @@ spec_algorithm(
     standard="adam",
     verb="bsa",
     params=(
-        Param("weight", annotation=str, required=True, description="Weight column (kg)."),
-        Param("height", annotation=str, required=True, description="Height column (cm)."),
-        Param("method", annotation=str, default="Mosteller", description="BSA formula."),
+        Param("weight", annotation=str, description="Weight column (kg)."),
+        Param("height", annotation=str, description="Height column (cm)."),
+        Param("method", annotation=str, description="BSA formula."),
     ),
     description="Body Surface Area.",
     define_template="Body Surface Area ({method} formula) from {weight} and {height}.",
@@ -1525,8 +1628,8 @@ spec_algorithm(
     verb="map",
     aliases=("mean_arterial_pressure",),
     params=(
-        Param("systolic", annotation=str, default="SYSBP", description="Systolic BP column."),
-        Param("diastolic", annotation=str, default="DIABP", description="Diastolic BP column."),
+        Param("systolic", annotation=str, description="Systolic BP column."),
+        Param("diastolic", annotation=str, description="Diastolic BP column."),
     ),
     description="Mean Arterial Pressure.",
     define_template="Mean Arterial Pressure from {systolic} and {diastolic}.",
@@ -1537,9 +1640,9 @@ spec_algorithm(
     standard="adam",
     verb="qtc",
     params=(
-        Param("qt", annotation=str, default="QT", description="QT interval column (ms)."),
-        Param("rr", annotation=str, default="RR", description="RR interval column (ms)."),
-        Param("method", annotation=str, default="Fridericia", description="Correction formula."),
+        Param("qt", annotation=str, description="QT interval column (ms)."),
+        Param("rr", annotation=str, description="RR interval column (ms)."),
+        Param("method", annotation=str, description="Correction formula."),
     ),
     description="Corrected QT interval.",
     define_template="QT interval corrected using the {method} formula, from {qt} and {rr}.",
@@ -1550,19 +1653,17 @@ spec_algorithm(
     standard="adam",
     verb="atoxgr",
     params=(
-        Param("system", annotation=str, default="ctcae_v5", description="Grading system."),
-        Param("direction", annotation=str, required=True, description="'L' or 'H'."),
+        Param("system", annotation=str, description="Grading system."),
+        Param("direction", annotation=str, description="'L' or 'H'."),
         Param(
             "term_var",
             annotation=str,
-            required=True,
             description="Toxicity term variable.",
         ),
         Param("unit_var", description="Unit-of-measure variable."),
         Param(
             "signif_dig",
             annotation=int,
-            default=5,
             description="Significant digits for comparisons.",
         ),
         Param(
@@ -1579,8 +1680,14 @@ spec_algorithm(
     standard="adam",
     verb="combine_grades",
     params=(
-        Param("low_var", annotation=str, default="ATOXGRL"),
-        Param("high_var", annotation=str, default="ATOXGRH"),
+        Param(
+            "low_var",
+            annotation=str,
+        ),
+        Param(
+            "high_var",
+            annotation=str,
+        ),
         Param("low_desc_var", description="Low-direction description column."),
         Param("high_desc_var", description="High-direction description column."),
     ),
@@ -1596,13 +1703,12 @@ spec_algorithm(
         Param("value", description="Literal date value to broadcast."),
         Param("output", description="Output type override: 'dt' or 'dtm'."),
         Param("time", description="Time column or 'HH:MM:SS' literal (DTM targets)."),
-        Param("impute", annotation=str, default="first", description="Imputation strategy."),
+        Param("impute", annotation=str, description="Imputation strategy."),
         Param("impute_time", description="Time-part imputation override."),
         Param("highest", description="Maximum imputation ceiling (D/M/Y/h/m/s)."),
         Param(
             "flag",
             annotation=bool | str,
-            default=True,
             description="Auto-generate DTF/TMF flags (bool) or explicit flag name.",
         ),
         Param("min_date", description="Lower clamp bound."),
@@ -1623,14 +1729,13 @@ spec_algorithm(
         "end_date": "end",
     },
     params=(
-        Param("start", annotation=str, required=True, description="Start date column."),
-        Param("end", annotation=str, required=True, description="End date column."),
-        Param("unit", annotation=str, default="days", description="Output unit."),
+        Param("start", annotation=str, description="Start date column."),
+        Param("end", annotation=str, description="End date column."),
+        Param("unit", annotation=str, description="Output unit."),
         Param("add_one", annotation=bool | None, description="CDISC +1 day convention."),
         Param(
             "out",
             annotation=str,
-            default="numeric",
             description="Output style: numeric or iso8601.",
         ),
     ),
@@ -1670,11 +1775,10 @@ spec_algorithm(
         Param(
             "from_dataset",
             annotation=str,
-            required=True,
             convert="pin",
             description="Pinned event dataset name (resolved via .pin()).",
         ),
-        Param("date_col", annotation=str, required=True, description="Date column to minimise."),
+        Param("date_col", annotation=str, description="Date column to minimise."),
         Param("where", description="Filter applied before aggregation."),
         Param("groups", annotation=_LIST_OR_NONE, kwarg="by", description="Join key columns."),
     ),
@@ -1690,11 +1794,10 @@ spec_algorithm(
         Param(
             "from_dataset",
             annotation=str,
-            required=True,
             convert="pin",
             description="Pinned event dataset name (resolved via .pin()).",
         ),
-        Param("date_col", annotation=str, required=True, description="Date column to maximise."),
+        Param("date_col", annotation=str, description="Date column to maximise."),
         Param("where", description="Filter applied before aggregation."),
         Param("groups", annotation=_LIST_OR_NONE, kwarg="by", description="Join key columns."),
     ),
@@ -1711,7 +1814,6 @@ spec_algorithm(
         Param(
             "from_dataset",
             annotation=str,
-            required=True,
             convert="pin",
             description="Pinned event dataset name (resolved via .pin()).",
         ),

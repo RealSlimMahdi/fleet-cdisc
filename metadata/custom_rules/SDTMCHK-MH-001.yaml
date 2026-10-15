@@ -54,5 +54,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_mh_missing_month
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: MH Domain

@@ -1176,11 +1176,13 @@
         },
         "aval": {
           "default": "AVAL",
+          "description": "Analysis value column.",
           "title": "Aval",
           "type": "string"
         },
         "base": {
           "default": "BASE",
+          "description": "Baseline value column.",
           "title": "Base",
           "type": "string"
         },
@@ -1217,11 +1219,13 @@
         },
         "low_var": {
           "default": "ATOXGRL",
+          "description": "Low-direction grade column (default ``\"ATOXGRL\"``).",
           "title": "Low Var",
           "type": "string"
         },
         "high_var": {
           "default": "ATOXGRH",
+          "description": "High-direction grade column (default ``\"ATOXGRH\"``).",
           "title": "High Var",
           "type": "string"
         },
@@ -2151,11 +2155,13 @@
         },
         "aval": {
           "default": "AVAL",
+          "description": "Analysis value column.",
           "title": "Aval",
           "type": "string"
         },
         "base": {
           "default": "BASE",
+          "description": "Baseline value column.",
           "title": "Base",
           "type": "string"
         },
@@ -2347,6 +2353,7 @@
             }
           ],
           "default": null,
+          "description": "Name of the input column containing coded values.",
           "title": "Source"
         },
         "recode_map": {
@@ -2402,6 +2409,7 @@
             }
           ],
           "default": null,
+          "description": "Input column to copy from.",
           "title": "Source"
         },
         "depends_on": {
@@ -2728,6 +2736,7 @@
             }
           ],
           "default": null,
+          "description": "Input column to copy from.",
           "title": "Source"
         },
         "ct_codelist": {
@@ -3240,6 +3249,7 @@
             }
           ],
           "default": null,
+          "description": "Name of the raw column containing delimited responses.",
           "title": "Source"
         },
         "delimiter": {

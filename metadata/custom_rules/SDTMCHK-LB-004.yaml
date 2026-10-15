@@ -56,5 +56,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_lb_lbdtc_visit_ordinal_error
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: LB Domain

@@ -121,7 +121,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         method="t_overview",
         output_type=OutputType.TABLE,
         domains=("ADSL", "ADAE"),
-        source_ref="template_gdsr_aet01.R",
+        source_ref="Company's Metadata aet01",
         status=Status.DONE,
     ),
     "ael01": TemplateMeta(
@@ -132,7 +132,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         method="l_listing",
         output_type=OutputType.LISTING,
         domains=("ADAE",),
-        source_ref="template_gdsr_ael01.R",
+        source_ref="Company's Metadata ael01",
         status=Status.DONE,
     ),
     "vst01": TemplateMeta(
@@ -143,7 +143,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         method="t_summary",
         output_type=OutputType.TABLE,
         domains=("ADSL", "ADVS"),
-        source_ref="template_gdsr_vst01.R",
+        source_ref="Company's Metadata vst01",
         status=Status.DONE,
     ),
     "cmt01a": TemplateMeta(
@@ -154,7 +154,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         method="t_summary",
         output_type=OutputType.TABLE,
         domains=("ADSL", "ADCM"),
-        source_ref="template_gdsr_cmt01a.R",
+        source_ref="Company's Metadata cmt01a",
         status=Status.DONE,
     ),
     "ext01": TemplateMeta(
@@ -165,7 +165,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         method="t_summary",
         output_type=OutputType.TABLE,
         domains=("ADSL", "ADEX"),
-        source_ref="template_gdsr_ext01.R",
+        source_ref="Company's Metadata ext01",
         status=Status.DONE,
     ),
     "dmt01": TemplateMeta(
@@ -176,7 +176,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         method="t_summary",
         output_type=OutputType.TABLE,
         domains=("ADSL",),
-        source_ref="template_gdsr_dmt01.R",
+        source_ref="Company's Metadata dmt01",
         status=Status.DONE,
     ),
     "dst01": TemplateMeta(
@@ -187,7 +187,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         method="t_summary",
         output_type=OutputType.TABLE,
         domains=("ADSL",),
-        source_ref="template_gdsr_dst01.R",
+        source_ref="Company's Metadata dst01",
         status=Status.DONE,
     ),
     "dtht01": TemplateMeta(
@@ -198,7 +198,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         method="t_deaths",
         output_type=OutputType.TABLE,
         domains=("ADSL",),
-        source_ref="template_gdsr_dtht01.R",
+        source_ref="Company's Metadata dtht01",
         status=Status.DONE,
     ),
     "egt01": TemplateMeta(
@@ -209,7 +209,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         method="t_summary",
         output_type=OutputType.TABLE,
         domains=("ADSL", "ADEG"),
-        source_ref="template_gdsr_egt01.R",
+        source_ref="Company's Metadata egt01",
         status=Status.DONE,
     ),
     "ent01": TemplateMeta(
@@ -220,7 +220,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         method="t_enrollment",
         output_type=OutputType.TABLE,
         domains=("ADSL",),
-        source_ref="template_gdsr_ent01.R",
+        source_ref="Company's Metadata ent01",
         status=Status.DONE,
     ),
     "lbt01": TemplateMeta(
@@ -231,7 +231,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         method="t_summary",
         output_type=OutputType.TABLE,
         domains=("ADSL", "ADLB"),
-        source_ref="template_gdsr_lbt01.R",
+        source_ref="Company's Metadata lbt01",
         status=Status.DONE,
     ),
     "lbl01": TemplateMeta(
@@ -242,7 +242,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         method="l_listing",
         output_type=OutputType.LISTING,
         domains=("ADLB",),
-        source_ref="template_gdsr_lbl01.R",
+        source_ref="Company's Metadata lbl01",
         status=Status.DONE,
     ),
     "mht01": TemplateMeta(
@@ -253,7 +253,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         method="t_summary",
         output_type=OutputType.TABLE,
         domains=("ADSL", "ADMH"),
-        source_ref="template_gdsr_mht01.R",
+        source_ref="Company's Metadata mht01",
         status=Status.DONE,
     ),
     "pdt01": TemplateMeta(
@@ -264,7 +264,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         method="t_deviations",
         output_type=OutputType.TABLE,
         domains=("ADSL", "ADDV"),
-        source_ref="template_gdsr_pdt01.R",
+        source_ref="Company's Metadata pdt01",
         status=Status.DONE,
     ),
     "aet02": TemplateMeta(
@@ -275,7 +275,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         "t_soc_pt",
         OutputType.TABLE,
         ("ADSL", "ADAE"),
-        "template_gdsr_aet02.R",
+        "Company's Metadata aet02",
         Status.DONE,
     ),
     "aet03": TemplateMeta(
@@ -286,7 +286,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         "t_severity",
         OutputType.TABLE,
         ("ADSL", "ADAE"),
-        "template_gdsr_aet03.R",
+        "Company's Metadata aet03",
         Status.DONE,
     ),
     "aet04": TemplateMeta(
@@ -297,7 +297,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         "t_grade",
         OutputType.TABLE,
         ("ADSL", "ADAE"),
-        "template_gdsr_aet04.R",
+        "Company's Metadata aet04",
         Status.DONE,
     ),
     "lbt02": TemplateMeta(
@@ -308,7 +308,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         "t_chg",
         OutputType.TABLE,
         ("ADSL", "ADLB"),
-        "template_gdsr_lbt02.R",
+        "Company's Metadata lbt02",
         Status.DONE,
     ),
     "lbt03": TemplateMeta(
@@ -319,7 +319,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         "t_shift",
         OutputType.TABLE,
         ("ADSL", "ADLB"),
-        "template_gdsr_lbt03.R",
+        "Company's Metadata lbt03",
         Status.DONE,
     ),
     "lbt04": TemplateMeta(
@@ -330,7 +330,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         "t_abnormal",
         OutputType.TABLE,
         ("ADSL", "ADLB"),
-        "template_gdsr_lbt04.R",
+        "Company's Metadata lbt04",
         Status.DONE,
     ),
     "egt03": TemplateMeta(
@@ -341,7 +341,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         "t_chg",
         OutputType.TABLE,
         ("ADSL", "ADEG"),
-        "template_gdsr_egt03.R",
+        "Company's Metadata egt03",
         Status.DONE,
     ),
     "egt05": TemplateMeta(
@@ -352,7 +352,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         "t_qtcat",
         OutputType.TABLE,
         ("ADSL", "ADEG"),
-        "template_gdsr_egt05_qtcat.R",
+        "Company's Metadata egt05_qtcat",
         Status.DONE,
     ),
     "cmt02": TemplateMeta(
@@ -363,7 +363,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         "t_by_pt",
         OutputType.TABLE,
         ("ADSL", "ADCM"),
-        "template_gdsr_cmt02_pt.R",
+        "Company's Metadata cmt02_pt",
         Status.DONE,
     ),
     "aet05": TemplateMeta(
@@ -374,7 +374,7 @@ TEMPLATES: dict[str, TemplateMeta] = {
         "t_relationship",
         OutputType.TABLE,
         ("ADSL", "ADAE"),
-        "template_gdsr_aet05.R",
+        "Company's Metadata aet05",
         Status.DONE,
     ),
 }

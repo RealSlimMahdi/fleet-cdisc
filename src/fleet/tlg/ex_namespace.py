@@ -116,7 +116,7 @@ class EXTLGNamespace(BuilderVerbsMixin):
         spec = spec or EXSummarySpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
         spec.validate_dataframe(self._df, group_col=group_col)
-        # GDSR EXT01 summarizes the overall-exposure block: restrict to
+        # Company's Metadata EXT01 summarizes the overall-exposure block: restrict to
         # PARCAT1 == "OVERALL" when the column exists so per-interval
         # dose records are not averaged into subject-level statistics.
         prefilter = pl.col("PARCAT1") == "OVERALL" if "PARCAT1" in self._df.columns else None

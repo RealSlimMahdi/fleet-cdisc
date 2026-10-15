@@ -53,5 +53,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_rs_rsdtc_visit
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: RS Domain

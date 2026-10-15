@@ -38,7 +38,7 @@ class LBSummarySpec(SummarySpecBase):
 
     Defaults provide zero-config continuous statistics for each
     parameter (``PARAMCD``) at each analysis visit (``AVISIT``),
-    mirroring the GDSR ``LBT01`` baseline/change layout.
+    mirroring the Company's Metadata ``LBT01`` baseline/change layout.
     """
 
     rows: list[Row] = Field(

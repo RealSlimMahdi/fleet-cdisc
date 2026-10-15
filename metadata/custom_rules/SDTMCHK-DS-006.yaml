@@ -63,5 +63,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_ds_dsdecod_death
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: DS Domain

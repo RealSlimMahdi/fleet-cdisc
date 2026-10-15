@@ -3,7 +3,7 @@ CM TLG sub-namespace — concomitant-medication summary tables.
 
 Accessed via ``df.tlg.cm`` on any Polars DataFrame containing ADaM CM
 (ADCM) data.  Produces a hierarchical CMCLAS→CMDECOD summary of subjects
-with at least one concomitant medication, mirroring the GDSR ``cmt01a``
+with at least one concomitant medication, mirroring the Company's Metadata ``cmt01a``
 template (ATC class → preferred term, n / % subjects per arm).
 """
 
@@ -149,7 +149,7 @@ class CMTLGNamespace(BuilderVerbsMixin):
     ) -> pl.DataFrame:
         """Produce a CM-by-preferred-term ARD (CMDECOD only).
 
-        Single-level variant of :meth:`t_summary` mirroring the GDSR
+        Single-level variant of :meth:`t_summary` mirroring the Company's Metadata
         ``cmt02_pt`` template: counts subjects with at least one
         concomitant medication per arm, broken down by preferred term
         (``CMDECOD``) without the ATC-class hierarchy.

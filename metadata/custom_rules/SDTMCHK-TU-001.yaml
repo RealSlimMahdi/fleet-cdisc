@@ -45,5 +45,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_tu_tudtc
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: TU Domain (ONC)

@@ -60,10 +60,10 @@ validation:
 uv run fleet add-rule --domain AE --description "AESEV must be populated when AESER = Y"
 
 # Custom prefix
-uv run fleet add-rule --domain AE --prefix ROCHE --description "Severity required for serious AEs"
+uv run fleet add-rule --domain AE --prefix ACME --description "Severity required for serious AEs"
 
 # Explicit ID (skips auto-increment)
-uv run fleet add-rule --domain VS --id ROCHE-VS-010 --description "VSORRES range check"
+uv run fleet add-rule --domain VS --id ACME-VS-010 --description "VSORRES range check"
 
 # Output to a specific directory (overrides study_config)
 uv run fleet add-rule --domain AE --description "Custom check" --output ./my_rules/
@@ -230,7 +230,7 @@ my_study/
     custom_rules/          ← Your sponsor-specific rules (all .yaml files loaded)
       FLEET-AE-001.yaml
       FLEET-AE-002.yaml
-      ROCHE-VS-001.yaml
+      ACME-VS-001.yaml
     sdtm/
       rules/               ← CDISC CORE rules (from fleet init rules)
     adam/
@@ -246,7 +246,7 @@ Commit the directory to VCS so the complete rule inventory is versioned alongsid
 | Pattern | Example | Owner |
 |---------|---------|-------|
 | `CORE-XXXXXX` | `CORE-000001` | CDISC (official — never reuse) |
-| `<COMPANY>-<DOMAIN>-<NNN>` | `ROCHE-AE-001` | Your organisation |
+| `<COMPANY>-<DOMAIN>-<NNN>` | `ACME-AE-001` | Your organisation |
 | `FLEET-<DOMAIN>-<NNN>` | `FLEET-DM-003` | Default prefix |
 
 The `--prefix` flag on `fleet add-rule` controls the prefix. Auto-increment scans existing
