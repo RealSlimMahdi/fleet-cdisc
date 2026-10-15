@@ -1957,6 +1957,34 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#020a1-pre-alpha" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [0.2.0a1] — pre-alpha
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[0.2.0a1] — pre-alpha">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#added" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1968,7 +1996,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#changed" class="md-nav__link">
+  <a href="#changed_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Changed
@@ -2069,6 +2097,34 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#020a1-pre-alpha" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [0.2.0a1] — pre-alpha
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="[0.2.0a1] — pre-alpha">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#added" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2080,7 +2136,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#changed" class="md-nav__link">
+  <a href="#changed_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Changed
@@ -2157,6 +2213,16 @@
 <h1 id="changelog">Changelog<a class="headerlink" href="#changelog" title="Permanent link">&para;</a></h1>
 <p>All notable changes to Fleet are documented here.</p>
 <h2 id="unreleased">[Unreleased]<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
+<h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>TLG summary specs are the engine contract</strong> (ADR-0005) — one seam, <code>fleet.tlg.summarize_spec(df, spec, groupby=, adsl=)</code>, reads every engine argument from the spec; sixteen <code>df.tlg.&lt;domain&gt;.t_*</code> methods are now one call on it, and the seven composite tables (AE severity, grade and relationship, deaths, lab shift and abnormal, demographics) share <code>prepare_frame</code> before their own logic. Public method signatures are unchanged.</li>
+<li>two template rules leave method bodies and become spec fields, visible in YAML and settable inline: <code>uncoded</code> (an <code>Uncoded(columns, label)</code> model, GDSR default <code>"No Coding Available"</code> on the AE, CM and MH tables; <code>null</code> switches it off) and <code>prefilter</code> (an expression string in the same form as <code>dataset_filter</code>, applied after it; default per template; <code>null</code> switches it off). Builder verbs <code>.uncoded()</code> and <code>.prefilter()</code> map onto them.</li>
+<li>every column a prefilter names is a required column: <code>lb.t_chg</code> and <code>eg.t_chg</code> on a dataset without <code>ABLFL</code>, and <code>ex.t_summary</code> on a dataset without <code>PARCAT1</code>, now raise <code>SchemaError</code> instead of counting baseline or per-interval records silently. <code>check()</code> reports the missing column.</li>
+<li>the dataset filter on <code>lb.t_shift</code> now bites before the worst-case reduction, as it already did on the AE tables.</li>
+<li>the AE and VS spec classes moved from <code>fleet.tlg._specs</code> to their domain modules; <code>fleet.tlg.AESummarySpec</code> and friends are unchanged. <code>prepare_frame</code>, <code>summarize_ard</code> and <code>Uncoded</code> are new public names on <code>fleet.tlg</code>.</li>
+</ul>
+<h2 id="020a1-pre-alpha">[0.2.0a1] — pre-alpha<a class="headerlink" href="#020a1-pre-alpha" title="Permanent link">&para;</a></h2>
+<p>First pre-alpha on PyPI. It replaces 0.1.0, which is yanked. Install with <code>pip install --pre fleet-cdisc</code>.</p>
 <h3 id="added">Added<a class="headerlink" href="#added" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Dataset comparison</strong> — a <code>PROC COMPARE</code> analogue in pure Polars (no new dependency), reachable three ways over one engine:</li>
@@ -2227,7 +2293,7 @@
 <li>Pre-executed example notebook: ADSL pipeline (CDISCPILOT01)</li>
 <li><code>llms.txt</code> for LLM-friendly documentation</li>
 </ul>
-<h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
+<h3 id="changed_1">Changed<a class="headerlink" href="#changed_1" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Spec parameter facts are checked against the verb signature</strong> (ADR-0007, #179 phase 1) — the parity test now compares every <code>Param</code> of a spec algorithm with <code>inspect.signature()</code> of its verb: the spec may be stricter than the verb, never looser. The ten spec-only defaults are gone, so a define.yaml must state <code>aval</code>, <code>low</code> and <code>high</code> for <code>nrind</code>, the three dates for <code>on_treatment</code>, <code>term_var</code> for <code>atoxgr</code>, <code>on</code> for <code>merge</code> and <code>lookup</code>, and <code>agg</code> for <code>group_by</code>; <code>ct_codelist</code> is required on <code>assign_ct</code> and <code>hardcode_ct</code>, as the define.yaml concept doc already stated. A missing key is a load-time error</li>
 <li>
