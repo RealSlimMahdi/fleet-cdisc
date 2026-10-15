@@ -7,16 +7,18 @@
 
 ## Install
 
+Fleet is pre-alpha. Only pre-release versions are on PyPI, so tell the installer to accept them.
+
 === "uv (recommended)"
 
     ```bash
-    uv add fleet-cdisc
+    uv add fleet-cdisc --prerelease=allow
     ```
 
 === "pip"
 
     ```bash
-    pip install fleet-cdisc
+    pip install --pre fleet-cdisc
     ```
 
 ### Optional extras
@@ -41,7 +43,7 @@ uv add "fleet-cdisc[dev]"
 ```python
 import fleet
 
-print(fleet.__version__)  # e.g. 0.1.0
+print(fleet.__version__)  # e.g. 0.2.0a1
 ```
 
 After the import the `.sdtm`, `.adam`, `.adsl`, and `.occds` namespaces are available on every `polars.DataFrame`.

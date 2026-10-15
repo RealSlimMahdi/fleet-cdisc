@@ -40,6 +40,36 @@ _Avoid_: local rule, sponsor check, SOP rule
 A validation of every dataset in the study's data directories, in one engine run per standard (two with custom rules), so that rules spanning several datasets of that standard can execute. The SDTM and ADaM results are joined into one report with one verdict. The verb validates one dataset and cannot run those rules.
 _Avoid_: batch, bulk validation, study run
 
+### Tables, listings and graphs
+
+**Template**:
+One named TLG output as the catalogue lists it, for example `aet01`, the overview of adverse events. A template has a stable id, a CDISC class, and exactly one way to produce it.
+_Avoid_: shell, mock, report, table type
+
+**Spec**:
+The complete description of one TLG output that a template consumes: rows, statistics, columns, filters, formats. It is a data object; a YAML file and the fluent builder are two ways to write one.
+_Avoid_: config, settings, options, parameters
+
+**ARD**:
+The analysis results dataset: one long table with one row per statistic per cell, which every TLG output is first computed as and every renderer reads from. Compatible with the R `cards` package layout.
+_Avoid_: result, output table, summary
+
+**Population filter**:
+The spec's filter on ADSL that decides who is in the denominator, for example the safety population. Applied to ADSL only, never to the analysis dataset.
+_Avoid_: adsl filter, subset, big-N filter
+
+**Dataset filter**:
+The spec's filter on the analysis dataset that decides which records are counted, for example treatment-emergent events only. Applied after the uncoded rule and before the template's prefilter. An analyst sets it per study.
+_Avoid_: where clause, subset, record filter
+
+**Prefilter**:
+A template's own filter on the analysis dataset, for example "drop the baseline record" on a change-from-baseline table. It is a spec field with a default per template, written as an expression, and applied after the dataset filter. Every column it names is a required column of the template.
+_Avoid_: guard, hard-coded filter, built-in filter
+
+**Uncoded**:
+The rule that gives a null coding term, for example a missing AEDECOD, a visible level such as "No Coding Available" so the record is counted instead of dropped. A spec field that names the coding columns and the label; switched off by setting it to nothing.
+_Avoid_: fill uncoded, no-coding row, missing term handling
+
 ### Comparison
 
 **Compare**:

@@ -263,13 +263,30 @@ link straight to the matching builder method, so reviewers can
 move freely between the YAML and Python views without grepping.
 
     The descriptions are sourced from `pydantic.Field(description=...)`
-    in [`src/fleet/tlg/_specs.py`](https://github.com/RealSlimMahdi/fleet-cdisc/blob/main/src/fleet/tlg/_specs.py),
-    so docs, IDE tooltips, and JSON-schema exports stay in sync
-    automatically.
+    on the spec classes — the base classes and building blocks in
+    [`src/fleet/tlg/_specs.py`](https://github.com/RealSlimMahdi/fleet-cdisc/blob/main/src/fleet/tlg/_specs.py),
+    each domain's specs in its own namespace module — so docs, IDE
+    tooltips, and JSON-schema exports stay in sync automatically.
+
+!!! note "The spec is the engine contract"
+    A summary spec carries every argument the shared engine takes, two
+    record rules included: `uncoded` (the label a null coding term gets)
+    and `prefilter` (the template's own record filter, applied after
+    `dataset_filter`; every column it names is required). Each template
+    sets its own defaults and `null` switches a rule off. Decision record:
+    [ADR-0005](https://github.com/RealSlimMahdi/fleet-cdisc/blob/main/docs/adr/0005-summary-specs-are-the-engine-contract.md).
 
 ### TLGSpec (base)
 
 ::: fleet.tlg.TLGSpec
+options:
+show_root_heading: true
+heading_level: 4
+filters: ["!^_"]
+
+### SummarySpecBase
+
+::: fleet.tlg.SummarySpecBase
 options:
 show_root_heading: true
 heading_level: 4
@@ -302,6 +319,14 @@ filters: ["!^_"]
 ### OverallStat
 
 ::: fleet.tlg.OverallStat
+options:
+show_root_heading: true
+heading_level: 4
+filters: ["!^_"]
+
+### Uncoded
+
+::: fleet.tlg.Uncoded
 options:
 show_root_heading: true
 heading_level: 4
@@ -341,6 +366,28 @@ options:
 show_root_heading: true
 heading_level: 4
 filters: ["!^_"]
+
+---
+
+## Engine seam
+
+Every summary table is one call on the shared engine. The forwarding
+tables call `summarize_spec(df, spec, groupby=, adsl=)`, which resolves
+the group column, validates the frame, runs `prepare_frame` (uncoded
+rule, dataset filter, prefilter, in that order) and reads every other
+engine argument from the spec. Composite tables, such as deaths and the
+lab shift table, call `prepare_frame` and then `summarize_ard` with
+keyword arguments. User-registered templates may call either.
+
+::: fleet.tlg
+options:
+show_root_heading: false
+heading_level: 3
+members:
+
+- summarize_spec
+- prepare_frame
+- summarize_ard
 
 ---
 

@@ -8,10 +8,12 @@ per exposure parameter, aligned to the {cards} ARD layout.
 
 from __future__ import annotations
 
+from typing import Any, ClassVar
+
 import polars as pl
 from pydantic import Field
 
-from ._ard import summarize_ard
+from ._ard import summarize_spec
 from ._builder import BuilderVerbsMixin
 from ._specs import (
     Row,
@@ -27,8 +29,18 @@ class EXSummarySpec(SummarySpecBase):
     median, min, max) per ``PARAMCD``, grouped by treatment arm.  Every
     field is also settable inline through
     [`TLGBuilder`][fleet.tlg.TLGBuilder].
+
+    Prefilter rule: GDSR EXT01 summarises the overall-exposure block,
+    so only ``PARCAT1`` = OVERALL records are kept and per-interval dose
+    records are not averaged into subject-level statistics.  ``PARCAT1``
+    is therefore a required column; ``prefilter=None`` switches the rule
+    off.
     """
 
+    context: ClassVar[str] = "t_ex_summary"
+    nested: ClassVar[bool] = True
+
+    prefilter: Any | None = Field(default='pl.col("PARCAT1") == "OVERALL"')
     rows: list[Row] = Field(
         default_factory=lambda: [Row(field="PARAMCD", label="Parameter")],
         description=(
@@ -67,7 +79,6 @@ class EXTLGNamespace(BuilderVerbsMixin):
         df: A Polars DataFrame containing ADaM ADEX-level data.
     """
 
-    _builder_context = "t_ex_summary"
     _builder_specs = {"t_summary": EXSummarySpec}
 
     def __init__(self, df: pl.DataFrame) -> None:
@@ -113,31 +124,7 @@ class EXTLGNamespace(BuilderVerbsMixin):
                 )
                 ard = adex.tlg.ex.t_summary(spec=spec, adsl=adsl)
         """
-        spec = spec or EXSummarySpec()
-        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df, group_col=group_col)
-        # GDSR EXT01 summarizes the overall-exposure block: restrict to
-        # PARCAT1 == "OVERALL" when the column exists so per-interval
-        # dose records are not averaged into subject-level statistics.
-        prefilter = pl.col("PARCAT1") == "OVERALL" if "PARCAT1" in self._df.columns else None
-        return summarize_ard(
-            self._df,
-            rows=spec.rows,
-            stats=spec.statistics,
-            context="t_ex_summary",
-            group_col=group_col,
-            pools=spec.pools,
-            column_order=spec.column_order,
-            adsl=adsl,
-            adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
-            prefilter=prefilter,
-            header_rows=spec.header_rows,
-            nested=True,
-            value_col=spec.value_col,
-            label_col=spec.label_col,
-            decimals=spec.decimals,
-        )
+        return summarize_spec(self._df, spec or EXSummarySpec(), groupby=groupby, adsl=adsl)
 
     # ------------------------------------------------------------------ #
     # Pre-validation diagnostic                                            #

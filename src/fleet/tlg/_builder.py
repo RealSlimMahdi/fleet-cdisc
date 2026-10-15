@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 import polars as pl
 
 from ._specs import (
+    NO_CODING_LABEL,
     Column,
     GroupPool,
     InteractiveBlock,
@@ -27,6 +28,7 @@ from ._specs import (
     SchemaError,
     Statistic,
     SummarySpecBase,
+    Uncoded,
 )
 
 if TYPE_CHECKING:
@@ -35,6 +37,12 @@ if TYPE_CHECKING:
 
     from ._specs import TLGSpec
     from .render._models import RenderMetadata
+
+
+#: Marks a builder field the user never set, so the spec default applies.
+#: ``None`` is a real value for ``uncoded()`` and ``prefilter()`` (it
+#: switches the rule off), so absence needs its own marker.
+_UNSET: Any = object()
 
 
 class TLGBuilder:
@@ -80,6 +88,8 @@ class TLGBuilder:
         self._value_col: str | None = None
         self._label_col: str | None = None
         self._decimals: dict[str, str] | None = None
+        self._uncoded: Uncoded | None = _UNSET
+        self._prefilter: pl.Expr | str | None = _UNSET
         self._listing_columns: list[str | Column] | None = None
         self._sort_by: list[str] | None = None
         self._template_id: str | None = None
@@ -105,6 +115,8 @@ class TLGBuilder:
             or self._value_col is not None
             or self._label_col is not None
             or self._decimals is not None
+            or self._uncoded is not _UNSET
+            or self._prefilter is not _UNSET
             or self._listing_columns is not None
             or self._sort_by is not None
         )
@@ -443,6 +455,72 @@ class TLGBuilder:
         return new
 
     # ------------------------------------------------------------------ #
+    # Record-rule verbs                                                    #
+    # ------------------------------------------------------------------ #
+
+    def uncoded(self, columns: list[str] | None, *, label: str = NO_CODING_LABEL) -> TLGBuilder:
+        """Set the uncoded rule: the coding columns whose nulls become a level.
+
+        Maps to the spec's ``uncoded``.  Each template has its own
+        default (the AE tables fill ``AEBODSYS`` and ``AEDECOD`` with
+        ``"No Coding Available"``); ``uncoded(None)`` switches the rule
+        off so uncoded records are not counted.
+
+        Args:
+            columns: Coding columns to fill when null, or ``None`` to
+                switch the rule off.
+            label: Replacement level for a null coding term.
+
+        Returns:
+            TLGBuilder: Builder with the uncoded rule set.
+
+        Examples:
+            Use the sponsor's label for uncoded events::
+
+                ard = (
+                    adae.tlg.ae
+                    .population(adsl)
+                    .by("TRTA")
+                    .uncoded(["AEBODSYS", "AEDECOD"], label="UNCODED")
+                    .to_ard()
+                )
+        """
+        new = self._clone()
+        new._uncoded = None if columns is None else Uncoded(columns=list(columns), label=label)
+        return new
+
+    def prefilter(self, expr: pl.Expr | str | None) -> TLGBuilder:
+        """Set the template's own record filter, applied after ``filter()``.
+
+        Maps to the spec's ``prefilter``.  Each template has its own
+        default (the change-from-baseline tables drop the ``ABLFL`` = Y
+        record); every column the expression names becomes a required
+        column.  ``prefilter(None)`` switches the rule off.
+
+        Args:
+            expr: Polars expression, string expression (the
+                YAML-serializable form), or ``None``.
+
+        Returns:
+            TLGBuilder: Builder with the prefilter set.
+
+        Examples:
+            Keep on-treatment records only in a change table::
+
+                ard = (
+                    adlb.tlg.lb
+                    .population(adsl)
+                    .by("TRTA")
+                    .template("lbt02")
+                    .prefilter('pl.col("ONTRTFL") == "Y"')
+                    .to_ard()
+                )
+        """
+        new = self._clone()
+        new._prefilter = expr
+        return new
+
+    # ------------------------------------------------------------------ #
     # Listing verbs                                                        #
     # ------------------------------------------------------------------ #
 
@@ -706,6 +784,12 @@ class TLGBuilder:
         if self._decimals is not None:
             self._require_consumed_field("decimals", "decimals()")
             kwargs["decimals"] = self._decimals
+        if self._uncoded is not _UNSET:
+            self._require_consumed_field("uncoded", "uncoded()")
+            kwargs["uncoded"] = self._uncoded
+        if self._prefilter is not _UNSET:
+            self._require_consumed_field("prefilter", "prefilter()")
+            kwargs["prefilter"] = self._prefilter
         if self._listing_columns is not None:
             if not is_listing:
                 raise SchemaError(
@@ -1031,22 +1115,22 @@ class TLGBuilder:
 class BuilderVerbsMixin:
     """Inline-builder entry verbs shared by every TLG sub-namespace.
 
-    A namespace declares ``_builder_context`` (its default context label),
-    ``_builder_specs`` (method name → spec class; must include
-    ``"t_summary"``), and inherits ``population()`` / ``filter()`` /
+    A namespace declares ``_builder_specs`` (method name → spec class;
+    must include ``"t_summary"``, whose class carries the namespace's
+    context label) and inherits ``population()`` / ``filter()`` /
     ``by()`` — so no domain can ship without the inline path.
     """
 
     _df: pl.DataFrame
-    _builder_context: str
     _builder_specs: dict[str, type[TLGSpec]]
 
     def _builder(self) -> TLGBuilder:
         """Return a ``TLGBuilder`` pre-configured for this namespace."""
+        spec_cls = self._builder_specs["t_summary"]
         return TLGBuilder(
             self._df,
-            context=self._builder_context,
-            spec_cls=self._builder_specs["t_summary"],
+            context=getattr(spec_cls, "context", ""),
+            spec_cls=spec_cls,
             namespace_cls=type(self),
         )
 

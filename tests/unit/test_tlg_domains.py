@@ -87,6 +87,9 @@ def test_continuous_findings(ns: str, param: str) -> None:
     │ S03     ┆ Drug A  ┆ {param:<7}┆ 20.0 ┆ W1     │
     └─────────┴─────────┴─────────┴──────┴────────┘
     """)
+    if ns == "ex":
+        # ext01 keeps the overall-exposure block only, so PARCAT1 is required.
+        df = df.with_columns(pl.lit("OVERALL").alias("PARCAT1"))
     ard = getattr(df.tlg, ns).t_summary(groupby="TRTA", adsl=ADSL)
     _ard_ok(ard)
     assert "mean" in ard["stat_name"].to_list()
