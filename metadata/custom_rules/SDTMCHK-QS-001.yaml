@@ -49,5 +49,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_qs_qsstat_qsreasnd
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: QS Domain

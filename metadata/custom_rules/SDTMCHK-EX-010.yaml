@@ -57,5 +57,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_ex_infusion_exstdtc_exendtc
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: EX Domain

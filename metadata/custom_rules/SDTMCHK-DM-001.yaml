@@ -52,5 +52,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_dm_age_missing
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: DM Domain

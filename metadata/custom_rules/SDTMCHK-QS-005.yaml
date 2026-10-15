@@ -50,5 +50,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_qs_qsstat_qsstresc
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: QS Domain

@@ -67,7 +67,7 @@ Each link is a versioned, reviewable artefact stored alongside the study specifi
 
 ### Pillar 2 — Cross-Language Benchmark: `{admiral}` Parity
 
-`{admiral}`[^4] is the Roche/Atorus R package for ADaM derivations; it is the de-facto gold standard in R-based clinical programming and is documented in multiple regulatory submissions. Fleet's test suite contains `tests/unit/test_admiral_parity.py` — 400+ lines of tests that benchmark Fleet's Python outputs against documented `{admiral}` algorithm specifications.
+`{admiral}`[^4] is the pharmaverse R package for ADaM derivations; it is the de-facto gold standard in R-based clinical programming and is documented in multiple regulatory submissions. Fleet's test suite contains `tests/unit/test_admiral_parity.py` — 400+ lines of tests that benchmark Fleet's Python outputs against documented `{admiral}` algorithm specifications.
 
 **Coverage as of v0.1.0:**
 
@@ -225,7 +225,7 @@ uv run fleet check-rule metadata/custom_rules/FLEET-AE-001.yaml
 # .validate("AE", custom_rules="metadata/custom_rules")
 ```
 
-Use a company prefix (e.g. `ROCHE-AE-001`) to avoid collisions with `CORE-XXXXXX`.
+Use a company prefix (e.g. `ACME-AE-001`) to avoid collisions with `CORE-XXXXXX`.
 
 ---
 
@@ -272,6 +272,6 @@ Applying the R Validation Hub risk-based framework to Fleet:
 
 [^3]: CDISC (2024). _CDISC Library API._ Available from: <https://library.cdisc.org/api>
 
-[^4]: Atorus Research & Roche (2021–present). _{admiral}: ADaM in R Asset Library._ CRAN. Available from: <https://cran.r-project.org/package=admiral>
+[^4]: pharmaverse (2021–present). _{admiral}: ADaM in R Asset Library._ CRAN. Available from: <https://cran.r-project.org/package=admiral>
 
 [^5]: CDISC (2022–present). _CDISC Rules Engine (CORE)._ Open-source reference implementation for CDISC conformance checking. Available from: <https://github.com/cdisc-org/cdisc-rules-engine>

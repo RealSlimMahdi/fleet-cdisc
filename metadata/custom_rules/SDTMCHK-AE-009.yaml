@@ -49,5 +49,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_ae_aeout_aeendtc_nonfatal
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: AE Domain

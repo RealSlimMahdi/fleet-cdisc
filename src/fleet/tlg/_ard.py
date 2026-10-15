@@ -417,7 +417,7 @@ def compute_big_n(
 # ------------------------------------------------------------------ #
 
 
-#: Label used for uncoded terms, mirroring the GDSR templates' NA level.
+#: Label used for uncoded terms, mirroring the Company's Metadata templates' NA level.
 NO_CODING_LABEL = "No Coding Available"
 
 
@@ -428,7 +428,7 @@ def fill_uncoded(
 ) -> pl.DataFrame:
     """Fill null coding columns with an explicit level.
 
-    GDSR templates recode missing MedDRA/ATC terms to a visible
+    Company's Metadata templates recode missing MedDRA/ATC terms to a visible
     ``"No Coding Available"`` row instead of dropping the records — a
     subject whose only events are uncoded must still be counted.
 
@@ -455,7 +455,7 @@ def worst_case(
 ) -> pl.DataFrame:
     """Reduce to one record per *by* group, keeping the worst *order_col*.
 
-    Implements the GDSR "counted once at greatest intensity / highest
+    Implements the Company's Metadata "counted once at greatest intensity / highest
     grade" rule: within each group the record whose *order_col* value
     ranks highest in *order* survives.  Values not present in *order*
     rank below everything (they survive only when the group has no

@@ -98,12 +98,12 @@ class TestRuleScaffolder:
                 domain="DM",
                 description="Custom ID rule",
                 output_dir=Path(tmpdir),
-                rule_id="ROCHE-DM-042",
+                rule_id="ACME-DM-042",
             )
-            assert out.name == "ROCHE-DM-042.yaml"
+            assert out.name == "ACME-DM-042.yaml"
             with open(out) as f:
                 rule = yaml.safe_load(f)
-            assert rule["Core"]["Id"] == "ROCHE-DM-042"
+            assert rule["Core"]["Id"] == "ACME-DM-042"
 
     def test_scaffold_duplicate_id_raises(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -127,11 +127,11 @@ class TestRuleScaffolder:
                 domain="VS",
                 description="Org test",
                 output_dir=Path(tmpdir),
-                organization="Roche",
+                organization="ACME",
             )
             with open(out) as f:
                 rule = yaml.safe_load(f)
-            assert rule["Authorities"][0]["Organization"] == "Roche"
+            assert rule["Authorities"][0]["Organization"] == "ACME"
 
     def test_scan_existing_ids(self):
         with tempfile.TemporaryDirectory() as tmpdir:

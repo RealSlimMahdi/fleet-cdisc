@@ -55,5 +55,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_ex_exstdtc_visit_ordinal_error
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: EX Domain

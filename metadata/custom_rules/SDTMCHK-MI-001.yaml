@@ -45,5 +45,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_mi_mispec
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: MI Domain

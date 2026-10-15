@@ -49,5 +49,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_ss_ssstat_ssorres
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: SS Domain

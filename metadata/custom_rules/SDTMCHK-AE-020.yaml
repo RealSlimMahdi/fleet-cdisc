@@ -60,5 +60,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_ae_aeacnoth_ds_disctx
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: AE Domain

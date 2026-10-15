@@ -48,5 +48,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_lb_missing_month
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: LB Domain

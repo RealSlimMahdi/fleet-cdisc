@@ -53,5 +53,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_ex_exdose_exoccur
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: EX Domain

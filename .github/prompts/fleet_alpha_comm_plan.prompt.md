@@ -69,7 +69,7 @@ I'm writing to share that I have been working for a while on the Alpha version o
 
 The obvious question I expect is: _"Why are you building this when Admiral already exists?"_
 
-Admiral is an excellent R package. But Roche has been historically very R-centric, while the broader industry is rapidly shifting toward a multi-language ecosystem. We cannot ignore the scenario where Python becomes the lingua franca of statistical programming, the same way it is now the dominant language for AI and ML.
+Admiral is an excellent R package. But Pharma OS ecosystem has been historically very R-centric, while the broader industry is rapidly shifting toward a multi-language ecosystem. We cannot ignore the scenario where Python becomes the lingua franca of statistical programming, the same way it is now the dominant language for AI and ML.
 
 Here is why Fleet is different, and why we need it:
 
