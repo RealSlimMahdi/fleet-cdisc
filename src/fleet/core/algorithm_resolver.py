@@ -118,8 +118,8 @@ def resolve_algorithm_docstring(
 
     from fleet.core.lineage import defining_method_path
 
-    # Resolve through the spec registry first: algorithm names are not
-    # always method names (e.g. study_day executes via duration()).
+    # Resolve through the spec registry first: the algorithm is the verb,
+    # dotted for a sub-namespace verb (``onco.best_overall_response``).
     method_names = [algorithm]
     try:
         from fleet.core.spec_registry import get_algorithm
