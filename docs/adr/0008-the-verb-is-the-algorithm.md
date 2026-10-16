@@ -1,10 +1,10 @@
 # The verb is the algorithm: one vocabulary for inline code and define.yaml
 
-**Status: proposed, 2026-10-16.** This ADR is the proposal asked for in #146. It is not accepted. The questions at the end decide it. If it is accepted, it supersedes ADR-0007.
+**Status: accepted, 2026-10-16.** Proposed and decided the same day in #146. Supersedes ADR-0007.
 
 A derivation has two notations in Fleet. The inline notation is a verb call, `.assign("SEX", source="sex", ct=SEX)`. The spec notation is a `derivation:` block in a define.yaml, `algorithm: assign_ct`, `source: sex`, `ct_codelist: C66731`. Today the two notations use two vocabularies. The spec registry maps the spec names onto the verbs with a hand-written `Param` table per algorithm, and ADR-0007 made the table take its `default` and `required` facts from the verb signature. The table still exists, and so do the renamed keys, the aliases and the legacy keys.
 
-We propose that the `algorithm:` value is the verb name and the YAML keys are the keyword arguments of the verb. The rule for the programmer: remove `.verb("TARGET", ` and the last `)`. What stays is the YAML block. Fleet builds the strict Pydantic model from the verb signature. A short declaration per verb says only what a signature cannot say: which arguments stay out of the spec, which arguments exclude each other, and the Define-XML method text. Lineage already records `(verb, target, kwargs)`. `from_spec` calls the verb with them, and `to_spec_yaml()` writes them back unchanged.
+We decided that the `algorithm:` value is the verb name and the YAML keys are the keyword arguments of the verb. The rule for the programmer: remove `.verb("TARGET", ` and the last `)`. What stays is the YAML block. Fleet builds the strict Pydantic model from the verb signature. A short declaration per verb says only what a signature cannot say: which arguments stay out of the spec, which arguments exclude each other, and the Define-XML method text. Lineage already records `(verb, target, kwargs)`. `from_spec` calls the verb with them, and `to_spec_yaml()` writes them back unchanged.
 
 ## Measured on 2026-10-16, on `main` at bb4b878
 
@@ -50,7 +50,7 @@ The DM block for SEX, today and under this proposal. The inline call is `.assign
     ct_map: { "F": "F", "M": "M" }
 ```
 
-`ct:` is absent in the proposed block. It defaults to the `codelist:` of the variable (question 2 below). More examples:
+`ct:` is absent in the proposed block. It defaults to the `codelist:` of the variable. More examples:
 
 | Inline call | Spec block today | Spec block proposed |
 | --- | --- | --- |
@@ -98,10 +98,10 @@ The `method_text` list is where the reviewer vocabulary survives. The Define-XML
 
 ## Considered options
 
-- **Keep two vocabularies (ADR-0007, the status quo).** The spec reads `assign_ct` where a data-standards reviewer expects it. The cost is the 941-line table, the five parity rules that guard it, 13 renamed keys to learn, and every new verb paid twice: #90 plans 48 more `Param` tables. The static converter must rank candidates for one verb, and `to_spec_yaml()` relabels lineage nodes to the spec name. This option stays right if the answer to question 1 is "the reviewer reads the define.yaml".
+- **Keep two vocabularies (ADR-0007, the status quo).** The spec reads `assign_ct` where a data-standards reviewer expects it. The cost is the 941-line table, the five parity rules that guard it, 13 renamed keys to learn, and every new verb paid twice: #90 plans 48 more `Param` tables. The static converter must rank candidates for one verb, and `to_spec_yaml()` relabels lineage nodes to the spec name. Rejected: the inline verbs and the spec-driven derivations must match, and the reviewer reads the Define-XML, where the method text keeps the standards vocabulary.
 - **Rename the verbs to the spec names.** `.assign_ct(...)`, `.hardcode_no_ct(...)`, `.if_then_else(...)` as inline verbs. One vocabulary, but four verbs for one intent, and the inline API becomes the define dialect. Rejected.
-- **Verb names in YAML, old names kept as aliases for one minor version.** The table stays alive to serve the aliases, so nothing is deleted until the next version. Fleet is pre-alpha at 0.2.0a1, #146 states that no compatibility is owed, and `fleet migrate` already exists for the Python side. Rejected in favour of a hard cut with a spec migration (question 4).
-- **Rename the key `algorithm:` to `verb:`.** Honest, but it changes the JSON schema root, the LSP completions, every doc and every shipped spec for a word. The key stays `algorithm:` (question 5).
+- **Verb names in YAML, old names kept as aliases for one minor version.** The table stays alive to serve the aliases, so nothing is deleted until the next version. Fleet is pre-alpha at 0.2.0a1, #146 states that no compatibility is owed, and `fleet migrate` already exists for the Python side. Rejected in favour of a hard cut with a spec migration.
+- **Rename the key `algorithm:` to `verb:`.** Honest, but it changes the JSON schema root, the LSP completions, every doc and every shipped spec for a word. The key stays `algorithm:`.
 - **Derive the YAML type from the Python type.** ADR-0007 rejected this, because `ct` and `agg` differ between Python and YAML on purpose. The proposal keeps that difference, but as a fixed four-row table instead of a per-field `annotation` and `convert`. The table is the declaration.
 
 ## Consequences
@@ -128,27 +128,17 @@ Risks:
 - A verb signature change is now a spec dialect change. A renamed keyword breaks every study's define.yaml. The signature becomes a contract: a rename needs a `fleet migrate` entry and a `fleet_spec_version` note. ADR-0007 already made a default change a spec change, so this is one step further on the same path.
 - The strict CT check moves from the algorithm name to the variable's `codelist:`. A variable without `codelist:` and without `ct:` gets no CT check, as today for `assign_no_ct`.
 
-## Questions before this ADR is accepted
+## Decided on 2026-10-16
 
-At most five. **Domain** means Mahdi answers. **Engineering** means a recommendation is given, and "ok" accepts it.
+The five questions of the proposal and their answers.
 
-1. **Domain. Who reads the define.yaml?** Take AE.AESEV. Today the block says `algorithm: assign_ct` and a data-standards reviewer knows at once that a codelist is applied. Under the proposal it says `algorithm: assign` and the codelist is in `codelist: C66769` two lines above.
-   - Option A, verb names. A QC programmer who reads the define.yaml must know the Fleet verbs, but reads the same name in the program.
-   - Option B, keep the spec names. A QC programmer reads two names for one step, and the `Param` tables and their parity rules stay.
-   If the answer is B, this ADR is rejected and #146 is closed as decided.
+1. **Who reads the define.yaml? Domain.** The inline verbs and the spec-driven derivations must match. The `algorithm:` value is the verb name, `assign`. A QC programmer reads the same name in the program and in the spec.
+2. **`ct:` defaults to the variable's `codelist:`. Domain.** Yes. For DM.SEX with `codelist: C66731`, a derivation `algorithm: assign`, `source: sex` and no `ct:` checks the raw values against C66731. A `ct_map` on a variable without `codelist:` and without `ct:` is a load-time error.
+3. **`else_` is written `else:` in YAML. Engineering.** Yes. A trailing underscore that avoids a Python keyword is dropped in YAML.
+4. **Hard cut or aliases. Engineering.** Hard cut. Fleet is pre-alpha. An old define.yaml fails at load with a message that names `fleet migrate --spec`.
+5. **The key stays `algorithm:`. Engineering.** Yes.
 
-2. **Domain. `ct:` defaults to the variable's `codelist:`.** Take DM.SEX with `codelist: C66731` and a derivation `algorithm: assign`, `source: sex`, no `ct:`. Under the proposal the raw values are checked against C66731.
-   - Option A, default from `codelist:`. A programmer who wanted a plain copy with no CT check gets a warning on an out-of-codelist value. The warning is correct for a submission variable.
-   - Option B, `ct:` always explicit. The same id is written twice, and the two can drift, as in #96.
-   Recommendation: A.
-
-3. **Engineering. `else_` is written `else:` in YAML.** One rule: a trailing underscore that avoids a Python keyword is dropped in YAML. If it is kept, a QC programmer reads `else_: X`, which looks like a typo. Recommendation: drop it.
-
-4. **Engineering. Hard cut or aliases.** With a hard cut, an old define.yaml fails at load with a message that names `fleet migrate --spec`. With aliases for one minor version, the old names load with a warning, and the table stays until the next version. Recommendation: hard cut, because Fleet is pre-alpha and the aliases keep alive the code this ADR deletes.
-
-5. **Engineering. The key stays `algorithm:`.** Renaming it to `verb:` is more honest and changes every file for a word. Recommendation: keep `algorithm:`.
-
-## Decisions taken on his behalf
+## Decisions taken without a question
 
 - The ADR number is 0008. ADR-0006 is on PR #175 and may move this number.
 - The four custom-dispatch algorithms stay as they are.
@@ -158,7 +148,7 @@ At most five. **Domain** means Mahdi answers. **Engineering** means a recommenda
 - `callable:` stays as a key under `algorithm: derivation`, and the shorthand without `algorithm:` stays.
 - The `study_day` blocks in YAML migrate to `duration`.
 
-## Implementation phases, if accepted
+## Implementation phases
 
 Each phase is one PR. The next phase starts when the previous one is green.
 
