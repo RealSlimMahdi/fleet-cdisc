@@ -51,6 +51,7 @@ __all__ = [
     "algorithms",
     "define_schema",
     "get_algorithm",
+    "load_spec_yaml",
     "suggest_algorithm",
 ]
 
@@ -265,3 +266,32 @@ def _to_info(algo: Any) -> AlgorithmInfo:
             for p in algo.params
         ),
     )
+
+
+def load_spec_yaml(text: str) -> Any:
+    """Parse define.yaml text the way ``from_spec`` does.
+
+    The spec dialect reads booleans the YAML 1.2 way (``true`` and ``false``
+    only), so the ``on:`` join key of ``merge`` stays a string.  A tool that
+    parses a define.yaml itself must use this loader, or it sees the key
+    ``True`` where Fleet sees ``on``.
+
+    Args:
+        text: The YAML document.
+
+    Returns:
+        The parsed document, or ``None`` for an empty one.
+
+    Raises:
+        yaml.YAMLError: On invalid YAML.
+
+    Examples:
+        Read the blocks of a file the editor holds::
+
+            from fleet import introspect
+
+            data = introspect.load_spec_yaml(editor_text) or {}
+    """
+    from fleet.core.define_spec import load_spec_yaml as _load
+
+    return _load(text)

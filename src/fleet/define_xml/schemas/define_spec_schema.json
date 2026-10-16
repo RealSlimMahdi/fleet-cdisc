@@ -1538,6 +1538,14 @@
           "type": "string"
         },
         "expression": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
           "default": null,
           "description": "A Polars expression, expression string, or zero-arg callable returning ``pl.Expr``.",
           "title": "Expression"
@@ -2969,6 +2977,14 @@
           "type": "string"
         },
         "expression": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
           "default": null,
           "description": "A Polars expression, expression string, or zero-arg callable returning ``pl.Expr``.",
           "title": "Expression"

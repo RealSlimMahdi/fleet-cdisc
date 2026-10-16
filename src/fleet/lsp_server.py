@@ -36,7 +36,7 @@ from typing import Any, get_args
 
 import yaml
 
-from fleet.introspect import Standard
+from fleet.introspect import Standard, load_spec_yaml
 
 #: Seconds to wait after the last keystroke before re-validating.
 _DEBOUNCE_S = 0.3
@@ -54,7 +54,7 @@ _STANDARDS = get_args(Standard)
 def _safe_load(text: str) -> dict[str, Any]:
     """Parse YAML, returning ``{}`` on any error or non-mapping document."""
     try:
-        data = yaml.safe_load(text)
+        data = load_spec_yaml(text)
     except yaml.YAMLError:
         return {}
     return data if isinstance(data, dict) else {}
@@ -181,7 +181,7 @@ def compute_diagnostics(text: str, path: str = "") -> list[dict[str, Any]]:
     from fleet.introspect import define_schema, get_algorithm, suggest_algorithm
 
     try:
-        data = yaml.safe_load(text)
+        data = load_spec_yaml(text)
     except yaml.YAMLError as exc:
         mark = getattr(exc, "problem_mark", None)
         problem = getattr(exc, "problem", None) or str(exc)

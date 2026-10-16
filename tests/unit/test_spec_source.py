@@ -171,3 +171,15 @@ def test_program_from_spec_pins_cross_domain_inputs(tmp_path):
 def test_program_from_spec_unknown_dataset_raises():
     with pytest.raises(ValueError, match="Known: "):
         program_from_spec(SDTM_SPEC, "NOPE")
+
+
+def test_program_from_spec_applies_the_variable_codelist(tmp_path):
+    """The generated program carries the ct= that from_spec fills from codelist: (ADR-0008)."""
+    spec = tmp_path / "define.yaml"
+    spec.write_text(
+        "study:\n  id: X\n  standard: SDTMIG\ndatasets:\n  - name: DM\n    variables:\n"
+        "      - name: SEX\n        codelist: C66731\n        derivation:\n"
+        "          algorithm: assign\n          source: sex\n",
+        encoding="utf-8",
+    )
+    assert "    .assign('SEX', source='sex', ct='C66731')\n" in program_from_spec(spec, "DM")

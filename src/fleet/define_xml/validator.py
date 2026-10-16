@@ -23,6 +23,8 @@ from typing import Any
 import jsonschema
 import yaml
 
+from fleet.core.define_spec import load_spec_yaml
+
 _DEFAULT_SCHEMA = Path(__file__).parent / "schemas" / "define_xml_2_1_schema.json"
 
 
@@ -46,7 +48,7 @@ class DefineValidator:
         """Validate a Define-XML YAML file. Returns True if no errors."""
         self.issues = []
         try:
-            data = yaml.safe_load(Path(define_yaml_path).read_text())
+            data = load_spec_yaml(Path(define_yaml_path).read_text())
         except yaml.YAMLError as exc:
             self.issues.append(DefineIssue("error", "root", f"YAML parse error: {exc}", "YAML_001"))
             return False

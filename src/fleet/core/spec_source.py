@@ -33,6 +33,7 @@ from fleet.core.spec_registry import (
     derivation_from_lineage,
     get_algorithm,
     render_formal_expression,
+    with_codelist,
 )
 
 _NAMESPACES = ("sdtm", "adam")
@@ -139,7 +140,11 @@ def program_from_spec(spec_path: str | Path, dataset: str) -> str:
         if derivation.get("callable"):
             chain.append(_callable_call(str(derivation["callable"]), module, imports))
             continue
-        params = {k: v for k, v in derivation.items() if k not in _NOT_PARAMS}
+        try:
+            block = with_codelist(standard, derivation, variable.get("codelist"))
+        except ValueError:
+            block = dict(derivation)
+        params = {k: v for k, v in block.items() if k not in _NOT_PARAMS}
         text = render_formal_expression(
             standard, algorithm, params, target=str(variable.get("name"))
         )

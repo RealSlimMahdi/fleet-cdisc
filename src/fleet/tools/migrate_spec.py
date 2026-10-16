@@ -144,6 +144,9 @@ def migrate_block(
             changes.append(f"{key}: -> {target}:")
             key = target
         new[key] = value
+    for key, target in renames.items():
+        if key in block and target in block:
+            changes.append(f"{key}: kept, {target}: is also given — resolve by hand")
     if old in ALGORITHM_RENAMES:
         new["algorithm"] = ALGORITHM_RENAMES[str(old)]
         changes.append(f"algorithm: {old} -> {new['algorithm']}")
@@ -158,7 +161,7 @@ def migrate_block(
 # --------------------------------------------------------------------- #
 
 _KEY_LINE = re.compile(r"^(\s*)(- )?([A-Za-z_][\w]*):(.*)$")
-_ALGO_LINE = re.compile(r"^(\s*)(- )?algorithm:\s*([\w.]+)(\s*#.*)?\s*$")
+_ALGO_LINE = re.compile(r"""^(\s*)(- )?algorithm:\s*["']?([\w.]+)["']?(\s*#.*)?\s*$""")
 _VERSION_LINE = re.compile(r"^fleet_spec_version:\s*\d+(\s*#.*)?\s*$")
 _SCALAR = re.compile(r"""^\s*(?:"([^"]*)"|'([^']*)'|([^\s#]+))""")
 
@@ -201,6 +204,8 @@ def _block_bounds(lines: list[str], at: int, indent: int) -> tuple[int, int]:
         if eff < indent:
             break
         start -= 1
+        if key and eff == indent and prev.lstrip().startswith("- "):
+            break  # the `- key:` line opens this list item: the block starts here
     end = at + 1
     while end < len(lines):
         line = lines[end]
@@ -272,13 +277,15 @@ def migrate_spec_text(text: str, *, set_version: bool = True) -> tuple[str, list
                 continue
             eff, name, rest = key
             if j == i and old in ALGORITHM_RENAMES:
-                out[j] = lines[j].replace(
-                    f"algorithm: {old}", f"algorithm: {ALGORITHM_RENAMES[old]}", 1
-                )
+                out[j] = re.sub(rf"\b{re.escape(old)}\b", ALGORITHM_RENAMES[old], lines[j], count=1)
                 changes.append(f"line {j + 1}: algorithm: {old} -> {ALGORITHM_RENAMES[old]}")
                 continue
             new_name = renames.get(name)
-            if new_name and new_name not in present:
+            if new_name and new_name in present:
+                changes.append(
+                    f"line {j + 1}: {name}: kept, {new_name}: is also given — resolve by hand"
+                )
+            elif new_name:
                 out[j] = re.sub(rf"\b{name}:", f"{new_name}:", lines[j], count=1)
                 changes.append(f"line {j + 1}: {name}: -> {new_name}:")
                 name = new_name

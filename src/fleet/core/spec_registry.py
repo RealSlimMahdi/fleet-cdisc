@@ -44,6 +44,7 @@ Examples:
 
 from __future__ import annotations
 
+import builtins
 import collections.abc
 import difflib
 import inspect
@@ -254,14 +255,29 @@ def _namespace_class(standard: str) -> type | None:
     return None
 
 
+class _AnyForUnknownNames(dict):
+    """Namespace for annotation evaluation: a name imported under ``TYPE_CHECKING`` is ``Any``."""
+
+    def __missing__(self, name: str) -> Any:
+        return getattr(builtins, name, Any)
+
+
 def _eval_annotation(annotation: Any, fn: Any) -> Any:
-    """Resolve a (possibly string) annotation in the namespace of *fn*."""
+    """Resolve a (possibly string) annotation in the namespace of *fn*.
+
+    The namespaces import ``Callable``, ``Derivation`` or ``CTValidator``
+    under ``TYPE_CHECKING`` only, so those names are missing at run time.
+    ``Callable`` is restored (the lambda form is dropped from the YAML type)
+    and any other missing name reads as ``Any``.
+    """
     if annotation is inspect.Parameter.empty:
         return Any
     if not isinstance(annotation, str):
         return annotation
+    namespace = _AnyForUnknownNames(getattr(fn, "__globals__", {}))
+    namespace.setdefault("Callable", collections.abc.Callable)
     try:
-        return eval(annotation, dict(getattr(fn, "__globals__", {})), {})  # noqa: S307
+        return eval(annotation, {"__builtins__": __builtins__}, namespace)  # noqa: S307
     except Exception:
         return Any
 

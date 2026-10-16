@@ -42,7 +42,6 @@ from fleet.core.exceptions import (
     ValidationError,
     VerbUsageError,
 )
-from fleet.tools.migrate_spec import ALGORITHM_RENAMES
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -2243,9 +2242,7 @@ class SharedVerbsMixin:
             ns._spec_ct_validate = True
 
         # ct: IDs resolve to the study's codelists.py classes, as ct=<class> inline.
-        if any(
-            drv.get("ct") or drv.get("ct_codelist") or codelist for _, drv, codelist in raw_vars
-        ):
+        if any(drv.get("ct") or codelist for _, drv, codelist in raw_vars):
             from fleet.ct.study_codelists import spec_codelists
 
             codelists = spec_codelists(path)
@@ -2262,6 +2259,8 @@ class SharedVerbsMixin:
             alg = drv.get("algorithm")
             algo = spec_registry.get_algorithm(standard, str(alg)) if alg else None
             if algo is None:
+                from fleet.tools.migrate_spec import ALGORITHM_RENAMES
+
                 if str(alg) in ALGORITHM_RENAMES:
                     suffix = (
                         f" '{alg}' is the pre-ADR-0008 spelling of '{ALGORITHM_RENAMES[str(alg)]}';"

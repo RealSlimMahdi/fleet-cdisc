@@ -154,3 +154,37 @@ def test_the_join_key_on_stays_a_string():
     """``on:`` is a YAML 1.1 boolean; the spec loader keeps it a key (#87)."""
     data = load_spec_yaml("algorithm: merge\non: USUBJID\nflag: true\nmode: yes\n")
     assert data == {"algorithm": "merge", "on": "USUBJID", "flag": True, "mode": "yes"}
+
+
+class TestReviewFindings:
+    def test_sibling_items_of_the_simplified_format_do_not_share_keys(self):
+        """A `ct:` on the first item must not stop the rename of `ct_codelist:` on the second."""
+        text = (
+            "domain: DM\nvariables:\n"
+            "  - target: SEX\n    algorithm: assign_ct\n    source: sex\n    ct: C66731\n"
+            "  - target: RACE\n    algorithm: assign_ct\n    source: race\n    ct_codelist: C74457\n"
+        )
+        new, _ = migrate_spec_text(text)
+        data = load_spec_yaml(new)
+        assert data["variables"][1] == {
+            "target": "RACE",
+            "algorithm": "assign",
+            "source": "race",
+            "ct": "C74457",
+        }
+
+    def test_a_quoted_algorithm_value_is_rewritten(self):
+        new, changes = migrate_spec_text(
+            'derivation:\n  algorithm: "assign_ct"\n  source: sex\n  ct_codelist: C66731\n',
+            set_version=False,
+        )
+        assert new == 'derivation:\n  algorithm: "assign"\n  source: sex\n  ct: C66731\n'
+        assert len(changes) == 2
+
+    def test_old_and_new_key_together_are_reported_not_hidden(self):
+        text = "derivation:\n  algorithm: assign_ct\n  ct_codelist: C66731\n  ct: C66731\n"
+        new, changes = migrate_spec_text(text, set_version=False)
+        assert "ct_codelist: C66731" in new
+        assert any("resolve by hand" in c for c in changes)
+        _, block_changes = migrate_block({"algorithm": "assign_ct", "ct_codelist": "A", "ct": "B"})
+        assert any("resolve by hand" in c for c in block_changes)

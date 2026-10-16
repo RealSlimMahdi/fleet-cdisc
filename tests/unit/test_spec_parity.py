@@ -1203,3 +1203,17 @@ def test_seq_and_pin_merge_from_yaml(tmp_path) -> None:
     )
     out = raw.sdtm.pin("SUPP", supp, join_on="USUBJID").from_spec(spec, dataset="AE").to_frame()
     assert {"AESEQ", "EXTRA"} <= set(out.columns)
+
+
+def test_type_checking_only_names_do_not_erase_the_yaml_type() -> None:
+    """``expression`` is typed through ``Callable`` imported under TYPE_CHECKING: still a string."""
+    (field,) = [
+        f
+        for f in spec_registry.get_algorithm("adam", "derivation").params
+        if f.name == "expression"
+    ]
+    assert field.annotation == (str | None)
+    with pytest.raises(Exception, match="expression"):
+        spec_registry.parse_variable_spec(
+            "adam", {"target": "AVAL", "algorithm": "derivation", "expression": 42}
+        )

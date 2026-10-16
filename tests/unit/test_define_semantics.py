@@ -157,14 +157,76 @@ class TestSemanticLint:
         assert semantic_errors(xml) == []
 
     def test_algorithm_id_as_method_name_is_flagged(self):
+        """A method Fleet produced must not be named after the verb it ran."""
         xml = _doc(
             '<MethodDef OID="MT.X" Name="assign" Type="Computation">'
             "<Description><TranslatedText xml:lang='en'>t</TranslatedText></Description>"
+            "<FormalExpression Context=\"Python/Fleet\">x.assign('A')</FormalExpression>"
             "</MethodDef>"
         )
         assert any("algorithm id" in p for p in semantic_errors(xml))
         clean = xml.replace('Name="assign"', 'Name="Algorithm for AGEGR1"')
         assert semantic_errors(clean) == []
+
+    def test_a_sponsor_method_named_map_or_date_is_not_flagged(self):
+        """Verb names are ordinary words; a hand-written Define-XML may use them."""
+        xml = _doc(
+            '<MethodDef OID="MT.X" Name="date" Type="Computation">'
+            "<Description><TranslatedText xml:lang='en'>t</TranslatedText></Description>"
+            "</MethodDef>"
+        )
+        assert semantic_errors(xml) == []
+
+    def test_the_merge_join_key_reaches_the_formal_expression(self, tmp_path):
+        """``on:`` is read as a key, not as the boolean True, by the Define-XML generator (#87)."""
+        spec = {
+            "study": {
+                "id": "S",
+                "name": "S",
+                "description": "on test",
+                "protocol_name": "S",
+                "originator": "Fleet",
+                "standard": "ADAMIG",
+                "standard_version": "1.1",
+            },
+            "datasets": [
+                {
+                    "name": "ADAE",
+                    "label": "Adverse Events Analysis",
+                    "structure": "One record per event",
+                    "keys": ["USUBJID"],
+                    "variables": [
+                        {
+                            "name": "TRTSDT",
+                            "label": "Date of First Exposure",
+                            "type": "date",
+                            "origin": "Derived",
+                            "derivation": {
+                                "algorithm": "merge",
+                                "dataset": "ADSL",
+                                "on": "USUBJID",
+                            },
+                        }
+                    ],
+                }
+            ],
+        }
+        path = tmp_path / "define.yaml"
+        path.write_text(
+            "study:\n  id: S\n  name: S\n  description: on test\n  protocol_name: S\n"
+            "  originator: Fleet\n  standard: ADAMIG\n  standard_version: '1.1'\n"
+            "datasets:\n  - name: ADAE\n    label: Adverse Events Analysis\n"
+            "    structure: One record per event\n    keys: [USUBJID]\n    variables:\n"
+            "      - name: TRTSDT\n        label: Date of First Exposure\n        type: date\n"
+            "        origin: Derived\n        derivation:\n          algorithm: merge\n"
+            "          dataset: ADSL\n          on: USUBJID\n"
+        )
+        del spec
+        root = ET.fromstring(DefineSpecGenerator(path, enrich_methods=True).to_xml_string())
+        expressions = [f.text for f in root.iter(f"{ODM}FormalExpression")]
+        assert any("on='USUBJID'" in e for e in expressions), expressions
+        texts = [e.text for e in root.iter(f"{ODM}TranslatedText")]
+        assert "Records merged from ADSL (join key: USUBJID)." in texts
 
     def test_predecessor_description_must_be_dataset_variable(self):
         assert semantic_errors(_doc(_item_def("IT.X", "Predecessor", "DM.COUNTRY"))) == []

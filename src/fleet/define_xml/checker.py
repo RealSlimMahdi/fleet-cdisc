@@ -56,7 +56,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
-import yaml
+
+from fleet.core.define_spec import load_spec_yaml
 
 if TYPE_CHECKING:
     from fleet.validation.models import ValidationResult
@@ -263,7 +264,7 @@ class DatasetChecker:
         self._check_ct = check_ct
 
         path = Path(define_yaml_path)
-        self._data: dict[str, Any] = yaml.safe_load(path.read_text(encoding="utf-8"))
+        self._data: dict[str, Any] = load_spec_yaml(path.read_text(encoding="utf-8"))
 
         if validate_schema and enabled:
             self._validate_schema()

@@ -39,6 +39,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn
 
+from fleet.core.define_spec import load_spec_yaml
 from fleet.core.study_context import find_study_config
 
 if TYPE_CHECKING:
@@ -765,7 +766,7 @@ def _run_add_acrf(args: argparse.Namespace) -> None:
                 header.append(line)
             else:
                 break
-        data = yaml.safe_load(text) or {}
+        data = load_spec_yaml(text) or {}
         acrf = (
             data.setdefault("study", {}).setdefault("documents", {}).setdefault("annotated_crf", {})
         )
@@ -870,7 +871,6 @@ def _compose_run_frame(
 
 
 def _run_run(args: argparse.Namespace) -> None:
-    import yaml
 
     import fleet  # noqa: F401 — registers .sdtm / .adam namespaces
     from fleet.io import save_dataset_json, save_parquet, save_xpt
@@ -892,7 +892,7 @@ def _run_run(args: argparse.Namespace) -> None:
 
     plan: list[tuple[Path, str, dict[str, Any]]] = []
     for path, standard in defines:
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        data = load_spec_yaml(path.read_text(encoding="utf-8")) or {}
         for ds in data.get("datasets", []):
             plan.append((path, standard, ds))
 

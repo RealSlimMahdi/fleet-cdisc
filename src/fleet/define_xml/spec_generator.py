@@ -33,7 +33,7 @@ from lxml import etree as lxml_etree
 from fleet.core import spec_registry
 from fleet.core._verb_mixin import _import_derivations_module
 from fleet.core.algorithm_resolver import docstring_summary, resolve_callable_docstring
-from fleet.core.define_spec import load_define_spec
+from fleet.core.define_spec import load_define_spec, load_spec_yaml
 from fleet.core.exceptions import SpecError
 
 _SCHEMA_PATH = Path(__file__).parent / "schemas" / "define_spec_schema.json"
@@ -137,7 +137,7 @@ class DefineSpecGenerator:
         enrich_methods: bool = False,
     ) -> None:
         self._path = Path(define_yaml_path)
-        self._data: dict[str, Any] = yaml.safe_load(self._path.read_text(encoding="utf-8"))
+        self._data: dict[str, Any] = load_spec_yaml(self._path.read_text(encoding="utf-8"))
         self._check_spec_version()
         self._enrich_methods = enrich_methods
         self._validate_xml = validate_xml

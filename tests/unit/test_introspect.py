@@ -34,6 +34,7 @@ EXPECTED_ALL = [
     "algorithms",
     "define_schema",
     "get_algorithm",
+    "load_spec_yaml",  # ADR-0008: tools parse define.yaml with Fleet's loader (on: stays a key)
     "suggest_algorithm",
 ]
 
