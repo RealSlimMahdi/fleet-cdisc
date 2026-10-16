@@ -3,6 +3,7 @@
 # Single source of truth: describes output structure AND drives from_spec() derivations.
 # Used for: (1) Define-XML 2.1 generation  (2) post-dataset structure checks  (3) pipeline execution.
 
+fleet_spec_version: 2
 study:
   id: CDISCPILOT01
   name: CDISCPILOT01
@@ -93,7 +94,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: hardcode_no_ct
+          algorithm: assign
           value: "CDISCPILOT01"
 
       - name: DOMAIN
@@ -103,7 +104,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: hardcode_no_ct
+          algorithm: assign
           value: "DM"
 
       - name: USUBJID
@@ -114,7 +115,7 @@ datasets:
         origin: Derived
         comment: "Concatenation of STUDYID, SITEID, and SUBJID"
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: patient_number
 
       - name: SUBJID
@@ -125,7 +126,7 @@ datasets:
         origin: Collected
         crf_pages: "6"
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: patient_number
 
       - name: RFSTDTC
@@ -135,7 +136,7 @@ datasets:
         origin: Collected
         crf_pages: "7"
         derivation:
-          algorithm: assign_dtc
+          algorithm: date
           source: first_dose_date
 
       - name: RFENDTC
@@ -144,7 +145,7 @@ datasets:
         mandatory: false
         origin: Collected
         derivation:
-          algorithm: assign_dtc
+          algorithm: date
           source: last_dose_date
 
       - name: RFXSTDTC
@@ -169,7 +170,7 @@ datasets:
         origin: Collected
         crf_pages: "6"
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: site_id
 
       - name: AGE
@@ -179,7 +180,7 @@ datasets:
         origin: Collected
         crf_pages: "8"
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: age
 
       - name: AGEU
@@ -189,7 +190,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: hardcode_no_ct
+          algorithm: assign
           value: "YEARS"
 
       - name: SEX
@@ -201,10 +202,9 @@ datasets:
         crf_pages: "8"
         codelist: C66731
         derivation:
-          algorithm: assign_ct
+          algorithm: assign
           source: sex
-          ct_codelist: C66731
-          ct_mapping:
+          ct_map:
             "F": "F"
             "M": "M"
 
@@ -217,9 +217,8 @@ datasets:
         crf_pages: "8 9"
         codelist: C74457
         derivation:
-          algorithm: assign_ct
+          algorithm: assign
           source: race
-          ct_codelist: C74457
 
       - name: ETHNIC
         label: Ethnicity
@@ -229,9 +228,8 @@ datasets:
         origin: Collected
         codelist: C66790
         derivation:
-          algorithm: assign_ct
+          algorithm: assign
           source: ethnic
-          ct_codelist: C66790
 
       - name: ARMCD
         label: Planned Arm Code
@@ -240,7 +238,7 @@ datasets:
         mandatory: true
         origin: Protocol
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: arm_code
 
       - name: ARM
@@ -250,7 +248,7 @@ datasets:
         mandatory: true
         origin: Protocol
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: arm_description
 
       - name: ACTARMCD
@@ -260,7 +258,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: arm_code
 
       - name: ACTARM
@@ -270,7 +268,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: arm_description
 
       - name: RFICDTC
@@ -279,7 +277,7 @@ datasets:
         mandatory: false
         origin: Collected
         derivation:
-          algorithm: assign_dtc
+          algorithm: date
           source: informed_consent_date
 
   # ─────────────────────────────────────────────────────────────── AE ─── #
@@ -301,7 +299,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: hardcode_no_ct
+          algorithm: assign
           value: "CDISCPILOT01"
 
       - name: DOMAIN
@@ -311,7 +309,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: hardcode_no_ct
+          algorithm: assign
           value: "AE"
 
       - name: USUBJID
@@ -321,7 +319,7 @@ datasets:
         mandatory: true
         origin: Derived
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: patient_number
 
       - name: AESEQ
@@ -337,7 +335,7 @@ datasets:
         mandatory: true
         origin: Collected
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: ae_term
 
       - name: AEDECOD
@@ -347,7 +345,7 @@ datasets:
         mandatory: true
         origin: Derived
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: ae_decoded_term
 
       - name: AESTDTC
@@ -356,7 +354,7 @@ datasets:
         mandatory: true
         origin: Collected
         derivation:
-          algorithm: assign_dtc
+          algorithm: date
           source: ae_start_date
 
       - name: AEENDTC
@@ -365,7 +363,7 @@ datasets:
         mandatory: false
         origin: Collected
         derivation:
-          algorithm: assign_dtc
+          algorithm: date
           source: ae_end_date
 
       - name: AESEV
@@ -375,7 +373,7 @@ datasets:
         mandatory: false
         origin: Collected
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: ae_severity
 
       - name: AESER
@@ -385,7 +383,7 @@ datasets:
         mandatory: false
         origin: Collected
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: ae_serious
 
       - name: AEOUT
@@ -395,7 +393,7 @@ datasets:
         mandatory: false
         origin: Collected
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: ae_outcome
 
       - name: AEACN
@@ -405,7 +403,7 @@ datasets:
         mandatory: false
         origin: Collected
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: ae_action
 
       - name: AEREL
@@ -416,7 +414,7 @@ datasets:
         origin: Collected
         derivation:
           algorithm: ae_aerel
-          aerel_source: ae_relationship
+          source: ae_relationship
 
   # ─────────────────────────────────────────────────────────────── VS ─── #
   - name: VS
@@ -437,7 +435,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: hardcode_no_ct
+          algorithm: assign
           value: "CDISCPILOT01"
 
       - name: DOMAIN
@@ -447,7 +445,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: hardcode_no_ct
+          algorithm: assign
           value: "VS"
 
       - name: USUBJID
@@ -457,7 +455,7 @@ datasets:
         mandatory: true
         origin: Derived
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: patient_number
 
       - name: VSTESTCD
@@ -468,7 +466,7 @@ datasets:
         origin: Collected
         codelist: CL.VSTEST
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: vstestcd
 
       - name: VSTEST
@@ -478,7 +476,7 @@ datasets:
         mandatory: true
         origin: Collected
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: vstest
 
       - name: VSORRES
@@ -488,7 +486,7 @@ datasets:
         mandatory: true
         origin: Collected
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: vs_result
 
       - name: VSORRESU
@@ -498,7 +496,7 @@ datasets:
         mandatory: true
         origin: Collected
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: vsorresu
 
       - name: VSSTRESN
@@ -507,7 +505,7 @@ datasets:
         mandatory: false
         origin: Derived
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: vsstresn
 
       - name: VSSTRESU
@@ -517,7 +515,7 @@ datasets:
         mandatory: false
         origin: Derived
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: vsstresu
 
       - name: VISITNUM
@@ -526,7 +524,7 @@ datasets:
         mandatory: false
         origin: Protocol
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: visitnum
 
       - name: VISIT
@@ -536,7 +534,7 @@ datasets:
         mandatory: false
         origin: Protocol
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: visit
 
       - name: VSDTC
@@ -545,7 +543,7 @@ datasets:
         mandatory: true
         origin: Collected
         derivation:
-          algorithm: assign_dtc
+          algorithm: date
           source: vs_date
 
   # ─────────────────────────────────────────────────────────────── EX ─── #
@@ -567,7 +565,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: hardcode_no_ct
+          algorithm: assign
           value: "CDISCPILOT01"
 
       - name: DOMAIN
@@ -577,7 +575,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: hardcode_no_ct
+          algorithm: assign
           value: "EX"
 
       - name: USUBJID
@@ -587,7 +585,7 @@ datasets:
         mandatory: true
         origin: Derived
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: patient_number
 
       - name: EXSEQ
@@ -603,7 +601,7 @@ datasets:
         mandatory: true
         origin: Protocol
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: ex_treatment
 
       - name: EXDOSE
@@ -612,7 +610,7 @@ datasets:
         mandatory: false
         origin: Collected
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: ex_dose
 
       - name: EXDOSU
@@ -622,7 +620,7 @@ datasets:
         mandatory: false
         origin: Protocol
         derivation:
-          algorithm: hardcode_no_ct
+          algorithm: assign
           value: "mg"
 
       - name: EXSTDTC
@@ -631,7 +629,7 @@ datasets:
         mandatory: true
         origin: Collected
         derivation:
-          algorithm: assign_dtc
+          algorithm: date
           source: ex_start_date
 
       - name: EXENDTC
@@ -640,5 +638,5 @@ datasets:
         mandatory: false
         origin: Collected
         derivation:
-          algorithm: assign_dtc
+          algorithm: date
           source: ex_end_date

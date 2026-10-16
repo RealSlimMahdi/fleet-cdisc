@@ -22,7 +22,7 @@ fragments that reference files or study data not present in the test harness).
 
 ```yaml
 # yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json
-fleet_spec_version: 1
+fleet_spec_version: 2
 study:
   id:             CDISCPILOT01
   standard:       ADAMIG
@@ -54,7 +54,7 @@ datasets:
 The spec is validated against the bundled JSON Schema (`define_spec_schema.json`),
 which is **generated from the algorithm registry** — its `algorithm:` enum and
 per-algorithm required fields always match what `from_spec()` actually executes
-(a CI sync test enforces this). The top-level `fleet_spec_version: 1` pins the
+(a CI sync test enforces this). The top-level `fleet_spec_version: 2` pins the
 spec dialect; a future incompatible version is rejected with a clear message
 rather than silently misinterpreted.
 
@@ -139,7 +139,7 @@ on the callable's `kind`:
 ```yaml
 - name: AGEGR1
   derivation:
-    algorithm: callable
+    algorithm: derivation
     callable: examples.cdiscpilot01.adam.derivations.AGEGR1
 ```
 
@@ -203,7 +203,7 @@ spec, `from_dataset:` names a **pinned dataset** (attach it with `.pin("EX", ex)
 before calling `from_spec`); the runtime resolves the name to the pinned frame.
 
 ```yaml
-fleet_spec_version: 1
+fleet_spec_version: 2
 study:
   id: CDISCPILOT01
   standard: ADAMIG
@@ -329,7 +329,7 @@ reviewer-facing defects such as a `MethodOID` on a non-Derived variable or
 API markup inside `TranslatedText`; `validate_xml=False` bypasses both.
 Both generators honour the same new spec keys:
 
-- **`fleet_spec_version: 1`** — spec dialect version (checked on load).
+- **`fleet_spec_version: 2`** — spec dialect version (checked on load; 2 is the verb vocabulary of ADR-0008, `fleet migrate --spec` rewrites a version 1 file).
 - **`derivations_module:`** — a dotted module that `from_spec` imports itself, so
   `callable:` derivations register without a manual import.
 - **`output_format:`** — per-dataset or spec-level export format (`parquet`,
@@ -351,7 +351,7 @@ Variables can reference codelists declared in the `codelists` block:
   type: text
   codelist: C66731 # references the oid in codelists[]
   derivation:
-    algorithm: source
+    algorithm: assign
     source: SEX
 ```
 
@@ -367,9 +367,8 @@ A spec step and its inline call check the same terms. Inside a study, a
 - name: AESEV
   codelist: C66769
   derivation:
-    algorithm: assign_ct
+    algorithm: assign
     source: ae_severity
-    ct_codelist: C66769
 ```
 
 runs as `.assign("AESEV", source="ae_severity", ct=AESEV)` with the `AESEV`
@@ -420,9 +419,8 @@ datasets:
       - name: SEX
         codelist: C66731
         derivation:
-          algorithm: assign_ct
+          algorithm: assign
           source: sex
-          ct_codelist: C66731
 ```
 
 When datasets are checked with `DatasetChecker(spec, check_ct=True)`, the values
@@ -649,9 +647,9 @@ variables:
     origin: Collected
     crf_pages: "8" # single page
     derivation:
-      algorithm: assign_ct
+      algorithm: assign
       source: sex
-      ct_codelist: C66731
+      ct: C66731
 
   - name: RACE
     label: Race

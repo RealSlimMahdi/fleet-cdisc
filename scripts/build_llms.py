@@ -624,7 +624,7 @@ gen = DefineXMLGenerator(Path("examples/cdiscpilot01/adam/define.yaml"))
 gen.generate(Path("outputs/cdiscpilot01/define_adam.xml"))
 ```
 
-New spec keys: `fleet_spec_version: 1` (dialect pin), `derivations_module:` \
+New spec keys: `fleet_spec_version: 2` (dialect pin), `derivations_module:` \
 (auto-import for `callable:`), `output_format:` (parquet/json/xpt), `value_level:` \
 (value-level metadata), and `ct: {validate: true, file: ...}` (opt into CT validation).\
 """

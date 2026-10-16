@@ -66,7 +66,7 @@ datasets:
         type: text
         mandatory: true
         derivation:
-          algorithm: hardcode_no_ct
+          algorithm: assign
           value: "AE"
       - name: AESEV
         label: Severity/Intensity
@@ -75,9 +75,9 @@ datasets:
         origin: Collected
         codelist: C66769
         derivation:
-          algorithm: assign_ct
+          algorithm: assign
           source: ae_severity
-          ct_codelist: C66769
+          ct: C66769
 """
 
 RAW = pl.from_repr("""\

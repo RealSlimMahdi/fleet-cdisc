@@ -45,28 +45,28 @@ datasets:
         type: text
         mandatory: true
         derivation:
-          algorithm: hardcode_no_ct
+          algorithm: assign
           value: "TESTRUN"
       - name: DOMAIN
         label: Domain Abbreviation
         type: text
         mandatory: true
         derivation:
-          algorithm: hardcode_no_ct
+          algorithm: assign
           value: "DM"
       - name: USUBJID
         label: Unique Subject Identifier
         type: text
         mandatory: true
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: patient_number
       - name: AGE
         label: Age
         type: integer
         mandatory: false
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: age
 """
 
@@ -542,20 +542,20 @@ datasets:
         type: text
         mandatory: true
         derivation:
-          algorithm: assigned
+          algorithm: assign
           value: HOUSE
       - name: USUBJID
         label: Unique Subject Identifier
         type: text
         mandatory: true
         derivation:
-          algorithm: source
+          algorithm: assign
           source: usubjid
       - name: SAFFL
         label: Safety Population Flag
         type: text
         derivation:
-          algorithm: callable
+          algorithm: derivation
           callable: SAFFL_house
 """
     (project / "define.yaml").write_text(spec, encoding="utf-8")

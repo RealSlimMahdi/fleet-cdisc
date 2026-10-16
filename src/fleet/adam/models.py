@@ -21,23 +21,23 @@ from fleet.core.spec_registry import (
 
 
 class ADAMAlgorithm(StrEnum):
-    """Derivation verbs for ADaM variable derivations.
+    """The ADaM verbs a define.yaml can run: the ``algorithm:`` values.
 
-    Kept in sync with ``fleet.core.spec_registry`` by
-    ``tests/unit/test_spec_parity.py``.
+    The verb is the algorithm (ADR-0008). Kept in sync with
+    ``fleet.core.spec_registry`` by ``tests/unit/test_spec_parity.py``.
     """
 
-    # Base verbs
-    SOURCE = "source"
+    # Shared verbs
+    ASSIGN = "assign"
     DERIVATION = "derivation"
-    ASSIGNED = "assigned"
     RECODE = "recode"
-    RENAME = "rename"
-    CONDDERIVATION = "condderivation"
-    LOOKUP = "lookup"
+    CASE_WHEN = "case_when"
+    MERGE = "merge"
     WHERECLAUSES = "whereclauses"
-    # BDS first-class methods (also valid as direct YAML algorithm keys)
-    STUDY_DAY = "study_day"
+    DURATION = "duration"
+    DATE = "date"
+    SEQ = "seq"
+    # BDS verbs
     BASELINE = "baseline"
     CHG = "chg"
     PCHG = "pchg"
@@ -46,22 +46,16 @@ class ADAMAlgorithm(StrEnum):
     NRIND = "nrind"
     ON_TREATMENT = "on_treatment"
     SHIFT = "shift"
-    SEQ = "seq"
     BSA = "bsa"
     MAP = "map"
-    MEAN_ARTERIAL_PRESSURE = "mean_arterial_pressure"
     QTC = "qtc"
     ATOXGR = "atoxgr"
     COMBINE_GRADES = "combine_grades"
-    DATE = "date"
-    DURATION = "duration"
     PICK = "pick"
     # ADSL subject-level aggregations (pin-resolved event datasets)
     FIRST_DATE = "first_date"
     LAST_DATE = "last_date"
     COUNT_EVENTS = "count_events"
-    COUNT = "count"  # documented alias of count_events
-    CALLABLE = "callable"
 
 
 #: Discriminated union of all per-algorithm ADaM variable models.

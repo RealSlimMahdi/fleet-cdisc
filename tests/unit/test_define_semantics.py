@@ -66,10 +66,9 @@ class TestRegistryRendering:
     @pytest.mark.parametrize("standard", ["sdtm", "adam"])
     def test_templates_reference_only_declared_params(self, standard):
         for algo in spec_registry.algorithms(standard):
-            if not algo.define_template:
-                continue
-            keys = set(re.findall(r"{(\w+)}", algo.define_template))
-            declared = {p.name for p in algo.params} | {"target"}
+            for shape_keys, template in algo.method_text:
+                keys = set(re.findall(r"{(\w+)}", template)) | set(shape_keys)
+                declared = {p.name for p in algo.params} | {"target"}
             assert keys <= declared, (
                 f"{standard}:{algo.name} template names unknown params {keys - declared}"
             )
@@ -80,13 +79,13 @@ class TestRegistryRendering:
             == "Change from baseline: AVAL - BASE."
         )
         assert (
-            spec_registry.render_method_text("sdtm", "assign_no_ct", {"source": "raw_sex"})
+            spec_registry.render_method_text("sdtm", "assign", {"source": "raw_sex"})
             == "Direct copy of raw_sex."
         )
 
     def test_formal_expression_is_a_faithful_call(self):
         expr = spec_registry.render_formal_expression(
-            "sdtm", "assign_no_ct", {"source": "subject_id"}, target="USUBJID"
+            "sdtm", "assign", {"source": "subject_id"}, target="USUBJID"
         )
         assert expr == (
             "fleet.core._verb_mixin.SharedVerbsMixin.assign('USUBJID', source='subject_id')"
@@ -159,12 +158,12 @@ class TestSemanticLint:
 
     def test_algorithm_id_as_method_name_is_flagged(self):
         xml = _doc(
-            '<MethodDef OID="MT.X" Name="assign_no_ct" Type="Computation">'
+            '<MethodDef OID="MT.X" Name="assign" Type="Computation">'
             "<Description><TranslatedText xml:lang='en'>t</TranslatedText></Description>"
             "</MethodDef>"
         )
         assert any("algorithm id" in p for p in semantic_errors(xml))
-        clean = xml.replace("assign_no_ct", "Algorithm for AGEGR1")
+        clean = xml.replace('Name="assign"', 'Name="Algorithm for AGEGR1"')
         assert semantic_errors(clean) == []
 
     def test_predecessor_description_must_be_dataset_variable(self):
@@ -242,7 +241,7 @@ class TestGeneratorSemantics:
                 "type": "text",
                 "origin": "Derived",
                 "comment": "AGE grouped as <65, 65-80, >80 years",
-                "derivation": {"algorithm": "assign_no_ct", "source": "age_group"},
+                "derivation": {"algorithm": "assign", "source": "age_group"},
             }
         )
         root = _generate(spec, tmp_path, enrich_methods=True)
@@ -261,7 +260,7 @@ class TestGeneratorSemantics:
                 "type": "text",
                 "origin": "Derived",
                 "comment": "AGE grouped as <65, 65-80, >80 years",
-                "derivation": {"algorithm": "assign_no_ct", "source": "age_group"},
+                "derivation": {"algorithm": "assign", "source": "age_group"},
             }
         )
         root = _generate(spec, tmp_path)
@@ -275,7 +274,7 @@ class TestGeneratorSemantics:
                 "label": "Study Site Identifier",
                 "type": "text",
                 "origin": "Assigned",
-                "derivation": {"algorithm": "assign_no_ct", "source": "site"},
+                "derivation": {"algorithm": "assign", "source": "site"},
             }
         )
         root = _generate(spec, tmp_path, enrich_methods=True)
@@ -346,7 +345,7 @@ class TestGeneratorSemantics:
                         "label": "Analysis Value (SYSBP)",
                         "type": "float",
                         "derivation": {
-                            "algorithm": "callable",
+                            "algorithm": "derivation",
                             "callable": "fleet.core.lineage.lineage_of",
                         },
                     }
@@ -366,7 +365,7 @@ class TestGeneratorSemantics:
                 "label": "Age",
                 "type": "integer",
                 "origin": "Collected",
-                "derivation": {"algorithm": "source", "source": "AGE"},
+                "derivation": {"algorithm": "assign", "source": "AGE"},
             }
         )
         spec["study"]["standard"] = "ADAMIG"
@@ -433,9 +432,9 @@ def test_the_adam_example_define_names_no_sdtm_class():
 @pytest.mark.parametrize(
     ("target", "block"),
     [
-        ("USUBJID", {"algorithm": "source"}),  # runs assign
+        ("USUBJID", {"algorithm": "assign"}),  # runs assign
         ("ASTDT", {"algorithm": "date", "source": "AESTDTC"}),  # the ADaM override of date
-        ("ADY", {"algorithm": "study_day", "analysis_date": "ASTDT", "reference_date": "TRTSDT"}),
+        ("ADY", {"algorithm": "duration", "end": "ASTDT", "start": "TRTSDT"}),
     ],
 )
 def test_formal_expression_names_the_method_lineage_records(target, block):
@@ -514,13 +513,13 @@ class TestInlineParity:
                             "name": "DOMAIN",
                             "label": "Domain Abbreviation",
                             "type": "text",
-                            "derivation": {"algorithm": "hardcode_no_ct", "value": "DM"},
+                            "derivation": {"algorithm": "assign", "value": "DM"},
                         },
                         {
                             "name": "USUBJID",
                             "label": "Unique Subject Identifier",
                             "type": "text",
-                            "derivation": {"algorithm": "assign_no_ct", "source": "subject_id"},
+                            "derivation": {"algorithm": "assign", "source": "subject_id"},
                         },
                         {
                             "name": "RFSTDTC",
@@ -640,3 +639,66 @@ class TestPredecessorPopulate:
     def test_invalid_predecessor_name_rejected(self):
         with pytest.raises(Exception, match="not a valid"):
             self._adsl_ns().to_spec_yaml(dataset="ADSL", predecessor="dm raw!")
+
+
+class TestMethodTextShapes:
+    """One verb, several reviewer texts: the keys given in the block pick the shape."""
+
+    @pytest.mark.parametrize(
+        ("params", "text"),
+        [
+            ({"source": "sex"}, "Direct copy of sex."),
+            ({"source": "sex", "ct": "C66731"}, "Value of sex mapped to controlled terminology."),
+            ({"value": "DM"}, "Set to 'DM' for all records."),
+            (
+                {"value": "M", "ct": "C66731"},
+                "Set to the controlled terminology value 'M' for all records.",
+            ),
+            ({}, "Direct copy of SEX."),
+        ],
+    )
+    def test_assign_shapes(self, params, text):
+        assert spec_registry.render_method_text("sdtm", "assign", params, target="SEX") == text
+
+    def test_the_variable_codelist_reaches_the_method_text(self, tmp_path):
+        """``codelist:`` on the variable is the ``ct`` of its assign (ADR-0008)."""
+        spec = {
+            "study": {
+                "id": "S",
+                "name": "S",
+                "description": "Shape test",
+                "protocol_name": "S",
+                "originator": "Fleet",
+                "standard": "SDTMIG",
+                "standard_version": "3.4",
+            },
+            "datasets": [
+                {
+                    "name": "DM",
+                    "label": "Demographics",
+                    "structure": "One record per subject",
+                    "keys": ["USUBJID"],
+                    "variables": [
+                        {
+                            "name": "SEX",
+                            "label": "Sex",
+                            "type": "text",
+                            "origin": "Derived",
+                            "codelist": "C66731",
+                            "derivation": {"algorithm": "assign", "source": "sex"},
+                        }
+                    ],
+                }
+            ],
+            "codelists": [
+                {
+                    "oid": "C66731",
+                    "name": "Sex",
+                    "type": "text",
+                    "items": [{"coded_value": "M", "decode": "Male"}],
+                }
+            ],
+        }
+        root = _generate(spec, tmp_path, enrich_methods=True)
+        texts = [e.text for e in root.iter(f"{ODM}TranslatedText")]
+        assert "Value of sex mapped to controlled terminology." in texts

@@ -161,21 +161,21 @@ datasets:
         label: Study Identifier
         type: text
         derivation:
-          algorithm: assigned
+          algorithm: assign
           value: "STUDY01"
 
       - name: USUBJID
         label: Unique Subject Identifier
         type: text
         derivation:
-          algorithm: source
+          algorithm: assign
           source: USUBJID
 
       - name: MYVAR
         label: A derived variable
         type: text
         derivation:
-          algorithm: assigned
+          algorithm: assign
           value: "FROM_SPEC"
 """
 

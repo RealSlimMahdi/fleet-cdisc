@@ -346,14 +346,14 @@ datasets:
     variables:
       - name: STUDYID
         derivation:
-          algorithm: hardcode_no_ct
+          algorithm: assign
           value: "CDISCPILOT01"
       - name: SEX
         derivation:
-          algorithm: assign_ct
+          algorithm: assign
           source: sex
-          ct_codelist: C66731
-          ct_mapping: { "F": "F", "M": "M" }
+          ct: C66731
+          ct_map: { "F": "F", "M": "M" }
 ```
 
 ```python

@@ -15,7 +15,7 @@ Examples:
 
         >>> rows = derivations_from_source('dm = raw.sdtm.assign("DOMAIN", value="DM")')
         >>> rows[0]["block"]
-        {'algorithm': 'hardcode_no_ct', 'value': 'DM'}
+        {'algorithm': 'assign', 'value': 'DM'}
 """
 
 from __future__ import annotations
@@ -25,13 +25,11 @@ import re
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from fleet.core.dag import VariableNode
+from fleet.core.define_spec import load_spec_yaml
 from fleet.core.lineage import UNSERIALISABLE
 from fleet.core.spec_registry import (
     SPEC_UNSUPPORTED,
-    _candidate_algorithms,
     derivation_from_lineage,
     get_algorithm,
     render_formal_expression,
@@ -110,7 +108,7 @@ def program_from_spec(spec_path: str | Path, dataset: str) -> str:
         ValueError: When *dataset* is not declared in the spec.
     """
     path = Path(spec_path)
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    data = load_spec_yaml(path.read_text(encoding="utf-8")) or {}
     datasets = [ds for ds in data.get("datasets", []) if isinstance(ds, dict)]
     block = next(
         (ds for ds in datasets if str(ds.get("name", "")).upper() == dataset.upper()), None
@@ -138,8 +136,8 @@ def program_from_spec(spec_path: str | Path, dataset: str) -> str:
         if not isinstance(derivation, dict) or "algorithm" not in derivation:
             continue
         algorithm = str(derivation["algorithm"])
-        if algorithm == "callable":
-            chain.append(_callable_call(str(derivation.get("callable", "")), module, imports))
+        if derivation.get("callable"):
+            chain.append(_callable_call(str(derivation["callable"]), module, imports))
             continue
         params = {k: v for k, v in derivation.items() if k not in _NOT_PARAMS}
         text = render_formal_expression(
@@ -211,7 +209,7 @@ def _callable_row(
     imported: dict[str, str],
     defined: set[str],
 ) -> dict[str, Any]:
-    """A ``Derivation`` object dispatched bare — ``.derivation(AGEGR1)`` — as ``algorithm: callable``.
+    """A ``Derivation`` object dispatched bare — ``.derivation(AGEGR1)`` — as a ``callable:`` block.
 
     The reference is the dotted path the program itself imports it from,
     or the registered short name. The stanza takes the object's name, which
@@ -245,7 +243,7 @@ def _callable_row(
             "derivations package (fleet derivation add) so the spec can reference it"
         )
     else:
-        row.update(status="ok", block={"algorithm": "callable", "callable": dotted})
+        row.update(status="ok", block={"algorithm": "derivation", "callable": dotted})
     return row
 
 
@@ -299,8 +297,8 @@ def _row(standard: str, call: ast.Call, target: str) -> dict[str, Any]:
         row.update(status="ok", block=block)
     elif verb in SPEC_UNSUPPORTED[standard]:
         row.update(status="unsupported", reason="the verb has no spec form")
-    elif not _candidate_algorithms(standard, verb):
-        row.update(status="unknown", reason="not a registered spec algorithm or verb")
+    elif get_algorithm(standard, verb) is None:
+        row.update(status="unknown", reason="not a spec-executable verb")
     elif any(value is UNSERIALISABLE for value in params.values()):
         row["reason"] = "an argument is not a literal (expression, callable or variable)"
     else:

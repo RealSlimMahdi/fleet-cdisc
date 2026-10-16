@@ -36,7 +36,7 @@ datasets:
     variables:
       - name: SEX
         derivation:
-          algorithm: asign_ct
+          algorithm: asign
           source: sex
 """
 
@@ -57,9 +57,9 @@ datasets:
     variables:
       - name: SEX
         derivation:
-          algorithm: assign_ct
+          algorithm: assign
           source: sex
-          ct_codelist: C66731
+          ct: C66731
 """
 
 #: Simplified single-dataset shape: two entries, only the first derived.
@@ -95,9 +95,9 @@ class TestDiagnostics:
 
     def test_unknown_algorithm_gets_did_you_mean(self):
         diags = compute_diagnostics(BAD_ALGO_SPEC)
-        algo = [d for d in diags if "asign_ct" in d["message"]]
+        algo = [d for d in diags if "asign" in d["message"]]
         assert len(algo) == 1
-        assert "Did you mean 'assign_ct'?" in algo[0]["message"]
+        assert "Did you mean 'assign'?" in algo[0]["message"]
         assert algo[0]["line"] == 7  # the `algorithm:` line, 0-based
 
     def test_schema_violations_reported(self):
@@ -106,19 +106,19 @@ class TestDiagnostics:
         assert any("required property" in d["message"] for d in diags)
 
     def test_wrong_standard_algorithm_named(self):
-        text = BAD_ALGO_SPEC.replace("asign_ct", "chg")  # chg is ADaM-only
+        text = BAD_ALGO_SPEC.replace("asign", "chg")  # chg is ADaM-only
         diags = compute_diagnostics(text)
         assert any("'chg' is a adam algorithm" in d["message"] for d in diags)
 
     def test_simplified_format_is_clean(self):
         """The single-dataset shape from_spec() accepts is a valid spec, not an error."""
-        text = "domain: DM\nvariables:\n  - target: USUBJID\n    algorithm: assign_no_ct\n    source: subject_id\n"
+        text = "domain: DM\nvariables:\n  - target: USUBJID\n    algorithm: assign\n    source: subject_id\n"
         assert compute_diagnostics(text) == []
 
     def test_simplified_format_still_catches_unknown_algorithm(self):
-        text = "domain: DM\nvariables:\n  - target: USUBJID\n    algorithm: asign_no_ct\n    source: subject_id\n"
+        text = "domain: DM\nvariables:\n  - target: USUBJID\n    algorithm: asign\n    source: subject_id\n"
         diags = compute_diagnostics(text)
-        assert any("Did you mean 'assign_no_ct'?" in d["message"] for d in diags)
+        assert any("Did you mean 'assign'?" in d["message"] for d in diags)
         assert diags[0]["line"] == 3  # the `algorithm:` line, 0-based
 
 
@@ -131,16 +131,16 @@ class TestCompletions:
     def test_algorithm_completions_match_registry(self):
         labels = self._algo_items(BAD_ALGO_SPEC)
         assert set(algorithm_names("sdtm")) == set(labels)  # SDTMIG file → sdtm only
-        assert "assign_ct" in labels
+        assert "assign" in labels
         assert "chg" not in labels
 
     def test_algorithm_completions_both_standards_when_unknown(self):
         text = BAD_ALGO_SPEC.replace("  standard: SDTMIG\n", "")
         labels = self._algo_items(text)
-        assert "assign_ct" in labels and "chg" in labels
+        assert "assign" in labels and "chg" in labels
 
     def test_param_completions_required_first(self):
-        text = BAD_ALGO_SPEC.replace("asign_ct", "duration") + "          "
+        text = BAD_ALGO_SPEC.replace("asign", "duration") + "          "
         lines = text.splitlines()
         items = compute_completions(text, len(lines) - 1, 10)
         labels = [i["label"] for i in items]
@@ -150,7 +150,7 @@ class TestCompletions:
 
     def test_codelist_oid_completions_from_inline_section(self):
         lines = CODELIST_SPEC.splitlines()
-        line = next(i for i, ln in enumerate(lines) if "ct_codelist:" in ln)
+        line = next(i for i, ln in enumerate(lines) if "ct:" in ln)
         char = lines[line].index(":") + 2
         items = compute_completions(CODELIST_SPEC, line, char)
         assert items == [{"label": "C66731", "detail": "Sex"}]
@@ -172,17 +172,17 @@ class TestHover:
     def test_algorithm_hover_has_docstring_and_params(self):
         text = CODELIST_SPEC
         lines = text.splitlines()
-        line = next(i for i, ln in enumerate(lines) if "algorithm: assign_ct" in ln)
-        md = compute_hover(text, line, lines[line].index("assign_ct") + 1)
+        line = next(i for i, ln in enumerate(lines) if "algorithm: assign" in ln)
+        md = compute_hover(text, line, lines[line].index("assign") + 1)
         assert md is not None
-        assert "assign_ct" in md
-        assert "controlled-terminology" in md  # registry description
+        assert "assign" in md
+        assert "controlled terminology" in md  # registry description
         assert "Verb: `fleet." in md  # summary source: introspect.algorithm_doc()
-        assert "ct_codelist" in md  # param table
+        assert "`ct`" in md  # param table
 
     def test_codelist_hover_shows_name_and_terms(self):
         lines = CODELIST_SPEC.splitlines()
-        line = next(i for i, ln in enumerate(lines) if "ct_codelist:" in ln)
+        line = next(i for i, ln in enumerate(lines) if "ct:" in ln)
         md = compute_hover(CODELIST_SPEC, line, lines[line].index("C66731") + 1)
         assert md is not None
         assert "Sex" in md

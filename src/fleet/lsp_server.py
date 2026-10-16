@@ -301,7 +301,7 @@ def compute_completions(
             from fleet.lsp_server import compute_completions
 
             items = compute_completions("derivation:\\n  algorithm: ", 1, 13)
-            assert any(i["label"] == "assign_ct" for i in items)
+            assert any(i["label"] == "assign" for i in items)
     """
     from fleet import introspect
 
@@ -326,7 +326,7 @@ def compute_completions(
                 )
         return sorted(seen.values(), key=lambda i: i["label"])
 
-    if re.match(r"^(-\s+)?(ct_codelist|codelist):", stripped):
+    if re.match(r"^(-\s+)?(ct|codelist):", stripped):
         codelists = data.get("codelists")
         return [
             {"label": str(cl["oid"]), "detail": str(cl.get("name", ""))}
@@ -383,8 +383,8 @@ def compute_hover(text: str, line: int, character: int, path: str = "") -> str |
 
             from fleet.lsp_server import compute_hover
 
-            md = compute_hover("derivation:\\n  algorithm: assign_ct", 1, 15)
-            assert "assign_ct" in md
+            md = compute_hover("derivation:\\n  algorithm: assign", 1, 15)
+            assert "assign" in md
     """
     from fleet import introspect
 

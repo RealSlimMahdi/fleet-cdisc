@@ -91,9 +91,7 @@ def semantic_errors(xml: str | bytes) -> list[str]:
     # 3. MethodDef names are reviewer-facing, not Fleet algorithm ids.
     from fleet.core.spec_registry import algorithm_names
 
-    algo_ids = set(algorithm_names("sdtm", include_aliases=True)) | set(
-        algorithm_names("adam", include_aliases=True)
-    )
+    algo_ids = set(algorithm_names("sdtm")) | set(algorithm_names("adam"))
     for method in root.iter(f"{_ODM}MethodDef"):
         name = method.get("Name", "")
         if name in algo_ids:

@@ -13,7 +13,7 @@ Examples:
 
         from fleet.core.algorithm_resolver import resolve_algorithm_docstring
 
-        summary, dotted = resolve_algorithm_docstring("assign_ct")
+        summary, dotted = resolve_algorithm_docstring("assign")
         # spec algorithm ids resolve through the registry to their verb:
         # summary -> first sentence of SharedVerbsMixin.assign.__doc__
         # dotted  -> "fleet.core._verb_mixin.SharedVerbsMixin.assign"
@@ -105,7 +105,7 @@ def resolve_algorithm_docstring(
 
     Args:
         algorithm: Algorithm string from a ``define.yaml`` derivation
-            block (e.g. ``"assign_ct"`` or ``"baseline"``).
+            block (e.g. ``"assign"`` or ``"baseline"``).
 
     Returns:
         Tuple of ``(summary, dotted_path)`` if a match is found, or

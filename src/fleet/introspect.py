@@ -31,8 +31,8 @@ Examples:
 
         from fleet import introspect
 
-        algo = introspect.get_algorithm("sdtm", "assign_ct")
-        doc = introspect.algorithm_doc("assign_ct")
+        algo = introspect.get_algorithm("sdtm", "assign")
+        doc = introspect.algorithm_doc("assign")
         markdown = f"**{algo.name}** — {algo.description}\\n\\n{doc.summary}"
 """
 
@@ -122,8 +122,7 @@ def algorithms(standard: Standard) -> tuple[AlgorithmInfo, ...]:
         standard: ``"sdtm"`` or ``"adam"``.
 
     Returns:
-        tuple[AlgorithmInfo, ...]: Canonical algorithms (aliases are
-            resolved, not listed separately).
+        tuple[AlgorithmInfo, ...]: One entry per verb.
 
     Raises:
         ValueError: If *standard* is not a known CDISC standard.

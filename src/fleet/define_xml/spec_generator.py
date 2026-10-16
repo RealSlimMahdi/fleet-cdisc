@@ -94,6 +94,12 @@ _REGISTRY_STANDARDS: dict[str, str] = {
     "SENDIG": "sdtm",
 }
 
+
+def _is_plain_copy(block: dict) -> bool:
+    """An ``assign`` that copies a column: no constant and no codelist (ADR-0008)."""
+    return block.get("algorithm") == "assign" and block.get("value") is None and not block.get("ct")
+
+
 #: reST formatting in study docstrings (````code````, ``ref``, *emphasis*)
 #: is noise in a regulatory document — content kept, markup dropped.
 _REST_MARKUP = re.compile(r"``([^`]+)``|`([^`]+)`|\*([^*\s][^*]*)\*")
@@ -378,12 +384,11 @@ class DefineSpecGenerator:
             f"{ds['name']}.{var['name']}"
             for ds in self._data.get("datasets", [])
             for var in ds.get("variables", [])
-            if (var.get("derivation") or {}).get("algorithm") == "source"
-            and var.get("origin") == "Collected"
+            if _is_plain_copy(var.get("derivation") or {}) and var.get("origin") == "Collected"
         ]
         if hits:
             warnings.warn(
-                f"{self._path}: {', '.join(hits)} use 'algorithm: source' with "
+                f"{self._path}: {', '.join(hits)} use 'algorithm: assign' (a copy) with "
                 "origin 'Collected' — a variable carried from an upstream dataset "
                 "should declare origin: Predecessor with "
                 "predecessor: '<DATASET>.<VARIABLE>'.",
@@ -585,7 +590,11 @@ class DefineSpecGenerator:
             derivation = var.get("derivation")
             if self._enrich_methods and derivation and var.get("origin", "Derived") == "Derived":
                 method_oid = self._register_method(
-                    derivation, dataset=name, target=var_name, comment=var.get("comment")
+                    derivation,
+                    dataset=name,
+                    target=var_name,
+                    comment=var.get("comment"),
+                    codelist=var.get("codelist"),
                 )
                 if method_oid:
                     ref_attrs["MethodOID"] = method_oid
@@ -720,6 +729,7 @@ class DefineSpecGenerator:
         target: str,
         comment: str | None = None,
         vl_key: str | None = None,
+        codelist: str | None = None,
     ) -> str | None:
         """Register the MethodDef for one derived variable; return its OID.
 
@@ -738,14 +748,20 @@ class DefineSpecGenerator:
         description = (comment or "").strip()
         context = "Python/Fleet"
 
-        if callable_path and algorithm in ("", "callable"):
+        if callable_path and algorithm in ("", "derivation"):
             summary, dotted = self._resolve_callable(str(callable_path))
             description = description or _strip_rest_markup(summary or "")
             expression = dotted or str(callable_path)
             context = "Python"
         else:
-            params = {k: v for k, v in derivation.items() if k != "algorithm"}
             std = _REGISTRY_STANDARDS.get(self._data["study"]["standard"], "sdtm")
+            # The variable's codelist: is the ct: of its assign (ADR-0008), so the
+            # method text says "mapped to controlled terminology" when it applies.
+            try:
+                block = spec_registry.with_codelist(std, derivation, codelist)
+            except ValueError:
+                block = dict(derivation)
+            params = {k: v for k, v in block.items() if k != "algorithm"}
             description = description or (
                 spec_registry.render_method_text(std, algorithm, params, target=target) or ""
             )
@@ -896,6 +912,7 @@ class DefineSpecGenerator:
                             target=var_name,
                             comment=var.get("comment"),
                             vl_key=key,
+                            codelist=var.get("codelist"),
                         )
                         if method_oid:
                             ref_attrs["MethodOID"] = method_oid
