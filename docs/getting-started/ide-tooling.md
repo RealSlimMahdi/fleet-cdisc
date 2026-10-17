@@ -103,6 +103,8 @@ Each is a thin wrapper over a public Fleet API:
 | `fleet_tlg_catalog()` | all registered TLG templates |
 | `fleet_tlg_run(spec_path, data_path, adsl_path?, groupby?)` | run a TLG spec YAML, return rendered HTML |
 | `fleet_dataset_check(data_path, define_yaml, dataset)` | conformance check against the spec |
+| `fleet_code_to_spec(source)` | derivation blocks reverse-mapped from a program's verb calls, without running it |
+| `fleet_spec_to_code(define_yaml, dataset)` | an inline program skeleton rendered from a dataset's spec |
 
 `fleet_validate` builds the same run setup as `fleet validate`. It looks for
 the `study_config.yaml` from the directory of the dataset, not from the
@@ -148,6 +150,8 @@ become one question each:
 - *"Which TLG template covers an AE overview table, and run it against my ADAE."*
   → `fleet_tlg_catalog` + `fleet_tlg_run`
 - *"Does data/sdtm/dm.parquet conform to its define.yaml spec?"* → `fleet_dataset_check`
+- *"Turn this inline AE pipeline into define.yaml derivations."* → `fleet_code_to_spec`
+- *"Write me the ADSL program that metadata/adam/define.yaml describes."* → `fleet_spec_to_code`
 
 Combined with `llms.txt` (the machine-readable API summary shipped at the
 repo root), an assistant can both **write** Fleet pipelines and **verify**

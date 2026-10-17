@@ -14,16 +14,16 @@
 
 ## Part 1 — Installation
 
-### From TestPyPI (pre-release)
+### From PyPI (pre-alpha)
+
+```bash
+uv add fleet-cdisc --prerelease=allow
+```
+
+### From TestPyPI (development builds)
 
 ```bash
 uv pip install -i https://test.pypi.org/simple/ fleet-cdisc
-```
-
-### From PyPI (stable release)
-
-```bash
-uv pip install fleet-cdisc
 ```
 
 ### For development (source checkout)
@@ -102,6 +102,9 @@ This reads all codelist concept IDs referenced in the define.yaml files, fetches
 
 ```python
 # Generated codelists.py — example excerpt
+__ct_package__ = "sdtmct-2023-12-15"  # the CT package of every class below
+
+
 class C66731:
     """SEX (C66731)."""
 

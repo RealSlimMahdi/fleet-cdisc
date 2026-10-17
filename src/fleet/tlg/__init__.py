@@ -23,6 +23,9 @@ from ._ard import (
     build_ard_row,
     default_fmt_fn,
     format_ard,
+    prepare_frame,
+    summarize_ard,
+    summarize_spec,
     validate_ard,
 )
 from ._builder import TLGBuilder
@@ -45,8 +48,6 @@ from ._runner import (
     spec_schema,
 )
 from ._specs import (
-    AEListingSpec,
-    AESummarySpec,
     ChoiceOption,
     Column,
     GroupbyChoice,
@@ -57,16 +58,18 @@ from ._specs import (
     Statistic,
     SummarySpecBase,
     TLGSpec,
-    VSSummarySpec,
+    Uncoded,
     resolve_filter,
 )
 from ._variants import Variant, enumerate_variants
 from .ae_namespace import (
     AEGradeSpec,
+    AEListingSpec,
     AEOverviewSpec,
     AERelationshipSpec,
     AESeveritySpec,
     AESocPtSpec,
+    AESummarySpec,
     AETLGNamespace,
 )
 from .cm_namespace import CMByPTSpec, CMSummarySpec, CMTLGNamespace
@@ -109,7 +112,7 @@ from .render import (
     render_pptx,
     render_rtf,
 )
-from .vs_namespace import VSTLGNamespace
+from .vs_namespace import VSSummarySpec, VSTLGNamespace
 
 __all__ = [
     # Namespace
@@ -153,6 +156,7 @@ __all__ = [
     "LBListingSpec",
     "MHSummarySpec",
     "OverallStat",
+    "Uncoded",
     "resolve_filter",
     # Interactive explorer
     "ChoiceOption",
@@ -183,6 +187,10 @@ __all__ = [
     "Column",
     "Statistic",
     "GroupPool",
+    # Engine
+    "summarize_spec",
+    "summarize_ard",
+    "prepare_frame",
     # ARD
     "ARD_SCHEMA",
     "ARD_COLUMNS",

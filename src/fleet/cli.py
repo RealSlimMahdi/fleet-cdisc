@@ -15,7 +15,7 @@ Execution commands:
 - ``fleet run``      — execute define.yaml derivations and write datasets.
 - ``fleet validate`` — validate datasets with the CDISC Rules Engine.
 - ``fleet compare``  — compare a candidate dataset against a base on keys.
-- ``fleet check``    — one CI gate: config + define schema + rule YAMLs.
+- ``fleet check``    — one CI gate: config + define schema + codelists.py + rule YAMLs.
 - ``fleet tlg``      — list / run / export TLG templates (``tlg --help``).
 - ``fleet migrate``  — rewrite removed pre-alpha verb spellings to canonical ones.
 - ``fleet mcp``      — MCP server for AI assistants (``mcp`` extra).
@@ -448,6 +448,16 @@ def _run_add_ct(args: argparse.Namespace) -> None:
     # silently change already-reviewed terms.
     ig = args.ig or (ctx.config.sdtm.ig_version if ctx else None) or _default_ig("sdtm")
     package = args.package or (ctx.config.ct.package if ctx else "sdtmct-2023-12-15")
+    if args.package and output.is_file():
+        from fleet.ct.study_codelists import load_codelists
+
+        current = load_codelists(output)[0]
+        if current is not None and current != args.package:
+            _fail(
+                f"{output} was generated from {current}, not {args.package}; "
+                "fleet add-ct does not change the CT package of existing codelists. "
+                "Set ct.package in study_config.yaml, then run: fleet init ct --force"
+            )
     existing = existing_concept_ids(output)
 
     print(f"Adding domains: {', '.join(domains)}")
@@ -614,6 +624,27 @@ def _check_extras() -> list[tuple[str, bool, str]]:
     return results
 
 
+def _print_codelists_status(config_path: Path) -> None:
+    """The doctor line of the study's codelists.py: its CT package, or each problem."""
+    from fleet.core.study_context import StudyConfigError, load_study_context
+    from fleet.ct.study_codelists import check_codelists, load_codelists
+
+    try:
+        ctx = load_study_context(config_path)
+    except StudyConfigError:
+        return  # fleet check reports the invalid config
+    problems = check_codelists(ctx)
+    for problem in problems:
+        print(f"  ✗ codelists.py ....... {problem}")
+    if problems or not ctx.codelists_file.is_file():
+        return
+    package = load_codelists(ctx.codelists_file)[0]
+    if package is None:
+        print(f"  ✓ codelists.py ....... {ctx.codelists_file} (no CT package recorded)")
+    else:
+        print(f"  ✓ codelists.py ....... {package} (matches study_config)")
+
+
 def _run_doctor(args: argparse.Namespace) -> None:
     from fleet.core.exceptions import ValidationSetupError
     from fleet.validation import build_run_setup
@@ -626,6 +657,7 @@ def _run_doctor(args: argparse.Namespace) -> None:
 
     if config_path and config_path.is_file():
         print(f"  ✓ study config ....... {config_path}")
+        _print_codelists_status(config_path)
     else:
         print("  ✗ study config ....... not found (run `fleet init cfg`)")
 
@@ -813,53 +845,10 @@ _VALIDATE_ERRORS = 1
 _VALIDATE_COULD_NOT_RUN = 2
 
 
-def _write_validation_report(
-    path: Path, results: list[Any], could_not_run: Sequence[Any] = ()
-) -> None:
-    """Write a minimal self-contained HTML report of validation findings."""
-    from html import escape
-
-    rows: list[str] = [
-        "<tr>"
-        f"<td>{escape(d.name)}</td><td>Could not run</td><td></td><td></td><td></td>"
-        f"<td>{escape(d.reason or '')}</td>"
-        "</tr>"
-        for d in could_not_run
-    ]
-    for res in results:
-        for issue in (*res.errors, *res.warnings, *res.infos):
-            rows.append(
-                "<tr>"
-                f"<td>{escape(res.dataset_name)}</td>"
-                f"<td>{escape(issue.severity.value)}</td>"
-                f"<td>{escape(issue.rule_id)}</td>"
-                f"<td>{escape(issue.source)}</td>"
-                f"<td>{escape(issue.variable or '')}</td>"
-                f"<td>{escape(issue.message)}</td>"
-                "</tr>"
-            )
-    headers = dict.fromkeys(
-        "\n".join(res.setup.header_lines()) for res in results if res.setup is not None
-    )
-    setups = "".join(f"<pre>{escape(h)}</pre>" for h in headers)
-    html = (
-        "<!DOCTYPE html><html><head><meta charset='utf-8'>"
-        "<title>Fleet validation report</title>"
-        "<style>body{font-family:sans-serif}table{border-collapse:collapse}"
-        "td,th{border:1px solid #999;padding:4px 8px;font-size:13px}</style>"
-        f"</head><body><h1>Fleet validation report</h1>{setups}"
-        "<table><tr><th>Dataset</th><th>Severity</th><th>Rule</th><th>Source</th>"
-        "<th>Variable</th><th>Message</th></tr>"
-        f"{''.join(rows) or '<tr><td colspan=6>No findings.</td></tr>'}"
-        "</table></body></html>"
-    )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(html, encoding="utf-8")
-
-
 def _run_validate(args: argparse.Namespace) -> None:
     from fleet.core.exceptions import ValidationSetupError
     from fleet.validation import ValidationService, build_sweep
+    from fleet.validation.models import write_html_report
 
     try:
         sweep = build_sweep(
@@ -897,7 +886,7 @@ def _run_validate(args: argparse.Namespace) -> None:
 
     if args.report:
         report_path = Path(args.report)
-        _write_validation_report(report_path, results, could_not_run)
+        write_html_report(results, report_path, could_not_run=could_not_run)
         print(f"HTML report → {report_path}")
 
     failed = sum(1 for r in results if r.errors)
@@ -1019,7 +1008,7 @@ def _save_comparison_file(path_str: str, save: Callable[[Path], None], what: str
 
 
 def _run_check(args: argparse.Namespace) -> None:
-    """Run the CI gate: config + define schema + run setup + rule YAMLs + essentials."""
+    """Run the CI gate: config + define schema + codelists + run setup + rule YAMLs + essentials."""
     from fleet.core.study_context import StudyConfigError, load_study_context
 
     rows: list[tuple[str, str, str]] = []  # (status, name, detail)
@@ -1057,6 +1046,18 @@ def _run_check(args: argparse.Namespace) -> None:
             rows.append(
                 ("WARN", "define.yaml", "no define.yaml files found (run `fleet init define`)")
             )
+
+    # ── 2b. codelists.py against the study: package, mixed packages, missing classes or file ──
+    if ctx is not None:
+        from fleet.ct.study_codelists import check_codelists
+
+        try:
+            problems = check_codelists(ctx, references=True)
+        except Exception as exc:  # a codelists.py or define.yaml that does not load
+            problems = [str(exc)]
+        rows.extend(("FAIL", "codelists", problem) for problem in problems)
+        if not problems and ctx.codelists_file.is_file():
+            rows.append(("PASS", "codelists", str(ctx.codelists_file)))
 
     # ── 3. Run setup with no datasets: IG versions, custom rules, engine ──
     setups = []
@@ -2031,7 +2032,8 @@ def _add_ct_parsers(sub: argparse._SubParsersAction) -> None:
         default=None,
         help=(
             "CT package version. Default: ct.package from the discovered "
-            "study_config.yaml (sdtmct-2023-12-15 outside a study)."
+            "study_config.yaml (sdtmct-2023-12-15 outside a study). Refused when it "
+            "differs from the package an existing codelists.py was generated from."
         ),
     )
     add.add_argument(
@@ -2209,7 +2211,7 @@ def _add_engine_parsers(sub: argparse._SubParsersAction) -> None:
 
     doctor = sub.add_parser(
         "doctor",
-        help="Check Fleet setup: engine, API key, optional extras.",
+        help="Check Fleet setup: engine, API key, codelists.py, optional extras.",
     )
     _add_config_flag(doctor)
     doctor.set_defaults(func=_run_doctor)
@@ -2308,9 +2310,13 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     # -- check -------------------------------------------------------------- #
     check = sub.add_parser(
         "check",
-        help="CI gate: config parse + define.yaml schema + run setup + custom-rule YAMLs.",
+        help=(
+            "CI gate: config parse + define.yaml schema + codelists.py + run setup + "
+            "custom-rule YAMLs."
+        ),
         description=(
             "CI gate: parse the study config, check each define.yaml against its schema, "
+            "check codelists.py against ct.package and the define.yaml files, "
             "build the validation run setup for SDTM and ADaM with no datasets, and check "
             "each custom rule YAML. An unsupported sdtm.ig_version or adam.ig_version and a "
             "configured validation.custom_rules directory that does not exist fail the gate. "

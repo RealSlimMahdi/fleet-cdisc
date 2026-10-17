@@ -97,6 +97,11 @@ The generated `codelists.py` contains:
   from codelists import *
   ```
 
+- **`__ct_package__`** at the top, naming the CT package every class came from
+  (`__ct_package__ = "sdtmct-2025-09-26"`). The
+  [stale checks](../concepts/define-yaml.md#controlled-terminology-in-the-spec-path)
+  compare it with `ct.package` in `study_config.yaml`.
+
 ### Importing codelists in standalone study projects
 
 When your study lives in its own directory (not inside the Fleet repo), the

@@ -884,6 +884,67 @@ class TestStatistics:
         assert (row["differences"], row["base_n"], row["difference_n"]) == (2, 2, 2)
         assert (row["percent_difference_n"], row["percent_difference_mean"]) == (1, 25.0)
 
+    @pytest.mark.parametrize("value", [NAN, math.inf, -math.inf], ids=["nan", "inf", "-inf"])
+    @pytest.mark.parametrize("side", ["base", "candidate"])
+    def test_a_non_finite_value_is_left_out_like_a_null(self, side, value):
+        """Ticket #112: observation a pairs 1.0 with a non-finite value; b and c remain."""
+        x = {"base": [1.0, 2.0, 3.0], "candidate": [1.0, 2.0, 3.5]}
+        x[side][0] = value
+        b = pl.DataFrame({"ID": ["a", "b", "c"], "X": x["base"]})
+        c = pl.DataFrame({"ID": ["a", "b", "c"], "X": x["candidate"]})
+
+        row = compare(b, c, keys="ID").statistics.row(0, named=True)
+
+        assert row["differences"] == 2  # the non-finite pair still differs
+        assert all(math.isfinite(row[m]) for m in _MEASURES)
+        # base 2, 3 against candidate 2, 3.5: differences 0, 0.5 and percents 0, 50/3
+        assert (row["base_n"], row["base_mean"], row["base_min"], row["base_max"]) == (
+            2,
+            2.5,
+            2.0,
+            3.0,
+        )
+        assert row["base_std"] == pytest.approx(math.sqrt(0.5))
+        assert (row["candidate_n"], row["candidate_mean"]) == (2, 2.75)
+        assert row["candidate_std"] == pytest.approx(math.sqrt(1.125))
+        assert (row["difference_n"], row["difference_mean"], row["difference_max"]) == (
+            2,
+            0.25,
+            0.5,
+        )
+        assert row["difference_std"] == pytest.approx(math.sqrt(0.125))
+        assert row["percent_difference_n"] == 2
+        assert row["percent_difference_mean"] == pytest.approx(25 / 3)
+        assert row["percent_difference_std"] == pytest.approx(50 / 3 / math.sqrt(2))
+        assert row["percent_difference_max"] == pytest.approx(50 / 3)
+
+    def test_text_html_and_json_show_the_same_statistics_cells(self):
+        """Ticket #112: every renderer shows the finite number; none spells nan, NaN or null."""
+        b = pl.DataFrame({"ID": ["a", "b", "c"], "X": [1.0, 2.0, 3.0]})
+        c = pl.DataFrame({"ID": ["a", "b", "c"], "X": [NAN, 2.0, 3.5]})
+        report = compare(b, c, keys="ID")
+
+        record = json.loads(report.to_json())["statistics"][0]
+        text = report.to_text().split("Summary statistics")[1].split("Value listing")[0]
+        html = report.to_html().split("<caption>Summary statistics")[1].split("</table>")[0]
+        for side, label in (
+            ("base", "Base"),
+            ("candidate", "Candidate"),
+            ("difference", "Difference"),
+            ("percent_difference", "% difference"),
+        ):
+            # a null in the JSON would fail the :g format here
+            expected = [f"{record[f'{side}_{m}']:g}" for m in ("n", "mean", "std", "min", "max")]
+            text_row = next(
+                line.strip()[len(label) :].split()
+                for line in text.splitlines()
+                if line.strip().startswith(label + " ")
+            )
+            html_row = re.findall(
+                r"<td[^>]*>([^<]*)</td>", re.search(rf"<tr><td>{label}</td>(.*?)</tr>", html)[1]
+            )
+            assert text_row == html_row == expected, side
+
     def test_a_non_numeric_variable_contributes_only_a_count(self):
         b = pl.from_repr("""\
 ┌─────┬─────┬────────────┐

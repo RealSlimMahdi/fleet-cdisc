@@ -59,6 +59,10 @@ uv run fleet validate --report findings.html   # HTML findings report
   engine runs. See [Custom Validation Rules](custom-rules.md).
 - The report header of each dataset shows every input with its source, as on
   the verb.
+- **HTML report**: `--report findings.html` writes one page: a status row
+  per dataset, then one row per finding and per dataset that could not run.
+  `ValidationResult.save_html_report()` writes the same page for one
+  dataset. Every cell is HTML-escaped.
 - **Could not run**: a dataset whose directory and file name disagree
   (`data/sdtm/adsl.parquet`), or an unsupported IG version, is not validated.
   The reason is printed, and the other datasets still run.
@@ -73,6 +77,9 @@ It catches a setup error before delivery, without an engine:
 - `sdtm.ig_version: 3-5`, or any IG version not in the supported list, fails
   the gate.
 - A `validation.custom_rules` directory that does not exist fails the gate.
+- A `codelists.py` that disagrees with `ct.package` or the `define.yaml`
+  files fails the gate; each row names the fix command. See
+  [controlled terminology in the spec path](define-yaml.md#controlled-terminology-in-the-spec-path).
 - No engine found is a warning only, because CI installs no engine.
 
 ### The MCP tool

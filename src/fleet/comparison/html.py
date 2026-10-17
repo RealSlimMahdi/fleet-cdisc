@@ -338,7 +338,7 @@ def _statistics_table(report: ComparisonReport, variable: str) -> list[str]:
     lines = [
         "<table>",
         "<caption>Summary statistics over the matched observations where both sides "
-        "are non-null</caption>",
+        "are finite (not null, NaN or inf)</caption>",
         "<tr><th>Statistic</th>"
         + "".join(f"<th>{escape(m)}</th>" for m in _MEASURE_LABELS.values())
         + "</tr>",

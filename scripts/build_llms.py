@@ -693,7 +693,8 @@ user-authored `define.yaml`. The CLI queries the IG model to find every codelist
 by variables in the requested domains.
 
 Generated `codelists.py` provides classes with `_concept_id`, term attributes, human-readable \
-aliases (e.g. `SEX = C66731`), and `__all__` for clean imports.
+aliases (e.g. `SEX = C66731`), `__all__` for clean imports, and a `__ct_package__` marker \
+naming the CT package every class came from.
 
 ### Using generated codelists in pipelines
 
@@ -712,6 +713,12 @@ dm = (
 string (e.g. `"C66731"`). Prefer the class form for IDE auto-completion and readability. \
 When raw data already matches the standard, `ct_map` can be omitted (values are validated and \
 passed through).
+
+The spec path checks the same terms: inside a study, `from_spec` resolves a `ct_codelist:` ID \
+to the class of that ID in the study's `codelists.py`, so `algorithm: assign_ct` with \
+`ct_codelist: C66769` warns exactly like `.assign("AESEV", source="ae_severity", ct=AESEV)`. \
+A `codelists.py` that disagrees with `ct.package` or the define.yaml files warns once in \
+`from_spec` and fails `fleet check`.
 
 ### Programmatic API
 
@@ -804,7 +811,8 @@ and the JSON document show; the listing frame and the parquet are always complet
 `report.statistics` carries one row per differing variable (`fleet.comparison.STATISTICS_COLUMNS`): \
 its count of differing observations, then the n, mean, std, min and max of the base, the \
 candidate, their difference and its percent, over the matched observations where both sides are \
-non-null — so a systematic offset reads differently from noise; a variable that is not numeric \
+finite (null, NaN and infinite values are left out, and no measure is NaN) — so a systematic \
+offset reads differently from noise; a variable that is not numeric \
 contributes its count alone. No correlation, R squared or t statistic. \
 `report.flags` holds the raised names among `base_only_variables`, `candidate_only_variables`, \
 `type_conflicts`, `base_only_observations`, `candidate_only_observations`, `values_differ`, \

@@ -107,10 +107,12 @@ class TestContinuousRendering:
         model = ard_to_table_model(ard)
         sections = [r for r in model.rows if r.row_type == "section"]
         assert [s.label for s in sections] == ["Parameter"]
-        # Nested hierarchy: the parent Row.label becomes the stub header.
+        # Nested hierarchy: the stub header lists one Row.label per level,
+        # the child indented with non-breaking spaces (submission convention
+        # "System Organ Class / Preferred Term").
         adlb = FRAMES["ADLB"]
         lb_model = ard_to_table_model(adlb.tlg.lb.t_summary(groupby="TRTA", adsl=ADSL))
-        assert lb_model.stub_label == "Parameter"
+        assert lb_model.stub_label == "Parameter\n\u00a0\u00a0Analysis Visit"
 
     def test_dm_categorical_blocks_get_section_headings(self) -> None:
         adsl = ADSL

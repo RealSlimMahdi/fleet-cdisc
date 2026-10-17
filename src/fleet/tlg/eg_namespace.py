@@ -6,16 +6,18 @@ Accessed via ``df.tlg.eg`` on any Polars DataFrame containing ADaM ADEG data.
 
 from __future__ import annotations
 
-import polars as pl
-from pydantic import Field
+from typing import ClassVar
 
-from ._ard import summarize_ard
+import polars as pl
+from pydantic import Field, model_validator
+
+from ._ard import summarize_spec
 from ._builder import BuilderVerbsMixin
 from ._specs import (
     Row,
-    SchemaError,
     Statistic,
     SummarySpecBase,
+    change_from_baseline_prefilter,
 )
 
 
@@ -26,6 +28,9 @@ class EGSummarySpec(SummarySpecBase):
     per-PARAM × AVISIT continuous-stats table.  Every field is also
     settable inline through [`TLGBuilder`][fleet.tlg.TLGBuilder].
     """
+
+    context: ClassVar[str] = "t_eg_summary"
+    nested: ClassVar[bool] = True
 
     rows: list[Row] = Field(
         default_factory=lambda: [
@@ -58,7 +63,15 @@ class EGSummarySpec(SummarySpecBase):
 
 
 class EGChgSpec(EGSummarySpec):
-    """Spec for ECG change from baseline (egt03): CHG stats per PARAM × visit."""
+    """Spec for ECG change from baseline (egt03): CHG stats per PARAM × visit.
+
+    Prefilter rule: the baseline record (``ABLFL`` = Y) and records
+    with no change value are dropped before summarising, so ``ABLFL``
+    is a required column.  Unless set, the prefilter follows
+    ``value_col``; ``prefilter=None`` switches the rule off.
+    """
+
+    context: ClassVar[str] = "t_eg_chg"
 
     value_col: str = Field(
         default="CHG",
@@ -68,9 +81,18 @@ class EGChgSpec(EGSummarySpec):
         default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVISIT", "CHG"],
     )
 
+    @model_validator(mode="after")
+    def _default_prefilter_follows_value_col(self) -> EGChgSpec:
+        if "prefilter" not in self.model_fields_set:
+            self.prefilter = change_from_baseline_prefilter(self.value_col)
+        return self
+
 
 class EGQtcatSpec(SummarySpecBase):
     """Spec for QTc category counts (egt05_qtcat): n / % per PARAM × visit × category."""
+
+    context: ClassVar[str] = "t_eg_qtcat"
+    nested: ClassVar[bool] = False
 
     rows: list[Row] = Field(
         default_factory=lambda: [
@@ -95,7 +117,6 @@ class EGTLGNamespace(BuilderVerbsMixin):
         df: A Polars DataFrame containing ADaM ADEG-level data.
     """
 
-    _builder_context = "t_eg_summary"
     _builder_specs = {"t_summary": EGSummarySpec, "t_chg": EGChgSpec, "t_qtcat": EGQtcatSpec}
 
     def __init__(self, df: pl.DataFrame) -> None:
@@ -141,26 +162,7 @@ class EGTLGNamespace(BuilderVerbsMixin):
                 )
                 ard = adeg.tlg.eg.t_summary(spec=spec, adsl=adsl)
         """
-        spec = spec or EGSummarySpec()
-        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df, group_col=group_col)
-        return summarize_ard(
-            self._df,
-            rows=spec.rows,
-            stats=spec.statistics,
-            context="t_eg_summary",
-            group_col=group_col,
-            pools=spec.pools,
-            column_order=spec.column_order,
-            adsl=adsl,
-            adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
-            header_rows=spec.header_rows,
-            nested=True,
-            value_col=spec.value_col,
-            label_col=spec.label_col,
-            decimals=spec.decimals,
-        )
+        return summarize_spec(self._df, spec or EGSummarySpec(), groupby=groupby, adsl=adsl)
 
     # ------------------------------------------------------------------ #
     # Change-from-baseline (egt03) — continuous                            #
@@ -177,7 +179,8 @@ class EGTLGNamespace(BuilderVerbsMixin):
 
         Summarizes ``spec.value_col`` (``CHG`` by default) with
         mean/SD/median/min/max per PARAMCD × AVISIT for post-baseline
-        records with a non-missing change value.
+        records with a non-missing change value (the spec's prefilter;
+        ``ABLFL`` is required).
 
         Args:
             groupby: Treatment-arm column; overrides ``spec.columns[0]``.
@@ -190,35 +193,7 @@ class EGTLGNamespace(BuilderVerbsMixin):
         Examples:
             ``ard = adeg.tlg.eg.t_chg(groupby="TRTA", adsl=adsl)``
         """
-        spec = spec or EGChgSpec()
-        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df, group_col=group_col)
-        if spec.value_col not in self._df.columns:
-            raise SchemaError(
-                "t_chg summarizes change from baseline and requires a "
-                f"{spec.value_col} column. Available: {sorted(self._df.columns)}"
-            )
-        prefilter = pl.col(spec.value_col).is_not_null()
-        if "ABLFL" in self._df.columns:
-            prefilter = prefilter & pl.col("ABLFL").ne_missing("Y")
-        return summarize_ard(
-            self._df,
-            rows=spec.rows,
-            stats=spec.statistics,
-            context="t_eg_chg",
-            group_col=group_col,
-            pools=spec.pools,
-            column_order=spec.column_order,
-            adsl=adsl,
-            adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
-            prefilter=prefilter,
-            header_rows=spec.header_rows,
-            nested=True,
-            value_col=spec.value_col,
-            label_col=spec.label_col,
-            decimals=spec.decimals,
-        )
+        return summarize_spec(self._df, spec or EGChgSpec(), groupby=groupby, adsl=adsl)
 
     # ------------------------------------------------------------------ #
     # QTc category counts (egt05_qtcat) — categorical                      #
@@ -246,25 +221,7 @@ class EGTLGNamespace(BuilderVerbsMixin):
         Examples:
             ``ard = adeg.tlg.eg.t_qtcat(groupby="TRTA", adsl=adsl)``
         """
-        spec = spec or EGQtcatSpec()
-        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df, group_col=group_col)
-        return summarize_ard(
-            self._df,
-            rows=spec.rows,
-            stats=spec.statistics,
-            context="t_eg_qtcat",
-            group_col=group_col,
-            pools=spec.pools,
-            column_order=spec.column_order,
-            adsl=adsl,
-            adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
-            header_rows=spec.header_rows,
-            value_col=spec.value_col,
-            label_col=spec.label_col,
-            decimals=spec.decimals,
-        )
+        return summarize_spec(self._df, spec or EGQtcatSpec(), groupby=groupby, adsl=adsl)
 
     # ------------------------------------------------------------------ #
     # Pre-validation diagnostic                                            #
@@ -289,14 +246,4 @@ class EGTLGNamespace(BuilderVerbsMixin):
                 report = adeg.tlg.eg.check()
         """
         spec = spec or EGSummarySpec()
-        diagnostics = spec.check(self._df)
-
-        available = set(self._df.columns)
-        for row_def in spec.rows:
-            if row_def.field not in available:
-                diagnostics.append(
-                    f"WARNING: Column '{row_def.field}' not present — "
-                    f"'{row_def.label or row_def.field}' sub-analysis will be skipped."
-                )
-
-        return diagnostics
+        return spec.check(self._df)

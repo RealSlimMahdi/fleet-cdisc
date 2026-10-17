@@ -27,6 +27,7 @@ import yaml
 
 import fleet
 from fleet.core import spec_registry
+from fleet.core.lineage import latest_lineage_of
 from fleet.define_xml import DefineSpecGenerator, semantic_errors
 from fleet.define_xml.xsd import missing_files
 
@@ -87,7 +88,9 @@ class TestRegistryRendering:
         expr = spec_registry.render_formal_expression(
             "sdtm", "assign_no_ct", {"source": "subject_id"}, target="USUBJID"
         )
-        assert expr == ("fleet.sdtm.namespace.SDTMNamespace.assign('USUBJID', source='subject_id')")
+        assert expr == (
+            "fleet.core._verb_mixin.SharedVerbsMixin.assign('USUBJID', source='subject_id')"
+        )
 
     def test_unknown_algorithm_returns_none(self):
         assert spec_registry.render_method_text("sdtm", "nope", {}) is None
@@ -410,6 +413,54 @@ def test_examples_pass_the_semantic_lint(standard):
         EXAMPLES / standard / "define.yaml", enrich_methods=True
     ).to_xml_string()
     assert semantic_errors(xml) == []
+
+
+# ===================================================================== #
+# FormalExpression names the method lineage records (#93)                #
+# ===================================================================== #
+
+
+@schemas_present
+def test_the_adam_example_define_names_no_sdtm_class():
+    xml = DefineSpecGenerator(EXAMPLES / "adam" / "define.yaml", enrich_methods=True)
+    expressions = [
+        f.text for f in ET.fromstring(xml.to_xml_string()).iter(f"{ODM}FormalExpression")
+    ]
+    assert expressions
+    assert [e for e in expressions if e.startswith("fleet.sdtm.")] == []
+
+
+@pytest.mark.parametrize(
+    ("target", "block"),
+    [
+        ("USUBJID", {"algorithm": "source"}),  # runs assign
+        ("ASTDT", {"algorithm": "date", "source": "AESTDTC"}),  # the ADaM override of date
+        ("ADY", {"algorithm": "study_day", "analysis_date": "ASTDT", "reference_date": "TRTSDT"}),
+    ],
+)
+def test_formal_expression_names_the_method_lineage_records(target, block):
+    raw = fleet.frame(
+        pl.from_repr("""\
+┌─────────┬────────────┬────────────┬────────────┐
+│ USUBJID ┆ AESTDTC    ┆ ASTDT      ┆ TRTSDT     │
+│ ---     ┆ ---        ┆ ---        ┆ ---        │
+│ str     ┆ str        ┆ date       ┆ date       │
+╞═════════╪════════════╪════════════╪════════════╡
+│ 01-701  ┆ 2024-01-09 ┆ 2024-01-09 ┆ 2024-01-01 │
+└─────────┴────────────┴────────────┴────────────┘
+""")
+    )
+    var = spec_registry.parse_variable_spec("adam", {"target": target, **block})
+    recorded = {
+        n.name: n.method for n in latest_lineage_of(spec_registry.execute_variable(raw.adam, var))
+    }
+
+    params = {k: v for k, v in block.items() if k != "algorithm"}
+    expression = spec_registry.render_formal_expression(
+        "adam", block["algorithm"], params, target=target
+    )
+
+    assert expression.split("(")[0] == recorded[target]
 
 
 # ===================================================================== #
