@@ -263,6 +263,7 @@ _ADVS = """\
         derivation:
           algorithm: lookup
           dataset: ADSL
+          "on": USUBJID
 """
 
 VS = pl.from_repr("""\
@@ -337,6 +338,7 @@ _AE_WITH_MERGE = """\
         derivation:
           algorithm: merge
           dataset: DM
+          "on": USUBJID
 """
 
 AE_RAW = pl.from_repr("""\
