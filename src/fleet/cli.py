@@ -33,6 +33,7 @@ compare`` is the one command whose exit code is a verdict: ``0`` equal,
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import sys
@@ -50,15 +51,17 @@ if TYPE_CHECKING:
     from fleet.core.study_context import StudyContext
 
 #: Optional-dependency probes for ``fleet doctor`` / ``fleet check``:
-#: import name → (extra name, what it enables).
+#: the dotted module a feature imports → (extra name, what it enables).
+#: Probing the dotted path, not the distribution, is what catches a
+#: distribution that is installed but too old to expose the API.
 _OPTIONAL_EXTRAS: dict[str, tuple[str, str]] = {
     "weasyprint": ("tlg-pdf", "PDF rendering"),
     "pptx": ("tlg-pptx", "PPTX slide rendering"),
     "pyreadstat": ("io", "SAS XPT read/write"),
     "libcst": ("migrate", "fleet migrate codemod"),
     "watchfiles": ("watch", "--watch mode"),
-    "pygls": ("lsp", "fleet lsp language server"),
-    "mcp": ("mcp", "fleet mcp server"),
+    "pygls.lsp.server": ("lsp", "fleet lsp language server"),
+    "mcp.server.fastmcp": ("mcp", "fleet mcp server"),
 }
 
 
@@ -614,13 +617,11 @@ def _run_uninstall_engine(args: argparse.Namespace) -> None:
 
 def _check_extras() -> list[tuple[str, bool, str]]:
     """Probe optional dependencies: (display name, installed?, install hint)."""
-    import importlib.util
-
     results: list[tuple[str, bool, str]] = []
     for module, (extra, purpose) in _OPTIONAL_EXTRAS.items():
-        installed = importlib.util.find_spec(module) is not None
+        installed = _module_available(module)
         hint = f"{purpose} — install with: uv sync --extra {extra}"
-        results.append((module, installed, hint))
+        results.append((module.split(".")[0], installed, hint))
     return results
 
 
@@ -1584,26 +1585,52 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
 # ────────────────────────────────────────────────────────────────────── #
 
 
-def _require_extra(module: str, extra: str, command: str) -> None:
-    """Exit 1 with an install hint when an optional server dep is missing."""
-    import importlib.util
+def _module_available(module: str) -> bool:
+    """Whether *module* (a dotted path) can be imported."""
+    try:
+        return importlib.util.find_spec(module) is not None
+    except (ImportError, ValueError):  # parent package missing, or not a package
+        return False
 
-    if importlib.util.find_spec(module) is None:
-        _fail(
-            f"{module} is required for `fleet {command}`. Install it with: "
-            f"uv sync --extra {extra}  (or: uv pip install 'fleet-cdisc[{extra}]')"
-        )
+
+def _distribution_version(dist: str) -> str | None:
+    """Installed version of *dist*, or ``None`` when it has no metadata."""
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version(dist)
+    except PackageNotFoundError:
+        return None
+
+
+def _require_extra(module: str, extra: str, command: str) -> None:
+    """Exit 1 with an install hint when an optional server dep is unusable.
+
+    *module* is the dotted path the command actually imports, so a
+    distribution that is present but too old to expose it fails here
+    rather than as a bare ``ModuleNotFoundError`` from inside the server.
+    """
+    if _module_available(module):
+        return
+
+    dist = module.split(".")[0]
+    found = _distribution_version(dist) if _module_available(dist) else None
+    seen = f" (found {dist} {found})" if found else ""
+    _fail(
+        f"{dist} is required for `fleet {command}`{seen}. Install it with: "
+        f"uv sync --extra {extra}  (or: uv pip install 'fleet-cdisc[{extra}]')"
+    )
 
 
 def _run_mcp(args: argparse.Namespace) -> None:
-    _require_extra("mcp", "mcp", "mcp")
+    _require_extra("mcp.server.fastmcp", "mcp", "mcp")
     from fleet.mcp_server import main as mcp_main
 
     mcp_main()
 
 
 def _run_lsp(args: argparse.Namespace) -> None:
-    _require_extra("pygls", "lsp", "lsp")
+    _require_extra("pygls.lsp.server", "lsp", "lsp")
     from fleet.lsp_server import main as lsp_main
 
     lsp_main()
