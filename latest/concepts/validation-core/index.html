@@ -2264,6 +2264,10 @@ with the same rules a regulator's reviewer tooling references.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>install-engine<span class="w">     </span><span class="c1"># downloads the CORE binary to ~/.fleet</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>doctor<span class="w">             </span><span class="c1"># confirms engine + extras are healthy</span>
 </span></code></pre></div>
+<p><code>fleet install-engine</code> installs CORE 0.15.0 (GitHub tag <code>v0.15</code>), the
+version that Fleet is tested with. <code>--version latest</code> installs the newest
+CORE release, but Fleet prints a warning, because that version is not
+tested with Fleet. Newer releases can fail on data that 0.15.0 validates.</p>
 <p><code>fleet doctor</code> prints the engine that validation will use, where it came
 from, and its version. It takes them from the same run setup as the verb and
 <code>fleet validate</code>.</p>
@@ -2278,7 +2282,7 @@ first source that gives it:</p>
 <ol>
 <li>the engine's own <code>core version</code> command (<code>0.15.0</code>),</li>
 <li>the <code>fleet-release-tag.txt</code> file that <code>fleet install-engine</code> writes next
-   to the managed binary (tag <code>v0.15.0</code>, printed as <code>0.15.0</code>),</li>
+   to the managed binary (tag <code>v0.15</code>, printed as <code>0.15</code>),</li>
 <li>else <code>unknown</code>.</li>
 </ol>
 <h2 id="running-validation">Running validation<a class="headerlink" href="#running-validation" title="Permanent link">&para;</a></h2>
@@ -2505,7 +2509,7 @@ control next to the study.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 9, 2026 14:12:21 UTC">October 9, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 2, 2026 11:40:38 UTC">November 2, 2026</span>
   </span>
 
     
