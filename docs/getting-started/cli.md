@@ -336,7 +336,7 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | `--domain` | _(required)_ | SDTM/ADaM domain code (e.g. AE, DM, VS). |
 | `--description` | _(required)_ | Human-readable description of the rule. |
 | `--prefix` | `FLEET` | Rule ID prefix (default: FLEET). |
-| `--id` | _(none)_ | Explicit rule ID (e.g. ROCHE-AE-042). Skips auto-increment. |
+| `--id` | _(none)_ | Explicit rule ID (e.g. ACME-AE-042). Skips auto-increment. |
 | `--output` / `-o` | _(none)_ | Output directory for the rule YAML. Defaults to validation.custom_rules from study_config.yaml. |
 | `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 

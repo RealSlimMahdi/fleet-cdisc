@@ -273,7 +273,7 @@ A bad release cannot be replaced. PyPI refuses to take the same version number t
 ### What goes into the package
 
 - The wheel holds `src/fleet` only, with its JSON, YAML and XSD data files.
-- The sdist holds `src/fleet`, `tests`, `README.md`, `LICENSE` and `pyproject.toml`. The include list is in `[tool.hatch.build.targets.sdist]`. Do not widen it: the repository holds files that must not be published, such as the Roche Sans fonts in `assets/`.
+- The sdist holds `src/fleet`, `tests`, `README.md`, `LICENSE` and `pyproject.toml`. The include list is in `[tool.hatch.build.targets.sdist]`. Do not widen it.
 - The README is the PyPI project page. Use absolute URLs for links and images. Relative links break on pypi.org.
 - The Define-XML and ODM schemas in `src/fleet/define_xml/schemas/xsd/` come from `cdisc-org/data-definition-engine` under the MIT licence. Keep `LICENSE-CDISC` and `SOURCES.txt` next to them when you update the schemas.
 

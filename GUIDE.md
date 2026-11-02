@@ -1350,10 +1350,10 @@ in the `Check:` block with your logic:
 uv run fleet add-rule --domain AE --description "AESEV must be populated when AESER = Y"
 
 # Custom prefix (e.g. your company name)
-uv run fleet add-rule --domain AE --prefix ROCHE --description "AESEV required for serious AEs"
+uv run fleet add-rule --domain AE --prefix ACME --description "AESEV required for serious AEs"
 
 # Explicit ID (skips auto-increment)
-uv run fleet add-rule --domain AE --id ROCHE-AE-042 --description "Custom check"
+uv run fleet add-rule --domain AE --id ACME-AE-042 --description "Custom check"
 
 # Write to a specific directory (overrides study_config)
 uv run fleet add-rule --domain VS --description "VSORRES range check" --output ./my_rules/
@@ -1396,7 +1396,7 @@ Use a prefix to avoid clashing with official `CORE-XXXXXX` identifiers:
 
 | Pattern | Example |
 |---------|---------|
-| `<COMPANY>-<DOMAIN>-<NNN>` | `ROCHE-AE-001` |
+| `<COMPANY>-<DOMAIN>-<NNN>` | `ACME-AE-001` |
 | `FLEET-<DOMAIN>-<NNN>` | `FLEET-DM-003` |
 
 #### Rule YAML structure

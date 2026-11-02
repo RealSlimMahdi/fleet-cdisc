@@ -2055,10 +2055,10 @@ Sponsors can author rules in the same YAML schema as CDISC CORE and run them alo
 uv run fleet add-rule --domain AE --description "AESEV must be populated when AESER = Y"
 
 # Custom company prefix (default: FLEET)
-uv run fleet add-rule --domain AE --prefix ROCHE --description "Severity required for serious AEs"
+uv run fleet add-rule --domain AE --prefix ACME --description "Severity required for serious AEs"
 
 # Explicit rule ID override (skips auto-increment)
-uv run fleet add-rule --domain AE --id ROCHE-AE-042 --description "Custom check"
+uv run fleet add-rule --domain AE --id ACME-AE-042 --description "Custom check"
 
 # Write to a specific directory (overrides study_config.yaml)
 uv run fleet add-rule --domain VS --description "VSORRES range check" --output ./my_rules/
@@ -2108,7 +2108,7 @@ Resolution order: explicit `custom_rules=` param > `study_config.yaml` default >
 ### Rule ID convention
 
 Use a company prefix to avoid clashing with official `CORE-XXXXXX` identifiers:
-`<COMPANY>-<DOMAIN>-<NNN>` e.g. `ROCHE-AE-001`, `FLEET-DM-003`
+`<COMPANY>-<DOMAIN>-<NNN>` e.g. `ACME-AE-001`, `FLEET-DM-003`
 
 ### Reference
 

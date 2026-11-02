@@ -2,8 +2,7 @@
 Disposition TLG sub-namespace — disposition, deaths, enrollment, deviations.
 
 Accessed via ``df.tlg.ds`` on any Polars DataFrame containing ADaM ADSL (or
-ADDV) data.  Mirrors the Roche/pharmaverse ``tlg.templates`` disposition
-family:
+ADDV) data.  Covers the standard disposition table family:
 
 * ``t_summary``      → DST01  (subject disposition by EOSSTT / DCSREAS)
 * ``t_deaths``       → DTHT01 (deaths and primary cause of death)
@@ -73,8 +72,8 @@ class DSDeviationsSpec(SummarySpecBase):
 class DSTLGNamespace(BuilderVerbsMixin):
     """Disposition tables and diagnostics.
 
-    Accessed as ``df.tlg.ds``.  Covers the four Roche disposition
-    templates — disposition (DST01), deaths (DTHT01), enrollment (ENT01),
+    Accessed as ``df.tlg.ds``.  Covers the four disposition
+    tables — disposition (DST01), deaths (DTHT01), enrollment (ENT01),
     and protocol deviations (PDT01).  Every method emits a long-format
     {cards}-compatible ARD and accepts an inline spec override.
 

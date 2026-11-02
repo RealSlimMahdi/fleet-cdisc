@@ -49,5 +49,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_ds_dsdecod_dsstdtc
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: DS Domain

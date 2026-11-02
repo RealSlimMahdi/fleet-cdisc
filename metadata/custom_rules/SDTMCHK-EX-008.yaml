@@ -61,5 +61,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_ex_exstdtc_after_dd
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: EX Domain

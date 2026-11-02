@@ -62,5 +62,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_dd_ae_aedthdtc_ds_dsstdtc
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: Death Date Checks

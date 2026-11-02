@@ -52,5 +52,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_ex_extrt_exoccur
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: EX Domain

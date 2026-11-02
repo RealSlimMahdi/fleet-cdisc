@@ -3,7 +3,7 @@ DM TLG sub-namespace — demographic summary tables (DM/ADSL).
 
 Accessed via ``df.tlg.dm`` on any Polars DataFrame containing ADSL-level
 demographic data.  Produces a mixed continuous + categorical summary
-modelled on the GDSR ``dmt01`` Roche demographics layout.
+in the style of a standard demographics table (DMT01).
 """
 
 from __future__ import annotations

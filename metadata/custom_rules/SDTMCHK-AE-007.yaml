@@ -54,5 +54,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_ae_fatal
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: AE Domain
