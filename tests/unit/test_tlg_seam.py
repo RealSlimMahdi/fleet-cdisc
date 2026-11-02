@@ -205,3 +205,14 @@ class TestBuilderVerbs:
     def test_prefilter_verb_is_refused_on_a_listing(self) -> None:
         with pytest.raises(SchemaError, match="prefilter"):
             ADAE.tlg.ae.template("ael01").prefilter('pl.col("AESER") == "Y"').to_spec()
+
+
+def test_worst_case_never_keeps_a_null_over_a_value() -> None:
+    """A null outranks nothing, not even a value outside the clinical order."""
+    from fleet.tlg._ard import worst_case
+
+    adae = pl.DataFrame({"USUBJID": ["S1", "S1"], "AESEV": [None, "UNKNOWN"]})
+
+    kept = worst_case(adae, by=["USUBJID"], order_col="AESEV", order=["MILD", "SEVERE"])
+
+    assert kept["AESEV"].to_list() == ["UNKNOWN"]

@@ -962,7 +962,7 @@ class SharedVerbsMixin:
             where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
             right = right.filter(where_expr)
 
-        joined = self._lazy.join(right, on=on, how=how)
+        joined = self._lazy.join(right, on=on, how=how, nulls_equal=True)
         if keep:
             on_list = [on] if isinstance(on, str) else list(on)
             keep_list = list(dict.fromkeys(on_list + list(keep)))
@@ -1555,7 +1555,7 @@ class SharedVerbsMixin:
         _ref_tmp = f"__pin_{_ref_col}__"
         ref_slim = ref_slim.rename({_ref_col: _ref_tmp})
 
-        df = df.join(ref_slim, on=join_key, how="left")
+        df = df.join(ref_slim, on=join_key, how="left", nulls_equal=True)
 
         date_expr = pl.col(date_col)
         ref_expr = pl.col(_ref_tmp)
@@ -1858,6 +1858,7 @@ class SharedVerbsMixin:
         abs_tol: float = 0.0,
         rel_tol: float = 0.0,
         ignore_trailing_whitespace: bool = False,
+        blank_is_missing: bool = False,
         allow_duplicates: bool = False,
         max_print: MaxPrint = 50,
         base_name: str | None = None,
@@ -1903,6 +1904,8 @@ class SharedVerbsMixin:
                 sides of a string before comparing, so a legacy SAS dataset's
                 padded values equal the chain's stripped ones.  Leading
                 whitespace still differs.
+            blank_is_missing: Read an empty string as null on both sides,
+                keys included, as SAS does.  Off by default.
             allow_duplicates: Pair duplicate keys by their position within
                 each key group instead of refusing to run; the report then
                 counts them, raises ``duplicate_keys`` and warns.
@@ -2001,6 +2004,7 @@ class SharedVerbsMixin:
             abs_tol=abs_tol,
             rel_tol=rel_tol,
             ignore_trailing_whitespace=ignore_trailing_whitespace,
+            blank_is_missing=blank_is_missing,
             allow_duplicates=allow_duplicates,
             max_print=max_print,
             base_name=base_name,

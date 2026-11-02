@@ -89,7 +89,6 @@ class TestCustomRuleEngine:
     def test_xpt(self, tmp_path: Path) -> Path:
         """Create a minimal AE XPT with one passing and one failing record."""
         pyreadstat = pytest.importorskip("pyreadstat")
-        pd = pytest.importorskip("pandas")
         import polars as pl
 
         ae_data = pl.from_repr("""\
@@ -104,7 +103,7 @@ class TestCustomRuleEngine:
 └──────────────┴────────┴────────────────┴───────┴──────────┴──────────┴───────┘
 """)
         out = tmp_path / "ae.xpt"
-        pyreadstat.write_xport(pd.DataFrame(ae_data.to_dict()), str(out), file_format_version=5)
+        pyreadstat.write_xport(ae_data, str(out), file_format_version=5, table_name="AE")
         return out
 
     def test_engine_runs_rule(self, engine: Path, test_xpt: Path, tmp_path: Path) -> None:

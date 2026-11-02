@@ -342,7 +342,12 @@ class TTENamespace(SharedADaMVerbsMixin):
                     f"km_data(): column(s) {missing} not found on the ADTTE rows "
                     "nor in the pinned ADSL."
                 )
-            df = df.join(adsl_df.select(list(join_on) + needed), on=list(join_on), how="left")
+            df = df.join(
+                adsl_df.select(list(join_on) + needed),
+                on=list(join_on),
+                how="left",
+                nulls_equal=True,
+            )
 
         cols = [
             pl.col("USUBJID"),

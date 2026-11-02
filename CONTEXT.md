@@ -151,6 +151,16 @@ _Avoid_: type, class, category
 How far two numeric values may drift and still count as equal: absolute (`abs_tol`), or relative to the base value (`rel_tol`). A compare is exact unless a tolerance is given.
 _Avoid_: precision, epsilon, fuzz, approximate equality
 
+### Data in and out
+
+**Missing value**:
+A value that is not there; Polars holds it as null. SAS has one character missing value, the blank, so a blank in an XPT or SAS7BDAT file reads as null. An empty string from another tool is a value until the user says otherwise (`blank_is_missing`). In a join on keys, a missing key matches a missing key, as SAS MERGE BY does. See ADR-0010.
+_Avoid_: NA, empty, blank (for null)
+
+**Transport file**:
+A SAS XPORT version 5 file (`.xpt`), the submission format of FDA TCG 3.1.1: one dataset, named as the file. Names hold at most 8 characters, labels 40, values 200 bytes; Fleet stops a write that does not fit and cuts nothing.
+_Avoid_: XPT v8, SAS export, transport dataset
+
 ### Spec
 
 **Spec algorithm**:

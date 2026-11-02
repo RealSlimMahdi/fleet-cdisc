@@ -4,6 +4,17 @@ All notable changes to Fleet are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **SAS files follow SAS rules** (ADR-0010, alpha audit package F):
+  - XPT and SAS7BDAT read and write with the `io` extra alone, through the Polars route of pyreadstat; pandas and pyarrow are no longer needed. The `io` extra requires `pyreadstat>=1.3.3`.
+  - `save_xpt` writes SAS transport version 5 with the member named as the file (FDA TCG 3.1.1). A `pl.Date` is stored as SAS days with DATE9 (2024-01-15 is 23390), not DATETIME seconds. NaN and infinity become SAS missing. A name over 8 characters, a label over 40 or a value over 200 bytes stops the write instead of being cut. A value that is not ASCII is written as UTF-8 with a warning. New `label=` and `column_labels=` arguments; `fleet run --format xpt`, `fleet tdd build --format xpt` and `DatasetChecker.write_xpt` write the define and IG labels.
+  - A blank character value in an XPT or SAS7BDAT file reads as null, the SAS missing value. A variable with no value keeps its SAS type, and TIME formats read as `pl.Time`.
+  - Every verb join on user keys matches a missing key to a missing key, as SAS MERGE BY does: `derive_param` keeps the group with a missing ATPT, and `merge`, `pick`, `first_date`, `count_events` and `flag(criteria="exists")` no longer lose such records. `worst_case` never keeps a null over a value.
+  - A CSV column with a leading zero (SITEID `001`) reads as text with a warning, types are inferred from every row, and `fleet run` reads define type `text` variables as text, so LBORRES `1.10` stays `1.10`.
+  - `fleet compare` types CSV sides across both files: SITEID `001` against `1` differs, AVAL `1.10` against `1.1` is equal, and `--text` keeps a column text. New `blank_is_missing` / `--blank-is-missing` reads `""` as missing on both sides; the default stays exact.
+  - `load_raw_data(..., encoding=)` reaches the SAS reader, and `--encoding` is on `fleet compare` and `fleet validate`, so a file from a WLATIN1 SAS session can be read. A keyword the reader does not take raises.
+
 ### Changed
 
 - **TLG summary specs are the engine contract** (ADR-0005) — one seam, `fleet.tlg.summarize_spec(df, spec, groupby=, adsl=)`, reads every engine argument from the spec; sixteen `df.tlg.<domain>.t_*` methods are now one call on it, and the seven composite tables (AE severity, grade and relationship, deaths, lab shift and abnormal, demographics) share `prepare_frame` before their own logic. Public method signatures are unchanged.

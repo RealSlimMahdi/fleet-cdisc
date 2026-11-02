@@ -153,14 +153,14 @@ def _default_ig(standard: str) -> str:
     return DEFAULT_IG_VERSIONS[standard].replace(".", "-")
 
 
-def _load_dataset(path_str: str) -> pl.DataFrame:
+def _load_dataset(path_str: str, encoding: str | None = None) -> pl.DataFrame:
     """Load a dataset file (CSV / Parquet / XPT / SAS) as a DataFrame."""
     from fleet.io import load_raw_data
 
     p = Path(path_str)
     if not p.is_file():
         _fail(f"file not found: {p}")
-    return load_raw_data(p).collect()
+    return load_raw_data(p, **_encoding_option(p, encoding)).collect()
 
 
 def _detect_groupby(df: pl.DataFrame, explicit: str | None) -> str:
@@ -804,15 +804,26 @@ def _run_run(args: argparse.Namespace) -> None:
     :class:`~fleet.core.exceptions.StudyRunError` is turned into exit 1
     by :func:`main`.
     """
+    from fleet.core.define_spec import load_define_spec
     from fleet.io import save_dataset_json, save_parquet, save_xpt
     from fleet.run import plan_study, run_study
 
     ctx = _load_ctx(args.config)
     plan = plan_study(ctx, datasets=args.dataset)
+    entries = {
+        e.name.upper(): e
+        for define in {s.define for s in plan.steps}
+        for e in load_define_spec(define).datasets or []
+    }
 
     writers: dict[str, Callable[[pl.DataFrame, Path, str], Path]] = {
         "parquet": lambda df, d, n: save_parquet(df, d / f"{n.lower()}.parquet"),
-        "xpt": lambda df, d, n: save_xpt(df, d / f"{n.lower()}.xpt"),
+        "xpt": lambda df, d, n: save_xpt(
+            df,
+            d / f"{n.lower()}.xpt",
+            label=entries[n].label,
+            column_labels={v.name: v.label for v in entries[n].variables},
+        ),
         "dataset-json": lambda df, d, n: save_dataset_json(df, d / f"{n.lower()}.json", domain=n),
     }
     writer = writers[args.format]
@@ -870,7 +881,7 @@ def _run_validate(args: argparse.Namespace) -> None:
         for d in datasets:
             print(f"  {d.name} — {d.path}")
         by_name = ValidationService(rules_engine_path=setup.engine.value).validate_datasets(
-            {d.name: _load_dataset(str(d.path)) for d in datasets},
+            {d.name: _load_dataset(str(d.path), args.encoding) for d in datasets},
             standard=standard,
             version=setup.ig_version.value,
             custom_rules=setup.custom_rules.value,
@@ -911,18 +922,33 @@ _COMPARE_DIFFERENT = 1
 _COMPARE_IMPOSSIBLE = 2
 
 
-def _scan_comparison_side(path_str: str, side: str) -> pl.LazyFrame:
-    """Open one side through the raw-data loader; an unreadable file is exit 2."""
+def _scan_comparison_side(path_str: str, side: str, encoding: str | None) -> pl.LazyFrame:
+    """Open one side through the raw-data loader; an unreadable file is exit 2.
+
+    A CSV side is read as text: :func:`fleet.comparison.csv_types.type_csv_sides`
+    types it against the other side.
+    """
     from fleet.core.exceptions import FleetError
     from fleet.io import load_raw_data
 
+    path = Path(path_str)
+    options: dict[str, object] = _encoding_option(path, encoding)
+    if path.suffix.lower() == ".csv":
+        options["infer_schema"] = False
     try:
-        return load_raw_data(Path(path_str))
+        return load_raw_data(path, **options)
     except (FleetError, ImportError) as exc:
         _fail(
             f"cannot read the {side} {path_str}: {' '.join(str(exc).split())}",
             code=_COMPARE_IMPOSSIBLE,
         )
+
+
+def _encoding_option(path: Path, encoding: str | None) -> dict[str, object]:
+    """``encoding=`` for a file whose reader takes one (CSV and SAS); none for Parquet."""
+    if encoding is None or path.suffix.lower() not in (".csv", ".xpt", ".sas7bdat"):
+        return {}
+    return {"encoding": encoding}
 
 
 def _parse_variable_pairs(text: str) -> dict[str, str]:
@@ -944,6 +970,7 @@ def _run_compare(args: argparse.Namespace) -> None:
     import polars as pl
 
     from fleet.comparison import DEFAULT_MAX_PRINT, compare
+    from fleet.comparison.csv_types import type_csv_sides
     from fleet.core.exceptions import FleetError
 
     keys = [k.strip() for k in args.keys.split(",") if k.strip()]
@@ -952,9 +979,18 @@ def _run_compare(args: argparse.Namespace) -> None:
     variables = (
         [v.strip() for v in args.variables.split(",") if v.strip()] if args.variables else None
     )
-    base = _scan_comparison_side(args.base, "base")
-    candidate = _scan_comparison_side(args.candidate, "candidate")
+    text = [t.strip() for t in args.text.split(",") if t.strip()] if args.text else []
+    base = _scan_comparison_side(args.base, "base", args.encoding)
+    candidate = _scan_comparison_side(args.candidate, "candidate", args.encoding)
+    base_csv, candidate_csv = (
+        Path(p).suffix.lower() == ".csv" for p in (args.base, args.candidate)
+    )
+    csv_types: dict[str, pl.DataType] = {}
     try:
+        if base_csv or candidate_csv:
+            base, candidate, csv_types = type_csv_sides(
+                base, candidate, base_csv=base_csv, candidate_csv=candidate_csv, text=text
+            )
         report = compare(
             base,
             candidate,
@@ -965,6 +1001,7 @@ def _run_compare(args: argparse.Namespace) -> None:
             abs_tol=args.abs_tol,
             rel_tol=args.rel_tol,
             ignore_trailing_whitespace=args.ignore_trailing_whitespace,
+            blank_is_missing=args.blank_is_missing,
             allow_duplicates=args.allow_duplicates,
             max_print=None if args.all else DEFAULT_MAX_PRINT,
             base_name=args.base,
@@ -984,6 +1021,12 @@ def _run_compare(args: argparse.Namespace) -> None:
     if args.format == "json":
         print(report.to_json())  # the whole of stdout is the document
     else:
+        if csv_types:
+            read_as = ", ".join(
+                f"{c} {'numeric' if t.is_numeric() else 'text' if t == pl.String else t}"
+                for c, t in csv_types.items()
+            )
+            print(f"CSV columns read as: {read_as}")
         print(report.to_text())
         if args.out:
             print(f"Value listing → {args.out}")
@@ -1735,6 +1778,7 @@ def _run_tdd_audit(args: argparse.Namespace) -> None:
 
 def _run_tdd_build(args: argparse.Namespace) -> None:
     from fleet.io import save_dataset_json, save_parquet, save_xpt
+    from fleet.sdtm._tdd_mixin import packaged_structure
 
     design = _load_design(_resolve_design_path(args))
     frames = design.domains()
@@ -1746,9 +1790,18 @@ def _run_tdd_build(args: argparse.Namespace) -> None:
     if errors and not args.force:
         _fail(f"{errors} conformance error(s) — fix the design or re-run with --force")
 
+    def xpt(df: pl.DataFrame, d: Path, n: str) -> Path:
+        ig = packaged_structure(n) or {}
+        return save_xpt(
+            df,
+            d / f"{n.lower()}.xpt",
+            label=ig.get("label"),
+            column_labels={v["name"]: v.get("label") for v in ig.get("variables", [])},
+        )
+
     writers: dict[str, Callable[[pl.DataFrame, Path, str], Path]] = {
         "parquet": lambda df, d, n: save_parquet(df, d / f"{n.lower()}.parquet"),
-        "xpt": lambda df, d, n: save_xpt(df, d / f"{n.lower()}.xpt"),
+        "xpt": xpt,
         "dataset-json": lambda df, d, n: save_dataset_json(df, d / f"{n.lower()}.json", domain=n),
     }
     writer = writers[args.format]
@@ -2337,6 +2390,14 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         metavar="PATH",
         help="Write an HTML findings report to PATH.",
     )
+    validate.add_argument(
+        "--encoding",
+        metavar="NAME",
+        help=(
+            "Text encoding of the CSV and SAS files, e.g. iso-8859-1 for files from a "
+            "WLATIN1 SAS session (default: UTF-8)."
+        ),
+    )
     validate.set_defaults(func=_run_validate)
 
     # -- check -------------------------------------------------------------- #
@@ -2456,6 +2517,34 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
             "Strip trailing whitespace from both sides of a string before comparing, so a "
             "legacy SAS dataset's padded character values equal Fleet's stripped ones. "
             "Leading whitespace still differs."
+        ),
+    )
+    compare_parser.add_argument(
+        "--blank-is-missing",
+        action="store_true",
+        help=(
+            "Read an empty string as missing on both sides, keys included, as SAS does. "
+            "Use it when one side comes from a tool that kept blanks as empty strings "
+            "(an R data frame without convert_blanks_to_na). A SAS file always reads a "
+            "blank as missing."
+        ),
+    )
+    compare_parser.add_argument(
+        "--text",
+        metavar="V1,V2",
+        help=(
+            "Comma-separated CSV columns to read as text, the equivalent of a SAS $ "
+            "informat, e.g. LBORRES. A CSV file holds no types: a column is text when a "
+            "value on either side has a leading zero or is not a number, a number "
+            "otherwise, and the other side's type when that side is not a CSV file."
+        ),
+    )
+    compare_parser.add_argument(
+        "--encoding",
+        metavar="NAME",
+        help=(
+            "Text encoding of a CSV or SAS file, e.g. iso-8859-1 for a file from a "
+            "WLATIN1 SAS session (default: UTF-8)."
         ),
     )
     compare_parser.add_argument(

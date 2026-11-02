@@ -59,6 +59,11 @@ def _load_packaged_structure(domain: str, ig_version: str) -> dict[str, Any] | N
     return yaml.safe_load(_PACKAGED_STRUCTURES.read_text(encoding="utf-8")).get(domain)
 
 
+def packaged_structure(domain: str) -> dict[str, Any] | None:
+    """Return the packaged SDTMIG 3.4 label and variables of a trial design domain."""
+    return _load_packaged_structure(domain.upper(), _PACKAGED_IG_VERSION)
+
+
 # Stage labels for error messages
 _STAGE_SEQUENCE = (
     "fetch_structure()",

@@ -537,15 +537,16 @@ class DatasetChecker:
         *,
         reorder: bool = True,
     ) -> Path:
-        """Write *df* as a SAS transport (XPT) file.
+        """Write *df* as a SAS transport file, version 5, with the define labels.
 
         When *reorder* is ``True`` (default) the DataFrame columns are
         rearranged to match the variable order declared in the define before
         writing.  Columns not declared in the define (e.g. private ``_``-prefix
         columns) are silently dropped so the XPT only contains define-declared
-        variables.
+        variables.  The dataset and variable labels come from the define;
+        the rules of the file are those of :func:`fleet.io.save_xpt`.
 
-        Requires ``pyreadstat``.  Install with ``uv add fleet[io]``.
+        Requires ``pyreadstat``.  Install with ``uv add "fleet-cdisc[io]"``.
 
         Parameters
         ----------
@@ -553,6 +554,7 @@ class DatasetChecker:
             The materialised ``pl.DataFrame`` to write.
         dataset:
             Dataset name used to look up the variable order in the define.
+            It must equal the file name (FDA TCG 3.1.1).
         path:
             Destination file path (e.g. ``"outputs/dm.xpt"``).
         reorder:
@@ -563,25 +565,29 @@ class DatasetChecker:
         Path
             Resolved path of the written file.
         """
-        try:
-            import pyreadstat
-        except ImportError as exc:
-            raise ImportError(
-                "pyreadstat is required for XPT export. Install it with: uv add fleet[io]"
-            ) from exc
-
-        if reorder:
-            ds_def = self._datasets.get(dataset.upper())
-            if ds_def is not None:
-                define_names = [v["name"] for v in ds_def["variables"]]
-                # Keep only columns that are both in define and in df; preserve define order
-                ordered = [c for c in define_names if c in df.columns]
-                df = df.select(ordered)
+        from fleet.core.exceptions import IOError as FleetIOError
+        from fleet.io import save_xpt
 
         out = Path(path)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        pyreadstat.write_xport(df.to_pandas(), str(out))
-        return out
+        if out.stem.upper() != dataset.upper():
+            raise FleetIOError(
+                f"{out.name} would hold dataset {dataset.upper()}; name the file "
+                f"{dataset.lower()}.xpt, because the member is named as the file (FDA TCG 3.1.1)."
+            )
+
+        ds_def = self._datasets.get(dataset.upper())
+        if reorder and ds_def is not None:
+            define_names = [v["name"] for v in ds_def["variables"]]
+            # Keep only columns that are both in define and in df; preserve define order
+            ordered = [c for c in define_names if c in df.columns]
+            df = df.select(ordered)
+
+        return save_xpt(
+            df,
+            out,
+            label=ds_def.get("label") if ds_def is not None else None,
+            column_labels=self.labels(dataset),
+        )
 
     # ------------------------------------------------------------------ #
     # Schema validation                                                    #
