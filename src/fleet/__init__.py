@@ -43,6 +43,10 @@ Usage
     )
 """
 
+import sys
+
+import polars as _pl
+
 # Importing sdtm/adam triggers the @pl.api.register_dataframe_namespace decorators
 from . import (
     adam,  # noqa: F401  (registers df.adam)
@@ -102,6 +106,19 @@ from .tlg import (
     VSSummarySpec,
 )
 from .validation import ValidationResult, ValidationService
+
+
+def _check_python_and_polars(python: tuple[int, int], polars: str) -> None:
+    """Polars 1.x cannot dispatch Series methods on Python 3.15: they return None."""
+    if python >= (3, 15) and polars.startswith("1."):
+        raise ImportError(
+            f"Fleet needs Python 3.12 to 3.14: Polars {polars} does not work on Python "
+            f"{python[0]}.{python[1]}. In a new folder, run: uv init --python 3.12"
+        )
+
+
+# Remove with the polars<2 pin.
+_check_python_and_polars(sys.version_info[:2], _pl.__version__)
 
 __all__ = [
     "__version__",

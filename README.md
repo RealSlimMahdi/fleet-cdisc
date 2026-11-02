@@ -138,7 +138,7 @@ to rewrite old external scripts.
 
 ### Prerequisites
 
-- **Python 3.12+**
+- **Python 3.12 to 3.14**
 - [**uv**](https://docs.astral.sh/uv/getting-started/installation/) — the only supported package manager
 - **CDISC Library API key** (optional, for CLI bootstrapping) — get one at [library.cdisc.org](https://library.cdisc.org)
 

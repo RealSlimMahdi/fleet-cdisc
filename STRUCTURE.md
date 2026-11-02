@@ -415,7 +415,7 @@ uv run pytest tests/ -v
 | `polars ≥ 1.41, < 2`       | Core DataFrame engine; namespace extension host |
 | `pydantic ≥ 2.0.0`         | YAML spec validation and data modelling         |
 | `pyyaml ≥ 6.0`             | YAML spec / CT file parsing                     |
-| `httpx ≥ 0.27.0`           | HTTP downloads (CT files, raw data)             |
+| `httpx ≥ 0.27, < 1`        | HTTP downloads (CT files, raw data)             |
 | `jsonschema ≥ 4.26.0`      | Define-XML / spec schema validation             |
 | `lxml ≥ 5.0.0`             | Define-XML ODM XML generation                   |
 
