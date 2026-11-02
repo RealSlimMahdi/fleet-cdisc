@@ -116,6 +116,10 @@ class PedsNamespace(SharedADaMVerbsMixin):
                                 analysis_date="RFSTDTC")
                     .to_frame()
                 )
+
+        References:
+            admiral ``derive_vars_duration`` (pharmaverse): one month = 30.4375 days
+            (365.25 / 12). A month of 30 days gives a different answer.
         """
         days = (
             pl.col(analysis_date).cast(pl.Date) - pl.col(birth_date).cast(pl.Date)
@@ -155,6 +159,10 @@ class PedsNamespace(SharedADaMVerbsMixin):
                                analysis_date="RFSTDTC")
                     .to_frame()
                 )
+
+        References:
+            admiral ``derive_vars_duration`` and ``compute_age_years`` (pharmaverse):
+            one year = 365.25 days.
         """
         days = (
             pl.col(analysis_date).cast(pl.Date) - pl.col(birth_date).cast(pl.Date)
@@ -199,6 +207,12 @@ class PedsNamespace(SharedADaMVerbsMixin):
                                    gestational_weeks_col="GESTAG")
                     .to_frame()
                 )
+
+        References:
+            American Academy of Pediatrics, Committee on Fetus and Newborn. Age
+            terminology during the perinatal period. Pediatrics. 2004;114(5):1362-1364:
+            corrected age = chronological age minus the weeks born before 40 weeks.
+            52.18 weeks per year = 365.25 / 7.
         """
         prematurity_years = (
             pl.when(pl.col(gestational_weeks_col) < term_weeks)
@@ -243,6 +257,10 @@ class PedsNamespace(SharedADaMVerbsMixin):
                                      gestational_weeks_col="GESTAG")
                     .to_frame()
                 )
+
+        References:
+            WHO: preterm birth is birth before 37 completed weeks of gestation
+            (ICD-10 P07; WHO preterm birth fact sheet).
         """
         return self._chain(
             pl.when(pl.col(gestational_weeks_col) < threshold)
@@ -284,6 +302,13 @@ class PedsNamespace(SharedADaMVerbsMixin):
                     .bmi_category("BMICG", bmi_col="BMI")
                     .to_frame()
                 )
+
+        References:
+            WHO. Obesity: preventing and managing the global epidemic. WHO Technical
+            Report Series 894 (2000): adult classes at 18.5, 25.0 and 30.0 kg/m2.
+            These are adult cut-offs. Pediatric classification uses age- and
+            sex-specific percentiles (WHO growth reference 2007, CDC 2000), which
+            this verb does not apply.
         """
         default_thresholds: list[tuple[str, float]] = [
             ("Underweight", 18.5),

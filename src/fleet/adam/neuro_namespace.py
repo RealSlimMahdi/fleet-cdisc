@@ -97,6 +97,12 @@ class NeuroNamespace(SharedADaMVerbsMixin):
                                slope=183.07, intercept=-177.26)
                     .to_frame()
                 )
+
+        References:
+            Klunk WE et al. The Centiloid Project: standardizing quantitative amyloid
+            plaque estimation by PET. Alzheimers Dement. 2015;11(1):1-15. The built-in
+            tracer and pipeline calibrations follow admiralneuro
+            ``derive_param_centiloid`` (pharmaverse).
         """
         if slope is not None and intercept is not None:
             s, i = slope, intercept
@@ -127,14 +133,22 @@ class NeuroNamespace(SharedADaMVerbsMixin):
         target: str,
         *,
         score_col: str,
+        normal_threshold: int = 24,
+        mild_threshold: int = 19,
+        moderate_threshold: int = 10,
     ) -> Self:
         """Categorise MMSE total score into severity levels.
 
-        27–30 = Normal, 18–26 = Mild, 10–17 = Moderate, 0–9 = Severe.
+        Defaults: Normal >= 24, Mild 19-23, Moderate 10-18, Severe 0-9.
+        Each lower bound is an argument, so a SAP that uses other bands
+        passes its own cut-offs.
 
         Args:
             target: Name of the output column.
             score_col: Column containing the MMSE total score.
+            normal_threshold: Lower bound for Normal (default ``24``).
+            mild_threshold: Lower bound for Mild (default ``19``).
+            moderate_threshold: Lower bound for Moderate (default ``10``).
 
         Returns:
             Self: The namespace with *target* appended.
@@ -147,14 +161,31 @@ class NeuroNamespace(SharedADaMVerbsMixin):
                     .mmse_category("MMSECG", score_col="AVAL")
                     .to_frame()
                 )
+
+            Use the bands of a SAP that puts Mild at 21-26::
+
+                adcog = (
+                    cog_raw.adam.neuro
+                    .mmse_category("MMSECG", score_col="AVAL",
+                                   normal_threshold=27, mild_threshold=21)
+                    .to_frame()
+                )
+
+        References:
+            Folstein MF, Folstein SE, McHugh PR. Mini-mental state. J Psychiatr Res.
+            1975;12:189-198 (the instrument). Default bands: Tombaugh TN, McIntyre
+            NJ. The Mini-Mental State Examination: a comprehensive review. J Am
+            Geriatr Soc. 1992;40:922-935 (24-30 normal, 19-23 mild, 10-18 moderate,
+            9 and below severe). Other schemes are in use, for example mild 21-26
+            and moderate 10-20; take the cut-offs from the SAP.
         """
         score = pl.col(score_col)
         return self._chain(
-            pl.when(score >= 27)
+            pl.when(score >= normal_threshold)
             .then(pl.lit("Normal"))
-            .when(score >= 18)
+            .when(score >= mild_threshold)
             .then(pl.lit("Mild"))
-            .when(score >= 10)
+            .when(score >= moderate_threshold)
             .then(pl.lit("Moderate"))
             .when(score >= 0)
             .then(pl.lit("Severe"))
@@ -235,6 +266,11 @@ class NeuroNamespace(SharedADaMVerbsMixin):
                     .moca_category("MOACG", score_col="AVAL")
                     .to_frame()
                 )
+
+        References:
+            Nasreddine ZS et al. The Montreal Cognitive Assessment, MoCA. J Am Geriatr
+            Soc. 2005;53:695-699: a total of 26 or more is normal. The MCI lower
+            bound of 18 is not fixed by the instrument; check the SAP.
         """
         score = pl.col(score_col)
         return self._chain(

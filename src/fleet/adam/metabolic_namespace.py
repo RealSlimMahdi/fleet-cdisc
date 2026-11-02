@@ -156,6 +156,12 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
                                   sex_col="SEX")
                     .to_frame()
                 )
+
+        References:
+            Deurenberg P, Weststrate JA, Seidell JC. Body mass index as a measure of
+            body fatness: age- and sex-specific prediction formulas. Br J Nutr.
+            1991;65(2):105-114. Constants 1.2, 0.23, 10.8 and 5.4 are the adult
+            equation; admiralmetabolic ships the same rule.
         """
         sex_num = (
             pl.when(pl.col(sex_col) == sex_male_value).then(pl.lit(1.0)).otherwise(pl.lit(0.0))
@@ -205,6 +211,13 @@ class MetabolicNamespace(SharedADaMVerbsMixin):
                                        sex_col="SEX")
                     .to_frame()
                 )
+
+        References:
+            Grundy SM et al. Diagnosis and management of the metabolic syndrome: an
+            AHA/NHLBI scientific statement. Circulation. 2005;112:2735-2752: waist
+            circumference >= 102 cm (men) and >= 88 cm (women). NCEP ATP III (2001)
+            states the same cut-offs as strictly greater; IDF (2005) uses 94 and 80 cm
+            for Europids. Check the SAP for the population.
         """
         is_male = pl.col(sex_col) == sex_male_value
         waist = pl.col(waist_col)

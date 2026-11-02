@@ -71,6 +71,14 @@ class VaccineNamespace(SharedADaMVerbsMixin):
 
             .fever_flag("FEVFL", temp_col="TEMP", threshold=38.0)
             .fever_flag("HIGHFEVFL", temp_col="TEMP", threshold=39.0)
+
+        References:
+            FDA, Guidance for Industry: Toxicity Grading Scale for Healthy Adult and
+            Adolescent Volunteers Enrolled in Preventive Vaccine Clinical Trials
+            (2007): grade 1 fever starts at 38.0 °C. Brighton Collaboration fever case
+            definition (Marcy SM et al. Vaccine. 2004;22:551-556): >= 38.0 °C.
+            This verb flags strictly above *threshold*; see the FDA scale before
+            relying on the default at exactly 38.0.
         """
         return self._chain(
             pl.when(pl.col(temp_col) > threshold)
@@ -105,6 +113,13 @@ class VaccineNamespace(SharedADaMVerbsMixin):
             .seroconversion_flag("SRCONVFL", aval_col="AVAL", base_col="BASE")
             .seroconversion_flag("SRCONV2FL", aval_col="AVAL", base_col="BASE",
                                   fold_rise=2.0)
+
+        References:
+            FDA CBER, Guidance for Industry: Clinical Data Needed to Support the
+            Licensure of Seasonal Inactivated Influenza Vaccines (2007): seroconversion
+            includes a >= 4-fold rise in HI titre from baseline. EMA CHMP,
+            CPMP/BWP/214/96, states the same criterion. Null when BASE is null or
+            zero, so a missing baseline never divides.
         """
         aval = pl.col(aval_col)
         base = pl.col(base_col)
@@ -178,6 +193,11 @@ class VaccineNamespace(SharedADaMVerbsMixin):
             .aval_adis("AVAL", stresn_col="ISSTRESN",
                        lloq_col="ISLLOQ", uloq_col="ISULOQ",
                        orres_col="ISORRES")
+
+        References:
+            admiralvaccine ``derive_var_aval_adis`` (pharmaverse): the rule set this
+            verb mirrors. No CDISC standard fixes the LLOQ/2 imputation; it is an
+            analysis convention. Check the SAP for the rule in force.
         """
         stresn = pl.col(stresn_col)
         lloq = pl.col(lloq_col)
@@ -260,6 +280,10 @@ class VaccineNamespace(SharedADaMVerbsMixin):
 
             .event_flag("EVENTFL", aval_col="AVAL", cutoff=2.5,
                         by=["USUBJID", "FAOBJ", "ATPTREF"])
+
+        References:
+            admiralvaccine ``derive_vars_event_flag`` (pharmaverse), ``new_var1``
+            behaviour. FDA toxicity grading scale (2007) for the severity grades.
         """
         sev_vals = severity_values or ["MILD", "MODERATE", "SEVERE"]
         grps = by or ["USUBJID"]

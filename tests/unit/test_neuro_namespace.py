@@ -19,12 +19,13 @@ _CENTILOID_CALIBRATIONS = [
 # ---------------------------------------------------------------------------
 # MMSE severity boundary values — test exactly AT each transition threshold
 # ---------------------------------------------------------------------------
+# Tombaugh & McIntyre (1992): 24-30 normal, 19-23 mild, 10-18 moderate, 0-9 severe
 _MMSE_CATEGORY_CASES = [
     (30, "Normal"),
-    (27, "Normal"),  # boundary: ≥27
-    (26, "Mild"),
-    (18, "Mild"),  # boundary: ≥18
-    (17, "Moderate"),
+    (24, "Normal"),  # boundary: ≥24
+    (23, "Mild"),
+    (19, "Mild"),  # boundary: ≥19
+    (18, "Moderate"),
     (10, "Moderate"),  # boundary: ≥10
     (9, "Severe"),
     (0, "Severe"),
@@ -198,6 +199,25 @@ class TestMmseCategory:
 """)
         result = df.adam.neuro.mmse_category("MMSECG", score_col="MMSE").to_frame()
         assert result["MMSECG"].to_list() == ["Normal", "Mild", "Moderate", "Severe"]
+
+    def test_sap_cut_offs_override_the_defaults(self):
+        # A SAP that uses mild 21-26 and normal from 27
+        df = pl.from_repr("""\
+┌──────┐
+│ MMSE │
+│ ---  │
+│ i64  │
+╞══════╡
+│ 27   │
+│ 26   │
+│ 21   │
+│ 20   │
+└──────┘
+""")
+        result = df.adam.neuro.mmse_category(
+            "MMSECG", score_col="MMSE", normal_threshold=27, mild_threshold=21
+        ).to_frame()
+        assert result["MMSECG"].to_list() == ["Normal", "Mild", "Mild", "Moderate"]
 
 
 class TestCdrsob:

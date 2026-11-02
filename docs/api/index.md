@@ -52,12 +52,17 @@ import fleet
 import polars as pl
 
 df = pl.DataFrame({"x": [1]})
-df.sdtm.verbs()  # DataFrame: every SDTM verb + one-line summary
+df.sdtm.verbs()  # DataFrame: every SDTM verb + one-line summary + origin
 df.adam.adsl.verbs()  # same for any (sub-)namespace
+df.adam.onco.verbs().filter(pl.col("origin") == "adam.onco")  # only the oncology verbs
 
 fleet.spec_algorithms("sdtm")  # define.yaml algorithm ids per standard
 fleet.spec_coverage()  # algorithm ↔ verb ↔ required-fields matrix
 ```
 
-`verbs()` returns a sorted Polars DataFrame (`verb`, `summary`) built live
-from the class docstrings, so it can never lag behind the installed version.
+`verbs()` returns a sorted Polars DataFrame (`verb`, `summary`, `origin`) built
+live from the class docstrings, so it can never lag behind the installed version.
+`origin` is the path you type to reach the namespace that defines the verb:
+`sdtm`, `adam`, `adam.onco`, or `core` for the verbs every namespace shares.
+A sub-namespace inherits every shared verb, so autocomplete lists about 45
+names; filter on `origin` to see the handful it adds.

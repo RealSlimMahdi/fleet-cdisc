@@ -174,6 +174,22 @@ def _indent_yaml(text: str, spaces: int) -> str:
     return "\n".join(pad + ln if ln.strip() else ln for ln in text.rstrip().splitlines())
 
 
+def _verb_origin(klass: type) -> str:
+    """Return the path a programmer types to reach the namespace *klass* defines.
+
+    ``fleet.adam.metabolic_namespace`` becomes ``"adam.metabolic"``,
+    ``fleet.adam.namespace`` and ``fleet.adam._mixins`` become ``"adam"``,
+    ``fleet.sdtm.*`` becomes ``"sdtm"`` and ``fleet.core.*`` becomes
+    ``"core"``: the verbs every namespace shares.
+    """
+    parts = klass.__module__.split(".")
+    package = parts[1] if len(parts) > 1 else "core"
+    leaf = parts[-1]
+    if leaf.endswith("_namespace"):
+        return f"{package}.{leaf.removesuffix('_namespace')}"
+    return package
+
+
 class SharedVerbsMixin:
     """Base mixin providing verbs shared across SDTM and ADaM namespaces.
 
@@ -1021,13 +1037,18 @@ class SharedVerbsMixin:
         """List the public verbs available on this namespace.
 
         Walks the class MRO collecting public Fleet-defined methods and
-        returns a tidy frame with each verb's name and the first
-        sentence of its docstring.  This is the always-current
-        alternative to hard-coded verb counts in docs.
+        returns a tidy frame with each verb's name, the first sentence
+        of its docstring and the namespace that defines it.  This is
+        the always-current alternative to hard-coded verb counts in
+        docs, and the discovery seam for a sub-namespace: autocomplete
+        shows every inherited verb, ``origin`` tells them apart.
 
         Returns:
-            pl.DataFrame: Columns ``verb`` and ``summary``, sorted by
-                verb name.
+            pl.DataFrame: Columns ``verb``, ``summary`` and ``origin``,
+                sorted by verb name.  ``origin`` is the path a programmer
+                types to reach the namespace that defines the verb
+                (``"sdtm"``, ``"adam"``, ``"adam.metabolic"``), or
+                ``"core"`` for the verbs every namespace shares.
 
         Examples:
             Discover what an SDTM pipeline can do::
@@ -1036,6 +1057,12 @@ class SharedVerbsMixin:
 
                 catalog = raw_df.sdtm.verbs()
                 print(catalog)
+
+            Keep only the verbs a therapeutic-area namespace adds::
+
+                own = raw_df.adam.metabolic.verbs().filter(
+                    pl.col("origin") == "adam.metabolic"
+                )
         """
         from fleet.core.algorithm_resolver import docstring_summary
 
@@ -1044,6 +1071,7 @@ class SharedVerbsMixin:
         for klass in type(self).__mro__:
             if not klass.__module__.startswith("fleet."):
                 continue
+            origin = _verb_origin(klass)
             for name, attr in vars(klass).items():
                 if name.startswith("_") or name in seen:
                     continue
@@ -1052,9 +1080,13 @@ class SharedVerbsMixin:
                     continue
                 if not callable(attr):
                     continue
-                rows.append({"verb": name, "summary": docstring_summary(attr.__doc__)})
+                rows.append(
+                    {"verb": name, "summary": docstring_summary(attr.__doc__), "origin": origin}
+                )
         rows.sort(key=lambda r: r["verb"])
-        return pl.DataFrame(rows, schema={"verb": pl.String, "summary": pl.String})
+        return pl.DataFrame(
+            rows, schema={"verb": pl.String, "summary": pl.String, "origin": pl.String}
+        )
 
     # ------------------------------------------------------------------ #
     # Algorithmic (Group B)                                                #
