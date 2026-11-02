@@ -412,7 +412,7 @@ uv run pytest tests/ -v
 
 | Package                    | Role                                            |
 | -------------------------- | ----------------------------------------------- |
-| `polars ≥ 1.41.0`          | Core DataFrame engine; namespace extension host |
+| `polars ≥ 1.41, < 2`       | Core DataFrame engine; namespace extension host |
 | `pydantic ≥ 2.0.0`         | YAML spec validation and data modelling         |
 | `pyyaml ≥ 6.0`             | YAML spec / CT file parsing                     |
 | `httpx ≥ 0.27.0`           | HTTP downloads (CT files, raw data)             |
