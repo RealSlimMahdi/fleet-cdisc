@@ -17,7 +17,7 @@ df.adam.vaccine.verbs().filter(pl.col("origin") == "adam.vaccine")
 A TA verb is a **clinical verb**: it encodes a rule a programmer would otherwise
 copy from a standard or a SAP, and its docstring cites that rule under
 `References`. A new clinical verb must pass the admission bar of
-[ADR-0005](../adr/0005-an-admission-bar-for-clinical-verbs.md): if it were
+[ADR-0009](../adr/0009-an-admission-bar-for-clinical-verbs.md): if it were
 deleted, a programmer who rewrites it inline must be able to get a wrong answer,
 not only type more.
 
