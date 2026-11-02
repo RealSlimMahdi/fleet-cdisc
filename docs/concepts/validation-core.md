@@ -14,6 +14,11 @@ uv run fleet install-engine     # downloads the CORE binary to ~/.fleet
 uv run fleet doctor             # confirms engine + extras are healthy
 ```
 
+`fleet install-engine` installs CORE 0.15.0 (GitHub tag `v0.15`), the
+version that Fleet is tested with. `--version latest` installs the newest
+CORE release, but Fleet prints a warning, because that version is not
+tested with Fleet. Newer releases can fail on data that 0.15.0 validates.
+
 `fleet doctor` prints the engine that validation will use, where it came
 from, and its version. It takes them from the same run setup as the verb and
 `fleet validate`.
@@ -31,7 +36,7 @@ first source that gives it:
 
 1. the engine's own `core version` command (`0.15.0`),
 2. the `fleet-release-tag.txt` file that `fleet install-engine` writes next
-   to the managed binary (tag `v0.15.0`, printed as `0.15.0`),
+   to the managed binary (tag `v0.15`, printed as `0.15`),
 3. else `unknown`.
 
 ## Running validation

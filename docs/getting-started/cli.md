@@ -354,7 +354,7 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
-| `--version` | `latest` | Release tag to download (default: latest). |
+| `--version` | `v0.15` | Release tag to download (default: v0.15, the CORE release that Fleet is tested with). 'latest' gets the newest release and warns. |
 | `--force` | _(none)_ | Re-download even if already installed. |
 
 ---
