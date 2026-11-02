@@ -79,18 +79,29 @@ def _settle_on_fail(on_fail: str, summary: str, error: type[Exception]) -> None:
         warnings.warn(summary, stacklevel=3)
 
 
-#: Spec-format version this Fleet build understands (``fleet_spec_version``).
-SUPPORTED_SPEC_VERSION = 1
+#: Spec-format version this Fleet build writes (``fleet_spec_version``).
+#: Version 2 is the verb vocabulary of ADR-0008.
+SUPPORTED_SPEC_VERSION = 2
 
 
 def _check_spec_version(spec: DefineSpec, *, source: str) -> None:
-    """Raise ``SpecError`` when the spec declares an unknown future version."""
+    """Raise ``SpecError`` when the spec declares another dialect version.
+
+    Version 1 is the pre-ADR-0008 vocabulary; ``fleet migrate --spec``
+    rewrites it.
+    """
     version = spec.fleet_spec_version
-    if version is not None and version != SUPPORTED_SPEC_VERSION:
-        raise SpecError(
-            f"{source}: unsupported fleet_spec_version {version!r}. "
-            f"This Fleet version supports fleet_spec_version {SUPPORTED_SPEC_VERSION}."
-        )
+    if version is None or version == SUPPORTED_SPEC_VERSION:
+        return
+    hint = (
+        " Rewrite the file with `fleet migrate --spec <define.yaml> --write`."
+        if version == 1
+        else ""
+    )
+    raise SpecError(
+        f"{source}: unsupported fleet_spec_version {version!r}. "
+        f"This Fleet version supports fleet_spec_version {SUPPORTED_SPEC_VERSION}.{hint}"
+    )
 
 
 def _import_derivations_module(spec: DefineSpec, *, source: str) -> None:
@@ -111,8 +122,8 @@ _SPEC_META_KEYS = ("label", "origin", "role", "evaluator")
 
 def _extract_spec_variables(
     spec: DefineSpec, dataset: str | None
-) -> tuple[str, list[tuple[str, dict]]]:
-    """Return ``(dataset_name, [(variable_name, derivation_dict), ...])``.
+) -> tuple[str, list[tuple[str, dict, str | None]]]:
+    """Return ``(dataset_name, [(variable_name, derivation_dict, codelist), ...])``.
 
     Handles both the define.yaml format (top-level ``datasets`` where each
     variable carries a ``derivation`` block) and the simplified
@@ -122,20 +133,21 @@ def _extract_spec_variables(
     """
     if spec.datasets is not None:
         ds = spec.select(dataset)
-        out: list[tuple[str, dict]] = []
+        out: list[tuple[str, dict, str | None]] = []
         for var in ds.variables:
             drv = var.derivation
             if not drv:
                 continue  # no derivation → carry-through / manual column
-            # Backward compat: callable: without algorithm: → inject algorithm.
+            # Shorthand: callable: without algorithm: → the derivation verb.
             if "callable" in drv and "algorithm" not in drv:
-                drv = {**drv, "algorithm": "callable"}
+                drv = {**drv, "algorithm": "derivation"}
             merged = dict(drv)
             for meta in _SPEC_META_KEYS:
                 value = getattr(var, meta, None)
                 if value and meta not in merged:
                     merged[meta] = value
-            out.append((var.name, merged))
+            codelist = (var.model_extra or {}).get("codelist")
+            out.append((var.name, merged, str(codelist) if codelist else None))
         return ds.name, out
 
     # Simplified single-dataset format (domain:/dataset: + variables:).
@@ -144,9 +156,10 @@ def _extract_spec_variables(
     for var in spec.variables or []:
         entry = dict(var)
         if "callable" in entry and "algorithm" not in entry:
-            entry["algorithm"] = "callable"
+            entry["algorithm"] = "derivation"
         name = entry.pop("target", None) or entry.pop("name", None)
-        out.append((name, entry))
+        codelist = entry.pop("codelist", None)
+        out.append((name, entry, str(codelist) if codelist else None))
     return str(ds_name), out
 
 
@@ -1200,7 +1213,7 @@ class SharedVerbsMixin:
             # Registered derivations round-trip via to_spec_yaml as
             # `algorithm: callable` blocks referencing their dotted path.
             if ns._lineage:
-                ns._lineage[-1].spec = {"algorithm": "callable", "callable": drv.dotted_path}
+                ns._lineage[-1].spec = {"algorithm": "derivation", "callable": drv.dotted_path}
             return ns
 
         df = self.to_frame()
@@ -2127,12 +2140,17 @@ class SharedVerbsMixin:
               validate: true
               file: ct/cdisc_ct.yaml   # optional — loaded into the CT cache
 
-        With ``validate: true`` every assign-family derivation that
-        declares a codelist (``assign_ct`` / ``hardcode_ct``) runs with
+        With ``validate: true`` every ``assign`` that has a codelist
+        (``ct:``, or the variable's ``codelist:``) runs with
         ``validate_values=True``: out-of-codelist values emit the
         standard warning naming dataset, variable, and codelist.
 
-        Inside a study, a ``ct_codelist:`` ID resolves to the class of
+        A derivation block is the verb call: ``algorithm:`` is the verb
+        name and the keys are its keyword arguments (ADR-0008).  An
+        ``assign`` without ``ct:`` on a variable with ``codelist:`` checks
+        its values against that codelist.
+
+        Inside a study, a ``ct:`` ID resolves to the class of
         that ID in the study's generated ``codelists.py`` (found from the
         first ``study_config.yaml`` above the spec's folder), so a spec
         step checks the same terms as ``assign(..., ct=<class>)``; an ID
@@ -2223,15 +2241,15 @@ class SharedVerbsMixin:
             ns = copy.copy(ns)
             ns._spec_ct_validate = True
 
-        # ct_codelist IDs resolve to the study's codelists.py classes, as ct=<class> inline.
-        if any(drv.get("ct_codelist") for _, drv in raw_vars):
+        # ct: IDs resolve to the study's codelists.py classes, as ct=<class> inline.
+        if any(drv.get("ct") or codelist for _, drv, codelist in raw_vars):
             from fleet.ct.study_codelists import spec_codelists
 
             codelists = spec_codelists(path)
             if codelists:
                 ns = copy.copy(ns)
                 ns._spec_codelists = codelists
-        for var_name, drv in raw_vars:
+        for var_name, drv, codelist in raw_vars:
             if only is not None and var_name not in only:
                 continue
             if omit is not None and var_name in omit:
@@ -2241,8 +2259,16 @@ class SharedVerbsMixin:
             alg = drv.get("algorithm")
             algo = spec_registry.get_algorithm(standard, str(alg)) if alg else None
             if algo is None:
-                hint = spec_registry.suggest_algorithm(standard, str(alg))
-                suffix = f" Did you mean '{hint}'?" if hint else ""
+                from fleet.tools.migrate_spec import ALGORITHM_RENAMES
+
+                if str(alg) in ALGORITHM_RENAMES:
+                    suffix = (
+                        f" '{alg}' is the pre-ADR-0008 spelling of '{ALGORITHM_RENAMES[str(alg)]}';"
+                        " rewrite the file with `fleet migrate --spec <define.yaml> --write`."
+                    )
+                else:
+                    hint = spec_registry.suggest_algorithm(standard, str(alg))
+                    suffix = f" Did you mean '{hint}'?" if hint else ""
                 if strict:
                     raise SpecError(
                         f"{context}: unknown algorithm '{alg}' for the {standard} "
@@ -2256,6 +2282,7 @@ class SharedVerbsMixin:
                 continue
 
             try:
+                drv = spec_registry.with_codelist(standard, drv, codelist)
                 model = spec_registry.model_for(standard, algo.name)
                 var = model.model_validate({**drv, "target": var_name})
             except Exception as err:
@@ -2314,8 +2341,8 @@ class SharedVerbsMixin:
         columns that violate the CDISC name pattern are skipped.  Verbs
         covered by the spec registry emit real blocks; verbs that are
         not spec-expressible (or whose arguments cannot be serialised,
-        e.g. inline Polars expressions) emit an ``algorithm: callable``
-        stub with a ``# TODO`` comment carrying the verb name and
+        e.g. inline Polars expressions) emit an ``algorithm: derivation``
+        stub with a ``callable:`` placeholder and a ``# TODO`` comment carrying the verb name and
         sources.  Auto-generated by-product columns (e.g. ``--DTF``
         imputation flags) are listed without a derivation.
 
@@ -2331,7 +2358,7 @@ class SharedVerbsMixin:
             predecessor: Name of the upstream dataset this ADaM pipeline
                 was built from (e.g. ``"DM"``).  When given, variables
                 carried through unchanged — metadata-only entries and
-                pure ``algorithm: source`` copies of CDISC-named columns
+                pure ``algorithm: assign`` copies of CDISC-named columns
                 — are emitted with ``origin: Predecessor`` and
                 ``predecessor: '<DATASET>.<SOURCE>'``.  The emitted YAML
                 stays the explicit, reviewable source of truth; Fleet
@@ -2410,7 +2437,9 @@ class SharedVerbsMixin:
                         pred_ds
                         and "origin" not in entry
                         and block
-                        and block.get("algorithm") == "source"
+                        and block.get("algorithm") == "assign"
+                        and block.get("value") is None
+                        and not block.get("ct")
                         and name_pattern.match(source)
                     ):
                         entry["origin"] = "Predecessor"
@@ -2421,10 +2450,10 @@ class SharedVerbsMixin:
                     comment = (
                         f"TODO: verb '{node.verb}' (sources: {srcs}) is not spec-expressible "
                         f"— replace this stub with a registered derivation "
-                        f"(algorithm: callable)."
+                        f"(algorithm: derivation, callable: <name>)."
                     )
                     entry["derivation"] = {
-                        "algorithm": "callable",
+                        "algorithm": "derivation",
                         "callable": f"TODO_{col}",
                     }
                 # status == "byproduct": metadata-only (auto-generated column).

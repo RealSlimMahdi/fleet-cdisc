@@ -12,7 +12,7 @@ caller can optionally pass the resulting ``pl.DataFrame`` to a
 3. **Controlled terminology** — variables declaring a ``codelist:`` are
    verified against the spec's own inline ``codelists:`` items; values
    outside the declared submission values are **errors** (with a decode /
-   ``ct_mapping`` hint when the offending value looks like an unapplied
+   ``ct_map`` hint when the offending value looks like an unapplied
    mapping).
 4. **Labels** — a mapping of ``column → label`` is built from the define so it
    can be attached as report metadata or written to a SAS transport file.
@@ -56,7 +56,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import polars as pl
-import yaml
+
+from fleet.core.define_spec import load_spec_yaml
 
 if TYPE_CHECKING:
     from fleet.validation.models import ValidationResult
@@ -263,7 +264,7 @@ class DatasetChecker:
         self._check_ct = check_ct
 
         path = Path(define_yaml_path)
-        self._data: dict[str, Any] = yaml.safe_load(path.read_text(encoding="utf-8"))
+        self._data: dict[str, Any] = load_spec_yaml(path.read_text(encoding="utf-8"))
 
         if validate_schema and enabled:
             self._validate_schema()
@@ -432,7 +433,7 @@ class DatasetChecker:
         (``codelists[].items[].coded_value``) — a dataset asserting
         conformance to them must actually contain them.  Out-of-codelist
         values are **errors**.  When an offending value matches a decode
-        (or a raw ``ct_mapping`` key from the variable's derivation), the
+        (or a raw ``ct_map`` key from the variable's derivation), the
         message says so — those are almost always unapplied mappings.
         """
         for col_name, var_def in vars_by_name.items():
@@ -456,7 +457,7 @@ class DatasetChecker:
                 for item in items
                 if item.get("decode")
             }
-            ct_mapping: dict[str, Any] = (var_def.get("derivation") or {}).get("ct_mapping") or {}
+            ct_mapping: dict[str, Any] = (var_def.get("derivation") or {}).get("ct_map") or {}
 
             values = [str(v) for v in df[col_name].drop_nulls().unique().to_list() if str(v) != ""]
             invalid = sorted(v for v in values if v not in coded)
@@ -468,7 +469,7 @@ class DatasetChecker:
                 if v in decode_of:
                     hints.append(f"'{v}' is the decode of submission value '{decode_of[v]}'")
                 elif v in ct_mapping:
-                    hints.append(f"'{v}' is a raw ct_mapping key — the mapping was not applied")
+                    hints.append(f"'{v}' is a raw ct_map key — the mapping was not applied")
             hint = f" ({'; '.join(hints)})" if hints else ""
             msg = (
                 f"Column '{col_name}': value(s) {invalid} not in codelist "

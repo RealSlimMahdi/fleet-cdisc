@@ -5,7 +5,7 @@ Covers the §4.3 code→spec path:
 * the emitted YAML validates against the generated define-spec JSON schema;
 * registry-covered verbs emit real ``derivation:`` blocks that re-execute
   to the same frame via ``from_spec()``;
-* non-expressible verbs emit ``algorithm: callable`` stubs with a
+* non-expressible verbs emit ``algorithm: derivation`` stubs with a
   ``# TODO`` comment carrying the verb name and sources;
 * spec-driven pipelines round-trip their validated blocks verbatim;
 * re-derived targets dedupe last-write-wins.
@@ -89,7 +89,7 @@ def dm_pipeline(dm_raw: pl.DataFrame):
 
 class TestDMRoundTrip:
     #: The two DM variables that cannot be expressed in a spec today.
-    STUBS = {"SITEID", "ARMCD"}
+    STUBS = {"ARMCD"}  # SITEID is a string-expression derivation: spec-expressible since ADR-0008
 
     def test_output_validates_against_generated_schema(self, dm_pipeline):
         data = yaml.safe_load(dm_pipeline.to_spec_yaml(dataset="DM"))
@@ -113,26 +113,26 @@ class TestDMRoundTrip:
         data = yaml.safe_load(dm_pipeline.to_spec_yaml(dataset="DM"))
         variables = data["datasets"][0]["variables"]
         derived = [v for v in variables if "derivation" in v]
-        real = [v for v in derived if v["derivation"].get("algorithm") != "callable"]
-        stubs = {v["name"] for v in derived if v["derivation"].get("algorithm") == "callable"}
+        is_stub = lambda v: str(v["derivation"].get("callable", "")).startswith("TODO_")  # noqa: E731
+        real = [v for v in derived if not is_stub(v)]
+        stubs = {v["name"] for v in derived if is_stub(v)}
         assert stubs == self.STUBS
         assert len(real) / len(derived) >= 0.80
 
     def test_stub_comment_carries_verb_and_sources(self, dm_pipeline):
         text = dm_pipeline.to_spec_yaml(dataset="DM")
         assert "# TODO: verb 'case_when' (sources: arm_code)" in text
-        assert "# TODO: verb 'derivation' (sources: site_id)" in text
 
     def test_emitted_blocks_use_registry_spellings(self, dm_pipeline):
         data = yaml.safe_load(dm_pipeline.to_spec_yaml(dataset="DM"))
         by_name = {v["name"]: v.get("derivation") for v in data["datasets"][0]["variables"]}
-        assert by_name["STUDYID"] == {"algorithm": "hardcode_no_ct", "value": "CDISCPILOT01"}
-        assert by_name["USUBJID"] == {"algorithm": "assign_no_ct", "source": "patient_number"}
+        assert by_name["STUDYID"] == {"algorithm": "assign", "value": "CDISCPILOT01"}
+        assert by_name["USUBJID"] == {"algorithm": "assign", "source": "patient_number"}
         assert by_name["SEX"] == {
-            "algorithm": "assign_ct",
+            "algorithm": "assign",
             "source": "sex",
-            "ct_codelist": "C66731",
-            "ct_mapping": {"F": "F", "M": "M"},
+            "ct": "C66731",
+            "ct_map": {"F": "F", "M": "M"},
         }
         assert by_name["RFSTDTC"] == {"algorithm": "date", "source": "first_dose_date"}
 
@@ -154,9 +154,9 @@ class TestSpecDrivenRoundTrip:
                         {
                             "name": "ADY",
                             "derivation": {
-                                "algorithm": "study_day",
-                                "analysis_date": "ADT",
-                                "reference_date": "TRTSDT",
+                                "algorithm": "duration",
+                                "end": "ADT",
+                                "start": "TRTSDT",
                             },
                         },
                         {
@@ -182,9 +182,9 @@ class TestSpecDrivenRoundTrip:
         data = yaml.safe_load(ns.to_spec_yaml(dataset="ADVS"))
         by_name = {v["name"]: v.get("derivation") for v in data["datasets"][0]["variables"]}
         assert by_name["ADY"] == {
-            "algorithm": "study_day",
-            "analysis_date": "ADT",
-            "reference_date": "TRTSDT",
+            "algorithm": "duration",
+            "end": "ADT",
+            "start": "TRTSDT",
         }
         assert by_name["CHG"] == {"algorithm": "chg", "aval": "AVAL", "base": "BASE"}
 
@@ -208,7 +208,7 @@ class TestSpecDrivenRoundTrip:
         ns = df.adam.derivation(RTCOL)
         data = yaml.safe_load(ns.to_spec_yaml(dataset="ADSL"))
         (var,) = [v for v in data["datasets"][0]["variables"] if v["name"] == "RTCOL"]
-        assert var["derivation"]["algorithm"] == "callable"
+        assert var["derivation"]["algorithm"] == "derivation"
         assert var["derivation"]["callable"].endswith("RTCOL")
 
 
@@ -247,11 +247,11 @@ class TestAdamInlineRoundTrip:
         assert by_name["ABLFL"] == {
             "algorithm": "flag",
             "criteria": "pl.col('vsdy') <= 0",
-            "groups": ["USUBJID", "PARAMCD"],
+            "by": ["USUBJID", "PARAMCD"],
         }
         assert by_name["BASE"] == {
             "algorithm": "baseline",
-            "groups": ["USUBJID", "PARAMCD"],
+            "by": ["USUBJID", "PARAMCD"],
         }
         assert by_name["CHG"] == {"algorithm": "chg"}
         assert by_name["PCHG"] == {"algorithm": "pchg"}
@@ -284,7 +284,7 @@ class TestDedupAndEdgeCases:
         data = yaml.safe_load(ns.to_spec_yaml(dataset="DM"))
         cols = [v for v in data["datasets"][0]["variables"] if v["name"] == "COL"]
         assert len(cols) == 1
-        assert cols[0]["derivation"] == {"algorithm": "assign_no_ct", "source": "b"}
+        assert cols[0]["derivation"] == {"algorithm": "assign", "source": "b"}
 
     def test_dropped_columns_are_not_emitted(self):
         df = pl.from_repr("""\

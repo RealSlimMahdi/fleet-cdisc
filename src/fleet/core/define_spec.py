@@ -13,6 +13,7 @@ is interpreted in exactly one place.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -139,6 +140,51 @@ class DefineSpec(BaseModel):
         raise DerivationError(f"Dataset '{dataset}' not found in define.yaml. Available: {names}")
 
 
+class SpecYamlLoader(yaml.SafeLoader):
+    """``yaml.SafeLoader`` with YAML 1.2 booleans: only ``true`` and ``false``.
+
+    PyYAML follows YAML 1.1, where a bare ``on``, ``off``, ``yes`` or ``no``
+    is a boolean.  A define.yaml names the join key of ``merge`` with
+    ``on:``, so that key must stay a string (#87).
+    """
+
+
+SpecYamlLoader.add_implicit_resolver(
+    "tag:yaml.org,2002:bool",
+    re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$"),
+    list("tTfF"),
+)
+# Replace the YAML 1.1 resolver for every first character it was registered on.
+for _first in list("yYnNoOtTfF"):
+    SpecYamlLoader.yaml_implicit_resolvers[_first] = [
+        (tag, regexp)
+        for tag, regexp in SpecYamlLoader.yaml_implicit_resolvers.get(_first, [])
+        if tag != "tag:yaml.org,2002:bool"
+        or regexp.pattern == r"^(?:true|True|TRUE|false|False|FALSE)$"
+    ]
+
+
+def load_spec_yaml(text: str) -> Any:
+    """Parse define.yaml text with :class:`SpecYamlLoader`.
+
+    Args:
+        text: The YAML document.
+
+    Returns:
+        The parsed document (a mapping for a define.yaml), or ``None`` for
+        an empty document.
+
+    Examples:
+        The ``on:`` key of a merge stays a string::
+
+            from fleet.core.define_spec import load_spec_yaml
+
+            block = load_spec_yaml("algorithm: merge\non: USUBJID\n")
+            assert block == {"algorithm": "merge", "on": "USUBJID"}
+    """
+    return yaml.load(text, Loader=SpecYamlLoader)  # noqa: S506 — SafeLoader subclass
+
+
 def load_define_spec(path: str | Path) -> DefineSpec:
     """Load and validate a define.yaml / simplified spec file.
 
@@ -162,7 +208,7 @@ def load_define_spec(path: str | Path) -> DefineSpec:
     """
     p = Path(path)
     try:
-        data = yaml.safe_load(p.read_text(encoding="utf-8"))
+        data = load_spec_yaml(p.read_text(encoding="utf-8"))
     except yaml.YAMLError as err:
         raise SpecError(f"{p}: invalid YAML: {err}") from err
     if not isinstance(data, dict):

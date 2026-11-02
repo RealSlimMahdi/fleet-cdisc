@@ -575,21 +575,27 @@ generation, pipeline execution, and post-dataset checks.
 
 ### Derivation algorithms
 
-Every spec-executable algorithm is declared once in the central registry \
-(`fleet.core.spec_registry`), which drives the `from_spec` executor, the strict \
-discriminated-union validation models, and the JSON schema. Spec algorithm ids are \
-stable YAML vocabulary and resolve to canonical verbs (e.g. `assign_no_ct` → `assign`, \
-`count` → `count_events`).
+Every spec-executable verb is declared once in the central registry \
+(`fleet.core.spec_registry`), which derives the `from_spec` executor, the strict \
+per-verb validation models and the JSON schema from the verb signature. The verb is the \
+algorithm (ADR-0008): the `algorithm:` value is the verb name and the YAML keys are its \
+keyword arguments. Rule: remove `.verb("TARGET", ` and the last `)`; what stays is the block. \
+A Polars expression is an expression string, a frame is the name of a pinned dataset, a \
+codelist class is its id, and `else_` is written `else`.
 
-- `assigned` → `.assign(target, value=...)`
-- `source` → `.assign(target, source=...)`
-- `assign_ct` → `.assign(target, source=..., ct=..., ct_map=...)`
-- `derivation` → `.derivation(target, expression=...)`
-- `callable` → `.derivation(drv_obj)` (dispatches `@derivation`-decorated function by name or dotted path)
-- `first_date` / `last_date` → `.first_date(target, from_dataset=..., date_col=..., where=...)`
-- `count_events` → `.count_events(target, from_dataset=..., where=...)`
-- `duration` → `.duration(target, start=..., end=...)`
-- `flag` → `.flag(target, criteria=...)`
+- `.assign("DOMAIN", value="DM")` → `algorithm: assign`, `value: DM`
+- `.assign("SEX", source="sex", ct=SEX, ct_map={...})` → `algorithm: assign`, `source: sex`, \
+`ct: C66731`, `ct_map: {...}` (`ct:` defaults to the variable's `codelist:`)
+- `.derivation("AVAL", expression="pl.col('x') * 2")` → `algorithm: derivation`, `expression: ...`
+- `.derivation(AGEGR1)` → `algorithm: derivation`, `callable: AGEGR1` (name or dotted path)
+- `.first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")` → `from_dataset: EX` (a pin)
+- `.case_when("ARMCD", when=[...], else_="X")` → `when: [...]`, `else: X`
+- `.duration("ADY", start="TRTSDT", end="ASTDT")` → `start: TRTSDT`, `end: ASTDT`
+- `.seq("AESEQ", by=["USUBJID"])` → `by: [USUBJID]`
+
+A spec written in the pre-alpha spec vocabulary (`assign_ct`, `hardcode_no_ct`, \
+`if_then_else`, `ct_codelist`, …) fails at load; `fleet migrate --spec <define.yaml> --write` \
+rewrites it (`fleet_spec_version: 2`).
 
 Full machine-readable list: `spec_registry.algorithm_names("adam"|"sdtm")`; the \
 inline-only allowlist is `spec_registry.SPEC_UNSUPPORTED`. `from_spec(strict=True, \
@@ -624,7 +630,7 @@ gen = DefineXMLGenerator(Path("examples/cdiscpilot01/adam/define.yaml"))
 gen.generate(Path("outputs/cdiscpilot01/define_adam.xml"))
 ```
 
-New spec keys: `fleet_spec_version: 1` (dialect pin), `derivations_module:` \
+New spec keys: `fleet_spec_version: 2` (dialect pin), `derivations_module:` \
 (auto-import for `callable:`), `output_format:` (parquet/json/xpt), `value_level:` \
 (value-level metadata), and `ct: {validate: true, file: ...}` (opt into CT validation).\
 """
@@ -679,9 +685,10 @@ string (e.g. `"C66731"`). Prefer the class form for IDE auto-completion and read
 When raw data already matches the standard, `ct_map` can be omitted (values are validated and \
 passed through).
 
-The spec path checks the same terms: inside a study, `from_spec` resolves a `ct_codelist:` ID \
-to the class of that ID in the study's `codelists.py`, so `algorithm: assign_ct` with \
-`ct_codelist: C66769` warns exactly like `.assign("AESEV", source="ae_severity", ct=AESEV)`. \
+The spec path checks the same terms: inside a study, `from_spec` resolves a `ct:` ID (or the \
+variable's `codelist:`) to the class of that ID in the study's `codelists.py`, so \
+`algorithm: assign` with `source: ae_severity` on a variable with `codelist: C66769` warns \
+exactly like `.assign("AESEV", source="ae_severity", ct=AESEV)`. \
 A `codelists.py` that disagrees with `ct.package` or the define.yaml files warns once in \
 `from_spec` and fails `fleet check`.
 

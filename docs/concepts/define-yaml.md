@@ -22,7 +22,7 @@ fragments that reference files or study data not present in the test harness).
 
 ```yaml
 # yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json
-fleet_spec_version: 1
+fleet_spec_version: 2
 study:
   id:             CDISCPILOT01
   standard:       ADAMIG
@@ -54,7 +54,7 @@ datasets:
 The spec is validated against the bundled JSON Schema (`define_spec_schema.json`),
 which is **generated from the algorithm registry** — its `algorithm:` enum and
 per-algorithm required fields always match what `from_spec()` actually executes
-(a CI sync test enforces this). The top-level `fleet_spec_version: 1` pins the
+(a CI sync test enforces this). The top-level `fleet_spec_version: 2` pins the
 spec dialect; a future incompatible version is rejected with a clear message
 rather than silently misinterpreted.
 
@@ -69,37 +69,44 @@ extension reports every schema error twice, so use one or the other.
 
 ## Derivation Algorithms
 
-Every spec-executable algorithm is declared once in the central registry
-(`fleet.core.spec_registry`), which drives the `from_spec` executor, the
-discriminated-union validation models, **and** the JSON schema.
+Every spec-executable verb is declared once in the central registry
+(`fleet.core.spec_registry`), which derives the `from_spec` executor, the
+per-verb validation models **and** the JSON schema from the verb signature.
 
-**Two vocabularies, one mapping.** The spec dialect deliberately keeps
-define-spec terminology (`assign_ct`, `hardcode_no_ct`, …) — the language a
-data-standards reviewer reads in a metadata document — while the runtime API
-keeps one verb per intent (`assign`). The two are not competing spellings:
-every algorithm is declared **with** its runtime verb, the mapping below is
-machine-checkable (`fleet.spec_coverage()`), and a CI test fails if they
-drift. Splitting `assign_ct` / `assign_no_ct` in the spec is also what makes
-validation strict — each algorithm gets its own required-field model, so a
-CT derivation missing its codelist is a load-time error, not a runtime
-surprise. A representative subset:
+**The verb is the algorithm** (ADR-0008). A `derivation:` block is the verb
+call: the `algorithm:` value is the verb name and the keys are its keyword
+arguments. The rule for the programmer: remove `.verb("TARGET", ` and the
+last `)`. What stays is the YAML block. Four conversions apply, because YAML
+has no Python objects: a Polars expression is an expression string, a frame is
+the name of a pinned dataset, a codelist class is its id, and a `@derivation`
+object is its registered name or dotted path. One keyword changes its
+spelling: `else_` is written `else`.
 
-| `algorithm`         | Namespace verb                                                  | What it does                    |
-| ------------------- | --------------------------------------------------------------- | ------------------------------- |
-| `assigned`          | `.assign(target, value=...)`                                    | Constant literal for all rows   |
-| `source`            | `.assign(target, source=...)`                                   | Copy column from predecessor    |
-| `assign_ct`         | `.assign(target, source=..., ct=..., ct_map=...)`               | Copy + CT validate/decode       |
-| `derivation`        | `.derivation(target, expression=...)`                           | Arbitrary Polars expression     |
-| `first_date`        | `.first_date(target, from_dataset=..., date_col=..., where=...)`| Earliest event date per subject |
-| `last_date`         | `.last_date(...)`                                               | Latest event date per subject   |
-| `count_events`      | `.count_events(target, from_dataset=..., where=...)`            | Integer event count             |
-| `duration`          | `.duration(target, start=..., end=...)`                        | Integer day count / elapsed time |
-| `flag`              | `.flag(target, criteria=...)`                                   | `"Y"` / `null` flag             |
-| `baseline` / `chg` / `pchg` | `.baseline(...)` / `.chg(...)` / `.pchg(...)`           | Baseline value & change         |
-| `callable`          | `.derivation(drv_obj)`                                          | Study-specific escape hatch     |
+| Inline call                                                   | Spec block                                                   |
+| ------------------------------------------------------------- | ------------------------------------------------------------ |
+| `.assign("DOMAIN", value="DM")`                               | `algorithm: assign`, `value: DM`                             |
+| `.assign("SEX", source="sex", ct=SEX, ct_map={...})`          | `algorithm: assign`, `source: sex`, `ct_map: {...}`          |
+| `.derivation("AVAL", expression="pl.col('vs') * 2")`          | `algorithm: derivation`, `expression: "pl.col('vs') * 2"`    |
+| `.derivation(AGEGR1)`                                         | `algorithm: derivation`, `callable: AGEGR1`                  |
+| `.first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")`  | `algorithm: first_date`, `from_dataset: EX`, `date_col: ...` |
+| `.case_when("ARMCD", when=[...], else_="X")`                  | `algorithm: case_when`, `when: [...]`, `else: X`             |
+| `.duration("ADY", start="TRTSDT", end="ASTDT")`               | `algorithm: duration`, `start: TRTSDT`, `end: ASTDT`         |
+| `.seq("AESEQ", by=["USUBJID"])`                               | `algorithm: seq`, `by: [USUBJID]`                            |
+
+The SEX block gives no `ct:`: it defaults to the `codelist:` of the variable,
+so the id is written once. A `ct_map` on a variable with no `codelist:` and no
+`ct:` is a load-time error, because a mapping needs a codelist. Validation is
+strict in the other direction too: `source` and `value` exclude each other on
+`assign`, a `derivation` needs exactly one of `expression` and `callable`, and
+a misspelled key is rejected.
+
+A spec written before ADR-0008 (`assign_ct`, `hardcode_no_ct`, `if_then_else`,
+`ct_codelist`, `else_value`, `groups`, …) fails at load with a message that
+names the fix: `fleet migrate --spec <define.yaml> --write` rewrites the file
+line by line and sets `fleet_spec_version: 2`.
 
 The complete, always-current list is one call away (and `df.sdtm.verbs()` /
-`df.adam.verbs()` gives the runtime-verb counterpart):
+`df.adam.verbs()` gives the inline counterpart):
 
 ```python
 import fleet
@@ -110,9 +117,9 @@ print(sorted(fleet.spec_algorithms("sdtm")))
 
 ### The verb-coverage matrix
 
-Not every inline verb is spec-expressible. `fleet.spec_coverage()` returns the
-full algorithm ↔ verb ↔ required-fields mapping, and `fleet.SPEC_UNSUPPORTED`
-is the machine-checked allowlist of verbs that have **no** spec algorithm
+Not every inline verb is spec-expressible. `fleet.spec_coverage()` returns
+the verb ↔ YAML keys ↔ required-keys matrix, and `fleet.SPEC_UNSUPPORTED`
+is the machine-checked allowlist of verbs that have **no** spec form
 (e.g. `transform`, `derive_summary_records`, the TDD `add_*` verbs) — so
 "which subset is spec-safe" has a definite answer instead of a guess:
 
@@ -139,7 +146,7 @@ on the callable's `kind`:
 ```yaml
 - name: AGEGR1
   derivation:
-    algorithm: callable
+    algorithm: derivation
     callable: examples.cdiscpilot01.adam.derivations.AGEGR1
 ```
 
@@ -148,7 +155,7 @@ Or use the registered short name (if the derivations module was imported):
 ```yaml
 - name: AGEGR1
   derivation:
-    callable: AGEGR1 # algorithm: callable injected automatically
+    callable: AGEGR1 # algorithm: derivation injected automatically
 ```
 
 ### Derivations folder convention
@@ -163,7 +170,7 @@ programs/derivations/       # <programs dir from study_config.yaml>
     BMI.py
 ```
 
-The convention is **shared across standards** — `algorithm: callable` works
+The convention is **shared across standards** — a `callable:` block works
 identically in SDTM and ADaM specs, because both dispatch through the same
 core registry and resolver. The resolver itself does no folder scanning: a
 callable is found either (a) by short name, when its module has been imported
@@ -203,7 +210,7 @@ spec, `from_dataset:` names a **pinned dataset** (attach it with `.pin("EX", ex)
 before calling `from_spec`); the runtime resolves the name to the pinned frame.
 
 ```yaml
-fleet_spec_version: 1
+fleet_spec_version: 2
 study:
   id: CDISCPILOT01
   standard: ADAMIG
@@ -329,7 +336,7 @@ reviewer-facing defects such as a `MethodOID` on a non-Derived variable or
 API markup inside `TranslatedText`; `validate_xml=False` bypasses both.
 Both generators honour the same new spec keys:
 
-- **`fleet_spec_version: 1`** — spec dialect version (checked on load).
+- **`fleet_spec_version: 2`** — spec dialect version (checked on load; 2 is the verb vocabulary of ADR-0008, `fleet migrate --spec` rewrites a version 1 file).
 - **`derivations_module:`** — a dotted module that `from_spec` imports itself, so
   `callable:` derivations register without a manual import.
 - **`output_format:`** — per-dataset or spec-level export format (`parquet`,
@@ -351,15 +358,16 @@ Variables can reference codelists declared in the `codelists` block:
   type: text
   codelist: C66731 # references the oid in codelists[]
   derivation:
-    algorithm: source
+    algorithm: assign
     source: SEX
 ```
 
 ### Controlled terminology in the spec path
 
-A spec step and its inline call check the same terms. Inside a study, a
-`ct_codelist:` ID resolves to the class of that ID in the study's
-`codelists.py`, the module `fleet init ct` generates. So this entry:
+A spec step and its inline call check the same terms. Inside a study, the
+`ct:` ID of an `assign`, or the `codelist:` of its variable when `ct:` is
+absent, resolves to the class of that ID in the study's `codelists.py`, the
+module `fleet init ct` generates. So this entry:
 
 <!-- docs:no-run -->
 
@@ -367,9 +375,8 @@ A spec step and its inline call check the same terms. Inside a study, a
 - name: AESEV
   codelist: C66769
   derivation:
-    algorithm: assign_ct
+    algorithm: assign
     source: ae_severity
-    ct_codelist: C66769
 ```
 
 runs as `.assign("AESEV", source="ae_severity", ct=AESEV)` with the `AESEV`
@@ -381,7 +388,7 @@ notations:
   `define.yaml`, never the working directory.
 - When the CT loaded in `fleet.get_validator()` holds the codelist (for
   example through `ct: file:`, below), it checks the values in both
-  notations. A literal (`hardcode_ct`) is checked against the loaded CT only.
+  notations. A constant (`assign` with `value:`) is checked against the loaded CT only.
 - Outside a study, before `fleet init ct`, or for an ID without a class,
   only the loaded CT can check the values.
 
@@ -392,7 +399,7 @@ against the study:
 | --- | --- | --- |
 | Package | The `__ct_package__` marker of the file (for older files, the package in each class's `_cdisc_url`) is not `ct.package` in `study_config.yaml`. | `fleet init ct --force` |
 | Mixed packages | The classes name different CT packages. | `fleet init ct --force` |
-| Missing codelist | A `codelist:` or `ct_codelist:` ID of a `define.yaml` has no class in the file. | `fleet add-ct --domains AE` (SDTM), `fleet init ct --force` (ADaM) |
+| Missing codelist | A `codelist:` or `ct:` ID of a `define.yaml` has no class in the file. | `fleet add-ct --domains AE` (SDTM), `fleet init ct --force` (ADaM) |
 | Missing file | The `define.yaml` files reference codelists, but the file does not exist. | `fleet init ct` |
 
 `from_spec` warns once per process about all but the missing codelist, and
@@ -402,10 +409,10 @@ package gives the package warning too. `fleet check` fails on all four, and
 
 ### Opting the spec into CT validation
 
-Without a `ct:` block, an `assign_ct` without `ct_mapping` checks its values
-(pass-through), and one with `ct_mapping` maps them without a check. Add a
-top-level `ct:` block to check every `assign_ct` / `hardcode_ct` derivation
-of the spec, mapped ones included; out-of-codelist values emit a warning
+Without a top-level `ct:` block, an `assign` with a codelist and without
+`ct_map` checks its values (pass-through), and one with `ct_map` maps them
+without a check. Add a top-level `ct:` block to check every `assign` with a
+codelist, mapped ones included; out-of-codelist values emit a warning
 naming the dataset, variable, and codelist:
 
 <!-- docs:no-run -->
@@ -420,9 +427,8 @@ datasets:
       - name: SEX
         codelist: C66731
         derivation:
-          algorithm: assign_ct
+          algorithm: assign
           source: sex
-          ct_codelist: C66731
 ```
 
 When datasets are checked with `DatasetChecker(spec, check_ct=True)`, the values
@@ -454,29 +460,30 @@ What it catches:
 - Wrong field types (e.g. a list where a string is expected)
 
 Errors are wrapped in a `SpecError` that names **file → dataset → variable**.
-Here is the real message for a typo'd field (`ct_codelst` instead of
-`ct_codelist`):
+Here is the real message for a typo'd key (`ct_mp` instead of `ct_map`):
 
 <!-- docs:no-run -->
 
 ```python
 # derivation block with a typo:
 #   - name: SEX
+#     codelist: C66731
 #     derivation:
-#       algorithm: assign_ct
+#       algorithm: assign
 #       source: sex
-#       ct_codelst: C66731        # ← typo: should be ct_codelist
+#       ct_mp: {"F": "F"}         # ← typo: should be ct_map
 
 dm = raw_df.sdtm.from_spec("specs/define.yaml", dataset="DM")
 # fleet.core.exceptions.SpecError:
-# specs/define.yaml → dataset DM → variable SEX: 1 validation error for SDTMAssignCtSpec
-# ct_codelst
-#   Extra inputs are not permitted [type=extra_forbidden, input_value='C66731', input_type=str]
+# specs/define.yaml → dataset DM → variable SEX: 1 validation error for SDTMAssignSpec
+# ct_mp
+#   Extra inputs are not permitted [type=extra_forbidden, input_value={'F': 'F'}, input_type=dict]
 ```
 
-(Note: a well-formed `assign_ct` *without* any codelist does **not** error — it
-copies the value through and emits a `UserWarning` that CT could not be validated.
-`assign` never fabricates a missing-field error for an optional field.)
+(Note: an `assign` with a codelist id that no loaded CT holds does **not**
+error — it copies the value through and emits a `UserWarning` that CT could
+not be validated. `assign` never fabricates a missing-field error for an
+optional key.)
 
 ### Layer 2 — JSON Schema + business rule validation (`DefineValidator`)
 
@@ -509,7 +516,6 @@ for issue in validator.issues:
 # Example output:
 # [ERROR]   SCHEMA_001 @ datasets.0.variables.2: 'type' is a required property
 # [ERROR]   BR03 @ datasets.0.variables.5.codelist: CodeListRef 'C99999' not found in codelists[]
-# [WARNING] ALG02 @ datasets.0.variables.3: assign_ct should have ct_codelist declared
 ```
 
 What it catches:
@@ -521,10 +527,9 @@ What it catches:
 | `BR02`       | All `ItemRef` references resolve to declared variables               |
 | `BR03`       | All `codelist:` references resolve to codelists declared in the spec |
 | `BR04`       | All `MethodDef` references resolve                                   |
-| `ALG01`      | `assign_no_ct` has `source_variable`                                 |
-| `ALG02`      | `assign_ct` has both `source_variable` and `ct_codelist`             |
-| `ALG03`      | `hardcode_*` has `constant_value`                                    |
-| `ALG05`      | `merge` has `merge_dataset` and `merge_key`                          |
+
+The derivation blocks themselves are checked by layer 1: the verb's model
+knows the required keys, so there are no separate per-algorithm rules.
 
 `validator.issues` is a list of `DefineIssue` dataclasses with fields `severity`, `location`,
 `message`, and `rule`. `validator.has_errors()` returns `True` when any `"error"` severity
@@ -589,10 +594,10 @@ How the Origin **description** renders, per origin type:
 
 - **`Predecessor`** requires `predecessor: DATASET.VARIABLE` (schema-enforced);
   the define renders `Predecessor: DM.COUNTRY`. In an ADaM spec, a variable
-  carried with `algorithm: source` but still marked `Collected` triggers a
-  generation-time warning suggesting the Predecessor form. When freezing an
-  inline pipeline, `to_spec_yaml(dataset="ADSL", predecessor="DM")` pre-fills
-  these entries for carry-through columns and pure `source` copies — the
+  carried with `algorithm: assign` and `source:` but still marked `Collected`
+  triggers a generation-time warning suggesting the Predecessor form. When
+  freezing an inline pipeline, `to_spec_yaml(dataset="ADSL", predecessor="DM")`
+  pre-fills these entries for carry-through columns and pure copies — the
   emitted YAML stays the explicit, reviewable source of truth.
 - **`Derived`** describes the derivation in its `MethodDef` (or in the Origin
   description via `comment:` when method enrichment is off).
@@ -649,9 +654,9 @@ variables:
     origin: Collected
     crf_pages: "8" # single page
     derivation:
-      algorithm: assign_ct
+      algorithm: assign
       source: sex
-      ct_codelist: C66731
+      ct: C66731
 
   - name: RACE
     label: Race

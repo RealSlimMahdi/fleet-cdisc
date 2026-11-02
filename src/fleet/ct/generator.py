@@ -81,7 +81,7 @@ def extract_concept_ids(define_path: str | Path) -> set[str]:
     """Extract NCI concept IDs from a ``define.yaml`` spec file.
 
     Scans the ``codelists`` section (``oid`` fields), per-variable
-    ``codelist`` references, and per-variable ``derivation.ct_codelist``
+    ``codelist`` references, and per-variable ``derivation.ct``
     references.  Only IDs matching the ``C\\d+`` pattern are returned.
 
     Args:
@@ -100,7 +100,7 @@ def codelist_references(define_path: str | Path) -> list[tuple[str, str, str]]:
     """List the NCI codelist each variable of a ``define.yaml`` references.
 
     Reads the variable-level ``codelist`` and the derivation-level
-    ``ct_codelist``; only IDs matching the ``C\\d+`` pattern count.
+    ``ct``; only IDs matching the ``C\\d+`` pattern count.
 
     Args:
         define_path: Path to a ``define.yaml`` file.
@@ -127,7 +127,7 @@ def _references(spec: dict[str, Any]) -> Iterator[tuple[str, str, str]]:
     for ds in spec.get("datasets") or []:
         for var in ds.get("variables") or []:
             derivation = var.get("derivation") or {}
-            for ref in (var.get("codelist"), derivation.get("ct_codelist")):
+            for ref in (var.get("codelist"), derivation.get("ct")):
                 if isinstance(ref, str) and _NCI_ID.match(ref):
                     yield str(ds.get("name", "")), str(var.get("name", "")), ref
 

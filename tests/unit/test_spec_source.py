@@ -16,10 +16,10 @@ PROGRAM = """
 import polars as pl
 
 ae = (
-    ae_raw.sdtm.hardcode_no_ct("DOMAIN", value="AE")
+    ae_raw.sdtm.assign("DOMAIN", value="AE")
     .assign("STUDYID", source="study_id")
     .derivation("USUBJID", expression=pl.concat_str([pl.col("STUDY"), pl.col("SUBJ")]))
-    .assign_ct("AESEV", source="severity", ct_codelist="C66769", ct_mapping={"Yes": "Y"})
+    .assign("AESEV", source="severity", ct="C66769", ct_map={"Yes": "Y"})
     .export_supp("AESPID")
     .frobnicate("AEFROB")
     .to_frame()
@@ -41,10 +41,10 @@ def test_rows_follow_call_order_and_map_through_the_registry():
         "CHG",
     ]
     by = {r["name"]: r for r in rows}
-    assert by["DOMAIN"]["block"] == {"algorithm": "hardcode_no_ct", "value": "AE"}
+    assert by["DOMAIN"]["block"] == {"algorithm": "assign", "value": "AE"}
     assert by["DOMAIN"]["line"] == 5
-    assert by["STUDYID"]["block"] == {"algorithm": "assign_no_ct", "source": "study_id"}
-    assert by["AESEV"]["block"]["ct_mapping"] == {"Yes": "Y"}
+    assert by["STUDYID"]["block"] == {"algorithm": "assign", "source": "study_id"}
+    assert by["AESEV"]["block"]["ct_map"] == {"Yes": "Y"}
     assert by["CHG"]["standard"] == "adam"
     # Params at their registry default stay implicit, as in to_spec_yaml().
     assert by["CHG"]["block"] == {"algorithm": "chg", "aval": "AVALX", "base": "BASEX"}
@@ -105,10 +105,10 @@ def test_study_derivation_objects_become_callable_blocks():
     by = {r["name"]: r for r in rows}
     assert by["TRTDURD"]["status"] == "ok"
     assert by["TRTDURD"]["block"] == {
-        "algorithm": "callable",
+        "algorithm": "derivation",
         "callable": "programs.derivations.TRTDURD",
     }
-    assert by["BMI"]["block"] == {"algorithm": "callable", "callable": "programs.derivations.BMI"}
+    assert by["BMI"]["block"] == {"algorithm": "derivation", "callable": "programs.derivations.BMI"}
     assert by["add_pop_flags"]["status"] == "stub"
     assert "runtime" in by["add_pop_flags"]["reason"]
     assert by["AGEGR1"]["status"] == "stub"
@@ -123,8 +123,8 @@ def test_program_from_spec_imports_study_callables(tmp_path):
         "study:\n  id: X\n  standard: ADAMIG\nderivations_module: programs.derivations\n"
         "datasets:\n  - name: ADSL\n    variables:\n"
         "      - name: AGEGR1\n        derivation:\n          callable: AGEGR1\n"
-        "          algorithm: callable\n"
-        "      - name: BMI\n        derivation:\n          algorithm: callable\n"
+        "          algorithm: derivation\n"
+        "      - name: BMI\n        derivation:\n          algorithm: derivation\n"
         "          callable: study.derivs.BMI\n",
         encoding="utf-8",
     )
@@ -135,7 +135,7 @@ def test_program_from_spec_imports_study_callables(tmp_path):
 
     spec.write_text(
         "study:\n  id: X\n  standard: ADAMIG\ndatasets:\n  - name: ADSL\n    variables:\n"
-        "      - name: AGEGR1\n        derivation:\n          algorithm: callable\n"
+        "      - name: AGEGR1\n        derivation:\n          algorithm: derivation\n"
         "          callable: AGEGR1\n",
         encoding="utf-8",
     )
@@ -156,8 +156,8 @@ def test_program_from_spec_pins_cross_domain_inputs(tmp_path):
         "study:\n  id: X\n  standard: ADAMIG\n"
         "datasets:\n  - name: ADAE\n    inputs:\n      - name: AE\n      - name: ADSL\n"
         "    variables:\n      - name: TRTSDT\n        derivation:\n"
-        "          algorithm: lookup\n          dataset: ADSL\n          'on': [USUBJID]\n"
-        "          target_cols: [TRTSDT]\n",
+        "          algorithm: merge\n          dataset: ADSL\n          on: [USUBJID]\n"
+        "          keep: [TRTSDT]\n",
         encoding="utf-8",
     )
     code = program_from_spec(spec, "ADAE")
@@ -171,3 +171,15 @@ def test_program_from_spec_pins_cross_domain_inputs(tmp_path):
 def test_program_from_spec_unknown_dataset_raises():
     with pytest.raises(ValueError, match="Known: "):
         program_from_spec(SDTM_SPEC, "NOPE")
+
+
+def test_program_from_spec_applies_the_variable_codelist(tmp_path):
+    """The generated program carries the ct= that from_spec fills from codelist: (ADR-0008)."""
+    spec = tmp_path / "define.yaml"
+    spec.write_text(
+        "study:\n  id: X\n  standard: SDTMIG\ndatasets:\n  - name: DM\n    variables:\n"
+        "      - name: SEX\n        codelist: C66731\n        derivation:\n"
+        "          algorithm: assign\n          source: sex\n",
+        encoding="utf-8",
+    )
+    assert "    .assign('SEX', source='sex', ct='C66731')\n" in program_from_spec(spec, "DM")

@@ -9,11 +9,10 @@ Business Rules:
     BR03: All CodeListRef references must resolve to CodeLists
     BR04: MethodDef references must resolve
 
-Algorithm Validation Rules:
-    ALG01: assign_no_ct requires source_variable
-    ALG02: assign_ct requires source_variable and ct_codelist
-    ALG03: hardcode_* requires constant_value
-    ALG05: merge requires merge_dataset and merge_key
+The derivation blocks themselves are validated by the spec registry models
+(``fleet.core.spec_registry``) when ``from_spec`` loads the file: the
+algorithm is the verb and its keys are the verb's keyword arguments
+(ADR-0008).
 """
 
 import json
@@ -24,10 +23,9 @@ from typing import Any
 import jsonschema
 import yaml
 
-_DEFAULT_SCHEMA = Path(__file__).parent / "schemas" / "define_xml_2_1_schema.json"
+from fleet.core.define_spec import load_spec_yaml
 
-# Fleet's verb field name in the YAML spec
-_ALGO_KEY = "fleet_algorithm"
+_DEFAULT_SCHEMA = Path(__file__).parent / "schemas" / "define_xml_2_1_schema.json"
 
 
 @dataclass
@@ -50,7 +48,7 @@ class DefineValidator:
         """Validate a Define-XML YAML file. Returns True if no errors."""
         self.issues = []
         try:
-            data = yaml.safe_load(Path(define_yaml_path).read_text())
+            data = load_spec_yaml(Path(define_yaml_path).read_text())
         except yaml.YAMLError as exc:
             self.issues.append(DefineIssue("error", "root", f"YAML parse error: {exc}", "YAML_001"))
             return False
@@ -58,7 +56,6 @@ class DefineValidator:
         self._validate_schema(data)
         self._validate_business_rules(data)
         self._validate_cross_references(data)
-        self._validate_algorithms(data)
         self._validate_consistency(data)
         return not self.has_errors()
 
@@ -167,67 +164,6 @@ class DefineValidator:
                         "CR02",
                     )
                 )
-
-    # ------------------------------------------------------------------ #
-    # Algorithm completeness                                               #
-    # ------------------------------------------------------------------ #
-
-    def _validate_algorithms(self, data: dict[str, Any]) -> None:
-        meta = data.get("metadata_version", {})
-
-        for item in meta.get("item_defs", []):
-            algo = item.get(_ALGO_KEY, {})
-            if not isinstance(algo, dict):
-                continue
-            algo_type = algo.get("algorithm")
-            if not algo_type:
-                continue
-
-            oid = item.get("oid", "?")
-            name = item.get("name", "?")
-            loc = f"item_defs[oid={oid}].{_ALGO_KEY}"
-
-            if algo_type == "assign_no_ct" and not algo.get("source_variable"):
-                self.issues.append(
-                    DefineIssue(
-                        "error", loc, f"'{name}': assign_no_ct requires source_variable.", "ALG01"
-                    )
-                )
-
-            if algo_type == "assign_ct":
-                if not algo.get("source_variable"):
-                    self.issues.append(
-                        DefineIssue(
-                            "error", loc, f"'{name}': assign_ct requires source_variable.", "ALG02A"
-                        )
-                    )
-                if not algo.get("ct_codelist"):
-                    self.issues.append(
-                        DefineIssue(
-                            "error", loc, f"'{name}': assign_ct requires ct_codelist.", "ALG02B"
-                        )
-                    )
-
-            if algo_type in ("hardcode_no_ct", "hardcode_ct", "dataset_level") and not algo.get(
-                "constant_value"
-            ):
-                self.issues.append(
-                    DefineIssue(
-                        "error", loc, f"'{name}': {algo_type} requires constant_value.", "ALG03"
-                    )
-                )
-
-            if algo_type == "merge":
-                if not algo.get("merge_dataset"):
-                    self.issues.append(
-                        DefineIssue(
-                            "error", loc, f"'{name}': merge requires merge_dataset.", "ALG05A"
-                        )
-                    )
-                if not algo.get("merge_key"):
-                    self.issues.append(
-                        DefineIssue("error", loc, f"'{name}': merge requires merge_key.", "ALG05B")
-                    )
 
     # ------------------------------------------------------------------ #
     # Consistency                                                         #

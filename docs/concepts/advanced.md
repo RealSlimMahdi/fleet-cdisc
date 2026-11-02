@@ -147,7 +147,7 @@ fleet derivation add AGEGR1 --dataset ADSL --kind column
 ```
 
 The convention is **standard-agnostic**: the same `@derivation` objects and
-`algorithm: callable` escape hatch work in SDTM pipelines and specs exactly
+`callable:` escape hatch work in SDTM pipelines and specs exactly
 as in ADaM — both dispatch through the shared core registry.
 
 ### Complex Multi-Dataset Derivations (Escaping the Pipeline)

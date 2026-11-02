@@ -8,8 +8,9 @@ formatting.
 from pathlib import Path
 from typing import Any
 
-import yaml
 from lxml import etree
+
+from fleet.core.define_spec import load_spec_yaml
 
 # Namespace URIs for Define-XML 2.1
 _ODM_NS = "http://www.cdisc.org/ns/odm/v1.3"
@@ -37,7 +38,7 @@ class DefineXMLGenerator:
     """Generate CDISC Define-XML 2.1 from a YAML specification file."""
 
     def __init__(self, define_yaml_path: Path) -> None:
-        self.define_data = yaml.safe_load(Path(define_yaml_path).read_text())
+        self.define_data = load_spec_yaml(Path(define_yaml_path).read_text())
 
     def generate(self, output_path: Path) -> None:
         """Write a Define-XML 2.1 ODM XML file to *output_path*."""

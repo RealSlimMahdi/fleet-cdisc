@@ -126,7 +126,10 @@ materialised column (`baseline`, cross-domain joins) checkpoint internally
 without breaking the chain — so `flag → baseline → chg` is one pipeline, not
 three. The pre-alpha verb spellings (`assign_no_ct`, `hardcode_no_ct`,
 `if_then_else`, …) were removed outright; run `fleet migrate <files...> --write`
-to rewrite old external scripts.
+to rewrite old external scripts. A define.yaml uses the same words: the
+`algorithm:` value is the verb name and the keys are its keyword arguments
+(ADR-0008); run `fleet migrate --spec <define.yaml> --write` to rewrite a spec
+written in the old spec vocabulary.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -346,14 +349,14 @@ datasets:
     variables:
       - name: STUDYID
         derivation:
-          algorithm: hardcode_no_ct
+          algorithm: assign
           value: "CDISCPILOT01"
       - name: SEX
         derivation:
-          algorithm: assign_ct
+          algorithm: assign
           source: sex
-          ct_codelist: C66731
-          ct_mapping: { "F": "F", "M": "M" }
+          ct: C66731
+          ct_map: { "F": "F", "M": "M" }
 ```
 
 ```python

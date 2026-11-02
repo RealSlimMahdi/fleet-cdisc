@@ -22,30 +22,25 @@ from fleet.core.spec_registry import (
 
 
 class SDTMAlgorithm(StrEnum):
-    """Derivation verbs for SDTM variable mappings.
+    """The SDTM verbs a define.yaml can run: the ``algorithm:`` values.
 
-    Kept in sync with ``fleet.core.spec_registry`` by
-    ``tests/unit/test_spec_parity.py``.
+    The verb is the algorithm (ADR-0008). Kept in sync with
+    ``fleet.core.spec_registry`` by ``tests/unit/test_spec_parity.py``.
     """
 
-    ASSIGN_NO_CT = "assign_no_ct"
-    ASSIGN_CT = "assign_ct"
-    ASSIGN_DTC = "assign_dtc"
-    HARDCODE_CT = "hardcode_ct"
-    HARDCODE_NO_CT = "hardcode_no_ct"
+    ASSIGN = "assign"
+    DATE = "date"
     CONDITION_ADD = "condition_add"
-    IF_THEN_ELSE = "if_then_else"
+    CASE_WHEN = "case_when"
     AE_AEREL = "ae_aerel"
     MERGE = "merge"
     GROUP_BY = "group_by"
-    DATASET_LEVEL = "dataset_level"
     NOTSUBMITTED = "notsubmitted"
     MULTIPLE_RESPONSES = "multiple_responses"
-    DATE = "date"
-    DURATION = "duration"
     SEQ = "seq"
     NSV = "nsv"
-    CALLABLE = "callable"
+    DURATION = "duration"
+    DERIVATION = "derivation"
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,8 +77,8 @@ def SDTMVariableSpec(**data: Any) -> SpecVariableBase:  # noqa: N802 — back-co
             from fleet.sdtm.models import SDTMVariableSpec
 
             var = SDTMVariableSpec(
-                target="SEX", algorithm="assign_ct",
-                source="sex_raw", ct_codelist="C66731",
+                target="SEX", algorithm="assign",
+                source="sex_raw", ct="C66731",
             )
     """
     return parse_variable_spec("sdtm", data)

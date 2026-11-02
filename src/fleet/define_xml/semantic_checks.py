@@ -88,15 +88,16 @@ def semantic_errors(xml: str | bytes) -> list[str]:
         if "`" in text or _REST_EMPHASIS.search(text):
             errors.append(f"TranslatedText contains API markup: {text[:80]!r}")
 
-    # 3. MethodDef names are reviewer-facing, not Fleet algorithm ids.
+    # 3. MethodDef names are reviewer-facing, not Fleet algorithm ids.  The
+    # ids are verb names (ADR-0008), ordinary words such as `map` or `date`,
+    # so only a method Fleet produced (its FormalExpression says so) counts.
     from fleet.core.spec_registry import algorithm_names
 
-    algo_ids = set(algorithm_names("sdtm", include_aliases=True)) | set(
-        algorithm_names("adam", include_aliases=True)
-    )
+    algo_ids = set(algorithm_names("sdtm")) | set(algorithm_names("adam"))
     for method in root.iter(f"{_ODM}MethodDef"):
         name = method.get("Name", "")
-        if name in algo_ids:
+        contexts = {f.get("Context") for f in method.iter(f"{_ODM}FormalExpression")}
+        if name in algo_ids and "Python/Fleet" in contexts:
             errors.append(
                 f"MethodDef {method.get('OID')} Name {name!r} is a Fleet-internal "
                 "algorithm id, not reviewer-facing text"
