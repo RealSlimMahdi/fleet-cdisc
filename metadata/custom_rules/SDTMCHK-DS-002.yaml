@@ -46,5 +46,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_ds_dsterm_death_due_to
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: DS Domain

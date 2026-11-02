@@ -225,7 +225,7 @@ uv run fleet check-rule metadata/custom_rules/FLEET-AE-001.yaml
 # .validate("AE", custom_rules="metadata/custom_rules")
 ```
 
-Use a company prefix (e.g. `ROCHE-AE-001`) to avoid collisions with `CORE-XXXXXX`.
+Use a company prefix (e.g. `ACME-AE-001`) to avoid collisions with `CORE-XXXXXX`.
 
 ---
 

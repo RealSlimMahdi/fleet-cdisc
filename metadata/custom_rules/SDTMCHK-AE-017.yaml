@@ -48,5 +48,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_ae_ds_partial_death_dates
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: AE Domain

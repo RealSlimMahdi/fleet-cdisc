@@ -1,6 +1,6 @@
 # CDISC Rules Engine: Custom Rule Writing Guide & Tracker
 
-> **Source:** [Roche sdtmchecks R package](https://github.com/pharmaverse/sdtmchecks)
+> **Source:** [pharmaverse sdtmchecks R package](https://github.com/pharmaverse/sdtmchecks)
 > **Target:** Fleet CDISC Rules Engine custom YAML rules
 > **Branch:** `feat/sdtmchecks-custom-rules`
 > **Date:** 2026-05-20
