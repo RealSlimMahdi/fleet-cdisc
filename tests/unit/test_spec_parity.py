@@ -990,7 +990,7 @@ ADAM_CASES: list[Case] = [
                 "date_col": "EXSTDTC",
             }
         ],
-        lambda df: df.sort("USUBJID")["TRTSDT"].to_list() == ["2024-01-01", "2024-01-03"],
+        lambda df: df.sort("USUBJID")["TRTSDT"].to_list() == [date(2024, 1, 1), date(2024, 1, 3)],
         pins={
             "EX": lambda: pl.from_repr("""\
 ┌─────────┬────────────┐
@@ -1016,7 +1016,7 @@ ADAM_CASES: list[Case] = [
                 "date_col": "EXSTDTC",
             }
         ],
-        lambda df: df.sort("USUBJID")["TRTEDT"].to_list() == ["2024-01-05", "2024-01-03"],
+        lambda df: df.sort("USUBJID")["TRTEDT"].to_list() == [date(2024, 1, 5), date(2024, 1, 3)],
         pins={
             "EX": lambda: pl.from_repr("""\
 ┌─────────┬────────────┐

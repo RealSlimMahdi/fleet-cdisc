@@ -35,6 +35,7 @@ import yaml
 
 from fleet.core import log as fleet_log
 from fleet.core.define_spec import DefineSpec, load_define_spec
+from fleet.core.dtc import date_part, datetime_part, to_day, warn_on_collect
 from fleet.core.exceptions import (
     ComparisonError,
     DerivationError,
@@ -1262,15 +1263,25 @@ class SharedVerbsMixin:
         """Compute the duration between two date/datetime columns.
 
         Supports column references (``str``) and Polars expressions
-        for *start* and *end*.
+        for *start* and *end*.  ``--DTC`` text is read by its date part for
+        day-based units and by its date-time for hours, minutes and
+        seconds; a partial value gives null.
 
         The ``add_one`` parameter controls inclusive counting:
 
-        - ``None`` (default): auto-resolves from the target suffix.
-          ``*DY`` targets use CDISC study-day convention (no day 0);
-          all others add 1 for inclusive counting.
-        - ``True``: always add 1 (inclusive).
-        - ``False``: raw difference (e.g. PK elapsed time).
+        - ``None`` (default): auto-resolves from the target suffix and the
+          unit.  ``*DY`` targets in days use the CDISC study-day
+          convention (no day 0).  Days, weeks, months and years add one
+          **day** before the division; hours, minutes and seconds give
+          the raw difference (PK elapsed time).
+        - ``True``: add one day (day-based units) or one unit (sub-day).
+        - ``False``: raw difference.
+
+        One is added only when the end is on or after the start, as
+        admiral ``compute_duration`` does: an end one day before the start
+        gives -1, never 0.  Weeks, months and years divide the day count
+        by 7, 30.4375 and 365.25, so this verb does not give a completed
+        age in years.
 
         Args:
             target: Name of the output column.
@@ -1341,25 +1352,19 @@ class SharedVerbsMixin:
         }
 
         schema = self._lazy.collect_schema()
+        sub_day = unit in ("seconds", "minutes", "hours")
 
         def _to_date_expr(col_or_expr: str | pl.Expr) -> pl.Expr:
-            """Resolve a column reference or expression to a temporal expr."""
-            if isinstance(col_or_expr, str):
-                col_name = col_or_expr
-                dtype = schema.get(col_name)
-                if dtype is not None:
-                    if dtype == pl.Date:
-                        return pl.col(col_name)
-                    if dtype.is_(pl.Datetime) or str(dtype).startswith("Datetime"):
-                        if unit in ("seconds", "minutes", "hours"):
-                            return pl.col(col_name)
-                        return pl.col(col_name).cast(pl.Date)
-                    # String → try to parse
-                    if unit in ("seconds", "minutes", "hours"):
-                        return pl.col(col_name).str.to_datetime(strict=False)
-                    return pl.col(col_name).str.to_date(strict=False)
-                return pl.col(col_name)
-            return col_or_expr
+            """Resolve a column reference to a date (day units) or a date-time (sub-day)."""
+            if not isinstance(col_or_expr, str):
+                return col_or_expr
+            dtype = schema.get(col_or_expr)
+            col = pl.col(col_or_expr)
+            if not sub_day:
+                return to_day(col, dtype)
+            if dtype == pl.String:
+                return datetime_part(col)
+            return col
 
         s_expr = _to_date_expr(start)
         e_expr = _to_date_expr(end)
@@ -1378,7 +1383,7 @@ class SharedVerbsMixin:
                 f"duration unit={unit!r} is not supported. Choose one of: {sorted(valid_units)}"
             )
 
-        if unit in ("seconds", "minutes", "hours"):
+        if sub_day:
             s_dtm = s_expr.cast(pl.Datetime("us"))
             e_dtm = e_expr.cast(pl.Datetime("us"))
             diff_s = (e_dtm - s_dtm).dt.total_seconds().cast(pl.Float64)
@@ -1390,28 +1395,26 @@ class SharedVerbsMixin:
                 diff = diff_s / 3600.0
         else:
             diff_days = (e_expr - s_expr).dt.total_days()
-            if unit == "days":
-                diff = diff_days
-            elif unit == "weeks":
-                diff = diff_days.cast(pl.Float64) / 7.0
-            elif unit == "months":
-                diff = diff_days.cast(pl.Float64) / 30.4375
-            else:  # years
-                diff = diff_days.cast(pl.Float64) / 365.25
+            divisor = {"days": 1, "weeks": 7.0, "months": 30.4375, "years": 365.25}[unit]
+            diff = diff_days if unit == "days" else diff_days.cast(pl.Float64) / divisor
 
         # Resolve add_one
         if add_one is None:
-            if target.endswith("DY"):
+            if target.endswith("DY") and unit == "days":
                 # CDISC study day: +1 if >= 0, no day 0
                 result_expr = (
                     (pl.when(diff >= 0).then(diff + 1).otherwise(diff)).cast(pl.Int64).alias(target)
                 )
                 return self._chain(result_expr, verb="duration", params=duration_params)
-            else:
-                add_one = True
+            add_one = not sub_day
 
-        if add_one:
-            result_expr = (diff + 1).alias(target)
+        if add_one and sub_day:
+            result_expr = pl.when(diff >= 0).then(diff + 1).otherwise(diff).alias(target)
+        elif add_one:
+            inclusive = pl.when(diff_days >= 0).then(diff_days + 1).otherwise(diff_days)
+            result_expr = (
+                inclusive if unit == "days" else inclusive.cast(pl.Float64) / divisor
+            ).alias(target)
         else:
             result_expr = diff.alias(target)
 
@@ -1452,7 +1455,9 @@ class SharedVerbsMixin:
         """Derive a CDISC study day variable from a date column and reference date.
 
         Uses the CDISC algorithm: ``date - ref_date + 1`` when
-        ``date >= ref_date``, else ``date - ref_date`` (no day 0).
+        ``date >= ref_date``, else ``date - ref_date`` (no day 0), on the
+        date portion of each value (SDTMIG 3.4 section 4.4.4): a time
+        part is ignored, and a partial date gives null.
 
         The reference date is resolved in this order:
 
@@ -1527,13 +1532,8 @@ class SharedVerbsMixin:
             join_key = ["USUBJID"]
         elif _ref_col in schema.names():
             # ref_col already in frame — no join needed; stays lazy.
-            date_expr = pl.col(date_col)
-            ref_expr = pl.col(_ref_col)
-            # Handle both Date and String types
-            if schema.get(date_col) == pl.String:
-                date_expr = date_expr.str.to_date(format="%Y-%m-%d", strict=False)
-            if schema.get(_ref_col) == pl.String:
-                ref_expr = ref_expr.str.to_date(format="%Y-%m-%d", strict=False)
+            date_expr = to_day(pl.col(date_col), schema.get(date_col))
+            ref_expr = to_day(pl.col(_ref_col), schema.get(_ref_col))
             diff = (date_expr - ref_expr).dt.total_days()
             study_day_expr = pl.when(diff >= 0).then(diff + 1).otherwise(diff).alias(target)
             return self._chain(
@@ -1557,12 +1557,8 @@ class SharedVerbsMixin:
 
         df = df.join(ref_slim, on=join_key, how="left")
 
-        date_expr = pl.col(date_col)
-        ref_expr = pl.col(_ref_tmp)
-        if df.schema.get(date_col) == pl.String:
-            date_expr = date_expr.str.to_date(format="%Y-%m-%d", strict=False)
-        if df.schema.get(_ref_tmp) == pl.String:
-            ref_expr = ref_expr.str.to_date(format="%Y-%m-%d", strict=False)
+        date_expr = to_day(pl.col(date_col), df.schema.get(date_col))
+        ref_expr = to_day(pl.col(_ref_tmp), df.schema.get(_ref_tmp))
 
         diff = (date_expr - ref_expr).dt.total_days()
         study_day_expr = pl.when(diff >= 0).then(diff + 1).otherwise(diff).alias(target)
@@ -2036,6 +2032,13 @@ class SharedVerbsMixin:
         2. ``columns``: explicit list to keep (in that order).
         3. Neither: keep all current columns (subject to ``drop_pattern``).
 
+        With a spec on an ADaM namespace, a text column the define types
+        ``date`` becomes the date part of a complete date, and one typed
+        ``datetime`` the date-time of a value with hours and minutes.
+        Anything else becomes null, with one warning at collect: select
+        never imputes.  SDTM columns and every ``*DTC`` stay text, because
+        ``--DTC`` is character (SDTMIG 3.4 section 4.4).
+
         ``drop_pattern`` (default ``r"^_"``): regex applied *before* the
         explicit selection — columns whose names match are removed.  This
         enforces the convention that ``_``-prefixed columns are scratch
@@ -2097,23 +2100,34 @@ class SharedVerbsMixin:
 
         lf = self._lazy.select(final_cols)
 
-        # Step 4: cast date/datetime columns declared in the spec
-        if type_map:
+        # Step 4: ADaM *DT and *DTM declared date/datetime are read from text.
+        # SDTM and any *DTC stay text (SDTMIG 3.4 4.4); select never imputes.
+        if type_map and self._VALIDATE_STANDARD == "adam":
             casts = []
             for col_name, spec_type in type_map.items():
-                if col_name not in final_cols:
+                if col_name not in final_cols or col_name.upper().endswith("DTC"):
                     continue
                 dtype = schema.get(col_name)
-                if spec_type == "date":
-                    if dtype == pl.String:
-                        casts.append(pl.col(col_name).str.to_date("%Y-%m-%d", strict=False))
-                    elif dtype is not None and (
-                        dtype.is_(pl.Datetime) or str(dtype).startswith("Datetime")
-                    ):
-                        casts.append(pl.col(col_name).cast(pl.Date))
-                elif spec_type == "datetime":
-                    if dtype == pl.String:
-                        casts.append(pl.col(col_name).str.to_datetime(strict=False))
+                raw = pl.col(col_name)
+                if spec_type == "date" and isinstance(dtype, pl.Datetime):
+                    casts.append(raw.cast(pl.Date))
+                    continue
+                if dtype != pl.String:
+                    continue
+                read = date_part(raw) if spec_type == "date" else datetime_part(raw)
+                casts.append(
+                    warn_on_collect(
+                        read,
+                        (raw.str.strip_chars().fill_null("") != "") & read.is_null(),
+                        lambda n, values, c=col_name, t=spec_type: (
+                            f"select(spec=): {n} value(s) of {c} are not a complete {t} and "
+                            "become null; select never imputes, so use .date(impute=) for a "
+                            f"SAP rule. Values: {values}"
+                        ),
+                        dtype=pl.Date if spec_type == "date" else pl.Datetime("us"),
+                        shown=raw,
+                    ).alias(col_name)
+                )
             if casts:
                 lf = lf.with_columns(casts)
 

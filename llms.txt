@@ -1772,7 +1772,7 @@ Fleet supports all 7 CDISC Trial Design Model domains through `df.sdtm`. Protoco
 
 - `visit_map(target_num: str, target_name: str, *, date_col: str, planned_visits: TrialVisits | pl.DataFrame, ref_date: str | None = None, tolerance: dict[str, int] | None = None) -> Self` — Map raw visit dates to planned visits from TV.
 - `element_boundaries(target_start: str, target_end: str, *, milestones: dict[str, str], element_col: str = 'ETCD', subject_col: str = 'USUBJID') -> Self` — Derive element start/end dates from milestone columns.
-- `epoch_assign(target: str, *, date_col: str, epoch_ranges: list[dict[str, str]] | pl.DataFrame | None = None, se: pl.DataFrame | pl.LazyFrame | None = None, subject_col: str = 'USUBJID') -> Self` — Assign ``EPOCH`` based on date ranges or per-subject SE intervals.
+- `epoch_assign(target: str, *, date_col: str, epoch_ranges: list[dict[str, str]] | pl.DataFrame | None = None, se: pl.DataFrame | pl.LazyFrame | None = None, subject_col: str = 'USUBJID', same_day: "Literal['by_class', 'earlier', 'later']" = 'by_class') -> Self` — Assign ``EPOCH`` based on date ranges or per-subject SE intervals.
 
 ### Pydantic models
 
@@ -1828,8 +1828,8 @@ Available on `df.adam` (BDS base namespace). Shared verbs (source, assign, case_
 
 ## ADSL verbs
 
-- `first_date(target: str, *, from_dataset: pl.DataFrame, date_col: str, where: str | pl.Expr | None = None, by: list[str] | None = None) -> Self` — Derive *target* as the earliest date in *date_col* from *from_dataset*.
-- `last_date(target: str, *, from_dataset: pl.DataFrame, date_col: str, where: str | pl.Expr | None = None, by: list[str] | None = None) -> Self` — Derive *target* as the latest date in *date_col* from *from_dataset*.
+- `first_date(target: str, *, from_dataset: pl.DataFrame, date_col: str, where: str | pl.Expr | None = None, by: list[str] | None = None, impute: str | None = None) -> Self` — Derive *target* as the earliest date in *date_col* from *from_dataset*.
+- `last_date(target: str, *, from_dataset: pl.DataFrame, date_col: str, where: str | pl.Expr | None = None, by: list[str] | None = None, impute: str | None = None) -> Self` — Derive *target* as the latest date in *date_col* from *from_dataset*.
 - `duration(target: str, *, start: str | pl.Expr, end: str | pl.Expr, unit: "Literal['seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years']" = 'days', add_one: bool | None = None, out: "Literal['numeric', 'iso8601']" = 'numeric') -> Self` — Compute the duration between two date/datetime columns.
 - `count_events(target: str, *, from_dataset: pl.DataFrame, where: str | pl.Expr | None = None, by: list[str] | None = None) -> Self` — Derive *target* as the count of matching records in *from_dataset*.
 - `age_years(target: str = 'AAGE', *, age_col: str = 'AGE', age_unit_col: str = 'AGEU') -> Self` — Convert age to years, handling common unit strings.

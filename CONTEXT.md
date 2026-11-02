@@ -151,6 +151,16 @@ _Avoid_: type, class, category
 How far two numeric values may drift and still count as equal: absolute (`abs_tol`), or relative to the base value (`rel_tol`). A compare is exact unless a tolerance is given.
 _Avoid_: precision, epsilon, fuzz, approximate equality
 
+### Dates
+
+**Date portion**:
+The complete date at the start of a `--DTC` value, `2021-03-20` in `2021-03-20T10:30`. Study day and every day count use it (SDTMIG 3.4 section 4.4.4); a partial date has none. Every date verb reads it through `fleet.core.dtc` (ADR-0011).
+_Avoid_: date part (in prose), truncated date
+
+**Transition date**:
+The date on which one SE element ends and the next starts. A record on that date with no time to compare takes the element that `epoch_assign(same_day=)` names: by default the earlier one for Findings (`--DTC`) and the later one for Events and Interventions (`--STDTC`).
+_Avoid_: boundary day, switch date
+
 ### Spec
 
 **Spec algorithm**:
