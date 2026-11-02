@@ -62,6 +62,7 @@ from .adam import (
     PedsNamespace,
     VaccineNamespace,
 )
+from .comparison import ComparisonReport, compare
 from .core import (
     PipelineDAG,
     PipelineNode,
@@ -86,6 +87,7 @@ from .define_xml import (
     TypeMismatch,
 )
 from .io import load_datasets, load_raw_data, save_dataset_json, save_parquet
+from .run import BuiltDataset, ResolvedInput, Step, StudyPlan, plan_study, run_study
 from .sdtm import SDTMAlgorithm, SDTMNamespace, StudyDesign
 from .tlg import (
     AEListingSpec,
@@ -110,6 +112,13 @@ __all__ = [
     # Core
     "StudyContext",
     "load_study_context",
+    # Study run (fleet.run)
+    "plan_study",
+    "run_study",
+    "StudyPlan",
+    "Step",
+    "BuiltDataset",
+    "ResolvedInput",
     "build_dag",
     "PipelineDAG",
     "PipelineNode",
@@ -165,6 +174,9 @@ __all__ = [
     # Validation
     "ValidationResult",
     "ValidationService",
+    # Comparison (PROC COMPARE analogue)
+    "compare",
+    "ComparisonReport",
     # Utilities
     "to_repr",
 ]

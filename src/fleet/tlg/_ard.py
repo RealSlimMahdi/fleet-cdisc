@@ -27,7 +27,16 @@ from typing import Any
 
 import polars as pl
 
-from ._specs import GroupPool, OverallStat, Row, SchemaError, Statistic, resolve_filter
+from ._specs import (
+    NO_CODING_LABEL,
+    GroupPool,
+    OverallStat,
+    Row,
+    SchemaError,
+    Statistic,
+    SummarySpecBase,
+    resolve_filter,
+)
 
 # ------------------------------------------------------------------ #
 # Canonical ARD schema (aligned with {cards})                          #
@@ -415,10 +424,6 @@ def compute_big_n(
 # ------------------------------------------------------------------ #
 # Shared TLG computation helpers                                       #
 # ------------------------------------------------------------------ #
-
-
-#: Label used for uncoded terms, mirroring the GDSR templates' NA level.
-NO_CODING_LABEL = "No Coding Available"
 
 
 def fill_uncoded(
@@ -1049,6 +1054,92 @@ def summarize_ard(
     if issues:
         raise SchemaError("ARD output failed schema validation:\n  " + "\n  ".join(issues))
     return ard
+
+
+def prepare_frame(df: pl.DataFrame, spec: SummarySpecBase) -> pl.DataFrame:
+    """Apply a summary spec's record rules to the analysis dataset, in order.
+
+    The order is fixed and shared by every summary table: the uncoded
+    rule first (so a dataset filter may name the uncoded label), then
+    the dataset filter, then the template's prefilter.  The seam
+    (:func:`summarize_spec`) calls it; a composite table that does its
+    own work between the filter and the engine calls it first and then
+    passes no ``dataset_filter`` to :func:`summarize_ard`.
+
+    Args:
+        df: The analysis dataset.
+        spec: A summary spec carrying ``uncoded``, ``dataset_filter``
+            and ``prefilter``.
+
+    Returns:
+        pl.DataFrame: *df* with the three rules applied.
+
+    Examples:
+        A composite table prepares its frame, then does its own work::
+
+            df = prepare_frame(adae, spec)
+            df = worst_case(df, by=["USUBJID", "TRTA", "AEBODSYS"], order_col="AESEV")
+    """
+    if spec.uncoded is not None:
+        df = fill_uncoded(df, spec.uncoded.columns, spec.uncoded.label)
+    dataset_filter = resolve_filter(spec.dataset_filter)
+    if dataset_filter is not None:
+        df = df.filter(dataset_filter)
+    prefilter = resolve_filter(spec.prefilter)
+    if prefilter is not None:
+        df = df.filter(prefilter)
+    return df
+
+
+def summarize_spec(
+    df: pl.DataFrame,
+    spec: SummarySpecBase,
+    *,
+    groupby: str | None = None,
+    adsl: pl.DataFrame | None = None,
+) -> pl.DataFrame:
+    """Build a summary ARD from a spec — the seam every forwarding table uses.
+
+    The spec is the whole engine contract: every :func:`summarize_ard`
+    argument is read from its fields, and the cards ``context`` tag and
+    the ``nested`` flag from its class.  The group column is *groupby*,
+    else the spec's first column, else ``"TRTA"``; the frame is
+    validated against the spec, then prepared by :func:`prepare_frame`.
+
+    Args:
+        df: The analysis dataset.
+        spec: A summary spec (any :class:`SummarySpecBase` subclass).
+        groupby: Treatment-arm column; overrides ``spec.columns[0]``.
+        adsl: ADSL for big-N denominators and the arm universe.
+
+    Returns:
+        pl.DataFrame: Validated {cards}-compatible ARD.
+
+    Raises:
+        SchemaError: If the frame fails the spec's validation, or on any
+            engine refusal (see :func:`summarize_ard`).
+
+    Examples:
+        ``ard = summarize_spec(admh, MHSummarySpec(), groupby="TRTA", adsl=adsl)``
+    """
+    group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
+    spec.validate_dataframe(df, group_col=group_col)
+    return summarize_ard(
+        prepare_frame(df, spec),
+        rows=spec.rows,
+        stats=spec.statistics,
+        context=spec.context,
+        group_col=group_col,
+        pools=spec.pools,
+        column_order=spec.column_order,
+        adsl=adsl,
+        adsl_filter=spec.adsl_filter,
+        header_rows=spec.header_rows,
+        nested=spec.nested,
+        value_col=spec.value_col,
+        label_col=spec.label_col,
+        decimals=spec.decimals,
+    )
 
 
 def _apply_label_col(

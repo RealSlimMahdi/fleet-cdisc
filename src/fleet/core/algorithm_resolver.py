@@ -110,12 +110,13 @@ def resolve_algorithm_docstring(
     Returns:
         Tuple of ``(summary, dotted_path)`` if a match is found, or
         ``(None, None)`` otherwise.  ``summary`` is the first sentence of
-        the verb docstring; ``dotted_path`` is the fully-qualified
-        ``module.Class.method`` path suitable for use as a Define-XML
-        ``MethodDef`` reference.
+        the verb docstring; ``dotted_path`` is the ``module.Class.method``
+        path of the class that defines the method, as lineage records it.
     """
     if not algorithm:
         return (None, None)
+
+    from fleet.core.lineage import defining_method_path
 
     # Resolve through the spec registry first: algorithm names are not
     # always method names (e.g. study_day executes via duration()).
@@ -136,8 +137,7 @@ def resolve_algorithm_docstring(
             if method is None or not callable(method):
                 continue
             summary = docstring_summary(method.__doc__)
-            dotted = f"{cls.__module__}.{cls.__qualname__}.{name}"
-            return (summary, dotted)
+            return (summary, defining_method_path(cls, name))
     return (None, None)
 
 

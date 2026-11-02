@@ -1,9 +1,10 @@
 """
 TLG specification models — Vega-Lite-inspired declarative specs.
 
-Each TLG output (AE summary, AE listing, VS summary, etc.) is defined by
-a Pydantic model that declares field→role mappings, statistics, and data
-requirements.  The spec carries both structural validation (column
+Each TLG output is defined by a Pydantic model that declares field→role
+mappings, statistics, and data requirements.  This module holds the base
+classes and the building blocks; each domain's spec classes live in its
+own namespace module, next to the method that consumes them.  The spec carries both structural validation (column
 presence/types) and content validation (required PARAM/PARAMCD values,
 flag values, pool arm existence).
 """
@@ -193,6 +194,35 @@ class OverallStat(BaseModel):
     model_config = {"extra": "forbid", "arbitrary_types_allowed": True}
 
     _validate_filter = field_validator("filter")(_check_filter_field)
+
+
+#: GDSR label for a coding term that is still null at analysis time.
+NO_CODING_LABEL = "No Coding Available"
+
+
+class Uncoded(BaseModel):
+    """The uncoded rule: give a null coding term a visible level.
+
+    GDSR templates recode a missing MedDRA or ATC term to
+    ``"No Coding Available"`` instead of dropping the record, so a
+    subject whose only events are uncoded is still counted.  A spec
+    carries one ``Uncoded`` (or ``None`` to switch the rule off); set
+    inline via [`TLGBuilder.uncoded()`][fleet.tlg.TLGBuilder.uncoded].
+    """
+
+    columns: list[str] = Field(
+        ...,
+        description=(
+            "Coding columns to fill when null (e.g. ``AEBODSYS`` and "
+            "``AEDECOD``).  Names absent from the dataset are skipped."
+        ),
+    )
+    label: str = Field(
+        default=NO_CODING_LABEL,
+        description="Replacement level written into every null coding column.",
+    )
+
+    model_config = {"extra": "forbid"}
 
 
 class ChoiceOption(BaseModel):
@@ -486,6 +516,30 @@ class TLGSpec(BaseModel):
                 f"but DataFrame is missing {missing}. "
                 f"Available: {sorted(available)}"
             )
+        prefilter_missing = [c for c in self.prefilter_columns() if c not in available]
+        if prefilter_missing:
+            raise SchemaError(
+                f"{self.__class__.__name__}'s prefilter names columns "
+                f"{self.prefilter_columns()} but DataFrame is missing "
+                f"{prefilter_missing}. Add the column, or set prefilter=None "
+                "to switch the rule off (visible in the spec). "
+                f"Available: {sorted(available)}"
+            )
+
+    def prefilter_columns(self) -> list[str]:
+        """Return the columns the spec's prefilter names.
+
+        Every one of them is a required column of the template.  A
+        listing has no prefilter, so the base returns none; summary
+        specs override this.
+
+        Returns:
+            list[str]: Column names in first-seen order; empty here.
+
+        Examples:
+            ``AEListingSpec().prefilter_columns() == []``
+        """
+        return []
 
     def _validate_content(self, df: pl.DataFrame) -> None:
         """Tier 2: check required flag/PARAMCD values exist in data."""
@@ -520,6 +574,12 @@ class TLGSpec(BaseModel):
             diagnostics.append(
                 f"MISSING COLUMNS: {missing} required by {self.__class__.__name__} are not present."
             )
+        prefilter_missing = [c for c in self.prefilter_columns() if c not in available]
+        if prefilter_missing:
+            diagnostics.append(
+                f"MISSING PREFILTER COLUMNS: {prefilter_missing} named by the "
+                f"{self.__class__.__name__} prefilter are not present."
+            )
         for col, required_vals in self.required_flags.items():
             if col not in available:
                 diagnostics.append(f"MISSING FLAG COLUMN: '{col}' not in DataFrame.")
@@ -533,8 +593,8 @@ class TLGSpec(BaseModel):
     def to_yaml(self) -> str:
         """Serialize this spec to a YAML string.
 
-        Filters (``adsl_filter``, ``dataset_filter``, header-row
-        ``filter``) serialize only in their string-expression form.  A
+        Filters (``adsl_filter``, ``dataset_filter``, ``prefilter``,
+        header-row ``filter``) serialize only in their string-expression form.  A
         live ``pl.Expr`` cannot be serialized faithfully, and silently
         dropping it would change the numbers a reloaded spec computes —
         so it raises instead.
@@ -546,7 +606,7 @@ class TLGSpec(BaseModel):
             ValueError: If any filter field holds a ``pl.Expr``.  Pass
                 the filter as a string, e.g. ``'pl.col("SAFFL") == "Y"'``.
         """
-        for field_name in ("adsl_filter", "dataset_filter"):
+        for field_name in ("adsl_filter", "dataset_filter", "prefilter"):
             value = getattr(self, field_name, None)
             if value is not None and not isinstance(value, str):
                 raise ValueError(
@@ -584,10 +644,21 @@ class SummarySpecBase(TLGSpec):
     """Shared fields for every summary-table spec.
 
     Domain specs subclass this and override only their defaults (rows,
-    statistics, required columns) — one declaration of the shared shape
-    instead of nine divergent copies.  Every field is also settable
-    inline through [`TLGBuilder`][fleet.tlg.TLGBuilder].
+    statistics, required columns, the uncoded rule, the prefilter) —
+    one declaration of the shared shape instead of nine divergent
+    copies.  Every field is also settable inline through
+    [`TLGBuilder`][fleet.tlg.TLGBuilder].  The spec is the whole engine
+    contract: [`summarize_spec()`][fleet.tlg.summarize_spec] reads every
+    engine argument from it (ADR-0005).
     """
+
+    #: The cards ``context`` tag written to every ARD row.  One spec
+    #: class serves one template method, so the tag is a class fact,
+    #: not a YAML field.
+    context: ClassVar[str] = ""
+    #: ``True`` when ``rows`` is a hierarchy (SOC → PT, PARAM → visit);
+    #: ``False`` when each row field is an independent flat breakdown.
+    nested: ClassVar[bool] = False
 
     output_type: str = "summary"
     rows: list[Row] = Field(
@@ -597,6 +668,29 @@ class SummarySpecBase(TLGSpec):
             "via [`TLGBuilder.rows()`][fleet.tlg.TLGBuilder.rows]."
         ),
     )
+    uncoded: Uncoded | None = Field(
+        default=None,
+        description=(
+            "The uncoded rule: coding columns whose nulls become a "
+            "visible level before counting.  Each template sets its own "
+            "default; ``null`` switches the rule off.  Set inline via "
+            "[`TLGBuilder.uncoded()`][fleet.tlg.TLGBuilder.uncoded]."
+        ),
+    )
+    prefilter: Any | None = Field(
+        default=None,
+        description=(
+            "The template's own record filter, applied after "
+            "``dataset_filter`` — a ``pl.Expr`` or a string expression "
+            '(e.g. ``\'pl.col("ABLFL").ne_missing("Y")\'`` on a '
+            "change-from-baseline table).  Each template sets its own "
+            "default; ``null`` switches it off.  Every column it names "
+            "is a required column.  Set inline via "
+            "[`TLGBuilder.prefilter()`][fleet.tlg.TLGBuilder.prefilter]."
+        ),
+    )
+
+    _validate_prefilter = field_validator("prefilter")(_check_filter_field)
     columns: list[str] = Field(
         default_factory=lambda: ["TRTA"],
         description=(
@@ -658,6 +752,51 @@ class SummarySpecBase(TLGSpec):
         ),
     )
 
+    def prefilter_columns(self) -> list[str]:
+        """Return the columns the spec's prefilter names.
+
+        Every one of them is a required column of the template, so a
+        change table's ``ABLFL`` guard makes ``ABLFL`` required and
+        ``prefilter=None`` lifts that requirement with it.
+
+        Returns:
+            list[str]: Column names in first-seen order; empty when the
+                prefilter is ``None``.
+
+        Examples:
+            ``LBChgSpec().prefilter_columns() == ["ABLFL", "CHG"]``
+        """
+        expr = resolve_filter(self.prefilter)
+        if expr is None:
+            return []
+        return list(dict.fromkeys(expr.meta.root_names()))
+
+    def check(self, df: pl.DataFrame) -> list[str]:
+        """Run the pre-validation diagnostic without computing.
+
+        The base checks (required columns, prefilter columns, required
+        flag values) plus one warning per row field absent from *df*,
+        whose sub-analysis the engine would skip.
+
+        Args:
+            df: The DataFrame to check.
+
+        Returns:
+            list[str]: Diagnostic messages (empty if all checks pass).
+
+        Examples:
+            ``MHSummarySpec().check(admh)``
+        """
+        diagnostics = super().check(df)
+        available = set(df.columns)
+        for row_def in self.rows:
+            if row_def.field not in available:
+                diagnostics.append(
+                    f"WARNING: Column '{row_def.field}' not present — "
+                    f"'{row_def.label or row_def.field}' sub-analysis will be skipped."
+                )
+        return diagnostics
+
     @field_validator("columns")
     @classmethod
     def _single_group_column(cls, value: list[str]) -> list[str]:
@@ -677,70 +816,25 @@ class SummarySpecBase(TLGSpec):
         return value
 
 
-class AESummarySpec(SummarySpecBase):
-    """Spec for an AE summary table (t_ae_summary).
+def change_from_baseline_prefilter(value_col: str) -> str:
+    """Return the prefilter every change-from-baseline table starts from.
 
-    Defaults provide zero-config convenience for a standard SOC→PT
-    table.
+    Drops the baseline record (``ABLFL`` is ``Y``; ADaM codes the flag
+    as Y / null, so the test is null-safe) and records with no change
+    value, so the paired n counts subjects with a change at the visit.
+
+    Args:
+        value_col: The change column the table summarises (``CHG``,
+            ``PCHG``).
+
+    Returns:
+        str: The expression string, YAML-serialisable.
+
+    Examples:
+        ``change_from_baseline_prefilter("CHG")`` gives
+        ``'pl.col("ABLFL").ne_missing("Y") & pl.col("CHG").is_not_null()'``.
     """
-
-    rows: list[Row] = Field(
-        default_factory=lambda: [
-            Row(field="AEBODSYS", label="System Organ Class"),
-            Row(field="AEDECOD", label="Preferred Term"),
-        ],
-    )
-    required_columns: list[str] = Field(
-        default_factory=lambda: ["USUBJID", "TRTA", "AEDECOD", "AEBODSYS"],
-    )
-
-
-class AEListingSpec(TLGSpec):
-    """Spec for an AE listing (l_ae_listing)."""
-
-    _unconsumed_spec_fields: ClassVar[frozenset[str]] = frozenset({"adsl_filter", "header_rows"})
-
-    output_type: str = "listing"
-    columns: list[Column] = Field(
-        default_factory=lambda: [
-            Column(field="USUBJID", label="Subject"),
-            Column(field="TRTA", label="Treatment"),
-            Column(field="AEBODSYS", label="SOC"),
-            Column(field="AEDECOD", label="Preferred Term"),
-            Column(field="AESEV", label="Severity"),
-            Column(field="AESER", label="Serious"),
-        ],
-        description="Ordered list of columns to include in the listing.",
-    )
-    sort_by: list[str] = Field(
-        default_factory=lambda: ["USUBJID", "AEBODSYS", "AEDECOD"],
-        description="Sort order applied before rendering.",
-    )
-    required_columns: list[str] = Field(
-        default_factory=lambda: ["USUBJID", "TRTA", "AEDECOD"],
-        description="Columns required in the analysis dataset for this spec.",
-    )
-
-
-class VSSummarySpec(SummarySpecBase):
-    """Spec for a vital-signs summary table."""
-
-    rows: list[Row] = Field(
-        default_factory=lambda: [Row(field="PARAMCD", label="Parameter")],
-    )
-    statistics: list[Statistic] = Field(
-        default_factory=lambda: [
-            Statistic.N_SUBJECTS,
-            Statistic.MEAN,
-            Statistic.SD,
-            Statistic.MEDIAN,
-            Statistic.MIN,
-            Statistic.MAX,
-        ],
-    )
-    required_columns: list[str] = Field(
-        default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVAL"],
-    )
+    return f'pl.col("ABLFL").ne_missing("Y") & pl.col("{value_col}").is_not_null()'
 
 
 def _enum_to_value(obj: Any) -> Any:

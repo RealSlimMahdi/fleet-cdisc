@@ -56,5 +56,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_tu_tudtc_visit_ordinal_error
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: TU Domain

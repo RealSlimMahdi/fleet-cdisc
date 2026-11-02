@@ -14,16 +14,16 @@
 
 ## Part 1 — Installation
 
-### From TestPyPI (pre-release)
+### From PyPI (pre-alpha)
+
+```bash
+uv add fleet-cdisc --prerelease=allow
+```
+
+### From TestPyPI (development builds)
 
 ```bash
 uv pip install -i https://test.pypi.org/simple/ fleet-cdisc
-```
-
-### From PyPI (stable release)
-
-```bash
-uv pip install fleet-cdisc
 ```
 
 ### For development (source checkout)
@@ -102,6 +102,9 @@ This reads all codelist concept IDs referenced in the define.yaml files, fetches
 
 ```python
 # Generated codelists.py — example excerpt
+__ct_package__ = "sdtmct-2023-12-15"  # the CT package of every class below
+
+
 class C66731:
     """SEX (C66731)."""
 
@@ -1214,7 +1217,7 @@ Fleet integrates with the official CDISC Rules Engine for regulatory-grade valid
 Before running validation, install the engine binary:
 
 ```bash
-# Download the latest CDISC Rules Engine for your platform
+# Download CDISC Rules Engine v0.15 (CORE 0.15.0), the version Fleet is tested with
 uv run fleet install-engine
 
 # Verify installation
@@ -1237,10 +1240,11 @@ The engine is stored at:
 - **macOS / Linux:** `~/.fleet/cdisc-rules-engine/core/core`
 - **Windows:** `%LOCALAPPDATA%\fleet\cdisc-rules-engine\core\core.exe`
 
-You can also pin a specific version or force a re-download:
+By default, `fleet install-engine` installs the CORE release that Fleet is tested with
+(tag `v0.15`, CORE 0.15.0). You can ask for another release or force a re-download:
 
 ```bash
-uv run fleet install-engine --version v0.15
+uv run fleet install-engine --version latest   # newest release, not tested with Fleet: prints a warning
 uv run fleet install-engine --force
 ```
 
@@ -1248,8 +1252,8 @@ uv run fleet install-engine --force
 
 Fleet finds the engine automatically using a 4-tier discovery chain (first match wins):
 
-1. **`FLEET_RULES_ENGINE` env var** — set in `.env` or shell; highest priority.
-2. **`study_config.yaml`** — `validation.engine_path` (relative or absolute); committed to VCS for team use.
+1. **`study_config.yaml`** — `validation.engine_path` (relative or absolute); committed to VCS for team use. Inside a study it beats the environment variable.
+2. **`FLEET_RULES_ENGINE` env var** — set in `.env` or shell; applies when the study config pins no engine, and outside a study.
 3. **Managed install** — `~/.fleet/cdisc-rules-engine/` from `fleet install-engine`.
 4. **Legacy** — `../cdisc-rules-engine/core.py` (development fallback).
 
@@ -1346,10 +1350,10 @@ in the `Check:` block with your logic:
 uv run fleet add-rule --domain AE --description "AESEV must be populated when AESER = Y"
 
 # Custom prefix (e.g. your company name)
-uv run fleet add-rule --domain AE --prefix ROCHE --description "AESEV required for serious AEs"
+uv run fleet add-rule --domain AE --prefix ACME --description "AESEV required for serious AEs"
 
 # Explicit ID (skips auto-increment)
-uv run fleet add-rule --domain AE --id ROCHE-AE-042 --description "Custom check"
+uv run fleet add-rule --domain AE --id ACME-AE-042 --description "Custom check"
 
 # Write to a specific directory (overrides study_config)
 uv run fleet add-rule --domain VS --description "VSORRES range check" --output ./my_rules/
@@ -1378,7 +1382,7 @@ ae = (
 from fleet.validation.service import ValidationService
 
 svc = ValidationService()
-result = svc.validate_sdtm(ae, domain="AE", custom_rules="metadata/custom_rules")
+result = svc.validate_sdtm(ae, domain="AE", version="3.4", custom_rules="metadata/custom_rules")
 result.print_report()
 ```
 
@@ -1392,7 +1396,7 @@ Use a prefix to avoid clashing with official `CORE-XXXXXX` identifiers:
 
 | Pattern | Example |
 |---------|---------|
-| `<COMPANY>-<DOMAIN>-<NNN>` | `ROCHE-AE-001` |
+| `<COMPANY>-<DOMAIN>-<NNN>` | `ACME-AE-001` |
 | `FLEET-<DOMAIN>-<NNN>` | `FLEET-DM-003` |
 
 #### Rule YAML structure

@@ -26,7 +26,7 @@ Order matters in a Fleet pipeline! Make sure that a dependency variable is deriv
 **What it means:** In a spec-driven pipeline, your `define.yaml` uses an algorithm name under a `derivation` block that doesn't match any recognised namespace verbs.
 
 **How to fix it:**
-Check your spelling against the supported lists of verbs in the [Namespace Pipeline](../concepts/pipeline.md) or the API Reference. The JSON Schema (`define_spec_schema.json`) enforces a strict `enum` of valid algorithm names — if you include the `# yaml-language-server: $schema=...` directive at the top of your YAML file, your editor will flag invalid algorithms and empty `derivation: {}` blocks before you even run the pipeline.
+Check your spelling against the supported lists of verbs in the [Namespace Pipeline](../concepts/pipeline.md) or the API Reference. The JSON Schema (`define_spec_schema.json`) enforces a strict `enum` of valid algorithm names, so an editor validating against it flags invalid algorithms and empty `derivation: {}` blocks before you even run the pipeline — see [Validating `define.yaml`](#validating-defineyaml) below.
 
 ## Debugging Lazy Evaluation
 
@@ -57,10 +57,12 @@ print(debug_df.head())
 
 If you are using the spec-driven approach, validate your `define.yaml` file against the Fleet schema _before_ running pipelines. This ensures you don't waste time tracing runtime errors that are actually typos in the specification.
 
-If you have configured the schema comment in your YAML file:
+The [Fleet VS Code extension](https://github.com/RealSlimMahdi/fleet-vscode) does this with no setup: `fleet lsp` loads the schema from the installed package, so it can never drift from the Fleet that runs your pipeline.
+
+Without the extension, a generic YAML language server can read the same schema from a comment at the top of the file:
 
 ```yaml
-# yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json
+# yaml-language-server: $schema=<path to define_spec_schema.json>
 ```
 
-Your editor (like VS Code) should highlight structural or naming errors automatically.
+`fleet init define` prints that line with the path already resolved against your install. Scaffolded specs no longer carry it by default, because running both validators reports every schema error twice.

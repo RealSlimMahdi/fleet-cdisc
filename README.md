@@ -14,7 +14,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/RealSlimMahdi/fleet-cdisc">
-    <img src="docs/img/logo2.png" alt="Fleet Logo" width="600">
+    <img src="https://realslimmahdi.github.io/fleet-cdisc/img/logo2.png" alt="Fleet Logo" width="600">
   </a>
 
   <p align="center">
@@ -68,11 +68,12 @@ Clinical statistical programming often requires hundreds of lines of boilerplate
 
 **Why Fleet?**
 
+- **Workflow quality first** — one obvious path from raw data to submission artefact; one verb vocabulary whether a step is chained inline or declared in `define.yaml`
 - **Intent-driven syntax** — your code reads like the CDISC spec itself
 - **Lazy-first evaluation** — most verbs accumulate into a single Polars `with_columns` pass; window verbs (`baseline`, cross-domain joins) checkpoint internally without breaking the chain, and `pl.scan_parquet(...).sdtm` keeps a whole pipeline lazy
 - **Zero Pandas** — built entirely on Polars for blazing-fast, multi-threaded execution
-- **AI-first design** — structured API surface optimized for LLM-assisted programming
-- **Dual workflow** — inline Python pipeline chaining _or_ metadata-driven `define.yaml` approach
+- **AI-native by consequence** — a sharp workflow is what makes LLM-assisted programming reliable; the MCP server, language server and `llms.txt` just expose it
+- **Dual workflow** — the same pipeline chained inline in Python _or_ declared in `define.yaml`, and round-trippable between the two
 - **Six core dependencies** — minimal footprint (`polars`, `pydantic`, `pyyaml`, `httpx`, `jsonschema`, `lxml`); everything else is an opt-in extra
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -143,10 +144,13 @@ to rewrite old external scripts.
 
 ### Installation
 
-**From PyPI (stable)**
+**From PyPI (pre-alpha)**
+
+Fleet is pre-release software. The verbs and the CLI can change between versions.
 
 ```bash
-uv add fleet-cdisc
+uv add fleet-cdisc --prerelease=allow
+# or: pip install --pre fleet-cdisc
 ```
 
 **From source (development)**
@@ -356,7 +360,7 @@ datasets:
 dm = dm_raw.sdtm.from_spec("examples/cdiscpilot01/sdtm/define.yaml", dataset="DM").to_frame()
 ```
 
-_For complete end-to-end examples, see the [examples/](examples/) directory and the [full Guide](GUIDE.md)._
+_For complete end-to-end examples, see the [examples/](https://github.com/RealSlimMahdi/fleet-cdisc/tree/main/examples) directory and the [full Guide](https://github.com/RealSlimMahdi/fleet-cdisc/blob/main/GUIDE.md)._
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -369,7 +373,7 @@ pipelines and TLGs, validate datasets, and generate Define-XML. `fleet --version
 prints the version; errors go to stderr with meaningful exit codes; every command
 that needs `study_config.yaml` discovers it git-style by walking parent
 directories. The full, always-current reference is generated from the argparse
-tree — see **[docs/getting-started/cli.md](docs/getting-started/cli.md)**.
+tree — see the **[CLI reference](https://realslimmahdi.github.io/fleet-cdisc/getting-started/cli/)**.
 
 ### Bootstrap a New Study
 
@@ -387,7 +391,7 @@ uv run fleet init ct        # codelists.py from define.yaml
 ```bash
 uv run fleet run --dataset ADVS --out outputs/          # define.yaml -> from_spec -> writers
 uv run fleet validate data/sdtm --custom-rules metadata/custom_rules
-uv run fleet check                                       # one CI gate: config + define.yaml schema + custom rules (engine/API key as warnings)
+uv run fleet check                                       # one CI gate: config + define.yaml schema + run setup (IG versions, rules dir) + custom rules (engine/API key as warnings)
 uv run fleet tlg list                                    # registered TLG templates
 uv run fleet tlg run specs/aet01.yaml --data ADAE=adae.parquet --adsl adsl.parquet --format rtf --rows-per-page 40
 uv run fleet tdd build                                   # trial design datasets + conformance audit (paths from study_config.yaml)
@@ -400,7 +404,7 @@ uv run fleet migrate src/ --write                        # rewrite removed pre-a
 ```bash
 uv run fleet define-xml --spec examples/cdiscpilot01/sdtm/define.yaml \
   --output outputs/define_sdtm.xml --enrich-methods       # embed verb/callable docstrings as <MethodDef>
-uv run fleet install-engine && uv run fleet doctor        # CDISC Rules Engine + health check (checks extras)
+uv run fleet install-engine && uv run fleet doctor        # CDISC Rules Engine 0.15.0 + health check (checks extras)
 uv run fleet add-ct --domains DM,AE,VS,EX --output codelists.py
 uv run fleet add-rule --domain AE --description "AESEV required when AESER = Y"
 ```
@@ -436,7 +440,7 @@ Fleet/
 └── pyproject.toml          # Build config & dependencies
 ```
 
-For detailed module-by-module documentation, see [STRUCTURE.md](STRUCTURE.md).
+For detailed module-by-module documentation, see [STRUCTURE.md](https://github.com/RealSlimMahdi/fleet-cdisc/blob/main/STRUCTURE.md).
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -479,7 +483,7 @@ Contributions are what make the open-source community such an amazing place to l
 4. Push to the Branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for coding standards and development workflow.
+Please read [CONTRIBUTING.md](https://github.com/RealSlimMahdi/fleet-cdisc/blob/main/CONTRIBUTING.md) for coding standards and development workflow.
 
 ### Development Setup
 

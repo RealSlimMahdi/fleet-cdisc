@@ -1,14 +1,23 @@
 """Validation result models for CDISC conformance checking."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum
+from html import escape
 from pathlib import Path
+from typing import TYPE_CHECKING, Literal
 
 from fleet.core import log as fleet_log
+
+if TYPE_CHECKING:
+    from fleet.validation.run_setup import RunSetup, SweepDataset
 
 #: Validation reports emit through this logger (INFO level, stdout by
 #: default — see :mod:`fleet.core.log` to route or silence them).
 _logger = fleet_log.get_logger("fleet.validation")
+
+#: Which engine run a finding came from: the CDISC rules, or the study's custom rules.
+RuleSource = Literal["official", "custom"]
 
 
 class Severity(Enum):
@@ -40,12 +49,13 @@ class ValidationIssue:
     producing_verb: str | None = None
     verb_method: str | None = None
     spec_ref: str | None = None
+    source: RuleSource = "official"
 
     def __str__(self) -> str:
-        parts = [f"[{self.severity.value}] {self.rule_id}: {self.message}"]
+        parts = [f"[{self.severity.value}] {self.rule_id} ({self.source}): {self.message}"]
         if self.variable:
             parts.append(f"Variable: {self.variable}")
-        if self.rows_affected:
+        if self.rows_affected is not None:
             parts.append(f"Rows: {self.rows_affected}")
         if self.producing_verb:
             parts.append(f"Producing verb: {self.producing_verb} ({self.verb_method})")
@@ -67,6 +77,8 @@ class ValidationResult:
     errors: list[ValidationIssue] = field(default_factory=list)
     warnings: list[ValidationIssue] = field(default_factory=list)
     infos: list[ValidationIssue] = field(default_factory=list)
+    #: The inputs this result was validated with, when the surface used a run setup.
+    setup: "RunSetup | None" = None
 
     @property
     def is_valid(self) -> bool:
@@ -98,6 +110,8 @@ class ValidationResult:
         _logger.info("\n" + "=" * 70)
         _logger.info(f"CDISC Validation Report: {self.dataset_name}")
         _logger.info("=" * 70)
+        for line in self.setup.header_lines() if self.setup is not None else ():
+            _logger.info(line)
         _logger.info(f"Dataset Type: {self.dataset_type} {self.model_version}")
         _logger.info(f"Status: {'PASS' if self.is_valid else 'FAIL'}")
         _logger.info(f"Total Issues: {self.total_issues}")
@@ -120,14 +134,14 @@ class ValidationResult:
         if self.errors:
             _logger.info(f"\nERRORS ({len(self.errors)}):")
             for issue in self.errors:
-                label = f"  [{issue.rule_id}]"
+                label = f"  [{issue.rule_id}] ({issue.source})"
                 if issue.variable:
                     label += f" {issue.variable}:"
                 _logger.info(f"{label} {issue.message}")
         if self.warnings:
             _logger.info(f"\nWARNINGS ({len(self.warnings)}):")
             for issue in self.warnings:
-                label = f"  [{issue.rule_id}]"
+                label = f"  [{issue.rule_id}] ({issue.source})"
                 if issue.variable:
                     label += f" {issue.variable}:"
                 _logger.info(f"{label} {issue.message}")
@@ -161,7 +175,7 @@ class ValidationResult:
             """Group issues by (rule_id, message, variable) and consolidate rows."""
             groups: dict[tuple, dict] = {}
             for issue in issues:
-                key = (issue.rule_id, issue.message, issue.variable or "")
+                key = (issue.rule_id, issue.message, issue.variable or "", issue.source)
                 if key not in groups:
                     groups[key] = {
                         "issue": issue,
@@ -200,7 +214,7 @@ class ValidationResult:
                 issue = grp["issue"]
                 count = grp["count"]
                 rows = grp["rows"]
-                _logger.info(f"\n{i}. [{issue.rule_id}] {issue.message}")
+                _logger.info(f"\n{i}. [{issue.rule_id}] ({issue.source}) {issue.message}")
                 if issue.variable:
                     _logger.info(f"   Variable: {issue.variable}")
                 if rows:
@@ -220,94 +234,127 @@ class ValidationResult:
             _logger.info("\n  No issues found.")
 
     def save_html_report(self, output_path: str | Path) -> str:
-        """Save validation report as HTML file."""
-        output_file = Path(output_path)
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        html = self._build_html()
-        output_file.write_text(html, encoding="utf-8")
-        return str(output_file.absolute())
+        """Write this result as a self-contained HTML page and return its absolute path.
 
-    def _build_html(self) -> str:
-        status_color = "#28a745" if self.is_valid else "#dc3545"
-        status_text = "PASS" if self.is_valid else "FAIL"
+        The page is the one ``fleet validate --report`` writes for a sweep
+        (see :func:`write_html_report`), with this dataset only.
 
-        def issue_cards(issues: list[ValidationIssue], css_class: str = "") -> str:
-            cards = []
-            for i, issue in enumerate(issues, 1):
-                extra = ""
-                if issue.variable:
-                    extra += f"<div class='issue-detail'><strong>Variable:</strong> {issue.variable}</div>\n"
-                if issue.rows_affected:
-                    extra += f"<div class='issue-detail'><strong>Rows Affected:</strong> {issue.rows_affected}</div>\n"
-                if issue.producing_verb:
-                    verb_html = (
-                        f"<a href='#{issue.verb_method}' class='verb-link'>"
-                        f"{issue.producing_verb}</a>"
-                        if issue.verb_method
-                        else issue.producing_verb
-                    )
-                    extra += (
-                        f"<div class='issue-detail'><strong>Producing verb:</strong> "
-                        f"{verb_html}"
-                        f"{(' &middot; ' + issue.verb_method) if issue.verb_method else ''}"
-                        f"</div>\n"
-                    )
-                if issue.spec_ref:
-                    extra += f"<div class='issue-detail'><strong>Spec reference:</strong> {issue.spec_ref}</div>\n"
-                if issue.suggested_fix:
-                    extra += f"<div class='suggested-fix'><strong>Suggested Fix:</strong> {issue.suggested_fix}</div>\n"
-                cards.append(
-                    f"<div class='issue-card {css_class}'>"
-                    f"<div class='issue-header'>{i}. {issue.message}</div>"
-                    f"<div class='issue-detail'><strong>Rule ID:</strong> <span class='rule-id'>{issue.rule_id}</span></div>"
-                    f"{extra}</div>"
-                )
-            return "\n".join(cards)
+        Args:
+            output_path: Destination ``.html`` file; parent directories are
+                created.
 
-        errors_html = (
-            f"<div class='section'><div class='section-title'>Errors ({len(self.errors)})</div>"
-            f"{issue_cards(self.errors)}</div>"
-            if self.errors
-            else ""
+        Returns:
+            str: The absolute path of the written file.
+
+        Examples:
+            Archive the findings of one dataset::
+
+                result = ValidationService().validate_sdtm(dm, domain="DM", version="3.4")
+                result.save_html_report("outputs/dm_validation.html")
+        """
+        return write_html_report([self], output_path)
+
+
+def write_html_report(
+    results: Sequence[ValidationResult],
+    output_path: str | Path,
+    *,
+    could_not_run: "Sequence[SweepDataset]" = (),
+) -> str:
+    """Write validation results as one self-contained HTML page; return its absolute path.
+
+    A status row per dataset, then one row per error, warning and info
+    finding, and per dataset that could not run.  Every cell is escaped:
+    messages carry data values and the text of custom rules.
+    Both ``fleet validate --report`` and
+    :meth:`ValidationResult.save_html_report` write this page.
+
+    Args:
+        results: The validation results, one per dataset.
+        output_path: Destination ``.html`` file; parent directories are
+            created.
+        could_not_run: The datasets of a sweep whose run setup was refused.
+
+    Returns:
+        str: The absolute path of the written file.
+
+    Examples:
+        One page for every dataset of one engine run::
+
+            results = ValidationService().validate_datasets(
+                {"DM": dm, "AE": ae}, standard="sdtm", version="3.4"
+            )
+            write_html_report(list(results.values()), "outputs/validation.html")
+    """
+    status = [
+        _row(
+            r.dataset_name,
+            f"{r.dataset_type} {r.model_version}",
+            "PASS" if r.is_valid else "FAIL",
+            len(r.errors),
+            len(r.warnings),
+            len(r.infos),
         )
-        warnings_html = (
-            f"<div class='section'><div class='section-title'>Warnings ({len(self.warnings)})</div>"
-            f"{issue_cards(self.warnings, 'warning')}</div>"
-            if self.warnings
-            else ""
+        for r in results
+    ]
+    findings = [
+        _row(
+            r.dataset_name,
+            i.severity.value,
+            i.rule_id,
+            i.source,
+            i.variable or "",
+            "" if i.rows_affected is None else i.rows_affected,
+            i.message,
+            i.suggested_fix or "",
+            f"{i.producing_verb} ({i.verb_method})" if i.producing_verb else "",
+            i.spec_ref or "",
         )
+        for r in results
+        for i in (*r.errors, *r.warnings, *r.infos)
+    ]
+    findings += [
+        _row(d.name, "Could not run", "", "", "", "", d.reason or "", "", "", "")
+        for d in could_not_run
+    ]
+    setups = dict.fromkeys(
+        "\n".join(r.setup.header_lines()) for r in results if r.setup is not None
+    )
+    names = [r.dataset_name for r in results] + [d.name for d in could_not_run]
+    title = names[0] if len(names) == 1 else f"{len(names)} datasets"
+    html = (
+        "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+        f"<title>CDISC Validation Report - {escape(title)}</title>"
+        "<style>body{font-family:sans-serif}table{border-collapse:collapse;margin:1em 0}"
+        "td,th{border:1px solid #999;padding:4px 8px;font-size:13px;text-align:left}</style>"
+        "</head><body><h1>CDISC Validation Report</h1>"
+        + "".join(f"<pre>{escape(s)}</pre>" for s in setups)
+        + "<table>"
+        + _row("Dataset", "Standard", "Status", "Errors", "Warnings", "Info", tag="th")
+        + "".join(status)
+        + "</table><table>"
+        + _row(
+            "Dataset",
+            "Severity",
+            "Rule",
+            "Source",
+            "Variable",
+            "Rows",
+            "Message",
+            "Suggested fix",
+            "Producing verb",
+            "Spec reference",
+            tag="th",
+        )
+        + ("".join(findings) or "<tr><td colspan=10>No findings.</td></tr>")
+        + "</table></body></html>"
+    )
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(html, encoding="utf-8")
+    return str(path.absolute())
 
-        return f"""<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>CDISC Validation Report - {self.dataset_name}</title>
-<style>
-body {{ font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }}
-.container {{ background: white; padding: 30px; border-radius: 5px; max-width: 1200px; margin: 0 auto; }}
-h1 {{ color: #2c3e50; border-bottom: 3px solid {status_color}; padding-bottom: 10px; }}
-.status {{ display: inline-block; padding: 5px 15px; background: {status_color}; color: white; border-radius: 3px; font-weight: bold; }}
-.summary {{ background: #f8f9fa; padding: 15px; border-left: 4px solid {status_color}; margin: 20px 0; }}
-.section-title {{ font-size: 18px; font-weight: bold; margin-bottom: 15px; border-bottom: 2px solid #e0e0e0; padding-bottom: 5px; }}
-.issue-card {{ border: 1px solid #ddd; border-left: 4px solid #dc3545; padding: 15px; margin-bottom: 15px; border-radius: 3px; }}
-.issue-card.warning {{ border-left-color: #ffc107; }}
-.issue-header {{ font-weight: bold; margin-bottom: 8px; }}
-.issue-detail {{ margin: 5px 0; font-size: 14px; color: #555; }}
-.rule-id {{ background: #e9ecef; padding: 2px 8px; border-radius: 3px; font-family: monospace; }}
-.suggested-fix {{ background: #e7f3ff; border-left: 3px solid #0066cc; padding: 10px; margin-top: 10px; font-style: italic; }}
-</style>
-</head>
-<body>
-<div class="container">
-<h1>CDISC Validation Report</h1>
-<div class="summary">
-<strong>Dataset:</strong> {self.dataset_name}<br>
-<strong>Type:</strong> {self.dataset_type} {self.model_version}<br>
-<strong>Status:</strong> <span class="status">{status_text}</span><br>
-<strong>Errors:</strong> {len(self.errors)} | <strong>Warnings:</strong> {len(self.warnings)} | <strong>Info:</strong> {len(self.infos)}
-</div>
-{errors_html}
-{warnings_html}
-</div>
-</body>
-</html>"""
+
+def _row(*cells: object, tag: str = "td") -> str:
+    """One table row; every cell is escaped here and nowhere else."""
+    return "<tr>" + "".join(f"<{tag}>{escape(str(c))}</{tag}>" for c in cells) + "</tr>"

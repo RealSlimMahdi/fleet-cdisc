@@ -19,7 +19,8 @@ Fleet/
 │   ├── tlg/                # TLG namespace — tables, listings, template registry, render
 │   ├── tools/              # migrate codemod (old → canonical spellings)
 │   ├── define_xml/         # Define-XML validation + generation + schema_builder
-│   └── validation/         # CDISC rules-engine integration
+│   ├── validation/         # CDISC rules-engine integration
+│   └── comparison/         # fleet.compare — PROC COMPARE analogue in pure Polars
 │
 ├── datasets/               # Example raw data (CDISCPILOT01)
 ├── specs/                  # YAML derivation specs per study/domain
@@ -68,7 +69,7 @@ import fleet  # registers df.sdtm, df.adam (+ .adsl/.occds/…), df.tlg everywhe
 | `dag.py`                | `PipelineDAG`, `PipelineNode`, `VariableNode`, `PinDependency` — pipeline + variable-level lineage graph; recursive `.trace()`, input reconciliation, `output_format:` handling                                                |
 | `algorithm_resolver.py` | Resolves a Fleet verb name (`algorithm:`) or dotted callable (`callable:`) to its docstring + qualified path; powers Define-XML method enrichment                                                                              |
 | `derivation.py`         | `Derivation` protocol dataclass and `@derivation` decorator — wraps study-specific Python functions as typed, auto-registered derivation objects with `kind`, `targets`, `sources`, and `dotted_path`                          |
-| `lineage.py`            | `record_lineage(owner, exprs)` / `lineage_of(namespace)` / `record_pin_lineage()` / `pin_lineage_of()` / `_append_lineage_nodes()` — invoked by `_chain()` and pin-powered verbs to track intra-frame and cross-domain lineage |
+| `lineage.py`            | `record_lineage(owner, exprs)` / `lineage_of(namespace)` / `record_pin_lineage()` / `pin_lineage_of()` / `_append_lineage_nodes()` — invoked by `_chain()` and pin-powered verbs to track intra-frame and cross-domain lineage; `defining_method_path(cls, verb)` names a verb after its defining class (`VariableNode.method`) |
 | `_pin_mixin.py`         | `PinMixin` — attaches reference-domain DataFrames to pipeline instances; provides `.pin()`, `.repin()`, FK validation (batched at `to_frame()`), and `.pins()` introspection; pins/lineage survive sub-namespace switches       |
 | `rules_scaffolder.py`   | `RulesScaffolder` — fetches CDISC conformance rules from the Library API and writes per-domain YAML files into `metadata/sdtm/rules/` and `metadata/adam/rules/`                                                               |
 | `scaffolder.py`         | `DefineScaffolder` — generates `define.yaml` from the CDISC Library IG for SDTM and ADaM domains                                                                                                                               |
@@ -83,6 +84,7 @@ import fleet  # registers df.sdtm, df.adam (+ .adsl/.occds/…), df.tlg everywhe
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `loader.py`    | `load_controlled_terminology(ct_path, codelist_name=None)` — reads a YAML or CSV CT file (or downloads from a URL) and returns a nested dict: `{codelist_code: {term: decoded_value}}` |
 | `validator.py` | `CTValidator` — a **thread-safe process-wide singleton** that caches loaded CT files and provides validation helpers                                                                   |
+| `study_codelists.py` | The study's generated `codelists.py`: `spec_codelists()` gives `from_spec` its classes for `ct_codelist:` IDs; `check_codelists()` runs the stale checks for `from_spec`, `fleet check` and `fleet doctor`; `warn_if_class_stale()` checks an inline `ct=` class |
 
 **`CTValidator` key methods:**
 
@@ -281,12 +283,28 @@ Use `algorithm:` (Fleet verb) or `callable:` (study-specific dotted path) inside
 
 ---
 
+### `comparison/` — Dataset Comparison (`fleet.compare`)
+
+PROC COMPARE analogue in pure Polars (ADR 0002): pairs a **candidate** against a **base** on **keys**, matches variables by name, and returns a **comparison report** (vocabulary in `CONTEXT.md`). One join, one collect; differences never raise.
+
+| File        | Purpose                                                                                                                                                                                                                                                      |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `engine.py` | `compare(base, candidate, *, keys, by=None, pairs=None, variables=None, abs_tol=0.0, rel_tol=0.0, ignore_trailing_whitespace=False, allow_duplicates=False, max_print=50, base_name=None, candidate_name=None)` — keyed matching (BY variables prepended to the keys), variable matching by name plus the declared pairs and narrowed to the restriction, kind classification (numeric / string / temporal / boolean / other), dtype supertypes, the null-equals-null / NaN-equals-NaN rule, the equality modes (exact, base-anchored tolerance on the numeric variables, trailing-whitespace stripping on the string ones), duplicate pairing by position within a key group, the per-group summaries, the long value listing, the per-variable summary statistics |
+| `report.py` | `ComparisonSettings` (the options a run used, with `.equality` naming the rule in effect) and the `ComparisonReport` frozen dataclass — `datasets`, `variables`, `observations`, `values`, `listing`, `statistics` (see `STATISTICS_COLUMNS`), `flags` (named, see `FLAGS`), `settings`, `version`; `.is_equal`, `.summary`, `.warnings`, `.to_text()`, `.print_report()`, `.to_json()`, `.save_json()`, `.to_html()`, `.save_html_report()`, `.save_listing()` |
+| `text.py`   | Plain-text renderer in PROC COMPARE section order, warnings above the report, summary statistics per differing variable, listing grouped per observation and sectioned per BY group, `max_print` limits (50 per variable, 500 overall by default)                                                                             |
+| `json.py`   | JSON renderer: one document whose keys (`JSON_KEYS`) mirror the report attributes, additive-only within a major version; listing and one-sided key lists truncated to the print limits with a `truncated` marker                                        |
+| `html.py`   | Self-contained HTML renderer for a reviewer without Python: raised flags as chips, per-BY-group counts, then only the mismatched observations with base and candidate side by side, one collapsible block per differing variable opening on its summary statistics, one section per group; never truncated |
+
+Three surfaces over the one engine: `fleet.compare(base, candidate, keys=...)`; the `.compare(base, keys=..., on_fail="warn")` verb on `SharedVerbsMixin` (`core/_verb_mixin.py`), where the chain is the candidate and the report stays on the namespace as `last_comparison`; and `fleet compare BASE CANDIDATE --keys K1,K2 [--by B1,B2] [--pairs BASE=CAND,...] [--variables V1,V2] [--abs-tol N] [--rel-tol N] [--ignore-trailing-whitespace] [--allow-duplicates] [--all] [--format text|json] [--out differences.parquet] [--report compare.html]` (`cli.py`), whose exit code is the verdict — 0 equal, 1 different, 2 the comparison could not run. Concepts page: `docs/concepts/comparison.md`.
+
+---
+
 ### `validation/` — CDISC Rules Engine Integration
 
 | File                | Purpose                                                                                                                                                                                                                                                  |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `engine.py`         | Engine installer and discovery — `install_engine()`, `uninstall_engine()`, `discover_engine()`, `doctor()`; manages `~/.fleet/cdisc-rules-engine/`                                                                                                       |
-| `models.py`         | `Severity` enum (`ERROR/WARNING/INFO`), `ValidationIssue` dataclass, `ValidationResult` (with `.is_valid`, `.print_report(report_type="summary"/"full")`, `.save_html_report()`)                                                                         |
+| `models.py`         | `Severity` enum (`ERROR/WARNING/INFO`), `ValidationIssue` dataclass, `ValidationResult` (with `.is_valid`, `.print_report(report_type="summary"/"full")`, `.save_html_report()`); `write_html_report()` — the one escaped HTML table page, also behind `fleet validate --report` |
 | `official.py`       | `OfficialCDISCValidator` — wraps the CDISC Rules Engine binary (or legacy `core.py`) via subprocess; filters cross-domain engine noise to INFO; supports `custom_rules` via `-lr`                                                                        |
 | `providers.py`      | `ValidationProvider` ABC, `OfficialRulesEngineProvider` (engine wrapper)                                                                                                                                                  |
 | `service.py`        | `ValidationService` — high-level `.validate_sdtm()` and `.validate_adam()` methods with optional `custom_rules` parameter                                                                                                                                |
@@ -394,7 +412,7 @@ uv run pytest tests/ -v
 
 | Package                    | Role                                            |
 | -------------------------- | ----------------------------------------------- |
-| `polars ≥ 1.41.0`          | Core DataFrame engine; namespace extension host |
+| `polars ≥ 1.41, < 2`       | Core DataFrame engine; namespace extension host |
 | `pydantic ≥ 2.0.0`         | YAML spec validation and data modelling         |
 | `pyyaml ≥ 6.0`             | YAML spec / CT file parsing                     |
 | `httpx ≥ 0.27.0`           | HTTP downloads (CT files, raw data)             |

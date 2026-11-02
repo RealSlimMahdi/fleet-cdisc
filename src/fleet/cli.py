@@ -14,7 +14,8 @@ Execution commands:
 
 - ``fleet run``      — execute define.yaml derivations and write datasets.
 - ``fleet validate`` — validate datasets with the CDISC Rules Engine.
-- ``fleet check``    — one CI gate: config + define schema + rule YAMLs.
+- ``fleet compare``  — compare a candidate dataset against a base on keys.
+- ``fleet check``    — one CI gate: config + define schema + codelists.py + rule YAMLs.
 - ``fleet tlg``      — list / run / export TLG templates (``tlg --help``).
 - ``fleet migrate``  — rewrite removed pre-alpha verb spellings to canonical ones.
 - ``fleet mcp``      — MCP server for AI assistants (``mcp`` extra).
@@ -24,7 +25,9 @@ Every command that needs ``study_config.yaml`` discovers it git-style: the
 current directory first, then each parent.  Pass ``--config`` to override.
 
 Errors print a single clean message to **stderr** and exit ``1``; missing
-or unknown (sub)commands print usage to stderr and exit ``2``.
+or unknown (sub)commands print usage to stderr and exit ``2``.  ``fleet
+compare`` is the one command whose exit code is a verdict: ``0`` equal,
+``1`` different, ``2`` the comparison could not run.
 """
 
 from __future__ import annotations
@@ -35,7 +38,10 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
+
+from fleet.core.study_context import find_study_config
+from fleet.run import find_dataset_file
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -43,9 +49,6 @@ if TYPE_CHECKING:
     import polars as pl
 
     from fleet.core.study_context import StudyContext
-
-#: Treatment-arm columns tried (in order) when ``--groupby`` is not given.
-_GROUPBY_CANDIDATES: tuple[str, ...] = ("TRTA", "TRT01A", "TRT01P")
 
 #: Optional-dependency probes for ``fleet doctor`` / ``fleet check``:
 #: the dotted module a feature imports → (extra name, what it enables).
@@ -72,36 +75,15 @@ def _err(msg: str) -> None:
     print(msg, file=sys.stderr)
 
 
-def _fail(msg: str) -> None:
-    """Print an error to stderr and exit 1."""
+def _fail(msg: str, *, code: int = 1) -> NoReturn:
+    """Print an error to stderr and exit — ``1`` unless *code* says otherwise."""
     _err(f"Error: {msg}")
-    sys.exit(1)
+    sys.exit(code)
 
 
 # ────────────────────────────────────────────────────────────────────── #
 # Config discovery                                                        #
 # ────────────────────────────────────────────────────────────────────── #
-
-
-def find_study_config(start: Path | None = None) -> Path | None:
-    """Locate ``study_config.yaml`` by walking up parent directories.
-
-    Git-style discovery: the start directory is checked first, then each
-    parent up to the filesystem root.  Every CLI command that needs study
-    configuration resolves it through this single function.
-
-    Args:
-        start: Directory to start from (default: current working directory).
-
-    Returns:
-        Path | None: The first ``study_config.yaml`` found, or ``None``.
-    """
-    current = (start or Path.cwd()).resolve()
-    for candidate in (current, *current.parents):
-        cfg = candidate / "study_config.yaml"
-        if cfg.is_file():
-            return cfg
-    return None
 
 
 def _resolve_config(config_arg: str | None) -> Path:
@@ -148,21 +130,6 @@ def _try_ctx(config_arg: str | None = None) -> StudyContext | None:
         return None
 
 
-#: Dataset file extensions searched by name-based dataset resolution.
-_DATASET_EXTENSIONS = (".parquet", ".csv", ".xpt", ".sas7bdat")
-
-
-def _find_dataset_file(name: str, dirs: Sequence[Path]) -> Path | None:
-    """Find ``<name>.<ext>`` (lower/upper stem) in the given directories."""
-    for directory in dirs:
-        for stem in (name.lower(), name.upper()):
-            for ext in _DATASET_EXTENSIONS:
-                candidate = directory / f"{stem}{ext}"
-                if candidate.is_file():
-                    return candidate
-    return None
-
-
 def _config_flag_hint(config_path: Path) -> str:
     """Return `` --config <path>`` unless the config sits in the cwd."""
     if config_path.resolve().parent == Path.cwd().resolve():
@@ -177,6 +144,13 @@ def _config_flag_hint(config_path: Path) -> str:
 
 def _parse_domains(raw: str) -> list[str]:
     return [d.strip().upper() for d in raw.split(",") if d.strip()]
+
+
+def _default_ig(standard: str) -> str:
+    """The built-in IG version for *standard*, in the config's dashed form."""
+    from fleet.validation.run_setup import DEFAULT_IG_VERSIONS
+
+    return DEFAULT_IG_VERSIONS[standard].replace(".", "-")
 
 
 def _load_dataset(path_str: str) -> pl.DataFrame:
@@ -203,12 +177,14 @@ def _detect_groupby(df: pl.DataFrame, explicit: str | None) -> str:
                 f"Available columns: {', '.join(df.columns)}"
             )
         return explicit
-    for cand in _GROUPBY_CANDIDATES:
-        if cand in df.columns:
-            return cand
+    from fleet.tlg import GROUPBY_CANDIDATES, detect_groupby
+
+    detected = detect_groupby(df.columns)
+    if detected is not None:
+        return detected
     _fail(
         "could not auto-detect a treatment-arm column "
-        f"(tried {', '.join(_GROUPBY_CANDIDATES)}). Pass --groupby <column>. "
+        f"(tried {', '.join(GROUPBY_CANDIDATES)}). Pass --groupby <column>. "
         f"Columns present in the data: {', '.join(df.columns)}"
     )
     raise AssertionError("unreachable")
@@ -312,6 +288,7 @@ def _run_init_define(args: argparse.Namespace) -> None:
         scaffolder = DefineScaffolder(client)
 
         force = getattr(args, "force", False)
+        written: list[Path] = []
 
         if do_sdtm:
             sdtm_path = ctx.metadata_sdtm_dir / "define.yaml"
@@ -321,11 +298,12 @@ def _run_init_define(args: argparse.Namespace) -> None:
                 dest = scaffolder.scaffold_sdtm(
                     study_id=cfg.study_id,
                     company=cfg.company or "",
-                    ig_version=cfg.sdtm.ig_version,
+                    ig_version=cfg.sdtm.ig_version or _default_ig("sdtm"),
                     ct_version=ct_version,
                     domains=cfg.sdtm.domains,
                     output_path=sdtm_path,
                 )
+                written.append(dest)
                 print(f"SDTM define → {dest}")
 
         if do_adam:
@@ -336,16 +314,35 @@ def _run_init_define(args: argparse.Namespace) -> None:
                 dest = scaffolder.scaffold_adam(
                     study_id=cfg.study_id,
                     company=cfg.company or "",
-                    ig_version=cfg.adam.ig_version,
+                    ig_version=cfg.adam.ig_version or _default_ig("adam"),
                     ct_version=ct_version,
                     datasets=cfg.adam.datasets,
                     output_path=adam_path,
                 )
+                written.append(dest)
                 print(f"ADaM define → {dest}")
 
     hint = _config_flag_hint(ctx.study_root / "study_config.yaml")
     print()
+    _print_schema_optin(written)
     print(f"Next step: fleet init ct{hint}")
+
+
+def _print_schema_optin(specs: list[Path]) -> None:
+    """Offer the `$schema` directive to editors without the Fleet extension.
+
+    Scaffolded specs no longer carry it (#71): `fleet lsp` reads the schema
+    from the installed package, so a second validator double-reports.
+    """
+    if not specs:
+        return
+    from fleet.core.scaffolder import schema_directive
+
+    print("`fleet lsp` validates these against the installed schema already.")
+    print("Without the Fleet extension, paste this at the top of each spec:")
+    for spec in specs:
+        print(f"  {spec}:\n    {schema_directive(spec)}")
+    print()
 
 
 def _run_init_rules(args: argparse.Namespace) -> None:
@@ -452,8 +449,18 @@ def _run_add_ct(args: argparse.Namespace) -> None:
     # discovered study config, then the hard default. Regenerating existing
     # codelists against a different CT package than the study pins would
     # silently change already-reviewed terms.
-    ig = args.ig or (ctx.config.sdtm.ig_version if ctx else "3-4")
+    ig = args.ig or (ctx.config.sdtm.ig_version if ctx else None) or _default_ig("sdtm")
     package = args.package or (ctx.config.ct.package if ctx else "sdtmct-2023-12-15")
+    if args.package and output.is_file():
+        from fleet.ct.study_codelists import load_codelists
+
+        current = load_codelists(output)[0]
+        if current is not None and current != args.package:
+            _fail(
+                f"{output} was generated from {current}, not {args.package}; "
+                "fleet add-ct does not change the CT package of existing codelists. "
+                "Set ct.package in study_config.yaml, then run: fleet init ct --force"
+            )
     existing = existing_concept_ids(output)
 
     print(f"Adding domains: {', '.join(domains)}")
@@ -618,33 +625,61 @@ def _check_extras() -> list[tuple[str, bool, str]]:
     return results
 
 
+def _print_codelists_status(config_path: Path) -> None:
+    """The doctor line of the study's codelists.py: its CT package, or each problem."""
+    from fleet.core.study_context import StudyConfigError, load_study_context
+    from fleet.ct.study_codelists import check_codelists, load_codelists
+
+    try:
+        ctx = load_study_context(config_path)
+    except StudyConfigError:
+        return  # fleet check reports the invalid config
+    problems = check_codelists(ctx)
+    for problem in problems:
+        print(f"  ✗ codelists.py ....... {problem}")
+    if problems or not ctx.codelists_file.is_file():
+        return
+    package = load_codelists(ctx.codelists_file)[0]
+    if package is None:
+        print(f"  ✓ codelists.py ....... {ctx.codelists_file} (no CT package recorded)")
+    else:
+        print(f"  ✓ codelists.py ....... {package} (matches study_config)")
+
+
 def _run_doctor(args: argparse.Namespace) -> None:
-    from fleet.validation.engine import doctor
+    from fleet.core.exceptions import ValidationSetupError
+    from fleet.validation import build_run_setup
+    from fleet.validation.engine import discover_engine, doctor, engine_version
 
-    # Honour validation.engine_path from the discovered study config.
     config_path = Path(args.config) if getattr(args, "config", None) else find_study_config()
-    study_root = config_path.parent if config_path and config_path.is_file() else None
-
-    checks = doctor(study_root=study_root)
 
     print("Fleet Doctor")
     print("=" * 52)
 
     if config_path and config_path.is_file():
         print(f"  ✓ study config ....... {config_path}")
+        _print_codelists_status(config_path)
     else:
         print("  ✗ study config ....... not found (run `fleet init cfg`)")
 
-    engine = checks.get("engine", "")
-    engine_ok = not engine.startswith("NOT FOUND")
-    mark = "✓" if engine_ok else "✗"
-    print(f"  {mark} rules engine ....... {engine}")
-    if engine_ok:
-        if "type" in checks:
-            print(f"      type: {checks['type']}")
-        if "status" in checks:
-            status_mark = "✓" if checks["status"].startswith("OK") else "✗"
-            print(f"  {status_mark} engine status ...... {checks['status']}")
+    # A run setup with no datasets: the standard only fills the record.
+    try:
+        setup = build_run_setup(standard="sdtm", config=config_path)
+        engine, where = setup.engine.value, f" ({setup.engine.source})"
+    except ValidationSetupError as exc:
+        print(f"  ✗ run setup .......... {exc}")
+        study_root = config_path.parent if config_path and config_path.is_file() else None
+        engine, where = discover_engine(study_root), ""
+
+    if engine is None:
+        print("  ✗ rules engine ....... NOT FOUND — run `fleet install-engine`")
+    else:
+        checks = doctor(engine=engine)
+        print(f"  ✓ rules engine ....... {engine}{where}")
+        print(f"      version: {engine_version(engine)}")
+        print(f"      type: {checks['type']}")
+        status_mark = "✓" if checks["status"].startswith("OK") else "✗"
+        print(f"  {status_mark} engine status ...... {checks['status']}")
 
     api_key_set = bool(os.environ.get("CDISC_API_KEY"))
     if api_key_set:
@@ -761,103 +796,19 @@ def _run_define_xml(args: argparse.Namespace) -> None:
 # ────────────────────────────────────────────────────────────────────── #
 
 
-def _load_run_input(ctx: StudyContext, name: str, built: dict[str, pl.DataFrame]) -> pl.DataFrame:
-    """Resolve one ``inputs:`` entry: in-memory result first, then files."""
-    from fleet.io import load_raw_data
-
-    key = name.upper()
-    if key in built:
-        return built[key]
-
-    search_dirs = [ctx.raw_data_dir, ctx.sdtm_data_dir, ctx.adam_data_dir]
-    candidate = _find_dataset_file(name, search_dirs)
-    if candidate is not None:
-        return load_raw_data(candidate).collect()
-
-    _fail(
-        f"input dataset '{name}' not found. Searched for {name.lower()}/{name.upper()} "
-        f"with extensions {', '.join(_DATASET_EXTENSIONS)} under: "
-        f"{', '.join(str(d) for d in search_dirs)}. "
-        "Run the upstream dataset first (fleet run --dataset ...) or place the file "
-        "in one of those directories."
-    )
-    raise AssertionError("unreachable")
-
-
-def _compose_run_frame(
-    ctx: StudyContext,
-    ds: dict[str, Any],
-    built: dict[str, pl.DataFrame],
-) -> pl.DataFrame:
-    """Build the input frame for one dataset from its ``inputs:`` block.
-
-    The first input is the base frame; every additional input is
-    left-joined on ``USUBJID``, restricted to the spec-declared columns
-    the base does not already carry (the standard ADSL-into-BDS merge).
-    """
-    name = ds.get("name", "?")
-    inputs = [i["name"] for i in ds.get("inputs", []) if i.get("type", "dataset") == "dataset"]
-    if not inputs:
-        _fail(
-            f"dataset {name}: the define declares no `inputs:` — "
-            "fleet run cannot determine the source data. Add an inputs: block."
-        )
-
-    base = _load_run_input(ctx, inputs[0], built)
-    declared = {v["name"] for v in ds.get("variables", [])}
-
-    for extra_name in inputs[1:]:
-        extra = _load_run_input(ctx, extra_name, built)
-        if "USUBJID" not in base.columns or "USUBJID" not in extra.columns:
-            _fail(
-                f"dataset {name}: cannot merge input '{extra_name}' — "
-                "both frames must carry USUBJID."
-            )
-        cols = [
-            c for c in extra.columns if c != "USUBJID" and c in declared and c not in base.columns
-        ]
-        base = base.join(extra.select(["USUBJID", *cols]), on="USUBJID", how="left")
-
-    return base
-
-
 def _run_run(args: argparse.Namespace) -> None:
-    import yaml
+    """``fleet run``: print the study plan, build it, write each dataset.
 
-    import fleet  # noqa: F401 — registers .sdtm / .adam namespaces
+    The study run itself lives in :mod:`fleet.run`; this command only
+    chooses the writer, prints progress and sets the exit code.  A
+    :class:`~fleet.core.exceptions.StudyRunError` is turned into exit 1
+    by :func:`main`.
+    """
     from fleet.io import save_dataset_json, save_parquet, save_xpt
+    from fleet.run import plan_study, run_study
 
     ctx = _load_ctx(args.config)
-
-    defines: list[tuple[Path, str]] = []
-    for path, standard in (
-        (ctx.metadata_sdtm_dir / "define.yaml", "sdtm"),
-        (ctx.metadata_adam_dir / "define.yaml", "adam"),
-    ):
-        if path.is_file():
-            defines.append((path, standard))
-    if not defines:
-        _fail(
-            f"no define.yaml found under {ctx.metadata_sdtm_dir} or "
-            f"{ctx.metadata_adam_dir}. Run `fleet init define` first."
-        )
-
-    plan: list[tuple[Path, str, dict[str, Any]]] = []
-    for path, standard in defines:
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        for ds in data.get("datasets", []):
-            plan.append((path, standard, ds))
-
-    if args.dataset:
-        wanted = {d.upper() for d in args.dataset}
-        known = {ds["name"].upper() for _, _, ds in plan}
-        unknown = sorted(wanted - known)
-        if unknown:
-            _fail(
-                f"unknown dataset(s): {', '.join(unknown)}. "
-                f"Datasets in the define files: {', '.join(sorted(known))}"
-            )
-        plan = [entry for entry in plan if entry[2]["name"].upper() in wanted]
+    plan = plan_study(ctx, datasets=args.dataset)
 
     writers: dict[str, Callable[[pl.DataFrame, Path, str], Path]] = {
         "parquet": lambda df, d, n: save_parquet(df, d / f"{n.lower()}.parquet"),
@@ -865,164 +816,191 @@ def _run_run(args: argparse.Namespace) -> None:
         "dataset-json": lambda df, d, n: save_dataset_json(df, d / f"{n.lower()}.json", domain=n),
     }
     writer = writers[args.format]
-
-    built: dict[str, pl.DataFrame] = {}
     out_override = Path(args.out) if args.out else None
+    total = len(plan.steps)
 
     print(f"Config:  {ctx.study_root / 'study_config.yaml'}")
     print(f"Format:  {args.format}")
+    print(f"Plan:    {total} dataset(s)")
+    for i, step in enumerate(plan.steps, start=1):
+        print(f"  [{i}/{total}] {step.dataset} ({step.standard}, {step.define.name})")
     print()
 
-    for i, (path, standard, ds) in enumerate(plan, start=1):
-        name = ds["name"].upper()
-        print(f"[{i}/{len(plan)}] {name} ({standard}, {path.name}) ...")
-
-        frame = _compose_run_frame(ctx, ds, built)
-        ns = frame.sdtm if standard == "sdtm" else frame.adam  # type: ignore[attr-defined]
-        result = (
-            ns.from_spec(path, dataset=name, strict=args.strict)
-            .select(spec=path, dataset=name)
-            .to_frame()
-        )
-        built[name] = result
-
-        out_dir = out_override or (ctx.sdtm_data_dir if standard == "sdtm" else ctx.adam_data_dir)
-        out_path = writer(result, out_dir, name)
-        print(f"        {result.shape[0]} rows × {result.shape[1]} cols → {out_path}")
+    for i, built in enumerate(run_study(plan, strict=args.strict), start=1):
+        step = built.step
+        out_dir = out_override or ctx.data_dir(step.standard)
+        out_path = writer(built.frame, out_dir, step.dataset)
+        rows, cols = built.frame.shape
+        print(f"[{i}/{total}] {step.dataset}: {rows} rows × {cols} cols → {out_path}")
 
     print()
-    print(f"Done — {len(plan)} dataset(s) written.")
+    print(f"Done — {total} dataset(s) written.")
 
 
 # ────────────────────────────────────────────────────────────────────── #
 # fleet validate — CDISC Rules Engine wrapper                             #
 # ────────────────────────────────────────────────────────────────────── #
 
-_DATA_EXTENSIONS = (".parquet", ".csv", ".xpt", ".sas7bdat")
-
-
-def _collect_data_files(paths: Sequence[str]) -> list[Path]:
-    files: list[Path] = []
-    for raw in paths:
-        p = Path(raw)
-        if p.is_dir():
-            for ext in _DATA_EXTENSIONS:
-                files.extend(sorted(p.glob(f"*{ext}")))
-        elif p.is_file():
-            files.append(p)
-        else:
-            _fail(f"path not found: {p}")
-    return files
-
-
-def _write_validation_report(path: Path, results: list[Any]) -> None:
-    """Write a minimal self-contained HTML report of validation findings."""
-    from html import escape
-
-    rows: list[str] = []
-    for res in results:
-        for issue in (*res.errors, *res.warnings, *res.infos):
-            rows.append(
-                "<tr>"
-                f"<td>{escape(res.dataset_name)}</td>"
-                f"<td>{escape(issue.severity.value)}</td>"
-                f"<td>{escape(issue.rule_id)}</td>"
-                f"<td>{escape(issue.variable or '')}</td>"
-                f"<td>{escape(issue.message)}</td>"
-                "</tr>"
-            )
-    html = (
-        "<!DOCTYPE html><html><head><meta charset='utf-8'>"
-        "<title>Fleet validation report</title>"
-        "<style>body{font-family:sans-serif}table{border-collapse:collapse}"
-        "td,th{border:1px solid #999;padding:4px 8px;font-size:13px}</style>"
-        "</head><body><h1>Fleet validation report</h1>"
-        "<table><tr><th>Dataset</th><th>Severity</th><th>Rule</th>"
-        "<th>Variable</th><th>Message</th></tr>"
-        f"{''.join(rows) or '<tr><td colspan=5>No findings.</td></tr>'}"
-        "</table></body></html>"
-    )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(html, encoding="utf-8")
+#: ``fleet validate`` exit codes: 0 no errors, 1 errors found, 2 a dataset could not run.
+_VALIDATE_ERRORS = 1
+_VALIDATE_COULD_NOT_RUN = 2
 
 
 def _run_validate(args: argparse.Namespace) -> None:
-    from fleet.validation import ValidationService
-    from fleet.validation.engine import discover_engine
+    from fleet.core.exceptions import ValidationSetupError
+    from fleet.validation import ValidationService, build_sweep
+    from fleet.validation.models import write_html_report
 
-    ctx = _try_ctx(args.config)
-
-    # No paths given → validate the study's configured data directories.
-    paths = args.paths
-    if not paths:
-        if ctx is None:
-            _fail(
-                "no dataset paths given and no study_config.yaml found. "
-                "Pass files/directories, or run inside a study workspace."
-            )
-        paths = [str(d) for d in (ctx.sdtm_data_dir, ctx.adam_data_dir) if d.is_dir()]
-        if not paths:
-            _fail(
-                f"no data directories found under {ctx.study_root} "
-                f"({ctx.config.paths.sdtm_data}, {ctx.config.paths.adam_data}). "
-                "Run `fleet run` first or pass explicit paths."
-            )
-
-    files = _collect_data_files(paths)
-    if not files:
-        _fail(
-            "no dataset files found. Pass files or a directory containing "
-            f"{', '.join(_DATA_EXTENSIONS)} files."
+    try:
+        sweep = build_sweep(
+            args.paths,
+            standard=args.standard,
+            version=args.standard_version,
+            custom_rules=args.custom_rules,
+            config=Path(args.config) if args.config else None,
         )
+    except ValidationSetupError as exc:
+        _fail(str(exc), code=_VALIDATE_COULD_NOT_RUN)
 
-    # Custom CORE rules: explicit flag, else validation.custom_rules from the config.
-    custom_rules = args.custom_rules
-    if custom_rules is None and ctx is not None and ctx.custom_rules_dir is not None:
-        custom_rules = str(ctx.custom_rules_dir)
-
-    engine = discover_engine(ctx.study_root if ctx else None)
-    if engine is None:
-        _fail(
-            "CDISC Rules Engine not found. Install it with `fleet install-engine` "
-            "or set FLEET_RULES_ENGINE / validation.engine_path."
-        )
-
-    service = ValidationService(rules_engine_path=engine)
     results = []
-    failed = 0
+    for standard, datasets in sweep.runs().items():
+        setup = datasets[0].setup
+        assert setup is not None  # runs() holds only datasets with a setup
+        print(f"Validating {len(datasets)} {standard} dataset(s) in one engine run:")
+        for d in datasets:
+            print(f"  {d.name} — {d.path}")
+        by_name = ValidationService(rules_engine_path=setup.engine.value).validate_datasets(
+            {d.name: _load_dataset(str(d.path)) for d in datasets},
+            standard=standard,
+            version=setup.ig_version.value,
+            custom_rules=setup.custom_rules.value,
+        )
+        setups = {d.name: d.setup for d in datasets}
+        for name, result in by_name.items():
+            result.setup = setups.get(name, setup)
+            result.print_report()
+            results.append(result)
 
-    for f in files:
-        df = _load_dataset(str(f))
-        name = f.stem.upper()
-        standard = args.standard or ("adam" if name.startswith("AD") else "sdtm")
-        kwargs: dict[str, Any] = {"custom_rules": custom_rules}
-        version = args.standard_version
-        if version is None and ctx is not None:
-            # The config's declared IG versions drive validation ("3-4" → "3.4").
-            declared = ctx.config.adam if standard == "adam" else ctx.config.sdtm
-            version = declared.ig_version.replace("-", ".")
-        if version:
-            kwargs["version"] = version
-
-        print(f"Validating {name} ({standard}) — {f}")
-        if standard == "adam":
-            result = service.validate_adam(df, name, **kwargs)
-        else:
-            result = service.validate_sdtm(df, name, **kwargs)
-        results.append(result)
-        result.print_report()
-        if result.errors:
-            failed += 1
+    could_not_run = sweep.could_not_run
+    for d in could_not_run:
+        _err(f"{d.name} ({d.path}): {d.reason}")
 
     if args.report:
         report_path = Path(args.report)
-        _write_validation_report(report_path, results)
+        write_html_report(results, report_path, could_not_run=could_not_run)
         print(f"HTML report → {report_path}")
 
+    failed = sum(1 for r in results if r.errors)
     print()
-    print(f"Validated {len(files)} dataset(s): {len(files) - failed} passed, {failed} failed.")
+    print(
+        f"Validated {len(results)} dataset(s): {len(results) - failed} passed, "
+        f"{failed} failed, {len(could_not_run)} could not run."
+    )
+    if could_not_run:
+        sys.exit(_VALIDATE_COULD_NOT_RUN)
     if failed:
-        sys.exit(1)
+        sys.exit(_VALIDATE_ERRORS)
+
+
+# ────────────────────────────────────────────────────────────────────── #
+# fleet compare — the exit code is the verdict                           #
+# ────────────────────────────────────────────────────────────────────── #
+
+#: ``fleet compare`` exit codes: the job status is the verdict.
+_COMPARE_DIFFERENT = 1
+_COMPARE_IMPOSSIBLE = 2
+
+
+def _scan_comparison_side(path_str: str, side: str) -> pl.LazyFrame:
+    """Open one side through the raw-data loader; an unreadable file is exit 2."""
+    from fleet.core.exceptions import FleetError
+    from fleet.io import load_raw_data
+
+    try:
+        return load_raw_data(Path(path_str))
+    except (FleetError, ImportError) as exc:
+        _fail(
+            f"cannot read the {side} {path_str}: {' '.join(str(exc).split())}",
+            code=_COMPARE_IMPOSSIBLE,
+        )
+
+
+def _parse_variable_pairs(text: str) -> dict[str, str]:
+    """``BASE=CANDIDATE,...`` as a mapping; anything else is exit 2."""
+    pairs: dict[str, str] = {}
+    for item in (i.strip() for i in text.split(",") if i.strip()):
+        base, _, candidate = item.partition("=")
+        if not base.strip() or not candidate.strip():
+            _fail(
+                f"--pairs expects BASE=CANDIDATE pairs separated by commas, got {item!r}",
+                code=_COMPARE_IMPOSSIBLE,
+            )
+        pairs[base.strip()] = candidate.strip()
+    return pairs
+
+
+def _run_compare(args: argparse.Namespace) -> None:
+    """Compare a candidate file against a base file on keys; exit 0 / 1 / 2."""
+    import polars as pl
+
+    from fleet.comparison import DEFAULT_MAX_PRINT, compare
+    from fleet.core.exceptions import FleetError
+
+    keys = [k.strip() for k in args.keys.split(",") if k.strip()]
+    by = [b.strip() for b in args.by.split(",") if b.strip()] if args.by else None
+    pairs = _parse_variable_pairs(args.pairs) if args.pairs else None
+    variables = (
+        [v.strip() for v in args.variables.split(",") if v.strip()] if args.variables else None
+    )
+    base = _scan_comparison_side(args.base, "base")
+    candidate = _scan_comparison_side(args.candidate, "candidate")
+    try:
+        report = compare(
+            base,
+            candidate,
+            keys=keys,
+            by=by,
+            pairs=pairs,
+            variables=variables,
+            abs_tol=args.abs_tol,
+            rel_tol=args.rel_tol,
+            ignore_trailing_whitespace=args.ignore_trailing_whitespace,
+            allow_duplicates=args.allow_duplicates,
+            max_print=None if args.all else DEFAULT_MAX_PRINT,
+            base_name=args.base,
+            candidate_name=args.candidate,
+        )
+    except (FleetError, pl.exceptions.PolarsError) as exc:
+        # Keys missing, duplicated or incompatible; a tolerance that is not
+        # a tolerance; or a file that scanned but could not be read.
+        # Differences never raise.
+        _fail(" ".join(str(exc).split()), code=_COMPARE_IMPOSSIBLE)
+
+    if args.out:
+        _save_comparison_file(args.out, report.save_listing, "value listing")
+    if args.report:
+        _save_comparison_file(args.report, report.save_html_report, "HTML report")
+
+    if args.format == "json":
+        print(report.to_json())  # the whole of stdout is the document
+    else:
+        print(report.to_text())
+        if args.out:
+            print(f"Value listing → {args.out}")
+        if args.report:
+            print(f"HTML report → {args.report}")
+    if not report.is_equal:
+        sys.exit(_COMPARE_DIFFERENT)
+
+
+def _save_comparison_file(path_str: str, save: Callable[[Path], None], what: str) -> None:
+    """Write one comparison output, creating parent directories; an unwritable path is exit 2."""
+    path = Path(path_str)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        save(path)
+    except OSError as exc:
+        _fail(f"cannot write the {what} {path}: {exc}", code=_COMPARE_IMPOSSIBLE)
 
 
 # ────────────────────────────────────────────────────────────────────── #
@@ -1031,7 +1009,7 @@ def _run_validate(args: argparse.Namespace) -> None:
 
 
 def _run_check(args: argparse.Namespace) -> None:
-    """Run the CI gate: config + define schema + rule YAMLs + essentials."""
+    """Run the CI gate: config + define schema + codelists + run setup + rule YAMLs + essentials."""
     from fleet.core.study_context import StudyConfigError, load_study_context
 
     rows: list[tuple[str, str, str]] = []  # (status, name, detail)
@@ -1070,12 +1048,43 @@ def _run_check(args: argparse.Namespace) -> None:
                 ("WARN", "define.yaml", "no define.yaml files found (run `fleet init define`)")
             )
 
-    # ── 3. Custom-rule YAML checks ──
+    # ── 2b. codelists.py against the study: package, mixed packages, missing classes or file ──
+    if ctx is not None:
+        from fleet.ct.study_codelists import check_codelists
+
+        try:
+            problems = check_codelists(ctx, references=True)
+        except Exception as exc:  # a codelists.py or define.yaml that does not load
+            problems = [str(exc)]
+        rows.extend(("FAIL", "codelists", problem) for problem in problems)
+        if not problems and ctx.codelists_file.is_file():
+            rows.append(("PASS", "codelists", str(ctx.codelists_file)))
+
+    # ── 3. Run setup with no datasets: IG versions, custom rules, engine ──
+    setups = []
+    if ctx is not None:
+        from fleet.core.exceptions import ValidationSetupError
+        from fleet.validation import build_run_setup
+
+        refusals: dict[str, None] = {}
+        for std in ("sdtm", "adam"):
+            try:
+                setups.append(build_run_setup(standard=std, config=config_path))
+            except ValidationSetupError as exc:
+                refusals[str(exc)] = None
+        # A missing rules directory refuses both standards with the same reason.
+        rows.extend(("FAIL", "run setup", reason) for reason in refusals)
+        for setup in setups:
+            label = "SDTMIG" if setup.standard.value == "sdtm" else "ADaMIG"
+            detail = f"{label} {setup.ig_version.value} ({setup.ig_version.source})"
+            rows.append(("PASS", "run setup", detail))
+
+    # ── 4. Custom-rule YAML checks ──
     if ctx is not None:
         rules_dir = ctx.custom_rules_dir
-        if rules_dir is None or not rules_dir.is_dir():
+        if rules_dir is None:
             rows.append(("WARN", "custom rules", "no validation.custom_rules directory configured"))
-        else:
+        elif rules_dir.is_dir():
             from fleet.validation.rule_scaffolder import check_rule
 
             rule_files = sorted([*rules_dir.glob("*.yaml"), *rules_dir.glob("*.yml")])
@@ -1088,13 +1097,15 @@ def _run_check(args: argparse.Namespace) -> None:
             if not bad:
                 rows.append(("PASS", "custom rules", f"{len(rule_files)} rule file(s) valid"))
 
-    # ── 4. Doctor essentials (informational — never fail the gate) ──
-    from fleet.validation.engine import discover_engine
+    # ── 5. Doctor essentials (informational — never fail the gate) ──
+    if setups:
+        engine, where = setups[0].engine.value, f" ({setups[0].engine.source})"
+    else:
+        from fleet.validation.engine import discover_engine
 
-    study_root = ctx.study_root if ctx is not None else None
-    engine = discover_engine(study_root)
+        engine, where = discover_engine(ctx.study_root if ctx is not None else None), ""
     if engine is not None:
-        rows.append(("PASS", "rules engine", str(engine)))
+        rows.append(("PASS", "rules engine", f"{engine}{where}"))
     else:
         rows.append(("WARN", "rules engine", "not found (run `fleet install-engine`)"))
 
@@ -1334,7 +1345,7 @@ def _resolve_spec_frames(
     if data_path is None and analysis_domain == "ADSL" and adsl_arg:
         data_path = Path(adsl_arg)
     if data_path is None and ctx is not None and analysis_domain:
-        data_path = _find_dataset_file(analysis_domain, [ctx.adam_data_dir, ctx.sdtm_data_dir])
+        data_path = find_dataset_file(analysis_domain, [ctx.adam_data_dir, ctx.sdtm_data_dir])
     if data_path is None:
         _fail(
             f"{spec_path}: template '{meta.id}' needs the {analysis_domain} dataset. "
@@ -1351,7 +1362,7 @@ def _resolve_spec_frames(
     if population is None and analysis_domain == "ADSL":
         population = data_df
     if population is None and not is_listing and "ADSL" in meta.domains and ctx is not None:
-        adsl_path = _find_dataset_file("ADSL", [ctx.adam_data_dir])
+        adsl_path = find_dataset_file("ADSL", [ctx.adam_data_dir])
         if adsl_path is not None:
             population = _load_dataset(str(adsl_path))
     if population is None and not is_listing and "ADSL" in meta.domains:
@@ -1499,7 +1510,7 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
     )
     data_arg = args.data
     if data_arg is None and ctx is not None:
-        found = _find_dataset_file(dataset_name, [ctx.adam_data_dir, ctx.sdtm_data_dir])
+        found = find_dataset_file(dataset_name, [ctx.adam_data_dir, ctx.sdtm_data_dir])
         data_arg = str(found) if found else None
     if data_arg is None:
         _fail(
@@ -1508,7 +1519,7 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
         )
     adsl_arg = args.adsl
     if adsl_arg is None and ctx is not None:
-        found = _find_dataset_file("ADSL", [ctx.adam_data_dir])
+        found = find_dataset_file("ADSL", [ctx.adam_data_dir])
         adsl_arg = str(found) if found else None
     if adsl_arg is None:
         _fail(
@@ -1938,13 +1949,13 @@ def _add_init_parsers(sub: argparse._SubParsersAction) -> None:
     )
     cfg.add_argument(
         "--ig",
-        default="3-4",
-        help="SDTM IG version (default: 3-4).",
+        default=_default_ig("sdtm"),
+        help=f"SDTM IG version (default: {_default_ig('sdtm')}).",
     )
     cfg.add_argument(
         "--adam-ig",
-        default="1-1",
-        help="ADaM IG version (default: 1-1).",
+        default=_default_ig("adam"),
+        help=f"ADaM IG version (default: {_default_ig('adam')}).",
     )
     cfg.add_argument(
         "--package",
@@ -2048,7 +2059,8 @@ def _add_ct_parsers(sub: argparse._SubParsersAction) -> None:
         default=None,
         help=(
             "CT package version. Default: ct.package from the discovered "
-            "study_config.yaml (sdtmct-2023-12-15 outside a study)."
+            "study_config.yaml (sdtmct-2023-12-15 outside a study). Refused when it "
+            "differs from the package an existing codelists.py was generated from."
         ),
     )
     add.add_argument(
@@ -2094,7 +2106,7 @@ def _add_rule_parsers(sub: argparse._SubParsersAction) -> None:
         "--id",
         default=None,
         dest="rule_id",
-        help="Explicit rule ID (e.g. ROCHE-AE-042). Skips auto-increment.",
+        help="Explicit rule ID (e.g. ACME-AE-042). Skips auto-increment.",
     )
     add_rule.add_argument(
         "--output",
@@ -2202,14 +2214,19 @@ def _add_define_xml_parser(sub: argparse._SubParsersAction) -> None:
 
 
 def _add_engine_parsers(sub: argparse._SubParsersAction) -> None:
+    from fleet.validation.engine import DEFAULT_ENGINE_TAG
+
     inst = sub.add_parser(
         "install-engine",
         help="Download the CDISC Rules Engine binary for validation.",
     )
     inst.add_argument(
         "--version",
-        default="latest",
-        help="Release tag to download (default: latest).",
+        default=DEFAULT_ENGINE_TAG,
+        help=(
+            f"Release tag to download (default: {DEFAULT_ENGINE_TAG}, the CORE release "
+            "that Fleet is tested with). 'latest' gets the newest release and warns."
+        ),
     )
     inst.add_argument(
         "--force",
@@ -2226,7 +2243,7 @@ def _add_engine_parsers(sub: argparse._SubParsersAction) -> None:
 
     doctor = sub.add_parser(
         "doctor",
-        help="Check Fleet setup: engine, API key, optional extras.",
+        help="Check Fleet setup: engine, API key, codelists.py, optional extras.",
     )
     _add_config_flag(doctor)
     doctor.set_defaults(func=_run_doctor)
@@ -2274,7 +2291,10 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     # -- validate ---------------------------------------------------------- #
     validate = sub.add_parser(
         "validate",
-        help="Validate datasets with the CDISC Rules Engine (exit 1 on errors).",
+        help=(
+            "Validate datasets with the CDISC Rules Engine, one engine run per standard "
+            "(exit 0 no errors, 1 errors, 2 a dataset could not run)."
+        ),
     )
     validate.add_argument(
         "paths",
@@ -2289,7 +2309,10 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         "--standard",
         choices=["sdtm", "adam"],
         default=None,
-        help="Force the standard. Default: AD* datasets → adam, others → sdtm.",
+        help=(
+            "Force the standard. Default: the configured data directory that holds "
+            "the dataset, else AD* datasets → adam, others → sdtm."
+        ),
     )
     validate.add_argument(
         "--version",
@@ -2319,10 +2342,165 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     # -- check -------------------------------------------------------------- #
     check = sub.add_parser(
         "check",
-        help="CI gate: config parse + define.yaml schema + custom-rule YAMLs.",
+        help=(
+            "CI gate: config parse + define.yaml schema + codelists.py + run setup + "
+            "custom-rule YAMLs."
+        ),
+        description=(
+            "CI gate: parse the study config, check each define.yaml against its schema, "
+            "check codelists.py against ct.package and the define.yaml files, "
+            "build the validation run setup for SDTM and ADaM with no datasets, and check "
+            "each custom rule YAML. An unsupported sdtm.ig_version or adam.ig_version and a "
+            "configured validation.custom_rules directory that does not exist fail the gate. "
+            "A missing rules engine and an unset CDISC_API_KEY are warnings only, because CI "
+            "installs no engine. Exit 1 on any failure, else 0."
+        ),
     )
     _add_config_flag(check)
     check.set_defaults(func=_run_check)
+
+    # -- compare ------------------------------------------------------------ #
+    compare_parser = sub.add_parser(
+        "compare",
+        help=(
+            "Compare a candidate dataset against a base on keys "
+            "(exit 0 equal, 1 different, 2 could not run)."
+        ),
+        description=(
+            "PROC COMPARE analogue: pair the two datasets on --keys, match variables by "
+            "name and print the comparison report. --pairs compares variables named "
+            "differently on each side and --variables restricts the comparison to the ones "
+            "that matter. Equality is exact unless --abs-tol, "
+            "--rel-tol or --ignore-trailing-whitespace widens it. --by sections the report "
+            "per group and --allow-duplicates pairs duplicate keys by position. Exit 0 when "
+            "the datasets are equal, 1 when they differ, 2 when the comparison could not run "
+            "(unreadable file, missing keys, duplicate keys without --allow-duplicates, a "
+            "negative tolerance, a --variables list of keys only, --out or --report not "
+            "writable)."
+        ),
+    )
+    compare_parser.add_argument(
+        "base",
+        help="The reference dataset (parquet / csv / xpt / sas7bdat; SAS formats need the io extra).",
+    )
+    compare_parser.add_argument(
+        "candidate",
+        help="The dataset measured against the base (same formats).",
+    )
+    compare_parser.add_argument(
+        "--keys",
+        required=True,
+        metavar="K1,K2",
+        help=(
+            "Comma-separated variables that identify one observation on each side, "
+            "e.g. USUBJID,AESEQ. Required; keys are never looked up."
+        ),
+    )
+    compare_parser.add_argument(
+        "--by",
+        metavar="B1,B2",
+        help=(
+            "Comma-separated variables to section the report by, e.g. TRT01P. They are "
+            "prepended to --keys automatically, so they need not be repeated there. The "
+            "observation and values summaries are also reported per group, and a group "
+            "present on one side only is flagged and listed; the verdict stays global."
+        ),
+    )
+    compare_parser.add_argument(
+        "--pairs",
+        metavar="BASE=CAND,...",
+        help=(
+            "Comma-separated variable pairs whose sides carry different names, e.g. "
+            "WEIGHT=WT. Applied on top of the automatic name matching, so a renamed "
+            "column is compared rather than reported missing; the report names it after "
+            "the base. A pair whose candidate variable is absent reports the base one as "
+            "missing from the candidate."
+        ),
+    )
+    compare_parser.add_argument(
+        "--variables",
+        metavar="V1,V2",
+        help=(
+            "Comma-separated variables to restrict the comparison to, in base names, so a "
+            "work-in-progress candidate is checked on the columns that are finished. A "
+            "variable outside the list is ignored on both sides: neither compared nor "
+            "reported as missing."
+        ),
+    )
+    compare_parser.add_argument(
+        "--abs-tol",
+        type=float,
+        default=0.0,
+        metavar="TOL",
+        help=(
+            "Absolute tolerance on the numeric variables (default: 0, exact). A numeric "
+            "pair differs when the absolute difference exceeds max(--abs-tol, --rel-tol x "
+            "|base|)."
+        ),
+    )
+    compare_parser.add_argument(
+        "--rel-tol",
+        type=float,
+        default=0.0,
+        metavar="TOL",
+        help=(
+            "Relative tolerance on the numeric variables, as a fraction of the base value "
+            "(default: 0, exact). It anchors on the base because the base is the reference, "
+            "as in SAS: 0.01 is one percent of the base."
+        ),
+    )
+    compare_parser.add_argument(
+        "--ignore-trailing-whitespace",
+        action="store_true",
+        help=(
+            "Strip trailing whitespace from both sides of a string before comparing, so a "
+            "legacy SAS dataset's padded character values equal Fleet's stripped ones. "
+            "Leading whitespace still differs."
+        ),
+    )
+    compare_parser.add_argument(
+        "--allow-duplicates",
+        action="store_true",
+        help=(
+            "Pair duplicate keys by their position within each key group instead of "
+            "refusing to run. The report then counts the duplicates per side, raises the "
+            "duplicate_keys flag and warns at the top: order within a key group decides "
+            "which observations pair."
+        ),
+    )
+    compare_parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Print every unequal value (default: 50 per variable, 500 overall).",
+    )
+    compare_parser.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help=(
+            "Output format: the text report, or one JSON document (verdict, flags, "
+            "summaries, listing within the print limits, settings, Fleet version) and "
+            "nothing else on stdout (default: text)."
+        ),
+    )
+    compare_parser.add_argument(
+        "--out",
+        metavar="PATH",
+        help=(
+            "Also write the complete value listing (never truncated) to PATH as parquet, "
+            "e.g. differences.parquet."
+        ),
+    )
+    compare_parser.add_argument(
+        "--report",
+        metavar="PATH",
+        help=(
+            "Also write a self-contained HTML report to PATH for a reviewer without Python: "
+            "structural findings as chips, then every mismatched observation with the base "
+            "and candidate values side by side, one collapsible block per variable."
+        ),
+    )
+    compare_parser.set_defaults(func=_run_compare)
 
     # -- new ---------------------------------------------------------------- #
     new = sub.add_parser(
@@ -2350,13 +2528,13 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     )
     new.add_argument(
         "--ig",
-        default="3-4",
-        help="SDTM IG version (default: 3-4).",
+        default=_default_ig("sdtm"),
+        help=f"SDTM IG version (default: {_default_ig('sdtm')}).",
     )
     new.add_argument(
         "--adam-ig",
-        default="1-1",
-        help="ADaM IG version (default: 1-1).",
+        default=_default_ig("adam"),
+        help=f"ADaM IG version (default: {_default_ig('adam')}).",
     )
     new.add_argument(
         "--package",

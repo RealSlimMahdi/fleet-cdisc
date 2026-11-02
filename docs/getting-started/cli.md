@@ -20,6 +20,8 @@ CDISC_API_KEY=your-api-key-here
   `--config <path>` to override.
 - **Exit codes** — `0` success, `1` on a Fleet error (a single clean message
   on stderr), `2` on a usage error (missing/unknown command or flag).
+  `fleet compare` turns its verdict into the exit code: `0` equal, `1`
+  different, `2` the comparison could not run.
 - **Errors** go to **stderr**; results go to stdout.
 - `fleet --version` prints the installed version.
 
@@ -31,8 +33,9 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | ------- | ------------ |
 | [`fleet init`](#fleet-init) | Bootstrapping pipeline: cfg → define → ct → rules. |
 | [`fleet run`](#fleet-run) | Execute define.yaml derivation pipelines and write datasets. |
-| [`fleet validate`](#fleet-validate) | Validate datasets with the CDISC Rules Engine (exit 1 on errors). |
-| [`fleet check`](#fleet-check) | CI gate: config parse + define.yaml schema + custom-rule YAMLs. |
+| [`fleet validate`](#fleet-validate) | Validate datasets with the CDISC Rules Engine, one engine run per standard (exit 0 no errors, 1 errors, 2 a dataset could not run). |
+| [`fleet check`](#fleet-check) | CI gate: config parse + define.yaml schema + codelists.py + run setup + custom-rule YAMLs. |
+| [`fleet compare`](#fleet-compare) | Compare a candidate dataset against a base on keys (exit 0 equal, 1 different, 2 could not run). |
 | [`fleet new`](#fleet-new) | Bootstrap a study: init cfg → define → ct → rules, one confirmation. |
 | [`fleet migrate`](#fleet-migrate) | Rewrite removed pre-alpha verb/kwarg spellings to canonical ones (libcst). |
 | [`fleet tdd`](#fleet-tdd) | Trial design workflow: build/audit TDD datasets from trial_design.yaml. |
@@ -44,7 +47,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | [`fleet check-rule`](#fleet-check-rule) | Validate a custom rule YAML (syntax, structure, schema). |
 | [`fleet install-engine`](#fleet-install-engine) | Download the CDISC Rules Engine binary for validation. |
 | [`fleet uninstall-engine`](#fleet-uninstall-engine) | Remove the managed CDISC Rules Engine binary. |
-| [`fleet doctor`](#fleet-doctor) | Check Fleet setup: engine, API key, optional extras. |
+| [`fleet doctor`](#fleet-doctor) | Check Fleet setup: engine, API key, codelists.py, optional extras. |
 | [`fleet derivation`](#fleet-derivation) | Scaffold and manage study-specific derivations. |
 | [`fleet mcp`](#fleet-mcp) | Serve Fleet tools to MCP-capable assistants (requires the 'mcp' extra). |
 | [`fleet lsp`](#fleet-lsp) | Language server for define.yaml files (requires the 'lsp' extra). |
@@ -62,7 +65,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | `--domains` | _(none)_ | Comma-separated SDTM domains (e.g. DM,AE,VS,EX). |
 | `--adam-datasets` | _(none)_ | Comma-separated ADaM datasets (e.g. ADSL,ADVS,ADAE). |
 | `--ig` | `3-4` | SDTM IG version (default: 3-4). |
-| `--adam-ig` | `1-1` | ADaM IG version (default: 1-1). |
+| `--adam-ig` | `1-3` | ADaM IG version (default: 1-3). |
 | `--package` | `sdtmct-2023-12-15` | CT package version (default: sdtmct-2023-12-15). |
 | `--root` / `-r` | `.` | Study root directory (default: current directory). |
 
@@ -115,7 +118,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | Option | Default | Description |
 | ------ | ------- | ----------- |
 | `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
-| `--standard` | _(none)_ | Force the standard. Default: AD* datasets → adam, others → sdtm. Choices: `sdtm`, `adam`. |
+| `--standard` | _(none)_ | Force the standard. Default: the configured data directory that holds the dataset, else AD* datasets → adam, others → sdtm. Choices: `sdtm`, `adam`. |
 | `--version` | _(none)_ | IG version. Default: the sdtm/adam ig_version declared in the discovered study_config.yaml (3.4 / 1.3 outside a study). |
 | `--custom-rules` | _(none)_ | Directory of custom validation rule YAML files. Default: validation.custom_rules from the discovered study_config.yaml. |
 | `--report` | _(none)_ | Write an HTML findings report to PATH. |
@@ -124,9 +127,37 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 
 ## `fleet check`
 
+CI gate: parse the study config, check each define.yaml against its schema, check codelists.py against ct.package and the define.yaml files, build the validation run setup for SDTM and ADaM with no datasets, and check each custom rule YAML. An unsupported sdtm.ig_version or adam.ig_version and a configured validation.custom_rules directory that does not exist fail the gate. A missing rules engine and an unset CDISC_API_KEY are warnings only, because CI installs no engine. Exit 1 on any failure, else 0.
+
 | Option | Default | Description |
 | ------ | ------- | ----------- |
 | `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
+
+---
+
+## `fleet compare`
+
+PROC COMPARE analogue: pair the two datasets on --keys, match variables by name and print the comparison report. --pairs compares variables named differently on each side and --variables restricts the comparison to the ones that matter. Equality is exact unless --abs-tol, --rel-tol or --ignore-trailing-whitespace widens it. --by sections the report per group and --allow-duplicates pairs duplicate keys by position. Exit 0 when the datasets are equal, 1 when they differ, 2 when the comparison could not run (unreadable file, missing keys, duplicate keys without --allow-duplicates, a negative tolerance, a --variables list of keys only, --out or --report not writable).
+
+| Argument | Description |
+| -------- | ----------- |
+| `base` | The reference dataset (parquet / csv / xpt / sas7bdat; SAS formats need the io extra). |
+| `candidate` | The dataset measured against the base (same formats). |
+
+| Option | Default | Description |
+| ------ | ------- | ----------- |
+| `--keys` | _(required)_ | Comma-separated variables that identify one observation on each side, e.g. USUBJID,AESEQ. Required; keys are never looked up. |
+| `--by` | _(none)_ | Comma-separated variables to section the report by, e.g. TRT01P. They are prepended to --keys automatically, so they need not be repeated there. The observation and values summaries are also reported per group, and a group present on one side only is flagged and listed; the verdict stays global. |
+| `--pairs` | _(none)_ | Comma-separated variable pairs whose sides carry different names, e.g. WEIGHT=WT. Applied on top of the automatic name matching, so a renamed column is compared rather than reported missing; the report names it after the base. A pair whose candidate variable is absent reports the base one as missing from the candidate. |
+| `--variables` | _(none)_ | Comma-separated variables to restrict the comparison to, in base names, so a work-in-progress candidate is checked on the columns that are finished. A variable outside the list is ignored on both sides: neither compared nor reported as missing. |
+| `--abs-tol` | `0.0` | Absolute tolerance on the numeric variables (default: 0, exact). A numeric pair differs when the absolute difference exceeds max(--abs-tol, --rel-tol x \|base\|). |
+| `--rel-tol` | `0.0` | Relative tolerance on the numeric variables, as a fraction of the base value (default: 0, exact). It anchors on the base because the base is the reference, as in SAS: 0.01 is one percent of the base. |
+| `--ignore-trailing-whitespace` | _(none)_ | Strip trailing whitespace from both sides of a string before comparing, so a legacy SAS dataset's padded character values equal Fleet's stripped ones. Leading whitespace still differs. |
+| `--allow-duplicates` | _(none)_ | Pair duplicate keys by their position within each key group instead of refusing to run. The report then counts the duplicates per side, raises the duplicate_keys flag and warns at the top: order within a key group decides which observations pair. |
+| `--all` | _(none)_ | Print every unequal value (default: 50 per variable, 500 overall). |
+| `--format` | `text` | Output format: the text report, or one JSON document (verdict, flags, summaries, listing within the print limits, settings, Fleet version) and nothing else on stdout (default: text). Choices: `text`, `json`. |
+| `--out` | _(none)_ | Also write the complete value listing (never truncated) to PATH as parquet, e.g. differences.parquet. |
+| `--report` | _(none)_ | Also write a self-contained HTML report to PATH for a reviewer without Python: structural findings as chips, then every mismatched observation with the base and candidate values side by side, one collapsible block per variable. |
 
 ---
 
@@ -142,7 +173,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | `--adam-datasets` | _(none)_ | Comma-separated ADaM datasets (e.g. ADSL,ADVS,ADAE). |
 | `--company` | _(none)_ | Originator / company name. |
 | `--ig` | `3-4` | SDTM IG version (default: 3-4). |
-| `--adam-ig` | `1-1` | ADaM IG version (default: 1-1). |
+| `--adam-ig` | `1-3` | ADaM IG version (default: 1-3). |
 | `--package` | `sdtmct-2023-12-15` | CT package version (default: sdtmct-2023-12-15). |
 | `--root` / `-r` | `.` | Study root directory (default: current directory). |
 | `--yes` / `-y` | _(none)_ | Skip the confirmation prompt. |
@@ -292,7 +323,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | ------ | ------- | ----------- |
 | `--domains` | _(required)_ | Comma-separated SDTM domain abbreviations to add. |
 | `--ig` | _(none)_ | SDTM IG version. Default: sdtm.ig_version from the discovered study_config.yaml (3-4 outside a study). |
-| `--package` | _(none)_ | CT package version. Default: ct.package from the discovered study_config.yaml (sdtmct-2023-12-15 outside a study). |
+| `--package` | _(none)_ | CT package version. Default: ct.package from the discovered study_config.yaml (sdtmct-2023-12-15 outside a study). Refused when it differs from the package an existing codelists.py was generated from. |
 | `--output` / `-o` | _(none)_ | Path to the existing codelists.py. Default: <metadata_sdtm>/codelists.py from the discovered study_config.yaml (./codelists.py outside a study). |
 | `--no-docs` | _(none)_ | Omit definitions and preferred terms from generated code. |
 
@@ -305,7 +336,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | `--domain` | _(required)_ | SDTM/ADaM domain code (e.g. AE, DM, VS). |
 | `--description` | _(required)_ | Human-readable description of the rule. |
 | `--prefix` | `FLEET` | Rule ID prefix (default: FLEET). |
-| `--id` | _(none)_ | Explicit rule ID (e.g. ROCHE-AE-042). Skips auto-increment. |
+| `--id` | _(none)_ | Explicit rule ID (e.g. ACME-AE-042). Skips auto-increment. |
 | `--output` / `-o` | _(none)_ | Output directory for the rule YAML. Defaults to validation.custom_rules from study_config.yaml. |
 | `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 
@@ -323,7 +354,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
-| `--version` | `latest` | Release tag to download (default: latest). |
+| `--version` | `v0.15` | Release tag to download (default: v0.15, the CORE release that Fleet is tested with). 'latest' gets the newest release and warns. |
 | `--force` | _(none)_ | Re-download even if already installed. |
 
 ---

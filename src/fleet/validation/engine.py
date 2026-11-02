@@ -11,10 +11,13 @@ Install locations:
 
 Discovery order:
 
-1. ``FLEET_RULES_ENGINE`` environment variable (explicit executable path).
-2. ``validation.engine_path`` from ``study_config.yaml`` (team-shared).
+1. ``validation.engine_path`` from ``study_config.yaml`` (team-shared).
+2. ``FLEET_RULES_ENGINE`` environment variable (explicit executable path).
 3. Managed install from ``fleet install-engine``.
 4. Legacy ``../cdisc-rules-engine/core.py`` (development fallback).
+
+The study config comes first so that a team lead's pinned engine is not
+overridden by a stale environment variable on one machine (ADR 0003).
 """
 
 from __future__ import annotations
@@ -22,13 +25,22 @@ from __future__ import annotations
 import os
 import platform
 import stat
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 # GitHub repository for the CDISC Rules Engine releases.
 _GITHUB_REPO = "cdisc-org/cdisc-rules-engine"
 _RELEASES_API = f"https://api.github.com/repos/{_GITHUB_REPO}/releases/latest"
+
+#: GitHub release tag of the CORE version that Fleet is tested with (CORE 0.15.0).
+#: ``fleet install-engine`` installs this tag unless the user asks for another one.
+DEFAULT_ENGINE_TAG = "v0.15"
 
 
 def _fleet_home() -> Path:
@@ -45,6 +57,9 @@ def _fleet_home() -> Path:
 
 FLEET_HOME = _fleet_home()
 ENGINE_DIR = FLEET_HOME / "cdisc-rules-engine"
+
+#: File next to the managed binary that holds the release tag ``fleet install-engine`` installed.
+VERSION_MARKER = "fleet-release-tag.txt"
 
 
 def _platform_asset_keywords() -> list[str]:
@@ -73,14 +88,109 @@ def engine_path() -> Path:
     return ENGINE_DIR / "core" / _engine_filename()
 
 
+def find_engine(
+    configured: Path | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> tuple[Path, Literal["study config", "environment", "default"]] | None:
+    """Find the CDISC Rules Engine executable and say where it came from.
+
+    Order: *configured* (``validation.engine_path``), then
+    ``FLEET_RULES_ENGINE``, then the managed install, then the legacy
+    sibling checkout.  A candidate that is not a file is skipped.
+
+    Args:
+        configured: The engine path from the study config, already resolved.
+        environ: Environment to read ``FLEET_RULES_ENGINE`` from
+            (default: ``os.environ``).
+
+    Returns:
+        ``(path, source)``, or ``None`` when no engine is found.
+    """
+    if configured is not None and configured.is_file():
+        return configured, "study config"
+
+    env = (os.environ if environ is None else environ).get("FLEET_RULES_ENGINE")
+    if env and Path(env).is_file():
+        return Path(env), "environment"
+
+    managed = engine_path()
+    if managed.is_file():
+        return managed, "default"
+
+    legacy = Path(__file__).parent.parent.parent.parent / "cdisc-rules-engine" / "core.py"
+    if legacy.is_file():
+        return legacy, "default"
+
+    return None
+
+
+def engine_version(executable: Path) -> str:
+    """Return the version of the engine at *executable*.
+
+    The version comes from the engine's own ``version`` command, else from
+    the :data:`VERSION_MARKER` file next to the executable (the release tag
+    without its ``v``), else it is ``"unknown"``.  A version the command
+    gave is kept per executable and modification time, so a sweep asks the
+    engine once.
+
+    Args:
+        executable: The engine binary, or the legacy ``core.py``.
+
+    Returns:
+        str: The version (``"0.15.0"``), or ``"unknown"``.
+
+    Examples:
+        The version that the report header prints for the managed install::
+
+            from fleet.validation.engine import engine_path, engine_version
+
+            engine_version(engine_path())  # "0.15.0"
+    """
+    try:
+        key = (executable, executable.stat().st_mtime_ns)
+    except OSError:
+        return "unknown"
+    if key not in _VERSIONS:
+        found = _version_command(executable)
+        if found is None:
+            return _version_marker(executable)
+        _VERSIONS[key] = found
+    return _VERSIONS[key]
+
+
+_VERSIONS: dict[tuple[Path, int], str] = {}
+
+
+def _version_command(executable: Path) -> str | None:
+    cmd = [str(executable), "version"]
+    if executable.suffix == ".py":
+        cmd.insert(0, "python")
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=30, cwd=str(executable.parent)
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    lines = result.stdout.strip().splitlines()
+    return lines[-1].strip() if result.returncode == 0 and lines else None
+
+
+def _version_marker(executable: Path) -> str:
+    try:
+        tag = (executable.parent / VERSION_MARKER).read_text(encoding="utf-8").strip()
+    except OSError:
+        tag = ""
+    return tag.removeprefix("v") or "unknown"
+
+
 def discover_engine(study_root: Path | None = None) -> Path | None:
     """Find the CDISC Rules Engine executable.
 
     Discovery order:
 
-    1. ``FLEET_RULES_ENGINE`` environment variable.
-    2. ``validation.engine_path`` from ``study_config.yaml`` (if *study_root* given).
-    3. Managed install (``~/.fleet/bin/core``).
+    1. ``validation.engine_path`` from ``study_config.yaml`` (if *study_root* given).
+    2. ``FLEET_RULES_ENGINE`` environment variable.
+    3. Managed install (``~/.fleet/cdisc-rules-engine/core/core``).
     4. Legacy ``../cdisc-rules-engine/core.py`` (development fallback).
 
     Args:
@@ -90,30 +200,9 @@ def discover_engine(study_root: Path | None = None) -> Path | None:
     Returns:
         Path to the engine executable, or ``None`` if not found.
     """
-    # 1. Explicit env var (highest priority — always overrides)
-    env = os.environ.get("FLEET_RULES_ENGINE")
-    if env:
-        p = Path(env)
-        if p.is_file():
-            return p
-
-    # 2. Project-level config (study_config.yaml → validation.engine_path)
-    if study_root is not None:
-        cfg_path = _engine_path_from_study_config(study_root)
-        if cfg_path is not None and cfg_path.is_file():
-            return cfg_path
-
-    # 3. Managed install
-    managed = engine_path()
-    if managed.is_file():
-        return managed
-
-    # 4. Legacy: ../cdisc-rules-engine/core.py (dev layout)
-    legacy = Path(__file__).parent.parent.parent.parent / "cdisc-rules-engine" / "core.py"
-    if legacy.is_file():
-        return legacy
-
-    return None
+    configured = _engine_path_from_study_config(study_root) if study_root is not None else None
+    found = find_engine(configured)
+    return found[0] if found is not None else None
 
 
 def _engine_path_from_study_config(study_root: Path) -> Path | None:
@@ -141,7 +230,7 @@ def _engine_path_from_study_config(study_root: Path) -> Path | None:
     return p
 
 
-def install_engine(*, version: str = "latest", force: bool = False) -> Path:
+def install_engine(*, version: str = DEFAULT_ENGINE_TAG, force: bool = False) -> Path:
     """Download the CDISC Rules Engine bundle from GitHub Releases.
 
     The CDISC Rules Engine is distributed as a PyInstaller ``--onedir`` bundle
@@ -150,7 +239,10 @@ def install_engine(*, version: str = "latest", force: bool = False) -> Path:
     equivalent).
 
     Args:
-        version: Release tag to download (default: ``"latest"``).
+        version: Release tag to download. The default is
+            ``DEFAULT_ENGINE_TAG``, the CORE release that Fleet is tested
+            with. ``"latest"`` downloads the newest release and prints a
+            warning, because Fleet is not tested with that version.
         force: Re-download even if the engine is already installed.
 
     Returns:
@@ -171,6 +263,12 @@ def install_engine(*, version: str = "latest", force: bool = False) -> Path:
 
     # Resolve the release URL
     if version == "latest":
+        print(
+            f"Warning: 'latest' is not tested with Fleet. "
+            f"Fleet is tested with CORE {DEFAULT_ENGINE_TAG}; "
+            f"validation can fail on a newer engine.",
+            file=sys.stderr,
+        )
         release_url = _RELEASES_API
     else:
         tag = version if version.startswith("v") else f"v{version}"
@@ -218,7 +316,8 @@ def install_engine(*, version: str = "latest", force: bool = False) -> Path:
     if platform.system().lower() != "windows":
         dest.chmod(dest.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
-    print(f"Installed CDISC Rules Engine → {dest}")
+    (dest.parent / VERSION_MARKER).write_text(f"{tag_name}\n", encoding="utf-8")
+    print(f"Installed CDISC Rules Engine {tag_name} → {dest}")
     return dest
 
 
@@ -350,23 +449,23 @@ def uninstall_engine() -> bool:
     return False
 
 
-def doctor(study_root: Path | None = None) -> dict[str, str]:
+def doctor(study_root: Path | None = None, engine: Path | None = None) -> dict[str, str]:
     """Check the health of the CDISC Rules Engine installation.
 
     Args:
         study_root: Optional study root directory; when given,
             ``validation.engine_path`` from its ``study_config.yaml`` is
             honoured during engine discovery.
+        engine: The engine to check, as a run setup resolved it; skips
+            the discovery.
 
     Returns:
         A dict of check names to status strings.
     """
-    import subprocess
-
     checks: dict[str, str] = {}
 
     # Engine discovery
-    found = discover_engine(study_root)
+    found = engine if engine is not None else discover_engine(study_root)
     if found is None:
         checks["engine"] = "NOT FOUND — run `fleet install-engine`"
         checks["version"] = "N/A"

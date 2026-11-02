@@ -19,6 +19,7 @@ These are also the composition points for the ``fleet tlg run`` /
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -53,6 +54,28 @@ NAMESPACE_CLASSES: dict[str, type[Any]] = {
     "lb": LBTLGNamespace,
     "mh": MHTLGNamespace,
 }
+
+#: Treatment-arm columns tried, in order, when no ``groupby`` is given.
+GROUPBY_CANDIDATES: tuple[str, ...] = ("TRTA", "TRT01A", "TRT01P")
+
+
+def detect_groupby(columns: Iterable[str]) -> str | None:
+    """The first :data:`GROUPBY_CANDIDATES` column present in *columns*.
+
+    Args:
+        columns: Column names of the analysis dataset.
+
+    Returns:
+        str | None: The detected treatment-arm column, or ``None`` when the
+        caller must ask for one explicitly.
+
+    Examples:
+        Auto-detect the arm column of an ADAE::
+
+            detect_groupby(adae.columns)  # -> 'TRTA'
+    """
+    present = set(columns)
+    return next((c for c in GROUPBY_CANDIDATES if c in present), None)
 
 
 def resolve_spec_cls(meta: TemplateMeta) -> type[TLGSpec]:

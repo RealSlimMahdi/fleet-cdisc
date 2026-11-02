@@ -16,6 +16,7 @@ Three layers of guarantees, all driven by ``fleet.core.spec_registry``
 
 from __future__ import annotations
 
+import inspect
 import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -98,6 +99,7 @@ _INFRASTRUCTURE: set[str] = {
     "explain",
     "trail",
     "validate",
+    "compare",  # QC step: reports against a base, derives nothing
     "select",
     "nodup",
     "from_spec",
@@ -157,6 +159,77 @@ def test_coverage_matrix_shape() -> None:
     }
     assert per_standard["sdtm"] == set(spec_registry.algorithm_names("sdtm"))
     assert per_standard["adam"] == set(spec_registry.algorithm_names("adam"))
+
+
+# ──────────────────────────────────────────────────────────────────────
+# 2b. Parameter facts: Param tables ↔ verb signatures (ADR-0007)
+# ──────────────────────────────────────────────────────────────────────
+
+#: Algorithms with a custom ``dispatch`` have no verb signature to compare
+#: against (``callable_ref`` is not a keyword of any verb).
+_NAMESPACES: dict[str, type] = {"sdtm": SDTMNamespace, "adam": AdamNamespace}
+
+
+def _default_dispatch_algorithms() -> list[spec_registry.SpecAlgorithm]:
+    return [
+        algo
+        for standard in ("sdtm", "adam")
+        for algo in spec_registry.algorithms(standard)
+        if algo.dispatch is None
+    ]
+
+
+def _signature_facts(algo: spec_registry.SpecAlgorithm) -> dict[str, inspect.Parameter]:
+    verb = getattr(_NAMESPACES[algo.standard], algo.verb)
+    return {
+        name: param
+        for name, param in inspect.signature(verb).parameters.items()
+        if name != "self" and param.kind not in (param.VAR_POSITIONAL, param.VAR_KEYWORD)
+    }
+
+
+@pytest.mark.parametrize(
+    "algo",
+    _default_dispatch_algorithms(),
+    ids=lambda a: f"{a.standard}.{a.name}",
+)
+def test_param_table_matches_verb_signature(algo: spec_registry.SpecAlgorithm) -> None:
+    """ADR-0007: the spec may be stricter than the verb, never looser.
+
+    1. Every ``Param`` keyword exists in the verb signature.
+    2. A default-to-target ``Param`` skips the default check.
+    3. ``required=True`` where the signature has a default is allowed
+       (stricter). A spec default where the signature requires a value, or
+       a spec default that differs from the signature's, is not (looser).
+    4. When both sides are optional, the defaults are equal.
+    5. Signature arguments absent from the registry are ignored: the spec
+       surface is a curated subset.
+    """
+    sig = _signature_facts(algo)
+    problems: list[str] = []
+    for p in algo.params:
+        kwarg = p.kwarg or p.name
+        if kwarg not in sig:  # rule 1
+            problems.append(f"{p.name}: kwarg {kwarg!r} is not a parameter of .{algo.verb}()")
+            continue
+        if p.default_to_target:  # rule 2
+            continue
+        sig_param = sig[kwarg]
+        sig_required = sig_param.default is inspect.Parameter.empty
+        if p.required:  # rule 3, stricter side: always fine
+            continue
+        if sig_required:  # rule 3, looser side
+            problems.append(
+                f"{p.name}: spec default {p.default!r} but .{algo.verb}() requires {kwarg!r}"
+            )
+        elif p.default != sig_param.default:  # rule 4
+            problems.append(
+                f"{p.name}: spec default {p.default!r} != verb default {sig_param.default!r}"
+            )
+    assert not problems, (
+        f"{algo.standard}.{algo.name} → .{algo.verb}(): Param table drifted from the verb "
+        "signature (ADR-0007):\n  " + "\n  ".join(problems)
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -234,6 +307,7 @@ SDTM_CASES: list[Case] = [
                 "target": "SEX",
                 "algorithm": "assign_ct",
                 "source": "sex_raw",
+                "ct_codelist": "C66731",
                 "ct_mapping": {"male": "M", "female": "F"},
             }
         ],
@@ -256,7 +330,7 @@ SDTM_CASES: list[Case] = [
     Case(
         "hardcode_ct",
         lambda: _subjects(),
-        [{"target": "SEX", "algorithm": "hardcode_ct", "value": "M"}],
+        [{"target": "SEX", "algorithm": "hardcode_ct", "value": "M", "ct_codelist": "C66731"}],
         lambda df: df["SEX"].to_list() == ["M", "M"],
     ),
     Case(
@@ -695,7 +769,15 @@ ADAM_CASES: list[Case] = [
 │ 200  ┆ 60       ┆ 140      │
 └──────┴──────────┴──────────┘
 """),
-        [{"target": "LBNRIND", "algorithm": "nrind"}],
+        [
+            {
+                "target": "LBNRIND",
+                "algorithm": "nrind",
+                "aval": "AVAL",
+                "low": "LBSTNRLO",
+                "high": "LBSTNRHI",
+            }
+        ],
         lambda df: df["LBNRIND"].to_list() == ["LOW", "NORMAL", "HIGH"],
     ),
     Case(
@@ -710,7 +792,15 @@ ADAM_CASES: list[Case] = [
 │ 2024-03-01 ┆ 2024-01-01 ┆ 2024-02-01 │
 └────────────┴────────────┴────────────┘
 """),
-        [{"target": "ONTRTFL", "algorithm": "on_treatment"}],
+        [
+            {
+                "target": "ONTRTFL",
+                "algorithm": "on_treatment",
+                "analysis_date": "ADT",
+                "reference_date": "TRTSDT",
+                "trtedt": "TRTEDT",
+            }
+        ],
         lambda df: df["ONTRTFL"].to_list() == ["Y", None],
     ),
     Case(
@@ -808,6 +898,7 @@ ADAM_CASES: list[Case] = [
                 "target": "ATOXGRL",
                 "algorithm": "atoxgr",
                 "direction": "L",
+                "term_var": "PARAMCD",
                 "unit_var": "AVALU",
             }
         ],

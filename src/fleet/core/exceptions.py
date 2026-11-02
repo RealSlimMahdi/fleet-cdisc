@@ -67,6 +67,37 @@ class ValidationError(FleetError):
     """Raised when CDISC validation encounters a fatal error."""
 
 
+class ValidationSetupError(FleetError, ValueError):
+    """Raised when a validation could not run: its run setup was refused.
+
+    Examples: the namespace and the dataset name point to different
+    standards, or the IG version is not supported.  The verb raises it in
+    every ``on_fail`` mode, because no rule was reached.
+    """
+
+
+class StudyRunError(FleetError):
+    """Raised when a study run cannot plan or build a dataset.
+
+    Examples: no define file under the study's metadata directories, a
+    dataset name the define files do not declare, an input that no seed,
+    earlier step, declared path or data directory provides, or a seed
+    that is also a step of the plan.
+    """
+
+
+class ComparisonError(FleetError, ValueError):
+    """Raised when a comparison cannot run: keys missing, duplicated or
+    incompatible between the base and the candidate.
+
+    Differences between the two datasets never raise from
+    :func:`fleet.compare`; they are reported.  The pipeline verb
+    ``.compare(..., on_fail="raise")`` is the one place that turns a
+    difference into this error, on request.  Dual-inherits from
+    ``ValueError`` so ``except ValueError`` handlers keep working.
+    """
+
+
 class TLGError(FleetError):
     """Raised when TLG namespace operations fail."""
 

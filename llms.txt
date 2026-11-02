@@ -6,6 +6,8 @@ Fleet adds chainable verb pipelines directly onto every Polars DataFrame so you 
 
 ## Rules for AI Agents
 
+Fleet optimises for workflow quality: one obvious path from raw data to submission artefact. That is why these rules exist and why they are narrow — following them keeps you on the path the library was designed around, which is the single biggest factor in getting a pipeline right on the first pass. When a rule seems to forbid a shortcut, the rule wins.
+
 1. **Fleet-first verb priority** — Always reach for a named Fleet verb (`duration`, `baseline`, `chg`, `treatment_emergent`, …) before falling back to a raw `derivation(expression=...)` call. Named verbs encode CDISC semantics, enforce correct argument names, and appear in Define-XML traceability. Use `derivation` only as a last resort for logic not yet covered by a typed verb.
 
 2. **Polars-only** — Fleet pipelines are built on Polars. Never introduce Pandas, NumPy array operations, or any other DataFrame library. All expressions must be `pl.Expr` objects or expression strings that Fleet will evaluate with `eval()`.
@@ -1935,6 +1937,27 @@ gen.generate(Path("outputs/cdiscpilot01/define_adam.xml"))
 
 New spec keys: `fleet_spec_version: 1` (dialect pin), `derivations_module:` (auto-import for `callable:`), `output_format:` (parquet/json/xpt), `value_level:` (value-level metadata), and `ct: {validate: true, file: ...}` (opt into CT validation).
 
+## Study run (`fleet.run`, behind `fleet run`)
+
+A **study run** reads the study's define files, builds every dataset they declare from its inputs, and hands each **built dataset** forward to the datasets that take it as an input. `plan_study` returns the **study plan** (the ordered **steps**) without building anything; `run_study` yields one built dataset per step. The module writes no file and prints nothing: `fleet run` is the CLI adapter that writes parquet / xpt / dataset-json and prints progress.
+
+```python
+import fleet
+
+ctx = fleet.load_study_context("study_config.yaml")
+plan = fleet.plan_study(ctx)  # SDTM define first, then ADaM, each in file order
+[(s.standard, s.dataset) for s in plan.steps]  # [("sdtm", "DM"), ("sdtm", "AE"), ("adam", "ADSL"), ...]
+
+for built in fleet.run_study(plan):  # a generator: each dataset as soon as it is built
+    built.step.dataset, built.frame.shape, built.inputs  # inputs: name -> (path, source)
+
+# Build ADVS from an ADSL held in memory (a seed), not from the file on disk
+plan = fleet.plan_study(ctx, datasets=["ADVS"])
+advs = next(fleet.run_study(plan, inputs={"ADSL": adsl_fixed})).frame
+```
+
+Rules (ADR 0006): each input is taken from the first source that gives it — a seed, a dataset built earlier in the run, the input's `path:` relative to the study root, then its name in the raw / SDTM / ADaM data directories (`.parquet`, `.csv`, `.xpt`, `.sas7bdat`). The first input is the base frame. Every other input is **pinned** under its dataset name, so `merge`, `lookup`, `first_date`, `last_date` and `count_events` reach it. Only **carry-through columns** (declared with no `derivation:`) are left-joined from the other inputs on USUBJID; a column with a derivation comes from its algorithm alone. A seed that is also a step is refused. Every refusal is a `StudyRunError`, which `fleet run` turns into exit 1.
+
 ## Controlled Terminology
 
 ### CLI bootstrap (recommended)
@@ -1957,7 +1980,7 @@ uv run fleet define-xml --spec specs/study/sdtm/define.yaml --output outputs/def
 
 The source of truth for which codelists to generate is the **CDISC Library SDTM IG** — not the user-authored `define.yaml`. The CLI queries the IG model to find every codelist referenced by variables in the requested domains.
 
-Generated `codelists.py` provides classes with `_concept_id`, term attributes, human-readable aliases (e.g. `SEX = C66731`), and `__all__` for clean imports.
+Generated `codelists.py` provides classes with `_concept_id`, term attributes, human-readable aliases (e.g. `SEX = C66731`), `__all__` for clean imports, and a `__ct_package__` marker naming the CT package every class came from.
 
 ### Using generated codelists in pipelines
 
@@ -1973,6 +1996,8 @@ dm = (
 ```
 
 `assign(ct=...)` accepts either a generated codelist class (e.g. `SEX`) or a raw NCI concept ID string (e.g. `"C66731"`). Prefer the class form for IDE auto-completion and readability. When raw data already matches the standard, `ct_map` can be omitted (values are validated and passed through).
+
+The spec path checks the same terms: inside a study, `from_spec` resolves a `ct_codelist:` ID to the class of that ID in the study's `codelists.py`, so `algorithm: assign_ct` with `ct_codelist: C66769` warns exactly like `.assign("AESEV", source="ae_severity", ct=AESEV)`. A `codelists.py` that disagrees with `ct.package` or the define.yaml files warns once in `from_spec` and fails `fleet check`.
 
 ### Programmatic API
 
@@ -2030,10 +2055,10 @@ Sponsors can author rules in the same YAML schema as CDISC CORE and run them alo
 uv run fleet add-rule --domain AE --description "AESEV must be populated when AESER = Y"
 
 # Custom company prefix (default: FLEET)
-uv run fleet add-rule --domain AE --prefix ROCHE --description "Severity required for serious AEs"
+uv run fleet add-rule --domain AE --prefix ACME --description "Severity required for serious AEs"
 
 # Explicit rule ID override (skips auto-increment)
-uv run fleet add-rule --domain AE --id ROCHE-AE-042 --description "Custom check"
+uv run fleet add-rule --domain AE --id ACME-AE-042 --description "Custom check"
 
 # Write to a specific directory (overrides study_config.yaml)
 uv run fleet add-rule --domain VS --description "VSORRES range check" --output ./my_rules/
@@ -2083,12 +2108,79 @@ Resolution order: explicit `custom_rules=` param > `study_config.yaml` default >
 ### Rule ID convention
 
 Use a company prefix to avoid clashing with official `CORE-XXXXXX` identifiers:
-`<COMPANY>-<DOMAIN>-<NNN>` e.g. `ROCHE-AE-001`, `FLEET-DM-003`
+`<COMPANY>-<DOMAIN>-<NNN>` e.g. `ACME-AE-001`, `FLEET-DM-003`
 
 ### Reference
 
 CDISC Rules Engine rule types and operators:
 https://github.com/cdisc-org/cdisc-rules-engine/wiki/Rule-Types
+
+## Dataset comparison (PROC COMPARE analogue)
+
+`fleet.compare` pairs a **candidate** dataset against a **base** on **keys**, matches variables by name and returns a **comparison report**. Differences never raise from the function; the report says what was found. Pure Polars, no extra dependency. Keys are mandatory on every surface and are never looked up (not from define.yaml, not from study_config.yaml).
+
+### Python API
+
+```python
+import fleet
+
+report = fleet.compare(adae_prod, adae_qc, keys=["USUBJID", "AESEQ"])
+report.print_report()  # data set, variables, observation and values summaries, summary statistics, value listing, verdict
+assert report.is_equal, report.raised_flags
+report.listing  # long frame: keys, group, variable, base, candidate, difference, percent_difference
+report.statistics  # one row per differing variable: differences, then n/mean/std/min/max of base, candidate, difference, percent_difference (numeric variables only)
+report.to_json()  # one JSON document for agents / editors; report.save_json(path) writes it
+report.save_listing("differences.parquet")  # the complete listing as parquet, never truncated
+report.save_html_report("compare.html")  # self-contained page for a reviewer: flags as chips, mismatched observations side by side, never truncated
+
+# Absorb a legacy engine's noise without hiding a real difference
+report = fleet.compare(advs_legacy, advs_fleet, keys=["USUBJID", "PARAMCD"], rel_tol=1e-9, ignore_trailing_whitespace=True)
+
+# Section the report per treatment arm; duplicates pair by position instead of refusing
+report = fleet.compare(adsl_prod, adsl_qc, keys="USUBJID", by="TRT01P", allow_duplicates=True)
+report.observations.per_group  # group, matched, base_only, candidate_only
+report.values.per_group  # group, variables_with_differences, observations_with_differences, differences
+report.warnings  # lines every renderer prints above the report (duplicate keys today)
+
+# Compare a variable the two sides name differently, on the variables that are finished
+report = fleet.compare(advs_legacy, advs_wip, keys=["USUBJID", "PARAMCD"], pairs={"WEIGHT": "WT"}, variables=["WEIGHT", "AVISIT"])
+```
+
+Rules: equality is exact by default; null equals null, NaN equals NaN, null against NaN differs. `abs_tol` and `rel_tol` widen equality on the numeric variables only — a pair differs when the absolute difference exceeds `max(abs_tol, rel_tol * abs(base))`, anchored on the **base** as in SAS (not on the candidate, as Polars' testing helper does), in `Float64` arithmetic — and `ignore_trailing_whitespace` strips the right of both strings, leaving leading whitespace a difference. Nulls and NaN keep their rule under both: a NaN is never within a tolerance of a number, and NaN still equals NaN. Same-kind variables with different dtypes (Int64 / Float64, String / Categorical, Date / Datetime) are compared after casting and listed as dtype differences without a flag; different kinds (numeric / string) are type conflicts, listed and not compared. Row and column order are ignored. A missing key raises `ComparisonError` naming the side, and so does a duplicated one unless `allow_duplicates` pairs duplicates by their position within each key group (counted per side, flagged and warned about; an unpaired one becomes a one-sided observation). `pairs` maps base names to candidate names on top of the name matching, so a renamed column is compared rather than reported missing and is named after the **base** throughout the report; a pair whose candidate name is absent reports the base variable as missing from the candidate. `variables` restricts the universe, in base names: what is outside it is ignored on both sides and raises no missing-variable flag. `by` prepends the BY variables to the keys — they need not be repeated there — labels each difference `TRT01P=A` in the listing's `group` column, adds per-group observation and values counts to every renderer, and flags groups found on one side only; the verdict stays global. `max_print` (50 per variable, 500 overall; `None` prints all) caps only what the text report and the JSON document show; the listing frame and the parquet are always complete. `report.statistics` carries one row per differing variable (`fleet.comparison.STATISTICS_COLUMNS`): its count of differing observations, then the n, mean, std, min and max of the base, the candidate, their difference and its percent, over the matched observations where both sides are finite (null, NaN and infinite values are left out, and no measure is NaN) — so a systematic offset reads differently from noise; a variable that is not numeric contributes its count alone. No correlation, R squared or t statistic. `report.flags` holds the raised names among `base_only_variables`, `candidate_only_variables`, `type_conflicts`, `base_only_observations`, `candidate_only_observations`, `values_differ`, `duplicate_keys`, `base_only_groups`, `candidate_only_groups`; `report.is_equal` is true only when none is raised.
+
+JSON contract (`fleet.comparison.JSON_KEYS`, additive-only within a major version — keys are added, never removed or renamed): `is_equal`, `summary`, `flags`, `warnings`, `datasets`, `variables`, `observations` (with `per_group`, `base_only_groups`, `candidate_only_groups` and the duplicate counts), `values` (with `per_group`), `statistics` (one record per differing variable), `listing` (`columns`, `rows`, `shown`, `total`, `truncated` — truncated to the print limits, unlike the parquet), `settings` (every option in effect), `version`. Strict JSON: non-finite numbers are null, temporal keys are ISO 8601 strings.
+
+### Pipeline verb (every namespace: `df.sdtm`, `df.adam`, `df.adam.adsl`, `df.adam.occds`, …)
+
+The chain is the candidate, the argument is the base. `on_fail` is `"warn"` (default, `UserWarning`), `"raise"` (`ComparisonError`) or `"ignore"`, exactly as for `.validate()`; the report stays on the namespace as `.last_comparison` and the chain continues.
+
+- `compare(base: pl.DataFrame | pl.LazyFrame, *, keys: str | Sequence[str], by: str | Sequence[str] | None = None, pairs: Mapping[str, str] | None = None, variables: str | Sequence[str] | None = None, abs_tol: float = 0.0, rel_tol: float = 0.0, ignore_trailing_whitespace: bool = False, allow_duplicates: bool = False, max_print: MaxPrint = 50, base_name: str | None = None, candidate_name: str | None = None, on_fail: "Literal['warn', 'raise', 'ignore']" = 'warn') -> Self` — Compare the chain against a base dataset, PROC COMPARE style.
+
+```python
+adae_qc = (
+    ae_df.adam.occds
+    .source("USUBJID")
+    .source("AESEQ")
+    .compare(adae_prod, keys=["USUBJID", "AESEQ"], on_fail="raise")
+    .to_frame()
+)
+```
+
+### CLI
+
+```bash
+uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID,AESEQ   # parquet / csv / xpt / sas7bdat
+uv run fleet compare legacy/adae.xpt outputs/adam/adae.parquet --keys USUBJID,AESEQ --all   # print every unequal value
+uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID,AESEQ --format json   # one JSON document, nothing else on stdout
+uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID,AESEQ --out build/adae_differences.parquet   # complete listing as parquet
+uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID,AESEQ --report build/adae_compare.html   # self-contained HTML report for a reviewer
+uv run fleet compare legacy/advs.xpt outputs/adam/advs.parquet --keys USUBJID,PARAMCD --rel-tol 1e-9 --ignore-trailing-whitespace   # absorb legacy engine noise
+uv run fleet compare adsl_prod.parquet adsl_qc.parquet --keys USUBJID --by TRT01P   # section the report per treatment arm
+uv run fleet compare adae_prod.parquet adae_qc.parquet --keys USUBJID --allow-duplicates   # pair duplicate keys by position instead of refusing
+uv run fleet compare legacy/advs.xpt outputs/adam/advs.parquet --keys USUBJID,PARAMCD --pairs WEIGHT=WT --variables WEIGHT,AVISIT   # renamed column, and only the variables that are finished
+```
+
+The exit code is the verdict: `0` equal, `1` different (report on stdout), `2` the comparison could not run (unreadable file, missing keys, duplicate keys without `--allow-duplicates`, a negative tolerance, a `--variables` list of keys only, `--out` or `--report` not writable — the reason is on stderr). `--keys` is required.
 
 ## Documentation
 

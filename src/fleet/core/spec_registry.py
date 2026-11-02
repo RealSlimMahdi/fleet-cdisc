@@ -419,6 +419,10 @@ def _default_dispatch(ns: Any, var: SpecVariableBase) -> Any:
         (p.kwarg or p.name) == "ct" for p in algo.params
     ):
         kwargs.setdefault("validate_values", True)
+    # from_spec put the study's codelists.py classes here; an ID they lack stays a string.
+    codelists = getattr(ns, "_spec_codelists", None)
+    if codelists and isinstance(kwargs.get("ct"), str):
+        kwargs["ct"] = codelists.get(kwargs["ct"], kwargs["ct"])
     method = getattr(ns, algo.verb)
     if algo.takes_target:
         return method(var.target, **kwargs)
@@ -745,10 +749,12 @@ def render_formal_expression(
 ) -> str | None:
     """Machine-readable provenance for ``FormalExpression Context="Python/Fleet"``.
 
-    Renders the faithful Fleet call — dotted verb path plus the spec
-    params as keyword arguments in declared (deterministic) order — so a
-    reviewer can reproduce the derivation, unlike the former
-    ``.verb(...)`` stub.
+    Renders the faithful Fleet call — the method the spec dispatches to,
+    plus the spec params as keyword arguments in declared (deterministic)
+    order — so a reviewer can reproduce the derivation, unlike the former
+    ``.verb(...)`` stub.  The method is named after the class that defines
+    it on the *standard*'s namespace, so the path is the one runtime
+    lineage records in ``VariableNode.method`` for the same derivation.
 
     Args:
         standard: ``"sdtm"`` or ``"adam"``.
@@ -764,9 +770,13 @@ def render_formal_expression(
     algo = get_algorithm(standard, algorithm)
     if algo is None:
         return None
-    from fleet.core.algorithm_resolver import resolve_algorithm_docstring
+    from fleet.adam.namespace import AdamNamespace
+    from fleet.core.lineage import defining_method_path
+    from fleet.sdtm.namespace import SDTMNamespace
 
-    _, dotted = resolve_algorithm_docstring(algo.name)
+    # The class from_spec runs on, so the path is the one lineage records.
+    namespace = AdamNamespace if standard == "adam" else SDTMNamespace
+    dotted = defining_method_path(namespace, algo.verb)
     args: list[str] = []
     if target and algo.takes_target:
         args.append(repr(target))
@@ -774,7 +784,7 @@ def render_formal_expression(
         value = _given_param(params, p)
         if value is not None:
             args.append(f"{p.kwarg or p.name}={value!r}")
-    return f"{dotted or algo.verb}({', '.join(args)})"
+    return f"{dotted}({', '.join(args)})"
 
 
 # --------------------------------------------------------------------- #
@@ -870,7 +880,7 @@ spec_algorithm(
             "ct_codelist",
             annotation=str,
             kwarg="ct",
-            default="",
+            required=True,
             description="CT codelist OID.",
         ),
         Param(
@@ -919,7 +929,13 @@ spec_algorithm(
     verb="assign",
     params=(
         Param("value", annotation=Any, required=True, description="Constant CT value."),
-        Param("ct_codelist", kwarg="ct", description="CT codelist OID to validate against."),
+        Param(
+            "ct_codelist",
+            annotation=str,
+            kwarg="ct",
+            required=True,
+            description="CT codelist OID to validate against.",
+        ),
     ),
     description="Hardcode a constant validated against controlled terminology.",
     define_template="Set to the controlled terminology value '{value}' for all records.",
@@ -1011,7 +1027,7 @@ spec_algorithm(
         Param(
             "on",
             annotation=str | list[str],
-            default="USUBJID",
+            required=True,
             description="Join key column(s).",
         ),
         Param("how", annotation=str, default="left", description="Join strategy."),
@@ -1041,7 +1057,8 @@ spec_algorithm(
         ),
         Param(
             "agg",
-            annotation=_LIST_OR_NONE,
+            annotation=list[str],
+            required=True,
             convert="exprs",
             description="Aggregation expression strings.",
         ),
@@ -1246,7 +1263,7 @@ spec_algorithm(
         Param(
             "on",
             annotation=str | list[str],
-            default="USUBJID",
+            required=True,
             description="Join key column(s).",
         ),
         Param("how", annotation=str, default="left", description="Join strategy."),
@@ -1393,19 +1410,19 @@ spec_algorithm(
             "aval",
             annotation=str,
             kwarg="value",
-            default="AVAL",
+            required=True,
             description="Analysis value column.",
         ),
         Param(
             "low",
             annotation=str,
-            default="LBSTNRLO",
+            required=True,
             description="Lower normal range column.",
         ),
         Param(
             "high",
             annotation=str,
-            default="LBSTNRHI",
+            required=True,
             description="Upper normal range column.",
         ),
     ),
@@ -1423,20 +1440,20 @@ spec_algorithm(
             "analysis_date",
             annotation=str,
             kwarg="adt",
-            default="ADT",
+            required=True,
             description="Analysis date column.",
         ),
         Param(
             "reference_date",
             annotation=str,
             kwarg="trtsdt",
-            default="TRTSDT",
+            required=True,
             description="Treatment start date column.",
         ),
         Param(
             "trtedt",
             annotation=str,
-            default="TRTEDT",
+            required=True,
             description="Treatment end date column.",
         ),
         Param(
@@ -1538,7 +1555,7 @@ spec_algorithm(
         Param(
             "term_var",
             annotation=str,
-            default="PARAMCD",
+            required=True,
             description="Toxicity term variable.",
         ),
         Param("unit_var", description="Unit-of-measure variable."),

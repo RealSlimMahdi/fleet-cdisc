@@ -3,6 +3,7 @@
 from .dag import PinDependency, PipelineDAG, PipelineNode, build_dag
 from .exceptions import (
     ADAMError,
+    ComparisonError,
     CTError,
     DerivationError,
     FleetError,
@@ -12,6 +13,7 @@ from .exceptions import (
     SpecError,
     TLGError,
     ValidationError,
+    ValidationSetupError,
     VerbUsageError,
 )
 from .repr_utils import to_repr
@@ -24,6 +26,7 @@ from .study_context import (
     StudyContext,
     StudyPathConfig,
     ValidationConfig,
+    find_study_config,
     load_study_context,
 )
 from .study_context import StudyConfigError as StudyContextError
@@ -40,6 +43,8 @@ __all__ = [
     "TLGError",
     "SchemaError",
     "ValidationError",
+    "ValidationSetupError",
+    "ComparisonError",
     "StudyConfig",
     "StudyPathConfig",
     "SDTMConfig",
@@ -48,6 +53,7 @@ __all__ = [
     "ValidationConfig",
     "StudyContext",
     "StudyContextError",
+    "find_study_config",
     "load_study_context",
     "build_dag",
     "PinDependency",

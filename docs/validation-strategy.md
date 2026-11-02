@@ -122,6 +122,7 @@ Fleet integrates the **official CDISC Rules Engine (CORE)**[^5] — the open-sou
 
 ```bash
 # Download the managed engine binary for the current platform
+# (CORE 0.15.0, the version Fleet is tested with)
 uv run fleet install-engine
 
 # Verify engine and supporting dependencies
@@ -147,16 +148,20 @@ adsl_result = svc.validate_adam(adsl, dataset="ADSL", version="1.3")
 assert adsl_result.is_valid
 ```
 
-The `ValidationResult` object exposes `.is_valid` (bool), `.print_report(report_type="summary")` (or `"full"` for expanded details including INFO-level engine noise), and `.save_html_report(path)` — a styled HTML artefact with rule-level error and warning cards, suitable for archiving as a validation deliverable.
+The `ValidationResult` object exposes `.is_valid` (bool), `.print_report(report_type="summary")` (or `"full"` for expanded details including INFO-level engine noise), and `.save_html_report(path)` — an HTML page with the dataset status and one table row per error, warning and info finding, suitable for archiving as a validation deliverable. Every cell is HTML-escaped, because messages carry data values and the text of custom rules. `fleet validate --report` writes the same page for a sweep.
 
 #### Engine discovery order
 
 Fleet resolves the engine path at runtime via a four-tier chain (first match wins):
 
-1. `FLEET_RULES_ENGINE` environment variable (`.env` at project root)
-2. `validation.engine_path` in `study_config.yaml` (committable to VCS for team reuse)
+1. `validation.engine_path` in `study_config.yaml` (committable to VCS for team reuse)
+2. `FLEET_RULES_ENGINE` environment variable (`.env` at project root)
 3. Managed install under `~/.fleet/cdisc-rules-engine/core/`
 4. Legacy `../cdisc-rules-engine/core.py` (development fallback)
+
+The study config comes first, so a stale environment variable on one machine
+cannot replace the engine the team pinned. An explicit `rules_engine_path=` on
+`.validate()` beats all four.
 
 ---
 
@@ -221,7 +226,7 @@ uv run fleet check-rule metadata/custom_rules/FLEET-AE-001.yaml
 # .validate("AE", custom_rules="metadata/custom_rules")
 ```
 
-Use a company prefix (e.g. `ROCHE-AE-001`) to avoid collisions with `CORE-XXXXXX`.
+Use a company prefix (e.g. `ACME-AE-001`) to avoid collisions with `CORE-XXXXXX`.
 
 ---
 

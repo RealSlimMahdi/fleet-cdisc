@@ -911,7 +911,6 @@
           "type": "string"
         },
         "term_var": {
-          "default": "PARAMCD",
           "description": "Toxicity term variable.",
           "title": "Term Var",
           "type": "string"
@@ -972,7 +971,8 @@
       },
       "required": [
         "algorithm",
-        "direction"
+        "direction",
+        "term_var"
       ],
       "title": "ADAMAtoxgrSpec",
       "type": "object"
@@ -1928,7 +1928,6 @@
               "type": "array"
             }
           ],
-          "default": "USUBJID",
           "description": "Join key column(s).",
           "title": "On"
         },
@@ -1985,7 +1984,8 @@
       },
       "required": [
         "algorithm",
-        "dataset"
+        "dataset",
+        "on"
       ],
       "title": "ADAMLookupSpec",
       "type": "object"
@@ -2046,19 +2046,16 @@
           "type": "string"
         },
         "aval": {
-          "default": "AVAL",
           "description": "Analysis value column.",
           "title": "Aval",
           "type": "string"
         },
         "low": {
-          "default": "LBSTNRLO",
           "description": "Lower normal range column.",
           "title": "Low",
           "type": "string"
         },
         "high": {
-          "default": "LBSTNRHI",
           "description": "Upper normal range column.",
           "title": "High",
           "type": "string"
@@ -2080,7 +2077,10 @@
         }
       },
       "required": [
-        "algorithm"
+        "algorithm",
+        "aval",
+        "low",
+        "high"
       ],
       "title": "ADAMNrindSpec",
       "type": "object"
@@ -2095,19 +2095,16 @@
           "type": "string"
         },
         "analysis_date": {
-          "default": "ADT",
           "description": "Analysis date column.",
           "title": "Analysis Date",
           "type": "string"
         },
         "reference_date": {
-          "default": "TRTSDT",
           "description": "Treatment start date column.",
           "title": "Reference Date",
           "type": "string"
         },
         "trtedt": {
-          "default": "TRTEDT",
           "description": "Treatment end date column.",
           "title": "Trtedt",
           "type": "string"
@@ -2135,7 +2132,10 @@
         }
       },
       "required": [
-        "algorithm"
+        "algorithm",
+        "analysis_date",
+        "reference_date",
+        "trtedt"
       ],
       "title": "ADAMOnTreatmentSpec",
       "type": "object"
@@ -2731,7 +2731,6 @@
           "title": "Source"
         },
         "ct_codelist": {
-          "default": "",
           "description": "CT codelist OID.",
           "title": "Ct Codelist",
           "type": "string"
@@ -2754,7 +2753,8 @@
         }
       },
       "required": [
-        "algorithm"
+        "algorithm",
+        "ct_codelist"
       ],
       "title": "SDTMAssignCtSpec",
       "type": "object"
@@ -3063,25 +3063,18 @@
           "type": "array"
         },
         "agg": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
           "description": "Aggregation expression strings.",
-          "title": "Agg"
+          "items": {
+            "type": "string"
+          },
+          "title": "Agg",
+          "type": "array"
         }
       },
       "required": [
         "algorithm",
-        "group_cols"
+        "group_cols",
+        "agg"
       ],
       "title": "SDTMGroupBySpec",
       "type": "object"
@@ -3100,22 +3093,15 @@
           "title": "Value"
         },
         "ct_codelist": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
           "description": "CT codelist OID to validate against.",
-          "title": "Ct Codelist"
+          "title": "Ct Codelist",
+          "type": "string"
         }
       },
       "required": [
         "algorithm",
-        "value"
+        "value",
+        "ct_codelist"
       ],
       "title": "SDTMHardcodeCtSpec",
       "type": "object"
@@ -3201,7 +3187,6 @@
               "type": "array"
             }
           ],
-          "default": "USUBJID",
           "description": "Join key column(s).",
           "title": "On"
         },
@@ -3230,7 +3215,8 @@
       },
       "required": [
         "algorithm",
-        "dataset"
+        "dataset",
+        "on"
       ],
       "title": "SDTMMergeSpec",
       "type": "object"

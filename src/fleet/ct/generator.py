@@ -6,9 +6,14 @@ statically typed, IDE-autocomplete-friendly access to CDISC CT.
 
 Each generated class also exposes ``_cdisc_url`` and embeds the CDISC
 Library Browser URL in its docstring so reviewers can navigate from
-pipeline code straight to the authoritative codelist definition.
+pipeline code straight to the authoritative codelist definition.  When
+every codelist comes from one CT package, the module opens with a
+``__ct_package__`` marker naming it (see :mod:`fleet.ct.study_codelists`).
 
 Example generated output::
+
+    __ct_package__ = "sdtmct-2023-12-15"
+
 
     class C66731:
         \"\"\"Sex (C66731).\"\"\"
@@ -48,6 +53,8 @@ import yaml
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from fleet.ct.api import CDISCClient
 
 
@@ -67,6 +74,9 @@ def _safe_identifier(name: str) -> str:
     return ident
 
 
+_NCI_ID = re.compile(r"^C\d+$")
+
+
 def extract_concept_ids(define_path: str | Path) -> set[str]:
     """Extract NCI concept IDs from a ``define.yaml`` spec file.
 
@@ -80,31 +90,46 @@ def extract_concept_ids(define_path: str | Path) -> set[str]:
     Returns:
         Set of concept ID strings (e.g. ``{"C66731", "C74457"}``).
     """
-    path = Path(define_path)
-    with open(path) as f:
-        spec = yaml.safe_load(f)
+    spec = _load_spec(define_path)
+    ids = {str(cl.get("oid", "")) for cl in spec.get("codelists") or []}
+    ids |= {concept_id for _, _, concept_id in _references(spec)}
+    return {i for i in ids if _NCI_ID.match(i)}
 
-    nci_pattern = re.compile(r"^C\d+$")
-    ids: set[str] = set()
 
-    for cl in spec.get("codelists", []):
-        oid = cl.get("oid", "")
-        if nci_pattern.match(oid):
-            ids.add(oid)
+def codelist_references(define_path: str | Path) -> list[tuple[str, str, str]]:
+    """List the NCI codelist each variable of a ``define.yaml`` references.
 
-    for ds in spec.get("datasets", []):
-        for var in ds.get("variables", []):
-            # Variable-level codelist reference
-            cl_ref = var.get("codelist", "")
-            if isinstance(cl_ref, str) and nci_pattern.match(cl_ref):
-                ids.add(cl_ref)
-            # Derivation-level ct_codelist reference
-            deriv = var.get("derivation") or {}
-            ct_ref = deriv.get("ct_codelist", "")
-            if isinstance(ct_ref, str) and nci_pattern.match(ct_ref):
-                ids.add(ct_ref)
+    Reads the variable-level ``codelist`` and the derivation-level
+    ``ct_codelist``; only IDs matching the ``C\\d+`` pattern count.
 
-    return ids
+    Args:
+        define_path: Path to a ``define.yaml`` file.
+
+    Returns:
+        ``(dataset, variable, concept_id)`` tuples in spec order, one per
+        reference.
+
+    Examples:
+        Name the variables that need a class in ``codelists.py``::
+
+            for dataset, variable, concept_id in codelist_references("define.yaml"):
+                print(f"{dataset}.{variable} -> {concept_id}")
+    """
+    return list(_references(_load_spec(define_path)))
+
+
+def _load_spec(define_path: str | Path) -> dict[str, Any]:
+    with open(define_path, encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
+
+def _references(spec: dict[str, Any]) -> Iterator[tuple[str, str, str]]:
+    for ds in spec.get("datasets") or []:
+        for var in ds.get("variables") or []:
+            derivation = var.get("derivation") or {}
+            for ref in (var.get("codelist"), derivation.get("ct_codelist")):
+                if isinstance(ref, str) and _NCI_ID.match(ref):
+                    yield str(ds.get("name", "")), str(var.get("name", "")), ref
 
 
 def extract_ig_concept_ids(
@@ -337,6 +362,10 @@ class CodelistGenerator:
             '"""',
             "",
         ]
+        # Marker for the stale checks of fleet.ct.study_codelists; mixed packages get none.
+        packages = {cl.get("_package") for cl in sorted_cls}
+        if len(packages) == 1 and None not in packages:
+            lines += [f"__ct_package__ = {packages.pop()!r}", "", ""]
 
         # Class definitions
         for cl in sorted_cls:

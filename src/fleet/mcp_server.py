@@ -25,9 +25,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
-from mcp.server.fastmcp import FastMCP
+try:  # mcp >= 2 renamed FastMCP; the three calls made here are unchanged.
+    from mcp.server.mcpserver import MCPServer as FastMCP
+except ImportError:  # mcp 1.x
+    from mcp.server.fastmcp import FastMCP
 
 if TYPE_CHECKING:
     import polars as pl
@@ -106,55 +109,103 @@ def fleet_lineage(dag_json_path: str, dataset: str) -> dict[str, Any]:
 
 def fleet_validate(
     dataset_path: str,
-    standard: str,
+    standard: Literal["sdtm", "adam"] | None = None,
     version: str | None = None,
+    custom_rules: str | None = None,
 ) -> dict[str, Any]:
     """Validate a dataset file with the CDISC Rules Engine.
 
-    Requires the engine binary (``fleet install-engine`` or the
-    ``FLEET_RULES_ENGINE`` environment variable).
+    The inputs come from the run setup, the same as ``fleet validate``.
+    The study config is looked for from the dataset's directory, so a
+    dataset inside a study uses its IG version, custom rules and engine.
+    An explicit argument overrides the study config.
 
     Args:
         dataset_path: Dataset file (parquet / csv / xpt / sas7bdat); the
-            file stem is used as the domain/dataset name.
-        standard: ``"sdtm"`` or ``"adam"``.
-        version: IG version override (default: 3.4 for SDTM, 1.3 for ADaM).
+            file stem is the dataset name.
+        standard: ``"sdtm"`` or ``"adam"``.  Default: the configured data
+            directory that holds the file, else the file stem (``AD*`` is
+            ADaM).
+        version: IG version, ``"3-4"`` or ``"3.4"``.  Default: the study
+            config, else 3.4 for SDTM and 1.3 for ADaM.
+        custom_rules: Directory of custom CORE rules.  Default:
+            ``validation.custom_rules`` in the study config.
 
     Returns:
-        dict: ``{"dataset", "standard", "is_valid", "issues": [{severity,
-            rule_id, message, variable}, ...]}``.
-    """
-    from fleet.validation import ValidationService
-    from fleet.validation.engine import discover_engine
+        dict: ``{"outcome": "pass" | "fail", "dataset", "standard",
+            "is_valid", "setup": {input: {value, source}, ...},
+            "issues": [{severity, rule_id, message, variable, source}, ...]}``,
+            or ``{"outcome": "could not run", "reason"}`` when the run
+            setup is refused or no engine is found.
 
-    engine = discover_engine()
-    if engine is None:
-        raise RuntimeError(
-            "CDISC Rules Engine not found. Install it with `fleet install-engine` "
-            "or set FLEET_RULES_ENGINE."
+    Examples:
+        Validate an ADaM dataset of a study from any working directory::
+
+            result = fleet_validate("/study/data/adam/adsl.parquet")
+            result["setup"]["ig_version"]  # {"value": "1.3", "source": "study config"}
+    """
+    from fleet.validation import ValidationService, ValidationSetupError, build_run_setup
+
+    path = Path(dataset_path)
+    if not path.is_file():
+        return _could_not_run(f"dataset file not found: {path}")
+    try:
+        setup = build_run_setup(
+            path=path,
+            standard=standard,
+            version=version,
+            custom_rules=custom_rules,
+            start=path.resolve().parent,
         )
-    df = _load_frame(dataset_path)
-    name = Path(dataset_path).stem.upper()
-    service = ValidationService(rules_engine_path=engine)
-    kwargs: dict[str, Any] = {} if version is None else {"version": version}
-    if standard == "adam":
-        result = service.validate_adam(df, name, **kwargs)
-    else:
-        result = service.validate_sdtm(df, name, **kwargs)
+    except ValidationSetupError as exc:
+        return _could_not_run(str(exc))
+    if setup.engine.value is None:
+        return _could_not_run(
+            "CDISC Rules Engine not found. Install it with `fleet install-engine` "
+            "or set validation.engine_path / FLEET_RULES_ENGINE."
+        )
+
+    name = path.stem.upper()
+    result = ValidationService(rules_engine_path=setup.engine.value).validate_datasets(
+        {name: _load_frame(dataset_path)},
+        standard=setup.standard.value,
+        version=setup.ig_version.value,
+        custom_rules=setup.custom_rules.value,
+    )[name]
+    inputs = {
+        "standard": setup.standard,
+        "ig_version": setup.ig_version,
+        "custom_rules": setup.custom_rules,
+        "engine": setup.engine,
+    }
     return {
+        "outcome": "pass" if result.is_valid else "fail",
         "dataset": result.dataset_name,
-        "standard": standard,
+        "standard": setup.standard.value,
         "is_valid": result.is_valid,
+        "setup": {
+            **{
+                key: {"value": None if r.value is None else str(r.value), "source": r.source}
+                for key, r in inputs.items()
+            },
+            "engine_version": setup.engine_version,
+            "study_config": None if setup.study_config is None else str(setup.study_config),
+        },
         "issues": [
             {
                 "severity": issue.severity.value,
                 "rule_id": issue.rule_id,
                 "message": issue.message,
                 "variable": issue.variable,
+                "source": issue.source,
             }
             for issue in (*result.errors, *result.warnings, *result.infos)
         ],
     }
+
+
+def _could_not_run(reason: str) -> dict[str, Any]:
+    return {"outcome": "could not run", "reason": reason}
 
 
 def fleet_ct_terms(codelist: str, ct_path: str | None = None) -> list[str]:
@@ -212,12 +263,13 @@ def fleet_tlg_run(
     Returns:
         str: The rendered HTML table or listing.
     """
-    from fleet.cli import _GROUPBY_CANDIDATES
     from fleet.tlg import (
+        GROUPBY_CANDIDATES,
         TEMPLATES,
         OutputType,
         RenderMetadata,
         ard_to_table_model,
+        detect_groupby,
         listing_to_model,
         load_spec,
         render_html,
@@ -233,11 +285,11 @@ def fleet_tlg_run(
     if adsl is None and meta.domains and meta.domains[-1] == "ADSL":
         adsl = df
     if not is_listing and groupby is None:
-        groupby = next((c for c in _GROUPBY_CANDIDATES if c in df.columns), None)
+        groupby = detect_groupby(df.columns)
         if groupby is None:
             raise ValueError(
                 "could not auto-detect a treatment-arm column "
-                f"(tried {', '.join(_GROUPBY_CANDIDATES)}). Pass groupby=<column>."
+                f"(tried {', '.join(GROUPBY_CANDIDATES)}). Pass groupby=<column>."
             )
     result = run_spec(spec, df, adsl=adsl, groupby=None if is_listing else groupby)
     rmeta = RenderMetadata(title=meta.title)
@@ -281,6 +333,47 @@ def fleet_dataset_check(data_path: str, define_yaml: str, dataset: str) -> dict[
     }
 
 
+def fleet_code_to_spec(source: str) -> list[dict[str, Any]]:
+    """Reverse-map the Fleet verb calls in a Python program to define.yaml derivation blocks.
+
+    Static: the program is parsed, never run. Every namespace verb call
+    with a CDISC-named target becomes one row, in call order, carrying
+    the registry's ``derivation:`` block when the call is spec-expressible.
+
+    Args:
+        source: Python source of a program (a whole file or a selection).
+
+    Returns:
+        list[dict]: ``{"name", "verb", "standard", "line", "status",
+            "block", "reason", "meta"}`` per call. *status* is ``"ok"``
+            (``block`` usable), ``"stub"`` (non-literal or unmatched
+            arguments), ``"unsupported"`` (the verb has no spec form) or
+            ``"unknown"`` (not a registered verb).
+    """
+    from fleet.core.spec_source import derivations_from_source
+
+    return derivations_from_source(source)
+
+
+def fleet_spec_to_code(define_yaml: str, dataset: str) -> str:
+    """Render one dataset's define.yaml derivations as an inline Fleet program skeleton.
+
+    One chained call per variable with a ``derivation:`` block, in spec
+    order, plus placeholder loads for declared inputs and ``.pin()`` calls
+    for datasets the derivations look up.
+
+    Args:
+        define_yaml: Path to the ``define.yaml``.
+        dataset: Dataset name declared in it (e.g. ``"ADSL"``).
+
+    Returns:
+        str: A Python program to review before running.
+    """
+    from fleet.core.spec_source import program_from_spec
+
+    return program_from_spec(define_yaml, dataset)
+
+
 #: Every function exposed as an MCP tool (docstring = tool description).
 TOOLS = (
     fleet_execution_order,
@@ -291,6 +384,8 @@ TOOLS = (
     fleet_tlg_catalog,
     fleet_tlg_run,
     fleet_dataset_check,
+    fleet_code_to_spec,
+    fleet_spec_to_code,
 )
 
 
@@ -304,7 +399,8 @@ def create_server() -> FastMCP:
         "fleet",
         instructions=(
             "Fleet CDISC toolkit: pipeline DAG queries, dataset validation, "
-            "controlled-terminology lookups, and TLG spec execution."
+            "controlled-terminology lookups, TLG spec execution, and static "
+            "conversion between inline programs and define.yaml derivations."
         ),
     )
     for fn in TOOLS:

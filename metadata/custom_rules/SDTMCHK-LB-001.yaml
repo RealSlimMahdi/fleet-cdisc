@@ -50,5 +50,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_lb_lbstresn_missing
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: LB Domain
