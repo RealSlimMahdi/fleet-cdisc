@@ -122,6 +122,7 @@ Fleet integrates the **official CDISC Rules Engine (CORE)**[^5] — the open-sou
 
 ```bash
 # Download the managed engine binary for the current platform
+# (CORE 0.15.0, the version Fleet is tested with)
 uv run fleet install-engine
 
 # Verify engine and supporting dependencies

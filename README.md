@@ -404,7 +404,7 @@ uv run fleet migrate src/ --write                        # rewrite removed pre-a
 ```bash
 uv run fleet define-xml --spec examples/cdiscpilot01/sdtm/define.yaml \
   --output outputs/define_sdtm.xml --enrich-methods       # embed verb/callable docstrings as <MethodDef>
-uv run fleet install-engine && uv run fleet doctor        # CDISC Rules Engine + health check (checks extras)
+uv run fleet install-engine && uv run fleet doctor        # CDISC Rules Engine 0.15.0 + health check (checks extras)
 uv run fleet add-ct --domains DM,AE,VS,EX --output codelists.py
 uv run fleet add-rule --domain AE --description "AESEV required when AESER = Y"
 ```

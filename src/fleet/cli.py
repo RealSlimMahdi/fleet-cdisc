@@ -2187,14 +2187,19 @@ def _add_define_xml_parser(sub: argparse._SubParsersAction) -> None:
 
 
 def _add_engine_parsers(sub: argparse._SubParsersAction) -> None:
+    from fleet.validation.engine import DEFAULT_ENGINE_TAG
+
     inst = sub.add_parser(
         "install-engine",
         help="Download the CDISC Rules Engine binary for validation.",
     )
     inst.add_argument(
         "--version",
-        default="latest",
-        help="Release tag to download (default: latest).",
+        default=DEFAULT_ENGINE_TAG,
+        help=(
+            f"Release tag to download (default: {DEFAULT_ENGINE_TAG}, the CORE release "
+            "that Fleet is tested with). 'latest' gets the newest release and warns."
+        ),
     )
     inst.add_argument(
         "--force",

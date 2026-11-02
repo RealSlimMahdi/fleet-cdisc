@@ -1217,7 +1217,7 @@ Fleet integrates with the official CDISC Rules Engine for regulatory-grade valid
 Before running validation, install the engine binary:
 
 ```bash
-# Download the latest CDISC Rules Engine for your platform
+# Download CDISC Rules Engine v0.15 (CORE 0.15.0), the version Fleet is tested with
 uv run fleet install-engine
 
 # Verify installation
@@ -1240,10 +1240,11 @@ The engine is stored at:
 - **macOS / Linux:** `~/.fleet/cdisc-rules-engine/core/core`
 - **Windows:** `%LOCALAPPDATA%\fleet\cdisc-rules-engine\core\core.exe`
 
-You can also pin a specific version or force a re-download:
+By default, `fleet install-engine` installs the CORE release that Fleet is tested with
+(tag `v0.15`, CORE 0.15.0). You can ask for another release or force a re-download:
 
 ```bash
-uv run fleet install-engine --version v0.15
+uv run fleet install-engine --version latest   # newest release, not tested with Fleet: prints a warning
 uv run fleet install-engine --force
 ```
 
