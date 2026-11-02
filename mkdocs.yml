@@ -142,6 +142,7 @@ nav:
       - Tooling Introspection: api/introspect.md
       - Comparison: api/comparison.md
       - Core: api/core.md
+      - Study run: api/run.md
   - Quality & Compliance:
       - Validation Strategy: validation-strategy.md
   - Test Status: test-status.md

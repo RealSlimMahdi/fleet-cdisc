@@ -630,6 +630,41 @@ New spec keys: `fleet_spec_version: 1` (dialect pin), `derivations_module:` \
 """
 
 
+def _run_section() -> str:
+    return """\
+## Study run (`fleet.run`, behind `fleet run`)
+
+A **study run** reads the study's define files, builds every dataset they declare from its \
+inputs, and hands each **built dataset** forward to the datasets that take it as an input. \
+`plan_study` returns the **study plan** (the ordered **steps**) without building anything; \
+`run_study` yields one built dataset per step. The module writes no file and prints nothing: \
+`fleet run` is the CLI adapter that writes parquet / xpt / dataset-json and prints progress.
+
+```python
+import fleet
+
+ctx = fleet.load_study_context("study_config.yaml")
+plan = fleet.plan_study(ctx)  # SDTM define first, then ADaM, each in file order
+[(s.standard, s.dataset) for s in plan.steps]  # [("sdtm", "DM"), ("sdtm", "AE"), ("adam", "ADSL"), ...]
+
+for built in fleet.run_study(plan):  # a generator: each dataset as soon as it is built
+    built.step.dataset, built.frame.shape, built.inputs  # inputs: name -> (path, source)
+
+# Build ADVS from an ADSL held in memory (a seed), not from the file on disk
+plan = fleet.plan_study(ctx, datasets=["ADVS"])
+advs = next(fleet.run_study(plan, inputs={"ADSL": adsl_fixed})).frame
+```
+
+Rules (ADR 0006): each input is taken from the first source that gives it — a seed, a dataset \
+built earlier in the run, the input's `path:` relative to the study root, then its name in the \
+raw / SDTM / ADaM data directories (`.parquet`, `.csv`, `.xpt`, `.sas7bdat`). The first input \
+is the base frame. Every other input is **pinned** under its dataset name, so `merge`, `lookup`, \
+`first_date`, `last_date` and `count_events` reach it. Only **carry-through columns** (declared \
+with no `derivation:`) are left-joined from the other inputs on USUBJID; a column with a \
+derivation comes from its algorithm alone. A seed that is also a step is refused. Every refusal \
+is a `StudyRunError`, which `fleet run` turns into exit 1."""
+
+
 def _ct_section() -> str:
     return """\
 ## Controlled Terminology
@@ -1293,6 +1328,7 @@ def build() -> str:
         _occds_verbs_section(),
         _verb_mapping_section(),
         _define_yaml_section(),
+        _run_section(),
         _ct_section(),
         _rules_caching_section(),
         _custom_rules_section(),

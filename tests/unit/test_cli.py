@@ -37,8 +37,9 @@ datasets:
     class: SPECIAL PURPOSE
     keys: [STUDYID, USUBJID]
     inputs:
-      - name: dm
-        type: dataset
+      - name: dm_raw
+        type: raw
+        path: data/raw/dm.csv
     variables:
       - name: STUDYID
         label: Study Identifier
@@ -233,6 +234,16 @@ def test_run_happy_path(
     assert result.columns == ["STUDYID", "DOMAIN", "USUBJID", "AGE"]
     assert result["STUDYID"].to_list() == ["TESTRUN", "TESTRUN"]
     assert result["USUBJID"].to_list() == ["P1", "P2"]
+
+
+def test_run_prints_the_plan_before_the_first_dataset_builds(
+    study: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    monkeypatch.chdir(study)
+    assert _run(["run"]) == 0
+    out = capsys.readouterr().out
+    assert out.index("Plan:    1 dataset(s)") < out.index("[1/1] DM (sdtm, define.yaml)")
+    assert out.index("[1/1] DM (sdtm, define.yaml)") < out.index("[1/1] DM: 2 rows")
 
 
 def test_run_out_override(study: Path, monkeypatch: pytest.MonkeyPatch) -> None:
