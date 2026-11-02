@@ -86,7 +86,7 @@ Exception: empty DataFrames for TDD scaffolding, programmatic/random data.
 
 ## Publishing
 
-Distribution name: `fleet-cdisc` (import: `fleet`). Version comes from git tags — never edit version strings manually.
+Distribution name: `fleet-cdisc` (import: `fleet`). Version comes from git tags — never edit version strings manually. Release steps and PyPI/GitHub configuration: `CONTRIBUTING.md`, section "Releasing (maintainers)".
 
 ## Typed Entry (IDE Autocomplete)
 
@@ -120,3 +120,12 @@ The five canonical triage roles, each label string equal to its name. See `docs/
 ### Domain docs
 
 Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## Pull requests
+
+Every PR description ends with two lines:
+
+- `Tool:` the AI tool that helped write the PR. Claude Code adds `🤖 Generated with Claude Code` by itself, and that line counts.
+- `Verified:` the commands from Verification Order that you ran, followed by the last line of the `pytest` output.
+
+A PR without both lines is closed without review.

@@ -9,6 +9,9 @@ public repository:
       schemas/define/2.1/  ->  define/2.1/
       schemas/odm/1.3.2/   ->  odm/1.3.2/
 
+The upstream MIT licence text is in LICENSE-CDISC.  xml.xsd, xlink.xsd and
+xmldsig-core-schema.xsd are W3C schemas, redistributed as CDISC ships them.
+
 Layout matters as much as content: the Define-XML schemas import ODM by
 relative path (../../odm/1.3.2/ODM1-3-2-foundation.xsd), so the two
 directories must stay side by side exactly as published.

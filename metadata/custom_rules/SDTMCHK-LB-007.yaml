@@ -52,5 +52,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_lb_lbstnrlo_lbstnrhi
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: LB Domain

@@ -49,5 +49,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_tr_trstresn_ldiam
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: TR Domain (ONC)

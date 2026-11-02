@@ -48,5 +48,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_cm_cmdecod
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: CM Domain

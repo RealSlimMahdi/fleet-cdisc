@@ -64,5 +64,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_ss_ssdtc_alive_dm
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: SS Domain

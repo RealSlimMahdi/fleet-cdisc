@@ -51,5 +51,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_ds_duplicate_randomization
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: DS Domain

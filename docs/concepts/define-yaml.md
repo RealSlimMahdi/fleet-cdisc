@@ -651,6 +651,7 @@ variables:
     derivation:
       algorithm: assign_ct
       source: sex
+      ct_codelist: C66731
 
   - name: RACE
     label: Race

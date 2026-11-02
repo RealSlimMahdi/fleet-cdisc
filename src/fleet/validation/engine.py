@@ -38,6 +38,10 @@ if TYPE_CHECKING:
 _GITHUB_REPO = "cdisc-org/cdisc-rules-engine"
 _RELEASES_API = f"https://api.github.com/repos/{_GITHUB_REPO}/releases/latest"
 
+#: GitHub release tag of the CORE version that Fleet is tested with (CORE 0.15.0).
+#: ``fleet install-engine`` installs this tag unless the user asks for another one.
+DEFAULT_ENGINE_TAG = "v0.15"
+
 
 def _fleet_home() -> Path:
     """Return the Fleet data directory, respecting platform conventions."""
@@ -226,7 +230,7 @@ def _engine_path_from_study_config(study_root: Path) -> Path | None:
     return p
 
 
-def install_engine(*, version: str = "latest", force: bool = False) -> Path:
+def install_engine(*, version: str = DEFAULT_ENGINE_TAG, force: bool = False) -> Path:
     """Download the CDISC Rules Engine bundle from GitHub Releases.
 
     The CDISC Rules Engine is distributed as a PyInstaller ``--onedir`` bundle
@@ -235,7 +239,10 @@ def install_engine(*, version: str = "latest", force: bool = False) -> Path:
     equivalent).
 
     Args:
-        version: Release tag to download (default: ``"latest"``).
+        version: Release tag to download. The default is
+            ``DEFAULT_ENGINE_TAG``, the CORE release that Fleet is tested
+            with. ``"latest"`` downloads the newest release and prints a
+            warning, because Fleet is not tested with that version.
         force: Re-download even if the engine is already installed.
 
     Returns:
@@ -256,6 +263,12 @@ def install_engine(*, version: str = "latest", force: bool = False) -> Path:
 
     # Resolve the release URL
     if version == "latest":
+        print(
+            f"Warning: 'latest' is not tested with Fleet. "
+            f"Fleet is tested with CORE {DEFAULT_ENGINE_TAG}; "
+            f"validation can fail on a newer engine.",
+            file=sys.stderr,
+        )
         release_url = _RELEASES_API
     else:
         tag = version if version.startswith("v") else f"v{version}"

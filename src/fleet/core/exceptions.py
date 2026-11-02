@@ -76,6 +76,16 @@ class ValidationSetupError(FleetError, ValueError):
     """
 
 
+class StudyRunError(FleetError):
+    """Raised when a study run cannot plan or build a dataset.
+
+    Examples: no define file under the study's metadata directories, a
+    dataset name the define files do not declare, an input that no seed,
+    earlier step, declared path or data directory provides, or a seed
+    that is also a step of the plan.
+    """
+
+
 class ComparisonError(FleetError, ValueError):
     """Raised when a comparison cannot run: keys missing, duplicated or
     incompatible between the base and the candidate.

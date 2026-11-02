@@ -56,5 +56,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_qs_qsdtc_visit_ordinal_error
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: QS Domain

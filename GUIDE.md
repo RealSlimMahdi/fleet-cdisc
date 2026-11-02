@@ -14,16 +14,16 @@
 
 ## Part 1 — Installation
 
-### From TestPyPI (pre-release)
+### From PyPI (pre-alpha)
+
+```bash
+uv add fleet-cdisc --prerelease=allow
+```
+
+### From TestPyPI (development builds)
 
 ```bash
 uv pip install -i https://test.pypi.org/simple/ fleet-cdisc
-```
-
-### From PyPI (stable release)
-
-```bash
-uv pip install fleet-cdisc
 ```
 
 ### For development (source checkout)
@@ -1217,7 +1217,7 @@ Fleet integrates with the official CDISC Rules Engine for regulatory-grade valid
 Before running validation, install the engine binary:
 
 ```bash
-# Download the latest CDISC Rules Engine for your platform
+# Download CDISC Rules Engine v0.15 (CORE 0.15.0), the version Fleet is tested with
 uv run fleet install-engine
 
 # Verify installation
@@ -1240,10 +1240,11 @@ The engine is stored at:
 - **macOS / Linux:** `~/.fleet/cdisc-rules-engine/core/core`
 - **Windows:** `%LOCALAPPDATA%\fleet\cdisc-rules-engine\core\core.exe`
 
-You can also pin a specific version or force a re-download:
+By default, `fleet install-engine` installs the CORE release that Fleet is tested with
+(tag `v0.15`, CORE 0.15.0). You can ask for another release or force a re-download:
 
 ```bash
-uv run fleet install-engine --version v0.15
+uv run fleet install-engine --version latest   # newest release, not tested with Fleet: prints a warning
 uv run fleet install-engine --force
 ```
 
@@ -1349,10 +1350,10 @@ in the `Check:` block with your logic:
 uv run fleet add-rule --domain AE --description "AESEV must be populated when AESER = Y"
 
 # Custom prefix (e.g. your company name)
-uv run fleet add-rule --domain AE --prefix ROCHE --description "AESEV required for serious AEs"
+uv run fleet add-rule --domain AE --prefix ACME --description "AESEV required for serious AEs"
 
 # Explicit ID (skips auto-increment)
-uv run fleet add-rule --domain AE --id ROCHE-AE-042 --description "Custom check"
+uv run fleet add-rule --domain AE --id ACME-AE-042 --description "Custom check"
 
 # Write to a specific directory (overrides study_config)
 uv run fleet add-rule --domain VS --description "VSORRES range check" --output ./my_rules/
@@ -1395,7 +1396,7 @@ Use a prefix to avoid clashing with official `CORE-XXXXXX` identifiers:
 
 | Pattern | Example |
 |---------|---------|
-| `<COMPANY>-<DOMAIN>-<NNN>` | `ROCHE-AE-001` |
+| `<COMPANY>-<DOMAIN>-<NNN>` | `ACME-AE-001` |
 | `FLEET-<DOMAIN>-<NNN>` | `FLEET-DM-003` |
 
 #### Rule YAML structure

@@ -9,15 +9,14 @@ template (ATC class → preferred term, n / % subjects per arm).
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import polars as pl
 from pydantic import Field
 
-from ._ard import fill_uncoded, summarize_ard
+from ._ard import summarize_spec
 from ._builder import BuilderVerbsMixin
-from ._specs import (
-    Row,
-    SummarySpecBase,
-)
+from ._specs import Row, SummarySpecBase, Uncoded
 
 
 class CMSummarySpec(SummarySpecBase):
@@ -26,9 +25,16 @@ class CMSummarySpec(SummarySpecBase):
     Defaults provide zero-config convenience for a standard CMCLAS→CMDECOD
     table, counting subjects with at least one medication per arm.  Every
     field is also settable inline through the same pattern as
-    :class:`AESummarySpec`.
+    :class:`AESummarySpec`.  Uncoded rule: a null ``CMCLAS`` or
+    ``CMDECOD`` is counted under ``"No Coding Available"``.
     """
 
+    context: ClassVar[str] = "t_cm_summary"
+    nested: ClassVar[bool] = True
+
+    uncoded: Uncoded | None = Field(
+        default_factory=lambda: Uncoded(columns=["CMCLAS", "CMDECOD"]),
+    )
     rows: list[Row] = Field(
         default_factory=lambda: [
             Row(field="CMCLAS", label="ATC Class Level 2"),
@@ -44,6 +50,9 @@ class CMSummarySpec(SummarySpecBase):
 
 class CMByPTSpec(CMSummarySpec):
     """Spec for CM by preferred term only (cmt02): flat CMDECOD counts."""
+
+    context: ClassVar[str] = "t_cm_by_pt"
+    nested: ClassVar[bool] = False
 
     rows: list[Row] = Field(
         default_factory=lambda: [Row(field="CMDECOD", label="Other Treatment")],
@@ -64,7 +73,6 @@ class CMTLGNamespace(BuilderVerbsMixin):
         df: A Polars DataFrame containing ADaM CM-level data.
     """
 
-    _builder_context = "t_cm_summary"
     _builder_specs = {"t_summary": CMSummarySpec, "t_by_pt": CMByPTSpec}
 
     def __init__(self, df: pl.DataFrame) -> None:
@@ -115,26 +123,7 @@ class CMTLGNamespace(BuilderVerbsMixin):
                 )
                 ard = adcm.tlg.cm.t_summary(spec=spec, adsl=adsl)
         """
-        spec = spec or CMSummarySpec()
-        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df, group_col=group_col)
-        return summarize_ard(
-            fill_uncoded(self._df, ["CMCLAS", "CMDECOD"]),
-            rows=spec.rows,
-            stats=spec.statistics,
-            context="t_cm_summary",
-            group_col=group_col,
-            pools=spec.pools,
-            column_order=spec.column_order,
-            adsl=adsl,
-            adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
-            header_rows=spec.header_rows,
-            nested=True,
-            value_col=spec.value_col,
-            label_col=spec.label_col,
-            decimals=spec.decimals,
-        )
+        return summarize_spec(self._df, spec or CMSummarySpec(), groupby=groupby, adsl=adsl)
 
     # ------------------------------------------------------------------ #
     # By preferred term only                                               #
@@ -165,25 +154,7 @@ class CMTLGNamespace(BuilderVerbsMixin):
         Examples:
             ``ard = adcm.tlg.cm.t_by_pt(groupby="TRTA", adsl=adsl)``
         """
-        spec = spec or CMByPTSpec()
-        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df, group_col=group_col)
-        return summarize_ard(
-            fill_uncoded(self._df, ["CMCLAS", "CMDECOD"]),
-            rows=spec.rows,
-            stats=spec.statistics,
-            context="t_cm_by_pt",
-            group_col=group_col,
-            pools=spec.pools,
-            column_order=spec.column_order,
-            adsl=adsl,
-            adsl_filter=spec.adsl_filter,
-            dataset_filter=spec.dataset_filter,
-            header_rows=spec.header_rows,
-            value_col=spec.value_col,
-            label_col=spec.label_col,
-            decimals=spec.decimals,
-        )
+        return summarize_spec(self._df, spec or CMByPTSpec(), groupby=groupby, adsl=adsl)
 
     # ------------------------------------------------------------------ #
     # Pre-validation diagnostic                                            #
@@ -209,15 +180,4 @@ class CMTLGNamespace(BuilderVerbsMixin):
                 report = adcm.tlg.cm.check()
         """
         spec = spec or CMSummarySpec()
-        diagnostics = spec.check(self._df)
-
-        # Additional CM-specific checks
-        available = set(self._df.columns)
-        for row_def in spec.rows:
-            if row_def.field not in available:
-                diagnostics.append(
-                    f"WARNING: Column '{row_def.field}' not present — "
-                    f"'{row_def.label or row_def.field}' sub-analysis will be skipped."
-                )
-
-        return diagnostics
+        return spec.check(self._df)

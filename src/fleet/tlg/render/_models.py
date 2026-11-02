@@ -467,11 +467,18 @@ def ard_to_table_model(
     parent_vars = {k[0] for k in row_keys if k[0]}
     explicit_parents = parent_vars & variable_set
 
-    # Stub column heading: the top-level hierarchy variable's label.
+    # Stub column heading: one line per hierarchy level, top level first
+    # and each child indented ("System Organ Class" / "  Preferred Term").
+    # Non-breaking spaces survive the renderers' whitespace collapsing.
     stub_label = ""
     for k in row_keys:
         if not k[0] and k[2] in explicit_parents:
-            stub_label = var_labels.get(k[2], "")
+            parent = k[2]
+            lines = [var_labels.get(parent, "")]
+            for child in dict.fromkeys(kk[2] for kk in row_keys if kk[0] == parent):
+                if child != parent and var_labels.get(child):
+                    lines.append("  " + var_labels[child])
+            stub_label = "\n".join(line for line in lines if line.strip())
             break
 
     # ── 5. Build display rows ──

@@ -4,6 +4,18 @@ All notable changes to Fleet are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **TLG summary specs are the engine contract** (ADR-0005) — one seam, `fleet.tlg.summarize_spec(df, spec, groupby=, adsl=)`, reads every engine argument from the spec; sixteen `df.tlg.<domain>.t_*` methods are now one call on it, and the seven composite tables (AE severity, grade and relationship, deaths, lab shift and abnormal, demographics) share `prepare_frame` before their own logic. Public method signatures are unchanged.
+  - two template rules leave method bodies and become spec fields, visible in YAML and settable inline: `uncoded` (an `Uncoded(columns, label)` model, GDSR default `"No Coding Available"` on the AE, CM and MH tables; `null` switches it off) and `prefilter` (an expression string in the same form as `dataset_filter`, applied after it; default per template; `null` switches it off). Builder verbs `.uncoded()` and `.prefilter()` map onto them.
+  - every column a prefilter names is a required column: `lb.t_chg` and `eg.t_chg` on a dataset without `ABLFL`, and `ex.t_summary` on a dataset without `PARCAT1`, now raise `SchemaError` instead of counting baseline or per-interval records silently. `check()` reports the missing column.
+  - the dataset filter on `lb.t_shift` now bites before the worst-case reduction, as it already did on the AE tables.
+  - the AE and VS spec classes moved from `fleet.tlg._specs` to their domain modules; `fleet.tlg.AESummarySpec` and friends are unchanged. `prepare_frame`, `summarize_ard` and `Uncoded` are new public names on `fleet.tlg`.
+
+## [0.2.0a1] — pre-alpha
+
+First pre-alpha on PyPI. It replaces 0.1.0, which is yanked. Install with `pip install --pre fleet-cdisc`.
+
 ### Added
 
 - **`verbs()` reports where each verb comes from** — a third column, `origin`, holds the path you type to reach the namespace that defines the verb (`sdtm`, `adam`, `adam.onco`) or `core` for the verbs every namespace shares. A therapeutic-area namespace inherits about 41 verbs; `df.adam.onco.verbs().filter(pl.col("origin") == "adam.onco")` lists the few it adds. Every row stays, so existing readers of the frame are unchanged (#160)
@@ -70,6 +82,8 @@ All notable changes to Fleet are documented here.
 
 ### Changed
 
+- **Polars stays below 2.0**: the requirement is now `polars>=1.41,<2`. Polars 2.0 runs lazy queries on the streaming engine by default, which does not keep the row order of joins, and it removes the cast from a string to a date. Fleet moves to Polars 2.0 after its tests pass on it.
+- **Spec parameter facts are checked against the verb signature** (ADR-0007, #179 phase 1) — the parity test now compares every `Param` of a spec algorithm with `inspect.signature()` of its verb: the spec may be stricter than the verb, never looser. The ten spec-only defaults are gone, so a define.yaml must state `aval`, `low` and `high` for `nrind`, the three dates for `on_treatment`, `term_var` for `atoxgr`, `on` for `merge` and `lookup`, and `agg` for `group_by`; `ct_codelist` is required on `assign_ct` and `hardcode_ct`, as the define.yaml concept doc already stated. A missing key is a load-time error
 - **One validation HTML page**: `fleet validate --report` and `ValidationResult.save_html_report()` write the same page (`fleet.validation.models.write_html_report()`): a status row per dataset, then one row per finding. Every cell is HTML-escaped, so a `<` in a data value or a custom rule message no longer breaks the page or injects markup; `rows_affected=0` is shown (#119)
 
 - **API simplification**: therapeutic-area namespaces (`onco`, `ophtha`, `peds`, `vaccine`, `metabolic`, `neuro`) and ADaM sub-structures (`adsl`, `occds`) are now accessed via `df.adam.<name>` instead of `df.<name>` — reduces registered namespaces from 10 to 2 (`df.sdtm` and `df.adam`)

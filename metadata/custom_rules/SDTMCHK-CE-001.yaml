@@ -48,5 +48,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_ce_missing_month
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: CE Domain

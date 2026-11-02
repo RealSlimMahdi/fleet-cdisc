@@ -61,5 +61,5 @@ Authorities:
             Version: "1"
             Citations:
               - Cited Guidance: check_vs_vsdtc_after_dd
-                Document: Roche sdtmchecks
+                Document: pharmaverse sdtmchecks
                 Section: VS Domain

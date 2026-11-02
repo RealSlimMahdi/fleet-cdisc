@@ -153,6 +153,22 @@ class StudyContext:
     def metadata_adam_dir(self) -> Path:
         return self.resolve(self.config.paths.metadata_adam)
 
+    def data_dir(self, standard: str) -> Path:
+        """The configured data directory of one standard (``"sdtm"`` or ``"adam"``)."""
+        if standard == "sdtm":
+            return self.sdtm_data_dir
+        if standard == "adam":
+            return self.adam_data_dir
+        raise ValueError(f"unknown standard {standard!r}: expected 'sdtm' or 'adam'")
+
+    def metadata_dir(self, standard: str) -> Path:
+        """The configured metadata directory of one standard (``"sdtm"`` or ``"adam"``)."""
+        if standard == "sdtm":
+            return self.metadata_sdtm_dir
+        if standard == "adam":
+            return self.metadata_adam_dir
+        raise ValueError(f"unknown standard {standard!r}: expected 'sdtm' or 'adam'")
+
     @property
     def define_xml_dir(self) -> Path:
         return self.resolve(self.config.paths.define_xml)

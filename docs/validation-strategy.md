@@ -122,6 +122,7 @@ Fleet integrates the **official CDISC Rules Engine (CORE)**[^5] — the open-sou
 
 ```bash
 # Download the managed engine binary for the current platform
+# (CORE 0.15.0, the version Fleet is tested with)
 uv run fleet install-engine
 
 # Verify engine and supporting dependencies
@@ -225,7 +226,7 @@ uv run fleet check-rule metadata/custom_rules/FLEET-AE-001.yaml
 # .validate("AE", custom_rules="metadata/custom_rules")
 ```
 
-Use a company prefix (e.g. `ROCHE-AE-001`) to avoid collisions with `CORE-XXXXXX`.
+Use a company prefix (e.g. `ACME-AE-001`) to avoid collisions with `CORE-XXXXXX`.
 
 ---
 
