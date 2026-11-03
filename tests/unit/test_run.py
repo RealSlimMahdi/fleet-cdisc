@@ -48,17 +48,17 @@ _DM = """\
       - name: STUDYID
         type: text
         derivation:
-          algorithm: hardcode_no_ct
+          algorithm: assign
           value: "TESTRUN"
       - name: USUBJID
         type: text
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: patient_number
       - name: AGE
         type: integer
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: age
 """
 
@@ -72,17 +72,17 @@ _ADSL = """\
       - name: USUBJID
         type: text
         derivation:
-          algorithm: source
+          algorithm: assign
           source: USUBJID
       - name: AGE
         type: integer
         derivation:
-          algorithm: source
+          algorithm: assign
           source: AGE
       - name: TRT01A
         type: text
         derivation:
-          algorithm: assigned
+          algorithm: assign
           value: "Placebo"
 """
 
@@ -227,7 +227,7 @@ _ADSL_WITH_AGEGR1 = (
       - name: AGEGR1
         type: text
         derivation:
-          algorithm: assigned
+          algorithm: assign
           value: "<65"
 """
 )
@@ -244,24 +244,24 @@ _ADVS = """\
       - name: USUBJID
         type: text
         derivation:
-          algorithm: source
+          algorithm: assign
           source: USUBJID
       - name: AVAL
         type: float
         derivation:
-          algorithm: source
+          algorithm: assign
           source: vsstresn
       - name: TRT01A
         type: text
       - name: AGE
         type: integer
         derivation:
-          algorithm: assigned
+          algorithm: assign
           value: 99
       - name: AGEGR1
         type: text
         derivation:
-          algorithm: lookup
+          algorithm: merge
           dataset: ADSL
           "on": USUBJID
 """
@@ -326,12 +326,12 @@ _AE_WITH_MERGE = """\
       - name: USUBJID
         type: text
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: patient_number
       - name: AETERM
         type: text
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: term
       - name: AGE
         type: integer

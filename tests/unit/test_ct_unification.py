@@ -5,7 +5,7 @@
   names dataset, variable, and codelist;
 * ``DatasetChecker`` verifies values against the spec's own inline
   ``codelists:`` items (ERROR on out-of-codelist values, with decode /
-  ``ct_mapping`` hints);
+  ``ct_map`` hints);
 * ``CTValidator`` resolves aliases at load time so a codelist is
   reachable by OID (C66731) or registered name (SEX) interchangeably.
 """
@@ -37,9 +37,9 @@ def ct_file(tmp_path: Path) -> Path:
 
 
 def _dm_spec(tmp_path: Path, ct: dict | None, ct_mapping: dict | None = None) -> Path:
-    derivation: dict = {"algorithm": "assign_ct", "source": "sex", "ct_codelist": "C66731"}
+    derivation: dict = {"algorithm": "assign", "source": "sex", "ct": "C66731"}
     if ct_mapping is not None:
-        derivation["ct_mapping"] = ct_mapping
+        derivation["ct_map"] = ct_mapping
     spec: dict = {
         "datasets": [
             {
@@ -47,7 +47,7 @@ def _dm_spec(tmp_path: Path, ct: dict | None, ct_mapping: dict | None = None) ->
                 "variables": [
                     {
                         "name": "DOMAIN",
-                        "derivation": {"algorithm": "hardcode_no_ct", "value": "DM"},
+                        "derivation": {"algorithm": "assign", "value": "DM"},
                     },
                     {"name": "SEX", "derivation": derivation},
                 ],
@@ -185,10 +185,10 @@ CHECKER_SPEC = {
                     "type": "text",
                     "codelist": "C66731",
                     "derivation": {
-                        "algorithm": "assign_ct",
+                        "algorithm": "assign",
                         "source": "sex_raw",
-                        "ct_codelist": "C66731",
-                        "ct_mapping": {"1": "M", "2": "F"},
+                        "ct": "C66731",
+                        "ct_map": {"1": "M", "2": "F"},
                     },
                 },
             ],
@@ -264,7 +264,7 @@ class TestCheckerInlineCodelists:
 """)
         result = checker.check(df, dataset="DM")
         (msg,) = result.ct_violations
-        assert "raw ct_mapping key" in msg
+        assert "raw ct_map key" in msg
 
     def test_nulls_ignored(self, checker):
         df = pl.from_repr("""\

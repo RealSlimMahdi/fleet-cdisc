@@ -126,7 +126,7 @@ def test_methods_are_on_by_default(tmp_path: Path) -> None:
         "type": "text",
         "length": 5,
         "origin": "Derived",
-        "derivation": {"algorithm": "assign_no_ct", "source": "age_group"},
+        "derivation": {"algorithm": "assign", "source": "age_group"},
     }
 
     root, _ = _xml(_spec(agegr1), tmp_path)
@@ -138,7 +138,7 @@ def test_a_callable_that_does_not_import_is_named_even_with_a_comment(tmp_path: 
     saffl = {
         **_SAFFL_NO_TEXT,
         "comment": "Y if the subject took at least one dose, else N.",
-        "derivation": {"algorithm": "callable", "callable": "study.derivations.saffl_typo"},
+        "derivation": {"algorithm": "derivation", "callable": "study.derivations.saffl_typo"},
     }
 
     root, messages = _xml(_spec(saffl), tmp_path)

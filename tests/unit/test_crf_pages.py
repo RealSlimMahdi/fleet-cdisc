@@ -51,7 +51,7 @@ _DM_DATASET = {
             "length": 12,
             "mandatory": True,
             "origin": "Assigned",
-            "derivation": {"algorithm": "hardcode_no_ct", "value": "TEST01"},
+            "derivation": {"algorithm": "assign", "value": "TEST01"},
         },
         {
             "name": "USUBJID",

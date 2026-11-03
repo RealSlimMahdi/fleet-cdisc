@@ -46,7 +46,7 @@ def spec_file(tmp_path: Path):
     return _write
 
 
-# ── algorithm: callable with registered Derivation ───────────────────────
+# ── algorithm: derivation, callable: with registered Derivation ───────────────────────
 
 
 class TestFromSpecCallableRegistered:
@@ -64,7 +64,7 @@ class TestFromSpecCallableRegistered:
                     "variables": [
                         {
                             "name": "AGEGR1",
-                            "derivation": {"algorithm": "callable", "callable": "AGEGR1"},
+                            "derivation": {"algorithm": "derivation", "callable": "AGEGR1"},
                         }
                     ],
                 }
@@ -86,7 +86,7 @@ class TestFromSpecCallableRegistered:
                     "variables": [
                         {
                             "name": "MYFLAG",
-                            "derivation": {"algorithm": "callable", "callable": "add_myflag"},
+                            "derivation": {"algorithm": "derivation", "callable": "add_myflag"},
                         }
                     ],
                 }
@@ -110,7 +110,7 @@ class TestFromSpecCallableRegistered:
                     "variables": [
                         {
                             "name": "PLAIN_COL",
-                            "derivation": {"algorithm": "callable", "callable": "plain_fn"},
+                            "derivation": {"algorithm": "derivation", "callable": "plain_fn"},
                         }
                     ],
                 }
@@ -186,7 +186,7 @@ class TestSDTMFromSpecCallable:
                     "variables": [
                         {
                             "name": "SDTM_DRV",
-                            "derivation": {"algorithm": "callable", "callable": "SDTM_DRV"},
+                            "derivation": {"algorithm": "derivation", "callable": "SDTM_DRV"},
                         }
                     ],
                 }

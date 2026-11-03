@@ -33,7 +33,7 @@ from lxml import etree as lxml_etree
 from fleet.core import spec_registry
 from fleet.core._verb_mixin import _import_derivations_module
 from fleet.core.algorithm_resolver import docstring_summary, resolve_callable_docstring
-from fleet.core.define_spec import load_define_spec
+from fleet.core.define_spec import load_define_spec, load_spec_yaml
 from fleet.core.exceptions import SpecError
 
 _SCHEMA_PATH = Path(__file__).parent / "schemas" / "define_spec_schema.json"
@@ -87,6 +87,12 @@ _REGISTRY_STANDARDS: dict[str, str] = {
     "SENDIG": "sdtm",
 }
 
+
+def _is_plain_copy(block: dict) -> bool:
+    """An ``assign`` that copies a column: no constant and no codelist (ADR-0008)."""
+    return block.get("algorithm") == "assign" and block.get("value") is None and not block.get("ct")
+
+
 #: reST formatting in study docstrings (````code````, ``ref``, *emphasis*)
 #: is noise in a regulatory document — content kept, markup dropped.
 _REST_MARKUP = re.compile(r"``([^`]+)``|`([^`]+)`|\*([^*\s][^*]*)\*")
@@ -134,7 +140,7 @@ class DefineSpecGenerator:
         strict: bool = False,
     ) -> None:
         self._path = Path(define_yaml_path)
-        self._data: dict[str, Any] = yaml.safe_load(self._path.read_text(encoding="utf-8"))
+        self._data: dict[str, Any] = load_spec_yaml(self._path.read_text(encoding="utf-8"))
         self._check_spec_version()
         self._enrich_methods = enrich_methods
         self._strict = strict
@@ -405,12 +411,11 @@ class DefineSpecGenerator:
             f"{ds['name']}.{var['name']}"
             for ds in self._data.get("datasets", [])
             for var in ds.get("variables", [])
-            if (var.get("derivation") or {}).get("algorithm") == "source"
-            and var.get("origin") == "Collected"
+            if _is_plain_copy(var.get("derivation") or {}) and var.get("origin") == "Collected"
         ]
         if hits:
             warnings.warn(
-                f"{self._path}: {', '.join(hits)} use 'algorithm: source' with "
+                f"{self._path}: {', '.join(hits)} use 'algorithm: assign' (a copy) with "
                 "origin 'Collected' — a variable carried from an upstream dataset "
                 "should declare origin: Predecessor with "
                 "predecessor: '<DATASET>.<VARIABLE>'.",
@@ -784,7 +789,12 @@ class DefineSpecGenerator:
             self._gaps.append(f"{label}: no method text (add a comment: or a derivation: block)")
             return None
         method_oid, problem = self._register_method(
-            derivation, dataset=dataset, target=target, comment=var.get("comment"), vl_key=vl_key
+            derivation,
+            dataset=dataset,
+            target=target,
+            comment=var.get("comment"),
+            vl_key=vl_key,
+            codelist=var.get("codelist"),
         )
         if problem:
             self._gaps.append(f"{label}: {problem}")
@@ -823,6 +833,7 @@ class DefineSpecGenerator:
         target: str,
         comment: str | None = None,
         vl_key: str | None = None,
+        codelist: str | None = None,
     ) -> tuple[str | None, str | None]:
         """Register the MethodDef for one derived variable; return its OID and a problem.
 
@@ -844,7 +855,7 @@ class DefineSpecGenerator:
         expression = ""
         problem: str | None = None
 
-        if callable_path and algorithm in ("", "callable"):
+        if callable_path and algorithm in ("", "derivation"):
             summary, dotted = self._resolve_callable(str(callable_path))
             if summary is None and dotted is None:
                 problem = f"callable {callable_path} does not import"
@@ -854,8 +865,14 @@ class DefineSpecGenerator:
             expression = dotted or ""
             context = "Python"
         elif algorithm:
-            params = {k: v for k, v in derivation.items() if k != "algorithm"}
             std = _REGISTRY_STANDARDS.get(self._data["study"]["standard"], "sdtm")
+            # The variable's codelist: is the ct: of its assign (ADR-0008), so the
+            # method text says "mapped to controlled terminology" when it applies.
+            try:
+                block = spec_registry.with_codelist(std, derivation, codelist)
+            except ValueError:
+                block = dict(derivation)
+            params = {k: v for k, v in block.items() if k != "algorithm"}
             description = description or (
                 spec_registry.render_method_text(std, algorithm, params, target=target) or ""
             )

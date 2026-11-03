@@ -77,9 +77,9 @@ The derivation block accepts either form:
 ```yaml
 # Standard verb — resolves against fleet.sdtm / fleet.adam namespaces
 derivation:
-  algorithm: assign_ct
+  algorithm: assign
   source: sex
-  ct_codelist: C66731
+  ct: C66731
 
 # Study-specific callable — full dotted path importable at generation time
 derivation:

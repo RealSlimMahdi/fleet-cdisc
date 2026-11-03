@@ -69,7 +69,7 @@ class TestEnvelopeErrors:
                     {
                         "name": "DM",
                         "variables": [
-                            {"derivation": {"algorithm": "assign_no_ct", "source": "subject_id"}}
+                            {"derivation": {"algorithm": "assign", "source": "subject_id"}}
                         ],
                     }
                 ]
@@ -102,7 +102,7 @@ class TestBothFormatsStillLoad:
                             {
                                 "name": "USUBJID",
                                 "derivation": {
-                                    "algorithm": "assign_no_ct",
+                                    "algorithm": "assign",
                                     "source": "subject_id",
                                 },
                             }
@@ -119,9 +119,7 @@ class TestBothFormatsStillLoad:
             tmp_path,
             {
                 "domain": "DM",
-                "variables": [
-                    {"target": "USUBJID", "algorithm": "assign_no_ct", "source": "subject_id"}
-                ],
+                "variables": [{"target": "USUBJID", "algorithm": "assign", "source": "subject_id"}],
             },
         )
         out = raw.sdtm.from_spec(spec).to_frame()

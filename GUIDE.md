@@ -334,22 +334,22 @@ datasets:
     variables:
       - name: STUDYID
         derivation:
-          algorithm: hardcode_no_ct
+          algorithm: assign
           value: "CDISCPILOT01"
       - name: DOMAIN
         derivation:
-          algorithm: hardcode_no_ct
+          algorithm: assign
           value: "DM"
       - name: USUBJID
         derivation:
-          algorithm: assign_no_ct
+          algorithm: assign
           source: patient_number
       - name: SEX
         derivation:
-          algorithm: assign_ct
+          algorithm: assign
           source: sex
-          ct_codelist: C66731
-          ct_mapping:
+          ct: C66731
+          ct_map:
             "F": "F"
             "M": "M"
       - name: RFSTDTC
@@ -1736,8 +1736,8 @@ The pre-alpha verb/kwarg spellings (`assign_no_ct`, `assign_ct`, `hardcode_*`,
 `target_cols=`/`keep_cols=` → `keep=`) were removed outright — no deprecation
 shims remain. Old external scripts migrate in one command:
 `python -m fleet.tools.migrate <files...> --write` (or `fleet migrate`).
-Spec-file algorithm ids (`algorithm: assign_no_ct`, …) are the stable YAML
-vocabulary and are unaffected.
+Spec files use the verb names as `algorithm:` values (ADR-0008); an old
+`define.yaml` migrates with `fleet migrate --spec <define.yaml> --write`.
 
 ---
 

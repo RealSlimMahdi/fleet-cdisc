@@ -1,18 +1,29 @@
-"""Single source of truth for spec-executable derivation algorithms.
+"""Single source of truth for spec-executable derivations: the verb is the algorithm.
 
-Every algorithm that ``from_spec()`` can execute is declared **once** in
-this module as a :class:`SpecAlgorithm` entry.  From that single
-declaration Fleet derives:
+Every verb a define.yaml can run is declared **once** here with
+:func:`spec_verb`.  The ``algorithm:`` value of a ``derivation:`` block is
+the verb name, and the YAML keys are the keyword arguments of the verb
+(ADR-0008).  The rule for the programmer: remove ``.verb("TARGET", `` and
+the last ``)``; what stays is the YAML block.
 
-* the per-algorithm **discriminated-union Pydantic models** (required
-  fields required, ``extra="forbid"`` — a typo like ``recod_map`` is a
-  validation error, not a silent column of nulls);
-* the shared table-driven ``from_spec`` executor (replacing the previous
-  duplicated SDTM/ADaM ``elif`` ladders);
-* the ``derivation`` section of the published JSON schema
-  (``fleet.define_xml.schema_builder``);
-* the machine-checked **coverage matrix** (algorithm ↔ namespace verb ↔
-  ``SPEC_UNSUPPORTED`` allowlist) used by the parity tests.
+From the verb signature, read on first lookup, Fleet derives:
+
+* the strict per-verb **Pydantic model** (required fields required,
+  ``extra="forbid"``, so a typo like ``recod_map`` is a validation error,
+  not a silent column of nulls);
+* the **YAML type** of every key, through a fixed table: a Polars
+  expression is an expression string, a frame is the name of a pinned
+  dataset, a codelist class is a codelist id, a ``@derivation`` object is
+  its registered name or dotted path;
+* the table-driven ``from_spec`` executor and the reverse mapping that
+  ``to_spec_yaml()`` and the static converter apply;
+* the ``derivation`` section of the published JSON schema and the
+  machine-checked coverage matrix (verb ↔ ``SPEC_UNSUPPORTED``).
+
+A declaration says only what a signature cannot say: the keyword arguments
+kept out of the spec, the ones that exclude each other, the ones the spec
+requires although the verb has a default, which argument is the input
+column, and the Define-XML method text.
 
 The ``SDTMAlgorithm`` / ``ADAMAlgorithm`` enums remain literal source
 code in ``fleet.sdtm.models`` / ``fleet.adam.models`` for import
@@ -33,18 +44,24 @@ Examples:
 
 from __future__ import annotations
 
+import builtins
+import collections.abc
 import difflib
+import inspect
+import keyword
 import re
+import types
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
-from typing import Annotated, Any, ClassVar, Literal, Union
+from dataclasses import dataclass, replace
+from typing import Annotated, Any, ClassVar, Literal, Union, get_args, get_origin
 
+import polars as pl
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, create_model, model_validator
 
 __all__ = [
     "SPEC_UNSUPPORTED",
-    "Param",
     "SpecAlgorithm",
+    "SpecField",
     "SpecVariableBase",
     "algorithm_names",
     "algorithms",
@@ -57,9 +74,10 @@ __all__ = [
     "parse_variable_spec",
     "render_formal_expression",
     "render_method_text",
-    "spec_algorithm",
+    "spec_verb",
     "suggest_algorithm",
     "variable_spec_union",
+    "with_codelist",
 ]
 
 
@@ -69,90 +87,83 @@ __all__ = [
 
 
 @dataclass(frozen=True)
-class Param:
-    """One spec field of an algorithm and how it maps onto the verb call.
+class SpecField:
+    """One YAML key of a verb, derived from the verb signature (ADR-0008).
 
     Args:
-        name: Spec field name (the YAML key inside the ``derivation`` block).
-        annotation: Type annotation for the generated Pydantic field.
-        kwarg: Verb keyword argument the value is passed to (defaults to
-            *name*).
-        default: Live default applied when the field is omitted.  This is
-            the value the verb actually receives — no more unreachable
-            ``getattr(var, "low", "LBSTNRLO")`` fallbacks.
-        required: When ``True`` the field must be present in the spec.
-        alias: Additional accepted YAML key (Pydantic alias), e.g.
-            ``callable`` for ``callable_ref``.
-        default_to_target: When the field is omitted (``None``), use the
-            variable's ``target`` name as the value.
-        identity_source: Marks the param as the algorithm's *input column*.
-            When its resolved value equals ``target`` the derivation is an
-            in-place / carry-through operation and is exempt from the
-            ``from_spec`` overwrite guard.
-        convert: Dispatch-time conversion: ``"pin"`` resolves the value as
-            a pinned dataset name via ``_require_pin``; ``"exprs"`` parses
-            a list of expression strings via ``parse_expression``.
-        description: Short human-readable description (surfaces in the
-            generated JSON schema).
+        name: The YAML key.  The keyword argument without a trailing
+            underscore that avoids a Python keyword (``else_`` is ``else``).
+        kwarg: The keyword argument of the verb the value is passed to.
+        annotation: The YAML type: the Python type after the conversion
+            table (an expression is a string, a frame is a pin name).
+        required: Whether the key must be present in the spec.
+        default: The default the verb applies when the key is omitted.
+        convert: Dispatch-time conversion: ``"pin"`` resolves a pinned
+            dataset name, ``"expr"`` parses an expression string.
+        description: The ``Args:`` line of the verb docstring.
+        extra: True for a spec-only key that is not a keyword of the verb
+            (``callable`` on ``derivation``, ``targets`` on ``pick``).
     """
 
     name: str
-    annotation: Any = str | None
-    kwarg: str | None = None
+    kwarg: str
+    annotation: Any
+    required: bool
     default: Any = None
-    required: bool = False
-    alias: str | None = None
-    default_to_target: bool = False
-    identity_source: bool = False
     convert: str | None = None
     description: str = ""
+    extra: bool = False
 
 
 @dataclass(frozen=True)
 class SpecAlgorithm:
-    """A spec-executable algorithm: name, target verb, and parameter table.
+    """A spec-executable verb: what the signature cannot say, plus the derived fields.
 
     Args:
-        name: Canonical algorithm name used in YAML (``algorithm:`` key).
+        name: The ``algorithm:`` value in YAML. It is the verb name.
         standard: ``"sdtm"`` or ``"adam"``.
-        verb: Namespace method the algorithm drives (coverage matrix and
-            default dispatch target).
-        params: Ordered :class:`Param` declarations.
-        aliases: Extra accepted spellings of the algorithm name
-            (e.g. ``assign_dtc`` for ``date``).
-        legacy_keys: Mapping of legacy spec key → canonical param name,
-            normalised before validation (e.g. ``join_on`` → ``on``).
+        verb: Namespace method the algorithm drives. Dotted for a
+            sub-namespace verb (``onco.best_overall_response``).
+        params: The derived :class:`SpecField` entries, in signature order.
+        exclude: Keyword arguments kept out of the spec.
+        exclusive: Keyword arguments of which at most one may be given.
+        one_of: Keyword arguments of which exactly one must be given.
+        required: Keyword arguments the spec requires although the verb
+            has a default (the spec may be stricter, never looser).
+        target_default: Keyword arguments that take the variable name
+            when omitted (a carry-through ``source``).
+        identity: The keyword that names the input column; when its
+            value is the target the derivation is an in-place operation,
+            exempt from the ``from_spec`` overwrite guard.
+        extra: Spec-only fields as ``(name, annotation, default)``.
         takes_target: Whether the verb receives the variable name as its
             first positional argument.
-        overwrite_guard: Whether the ``from_spec`` overwrite guard applies
-            (``False`` for verbs that intentionally rewrite existing
-            columns, e.g. ``notsubmitted``).
-        dispatch: Optional custom executor ``(ns, var) -> ns`` for
-            algorithms whose call shape is not expressible via *params*.
-        description: One-line description for docs / JSON schema.
-        define_template: Optional ``str.format`` template for the
-            Define-XML MethodDef description (submission-facing text —
-            review as content, not code).  ``{param}`` placeholders are
-            filled from the spec block; when absent the text is
-            synthesised from *description* and the given params.
+        overwrite_guard: Whether the ``from_spec`` overwrite guard applies.
+        dispatch: Optional custom executor ``(ns, var) -> ns``.
+        description: One-line description for docs and the JSON schema.
+        method_text: Define-XML ``MethodDef`` text shapes as
+            ``(keys, template)`` pairs: the first shape whose keys are all
+            given in the block renders, so one verb keeps the standards
+            vocabulary a reviewer reads ("mapped to controlled
+            terminology" when ``ct`` is given).  Review as content.
     """
 
     name: str
     standard: str
     verb: str
-    params: tuple[Param, ...] = ()
-    aliases: tuple[str, ...] = ()
-    legacy_keys: dict[str, str] = field(default_factory=dict)
+    params: tuple[SpecField, ...] = ()
+    exclude: tuple[str, ...] = ()
+    exclusive: tuple[str, ...] = ()
+    one_of: tuple[str, ...] = ()
+    required: tuple[str, ...] = ()
+    target_default: tuple[str, ...] = ()
+    identity: str | None = None
+    extra: tuple[tuple[str, Any, Any], ...] = ()
     takes_target: bool = True
     overwrite_guard: bool = True
     dispatch: Callable[[Any, SpecVariableBase], Any] | None = None
     description: str = ""
-    define_template: str | None = None
-
-    @property
-    def names(self) -> tuple[str, ...]:
-        """All accepted algorithm spellings (canonical name first)."""
-        return (self.name, *self.aliases)
+    method_text: tuple[tuple[frozenset[str], str], ...] = ()
 
 
 # --------------------------------------------------------------------- #
@@ -164,50 +175,50 @@ class SpecAlgorithm:
 #: role, evaluator) and are legitimate on any derivation.
 _META_FIELDS: tuple[str, ...] = ("label", "origin", "role", "evaluator")
 
+#: Keyword arguments no spec exposes: validators and runtime switches.
+_ALWAYS_EXCLUDED: frozenset[str] = frozenset(
+    {"ct_validator", "validate_values", "check_uniqueness"}
+)
+
 
 class SpecVariableBase(BaseModel):
-    """Base class for all generated per-algorithm variable-spec models.
+    """Base of every generated per-verb model."""
 
-    Unknown keys are **rejected** (``extra="forbid"``): a misspelled
-    param fails validation instead of silently producing nulls.
-    """
+    model_config = ConfigDict(extra="forbid")
 
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    _algo: ClassVar[SpecAlgorithm]
 
     target: str
 
-    _algo: ClassVar[SpecAlgorithm]
-    _legacy: ClassVar[dict[str, str]] = {}
-
-    @model_validator(mode="before")
-    @classmethod
-    def _normalise_legacy_keys(cls, data: Any) -> Any:
-        """Rename legacy spec keys to their canonical param names."""
-        legacy = cls._legacy
-        if legacy and isinstance(data, dict):
-            for old, new in legacy.items():
-                if old in data and new not in data:
-                    data = dict(data)
-                    data[new] = data.pop(old)
-        return data
+    @model_validator(mode="after")
+    def _check_argument_groups(self) -> SpecVariableBase:
+        """Enforce the ``exclusive`` and ``one_of`` groups of the declaration."""
+        algo = type(self)._algo
+        given = {f.kwarg for f in algo.params if getattr(self, f.kwarg, None) is not None}
+        if algo.exclusive and len(given & set(algo.exclusive)) > 1:
+            raise ValueError(f"{', '.join(algo.exclusive)} exclude each other; give one of them.")
+        if algo.one_of and len(given & set(algo.one_of)) != 1:
+            raise ValueError(f"exactly one of {', '.join(algo.one_of)} is required.")
+        return self
 
 
 def _model_name(algo: SpecAlgorithm) -> str:
     prefix = "SDTM" if algo.standard == "sdtm" else "ADAM"
-    camel = "".join(part.capitalize() for part in algo.name.split("_"))
+    camel = "".join(part.capitalize() for part in re.split(r"[._]", algo.name))
     return f"{prefix}{camel}Spec"
 
 
 def _build_model(algo: SpecAlgorithm) -> type[SpecVariableBase]:
-    """Generate the strict Pydantic model for one algorithm."""
+    """Generate the strict Pydantic model for one verb."""
     fields: dict[str, Any] = {
-        "algorithm": (Literal[algo.names], Field(..., description=algo.description or None)),
+        "algorithm": (Literal[algo.name], Field(..., description=algo.description or None)),
     }
-    for p in algo.params:
-        default = ... if p.required else p.default
-        fields[p.name] = (
-            p.annotation,
-            Field(default, alias=p.alias, description=p.description or None),
+    for f in algo.params:
+        default = ... if f.required else f.default
+        alias = f.name if f.name != f.kwarg else None
+        fields[f.kwarg] = (
+            f.annotation,
+            Field(default, alias=alias, description=f.description or None),
         )
     for meta in _META_FIELDS:
         fields.setdefault(meta, (str | None, Field(None)))
@@ -216,90 +227,299 @@ def _build_model(algo: SpecAlgorithm) -> type[SpecVariableBase]:
         fields.setdefault("depends_on", (list[str] | None, Field(None)))
     model = create_model(_model_name(algo), __base__=SpecVariableBase, **fields)
     model._algo = algo
-    model._legacy = dict(algo.legacy_keys)
     return model
+
+
+# --------------------------------------------------------------------- #
+# Reading the verb signature                                              #
+# --------------------------------------------------------------------- #
+
+_SECTION_RE = re.compile(r"^[A-Z][A-Za-z ]*:\s*$")
+_ARG_RE = re.compile(r"^(\*{0,2}\w+)(?:\s*\([^)]*\))?:\s*(.*)$")
+_FRAME_TYPES: tuple[type, ...] = (pl.DataFrame, pl.LazyFrame)
+
+
+def _namespace_class(standard: str) -> type | None:
+    """The namespace class whose methods the *standard*'s verbs are.
+
+    Imported here, not at module load: the namespaces import this module.
+    """
+    if standard == "sdtm":
+        from fleet.sdtm.namespace import SDTMNamespace
+
+        return SDTMNamespace
+    if standard == "adam":
+        from fleet.adam.namespace import AdamNamespace
+
+        return AdamNamespace
+    return None
+
+
+class _AnyForUnknownNames(dict):
+    """Namespace for annotation evaluation: a name imported under ``TYPE_CHECKING`` is ``Any``."""
+
+    def __missing__(self, name: str) -> Any:
+        return getattr(builtins, name, Any)
+
+
+def _eval_annotation(annotation: Any, fn: Any) -> Any:
+    """Resolve a (possibly string) annotation in the namespace of *fn*.
+
+    The namespaces import ``Callable``, ``Derivation`` or ``CTValidator``
+    under ``TYPE_CHECKING`` only, so those names are missing at run time.
+    ``Callable`` is restored (the lambda form is dropped from the YAML type)
+    and any other missing name reads as ``Any``.
+    """
+    if annotation is inspect.Parameter.empty:
+        return Any
+    if not isinstance(annotation, str):
+        return annotation
+    namespace = _AnyForUnknownNames(getattr(fn, "__globals__", {}))
+    namespace.setdefault("Callable", collections.abc.Callable)
+    try:
+        return eval(annotation, {"__builtins__": __builtins__}, namespace)  # noqa: S307
+    except Exception:
+        return Any
+
+
+def _namespace_method(standard: str, verb: str) -> Any | None:
+    """The function behind *verb* on the *standard*'s namespace.
+
+    A dotted verb walks the sub-namespace properties through their return
+    annotations (``adam.onco.best_overall_response``).
+    """
+    cls = _namespace_class(standard)
+    if cls is None:
+        return None
+    *path, name = verb.split(".")
+    for part in path:
+        prop = getattr(cls, part, None)
+        fget = getattr(prop, "fget", None)
+        if fget is None:
+            return None
+        sub = _eval_annotation(inspect.signature(fget).return_annotation, fget)
+        if not isinstance(sub, type):
+            return None
+        cls = sub
+    fn = getattr(cls, name, None)
+    return fn if callable(fn) else None
+
+
+def _docstring_arg_descriptions(fn: Any) -> dict[str, str]:
+    """First sentence of each ``Args:`` entry of a Google-style docstring."""
+    doc = inspect.getdoc(fn) or ""
+    out: dict[str, str] = {}
+    in_args = False
+    current: str | None = None
+    for line in doc.splitlines():
+        stripped = line.strip()
+        if _SECTION_RE.match(stripped):
+            in_args = stripped == "Args:"
+            current = None
+            continue
+        if not in_args or not stripped:
+            continue
+        indent = len(line) - len(line.lstrip())
+        m = _ARG_RE.match(stripped)
+        if m and indent <= 4:
+            current = m.group(1).lstrip("*")
+            out[current] = m.group(2).strip()
+        elif current is not None:
+            out[current] = f"{out[current]} {stripped}".strip()
+    for name, text in out.items():
+        head, sep, _ = text.partition(". ")
+        out[name] = f"{head}." if sep else text
+    return out
+
+
+def _is_callable_type(tp: Any) -> bool:
+    return tp is Callable or get_origin(tp) is collections.abc.Callable
+
+
+def _yaml_type(tp: Any) -> tuple[Any, str | None]:
+    """The YAML type of a Python annotation, and the conversion it needs.
+
+    The table of ADR-0008: a Polars expression is an expression string, a
+    frame is the name of a pinned dataset, a codelist class is a codelist
+    id.  A zero-argument callable (the lambda form) stays inline-only and
+    is dropped from the union.  A string form the verb already parses needs
+    no conversion.
+    """
+    if tp is pl.Expr:
+        return str, "expr"
+    if tp in _FRAME_TYPES:
+        return str, "pin"
+    if tp is type:
+        return str, None
+    origin = get_origin(tp)
+    if origin in (Union, types.UnionType):
+        members: list[Any] = []
+        kinds: set[str] = set()
+        args = [arg for arg in get_args(tp) if not _is_callable_type(arg)]
+        for arg in args:
+            yt, kind = _yaml_type(arg)
+            if kind:
+                kinds.add(kind)
+            if yt not in members:
+                members.append(yt)
+        if str in args or list[str] in args:
+            kinds.discard("expr")  # the verb parses the string form itself
+        yaml_tp = Union[tuple(members)] if len(members) > 1 else members[0]  # noqa: UP007
+        return yaml_tp, (kinds.pop() if len(kinds) == 1 else None)
+    if origin is list and get_args(tp):
+        inner, kind = _yaml_type(get_args(tp)[0])
+        return list[inner], kind  # type: ignore[valid-type]
+    return tp, None
+
+
+def _yaml_name(kwarg: str) -> str:
+    """``else_`` is written ``else`` in YAML: one trailing underscore goes."""
+    if kwarg.endswith("_") and keyword.iskeyword(kwarg[:-1]):
+        return kwarg[:-1]
+    return kwarg
+
+
+def _fields_from_signature(algo: SpecAlgorithm, fn: Any) -> tuple[SpecField, ...]:
+    """Derive the YAML keys of *algo* from the signature of its verb."""
+    sig = inspect.signature(fn)
+    docs = _docstring_arg_descriptions(fn)
+    params = [p for name, p in sig.parameters.items() if name != "self"]
+    if algo.takes_target and params:
+        params = params[1:]
+    excluded = _ALWAYS_EXCLUDED | set(algo.exclude)
+    fields: list[SpecField] = []
+    for p in params:
+        if p.kind in (p.VAR_POSITIONAL, p.VAR_KEYWORD) or p.name in excluded:
+            continue
+        annotation, convert = _yaml_type(_eval_annotation(p.annotation, fn))
+        has_default = p.default is not p.empty
+        if p.name in algo.target_default:
+            required, default = False, None
+            annotation = annotation | None if annotation is not Any else annotation
+        else:
+            required = not has_default or p.name in algo.required
+            default = None if required else p.default
+        fields.append(
+            SpecField(
+                name=_yaml_name(p.name),
+                kwarg=p.name,
+                annotation=annotation,
+                required=required,
+                default=default,
+                convert=convert,
+                description=docs.get(p.name, ""),
+            )
+        )
+    for name, annotation, default in algo.extra:
+        fields.append(
+            SpecField(name, name, annotation, required=False, default=default, extra=True)
+        )
+    return tuple(fields)
 
 
 # --------------------------------------------------------------------- #
 # Registry storage & registration                                         #
 # --------------------------------------------------------------------- #
 
-_REGISTRY: dict[str, dict[str, SpecAlgorithm]] = {"sdtm": {}, "adam": {}}
+_DECLARED: dict[str, dict[str, SpecAlgorithm]] = {"sdtm": {}, "adam": {}}
+_RESOLVED: dict[tuple[str, str], SpecAlgorithm] = {}
 _MODELS: dict[tuple[str, str], type[SpecVariableBase]] = {}
 _ADAPTERS: dict[str, TypeAdapter] = {}
 
 
-def spec_algorithm(
-    name: str,
+def spec_verb(
+    verb: str,
     *,
     standard: str,
-    verb: str,
-    params: tuple[Param, ...] = (),
-    aliases: tuple[str, ...] = (),
-    legacy_keys: dict[str, str] | None = None,
+    exclude: tuple[str, ...] = (),
+    exclusive: tuple[str, ...] = (),
+    one_of: tuple[str, ...] = (),
+    required: tuple[str, ...] = (),
+    target_default: tuple[str, ...] = (),
+    identity: str | None = None,
+    extra: tuple[tuple[str, Any, Any], ...] = (),
     takes_target: bool = True,
     overwrite_guard: bool = True,
     dispatch: Callable[[Any, SpecVariableBase], Any] | None = None,
     description: str = "",
-    define_template: str | None = None,
+    method_text: tuple[tuple[set[str] | frozenset[str], str], ...] = (),
 ) -> SpecAlgorithm:
-    """Declare a spec-executable algorithm (single source of truth).
+    """Declare that *verb* can run from a define.yaml (single source of truth).
 
-    Registers the algorithm under *name* (and *aliases*) for *standard*
-    and generates its strict Pydantic model.
+    The YAML keys come from the verb signature on first lookup, so the
+    declaration states only what the signature cannot say.
 
     Args:
-        name: Canonical algorithm name (``algorithm:`` value in YAML).
+        verb: The verb name, which is the ``algorithm:`` value in YAML.
+            Dotted for a sub-namespace verb.
         standard: ``"sdtm"`` or ``"adam"``.
-        verb: Namespace method the algorithm executes.
-        params: Spec-field → verb-kwarg declarations.
-        aliases: Additional accepted algorithm spellings.
-        legacy_keys: Legacy spec key → canonical param name renames.
+        exclude: Keyword arguments kept out of the spec.
+        exclusive: Keyword arguments of which at most one may be given.
+        one_of: Keyword arguments of which exactly one must be given.
+        required: Keyword arguments the spec requires although the verb
+            has a default.
+        target_default: Keyword arguments that take the variable name
+            when omitted.
+        identity: The keyword that names the input column.
+        extra: Spec-only fields as ``(name, annotation, default)``.
         takes_target: Whether the verb takes the target name positionally.
         overwrite_guard: Whether the overwrite guard applies to *target*.
         dispatch: Custom executor for non-tabular call shapes.
-        description: One-line description for docs and JSON schema.
-        define_template: Submission-facing MethodDef text template
-            (see :class:`SpecAlgorithm` and :func:`render_method_text`).
+        description: One-line description for docs and the JSON schema.
+        method_text: Define-XML text shapes, ``(keys, template)``.
 
     Returns:
-        SpecAlgorithm: The registered declaration.
+        SpecAlgorithm: The declaration (fields resolved on first lookup).
 
     Raises:
-        ValueError: If *name* or an alias is already registered for
-            *standard*.
+        ValueError: If *verb* is already registered for *standard*.
 
     Examples:
-        Declare a spec algorithm executing the ``chg`` verb::
+        Declare the ``chg`` verb for ADaM specs::
 
-            spec_algorithm(
-                "chg", standard="adam", verb="chg",
-                params=(
-                    Param("aval", annotation=str, default="AVAL"),
-                    Param("base", annotation=str, default="BASE"),
-                ),
+            spec_verb(
+                "chg",
+                standard="adam",
+                description="Change from baseline (AVAL - BASE).",
+                method_text=((set(), "Change from baseline: {aval} - {base}."),),
             )
     """
+    if verb in _DECLARED[standard]:
+        raise ValueError(f"Algorithm '{verb}' is already registered for {standard}.")
     algo = SpecAlgorithm(
-        name=name,
+        name=verb,
         standard=standard,
         verb=verb,
-        params=params,
-        aliases=aliases,
-        legacy_keys=legacy_keys or {},
+        exclude=exclude,
+        exclusive=exclusive,
+        one_of=one_of,
+        required=required,
+        target_default=target_default,
+        identity=identity,
+        extra=extra,
         takes_target=takes_target,
         overwrite_guard=overwrite_guard,
         dispatch=dispatch,
         description=description,
-        define_template=define_template,
+        method_text=tuple((frozenset(keys), text) for keys, text in method_text),
     )
-    table = _REGISTRY[standard]
-    for spelling in algo.names:
-        if spelling in table:
-            raise ValueError(f"Algorithm '{spelling}' is already registered for {standard}.")
-        table[spelling] = algo
-    _MODELS[(standard, name)] = _build_model(algo)
+    _DECLARED[standard][verb] = algo
+    _ADAPTERS.pop(standard, None)
     return algo
+
+
+def _resolved(declared: SpecAlgorithm) -> SpecAlgorithm:
+    """The declaration with its fields read from the verb signature (cached)."""
+    key = (declared.standard, declared.name)
+    if key not in _RESOLVED:
+        fn = _namespace_method(declared.standard, declared.verb)
+        if fn is None:
+            raise LookupError(
+                f"spec_verb({declared.verb!r}, standard={declared.standard!r}): "
+                f"the {declared.standard} namespace has no such verb."
+            )
+        _RESOLVED[key] = replace(declared, params=_fields_from_signature(declared, fn))
+    return _RESOLVED[key]
 
 
 # --------------------------------------------------------------------- #
@@ -308,44 +528,35 @@ def spec_algorithm(
 
 
 def get_algorithm(standard: str, name: str) -> SpecAlgorithm | None:
-    """Return the algorithm registered under *name* (or alias), else None."""
-    return _REGISTRY.get(standard, {}).get(name)
+    """Return the verb registered under *name* for *standard*, else None."""
+    declared = _DECLARED.get(standard, {}).get(name)
+    return None if declared is None else _resolved(declared)
 
 
 def algorithms(standard: str) -> list[SpecAlgorithm]:
-    """Return the canonical algorithm declarations for *standard*."""
-    seen: dict[str, SpecAlgorithm] = {}
-    for algo in _REGISTRY[standard].values():
-        seen.setdefault(algo.name, algo)
-    return list(seen.values())
+    """Return the resolved declarations for *standard*, in registration order."""
+    return [_resolved(a) for a in _DECLARED[standard].values()]
 
 
-def algorithm_names(standard: str, *, include_aliases: bool = False) -> list[str]:
-    """Return registered algorithm names for *standard*.
-
-    Args:
-        standard: ``"sdtm"`` or ``"adam"``.
-        include_aliases: Also include accepted alias spellings.
-
-    Returns:
-        list[str]: Sorted algorithm names.
-    """
-    if include_aliases:
-        return sorted(_REGISTRY[standard])
-    return sorted({a.name for a in _REGISTRY[standard].values()})
+def algorithm_names(standard: str) -> list[str]:
+    """Return the sorted ``algorithm:`` values for *standard*."""
+    return sorted(_DECLARED[standard])
 
 
 def model_for(standard: str, name: str) -> type[SpecVariableBase]:
-    """Return the generated Pydantic model for algorithm *name*."""
+    """Return the generated Pydantic model for the verb *name*."""
     algo = get_algorithm(standard, name)
     if algo is None:
         raise KeyError(f"No {standard} spec algorithm named '{name}'.")
-    return _MODELS[(standard, algo.name)]
+    key = (standard, algo.name)
+    if key not in _MODELS:
+        _MODELS[key] = _build_model(algo)
+    return _MODELS[key]
 
 
 def variable_spec_union(standard: str) -> Any:
-    """Return the discriminated union of all algorithm models for *standard*."""
-    models = tuple(_MODELS[(standard, a.name)] for a in algorithms(standard))
+    """Return the discriminated union of all verb models for *standard*."""
+    models = tuple(model_for(standard, name) for name in _DECLARED[standard])
     return Annotated[Union[models], Field(discriminator="algorithm")]  # noqa: UP007
 
 
@@ -356,15 +567,15 @@ def _adapter(standard: str) -> TypeAdapter:
 
 
 def parse_variable_spec(standard: str, data: Mapping[str, Any]) -> SpecVariableBase:
-    """Validate a raw spec dict into its per-algorithm model.
+    """Validate a raw spec dict into its per-verb model.
 
     Args:
         standard: ``"sdtm"`` or ``"adam"``.
         data: Mapping with at least ``target`` and ``algorithm`` keys plus
-            the algorithm's params.
+            the keyword arguments of the verb.
 
     Returns:
-        SpecVariableBase: The validated per-algorithm model instance.
+        SpecVariableBase: The validated per-verb model instance.
 
     Raises:
         pydantic.ValidationError: On unknown algorithm, missing required
@@ -385,8 +596,39 @@ def parse_variable_spec(standard: str, data: Mapping[str, Any]) -> SpecVariableB
 
 def suggest_algorithm(standard: str, name: str) -> str | None:
     """Return the closest registered algorithm name to *name*, if any."""
-    matches = difflib.get_close_matches(name, list(_REGISTRY[standard]), n=1, cutoff=0.6)
+    matches = difflib.get_close_matches(name, list(_DECLARED[standard]), n=1, cutoff=0.6)
     return matches[0] if matches else None
+
+
+def with_codelist(standard: str, block: Mapping[str, Any], codelist: str | None) -> dict[str, Any]:
+    """Fill ``ct`` from the variable's ``codelist:`` when the block omits it (ADR-0008).
+
+    A verb with a ``ct`` keyword checks its values against the codelist the
+    variable declares, so the id is written once.  A ``ct_map`` with no
+    codelist anywhere is an error, because a mapping needs a codelist.
+
+    Args:
+        standard: ``"sdtm"`` or ``"adam"``.
+        block: The ``derivation:`` block, with its ``algorithm``.
+        codelist: The ``codelist:`` of the variable, if any.
+
+    Returns:
+        dict: The block, with ``ct`` filled in when it applies.
+
+    Raises:
+        ValueError: When the block maps values with ``ct_map`` and neither
+            ``ct`` nor the variable's ``codelist:`` names the codelist.
+    """
+    algo = get_algorithm(standard, str(block.get("algorithm", "")))
+    if algo is None or "ct" in block or not any(f.kwarg == "ct" for f in algo.params):
+        return dict(block)
+    if codelist:
+        return {**block, "ct": codelist}
+    if block.get("ct_map"):
+        raise ValueError(
+            "ct_map needs a codelist: give ct: in the derivation, or codelist: on the variable."
+        )
+    return dict(block)
 
 
 # --------------------------------------------------------------------- #
@@ -394,35 +636,67 @@ def suggest_algorithm(standard: str, name: str) -> str | None:
 # --------------------------------------------------------------------- #
 
 
-def _resolve_param(ns: Any, var: SpecVariableBase, p: Param, algo: SpecAlgorithm) -> Any:
-    """Resolve one param value: target-default, then dispatch-time convert."""
-    value = getattr(var, p.name)
-    if value is None and p.default_to_target:
-        value = var.target
-    if p.convert == "pin":
-        value = ns._require_pin(str(value).upper(), algo.name)
-    elif p.convert == "exprs":
+def _convert(ns: Any, algo: SpecAlgorithm, f: SpecField, value: Any) -> Any:
+    """Apply the dispatch-time conversion of the YAML type table."""
+    if value is None or f.convert is None:
+        return value
+    if f.convert == "pin":
+        if isinstance(value, list):
+            return [ns._require_pin(str(v).upper(), algo.name) for v in value]
+        return ns._require_pin(str(value).upper(), algo.name)
+    if f.convert == "expr":
         from fleet.sdtm.utils import parse_expression
 
-        value = [parse_expression(e) for e in (value or [])]
+        if isinstance(value, list):
+            return [parse_expression(e) for e in value]
+        return parse_expression(value)
     return value
 
 
+def _takes_target_default(var: SpecVariableBase, algo: SpecAlgorithm, kwarg: str) -> bool:
+    """Whether an omitted *kwarg* takes the variable name.
+
+    Not when another member of its exclusive group is given: ``assign``
+    with ``value`` is a constant, not a copy of the target column.
+    """
+    if kwarg not in algo.target_default:
+        return False
+    if kwarg in algo.exclusive:
+        others = (k for k in algo.exclusive if k != kwarg)
+        return all(getattr(var, k, None) is None for k in others)
+    return True
+
+
+def _resolve_field(ns: Any, var: SpecVariableBase, f: SpecField, algo: SpecAlgorithm) -> Any:
+    """Resolve one field value: target default, then conversion."""
+    value = getattr(var, f.kwarg)
+    if value is None and _takes_target_default(var, algo, f.kwarg):
+        value = var.target
+    return _convert(ns, algo, f, value)
+
+
+def _method(ns: Any, verb: str) -> Any:
+    """The bound verb on *ns*, walking sub-namespaces for a dotted name."""
+    obj = ns
+    for part in verb.split("."):
+        obj = getattr(obj, part)
+    return obj
+
+
 def _default_dispatch(ns: Any, var: SpecVariableBase) -> Any:
-    """Table-driven executor: build kwargs from the param table, call the verb."""
+    """Table-driven executor: the keys become the keyword arguments of the verb."""
     algo = type(var)._algo
-    kwargs = {p.kwarg or p.name: _resolve_param(ns, var, p, algo) for p in algo.params}
-    # Spec-level CT config (`ct: {validate: true|false}`) sets the assign
-    # family's value check — only algorithms that declare a ct codelist
-    # param are affected.
+    kwargs = {f.kwarg: _resolve_field(ns, var, f, algo) for f in algo.params if not f.extra}
+    # Spec-level CT config (`ct: {validate: true|false}`) sets the value check of
+    # the verbs with a codelist keyword.
     spec_ct_validate = getattr(ns, "_spec_ct_validate", None)
-    if spec_ct_validate is not None and any((p.kwarg or p.name) == "ct" for p in algo.params):
+    if spec_ct_validate is not None and "ct" in kwargs:
         kwargs.setdefault("validate_values", spec_ct_validate)
     # from_spec put the study's codelists.py classes here; an ID they lack stays a string.
     codelists = getattr(ns, "_spec_codelists", None)
     if codelists and isinstance(kwargs.get("ct"), str):
         kwargs["ct"] = codelists.get(kwargs["ct"], kwargs["ct"])
-    method = getattr(ns, algo.verb)
+    method = _method(ns, algo.verb)
     if algo.takes_target:
         return method(var.target, **kwargs)
     return method(**kwargs)
@@ -431,26 +705,25 @@ def _default_dispatch(ns: Any, var: SpecVariableBase) -> Any:
 def _spec_block(var: SpecVariableBase) -> dict[str, Any]:
     """Rebuild the define.yaml ``derivation:`` block from a validated model.
 
-    Variable-level metadata (``label``/``origin``/…) and ``target`` are
-    stripped — they live at the variable level of a define.yaml.
+    Only the keys the spec gave are kept (defaults stay implicit), so the
+    block round-trips verbatim.  Variable-level metadata
+    (``label``/``origin``/…) and ``target`` are stripped — they live at
+    the variable level of a define.yaml.
     """
-    data = var.model_dump(by_alias=True, exclude_none=True)
+    data = var.model_dump(by_alias=True, exclude_none=True, exclude_unset=True)
     data.pop("target", None)
     for meta in _META_FIELDS:
         data.pop(meta, None)
     return data
 
 
-def _attach_spec_lineage(ns: Any, var: SpecVariableBase, algo: SpecAlgorithm, start: int) -> None:
-    """Relabel lineage recorded during spec dispatch with the algorithm.
+def _attach_spec_lineage(ns: Any, var: SpecVariableBase, start: int) -> None:
+    """Give the lineage nodes of the spec target(s) the validated block.
 
-    The verbs a spec algorithm drives record their own name (a spec
-    ``study_day`` executes the ``duration`` verb).  For correct
-    attribution, every node created for the spec *target(s)* during the
-    dispatch is relabelled with the algorithm name and given the
-    validated spec block (``VariableNode.spec``) so ``to_spec_yaml()``
-    round-trips it verbatim.  By-product columns (e.g. auto-generated
-    ``--DTF`` flags) keep their verb attribution and get no spec block.
+    The verb records its own name, which is the algorithm.  The block is
+    attached as ``VariableNode.spec`` so ``to_spec_yaml()`` round-trips it
+    verbatim, pinned frames and codelist classes included.  By-product
+    columns (an auto-generated ``--DTF`` flag) get no block.
     """
     lineage = getattr(ns, "_lineage", None)
     if not lineage:
@@ -462,7 +735,6 @@ def _attach_spec_lineage(ns: Any, var: SpecVariableBase, algo: SpecAlgorithm, st
     block = _spec_block(var)
     for node in lineage[start:]:
         if node.name in targets:
-            node.verb = algo.name
             node.spec = dict(block)
 
 
@@ -471,8 +743,7 @@ def execute_variable(ns: Any, var: SpecVariableBase) -> Any:
 
     Args:
         ns: An SDTM/ADaM namespace instance.
-        var: A validated per-algorithm model from
-            :func:`parse_variable_spec`.
+        var: A validated per-verb model from :func:`parse_variable_spec`.
 
     Returns:
         The namespace returned by the dispatched verb.
@@ -481,7 +752,7 @@ def execute_variable(ns: Any, var: SpecVariableBase) -> Any:
     fn = algo.dispatch or _default_dispatch
     start = len(getattr(ns, "_lineage", []))
     out = fn(ns, var)
-    _attach_spec_lineage(out, var, algo, start)
+    _attach_spec_lineage(out, var, start)
     return out
 
 
@@ -493,80 +764,53 @@ def is_identity_copy(var: SpecVariableBase) -> bool:
     accidental overwrite.
     """
     algo = type(var)._algo
-    for p in algo.params:
-        if not p.identity_source:
-            continue
-        value = getattr(var, p.name)
-        if value is None and p.default_to_target:
-            value = var.target
-        if isinstance(value, str) and value == var.target:
-            return True
-    return False
+    if algo.identity is None:
+        return False
+    value = getattr(var, algo.identity, None)
+    if value is None and _takes_target_default(var, algo, algo.identity):
+        value = var.target
+    return isinstance(value, str) and value == var.target
 
 
 # --------------------------------------------------------------------- #
 # Reverse mapping (lineage → derivation block, for to_spec_yaml)          #
 # --------------------------------------------------------------------- #
 
-#: Captured verb kwargs that have no spec representation but do not
-#: change the derived data — safe to drop when reverse-mapping.
-_REVERSE_IGNORED_KWARGS: frozenset[str] = frozenset(
-    {"ct_validator", "validate_values", "check_uniqueness", "fk", "verb"}
-)
-
-_MISSING = object()
+#: Captured kwargs that never appear in a spec block: validators, runtime
+#: switches, and lineage bookkeeping.
+_REVERSE_IGNORED_KWARGS: frozenset[str] = _ALWAYS_EXCLUDED | {"fk", "verb"}
 
 
-def _candidate_algorithms(standard: str, verb: str) -> list[SpecAlgorithm]:
-    """Algorithms that could have produced a lineage node with *verb*.
+def _build_block(algo: SpecAlgorithm, captured: dict[str, Any], node: Any) -> dict | None:
+    """Build a derivation block from captured kwargs, or ``None``.
 
-    A verb that *is* a registered algorithm name (legacy shims like
-    ``hardcode_no_ct``, or spec-relabelled nodes like ``study_day``)
-    maps directly.  Otherwise every algorithm driving *verb* is a
-    candidate, ranked exact-name-match first, then by declared param
-    count ascending (the smallest algorithm that covers the call wins).
-    """
-    direct = get_algorithm(standard, verb)
-    if direct is not None:
-        return [direct]
-    candidates = [a for a in algorithms(standard) if a.verb == verb]
-    candidates.sort(key=lambda a: (0 if a.name == verb else 1, len(a.params)))
-    return candidates
-
-
-def _try_build_block(algo: SpecAlgorithm, captured: dict[str, Any], node: Any) -> dict | None:
-    """Build a derivation block for *algo* from captured kwargs, or ``None``.
-
-    Fails (returns ``None``) when a required param is missing or when a
-    captured non-default kwarg has no spec field — an emitted block must
+    Fails (returns ``None``) when a required key is missing or when a
+    captured non-default kwarg has no YAML key — an emitted block must
     reproduce the call faithfully or not at all.
     """
     remaining = dict(captured)
     fields: dict[str, Any] = {}
-    for p in algo.params:
-        key = p.kwarg or p.name
-        if key in remaining:
-            value = remaining.pop(key)
-        elif p.name in remaining:
-            value = remaining.pop(p.name)
+    for f in algo.params:
+        if f.extra:
+            continue
+        if f.kwarg in remaining:
+            value = remaining.pop(f.kwarg)
+        elif (f.kwarg == algo.identity or f.kwarg in algo.target_default) and len(
+            node.sources
+        ) == 1:
+            value = node.sources[0]
+        elif f.required:
+            return None
         else:
-            value = _MISSING
-        if value is _MISSING:
-            # Identity/input params can be recovered from expression sources.
-            if (p.identity_source or p.default_to_target) and len(node.sources) == 1:
-                value = node.sources[0]
-            elif p.required:
-                return None
-            else:
-                continue
-        if p.default_to_target and value == node.name:
+            continue
+        if f.kwarg in algo.target_default and value == node.name:
             continue  # implicit — the spec defaults it to the target
         try:
-            if p.default is not None and bool(value == p.default):
+            if f.default is not None and bool(value == f.default):
                 continue
         except Exception:
             pass
-        fields[p.name] = value
+        fields[f.name] = value
     if remaining:
         return None
     return {"algorithm": algo.name, **fields}
@@ -579,13 +823,11 @@ def derivation_from_lineage(standard: str, node: Any) -> tuple[str, dict | None,
 
     1. ``node.spec`` (set by ``from_spec`` execution and ``@derivation``
        objects) round-trips verbatim.
-    2. ``node.params`` (captured verb kwargs) are matched against the
-       registry: the node's verb selects the candidate algorithm(s) and
-       each captured kwarg must map onto a declared spec param.
+    2. ``node.params`` (captured verb kwargs) become the keys of the block
+       of the verb the node records: one verb, one block.
     3. Anything else — unknown verb, unserialisable arguments (Polars
        expressions, DataFrames), spec-inexpressible kwargs — yields a
-       ``"stub"`` status so the caller can emit an ``algorithm:
-       callable`` placeholder.
+       ``"stub"`` status so the caller can emit a placeholder.
 
     Args:
         standard: ``"sdtm"`` or ``"adam"``.
@@ -609,7 +851,7 @@ def derivation_from_lineage(standard: str, node: Any) -> tuple[str, dict | None,
             ns = raw_df.sdtm.assign("DOMAIN", value="DM")
             node = latest_lineage_of(ns)[0]
             status, block, _ = spec_registry.derivation_from_lineage("sdtm", node)
-            assert status == "ok" and block["algorithm"] == "hardcode_no_ct"
+            assert status == "ok" and block == {"algorithm": "assign", "value": "DM"}
     """
     from fleet.core.lineage import UNSERIALISABLE
 
@@ -635,8 +877,9 @@ def derivation_from_lineage(standard: str, node: Any) -> tuple[str, dict | None,
     if any(v is UNSERIALISABLE for v in captured.values()):
         return ("stub", None, meta)
 
-    for algo in _candidate_algorithms(standard, node.verb):
-        block = _try_build_block(algo, captured, node)
+    algo = get_algorithm(standard, node.verb)
+    if algo is not None:
+        block = _build_block(algo, captured, node)
         if block is not None:
             return ("ok", block, meta)
     return ("stub", None, meta)
@@ -646,26 +889,17 @@ def derivation_from_lineage(standard: str, node: Any) -> tuple[str, dict | None,
 # Define-XML method text (single choke point for both spec paths)          #
 # --------------------------------------------------------------------- #
 
-#: ``{param}`` placeholders inside a ``define_template``.
+#: ``{key}`` placeholders inside a method text template.
 _TEMPLATE_KEYS_RE = re.compile(r"{(\w+)}")
 
 
 def _fmt_value(value: Any) -> str:
-    """Render one param value as reviewer-readable prose (no Python reprs)."""
+    """Render one value as reviewer-readable prose (no Python reprs)."""
     if isinstance(value, dict):
         return "; ".join(f"{k} → {v}" for k, v in value.items())
     if isinstance(value, (list, tuple)):
         return ", ".join(str(v) for v in value)
     return str(value)
-
-
-def _given_param(params: Mapping[str, Any], p: Param) -> Any:
-    """Value the spec block provides for *p* (by name or alias), else None."""
-    if p.name in params:
-        return params[p.name]
-    if p.alias and p.alias in params:
-        return params[p.alias]
-    return None
 
 
 def render_method_text(
@@ -683,16 +917,14 @@ def render_method_text(
     identical submission text.  Fleet verb docstrings are never used
     (API-shaped, generic, and unstable across Fleet versions).
 
-    Resolution: the algorithm's ``define_template`` (formatted with the
-    spec params, defaults filled) when declared and fully resolvable;
-    otherwise text synthesised from the registry ``description`` plus the
-    explicitly-given params.
+    Resolution: the first ``method_text`` shape of the verb whose keys are
+    all given in the block (defaults filled), otherwise text synthesised
+    from the registry ``description`` plus the given keys.
 
     Args:
         standard: ``"sdtm"`` or ``"adam"``.
         algorithm: Algorithm name from the derivation block.
-        params: The derivation block minus ``algorithm`` (spec field
-            names or aliases).
+        params: The derivation block minus ``algorithm``.
         target: Variable name, available to templates as ``{target}``.
 
     Returns:
@@ -711,31 +943,29 @@ def render_method_text(
     if algo is None:
         return None
 
-    if algo.define_template:
-        values: dict[str, Any] = {"target": target or ""}
-        for p in algo.params:
-            raw = _given_param(params, p)
-            if raw is None and p.default_to_target:
-                raw = target
-            if raw is None:
-                raw = p.default
-            values[p.name] = None if raw is None else _fmt_value(raw)
-        try:
-            if all(
-                values.get(k) is not None for k in _TEMPLATE_KEYS_RE.findall(algo.define_template)
-            ):
-                return algo.define_template.format(**values)
-        except (KeyError, IndexError):  # template names an unknown key — fall through
-            pass
+    given = {k for k, v in params.items() if v is not None}
+    values: dict[str, Any] = {"target": target or ""}
+    for f in algo.params:
+        raw = params.get(f.name)
+        if raw is None and f.kwarg in algo.target_default:
+            raw = target
+        if raw is None:
+            raw = f.default
+        values[f.name] = None if raw is None else _fmt_value(raw)
+    for keys, template in algo.method_text:
+        if keys <= given and all(
+            values.get(k) is not None for k in _TEMPLATE_KEYS_RE.findall(template)
+        ):
+            return template.format(**values)
 
     base = (algo.description or f"Fleet '{algo.name}' derivation.").rstrip(".")
-    given = [
-        f"{p.name.replace('_', ' ')}: {_fmt_value(_given_param(params, p))}"
-        for p in algo.params
-        if _given_param(params, p) is not None
+    shown = [
+        f"{f.name.replace('_', ' ')}: {_fmt_value(params[f.name])}"
+        for f in algo.params
+        if params.get(f.name) is not None
     ]
-    if given:
-        return f"{base} ({'; '.join(given)})."
+    if shown:
+        return f"{base} ({'; '.join(shown)})."
     return f"{base}."
 
 
@@ -748,12 +978,11 @@ def render_formal_expression(
 ) -> str | None:
     """Machine-readable provenance for ``FormalExpression Context="Python/Fleet"``.
 
-    Renders the faithful Fleet call — the method the spec dispatches to,
-    plus the spec params as keyword arguments in declared (deterministic)
-    order — so a reviewer can reproduce the derivation, unlike the former
-    ``.verb(...)`` stub.  The method is named after the class that defines
-    it on the *standard*'s namespace, so the path is the one runtime
-    lineage records in ``VariableNode.method`` for the same derivation.
+    Renders the faithful Fleet call — the verb, plus the block's keys as
+    keyword arguments in signature order — so a reviewer can reproduce the
+    derivation.  The method is named after the class that defines it on
+    the *standard*'s namespace, so the path is the one runtime lineage
+    records in ``VariableNode.method`` for the same derivation.
 
     Args:
         standard: ``"sdtm"`` or ``"adam"``.
@@ -769,20 +998,17 @@ def render_formal_expression(
     algo = get_algorithm(standard, algorithm)
     if algo is None:
         return None
-    from fleet.adam.namespace import AdamNamespace
     from fleet.core.lineage import defining_method_path
-    from fleet.sdtm.namespace import SDTMNamespace
 
     # The class from_spec runs on, so the path is the one lineage records.
-    namespace = AdamNamespace if standard == "adam" else SDTMNamespace
-    dotted = defining_method_path(namespace, algo.verb)
+    dotted = defining_method_path(_namespace_class(standard), algo.verb)
     args: list[str] = []
     if target and algo.takes_target:
         args.append(repr(target))
-    for p in algo.params:
-        value = _given_param(params, p)
+    for f in algo.params:
+        value = params.get(f.name)
         if value is not None:
-            args.append(f"{p.kwarg or p.name}={value!r}")
+            args.append(f"{f.kwarg}={value!r}")
     return f"{dotted}({', '.join(args)})"
 
 
@@ -791,36 +1017,16 @@ def render_formal_expression(
 # --------------------------------------------------------------------- #
 
 
-def _dispatch_callable(ns: Any, var: SpecVariableBase) -> Any:
-    """Resolve ``callable:`` to a registered Derivation or dotted path."""
-    from fleet.core._resolve_callable import resolve_callable
+def _dispatch_derivation(ns: Any, var: SpecVariableBase) -> Any:
+    """``callable:`` resolves a registered Derivation or dotted path; else the expression."""
+    if var.callable:
+        from fleet.core._resolve_callable import resolve_callable
 
-    fn = resolve_callable(var.callable_ref or "")
-    if hasattr(fn, "kind"):
-        return ns.derivation(fn)
-    return ns._materialise_then(fn(ns.to_frame()))
-
-
-def _dispatch_sdtm_date(ns: Any, var: SpecVariableBase) -> Any:
-    """SDTM date: source= / value= are exclusive; default source is target."""
-    kwargs: dict[str, Any] = {
-        "output": var.output,
-        "time": var.time,
-        "impute": var.impute,
-        "impute_time": var.impute_time,
-        "highest": var.highest,
-        "flag": var.flag,
-        "min_date": var.min_date,
-        "max_date": var.max_date,
-        "format": var.format,
-    }
-    if var.source is not None:
-        kwargs["source"] = var.source
-    elif var.value is not None:
-        kwargs["value"] = var.value
-    else:
-        kwargs["source"] = var.target
-    return ns.date(var.target, **kwargs)
+        fn = resolve_callable(var.callable)
+        if hasattr(fn, "kind"):
+            return ns.derivation(fn)
+        return ns._materialise_then(fn(ns.to_frame()))
+    return _default_dispatch(ns, var)
 
 
 def _dispatch_nsv(ns: Any, var: SpecVariableBase) -> Any:
@@ -847,917 +1053,322 @@ def _dispatch_pick(ns: Any, var: SpecVariableBase) -> Any:
 
 
 # --------------------------------------------------------------------- #
-# SDTM algorithm declarations                                             #
+# Define-XML method text shared by both standards                         #
 # --------------------------------------------------------------------- #
 
-_STR_OR_NONE = str | None
-_LIST_OR_NONE = list[str] | None
+_ASSIGN_TEXT = (
+    ({"value", "ct"}, "Set to the controlled terminology value '{value}' for all records."),
+    ({"value"}, "Set to '{value}' for all records."),
+    ({"source", "ct"}, "Value of {source} mapped to controlled terminology."),
+    (set(), "Direct copy of {source}."),
+)
+_DATE_TEXT = ((set(), "ISO 8601 date/time derived from {source} (imputation: {impute})."),)
+_MERGE_TEXT = ((set(), "Records merged from {dataset} (join key: {on})."),)
+_DURATION_TEXT = ((set(), "Duration from {start} to {end}, in {unit}."),)
+_DERIVATION_TEXT = (({"expression"}, "Derived as: {expression}."),)
+_CALLABLE_FIELD = (("callable", str | None, None),)
 
-spec_algorithm(
-    "assign_no_ct",
+
+# --------------------------------------------------------------------- #
+# SDTM verbs                                                              #
+# --------------------------------------------------------------------- #
+
+spec_verb(
+    "assign",
     standard="sdtm",
-    verb="assign",
-    params=(
-        Param(
-            "source",
-            default_to_target=True,
-            identity_source=True,
-            description="Source column; defaults to the variable name (carry-through).",
-        ),
-    ),
-    description="Copy a raw column without controlled-terminology mapping.",
-    define_template="Direct copy of {source}.",
+    exclusive=("source", "value"),
+    target_default=("source",),
+    identity="source",
+    description="Copy a column or set a constant, with optional controlled terminology.",
+    method_text=_ASSIGN_TEXT,
 )
 
-spec_algorithm(
-    "assign_ct",
-    standard="sdtm",
-    verb="assign",
-    params=(
-        Param("source", default_to_target=True, identity_source=True),
-        Param(
-            "ct_codelist",
-            annotation=str,
-            kwarg="ct",
-            required=True,
-            description="CT codelist OID.",
-        ),
-        Param(
-            "ct_mapping",
-            annotation=dict[str, str] | None,
-            kwarg="ct_map",
-            description="Explicit raw→CT value mapping.",
-        ),
-    ),
-    description="Copy a raw column applying controlled-terminology mapping.",
-    define_template="Value of {source} mapped to controlled terminology.",
-)
-
-spec_algorithm(
+spec_verb(
     "date",
     standard="sdtm",
-    verb="date",
-    aliases=("assign_dtc",),
-    legacy_keys={"input_format": "format"},
-    dispatch=_dispatch_sdtm_date,
-    params=(
-        Param("source", identity_source=True, description="Source date column."),
-        Param("value", description="Literal date value to broadcast."),
-        Param("output", description="Output type override: 'dt' or 'dtm'."),
-        Param("format", description="strftime format of the source column."),
-        Param("time", description="Time column or 'HH:MM:SS' literal (DTM targets)."),
-        Param("impute", annotation=str, default="first", description="Imputation strategy."),
-        Param("impute_time", description="Time-part imputation override."),
-        Param("highest", description="Maximum imputation ceiling (D/M/Y/h/m/s)."),
-        Param(
-            "flag",
-            annotation=bool | str,
-            default=True,
-            description="Auto-generate DTF/TMF flags (bool) or explicit flag name.",
-        ),
-        Param("min_date", description="Lower clamp bound."),
-        Param("max_date", description="Upper clamp bound."),
-    ),
+    exclusive=("source", "value"),
+    target_default=("source",),
+    identity="source",
     description="Parse, convert, impute, and flag a date/datetime column (ISO 8601).",
-    define_template="ISO 8601 date/time derived from {source} (imputation: {impute}).",
+    method_text=_DATE_TEXT,
 )
 
-spec_algorithm(
-    "hardcode_ct",
-    standard="sdtm",
-    verb="assign",
-    params=(
-        Param("value", annotation=Any, required=True, description="Constant CT value."),
-        Param(
-            "ct_codelist",
-            annotation=str,
-            kwarg="ct",
-            required=True,
-            description="CT codelist OID to validate against.",
-        ),
-    ),
-    description="Hardcode a constant validated against controlled terminology.",
-    define_template="Set to the controlled terminology value '{value}' for all records.",
-)
-
-spec_algorithm(
-    "hardcode_no_ct",
-    standard="sdtm",
-    verb="assign",
-    aliases=("dataset_level",),
-    params=(Param("value", annotation=Any, required=True, description="Constant value."),),
-    description="Hardcode a constant value for all rows.",
-    define_template="Set to '{value}' for all records.",
-)
-
-spec_algorithm(
+spec_verb(
     "condition_add",
     standard="sdtm",
-    verb="condition_add",
-    params=(
-        Param("condition", annotation=str, required=True, description="Boolean expression."),
-        Param(
-            "then_value",
-            annotation=Any,
-            required=True,
-            description="Value emitted when the condition is true.",
-        ),
-    ),
     description="Set a value where a condition holds (null otherwise).",
-    define_template="Set to '{then_value}' where {condition}; null otherwise.",
+    method_text=((set(), "Set to '{then_value}' where {condition}; null otherwise."),),
 )
 
-spec_algorithm(
-    "if_then_else",
-    standard="sdtm",
-    verb="case_when",
-    params=(
-        Param(
-            "when",
-            annotation=list[dict[str, Any]],
-            required=True,
-            description="Ordered when/then clause dicts.",
-        ),
-        Param(
-            "else_value",
-            annotation=Any,
-            kwarg="else_",
-            description="Fallback when no clause matches.",
-        ),
-    ),
-    description="Multi-branch conditional derivation.",
-)
+spec_verb("case_when", standard="sdtm", description="Multi-branch conditional derivation.")
 
-spec_algorithm(
+spec_verb(
     "ae_aerel",
     standard="sdtm",
-    verb="ae_aerel",
-    params=(
-        Param(
-            "aerel_source",
-            annotation=str,
-            kwarg="source",
-            default="ae_relationship",
-            description="Raw relationship column.",
-        ),
-        Param(
-            "aerel_map",
-            annotation=dict[str, str] | None,
-            description="Raw→AEREL mapping dict.",
-        ),
-    ),
     description="Map raw relationship values onto AEREL controlled terms.",
 )
 
-spec_algorithm(
+spec_verb(
     "merge",
     standard="sdtm",
-    verb="merge",
+    required=("dataset", "on"),
     takes_target=False,
-    legacy_keys={"join_on": "on"},
-    params=(
-        Param(
-            "dataset",
-            annotation=str,
-            required=True,
-            convert="pin",
-            description="Pinned dataset name to merge (resolved via .pin()).",
-        ),
-        Param(
-            "on",
-            annotation=str | list[str],
-            required=True,
-            description="Join key column(s).",
-        ),
-        Param("how", annotation=str, default="left", description="Join strategy."),
-        Param(
-            "target_cols",
-            annotation=_LIST_OR_NONE,
-            kwarg="keep",
-            description="Columns to keep from the joined result.",
-        ),
-    ),
     description="Join a pinned reference dataset into the pipeline.",
-    define_template="Records merged from {dataset} (join key: {on}).",
+    method_text=_MERGE_TEXT,
 )
 
-spec_algorithm(
+spec_verb(
     "group_by",
     standard="sdtm",
-    verb="group_by",
     takes_target=False,
-    params=(
-        Param(
-            "group_cols",
-            annotation=list[str],
-            kwarg="by",
-            required=True,
-            description="Grouping columns.",
-        ),
-        Param(
-            "agg",
-            annotation=list[str],
-            required=True,
-            convert="exprs",
-            description="Aggregation expression strings.",
-        ),
-    ),
     description="Aggregate the frame by group columns.",
 )
 
-spec_algorithm(
+spec_verb(
     "notsubmitted",
     standard="sdtm",
-    verb="notsubmitted",
     overwrite_guard=False,
     description="Null out a variable that is not submitted.",
 )
 
-spec_algorithm(
+spec_verb(
     "multiple_responses",
     standard="sdtm",
-    verb="multiple_responses",
-    params=(
-        Param("source", default_to_target=True, identity_source=True),
-        Param("delimiter", annotation=str, default="|", description="Response separator."),
-    ),
+    target_default=("source",),
+    identity="source",
     description="Explode a delimited multi-response field into rows.",
 )
 
-spec_algorithm(
-    "seq",
-    standard="sdtm",
-    verb="seq",
-    params=(
-        Param(
-            "order_by",
-            annotation=str | list[str] | None,
-            description="Sort column(s) for sequence order.",
-        ),
-        Param("groups", annotation=_LIST_OR_NONE, kwarg="by", description="Partition columns."),
-        Param("start_at", annotation=int, default=1, description="First sequence number."),
-    ),
-    description="Assign the --SEQ sequence number within each group.",
-)
+spec_verb("seq", standard="sdtm", description="Assign the --SEQ sequence number within each group.")
 
-spec_algorithm(
+spec_verb(
     "nsv",
     standard="sdtm",
-    verb="nsv",
+    exclude=("label", "origin", "evaluator"),
+    identity="source",
     dispatch=_dispatch_nsv,
-    params=(
-        Param("source", identity_source=True, description="Source column for the qualifier."),
-        Param("value", annotation=Any, description="Constant qualifier value."),
-    ),
     description="Declare a Non-Standard Variable (SUPPQUAL qualifier).",
 )
 
-spec_algorithm(
+spec_verb(
     "duration",
     standard="sdtm",
-    verb="duration",
-    legacy_keys={"source": "start"},
-    params=(
-        Param("start", annotation=str, required=True, description="Start date column."),
-        Param("end", annotation=str, required=True, description="End date column."),
-        Param("unit", annotation=str, default="days", description="Output unit."),
-        Param("add_one", annotation=bool | None, description="CDISC +1 day convention."),
-        Param(
-            "out",
-            annotation=str,
-            default="numeric",
-            description="Output style: numeric or iso8601.",
-        ),
-    ),
     description="Compute the duration between two dates.",
-    define_template="Duration from {start} to {end}, in {unit}.",
+    method_text=_DURATION_TEXT,
 )
 
-spec_algorithm(
-    "callable",
+spec_verb(
+    "derivation",
     standard="sdtm",
-    verb="derivation",
-    dispatch=_dispatch_callable,
-    params=(
-        Param(
-            "callable_ref",
-            annotation=str,
-            required=True,
-            alias="callable",
-            description="Registered derivation name or dotted Python path.",
-        ),
+    one_of=("expression", "callable"),
+    extra=_CALLABLE_FIELD,
+    dispatch=_dispatch_derivation,
+    description=(
+        "Derive a column from a Polars expression string, or run a registered or "
+        "importable study derivation (callable)."
     ),
-    description="Escape hatch: run a registered or importable custom derivation.",
+    method_text=_DERIVATION_TEXT,
 )
 
 
 # --------------------------------------------------------------------- #
-# ADaM algorithm declarations                                             #
+# ADaM verbs                                                              #
 # --------------------------------------------------------------------- #
 
-spec_algorithm(
-    "source",
+spec_verb(
+    "assign",
     standard="adam",
-    verb="assign",
-    params=(
-        Param(
-            "source",
-            identity_source=True,
-            default_to_target=True,
-            description="Predecessor column; defaults to the variable name.",
-        ),
-    ),
-    description="Copy a column from the predecessor dataset.",
-    define_template="Direct copy of {source}.",
+    exclusive=("source", "value"),
+    target_default=("source",),
+    identity="source",
+    description="Copy a column or set a constant, with optional controlled terminology.",
+    method_text=_ASSIGN_TEXT,
 )
 
-spec_algorithm(
+spec_verb(
     "derivation",
     standard="adam",
-    verb="derivation",
-    params=(
-        Param(
-            "expression",
-            default_to_target=True,
-            identity_source=True,
-            description="Polars expression string (or bare column name).",
-        ),
+    one_of=("expression", "callable"),
+    extra=_CALLABLE_FIELD,
+    dispatch=_dispatch_derivation,
+    description=(
+        "Derive a column from a Polars expression string, or run a registered or "
+        "importable study derivation (callable)."
     ),
-    description="Derive a column from a Polars expression string.",
-    define_template="Derived as: {expression}.",
+    method_text=_DERIVATION_TEXT,
 )
 
-spec_algorithm(
-    "assigned",
-    standard="adam",
-    verb="assign",
-    params=(Param("value", annotation=Any, required=True, description="Constant value."),),
-    description="Assign a constant value for all rows.",
-    define_template="Set to '{value}' for all records.",
-)
-
-spec_algorithm(
+spec_verb(
     "recode",
     standard="adam",
-    verb="recode",
-    params=(
-        Param("source", default_to_target=True, identity_source=True),
-        Param(
-            "recode_map",
-            annotation=dict[Any, Any],
-            required=True,
-            description="Old-value → new-value mapping.",
-        ),
-        Param("default", annotation=Any, description="Fallback for unmapped values."),
-    ),
+    target_default=("source",),
+    identity="source",
     description="Map source values onto new values via a lookup dict.",
-    define_template="Values of {source} recoded as: {recode_map}.",
+    method_text=((set(), "Values of {source} recoded as: {recode_map}."),),
 )
 
-spec_algorithm(
-    "rename",
-    standard="adam",
-    verb="assign",
-    params=(Param("source", default_to_target=True, identity_source=True),),
-    description="Copy a column under a new CDISC-compliant name.",
-    define_template="Direct copy of {source}.",
-)
+spec_verb("case_when", standard="adam", description="Multi-branch conditional derivation.")
 
-spec_algorithm(
-    "condderivation",
+spec_verb(
+    "merge",
     standard="adam",
-    verb="case_when",
-    params=(
-        Param(
-            "conditions",
-            annotation=list[dict[str, Any]],
-            kwarg="when",
-            required=True,
-            description="Ordered when/then condition dicts.",
-        ),
-        Param(
-            "else_value",
-            annotation=Any,
-            kwarg="else_",
-            description="Fallback when no condition matches.",
-        ),
-    ),
-    description="Multi-branch conditional derivation.",
-)
-
-spec_algorithm(
-    "lookup",
-    standard="adam",
-    verb="merge",
+    required=("dataset", "on"),
     takes_target=False,
-    legacy_keys={"join_on": "on"},
-    params=(
-        Param(
-            "dataset",
-            annotation=str,
-            required=True,
-            convert="pin",
-            description="Pinned dataset name to join (resolved via .pin()).",
-        ),
-        Param(
-            "on",
-            annotation=str | list[str],
-            required=True,
-            description="Join key column(s).",
-        ),
-        Param("how", annotation=str, default="left", description="Join strategy."),
-        Param(
-            "target_cols",
-            annotation=_LIST_OR_NONE,
-            kwarg="keep",
-            description="Columns to keep from the joined result.",
-        ),
-        Param("where", description="Filter applied to the lookup dataset before joining."),
-    ),
-    description="SQL-style join against a pinned lookup dataset.",
-    define_template="Records merged from {dataset} (join key: {on}).",
+    description="SQL-style join against a pinned dataset.",
+    method_text=_MERGE_TEXT,
 )
 
-spec_algorithm(
+spec_verb(
     "whereclauses",
     standard="adam",
-    verb="whereclauses",
     takes_target=False,
-    params=(Param("where", annotation=str, required=True, description="Row filter expression."),),
     description="Filter rows by a boolean expression.",
 )
 
-spec_algorithm(
-    "study_day",
+spec_verb(
+    "duration",
     standard="adam",
-    verb="duration",
-    params=(
-        Param(
-            "analysis_date",
-            annotation=str,
-            kwarg="end",
-            required=True,
-            description="Analysis date column (e.g. ADT).",
-        ),
-        Param(
-            "reference_date",
-            annotation=str,
-            kwarg="start",
-            required=True,
-            description="Reference date column (e.g. TRTSDT).",
-        ),
-    ),
-    description="Relative study day (analysis date vs reference date).",
-    define_template="Study day of {analysis_date} relative to {reference_date}.",
+    description="Compute the duration between two dates (a study day is end minus start).",
+    method_text=_DURATION_TEXT,
 )
 
-spec_algorithm(
+spec_verb(
     "baseline",
     standard="adam",
-    verb="baseline",
-    params=(
-        Param("aval", annotation=str, default="AVAL", description="Analysis value column."),
-        Param(
-            "baseline_flag",
-            annotation=str,
-            default="ABLFL",
-            description="Baseline record flag column.",
-        ),
-        Param("groups", annotation=_LIST_OR_NONE, kwarg="by", description="Partition columns."),
-    ),
     description="Propagate the baseline value to all records in a group.",
-    define_template="Value of {aval} at the baseline record ({baseline_flag} = 'Y').",
+    method_text=((set(), "Value of {aval} at the baseline record ({baseline_flag} = 'Y')."),),
 )
 
-spec_algorithm(
+spec_verb(
     "chg",
     standard="adam",
-    verb="chg",
-    params=(
-        Param("aval", annotation=str, default="AVAL"),
-        Param("base", annotation=str, default="BASE"),
-    ),
     description="Change from baseline (AVAL - BASE).",
-    define_template="Change from baseline: {aval} - {base}.",
+    method_text=((set(), "Change from baseline: {aval} - {base}."),),
 )
 
-spec_algorithm(
+spec_verb(
     "pchg",
     standard="adam",
-    verb="pchg",
-    params=(
-        Param("aval", annotation=str, default="AVAL"),
-        Param("base", annotation=str, default="BASE"),
-    ),
     description="Percent change from baseline.",
-    define_template="Percent change from baseline: 100 * ({aval} - {base}) / {base}.",
+    method_text=((set(), "Percent change from baseline: 100 * ({aval} - {base}) / {base}."),),
 )
 
-spec_algorithm(
-    "flag",
-    standard="adam",
-    verb="flag",
-    legacy_keys={
-        "flag_order_by": "order_by",
-        "flag_value_col": "value_col",
-        "flag_where": "where",
-    },
-    params=(
-        Param(
-            "criteria",
-            annotation=str,
-            required=True,
-            description="Row expression or sentinel: first/last/max/min.",
-        ),
-        Param("groups", annotation=_LIST_OR_NONE, kwarg="by", description="Partition columns."),
-        Param(
-            "order_by",
-            annotation=str | list[str] | None,
-            description="Sort column(s) for first/last criteria.",
-        ),
-        Param("value_col", description="Column for max/min comparison."),
-        Param("where", description="Candidate pre-filter expression."),
-        Param(
-            "flag_value",
-            annotation=str,
-            default="Y",
-            description="Value emitted when the flag condition is met.",
-        ),
-    ),
-    description="Derive a Y/null flag from criteria.",
-)
+spec_verb("flag", standard="adam", description="Derive a Y/null flag from criteria.")
 
-spec_algorithm(
+spec_verb(
     "bmi",
     standard="adam",
-    verb="bmi",
-    params=(
-        Param("weight", annotation=str, required=True, description="Weight column (kg)."),
-        Param("height", annotation=str, required=True, description="Height column (cm)."),
-    ),
     description="Body Mass Index from weight and height.",
-    define_template="Body Mass Index (kg/m2) from {weight} and {height}.",
+    method_text=((set(), "Body Mass Index (kg/m2) from {weight} and {height}."),),
 )
 
-spec_algorithm(
+spec_verb(
     "nrind",
     standard="adam",
-    verb="nrind",
-    legacy_keys={"value": "aval"},
-    params=(
-        Param(
-            "aval",
-            annotation=str,
-            kwarg="value",
-            required=True,
-            description="Analysis value column.",
-        ),
-        Param(
-            "low",
-            annotation=str,
-            required=True,
-            description="Lower normal range column.",
-        ),
-        Param(
-            "high",
-            annotation=str,
-            required=True,
-            description="Upper normal range column.",
-        ),
-    ),
     description="Reference-range indicator (LOW/NORMAL/HIGH).",
-    define_template="Reference range indicator: {aval} compared with {low} and {high}.",
+    method_text=((set(), "Reference range indicator: {value} compared with {low} and {high}."),),
 )
 
-spec_algorithm(
+spec_verb(
     "on_treatment",
     standard="adam",
-    verb="on_treatment",
-    legacy_keys={"adt": "analysis_date", "trtsdt": "reference_date"},
-    params=(
-        Param(
-            "analysis_date",
-            annotation=str,
-            kwarg="adt",
-            required=True,
-            description="Analysis date column.",
-        ),
-        Param(
-            "reference_date",
-            annotation=str,
-            kwarg="trtsdt",
-            required=True,
-            description="Treatment start date column.",
-        ),
-        Param(
-            "trtedt",
-            annotation=str,
-            required=True,
-            description="Treatment end date column.",
-        ),
-        Param(
-            "open_ended",
-            annotation=bool,
-            default=True,
-            description="Treat a missing end date as still on treatment.",
-        ),
-    ),
     description="On-treatment flag from analysis vs treatment dates.",
-    define_template="Set to 'Y' when {analysis_date} falls between {reference_date} and {trtedt}.",
+    method_text=((set(), "Set to 'Y' when {adt} falls between {trtsdt} and {trtedt}."),),
 )
 
-spec_algorithm(
+spec_verb(
     "shift",
     standard="adam",
-    verb="shift",
-    params=(
-        Param(
-            "baseline_cat",
-            annotation=str,
-            required=True,
-            description="Baseline category column.",
-        ),
-        Param(
-            "post_cat",
-            annotation=str,
-            required=True,
-            description="Post-baseline category column.",
-        ),
-        Param("sep", annotation=str, default=" to ", description="Join separator."),
-    ),
     description="Shift-table category ('NORMAL to HIGH').",
-    define_template="Shift from {baseline_cat} to {post_cat}.",
+    method_text=((set(), "Shift from {baseline_cat} to {post_cat}."),),
 )
 
-spec_algorithm(
-    "seq",
-    standard="adam",
-    verb="seq",
-    params=(
-        Param(
-            "order_by",
-            annotation=str | list[str] | None,
-            description="Sort column(s) for sequence order.",
-        ),
-        Param("groups", annotation=_LIST_OR_NONE, kwarg="by", description="Partition columns."),
-        Param("start_at", annotation=int, default=1, description="First sequence number."),
-    ),
-    description="Assign the ASEQ sequence number within each group.",
-)
+spec_verb("seq", standard="adam", description="Assign the ASEQ sequence number within each group.")
 
-spec_algorithm(
+spec_verb(
     "bsa",
     standard="adam",
-    verb="bsa",
-    params=(
-        Param("weight", annotation=str, required=True, description="Weight column (kg)."),
-        Param("height", annotation=str, required=True, description="Height column (cm)."),
-        Param("method", annotation=str, default="Mosteller", description="BSA formula."),
-    ),
     description="Body Surface Area.",
-    define_template="Body Surface Area ({method} formula) from {weight} and {height}.",
+    method_text=((set(), "Body Surface Area ({method} formula) from {weight} and {height}."),),
 )
 
-spec_algorithm(
+spec_verb(
     "map",
     standard="adam",
-    verb="map",
-    aliases=("mean_arterial_pressure",),
-    params=(
-        Param("systolic", annotation=str, default="SYSBP", description="Systolic BP column."),
-        Param("diastolic", annotation=str, default="DIABP", description="Diastolic BP column."),
-    ),
     description="Mean Arterial Pressure.",
-    define_template="Mean Arterial Pressure from {systolic} and {diastolic}.",
+    method_text=((set(), "Mean Arterial Pressure from {systolic} and {diastolic}."),),
 )
 
-spec_algorithm(
+spec_verb(
     "qtc",
     standard="adam",
-    verb="qtc",
-    params=(
-        Param("qt", annotation=str, default="QT", description="QT interval column (ms)."),
-        Param("rr", annotation=str, default="RR", description="RR interval column."),
-        Param("method", annotation=str, default="Fridericia", description="Correction formula."),
-        Param(
-            "rr_unit",
-            annotation=str,
-            default="ms",
-            description="Unit of the RR column: ms, msec, s or sec.",
-        ),
-    ),
     description="Corrected QT interval.",
-    define_template=(
-        "QT interval corrected using the {method} formula, from {qt} (ms) and {rr} ({rr_unit})."
+    method_text=(
+        (
+            set(),
+            "QT interval corrected using the {method} formula, from {qt} (ms) and {rr} ({rr_unit}).",
+        ),
     ),
 )
 
-spec_algorithm(
-    "atoxgr",
-    standard="adam",
-    verb="atoxgr",
-    params=(
-        Param("system", annotation=str, default="ctcae_v5", description="Grading system."),
-        Param("direction", annotation=str, required=True, description="'L' or 'H'."),
-        Param(
-            "term_var",
-            annotation=str,
-            required=True,
-            description="Toxicity term variable.",
-        ),
-        Param("unit_var", description="Unit-of-measure variable."),
-        Param(
-            "signif_dig",
-            annotation=int,
-            default=15,
-            description="Significant digits for comparisons (admiral signif_digits).",
-        ),
-        Param(
-            "indicators",
-            annotation=dict[str, list[str]] | None,
-            description="Baseline NRIND indicator lists.",
-        ),
-    ),
-    description="Toxicity grade via criteria-file grading.",
-)
+spec_verb("atoxgr", standard="adam", description="Toxicity grade via criteria-file grading.")
 
-spec_algorithm(
+spec_verb(
     "combine_grades",
     standard="adam",
-    verb="combine_grades",
-    params=(
-        Param("low_var", annotation=str, default="ATOXGRL"),
-        Param("high_var", annotation=str, default="ATOXGRH"),
-        Param("low_desc_var", description="Low-direction description column."),
-        Param("high_desc_var", description="High-direction description column."),
-    ),
     description="Combine directional toxicity grades into one column.",
 )
 
-spec_algorithm(
+spec_verb(
     "date",
     standard="adam",
-    verb="date",
-    params=(
-        Param("source", identity_source=True, description="Source date column."),
-        Param("value", description="Literal date value to broadcast."),
-        Param("output", description="Output type override: 'dt' or 'dtm'."),
-        Param("time", description="Time column or 'HH:MM:SS' literal (DTM targets)."),
-        Param("impute", annotation=str, default="first", description="Imputation strategy."),
-        Param("impute_time", description="Time-part imputation override."),
-        Param("highest", description="Maximum imputation ceiling (D/M/Y/h/m/s)."),
-        Param(
-            "flag",
-            annotation=bool | str,
-            default=True,
-            description="Auto-generate DTF/TMF flags (bool) or explicit flag name.",
-        ),
-        Param("min_date", description="Lower clamp bound."),
-        Param("max_date", description="Upper clamp bound."),
-    ),
+    exclusive=("source", "value"),
+    target_default=("source",),
+    identity="source",
     description="Parse, convert, impute, and flag an analysis date column.",
-    define_template="ISO 8601 date/time derived from {source} (imputation: {impute}).",
+    method_text=_DATE_TEXT,
 )
 
-spec_algorithm(
-    "duration",
-    standard="adam",
-    verb="duration",
-    legacy_keys={
-        "analysis_date": "start",
-        "reference_date": "end",
-        "start_date": "start",
-        "end_date": "end",
-    },
-    params=(
-        Param("start", annotation=str, required=True, description="Start date column."),
-        Param("end", annotation=str, required=True, description="End date column."),
-        Param("unit", annotation=str, default="days", description="Output unit."),
-        Param("add_one", annotation=bool | None, description="CDISC +1 day convention."),
-        Param(
-            "out",
-            annotation=str,
-            default="numeric",
-            description="Output style: numeric or iso8601.",
-        ),
-    ),
-    description="Compute the duration between two dates.",
-    define_template="Duration from {start} to {end}, in {unit}.",
-)
-
-spec_algorithm(
+spec_verb(
     "pick",
     standard="adam",
-    verb="pick",
+    extra=(("targets", list[str] | None, None),),
     dispatch=_dispatch_pick,
-    params=(
-        Param(
-            "events",
-            annotation=list[dict[str, Any]],
-            required=True,
-            description="Ordered event definition dicts.",
-        ),
-        Param(
-            "targets",
-            annotation=_LIST_OR_NONE,
-            description="Output columns; defaults to the variable name.",
-        ),
-        Param("by", annotation=_LIST_OR_NONE, description="Grouping columns."),
-        Param("order", annotation=str | list[str] | None, description="Sort order."),
-        Param("mode", annotation=str, default="first", description="'first' or 'last'."),
-    ),
     description="Select the first/last matching event per group.",
 )
 
-spec_algorithm(
+spec_verb(
     "first_date",
     standard="adam",
-    verb="first_date",
-    params=(
-        Param(
-            "from_dataset",
-            annotation=str,
-            required=True,
-            convert="pin",
-            description="Pinned event dataset name (resolved via .pin()).",
-        ),
-        Param("date_col", annotation=str, required=True, description="Date column to minimise."),
-        Param("where", description="Filter applied before aggregation."),
-        Param("groups", annotation=_LIST_OR_NONE, kwarg="by", description="Join key columns."),
-    ),
     description="Earliest event date per subject from a pinned dataset.",
-    define_template="Earliest {date_col} per subject from {from_dataset}.",
+    method_text=((set(), "Earliest {date_col} per subject from {from_dataset}."),),
 )
 
-spec_algorithm(
+spec_verb(
     "last_date",
     standard="adam",
-    verb="last_date",
-    params=(
-        Param(
-            "from_dataset",
-            annotation=str,
-            required=True,
-            convert="pin",
-            description="Pinned event dataset name (resolved via .pin()).",
-        ),
-        Param("date_col", annotation=str, required=True, description="Date column to maximise."),
-        Param("where", description="Filter applied before aggregation."),
-        Param("groups", annotation=_LIST_OR_NONE, kwarg="by", description="Join key columns."),
-    ),
     description="Latest event date per subject from a pinned dataset.",
-    define_template="Latest {date_col} per subject from {from_dataset}.",
+    method_text=((set(), "Latest {date_col} per subject from {from_dataset}."),),
 )
 
-spec_algorithm(
+spec_verb(
     "count_events",
     standard="adam",
-    verb="count_events",
-    aliases=("count",),
-    params=(
-        Param(
-            "from_dataset",
-            annotation=str,
-            required=True,
-            convert="pin",
-            description="Pinned event dataset name (resolved via .pin()).",
-        ),
-        Param("where", description="Filter applied before counting."),
-        Param("groups", annotation=_LIST_OR_NONE, kwarg="by", description="Join key columns."),
-    ),
     description="Count matching records per subject from a pinned dataset.",
-    define_template="Count of qualifying records per subject from {from_dataset}.",
-)
-
-spec_algorithm(
-    "callable",
-    standard="adam",
-    verb="derivation",
-    dispatch=_dispatch_callable,
-    params=(
-        Param(
-            "callable_ref",
-            annotation=str,
-            required=True,
-            alias="callable",
-            description="Registered derivation name or dotted Python path.",
-        ),
-    ),
-    description="Escape hatch: run a registered or importable custom derivation.",
+    method_text=((set(), "Count of qualifying records per subject from {from_dataset}."),),
 )
 
 
 # --------------------------------------------------------------------- #
-# Coverage matrix                                                          #
+# Inline-only verbs (machine-checked allowlist)                           #
 # --------------------------------------------------------------------- #
 
-#: Public namespace verbs that are deliberately **inline-only** (not
-#: expressible in a YAML spec).  The reverse-parity test asserts that
-#: every public verb is either a registry `verb` or listed here — adding
-#: a verb without deciding its spec story fails CI.
+#: Namespace verbs that deliberately have **no** spec form, with the
+#: reason.  The parity test asserts every public verb is either registered
+#: above or listed here — nothing falls through the cracks silently.
 SPEC_UNSUPPORTED: dict[str, set[str]] = {
     "sdtm": {
-        "study_day",  # pin-based reference join; spec uses duration/study_day forms
+        "study_day",  # pin-based reference join; a define.yaml uses duration
         "export_supp",  # terminal exporter, not a derivation
         "baseline_flag",  # inline flag sugar; no per-variable spec semantics yet
         "epoch_assign",  # trial-design lookup (TrialDesignMixin)
@@ -1772,7 +1383,7 @@ SPEC_UNSUPPORTED: dict[str, set[str]] = {
         "add_visits",  # TDD scaffolding (TrialDesignMixin)
         "fetch_structure",  # TDD scaffolding (TrialDesignMixin)
         "study_header",  # TDD scaffolding (TrialDesignMixin)
-        "flag",  # inline-only on SDTM (ADaM has the spec algorithm)
+        "flag",  # inline-only on SDTM (ADaM has the spec verb)
         "criterion",  # multi-column output; no single-target spec semantics
         "flag_first",  # per-mode wrapper over flag()
         "flag_last",  # per-mode wrapper over flag()
@@ -1783,10 +1394,11 @@ SPEC_UNSUPPORTED: dict[str, set[str]] = {
         "verbs",  # discoverability helper, not a derivation
     },
     "adam": {
-        "study_day",  # pin-based reference join; spec algorithm maps to duration
-        "join_adsl",  # variadic pin sugar; spec uses lookup
-        "merge_adsl",  # pin sugar; spec uses lookup
-        "transform",  # spec equivalent is algorithm: callable
+        "study_day",  # pin-based reference join; a define.yaml uses duration
+        "source",  # variadic carry-through sugar; a define.yaml uses assign
+        "join_adsl",  # variadic pin sugar; a define.yaml uses merge
+        "merge_adsl",  # pin sugar; a define.yaml uses merge
+        "transform",  # spec equivalent is derivation with callable:
         "derive_summary_records",  # frame-reshaping; no single-target semantics
         "derive_locf_records",  # frame-reshaping; no single-target semantics
         "derive_param",  # frame-reshaping; no single-target semantics
@@ -1806,12 +1418,12 @@ def coverage_matrix() -> list[dict[str, Any]]:
     """Return the machine-readable algorithm ↔ verb coverage matrix.
 
     Returns:
-        list[dict]: One row per registered algorithm with keys
-            ``standard``, ``algorithm``, ``aliases``, ``verb``,
-            ``params`` (name list) and ``required`` (name list).
+        list[dict]: One row per registered verb with keys ``standard``,
+            ``algorithm``, ``verb``, ``params`` (YAML key list) and
+            ``required`` (YAML key list).
 
     Examples:
-        List which ADaM algorithms are spec-executable::
+        List which ADaM verbs are spec-executable::
 
             from fleet.core.spec_registry import coverage_matrix
 
@@ -1825,10 +1437,9 @@ def coverage_matrix() -> list[dict[str, Any]]:
                 {
                     "standard": standard,
                     "algorithm": algo.name,
-                    "aliases": list(algo.aliases),
                     "verb": algo.verb,
-                    "params": [p.name for p in algo.params],
-                    "required": [p.name for p in algo.params if p.required],
+                    "params": [f.name for f in algo.params],
+                    "required": [f.name for f in algo.params if f.required],
                 }
             )
     return rows
@@ -1847,10 +1458,10 @@ def derivation_json_schema() -> tuple[dict[str, Any], dict[str, Any]]:
     Returns:
         tuple: ``(derivation_def, model_defs)`` where *derivation_def* is
             the schema object for ``$defs.derivation`` and *model_defs*
-            maps model names to their per-algorithm schemas (to be merged
+            maps model names to their per-verb schemas (to be merged
             into the document's top-level ``$defs``).
 
-    The per-algorithm schemas are generated from the registry models via
+    The per-verb schemas are generated from the registry models via
     Pydantic (``TypeAdapter(...).json_schema()``), then stripped of the
     ``target`` and variable-level metadata fields, which live at the
     variable level of a define.yaml rather than inside ``derivation``.
@@ -1872,13 +1483,13 @@ def derivation_json_schema() -> tuple[dict[str, Any], dict[str, Any]]:
         else:
             model_schema.pop("required", None)
 
-    # Backward-compat: a bare `callable:` block without `algorithm:` is
-    # accepted by from_spec (the algorithm is injected automatically).
+    # A bare `callable:` block without `algorithm:` is accepted by
+    # from_spec (`algorithm: derivation` is injected automatically).
     branches.append(
         {
             "type": "object",
             "description": (
-                "Backward-compat callable block — `algorithm: callable` is "
+                "Shorthand callable block — `algorithm: derivation` is "
                 "injected automatically when only `callable:` is present."
             ),
             "required": ["callable"],
@@ -1891,7 +1502,8 @@ def derivation_json_schema() -> tuple[dict[str, Any], dict[str, Any]]:
         "title": "Derivation",
         "description": (
             "Describes how a variable is derived by the Fleet pipeline "
-            "engine. Validated per algorithm: unknown keys are rejected. "
+            "engine. The algorithm is the verb; the keys are its keyword "
+            "arguments. Validated per verb: unknown keys are rejected. "
             "Generated from fleet.core.spec_registry — do not edit by hand; "
             "run `python -m fleet.define_xml.schema_builder` to regenerate."
         ),

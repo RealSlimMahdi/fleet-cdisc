@@ -37,7 +37,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | [`fleet check`](#fleet-check) | CI gate: config parse + define.yaml schema + codelists.py + run setup + custom-rule YAMLs. |
 | [`fleet compare`](#fleet-compare) | Compare a candidate dataset against a base on keys (exit 0 equal, 1 different, 2 could not run). |
 | [`fleet new`](#fleet-new) | Bootstrap a study: init cfg → define → ct → rules, one confirmation. |
-| [`fleet migrate`](#fleet-migrate) | Rewrite removed pre-alpha verb/kwarg spellings to canonical ones (libcst). |
+| [`fleet migrate`](#fleet-migrate) | Rewrite removed pre-alpha spellings: Python verbs and kwargs (libcst), or, with --spec, define.yaml algorithms and keys (ADR-0008). |
 | [`fleet tdd`](#fleet-tdd) | Trial design workflow: build/audit TDD datasets from trial_design.yaml. |
 | [`fleet tlg`](#fleet-tlg) | TLG workflow: list templates, run/explore YAML specs, export summaries. |
 | [`fleet define-xml`](#fleet-define-xml) | Generate Define-XML 2.1 from a define.yaml specification. |
@@ -193,10 +193,11 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 
 | Argument | Description |
 | -------- | ----------- |
-| `files` | Python files or directories to migrate. |
+| `files` | Python files or directories to migrate (define.yaml files with --spec). |
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
+| `--spec` | _(none)_ | Migrate define.yaml files to the verb vocabulary (fleet_spec_version 2). |
 | `--write` | _(none)_ | Rewrite files in place (default: print a unified diff). |
 
 ---

@@ -3,6 +3,7 @@
 # Single source of truth: describes output structure AND drives from_spec() derivations.
 # Used for: (1) Define-XML 2.1 generation  (2) post-dataset structure checks  (3) pipeline execution.
 
+fleet_spec_version: 2
 study:
   id: CDISCPILOT01
   name: CDISCPILOT01
@@ -47,7 +48,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: assigned
+          algorithm: assign
           value: "CDISCPILOT01"
 
       - name: USUBJID
@@ -57,7 +58,7 @@ datasets:
         mandatory: true
         origin: Derived
         derivation:
-          algorithm: source
+          algorithm: assign
           source: USUBJID
 
       - name: SUBJID
@@ -68,7 +69,7 @@ datasets:
         origin: Predecessor
         predecessor: DM.SUBJID
         derivation:
-          algorithm: source
+          algorithm: assign
           source: SUBJID
 
       - name: SITEID
@@ -79,7 +80,7 @@ datasets:
         origin: Predecessor
         predecessor: DM.SITEID
         derivation:
-          algorithm: source
+          algorithm: assign
           source: SITEID
 
       - name: AGE
@@ -90,7 +91,7 @@ datasets:
         origin: Predecessor
         predecessor: DM.AGE
         derivation:
-          algorithm: source
+          algorithm: assign
           source: AGE
 
       - name: AGEU
@@ -100,7 +101,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: source
+          algorithm: assign
           source: AGEU
 
       - name: SEX
@@ -112,7 +113,7 @@ datasets:
         predecessor: DM.SEX
         codelist: C66731
         derivation:
-          algorithm: source
+          algorithm: assign
           source: SEX
 
       - name: RACE
@@ -123,7 +124,7 @@ datasets:
         origin: Predecessor
         predecessor: DM.RACE
         derivation:
-          algorithm: source
+          algorithm: assign
           source: RACE
 
       - name: ETHNIC
@@ -134,7 +135,7 @@ datasets:
         origin: Predecessor
         predecessor: DM.ETHNIC
         derivation:
-          algorithm: source
+          algorithm: assign
           source: ETHNIC
 
       - name: ARMCD
@@ -144,7 +145,7 @@ datasets:
         mandatory: true
         origin: Protocol
         derivation:
-          algorithm: source
+          algorithm: assign
           source: ARMCD
 
       - name: ARM
@@ -154,7 +155,7 @@ datasets:
         mandatory: true
         origin: Protocol
         derivation:
-          algorithm: source
+          algorithm: assign
           source: ARM
 
       - name: ACTARMCD
@@ -164,7 +165,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: source
+          algorithm: assign
           source: ACTARMCD
 
       - name: ACTARM
@@ -174,7 +175,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: source
+          algorithm: assign
           source: ACTARM
 
       - name: TRT01P
@@ -184,7 +185,7 @@ datasets:
         mandatory: false
         origin: Protocol
         derivation:
-          algorithm: source
+          algorithm: assign
           source: ARM
 
       - name: TRT01A
@@ -194,7 +195,7 @@ datasets:
         mandatory: false
         origin: Assigned
         derivation:
-          algorithm: source
+          algorithm: assign
           source: ACTARM
 
       - name: TRTSDT
@@ -222,7 +223,7 @@ datasets:
         origin: Predecessor
         predecessor: DM.RFSTDTC
         derivation:
-          algorithm: source
+          algorithm: assign
           source: RFSTDTC
 
       - name: RFENDTC
@@ -232,7 +233,7 @@ datasets:
         origin: Predecessor
         predecessor: DM.RFENDTC
         derivation:
-          algorithm: source
+          algorithm: assign
           source: RFENDTC
 
       - name: RFICDTC
@@ -242,7 +243,7 @@ datasets:
         origin: Predecessor
         predecessor: DM.RFICDTC
         derivation:
-          algorithm: source
+          algorithm: assign
           source: RFICDTC
 
       - name: SAFFL
@@ -283,7 +284,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: assigned
+          algorithm: assign
           value: "CDISCPILOT01"
 
       - name: USUBJID
@@ -293,7 +294,7 @@ datasets:
         mandatory: true
         origin: Derived
         derivation:
-          algorithm: source
+          algorithm: assign
           source: patient_number
 
       - name: PARAMCD
@@ -303,7 +304,7 @@ datasets:
         mandatory: true
         origin: Derived
         derivation:
-          algorithm: source
+          algorithm: assign
           source: vstestcd
 
       - name: PARAM
@@ -313,7 +314,7 @@ datasets:
         mandatory: true
         origin: Derived
         derivation:
-          algorithm: source
+          algorithm: assign
           source: vstest
 
       - name: AVAL
@@ -335,7 +336,7 @@ datasets:
         mandatory: false
         origin: Derived
         derivation:
-          algorithm: source
+          algorithm: assign
           source: vsorresu
 
       - name: ADT
@@ -344,7 +345,7 @@ datasets:
         mandatory: false
         origin: Derived
         derivation:
-          algorithm: rename
+          algorithm: assign
           source: vsdtc
 
       - name: ADY
@@ -354,9 +355,9 @@ datasets:
         mandatory: false
         origin: Derived
         derivation:
-          algorithm: study_day
-          analysis_date: ADT
-          reference_date: TRTSDT
+          algorithm: duration
+          end: ADT
+          start: TRTSDT
           depends_on: [ADT]
 
       - name: ABLFL
@@ -368,7 +369,7 @@ datasets:
         derivation:
           algorithm: flag
           criteria: "pl.col('vsdy') <= 0"
-          groups: [USUBJID, PARAMCD]
+          by: [USUBJID, PARAMCD]
 
       - name: BASE
         label: Baseline Value
@@ -381,7 +382,7 @@ datasets:
           algorithm: baseline
           aval: AVAL
           baseline_flag: ABLFL
-          groups: [USUBJID, PARAMCD]
+          by: [USUBJID, PARAMCD]
           depends_on: [ABLFL]
 
       - name: CHG
@@ -585,7 +586,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: assigned
+          algorithm: assign
           value: "CDISCPILOT01"
 
       - name: USUBJID
@@ -595,7 +596,7 @@ datasets:
         mandatory: true
         origin: Derived
         derivation:
-          algorithm: source
+          algorithm: assign
           source: USUBJID
 
       - name: AETERM
@@ -606,7 +607,7 @@ datasets:
         origin: Predecessor
         predecessor: AE.AETERM
         derivation:
-          algorithm: source
+          algorithm: assign
           source: AETERM
 
       - name: AESTDTC
@@ -616,7 +617,7 @@ datasets:
         origin: Predecessor
         predecessor: AE.AESTDTC
         derivation:
-          algorithm: source
+          algorithm: assign
           source: AESTDTC
 
       - name: AEENDTC
@@ -626,7 +627,7 @@ datasets:
         origin: Predecessor
         predecessor: AE.AEENDTC
         derivation:
-          algorithm: source
+          algorithm: assign
           source: AEENDTC
 
       - name: AESEV
@@ -637,7 +638,7 @@ datasets:
         origin: Predecessor
         predecessor: AE.AESEV
         derivation:
-          algorithm: source
+          algorithm: assign
           source: AESEV
 
       - name: AESER
@@ -648,7 +649,7 @@ datasets:
         origin: Predecessor
         predecessor: AE.AESER
         derivation:
-          algorithm: source
+          algorithm: assign
           source: AESER
 
       - name: AEREL
@@ -659,7 +660,7 @@ datasets:
         origin: Predecessor
         predecessor: AE.AEREL
         derivation:
-          algorithm: source
+          algorithm: assign
           source: AEREL
 
       - name: AEOUT
@@ -670,7 +671,7 @@ datasets:
         origin: Predecessor
         predecessor: AE.AEOUT
         derivation:
-          algorithm: source
+          algorithm: assign
           source: AEOUT
 
       - name: AEACN
@@ -681,7 +682,7 @@ datasets:
         origin: Predecessor
         predecessor: AE.AEACN
         derivation:
-          algorithm: source
+          algorithm: assign
           source: AEACN
 
       - name: ASTDT
@@ -690,7 +691,7 @@ datasets:
         mandatory: false
         origin: Derived
         derivation:
-          algorithm: rename
+          algorithm: assign
           source: AESTDTC
 
       - name: AENDT
@@ -699,7 +700,7 @@ datasets:
         mandatory: false
         origin: Derived
         derivation:
-          algorithm: rename
+          algorithm: assign
           source: AEENDTC
 
       - name: ADY
@@ -709,9 +710,9 @@ datasets:
         mandatory: false
         origin: Derived
         derivation:
-          algorithm: study_day
-          analysis_date: ASTDT
-          reference_date: TRTSDT
+          algorithm: duration
+          end: ASTDT
+          start: TRTSDT
           depends_on: [ASTDT]
 
       # TRTEMFL, ANL01FL, ASEQ use OCCDS verbs not expressible in from_spec;
@@ -808,7 +809,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: assigned
+          algorithm: assign
           value: "CDISCPILOT01"
 
       - name: USUBJID
@@ -818,7 +819,7 @@ datasets:
         mandatory: true
         origin: Derived
         derivation:
-          algorithm: source
+          algorithm: assign
           source: USUBJID
 
       - name: EXTRT
@@ -829,7 +830,7 @@ datasets:
         origin: Predecessor
         predecessor: EX.EXTRT
         derivation:
-          algorithm: source
+          algorithm: assign
           source: EXTRT
 
       - name: EXDOSE
@@ -841,7 +842,7 @@ datasets:
         origin: Predecessor
         predecessor: EX.EXDOSE
         derivation:
-          algorithm: source
+          algorithm: assign
           source: EXDOSE
 
       - name: EXDOSU
@@ -852,7 +853,7 @@ datasets:
         origin: Predecessor
         predecessor: EX.EXDOSU
         derivation:
-          algorithm: source
+          algorithm: assign
           source: EXDOSU
 
       - name: ASTDT
@@ -861,7 +862,7 @@ datasets:
         mandatory: false
         origin: Derived
         derivation:
-          algorithm: rename
+          algorithm: assign
           source: EXSTDTC
 
       - name: AENDT
@@ -870,7 +871,7 @@ datasets:
         mandatory: false
         origin: Derived
         derivation:
-          algorithm: rename
+          algorithm: assign
           source: EXENDTC
 
       # ASEQ and EXDURD derived inline (not yet expressible in from_spec)

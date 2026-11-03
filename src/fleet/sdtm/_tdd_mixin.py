@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import polars as pl
 import yaml
 
+from fleet.core.define_spec import load_spec_yaml
 from fleet.core.dtc import date_part, datetime_part, to_day
 from fleet.core.exceptions import DerivationError
 from fleet.sdtm.tdd import (
@@ -890,7 +891,7 @@ def _extract_domain_from_define(domain: str, define_path: Path) -> dict[str, Any
     if not define_path.is_file():
         return None
 
-    data = yaml.safe_load(define_path.read_text(encoding="utf-8"))
+    data = load_spec_yaml(define_path.read_text(encoding="utf-8"))
     for ds in data.get("datasets", []):
         if ds.get("name", "").upper() == domain:
             variables: list[dict[str, str]] = []

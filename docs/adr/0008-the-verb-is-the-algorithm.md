@@ -1,6 +1,6 @@
 # The verb is the algorithm: one vocabulary for inline code and define.yaml
 
-**Status: accepted, 2026-10-16.** Proposed and decided the same day in #146. Supersedes ADR-0007.
+**Status: accepted, 2026-10-16.** Proposed and decided the same day in #146. Supersedes ADR-0007. Implemented on 2026-10-17 on branch `feat/146-verb-is-the-algorithm`.
 
 A derivation has two notations in Fleet. The inline notation is a verb call, `.assign("SEX", source="sex", ct=SEX)`. The spec notation is a `derivation:` block in a define.yaml, `algorithm: assign_ct`, `source: sex`, `ct_codelist: C66731`. Today the two notations use two vocabularies. The spec registry maps the spec names onto the verbs with a hand-written `Param` table per algorithm, and ADR-0007 made the table take its `default` and `required` facts from the verb signature. The table still exists, and so do the renamed keys, the aliases and the legacy keys.
 
@@ -18,7 +18,7 @@ We decided that the `algorithm:` value is the verb name and the YAML keys are th
 | Algorithm aliases | 4: `assign_dtc`, `dataset_level`, `count`, `mean_arterial_pressure` |
 | Legacy key maps | 8 |
 | Custom dispatch | 4: `date` (SDTM), `nsv`, `pick`, `callable` |
-| Registration code in `spec_registry.py` | 941 lines (lines 960 to 1900) |
+| Registration code in `spec_registry.py` | 894 lines (lines 857 to 1751) |
 | Shipped define.yaml files with derivations | 4 files, 174 blocks |
 | Blocks whose `algorithm:` value changes | 160 of 174 |
 | Blocks where a key changes | 18 of 174 |
@@ -98,7 +98,7 @@ The `method_text` list is where the reviewer vocabulary survives. The Define-XML
 
 ## Considered options
 
-- **Keep two vocabularies (ADR-0007, the status quo).** The spec reads `assign_ct` where a data-standards reviewer expects it. The cost is the 941-line table, the five parity rules that guard it, 13 renamed keys to learn, and every new verb paid twice: #90 plans 48 more `Param` tables. The static converter must rank candidates for one verb, and `to_spec_yaml()` relabels lineage nodes to the spec name. Rejected: the inline verbs and the spec-driven derivations must match, and the reviewer reads the Define-XML, where the method text keeps the standards vocabulary.
+- **Keep two vocabularies (ADR-0007, the status quo).** The spec reads `assign_ct` where a data-standards reviewer expects it. The cost is the 894-line table, the five parity rules that guard it, 13 renamed keys to learn, and every new verb paid twice: #90 plans 48 more `Param` tables. The static converter must rank candidates for one verb, and `to_spec_yaml()` relabels lineage nodes to the spec name. Rejected: the inline verbs and the spec-driven derivations must match, and the reviewer reads the Define-XML, where the method text keeps the standards vocabulary.
 - **Rename the verbs to the spec names.** `.assign_ct(...)`, `.hardcode_no_ct(...)`, `.if_then_else(...)` as inline verbs. One vocabulary, but four verbs for one intent, and the inline API becomes the define dialect. Rejected.
 - **Verb names in YAML, old names kept as aliases for one minor version.** The table stays alive to serve the aliases, so nothing is deleted until the next version. Fleet is pre-alpha at 0.2.0a1, #146 states that no compatibility is owed, and `fleet migrate` already exists for the Python side. Rejected in favour of a hard cut with a spec migration.
 - **Rename the key `algorithm:` to `verb:`.** Honest, but it changes the JSON schema root, the LSP completions, every doc and every shipped spec for a word. The key stays `algorithm:`.
@@ -108,7 +108,7 @@ The `method_text` list is where the reviewer vocabulary survives. The Define-XML
 
 Deleted:
 
-- The `Param` tables, `annotation`, `kwarg`, `alias`, `convert`, `legacy_keys` and `aliases`. About 941 lines become an estimated 200.
+- The `Param` tables, `annotation`, `kwarg`, `alias`, `convert`, `legacy_keys` and `aliases`. About 894 lines become an estimated 200 (measured after implementation: 39 declarations in 330 lines, of which 60 are Define-XML text).
 - The five parity rules of ADR-0007 and the kwarg renames. The remaining test is one rule: the YAML model of a verb equals its signature minus the excluded arguments.
 - The `SDTMAlgorithm` and `ADAMAlgorithm` enums in `fleet.sdtm.models` and `fleet.adam.models`. They are exported from `fleet` and hold the spec names. They go, or they are generated from the verb list.
 - The rules ALG01 to ALG05 in `fleet.define_xml.validator`. They check `source_variable`, `constant_value`, `merge_dataset` and `merge_key` under `item_defs`, keys the current dialect does not have. No shipped define.yaml uses them.

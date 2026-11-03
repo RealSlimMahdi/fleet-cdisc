@@ -75,6 +75,20 @@ All notable changes to Fleet are documented here.
 
 ### Changed
 
+- **The verb is the algorithm** (ADR-0008, #146) — a `derivation:` block is the verb call: the `algorithm:` value is the verb name (`assign`, `case_when`, `duration`, `derivation`) and the keys are its keyword arguments (`ct`, `ct_map`, `by`, `else`). The spec registry derives the YAML keys, their types, defaults and required flags from the verb signature; the hand-written `Param` tables, aliases, legacy keys and the spec-only spellings (`assign_ct`, `hardcode_no_ct`, `if_then_else`, `lookup`, `study_day`, `callable`, `ct_codelist`, `else_value`, `groups`, …) are gone. The dialect is `fleet_spec_version: 2`; a version 1 file, or an old name, fails at load with a message that names `fleet migrate --spec`.
+  - `ct:` defaults to the variable's `codelist:`, so the id is written once; a `ct_map` with no codelist anywhere is a load-time error.
+  - the Define-XML method text keeps the standards vocabulary: one `assign` renders "Direct copy of …", "Value of … mapped to controlled terminology" or "Set to '…' for all records" from the keys given.
+  - `fleet.spec_coverage()` rows lose their `aliases` key; `SDTMAlgorithm` / `ADAMAlgorithm` list the verb names; `fleet.core.spec_registry.spec_verb()` replaces `spec_algorithm()`.
+  - the `DefineValidator` rules ALG01 to ALG05 are removed: they checked keys the dialect never had.
+
+### Added
+
+- **`fleet migrate --spec <define.yaml> --write`** — rewrites a define.yaml to the verb vocabulary line by line (comments and layout survive) and sets `fleet_spec_version: 2`.
+
+### Fixed
+
+- The spec YAML loader reads booleans the YAML 1.2 way (`true`/`false` only), so the `on:` join key of `merge` stays a string (#87).
+
 - **TLG summary specs are the engine contract** (ADR-0005) — one seam, `fleet.tlg.summarize_spec(df, spec, groupby=, adsl=)`, reads every engine argument from the spec; sixteen `df.tlg.<domain>.t_*` methods are now one call on it, and the seven composite tables (AE severity, grade and relationship, deaths, lab shift and abnormal, demographics) share `prepare_frame` before their own logic. Public method signatures are unchanged.
   - two template rules leave method bodies and become spec fields, visible in YAML and settable inline: `uncoded` (an `Uncoded(columns, label)` model, GDSR default `"No Coding Available"` on the AE, CM and MH tables; `null` switches it off) and `prefilter` (an expression string in the same form as `dataset_filter`, applied after it; default per template; `null` switches it off). Builder verbs `.uncoded()` and `.prefilter()` map onto them.
   - every column a prefilter names is a required column: `lb.t_chg` and `eg.t_chg` on a dataset without `ABLFL`, and `ex.t_summary` on a dataset without `PARCAT1`, now raise `SchemaError` instead of counting baseline or per-interval records silently. `check()` reports the missing column.
