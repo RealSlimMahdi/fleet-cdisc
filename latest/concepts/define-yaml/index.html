@@ -2683,7 +2683,7 @@ fragments that reference files or study data not present in the test harness).
 <!-- docs:no-run -->
 
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">fleet_spec_version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">fleet_spec_version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">study</span><span class="p">:</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span><span class="nt">id</span><span class="p">:</span><span class="w">             </span><span class="l l-Scalar l-Scalar-Plain">CDISCPILOT01</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">  </span><span class="nt">standard</span><span class="p">:</span><span class="w">       </span><span class="l l-Scalar l-Scalar-Plain">ADAMIG</span>
@@ -2714,7 +2714,7 @@ fragments that reference files or study data not present in the test harness).
 <p>The spec is validated against the bundled JSON Schema (<code>define_spec_schema.json</code>),
 which is <strong>generated from the algorithm registry</strong> — its <code>algorithm:</code> enum and
 per-algorithm required fields always match what <code>from_spec()</code> actually executes
-(a CI sync test enforces this). The top-level <code>fleet_spec_version: 1</code> pins the
+(a CI sync test enforces this). The top-level <code>fleet_spec_version: 2</code> pins the
 spec dialect; a future incompatible version is rejected with a clear message
 rather than silently misinterpreted.</p>
 <p><code>fleet lsp</code> reads that schema straight from the installed package, so the
@@ -2725,96 +2725,80 @@ exact line, resolved against your install. Adding it <em>alongside</em> the Flee
 extension reports every schema error twice, so use one or the other.</p>
 <hr />
 <h2 id="derivation-algorithms">Derivation Algorithms<a class="headerlink" href="#derivation-algorithms" title="Permanent link">&para;</a></h2>
-<p>Every spec-executable algorithm is declared once in the central registry
-(<code>fleet.core.spec_registry</code>), which drives the <code>from_spec</code> executor, the
-discriminated-union validation models, <strong>and</strong> the JSON schema.</p>
-<p><strong>Two vocabularies, one mapping.</strong> The spec dialect deliberately keeps
-define-spec terminology (<code>assign_ct</code>, <code>hardcode_no_ct</code>, …) — the language a
-data-standards reviewer reads in a metadata document — while the runtime API
-keeps one verb per intent (<code>assign</code>). The two are not competing spellings:
-every algorithm is declared <strong>with</strong> its runtime verb, the mapping below is
-machine-checkable (<code>fleet.spec_coverage()</code>), and a CI test fails if they
-drift. Splitting <code>assign_ct</code> / <code>assign_no_ct</code> in the spec is also what makes
-validation strict — each algorithm gets its own required-field model, so a
-CT derivation missing its codelist is a load-time error, not a runtime
-surprise. A representative subset:</p>
+<p>Every spec-executable verb is declared once in the central registry
+(<code>fleet.core.spec_registry</code>), which derives the <code>from_spec</code> executor, the
+per-verb validation models <strong>and</strong> the JSON schema from the verb signature.</p>
+<p><strong>The verb is the algorithm</strong> (ADR-0008). A <code>derivation:</code> block is the verb
+call: the <code>algorithm:</code> value is the verb name and the keys are its keyword
+arguments. The rule for the programmer: remove <code>.verb("TARGET",</code> and the
+last <code>)</code>. What stays is the YAML block. Four conversions apply, because YAML
+has no Python objects: a Polars expression is an expression string, a frame is
+the name of a pinned dataset, a codelist class is its id, and a <code>@derivation</code>
+object is its registered name or dotted path. One keyword changes its
+spelling: <code>else_</code> is written <code>else</code>.</p>
 <table>
 <thead>
 <tr>
-<th><code>algorithm</code></th>
-<th>Namespace verb</th>
-<th>What it does</th>
+<th>Inline call</th>
+<th>Spec block</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>assigned</code></td>
-<td><code>.assign(target, value=...)</code></td>
-<td>Constant literal for all rows</td>
+<td><code>.assign("DOMAIN", value="DM")</code></td>
+<td><code>algorithm: assign</code>, <code>value: DM</code></td>
 </tr>
 <tr>
-<td><code>source</code></td>
-<td><code>.assign(target, source=...)</code></td>
-<td>Copy column from predecessor</td>
+<td><code>.assign("SEX", source="sex", ct=SEX, ct_map={...})</code></td>
+<td><code>algorithm: assign</code>, <code>source: sex</code>, <code>ct_map: {...}</code></td>
 </tr>
 <tr>
-<td><code>assign_ct</code></td>
-<td><code>.assign(target, source=..., ct=..., ct_map=...)</code></td>
-<td>Copy + CT validate/decode</td>
+<td><code>.derivation("AVAL", expression="pl.col('vs') * 2")</code></td>
+<td><code>algorithm: derivation</code>, <code>expression: "pl.col('vs') * 2"</code></td>
 </tr>
 <tr>
-<td><code>derivation</code></td>
-<td><code>.derivation(target, expression=...)</code></td>
-<td>Arbitrary Polars expression</td>
+<td><code>.derivation(AGEGR1)</code></td>
+<td><code>algorithm: derivation</code>, <code>callable: AGEGR1</code></td>
 </tr>
 <tr>
-<td><code>first_date</code></td>
-<td><code>.first_date(target, from_dataset=..., date_col=..., where=...)</code></td>
-<td>Earliest event date per subject</td>
+<td><code>.first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")</code></td>
+<td><code>algorithm: first_date</code>, <code>from_dataset: EX</code>, <code>date_col: ...</code></td>
 </tr>
 <tr>
-<td><code>last_date</code></td>
-<td><code>.last_date(...)</code></td>
-<td>Latest event date per subject</td>
+<td><code>.case_when("ARMCD", when=[...], else_="X")</code></td>
+<td><code>algorithm: case_when</code>, <code>when: [...]</code>, <code>else: X</code></td>
 </tr>
 <tr>
-<td><code>count_events</code></td>
-<td><code>.count_events(target, from_dataset=..., where=...)</code></td>
-<td>Integer event count</td>
+<td><code>.duration("ADY", start="TRTSDT", end="ASTDT")</code></td>
+<td><code>algorithm: duration</code>, <code>start: TRTSDT</code>, <code>end: ASTDT</code></td>
 </tr>
 <tr>
-<td><code>duration</code></td>
-<td><code>.duration(target, start=..., end=...)</code></td>
-<td>Integer day count / elapsed time</td>
-</tr>
-<tr>
-<td><code>flag</code></td>
-<td><code>.flag(target, criteria=...)</code></td>
-<td><code>"Y"</code> / <code>null</code> flag</td>
-</tr>
-<tr>
-<td><code>baseline</code> / <code>chg</code> / <code>pchg</code></td>
-<td><code>.baseline(...)</code> / <code>.chg(...)</code> / <code>.pchg(...)</code></td>
-<td>Baseline value &amp; change</td>
-</tr>
-<tr>
-<td><code>callable</code></td>
-<td><code>.derivation(drv_obj)</code></td>
-<td>Study-specific escape hatch</td>
+<td><code>.seq("AESEQ", by=["USUBJID"])</code></td>
+<td><code>algorithm: seq</code>, <code>by: [USUBJID]</code></td>
 </tr>
 </tbody>
 </table>
+<p>The SEX block gives no <code>ct:</code>: it defaults to the <code>codelist:</code> of the variable,
+so the id is written once. A <code>ct_map</code> on a variable with no <code>codelist:</code> and no
+<code>ct:</code> is a load-time error, because a mapping needs a codelist. Validation is
+strict in the other direction too: <code>source</code> and <code>value</code> exclude each other on
+<code>assign</code>, a <code>derivation</code> needs exactly one of <code>expression</code> and <code>callable</code>, and
+a misspelled key is rejected.</p>
+<p>A spec written before ADR-0008 (<code>assign_ct</code>, <code>hardcode_no_ct</code>, <code>if_then_else</code>,
+<code>ct_codelist</code>, <code>else_value</code>, <code>groups</code>, …) fails at load with a message that
+names the fix: <code>fleet migrate --spec &lt;define.yaml&gt; --write</code> rewrites the file
+line by line and sets <code>fleet_spec_version: 2</code>.</p>
 <p>The complete, always-current list is one call away (and <code>df.sdtm.verbs()</code> /
-<code>df.adam.verbs()</code> gives the runtime-verb counterpart):</p>
+<code>df.adam.verbs()</code> gives the inline counterpart):</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">fleet</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="nb">print</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">fleet</span><span class="o">.</span><span class="n">spec_algorithms</span><span class="p">(</span><span class="s2">&quot;adam&quot;</span><span class="p">)))</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="nb">print</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">fleet</span><span class="o">.</span><span class="n">spec_algorithms</span><span class="p">(</span><span class="s2">&quot;sdtm&quot;</span><span class="p">)))</span>
 </span></code></pre></div>
 <h3 id="the-verb-coverage-matrix">The verb-coverage matrix<a class="headerlink" href="#the-verb-coverage-matrix" title="Permanent link">&para;</a></h3>
-<p>Not every inline verb is spec-expressible. <code>fleet.spec_coverage()</code> returns the
-full algorithm ↔ verb ↔ required-fields mapping, and <code>fleet.SPEC_UNSUPPORTED</code>
-is the machine-checked allowlist of verbs that have <strong>no</strong> spec algorithm
+<p>Not every inline verb is spec-expressible. <code>fleet.spec_coverage()</code> returns
+the verb ↔ YAML keys ↔ required-keys matrix, and <code>fleet.SPEC_UNSUPPORTED</code>
+is the machine-checked allowlist of verbs that have <strong>no</strong> spec form
 (e.g. <code>transform</code>, <code>derive_summary_records</code>, the TDD <code>add_*</code> verbs) — so
 "which subset is spec-safe" has a definite answer instead of a guess:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">fleet</span>
@@ -2836,13 +2820,13 @@ on the callable's <code>kind</code>:</p>
 </ul>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AGEGR1</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">derivation</span><span class="p">:</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">callable</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">derivation</span>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="nt">callable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">examples.cdiscpilot01.adam.derivations.AGEGR1</span>
 </span></code></pre></div>
 <p>Or use the registered short name (if the derivations module was imported):</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AGEGR1</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">derivation</span><span class="p">:</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nt">callable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AGEGR1</span><span class="w"> </span><span class="c1"># algorithm: callable injected automatically</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nt">callable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AGEGR1</span><span class="w"> </span><span class="c1"># algorithm: derivation injected automatically</span>
 </span></code></pre></div>
 <h3 id="derivations-folder-convention">Derivations folder convention<a class="headerlink" href="#derivations-folder-convention" title="Permanent link">&para;</a></h3>
 <p><code>fleet derivation add AGEGR1 --dataset ADSL</code> scaffolds a derivation file
@@ -2852,7 +2836,7 @@ under the study's configured programs tree:</p>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    AGEGR1.py
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    BMI.py
 </span></code></pre></div>
-<p>The convention is <strong>shared across standards</strong> — <code>algorithm: callable</code> works
+<p>The convention is <strong>shared across standards</strong> — a <code>callable:</code> block works
 identically in SDTM and ADaM specs, because both dispatch through the same
 core registry and resolver. The resolver itself does no folder scanning: a
 callable is found either (a) by short name, when its module has been imported
@@ -2886,7 +2870,7 @@ in the define and in the lineage of the dataset it documents.</p>
 <p><code>first_date</code> is a real spec algorithm — this example runs end to end. In the
 spec, <code>from_dataset:</code> names a <strong>pinned dataset</strong> (attach it with <code>.pin("EX", ex)</code>
 before calling <code>from_spec</code>); the runtime resolves the name to the pinned frame.</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">fleet_spec_version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nt">fleet_spec_version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nt">study</span><span class="p">:</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">  </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CDISCPILOT01</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="nt">standard</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ADAMIG</span>
@@ -3033,7 +3017,7 @@ API markup inside <code>TranslatedText</code>; <code>validate_xml=False</code> b
 <code>length:</code> on <code>date</code> and <code>datetime</code>.</p>
 <p>The spec keys below apply to every generation:</p>
 <ul>
-<li><strong><code>fleet_spec_version: 1</code></strong> — spec dialect version (checked on load).</li>
+<li><strong><code>fleet_spec_version: 2</code></strong> — spec dialect version (checked on load; 2 is the verb vocabulary of ADR-0008, <code>fleet migrate --spec</code> rewrites a version 1 file).</li>
 <li><strong><code>derivations_module:</code></strong> — a dotted module that <code>from_spec</code> imports itself, so
   <code>callable:</code> derivations register without a manual import.</li>
 <li><strong><code>output_format:</code></strong> — per-dataset or spec-level export format (<code>parquet</code>,
@@ -3051,21 +3035,21 @@ API markup inside <code>TranslatedText</code>; <code>validate_xml=False</code> b
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span>
 </span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span><span class="nt">codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66731</span><span class="w"> </span><span class="c1"># references the oid in codelists[]</span>
 </span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span><span class="nt">derivation</span><span class="p">:</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">    </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">source</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">    </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign</span>
 </span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">    </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SEX</span>
 </span></code></pre></div>
 <h3 id="controlled-terminology-in-the-spec-path">Controlled terminology in the spec path<a class="headerlink" href="#controlled-terminology-in-the-spec-path" title="Permanent link">&para;</a></h3>
-<p>A spec step and its inline call check the same terms. Inside a study, a
-<code>ct_codelist:</code> ID resolves to the class of that ID in the study's
-<code>codelists.py</code>, the module <code>fleet init ct</code> generates. So this entry:</p>
+<p>A spec step and its inline call check the same terms. Inside a study, the
+<code>ct:</code> ID of an <code>assign</code>, or the <code>codelist:</code> of its variable when <code>ct:</code> is
+absent, resolves to the class of that ID in the study's <code>codelists.py</code>, the
+module <code>fleet init ct</code> generates. So this entry:</p>
 <!-- docs:no-run -->
 
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AESEV</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66769</span>
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="nt">derivation</span><span class="p">:</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign_ct</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign</span>
 </span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ae_severity</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span><span class="nt">ct_codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66769</span>
 </span></code></pre></div>
 <p>runs as <code>.assign("AESEV", source="ae_severity", ct=AESEV)</code> with the <code>AESEV</code>
 class of <code>codelists.py</code>, and a raw <code>Mild</code> gives the same warning in both
@@ -3076,7 +3060,7 @@ notations:
   <code>define.yaml</code>, never the working directory.</li>
 <li>When the CT loaded in <code>fleet.get_validator()</code> holds the codelist (for
   example through <code>ct: file:</code>, below), it checks the values in both
-  notations. A literal (<code>hardcode_ct</code>) is checked against the loaded CT only.</li>
+  notations. A constant (<code>assign</code> with <code>value:</code>) is checked against the loaded CT only.</li>
 <li>Outside a study, before <code>fleet init ct</code>, or for an ID without a class,
   only the loaded CT can check the values.</li>
 </ul>
@@ -3103,7 +3087,7 @@ against the study:</p>
 </tr>
 <tr>
 <td>Missing codelist</td>
-<td>A <code>codelist:</code> or <code>ct_codelist:</code> ID of a <code>define.yaml</code> has no class in the file.</td>
+<td>A <code>codelist:</code> or <code>ct:</code> ID of a <code>define.yaml</code> has no class in the file.</td>
 <td><code>fleet add-ct --domains AE</code> (SDTM); <code>fleet init ct --force</code> (ADaM), after you set <code>ct.adam_package</code></td>
 </tr>
 <tr>
@@ -3142,10 +3126,10 @@ ADaM CT (DTYPE, C81224). A study with ADaM datasets pins both packages in
   standards, with the publishing sets SDTM and ADaM.</li>
 </ul>
 <h3 id="opting-the-spec-into-ct-validation">Opting the spec into CT validation<a class="headerlink" href="#opting-the-spec-into-ct-validation" title="Permanent link">&para;</a></h3>
-<p>Without a <code>ct:</code> block, an <code>assign_ct</code> without <code>ct_mapping</code> checks its values
-(pass-through), and one with <code>ct_mapping</code> maps them without a check. Add a
-top-level <code>ct:</code> block to check every <code>assign_ct</code> / <code>hardcode_ct</code> derivation
-of the spec, mapped ones included; out-of-codelist values emit a warning
+<p>Without a top-level <code>ct:</code> block, an <code>assign</code> with a codelist and without
+<code>ct_map</code> checks its values (pass-through), and one with <code>ct_map</code> maps them
+without a check. Add a top-level <code>ct:</code> block to check every <code>assign</code> with a
+codelist, mapped ones included; out-of-codelist values emit a warning
 naming the dataset, variable, and codelist:</p>
 <!-- docs:no-run -->
 
@@ -3158,9 +3142,8 @@ naming the dataset, variable, and codelist:</p>
 </span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SEX</span>
 </span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="w">        </span><span class="nt">codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66731</span>
 </span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="w">        </span><span class="nt">derivation</span><span class="p">:</span>
-</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="w">          </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign_ct</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="w">          </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign</span>
 </span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="w">          </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sex</span>
-</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="w">          </span><span class="nt">ct_codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66731</span>
 </span></code></pre></div>
 <p>When datasets are checked with <code>DatasetChecker(spec, check_ct=True)</code>, the values
 are also verified against the spec's own inline <code>codelists:</code>, and codelist
@@ -3185,26 +3168,27 @@ is called</strong>, before any data is materialised.</p>
 <li>Wrong field types (e.g. a list where a string is expected)</li>
 </ul>
 <p>Errors are wrapped in a <code>SpecError</code> that names <strong>file → dataset → variable</strong>.
-Here is the real message for a typo'd field (<code>ct_codelst</code> instead of
-<code>ct_codelist</code>):</p>
+Here is the real message for a typo'd key (<code>ct_mp</code> instead of <code>ct_map</code>):</p>
 <!-- docs:no-run -->
 
 <div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># derivation block with a typo:</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="c1">#   - name: SEX</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="c1">#     derivation:</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1">#       algorithm: assign_ct</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="c1">#       source: sex</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="c1">#       ct_codelst: C66731        # ← typo: should be ct_codelist</span>
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="n">dm</span> <span class="o">=</span> <span class="n">raw_df</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">from_spec</span><span class="p">(</span><span class="s2">&quot;specs/define.yaml&quot;</span><span class="p">,</span> <span class="n">dataset</span><span class="o">=</span><span class="s2">&quot;DM&quot;</span><span class="p">)</span>
-</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="c1"># fleet.core.exceptions.SpecError:</span>
-</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="c1"># specs/define.yaml → dataset DM → variable SEX: 1 validation error for SDTMAssignCtSpec</span>
-</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="c1"># ct_codelst</span>
-</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="c1">#   Extra inputs are not permitted [type=extra_forbidden, input_value=&#39;C66731&#39;, input_type=str]</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="c1">#     codelist: C66731</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1">#     derivation:</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="c1">#       algorithm: assign</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="c1">#       source: sex</span>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="c1">#       ct_mp: {&quot;F&quot;: &quot;F&quot;}         # ← typo: should be ct_map</span>
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>
+</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="n">dm</span> <span class="o">=</span> <span class="n">raw_df</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">from_spec</span><span class="p">(</span><span class="s2">&quot;specs/define.yaml&quot;</span><span class="p">,</span> <span class="n">dataset</span><span class="o">=</span><span class="s2">&quot;DM&quot;</span><span class="p">)</span>
+</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="c1"># fleet.core.exceptions.SpecError:</span>
+</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="c1"># specs/define.yaml → dataset DM → variable SEX: 1 validation error for SDTMAssignSpec</span>
+</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="c1"># ct_mp</span>
+</span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a><span class="c1">#   Extra inputs are not permitted [type=extra_forbidden, input_value={&#39;F&#39;: &#39;F&#39;}, input_type=dict]</span>
 </span></code></pre></div>
-<p>(Note: a well-formed <code>assign_ct</code> <em>without</em> any codelist does <strong>not</strong> error — it
-copies the value through and emits a <code>UserWarning</code> that CT could not be validated.
-<code>assign</code> never fabricates a missing-field error for an optional field.)</p>
+<p>(Note: an <code>assign</code> with a codelist id that no loaded CT holds does <strong>not</strong>
+error — it copies the value through and emits a <code>UserWarning</code> that CT could
+not be validated. <code>assign</code> never fabricates a missing-field error for an
+optional key.)</p>
 <h3 id="layer-2-define-xml-generation-in-strict-mode-fleet-check">Layer 2 — Define-XML generation in strict mode (<code>fleet check</code>)<a class="headerlink" href="#layer-2-define-xml-generation-in-strict-mode-fleet-check" title="Permanent link">&para;</a></h3>
 <p><code>fleet check</code> generates the Define-XML of every define.yaml the study config
 points at, in strict mode, and writes no file. The row passes only when the
@@ -3221,6 +3205,8 @@ automatically during pipeline execution.</p>
   <em>Define-XML gaps</em> above);</li>
 <li>a generated document that fails the CDISC XSDs or the semantic lint.</li>
 </ul>
+<p>The derivation blocks themselves are checked by layer 1: the verb's model
+knows the required keys, so there are no separate per-algorithm rules.</p>
 <p>The same check from Python: <code>DefineSpecGenerator(path, strict=True).to_xml_string()</code>
 raises on the first of these problems and returns the XML text otherwise.</p>
 <h3 id="when-to-run-each-layer">When to run each layer<a class="headerlink" href="#when-to-run-each-layer" title="Permanent link">&para;</a></h3>
@@ -3288,10 +3274,10 @@ Subject</code>. The Define-XML 2.0 spellings <code>CRF</code> and <code>eDT</cod
 <ul>
 <li><strong><code>Predecessor</code></strong> requires <code>predecessor: DATASET.VARIABLE</code> (schema-enforced);
   the define renders <code>Predecessor: DM.COUNTRY</code>. In an ADaM spec, a variable
-  carried with <code>algorithm: source</code> but still marked <code>Collected</code> triggers a
-  generation-time warning suggesting the Predecessor form. When freezing an
-  inline pipeline, <code>to_spec_yaml(dataset="ADSL", predecessor="DM")</code> pre-fills
-  these entries for carry-through columns and pure <code>source</code> copies — the
+  carried with <code>algorithm: assign</code> and <code>source:</code> but still marked <code>Collected</code>
+  triggers a generation-time warning suggesting the Predecessor form. When
+  freezing an inline pipeline, <code>to_spec_yaml(dataset="ADSL", predecessor="DM")</code>
+  pre-fills these entries for carry-through columns and pure copies — the
   emitted YAML stays the explicit, reviewable source of truth.</li>
 <li><strong><code>Derived</code></strong> describes the derivation in its <code>MethodDef</code>.</li>
 <li><strong><code>Assigned</code> / <code>Protocol</code></strong> show the <code>comment:</code> — e.g.
@@ -3334,9 +3320,9 @@ own define.yaml; <code>--standard adam|both</code> covers the ADaM spec too):</p
 </span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="w">    </span><span class="nt">origin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Collected</span>
 </span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="w">    </span><span class="nt">crf_pages</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;8&quot;</span><span class="w"> </span><span class="c1"># single page</span>
 </span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="w">    </span><span class="nt">derivation</span><span class="p">:</span>
-</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="w">      </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign_ct</span>
+</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="w">      </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign</span>
 </span><span id="__span-25-9"><a id="__codelineno-25-9" name="__codelineno-25-9" href="#__codelineno-25-9"></a><span class="w">      </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sex</span>
-</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a><span class="w">      </span><span class="nt">ct_codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66731</span>
+</span><span id="__span-25-10"><a id="__codelineno-25-10" name="__codelineno-25-10" href="#__codelineno-25-10"></a><span class="w">      </span><span class="nt">ct</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66731</span>
 </span><span id="__span-25-11"><a id="__codelineno-25-11" name="__codelineno-25-11" href="#__codelineno-25-11"></a>
 </span><span id="__span-25-12"><a id="__codelineno-25-12" name="__codelineno-25-12" href="#__codelineno-25-12"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RACE</span>
 </span><span id="__span-25-13"><a id="__codelineno-25-13" name="__codelineno-25-13" href="#__codelineno-25-13"></a><span class="w">    </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Race</span>

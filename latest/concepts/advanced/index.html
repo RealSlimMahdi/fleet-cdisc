@@ -2694,7 +2694,7 @@ inside the study workspace):</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>fleet<span class="w"> </span>derivation<span class="w"> </span>add<span class="w"> </span>AGEGR1<span class="w"> </span>--dataset<span class="w"> </span>ADSL<span class="w"> </span>--kind<span class="w"> </span>column
 </span></code></pre></div>
 <p>The convention is <strong>standard-agnostic</strong>: the same <code>@derivation</code> objects and
-<code>algorithm: callable</code> escape hatch work in SDTM pipelines and specs exactly
+<code>callable:</code> escape hatch work in SDTM pipelines and specs exactly
 as in ADaM — both dispatch through the shared core registry.</p>
 <h3 id="complex-multi-dataset-derivations-escaping-the-pipeline">Complex Multi-Dataset Derivations (Escaping the Pipeline)<a class="headerlink" href="#complex-multi-dataset-derivations-escaping-the-pipeline" title="Permanent link">&para;</a></h3>
 <p>For highly complex, advanced logic—such as derivations requiring customized multi-dataset joins, complex rolling window aggregations, or logic that simply cannot be expressed linearly in standard verbs—the recommended pattern is to "escape" the automated pipeline.</p>

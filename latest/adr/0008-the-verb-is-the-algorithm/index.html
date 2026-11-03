@@ -2075,7 +2075,7 @@
 
 
 <h1 id="the-verb-is-the-algorithm-one-vocabulary-for-inline-code-and-defineyaml">The verb is the algorithm: one vocabulary for inline code and define.yaml<a class="headerlink" href="#the-verb-is-the-algorithm-one-vocabulary-for-inline-code-and-defineyaml" title="Permanent link">&para;</a></h1>
-<p><strong>Status: accepted, 2026-10-16.</strong> Proposed and decided the same day in #146. Supersedes ADR-0007.</p>
+<p><strong>Status: accepted, 2026-10-16.</strong> Proposed and decided the same day in #146. Supersedes ADR-0007. Implemented on 2026-10-17 on branch <code>feat/146-verb-is-the-algorithm</code>.</p>
 <p>A derivation has two notations in Fleet. The inline notation is a verb call, <code>.assign("SEX", source="sex", ct=SEX)</code>. The spec notation is a <code>derivation:</code> block in a define.yaml, <code>algorithm: assign_ct</code>, <code>source: sex</code>, <code>ct_codelist: C66731</code>. Today the two notations use two vocabularies. The spec registry maps the spec names onto the verbs with a hand-written <code>Param</code> table per algorithm, and ADR-0007 made the table take its <code>default</code> and <code>required</code> facts from the verb signature. The table still exists, and so do the renamed keys, the aliases and the legacy keys.</p>
 <p>We decided that the <code>algorithm:</code> value is the verb name and the YAML keys are the keyword arguments of the verb. The rule for the programmer: remove <code>.verb("TARGET",</code> and the last <code>)</code>. What stays is the YAML block. Fleet builds the strict Pydantic model from the verb signature. A short declaration per verb says only what a signature cannot say: which arguments stay out of the spec, which arguments exclude each other, and the Define-XML method text. Lineage already records <code>(verb, target, kwargs)</code>. <code>from_spec</code> calls the verb with them, and <code>to_spec_yaml()</code> writes them back unchanged.</p>
 <h2 id="measured-on-2026-10-16-on-main-at-bb4b878">Measured on 2026-10-16, on <code>main</code> at bb4b878<a class="headerlink" href="#measured-on-2026-10-16-on-main-at-bb4b878" title="Permanent link">&para;</a></h2>
@@ -2121,7 +2121,7 @@
 </tr>
 <tr>
 <td>Registration code in <code>spec_registry.py</code></td>
-<td>941 lines (lines 960 to 1900)</td>
+<td>894 lines (lines 857 to 1751)</td>
 </tr>
 <tr>
 <td>Shipped define.yaml files with derivations</td>
@@ -2232,7 +2232,7 @@
 </ul>
 <h2 id="considered-options">Considered options<a class="headerlink" href="#considered-options" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>Keep two vocabularies (ADR-0007, the status quo).</strong> The spec reads <code>assign_ct</code> where a data-standards reviewer expects it. The cost is the 941-line table, the five parity rules that guard it, 13 renamed keys to learn, and every new verb paid twice: #90 plans 48 more <code>Param</code> tables. The static converter must rank candidates for one verb, and <code>to_spec_yaml()</code> relabels lineage nodes to the spec name. Rejected: the inline verbs and the spec-driven derivations must match, and the reviewer reads the Define-XML, where the method text keeps the standards vocabulary.</li>
+<li><strong>Keep two vocabularies (ADR-0007, the status quo).</strong> The spec reads <code>assign_ct</code> where a data-standards reviewer expects it. The cost is the 894-line table, the five parity rules that guard it, 13 renamed keys to learn, and every new verb paid twice: #90 plans 48 more <code>Param</code> tables. The static converter must rank candidates for one verb, and <code>to_spec_yaml()</code> relabels lineage nodes to the spec name. Rejected: the inline verbs and the spec-driven derivations must match, and the reviewer reads the Define-XML, where the method text keeps the standards vocabulary.</li>
 <li><strong>Rename the verbs to the spec names.</strong> <code>.assign_ct(...)</code>, <code>.hardcode_no_ct(...)</code>, <code>.if_then_else(...)</code> as inline verbs. One vocabulary, but four verbs for one intent, and the inline API becomes the define dialect. Rejected.</li>
 <li><strong>Verb names in YAML, old names kept as aliases for one minor version.</strong> The table stays alive to serve the aliases, so nothing is deleted until the next version. Fleet is pre-alpha at 0.2.0a1, #146 states that no compatibility is owed, and <code>fleet migrate</code> already exists for the Python side. Rejected in favour of a hard cut with a spec migration.</li>
 <li><strong>Rename the key <code>algorithm:</code> to <code>verb:</code>.</strong> Honest, but it changes the JSON schema root, the LSP completions, every doc and every shipped spec for a word. The key stays <code>algorithm:</code>.</li>
@@ -2241,7 +2241,7 @@
 <h2 id="consequences">Consequences<a class="headerlink" href="#consequences" title="Permanent link">&para;</a></h2>
 <p>Deleted:</p>
 <ul>
-<li>The <code>Param</code> tables, <code>annotation</code>, <code>kwarg</code>, <code>alias</code>, <code>convert</code>, <code>legacy_keys</code> and <code>aliases</code>. About 941 lines become an estimated 200.</li>
+<li>The <code>Param</code> tables, <code>annotation</code>, <code>kwarg</code>, <code>alias</code>, <code>convert</code>, <code>legacy_keys</code> and <code>aliases</code>. About 894 lines become an estimated 200 (measured after implementation: 39 declarations in 330 lines, of which 60 are Define-XML text).</li>
 <li>The five parity rules of ADR-0007 and the kwarg renames. The remaining test is one rule: the YAML model of a verb equals its signature minus the excluded arguments.</li>
 <li>The <code>SDTMAlgorithm</code> and <code>ADAMAlgorithm</code> enums in <code>fleet.sdtm.models</code> and <code>fleet.adam.models</code>. They are exported from <code>fleet</code> and hold the spec names. They go, or they are generated from the verb list.</li>
 <li>The rules ALG01 to ALG05 in <code>fleet.define_xml.validator</code>. They check <code>source_variable</code>, <code>constant_value</code>, <code>merge_dataset</code> and <code>merge_key</code> under <code>item_defs</code>, keys the current dialect does not have. No shipped define.yaml uses them.</li>
@@ -2311,7 +2311,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 16, 2026 21:46:59 UTC">October 16, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 16, 2026 22:29:54 UTC">October 16, 2026</span>
   </span>
 
     

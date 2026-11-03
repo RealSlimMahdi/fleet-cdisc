@@ -2908,7 +2908,7 @@ set it in a <code>.env</code> file at your project root or as an environment var
 </tr>
 <tr>
 <td><a href="#fleet-migrate"><code>fleet migrate</code></a></td>
-<td>Rewrite removed pre-alpha verb/kwarg spellings to canonical ones (libcst).</td>
+<td>Rewrite removed pre-alpha spellings: Python verbs and kwargs (libcst), or, with --spec, define.yaml algorithms and keys (ADR-0008).</td>
 </tr>
 <tr>
 <td><a href="#fleet-tdd"><code>fleet tdd</code></a></td>
@@ -3434,7 +3434,7 @@ set it in a <code>.env</code> file at your project root or as an environment var
 <tbody>
 <tr>
 <td><code>files</code></td>
-<td>Python files or directories to migrate.</td>
+<td>Python files or directories to migrate (define.yaml files with --spec).</td>
 </tr>
 </tbody>
 </table>
@@ -3447,6 +3447,11 @@ set it in a <code>.env</code> file at your project root or as an environment var
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><code>--spec</code></td>
+<td><em>(none)</em></td>
+<td>Migrate define.yaml files to the verb vocabulary (fleet_spec_version 2).</td>
+</tr>
 <tr>
 <td><code>--write</code></td>
 <td><em>(none)</em></td>
