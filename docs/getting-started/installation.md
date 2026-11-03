@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Python 3.12+
+- Python 3.12 to 3.14
 - [uv](https://github.com/astral-sh/uv) (recommended) or pip
 
 ## Install

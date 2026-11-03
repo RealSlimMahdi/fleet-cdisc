@@ -65,7 +65,7 @@
 [![GitHub](https://img.shields.io/badge/GitHub-fleet--cdisc-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/RealSlimMahdi/fleet-cdisc)
 [![Docs](https://img.shields.io/badge/docs-passing-success?style=for-the-badge)](https://realslimmahdi.github.io/fleet-cdisc/)
 [![PyPI](https://img.shields.io/pypi/v/fleet-cdisc?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/fleet-cdisc/)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Python 3.12 to 3.14](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/github/license/RealSlimMahdi/fleet-cdisc.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
 ---

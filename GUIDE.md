@@ -6,7 +6,7 @@
 
 ## Prerequisites
 
-- **Python 3.12+**
+- **Python 3.12 to 3.14**
 - **uv** — the only supported package manager ([install uv](https://docs.astral.sh/uv/getting-started/installation/))
 - **CDISC Library API key** — required for CLI bootstrapping and codelist generation. Get one at [library.cdisc.org](https://library.cdisc.org). Set `CDISC_API_KEY` in a `.env` file at your project root.
 
