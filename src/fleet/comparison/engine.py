@@ -17,6 +17,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 
 import polars as pl
+import polars.selectors as cs
 
 from fleet._version import __version__
 from fleet.core.exceptions import ComparisonError, VerbUsageError
@@ -66,6 +67,7 @@ def compare(
     abs_tol: float = 0.0,
     rel_tol: float = 0.0,
     ignore_trailing_whitespace: bool = False,
+    blank_is_missing: bool = False,
     allow_duplicates: bool = False,
     max_print: MaxPrint = 50,
     base_name: str | None = None,
@@ -123,6 +125,12 @@ def compare(
             sides of a string before comparing, so SAS's padded character
             values equal Fleet's stripped ones.  Leading whitespace still
             differs.
+        blank_is_missing: Read an empty string as null on both sides, keys
+            included, as SAS does: SAS has one character missing value, the
+            blank.  Use it when one side comes from a tool that kept ``""``
+            (an R data frame without ``convert_blanks_to_na``).  Off by
+            default, because the two frames then give different
+            ``is_null()`` results.
         allow_duplicates: Pair duplicate keys by their position within each
             key group instead of refusing to run.  The observation summary
             then counts the duplicates per side, the ``duplicate_keys`` flag
@@ -198,6 +206,7 @@ def compare(
         ignore_trailing_whitespace=_normalise_flag(
             ignore_trailing_whitespace, "ignore_trailing_whitespace"
         ),
+        blank_is_missing=_normalise_flag(blank_is_missing, "blank_is_missing"),
         allow_duplicates=_normalise_flag(allow_duplicates, "allow_duplicates"),
         max_print=max_print,
         base_name=base_name,
@@ -534,11 +543,15 @@ def _prepare(
     compared: Mapping[str, str],
     key_casts: dict[str, pl.DataType],
     marker: str,
+    blank_is_missing: bool,
 ) -> pl.LazyFrame:
     """One side, presenting every compared variable under its base name; *compared* maps that name to this side's column."""
     columns = [pl.col(k).cast(key_casts[k]) if k in key_casts else pl.col(k) for k in keys]
     columns += [pl.col(source).alias(name) for name, source in compared.items()]
-    return lf.select(columns).with_columns(
+    side = lf.select(columns)
+    if blank_is_missing:
+        side = side.with_columns(cs.string().replace("", None))
+    return side.with_columns(
         pl.int_range(pl.len()).over(keys).alias(_IDX),
         pl.lit(True).alias(marker),
     )
@@ -554,13 +567,16 @@ def _join(
     settings: ComparisonSettings,
 ) -> pl.DataFrame:
     """Full-join both sides on the keys and evaluate the inequality flags; the one collect."""
-    joined = _prepare(base, keys, {c: c for c in compared}, key_casts, _IN_BASE).join(
+    joined = _prepare(
+        base, keys, {c: c for c in compared}, key_casts, _IN_BASE, settings.blank_is_missing
+    ).join(
         _prepare(
             candidate,
             keys,
             {c: settings.pairs.get(c, c) for c in compared},
             key_casts,
             _IN_CANDIDATE,
+            settings.blank_is_missing,
         ),
         on=[*keys, _IDX],
         how="full",

@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping, Sequence
 
     from fleet.adam.namespace import AdamNamespace
+    from fleet.core.define_spec import DatasetEntry
     from fleet.core.study_context import StudyContext
     from fleet.sdtm.namespace import SDTMNamespace
 
@@ -92,6 +93,10 @@ class Step:
             frame; every other one is pinned under its name.
         carry_through: The declared variables with no derivation, which
             the run takes from the inputs unchanged (ADR 0006).
+        text_columns: The variables of define type ``text`` and the raw
+            columns their derivations name as ``source``.  A CSV input
+            reads them as text, so SUBJID ``0012`` and LBORRES ``1.10``
+            keep their characters.
     """
 
     define: Path
@@ -99,6 +104,7 @@ class Step:
     dataset: str
     inputs: tuple[DeclaredInput, ...]
     carry_through: tuple[str, ...]
+    text_columns: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -177,6 +183,7 @@ def plan_study(ctx: StudyContext, *, datasets: Sequence[str] | None = None) -> S
                         DeclaredInput(name=i["name"], path=i.get("path")) for i in entry.inputs
                     ),
                     carry_through=tuple(v.name for v in entry.variables if v.derivation is None),
+                    text_columns=_text_columns(entry),
                 )
             )
 
@@ -236,6 +243,7 @@ def run_study(
         name.upper(): _Held(frame, ResolvedInput(path=None, source="seed"))
         for name, frame in (inputs or {}).items()
     }
+    text_columns = frozenset(c for s in plan.steps for c in s.text_columns)
     collisions = sorted(held.keys() & {s.dataset for s in plan.steps})
     if collisions:
         raise StudyRunError(
@@ -244,7 +252,7 @@ def run_study(
         )
 
     for step in plan.steps:
-        resolved = {d.name: _resolve_input(plan.ctx, d, held) for d in step.inputs}
+        resolved = {d.name: _resolve_input(plan.ctx, d, held, text_columns) for d in step.inputs}
         frames = [held[d.name.upper()].frame for d in step.inputs]
         base, extras = frames[0], list(zip(step.inputs[1:], frames[1:], strict=True))
 
@@ -303,20 +311,37 @@ class _Held:
     origin: ResolvedInput
 
 
+def _text_columns(entry: DatasetEntry) -> tuple[str, ...]:
+    """The define text variables and the raw columns their derivations take as source."""
+    columns: dict[str, None] = {}
+    for v in entry.variables:
+        if (v.type or "").lower() != "text":
+            continue
+        columns[v.name] = None
+        source = (v.derivation or {}).get("source")
+        if isinstance(source, str):
+            columns[source] = None
+    return tuple(columns)
+
+
 def _namespace(df: pl.DataFrame, standard: Standard) -> SDTMNamespace | AdamNamespace:
     """The namespace a step runs in: the one place that branches on the standard."""
     return _frame(df).sdtm if standard == "sdtm" else _frame(df).adam
 
 
 def _resolve_input(
-    ctx: StudyContext, declared: DeclaredInput, held: dict[str, _Held]
+    ctx: StudyContext,
+    declared: DeclaredInput,
+    held: dict[str, _Held],
+    text_columns: frozenset[str] = frozenset(),
 ) -> ResolvedInput:
     """Find one declared input, loading it into *held* when it comes from a file.
 
     In order: a seed or a dataset built earlier in this run, then the
     input's ``path:`` relative to the study root, then the input's name in
     the raw, SDTM and ADaM data directories.  A declared path that does
-    not exist is refused; it does not fall back to the name search.
+    not exist is refused; it does not fall back to the name search.  A CSV
+    input reads *text_columns* as text.
     """
     from fleet.io import load_raw_data
 
@@ -325,7 +350,13 @@ def _resolve_input(
         return held[key].origin
 
     def hold(file: Path, source: InputSource) -> ResolvedInput:
-        held[key] = _Held(load_raw_data(file).collect(), ResolvedInput(path=file, source=source))
+        options = (
+            {"schema_overrides": dict.fromkeys(text_columns, pl.String)}
+            if file.suffix.lower() == ".csv"
+            else {}
+        )
+        frame = load_raw_data(file, **options).collect()
+        held[key] = _Held(frame, ResolvedInput(path=file, source=source))
         return held[key].origin
 
     if declared.path is not None:

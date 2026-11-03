@@ -348,6 +348,8 @@ class ComparisonSettings:
     #: Whether trailing whitespace was stripped from both sides of a string
     #: before comparing.
     ignore_trailing_whitespace: bool
+    #: Whether an empty string read as null on both sides, keys included.
+    blank_is_missing: bool
     #: Whether duplicate keys were paired by position instead of stopping the compare.
     allow_duplicates: bool
     max_print: MaxPrint
@@ -382,6 +384,8 @@ class ComparisonSettings:
         ]
         if self.ignore_trailing_whitespace:
             parts.append("ignoring trailing whitespace")
+        if self.blank_is_missing:
+            parts.append("blank equals missing")
         return ", ".join(parts)
 
 

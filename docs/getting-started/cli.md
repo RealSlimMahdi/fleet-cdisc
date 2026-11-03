@@ -122,6 +122,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | `--version` | _(none)_ | IG version. Default: the sdtm/adam ig_version declared in the discovered study_config.yaml (3.4 / 1.3 outside a study). |
 | `--custom-rules` | _(none)_ | Directory of custom validation rule YAML files. Default: validation.custom_rules from the discovered study_config.yaml. |
 | `--report` | _(none)_ | Write an HTML findings report to PATH. |
+| `--encoding` | _(none)_ | Text encoding of the CSV and SAS files, e.g. iso-8859-1 for files from a WLATIN1 SAS session (default: UTF-8). |
 
 ---
 
@@ -153,6 +154,9 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | `--abs-tol` | `0.0` | Absolute tolerance on the numeric variables (default: 0, exact). A numeric pair differs when the absolute difference exceeds max(--abs-tol, --rel-tol x \|base\|). |
 | `--rel-tol` | `0.0` | Relative tolerance on the numeric variables, as a fraction of the base value (default: 0, exact). It anchors on the base because the base is the reference, as in SAS: 0.01 is one percent of the base. |
 | `--ignore-trailing-whitespace` | _(none)_ | Strip trailing whitespace from both sides of a string before comparing, so a legacy SAS dataset's padded character values equal Fleet's stripped ones. Leading whitespace still differs. |
+| `--blank-is-missing` | _(none)_ | Read an empty string as missing on both sides, keys included, as SAS does. Use it when one side comes from a tool that kept blanks as empty strings (an R data frame without convert_blanks_to_na). A SAS file always reads a blank as missing. |
+| `--text` | _(none)_ | Comma-separated CSV columns to read as text, the equivalent of a SAS $ informat, e.g. LBORRES. A CSV file holds no types: a column is text when a value on either side has a leading zero or is not a number, a number otherwise, and the other side's type when that side is not a CSV file. |
+| `--encoding` | _(none)_ | Text encoding of a CSV or SAS file, e.g. iso-8859-1 for a file from a WLATIN1 SAS session (default: UTF-8). |
 | `--allow-duplicates` | _(none)_ | Pair duplicate keys by their position within each key group instead of refusing to run. The report then counts the duplicates per side, raises the duplicate_keys flag and warns at the top: order within a key group decides which observations pair. |
 | `--all` | _(none)_ | Print every unequal value (default: 50 per variable, 500 overall). |
 | `--format` | `text` | Output format: the text report, or one JSON document (verdict, flags, summaries, listing within the print limits, settings, Fleet version) and nothing else on stdout (default: text). Choices: `text`, `json`. |

@@ -485,7 +485,7 @@ def worst_case(
         .alias("__worst_rank")
     )
     return (
-        ranked.sort(["__worst_rank", order_col], descending=[True, False])
+        ranked.sort(["__worst_rank", order_col], descending=[True, False], nulls_last=True)
         .unique(subset=list(by), keep="first", maintain_order=True)
         .drop("__worst_rank")
     )

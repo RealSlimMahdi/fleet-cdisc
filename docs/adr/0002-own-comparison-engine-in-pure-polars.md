@@ -11,5 +11,5 @@ Fleet needs a PROC COMPARE equivalent: pair two datasets on keys, report common 
 ## Consequences
 
 - The comparison engine is qualified as Fleet code, with its own SAS-parity fixtures, rather than as an inherited dependency.
-- Fleet keeps its promise of a pure-Polars core: pandas and numpy stay confined to the optional `io` extra.
+- Fleet keeps its promise of a pure-Polars core: pandas and numpy stay confined to the optional `io` extra. Amended by ADR-0010: the `io` extra now reads and writes SAS files through the Polars route of pyreadstat, with no pandas.
 - If Polars ships a native compare later, `fleet.compare` can delegate to it behind the same three surfaces without changing the comparison report.

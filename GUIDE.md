@@ -1530,7 +1530,7 @@ save_xpt(advs, "outputs/adam/advs.xpt")
 save_xpt(adae, "outputs/adam/adae.xpt")
 ```
 
-> **Note:** XPT export requires `pyreadstat`. Install with `uv sync --extra io`. Column names are automatically upper-cased and truncated to 8 characters per SAS Transport format.
+> **Note:** XPT export requires `pyreadstat`. Install with `uv add "fleet-cdisc[io]"`. The file is SAS transport version 5, and the member is named as the file (FDA TCG 3.1.1). Names are upper-cased. A name over 8 characters, a label over 40 or a value over 200 bytes stops the write; nothing is cut. Dates are stored as SAS dates with DATE9.
 
 ### CDISC Dataset-JSON v1.1 (recommended)
 

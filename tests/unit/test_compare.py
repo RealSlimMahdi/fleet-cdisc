@@ -1937,6 +1937,7 @@ class TestJsonReport:
             "abs_tol": 0.0,
             "rel_tol": 0.0,
             "ignore_trailing_whitespace": False,
+            "blank_is_missing": False,
             "allow_duplicates": False,
             "max_print": 50,
             "base_name": "prod",

@@ -766,7 +766,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         # Join all pivoted parts on the by keys
         joined = pivoted_parts[0]
         for part in pivoted_parts[1:]:
-            joined = joined.join(part, on=grps, how="inner")
+            joined = joined.join(part, on=grps, how="inner", nulls_equal=True)
 
         # Compute the new AVAL
         aval_expr = (

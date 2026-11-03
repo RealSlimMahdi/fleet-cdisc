@@ -30,9 +30,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# I/O: SAS XPT support
+# I/O: SAS XPT support (1.3.3: the first tested release that reads and writes Polars frames)
 io = [
-    "pyreadstat>=1.2.0",
+    "pyreadstat>=1.3.3",
 ]
 
 # TLG-PDF: PDF export via WeasyPrint

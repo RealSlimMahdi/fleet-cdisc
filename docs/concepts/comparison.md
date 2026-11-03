@@ -257,6 +257,19 @@ documented columns.
   a `Datetime` is compared by value after casting to a common type and listed
   as a dtype difference. A numeric next to a string is a **type conflict**:
   listed, not compared.
+- **A blank is not a missing value unless you say so.** A SAS file reads a
+  blank as null, so XPT against Parquet needs nothing. A file from another
+  tool can keep `""` (an R data frame without `convert_blanks_to_na`), and
+  `""` against null differs by default. `blank_is_missing=True` (or
+  `--blank-is-missing`) reads `""` as null on both sides, keys included, and
+  the settings line says `blank equals missing`.
+- **A CSV file holds no types.** `fleet compare` reads a CSV side as text and
+  types each column across both sides: the other side's type when that side
+  is not a CSV file; otherwise text when a value on either side has a leading
+  zero or is not a number, and a number in every other case. So SITEID `001`
+  against `1` differs, and AVAL `1.10` against `1.1` is equal, as in PROC
+  COMPARE. `--text LBORRES` keeps a column text, the `$` informat. The text
+  report starts with the type each CSV column was read as.
 - **Row order and column order are ignored.** A re-sorted or re-ordered
   dataset is not a different dataset.
 - **Print limits only affect what is rendered.** By default the text report

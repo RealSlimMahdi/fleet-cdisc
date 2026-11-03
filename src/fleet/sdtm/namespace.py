@@ -459,7 +459,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                 [c for c in dict.fromkeys(join_key + [ref_col]) if c in ref_df.columns]
             ).unique(subset=join_key if join_key else None)
             ref_slim = ref_slim.rename({ref_col: _ref_tmp})
-            df = df.join(ref_slim, on=join_key, how="left")
+            df = df.join(ref_slim, on=join_key, how="left", nulls_equal=True)
             ref_col_name = _ref_tmp
         else:
             ref_col_name = ref_col

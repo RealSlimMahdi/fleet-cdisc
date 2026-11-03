@@ -49,9 +49,15 @@ save_dataset_json(
 
 Format-specific behaviour worth knowing:
 
-- **XPT** enforces the SAS v5 Transport constraints for you: column names
-  are upper-cased and truncated to 8 characters on write. Install the
-  writer with `uv add "fleet-cdisc[io]"`.
+- **XPT** is SAS transport version 5, the submission format of FDA TCG
+  3.1.1, and the member is named as the file (`adsl.xpt` holds `ADSL`).
+  Names are upper-cased. A `pl.Date` is stored as a SAS date with DATE9, a
+  `pl.Datetime` with DATETIME20 and a `pl.Time` with TIME8. NaN and infinity
+  become SAS missing. Nothing is cut: a name over 8 characters, a label over
+  40 or a value over 200 bytes stops the write. A value that is not ASCII is
+  written as UTF-8 bytes, with a warning. Pass `label=` and `column_labels=`
+  for the dataset and variable labels; `fleet run` takes them from
+  `define.yaml`. Install the writer with `uv add "fleet-cdisc[io]"`.
 - **Dataset-JSON** embeds dataset metadata (`domain`, `label`, originator,
   file OID) alongside typed column data — pass them as keyword arguments.
 - **Parquet** forwards any keyword arguments to Polars'
@@ -70,6 +76,24 @@ frames = load_datasets(
     {"DM": "data/sdtm/dm.parquet", "AE": "data/sdtm/ae.xpt"}  # many files → dict
 )
 ```
+
+What the readers decide for you:
+
+- **A SAS blank is a missing value.** SAS has one character missing value,
+  the blank, so a blank in an XPT or SAS7BDAT file reads as null and
+  `is_null()` finds it. A variable with no value keeps its SAS type.
+- **A CSV file holds no types.** Polars infers them from every row. A column
+  with a leading zero (SITEID `001`) stays text, with a warning, because a
+  number would lose the zero. `schema_overrides={"LBORRES": pl.String}` is
+  the `$` informat; your types always win. `fleet run` reads the variables
+  of define type `text`, and their raw source columns, as text.
+- **The encoding is yours to name.** A file from a WLATIN1 SAS session needs
+  `load_raw_data(path, encoding="iso-8859-1")`, or `--encoding iso-8859-1` on
+  `fleet compare` and `fleet validate`. A keyword the reader does not take
+  raises; it is never dropped.
+
+In a join on keys a missing key matches a missing key, as SAS MERGE BY does,
+in every verb that joins (`merge`, `pick`, `first_date`, `derive_param`, ...).
 
 ## Not to be confused with TLG render formats
 

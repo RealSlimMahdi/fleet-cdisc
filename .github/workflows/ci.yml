@@ -53,3 +53,26 @@ jobs:
         with:
           files: coverage.xml
           fail_ci_if_error: false
+
+  io-extra-only:
+    # A user's install of the io extra: no pandas and no pyarrow. The test job
+    # gets pandas through dsjson, which hid that XPT failed without it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Install the io extra only
+        run: uv sync --extra io
+
+      - name: Check that pandas and pyarrow are absent
+        run: uv run --no-sync python -c "import importlib.util as u; assert u.find_spec('pandas') is None and u.find_spec('pyarrow') is None"
+
+      - name: Read and write SAS files
+        run: uv run --no-sync pytest tests/unit/test_io_sas.py tests/unit/test_compare_inputs.py
