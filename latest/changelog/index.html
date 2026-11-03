@@ -2287,6 +2287,11 @@
 <li><code>pick</code> with a top-level <code>order</code> keeps the extreme value over all events, as admiral <code>derive_vars_extreme_event</code>: <code>order=["LSTALVDT"], mode="last"</code> gives the latest date, not the first listed event's date. A tie goes to the first listed event; with no top-level <code>order</code> the first listed event with a record still wins. The result no longer depends on the sort engine's order.</li>
 <li><code>recode</code> types the output from the map: <code>{"MILD": 1, "MODERATE": 2, "SEVERE": 3}</code> gives an integer ASEVN, not text. A map that mixes text and numbers raises <code>DerivationError</code>.</li>
 <li>The SAFFL recipes in the README, GUIDE, quickstart, installation, define-yaml and both pilot examples keep placebo subjects (EXDOSE = 0 with PLACEBO in EXTRT, the admiral template rule) and give N to non-members, as ADaMIG 1.3 requires. Both pilot examples now have SAFFL = Y for 5 of 5.</li>
+<li><strong>One flagged record per group, and units stated for QTc</strong> (ADR-0013, alpha audit package C):</li>
+<li><code>baseline_flag</code> takes only a record with a result: not null or blank in <code>--STRESC</code> (else <code>--ORRES</code>, or new <code>result_col=</code>), and <code>--STAT</code> not NOT DONE. A NOT DONE record on the last date no longer takes the flag. With no result column the verb stops.</li>
+<li><code>baseline_flag</code> flags one record on a tie: the last by new <code>order_by=</code> (default <code>--SEQ</code>), then input order, as SAS <code>LAST.</code>, with a warning when <code>order_by=</code> is not given. Before, every record on the last date got the flag.</li>
+<li><code>flag(criteria="last", where=)</code> no longer loses the flag when a record that fails <code>where</code> ties on <code>order_by</code>; ABLFL, BASE and CHG come back. A tie among candidates goes to the last input record (<code>first</code>: the first). <code>flag_all=True</code> takes the extreme over the records that pass <code>where</code>.</li>
+<li><code>qtc</code> reads RR in ms by default, as admiral <code>compute_qtc</code>: QT 400 and RR 800 give QTcF 430.89, not 43.09. New <code>rr_unit=</code> (<code>ms</code>, <code>msec</code>, <code>s</code>, <code>sec</code>). The verb stops when a value cannot be in its unit.</li>
 </ul>
 <h3 id="changed">Changed<a class="headerlink" href="#changed" title="Permanent link">&para;</a></h3>
 <ul>
@@ -2425,7 +2430,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 09:14:56 UTC">November 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 11:00:10 UTC">November 3, 2026</span>
   </span>
 
     
