@@ -8,7 +8,8 @@ Each generated class also exposes ``_cdisc_url`` and embeds the CDISC
 Library Browser URL in its docstring so reviewers can navigate from
 pipeline code straight to the authoritative codelist definition.  When
 every codelist comes from one CT package, the module opens with a
-``__ct_package__`` marker naming it (see :mod:`fleet.ct.study_codelists`).
+``__ct_package__`` marker naming it; codelists from an SDTM and an ADaM
+package give ``__ct_packages__`` (see :mod:`fleet.ct.study_codelists`).
 
 Example generated output::
 
@@ -258,18 +259,28 @@ class CodelistGenerator:
         concept_ids: set[str],
         *,
         package: str = "sdtmct-2023-12-15",
+        adam_package: str | None = None,
         include_docs: bool = True,
     ) -> CodelistGenerator:
         """Build a generator from an explicit set of NCI concept IDs.
 
+        Each codelist comes from the first package that holds it: *package*
+        (SDTM CT), then *adam_package* (ADaM CT, for codelists such as
+        DTYPE that only ADaM CT publishes).
+
         Args:
             client: An authenticated ``CDISCClient`` instance.
             concept_ids: Set of NCI concept ID strings to download.
-            package: CT package version to download from.
+            package: SDTM CT package version to download from.
+            adam_package: ADaM CT package asked second; ``None`` for SDTM only.
             include_docs: Whether to include definitions in generated output.
 
         Returns:
             A ``CodelistGenerator`` populated with the requested codelists.
+
+        Raises:
+            CTError: When no pinned package holds a codelist (each ID is
+                named), or on an authentication or network error.
 
         Examples:
             Generate codelists for specific concept IDs::
@@ -280,23 +291,32 @@ class CodelistGenerator:
                 with CDISCClient() as client:
                     gen = CodelistGenerator.from_concept_ids(
                         client,
-                        {"C66731", "C74457"},
+                        {"C66731", "C81224"},
+                        adam_package="adamct-2023-06-30",
                     )
                     gen.write("codelists.py")
         """
+        from fleet.core.exceptions import CTError, CTNotFoundError
+
+        pins = [p for p in (package, adam_package) if p]
         gen = cls(include_docs=include_docs)
+        missing: list[str] = []
         for cid in sorted(concept_ids):
-            try:
-                gen.add_codelist(
-                    client.get_codelist(cid, package=package),
-                    package=package,
-                )
-            except Exception:
-                logger.warning(
-                    "Codelist %s not found in package %s — skipping.",
-                    cid,
-                    package,
-                )
+            for pin in pins:
+                try:
+                    gen.add_codelist(client.get_codelist(cid, package=pin), package=pin)
+                    break
+                except CTNotFoundError:
+                    continue
+            else:
+                missing.append(cid)
+        if missing:
+            raise CTError(
+                f"{len(missing)} codelist(s) are in no pinned CT package "
+                f"({', '.join(pins)}): {', '.join(missing)}. Correct the codelist id in "
+                "define.yaml, or pin the package that holds it in study_config.yaml "
+                "(ct.package, ct.adam_package)."
+            )
         return gen
 
     @classmethod
@@ -362,10 +382,14 @@ class CodelistGenerator:
             '"""',
             "",
         ]
-        # Marker for the stale checks of fleet.ct.study_codelists; mixed packages get none.
+        # Marker for the stale checks of fleet.ct.study_codelists; two dates of one
+        # product (two SDTM CT packages) get none, so check b reports the mix.
         packages = {cl.get("_package") for cl in sorted_cls}
+        products = {str(p).split("-", 1)[0] for p in packages}
         if len(packages) == 1 and None not in packages:
             lines += [f"__ct_package__ = {packages.pop()!r}", "", ""]
+        elif None not in packages and len(products) == len(packages) > 1:
+            lines += [f"__ct_packages__ = {tuple(sorted(packages))!r}", "", ""]
 
         # Class definitions
         for cl in sorted_cls:
@@ -413,6 +437,27 @@ class CodelistGenerator:
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(self.render(), encoding="utf-8")
         return dest.resolve()
+
+    def define_terms(self) -> dict[str, dict[str, Any]]:
+        """The ``codelists:`` entry of ``define.yaml`` for each loaded codelist, by concept ID.
+
+        Returns:
+            dict[str, dict[str, Any]]: ``{"name": ..., "items": [{"coded_value": ...,
+                "decode": ...}]}``; the decode is the NCI preferred term.
+        """
+        return {
+            cl["conceptId"]: {
+                "name": cl.get("name") or cl.get("submissionValue") or cl["conceptId"],
+                "items": [
+                    {
+                        "coded_value": t["submissionValue"],
+                        "decode": t.get("preferredTerm") or t["submissionValue"],
+                    }
+                    for t in cl.get("terms", [])
+                ],
+            }
+            for cl in self._codelists
+        }
 
     # -- private -------------------------------------------------------- #
 

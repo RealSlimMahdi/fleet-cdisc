@@ -229,6 +229,44 @@ def test_guide_pipeline_blocks_execute(tmp_path, monkeypatch):
     assert ns["td"].shape[0] == 1 and ns["tm"].shape[0] == 1
 
 
+def test_readme_blocks_execute(tmp_path, monkeypatch):
+    """c1-179: every python block of the README (the PyPI page) runs as written, in an empty folder."""
+    text = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    ns: dict = {}
+
+    ran_python = 0
+    for lang, body, run in _iter_blocks(text):
+        if not run:
+            continue
+        if lang == "yaml":
+            loaded = yaml.safe_load(body)
+            if isinstance(loaded, dict) and "datasets" in loaded:
+                (tmp_path / "define.yaml").write_text(body, encoding="utf-8")
+        else:
+            exec(compile(body, "<README>", "exec"), ns)  # noqa: S102 — trusted doc source
+            ran_python += 1
+
+    assert ran_python == 3
+    assert {"ADY", "BASE", "CHG"}.issubset(ns["advs"].columns)
+    assert ns["dm"]["SEX"].to_list() == ["F", "M", "M"]  # the spec-driven DM, last block
+    assert ns["dm"]["STUDYID"].to_list() == ["CDISCPILOT01"] * 3
+    adsl = ns["adsl"]
+    assert adsl.columns == [
+        "STUDYID",
+        "USUBJID",
+        "AGE",
+        "SEX",
+        "ARM",
+        "TRT01P",
+        "TRTSDT",
+        "TRTEDT",
+        "TRTDURD",
+        "SAFFL",
+    ]
+    assert set(adsl["SAFFL"].to_list()) <= {"Y", "N"}
+
+
 def test_define_yaml_doc_blocks_execute(tmp_path, monkeypatch):
     """Every non-illustrative code block in define-yaml.md runs / parses."""
     text = DEFINE_YAML_DOC.read_text(encoding="utf-8")

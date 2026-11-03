@@ -61,12 +61,14 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | Option | Default | Description |
 | ------ | ------- | ----------- |
 | `--study-id` | _(required)_ | Study identifier (e.g. CDISCPILOT01). |
-| `--company` | _(none)_ | Originator / company name. |
+| `--company` | _(none)_ | Originator / company name (study.originator in define.yaml). |
+| `--description` | _(none)_ | Study description (study.description in define.yaml). |
 | `--domains` | _(none)_ | Comma-separated SDTM domains (e.g. DM,AE,VS,EX). |
 | `--adam-datasets` | _(none)_ | Comma-separated ADaM datasets (e.g. ADSL,ADVS,ADAE). |
 | `--ig` | `3-4` | SDTM IG version (default: 3-4). |
 | `--adam-ig` | `1-3` | ADaM IG version (default: 1-3). |
-| `--package` | `sdtmct-2023-12-15` | CT package version (default: sdtmct-2023-12-15). |
+| `--package` | `sdtmct-2023-12-15` | SDTM CT package version (default: sdtmct-2023-12-15). |
+| `--adam-package` | _(none)_ | ADaM CT package, for the codelists only ADaM CT holds (DTYPE). Default with ADaM datasets: adamct-2023-06-30, the latest on or before the default SDTM package; required with another --package. |
 | `--root` / `-r` | `.` | Study root directory (default: current directory). |
 
 ### `fleet init define`
@@ -129,7 +131,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 
 ## `fleet check`
 
-CI gate: parse the study config, check each define.yaml against its schema, check codelists.py against ct.package and the define.yaml files, build the validation run setup for SDTM and ADaM with no datasets, and check each custom rule YAML. An unsupported sdtm.ig_version or adam.ig_version and a configured validation.custom_rules directory that does not exist fail the gate. A missing rules engine and an unset CDISC_API_KEY are warnings only, because CI installs no engine. Exit 1 on any failure, else 0.
+CI gate: parse the study config, check each define.yaml against its schema, check codelists.py against ct.package, ct.adam_package and the define.yaml files, build the validation run setup for SDTM and ADaM with no datasets, and check each custom rule YAML. An unsupported sdtm.ig_version or adam.ig_version and a configured validation.custom_rules directory that does not exist fail the gate. A missing rules engine and an unset CDISC_API_KEY are warnings only, because CI installs no engine. Exit 1 on any failure, else 0.
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
@@ -176,10 +178,12 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | ------ | ------- | ----------- |
 | `--domains` | _(none)_ | Comma-separated SDTM domains (e.g. DM,AE,VS,EX). |
 | `--adam-datasets` | _(none)_ | Comma-separated ADaM datasets (e.g. ADSL,ADVS,ADAE). |
-| `--company` | _(none)_ | Originator / company name. |
+| `--company` | _(none)_ | Originator / company name (study.originator in define.yaml). |
+| `--description` | _(none)_ | Study description (study.description in define.yaml). |
 | `--ig` | `3-4` | SDTM IG version (default: 3-4). |
 | `--adam-ig` | `1-3` | ADaM IG version (default: 1-3). |
-| `--package` | `sdtmct-2023-12-15` | CT package version (default: sdtmct-2023-12-15). |
+| `--package` | `sdtmct-2023-12-15` | SDTM CT package version (default: sdtmct-2023-12-15). |
+| `--adam-package` | _(none)_ | ADaM CT package, for the codelists only ADaM CT holds (DTYPE). Default with ADaM datasets: adamct-2023-06-30, the latest on or before the default SDTM package; required with another --package. |
 | `--root` / `-r` | `.` | Study root directory (default: current directory). |
 | `--yes` / `-y` | _(none)_ | Skip the confirmation prompt. |
 

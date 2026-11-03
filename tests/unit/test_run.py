@@ -363,6 +363,53 @@ class TestPinnedInputs:
         assert ae["AGE"].to_list() == [60]  # P2's age, from the DM built one step earlier
 
 
+class TestRawPaths:
+    """c1-288: a raw input with ``path:`` is read from the study root, by the DAG and the run."""
+
+    def test_one_define_drives_the_dag_and_the_run(self, ctx: StudyContext) -> None:
+        from fleet.core.dag import build_dag
+
+        raw = ctx.study_root / "data" / "raw"
+        raw.mkdir(parents=True)
+        DM_RAW.write_csv(raw / "dm_raw.csv")
+
+        dag = build_dag(
+            ctx.metadata_sdtm_dir / "define.yaml", ctx.metadata_adam_dir / "define.yaml"
+        )
+        built = list(run_study(plan_study(ctx)))
+
+        assert dag.impacted_by("dm_raw") == ["dm_raw", "DM", "ADSL"]
+        assert dag.nodes["dm_raw"].path == "data/raw/dm_raw.csv"
+        assert built[0].inputs["dm_raw"].path == raw / "dm_raw.csv"
+        assert built[-1].frame["USUBJID"].to_list() == ["P1", "P2"]
+
+    def test_raw_and_dataset_inputs_keep_the_raw_records(self, tmp_path: Path) -> None:
+        ae = _AE_WITH_MERGE.replace(
+            "      - name: ae_raw\n        type: raw\n",
+            "      - name: ae_raw\n        type: raw\n        path: data/raw/ae_raw.csv\n",
+        )
+        ctx = _write_study(tmp_path, sdtm=_DM + ae, adam=None)
+        raw = tmp_path / "data" / "raw"
+        raw.mkdir(parents=True)
+        DM_RAW.write_csv(raw / "dm_raw.csv")
+        pl.from_repr("""\
+┌────────────────┬──────────┐
+│ patient_number ┆ term     │
+│ ---            ┆ ---      │
+│ str            ┆ str      │
+╞════════════════╪══════════╡
+│ P1             ┆ HEADACHE │
+│ P1             ┆ NAUSEA   │
+│ P1             ┆ RASH     │
+└────────────────┴──────────┘
+""").write_csv(raw / "ae_raw.csv")
+
+        ae_built = list(run_study(plan_study(ctx)))[-1]
+
+        assert ae_built.frame["AETERM"].to_list() == ["HEADACHE", "NAUSEA", "RASH"]
+        assert ae_built.frame["AGE"].to_list() == [45, 45, 45]
+
+
 class TestPlanRefusals:
     def test_a_dataset_without_inputs_is_refused_only_when_it_is_planned(
         self, tmp_path: Path
