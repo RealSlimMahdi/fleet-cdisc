@@ -260,14 +260,16 @@ Many CDISC derivations require data from sibling domains — SDTM study day need
 # Build DM first
 dm = dm_raw.sdtm.assign("DOMAIN", value="DM").to_frame()  # ...plus the rest of DM
 
-# Pin DM to the AE pipeline — verbs can now resolve RFSTDTC
-ae = (
-    ae_raw.sdtm.assign("DOMAIN", value="AE")
+# Pin DM to the VS pipeline — verbs can now resolve RFSTDTC
+vs = (
+    vs_raw.sdtm.assign("DOMAIN", value="VS")
     .assign("USUBJID", source="patient_number")
-    .date("AESTDTC", source="ae_start_date")
+    .assign("VSTESTCD", source="vs_test_code")
+    .assign("VSORRES", source="vs_result")
+    .date("VSDTC", source="vs_date")
     .pin("DM", dm)  # ← attach reference (join_on="USUBJID" by default)
-    .study_day("AESTDY", date_col="AESTDTC")  # ← consumes the pin
-    .baseline_flag("AEBLFL", date_col="AESTDTC")  # ← also consumes it
+    .study_day("VSDY", date_col="VSDTC")  # ← consumes the pin
+    .baseline_flag("VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD")  # ← also consumes it
     .to_frame()
 )
 ```
@@ -278,7 +280,7 @@ up RFSTDTC in the pinned DM, joined on the pin's key". Spelled out in full,
 the call above is:
 
 ```python
-ae_ns.study_day("AESTDY", date_col="AESTDTC", ref_pin="DM", ref_col="RFSTDTC")
+vs_ns.study_day("VSDY", date_col="VSDTC", ref_pin="DM", ref_col="RFSTDTC")
 ```
 
 On ADaM namespaces the same defaults become `ref_pin="ADSL"` /

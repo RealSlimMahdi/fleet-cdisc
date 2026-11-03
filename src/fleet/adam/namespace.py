@@ -498,21 +498,32 @@ class AdamNamespace(SharedADaMVerbsMixin):
         qt: str = "QT",
         rr: str = "RR",
         method: str = "Fridericia",
+        rr_unit: str = "ms",
     ) -> AdamNamespace:
-        """Derive corrected QT interval.
+        """Derive corrected QT interval, as admiral ``compute_qtc``.
 
         Args:
             target: Name of the output column (default ``"QTC"``).
-            qt: QT interval column.
-            rr: RR interval column.
+            qt: QT interval column, in ms.
+            rr: RR interval column, in *rr_unit*.
             method: Correction formula — ``"Fridericia"`` (default) or
                 ``"Bazett"``.
+            rr_unit: Unit of *rr*: ``"ms"`` (default) or ``"msec"``, or
+                ``"s"`` or ``"sec"``.
 
         Returns:
             AdamNamespace: The namespace with *target* appended.
 
+        Raises:
+            DerivationError: When *rr_unit* is unknown, or a value cannot be
+                in its unit: an RR under 10 in ms, an RR of 10 or more in
+                seconds, or a QT under 10 ms.
+
+        References:
+            admiral ``compute_qtc`` (pharmaverse): RR in ms, QT in ms.
+
         Examples:
-            Derive QTcF from QT and RR::
+            Derive QTcF from QT and RR, both in ms::
 
                 adeg = (
                     eg_raw.adam
@@ -520,7 +531,31 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        return self._chain(_qtc_expr(qt=qt, rr=rr, method=method, target=target), verb="qtc")
+        expr = _qtc_expr(qt=qt, rr=rr, method=method, target=target, rr_unit=rr_unit)
+        schema_names = self._lazy.collect_schema().names()
+        if qt in schema_names and rr in schema_names:
+            seconds = rr_unit.lower() in ("s", "sec")
+            rr_num = pl.col(rr).cast(pl.Float64, strict=False)
+            bad_rr = rr_num >= 10 if seconds else rr_num < 10
+            counts = (
+                self._lazy.select(
+                    bad_rr.sum().alias("rr"),
+                    (pl.col(qt).cast(pl.Float64, strict=False) < 10).sum().alias("qt"),
+                )
+                .collect()
+                .row(0)
+            )
+            if counts[0]:
+                raise DerivationError(
+                    f"qtc('{target}'): {counts[0]} {rr} value(s) cannot be in "
+                    f"rr_unit={rr_unit!r} (RR in ms is 10 or more; in seconds it is under 10). "
+                    "State the unit of the data with rr_unit=."
+                )
+            if counts[1]:
+                raise DerivationError(
+                    f"qtc('{target}'): {counts[1]} {qt} value(s) are under 10. QT must be in ms."
+                )
+        return self._chain(expr, verb="qtc")
 
     # ------------------------------------------------------------------ #
     # 20. derive_summary_records — aggregate and append new rows          #

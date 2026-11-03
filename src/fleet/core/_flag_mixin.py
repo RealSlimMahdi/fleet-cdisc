@@ -133,9 +133,13 @@ class FlagCriterionMixin:
                 ``"exists_before"``.
             by: Partition columns (default ``["USUBJID"]``).
             order_by: Sort column(s) required for ``"first"``/``"last"``
-                and ``"before"``/``"after"``.
+                and ``"before"``/``"after"``.  On a tie among candidates,
+                ``"last"`` takes the last input record and ``"first"`` the
+                first (SAS ``LAST.``/``FIRST.``); add a sequence variable
+                to remove the dependence on input order.
             value_col: Value column required for ``"max"``/``"min"``.
-            where: Optional pre-filter — only matching rows are candidates.
+            where: Optional pre-filter — only matching rows are candidates;
+                rows that fail it take no part, even on a tie.
             from_dataset: External dataset(s) for ``"exists"`` and
                 ``"exists_after"``/``"exists_before"`` criteria.
             on: Join key columns for ``"exists"`` criteria.
@@ -329,6 +333,7 @@ class FlagCriterionMixin:
         Args:
             target: Name of the output flag column.
             order_by: Sort column(s) defining "first" within each group.
+                A tie goes to the first input record.
             by: Partition columns (default ``["USUBJID"]``).
             where: Optional pre-filter — only matching rows are candidates.
             flag_all: Flag every tied extreme record instead of one.
@@ -376,6 +381,7 @@ class FlagCriterionMixin:
         Args:
             target: Name of the output flag column.
             order_by: Sort column(s) defining "last" within each group.
+                A tie goes to the last input record.
             by: Partition columns (default ``["USUBJID"]``).
             where: Optional pre-filter — only matching rows are candidates.
             flag_all: Flag every tied extreme record instead of one.
@@ -625,28 +631,28 @@ class FlagCriterionMixin:
             raise DerivationError(f"flag criteria='{criteria_lower}' requires order_by.")
         descending = criteria_lower == "last"
         null_mask = pl.all_horizontal([pl.col(c).is_not_null() for c in order_cols])
+        eligible = null_mask if where_expr is None else (where_expr & null_mask)
 
         if flag_all:
             if len(order_cols) == 1:
                 val_expr = pl.col(order_cols[0])
             else:
                 val_expr = pl.struct(order_cols)
-            extreme = val_expr.max().over(grps) if descending else val_expr.min().over(grps)
-            row_cond = null_mask & (val_expr == extreme)
-            if where_expr is not None:
-                row_cond = where_expr & row_cond
+            candidate = pl.when(eligible).then(val_expr)
+            extreme = candidate.max().over(grps) if descending else candidate.min().over(grps)
+            row_cond = eligible & (val_expr == extreme)
             expr = pl.when(row_cond).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
             return self._chain(expr, verb="flag")
 
-        eligible = null_mask if where_expr is None else (where_expr & null_mask)
-        rank = pl.int_range(pl.len()).over(
+        # Records that fail `where` take no part; a tie goes to the last (first) input row.
+        position = pl.int_range(pl.len())
+        winner = pl.when(eligible).then(position).otherwise(None).min()
+        row_cond = ((position == winner) & eligible).over(
             grps,
-            order_by=[pl.col(c) for c in order_cols],
+            order_by=[*(pl.col(c) for c in order_cols), pl.int_range(pl.len()).alias("__flag_tie")],
             descending=descending,
             nulls_last=True,
         )
-        winner = pl.when(eligible).then(rank).otherwise(None).min().over(grps)
-        row_cond = eligible & (rank == winner)
         expr = pl.when(row_cond).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
         return self._chain(expr, verb="flag")
 

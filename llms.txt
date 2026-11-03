@@ -1815,7 +1815,7 @@ Available on `df.adam` (BDS base namespace). Shared verbs (source, assign, case_
 - `bmi(target: str, *, weight: str, height: str) -> AdamNamespace` — Derive Body Mass Index: ``weight_kg / (height_cm / 100) ** 2``.
 - `bsa(target: str, *, weight: str, height: str, method: str = 'Mosteller') -> AdamNamespace` — Derive Body Surface Area in m².
 - `map(target: str = 'MAP', *, systolic: str = 'SYSBP', diastolic: str = 'DIABP') -> AdamNamespace` — Derive Mean Arterial Pressure: ``DBP + (SBP - DBP) / 3``.
-- `qtc(target: str = 'QTC', *, qt: str = 'QT', rr: str = 'RR', method: str = 'Fridericia') -> AdamNamespace` — Derive corrected QT interval.
+- `qtc(target: str = 'QTC', *, qt: str = 'QT', rr: str = 'RR', method: str = 'Fridericia', rr_unit: str = 'ms') -> AdamNamespace` — Derive corrected QT interval, as admiral ``compute_qtc``.
 - `nrind(target: str, *, value: str, low: str, high: str) -> AdamNamespace` — Categorise *value* relative to normal range: LOW / NORMAL / HIGH.
 - `on_treatment(target: str = 'ONTRTFL', *, adt: str, trtsdt: str, trtedt: str, open_ended: bool = True) -> AdamNamespace` — Set *target* to ``"Y"`` when *adt* is within [trtsdt, trtedt].
 - `shift(target: str, *, baseline_cat: str, post_cat: str, sep: str = ' to ') -> AdamNamespace` — Derive a categorical shift label: ``"<baseline><sep><post>"``.

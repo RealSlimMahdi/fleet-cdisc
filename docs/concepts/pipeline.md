@@ -125,7 +125,7 @@ This means you pay no cost for columns you don't chain. Expression ordering mirr
 | `shift(target, baseline_cat, post_cat)`     | Categorical shift string                  |
 | `bsa(target, weight, height, method)`       | Body Surface Area (4 methods)             |
 | `map(target, systolic, diastolic)`          | Mean Arterial Pressure                    |
-| `qtc(target, qt, rr, method)`               | Corrected QT interval (Fridericia/Bazett) |
+| `qtc(target, qt, rr, method, rr_unit)`      | Corrected QT (QT in ms, RR in ms by default) |
 | `derive_summary_records(by_vars, ...)`      | Aggregate by group, append summary rows   |
 | `derive_locf_records(by_vars, ...)`         | Forward-fill (LOCF) within patient groups |
 | `derive_param(by_vars, ...)`                | Derive a new parameter and append as rows |

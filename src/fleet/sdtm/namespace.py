@@ -452,17 +452,27 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         ref_pin: str = "DM",
         dm: pl.DataFrame | None = None,
         by: list[str] | None = None,
+        result_col: str | None = None,
+        order_by: str | list[str] | None = None,
     ) -> SDTMNamespace:
-        """Flag the last observation before the reference date as baseline.
+        """Flag the last observation with a result before the reference date as baseline.
 
-        Sets *target* to ``"Y"`` for the last record (per subject and
-        optional grouping variables) strictly before the reference
-        date/time, and ``null`` for all other records.  A record on the
-        reference date is eligible only when it and the reference both
-        have a time and the record time is earlier; a record on that date
-        with no time is not eligible, because it may follow the dose
-        (SDTMIG "prior to"; sdtm.oak ``derive_blfl``).  Among eligible
-        records the latest date, then the latest time, wins.
+        Sets *target* to ``"Y"`` for one record (per subject and optional
+        grouping variables): the last record with a result strictly before
+        the reference date/time, and ``null`` for all other records.  A
+        record on the reference date is eligible only when it and the
+        reference both have a time and the record time is earlier; a record
+        on that date with no time is not eligible, because it may follow
+        the dose (SDTMIG "prior to"; sdtm.oak ``derive_blfl``).  Among
+        eligible records the latest date, then the latest time, wins.
+
+        A record has a result when *result_col* is not null or blank and
+        ``--STAT`` (when present) is not ``"NOT DONE"``.  When ``--ORRES`` is
+        present and is not *result_col*, it must hold a value too, unless
+        ``--DRVFL`` is ``"Y"`` (CG0553).  A tie on the last date and time
+        goes to the last record by *order_by*, then input order, as SAS
+        ``LAST.`` after PROC SORT; with no *order_by* the tie is broken by
+        ``--SEQ`` (when present) and a warning names the groups.
 
         Args:
             target: Name of the output flag variable
@@ -477,11 +487,24 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                 (default ``"DM"``).
             dm: Optional explicit DataFrame override.
             by: Additional grouping columns beyond USUBJID and
-                *testcd_col*.
+                *testcd_col*, such as ``--CAT``, ``--SCAT``, ``--SPEC`` and
+                ``--METHOD``.
+            result_col: Result column (default ``--STRESC`` when present,
+                else ``--ORRES``; the prefix comes from *target*).
+            order_by: Column(s) that break a tie on the last date and time
+                (default ``--SEQ`` when present).
 
         Returns:
             SDTMNamespace: The namespace with *target* appended; call
                 ``.to_frame()`` to materialise.
+
+        Raises:
+            DerivationError: When no result column is found or named.
+
+        References:
+            SDTMIG 3.4, ``--LOBXFL``: the last non-missing value prior to
+            RFXSTDTC; CDISC CORE FB2603/FB2604 (one flag per group);
+            admiral ``ad_advs.R`` order (ADT, VISITNUM, VSSEQ).
 
         Examples:
             Flag baseline vital signs::
@@ -491,6 +514,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                     .assign("DOMAIN", value="VS")
                     .assign("USUBJID", source="patient_number")
                     .assign("VSTESTCD", source="vstestcd")
+                    .assign("VSORRES", source="vsresult")
                     .date("VSDTC", source="vs_date")
                     .pin("DM", dm_df)
                     .baseline_flag("VSBLFL", date_col="VSDTC",
@@ -498,9 +522,28 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                     .to_frame()
                 )
         """
+        import warnings
+
         from fleet.core.lineage import record_pin_lineage
 
         df = self._lazy.collect()
+
+        prefix = next(
+            (target[: -len(s)] for s in ("LOBXFL", "BLFL") if target.endswith(s) and target != s),
+            target[:2],
+        )
+        if result_col is None:
+            candidates = (f"{prefix}STRESC", f"{prefix}ORRES")
+            result_col = next((c for c in candidates if c in df.columns), None)
+            if result_col is None:
+                raise DerivationError(
+                    f"baseline_flag('{target}'): neither {candidates[0]} nor {candidates[1]} "
+                    "is in the frame. Name the result column with result_col=."
+                )
+        elif result_col not in df.columns:
+            raise DerivationError(
+                f"baseline_flag('{target}'): result_col={result_col!r} is not in the frame."
+            )
 
         # Resolve reference date
         if dm is not None:
@@ -545,21 +588,56 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
 
         day, time = day_and_time(date_col)
         ref_day, ref_time = day_and_time(ref_col_name)
-        eligible = (day < ref_day) | ((day == ref_day) & (time < ref_time))
+        before_ref = (day < ref_day) | ((day == ref_day) & (time < ref_time))
+
+        has_result = pl.col(result_col).is_not_null()
+        if df.schema[result_col] == pl.String:
+            has_result = has_result & (pl.col(result_col).str.strip_chars() != "")
+        stat_col, orres_col, drvfl_col = f"{prefix}STAT", f"{prefix}ORRES", f"{prefix}DRVFL"
+        if stat_col in df.columns:
+            has_result = has_result & (pl.col(stat_col).fill_null("") != "NOT DONE")
+        if orres_col in df.columns and orres_col != result_col:
+            orres_ok = pl.col(orres_col).cast(pl.String).str.strip_chars().fill_null("") != ""
+            if drvfl_col in df.columns:
+                orres_ok = orres_ok | (pl.col(drvfl_col).fill_null("") == "Y")
+            has_result = has_result & orres_ok
+
+        eligible = before_ref.fill_null(False) & has_result.fill_null(False)
         key = pl.coalesce(time, day.cast(pl.Datetime("us")))
-        df = df.with_columns(
-            pl.when(eligible.fill_null(False)).then(key).alias("__bl_key__"),
-        ).with_columns(pl.col("__bl_key__").max().over(grp_keys).alias("__bl_max__"))
+        df = df.with_row_index("__bl_row__").with_columns(
+            pl.when(eligible).then(key).alias("__bl_key__"),
+        )
+
+        if order_by is not None:
+            tie_cols = [order_by] if isinstance(order_by, str) else list(order_by)
+        else:
+            tie_cols = [c for c in (f"{prefix}SEQ",) if c in df.columns]
+        last_day = (
+            df.filter(pl.col("__bl_key__").is_not_null())
+            .filter(pl.col("__bl_key__") == pl.col("__bl_key__").max().over(grp_keys))
+            .sort(["__bl_key__", *tie_cols, "__bl_row__"], descending=True, nulls_last=True)
+            .group_by(grp_keys, maintain_order=True)
+            .agg(pl.col("__bl_row__").first().alias("__bl_win__"), pl.len().alias("__bl_n__"))
+        )
+        n_ties = last_day.filter(pl.col("__bl_n__") > 1).height
+        if n_ties and order_by is None:
+            rule = f"the last {tie_cols[0]}" if tie_cols else "the last input record"
+            warnings.warn(
+                f"baseline_flag('{target}'): {n_ties} group(s) have more than one record with a "
+                f"result on the last date and time before the reference. The flag goes to "
+                f"{rule}; pass order_by= to state the SAP rule.",
+                stacklevel=2,
+            )
 
         df = df.with_columns(
-            pl.when(pl.col("__bl_key__") == pl.col("__bl_max__"))
+            pl.when(pl.col("__bl_row__").is_in(last_day["__bl_win__"]))
             .then(pl.lit("Y"))
             .otherwise(pl.lit(None, dtype=pl.String))
             .alias(target)
         )
 
         # Clean up temp columns
-        drop_cols = ["__bl_key__", "__bl_max__"]
+        drop_cols = ["__bl_row__", "__bl_key__"]
         if ref_df is not None:
             drop_cols.append(_ref_tmp)
         df = df.drop([c for c in drop_cols if c in df.columns])
@@ -574,7 +652,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
             _VN(
                 name=target,
                 verb="baseline_flag",
-                sources=[date_col, ref_col],
+                sources=[date_col, ref_col, result_col],
                 method="fleet.sdtm.namespace.SDTMNamespace.baseline_flag",
                 domain=getattr(new, "_domain", None),
             )
