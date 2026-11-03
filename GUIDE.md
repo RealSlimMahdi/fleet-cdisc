@@ -1061,14 +1061,14 @@ template to the open registry. These are also the composition points for the
 
 ### Filters: `adsl_filter` vs `dataset_filter`
 
-Two filter fields keep denominators separate from analysis subsets:
+Two filter fields keep the population separate from analysis subsets:
 
-| Field            | Applied to      | Example                          |
-| ---------------- | --------------- | -------------------------------- |
-| `adsl_filter`    | ADSL only (N)   | `pl.col("SAFFL") == "Y"`         |
-| `dataset_filter` | Primary dataset | `pl.col("PARAMCD") == "ALBUMIN"` |
+| Field            | Applied to                                    | Example                          |
+| ---------------- | --------------------------------------------- | -------------------------------- |
+| `adsl_filter`    | ADSL (N), then the analysis records of its subjects (n) | `pl.col("SAFFL") == "Y"`         |
+| `dataset_filter` | Primary dataset                               | `pl.col("PARAMCD") == "ALBUMIN"` |
 
-Both default to `None` (no filter). Neither propagates to the other.
+Both default to `None` (no filter). The population filter selects subjects, so a record of a subject outside it is not counted (ADR-0016). The dataset filter does not change the big N.
 
 ### Header rows (`OverallStat`)
 

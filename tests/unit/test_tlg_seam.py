@@ -171,7 +171,10 @@ class TestCompositesSharePreparation:
         │ S01     ┆ Placebo ┆ ALT     ┆ WEEK 4 ┆ null  ┆ NORMAL ┆ NORMAL │
         └─────────┴─────────┴─────────┴────────┴───────┴────────┴────────┘
         """)
-        spec = LBShiftSpec(dataset_filter='pl.col("AVISIT") == "WEEK 4"')
+        spec = LBShiftSpec(
+            dataset_filter='pl.col("AVISIT") == "WEEK 4"',
+            prefilter='pl.col("ABLFL").ne_missing("Y")',
+        )
         ard = adlb.tlg.lb.t_shift(groupby="TRTA", adsl=ADSL, spec=spec)
         assert _levels(ard, "SHIFT") == {"NORMAL to NORMAL"}
 
@@ -208,11 +211,11 @@ class TestBuilderVerbs:
 
 
 def test_worst_case_never_keeps_a_null_over_a_value() -> None:
-    """A null outranks nothing, not even a value outside the clinical order."""
+    """A null outranks nothing, not even the least severe value."""
     from fleet.tlg._ard import worst_case
 
-    adae = pl.DataFrame({"USUBJID": ["S1", "S1"], "AESEV": [None, "UNKNOWN"]})
+    adae = pl.DataFrame({"USUBJID": ["S1", "S1"], "AESEV": [None, "MILD"]})
 
     kept = worst_case(adae, by=["USUBJID"], order_col="AESEV", order=["MILD", "SEVERE"])
 
-    assert kept["AESEV"].to_list() == ["UNKNOWN"]
+    assert kept["AESEV"].to_list() == ["MILD"]

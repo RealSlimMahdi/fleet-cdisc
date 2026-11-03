@@ -847,20 +847,20 @@ class TestBuilderAPI:
 def advs() -> pl.DataFrame:
     """Minimal ADVS-like DataFrame for VS summary tests."""
     return pl.from_repr("""\
-┌─────────┬─────────┬─────────┬───────┐
-│ USUBJID ┆ TRTA    ┆ PARAMCD ┆ AVAL  │
-│ ---     ┆ ---     ┆ ---     ┆ ---   │
-│ str     ┆ str     ┆ str     ┆ f64   │
-╞═════════╪═════════╪═════════╪═══════╡
-│ SUBJ-01 ┆ Placebo ┆ SYSBP   ┆ 120.0 │
-│ SUBJ-01 ┆ Placebo ┆ DIABP   ┆ 80.0  │
-│ SUBJ-02 ┆ Placebo ┆ SYSBP   ┆ 130.0 │
-│ SUBJ-02 ┆ Placebo ┆ DIABP   ┆ 85.0  │
-│ SUBJ-03 ┆ Drug A  ┆ SYSBP   ┆ 115.0 │
-│ SUBJ-03 ┆ Drug A  ┆ DIABP   ┆ 75.0  │
-│ SUBJ-04 ┆ Drug A  ┆ SYSBP   ┆ 125.0 │
-│ SUBJ-04 ┆ Drug A  ┆ DIABP   ┆ 78.0  │
-└─────────┴─────────┴─────────┴───────┘
+┌─────────┬─────────┬─────────┬────────┬───────┐
+│ USUBJID ┆ TRTA    ┆ PARAMCD ┆ AVISIT ┆ AVAL  │
+│ ---     ┆ ---     ┆ ---     ┆ ---    ┆ ---   │
+│ str     ┆ str     ┆ str     ┆ str    ┆ f64   │
+╞═════════╪═════════╪═════════╪════════╪═══════╡
+│ SUBJ-01 ┆ Placebo ┆ SYSBP   ┆ WEEK 2 ┆ 120.0 │
+│ SUBJ-01 ┆ Placebo ┆ DIABP   ┆ WEEK 2 ┆ 80.0  │
+│ SUBJ-02 ┆ Placebo ┆ SYSBP   ┆ WEEK 2 ┆ 130.0 │
+│ SUBJ-02 ┆ Placebo ┆ DIABP   ┆ WEEK 2 ┆ 85.0  │
+│ SUBJ-03 ┆ Drug A  ┆ SYSBP   ┆ WEEK 2 ┆ 115.0 │
+│ SUBJ-03 ┆ Drug A  ┆ DIABP   ┆ WEEK 2 ┆ 75.0  │
+│ SUBJ-04 ┆ Drug A  ┆ SYSBP   ┆ WEEK 2 ┆ 125.0 │
+│ SUBJ-04 ┆ Drug A  ┆ DIABP   ┆ WEEK 2 ┆ 78.0  │
+└─────────┴─────────┴─────────┴────────┴───────┘
 """)
 
 

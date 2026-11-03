@@ -21,7 +21,9 @@ Polars adaptation notes vs. R {cards}:
 
 from __future__ import annotations
 
+import logging
 import math
+import warnings
 from collections.abc import Sequence
 from typing import Any
 
@@ -37,6 +39,8 @@ from ._specs import (
     SummarySpecBase,
     resolve_filter,
 )
+
+logger = logging.getLogger("fleet")
 
 # ------------------------------------------------------------------ #
 # Canonical ARD schema (aligned with {cards})                          #
@@ -421,6 +425,94 @@ def compute_big_n(
     return dict(zip(counts[group_col].to_list(), counts["N"].to_list()))
 
 
+def restrict_to_population(
+    df: pl.DataFrame,
+    adsl: pl.DataFrame,
+    adsl_filter: Any | None = None,
+) -> pl.DataFrame:
+    """Keep only the analysis records of subjects in the filtered ADSL.
+
+    The population filter defines the denominator, so it must define the
+    numerator too: a record of a subject outside the population would
+    count in n but not in N (a percentage above 100 at worst).  The ADaM
+    IG population flags (SAFFL, ITTFL) select subjects, and the SAS idiom
+    is ``where saffl = 'Y'`` on both ADSL and the analysis dataset
+    (ADR-0016).
+
+    Records of subjects in ADSL but outside the filter are dropped with
+    an INFO note on the ``fleet`` logger.  Records whose subject is not
+    in ADSL at all (or whose ``USUBJID`` is null) are dropped with a
+    ``UserWarning``: that is a data issue, not a population choice.
+
+    Args:
+        df: The analysis dataset.
+        adsl: The population source.
+        adsl_filter: The population filter (``pl.Expr`` or string);
+            ``None`` keeps every ADSL subject.
+
+    Returns:
+        pl.DataFrame: *df* without the records outside the population.
+
+    References:
+        ADaM IG v1.3, ADSL subject-level population flags; ADR-0016.
+
+    Examples:
+        ``restrict_to_population(adae, adsl, 'pl.col("SAFFL") == "Y"')``
+    """
+    all_ids = adsl["USUBJID"].drop_nulls().unique()
+    filter_expr = resolve_filter(adsl_filter)
+    pop_ids = adsl.filter(filter_expr)["USUBJID"] if filter_expr is not None else all_ids
+    in_adsl = pl.col("USUBJID").is_in(all_ids.implode())
+    in_pop = pl.col("USUBJID").is_in(pop_ids.drop_nulls().unique().implode())
+
+    absent = df.filter(~in_adsl.fill_null(False))
+    if absent.height:
+        ids = absent["USUBJID"].unique(maintain_order=True)
+        warnings.warn(
+            f"{ids.len()} subject(s) ({absent.height} record(s)) in the analysis "
+            f"dataset are not in ADSL and are left out: {ids.head(5).to_list()}. "
+            "Check USUBJID between the datasets.",
+            UserWarning,
+            stacklevel=3,
+        )
+    outside = df.filter(in_adsl.fill_null(False) & ~in_pop)
+    if outside.height:
+        logger.info(
+            "NOTE: %d subject(s) (%d record(s)) outside the population "
+            "(adsl_filter) are left out of the counts.",
+            outside["USUBJID"].n_unique(),
+            outside.height,
+        )
+    return df.filter(in_pop.fill_null(False))
+
+
+def _quantile_qntldef5(col: pl.Expr, p: float) -> pl.Expr:
+    """Quantile by SAS QNTLDEF=5 (PROC UNIVARIATE / PROC MEANS default).
+
+    Sort the non-missing values x(1) <= ... <= x(n).  With n*p = j + g
+    (j the integer part): when g > 0 the quantile is x(j+1); when g = 0
+    it is the mean of x(j) and x(j+1).  This equals R ``quantile(type =
+    2)``.  Polars' own ``quantile`` uses another definition.
+
+    References:
+        SAS PROC UNIVARIATE, "Calculating Percentiles", PCTLDEF=5.
+    """
+    x = col.drop_nulls().sort()
+    n = x.len()
+    np_ = n.cast(pl.Float64) * p
+    j = np_.floor().cast(pl.Int64)
+    upper = x.get(j.clip(upper_bound=(n - 1).clip(lower_bound=0)), null_on_oob=True)
+    lower = x.get((j - 1).clip(lower_bound=0), null_on_oob=True)
+    return (
+        pl.when(n == 0)
+        .then(None)
+        .when(np_ > j)
+        .then(upper)
+        .otherwise((lower + upper) / 2)
+        .cast(pl.Float64)
+    )
+
+
 # ------------------------------------------------------------------ #
 # Shared TLG computation helpers                                       #
 # ------------------------------------------------------------------ #
@@ -457,15 +549,15 @@ def worst_case(
     by: Sequence[str],
     order_col: str,
     order: Sequence[str],
+    order_field: str = "order",
 ) -> pl.DataFrame:
     """Reduce to one record per *by* group, keeping the worst *order_col*.
 
     Implements the GDSR "counted once at greatest intensity / highest
     grade" rule: within each group the record whose *order_col* value
-    ranks highest in *order* survives.  Values not present in *order*
-    rank below everything (they survive only when the group has no
-    ranked value); ties break deterministically on *order_col* then the
-    original sort.
+    ranks highest in *order* survives.  A null or blank value ranks
+    below everything (it survives only when the group has no ranked
+    value); ties keep the original record order.
 
     Args:
         df: The analysis DataFrame.
@@ -473,19 +565,38 @@ def worst_case(
         order_col: Column holding the severity/grade value.
         order: Values from least to most severe (explicit clinical rank —
             never alphabetical).
+        order_field: Name of the spec field that holds *order*, shown in
+            the error message (e.g. ``"relationship_order"``).
 
     Returns:
         pl.DataFrame: One row per group at the worst level.
+
+    Raises:
+        SchemaError: If a non-blank *order_col* value is not in *order*.
+            Ranking it below every listed value would let a sponsor term
+            ("POSSIBLY RELATED") lose against "N" without a sign.
     """
     rank_map = {value: idx for idx, value in enumerate(order)}
+    as_text = pl.col(order_col).cast(pl.Utf8)
+    unknown = (
+        df.select(as_text.alias("__v"))
+        .filter(pl.col("__v").str.strip_chars() != "")
+        .filter(~pl.col("__v").is_in(list(order)))
+        .unique()
+        .sort("__v")["__v"]
+        .to_list()
+    )
+    if unknown:
+        raise SchemaError(
+            f"{order_col} has values {unknown} that are not in {order_field} "
+            f"{list(order)}. Set {order_field} in the spec to the study's "
+            "terms, from least to most severe."
+        )
     ranked = df.with_columns(
-        pl.col(order_col)
-        .cast(pl.Utf8)
-        .replace_strict(rank_map, default=-1, return_dtype=pl.Int32)
-        .alias("__worst_rank")
+        as_text.replace_strict(rank_map, default=-1, return_dtype=pl.Int32).alias("__worst_rank")
     )
     return (
-        ranked.sort(["__worst_rank", order_col], descending=[True, False], nulls_last=True)
+        ranked.sort("__worst_rank", descending=True, nulls_last=True, maintain_order=True)
         .unique(subset=list(by), keep="first", maintain_order=True)
         .drop("__worst_rank")
     )
@@ -497,6 +608,7 @@ def compute_stat(
     arm_n: int,
     *,
     value_col: str = "AVAL",
+    count_values: bool = False,
 ) -> tuple[str, str, float | int | str | None]:
     """Compute a single statistic for a subset of data.
 
@@ -509,11 +621,15 @@ def compute_stat(
         level_df: Filtered DataFrame for this analysis level.
         arm_n: Big-N denominator for the arm.
         value_col: Analysis-value column for continuous statistics.
+        count_values: When ``True`` (a continuous summary), ``n`` is the
+            count of non-missing *value_col* values, as PROC MEANS N.
 
     Returns:
         Tuple of (stat_name, stat_label, stat_value).
     """
     if stat_type == Statistic.N_SUBJECTS:
+        if count_values and value_col in level_df.columns:
+            return ("n", "n", level_df[value_col].count())
         n = level_df["USUBJID"].n_unique() if len(level_df) > 0 else 0
         return ("n", "n", n)
     if stat_type == Statistic.N_EVENTS:
@@ -539,9 +655,8 @@ def compute_stat(
         return (*meta, values.min())
     if stat_type == Statistic.MAX:
         return (*meta, values.max())
-    if stat_type == Statistic.Q1:
-        return (*meta, values.quantile(0.25))
-    return (*meta, values.quantile(0.75))
+    p = 0.25 if stat_type == Statistic.Q1 else 0.75
+    return (*meta, level_df.select(_quantile_qntldef5(pl.col(value_col), p)).item())
 
 
 def ard_row(
@@ -674,8 +789,8 @@ def _cont_stat_exprs(value_col: str) -> dict[Statistic, pl.Expr]:
         Statistic.MEDIAN: col.median(),
         Statistic.MIN: col.min(),
         Statistic.MAX: col.max(),
-        Statistic.Q1: col.quantile(0.25),
-        Statistic.Q3: col.quantile(0.75),
+        Statistic.Q1: _quantile_qntldef5(col, 0.25),
+        Statistic.Q3: _quantile_qntldef5(col, 0.75),
     }
 
 
@@ -735,6 +850,7 @@ def _level_rows(
     value_col: str = "AVAL",
     field_labels: dict[str, str] | None = None,
     fmt_overrides: dict[str, str] | None = None,
+    count_values: bool = False,
 ) -> list[dict[str, Any]]:
     """Stats per arm × level combination of *fields*, with explicit zero cells.
 
@@ -743,6 +859,11 @@ def _level_rows(
     rows instead of silently missing.  For two or more fields the last
     field is the ``variable`` and its immediate parent goes to
     ``group2`` / ``group2_level``.
+
+    With *count_values* (a continuous summary) ``n`` follows PROC MEANS:
+    at a level with continuous statistics it is the count of non-missing
+    *value_col* values; at a parent level it is the count of subjects
+    with a non-missing value.
     """
     # Deduplicate for select/group_by: a row field may repeat or equal
     # group_col (e.g. a per-arm breakdown) — the lookup tuples below are
@@ -754,7 +875,13 @@ def _level_rows(
 
     fmt_overrides = fmt_overrides or {}
     has_value_col = value_col in frame.columns
-    aggs = [pl.col("USUBJID").n_unique().alias("__n"), pl.len().alias("__n_events")]
+    n_expr = pl.col("USUBJID").n_unique()
+    if count_values and has_value_col:
+        if any(s in _CONT_STAT_META for s in stats):
+            n_expr = pl.col(value_col).count()
+        else:
+            n_expr = pl.col("USUBJID").filter(pl.col(value_col).is_not_null()).n_unique()
+    aggs = [n_expr.alias("__n"), pl.len().alias("__n_events")]
     if has_value_col:
         cont_exprs = _cont_stat_exprs(value_col)
         aggs += [cont_exprs[s].alias(f"__{s.value}") for s in stats if s in cont_exprs]
@@ -835,9 +962,12 @@ def summarize_ard(
         group_col: Treatment-arm column.
         pools: Composite arms; ``None`` for none.
         column_order: Explicit arm ordering; remaining arms keep sort order.
-        adsl: Population source for big-N denominators and the arm universe.
-        adsl_filter: Filter applied to *adsl* before counting
-            (``pl.Expr`` or expression string).
+        adsl: Population source for big-N denominators and the arm
+            universe.  Analysis records of subjects outside the filtered
+            ADSL are left out of every count (ADR-0016).
+        adsl_filter: Population filter (``pl.Expr`` or expression
+            string).  It selects the ADSL subjects for N and, through
+            them, the analysis records for n.  Requires *adsl*.
         dataset_filter: Filter applied to *df* before counting
             (``pl.Expr`` or expression string).
         prefilter: Extra *df* filter (e.g. ``DTHFL == "Y"``).
@@ -885,6 +1015,16 @@ def summarize_ard(
         df = df.filter(dataset_filter_expr)
     if prefilter is not None:
         df = df.filter(prefilter)
+    if adsl is not None:
+        if "USUBJID" not in adsl.columns:
+            raise SchemaError(f"adsl has no USUBJID column. Available: {sorted(adsl.columns)}")
+        df = restrict_to_population(df, adsl, adsl_filter)
+    elif adsl_filter is not None:
+        raise SchemaError(
+            "adsl_filter is set but no adsl was given. The population filter "
+            "selects ADSL subjects, so it cannot apply without ADSL: pass "
+            "adsl=..., or filter the analysis dataset with dataset_filter."
+        )
 
     pct_requested = Statistic.N_PCT in stats or any(
         Statistic.N_PCT in (hdr.statistics or stats) for hdr in header_rows
@@ -975,11 +1115,16 @@ def summarize_ard(
         if hdr_filter is not None:
             hdr_df = hdr_df.filter(hdr_filter)
         effective_stats = hdr.statistics or stats
+        hdr_values = value_col in hdr_df.columns and any(
+            s in _CONT_STAT_META for s in effective_stats
+        )
         for arm in arms:
             arm_hdr = hdr_df.filter(pl.col(group_col) == arm)
             arm_n = big_n.get(arm, 0)
             for stat_type in effective_stats:
-                sn, sl, sv = compute_stat(stat_type, arm_hdr, arm_n, value_col=value_col)
+                sn, sl, sv = compute_stat(
+                    stat_type, arm_hdr, arm_n, value_col=value_col, count_values=hdr_values
+                )
                 ard_rows.append(
                     ard_row(
                         group_col,
@@ -1028,6 +1173,7 @@ def summarize_ard(
                 value_col=value_col,
                 field_labels=field_labels,
                 fmt_overrides={**table_fmt, **(present[depth].decimals or {})},
+                count_values=bool(cont_requested),
             )
     else:
         for row_def in present:
@@ -1045,6 +1191,7 @@ def summarize_ard(
                 value_col=value_col,
                 field_labels=field_labels,
                 fmt_overrides={**table_fmt, **(row_def.decimals or {})},
+                count_values=bool(cont_requested),
             )
 
     ard = rows_to_ard(ard_rows)
