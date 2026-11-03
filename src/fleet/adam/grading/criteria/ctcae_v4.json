@@ -1,2405 +1,1983 @@
 {
+  "schema_version": 2,
   "version": "ctcae_v4",
   "unit_system": "SI",
+  "source": {
+    "package": "admiral",
+    "package_version": "1.4.1",
+    "dataset": "atoxgr_criteria_ctcv4",
+    "generated_by": "scripts/regen_grading_criteria.R"
+  },
   "criteria": [
     {
       "term": "Anemia",
       "direction": "L",
-      "required_vars": [
-        "AVAL",
-        "ANRLO"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "g/L",
+      "required_vars": ["AVAL", "ANRLO"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 80
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 100
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},80]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRLO"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right_var": "ANRLO"
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},100]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRLO"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRLO"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "g/L"
+      "source": {
+        "soc": "Blood and lymphatic system disorders",
+        "grade_1": "Hemoglobin (Hgb) <LLN - 10.0 g/dL; <LLN - 6.2 mmol/L; <LLN - 100 g/L",
+        "grade_2": "Hgb <10.0 - 8.0 g/dL; <6.2 - 4.9 mmol/L; <100 - 80g/L",
+        "grade_3": "Hgb <8.0 g/dL; <4.9 mmol/L; <80 g/L; transfusion indicated",
+        "grade_4": "Life-threatening consequences; urgent intervention indicated",
+        "grade_5": "Death",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) < 80 ~ \"3\", signif(AVAL, signif_dig) < 100 ~ \"2\", is.na(ANRLO) ~ NA_character_,  signif(AVAL, signif_dig) < signif(ANRLO, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Leukocytosis",
       "direction": "H",
-      "required_vars": [
-        "AVAL"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "10^9/L",
+      "required_vars": ["AVAL"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 100
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},100]},
+          "then": "3"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "10^9/L"
+      "source": {
+        "soc": "Blood and lymphatic system disorders",
+        "grade_1": "-",
+        "grade_2": "-",
+        "grade_3": ">100,000/mm3",
+        "grade_4": "Clinical manifestations of leucostasis; urgent intervention indicated",
+        "grade_5": "Death",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) > 100 ~ \"3\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Activated partial thromboplastin time prolonged",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "na_check": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "grades": [
+      "unit": null,
+      "required_vars": ["AVAL", "ANRHI"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  2.5
-                ]
-              }
-            }
-          ]
+          "when": {"op":"or","args":[{"op":"is_na","args":[{"var":"AVAL"}]},{"op":"is_na","args":[{"var":"ANRHI"}]}]},
+          "then": null
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  1.5
-                ]
-              }
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[2.5,{"var":"ANRHI"}]}]}]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[1.5,{"var":"ANRHI"}]}]}]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
-      ]
+      ],
+      "source": {
+        "soc": "Investigations",
+        "grade_1": ">ULN - 1.5 x ULN",
+        "grade_2": ">1.5 - 2.5 x ULN",
+        "grade_3": ">2.5 x ULN; hemorrhage",
+        "grade_4": "-",
+        "grade_5": "-",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) | is.na(ANRHI) ~ NA_character_, signif(AVAL, signif_dig) > signif(2.5*ANRHI, signif_dig) ~ \"3\", signif(AVAL, signif_dig) > signif(1.5*ANRHI, signif_dig) ~ \"2\", signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Alanine aminotransferase increased",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "na_check": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "grades": [
+      "unit": null,
+      "required_vars": ["AVAL", "ANRHI"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  20
-                ]
-              }
-            }
-          ]
+          "when": {"op":"or","args":[{"op":"is_na","args":[{"var":"AVAL"}]},{"op":"is_na","args":[{"var":"ANRHI"}]}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  5
-                ]
-              }
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[20,{"var":"ANRHI"}]}]}]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  3
-                ]
-              }
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[5,{"var":"ANRHI"}]}]}]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[3,{"var":"ANRHI"}]}]}]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
-      ]
+      ],
+      "source": {
+        "soc": "Investigations",
+        "grade_1": ">ULN - 3.0 x ULN",
+        "grade_2": ">3.0 - 5.0 x ULN",
+        "grade_3": ">5.0 - 20.0 x ULN",
+        "grade_4": ">20.0 x ULN",
+        "grade_5": "-",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) | is.na(ANRHI) ~ NA_character_, signif(AVAL, signif_dig) > signif(20*ANRHI, signif_dig) ~ \"4\", signif(AVAL, signif_dig) > signif(5*ANRHI, signif_dig) ~ \"3\", signif(AVAL, signif_dig) > signif(3*ANRHI, signif_dig) ~ \"2\", signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Alkaline phosphatase increased",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "na_check": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "grades": [
+      "unit": null,
+      "required_vars": ["AVAL", "ANRHI"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  20
-                ]
-              }
-            }
-          ]
+          "when": {"op":"or","args":[{"op":"is_na","args":[{"var":"AVAL"}]},{"op":"is_na","args":[{"var":"ANRHI"}]}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  5
-                ]
-              }
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[20,{"var":"ANRHI"}]}]}]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  2.5
-                ]
-              }
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[5,{"var":"ANRHI"}]}]}]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[2.5,{"var":"ANRHI"}]}]}]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
-      ]
+      ],
+      "source": {
+        "soc": "Investigations",
+        "grade_1": ">ULN - 2.5 x ULN",
+        "grade_2": ">2.5 - 5.0 x ULN",
+        "grade_3": ">5.0 - 20.0 x ULN",
+        "grade_4": ">20.0 x ULN",
+        "grade_5": "-",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) | is.na(ANRHI) ~ NA_character_, signif(AVAL, signif_dig) > signif(20*ANRHI, signif_dig) ~ \"4\", signif(AVAL, signif_dig) > signif(5*ANRHI, signif_dig) ~ \"3\", signif(AVAL, signif_dig) > signif(2.5*ANRHI, signif_dig) ~ \"2\", signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Aspartate aminotransferase increased",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "na_check": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "grades": [
+      "unit": null,
+      "required_vars": ["AVAL", "ANRHI"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  20
-                ]
-              }
-            }
-          ]
+          "when": {"op":"or","args":[{"op":"is_na","args":[{"var":"AVAL"}]},{"op":"is_na","args":[{"var":"ANRHI"}]}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  5
-                ]
-              }
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[20,{"var":"ANRHI"}]}]}]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  3
-                ]
-              }
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[5,{"var":"ANRHI"}]}]}]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[3,{"var":"ANRHI"}]}]}]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
-      ]
+      ],
+      "source": {
+        "soc": "Investigations",
+        "grade_1": ">ULN - 3.0 x ULN",
+        "grade_2": ">3.0 - 5.0 x ULN",
+        "grade_3": ">5.0 - 20.0 x ULN",
+        "grade_4": ">20.0 x ULN",
+        "grade_5": "-",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) | is.na(ANRHI) ~ NA_character_, signif(AVAL, signif_dig) > signif(20*ANRHI, signif_dig) ~ \"4\", signif(AVAL, signif_dig) > signif(5*ANRHI, signif_dig) ~ \"3\", signif(AVAL, signif_dig) > signif(3*ANRHI, signif_dig) ~ \"2\", signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Blood bilirubin increased",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "na_check": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "grades": [
+      "unit": null,
+      "required_vars": ["AVAL", "ANRHI"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  10
-                ]
-              }
-            }
-          ]
+          "when": {"op":"or","args":[{"op":"is_na","args":[{"var":"AVAL"}]},{"op":"is_na","args":[{"var":"ANRHI"}]}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  3
-                ]
-              }
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[10,{"var":"ANRHI"}]}]}]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  1.5
-                ]
-              }
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[3,{"var":"ANRHI"}]}]}]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[1.5,{"var":"ANRHI"}]}]}]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
-      ]
+      ],
+      "source": {
+        "soc": "Investigations",
+        "grade_1": ">ULN - 1.5 x ULN",
+        "grade_2": ">1.5 - 3.0 x ULN",
+        "grade_3": ">3.0 - 10.0 x ULN",
+        "grade_4": ">10.0 x ULN",
+        "grade_5": "-",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) | is.na(ANRHI) ~ NA_character_, signif(AVAL, signif_dig) > signif(10*ANRHI, signif_dig) ~ \"4\", signif(AVAL, signif_dig) > signif(3*ANRHI, signif_dig) ~ \"3\", signif(AVAL, signif_dig) > signif(1.5*ANRHI, signif_dig) ~ \"2\", signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "CD4 lymphocytes decreased",
       "direction": "L",
-      "required_vars": [
-        "AVAL",
-        "ANRLO"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "10^9/L",
+      "required_vars": ["AVAL", "ANRLO"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 0.05
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 0.2
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},0.05]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 0.5
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},0.2]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRLO"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right_var": "ANRLO"
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},0.5]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRLO"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRLO"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "10^9/L"
+      "source": {
+        "soc": "Investigations",
+        "grade_1": "<LLN - 500/mm3; <LLN - 0.5 x 10e9 /L",
+        "grade_2": "<500 - 200/mm3; <0.5 - 0.2 x 10e9 /L",
+        "grade_3": "<200 - 50/mm3; <0.2 x 0.05 - 10e9 /L",
+        "grade_4": "<50/mm3; <0.05 x 10e9 /L",
+        "grade_5": "-",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) < 0.05 ~ \"4\", signif(AVAL, signif_dig) < 0.2 ~ \"3\", signif(AVAL, signif_dig) < 0.5 ~ \"2\", is.na(ANRLO) ~ NA_character_,  signif(AVAL, signif_dig) < signif(ANRLO, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Cholesterol high",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "mmol/L",
+      "required_vars": ["AVAL", "ANRHI"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 12.92
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 10.34
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},12.92]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 7.75
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},10.34]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRHI"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},7.75]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRHI"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "mmol/L"
+      "source": {
+        "soc": "Investigations",
+        "grade_1": ">ULN - 300 mg/dL; >ULN - 7.75 mmol/L",
+        "grade_2": ">300 - 400 mg/dL; >7.75 - 10.34 mmol/L",
+        "grade_3": ">400 - 500 mg/dL; >10.34 - 12.92 mmol/L",
+        "grade_4": ">500 mg/dL; >12.92 mmol/L",
+        "grade_5": "-",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) > 12.92 ~ \"4\", signif(AVAL, signif_dig) > 10.34 ~ \"3\", signif(AVAL, signif_dig) > 7.75 ~ \"2\", is.na(ANRHI) ~ NA_character_,  signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "CPK increased",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "na_check": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "grades": [
+      "unit": null,
+      "required_vars": ["AVAL", "ANRHI"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  10
-                ]
-              }
-            }
-          ]
+          "when": {"op":"or","args":[{"op":"is_na","args":[{"var":"AVAL"}]},{"op":"is_na","args":[{"var":"ANRHI"}]}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  5
-                ]
-              }
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[10,{"var":"ANRHI"}]}]}]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  2.5
-                ]
-              }
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[5,{"var":"ANRHI"}]}]}]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[2.5,{"var":"ANRHI"}]}]}]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
-      ]
+      ],
+      "source": {
+        "soc": "Investigations",
+        "grade_1": ">ULN - 2.5 x ULN",
+        "grade_2": ">2.5 x ULN - 5 x ULN",
+        "grade_3": ">5 x ULN - 10 x ULN",
+        "grade_4": ">10 x ULN",
+        "grade_5": "-",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) | is.na(ANRHI) ~ NA_character_, signif(AVAL, signif_dig) > signif(10*ANRHI, signif_dig) ~ \"4\", signif(AVAL, signif_dig) > signif(5*ANRHI, signif_dig) ~ \"3\", signif(AVAL, signif_dig) > signif(2.5*ANRHI, signif_dig) ~ \"2\", signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Creatinine increased",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI",
-        "BASE"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": null,
+      "required_vars": ["AVAL", "ANRHI", "BASE"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  6
-                ]
-              }
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  3
-                ]
-              }
-            },
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "BASE",
-                  3
-                ]
-              }
-            }
-          ]
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"ANRHI"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[6,{"var":"ANRHI"}]}]}]}]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  1.5
-                ]
-              }
-            },
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "BASE",
-                  1.5
-                ]
-              }
-            }
-          ]
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"ANRHI"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[3,{"var":"ANRHI"}]}]}]}]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRHI",
-            "BASE"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            },
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "BASE"
-            }
-          ]
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"BASE"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[3,{"var":"BASE"}]}]}]}]},
+          "then": "3"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"ANRHI"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[1.5,{"var":"ANRHI"}]}]}]}]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"BASE"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[1.5,{"var":"BASE"}]}]}]}]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"ANRHI"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]}]},
+          "then": "1"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"BASE"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"BASE"}]}]}]},
+          "then": "1"
+        },
+        {
+          "when": {"op":"or","args":[{"op":"is_na","args":[{"var":"ANRHI"}]},{"op":"is_na","args":[{"var":"BASE"}]}]},
+          "then": null
+        },
+        {
+          "when": true,
+          "then": "0"
         }
-      ]
+      ],
+      "source": {
+        "soc": "Investigations",
+        "grade_1": ">1 - 1.5 x baseline; >ULN - 1.5 x ULN",
+        "grade_2": ">1.5 - 3.0 x baseline; >1.5 - 3.0 x ULN",
+        "grade_3": ">3.0 baseline; >3.0 - 6.0 x ULN",
+        "grade_4": ">6.0 x ULN",
+        "grade_5": "-",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, !is.na(ANRHI) & signif(AVAL, signif_dig) > signif(6*ANRHI, signif_dig) ~ \"4\", !is.na(ANRHI) & signif(AVAL, signif_dig) > signif(3*ANRHI, signif_dig) ~ \"3\",  !is.na(BASE) & signif(AVAL, signif_dig) > signif(3*BASE, signif_dig) ~ \"3\", !is.na(ANRHI) & signif(AVAL, signif_dig) > signif(1.5*ANRHI, signif_dig) ~ \"2\",  !is.na(BASE) & signif(AVAL, signif_dig) > signif(1.5*BASE, signif_dig) ~ \"2\", !is.na(ANRHI) & signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\",  !is.na(BASE) & signif(AVAL, signif_dig) > signif(BASE, signif_dig) ~ \"1\",  is.na(ANRHI) | is.na(BASE) ~ NA_character_, TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Fibrinogen decreased",
       "direction": "L",
-      "required_vars": [
-        "AVAL",
-        "ANRLO",
-        "PCHG"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "g/L",
+      "required_vars": ["AVAL", "ANRLO", "PCHG"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 0.5
-            },
-            {
-              "left": "PCHG",
-              "op": "le",
-              "right": -75
-            },
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right_expr": {
-                "multiply": [
-                  "ANRLO",
-                  0.25
-                ]
-              }
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right_expr": {
-                "multiply": [
-                  "ANRLO",
-                  0.5
-                ]
-              }
-            },
-            {
-              "left": "PCHG",
-              "op": "le",
-              "right": -50
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},0.5]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right_expr": {
-                "multiply": [
-                  "ANRLO",
-                  0.75
-                ]
-              }
-            },
-            {
-              "left": "PCHG",
-              "op": "le",
-              "right": -25
-            }
-          ]
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"PCHG"}]}]},{"op":"le","args":[{"op":"signif","args":[{"var":"PCHG"}]},-75]}]},
+          "then": "4"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRLO",
-            "PCHG"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right_var": "ANRLO"
-            },
-            {
-              "left": "PCHG",
-              "op": "lt",
-              "right": 0
-            }
-          ]
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"ANRLO"}]}]},{"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[0.25,{"var":"ANRLO"}]}]}]}]},
+          "then": "4"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"ANRLO"}]}]},{"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[0.5,{"var":"ANRLO"}]}]}]}]},
+          "then": "3"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"PCHG"}]}]},{"op":"le","args":[{"op":"signif","args":[{"var":"PCHG"}]},-50]}]},
+          "then": "3"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"ANRLO"}]}]},{"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[0.75,{"var":"ANRLO"}]}]}]}]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"PCHG"}]}]},{"op":"le","args":[{"op":"signif","args":[{"var":"PCHG"}]},-25]}]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"ANRLO"}]}]},{"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRLO"}]}]}]},
+          "then": "1"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"PCHG"}]}]},{"op":"lt","args":[{"op":"signif","args":[{"var":"PCHG"}]},0]}]},
+          "then": "1"
+        },
+        {
+          "when": {"op":"or","args":[{"op":"is_na","args":[{"var":"ANRLO"}]},{"op":"is_na","args":[{"var":"PCHG"}]}]},
+          "then": null
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "g/L"
+      "source": {
+        "soc": "Investigations",
+        "grade_1": "<1.0 - 0.75 x LLN or <25% decrease from baseline",
+        "grade_2": "<0.75 - 0.5 x LLN or 25 - <50% decrease from baseline",
+        "grade_3": "<0.5 - 0.25 x LLN or 50 - <75% decrease from baseline",
+        "grade_4": "<0.25 x LLN or 75% decrease from baseline or absolute value <50 mg/dL",
+        "grade_5": "-",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) <  0.5 ~ \"4\",  !is.na(PCHG) & signif(PCHG, signif_dig) <= -75 ~ \"4\", !is.na(ANRLO) & signif(AVAL, signif_dig) < signif(0.25*ANRLO, signif_dig) ~ \"4\", !is.na(ANRLO) & signif(AVAL, signif_dig) < signif(0.5*ANRLO, signif_dig) ~ \"3\",  !is.na(PCHG) & signif(PCHG, signif_dig) <=  -50 ~ \"3\", !is.na(ANRLO) & signif(AVAL, signif_dig) < signif(0.75*ANRLO, signif_dig) ~ \"2\",  !is.na(PCHG) & signif(PCHG, signif_dig) <=  -25 ~ \"2\", !is.na(ANRLO) & signif(AVAL, signif_dig) <  signif(ANRLO, signif_dig) ~ \"1\",  !is.na(PCHG) & signif(PCHG, signif_dig) <  0 ~ \"1\", is.na(ANRLO) | is.na(PCHG) ~ NA_character_, TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "GGT increased",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "na_check": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "grades": [
+      "unit": null,
+      "required_vars": ["AVAL", "ANRHI"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  20
-                ]
-              }
-            }
-          ]
+          "when": {"op":"or","args":[{"op":"is_na","args":[{"var":"AVAL"}]},{"op":"is_na","args":[{"var":"ANRHI"}]}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  5
-                ]
-              }
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[20,{"var":"ANRHI"}]}]}]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  2.5
-                ]
-              }
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[5,{"var":"ANRHI"}]}]}]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[2.5,{"var":"ANRHI"}]}]}]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
-      ]
+      ],
+      "source": {
+        "soc": "Investigations",
+        "grade_1": ">ULN - 2.5 x ULN",
+        "grade_2": ">2.5 - 5.0 x ULN",
+        "grade_3": ">5.0 - 20.0 x ULN",
+        "grade_4": ">20.0 x ULN",
+        "grade_5": "-",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) | is.na(ANRHI) ~ NA_character_, signif(AVAL, signif_dig) > signif(20*ANRHI, signif_dig) ~ \"4\", signif(AVAL, signif_dig) > signif(5*ANRHI, signif_dig) ~ \"3\", signif(AVAL, signif_dig) > signif(2.5*ANRHI, signif_dig) ~ \"2\", signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Haptoglobin decreased",
       "direction": "L",
-      "required_vars": [
-        "AVAL",
-        "ANRLO"
-      ],
-      "na_check": [
-        "AVAL",
-        "ANRLO"
-      ],
-      "grades": [
+      "unit": null,
+      "required_vars": ["AVAL", "ANRLO"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 1,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right_var": "ANRLO"
-            }
-          ]
+          "when": {"op":"or","args":[{"op":"is_na","args":[{"var":"AVAL"}]},{"op":"is_na","args":[{"var":"ANRLO"}]}]},
+          "then": null
+        },
+        {
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRLO"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
-      ]
+      ],
+      "source": {
+        "soc": "Investigations",
+        "grade_1": "<LLN",
+        "grade_2": "-",
+        "grade_3": "-",
+        "grade_4": "-",
+        "grade_5": "-",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) | is.na(ANRLO) ~ NA_character_, signif(AVAL, signif_dig) < signif(ANRLO, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Hemoglobin increased",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI",
-        "BASE"
-      ],
-      "na_check": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "grades": [
+      "unit": "g/L",
+      "required_vars": ["AVAL", "ANRHI", "BASE"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "add": [
-                  "BASE",
-                  40
-                ]
-              }
-            },
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "add": [
-                  "ANRHI",
-                  40
-                ]
-              }
-            }
-          ]
+          "when": {"op":"or","args":[{"op":"is_na","args":[{"var":"AVAL"}]},{"op":"is_na","args":[{"var":"ANRHI"}]}]},
+          "then": null
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "add": [
-                  "BASE",
-                  20
-                ]
-              }
-            },
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "add": [
-                  "ANRHI",
-                  20
-                ]
-              }
-            }
-          ]
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"BASE"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"BASE"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"add","args":[{"var":"BASE"},40]}]}]}]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "rules": [
-            {
-              "left": "BASE",
-              "op": "gt",
-              "right_var": "ANRHI"
-            },
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "BASE"
-            },
-            {
-              "left": "BASE",
-              "op": "le",
-              "right_var": "ANRHI"
-            },
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            }
-          ]
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"BASE"}]}]},{"op":"le","args":[{"op":"signif","args":[{"var":"BASE"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"add","args":[{"var":"ANRHI"},40]}]}]}]},
+          "then": "3"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"is_na","args":[{"var":"BASE"}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"add","args":[{"var":"ANRHI"},40]}]}]}]},
+          "then": "3"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"BASE"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"BASE"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"add","args":[{"var":"BASE"},20]}]}]}]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"BASE"}]}]},{"op":"le","args":[{"op":"signif","args":[{"var":"BASE"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"add","args":[{"var":"ANRHI"},20]}]}]}]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"is_na","args":[{"var":"BASE"}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"add","args":[{"var":"ANRHI"},20]}]}]}]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"BASE"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"BASE"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"BASE"}]}]}]},
+          "then": "1"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"BASE"}]}]},{"op":"le","args":[{"op":"signif","args":[{"var":"BASE"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]}]},
+          "then": "1"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"is_na","args":[{"var":"BASE"}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "g/L"
+      "source": {
+        "soc": "Investigations",
+        "grade_1": "Increase in >0 - 2 gm/dL above ULN or above baseline if baseline is above ULN",
+        "grade_2": "Increase in >2 - 4 gm/dL above ULN or above baseline if baseline is above ULN",
+        "grade_3": "Increase in >4 gm/dL above ULN or above baseline if baseline is above ULN",
+        "grade_4": "-",
+        "grade_5": "-",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) | is.na(ANRHI) ~ NA_character_, !is.na(BASE) & signif(BASE, signif_dig) > signif(ANRHI, signif_dig) & signif(AVAL, signif_dig) > signif(BASE + 40, signif_dig) ~ \"3\",  !is.na(BASE) & signif(BASE, signif_dig) <=  signif(ANRHI, signif_dig) & signif(AVAL, signif_dig) > signif(ANRHI + 40, signif_dig) ~ \"3\",  is.na(BASE) & signif(AVAL, signif_dig) > signif(ANRHI + 40, signif_dig) ~ \"3\", !is.na(BASE) & signif(BASE, signif_dig) > signif(ANRHI, signif_dig) & signif(AVAL, signif_dig) > signif(BASE + 20, signif_dig) ~ \"2\",  !is.na(BASE) & signif(BASE, signif_dig) <=  signif(ANRHI, signif_dig) & signif(AVAL, signif_dig) > signif(ANRHI + 20, signif_dig) ~ \"2\",  is.na(BASE) & signif(AVAL, signif_dig) > signif(ANRHI + 20, signif_dig) ~ \"2\", !is.na(BASE) & signif(BASE, signif_dig) > signif(ANRHI, signif_dig) & signif(AVAL, signif_dig) > signif(BASE, signif_dig) ~ \"1\",  !is.na(BASE) & signif(BASE, signif_dig) <=  signif(ANRHI, signif_dig) & signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\",  is.na(BASE) & signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "INR increased",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": null,
+      "required_vars": ["AVAL", "ANRHI"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  2.5
-                ]
-              }
-            },
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "BASE",
-                  2.5
-                ]
-              }
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  1.5
-                ]
-              }
-            },
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "BASE",
-                  1.5
-                ]
-              }
-            }
-          ]
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"ANRHI"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[2.5,{"var":"ANRHI"}]}]}]}]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRHI",
-            "BASE"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            },
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "BASE"
-            }
-          ]
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"BASE"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[2.5,{"var":"BASE"}]}]}]}]},
+          "then": "3"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"ANRHI"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[1.5,{"var":"ANRHI"}]}]}]}]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"BASE"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[1.5,{"var":"BASE"}]}]}]}]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"ANRHI"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]}]},
+          "then": "1"
+        },
+        {
+          "when": {"op":"and","args":[{"op":"not","args":[{"op":"is_na","args":[{"var":"BASE"}]}]},{"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"BASE"}]}]}]},
+          "then": "1"
+        },
+        {
+          "when": {"op":"or","args":[{"op":"is_na","args":[{"var":"ANRHI"}]},{"op":"is_na","args":[{"var":"BASE"}]}]},
+          "then": null
+        },
+        {
+          "when": true,
+          "then": "0"
         }
-      ]
+      ],
+      "source": {
+        "soc": "Investigations",
+        "grade_1": ">1 - 1.5 x ULN; >1 - 1.5 times above baseline if on anticoagulation",
+        "grade_2": ">1.5 - 2.5 x ULN; >1.5 - 2.5 times above baseline if on anticoagulation",
+        "grade_3": ">2.5 x ULN; >2.5 times above baseline if on anticoagulation",
+        "grade_4": "-",
+        "grade_5": "-",
+        "comment": "Take worst case and assume \"on anticoagulation\"",
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, !is.na(ANRHI) & signif(AVAL, signif_dig) > signif(2.5*ANRHI, signif_dig) ~ \"3\", !is.na(BASE) & signif(AVAL, signif_dig) > signif(2.5*BASE, signif_dig) ~ \"3\", !is.na(ANRHI) & signif(AVAL, signif_dig) > signif(1.5*ANRHI, signif_dig) ~ \"2\", !is.na(BASE) & signif(AVAL, signif_dig) > signif(1.5*BASE, signif_dig) ~ \"2\", !is.na(ANRHI) & signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\", !is.na(BASE) & signif(AVAL, signif_dig) > signif(BASE, signif_dig) ~ \"1\", is.na(ANRHI) | is.na(BASE) ~ NA_character_, TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Lipase increased",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "na_check": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "grades": [
+      "unit": null,
+      "required_vars": ["AVAL", "ANRHI"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  5
-                ]
-              }
-            }
-          ]
+          "when": {"op":"or","args":[{"op":"is_na","args":[{"var":"AVAL"}]},{"op":"is_na","args":[{"var":"ANRHI"}]}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  2
-                ]
-              }
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[5,{"var":"ANRHI"}]}]}]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  1.5
-                ]
-              }
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[2,{"var":"ANRHI"}]}]}]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[1.5,{"var":"ANRHI"}]}]}]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
-      ]
+      ],
+      "source": {
+        "soc": "Investigations",
+        "grade_1": ">ULN - 1.5 x ULN",
+        "grade_2": ">1.5 - 2.0 x ULN",
+        "grade_3": ">2.0 - 5.0 x ULN",
+        "grade_4": ">5.0 x ULN",
+        "grade_5": "-",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) | is.na(ANRHI) ~ NA_character_, signif(AVAL, signif_dig) > signif(5*ANRHI, signif_dig) ~ \"4\", signif(AVAL, signif_dig) > signif(2*ANRHI, signif_dig) ~ \"3\", signif(AVAL, signif_dig) > signif(1.5*ANRHI, signif_dig) ~ \"2\", signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Lymphocyte count decreased",
       "direction": "L",
-      "required_vars": [
-        "AVAL",
-        "ANRLO"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "10^9/L",
+      "required_vars": ["AVAL", "ANRLO"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 0.2
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 0.5
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},0.2]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 0.8
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},0.5]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRLO"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right_var": "ANRLO"
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},0.8]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRLO"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRLO"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "10^9/L"
+      "source": {
+        "soc": "Investigations",
+        "grade_1": "<LLN - 800/mm3; <LLN - 0.8 x 10e9/L",
+        "grade_2": "<800 - 500/mm3; <0.8 - 0.5 x 10e9 /L",
+        "grade_3": "<500 - 200/mm3; <0.5 - 0.2 x 10e9 /L",
+        "grade_4": "<200/mm3; <0.2 x 10e9 /L",
+        "grade_5": "-",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) < 0.2 ~ \"4\", signif(AVAL, signif_dig) < 0.5 ~ \"3\", signif(AVAL, signif_dig) < 0.8 ~ \"2\", is.na(ANRLO) ~ NA_character_,  signif(AVAL, signif_dig) < signif(ANRLO, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Lymphocyte count increased",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "10^9/L",
+      "required_vars": ["AVAL", "ANRHI"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 20
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 4
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},20]},
+          "then": "3"
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},4]},
+          "then": "2"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "10^9/L"
+      "source": {
+        "soc": "Investigations",
+        "grade_1": "-",
+        "grade_2": ">4000/mm3 - 20,000/mm3",
+        "grade_3": ">20,000/mm3",
+        "grade_4": "-",
+        "grade_5": "-",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) > 20 ~ \"3\", signif(AVAL, signif_dig) > 4 ~ \"2\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Neutrophil count decreased",
       "direction": "L",
-      "required_vars": [
-        "AVAL",
-        "ANRLO"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "10^9/L",
+      "required_vars": ["AVAL", "ANRLO"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 0.5
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 1
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},0.5]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 1.5
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},1]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRLO"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right_var": "ANRLO"
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},1.5]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRLO"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRLO"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "10^9/L"
+      "source": {
+        "soc": "Investigations",
+        "grade_1": "<LLN - 1500/mm3; <LLN - 1.5 x 10e9 /L",
+        "grade_2": "<1500 - 1000/mm3; <1.5 - 1.0 x 10e9 /L",
+        "grade_3": "<1000 - 500/mm3; <1.0 - 0.5 x 10e9 /L",
+        "grade_4": "<500/mm3; <0.5 x 10e9 /L",
+        "grade_5": "-",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) < 0.5 ~ \"4\", signif(AVAL, signif_dig) < 1 ~ \"3\", signif(AVAL, signif_dig) < 1.5 ~ \"2\", is.na(ANRLO) ~ NA_character_,  signif(AVAL, signif_dig) < signif(ANRLO, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Platelet count decreased",
       "direction": "L",
-      "required_vars": [
-        "AVAL",
-        "ANRLO"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "10^9/L",
+      "required_vars": ["AVAL", "ANRLO"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 25
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 50
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},25]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 75
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},50]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRLO"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right_var": "ANRLO"
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},75]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRLO"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRLO"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "10^9/L"
+      "source": {
+        "soc": "Investigations",
+        "grade_1": "<LLN - 75,000/mm3; <LLN - 75.0 x 10e9 /L",
+        "grade_2": "<75,000 - 50,000/mm3; <75.0 - 50.0 x 10e9 /L",
+        "grade_3": "<50,000 - 25,000/mm3; <50.0 - 25.0 x 10e9 /L",
+        "grade_4": "<25,000/mm3; <25.0 x 10e9 /L",
+        "grade_5": "-",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) < 25 ~ \"4\", signif(AVAL, signif_dig) < 50 ~ \"3\", signif(AVAL, signif_dig) < 75 ~ \"2\", is.na(ANRLO) ~ NA_character_,  signif(AVAL, signif_dig) < signif(ANRLO, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Serum amylase increased",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "na_check": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "grades": [
+      "unit": null,
+      "required_vars": ["AVAL", "ANRHI"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  5
-                ]
-              }
-            }
-          ]
+          "when": {"op":"or","args":[{"op":"is_na","args":[{"var":"AVAL"}]},{"op":"is_na","args":[{"var":"ANRHI"}]}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  2
-                ]
-              }
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[5,{"var":"ANRHI"}]}]}]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_expr": {
-                "multiply": [
-                  "ANRHI",
-                  1.5
-                ]
-              }
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[2,{"var":"ANRHI"}]}]}]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"op":"mul","args":[1.5,{"var":"ANRHI"}]}]}]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
-      ]
+      ],
+      "source": {
+        "soc": "Investigations",
+        "grade_1": ">ULN - 1.5 x ULN",
+        "grade_2": ">1.5 - 2.0 x ULN",
+        "grade_3": ">2.0 - 5.0 x ULN",
+        "grade_4": ">5.0 x ULN",
+        "grade_5": "-",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) | is.na(ANRHI) ~ NA_character_, signif(AVAL, signif_dig) > signif(5*ANRHI, signif_dig) ~ \"4\", signif(AVAL, signif_dig) > signif(2*ANRHI, signif_dig) ~ \"3\", signif(AVAL, signif_dig) > signif(1.5*ANRHI, signif_dig) ~ \"2\", signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "White blood cell decreased",
       "direction": "L",
-      "required_vars": [
-        "AVAL",
-        "ANRLO"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "10^9/L",
+      "required_vars": ["AVAL", "ANRLO"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 1
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 2
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},1]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 3
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},2]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRLO"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right_var": "ANRLO"
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},3]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRLO"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRLO"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "10^9/L"
+      "source": {
+        "soc": "Investigations",
+        "grade_1": "<LLN - 3000/mm3; <LLN - 3.0 x 10e9 /L",
+        "grade_2": "<3000 - 2000/mm3; <3.0 - 2.0 x 10e9 /L",
+        "grade_3": "<2000 - 1000/mm3; <2.0 - 1.0 x 10e9 /L",
+        "grade_4": "<1000/mm3; <1.0 x 10e9 /L",
+        "grade_5": "-",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) < 1 ~ \"4\", signif(AVAL, signif_dig) < 2 ~ \"3\", signif(AVAL, signif_dig) < 3 ~ \"2\", is.na(ANRLO) ~ NA_character_,  signif(AVAL, signif_dig) < signif(ANRLO, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Acidosis",
       "direction": "L",
-      "required_vars": [
-        "AVAL",
-        "ANRLO"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": null,
+      "required_vars": ["AVAL", "ANRLO"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 7.3
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRLO"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right_var": "ANRLO"
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},7.3]},
+          "then": "3"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRLO"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRLO"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
-      ]
+      ],
+      "source": {
+        "soc": "Metabolism and nutrition disorders",
+        "grade_1": "pH <normal, but >=7.3",
+        "grade_2": "-",
+        "grade_3": "pH <7.3",
+        "grade_4": "Life-threatening consequences",
+        "grade_5": "Death",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) < 7.3 ~ \"3\", is.na(ANRLO) ~ NA_character_,  signif(AVAL, signif_dig) < signif(ANRLO, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Alkalosis",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": null,
+      "required_vars": ["AVAL", "ANRHI"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 7.5
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRHI"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},7.5]},
+          "then": "3"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRHI"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
-      ]
+      ],
+      "source": {
+        "soc": "Metabolism and nutrition disorders",
+        "grade_1": "pH >normal, but <=7.5",
+        "grade_2": "-",
+        "grade_3": "pH >7.5",
+        "grade_4": "Life-threatening consequences",
+        "grade_5": "Death",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) > 7.5 ~ \"3\", is.na(ANRHI) ~ NA_character_,  signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Hypercalcemia",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "MMOL/L",
+      "required_vars": ["AVAL", "ANRHI"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 3.4
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 3.1
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},3.4]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 2.9
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},3.1]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRHI"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},2.9]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRHI"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "MMOL/L"
+      "source": {
+        "soc": "Metabolism and nutrition disorders",
+        "grade_1": "Corrected serum calcium of >ULN - 11.5 mg/dL; >ULN - 2.9 mmol/L;  Ionized calcium  >ULN - 1.5 mmol/L",
+        "grade_2": "Corrected serum calcium of >11.5 - 12.5 mg/dL; >2.9 - 3.1 mmol/L;  Ionized calcium >1.5 - 1.6 mmol/L; symptomatic",
+        "grade_3": "Corrected serum calcium of >12.5 - 13.5 mg/dL;>3.1 - 3.4 mmol/L;  Ionized calcium  >1.6 - 1.8 mmol/L; hospitalization indicated",
+        "grade_4": "Corrected serum calcium of >13.5 mg/dL; >3.4 mmol/L;  Ionized calcium  >1.8 mmol/L; life-threatening consequences",
+        "grade_5": "Death",
+        "comment": "Split Corrected Calcium and Ionized Calcium into 2 separate terms.",
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) > 3.4 ~ \"4\", signif(AVAL, signif_dig) > 3.1 ~ \"3\", signif(AVAL, signif_dig) > 2.9 ~ \"2\", is.na(ANRHI) ~ NA_character_,  signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Hypercalcemia (Ionized)",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "MMOL/L",
+      "required_vars": ["AVAL", "ANRHI"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 1.8
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 1.6
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},1.8]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 1.5
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},1.6]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRHI"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},1.5]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRHI"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "MMOL/L"
+      "source": {
+        "soc": "Metabolism and nutrition disorders",
+        "grade_1": "Corrected serum calcium of >ULN - 11.5 mg/dL; >ULN - 2.9 mmol/L;  Ionized calcium  >ULN - 1.5 mmol/L",
+        "grade_2": "Corrected serum calcium of >11.5 - 12.5 mg/dL; >2.9 - 3.1 mmol/L;  Ionized calcium >1.5 - 1.6 mmol/L; symptomatic",
+        "grade_3": "Corrected serum calcium of >12.5 - 13.5 mg/dL;>3.1 - 3.4 mmol/L;  Ionized calcium  >1.6 - 1.8 mmol/L; hospitalization indicated",
+        "grade_4": "Corrected serum calcium of >13.5 mg/dL; >3.4 mmol/L;  Ionized calcium  >1.8 mmol/L; life-threatening consequences",
+        "grade_5": "Death",
+        "comment": "Split Corrected Calcium and Ionized Calcium into 2 separate terms.",
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) > 1.8 ~ \"4\", signif(AVAL, signif_dig) > 1.6 ~ \"3\", signif(AVAL, signif_dig) > 1.5 ~ \"2\", is.na(ANRHI) ~ NA_character_,  signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Hyperglycemia (Fasting)",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "MMOL/L",
+      "required_vars": ["AVAL", "ANRHI"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 27.8
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 13.9
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},27.8]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 8.9
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},13.9]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRHI"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},8.9]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRHI"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "MMOL/L"
+      "source": {
+        "soc": "Metabolism and nutrition disorders",
+        "grade_1": "Fasting glucose value >ULN - 160 mg/dL; Fasting glucose value >ULN - 8.9 mmol/L",
+        "grade_2": "Fasting glucose value >160 - 250 mg/dL; Fasting glucose value >8.9 - 13.9 mmol/L",
+        "grade_3": ">250 - 500 mg/dL; >13.9 - 27.8 mmol/L; hospitalization indicated",
+        "grade_4": ">500 mg/dL; >27.8 mmol/L; life-threatening consequences",
+        "grade_5": "Death",
+        "comment": "Split Fasting Glucose and Glucose into 2 separate terms.",
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) > 27.8 ~ \"4\", signif(AVAL, signif_dig) > 13.9 ~ \"3\", signif(AVAL, signif_dig) > 8.9 ~ \"2\", is.na(ANRHI) ~ NA_character_,  signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Hyperglycemia",
       "direction": "H",
-      "required_vars": [
-        "AVAL"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "MMOL/L",
+      "required_vars": ["AVAL"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 27.8
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 13.9
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},27.8]},
+          "then": "4"
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},13.9]},
+          "then": "3"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "MMOL/L"
+      "source": {
+        "soc": "Metabolism and nutrition disorders",
+        "grade_1": "Fasting glucose value >ULN - 160 mg/dL; Fasting glucose value >ULN - 8.9 mmol/L",
+        "grade_2": "Fasting glucose value >160 - 250 mg/dL; Fasting glucose value >8.9 - 13.9 mmol/L",
+        "grade_3": ">250 - 500 mg/dL; >13.9 - 27.8 mmol/L; hospitalization indicated",
+        "grade_4": ">500 mg/dL; >27.8 mmol/L; life-threatening consequences",
+        "grade_5": "Death",
+        "comment": "Split Fasting Glucose and Glucose into 2 separate terms.",
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) > 27.8 ~ \"4\", signif(AVAL, signif_dig) > 13.9 ~ \"3\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Hyperkalemia",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "MMOL/L",
+      "required_vars": ["AVAL", "ANRHI"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 7
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 6
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},7]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 5.5
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},6]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRHI"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},5.5]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRHI"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "MMOL/L"
+      "source": {
+        "soc": "Metabolism and nutrition disorders",
+        "grade_1": ">ULN - 5.5 mmol/L",
+        "grade_2": ">5.5 - 6.0 mmol/L",
+        "grade_3": ">6.0 - 7.0 mmol/L; hospitalization indicated",
+        "grade_4": ">7.0 mmol/L; life-threatening consequences",
+        "grade_5": "Death",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) > 7 ~ \"4\", signif(AVAL, signif_dig) > 6 ~ \"3\", signif(AVAL, signif_dig) > 5.5 ~ \"2\", is.na(ANRHI) ~ NA_character_,  signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Hypermagnesemia",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "MMOL/L",
+      "required_vars": ["AVAL", "ANRHI"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 3.3
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 1.23
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},3.3]},
+          "then": "4"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRHI"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},1.23]},
+          "then": "3"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRHI"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "MMOL/L"
+      "source": {
+        "soc": "Metabolism and nutrition disorders",
+        "grade_1": ">ULN - 3.0 mg/dL; >ULN - 1.23 mmol/L",
+        "grade_2": "-",
+        "grade_3": ">3.0 - 8.0 mg/dL; >1.23 - 3.30 mmol/L",
+        "grade_4": ">8.0 mg/dL; >3.30 mmol/L; life-threatening consequences",
+        "grade_5": "Death",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) > 3.3 ~ \"4\", signif(AVAL, signif_dig) > 1.23 ~ \"3\", is.na(ANRHI) ~ NA_character_,  signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Hypernatremia",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "MMOL/L",
+      "required_vars": ["AVAL", "ANRHI"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 160
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 155
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},160]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 150
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},155]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRHI"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},150]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRHI"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "MMOL/L"
+      "source": {
+        "soc": "Metabolism and nutrition disorders",
+        "grade_1": ">ULN - 150 mmol/L",
+        "grade_2": ">150 - 155 mmol/L",
+        "grade_3": ">155 - 160 mmol/L; hospitalization indicated",
+        "grade_4": ">160 mmol/L; life-threatening consequences",
+        "grade_5": "Death",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) > 160 ~ \"4\", signif(AVAL, signif_dig) > 155 ~ \"3\", signif(AVAL, signif_dig) > 150 ~ \"2\", is.na(ANRHI) ~ NA_character_,  signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Hypertriglyceridemia",
       "direction": "H",
-      "required_vars": [
-        "AVAL"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "MMOL/L",
+      "required_vars": ["AVAL"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 11.4
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 5.7
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},11.4]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 3.42
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},5.7]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 1.71
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},3.42]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},1.71]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "MMOL/L"
+      "source": {
+        "soc": "Metabolism and nutrition disorders",
+        "grade_1": "150 mg/dL - 300 mg/dL; 1.71 mmol/L - 3.42 mmol/L",
+        "grade_2": ">300 mg/dL - 500 mg/dL;  >3.42 mmol/L - 5.7 mmol/L",
+        "grade_3": ">500 mg/dL - 1000 mg/dL;  >5.7 mmol/L - 11.4 mmol/L",
+        "grade_4": ">1000 mg/dL; >11.4 mmol/L;  life-threatening consequences",
+        "grade_5": "Death",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) > 11.4 ~ \"4\", signif(AVAL, signif_dig) > 5.7 ~ \"3\", signif(AVAL, signif_dig) > 3.42 ~ \"2\", signif(AVAL, signif_dig) > 1.71 ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Hyperuricemia",
       "direction": "H",
-      "required_vars": [
-        "AVAL",
-        "ANRHI"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "UMOL/L",
+      "required_vars": ["AVAL", "ANRHI"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right": 590
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "na_guard": [
-            "ANRHI"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "gt",
-              "right_var": "ANRHI"
-            }
-          ]
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},590]},
+          "then": "4"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRHI"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"gt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRHI"}]}]},
+          "then": "3"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "UMOL/L"
+      "source": {
+        "soc": "Metabolism and nutrition disorders",
+        "grade_1": ">ULN - 10 mg/dL (0.59 mmol/L) without physiologic consequences",
+        "grade_2": "-",
+        "grade_3": ">ULN - 10 mg/dL (0.59 mmol/L) with physiologic consequences",
+        "grade_4": ">10 mg/dL; >0.59 mmol/L; life-threatening consequences",
+        "grade_5": "Death",
+        "comment": "Take worst case and assume \"with physiologic consequences\"",
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) > 590 ~ \"4\", is.na(ANRHI) ~ NA_character_,  signif(AVAL, signif_dig) > signif(ANRHI, signif_dig) ~ \"3\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Hypoalbuminemia",
       "direction": "L",
-      "required_vars": [
-        "AVAL",
-        "ANRLO"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "g/L",
+      "required_vars": ["AVAL", "ANRLO"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 20
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 30
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},20]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRLO"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right_var": "ANRLO"
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},30]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRLO"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRLO"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "g/L"
+      "source": {
+        "soc": "Metabolism and nutrition disorders",
+        "grade_1": "<LLN - 3 g/dL; <LLN - 30 g/L",
+        "grade_2": "<3 - 2 g/dL; <30 - 20 g/L",
+        "grade_3": "<2 g/dL; <20 g/L",
+        "grade_4": "Life-threatening consequences; urgent intervention indicated",
+        "grade_5": "Death",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) < 20 ~ \"3\", signif(AVAL, signif_dig) < 30 ~ \"2\", is.na(ANRLO) ~ NA_character_,  signif(AVAL, signif_dig) < signif(ANRLO, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Hypocalcemia",
       "direction": "L",
-      "required_vars": [
-        "AVAL",
-        "ANRLO"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "MMOL/L",
+      "required_vars": ["AVAL", "ANRLO"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 1.5
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 1.75
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},1.5]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 2
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},1.75]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRLO"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right_var": "ANRLO"
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},2]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRLO"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRLO"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "MMOL/L"
+      "source": {
+        "soc": "Metabolism and nutrition disorders",
+        "grade_1": "Corrected serum calcium of <LLN - 8.0 mg/dL; <LLN - 2.0 mmol/L; Ionized calcium  <LLN - 1.0 mmol/L",
+        "grade_2": "Corrected serum calcium of <8.0 - 7.0 mg/dL; <2.0 - 1.75 mmol/L; Ionized calcium  <1.0 - 0.9 mmol/L; symptomatic",
+        "grade_3": "Corrected serum calcium of <7.0 - 6.0 mg/dL; <1.75 - 1.5 mmol/L;  Ionized calcium  <0.9 - 0.8 mmol/L; hospitalization indicated",
+        "grade_4": "Corrected serum calcium of  <6.0 mg/dL; <1.5 mmol/L;  Ionized calcium  <0.8 mmol/L; life-threatening consequences",
+        "grade_5": "Death",
+        "comment": "Split Corrected Calcium and Ionized Calcium into 2 separate terms.",
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) < 1.5 ~ \"4\", signif(AVAL, signif_dig) < 1.75 ~ \"3\", signif(AVAL, signif_dig) < 2 ~ \"2\", is.na(ANRLO) ~ NA_character_,  signif(AVAL, signif_dig) < signif(ANRLO, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Hypocalcemia (Ionized)",
       "direction": "L",
-      "required_vars": [
-        "AVAL",
-        "ANRLO"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "MMOL/L",
+      "required_vars": ["AVAL", "ANRLO"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 0.8
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 0.9
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},0.8]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 1
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},0.9]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRLO"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right_var": "ANRLO"
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},1]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRLO"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRLO"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "MMOL/L"
+      "source": {
+        "soc": "Metabolism and nutrition disorders",
+        "grade_1": "Corrected serum calcium of <LLN - 8.0 mg/dL; <LLN - 2.0 mmol/L; Ionized calcium  <LLN - 1.0 mmol/L",
+        "grade_2": "Corrected serum calcium of <8.0 - 7.0 mg/dL; <2.0 - 1.75 mmol/L; Ionized calcium  <1.0 - 0.9 mmol/L; symptomatic",
+        "grade_3": "Corrected serum calcium of <7.0 - 6.0 mg/dL; <1.75 - 1.5 mmol/L;  Ionized calcium  <0.9 - 0.8 mmol/L; hospitalization indicated",
+        "grade_4": "Corrected serum calcium of  <6.0 mg/dL; <1.5 mmol/L;  Ionized calcium  <0.8 mmol/L; life-threatening consequences",
+        "grade_5": "Death",
+        "comment": "Split Corrected Calcium and Ionized Calcium into 2 separate terms.",
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) < 0.8 ~ \"4\", signif(AVAL, signif_dig) < 0.9 ~ \"3\", signif(AVAL, signif_dig) < 1 ~ \"2\", is.na(ANRLO) ~ NA_character_,  signif(AVAL, signif_dig) < signif(ANRLO, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Hypoglycemia",
       "direction": "L",
-      "required_vars": [
-        "AVAL",
-        "ANRLO"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "MMOL/L",
+      "required_vars": ["AVAL", "ANRLO"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 1.7
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 2.2
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},1.7]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 3
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},2.2]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRLO"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right_var": "ANRLO"
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},3]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRLO"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRLO"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "MMOL/L"
+      "source": {
+        "soc": "Metabolism and nutrition disorders",
+        "grade_1": "<LLN - 55 mg/dL; <LLN - 3.0 mmol/L",
+        "grade_2": "<55 - 40 mg/dL; <3.0 - 2.2 mmol/L",
+        "grade_3": "<40 - 30 mg/dL; <2.2 - 1.7 mmol/L",
+        "grade_4": "<30 mg/dL; <1.7 mmol/L; life-threatening consequences; seizures",
+        "grade_5": "Death",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) < 1.7 ~ \"4\", signif(AVAL, signif_dig) < 2.2 ~ \"3\", signif(AVAL, signif_dig) < 3 ~ \"2\", is.na(ANRLO) ~ NA_character_,  signif(AVAL, signif_dig) < signif(ANRLO, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Hypokalemia",
       "direction": "L",
-      "required_vars": [
-        "AVAL",
-        "ANRLO"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "MMOL/L",
+      "required_vars": ["AVAL", "ANRLO"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 2.5
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 3
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},2.5]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "na_guard": [
-            "ANRLO"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right_var": "ANRLO"
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},3]},
+          "then": "3"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRLO"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRLO"}]}]},
+          "then": "2"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "MMOL/L"
+      "source": {
+        "soc": "Metabolism and nutrition disorders",
+        "grade_1": "<LLN - 3.0 mmol/L",
+        "grade_2": "<LLN - 3.0 mmol/L; symptomatic; intervention indicated",
+        "grade_3": "<3.0 - 2.5 mmol/L; hospitalization indicated",
+        "grade_4": "<2.5 mmol/L; life-threatening consequences",
+        "grade_5": "Death",
+        "comment": "Take worst case and assume \"symptomatic OR intervention indicated\"",
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) < 2.5 ~ \"4\", signif(AVAL, signif_dig) < 3 ~ \"3\", is.na(ANRLO) ~ NA_character_,  signif(AVAL, signif_dig) < signif(ANRLO, signif_dig) ~ \"2\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Hypomagnesemia",
       "direction": "L",
-      "required_vars": [
-        "AVAL",
-        "ANRLO"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "MMOL/L",
+      "required_vars": ["AVAL", "ANRLO"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 0.3
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 0.4
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},0.3]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 0.5
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},0.4]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRLO"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right_var": "ANRLO"
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},0.5]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRLO"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRLO"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "MMOL/L"
+      "source": {
+        "soc": "Metabolism and nutrition disorders",
+        "grade_1": "<LLN - 1.2 mg/dL; <LLN - 0.5 mmol/L",
+        "grade_2": "<1.2 - 0.9 mg/dL; <0.5 - 0.4 mmol/L",
+        "grade_3": "<0.9 - 0.7 mg/dL; <0.4 - 0.3 mmol/L",
+        "grade_4": "<0.7 mg/dL; <0.3 mmol/L; life-threatening consequences",
+        "grade_5": "Death",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) < 0.3 ~ \"4\", signif(AVAL, signif_dig) < 0.4 ~ \"3\", signif(AVAL, signif_dig) < 0.5 ~ \"2\", is.na(ANRLO) ~ NA_character_,  signif(AVAL, signif_dig) < signif(ANRLO, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Hyponatremia",
       "direction": "L",
-      "required_vars": [
-        "AVAL",
-        "ANRLO"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "MMOL/L",
+      "required_vars": ["AVAL", "ANRLO"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 120
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 130
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},120]},
+          "then": "4"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRLO"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right_var": "ANRLO"
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},130]},
+          "then": "3"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRLO"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRLO"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "MMOL/L"
+      "source": {
+        "soc": "Metabolism and nutrition disorders",
+        "grade_1": "<LLN - 130 mmol/L",
+        "grade_2": "-",
+        "grade_3": "<130 - 120 mmol/L",
+        "grade_4": "<120 mmol/L; life-threatening consequences",
+        "grade_5": "Death",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) < 120 ~ \"4\", signif(AVAL, signif_dig) < 130 ~ \"3\", is.na(ANRLO) ~ NA_character_,  signif(AVAL, signif_dig) < signif(ANRLO, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     },
     {
       "term": "Hypophosphatemia",
       "direction": "L",
-      "required_vars": [
-        "AVAL",
-        "ANRLO"
-      ],
-      "na_check": [
-        "AVAL"
-      ],
-      "grades": [
+      "unit": "MMOL/L",
+      "required_vars": ["AVAL", "ANRLO"],
+      "subgroup": null,
+      "filter": null,
+      "arms": [
         {
-          "grade": 4,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 0.3
-            }
-          ]
+          "when": {"op":"is_na","args":[{"var":"AVAL"}]},
+          "then": null
         },
         {
-          "grade": 3,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 0.6
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},0.3]},
+          "then": "4"
         },
         {
-          "grade": 2,
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right": 0.8
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},0.6]},
+          "then": "3"
         },
         {
-          "grade": 1,
-          "na_guard": [
-            "ANRLO"
-          ],
-          "rules": [
-            {
-              "left": "AVAL",
-              "op": "lt",
-              "right_var": "ANRLO"
-            }
-          ]
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},0.8]},
+          "then": "2"
+        },
+        {
+          "when": {"op":"is_na","args":[{"var":"ANRLO"}]},
+          "then": null
+        },
+        {
+          "when": {"op":"lt","args":[{"op":"signif","args":[{"var":"AVAL"}]},{"op":"signif","args":[{"var":"ANRLO"}]}]},
+          "then": "1"
+        },
+        {
+          "when": true,
+          "then": "0"
         }
       ],
-      "unit": "MMOL/L"
+      "source": {
+        "soc": "Metabolism and nutrition disorders",
+        "grade_1": "<LLN - 2.5 mg/dL; <LLN - 0.8 mmol/L",
+        "grade_2": "<2.5 - 2.0 mg/dL; <0.8 - 0.6 mmol/L",
+        "grade_3": "<2.0 - 1.0 mg/dL; <0.6 - 0.3 mmol/L",
+        "grade_4": "<1.0 mg/dL; <0.3 mmol/L; life-threatening consequences",
+        "grade_5": "Death",
+        "comment": null,
+        "grade_criteria_code": "case_when(is.na(AVAL) ~ NA_character_, signif(AVAL, signif_dig) < 0.3 ~ \"4\", signif(AVAL, signif_dig) < 0.6 ~ \"3\", signif(AVAL, signif_dig) < 0.8 ~ \"2\", is.na(ANRLO) ~ NA_character_,  signif(AVAL, signif_dig) < signif(ANRLO, signif_dig) ~ \"1\", TRUE ~ \"0\")",
+        "filter": null
+      }
     }
   ]
 }

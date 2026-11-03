@@ -929,8 +929,8 @@
           "title": "Unit Var"
         },
         "signif_dig": {
-          "default": 5,
-          "description": "Significant digits for comparisons.",
+          "default": 15,
+          "description": "Significant digits for comparisons (admiral signif_digits).",
           "title": "Signif Dig",
           "type": "integer"
         },

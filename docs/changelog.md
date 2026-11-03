@@ -6,6 +6,13 @@ All notable changes to Fleet are documented here.
 
 ### Fixed
 
+- **Toxicity grades equal admiral** (ADR-0014, alpha audit package D). The 8 bundled criteria files are generated from the admiral 1.4.1 metadata by `scripts/regen_grading_criteria.R` and keep the admiral text of each term; a frozen admiral grid of 34,146 rows is the CI test.
+  - A null BNRIND takes the ULN criteria: ALT 900 with ULN 40 is grade 4, not 0.
+  - The unit matches without case: potassium 7.5 in `mmol/L` is grade 4, not null.
+  - Each row is graded with the entry of its own DAIDS subgroup and unit: DAIDS `Hemoglobin, Low` 60 g/L is grade 4 for adults and neonates. A term with criteria for several units needs `unit_var=`. Every row keeps its place.
+  - CTCAE v5 and v6 INR take the worse of the absolute and the baseline cut-offs (INR 3.0 is grade 3, also with no BASE), as admiral. v4 `Hemoglobin increased` no longer raises; Fibrinogen, Creatinine clearance and Alkaline phosphatase follow admiral.
+  - `atoxgr(signif_dig=)` defaults to 15, as admiral.
+  - A custom criteria file needs `schema_version: 2` (ordered `case_when` arms); a file in the old format stops with a message.
 - **One reader for `--DTC` text** (ADR-0011, alpha audit package A). Every date verb reads `--DTC` through `fleet.core.dtc`:
   - `study_day`, `duration` in days and `visit_map` use the date portion of a timed value (SDTMIG 3.4 section 4.4.4): `2021-03-20T10:30` against `2021-03-15T08:00` is day 6, not null. A `pl.Datetime` gives its date.
   - `duration` adds one **day** before dividing for weeks, months and years (85 days is 2.79 months, not 3.76), gives the raw difference for hours by default, and adds nothing to a negative span (-1, not 0), as admiral `compute_duration`. `tte.aval` has the same sign rule.

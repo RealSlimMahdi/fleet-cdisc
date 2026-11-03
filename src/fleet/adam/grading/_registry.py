@@ -7,7 +7,7 @@ from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 
-from fleet.adam.grading._models import CriteriaFile
+from fleet.adam.grading._models import SCHEMA_VERSION, CriteriaFile
 
 _CRITERIA_DIR: Path = Path(__file__).parent / "criteria"
 
@@ -48,6 +48,13 @@ def _load_from_path(resolved: str) -> CriteriaFile:
     if not path.exists():
         raise FileNotFoundError(f"Criteria file not found: {path}")
     raw = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(raw, dict) and "schema_version" not in raw:
+        raise ValueError(
+            f"{path} uses the grade-level criteria format of Fleet 0.2.0a1, which cannot "
+            f"state AND conditions or null arms. Rewrite it in schema_version {SCHEMA_VERSION}: "
+            "each term holds ordered case_when 'arms' (see the bundled files, written by "
+            "scripts/regen_grading_criteria.R from admiral)."
+        )
     return CriteriaFile.model_validate(raw)
 
 
