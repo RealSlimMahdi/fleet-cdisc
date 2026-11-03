@@ -23,6 +23,10 @@ All notable changes to Fleet are documented here.
   - A CSV column with a leading zero (SITEID `001`) reads as text with a warning, types are inferred from every row, and `fleet run` reads define type `text` variables as text, so LBORRES `1.10` stays `1.10`.
   - `fleet compare` types CSV sides across both files: SITEID `001` against `1` differs, AVAL `1.10` against `1.1` is equal, and `--text` keeps a column text. New `blank_is_missing` / `--blank-is-missing` reads `""` as missing on both sides; the default stays exact.
   - `load_raw_data(..., encoding=)` reaches the SAS reader, and `--encoding` is on `fleet compare` and `fleet validate`, so a file from a WLATIN1 SAS session can be read. A keyword the reader does not take raises.
+- **BLQ comes from the SDTM text, and confirmed response uses every by column** (ADR-0015, alpha audit package E):
+  - `blq_flag`, `blqfn`, `blq_impute` and `avalcat` share one BLQ rule: a number below the LLOQ, or no number and a BLQ text in `PCSTRESC` (`<0.1`, `BLQ`, `BQL`, `BLOQ`, `LLOQ`; new `blq_text=`). A record with PCSTRESC `BLQ` and a null PCSTRESN is now BLQFL Y and imputed; before it was skipped with no message. `ALQ`, `>1000` and a missed sample are not BLQ. New `text_col="PCSTRESC"` (a frame without it stops; `text_col=None` for numeric results only) and `numeric_below_lloq=True` (`False` lets only the text decide, as admiral).
+  - `avalcat` gives a record with no number that is not BLQ its PCSTRESC text (`>1000`), or null for a missed sample, not `BLQ`.
+  - `confirmed_response_flag` checks the confirmation within every `by=` column, not only the first: `by=["STUDYID", "USUBJID"]` no longer flags a subject with one PR. A null by value is a group.
 
 ### Changed
 
