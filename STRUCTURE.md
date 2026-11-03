@@ -22,8 +22,6 @@ Fleet/
 │   ├── validation/         # CDISC rules-engine integration
 │   └── comparison/         # fleet.compare — PROC COMPARE analogue in pure Polars
 │
-├── datasets/               # Example raw data (CDISCPILOT01)
-├── specs/                  # YAML derivation specs per study/domain
 ├── tests/                  # Pytest test suite
 │   ├── conftest.py         # Shared fixtures
 │   ├── fixtures/           # CT files, spec YAMLs, raw CSVs for tests

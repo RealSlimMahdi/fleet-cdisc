@@ -223,6 +223,8 @@ def _watch_loop(paths: Sequence[Path], run_once: Callable[[], None]) -> None:
 
 def _run_init_cfg(args: argparse.Namespace) -> None:
     from fleet.core.study_context import (
+        DEFAULT_ADAM_CT,
+        DEFAULT_SDTM_CT,
         ADAMConfig,
         CTConfig,
         SDTMConfig,
@@ -233,6 +235,16 @@ def _run_init_cfg(args: argparse.Namespace) -> None:
     study_root = Path(args.root).resolve()
     domains = _parse_domains(args.domains) if args.domains else []
     adam_datasets = _parse_domains(args.adam_datasets) if args.adam_datasets else []
+    adam_package = args.adam_package
+    if adam_datasets and adam_package is None:
+        if args.package != DEFAULT_SDTM_CT:
+            _fail(
+                f"--package {args.package} with ADaM datasets needs --adam-package: CDISC "
+                "publishes ADaM CT on its own dates. Give the latest ADaM CT package on or "
+                f"before {args.package.split('-', 1)[-1]} (for example --adam-package "
+                f"{DEFAULT_ADAM_CT} goes with {DEFAULT_SDTM_CT})."
+            )
+        adam_package = DEFAULT_ADAM_CT
 
     print(f"Study ID: {args.study_id}")
     print(f"Root:     {study_root}")
@@ -246,9 +258,10 @@ def _run_init_cfg(args: argparse.Namespace) -> None:
         study_root=study_root,
         study_id=args.study_id,
         company=args.company,
+        description=args.description or "",
         sdtm=SDTMConfig(ig_version=args.ig, domains=domains),
         adam=ADAMConfig(ig_version=args.adam_ig, datasets=adam_datasets),
-        ct=CTConfig(package=args.package),
+        ct=CTConfig(package=args.package, adam_package=adam_package),
         validation=ValidationConfig(custom_rules="metadata/custom_rules"),
     )
     config_path = ctx.study_root / "study_config.yaml"
@@ -283,6 +296,8 @@ def _run_init_define(args: argparse.Namespace) -> None:
 
     # Extract CT version date from package string (e.g. "sdtmct-2023-12-15" → "2023-12-15")
     ct_version = cfg.ct.package.split("-", 1)[-1] if "-" in cfg.ct.package else "2023-12-15"
+    adam_ct = cfg.ct.adam_package
+    adam_ct_version = adam_ct.split("-", 1)[-1] if adam_ct and "-" in adam_ct else None
 
     with CDISCClient() as client:
         scaffolder = DefineScaffolder(client)
@@ -298,6 +313,7 @@ def _run_init_define(args: argparse.Namespace) -> None:
                 dest = scaffolder.scaffold_sdtm(
                     study_id=cfg.study_id,
                     company=cfg.company or "",
+                    description=cfg.description,
                     ig_version=cfg.sdtm.ig_version or _default_ig("sdtm"),
                     ct_version=ct_version,
                     domains=cfg.sdtm.domains,
@@ -314,8 +330,10 @@ def _run_init_define(args: argparse.Namespace) -> None:
                 dest = scaffolder.scaffold_adam(
                     study_id=cfg.study_id,
                     company=cfg.company or "",
+                    description=cfg.description,
                     ig_version=cfg.adam.ig_version or _default_ig("adam"),
                     ct_version=ct_version,
+                    adam_ct_version=adam_ct_version,
                     datasets=cfg.adam.datasets,
                     output_path=adam_path,
                 )
@@ -373,6 +391,7 @@ def _run_init_rules(args: argparse.Namespace) -> None:
 
 
 def _run_init_ct_pipeline(args: argparse.Namespace) -> None:
+    from fleet.core.exceptions import CTError
     from fleet.ct.api import CDISCClient
     from fleet.ct.generator import CodelistGenerator, extract_concept_ids
 
@@ -407,15 +426,25 @@ def _run_init_ct_pipeline(args: argparse.Namespace) -> None:
         return
 
     with CDISCClient() as client:
-        gen = CodelistGenerator.from_concept_ids(
-            client,
-            all_ids,
-            package=cfg.ct.package,
-            include_docs=not args.no_docs,
-        )
+        try:
+            gen = CodelistGenerator.from_concept_ids(
+                client,
+                all_ids,
+                package=cfg.ct.package,
+                adam_package=cfg.ct.adam_package,
+                include_docs=not args.no_docs,
+            )
+        except CTError as exc:
+            _fail(str(exc))
         dest = gen.write(output)
 
-    print(f"Generated {gen.codelist_count} codelists → {dest}")
+    print(f"Generated {gen.codelist_count} codelists ({', '.join(cfg.ct.pins)}) → {dest}")
+    terms = gen.define_terms()
+    for dpath in (sdtm_define, adam_define):
+        if dpath.is_file():
+            filled = _write_define_terms(dpath, terms, force=force)
+            if filled:
+                print(f"Wrote the terms of {filled} codelist(s) into {dpath}")
 
     print()
     print("Bootstrap complete! Next steps:")
@@ -425,6 +454,38 @@ def _run_init_ct_pipeline(args: argparse.Namespace) -> None:
     print("  - Inline code:  from fleet.ct import import_codelists; ct = import_codelists()")
     print("                  or: import_codelists(); from codelists import SEX, RACE, ...")
     print("  - When ready:   fleet run   (or: fleet define-xml --spec <define.yaml>)")
+
+
+def _write_define_terms(path: Path, terms: dict[str, dict], *, force: bool) -> int:
+    """Write downloaded terms into the ``codelists:`` entries of a define.yaml; return the count.
+
+    An entry that already has terms is kept unless *force*.  The file is
+    rewritten through YAML, so only its header comment survives.
+    """
+    from itertools import takewhile
+
+    import yaml
+
+    text = path.read_text(encoding="utf-8")
+    spec = yaml.safe_load(text) or {}
+    filled = 0
+    for entry in spec.get("codelists") or []:
+        found = terms.get(str(entry.get("oid")))
+        if found is None or (entry.get("items") and not force):
+            continue
+        entry["name"] = found["name"]
+        entry["items"] = found["items"]
+        filled += 1
+    if filled:
+        lines = text.splitlines(keepends=True)
+        header = list(takewhile(lambda line: line.startswith("#") or not line.strip(), lines))
+        if any(line.lstrip().startswith("#") for line in lines[len(header) :]):
+            print(f"Note: {path} is rewritten; comments after its header are not kept.")
+        body = yaml.dump(
+            spec, default_flow_style=False, allow_unicode=True, sort_keys=False, width=120
+        )
+        path.write_text("".join(header) + body, encoding="utf-8")
+    return filled
 
 
 # ────────────────────────────────────────────────────────────────────── #
@@ -455,9 +516,9 @@ def _run_add_ct(args: argparse.Namespace) -> None:
         from fleet.ct.study_codelists import load_codelists
 
         current = load_codelists(output)[0]
-        if current is not None and current != args.package:
+        if current and args.package not in current:
             _fail(
-                f"{output} was generated from {current}, not {args.package}; "
+                f"{output} was generated from {', '.join(current)}, not {args.package}; "
                 "fleet add-ct does not change the CT package of existing codelists. "
                 "Set ct.package in study_config.yaml, then run: fleet init ct --force"
             )
@@ -639,11 +700,11 @@ def _print_codelists_status(config_path: Path) -> None:
         print(f"  ✗ codelists.py ....... {problem}")
     if problems or not ctx.codelists_file.is_file():
         return
-    package = load_codelists(ctx.codelists_file)[0]
-    if package is None:
+    packages = load_codelists(ctx.codelists_file)[0]
+    if not packages:
         print(f"  ✓ codelists.py ....... {ctx.codelists_file} (no CT package recorded)")
     else:
-        print(f"  ✓ codelists.py ....... {package} (matches study_config)")
+        print(f"  ✓ codelists.py ....... {', '.join(packages)} (matches study_config)")
 
 
 def _run_doctor(args: argparse.Namespace) -> None:
@@ -1218,11 +1279,13 @@ def _run_new(args: argparse.Namespace) -> None:
         argparse.Namespace(
             study_id=args.study_id,
             company=args.company,
+            description=args.description,
             domains=args.domains,
             adam_datasets=args.adam_datasets,
             ig=args.ig,
             adam_ig=args.adam_ig,
             package=args.package,
+            adam_package=args.adam_package,
             root=str(study_root),
         )
     )
@@ -1997,7 +2060,12 @@ def _add_init_parsers(sub: argparse._SubParsersAction) -> None:
     cfg.add_argument(
         "--company",
         default=None,
-        help="Originator / company name.",
+        help="Originator / company name (study.originator in define.yaml).",
+    )
+    cfg.add_argument(
+        "--description",
+        default=None,
+        help="Study description (study.description in define.yaml).",
     )
     cfg.add_argument(
         "--domains",
@@ -2022,7 +2090,16 @@ def _add_init_parsers(sub: argparse._SubParsersAction) -> None:
     cfg.add_argument(
         "--package",
         default="sdtmct-2023-12-15",
-        help="CT package version (default: sdtmct-2023-12-15).",
+        help="SDTM CT package version (default: sdtmct-2023-12-15).",
+    )
+    cfg.add_argument(
+        "--adam-package",
+        default=None,
+        help=(
+            "ADaM CT package, for the codelists only ADaM CT holds (DTYPE). Default with "
+            "ADaM datasets: adamct-2023-06-30, the latest on or before the default SDTM "
+            "package; required with another --package."
+        ),
     )
     cfg.add_argument(
         "--root",
@@ -2436,7 +2513,7 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         ),
         description=(
             "CI gate: parse the study config, check each define.yaml against its schema, "
-            "check codelists.py against ct.package and the define.yaml files, "
+            "check codelists.py against ct.package, ct.adam_package and the define.yaml files, "
             "build the validation run setup for SDTM and ADaM with no datasets, and check "
             "each custom rule YAML. An unsupported sdtm.ig_version or adam.ig_version and a "
             "configured validation.custom_rules directory that does not exist fail the gate. "
@@ -2640,7 +2717,12 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     new.add_argument(
         "--company",
         default=None,
-        help="Originator / company name.",
+        help="Originator / company name (study.originator in define.yaml).",
+    )
+    new.add_argument(
+        "--description",
+        default=None,
+        help="Study description (study.description in define.yaml).",
     )
     new.add_argument(
         "--ig",
@@ -2655,7 +2737,16 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     new.add_argument(
         "--package",
         default="sdtmct-2023-12-15",
-        help="CT package version (default: sdtmct-2023-12-15).",
+        help="SDTM CT package version (default: sdtmct-2023-12-15).",
+    )
+    new.add_argument(
+        "--adam-package",
+        default=None,
+        help=(
+            "ADaM CT package, for the codelists only ADaM CT holds (DTYPE). Default with "
+            "ADaM datasets: adamct-2023-06-30, the latest on or before the default SDTM "
+            "package; required with another --package."
+        ),
     )
     new.add_argument(
         "--root",

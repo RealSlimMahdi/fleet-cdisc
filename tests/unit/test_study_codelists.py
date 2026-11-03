@@ -259,7 +259,7 @@ class TestStaleCodelists:
         # a file generated before the marker existed
         path.write_text(re.sub(r"^__ct_package__ = .*\n", "", text, flags=re.M), encoding="utf-8")
 
-        assert load_codelists(path)[0] == PINNED
+        assert load_codelists(path)[0] == (PINNED,)
 
     def test_a_mixed_package_file_is_detected(self, study: Path) -> None:
         _write_codelists(

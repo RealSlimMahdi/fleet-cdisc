@@ -424,15 +424,42 @@ against the study:
 
 | Check | Problem | Fix |
 | --- | --- | --- |
-| Package | The `__ct_package__` marker of the file (for older files, the package in each class's `_cdisc_url`) is not `ct.package` in `study_config.yaml`. | `fleet init ct --force` |
-| Mixed packages | The classes name different CT packages. | `fleet init ct --force` |
-| Missing codelist | A `codelist:` or `ct_codelist:` ID of a `define.yaml` has no class in the file. | `fleet add-ct --domains AE` (SDTM), `fleet init ct --force` (ADaM) |
+| Package | A package in the `__ct_packages__` or `__ct_package__` marker of the file (for older files, the package in each class's `_cdisc_url`) is not pinned in `study_config.yaml` (`ct.package`, `ct.adam_package`). | `fleet init ct --force` |
+| Mixed packages | The classes name two packages of one product, for example two SDTM CT dates. An SDTM and an ADaM package together are correct. | `fleet init ct --force` |
+| Missing codelist | A `codelist:` or `ct_codelist:` ID of a `define.yaml` has no class in the file. | `fleet add-ct --domains AE` (SDTM); `fleet init ct --force` (ADaM), after you set `ct.adam_package` |
 | Missing file | The `define.yaml` files reference codelists, but the file does not exist. | `fleet init ct` |
 
 `from_spec` warns once per process about all but the missing codelist, and
 still checks the values against the file. An inline `ct=` class from another
 package gives the package warning too. `fleet check` fails on all four, and
 `fleet doctor` prints one `codelists.py` line.
+
+### Two CT packages: SDTM CT and ADaM CT
+
+CDISC publishes ADaM CT on its own dates, and some codelists are only in
+ADaM CT (DTYPE, C81224). A study with ADaM datasets pins both packages in
+`study_config.yaml`:
+
+```yaml
+ct:
+  package: sdtmct-2023-12-15
+  adam_package: adamct-2023-06-30
+```
+
+- `fleet init cfg` and `fleet new` with ADaM datasets pin
+  `adamct-2023-06-30`, the latest ADaM CT package on or before the default
+  SDTM package. With another `--package`, give `--adam-package` too.
+- `fleet init ct` takes each codelist from the first pinned package that
+  holds it, SDTM CT first. When no pinned package holds a codelist, it names
+  the ID, writes no file and exits with code 1.
+- `fleet init ct` also writes the terms and decodes (the NCI preferred term)
+  into each `codelists:` entry of the `define.yaml` files that has no terms
+  yet; with `--force`, into every entry. The file is rewritten, so only its
+  header comment stays. A Define-XML `CodeList` needs its terms, and
+  `fleet define-xml` names each codelist without them.
+- The ADaM `define.yaml` states both dates: `ct_version` (SDTM CT, for SEX)
+  and `adam_ct_version` (ADaM CT, for DTYPE). Its Define-XML lists two CT
+  standards, with the publishing sets SDTM and ADaM.
 
 ### Opting the spec into CT validation
 

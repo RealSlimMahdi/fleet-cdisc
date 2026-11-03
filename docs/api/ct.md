@@ -98,9 +98,11 @@ The generated `codelists.py` contains:
   ```
 
 - **`__ct_package__`** at the top, naming the CT package every class came from
-  (`__ct_package__ = "sdtmct-2025-09-26"`). The
+  (`__ct_package__ = "sdtmct-2025-09-26"`). A file with codelists from an
+  SDTM and an ADaM package has `__ct_packages__` instead
+  (`("adamct-2023-06-30", "sdtmct-2023-12-15")`). The
   [stale checks](../concepts/define-yaml.md#controlled-terminology-in-the-spec-path)
-  compare it with `ct.package` in `study_config.yaml`.
+  compare them with `ct.package` and `ct.adam_package` in `study_config.yaml`.
 
 ### Importing codelists in standalone study projects
 

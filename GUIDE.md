@@ -201,11 +201,12 @@ from pathlib import Path
 
 from fleet import load_raw_data
 
-dm_raw = load_raw_data(Path("datasets/cdiscpilot01/raw/dm_raw.csv")).collect()
-ae_raw = load_raw_data(Path("datasets/cdiscpilot01/raw/ae_raw.csv")).collect()
-vs_raw = load_raw_data(Path("datasets/cdiscpilot01/raw/vs_raw.csv")).collect()
+dm_raw = load_raw_data(Path("data/raw/dm_raw.csv")).collect()
+ae_raw = load_raw_data(Path("data/raw/ae_raw.csv")).collect()
+vs_raw = load_raw_data(Path("data/raw/vs_raw.csv")).collect()
 ```
 
+The paths are those of your study's raw files; the repository ships no raw data.
 `load_raw_data` takes a `pathlib.Path` and returns a `pl.LazyFrame` — call
 `.collect()` to materialise. It also accepts a URL or Parquet/XPT/SAS path. The
 examples below reuse `dm_raw`, `ae_raw`, `vs_raw` from this step.

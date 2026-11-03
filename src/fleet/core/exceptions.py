@@ -55,6 +55,10 @@ class CTError(FleetError):
     """Raised when controlled terminology operations fail."""
 
 
+class CTNotFoundError(CTError, LookupError):
+    """Raised when the CDISC Library has no such resource (HTTP 404), unlike a 401 or a network error."""
+
+
 class IOError(FleetError):  # noqa: A001
     """Raised when data loading or saving fails."""
 

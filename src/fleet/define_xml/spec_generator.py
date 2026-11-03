@@ -62,6 +62,7 @@ _STANDARD_OIDS: dict[str, str] = {
     "SENDIG": "STD.SENDIG",
 }
 _CT_OID = "STD.CT"
+_ADAM_CT_OID = "STD.CT.ADAM"
 
 #: Spec ``study.standard`` → the ``def:Standard/@Name`` value Define-XML 2.1
 #: enumerates (note the lower-case 'a' in ADaMIG).
@@ -69,14 +70,6 @@ _STANDARD_NAMES: dict[str, str] = {
     "SDTMIG": "SDTMIG",
     "ADAMIG": "ADaMIG",
     "SENDIG": "SENDIG",
-}
-
-#: Spec ``study.standard`` → the ``def:Standard/@PublishingSet`` value, a
-#: separate and smaller enumeration than the IG names.
-_PUBLISHING_SETS: dict[str, str] = {
-    "SDTMIG": "SDTM",
-    "ADAMIG": "ADaM",
-    "SENDIG": "SEND",
 }
 
 # Map export format (spec key ``output_format``) → def:leaf href extension.
@@ -320,9 +313,26 @@ class DefineSpecGenerator:
         schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
         validator = jsonschema.Draft202012Validator(schema)
         errors = list(validator.iter_errors(self._data))
-        if errors:
-            msgs = "\n".join(f"  - {e.json_path}: {e.message}" for e in errors[:5])
-            raise SpecSchemaError(f"{self._path}: define YAML failed schema validation:\n{msgs}")
+        if not errors:
+            return
+        empty = [
+            e.json_path[2:]
+            for e in errors
+            if e.json_path in ("$.study.description", "$.study.originator")
+            and e.validator == "minLength"
+        ]
+        lines = [f"  - {e.json_path}: {e.message}" for e in errors if e.json_path[2:] not in empty][
+            :5
+        ]
+        if empty:
+            lines.insert(
+                0,
+                f"  - {' and '.join(empty)} {'is' if len(empty) == 1 else 'are'} empty. "
+                "Write the text in this file, or create the study with "
+                "`fleet new --description ... --company ...`.",
+            )
+        msgs = "\n".join(lines)
+        raise SpecSchemaError(f"{self._path}: define YAML failed schema validation:\n{msgs}")
 
     def _validate_codelist_refs(self) -> None:
         """Fail loudly on ``codelist:`` references to undeclared codelists.
@@ -352,6 +362,13 @@ class DefineSpecGenerator:
                 f"{'; '.join(dangling)}. Declared codelist OIDs: "
                 f"{sorted(declared) or '(none)'}. Add the codelist to the "
                 f"spec's `codelists:` section or fix the reference."
+            )
+        empty = [cl["oid"] for cl in self._data.get("codelists", []) if not cl.get("items")]
+        if empty:
+            raise SpecError(
+                f"{self._path}: codelist(s) with no terms: {', '.join(empty)}. A Define-XML "
+                "CodeList needs its terms. Run: fleet init ct (it writes the terms of the "
+                "pinned CT package into this file), or add items: by hand."
             )
 
     def _leaf_href(self, ds: dict[str, Any]) -> str:
@@ -491,7 +508,17 @@ class DefineSpecGenerator:
                     "CDISC/NCI",
                     "CT",
                     study["ct_version"],
-                    publishing_set=_PUBLISHING_SETS.get(study["standard"]),
+                    publishing_set="SEND" if study["standard"] == "SENDIG" else "SDTM",
+                )
+            )
+        if study.get("adam_ct_version"):
+            stds_container.append(
+                self._build_standard(
+                    _ADAM_CT_OID,
+                    "CDISC/NCI",
+                    "CT",
+                    study["adam_ct_version"],
+                    publishing_set="ADaM",
                 )
             )
 
