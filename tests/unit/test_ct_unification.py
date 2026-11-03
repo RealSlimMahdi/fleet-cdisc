@@ -104,8 +104,8 @@ class TestFromSpecCTConfig:
         with pytest.warns(UserWarning, match=r"not in codelist 'C66731'.*Female"):
             df.sdtm.from_spec(spec, dataset="DM").to_frame()
 
-    def test_no_ct_block_behaves_as_before(self, tmp_path, ct_file):
-        """Back-compat: a mapped assign_ct without ct: stays silent."""
+    def test_a_mapped_value_outside_the_codelist_warns(self, tmp_path, ct_file):
+        """A raw value outside the map stays in SEX, and the check names it (c1-31)."""
         get_validator().load_ct_file(ct_file)
         spec = _dm_spec(tmp_path, ct=None, ct_mapping={"F": "F", "M": "M"})
         df = pl.from_repr("""\
@@ -118,10 +118,8 @@ class TestFromSpecCTConfig:
 │ UNKNOWN │
 └─────────┘
 """)
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
+        with pytest.warns(UserWarning, match=r"not in codelist.*UNKNOWN"):
             df.sdtm.from_spec(spec, dataset="DM").to_frame()
-        assert not [w for w in caught if "not in codelist" in str(w.message)]
 
     def test_validate_false_is_inert(self, tmp_path, ct_file):
         spec = _dm_spec(
@@ -139,7 +137,7 @@ class TestFromSpecCTConfig:
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             df.sdtm.from_spec(spec, dataset="DM").to_frame()
-        assert not [w for w in caught if "not in codelist" in str(w.message)]
+        assert not [w for w in caught if "codelist" in str(w.message)]
 
     def test_unloadable_ct_file_raises_spec_error(self, tmp_path):
         spec = _dm_spec(tmp_path, ct={"validate": True, "file": "missing_ct.yaml"})

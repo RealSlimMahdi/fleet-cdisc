@@ -454,6 +454,11 @@ class CodelistGenerator:
             lines.append("    pass")
             return lines
 
+        submission_values = sorted({t.get("submissionValue", "") for t in terms} - {""})
+        # Two terms can share one attribute name (2 and 3 TIMES PER WEEK).
+        lines.append(f"    _terms = {tuple(submission_values)!r}")
+        lines.append("")
+
         for term in sorted(terms, key=lambda t: t.get("submissionValue", "")):
             sv: str = term.get("submissionValue", "")
             if not sv:

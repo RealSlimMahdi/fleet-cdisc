@@ -649,7 +649,7 @@ def _print_codelists_status(config_path: Path) -> None:
 def _run_doctor(args: argparse.Namespace) -> None:
     from fleet.core.exceptions import ValidationSetupError
     from fleet.validation import build_run_setup
-    from fleet.validation.engine import discover_engine, doctor, engine_version
+    from fleet.validation.engine import discover_engine, doctor
 
     config_path = Path(args.config) if getattr(args, "config", None) else find_study_config()
 
@@ -676,7 +676,7 @@ def _run_doctor(args: argparse.Namespace) -> None:
     else:
         checks = doctor(engine=engine)
         print(f"  ✓ rules engine ....... {engine}{where}")
-        print(f"      version: {engine_version(engine)}")
+        print(f"      version: {checks['version']}")
         print(f"      type: {checks['type']}")
         status_mark = "✓" if checks["status"].startswith("OK") else "✗"
         print(f"  {status_mark} engine status ...... {checks['status']}")
@@ -852,7 +852,7 @@ def _run_run(args: argparse.Namespace) -> None:
 # fleet validate — CDISC Rules Engine wrapper                             #
 # ────────────────────────────────────────────────────────────────────── #
 
-#: ``fleet validate`` exit codes: 0 no errors, 1 errors found, 2 a dataset could not run.
+#: ``fleet validate`` exit codes: 0 nothing blocks, 1 a finding blocks, 2 a dataset could not run.
 _VALIDATE_ERRORS = 1
 _VALIDATE_COULD_NOT_RUN = 2
 
@@ -868,6 +868,7 @@ def _run_validate(args: argparse.Namespace) -> None:
             standard=args.standard,
             version=args.standard_version,
             custom_rules=args.custom_rules,
+            timeout=args.timeout,
             config=Path(args.config) if args.config else None,
         )
     except ValidationSetupError as exc:
@@ -885,10 +886,11 @@ def _run_validate(args: argparse.Namespace) -> None:
             standard=standard,
             version=setup.ig_version.value,
             custom_rules=setup.custom_rules.value,
+            timeout=setup.timeout.value,
         )
         setups = {d.name: d.setup for d in datasets}
         for name, result in by_name.items():
-            result.setup = setups.get(name, setup)
+            result.apply_setup(setups.get(name) or setup)
             result.print_report()
             results.append(result)
 
@@ -901,13 +903,23 @@ def _run_validate(args: argparse.Namespace) -> None:
         write_html_report(results, report_path, could_not_run=could_not_run)
         print(f"HTML report → {report_path}")
 
-    failed = sum(1 for r in results if r.errors)
+    engine_failed = sum(1 for r in results if r.could_not_run is not None)
+    failed = sum(1 for r in results if r.could_not_run is None and r.errors)
+    not_assessed = sum(1 for r in results if r.status == "NOT ASSESSED")
+    accepted_only = sum(1 for r in results if r.status.startswith("FINDINGS"))
+    passed = sum(1 for r in results if r.status == "PASS")
+    accepted = sum(len(r.warnings) for r in results)
+    findings = sum(len(r.errors) for r in results) + accepted
+    datasets = sum(1 for r in results if r.dataset_name != "STUDY")
+    study = " and the study-level rules" if datasets < len(results) else ""
     print()
     print(
-        f"Validated {len(results)} dataset(s): {len(results) - failed} passed, "
-        f"{failed} failed, {len(could_not_run)} could not run."
+        f"Validated {datasets} dataset(s){study}: {passed} passed, "
+        f"{accepted_only} with accepted findings, {not_assessed} not assessed, "
+        f"{failed} failed, {len(could_not_run) + engine_failed} could not run. "
+        f"Findings: {findings} ({accepted} accepted)."
     )
-    if could_not_run:
+    if could_not_run or engine_failed:
         sys.exit(_VALIDATE_COULD_NOT_RUN)
     if failed:
         sys.exit(_VALIDATE_ERRORS)
@@ -2345,8 +2357,9 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     validate = sub.add_parser(
         "validate",
         help=(
-            "Validate datasets with the CDISC Rules Engine, one engine run per standard "
-            "(exit 0 no errors, 1 errors, 2 a dataset could not run)."
+            "Validate datasets with the CDISC Rules Engine, one engine run per standard. "
+            "Every finding blocks unless validation.accepted lists it "
+            "(exit 0 nothing blocks, 1 a finding blocks, 2 a dataset could not run)."
         ),
     )
     validate.add_argument(
@@ -2382,6 +2395,16 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         help=(
             "Directory of custom validation rule YAML files. "
             "Default: validation.custom_rules from the discovered study_config.yaml."
+        ),
+    )
+    validate.add_argument(
+        "--timeout",
+        type=float,
+        default=None,
+        metavar="SECONDS",
+        help=(
+            "Seconds before an engine run is stopped. "
+            "Default: validation.timeout from the discovered study_config.yaml, else 300."
         ),
     )
     validate.add_argument(

@@ -132,11 +132,13 @@ def fleet_validate(
             ``validation.custom_rules`` in the study config.
 
     Returns:
-        dict: ``{"outcome": "pass" | "fail", "dataset", "standard",
+        dict: ``{"outcome": "pass" | "fail", "status", "dataset", "standard",
             "is_valid", "setup": {input: {value, source}, ...},
-            "issues": [{severity, rule_id, message, variable, source}, ...]}``,
+            "issues": [{severity, rule_id, message, variable, source, accepted}, ...]}``,
             or ``{"outcome": "could not run", "reason"}`` when the run
-            setup is refused or no engine is found.
+            setup is refused, no engine is found, or the engine crashed or
+            timed out.  ``status`` is ``PASS``, ``FINDINGS (n)``,
+            ``NOT ASSESSED`` or ``FAIL``; only ``FAIL`` gives ``"fail"``.
 
     Examples:
         Validate an ADaM dataset of a study from any working directory::
@@ -171,15 +173,21 @@ def fleet_validate(
         standard=setup.standard.value,
         version=setup.ig_version.value,
         custom_rules=setup.custom_rules.value,
+        timeout=setup.timeout.value,
     )[name]
+    result.apply_setup(setup)
+    if result.could_not_run is not None:
+        return _could_not_run(result.could_not_run)
     inputs = {
         "standard": setup.standard,
         "ig_version": setup.ig_version,
         "custom_rules": setup.custom_rules,
         "engine": setup.engine,
+        "timeout": setup.timeout,
     }
     return {
         "outcome": "pass" if result.is_valid else "fail",
+        "status": result.status,
         "dataset": result.dataset_name,
         "standard": setup.standard.value,
         "is_valid": result.is_valid,
@@ -198,6 +206,7 @@ def fleet_validate(
                 "message": issue.message,
                 "variable": issue.variable,
                 "source": issue.source,
+                "accepted": issue.accepted,
             }
             for issue in (*result.errors, *result.warnings, *result.infos)
         ],

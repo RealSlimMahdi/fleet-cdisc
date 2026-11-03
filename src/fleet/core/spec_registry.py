@@ -412,13 +412,12 @@ def _default_dispatch(ns: Any, var: SpecVariableBase) -> Any:
     """Table-driven executor: build kwargs from the param table, call the verb."""
     algo = type(var)._algo
     kwargs = {p.kwarg or p.name: _resolve_param(ns, var, p, algo) for p in algo.params}
-    # Spec-level CT config (`ct: {validate: true}`) opts the assign family
-    # into pass-through value validation — only algorithms that declare a
-    # ct codelist param are affected.
-    if getattr(ns, "_spec_ct_validate", False) and any(
-        (p.kwarg or p.name) == "ct" for p in algo.params
-    ):
-        kwargs.setdefault("validate_values", True)
+    # Spec-level CT config (`ct: {validate: true|false}`) sets the assign
+    # family's value check — only algorithms that declare a ct codelist
+    # param are affected.
+    spec_ct_validate = getattr(ns, "_spec_ct_validate", None)
+    if spec_ct_validate is not None and any((p.kwarg or p.name) == "ct" for p in algo.params):
+        kwargs.setdefault("validate_values", spec_ct_validate)
     # from_spec put the study's codelists.py classes here; an ID they lack stays a string.
     codelists = getattr(ns, "_spec_codelists", None)
     if codelists and isinstance(kwargs.get("ct"), str):

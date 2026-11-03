@@ -134,15 +134,18 @@ _SUBJECTS = pl.from_repr("""\
 
 @pytest.fixture
 def engine_calls(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
-    """Capture each validate command; the engine writes no report and exits 0."""
+    """Capture each validate command; the engine writes a clean report and exits 0."""
     calls: list[list[str]] = []
 
     def run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         if "validate" in cmd and "--help" not in cmd:
             calls.append(cmd)
+            out = Path(cmd[cmd.index("-o") + 1]).with_suffix(".json")
+            out.write_text('{"Issue_Details": []}', encoding="utf-8")
         return subprocess.CompletedProcess(cmd, 0, "0.15.0\n", "")
 
     monkeypatch.setattr("fleet.validation.official.subprocess.run", run)
+    monkeypatch.setattr("fleet.validation.official._run_command", run)
     monkeypatch.delenv("FLEET_RULES_ENGINE", raising=False)
     return calls
 

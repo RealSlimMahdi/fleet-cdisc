@@ -70,9 +70,35 @@ uv run fleet validate --report findings.html   # HTML findings report
   dataset. Every cell is HTML-escaped.
 - **Could not run**: a dataset whose directory and file name disagree
   (`data/sdtm/adsl.parquet`), or an unsupported IG version, is not validated.
-  The reason is printed, and the other datasets still run.
-- Exit codes: 0 no errors, 1 any dataset has errors, 2 any dataset could not
-  run. So `fleet validate` drops straight into CI.
+  The reason is printed, and the other datasets still run. An engine that
+  crashes, writes no report, or does not finish within the timeout also
+  gives "could not run", not a data failure.
+- **Timeout**: `--timeout SECONDS`, else `validation.timeout` in the study
+  config, else 300 s. On timeout Fleet stops the engine and its workers.
+- **Every finding blocks** (ADR-0017). CORE gives no severity, so Fleet does
+  not invent one. A finding stops blocking only when `validation.accepted`
+  lists its rule and dataset with a reason, as an SDRG explanation does:
+
+  ```yaml
+  validation:
+    accepted:
+      - rule: CORE-000767
+        dataset: AE
+        reason: No FA domain in this study; see SDRG section 4.2.
+  ```
+
+- **Status words**: `PASS` (at least one rule executed, no finding),
+  `FINDINGS (n)` (every finding accepted), `NOT ASSESSED` (no rule executed),
+  `FAIL` (a finding blocks), `COULD NOT RUN`. Study-level findings
+  (dataset `STUDY`) get their own block in a sweep. In a single-dataset run
+  (the verb, the MCP tool) they are information only, because one dataset
+  cannot show what the study lacks.
+- Exit codes: 0 nothing blocks, 1 a finding blocks, 2 a dataset could not
+  run. So `fleet validate` drops straight into CI. The last line counts each
+  status and the findings.
+- **Engine version**: `fleet install-engine` installs the newest tested CORE
+  release. The report header and `fleet doctor` name a version Fleet is not
+  tested with. A weekly CI job runs Fleet on the newest CORE release.
 
 ### The CI gate: `fleet check`
 
