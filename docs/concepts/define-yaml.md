@@ -171,9 +171,8 @@ and the function is `@derivation`-registered, or (b) by fully qualified
 dotted path. Declare `derivations_module:` at the top of the spec and
 `from_spec()` imports it for you, so short names always resolve.
 
-Both `algorithm:` and `callable:` plug into Define-XML method enrichment:
-running `DefineSpecGenerator(spec, enrich_methods=True)` (or
-`fleet define-xml --enrich-methods`) emits one `<MethodDef>` per
+Both `algorithm:` and `callable:` plug into the Define-XML methods:
+`DefineSpecGenerator(spec)` (or `fleet define-xml`) emits one `<MethodDef>` per
 **Derived** variable, named `Algorithm for <VARIABLE>`. The
 `<Description>` is submission text, resolved in this order:
 
@@ -273,7 +272,7 @@ graph TD
     B -->|derivation specs| D[namespace.from_spec]
     D -->|applies verbs| E[Polars pipeline]
     E -->|calls .to_frame| F[ADSL DataFrame]
-    A -->|variable metadata| C[DefineSpecGenerator / DefineXMLGenerator]
+    A -->|variable metadata| C[DefineSpecGenerator]
     C --> G[define_adam.xml]
     F --> H[adsl.parquet / adsl.json]
     F --> I[DatasetChecker / ValidationService]
@@ -311,7 +310,7 @@ One CLI command — inside a study workspace, spec and output default from
 
 ```bash
 uv run fleet define-xml --standard adam                 # config-based defaults
-uv run fleet define-xml -s specs/define.yaml -o out.xml --enrich-methods
+uv run fleet define-xml -s specs/define.yaml -o out.xml --strict
 ```
 
 The same generation from Python:
@@ -319,23 +318,50 @@ The same generation from Python:
 <!-- docs:no-run -->
 
 ```python
-from pathlib import Path
+from fleet import DefineSpecGenerator
 
-from fleet import DefineXMLGenerator
-
-gen = DefineXMLGenerator(Path("examples/cdiscpilot01/adam/define.yaml"))
-gen.generate(Path("outputs/cdiscpilot01/define_adam.xml"))
+DefineSpecGenerator("examples/cdiscpilot01/adam/define.yaml").generate(
+    "outputs/cdiscpilot01/define_adam.xml"
+)
 ```
 
-`DefineSpecGenerator(spec, enrich_methods=True).generate(out)` additionally emits
-a `<MethodDef>` per **Derived** variable (see *Define-XML method enrichment*
-above for the text-source rule); variables with `origin: Collected`,
+`DefineSpecGenerator` emits a `<MethodDef>` per **Derived** variable (see
+the method text rule above); variables with `origin: Collected`,
 `Assigned`, `Protocol`, or `Predecessor` never reference a method. Generated
 documents are validated on the way out — against the vendored CDISC XSDs
 *and* a semantic lint (`fleet.define_xml.semantic_errors`) that rejects
 reviewer-facing defects such as a `MethodOID` on a non-Derived variable or
 API markup inside `TranslatedText`; `validate_xml=False` bypasses both.
-Both generators honour the same new spec keys:
+
+### Define-XML gaps: warning or refusal
+
+Define-XML 2.1 requires three things that a spec can leave out:
+
+- a `MethodOID` on each Derived `ItemRef`, so a Derived variable needs a
+  `comment:` or a `derivation:` block that gives method text;
+- a `Length` on `text`, `integer` and `float` items (characters for text,
+  digits for numbers);
+- a `SignificantDigits` on `float` items (`significant_digits:` in the spec,
+  on a variable or on a value-level entry).
+
+The generator names each gap, one line per item:
+
+```text
+specs/define.yaml: 2 Define-XML gap(s):
+  DM.SAFFL: no method text (add a comment: or a derivation: block)
+  VS.AVAL (PARAMCD = SYSBP): no SignificantDigits (required on float)
+```
+
+| Entry point | A gap gives |
+| --- | --- |
+| `fleet define-xml`, `DefineSpecGenerator(spec)` | the file, and one warning with the list |
+| `fleet define-xml --strict`, `DefineSpecGenerator(spec, strict=True)` | `SpecError`, exit code 1, no file |
+| `fleet check` | a FAIL row `define (sdtm)` or `define (adam)` with the list |
+
+The schema refuses `significant_digits:` on a type other than `float`, and
+`length:` on `date` and `datetime`.
+
+The spec keys below apply to every generation:
 
 - **`fleet_spec_version: 1`** — spec dialect version (checked on load).
 - **`derivations_module:`** — a dotted module that `from_spec` imports itself, so
@@ -486,65 +512,36 @@ dm = raw_df.sdtm.from_spec("specs/define.yaml", dataset="DM")
 copies the value through and emits a `UserWarning` that CT could not be validated.
 `assign` never fabricates a missing-field error for an optional field.)
 
-### Layer 2 — JSON Schema + business rule validation (`DefineValidator`)
+### Layer 2 — Define-XML generation in strict mode (`fleet check`)
 
-`DefineValidator` runs a deeper structural check against the bundled JSON Schema
-(`src/fleet/define_xml/schemas/define_xml_2_1_schema.json`) and a set of CDISC business rules.
-This layer fires **on demand**, not automatically during pipeline execution.
-
-From the CLI, this layer is part of the one-shot CI gate — it validates every
-define.yaml the study config points at:
+`fleet check` generates the Define-XML of every define.yaml the study config
+points at, in strict mode, and writes no file. The row passes only when the
+generator gives a valid document. This layer fires **on demand**, not
+automatically during pipeline execution.
 
 ```bash
 uv run fleet check
 ```
 
-Or trigger it explicitly from Python — before generating Define-XML or before
-submission:
-
-<!-- docs:no-run -->
-
-```python
-from fleet.define_xml import DefineValidator
-from pathlib import Path
-
-validator = DefineValidator()
-is_valid = validator.validate(Path("examples/cdiscpilot01/sdtm/define.yaml"))
-
-for issue in validator.issues:
-    print(f"[{issue.severity.upper()}] {issue.rule} @ {issue.location}: {issue.message}")
-
-# Example output:
-# [ERROR]   SCHEMA_001 @ datasets.0.variables.2: 'type' is a required property
-# [ERROR]   BR03 @ datasets.0.variables.5.codelist: CodeListRef 'C99999' not found in codelists[]
-# [WARNING] ALG02 @ datasets.0.variables.3: assign_ct should have ct_codelist declared
-```
-
 What it catches:
 
-| Rule         | Checks                                                               |
-| ------------ | -------------------------------------------------------------------- |
-| `SCHEMA_001` | All fields conform to the JSON Schema (types, required properties)   |
-| `BR01`       | Every dataset has at least one key variable                          |
-| `BR02`       | All `ItemRef` references resolve to declared variables               |
-| `BR03`       | All `codelist:` references resolve to codelists declared in the spec |
-| `BR04`       | All `MethodDef` references resolve                                   |
-| `ALG01`      | `assign_no_ct` has `source_variable`                                 |
-| `ALG02`      | `assign_ct` has both `source_variable` and `ct_codelist`             |
-| `ALG03`      | `hardcode_*` has `constant_value`                                    |
-| `ALG05`      | `merge` has `merge_dataset` and `merge_key`                          |
+- a spec that does not conform to `define_spec_schema.json` (`SpecSchemaError`,
+  with the path of the bad entry);
+- a `codelist:` reference to a codelist that the spec does not declare;
+- a Define-XML gap: method text, `Length` or `SignificantDigits` (see
+  *Define-XML gaps* above);
+- a generated document that fails the CDISC XSDs or the semantic lint.
 
-`validator.issues` is a list of `DefineIssue` dataclasses with fields `severity`, `location`,
-`message`, and `rule`. `validator.has_errors()` returns `True` when any `"error"` severity
-issues exist. Warnings do not block Define-XML generation.
+The same check from Python: `DefineSpecGenerator(path, strict=True).to_xml_string()`
+raises on the first of these problems and returns the XML text otherwise.
 
 ### When to run each layer
 
-| Layer              | When it fires                             | Blocks execution?                                               |
-| ------------------ | ----------------------------------------- | --------------------------------------------------------------- |
-| Registry models    | Automatically on `.from_spec()` call      | Yes — raises `SpecError` (file → dataset → variable)            |
-| `DefineValidator`  | Manually, before Define-XML generation    | Only `has_errors()` returns `True`; you decide how to handle it |
-| CDISC Rules Engine | Manually, after datasets are materialised | No — report only                                                |
+| Layer              | When it fires                             | Blocks execution?                                    |
+| ------------------ | ----------------------------------------- | ---------------------------------------------------- |
+| Registry models    | Automatically on `.from_spec()` call      | Yes — raises `SpecError` (file → dataset → variable) |
+| `fleet check`      | Manually or in CI, before submission      | Yes — a FAIL row and exit code 1                     |
+| CDISC Rules Engine | Manually, after datasets are materialised | No — report only                                     |
 
 ### JSON Schema & Editor Support
 
@@ -602,8 +599,7 @@ How the Origin **description** renders, per origin type:
   inline pipeline, `to_spec_yaml(dataset="ADSL", predecessor="DM")` pre-fills
   these entries for carry-through columns and pure `source` copies — the
   emitted YAML stays the explicit, reviewable source of truth.
-- **`Derived`** describes the derivation in its `MethodDef` (or in the Origin
-  description via `comment:` when method enrichment is off).
+- **`Derived`** describes the derivation in its `MethodDef`.
 - **`Assigned` / `Protocol`** show the `comment:` — e.g.
   `comment: DM.ARM` renders `Assigned: DM.ARM`.
 - **`Collected`** with CRF pages renders the page links; Investigator-collected
@@ -741,4 +737,4 @@ These emit `<def:SupplementalDoc>` and corresponding `<def:leaf>` elements.
 
 - The `inputs` block declares which upstream datasets the pipeline should join/merge.
 - Variables with no `derivation` block are expected to flow in via the `source` dataset — they appear in Define-XML as `origin: Collected`.
-- Run `DefineValidator("...").validate(Path("specs/.../define.yaml"))` to catch schema and business rule errors before generating Define-XML or running pipelines.
+- Run `uv run fleet check` (or `fleet define-xml --strict`) to catch schema errors and Define-XML gaps before submission.

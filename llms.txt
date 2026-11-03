@@ -1375,12 +1375,14 @@ for checker, df, ds in [
     result.raise_on_errors()  # a failing dataset must fail the pipeline
 
 # ── 10. Generate Define-XML 2.1 ───────────────────────────────────────────────
-# enrich_methods=True emits one MethodDef per Derived variable, with
-# submission-facing text rendered from the algorithm registry (a spec
-# `comment:` overrides it) and the faithful Fleet call as FormalExpression.
+# One MethodDef per Derived variable, with submission-facing text rendered
+# from the algorithm registry (a spec `comment:` overrides it) and the
+# faithful Fleet call as FormalExpression. strict=True refuses a define with
+# a gap: a Derived variable with no method text, a numeric item with no
+# Length or a float with no SignificantDigits.
 # XSD validation + the semantic lint run automatically on the way out.
-DefineSpecGenerator(SDTM_SPEC, enrich_methods=True).generate(OUT / "define_sdtm.xml")
-DefineSpecGenerator(ADAM_SPEC, enrich_methods=True).generate(OUT / "define_adam.xml")
+DefineSpecGenerator(SDTM_SPEC, strict=True).generate(OUT / "define_sdtm.xml")
+DefineSpecGenerator(ADAM_SPEC, strict=True).generate(OUT / "define_adam.xml")
 print(f"\nDefine-XML written to {OUT}/")
 print("  Serve with: python -m http.server 8080 --directory outputs/cdiscpilot01")
 
@@ -1947,13 +1949,14 @@ adsl = (
 ### Define-XML generation
 
 ```python
-from pathlib import Path
+from fleet import DefineSpecGenerator
 
-from fleet import DefineXMLGenerator
-
-gen = DefineXMLGenerator(Path("examples/cdiscpilot01/adam/define.yaml"))
-gen.generate(Path("outputs/cdiscpilot01/define_adam.xml"))
+DefineSpecGenerator("examples/cdiscpilot01/adam/define.yaml").generate(
+    "outputs/cdiscpilot01/define_adam.xml"
+)
 ```
+
+Each Derived variable needs method text (`comment:` or `derivation:`); text, integer and float need `length:`; float needs `significant_digits:`. A gap warns; `strict=True` (CLI `fleet define-xml --strict`, and `fleet check`) refuses.
 
 New spec keys: `fleet_spec_version: 1` (dialect pin), `derivations_module:` (auto-import for `callable:`), `output_format:` (parquet/json/xpt), `value_level:` (value-level metadata), and `ct: {validate: true, file: ...}` (opt into CT validation).
 

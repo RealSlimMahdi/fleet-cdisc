@@ -51,6 +51,17 @@ study:
   originator: Test Co
   standard: SDTMIG
   standard_version: "3.4"
+codelists:
+  - oid: C66769
+    name: Severity/Intensity Scale for Adverse Events
+    type: text
+    items:
+      - coded_value: MILD
+        decode: MILD
+      - coded_value: MODERATE
+        decode: MODERATE
+      - coded_value: SEVERE
+        decode: SEVERE
 datasets:
   - name: AE
     label: Adverse Events
@@ -64,6 +75,7 @@ datasets:
       - name: DOMAIN
         label: Domain Abbreviation
         type: text
+        length: 2
         mandatory: true
         derivation:
           algorithm: hardcode_no_ct
@@ -71,6 +83,7 @@ datasets:
       - name: AESEV
         label: Severity/Intensity
         type: text
+        length: 8
         mandatory: false
         origin: Collected
         codelist: C66769

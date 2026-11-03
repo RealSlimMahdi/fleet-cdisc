@@ -86,8 +86,6 @@ from .define_xml import (
     CheckResult,
     DatasetChecker,
     DefineSpecGenerator,
-    DefineValidator,
-    DefineXMLGenerator,
     TypeMismatch,
 )
 from .io import load_datasets, load_raw_data, save_dataset_json, save_parquet
@@ -185,9 +183,6 @@ __all__ = [
     "DatasetChecker",
     "CheckResult",
     "TypeMismatch",
-    # Define-XML — full Pharmaversepy-format workflow
-    "DefineValidator",
-    "DefineXMLGenerator",
     # Validation
     "ValidationResult",
     "ValidationService",

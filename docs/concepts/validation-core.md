@@ -171,7 +171,7 @@ different error class:
 | Layer | When | What it catches |
 | --- | --- | --- |
 | Spec registry models | `from_spec()` load time | unknown algorithms, misspelled/missing derivation fields |
-| `DefineValidator` / `fleet check` | on demand / CI gate | define.yaml schema + business rules, run setup (IG versions, custom rules directory) |
+| `fleet check` | on demand / CI gate | Define-XML generation in strict mode (schema, codelists, method text, Length, SignificantDigits), run setup (IG versions, custom rules directory) |
 | Trial-design audit (`fleet tdd audit`) | on demand, offline | P21-style SD-series + FDA TS profile for TDD domains |
 | **CORE (`fleet validate`)** | after datasets materialise | official CDISC conformance rules against the data itself |
 

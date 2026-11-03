@@ -44,6 +44,7 @@ datasets:
       - name: STUDYID
         label: Study Identifier
         type: text
+        length: 7
         mandatory: true
         derivation:
           algorithm: hardcode_no_ct
@@ -51,6 +52,7 @@ datasets:
       - name: DOMAIN
         label: Domain Abbreviation
         type: text
+        length: 2
         mandatory: true
         derivation:
           algorithm: hardcode_no_ct
@@ -58,6 +60,7 @@ datasets:
       - name: USUBJID
         label: Unique Subject Identifier
         type: text
+        length: 20
         mandatory: true
         derivation:
           algorithm: assign_no_ct
@@ -65,6 +68,7 @@ datasets:
       - name: AGE
         label: Age
         type: integer
+        length: 3
         mandatory: false
         derivation:
           algorithm: assign_no_ct

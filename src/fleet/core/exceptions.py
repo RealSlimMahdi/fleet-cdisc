@@ -63,6 +63,14 @@ class SpecError(FleetError):
     """Raised when a YAML specification is invalid."""
 
 
+class SpecSchemaError(SpecError, ValueError):
+    """Raised when a define.yaml fails its JSON schema.
+
+    A ``ValueError`` too, so code written for the earlier ``ValueError``
+    keeps working; the CLI prints it as one clean message, with no traceback.
+    """
+
+
 class ValidationError(FleetError):
     """Raised when CDISC validation encounters a fatal error."""
 

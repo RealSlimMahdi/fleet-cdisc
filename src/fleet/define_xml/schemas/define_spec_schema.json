@@ -369,8 +369,13 @@
         },
         "length": {
           "type": "integer",
-          "description": "Maximum character length (for text variables).",
+          "description": "Define-XML Length. Text: the maximum number of characters. Integer and float: the number of digits, whole digits plus decimals (not the SAS storage length of 8). Required on text, integer and float; not allowed on date and datetime.",
           "minimum": 1
+        },
+        "significant_digits": {
+          "type": "integer",
+          "description": "Define-XML SignificantDigits: the number of decimals. Required on float; not allowed on other types.",
+          "minimum": 0
         },
         "mandatory": {
           "type": "boolean",
@@ -453,21 +458,58 @@
           "description": "Derivation rule that drives the pipeline when from_spec() is called. Omit for columns that are not programmatically derived (e.g. carry-through columns)."
         }
       },
-      "if": {
-        "properties": {
-          "origin": {
-            "const": "Predecessor"
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "origin": {
+                "const": "Predecessor"
+              }
+            },
+            "required": [
+              "origin"
+            ]
+          },
+          "then": {
+            "required": [
+              "predecessor"
+            ]
           }
         },
-        "required": [
-          "origin"
-        ]
-      },
-      "then": {
-        "required": [
-          "predecessor"
-        ]
-      }
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "date",
+                  "datetime"
+                ]
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "length"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "significant_digits"
+            ]
+          },
+          "then": {
+            "properties": {
+              "type": {
+                "const": "float"
+              }
+            }
+          }
+        }
+      ]
     },
     "documents": {
       "type": "object",

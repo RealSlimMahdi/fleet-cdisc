@@ -120,6 +120,15 @@ class DefineSpecGenerator:
         :class:`~fleet.core.exceptions.SpecError` rather than emitting a
         non-conformant define.xml.  Set to ``False`` to write the file
         anyway (e.g. to inspect what failed).
+    enrich_methods:
+        When *True* (default), every Derived variable with a ``comment:``
+        or a ``derivation:`` gets a MethodDef.
+    strict:
+        When *True*, refuse (``SpecError``) a define with gaps: a Derived
+        variable with no method text, a text, integer or float variable
+        with no Length, a float with no SignificantDigits.  When *False*
+        (default), the gaps are named in one ``UserWarning`` and the file
+        is written (ADR-0018).
     """
 
     def __init__(
@@ -128,15 +137,21 @@ class DefineSpecGenerator:
         *,
         validate_schema: bool = True,
         validate_xml: bool = True,
-        enrich_methods: bool = False,
+        enrich_methods: bool = True,
+        strict: bool = False,
     ) -> None:
         self._path = Path(define_yaml_path)
         self._data: dict[str, Any] = yaml.safe_load(self._path.read_text(encoding="utf-8"))
         self._check_spec_version()
         self._enrich_methods = enrich_methods
+        self._strict = strict
         self._validate_xml = validate_xml
-        # Populated via _register_method when enrich_methods is True;
-        # rendered into MethodDef elements at the end of MetaDataVersion.
+        #: "DATASET.VARIABLE: reason" for each define gap of the last build.
+        self._gaps: list[str] = []
+        #: (dataset, variable) pairs whose methods live at value level.
+        self._vlm_parents: set[tuple[str, str]] = set()
+        # Populated via _register_method; rendered into MethodDef elements at
+        # the end of MetaDataVersion.
         self._method_defs: dict[str, dict[str, str]] = {}
         # ItemDef OID → ValueListDef OID (populated by _build_value_level;
         # consumed by _build_item_def to emit def:ValueListRef).
@@ -174,13 +189,6 @@ class DefineSpecGenerator:
             ``define2-1.xsl`` in the same directory as *output_path*, which
             is the standard layout used by Fleet.
         """
-        # Import the spec's derivations_module so short-name `callable:`
-        # derivations are registered before their MethodDefs are resolved
-        # (from_spec does this too; without it the study's MethodDef is
-        # silently dropped).
-        spec = load_define_spec(self._path)
-        _import_derivations_module(spec, source="define-xml")
-
         root = self._build_odm()
         xml_str = self._serialise(root)
         out = Path(output_path)
@@ -307,12 +315,14 @@ class DefineSpecGenerator:
             )
 
     def _validate(self) -> None:
+        from fleet.core.exceptions import SpecSchemaError
+
         schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
         validator = jsonschema.Draft202012Validator(schema)
         errors = list(validator.iter_errors(self._data))
         if errors:
             msgs = "\n".join(f"  - {e.json_path}: {e.message}" for e in errors[:5])
-            raise ValueError(f"define YAML failed schema validation:\n{msgs}")
+            raise SpecSchemaError(f"{self._path}: define YAML failed schema validation:\n{msgs}")
 
     def _validate_codelist_refs(self) -> None:
         """Fail loudly on ``codelist:`` references to undeclared codelists.
@@ -393,6 +403,12 @@ class DefineSpecGenerator:
     def _build_odm(self) -> ET.Element:
         self._validate_codelist_refs()
         self._warn_predecessor_candidates()
+        # Import the spec's derivations_module so short-name `callable:`
+        # derivations are registered before their MethodDefs are resolved
+        # (from_spec does this too; without it the study's MethodDef is
+        # silently dropped).
+        _import_derivations_module(load_define_spec(self._path), source="define-xml")
+        self._gaps = []
         study = self._data["study"]
         std_oid = _STANDARD_OIDS.get(study["standard"], f"STD.{study['standard']}")
         ts = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
@@ -412,7 +428,27 @@ class DefineSpecGenerator:
         }
         odm = ET.Element("ODM", attrib=attribs)
         odm.append(self._build_study(study, std_oid))
+        self._report_gaps()
         return odm
+
+    def _report_gaps(self) -> None:
+        """Refuse the define in strict mode, else name its gaps in one warning."""
+        if not self._gaps:
+            return
+        shown = "\n  ".join(self._gaps[:25])
+        more = f"\n  ... and {len(self._gaps) - 25} more" if len(self._gaps) > 25 else ""
+        text = (
+            f"{self._path}: {len(self._gaps)} Define-XML gap(s):\n  {shown}{more}\n"
+            "Define-XML 2.1 requires a MethodOID on each Derived ItemRef, Length on "
+            "text, integer and float, and SignificantDigits on float."
+        )
+        if self._strict:
+            raise SpecError(text)
+        warnings.warn(
+            text + " The file is written; fleet define-xml --strict refuses it.",
+            UserWarning,
+            stacklevel=4,
+        )
 
     # ------------------------------------------------------------------ #
     # Study / MetaDataVersion                                              #
@@ -474,6 +510,12 @@ class DefineSpecGenerator:
                 ET.SubElement(supp_elem, "def:DocumentRef", {"leafID": sd["id"]})
 
         datasets: list[dict[str, Any]] = self._data.get("datasets", [])
+        self._vlm_parents = {
+            (ds["name"], var["name"])
+            for ds in datasets
+            for entry in ds.get("value_level") or []
+            for var in entry.get("variables", [])
+        }
 
         # Value-level metadata (def:ValueListDef / def:WhereClauseDef) —
         # placed before ItemGroupDefs per the Define-XML 2.1 element order.
@@ -581,11 +623,13 @@ class DefineSpecGenerator:
             # Define-XML 2.1 places MethodOID on the ItemRef (usage site),
             # not on the ItemDef — and only Derived-origin variables carry
             # a computational method (a collected column rename is not a
-            # MethodDef).
-            derivation = var.get("derivation")
-            if self._enrich_methods and derivation and var.get("origin", "Derived") == "Derived":
-                method_oid = self._register_method(
-                    derivation, dataset=name, target=var_name, comment=var.get("comment")
+            # MethodDef).  A parent with value-level metadata is judged there.
+            if (
+                var.get("origin", "Derived") == "Derived"
+                and (name, var_name) not in self._vlm_parents
+            ):
+                method_oid = self._method_ref(
+                    var, dataset=name, target=var_name, label=f"{name}.{var_name}"
                 )
                 if method_oid:
                     ref_attrs["MethodOID"] = method_oid
@@ -623,6 +667,7 @@ class DefineSpecGenerator:
         dataset_name: str,
         *,
         vl_key: str | None = None,
+        label: str | None = None,
     ) -> ET.Element:
         attribs: dict[str, str] = {
             "OID": item_oid,
@@ -630,8 +675,15 @@ class DefineSpecGenerator:
             "DataType": _TYPE_TO_ODM[var["type"]],
             "SASFieldName": var["name"],
         }
+        where = label or f"{dataset_name}.{var['name']}"
         if var.get("length") is not None:
             attribs["Length"] = str(var["length"])
+        elif var["type"] in ("text", "integer", "float"):
+            self._gaps.append(f"{where}: no Length (required on text, integer and float)")
+        if var.get("significant_digits") is not None:
+            attribs["SignificantDigits"] = str(var["significant_digits"])
+        elif var["type"] == "float":
+            self._gaps.append(f"{where}: no SignificantDigits (required on float)")
 
         elem = ET.Element("ItemDef", attrib=attribs)
 
@@ -687,6 +739,30 @@ class DefineSpecGenerator:
 
         return elem
 
+    def _method_ref(
+        self,
+        var: dict[str, Any],
+        *,
+        dataset: str,
+        target: str,
+        label: str,
+        vl_key: str | None = None,
+    ) -> str | None:
+        """Return the MethodOID of one Derived variable, or record why it has none."""
+        if not self._enrich_methods:
+            self._gaps.append(f"{label}: no MethodDef (enrich_methods=False)")
+            return None
+        derivation = var.get("derivation") or {}
+        if not derivation and not var.get("comment"):
+            self._gaps.append(f"{label}: no method text (add a comment: or a derivation: block)")
+            return None
+        method_oid, problem = self._register_method(
+            derivation, dataset=dataset, target=target, comment=var.get("comment"), vl_key=vl_key
+        )
+        if problem:
+            self._gaps.append(f"{label}: {problem}")
+        return method_oid
+
     @staticmethod
     def _method_oid(dataset: str, target: str, vl_key: str | None = None) -> str:
         """Per-variable MethodDef OID: ``MT.<dataset>.<target>[.<vl_key>]``."""
@@ -720,30 +796,37 @@ class DefineSpecGenerator:
         target: str,
         comment: str | None = None,
         vl_key: str | None = None,
-    ) -> str | None:
-        """Register the MethodDef for one derived variable; return its OID.
+    ) -> tuple[str | None, str | None]:
+        """Register the MethodDef for one derived variable; return its OID and a problem.
 
         One MethodDef per derived variable, named ``Algorithm for
         <target>`` — never Fleet's internal algorithm id.  Description
         precedence: the spec ``comment:``, then the study callable's
         docstring (``callable:`` escape hatch), then the registry's
         submission-facing template / synthesised text
-        (:func:`fleet.core.spec_registry.render_method_text`).  Returns
+        (:func:`fleet.core.spec_registry.render_method_text`).  The OID is
         ``None`` when no reviewer-facing text can be produced — the
         variable then ships without a MethodDef rather than with API
-        prose.
+        prose.  The problem names what the define reviewer must fix (a
+        callable that does not import is a problem even with a comment).
         """
         callable_path = derivation.get("callable")
         algorithm = str(derivation.get("algorithm") or "")
         description = (comment or "").strip()
         context = "Python/Fleet"
+        expression = ""
+        problem: str | None = None
 
         if callable_path and algorithm in ("", "callable"):
             summary, dotted = self._resolve_callable(str(callable_path))
+            if summary is None and dotted is None:
+                problem = f"callable {callable_path} does not import"
+            elif summary is None and not description:
+                problem = f"callable {callable_path} has no docstring"
             description = description or _strip_rest_markup(summary or "")
-            expression = dotted or str(callable_path)
+            expression = dotted or ""
             context = "Python"
-        else:
+        elif algorithm:
             params = {k: v for k, v in derivation.items() if k != "algorithm"}
             std = _REGISTRY_STANDARDS.get(self._data["study"]["standard"], "sdtm")
             description = description or (
@@ -755,7 +838,7 @@ class DefineSpecGenerator:
             )
 
         if not description:
-            return None
+            return None, problem or "no method text (add a comment:)"
 
         method_oid = self._method_oid(dataset, target, vl_key)
         self._method_defs.setdefault(
@@ -767,13 +850,15 @@ class DefineSpecGenerator:
                 "context": context,
             },
         )
-        return method_oid
+        return method_oid, problem
 
     @staticmethod
     def _build_method_def(method_oid: str, info: dict[str, str]) -> ET.Element:
         """Render a Define-XML 2.1 ``MethodDef`` element.
 
         See CDISC Define-XML 2.1 §4.2.2 for the FormalExpression contract.
+        FormalExpression is optional: a method described only in words
+        (a ``comment:``) has none, as in the CDISC ADaM example define.
         """
         elem = ET.Element(
             "MethodDef",
@@ -781,8 +866,9 @@ class DefineSpecGenerator:
         )
         desc = ET.SubElement(elem, "Description")
         ET.SubElement(desc, "TranslatedText", {"xml:lang": "en"}).text = info["description"]
-        formal = ET.SubElement(elem, "FormalExpression", {"Context": info["context"]})
-        formal.text = info["expression"]
+        if info["expression"]:
+            formal = ET.SubElement(elem, "FormalExpression", {"Context": info["context"]})
+            formal.text = info["expression"]
         return elem
 
     @staticmethod
@@ -877,6 +963,7 @@ class DefineSpecGenerator:
 
                     key = "_".join(values)
                     item_oid = f"IT.{ds_name}.{var_name}.{key}"
+                    label = f"{ds_name}.{var_name} ({wc_var} = {', '.join(values)})"
 
                     vl_counters[vl_oid] += 1
                     ref_attrs: dict[str, str] = {
@@ -884,18 +971,9 @@ class DefineSpecGenerator:
                         "OrderNumber": str(vl_counters[vl_oid]),
                         "Mandatory": "Yes" if var.get("mandatory") else "No",
                     }
-                    derivation = var.get("derivation")
-                    if (
-                        self._enrich_methods
-                        and derivation
-                        and var.get("origin", "Derived") == "Derived"
-                    ):
-                        method_oid = self._register_method(
-                            derivation,
-                            dataset=ds_name,
-                            target=var_name,
-                            comment=var.get("comment"),
-                            vl_key=key,
+                    if var.get("origin", "Derived") == "Derived":
+                        method_oid = self._method_ref(
+                            var, dataset=ds_name, target=var_name, label=label, vl_key=key
                         )
                         if method_oid:
                             ref_attrs["MethodOID"] = method_oid
@@ -903,7 +981,9 @@ class DefineSpecGenerator:
                     ET.SubElement(item_ref, "def:WhereClauseRef", {"WhereClauseOID": wc_oid})
                     # Built after _register_method so the ItemDef knows its
                     # comment: was consumed by the MethodDef.
-                    item_defs.append(self._build_item_def(item_oid, var, ds_name, vl_key=key))
+                    item_defs.append(
+                        self._build_item_def(item_oid, var, ds_name, vl_key=key, label=label)
+                    )
 
         return list(value_lists.values()), list(where_defs.values()), item_defs
 

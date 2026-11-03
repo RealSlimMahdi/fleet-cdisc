@@ -238,9 +238,6 @@ class StudyContext:
     def define_yaml(self, file_name: str = "define.yaml") -> Path:
         return self.define_xml_dir / file_name
 
-    def define_schema(self, file_name: str = "define_xml_2_1_schema.json") -> Path:
-        return self.define_xml_dir / file_name
-
     @classmethod
     def init(
         cls,
