@@ -246,6 +246,7 @@ def _run_init_cfg(args: argparse.Namespace) -> None:
         study_root=study_root,
         study_id=args.study_id,
         company=args.company,
+        description=args.description or "",
         sdtm=SDTMConfig(ig_version=args.ig, domains=domains),
         adam=ADAMConfig(ig_version=args.adam_ig, datasets=adam_datasets),
         ct=CTConfig(package=args.package),
@@ -298,6 +299,7 @@ def _run_init_define(args: argparse.Namespace) -> None:
                 dest = scaffolder.scaffold_sdtm(
                     study_id=cfg.study_id,
                     company=cfg.company or "",
+                    description=cfg.description,
                     ig_version=cfg.sdtm.ig_version or _default_ig("sdtm"),
                     ct_version=ct_version,
                     domains=cfg.sdtm.domains,
@@ -314,6 +316,7 @@ def _run_init_define(args: argparse.Namespace) -> None:
                 dest = scaffolder.scaffold_adam(
                     study_id=cfg.study_id,
                     company=cfg.company or "",
+                    description=cfg.description,
                     ig_version=cfg.adam.ig_version or _default_ig("adam"),
                     ct_version=ct_version,
                     datasets=cfg.adam.datasets,
@@ -1218,6 +1221,7 @@ def _run_new(args: argparse.Namespace) -> None:
         argparse.Namespace(
             study_id=args.study_id,
             company=args.company,
+            description=args.description,
             domains=args.domains,
             adam_datasets=args.adam_datasets,
             ig=args.ig,
@@ -1997,7 +2001,12 @@ def _add_init_parsers(sub: argparse._SubParsersAction) -> None:
     cfg.add_argument(
         "--company",
         default=None,
-        help="Originator / company name.",
+        help="Originator / company name (study.originator in define.yaml).",
+    )
+    cfg.add_argument(
+        "--description",
+        default=None,
+        help="Study description (study.description in define.yaml).",
     )
     cfg.add_argument(
         "--domains",
@@ -2640,7 +2649,12 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     new.add_argument(
         "--company",
         default=None,
-        help="Originator / company name.",
+        help="Originator / company name (study.originator in define.yaml).",
+    )
+    new.add_argument(
+        "--description",
+        default=None,
+        help="Study description (study.description in define.yaml).",
     )
     new.add_argument(
         "--ig",

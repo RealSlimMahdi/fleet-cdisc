@@ -331,7 +331,7 @@
         },
         "path": {
           "type": "string",
-          "description": "File path for raw inputs relative to the repo root. Omit for dataset-type inputs (path is resolved from the DAG)."
+          "description": "File path for raw inputs relative to the study root (the folder of study_config.yaml). Omit for dataset-type inputs (path is resolved from the DAG)."
         }
       }
     },

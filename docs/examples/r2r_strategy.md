@@ -123,8 +123,8 @@ import fleet  # registers .sdtm / .adam / .tlg namespaces
 adsl = pl.read_csv("outputs/cdiscpilot01/adsl_admiral.csv", try_parse_dates=True)
 adsl = adsl.with_columns(pl.col("TRT01P").alias("TRTA"))
 
-# Raw AE — the only raw data this script owns
-ae_raw = pl.read_csv("datasets/cdiscpilot01/raw/ae_raw.csv")
+# Raw AE — the only raw data this script owns (your study's file)
+ae_raw = pl.read_csv("data/raw/ae_raw.csv")
 ```
 
 ### Layer 1 — SDTM (`.sdtm` namespace)

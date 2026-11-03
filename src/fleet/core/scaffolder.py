@@ -203,6 +203,7 @@ class DefineScaffolder:
         study_id: str,
         *,
         company: str = "",
+        description: str = "",
         ig_version: str = "3-4",
         ct_version: str = "2023-12-15",
         domains: list[str],
@@ -212,7 +213,8 @@ class DefineScaffolder:
 
         Args:
             study_id: Study identifier.
-            company: Originator / company name.
+            company: Originator / company name; empty when not known.
+            description: Study description; empty when not known.
             ig_version: SDTM IG version (e.g. ``"3-4"``).
             ct_version: CT version date (e.g. ``"2023-12-15"``).
             domains: List of SDTM domain abbreviations.
@@ -225,6 +227,7 @@ class DefineScaffolder:
         return self._write_define(
             study_id=study_id,
             company=company,
+            description=description,
             standard="SDTMIG",
             standard_version=_ig_version_dotted(ig_version),
             ct_version=ct_version,
@@ -237,6 +240,7 @@ class DefineScaffolder:
         study_id: str,
         *,
         company: str = "",
+        description: str = "",
         ig_version: str = "1-3",
         ct_version: str = "2023-12-15",
         datasets: list[str],
@@ -246,7 +250,8 @@ class DefineScaffolder:
 
         Args:
             study_id: Study identifier.
-            company: Originator / company name.
+            company: Originator / company name; empty when not known.
+            description: Study description; empty when not known.
             ig_version: ADaM IG version (e.g. ``"1-1"``).
             ct_version: CT version date (e.g. ``"2023-12-15"``).
             datasets: List of ADaM dataset names (e.g. ``["ADSL", "ADVS"]``).
@@ -259,6 +264,7 @@ class DefineScaffolder:
         return self._write_define(
             study_id=study_id,
             company=company,
+            description=description,
             standard="ADAMIG",
             standard_version=_ig_version_dotted(ig_version),
             ct_version=ct_version,
@@ -398,8 +404,13 @@ class DefineScaffolder:
         ct_version: str,
         datasets: list[dict[str, Any]],
         output_path: Path,
+        description: str = "",
     ) -> Path:
-        """Write the assembled define spec to a YAML file."""
+        """Write the assembled define spec to a YAML file.
+
+        An empty *company* or *description* stays empty: the schema then
+        names the field, so no placeholder reaches a Define-XML.
+        """
         from fleet._version import __version__
 
         output_path = output_path.resolve()
@@ -425,7 +436,7 @@ class DefineScaffolder:
             "study": {
                 "id": study_id,
                 "name": study_id,
-                "description": "",
+                "description": description,
                 "protocol_name": study_id,
                 "originator": company or "",
                 "source_system": "Fleet",

@@ -320,9 +320,26 @@ class DefineSpecGenerator:
         schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
         validator = jsonschema.Draft202012Validator(schema)
         errors = list(validator.iter_errors(self._data))
-        if errors:
-            msgs = "\n".join(f"  - {e.json_path}: {e.message}" for e in errors[:5])
-            raise SpecSchemaError(f"{self._path}: define YAML failed schema validation:\n{msgs}")
+        if not errors:
+            return
+        empty = [
+            e.json_path[2:]
+            for e in errors
+            if e.json_path in ("$.study.description", "$.study.originator")
+            and e.validator == "minLength"
+        ]
+        lines = [f"  - {e.json_path}: {e.message}" for e in errors if e.json_path[2:] not in empty][
+            :5
+        ]
+        if empty:
+            lines.insert(
+                0,
+                f"  - {' and '.join(empty)} {'is' if len(empty) == 1 else 'are'} empty. "
+                "Write the text in this file, or create the study with "
+                "`fleet new --description ... --company ...`.",
+            )
+        msgs = "\n".join(lines)
+        raise SpecSchemaError(f"{self._path}: define YAML failed schema validation:\n{msgs}")
 
     def _validate_codelist_refs(self) -> None:
         """Fail loudly on ``codelist:`` references to undeclared codelists.
