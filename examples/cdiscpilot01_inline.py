@@ -422,37 +422,38 @@ print(f"   AGEGR1 distribution: {_agegr.to_dicts()}")
 # ════════════════════════════════════════════════════════════════════════════
 # 8. Safety Population Flag (SAFFL)
 #    Admiral: derive_var_merged_exist_flag(ex, condition = EXDOSE > 0 | PLACEBO)
-#    Subjects with at least one exposure record (all randomised subjects here).
+#    This is the admiral template condition; the SAP decides the population.
+#    A population flag is never blank (ADaMIG 1.3): non-members get "N".
 #    We also derive ITTFL (intent-to-treat) = same population in this study.
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── 8. Population flags ──────────────────────────────────────────────────")
 
-# Pre-compute max EXDOSE per subject so flag can reference it
-_ex_max_dose = ex.group_by("USUBJID").agg(pl.col("EXDOSE").max().alias("_EXDOSE_MAX"))
+_treated = (pl.col("EXDOSE") > 0) | (
+    (pl.col("EXDOSE") == 0) & pl.col("EXTRT").str.to_uppercase().str.contains("PLACEBO")
+)
 
 adsl = (
-    adsl.adam.merge(dataset=_ex_max_dose, on="USUBJID", how="left")
-    .to_frame()
-    .adam.adsl.flag(  # SAFFL: subjects with at least one dose > 0 (admiral: derive_var_merged_exist_flag)
-        "SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0'
+    adsl.adam.adsl.flag_exists(  # admiral: derive_var_merged_exist_flag
+        "SAFFL", from_dataset=ex, on=["USUBJID"], source_filter=_treated, false_value="N"
     )
     # ITTFL: all randomised subjects (ARMCD not SCRNFAIL)
-    .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"')
+    .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"', false_value="N")
     .to_frame()
-    .drop("_EXDOSE_MAX")
 )
 
 print(f"   SAFFL : {adsl['SAFFL'].value_counts().to_dicts()}")
 print(f"   ITTFL : {adsl['ITTFL'].value_counts().to_dicts()}")
+assert (adsl["SAFFL"] == "Y").sum() == adsl.height, "every pilot subject took a dose"
 
 # ════════════════════════════════════════════════════════════════════════════
 # 9. Last Date Known Alive (LSTALVDT)
 #    Admiral: derive_vars_extreme_event(ae, lb, adsl; order=last)
-#    Fleet: pick() — event-priority cascade selecting the latest date across
-#    multiple sources.  Events are checked in priority order; within each
-#    event the latest record (mode="last", order by date) wins.
+#    Fleet: pick() — the latest date over all sources.  Within each event
+#    the latest record is kept; then the top-level order=["LSTALVDT"],
+#    mode="last" makes the events compete on the date, as admiral does.
+#    A tie on the date goes to the first listed event.
 #
-#    Sources (in priority order):
+#    Sources:
 #      a) AE end dates   (AEENDTC)  — most clinically recent contact
 #      b) AE start dates (AESTDTC)  — if AE end is missing
 #      c) Treatment end  (TRTEDT)   — fallback from ADSL itself
@@ -744,7 +745,12 @@ adae = (
     .duration("ADY", start="TRTSDT", end="ASTDT")
     .to_frame()
     .adam.occds.treatment_emergent(  # admiral: derive_var_trtemfl
-        "TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT"
+        "TRTEMFL",
+        start_date="ASTDT",
+        end_date="AENDT",
+        trtsdt="TRTSDT",
+        trtedt="TRTEDT",
+        end_window=0,  # the SAP decides the window after the last dose
     )
     # admiral: slice_derivation (worst severity per subject × AE term)
     .recode("AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})

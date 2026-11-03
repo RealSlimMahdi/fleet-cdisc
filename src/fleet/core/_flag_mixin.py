@@ -202,12 +202,13 @@ class FlagCriterionMixin:
                     .to_frame()
                 )
 
-            Population flag on SDTM::
+            Population flag from the treatment start date (a population
+            flag is never blank, so non-members get ``"N"``)::
 
-                dm = (
-                    raw_df.sdtm
-                    .flag("SAFFL", criteria=pl.col("EXDOSE") > 0,
-                          by=["USUBJID"])
+                adsl = (
+                    adsl.adam.adsl
+                    .flag("SAFFL", criteria=pl.col("TRTSDT").is_not_null(),
+                          false_value="N")
                     .to_frame()
                 )
         """

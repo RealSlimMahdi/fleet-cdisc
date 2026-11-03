@@ -15,8 +15,8 @@ Usage
                     where='pl.col("AESER") == "Y"')
         .duration("TRTDURD", start="TRTSDT", end="TRTEDT")
         .count_events("NUMAE",  from_dataset=ae_sdtm)
-        .flag("SAFFL",   criteria='pl.col("RANDFL") == "Y"')
-        .flag("PPROTFL", criteria='pl.col("COMPLFL") == "Y"')
+        .flag("SAFFL",   criteria='pl.col("TRTSDT").is_not_null()', false_value="N")
+        .flag("PPROTFL", criteria='pl.col("COMPLFL") == "Y"', false_value="N")
         .to_frame()
     )
 """

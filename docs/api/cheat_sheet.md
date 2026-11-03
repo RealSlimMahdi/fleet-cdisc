@@ -45,7 +45,7 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 | [`.recode()`][fleet.adam.AdamNamespace.recode]                                 | Value remapping with default.                                        | `.recode("PARAM", source="vstest", recode_map={...})`                   |
 | [`.assign()`][fleet.core._verb_mixin.SharedVerbsMixin.assign]                  | Copy/rename a column, or hardcode a literal.                         | `.assign("PARAMCD", source="vstestcd")`                                 |
 | [`.case_when()`][fleet.core._verb_mixin.SharedVerbsMixin.case_when]            | Multi-branch conditional derivation.                                 | `.case_when("EOSSTT", when=[...])`                                      |
-| [`.pick()`][fleet.adam.SharedADaMVerbsMixin.pick]                              | Derive targets from highest-priority matching event across sources.  | `.pick("LSTALVDT", events=[...], by=["USUBJID"], order=["LSTALVDT"])`   |
+| [`.pick()`][fleet.adam.SharedADaMVerbsMixin.pick]                              | Derive targets from the event with the latest (or first) value across sources. | `.pick("LSTALVDT", events=[...], by=["USUBJID"], order=["LSTALVDT"], mode="last")`   |
 | [`.date()`][fleet.adam.AdamNamespace.date]                                     | Parse `--DTC` to analysis date or datetime with optional imputation. | `.date("ADT", source="VSDTC")`                                          |
 | [`.duration()`][fleet.core._verb_mixin.SharedVerbsMixin.duration]                             | CDISC study day, elapsed time, or ISO 8601 duration.                 | `.duration("ADY", start="TRTSDT", end="ADT")`                           |
 | [`.merge_adsl()`][fleet.adam.AdamNamespace.merge_adsl]                         | Bring ADSL columns onto a BDS dataset.                               | `.merge_adsl(adsl, keep=["TRTSDT","SAFFL"])`                            |
@@ -75,7 +75,7 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 | [`.first_date()`][fleet.adam.SharedADaMVerbsMixin.first_date] | Earliest date per subject from a second dataset.                     | `.first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")`  |
 | [`.last_date()`][fleet.adam.SharedADaMVerbsMixin.last_date]   | Latest date per subject from a second dataset.                       | `.last_date("TRTEDT", from_dataset=ex, date_col="EXENDTC")`   |
 | [`.duration()`][fleet.core._verb_mixin.SharedVerbsMixin.duration]             | Number of elapsed days (start to end).                                      | `.duration("TRTDURD", start="TRTSDT", end="TRTEDT")`          |
-| [`.flag()`][fleet.adam.FlagCriterionMixin.flag]                | Generalised `"Y"` flag (first/last/max/min/exists/before/after/expression). | `.flag("SAFFL", criteria='pl.col("EXDOSE") > 0')`             |
+| [`.flag()`][fleet.adam.FlagCriterionMixin.flag]                | Generalised `"Y"` flag (first/last/max/min/exists/before/after/expression). | `.flag("SAFFL", criteria='pl.col("TRTSDT").is_not_null()', false_value="N")` |
 | [`.count_events()`][fleet.adam.SharedADaMVerbsMixin.count_events] | Tally events for each subject.                                   | `.count_events("NUMAE", from_dataset=ae)`                     |
 | [`.age_years()`][fleet.adam.ADSLNamespace.age_years]           | Unit-aware age conversion (YEARS, MONTHS, WEEKS, DAYS).                     | `.age_years("AAGE", age_col="AGE", age_unit_col="AGEU")`      |
 | [`.age_from_dates()`][fleet.adam.ADSLNamespace.age_from_dates] | Compute age between two dates.                                              | `.age_from_dates("AGE", birth="BRTHDT", reference="RFSTDTC")` |
@@ -85,7 +85,7 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 
 | Verb                                                                    | Description                                      | Example                                                                                  |
 | ----------------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| [`.treatment_emergent()`][fleet.adam.OCCDSNamespace.treatment_emergent] | TRTEMFL flag for events within treatment window. | `.treatment_emergent("TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT")` |
+| [`.treatment_emergent()`][fleet.adam.OCCDSNamespace.treatment_emergent] | TRTEMFL flag (admiral `derive_var_trtemfl` rules). | `.treatment_emergent("TRTEMFL", start_date="ASTDT", end_date="AENDT", trtsdt="TRTSDT", trtedt="TRTEDT", end_window=30)` |
 | [`.onset_recovery()`][fleet.adam.OCCDSNamespace.onset_recovery]         | Onset and recovery interval flags.               | `.onset_recovery(...)`                                                                   |
 
 ## PK namespace (`df.adam.pk`)
