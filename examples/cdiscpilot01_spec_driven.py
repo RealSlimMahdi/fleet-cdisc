@@ -225,11 +225,20 @@ dm_enriched = (
         ],
         else_="Missing",
     )
-    # Population flags (admiral: derive_var_merged_exist_flag)
-    .flag_exists("SAFFL", from_dataset=ex, on=["USUBJID"], source_filter=pl.col("EXDOSE") > 0)
-    .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"')
+    # Population flags (admiral: derive_var_merged_exist_flag). This is the admiral
+    # template condition; the SAP decides. A population flag is never blank: N.
+    .flag_exists(
+        "SAFFL",
+        from_dataset=ex,
+        on=["USUBJID"],
+        source_filter=(pl.col("EXDOSE") > 0)
+        | ((pl.col("EXDOSE") == 0) & pl.col("EXTRT").str.to_uppercase().str.contains("PLACEBO")),
+        false_value="N",
+    )
+    .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"', false_value="N")
     .to_frame()
 )
+assert (dm_enriched["SAFFL"] == "Y").sum() == dm_enriched.height, "every pilot subject took a dose"
 
 # The columns below are derived inline above (or upstream in DM) with a
 # *different* method than the spec documents, so they are omitted from the
@@ -305,7 +314,12 @@ ae_with_trt = fleet.frame(ae).adam.merge(dataset=_adsl_trt, on="USUBJID", how="l
 adae_sourced = ae_with_trt.adam.from_spec(ADAM_SPEC, dataset="ADAE", omit=["STUDYID"]).to_frame()
 adae = (
     adae_sourced.adam.occds.treatment_emergent(
-        "TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT"
+        "TRTEMFL",
+        start_date="AESTDTC",
+        end_date="AEENDTC",
+        trtsdt="TRTSDT",
+        trtedt="TRTEDT",
+        end_window=0,
     )
     .recode("AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
     .flag(

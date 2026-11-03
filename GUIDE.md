@@ -455,11 +455,6 @@ ds = (
     .assign("DSSTDTC", source="RFENDTC")
     .to_frame()
 )
-
-# Prepare max-dose lookup for SAFFL
-_ex_max_dose = ex.sdtm.group_by(
-    by=["USUBJID"], agg=[pl.col("EXDOSE").max().alias("_EXDOSE_MAX")]
-).to_frame()
 ```
 
 ### 7.2 Derive ADSL
@@ -515,15 +510,15 @@ adsl = (
         ],
         else_="Missing",
     )
-    # ── Population flags ──
-    .merge(_ex_max_dose, on="USUBJID")
-    .flag("SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0')
-    .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"')
+    # ── Population flags: never blank (ADaMIG 1.3), so non-members get "N" ──
+    # Treated = a dose record in EX. The SAP decides; the admiral template also
+    # counts a placebo dose of 0 (EXDOSE = 0 with PLACEBO in EXTRT).
+    .flag("SAFFL", criteria='pl.col("TRTSDT").is_not_null()', false_value="N")
+    .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"', false_value="N")
     # ── AE counts ──
     .count_events("NUMAE", from_dataset=ae)
     .count_events("NUMSAE", from_dataset=ae, where='pl.col("AESER") == "Y"')
     .to_frame()
-    .drop("_EXDOSE_MAX")
 )
 
 print(adsl.select("USUBJID", "TRT01P", "TRTSDT", "TRTDURD", "SAFFL", "NUMAE"))
@@ -598,8 +593,15 @@ adae = (
     .date("ASTDT", source="AESTDTC")
     .date("AENDT", source="AEENDTC")
     .duration("ADY", start="TRTSDT", end="ASTDT")
-    # OCCDS-specific verbs — same chain
-    .treatment_emergent("TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT")
+    # OCCDS-specific verbs — same chain; the SAP decides the window after the last dose
+    .treatment_emergent(
+        "TRTEMFL",
+        start_date="ASTDT",
+        end_date="AENDT",
+        trtsdt="TRTSDT",
+        trtedt="TRTEDT",
+        end_window=0,
+    )
     .recode("AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
     .flag("ANL01FL", criteria="max", value_col="AESEVN", by=["USUBJID", "AETERM"])
     .seq("ASEQ", by=["USUBJID"])
@@ -1690,7 +1692,7 @@ sub-namespace, so you rarely need to switch back to the base `adam` namespace.
 | `first_date`    | Earliest date from event dataset                             |
 | `last_date`     | Latest date from event dataset                               |
 | `count_events`  | Count matching records per subject                           |
-| `pick`          | First/last event value(s) by ordered by-group               |
+| `pick`          | Latest/first value over several event sources                |
 | `age_years` / `age_from_dates` | Age → years                                   |
 | `derive_period` | Subperiod/Phase variables                                    |
 
@@ -1699,7 +1701,7 @@ sub-namespace, so you rarely need to switch back to the base `adam` namespace.
 | Verb                 | Purpose                                     |
 | -------------------- | ------------------------------------------- |
 | `seq`                | Sequential record number (ASEQ, `by=`)      |
-| `treatment_emergent` | TRTEMFL = "Y" on/after TRTSDT               |
+| `treatment_emergent` | TRTEMFL = "Y" by admiral `derive_var_trtemfl` |
 | `onset_recovery`     | Event started on-treatment and resolved     |
 
 ### TLG builder verbs (`df.tlg.<domain>`)
