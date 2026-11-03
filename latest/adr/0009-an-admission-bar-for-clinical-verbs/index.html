@@ -10,7 +10,7 @@
       
       
       
-        <link rel="canonical" href="https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0005-an-admission-bar-for-clinical-verbs/">
+        <link rel="canonical" href="https://realslimmahdi.github.io/fleet-cdisc/latest/adr/0009-an-admission-bar-for-clinical-verbs/">
       
       
       
@@ -2086,7 +2086,7 @@
 <li>Writing the references for the 20 TA verbs that pass exposed what the bar is for. <code>vaccine.fever_flag</code> flags strictly above 38.0 °C, while the FDA toxicity grading scale (2007) and the Brighton Collaboration define fever from 38.0 °C. <code>peds.bmi_category</code> applies the WHO adult cut-offs from the pediatrics namespace, where age- and sex-specific percentiles apply. <code>neuro.mmse_category</code> used severity bands (27, 18, 10) that no published scheme fixes; it now defaults to Tombaugh and McIntyre (1992) and takes the cut-offs as arguments, since admiralneuro ships no MMSE rule. The first two are tracked issues, not a change in this decision.</li>
 <li>A verb whose threshold comes from the SAP rather than a standard can still pass, when the verb adds a guard or an ordering the programmer would get wrong. Its <code>References:</code> then names the convention and says "check the SAP".</li>
 <li><code>fleet.introspect</code> is unchanged. <code>verbs()</code> is a namespace method, not part of the introspection surface, and the new column is additive.</li>
-<li>The <code>docs/adr/0006</code> on the study-run branch keeps its number; this ADR takes 0005, the next free number on <code>main</code>.</li>
+<li>This ADR was written as 0005 on its branch. It takes 0009, because 0005 to 0008 were taken on <code>main</code> before it merged.</li>
 </ul>
 
 
