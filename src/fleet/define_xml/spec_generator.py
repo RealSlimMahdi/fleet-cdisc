@@ -62,6 +62,7 @@ _STANDARD_OIDS: dict[str, str] = {
     "SENDIG": "STD.SENDIG",
 }
 _CT_OID = "STD.CT"
+_ADAM_CT_OID = "STD.CT.ADAM"
 
 #: Spec ``study.standard`` → the ``def:Standard/@Name`` value Define-XML 2.1
 #: enumerates (note the lower-case 'a' in ADaMIG).
@@ -69,14 +70,6 @@ _STANDARD_NAMES: dict[str, str] = {
     "SDTMIG": "SDTMIG",
     "ADAMIG": "ADaMIG",
     "SENDIG": "SENDIG",
-}
-
-#: Spec ``study.standard`` → the ``def:Standard/@PublishingSet`` value, a
-#: separate and smaller enumeration than the IG names.
-_PUBLISHING_SETS: dict[str, str] = {
-    "SDTMIG": "SDTM",
-    "ADAMIG": "ADaM",
-    "SENDIG": "SEND",
 }
 
 # Map export format (spec key ``output_format``) → def:leaf href extension.
@@ -370,6 +363,13 @@ class DefineSpecGenerator:
                 f"{sorted(declared) or '(none)'}. Add the codelist to the "
                 f"spec's `codelists:` section or fix the reference."
             )
+        empty = [cl["oid"] for cl in self._data.get("codelists", []) if not cl.get("items")]
+        if empty:
+            raise SpecError(
+                f"{self._path}: codelist(s) with no terms: {', '.join(empty)}. A Define-XML "
+                "CodeList needs its terms. Run: fleet init ct (it writes the terms of the "
+                "pinned CT package into this file), or add items: by hand."
+            )
 
     def _leaf_href(self, ds: dict[str, Any]) -> str:
         """Resolve the ``def:leaf`` href for a dataset.
@@ -508,7 +508,17 @@ class DefineSpecGenerator:
                     "CDISC/NCI",
                     "CT",
                     study["ct_version"],
-                    publishing_set=_PUBLISHING_SETS.get(study["standard"]),
+                    publishing_set="SEND" if study["standard"] == "SENDIG" else "SDTM",
+                )
+            )
+        if study.get("adam_ct_version"):
+            stds_container.append(
+                self._build_standard(
+                    _ADAM_CT_OID,
+                    "CDISC/NCI",
+                    "CT",
+                    study["adam_ct_version"],
+                    publishing_set="ADaM",
                 )
             )
 

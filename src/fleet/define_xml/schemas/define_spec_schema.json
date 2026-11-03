@@ -160,7 +160,12 @@
         },
         "ct_version": {
           "type": "string",
-          "description": "CDISC Controlled Terminology version used (e.g. '2023-12-15').",
+          "description": "SDTM (or SEND) Controlled Terminology version used (e.g. '2023-12-15').",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "adam_ct_version": {
+          "type": "string",
+          "description": "ADaM Controlled Terminology version, for an ADaM define with ADaM-only codelists such as DTYPE (e.g. '2023-06-30'). The Define-XML then lists both CT standards.",
           "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
         },
         "documents": {

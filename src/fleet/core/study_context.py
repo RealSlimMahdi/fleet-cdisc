@@ -49,10 +49,29 @@ class ADAMConfig(BaseModel):
     datasets: list[str] = Field(default_factory=list)
 
 
-class CTConfig(BaseModel):
-    """Controlled Terminology package configuration."""
+#: The default SDTM CT package of a new study.
+DEFAULT_SDTM_CT = "sdtmct-2023-12-15"
+#: The latest ADaM CT package on or before ``DEFAULT_SDTM_CT``.
+DEFAULT_ADAM_CT = "adamct-2023-06-30"
 
-    package: str = Field(default="sdtmct-2023-12-15")
+
+class CTConfig(BaseModel):
+    """Controlled Terminology package configuration.
+
+    CDISC publishes ADaM CT on its own dates, so a study with ADaM
+    datasets pins a second package for the ADaM-only codelists (DTYPE).
+    """
+
+    package: str = Field(default=DEFAULT_SDTM_CT)
+    adam_package: str | None = Field(
+        default=None,
+        description="ADaM CT package, e.g. ``adamct-2023-06-30``; ``None`` without ADaM datasets.",
+    )
+
+    @property
+    def pins(self) -> tuple[str, ...]:
+        """The pinned packages, SDTM first: ``fleet init ct`` asks them in this order."""
+        return (self.package, self.adam_package) if self.adam_package else (self.package,)
 
 
 class AcceptedFinding(BaseModel):

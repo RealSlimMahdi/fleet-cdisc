@@ -38,6 +38,9 @@ if TYPE_CHECKING:
     from fleet.ct.api import CDISCClient
 
 # CDISC simpleDatatype → Fleet define.yaml type
+#: A variable name as define_spec_schema.json accepts it.
+_VARIABLE_NAME = re.compile(r"^[A-Z_][A-Z0-9_]{0,7}$")
+
 _TYPE_MAP: dict[str, str] = {
     "Char": "text",
     "Num": "float",
@@ -243,6 +246,7 @@ class DefineScaffolder:
         description: str = "",
         ig_version: str = "1-3",
         ct_version: str = "2023-12-15",
+        adam_ct_version: str | None = None,
         datasets: list[str],
         output_path: str | Path,
     ) -> Path:
@@ -253,7 +257,8 @@ class DefineScaffolder:
             company: Originator / company name; empty when not known.
             description: Study description; empty when not known.
             ig_version: ADaM IG version (e.g. ``"1-1"``).
-            ct_version: CT version date (e.g. ``"2023-12-15"``).
+            ct_version: SDTM CT version date (e.g. ``"2023-12-15"``).
+            adam_ct_version: ADaM CT version date (e.g. ``"2023-06-30"``).
             datasets: List of ADaM dataset names (e.g. ``["ADSL", "ADVS"]``).
             output_path: Where to write the YAML file.
 
@@ -268,6 +273,7 @@ class DefineScaffolder:
             standard="ADAMIG",
             standard_version=_ig_version_dotted(ig_version),
             ct_version=ct_version,
+            adam_ct_version=adam_ct_version,
             datasets=ds_list,
             output_path=Path(output_path),
         )
@@ -364,8 +370,8 @@ class DefineScaffolder:
                 ordinal += 1
                 var["ordinal"] = ordinal
                 var_dict = self._parse_ig_variable(var)
-                # Skip template variables with placeholders (e.g. TRxxSDT)
-                if any(c in var_dict["name"] for c in ("xx", "yy", "ww")):
+                # Skip IG template names (TRxxSDT, ANLzzFL, PARCATy): not variable names.
+                if not _VARIABLE_NAME.match(var_dict["name"]):
                     continue
                 variables.append(var_dict)
 
@@ -405,6 +411,7 @@ class DefineScaffolder:
         datasets: list[dict[str, Any]],
         output_path: Path,
         description: str = "",
+        adam_ct_version: str | None = None,
     ) -> Path:
         """Write the assembled define spec to a YAML file.
 
@@ -444,6 +451,7 @@ class DefineScaffolder:
                 "standard": standard,
                 "standard_version": standard_version,
                 "ct_version": ct_version,
+                **({"adam_ct_version": adam_ct_version} if adam_ct_version else {}),
             },
             "codelists": codelists,
             "datasets": datasets,

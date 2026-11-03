@@ -20,7 +20,7 @@ from typing import Any
 
 import httpx
 
-from fleet.core.exceptions import CTError
+from fleet.core.exceptions import CTError, CTNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +181,7 @@ class CDISCClient:
                     "CDISC API authentication failed (401). Check your CDISC_API_KEY."
                 ) from exc
             if status == 404:
-                raise CTError(f"Resource not found on CDISC Library: {path}") from exc
+                raise CTNotFoundError(f"Resource not found on CDISC Library: {path}") from exc
             raise CTError(f"CDISC API request failed ({status}): {exc}") from exc
         except httpx.HTTPError as exc:
             raise CTError(f"Network error contacting CDISC Library: {exc}") from exc

@@ -720,8 +720,10 @@ passed through).
 The spec path checks the same terms: inside a study, `from_spec` resolves a `ct_codelist:` ID \
 to the class of that ID in the study's `codelists.py`, so `algorithm: assign_ct` with \
 `ct_codelist: C66769` warns exactly like `.assign("AESEV", source="ae_severity", ct=AESEV)`. \
-A `codelists.py` that disagrees with `ct.package` or the define.yaml files warns once in \
-`from_spec` and fails `fleet check`.
+A `codelists.py` that disagrees with `ct.package`, `ct.adam_package` or the define.yaml files warns once in \
+`from_spec` and fails `fleet check`. A study with ADaM datasets pins two CT packages: \
+`ct.package` (SDTM CT) and `ct.adam_package` (ADaM CT, default `adamct-2023-06-30`); \
+`fleet init ct` asks them in that order and writes the terms into define.yaml.
 
 ### Programmatic API
 
