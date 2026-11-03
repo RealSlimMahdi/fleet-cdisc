@@ -2265,6 +2265,13 @@
 <h2 id="unreleased">[Unreleased]<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
 <h3 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
 <ul>
+<li><strong>Toxicity grades equal admiral</strong> (ADR-0014, alpha audit package D). The 8 bundled criteria files are generated from the admiral 1.4.1 metadata by <code>scripts/regen_grading_criteria.R</code> and keep the admiral text of each term; a frozen admiral grid of 34,146 rows is the CI test.</li>
+<li>A null BNRIND takes the ULN criteria: ALT 900 with ULN 40 is grade 4, not 0.</li>
+<li>The unit matches without case: potassium 7.5 in <code>mmol/L</code> is grade 4, not null.</li>
+<li>Each row is graded with the entry of its own DAIDS subgroup and unit: DAIDS <code>Hemoglobin, Low</code> 60 g/L is grade 4 for adults and neonates. A term with criteria for several units needs <code>unit_var=</code>. Every row keeps its place.</li>
+<li>CTCAE v5 and v6 INR take the worse of the absolute and the baseline cut-offs (INR 3.0 is grade 3, also with no BASE), as admiral. v4 <code>Hemoglobin increased</code> no longer raises; Fibrinogen, Creatinine clearance and Alkaline phosphatase follow admiral.</li>
+<li><code>atoxgr(signif_dig=)</code> defaults to 15, as admiral.</li>
+<li>A custom criteria file needs <code>schema_version: 2</code> (ordered <code>case_when</code> arms); a file in the old format stops with a message.</li>
 <li><strong>One reader for <code>--DTC</code> text</strong> (ADR-0011, alpha audit package A). Every date verb reads <code>--DTC</code> through <code>fleet.core.dtc</code>:</li>
 <li><code>study_day</code>, <code>duration</code> in days and <code>visit_map</code> use the date portion of a timed value (SDTMIG 3.4 section 4.4.4): <code>2021-03-20T10:30</code> against <code>2021-03-15T08:00</code> is day 6, not null. A <code>pl.Datetime</code> gives its date.</li>
 <li><code>duration</code> adds one <strong>day</strong> before dividing for weeks, months and years (85 days is 2.79 months, not 3.76), gives the raw difference for hours by default, and adds nothing to a negative span (-1, not 0), as admiral <code>compute_duration</code>. <code>tte.aval</code> has the same sign rule.</li>
@@ -2274,6 +2281,10 @@
 <li><code>.adam.date()</code> to a <code>*DTM</code> keeps the collected hour and minute (<code>T10:30</code> is 10:30:00, flag S), keeps a fraction, and drops an offset with a warning. <code>min_date</code> and <code>max_date</code> move only an imputed date whose possible range holds the bound; a complete date never moves, and a <code>*DTM</code> target refuses them.</li>
 <li><code>first_date</code> and <code>last_date</code> compare dates and give <code>pl.Date</code> (<code>pl.Datetime</code> for <code>*DTM</code>); a partial value is left out with a warning, and new <code>impute=</code> imputes it and writes the <code>*DTF</code> flag.</li>
 <li><code>select(spec=)</code> leaves every SDTM column and every <code>*DTC</code> as text; ADaM <code>*DT</code> and <code>*DTM</code> are read from text with no invented time, and a value that is not complete becomes null with a warning. <code>DatasetChecker</code> expects text for <code>*DTC</code>.</li>
+<li><strong>BLQ comes from the SDTM text, and confirmed response uses every by column</strong> (ADR-0015, alpha audit package E):</li>
+<li><code>blq_flag</code>, <code>blqfn</code>, <code>blq_impute</code> and <code>avalcat</code> share one BLQ rule: a number below the LLOQ, or no number and a BLQ text in <code>PCSTRESC</code> (<code>&lt;0.1</code>, <code>BLQ</code>, <code>BQL</code>, <code>BLOQ</code>, <code>LLOQ</code>; new <code>blq_text=</code>). A record with PCSTRESC <code>BLQ</code> and a null PCSTRESN is now BLQFL Y and imputed; before it was skipped with no message. <code>ALQ</code>, <code>&gt;1000</code> and a missed sample are not BLQ. New <code>text_col="PCSTRESC"</code> (a frame without it stops; <code>text_col=None</code> for numeric results only) and <code>numeric_below_lloq=True</code> (<code>False</code> lets only the text decide, as admiral).</li>
+<li><code>avalcat</code> gives a record with no number that is not BLQ its PCSTRESC text (<code>&gt;1000</code>), or null for a missed sample, not <code>BLQ</code>.</li>
+<li><code>confirmed_response_flag</code> checks the confirmation within every <code>by=</code> column, not only the first: <code>by=["STUDYID", "USUBJID"]</code> no longer flags a subject with one PR. A null by value is a group.</li>
 <li><strong>SAS files follow SAS rules</strong> (ADR-0010, alpha audit package F):</li>
 <li>XPT and SAS7BDAT read and write with the <code>io</code> extra alone, through the Polars route of pyreadstat; pandas and pyarrow are no longer needed. The <code>io</code> extra requires <code>pyreadstat&gt;=1.3.3</code>.</li>
 <li><code>save_xpt</code> writes SAS transport version 5 with the member named as the file (FDA TCG 3.1.1). A <code>pl.Date</code> is stored as SAS days with DATE9 (2024-01-15 is 23390), not DATETIME seconds. NaN and infinity become SAS missing. A name over 8 characters, a label over 40 or a value over 200 bytes stops the write instead of being cut. A value that is not ASCII is written as UTF-8 with a warning. New <code>label=</code> and <code>column_labels=</code> arguments; <code>fleet run --format xpt</code>, <code>fleet tdd build --format xpt</code> and <code>DatasetChecker.write_xpt</code> write the define and IG labels.</li>
@@ -2430,7 +2441,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 11:00:10 UTC">November 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 14:34:09 UTC">November 3, 2026</span>
   </span>
 
     
