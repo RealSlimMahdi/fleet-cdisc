@@ -17,13 +17,22 @@ from ._specs import Row, Statistic, SummarySpecBase
 
 
 class VSSummarySpec(SummarySpecBase):
-    """Spec for a vital-signs summary table."""
+    """Spec for a vital-signs summary table (vst01).
+
+    Defaults give continuous statistics for each parameter (``PARAMCD``)
+    at each analysis visit (``AVISIT``), as the LB and EG summaries do:
+    one statistic over all visits of a subject would pool baseline and
+    on-treatment values.
+    """
 
     context: ClassVar[str] = "t_vs_summary"
     nested: ClassVar[bool] = True
 
     rows: list[Row] = Field(
-        default_factory=lambda: [Row(field="PARAMCD", label="Parameter")],
+        default_factory=lambda: [
+            Row(field="PARAMCD", label="Parameter"),
+            Row(field="AVISIT", label="Analysis Visit"),
+        ],
     )
     statistics: list[Statistic] = Field(
         default_factory=lambda: [
@@ -36,7 +45,7 @@ class VSSummarySpec(SummarySpecBase):
         ],
     )
     required_columns: list[str] = Field(
-        default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVAL"],
+        default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVAL", "AVISIT"],
     )
 
 
@@ -70,7 +79,7 @@ class VSTLGNamespace(BuilderVerbsMixin):
         """Produce a VS summary ARD (Analysis Results Dataset).
 
         Computes big-N from *adsl*, then continuous statistics for each
-        parameter (or custom row hierarchy).
+        parameter at each analysis visit (or custom row hierarchy).
 
         Args:
             groupby: Treatment arm column name.  Overrides

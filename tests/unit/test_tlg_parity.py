@@ -197,13 +197,13 @@ class TestEdgeBattery:
 
     def test_single_subject_arm_sd_is_null(self) -> None:
         advs = pl.from_repr("""\
-┌─────────┬─────────┬─────────┬──────┐
-│ USUBJID ┆ TRTA    ┆ PARAMCD ┆ AVAL │
-│ ---     ┆ ---     ┆ ---     ┆ ---  │
-│ str     ┆ str     ┆ str     ┆ f64  │
-╞═════════╪═════════╪═════════╪══════╡
-│ S01     ┆ Placebo ┆ SYSBP   ┆ 120  │
-└─────────┴─────────┴─────────┴──────┘
+┌─────────┬─────────┬─────────┬────────┬──────┐
+│ USUBJID ┆ TRTA    ┆ PARAMCD ┆ AVISIT ┆ AVAL │
+│ ---     ┆ ---     ┆ ---     ┆ ---    ┆ ---  │
+│ str     ┆ str     ┆ str     ┆ str    ┆ f64  │
+╞═════════╪═════════╪═════════╪════════╪══════╡
+│ S01     ┆ Placebo ┆ SYSBP   ┆ WEEK 2 ┆ 120  │
+└─────────┴─────────┴─────────┴────────┴──────┘
 """)
         adsl = pl.from_repr("""\
 ┌─────────┬─────────┐

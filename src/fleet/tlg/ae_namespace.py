@@ -194,7 +194,12 @@ class AERelationshipSpec(AESummarySpec):
     )
     relationship_order: list[str] = Field(
         default_factory=lambda: ["N", "Y"],
-        description="Relationship values from least to most related.",
+        description=(
+            "Relationship values from least to most related.  AEREL has no "
+            "CDISC codelist, so the default fits a Y/N study only.  A value "
+            "of AEREL outside this list stops the table: set the study's "
+            "terms here."
+        ),
     )
     required_columns: list[str] = Field(
         default_factory=lambda: ["USUBJID", "TRTA", "AEBODSYS", "AEREL"]
@@ -366,6 +371,7 @@ class AETLGNamespace(BuilderVerbsMixin):
             by=["USUBJID", group_col, "AEBODSYS"],
             order_col="AESEV",
             order=spec.severity_order,
+            order_field="severity_order",
         )
         return summarize_ard(
             df,
@@ -417,6 +423,7 @@ class AETLGNamespace(BuilderVerbsMixin):
             by=["USUBJID", group_col, "AEBODSYS"],
             order_col="AETOXGR",
             order=spec.grade_order,
+            order_field="grade_order",
         )
         return summarize_ard(
             df,
@@ -467,6 +474,7 @@ class AETLGNamespace(BuilderVerbsMixin):
             by=["USUBJID", group_col, "AEBODSYS"],
             order_col="AEREL",
             order=spec.relationship_order,
+            order_field="relationship_order",
         )
         return summarize_ard(
             df,

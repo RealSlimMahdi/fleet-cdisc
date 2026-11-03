@@ -94,7 +94,7 @@ The analysis results dataset: one long table with one row per statistic per cell
 _Avoid_: result, output table, summary
 
 **Population filter**:
-The spec's filter on ADSL that decides who is in the denominator, for example the safety population. Applied to ADSL only, never to the analysis dataset.
+The spec's filter on ADSL that decides who is in the table, for example the safety population. It selects the subjects for the denominator (N), and only the analysis records of those subjects are counted (n). It is never applied as an expression to the analysis dataset (ADR-0016).
 _Avoid_: adsl filter, subset, big-N filter
 
 **Dataset filter**:

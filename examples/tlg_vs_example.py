@@ -161,7 +161,7 @@ ard_builder = (
             OverallStat(label="Subjects with any measurement"),
         ]
     )
-    .rows(["PARAMCD"])
+    .rows(["PARAMCD", "AVISIT"])
     .stats([Statistic.MEAN, Statistic.SD, Statistic.MEDIAN])
     .to_ard()
 )
@@ -208,9 +208,11 @@ print(f"   Age groups: {sorted(advs_strat['AGEGR1'].unique().to_list())}")
 
 # Nested stratification: pass the merged column as a second row field —
 # the engine computes per-(AGEGR1, PARAMCD) cells with group2 lineage.
+# One visit only: the hierarchy has two levels, so the visit is a filter.
 ard_strat = (
     fleet.frame(advs_strat)
     .tlg.vs.population(adsl_age)
+    .filter(pl.col("AVISIT") == "Week 8")
     .by("TRTA")
     .rows(["AGEGR1", "PARAMCD"])
     .to_ard()

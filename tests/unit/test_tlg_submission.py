@@ -18,7 +18,7 @@ import fleet  # noqa: F401 — registers df.tlg
 from fleet.core.exceptions import SchemaError
 from fleet.tlg import Row, Statistic, VSSummarySpec
 from fleet.tlg._ard import ard_row, rows_to_ard, summarize_ard, validate_ard
-from fleet.tlg.lb_namespace import LBSummarySpec
+from fleet.tlg.lb_namespace import LBAbnormalSpec, LBSummarySpec
 from fleet.tlg.render import (
     ListingModel,
     RenderMetadata,
@@ -51,14 +51,14 @@ ADSL3 = pl.from_repr("""\
 """)
 
 ADVS = pl.from_repr("""\
-┌─────────┬─────────┬─────────┬────────────────────────────────┬──────┬─────┐
-│ USUBJID ┆ TRTA    ┆ PARAMCD ┆ PARAM                          ┆ AVAL ┆ CHG │
-│ ---     ┆ ---     ┆ ---     ┆ ---                            ┆ ---  ┆ --- │
-│ str     ┆ str     ┆ str     ┆ str                            ┆ f64  ┆ f64 │
-╞═════════╪═════════╪═════════╪════════════════════════════════╪══════╪═════╡
-│ S01     ┆ Placebo ┆ SYSBP   ┆ Systolic Blood Pressure (mmHg) ┆ 120  ┆ 2   │
-│ S02     ┆ Placebo ┆ SYSBP   ┆ Systolic Blood Pressure (mmHg) ┆ 130  ┆ 6   │
-└─────────┴─────────┴─────────┴────────────────────────────────┴──────┴─────┘
+┌─────────┬─────────┬─────────┬────────┬────────────────────────────────┬──────┬─────┐
+│ USUBJID ┆ TRTA    ┆ PARAMCD ┆ AVISIT ┆ PARAM                          ┆ AVAL ┆ CHG │
+│ ---     ┆ ---     ┆ ---     ┆ ---    ┆ ---                            ┆ ---  ┆ --- │
+│ str     ┆ str     ┆ str     ┆ str    ┆ str                            ┆ f64  ┆ f64 │
+╞═════════╪═════════╪═════════╪════════╪════════════════════════════════╪══════╪═════╡
+│ S01     ┆ Placebo ┆ SYSBP   ┆ WEEK 2 ┆ Systolic Blood Pressure (mmHg) ┆ 120  ┆ 2   │
+│ S02     ┆ Placebo ┆ SYSBP   ┆ WEEK 2 ┆ Systolic Blood Pressure (mmHg) ┆ 130  ┆ 6   │
+└─────────┴─────────┴─────────┴────────┴────────────────────────────────┴──────┴─────┘
 """)
 
 
@@ -95,15 +95,16 @@ class TestContinuousRendering:
     def test_stat_rows_sit_under_level_stub(self) -> None:
         ard = ADVS.tlg.vs.t_summary(groupby="TRTA", adsl=ADSL3)
         model = ard_to_table_model(ard)
-        stub = next(r for r in model.rows if r.label == "SYSBP")
+        stub = next(r for r in model.rows if r.label == "WEEK 2")
         assert all(v == "" for v in stub.cells.values())
         stat_rows = [r for r in model.rows if r.row_type == "stat"]
         assert all(r.indent == stub.indent + 1 for r in stat_rows)
 
     def test_row_label_becomes_section_or_stub_label(self) -> None:
         # Flat continuous block: the Row.label heads the stub column via
-        # a section row ("Parameter" — VSSummarySpec's default label).
-        ard = ADVS.tlg.vs.t_summary(groupby="TRTA", adsl=ADSL3)
+        # a section row ("Parameter").
+        spec = VSSummarySpec(rows=[Row(field="PARAMCD", label="Parameter")])
+        ard = ADVS.tlg.vs.t_summary(groupby="TRTA", adsl=ADSL3, spec=spec)
         model = ard_to_table_model(ard)
         sections = [r for r in model.rows if r.row_type == "section"]
         assert [s.label for s in sections] == ["Parameter"]
@@ -182,7 +183,10 @@ class TestUnroundedPercentages:
 │ S03     ┆ Placebo ┆ ALT     ┆ null  ┆ NORMAL ┆ NORMAL │
 └─────────┴─────────┴─────────┴───────┴────────┴────────┘
 """)
-        ard = adlb.tlg.lb.t_abnormal(groupby="TRTA", adsl=ADSL3)
+        # Every row is post-baseline, so the post-baseline rule is off.
+        ard = adlb.tlg.lb.t_abnormal(
+            groupby="TRTA", adsl=ADSL3, spec=LBAbnormalSpec(prefilter=None)
+        )
         high = ard.filter((pl.col("variable_level") == "High") & (pl.col("stat_name") == "pct"))
         assert high["stat"].to_list() == [pytest.approx(100 / 3)]
         assert high["stat_fmt"].to_list() == ["33.3"]

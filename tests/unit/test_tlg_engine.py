@@ -84,7 +84,8 @@ class TestLoudDenominators:
         assert ard.filter(pl.col("stat_name") == "N").height == 0
 
     def test_data_arm_missing_from_adsl_raises(self) -> None:
-        bad_adsl = ADSL.filter(pl.col("TRTA") != "Placebo")
+        # Same subjects, other arm label: the data arm has no denominator.
+        bad_adsl = ADSL.with_columns(pl.col("TRTA").replace("Placebo", "PBO"))
         with pytest.raises(SchemaError, match="Placebo"):
             ADAE.tlg.ae.t_summary(groupby="TRTA", adsl=bad_adsl)
 

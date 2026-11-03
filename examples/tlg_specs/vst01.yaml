@@ -1,4 +1,4 @@
-# VST01 — Vital Signs Summary (continuous statistics per parameter)
+# VST01 — Vital Signs Summary (continuous statistics per parameter and visit)
 #
 #     import fleet.tlg as tlg
 #     spec = tlg.load_spec("examples/tlg_specs/vst01.yaml")
@@ -9,6 +9,8 @@ schema_version: 1
 rows:
   - field: PARAMCD
     label: Parameter
+  - field: AVISIT
+    label: Analysis Visit
 
 statistics:
   - n_subjects

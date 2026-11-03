@@ -72,7 +72,13 @@ def _check_filter_field(value: Any, info: ValidationInfo) -> Any:
 
 
 class Statistic(str, Enum):  # noqa: UP042
-    """Statistics available for summary tables."""
+    """Statistics available for summary tables.
+
+    ``N_SUBJECTS`` (n) counts distinct subjects on a count table.  On a
+    table with continuous statistics it is the count of non-missing
+    values in the cell, as PROC MEANS N (ADR-0016).  ``Q1`` and ``Q3``
+    follow SAS QNTLDEF=5.
+    """
 
     N_SUBJECTS = "n_subjects"
     N_EVENTS = "n_events"
@@ -389,10 +395,11 @@ class TLGSpec(BaseModel):
     adsl_filter: Any | None = Field(
         default=None,
         description=(
-            "Filter applied to ADSL before subject counting — a "
+            "Population filter on ADSL — a "
             "``pl.Expr`` or a string expression such as "
-            '``\'pl.col("SAFFL") == "Y"\'`` (the YAML-serializable form). '
-            "Set inline via "
+            '``\'pl.col("SAFFL") == "Y"\'`` (the YAML-serializable form).  '
+            "It selects the subjects for the big N, and only their "
+            "analysis records are counted (ADR-0016).  Set inline via "
             "[`TLGBuilder.population()`][fleet.tlg.TLGBuilder.population]."
         ),
     )
@@ -522,7 +529,8 @@ class TLGSpec(BaseModel):
                 f"{self.__class__.__name__}'s prefilter names columns "
                 f"{self.prefilter_columns()} but DataFrame is missing "
                 f"{prefilter_missing}. Add the column, or set prefilter=None "
-                "to switch the rule off (visible in the spec). "
+                "to switch the rule off (visible in the spec)."
+                f"{getattr(self, 'prefilter_hint', '')} "
                 f"Available: {sorted(available)}"
             )
 
@@ -622,6 +630,10 @@ class TLGSpec(BaseModel):
                     "Use a string expression instead."
                 )
         data = self.model_dump(exclude_none=True, exclude_defaults=False)
+        # An explicit prefilter=None switches a template's default rule
+        # off; dropping it would bring the default back on reload.
+        if "prefilter" in self.model_fields_set and getattr(self, "prefilter", 0) is None:
+            data["prefilter"] = None
         # Convert enums to their values
         data = _enum_to_value(data)
         return yaml.dump(data, default_flow_style=False, sort_keys=False)
@@ -659,6 +671,9 @@ class SummarySpecBase(TLGSpec):
     #: ``True`` when ``rows`` is a hierarchy (SOC → PT, PARAM → visit);
     #: ``False`` when each row field is an independent flat breakdown.
     nested: ClassVar[bool] = False
+    #: Extra text for the missing-prefilter-column error (e.g. how to
+    #: state a post-baseline rule without ONTRTFL).
+    prefilter_hint: ClassVar[str] = ""
 
     output_type: str = "summary"
     rows: list[Row] = Field(

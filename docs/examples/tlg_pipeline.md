@@ -14,7 +14,7 @@ field:
 template: aet01                # resolves spec class + df.tlg.ae method
 schema_version: 1
 
-adsl_filter: 'pl.col("SAFFL") == "Y"'   # safety population (big N)
+adsl_filter: 'pl.col("SAFFL") == "Y"'   # safety population (N and n)
 
 header_rows:
   - label: Subjects with at least one adverse event

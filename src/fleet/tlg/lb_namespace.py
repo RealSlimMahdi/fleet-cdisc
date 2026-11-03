@@ -8,7 +8,7 @@ PARAM/AVISIT) and LBL01 (laboratory abnormalities listing) templates.
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import polars as pl
 from pydantic import Field, model_validator
@@ -17,6 +17,7 @@ from ._ard import (
     ard_row,
     compute_big_n,
     prepare_frame,
+    restrict_to_population,
     rows_to_ard,
     summarize_ard,
     summarize_spec,
@@ -33,6 +34,25 @@ from ._specs import (
     TLGSpec,
     change_from_baseline_prefilter,
     resolve_filter,
+)
+
+#: Default post-baseline rule of the shift and abnormality tables: an
+#: on-treatment record that is not the baseline record.  ADaM codes both
+#: flags as Y / null, so the ABLFL test is null-safe.
+POST_BASELINE_PREFILTER = '(pl.col("ONTRTFL") == "Y") & pl.col("ABLFL").ne_missing("Y")'
+
+_POST_BASELINE_HINT = (
+    " The table counts post-baseline records only. When the dataset has no "
+    "ONTRTFL or ABLFL, state the SAP's post-baseline rule as the prefilter, "
+    "for example prefilter='pl.col(\"ADY\") > 1'."
+)
+
+_PREFILTER_DESCRIPTION = (
+    "The post-baseline rule.  The default keeps on-treatment records "
+    "(``ONTRTFL`` = Y) that are not the baseline record (``ABLFL`` = Y), "
+    "so both columns are required.  State another SAP rule as an "
+    "expression, e.g. ``'pl.col(\"ADY\") > 1'``; ``null`` switches the "
+    "rule off (the dataset must then hold post-baseline records only)."
 )
 
 
@@ -141,17 +161,21 @@ class LBShiftSpec(SummarySpecBase):
     """Spec for the lab shift table (lbt03).
 
     The row hierarchy is fixed (PARAMCD → baseline-to-worst shift cell);
-    the spec drives validation, pooling, ordering and the worst-case
-    rank (``anrind_order``).
+    the spec drives validation, pooling, ordering, the worst-case
+    rank (``anrind_order``) and the post-baseline rule (``prefilter``).
     """
 
     context: ClassVar[str] = "t_lb_shift"
     nested: ClassVar[bool] = True
+    prefilter_hint: ClassVar[str] = _POST_BASELINE_HINT
 
     _unconsumed_spec_fields: ClassVar[frozenset[str]] = frozenset(
         {"rows", "header_rows", "value_col"}
     )
 
+    prefilter: Any | None = Field(
+        default=POST_BASELINE_PREFILTER, description=_PREFILTER_DESCRIPTION
+    )
     statistics: list[Statistic] = Field(
         default_factory=lambda: [Statistic.N_SUBJECTS],
     )
@@ -165,14 +189,22 @@ class LBShiftSpec(SummarySpecBase):
 
 
 class LBAbnormalSpec(SummarySpecBase):
-    """Spec for laboratory abnormalities not present at baseline (lbt04)."""
+    """Spec for laboratory abnormalities not present at baseline (lbt04).
+
+    The ``prefilter`` is the post-baseline rule; the baseline lookup
+    reads the records before it.
+    """
 
     context: ClassVar[str] = "t_lb_abnormal"
+    prefilter_hint: ClassVar[str] = _POST_BASELINE_HINT
 
     _unconsumed_spec_fields: ClassVar[frozenset[str]] = frozenset(
         {"rows", "statistics", "header_rows", "pools", "value_col", "label_col"}
     )
 
+    prefilter: Any | None = Field(
+        default=POST_BASELINE_PREFILTER, description=_PREFILTER_DESCRIPTION
+    )
     low_values: list[str] = Field(
         default_factory=lambda: ["LOW", "LOW LOW"],
         description="ANRIND values counted as the Low direction.",
@@ -304,9 +336,10 @@ class LBTLGNamespace(BuilderVerbsMixin):
         one ``"<BNRIND> to <ANRIND>"`` shift cell, where ANRIND is their
         worst post-baseline range indicator (NORMAL < LOW < HIGH <
         LOW LOW < HIGH HIGH — deterministic clinical rank, HIGH breaking
-        the LOW/HIGH tie).  Baseline records are excluded (``ONTRTFL``
-        preferred, else null-safe ``ABLFL``); subjects without a
-        baseline indicator are excluded.
+        the LOW/HIGH tie).  Only post-baseline records count: the
+        spec's ``prefilter`` states the rule (default ``ONTRTFL`` = Y
+        and not the ``ABLFL`` record); subjects without a baseline
+        indicator are excluded.
 
         Percentages are intentionally not emitted: the correct
         denominator is subjects with both a baseline and a post-baseline
@@ -325,7 +358,8 @@ class LBTLGNamespace(BuilderVerbsMixin):
         Raises:
             SchemaError: If the spec carries ``rows`` or ``header_rows``
                 — the shift hierarchy is fixed and would silently ignore
-                them.
+                them — or if a column of the post-baseline rule is
+                missing.
 
         Examples:
             ``ard = adlb.tlg.lb.t_shift(groupby="TRTA", adsl=adsl)``
@@ -343,15 +377,12 @@ class LBTLGNamespace(BuilderVerbsMixin):
         # The dataset filter must bite before the worst-case reduction:
         # a filtered-out record must not decide a subject's worst level.
         post = prepare_frame(self._df, spec).filter(pl.col("ANRIND").is_not_null())
-        if "ONTRTFL" in post.columns:
-            post = post.filter(pl.col("ONTRTFL") == "Y")
-        elif "ABLFL" in post.columns:
-            post = post.filter(pl.col("ABLFL").ne_missing("Y"))
         worst = worst_case(
             post,
             by=["USUBJID", group_col, "PARAMCD"],
             order_col="ANRIND",
             order=spec.anrind_order,
+            order_field="anrind_order",
         )
         shift = worst.filter(pl.col("BNRIND").is_not_null()).with_columns(
             (pl.col("BNRIND").cast(pl.Utf8) + " to " + pl.col("ANRIND").cast(pl.Utf8)).alias(
@@ -395,9 +426,10 @@ class LBTLGNamespace(BuilderVerbsMixin):
           direction;
         - ``pct`` = n / N (null when N = 0 — never fabricated).
 
-        Post-baseline means ``ONTRTFL == "Y"`` when present, else
-        non-baseline via null-safe ``ABLFL``.  Without a ``BNRIND``
-        column no baseline exclusion is applied.
+        Post-baseline means the spec's ``prefilter`` (default
+        ``ONTRTFL`` = Y and not the ``ABLFL`` record).  The baseline
+        lookup reads the records before the prefilter.  Without a
+        ``BNRIND`` column no baseline exclusion is applied.
 
         Args:
             groupby: Treatment-arm column.
@@ -423,12 +455,17 @@ class LBTLGNamespace(BuilderVerbsMixin):
                 f"Group column '{group_col}' not found in the analysis dataset. "
                 f"Available: {sorted(source.columns)}"
             )
-        source = prepare_frame(source, spec)
-        post = source.filter(pl.col("ANRIND").is_not_null())
-        if "ONTRTFL" in post.columns:
-            post = post.filter(pl.col("ONTRTFL") == "Y")
-        elif "ABLFL" in post.columns:
-            post = post.filter(pl.col("ABLFL").ne_missing("Y"))
+        # The baseline lookup needs the records the post-baseline rule drops.
+        source = prepare_frame(source, spec.model_copy(update={"prefilter": None}))
+        if adsl is not None:
+            if "USUBJID" not in adsl.columns:
+                raise SchemaError("adsl has no USUBJID column.")
+            source = restrict_to_population(source, adsl, spec.adsl_filter)
+        elif spec.adsl_filter is not None:
+            raise SchemaError("adsl_filter is set but no adsl was given: pass adsl=... .")
+        post_rule = resolve_filter(spec.prefilter)
+        post = source.filter(post_rule) if post_rule is not None else source
+        post = post.filter(pl.col("ANRIND").is_not_null())
         post = post.with_columns(pl.col("ANRIND").str.to_uppercase().alias("__anrind"))
 
         context = spec.context

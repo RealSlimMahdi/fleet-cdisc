@@ -11,7 +11,7 @@
 template: aet01
 schema_version: 1
 
-# Safety population denominator (big N).
+# Safety population: the big N, and only these subjects' records are counted.
 adsl_filter: 'pl.col("SAFFL") == "Y"'
 
 # Whole-population overview rows — no SOC -> PT hierarchy (that is aet02).
