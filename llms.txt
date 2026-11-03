@@ -539,37 +539,38 @@ print(f"   AGEGR1 distribution: {_agegr.to_dicts()}")
 # ════════════════════════════════════════════════════════════════════════════
 # 8. Safety Population Flag (SAFFL)
 #    Admiral: derive_var_merged_exist_flag(ex, condition = EXDOSE > 0 | PLACEBO)
-#    Subjects with at least one exposure record (all randomised subjects here).
+#    This is the admiral template condition; the SAP decides the population.
+#    A population flag is never blank (ADaMIG 1.3): non-members get "N".
 #    We also derive ITTFL (intent-to-treat) = same population in this study.
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── 8. Population flags ──────────────────────────────────────────────────")
 
-# Pre-compute max EXDOSE per subject so flag can reference it
-_ex_max_dose = ex.group_by("USUBJID").agg(pl.col("EXDOSE").max().alias("_EXDOSE_MAX"))
+_treated = (pl.col("EXDOSE") > 0) | (
+    (pl.col("EXDOSE") == 0) & pl.col("EXTRT").str.to_uppercase().str.contains("PLACEBO")
+)
 
 adsl = (
-    adsl.adam.merge(dataset=_ex_max_dose, on="USUBJID", how="left")
-    .to_frame()
-    .adam.adsl.flag(  # SAFFL: subjects with at least one dose > 0 (admiral: derive_var_merged_exist_flag)
-        "SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0'
+    adsl.adam.adsl.flag_exists(  # admiral: derive_var_merged_exist_flag
+        "SAFFL", from_dataset=ex, on=["USUBJID"], source_filter=_treated, false_value="N"
     )
     # ITTFL: all randomised subjects (ARMCD not SCRNFAIL)
-    .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"')
+    .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"', false_value="N")
     .to_frame()
-    .drop("_EXDOSE_MAX")
 )
 
 print(f"   SAFFL : {adsl['SAFFL'].value_counts().to_dicts()}")
 print(f"   ITTFL : {adsl['ITTFL'].value_counts().to_dicts()}")
+assert (adsl["SAFFL"] == "Y").sum() == adsl.height, "every pilot subject took a dose"
 
 # ════════════════════════════════════════════════════════════════════════════
 # 9. Last Date Known Alive (LSTALVDT)
 #    Admiral: derive_vars_extreme_event(ae, lb, adsl; order=last)
-#    Fleet: pick() — event-priority cascade selecting the latest date across
-#    multiple sources.  Events are checked in priority order; within each
-#    event the latest record (mode="last", order by date) wins.
+#    Fleet: pick() — the latest date over all sources.  Within each event
+#    the latest record is kept; then the top-level order=["LSTALVDT"],
+#    mode="last" makes the events compete on the date, as admiral does.
+#    A tie on the date goes to the first listed event.
 #
-#    Sources (in priority order):
+#    Sources:
 #      a) AE end dates   (AEENDTC)  — most clinically recent contact
 #      b) AE start dates (AESTDTC)  — if AE end is missing
 #      c) Treatment end  (TRTEDT)   — fallback from ADSL itself
@@ -861,7 +862,12 @@ adae = (
     .duration("ADY", start="TRTSDT", end="ASTDT")
     .to_frame()
     .adam.occds.treatment_emergent(  # admiral: derive_var_trtemfl
-        "TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT"
+        "TRTEMFL",
+        start_date="ASTDT",
+        end_date="AENDT",
+        trtsdt="TRTSDT",
+        trtedt="TRTEDT",
+        end_window=0,  # the SAP decides the window after the last dose
     )
     # admiral: slice_derivation (worst severity per subject × AE term)
     .recode("AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
@@ -1215,11 +1221,20 @@ dm_enriched = (
         ],
         else_="Missing",
     )
-    # Population flags (admiral: derive_var_merged_exist_flag)
-    .flag_exists("SAFFL", from_dataset=ex, on=["USUBJID"], source_filter=pl.col("EXDOSE") > 0)
-    .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"')
+    # Population flags (admiral: derive_var_merged_exist_flag). This is the admiral
+    # template condition; the SAP decides. A population flag is never blank: N.
+    .flag_exists(
+        "SAFFL",
+        from_dataset=ex,
+        on=["USUBJID"],
+        source_filter=(pl.col("EXDOSE") > 0)
+        | ((pl.col("EXDOSE") == 0) & pl.col("EXTRT").str.to_uppercase().str.contains("PLACEBO")),
+        false_value="N",
+    )
+    .flag("ITTFL", criteria='pl.col("ARMCD") != "SCRNFAIL"', false_value="N")
     .to_frame()
 )
+assert (dm_enriched["SAFFL"] == "Y").sum() == dm_enriched.height, "every pilot subject took a dose"
 
 # The columns below are derived inline above (or upstream in DM) with a
 # *different* method than the spec documents, so they are omitted from the
@@ -1295,7 +1310,12 @@ ae_with_trt = fleet.frame(ae).adam.merge(dataset=_adsl_trt, on="USUBJID", how="l
 adae_sourced = ae_with_trt.adam.from_spec(ADAM_SPEC, dataset="ADAE", omit=["STUDYID"]).to_frame()
 adae = (
     adae_sourced.adam.occds.treatment_emergent(
-        "TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT"
+        "TRTEMFL",
+        start_date="AESTDTC",
+        end_date="AEENDTC",
+        trtsdt="TRTSDT",
+        trtedt="TRTEDT",
+        end_window=0,
     )
     .recode("AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
     .flag(
@@ -1802,7 +1822,7 @@ These verbs are defined once in `SharedADaMVerbsMixin` (`src/fleet/adam/_mixins.
 - `date(target: str, *, source: str | None = None, value: str | None = None, output: str | None = None, time: str | None = None, impute: str = 'first', impute_time: str | None = None, highest: str | None = None, flag: bool | str = True, min_date: str | None = None, max_date: str | None = None) -> Self` — Parse, convert, impute, and flag a date or datetime column.
 - `duration(target: str, *, start: str | pl.Expr, end: str | pl.Expr, unit: "Literal['seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years']" = 'days', add_one: bool | None = None, out: "Literal['numeric', 'iso8601']" = 'numeric') -> Self` — Compute the duration between two date/datetime columns.
 - `flag(target: str, *, criteria: str | pl.Expr, by: list[str] | None = None, order_by: str | list[str] | None = None, value_col: str | None = None, where: str | pl.Expr | None = None, from_dataset: pl.DataFrame | list[pl.DataFrame] | None = None, on: list[str] | None = None, source_filter: pl.Expr | None = None, condition: pl.Expr | None = None, inclusive: bool = True, flag_no_ref_groups: bool = True, flag_all: bool = False, flag_value: str = 'Y', false_value: str | None = None) -> Self` — Set *target* to *flag_value* for records matching *criteria*.
-- `pick(targets: str | list[str], *, events: list[dict[str, Any]], by: list[str] | None = None, order: str | list[str] | None = None, mode: str = 'first') -> Self` — Derive targets from the highest-priority matching event per group.
+- `pick(targets: str | list[str], *, events: list[dict[str, Any]], by: list[str] | None = None, order: str | list[str] | None = None, mode: str = 'first') -> Self` — Derive targets from one event per group, chosen across the events.
 
 ## ADaM verbs
 
@@ -1839,7 +1859,7 @@ Available on `df.adam` (BDS base namespace). Shared verbs (source, assign, case_
 
 Available on `df.adam.occds` (and `df.adam.pk` for sequence). Shared verbs (source, assign, case_when, derivation, recode, merge, whereclauses, merge_adsl) are also available here via the shared mixin.
 
-- `treatment_emergent(target: str = 'TRTEMFL', *, start_date: str, trtsdt: str, trtedt: str | None = None, offset_days: int = 0) -> Self` — Set *target* to ``"Y"`` for treatment-emergent events.
+- `treatment_emergent(target: str = 'TRTEMFL', *, start_date: str, end_date: str | None, trtsdt: str, trtedt: str | None = None, end_window: int | None = None, offset_days: int = 0) -> Self` — Set *target* to ``"Y"`` for treatment-emergent events, as admiral ``derive_var_trtemfl``.
 - `onset_recovery(target: str, *, start_date: str, end_date: str, ref_date: str) -> Self` — Flag events that started on/after the reference date and have recovered.
 - `seq(target: str = 'ASEQ', *, order_by: list[str] | None = None, by: list[str] | None = None, start_at: int = 1, check_uniqueness: bool = False) -> Self` — Derive a 1-based sequence number within each group.
 

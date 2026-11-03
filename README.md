@@ -329,8 +329,8 @@ adsl = (
     .first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")
     .last_date("TRTEDT", from_dataset=ex, date_col="EXENDTC")
     .duration("TRTDURD", start="TRTSDT", end="TRTEDT")
-    .merge(ex_max_dose, on="USUBJID", keep=["_EXDOSE_MAX"])
-    .flag("SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0')
+    # Treated = any EX record. The SAP decides; a population flag is never blank.
+    .flag("SAFFL", criteria='pl.col("TRTSDT").is_not_null()', false_value="N")
     .to_frame()
 )
 ```

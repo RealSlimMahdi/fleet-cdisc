@@ -158,10 +158,10 @@ class TestCountEvents:
 
 
 class TestEligibilityFlag:
-    def test_saffl_at_least_one_dose(self, subject_frame):
-        """SAFFL = 'Y' when patient has at least one dose > 0."""
-        result = subject_frame.adam.adsl.flag("SAFFL", criteria='pl.col("EXDOSE") > 0').to_frame()
-        flags = result["SAFFL"].to_list()
+    def test_expression_flag_leaves_non_matches_null_by_default(self, subject_frame):
+        """The verb default: rows that fail the criteria get null, not "N"."""
+        result = subject_frame.adam.adsl.flag("DOSEFL", criteria='pl.col("EXDOSE") > 0').to_frame()
+        flags = result["DOSEFL"].to_list()
         assert flags[0] == "Y"  # 01-001: EXDOSE=54 → Y
         assert flags[1] is None  # 01-002: EXDOSE=0  → null
         assert flags[2] == "Y"  # 01-003: EXDOSE=81 → Y

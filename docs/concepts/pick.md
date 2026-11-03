@@ -1,6 +1,6 @@
-# Event-Priority Derivation with `pick()`
+# Multi-Source Event Derivation with `pick()`
 
-Many ADaM variables require scanning multiple data sources in a defined priority order and selecting the first (or last) qualifying value.  Admiral calls this pattern `derive_vars_extreme_event` / `event()`.  Fleet provides `pick()` — a single verb that replaces multi-step joins, coalesces, and manual priority logic.
+Many ADaM variables scan several data sources and keep one value per subject: the latest date over all sources, or the first source that has a value.  Admiral calls this pattern `derive_vars_extreme_event` / `event()`.  Fleet provides `pick()`, one verb that replaces multi-step joins, coalesces, and manual priority logic.
 
 ## The Problem
 
@@ -13,23 +13,25 @@ Consider **LSTALVDT** (Last Date Known Alive).  The derivation spec typically re
 > 3. Last AE start date (AESTDTC)
 > 4. Treatment end date (TRTEDT) — fallback
 
-Each "event" has its own source dataset, filter condition, and column to extract.  The first event that matches (in priority order) wins for each subject.
+Each "event" has its own source dataset, filter condition, and column to extract.  The latest date over all events wins for each subject, whatever the list position.
 
 Without `pick()`, you'd need:
 
 ```python
-# Manual approach — 4 last_date lookups + coalesce
+# Manual approach — 3 last_date lookups + a row-wise maximum
 adsl = (
     adsl.adam.adsl.last_date("_dth", from_dataset=adsl_df, date_col="DTHDT")
     .last_date("_ae_end", from_dataset=ae, date_col="AEENDTC")
     .last_date("_ae_start", from_dataset=ae, date_col="AESTDTC")
-    .derivation("LSTALVDT", expression='pl.coalesce("_dth", "_ae_end", "_ae_start", "TRTEDT")')
+    .derivation(
+        "LSTALVDT", expression='pl.max_horizontal("_dth", "_ae_end", "_ae_start", "TRTEDT")'
+    )
     .to_frame()
     .drop(["_dth", "_ae_end", "_ae_start"])
 )
 ```
 
-This is verbose, error-prone (column ordering = priority), and loses traceability.
+This is verbose, error-prone, and loses traceability: the record behind each date is gone.
 
 ## The Solution: `pick()`
 
@@ -67,35 +69,35 @@ adsl = adsl.adam.adsl.pick(
 ).to_frame()
 ```
 
-Priority is explicit in list order.  Each event's `"label"` documents intent.  No temporary columns needed.
+`order=["LSTALVDT"], mode="last"` at top level makes every event compete on the date: the latest one wins.  Each event's `"label"` documents intent.  No temporary columns needed.
 
 ## How It Works
 
 ```mermaid
 flowchart TD
-    A[Events list<br/>ordered by priority] --> PE
+    A[Events list] --> PE
 
-    subgraph PE["For each event · in priority order"]
+    subgraph PE["For each event"]
         direction TB
         C[Filter source by 'when' condition]
         D[Apply 'set' mappings to targets]
         E[Group by 'by' vars]
         F[Select record per mode / order]
-        G[Tag with event priority number]
+        G[Tag with event list position]
         C --> D --> E --> F --> G
     end
 
     PE --> H[Stack all candidate records]
-    H --> I[Sort by priority, then order]
+    H --> I[Sort by top-level order, then list position]
     I --> J[Keep first per group = winner]
     J --> K[Left-join targets back to base frame]
 ```
 
 **Key properties:**
 
-1. **Priority = list position.**  Event at index 0 beats index 1, regardless of dates.
-2. **Within-event selection** uses `mode` ("first" or "last") + `order` (sort columns).
-3. **Cross-event winner** is the highest-priority event that has qualifying records.
+1. **Within-event selection** uses the event's `mode` and `order`, or the top-level ones.
+2. **With a top-level `order`**, every event's record competes on that order and `mode`, as admiral `derive_vars_extreme_event` does.  `order=["LSTALVDT"], mode="last"` gives the latest date over all sources.  A tie goes to the first listed event.
+3. **With no top-level `order`**, the first listed event that has a record wins: a priority cascade, as the admiral DTHCAUS template.
 4. **Subjects with no matching events** get `null` for all targets.
 
 ## Event Dict Reference
@@ -113,7 +115,7 @@ Each event is a Python `dict` with these keys:
 
 ## Multiple Targets
 
-`pick()` can derive several columns simultaneously from the same event cascade:
+`pick()` can derive several columns simultaneously from the same events:
 
 ```python
 adsl = adsl.adam.adsl.pick(
@@ -156,7 +158,9 @@ This is equivalent to passing a `pl.Expr` directly and enables full round-trippi
 |---------|-------|
 | `event(dataset, condition, set_values_to, order, mode)` | Event dict in `events` list |
 | `derive_vars_extreme_event(events, source_datasets, by_vars, order, mode, check_type)` | `.pick(targets, events=..., by=..., order=..., mode=...)` |
-| Priority = position in `event()` list | Priority = position in `events` list |
+| `order = exprs(LSTALVDT), mode = "last"`: latest value over all events | `order=["LSTALVDT"], mode="last"` |
+| Ties on `order` go to the first event in the list | Ties on `order` go to the first event in `events` |
+| DTHCAUS template: first listed event with a record | No top-level `order`: first listed event with a record |
 | Requires pre-built event objects + explicit dataset references | Inline dicts with optional `"source"` — current frame used by default |
 
 Fleet's `pick()` is semantically equivalent but:
@@ -170,12 +174,12 @@ Fleet's `pick()` is semantically equivalent but:
 
 | Scenario | Use |
 |----------|-----|
-| Multi-source priority cascade (LSTALVDT, DTHCAUS, LDDTHELD) | `pick()` |
+| Multi-source extreme value or first-source cascade (LSTALVDT, DTHCAUS, LDDTHELD) | `pick()` |
 | Simple conditional (AGEGR1, EOSSTT) | `case_when()` |
 | Complex cross-record logic within one source (CBOR confirmation rules) | `@derivation(kind="frame")` |
 | Aggregation that needs custom grouping (derived parameters) | `derive_param()` |
 
-**Rule of thumb:** If your logic is "try source A, then B, then C" — use `pick()`.  If it requires comparing multiple records within the same subject to determine a single result (e.g., sustained response confirmation), use a `@derivation`.
+**Rule of thumb:** If your logic is "the latest (or first) value over sources A, B and C", or "try source A, then B, then C", use `pick()`.  If it requires comparing multiple records within the same subject to determine a single result (e.g., sustained response confirmation), use a `@derivation`.
 
 ## Spec-Driven Usage
 

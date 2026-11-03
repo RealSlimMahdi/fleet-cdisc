@@ -119,7 +119,12 @@ class TestFlagMax:
 class TestTreatmentEmergent:
     def test_on_treatment_flagged(self, ae_frame):
         result = ae_frame.adam.occds.treatment_emergent(
-            "TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT"
+            "TRTEMFL",
+            start_date="AESTDTC",
+            end_date="AEENDTC",
+            trtsdt="TRTSDT",
+            trtedt="TRTEDT",
+            end_window=0,
         ).to_frame()
         # All events start after TRTSDT and before TRTEDT
         assert all(f == "Y" for f in result["TRTEMFL"].to_list())
@@ -135,7 +140,12 @@ class TestTreatmentEmergent:
 └────────────┴────────────┴────────────┘
 """)
         result = df.adam.occds.treatment_emergent(
-            "TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT"
+            "TRTEMFL",
+            start_date="AESTDTC",
+            end_date=None,
+            trtsdt="TRTSDT",
+            trtedt="TRTEDT",
+            end_window=0,
         ).to_frame()
         assert result["TRTEMFL"][0] is None
 
