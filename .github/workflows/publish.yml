@@ -22,13 +22,16 @@ jobs:
 
       - name: Lint and test
         run: |
-          uv sync --extra dev
+          uv sync --locked --extra dev
           uv run ruff check
           uv run ruff format --check
           uv run pytest
 
+  fresh-install:
+    uses: ./.github/workflows/fresh-install.yml
+
   build:
-    needs: test
+    needs: [test, fresh-install]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

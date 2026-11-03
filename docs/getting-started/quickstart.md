@@ -129,6 +129,37 @@ reference date, no day 0).
 ## ADSL — one row per subject
 
 ```python
+dm_sdtm = pl.from_repr("""
+┌─────────┬─────┬─────┐
+│ USUBJID ┆ AGE ┆ SEX │
+│ ---     ┆ --- ┆ --- │
+│ str     ┆ i64 ┆ str │
+╞═════════╪═════╪═════╡
+│ 001-01  ┆ 63  ┆ F   │
+│ 001-02  ┆ 71  ┆ M   │
+└─────────┴─────┴─────┘
+""")
+ex_sdtm = pl.from_repr("""
+┌─────────┬────────────┬────────┬────────────┬────────────┐
+│ USUBJID ┆ EXTRT      ┆ EXDOSE ┆ EXSTDTC    ┆ EXENDTC    │
+│ ---     ┆ ---        ┆ ---    ┆ ---        ┆ ---        │
+│ str     ┆ str        ┆ f64    ┆ str        ┆ str        │
+╞═════════╪════════════╪════════╪════════════╪════════════╡
+│ 001-01  ┆ PLACEBO    ┆ 0.0    ┆ 2024-01-10 ┆ 2024-03-10 │
+│ 001-02  ┆ XANOMELINE ┆ 54.0   ┆ 2024-01-12 ┆ 2024-03-12 │
+└─────────┴────────────┴────────┴────────────┴────────────┘
+""")
+ae_sdtm = pl.from_repr("""
+┌─────────┬──────────┐
+│ USUBJID ┆ AETERM   │
+│ ---     ┆ ---      │
+│ str     ┆ str      │
+╞═════════╪══════════╡
+│ 001-02  ┆ HEADACHE │
+│ 001-02  ┆ NAUSEA   │
+└─────────┴──────────┘
+""")
+
 # Exposure rule of the admiral template (ad_adsl.R): a placebo dose of 0 is exposure.
 # The SAP decides. Change this if placebo is not coded EXDOSE = 0 with PLACEBO in EXTRT.
 treated = (
@@ -178,7 +209,8 @@ commands like `fleet add-ct`.
 The same first step can be done programmatically with `StudyContext.init()`:
 
 ```python
-from fleet import StudyContext, SDTMConfig, ADAMConfig
+from fleet import StudyContext
+from fleet.core.study_context import ADAMConfig, SDTMConfig
 
 ctx = StudyContext.init(
     "./studies/MYSTUDY01",

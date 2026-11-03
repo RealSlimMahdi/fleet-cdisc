@@ -267,6 +267,30 @@ def test_readme_blocks_execute(tmp_path, monkeypatch):
     assert set(adsl["SAFFL"].to_list()) <= {"Y", "N"}
 
 
+def test_quickstart_blocks_execute(tmp_path, monkeypatch):
+    """c1-848: every python block of the quickstart runs as written, in an empty folder.
+
+    The page generates ``codelists.py`` with ``fleet add-ct``, which needs the
+    CDISC Library; the pilot's generated file stands in for it.
+    """
+    text = (REPO_ROOT / "docs" / "getting-started" / "quickstart.md").read_text(encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.syspath_prepend(str(REPO_ROOT / "examples" / "cdiscpilot01" / "sdtm"))
+    ns: dict = {}
+
+    ran_python = 0
+    for lang, body, run in _iter_blocks(text):
+        if run and lang == "python":
+            exec(compile(body, "<quickstart>", "exec"), ns)  # noqa: S102 — trusted doc source
+            ran_python += 1
+
+    assert ran_python == 6
+    assert ns["dm"]["SEX"].to_list() == ["M", "F", "M"]
+    assert {"BASE", "CHG", "PCHG"}.issubset(ns["advs"].columns)
+    assert ns["adsl"]["SAFFL"].to_list() == ["Y", "Y"]
+    assert (tmp_path / "studies" / "MYSTUDY01" / "study_config.yaml").is_file()
+
+
 def test_define_yaml_doc_blocks_execute(tmp_path, monkeypatch):
     """Every non-illustrative code block in define-yaml.md runs / parses."""
     text = DEFINE_YAML_DOC.read_text(encoding="utf-8")

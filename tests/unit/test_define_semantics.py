@@ -459,8 +459,12 @@ def test_committed_define_outputs_are_reproducible(standard):
         EXAMPLES / standard / "define.yaml", enrich_methods=True
     ).to_xml_string()
 
-    def stamp_free(xml: str) -> list[str]:
-        return re.sub(r'CreationDateTime="[^"]*"', 'CreationDateTime=""', xml).splitlines()
+    def stamp_free(xml: str) -> str:
+        # Canonical XML: the same document gives the same text on every Python (c1-617).
+        from lxml import etree
+
+        stamped = re.sub(r'CreationDateTime="[^"]*"', 'CreationDateTime=""', xml)
+        return etree.canonicalize(xml_data=stamped, strip_text=True)
 
     assert stamp_free(regenerated) == stamp_free(committed), (
         f"outputs/cdiscpilot01/define_{standard}.xml is stale — regenerate with "
