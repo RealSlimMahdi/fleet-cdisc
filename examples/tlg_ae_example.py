@@ -198,7 +198,12 @@ adae = (
     .duration("ADY", start="TRTSDT", end="ASTDT")
     .to_frame()
     .adam.occds.treatment_emergent(
-        "TRTEMFL", start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT"
+        "TRTEMFL",
+        start_date="ASTDT",
+        end_date="AENDT",
+        trtsdt="TRTSDT",
+        trtedt="TRTEDT",
+        end_window=0,
     )
     .seq("ASEQ", by=["USUBJID"])
     .to_frame()

@@ -166,9 +166,11 @@ adae = (
     .to_frame()
     .adam.occds.treatment_emergent(
         "TRTEMFL",
-        start_date="AESTDTC",
+        start_date="ASTDT",
+        end_date="AEENDTC",
         trtsdt="TRTSDT",
         trtedt="TRTEDT",
+        end_window=0,  # the SAP decides the window after the last dose
     )
     .recode("AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
     .flag(
@@ -270,9 +272,11 @@ adae = (
     .to_frame()
     .adam.occds.treatment_emergent(
         "TRTEMFL",
-        start_date="AESTDTC",
+        start_date="ASTDT",
+        end_date="AEENDTC",
         trtsdt="TRTSDT",
         trtedt="TRTEDT",
+        end_window=0,
     )
     .recode("AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
     .flag(

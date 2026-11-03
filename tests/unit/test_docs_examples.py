@@ -160,18 +160,13 @@ def _guide_namespace() -> dict:
         .assign("DSSTDTC", source="RFENDTC")
         .to_frame()
     )
-    _ex_max_dose = ex.sdtm.group_by(
-        by=["USUBJID"], agg=[pl.col("EXDOSE").max().alias("_EXDOSE_MAX")]
-    ).to_frame()
     adsl = (
         dm.adam.adsl.source("STUDYID", "USUBJID", "AGE", "SEX", "ARM", "ARMCD", "ACTARM")
         .assign("TRT01P", source="ARM")
         .first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")
         .last_date("TRTEDT", from_dataset=ex, date_col="EXENDTC")
-        .merge(_ex_max_dose, on="USUBJID")
-        .flag("SAFFL", criteria='pl.col("_EXDOSE_MAX") > 0')
+        .flag("SAFFL", criteria='pl.col("TRTSDT").is_not_null()', false_value="N")
         .to_frame()
-        .drop("_EXDOSE_MAX")
     )
 
     return {
@@ -184,7 +179,6 @@ def _guide_namespace() -> dict:
         "ae": ae,
         "ex": ex,
         "ds": ds,
-        "_ex_max_dose": _ex_max_dose,
         "adsl": adsl,
     }
 

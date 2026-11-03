@@ -222,7 +222,10 @@ datasets:
           algorithm: first_date
           from_dataset: EX
           date_col: EXSTDTC
-          where: 'pl.col("EXDOSE") > 0'
+          # admiral template exposure rule: a placebo dose of 0 counts. The SAP decides.
+          where: >-
+            (pl.col("EXDOSE") > 0) | ((pl.col("EXDOSE") == 0)
+            & pl.col("EXTRT").str.to_uppercase().str.contains("PLACEBO"))
 ```
 
 Run it by pinning `EX` and calling `from_spec` (the harness writes the YAML above
@@ -236,8 +239,9 @@ dm = pl.DataFrame({"STUDYID": ["CDISCPILOT01"] * 2, "USUBJID": ["S1", "S2"]})
 ex = pl.DataFrame(
     {
         "USUBJID": ["S1", "S1", "S2"],
+        "EXTRT": ["XANOMELINE", "XANOMELINE", "XANOMELINE"],
         "EXSTDTC": ["2014-01-05", "2014-01-02", "2014-02-01"],
-        "EXDOSE": [54.0, 0.0, 54.0],  # the 0-dose row is filtered out by where=
+        "EXDOSE": [54.0, 0.0, 54.0],  # the 0-dose active row is filtered out by where=
     }
 )
 
@@ -250,8 +254,12 @@ The equivalent hand-written pipeline calls the same verb directly:
 <!-- docs:no-run -->
 
 ```python
+treated = (
+    '(pl.col("EXDOSE") > 0) | '
+    '((pl.col("EXDOSE") == 0) & pl.col("EXTRT").str.to_uppercase().str.contains("PLACEBO"))'
+)
 adsl = dm.adam.adsl.first_date(
-    "TRTSDT", from_dataset=ex, date_col="EXSTDTC", where='pl.col("EXDOSE") > 0'
+    "TRTSDT", from_dataset=ex, date_col="EXSTDTC", where=treated
 ).to_frame()
 ```
 

@@ -6,6 +6,13 @@ All notable changes to Fleet are documented here.
 
 ### Fixed
 
+- **Toxicity grades equal admiral** (ADR-0014, alpha audit package D). The 8 bundled criteria files are generated from the admiral 1.4.1 metadata by `scripts/regen_grading_criteria.R` and keep the admiral text of each term; a frozen admiral grid of 34,146 rows is the CI test.
+  - A null BNRIND takes the ULN criteria: ALT 900 with ULN 40 is grade 4, not 0.
+  - The unit matches without case: potassium 7.5 in `mmol/L` is grade 4, not null.
+  - Each row is graded with the entry of its own DAIDS subgroup and unit: DAIDS `Hemoglobin, Low` 60 g/L is grade 4 for adults and neonates. A term with criteria for several units needs `unit_var=`. Every row keeps its place.
+  - CTCAE v5 and v6 INR take the worse of the absolute and the baseline cut-offs (INR 3.0 is grade 3, also with no BASE), as admiral. v4 `Hemoglobin increased` no longer raises; Fibrinogen, Creatinine clearance and Alkaline phosphatase follow admiral.
+  - `atoxgr(signif_dig=)` defaults to 15, as admiral.
+  - A custom criteria file needs `schema_version: 2` (ordered `case_when` arms); a file in the old format stops with a message.
 - **One reader for `--DTC` text** (ADR-0011, alpha audit package A). Every date verb reads `--DTC` through `fleet.core.dtc`:
   - `study_day`, `duration` in days and `visit_map` use the date portion of a timed value (SDTMIG 3.4 section 4.4.4): `2021-03-20T10:30` against `2021-03-15T08:00` is day 6, not null. A `pl.Datetime` gives its date.
   - `duration` adds one **day** before dividing for weeks, months and years (85 days is 2.79 months, not 3.76), gives the raw difference for hours by default, and adds nothing to a negative span (-1, not 0), as admiral `compute_duration`. `tte.aval` has the same sign rule.
@@ -23,13 +30,11 @@ All notable changes to Fleet are documented here.
   - A CSV column with a leading zero (SITEID `001`) reads as text with a warning, types are inferred from every row, and `fleet run` reads define type `text` variables as text, so LBORRES `1.10` stays `1.10`.
   - `fleet compare` types CSV sides across both files: SITEID `001` against `1` differs, AVAL `1.10` against `1.1` is equal, and `--text` keeps a column text. New `blank_is_missing` / `--blank-is-missing` reads `""` as missing on both sides; the default stays exact.
   - `load_raw_data(..., encoding=)` reaches the SAS reader, and `--encoding` is on `fleet compare` and `fleet validate`, so a file from a WLATIN1 SAS session can be read. A keyword the reader does not take raises.
-- **Toxicity grades equal admiral** (ADR-0014, alpha audit package D). The 8 bundled criteria files are generated from the admiral 1.4.1 metadata by `scripts/regen_grading_criteria.R` and keep the admiral text of each term; a frozen admiral grid of 34,146 rows is the CI test.
-  - A null BNRIND takes the ULN criteria: ALT 900 with ULN 40 is grade 4, not 0.
-  - The unit matches without case: potassium 7.5 in `mmol/L` is grade 4, not null.
-  - Each row is graded with the entry of its own DAIDS subgroup and unit: DAIDS `Hemoglobin, Low` 60 g/L is grade 4 for adults and neonates. A term with criteria for several units needs `unit_var=`. Every row keeps its place.
-  - CTCAE v5 and v6 INR take the worse of the absolute and the baseline cut-offs (INR 3.0 is grade 3, also with no BASE), as admiral. v4 `Hemoglobin increased` no longer raises; Fibrinogen, Creatinine clearance and Alkaline phosphatase follow admiral.
-  - `atoxgr(signif_dig=)` defaults to 15, as admiral.
-  - A custom criteria file needs `schema_version: 2` (ordered `case_when` arms); a file in the old format stops with a message.
+- **ADSL and OCCDS verbs follow the admiral rules they name** (ADR-0012, alpha audit package B):
+  - `treatment_emergent` follows admiral `derive_var_trtemfl`: an AE with no start date is Y unless it ended before TRTSDT, an AE that ended before TRTSDT is null, and a start after TRTEDT is Y only within `end_window` days. New required keyword `end_date=` (pass `None` when there is none) and new `end_window=` (required with `trtedt=`). Dates are read with the `--DTC` reader of ADR-0011.
+  - `pick` with a top-level `order` keeps the extreme value over all events, as admiral `derive_vars_extreme_event`: `order=["LSTALVDT"], mode="last"` gives the latest date, not the first listed event's date. A tie goes to the first listed event; with no top-level `order` the first listed event with a record still wins. The result no longer depends on the sort engine's order.
+  - `recode` types the output from the map: `{"MILD": 1, "MODERATE": 2, "SEVERE": 3}` gives an integer ASEVN, not text. A map that mixes text and numbers raises `DerivationError`.
+  - The SAFFL recipes in the README, GUIDE, quickstart, installation, define-yaml and both pilot examples keep placebo subjects (EXDOSE = 0 with PLACEBO in EXTRT, the admiral template rule) and give N to non-members, as ADaMIG 1.3 requires. Both pilot examples now have SAFFL = Y for 5 of 5.
 
 ### Changed
 

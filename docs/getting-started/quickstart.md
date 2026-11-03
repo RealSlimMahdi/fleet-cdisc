@@ -129,16 +129,26 @@ reference date, no day 0).
 ## ADSL — one row per subject
 
 ```python
+# Exposure rule of the admiral template (ad_adsl.R): a placebo dose of 0 is exposure.
+# The SAP decides. Change this if placebo is not coded EXDOSE = 0 with PLACEBO in EXTRT.
+treated = (
+    '(pl.col("EXDOSE") > 0) | '
+    '((pl.col("EXDOSE") == 0) & pl.col("EXTRT").str.to_uppercase().str.contains("PLACEBO"))'
+)
+
 adsl = (
     dm_sdtm.adam.adsl.source("USUBJID", "AGE", "SEX")
-    .first_date("TRTSDT", from_dataset=ex_sdtm, date_col="EXSTDTC", where='pl.col("EXDOSE") > 0')
-    .last_date("TRTEDT", from_dataset=ex_sdtm, date_col="EXENDTC", where='pl.col("EXDOSE") > 0')
+    .first_date("TRTSDT", from_dataset=ex_sdtm, date_col="EXSTDTC", where=treated)
+    .last_date("TRTEDT", from_dataset=ex_sdtm, date_col="EXENDTC", where=treated)
     .duration("TRTDURD", start="TRTSDT", end="TRTEDT")
-    .flag("SAFFL", criteria='pl.col("TRTSDT").is_not_null()')
+    .flag("SAFFL", criteria='pl.col("TRTSDT").is_not_null()', false_value="N")
     .count_events("NUMAE", from_dataset=ae_sdtm)
     .to_frame()
 )
 ```
+
+A population flag is never blank (ADaMIG 1.3), so `false_value="N"` gives N to
+the subjects outside the safety population.
 
 Fleet also provides Admiral-parity verbs for advanced BDS derivations — `bsa()`, `map()`, `qtc()`, `derive_summary_records()`, `derive_locf_records()`, and `derive_param()` — as well as ADSL helpers `age_years()` and `derive_period()`. See the [Cheat Sheet](../api/cheat_sheet.md) for the full list.
 
