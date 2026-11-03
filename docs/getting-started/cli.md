@@ -305,7 +305,8 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | `--standard` | `sdtm` | Which define.yaml to use for the config-based defaults (default: sdtm). Choices: `sdtm`, `adam`. |
 | `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 | `--no-preview` | _(none)_ | Skip generating the HTML preview alongside the XML. |
-| `--enrich-methods` | _(none)_ | Embed Python verb / callable docstrings into Define-XML Origin descriptions and emit MethodDef elements with FormalExpression. Creates a verifiable link between the regulatory submission and the exact code that produced the data. |
+| `--enrich-methods` | _(none)_ | Kept for old scripts: MethodDefs are on by default. Every Derived variable with a comment: or a derivation: gets a MethodDef. |
+| `--strict` | _(none)_ | Refuse to write the file when the define has gaps: a Derived variable with no method text, a text, integer or float variable with no length, a float with no significant_digits. Without it the gaps are warnings. |
 | `--watch` | _(none)_ | Re-generate whenever the spec file changes (requires the 'watch' extra). |
 
 ---

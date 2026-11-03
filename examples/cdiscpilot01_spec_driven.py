@@ -379,12 +379,14 @@ for checker, df, ds in [
     result.raise_on_errors()  # a failing dataset must fail the pipeline
 
 # ── 10. Generate Define-XML 2.1 ───────────────────────────────────────────────
-# enrich_methods=True emits one MethodDef per Derived variable, with
-# submission-facing text rendered from the algorithm registry (a spec
-# `comment:` overrides it) and the faithful Fleet call as FormalExpression.
+# One MethodDef per Derived variable, with submission-facing text rendered
+# from the algorithm registry (a spec `comment:` overrides it) and the
+# faithful Fleet call as FormalExpression. strict=True refuses a define with
+# a gap: a Derived variable with no method text, a numeric item with no
+# Length or a float with no SignificantDigits.
 # XSD validation + the semantic lint run automatically on the way out.
-DefineSpecGenerator(SDTM_SPEC, enrich_methods=True).generate(OUT / "define_sdtm.xml")
-DefineSpecGenerator(ADAM_SPEC, enrich_methods=True).generate(OUT / "define_adam.xml")
+DefineSpecGenerator(SDTM_SPEC, strict=True).generate(OUT / "define_sdtm.xml")
+DefineSpecGenerator(ADAM_SPEC, strict=True).generate(OUT / "define_adam.xml")
 print(f"\nDefine-XML written to {OUT}/")
 print("  Serve with: python -m http.server 8080 --directory outputs/cdiscpilot01")
 

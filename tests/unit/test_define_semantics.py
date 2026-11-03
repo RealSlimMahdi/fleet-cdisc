@@ -264,7 +264,8 @@ class TestGeneratorSemantics:
                 "derivation": {"algorithm": "assign_no_ct", "source": "age_group"},
             }
         )
-        root = _generate(spec, tmp_path)
+        with pytest.warns(UserWarning, match=r"DM\.AGEGR1: no MethodDef"):
+            root = _generate(spec, tmp_path, enrich_methods=False)
         assert _origin_desc(root, "AGEGR1") == "AGE grouped as <65, 65-80, >80 years"
         assert list(root.iter(f"{ODM}MethodDef")) == []
 

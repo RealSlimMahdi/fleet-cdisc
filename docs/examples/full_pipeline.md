@@ -268,12 +268,14 @@ Tag CRF-collected variables with their page numbers in the define.yaml
 then generate:
 
 ```bash
-uv run fleet define-xml --standard sdtm --enrich-methods
-uv run fleet define-xml --standard adam --enrich-methods
+uv run fleet define-xml --standard sdtm
+uv run fleet define-xml --standard adam
 ```
 
-`--enrich-methods` embeds each derivation's docstring as a `<MethodDef>` —
-a verifiable link between the submission metadata and the exact code above.
+Each Derived variable gets a `<MethodDef>` with its method text: a verifiable
+link between the submission metadata and the exact code above. Add
+`--strict` to refuse a define with a gap (a Derived variable with no method
+text, or a numeric variable with no `length:`).
 
 ## 8. Bonus: hand the pipeline to an orchestrator
 

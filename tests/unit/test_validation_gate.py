@@ -355,12 +355,12 @@ def test_a_timeout_stops_the_engine_workers(tmp_path: Path) -> None:
     from fleet.validation.official import _run_command
 
     pidfile = tmp_path / "child.pid"
-    script = tmp_path / "core"
-    script.write_text(f"#!/bin/sh\nsleep 30 &\necho $! > {pidfile}\nwait\n", encoding="utf-8")
-    script.chmod(0o755)
+    script = tmp_path / "core.sh"
+    script.write_text(f"sleep 30 &\necho $! > {pidfile}\nwait\n", encoding="utf-8")
 
+    # Through /bin/sh: macOS scans a new executable on its first run, which can outlast the timeout.
     with pytest.raises(subprocess.TimeoutExpired):
-        _run_command([str(script)], cwd=str(tmp_path), timeout=3)
+        _run_command(["/bin/sh", str(script)], cwd=str(tmp_path), timeout=3)
 
     child = int(pidfile.read_text())
     time.sleep(0.2)

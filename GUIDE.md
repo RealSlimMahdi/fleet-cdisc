@@ -1462,21 +1462,25 @@ errors = validate_rule_schema(rule_dict)
 uv run fleet define-xml \
   --spec examples/cdiscpilot01/sdtm/define.yaml \
   --output outputs/define_sdtm.xml \
-  --enrich-methods
+  --strict
 
 # ADaM Define-XML (without HTML preview)
 uv run fleet define-xml \
   --spec examples/cdiscpilot01/adam/define.yaml \
   --output outputs/define_adam.xml \
-  --enrich-methods \
+  --strict \
   --no-preview
 ```
 
-`--enrich-methods` instructs Fleet to emit a `<MethodDef>` for every derivation
-in the spec, populated from the docstring of the referenced verb
-(`algorithm:`) or study callable (`callable:`). Each `<ItemDef>` gets a
-`MethodOID` attribute pointing at it, so reviewers see the exact computational
-method beside every variable.
+Fleet emits a `<MethodDef>` for every Derived variable in the spec. Its text
+comes from the variable's `comment:`, the study callable (`callable:`) or the
+algorithm (`algorithm:`). Each `<ItemRef>` gets a `MethodOID` attribute that
+points at it, so reviewers see the method beside every variable.
+
+A Derived variable with no method text, a numeric variable with no `length:`
+and a float with no `significant_digits:` are Define-XML gaps. Without
+`--strict`, Fleet writes the file and lists each gap in one warning. With
+`--strict`, it writes nothing and exits with code 1. `fleet check` is strict.
 
 ### From Python
 
@@ -1497,9 +1501,9 @@ adam_checker.check(advs, dataset="ADVS").print_report()
 # Use strict=False during development to downgrade Req errors to warnings
 sdtm_checker.check(dm, dataset="DM", strict=False).print_report()
 
-# Generate Define-XML 2.1 (enrich_methods=True emits one <MethodDef> per Derived variable)
-DefineSpecGenerator(sdtm_spec, enrich_methods=True).generate("outputs/define_sdtm.xml")
-DefineSpecGenerator(adam_spec, enrich_methods=True).generate("outputs/define_adam.xml")
+# Generate Define-XML 2.1 (one <MethodDef> per Derived variable; strict=True refuses a gap)
+DefineSpecGenerator(sdtm_spec, strict=True).generate("outputs/define_sdtm.xml")
+DefineSpecGenerator(adam_spec, strict=True).generate("outputs/define_adam.xml")
 ```
 
 ---
@@ -1804,7 +1808,7 @@ The `Derivation` object's `kind` determines routing:
 
 ### How Define-XML MethodDef text is resolved
 
-When `fleet define-xml --enrich-methods` is run, `DefineSpecGenerator` emits
+When `fleet define-xml` is run, `DefineSpecGenerator` emits
 one `<MethodDef>` per **Derived** variable (`Algorithm for <VARIABLE>`),
 choosing its `<Description>` in this order:
 

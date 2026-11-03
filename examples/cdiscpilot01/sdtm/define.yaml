@@ -175,6 +175,7 @@ datasets:
       - name: AGE
         label: Age
         type: integer
+        length: 2
         mandatory: true
         origin: Collected
         crf_pages: "8"
@@ -327,6 +328,7 @@ datasets:
       - name: AESEQ
         label: Sequence Number
         type: integer
+        length: 1
         mandatory: true
         origin: Assigned
 
@@ -504,6 +506,8 @@ datasets:
       - name: VSSTRESN
         label: Numeric Result/Finding in Standard Units
         type: float
+        length: 4
+        significant_digits: 1
         mandatory: false
         origin: Derived
         derivation:
@@ -523,6 +527,8 @@ datasets:
       - name: VISITNUM
         label: Visit Number
         type: float
+        length: 4
+        significant_digits: 1
         mandatory: false
         origin: Protocol
         derivation:
@@ -593,6 +599,7 @@ datasets:
       - name: EXSEQ
         label: Sequence Number
         type: integer
+        length: 1
         mandatory: true
         origin: Assigned
 
@@ -609,6 +616,8 @@ datasets:
       - name: EXDOSE
         label: Dose per Administration
         type: float
+        length: 2
+        significant_digits: 0
         mandatory: false
         origin: Collected
         derivation:

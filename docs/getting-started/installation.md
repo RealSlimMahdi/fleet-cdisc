@@ -167,10 +167,11 @@ uv run fleet define-xml --standard adam
 The same generation from Python, for notebooks or custom scripts:
 
 ```python
-from fleet import DefineXMLGenerator
+from fleet import DefineSpecGenerator
 
-gen = DefineXMLGenerator("examples/cdiscpilot01/adam/define.yaml")
-gen.write("outputs/cdiscpilot01/define_adam.xml")
+DefineSpecGenerator("examples/cdiscpilot01/adam/define.yaml").generate(
+    "outputs/cdiscpilot01/define_adam.xml"
+)
 ```
 
 ## Next steps

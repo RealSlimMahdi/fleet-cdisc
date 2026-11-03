@@ -616,13 +616,16 @@ adsl = (
 ### Define-XML generation
 
 ```python
-from pathlib import Path
+from fleet import DefineSpecGenerator
 
-from fleet import DefineXMLGenerator
-
-gen = DefineXMLGenerator(Path("examples/cdiscpilot01/adam/define.yaml"))
-gen.generate(Path("outputs/cdiscpilot01/define_adam.xml"))
+DefineSpecGenerator("examples/cdiscpilot01/adam/define.yaml").generate(
+    "outputs/cdiscpilot01/define_adam.xml"
+)
 ```
+
+Each Derived variable needs method text (`comment:` or `derivation:`); text, \
+integer and float need `length:`; float needs `significant_digits:`. A gap \
+warns; `strict=True` (CLI `fleet define-xml --strict`, and `fleet check`) refuses.
 
 New spec keys: `fleet_spec_version: 1` (dialect pin), `derivations_module:` \
 (auto-import for `callable:`), `output_format:` (parquet/json/xpt), `value_level:` \

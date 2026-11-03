@@ -602,9 +602,11 @@ class DatasetChecker:
     def _validate_schema(self) -> None:
         import jsonschema
 
+        from fleet.core.exceptions import SpecSchemaError
+
         schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
         validator = jsonschema.Draft202012Validator(schema)
         errors = list(validator.iter_errors(self._data))
         if errors:
             msgs = "\n".join(f"  - {e.json_path}: {e.message}" for e in errors[:5])
-            raise ValueError(f"define YAML failed schema validation:\n{msgs}")
+            raise SpecSchemaError(f"define YAML failed schema validation:\n{msgs}")

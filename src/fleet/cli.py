@@ -717,10 +717,7 @@ def _generate_define_xml(args: argparse.Namespace) -> None:
     print(f"Output:   {output}")
     print()
 
-    gen = DefineSpecGenerator(
-        str(spec),
-        enrich_methods=getattr(args, "enrich_methods", False),
-    )
+    gen = DefineSpecGenerator(str(spec), strict=getattr(args, "strict", False))
     gen.generate(str(output), html_preview=not args.no_preview)
     print(f"Generated Define-XML → {output}")
     if not args.no_preview:
@@ -1064,7 +1061,7 @@ def _save_comparison_file(path_str: str, save: Callable[[Path], None], what: str
 
 
 def _run_check(args: argparse.Namespace) -> None:
-    """Run the CI gate: config + define schema + codelists + run setup + rule YAMLs + essentials."""
+    """Run the CI gate: config + Define-XML generation + codelists + run setup + rules + essentials."""
     from fleet.core.study_context import StudyConfigError, load_study_context
 
     rows: list[tuple[str, str, str]] = []  # (status, name, detail)
@@ -1081,9 +1078,9 @@ def _run_check(args: argparse.Namespace) -> None:
         except StudyConfigError as exc:
             rows.append(("FAIL", "study config", str(exc)))
 
-    # ── 2. define.yaml JSON-schema validation ──
+    # ── 2. define.yaml: the generator itself, in strict mode ──
     if ctx is not None:
-        from fleet.define_xml import DatasetChecker
+        from fleet.define_xml import DefineSpecGenerator
 
         found_define = False
         for label, path in (
@@ -1094,10 +1091,10 @@ def _run_check(args: argparse.Namespace) -> None:
                 continue
             found_define = True
             try:
-                DatasetChecker(path)  # parses YAML + validates against the JSON schema
-                rows.append(("PASS", label, f"{path} — schema OK"))
+                DefineSpecGenerator(path, strict=True).to_xml_string()
+                rows.append(("PASS", label, f"{path} — generates a valid Define-XML"))
             except Exception as exc:
-                rows.append(("FAIL", label, f"{path}: {exc}"))
+                rows.append(("FAIL", label, str(exc)))
         if not found_define:
             rows.append(
                 ("WARN", "define.yaml", "no define.yaml files found (run `fleet init define`)")
@@ -2235,10 +2232,17 @@ def _add_define_xml_parser(sub: argparse._SubParsersAction) -> None:
         "--enrich-methods",
         action="store_true",
         help=(
-            "Embed Python verb / callable docstrings into Define-XML "
-            "Origin descriptions and emit MethodDef elements with "
-            "FormalExpression. Creates a verifiable link between the "
-            "regulatory submission and the exact code that produced the data."
+            "Kept for old scripts: MethodDefs are on by default. Every Derived "
+            "variable with a comment: or a derivation: gets a MethodDef."
+        ),
+    )
+    defxml.add_argument(
+        "--strict",
+        action="store_true",
+        help=(
+            "Refuse to write the file when the define has gaps: a Derived variable "
+            "with no method text, a text, integer or float variable with no length, "
+            "a float with no significant_digits. Without it the gaps are warnings."
         ),
     )
     defxml.add_argument(

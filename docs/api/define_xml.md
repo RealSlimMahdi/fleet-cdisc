@@ -2,14 +2,6 @@
 
 Fleet generates and validates CDISC Define-XML 2.1 documents from `define.yaml` specs.
 
-## DefineXMLGenerator
-
-::: fleet.define_xml.DefineXMLGenerator
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
-
 ## DefineSpecGenerator
 
 ::: fleet.define_xml.DefineSpecGenerator
@@ -18,13 +10,13 @@ show_root_heading: true
 heading_level: 3
 filters: ["!^_"]
 
-### Method enrichment (`enrich_methods=True`)
+### Method definitions
 
-When constructed with `enrich_methods=True`, `DefineSpecGenerator` emits one
+`DefineSpecGenerator` emits one
 Define-XML 2.1 `<MethodDef>` per **Derived** variable (named
 `Algorithm for <VARIABLE>`), referenced from the variable's `<ItemRef>` via
-`MethodOID`. Variables with any other origin — Collected, Assigned, Protocol,
-Predecessor — never reference a method: a collected column is not a
+`MethodOID`. Variables with any other origin (Collected, Assigned, Protocol,
+Predecessor) never reference a method: a collected column is not a
 computation.
 
 The `<Description>` is submission text, resolved as: the variable's
@@ -33,7 +25,24 @@ algorithm registry's submission-facing template with the spec params filled
 in (`fleet.core.spec_registry.render_method_text`). Fleet verb docstrings are
 never emitted. `<FormalExpression Context="Python/Fleet">` records the
 faithful call (dotted verb path + spec params), so identical specs produce
-identical text across Fleet versions.
+identical text across Fleet versions. A method with a `comment:` only has no
+`<FormalExpression>`.
+
+### Define-XML gaps
+
+Define-XML 2.1 requires a `MethodOID` on each Derived `ItemRef`, a `Length`
+on `text`, `integer` and `float` items, and `SignificantDigits` on `float`
+items. The generator names each item that misses one, for example
+`DM.SAFFL: no method text (add a comment: or a derivation: block)` or
+`VS.AVAL (PARAMCD = SYSBP): no SignificantDigits (required on float)`.
+
+- By default it writes the document and gives one `UserWarning` with the list.
+- With `strict=True` (CLI: `fleet define-xml --strict`) it raises `SpecError`
+  and writes nothing. `fleet check` runs the generator in strict mode.
+
+`significant_digits:` sets `SignificantDigits` on a variable or on a
+value-level entry. The schema refuses it on a type other than `float`, and
+refuses `length:` on `date` and `datetime`.
 
 ### Validation of generated documents
 
@@ -50,7 +59,7 @@ from fleet import DefineSpecGenerator
 
 DefineSpecGenerator(
     "examples/cdiscpilot01/sdtm/define.yaml",
-    enrich_methods=True,
+    strict=True,
 ).generate("outputs/define_sdtm.xml")
 ```
 
@@ -60,7 +69,7 @@ CLI equivalent:
 uv run fleet define-xml \
   --spec examples/cdiscpilot01/sdtm/define.yaml \
   --output outputs/define_sdtm.xml \
-  --enrich-methods
+  --strict
 ```
 
 The derivation block accepts either form:
@@ -76,14 +85,6 @@ derivation:
 derivation:
   callable: examples.cdiscpilot01.adam.derivations.derive_aval
 ```
-
-## DefineValidator
-
-::: fleet.define_xml.DefineValidator
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
 
 ## DatasetChecker
 

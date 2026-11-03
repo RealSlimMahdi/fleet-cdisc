@@ -271,15 +271,12 @@ Registers `df.tlg` on every Polars DataFrame. Produces Analysis Results Datasets
 
 | File                                 | Purpose                                                                                                                                         |
 | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `schemas/define_xml_2_1_schema.json` | JSON Schema for Define-XML 2.1 YAML representation                                                                                              |
 | `schemas/define_spec_schema.json`    | JSON Schema for the higher-level `define.yaml` spec — **generated** from the algorithm registry by `schema_builder.py` (CI sync test enforces it)  |
 | `schema_builder.py`                  | Builds `define_spec_schema.json` from `spec_registry` (algorithm enum, per-algorithm required fields, `fleet_spec_version`/`derivations_module`/`value_level` properties) |
-| `validator.py`                       | `DefineValidator` — validates a YAML spec against the schema + business rules; `.issues` / `.has_errors()` / `.print_report()`                    |
-| `generator.py`                       | `DefineXMLGenerator(path)` — converts a YAML spec into Define-XML 2.1 ODM XML; `.generate(out_path)`                                              |
-| `spec_generator.py`                  | `DefineSpecGenerator(spec, enrich_methods=)` — generates Define-XML from `define.yaml`; honours `output_format:` / `value_level:` / `fleet_spec_version:`; `enrich_methods=True` emits `<MethodDef>` from verb / callable docstrings |
+| `spec_generator.py`                  | `DefineSpecGenerator(spec, strict=False)` — generates Define-XML from `define.yaml`; honours `output_format:` / `value_level:` / `fleet_spec_version:`; emits a `<MethodDef>` per Derived variable; names each gap (method text, Length, SignificantDigits) in one warning, or raises `SpecError` when `strict=True` |
 | `checker.py`                         | `DatasetChecker(spec, check_ct=True)` — runtime conformance check of a built dataset against its spec (columns, types, CT via inline codelists)  |
 
-Use `algorithm:` (Fleet verb) or `callable:` (study-specific dotted path) inside `derivation:` to drive execution and `enrich_methods` enrichment.
+Use `algorithm:` (Fleet verb) or `callable:` (study-specific dotted path) inside `derivation:` to drive execution and the `<MethodDef>` text.
 
 ---
 
