@@ -305,16 +305,19 @@ _ADAE = """\
 
 @pytest.fixture
 def fake_engine(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
-    """Capture each validate command; the engine writes no report and exits 0."""
+    """Capture each validate command; the engine writes a clean report and exits 0."""
     commands: list[list[str]] = []
 
     def run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         if "validate" not in cmd:
             return subprocess.CompletedProcess(cmd, 0, "0.15.0\n", "")
         commands.append(cmd)
+        out = Path(_flag(cmd, "-o") or "").with_suffix(".json")
+        out.write_text('{"Issue_Details": []}', encoding="utf-8")
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     monkeypatch.setattr("fleet.validation.official.subprocess.run", run)
+    monkeypatch.setattr("fleet.validation.official._run_command", run)
     monkeypatch.delenv("FLEET_RULES_ENGINE", raising=False)
     return commands
 
@@ -372,12 +375,12 @@ class TestVerb:
         def run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
             if "validate" in cmd:
                 rule = "FLEET-AE-001" if "-lr" in cmd else "CORE-000001"
-                report = {"Issue_Details": [{"core_id": rule, "message": "m", "Severity": "Error"}]}
+                report = {"Issue_Details": [{"core_id": rule, "message": "m"}]}
                 out = Path(_flag(cmd, "-o") or "").with_suffix(".json")
                 out.write_text(json.dumps(report), encoding="utf-8")
             return subprocess.CompletedProcess(cmd, 0, "", "")
 
-        monkeypatch.setattr("fleet.validation.official.subprocess.run", run)
+        monkeypatch.setattr("fleet.validation.official._run_command", run)
 
         ns = pl.from_repr(_ADAE).adam.validate("ADAE", on_fail="ignore")
 

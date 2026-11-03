@@ -28,12 +28,13 @@ class ValidationService:
         domain: str,
         version: str,
         custom_rules: Path | str | None = None,
+        timeout: float = 300,
     ) -> ValidationResult:
         if isinstance(df, pl.LazyFrame):
             df = df.collect()
         resolved = Path(custom_rules) if custom_rules is not None else None
         return self.provider.validate_sdtm(
-            df=df, domain=domain, version=version, custom_rules=resolved
+            df=df, domain=domain, version=version, custom_rules=resolved, timeout=timeout
         )
 
     def validate_adam(
@@ -42,12 +43,13 @@ class ValidationService:
         dataset: str,
         version: str,
         custom_rules: Path | str | None = None,
+        timeout: float = 300,
     ) -> ValidationResult:
         if isinstance(df, pl.LazyFrame):
             df = df.collect()
         resolved = Path(custom_rules) if custom_rules is not None else None
         return self.provider.validate_adam(
-            df=df, dataset=dataset, version=version, custom_rules=resolved
+            df=df, dataset=dataset, version=version, custom_rules=resolved, timeout=timeout
         )
 
     def validate_datasets(
@@ -56,6 +58,7 @@ class ValidationService:
         standard: str,
         version: str,
         custom_rules: Path | str | None = None,
+        timeout: float = 300,
     ) -> dict[str, ValidationResult]:
         """Validate several datasets of one standard together, in one engine run.
 
@@ -64,6 +67,7 @@ class ValidationService:
             standard: ``"sdtm"`` or ``"adam"``.
             version: IG version, ``"3.4"`` or ``"3-4"``.
             custom_rules: Directory of custom CORE rules.
+            timeout: Seconds before the engine run is stopped.
 
         Returns:
             dict[str, ValidationResult]: One result per dataset name.
@@ -78,5 +82,5 @@ class ValidationService:
         """
         resolved = Path(custom_rules) if custom_rules is not None else None
         return self.provider.validate_datasets(
-            datasets, standard=standard, version=version, custom_rules=resolved
+            datasets, standard=standard, version=version, custom_rules=resolved, timeout=timeout
         )

@@ -21,7 +21,13 @@ RuleSource = Literal["official", "custom"]
 
 
 class Severity(Enum):
-    """Validation issue severity levels."""
+    """Where a finding stands.
+
+    CORE gives no severity (ADR-0017).  ``ERROR`` is a finding that blocks,
+    ``WARNING`` a finding the study config accepts with a reason, and
+    ``INFO`` a note that cannot block (a study-level rule in a
+    single-dataset run).
+    """
 
     ERROR = "Error"
     WARNING = "Warning"
@@ -50,9 +56,13 @@ class ValidationIssue:
     verb_method: str | None = None
     spec_ref: str | None = None
     source: RuleSource = "official"
+    #: The reason from ``validation.accepted`` when the study accepts this finding.
+    accepted: str | None = None
 
     def __str__(self) -> str:
         parts = [f"[{self.severity.value}] {self.rule_id} ({self.source}): {self.message}"]
+        if self.accepted:
+            parts.append(f"Accepted: {self.accepted}")
         if self.variable:
             parts.append(f"Variable: {self.variable}")
         if self.rows_affected is not None:
@@ -79,16 +89,63 @@ class ValidationResult:
     infos: list[ValidationIssue] = field(default_factory=list)
     #: The inputs this result was validated with, when the surface used a run setup.
     setup: "RunSetup | None" = None
+    #: Rules the engine executed (``SUCCESS`` or ``ISSUE_REPORTED`` in its
+    #: ``Rules_Report``); ``None`` when the report does not say.
+    rules_executed: int | None = None
+    #: Why the engine could not run (crash, timeout, no report), or ``None``.
+    could_not_run: str | None = None
 
     @property
     def is_valid(self) -> bool:
-        return len(self.errors) == 0
+        """``True`` when the engine ran and no finding blocks."""
+        return self.could_not_run is None and not self.errors
+
+    @property
+    def status(self) -> str:
+        """The status word of the report (ADR-0017).
+
+        ``COULD NOT RUN`` when the engine did not finish, ``FAIL`` when a
+        finding blocks, ``NOT ASSESSED`` when no rule executed,
+        ``FINDINGS (n)`` when every finding is accepted, else ``PASS``.
+        """
+        if self.could_not_run is not None:
+            return "COULD NOT RUN"
+        if self.errors:
+            return "FAIL"
+        if self.rules_executed == 0:
+            return "NOT ASSESSED"
+        if self.warnings:
+            return f"FINDINGS ({len(self.warnings)})"
+        return "PASS"
+
+    def apply_setup(self, setup: "RunSetup") -> None:
+        """Record *setup* and move the findings it accepts out of the blocking ones.
+
+        A finding is accepted when ``validation.accepted`` lists its rule
+        and this dataset; it keeps its message and gains the reason.
+
+        Args:
+            setup: The run setup this result was validated with.
+
+        Examples:
+            ``result.apply_setup(build_run_setup(name="DM"))``
+        """
+        self.setup = setup
+        reasons = {(a.rule.upper(), a.dataset.upper()): a.reason for a in setup.accepted}
+        blocking: list[ValidationIssue] = []
+        for issue in self.errors:
+            reason = reasons.get((issue.rule_id.upper(), self.dataset_name.upper()))
+            if reason is None:
+                blocking.append(issue)
+            else:
+                issue.severity, issue.accepted = Severity.WARNING, reason
+                self.warnings.append(issue)
+        self.errors = blocking
 
     @property
     def summary(self) -> str:
-        status = "PASS" if self.is_valid else "FAIL"
         return (
-            f"{status} - {self.dataset_name} ({self.dataset_type} {self.model_version})\n"
+            f"{self.status} - {self.dataset_name} ({self.dataset_type} {self.model_version})\n"
             f"  Errors: {len(self.errors)}, Warnings: {len(self.warnings)}, Info: {len(self.infos)}"
         )
 
@@ -113,10 +170,15 @@ class ValidationResult:
         for line in self.setup.header_lines() if self.setup is not None else ():
             _logger.info(line)
         _logger.info(f"Dataset Type: {self.dataset_type} {self.model_version}")
-        _logger.info(f"Status: {'PASS' if self.is_valid else 'FAIL'}")
+        _logger.info(f"Status: {self.status}")
+        if self.could_not_run is not None:
+            _logger.info(f"Could not run: {self.could_not_run}")
+        if self.rules_executed is not None:
+            _logger.info(f"Rules executed: {self.rules_executed}")
         _logger.info(f"Total Issues: {self.total_issues}")
         _logger.info(
-            f"  Errors: {len(self.errors)}, Warnings: {len(self.warnings)}, Info: {len(self.infos)}"
+            f"  Errors: {len(self.errors)}, Warnings (accepted): {len(self.warnings)}, "
+            f"Info: {len(self.infos)}"
         )
         _logger.info("-" * 70)
 
@@ -139,12 +201,12 @@ class ValidationResult:
                     label += f" {issue.variable}:"
                 _logger.info(f"{label} {issue.message}")
         if self.warnings:
-            _logger.info(f"\nWARNINGS ({len(self.warnings)}):")
+            _logger.info(f"\nACCEPTED FINDINGS ({len(self.warnings)}):")
             for issue in self.warnings:
                 label = f"  [{issue.rule_id}] ({issue.source})"
                 if issue.variable:
                     label += f" {issue.variable}:"
-                _logger.info(f"{label} {issue.message}")
+                _logger.info(f"{label} {issue.message} Accepted: {issue.accepted}")
         if not self.errors and not self.warnings:
             _logger.info("\n  No errors or warnings.")
 
@@ -156,7 +218,7 @@ class ValidationResult:
                 _logger.info(f"\n{i}. {issue}")
 
         if self.warnings:
-            _logger.info(f"\nWARNINGS ({len(self.warnings)}):")
+            _logger.info(f"\nACCEPTED FINDINGS ({len(self.warnings)}):")
             for i, issue in enumerate(self.warnings, 1):
                 _logger.info(f"\n{i}. {issue}")
 
@@ -223,11 +285,13 @@ class ValidationResult:
                     _logger.info(f"   Occurrences: {count}")
                 if issue.producing_verb:
                     _logger.info(f"   Producing verb: {issue.producing_verb} ({issue.verb_method})")
+                if issue.accepted:
+                    _logger.info(f"   Accepted: {issue.accepted}")
                 if issue.suggested_fix:
                     _logger.info(f"   Suggested fix: {issue.suggested_fix}")
 
         _print_grouped("ERRORS", self.errors)
-        _print_grouped("WARNINGS", self.warnings)
+        _print_grouped("ACCEPTED FINDINGS", self.warnings)
         _print_grouped("INFO", self.infos)
 
         if not self.errors and not self.warnings and not self.infos:
@@ -290,7 +354,7 @@ def write_html_report(
         _row(
             r.dataset_name,
             f"{r.dataset_type} {r.model_version}",
-            "PASS" if r.is_valid else "FAIL",
+            r.status,
             len(r.errors),
             len(r.warnings),
             len(r.infos),
@@ -306,7 +370,7 @@ def write_html_report(
             i.variable or "",
             "" if i.rows_affected is None else i.rows_affected,
             i.message,
-            i.suggested_fix or "",
+            f"Accepted: {i.accepted}" if i.accepted else (i.suggested_fix or ""),
             f"{i.producing_verb} ({i.verb_method})" if i.producing_verb else "",
             i.spec_ref or "",
         )
@@ -316,6 +380,10 @@ def write_html_report(
     findings += [
         _row(d.name, "Could not run", "", "", "", "", d.reason or "", "", "", "")
         for d in could_not_run
+    ] + [
+        _row(r.dataset_name, "Could not run", "", "", "", "", r.could_not_run, "", "", "")
+        for r in results
+        if r.could_not_run is not None
     ]
     setups = dict.fromkeys(
         "\n".join(r.setup.header_lines()) for r in results if r.setup is not None
