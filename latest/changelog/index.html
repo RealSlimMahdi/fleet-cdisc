@@ -2265,6 +2265,15 @@
 <h2 id="unreleased">[Unreleased]<a class="headerlink" href="#unreleased" title="Permanent link">&para;</a></h2>
 <h3 id="fixed">Fixed<a class="headerlink" href="#fixed" title="Permanent link">&para;</a></h3>
 <ul>
+<li><strong>One reader for <code>--DTC</code> text</strong> (ADR-0011, alpha audit package A). Every date verb reads <code>--DTC</code> through <code>fleet.core.dtc</code>:</li>
+<li><code>study_day</code>, <code>duration</code> in days and <code>visit_map</code> use the date portion of a timed value (SDTMIG 3.4 section 4.4.4): <code>2021-03-20T10:30</code> against <code>2021-03-15T08:00</code> is day 6, not null. A <code>pl.Datetime</code> gives its date.</li>
+<li><code>duration</code> adds one <strong>day</strong> before dividing for weeks, months and years (85 days is 2.79 months, not 3.76), gives the raw difference for hours by default, and adds nothing to a negative span (-1, not 0), as admiral <code>compute_duration</code>. <code>tte.aval</code> has the same sign rule.</li>
+<li><code>baseline_flag</code> takes the last record strictly before the reference: a record on the reference date counts only when both times show it is earlier. Date-only records on that date are no longer baseline.</li>
+<li><code>epoch_assign(se=)</code> reads timed and date-only values, treats a blank <code>SEENDTC</code> as open and skips a partial one with a warning. On a transition date the time decides; with no time, new <code>same_day=</code> decides (<code>"by_class"</code> default: <code>--DTC</code> earlier element, <code>--STDTC</code> later), with a warning for the SDRG.</li>
+<li><code>.sdtm.date()</code> never guesses: a slash date or a two-digit year raises until <code>format=</code> names the layout; a value that is not ISO 8601 becomes null with one warning (count and values), instead of being copied into <code>--DTC</code>; <code>2021-03-15 10:30</code> becomes <code>2021-03-15T10:30</code>. With <code>time=</code>, a blank time keeps the date, a partial date takes hyphens (<code>2021-03--T08:30</code>) and a time with no date gives <code>-----T08:30</code>.</li>
+<li><code>.adam.date()</code> to a <code>*DTM</code> keeps the collected hour and minute (<code>T10:30</code> is 10:30:00, flag S), keeps a fraction, and drops an offset with a warning. <code>min_date</code> and <code>max_date</code> move only an imputed date whose possible range holds the bound; a complete date never moves, and a <code>*DTM</code> target refuses them.</li>
+<li><code>first_date</code> and <code>last_date</code> compare dates and give <code>pl.Date</code> (<code>pl.Datetime</code> for <code>*DTM</code>); a partial value is left out with a warning, and new <code>impute=</code> imputes it and writes the <code>*DTF</code> flag.</li>
+<li><code>select(spec=)</code> leaves every SDTM column and every <code>*DTC</code> as text; ADaM <code>*DT</code> and <code>*DTM</code> are read from text with no invented time, and a value that is not complete becomes null with a warning. <code>DatasetChecker</code> expects text for <code>*DTC</code>.</li>
 <li><strong>SAS files follow SAS rules</strong> (ADR-0010, alpha audit package F):</li>
 <li>XPT and SAS7BDAT read and write with the <code>io</code> extra alone, through the Polars route of pyreadstat; pandas and pyarrow are no longer needed. The <code>io</code> extra requires <code>pyreadstat&gt;=1.3.3</code>.</li>
 <li><code>save_xpt</code> writes SAS transport version 5 with the member named as the file (FDA TCG 3.1.1). A <code>pl.Date</code> is stored as SAS days with DATE9 (2024-01-15 is 23390), not DATETIME seconds. NaN and infinity become SAS missing. A name over 8 characters, a label over 40 or a value over 200 bytes stops the write instead of being cut. A value that is not ASCII is written as UTF-8 with a warning. New <code>label=</code> and <code>column_labels=</code> arguments; <code>fleet run --format xpt</code>, <code>fleet tdd build --format xpt</code> and <code>DatasetChecker.write_xpt</code> write the define and IG labels.</li>
@@ -2411,7 +2420,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 2, 2026 16:26:57 UTC">November 2, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 2, 2026 20:08:21 UTC">November 2, 2026</span>
   </span>
 
     
