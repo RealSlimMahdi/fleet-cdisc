@@ -2674,6 +2674,19 @@ documented columns.</p>
   a <code>Datetime</code> is compared by value after casting to a common type and listed
   as a dtype difference. A numeric next to a string is a <strong>type conflict</strong>:
   listed, not compared.</li>
+<li><strong>A blank is not a missing value unless you say so.</strong> A SAS file reads a
+  blank as null, so XPT against Parquet needs nothing. A file from another
+  tool can keep <code>""</code> (an R data frame without <code>convert_blanks_to_na</code>), and
+  <code>""</code> against null differs by default. <code>blank_is_missing=True</code> (or
+  <code>--blank-is-missing</code>) reads <code>""</code> as null on both sides, keys included, and
+  the settings line says <code>blank equals missing</code>.</li>
+<li><strong>A CSV file holds no types.</strong> <code>fleet compare</code> reads a CSV side as text and
+  types each column across both sides: the other side's type when that side
+  is not a CSV file; otherwise text when a value on either side has a leading
+  zero or is not a number, and a number in every other case. So SITEID <code>001</code>
+  against <code>1</code> differs, and AVAL <code>1.10</code> against <code>1.1</code> is equal, as in PROC
+  COMPARE. <code>--text LBORRES</code> keeps a column text, the <code>$</code> informat. The text
+  report starts with the type each CSV column was read as.</li>
 <li><strong>Row order and column order are ignored.</strong> A re-sorted or re-ordered
   dataset is not a different dataset.</li>
 <li><strong>Print limits only affect what is rendered.</strong> By default the text report
@@ -2903,7 +2916,7 @@ and a diff view in the editor extension built on the JSON contract above.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="October 9, 2026 13:10:56 UTC">October 9, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 2, 2026 16:26:57 UTC">November 2, 2026</span>
   </span>
 
     
