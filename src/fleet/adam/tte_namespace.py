@@ -268,7 +268,7 @@ class TTENamespace(SharedADaMVerbsMixin):
         start, end = ("STARTDTM", "ADTM") if "ADTM" in schema.names() else ("STARTDT", "ADT")
         days = (pl.col(end).cast(pl.Date) - pl.col(start).cast(pl.Date)).dt.total_days()
         if add_one:
-            days = days + 1
+            days = pl.when(days >= 0).then(days + 1).otherwise(days)
         exprs = [(days / _UNIT_DAYS[unit]).alias("AVAL")]
         if avalu:
             exprs.append(pl.lit(unit.upper()).alias("AVALU"))

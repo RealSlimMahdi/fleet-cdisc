@@ -17,11 +17,13 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import polars as pl
 import yaml
 
+from fleet.core.dtc import date_part, datetime_part, to_day
+from fleet.core.exceptions import DerivationError
 from fleet.sdtm.tdd import (
     Epoch,
     TrialArms,
@@ -62,6 +64,107 @@ def _load_packaged_structure(domain: str, ig_version: str) -> dict[str, Any] | N
 def packaged_structure(domain: str) -> dict[str, Any] | None:
     """Return the packaged SDTMIG 3.4 label and variables of a trial design domain."""
     return _load_packaged_structure(domain.upper(), _PACKAGED_IG_VERSION)
+
+
+def _same_day_rule(date_col: str, same_day: str) -> Literal["earlier", "later"]:
+    """The element a record with no time takes on a transition date."""
+    if same_day in ("earlier", "later"):
+        return same_day  # type: ignore[return-value]
+    if same_day != "by_class":
+        raise DerivationError(
+            f"epoch_assign(same_day={same_day!r}): choose 'by_class', 'earlier' or 'later'."
+        )
+    name = date_col.upper()
+    if name.endswith("STDTC"):
+        return "later"
+    if name.endswith("DTC") and not name.endswith("ENDTC"):
+        return "earlier"
+    raise DerivationError(
+        f"epoch_assign(date_col='{date_col}', same_day='by_class'): the record kind comes "
+        "from the name, --DTC (Findings) takes the earlier element and --STDTC (Events, "
+        f"Interventions) the later one. '{date_col}' is neither: pass same_day='earlier' "
+        "or same_day='later'."
+    )
+
+
+def _epoch_from_se(
+    df: pl.DataFrame,
+    se: pl.DataFrame | pl.LazyFrame,
+    target: str,
+    date_col: str,
+    subject_col: str,
+    rule: Literal["earlier", "later"],
+    same_day: str,
+) -> pl.DataFrame:
+    """``__row_idx__`` and *target* for each row of *df* that falls in an SE element."""
+    se_df = se.collect() if isinstance(se, pl.LazyFrame) else se
+    end_raw = pl.col("SEENDTC").cast(pl.String).str.strip_chars()
+    elements = se_df.select(
+        pl.col(subject_col),
+        date_part(pl.col("SESTDTC")).alias("__sd__"),
+        datetime_part(pl.col("SESTDTC")).alias("__st__"),
+        date_part(pl.col("SEENDTC")).alias("__ed__"),
+        datetime_part(pl.col("SEENDTC")).alias("__et__"),
+        (end_raw.is_null() | (end_raw == "")).alias("__open__"),
+        pl.col("EPOCH").alias("__ep__"),
+    )
+    usable = pl.col("__sd__").is_not_null() & (pl.col("__ed__").is_not_null() | pl.col("__open__"))
+    skipped = elements.filter(~usable).height
+    if skipped:
+        warnings.warn(
+            f"epoch_assign({target}): {skipped} SE record(s) have no complete date in "
+            "SESTDTC or SEENDTC, so these elements are skipped.",
+            stacklevel=3,
+        )
+
+    dtype = df.schema[date_col]
+    if dtype == pl.String:
+        row_time = datetime_part(pl.col(date_col))
+    elif isinstance(dtype, pl.Datetime):
+        row_time = pl.col(date_col).cast(pl.Datetime("us"))
+    else:
+        row_time = pl.lit(None, dtype=pl.Datetime("us"))
+    rows = df.select(
+        "__row_idx__",
+        pl.col(subject_col),
+        to_day(pl.col(date_col), dtype).alias("__d__"),
+        row_time.alias("__t__"),
+        pl.col(date_col).cast(pl.String).alias("__raw__"),
+    )
+    d, t = pl.col("__d__"), pl.col("__t__")
+    # On a transition date the time decides when the record and the boundary both have one.
+    starts_later = (d == pl.col("__sd__")) & (t < pl.col("__st__"))
+    ended_earlier = (d == pl.col("__ed__")) & (t >= pl.col("__et__"))
+    candidates = (
+        rows.join(elements.filter(usable), on=subject_col, how="inner")
+        .filter((d >= pl.col("__sd__")) & (pl.col("__open__") | (d <= pl.col("__ed__"))))
+        .filter(~(starts_later.fill_null(False) | ended_earlier.fill_null(False)))
+        .sort("__row_idx__", "__sd__", "__st__", nulls_last=False)
+    )
+    picked = candidates.group_by("__row_idx__", maintain_order=True).agg(
+        pl.len().alias("__n__"),
+        pl.col("__ep__").first().alias("__first__"),
+        pl.col("__ep__").last().alias("__last__"),
+        pl.col(subject_col).first().alias("__subject__"),
+        pl.col("__raw__").first(),
+    )
+    ambiguous = picked.filter(pl.col("__n__") > 1)
+    if ambiguous.height:
+        sample = ", ".join(
+            f"{s} {v}" for s, v in ambiguous.select("__subject__", "__raw__").head(5).iter_rows()
+        )
+        warnings.warn(
+            f"epoch_assign({target}): {ambiguous.height} row(s) fall on an element transition "
+            f"date with no time to compare; EPOCH set to the {rule} element "
+            f"(same_day='{same_day}', date_col {date_col}). First rows: {sample}. "
+            "State this rule in the SDRG.",
+            stacklevel=3,
+        )
+    choice = pl.col("__first__") if rule == "earlier" else pl.col("__last__")
+    return picked.select(
+        "__row_idx__",
+        pl.when(pl.col("__n__") == 1).then(pl.col("__first__")).otherwise(choice).alias(target),
+    )
 
 
 # Stage labels for error messages
@@ -488,8 +591,8 @@ class TrialDesignMixin:
         if ref_date and ref_date in df.columns and date_col in df.columns:
             df = df.with_columns(
                 (
-                    pl.col(date_col).str.to_date(strict=False).cast(pl.Date)
-                    - pl.col(ref_date).str.to_date(strict=False).cast(pl.Date)
+                    to_day(pl.col(date_col), df.schema[date_col])
+                    - to_day(pl.col(ref_date), df.schema[ref_date])
                 )
                 .dt.total_days()
                 .alias("__actual_dy__")
@@ -613,6 +716,7 @@ class TrialDesignMixin:
         epoch_ranges: list[dict[str, str]] | pl.DataFrame | None = None,
         se: pl.DataFrame | pl.LazyFrame | None = None,
         subject_col: str = "USUBJID",
+        same_day: Literal["by_class", "earlier", "later"] = "by_class",
     ) -> Self:  # type: ignore[type-var]
         """Assign ``EPOCH`` based on date ranges or per-subject SE intervals.
 
@@ -620,9 +724,22 @@ class TrialDesignMixin:
         an ``Epoch`` value; the first matching range wins.  With *se*, the
         subject's own element intervals drive the assignment: for each row,
         the epoch of the SE record whose ``[SESTDTC, SEENDTC]`` interval
-        (date precision; open-ended when ``SEENDTC`` is null) contains the
-        date — the standard cross-domain EPOCH derivation P21 checks
-        against SE.
+        contains the date (SDTMIG 3.4: EPOCH of the start or collection
+        date/time).  A blank or null ``SEENDTC`` is open-ended; an element
+        whose dates are partial is skipped, with a warning.
+
+        On a transition date, where one element ends and the next starts,
+        the time decides when the record and the boundary both have one.
+        When one of them has no time, *same_day* decides, and one warning
+        gives the count and the rule:
+
+        - ``"by_class"`` (default): a Findings date (``--DTC``) takes the
+          earlier element, an Events or Interventions date (``--STDTC``)
+          the later one.  Any other *date_col* name raises.
+        - ``"earlier"``: the element that ends on that date.
+        - ``"later"``: the element that starts on that date.
+
+        No guidance fixes this case, so state the rule in the SDRG.
 
         Args:
             target: Name of the output ``EPOCH`` column.
@@ -634,6 +751,8 @@ class TrialDesignMixin:
                 with *epoch_ranges*.
             subject_col: Subject key used to join *se* (default
                 ``"USUBJID"``).
+            same_day: The rule for a record with no time on a transition
+                date (with *se* only).
 
         Returns:
             Self: The namespace with *target* appended.
@@ -641,6 +760,8 @@ class TrialDesignMixin:
         Raises:
             ValueError: When neither or both of *epoch_ranges* and *se*
                 are provided.
+            DerivationError: When ``same_day="by_class"`` and *date_col*
+                is neither a ``--DTC`` nor a ``--STDTC`` name.
 
         Examples:
             Stamp EPOCH onto any domain from the subject's SE intervals::
@@ -657,25 +778,9 @@ class TrialDesignMixin:
             raise ValueError("epoch_assign() takes exactly one of epoch_ranges= or se=")
 
         if se is not None:
-            se_df = se.collect() if isinstance(se, pl.LazyFrame) else se
-            slim = se_df.select(
-                pl.col(subject_col),
-                pl.col("SESTDTC").alias("__se_st__"),
-                pl.col("SEENDTC").alias("__se_en__"),
-                pl.col("EPOCH").alias("__se_ep__"),
-            )
+            rule = _same_day_rule(date_col, same_day)
             df = self._lazy.collect().with_row_index("__row_idx__")  # type: ignore[attr-defined]
-            date = pl.col(date_col).str.to_date(strict=False)
-            start = pl.col("__se_st__").str.to_date(strict=False)
-            end = pl.col("__se_en__").str.to_date(strict=False)
-            best = (
-                df.join(slim, on=subject_col, how="inner")
-                .filter((date >= start) & (end.is_null() | (date <= end)))
-                .sort("__se_st__")
-                .group_by("__row_idx__")
-                .last()
-                .select("__row_idx__", pl.col("__se_ep__").alias(target))
-            )
+            best = _epoch_from_se(df, se, target, date_col, subject_col, rule, same_day)
             out = df.join(best, on="__row_idx__", how="left").drop("__row_idx__")
             return self._materialise_then(out)  # type: ignore[attr-defined]
 
@@ -687,30 +792,12 @@ class TrialDesignMixin:
         if not ranges:
             return self._chain(pl.lit(None).alias(target))  # type: ignore[attr-defined]
 
-        # Build nested when/then
-        first = ranges[0]
-        expr = pl.when(
-            (
-                pl.col(date_col).str.to_date(strict=False)
-                >= pl.lit(first["start"]).str.to_date(strict=False)
-            )
-            & (
-                pl.col(date_col).str.to_date(strict=False)
-                <= pl.lit(first["end"]).str.to_date(strict=False)
-            )
-        ).then(pl.lit(first["epoch"]))
-
-        for r in ranges[1:]:
-            expr = expr.when(
-                (
-                    pl.col(date_col).str.to_date(strict=False)
-                    >= pl.lit(r["start"]).str.to_date(strict=False)
-                )
-                & (
-                    pl.col(date_col).str.to_date(strict=False)
-                    <= pl.lit(r["end"]).str.to_date(strict=False)
-                )
-            ).then(pl.lit(r["epoch"]))
+        day = date_part(pl.col(date_col))
+        expr = pl.when(pl.lit(False)).then(pl.lit(None, dtype=pl.String))
+        for r in ranges:
+            start = date_part(pl.lit(str(r["start"])))
+            end = date_part(pl.lit(str(r["end"])))
+            expr = expr.when((day >= start) & (day <= end)).then(pl.lit(r["epoch"]))
 
         final_expr = expr.otherwise(pl.lit(None)).alias(target)
         return self._chain(final_expr)  # type: ignore[attr-defined]

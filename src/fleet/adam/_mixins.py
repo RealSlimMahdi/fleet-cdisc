@@ -74,6 +74,7 @@ from __future__ import annotations
 
 import copy
 import difflib
+import warnings
 from typing import TYPE_CHECKING, Any, Self
 
 import polars as pl
@@ -621,11 +622,16 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         date_col: str,
         where: str | pl.Expr | None = None,
         by: list[str] | None = None,
+        impute: str | None = None,
     ) -> Self:
         """Derive *target* as the earliest date in *date_col* from *from_dataset*.
 
         Materialises the current pipeline, aggregates *from_dataset* to
         subject level, then left-joins.  Useful for ASTDTM, TRTSDT, etc.
+        ``--DTC`` text is compared as dates: ``*DT`` gives a date, ``*DTM``
+        a date-time, ``*DTC`` the text of the earliest record.  A partial
+        or unreadable value is left out with a warning, unless *impute*
+        states the SAP rule (admiral ``derive_vars_dt``).
 
         Args:
             target: Name of the output date column.
@@ -633,6 +639,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             date_col: Date column to take the minimum of.
             where: Optional filter applied to *from_dataset* before aggregation.
             by: Join key columns (default ``["USUBJID"]``).
+            impute: Impute a partial ``--DTC`` value (``"first"``, ``"mid"``,
+                ``"last"``) for a ``*DT`` target, write the ``*DTF`` flag of the
+                earliest record, and warn with the count.
 
         Returns:
             Self: The namespace with *target* appended.
@@ -655,6 +664,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             where=where,
             by=by,
             agg_fn="min",
+            impute=impute,
         )
 
     def last_date(
@@ -665,10 +675,12 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         date_col: str,
         where: str | pl.Expr | None = None,
         by: list[str] | None = None,
+        impute: str | None = None,
     ) -> Self:
         """Derive *target* as the latest date in *date_col* from *from_dataset*.
 
-        Useful for AENDTM, TRTEDT, DTHDT, etc.
+        Useful for AENDTM, TRTEDT, DTHDT, etc.  Reads ``--DTC`` text as
+        :meth:`first_date` does.
 
         Args:
             target: Name of the output date column.
@@ -676,6 +688,8 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             date_col: Date column to take the maximum of.
             where: Optional filter applied to *from_dataset* before aggregation.
             by: Join key columns (default ``["USUBJID"]``).
+            impute: Impute a partial ``--DTC`` value for a ``*DT`` target,
+                write the ``*DTF`` flag of the latest record, and warn.
 
         Returns:
             Self: The namespace with *target* appended.
@@ -697,6 +711,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             where=where,
             by=by,
             agg_fn="max",
+            impute=impute,
         )
 
     def _date_agg(
@@ -708,19 +723,99 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         where: str | pl.Expr | None,
         by: list[str] | None,
         agg_fn: str,
+        impute: str | None = None,
     ) -> Self:
-        """Shared implementation for first_date/last_date."""
+        """Shared implementation for first_date/last_date.
+
+        ``--DTC`` text is read by the shared reader and compared as dates, so
+        the extreme is a date, never a text minimum.  The output type
+        follows the target: ``*DT`` a date, ``*DTM`` a date-time (values with
+        hours and minutes), ``*DTC`` the text of the winning record.  With no
+        *impute*, a partial value is left out with a warning; with one, a
+        partial value is imputed and the ``*DTF`` flag comes from the
+        winning record.
+        """
+        from fleet.adam.utils import (
+            _extract_prefix,
+            _infer_output_type,
+            dtf_expr,
+            impute_dtc_to_date,
+        )
+        from fleet.core.dtc import date_part, datetime_part
         from fleet.sdtm.utils import parse_expression
 
+        verb = "first_date" if agg_fn == "min" else "last_date"
         grps = by or ["USUBJID"]
         src = from_dataset
         if where is not None:
             where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
             src = src.filter(where_expr)
-        col = pl.col(date_col)
-        agg_expr = (col.min() if agg_fn == "min" else col.max()).alias(target)
-        agg_df = src.group_by(grps).agg(agg_expr)
-        df = self.to_frame().join(agg_df, on=grps, how="left", nulls_equal=True)
+        output = _infer_output_type(target) or "dt"
+        if src.schema[date_col] != pl.String:
+            if impute is not None:
+                raise DerivationError(f"{verb}('{target}'): impute= reads --DTC text only.")
+            col = pl.col(date_col)
+            if output == "dt" and isinstance(src.schema[date_col], pl.Datetime):
+                col = col.cast(pl.Date)
+            agg_df = src.group_by(grps).agg(
+                (col.min() if agg_fn == "min" else col.max()).alias(target)
+            )
+            df = self.to_frame().join(agg_df, on=grps, how="left", nulls_equal=True)
+            return self._materialise_then(df)
+
+        raw = pl.col(date_col)
+        flag = None
+        if impute is not None:
+            if output != "dt":
+                raise DerivationError(
+                    f"{verb}('{target}', impute=): imputation writes a *DT target and its *DTF "
+                    "flag. Impute the source with .adam.date() first for other targets."
+                )
+            key = impute_dtc_to_date(
+                date_col, "__key__", day_imputation=impute, month_imputation=impute
+            )
+            flag = f"{_extract_prefix(target)}DTF"
+        elif output == "dtm":
+            key = datetime_part(raw)
+        else:
+            key = date_part(raw)
+
+        given = raw.str.strip_chars().fill_null("") != ""
+        rows = src.with_columns(key.alias("__key__"))
+        left_out = rows.filter(given & pl.col("__key__").is_null())
+        if left_out.height:
+            values = left_out[date_col].unique(maintain_order=True).head(5).to_list()
+            warnings.warn(
+                f"{verb}('{target}'): {date_col} has {left_out.height} partial or unreadable "
+                f"value(s), left out of the {verb}. Pass impute= to impute partial dates. "
+                f"Values: {values}",
+                stacklevel=3,
+            )
+
+        picks = [pl.col("__key__").alias(target) if output != "dtc" else raw.alias(target)]
+        if flag is not None:
+            rows = rows.with_columns(dtf_expr(date_col, "__flag__"))
+            picks.append(pl.col("__flag__").alias(flag))
+        winners = (
+            rows.filter(pl.col("__key__").is_not_null())
+            .sort(
+                [*grps, "__key__", *(["__flag__"] if flag else [])],
+                descending=[False] * len(grps) + [agg_fn == "max"] + ([False] if flag else []),
+                nulls_last=False,
+            )
+            .group_by(grps, maintain_order=True)
+            .first()
+            .select(*grps, *picks)
+        )
+        if flag is not None:
+            imputed = winners.filter(pl.col(flag).is_not_null()).height
+            if imputed:
+                warnings.warn(
+                    f"{verb}('{target}'): imputed {imputed} date(s) from partial {date_col} "
+                    f"values (impute='{impute}'); {flag} records it.",
+                    stacklevel=3,
+                )
+        df = self.to_frame().join(winners, on=grps, how="left", nulls_equal=True)
         return self._materialise_then(df)
 
     def count_events(
@@ -814,8 +909,11 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             flag: ``True`` to auto-generate DTF/TMF flag columns,
                 ``False`` to suppress, or a string to name the DTF flag
                 explicitly.
-            min_date: Lower clamp bound (column name or date literal).
-            max_date: Upper clamp bound (column name or date literal).
+            min_date: Lower bound for an imputed date (column name or date
+                literal).  Applies only when the bound is inside the possible
+                range of the partial value; a complete date never changes.
+                Date (*DT) targets only.
+            max_date: Upper bound for an imputed date, with the same rule.
 
         Returns:
             Self: The namespace with *target* (and optionally flag columns)
@@ -920,14 +1018,17 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             dtf_expr,
             impute_dtc_to_date,
             impute_dtc_to_datetime,
+            refuse_dtm_bounds,
             tmf_expr,
+            warn_unread,
         )
+        from fleet.core.dtc import date_part
 
+        refuse_dtm_bounds(target, min_date, max_date)
         dtf_name, tmf_name = _resolve_flag_names(target, flag, output_type)
         effective_time_impute = impute_time or impute
 
         col = pl.col(source)
-        length = col.str.len_chars()
 
         # Materialise for partial date handling
         date_expr = impute_dtc_to_date(
@@ -962,15 +1063,16 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             ).str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
 
         dtm_full = (
-            pl.when(col.is_null() | (length == 0))
+            pl.when(col.is_null() | (col.str.strip_chars() == ""))
             .then(pl.lit(None, dtype=pl.Datetime("us")))
-            .when(length >= 10)
+            .when(date_part(col).is_not_null())
             .then(dtm_expr)
             .otherwise(partial_dtm)
-            .alias(target)
         )
 
-        exprs_list: list[pl.Expr] = [dtm_full]
+        exprs_list: list[pl.Expr] = [
+            warn_unread(source, target, dtm_full, pl.Datetime("us")).alias(target)
+        ]
         if dtf_name is not None:
             exprs_list.append(dtf_expr(source, dtf_name))
         if tmf_name is not None:

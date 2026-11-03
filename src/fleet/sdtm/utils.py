@@ -8,6 +8,7 @@ from typing import Any
 
 import polars as pl
 
+from fleet.core.dtc import is_iso8601
 from fleet.core.exceptions import DerivationError
 
 # ------------------------------------------------------------------ #
@@ -15,78 +16,197 @@ from fleet.core.exceptions import DerivationError
 # ------------------------------------------------------------------ #
 
 _ISO_DATE_FMTS = [
-    "%Y-%m-%d",
-    "%d/%m/%Y",
-    "%m/%d/%Y",
     "%Y%m%d",
     "%d-%b-%Y",
     "%d %b %Y",
+    "%d%b%Y",
 ]
+"""Layouts read with no ``format=``: none can be read two ways."""
 
-_ISO_DATETIME_FMTS = [
-    "%Y-%m-%dT%H:%M:%S",
-    "%Y-%m-%d %H:%M:%S",
-    "%Y-%m-%dT%H:%M",
-    "%Y-%m-%d %H:%M",
-]
+#: A slash date, whose day and month order needs a guess.
+GUESSED_SLASH = r"^\s*\d{1,2}/\d{1,2}/\d{1,4}\s*$"
+#: A date with a two-digit year, whose century needs a guess.
+GUESSED_YEAR = r"^\s*(?:\d{1,2}[-/ ]?[A-Za-z]{3}[-/ ]?\d{2}|\d{2}[-/]\d{2}[-/]\d{2})\s*$"
+
+_TIME = r"^(\d{1,2})(?::(\d{2})(?::(\d{2}(?:\.\d+)?))?)?$"
+#: A time literal for ``time=``; anything else names a column.
+TIME_LITERAL = re.compile(r"^\d{1,2}:\d{2}(:\d{2}(\.\d+)?)?$")
+
+
+def _blank_to_null(expr: pl.Expr) -> pl.Expr:
+    text = expr.cast(pl.String).str.strip_chars()
+    return pl.when(text == "").then(None).otherwise(text)
+
+
+def dtc_text(raw: pl.Expr, *, input_format: str | None = None) -> pl.Expr:
+    """Convert raw text to ``--DTC`` text, or null; never guess a layout.
+
+    A valid ISO 8601 value (SDTMIG 3.4 sections 4.4.1 to 4.4.3) stays as it
+    is, partial dates included.  ``YYYY-MM-DD hh:mm`` gets its ``T``.  With
+    no *input_format*, the layouts ``YYYYMMDD``, ``DD-MON-YYYY``,
+    ``DD MON YYYY`` and ``DDMONYYYY`` are converted; with one, that layout
+    is.  Every other value gives null, and a blank gives null.
+
+    Args:
+        raw: An expression of raw text.
+        input_format: A ``strptime`` layout, e.g. ``"%m/%d/%Y"``.
+
+    Returns:
+        pl.Expr: A ``pl.String`` expression.
+
+    Examples:
+        Convert an EDC date column::
+
+            ae = raw.with_columns(dtc_text(pl.col("ae_start")).alias("AESTDTC"))
+    """
+    text = _blank_to_null(raw).str.replace(r"^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})", "${1}T${2}")
+    iso = pl.when(is_iso8601(text)).then(text)
+    if input_format is None:
+        converted = [
+            text.str.to_date(fmt, strict=False).dt.to_string("%Y-%m-%d") for fmt in _ISO_DATE_FMTS
+        ]
+    else:
+        converted = [_formatted(text, input_format).dt.to_string(_iso_layout(input_format))]
+    return pl.coalesce(iso, *converted)
+
+
+def _formatted(text: pl.Expr, input_format: str) -> pl.Expr:
+    if _iso_layout(input_format) == "%Y-%m-%d":
+        return text.str.to_date(input_format, strict=False)
+    return text.str.to_datetime(input_format, strict=False)
+
+
+def _iso_layout(input_format: str) -> str:
+    """The ISO 8601 layout that keeps the precision *input_format* reads."""
+    if "%S" in input_format or "%T" in input_format:
+        return "%Y-%m-%dT%H:%M:%S"
+    if "%M" in input_format or "%R" in input_format:
+        return "%Y-%m-%dT%H:%M"
+    if "%H" in input_format:
+        return "%Y-%m-%dT%H"
+    return "%Y-%m-%d"
+
+
+def guessed_values(raw: pl.Expr, *, input_format: str | None = None) -> pl.Expr:
+    """True where turning *raw* into a date needs a guess the call did not state.
+
+    With no *input_format*: a slash date or a two-digit year.  With one: a
+    value it reads to a year before 1000, as ``%Y`` does with ``21``.
+
+    Args:
+        raw: An expression of raw text.
+        input_format: The ``strptime`` layout of the call, if any.
+
+    Returns:
+        pl.Expr: A boolean expression.
+
+    Examples:
+        Find the rows that need a layout::
+
+            raw.filter(guessed_values(pl.col("ae_start")))
+    """
+    text = _blank_to_null(raw)
+    if input_format is None:
+        return text.str.contains(GUESSED_SLASH) | text.str.contains(GUESSED_YEAR)
+    return _formatted(text, input_format).dt.year() < 1000
+
+
+def dtc_with_time(date_dtc: pl.Expr, raw_date: pl.Expr, raw_time: pl.Expr) -> pl.Expr:
+    """Join ``--DTC`` date text and a collected time by SDTMIG 3.4 section 4.4.2.
+
+    A blank time leaves the date alone.  A time is ``h[h]:mm[:ss[.f]]``,
+    with the hour padded to two digits.  A partial date takes one hyphen
+    for each missing component before the time (``2021-03--T08:30``,
+    ``2021----T08:30``).  A time with no date gives ``-----T08:30``.  A
+    time in another layout is left out (see :func:`bad_time`).
+
+    Args:
+        date_dtc: The date as ``--DTC`` text (from :func:`dtc_text`).
+        raw_date: The raw date, to tell a missing date from an unreadable one.
+        raw_time: The raw time.
+
+    Returns:
+        pl.Expr: A ``pl.String`` expression.
+
+    Examples:
+        Combine EXSTDAT and EXSTTIM::
+
+            ex = raw.with_columns(
+                dtc_with_time(dtc_text(pl.col("d")), pl.col("d"), pl.col("t")).alias("EXSTDTC")
+            )
+    """
+    clock = _clock(raw_time)
+    no_date = _blank_to_null(raw_date).is_null()
+    with_hyphens = (
+        pl.when(date_dtc.str.contains(r"^\d{4}-\d{2}$"))
+        .then(date_dtc + "--")
+        .when(date_dtc.str.contains(r"^\d{4}$"))
+        .then(date_dtc + "----")
+        .otherwise(date_dtc)
+    )
+    return (
+        pl.when(clock.is_null())
+        .then(date_dtc)
+        .when(no_date)
+        .then(pl.lit("-----T") + clock)
+        .when(date_dtc.is_null() | date_dtc.str.contains("T"))
+        .then(date_dtc)
+        .otherwise(with_hyphens + pl.lit("T") + clock)
+    )
+
+
+def _clock(raw_time: pl.Expr) -> pl.Expr:
+    """``hh:mm[:ss[.f]]`` from a raw time, or null when it is blank or not a clock time."""
+    parts = _blank_to_null(raw_time).str.extract_groups(_TIME)
+    hour = parts.struct.field("1").str.pad_start(2, "0")
+    minute, second = parts.struct.field("2"), parts.struct.field("3")
+    valid = (
+        (hour.cast(pl.Int32, strict=False) <= 23)
+        & (minute.is_null() | (minute.cast(pl.Int32, strict=False) <= 59))
+        & (second.is_null() | (second.cast(pl.Float64, strict=False) < 60))
+    )
+    text = pl.concat_str(
+        hour,
+        pl.when(minute.is_not_null()).then(pl.lit(":") + minute).otherwise(pl.lit("")),
+        pl.when(second.is_not_null()).then(pl.lit(":") + second).otherwise(pl.lit("")),
+    )
+    return pl.when(valid.fill_null(False)).then(text)
+
+
+def bad_time(raw_time: pl.Expr) -> pl.Expr:
+    """True for a time that is not blank and not a clock time (``0830``, ``UNK``, ``25:00``).
+
+    Args:
+        raw_time: The raw time.
+
+    Returns:
+        pl.Expr: A boolean expression.
+
+    Examples:
+        Count the times the EDC export holds in another layout::
+
+            raw.select(bad_time(pl.col("t")).sum())
+    """
+    return _blank_to_null(raw_time).is_not_null() & _clock(raw_time).is_null()
 
 
 def dtc_date_expr(source: str, target: str, *, input_format: str | None = None) -> pl.Expr:
-    """Return a vectorised expression that parses *source* to ISO 8601 date string.
-
-    Tries each format in ``_ISO_DATE_FMTS`` via ``pl.coalesce``; partial dates
-    (e.g. ``"2014-01"``, ``"2014"``) that fail all formats are preserved as-is.
+    """Return :func:`dtc_text` of column *source*, named *target*.
 
     Args:
         source: Name of the input column containing date strings.
         target: Name of the output column.
-        input_format: When provided, skips the coalesce chain and uses a
-            single ``str.to_date`` call for maximum performance.
+        input_format: A ``strptime`` layout, or ``None``.
 
     Returns:
-        pl.Expr: Expression producing an ISO 8601 date string (``pl.String``).
+        pl.Expr: Expression producing ``--DTC`` text (``pl.String``).
+
+    Examples:
+        Convert raw dates::
+
+            ae = raw.with_columns(dtc_date_expr("ae_start", "AESTDTC"))
     """
-    col = pl.col(source)
-    if input_format is not None:
-        parsed = col.str.to_date(input_format, strict=False)
-        return (
-            pl.when(parsed.is_not_null())
-            .then(parsed.dt.to_string("%Y-%m-%d"))
-            .otherwise(col)
-            .alias(target)
-        )
-    candidates = [
-        col.str.to_date(fmt, strict=False).dt.to_string("%Y-%m-%d") for fmt in _ISO_DATE_FMTS
-    ]
-    return pl.coalesce(*candidates, col).alias(target)
-
-
-def dtc_datetime_expr(source: str, target: str, *, input_format: str | None = None) -> pl.Expr:
-    """Return a vectorised expression that parses *source* to ISO 8601 datetime string.
-
-    Args:
-        source: Name of the input column containing datetime strings.
-        target: Name of the output column.
-        input_format: When provided, skips the coalesce chain and uses a
-            single ``str.to_datetime`` call for maximum performance.
-
-    Returns:
-        pl.Expr: Expression producing an ISO 8601 datetime string (``pl.String``).
-    """
-    col = pl.col(source)
-    if input_format is not None:
-        parsed = col.str.to_datetime(input_format, strict=False)
-        return (
-            pl.when(parsed.is_not_null())
-            .then(parsed.dt.to_string("%Y-%m-%dT%H:%M:%S"))
-            .otherwise(col)
-            .alias(target)
-        )
-    all_fmts = _ISO_DATETIME_FMTS + _ISO_DATE_FMTS
-    candidates = [
-        col.str.to_datetime(fmt, strict=False).dt.to_string("%Y-%m-%dT%H:%M:%S") for fmt in all_fmts
-    ]
-    return pl.coalesce(*candidates, col).alias(target)
+    return dtc_text(pl.col(source), input_format=input_format).alias(target)
 
 
 # ------------------------------------------------------------------ #

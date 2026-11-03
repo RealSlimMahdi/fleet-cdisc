@@ -161,6 +161,16 @@ _Avoid_: NA, empty, blank (for null)
 A SAS XPORT version 5 file (`.xpt`), the submission format of FDA TCG 3.1.1: one dataset, named as the file. Names hold at most 8 characters, labels 40, values 200 bytes; Fleet stops a write that does not fit and cuts nothing.
 _Avoid_: XPT v8, SAS export, transport dataset
 
+### Dates
+
+**Date portion**:
+The complete date at the start of a `--DTC` value, `2021-03-20` in `2021-03-20T10:30`. Study day and every day count use it (SDTMIG 3.4 section 4.4.4); a partial date has none. Every date verb reads it through `fleet.core.dtc` (ADR-0011).
+_Avoid_: date part (in prose), truncated date
+
+**Transition date**:
+The date on which one SE element ends and the next starts. A record on that date with no time to compare takes the element that `epoch_assign(same_day=)` names: by default the earlier one for Findings (`--DTC`) and the later one for Events and Interventions (`--STDTC`).
+_Avoid_: boundary day, switch date
+
 ### Spec
 
 **Spec algorithm**:

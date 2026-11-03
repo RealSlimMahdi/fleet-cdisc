@@ -399,7 +399,9 @@ class DatasetChecker:
                 continue  # already reported as missing
             define_type = var_def["type"]
             actual_dtype = schema[col_name]
-            compat_types = _POLARS_COMPAT.get(define_type, ())
+            # --DTC is ISO 8601 text whatever the define type says (SDTMIG 3.4 4.4)
+            is_dtc = col_name.upper().endswith("DTC")
+            compat_types = (pl.String,) if is_dtc else _POLARS_COMPAT.get(define_type, ())
 
             ok = isinstance(actual_dtype, compat_types)
             if not ok:
@@ -409,7 +411,11 @@ class DatasetChecker:
                     actual_dtype=str(actual_dtype),
                 )
                 result.type_mismatches.append(mm)
-                expected_label = _TYPE_LABEL.get(define_type, define_type)
+                expected_label = (
+                    "String (ISO 8601 text)"
+                    if is_dtc
+                    else _TYPE_LABEL.get(define_type, define_type)
+                )
                 msg = (
                     f"Column '{col_name}': define type '{define_type}' "
                     f"(expects {expected_label}) but actual dtype is '{actual_dtype}'."

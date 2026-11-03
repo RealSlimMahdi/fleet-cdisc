@@ -6,6 +6,15 @@ All notable changes to Fleet are documented here.
 
 ### Fixed
 
+- **One reader for `--DTC` text** (ADR-0011, alpha audit package A). Every date verb reads `--DTC` through `fleet.core.dtc`:
+  - `study_day`, `duration` in days and `visit_map` use the date portion of a timed value (SDTMIG 3.4 section 4.4.4): `2021-03-20T10:30` against `2021-03-15T08:00` is day 6, not null. A `pl.Datetime` gives its date.
+  - `duration` adds one **day** before dividing for weeks, months and years (85 days is 2.79 months, not 3.76), gives the raw difference for hours by default, and adds nothing to a negative span (-1, not 0), as admiral `compute_duration`. `tte.aval` has the same sign rule.
+  - `baseline_flag` takes the last record strictly before the reference: a record on the reference date counts only when both times show it is earlier. Date-only records on that date are no longer baseline.
+  - `epoch_assign(se=)` reads timed and date-only values, treats a blank `SEENDTC` as open and skips a partial one with a warning. On a transition date the time decides; with no time, new `same_day=` decides (`"by_class"` default: `--DTC` earlier element, `--STDTC` later), with a warning for the SDRG.
+  - `.sdtm.date()` never guesses: a slash date or a two-digit year raises until `format=` names the layout; a value that is not ISO 8601 becomes null with one warning (count and values), instead of being copied into `--DTC`; `2021-03-15 10:30` becomes `2021-03-15T10:30`. With `time=`, a blank time keeps the date, a partial date takes hyphens (`2021-03--T08:30`) and a time with no date gives `-----T08:30`.
+  - `.adam.date()` to a `*DTM` keeps the collected hour and minute (`T10:30` is 10:30:00, flag S), keeps a fraction, and drops an offset with a warning. `min_date` and `max_date` move only an imputed date whose possible range holds the bound; a complete date never moves, and a `*DTM` target refuses them.
+  - `first_date` and `last_date` compare dates and give `pl.Date` (`pl.Datetime` for `*DTM`); a partial value is left out with a warning, and new `impute=` imputes it and writes the `*DTF` flag.
+  - `select(spec=)` leaves every SDTM column and every `*DTC` as text; ADaM `*DT` and `*DTM` are read from text with no invented time, and a value that is not complete becomes null with a warning. `DatasetChecker` expects text for `*DTC`.
 - **SAS files follow SAS rules** (ADR-0010, alpha audit package F):
   - XPT and SAS7BDAT read and write with the `io` extra alone, through the Polars route of pyreadstat; pandas and pyarrow are no longer needed. The `io` extra requires `pyreadstat>=1.3.3`.
   - `save_xpt` writes SAS transport version 5 with the member named as the file (FDA TCG 3.1.1). A `pl.Date` is stored as SAS days with DATE9 (2024-01-15 is 23390), not DATETIME seconds. NaN and infinity become SAS missing. A name over 8 characters, a label over 40 or a value over 200 bytes stops the write instead of being cut. A value that is not ASCII is written as UTF-8 with a warning. New `label=` and `column_labels=` arguments; `fleet run --format xpt`, `fleet tdd build --format xpt` and `DatasetChecker.write_xpt` write the define and IG labels.

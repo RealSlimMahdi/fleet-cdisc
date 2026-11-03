@@ -35,10 +35,19 @@ from fleet.core._flag_mixin import FlagCriterionMixin
 from fleet.core._pin_mixin import PinMixin
 from fleet.core._verb_mixin import SharedVerbsMixin
 from fleet.core.define_spec import load_define_spec
+from fleet.core.dtc import date_part, datetime_part, warn_on_collect
 from fleet.core.exceptions import DerivationError
 from fleet.sdtm._tdd_mixin import TrialDesignMixin
 from fleet.sdtm.models import NSVMeta
-from fleet.sdtm.utils import dtc_date_expr, dtc_datetime_expr, parse_expression
+from fleet.sdtm.utils import (
+    TIME_LITERAL,
+    bad_time,
+    dtc_date_expr,
+    dtc_text,
+    dtc_with_time,
+    guessed_values,
+    parse_expression,
+)
 
 
 @pl.api.register_dataframe_namespace("sdtm")
@@ -102,8 +111,17 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         Dispatches behavior based on the CDISC suffix of *target* (DTC, DT,
         DTM) or an explicit *output* override.
 
-        For DTC targets: parses raw strings to ISO 8601, preserving partial
-        dates.  Imputation parameters are ignored.  ``format`` is active.
+        For DTC targets: converts raw text to ISO 8601 and never guesses.
+        A valid ISO 8601 value stays as it is, partial dates included
+        (SDTMIG 3.4 section 4.4).  ``YYYYMMDD``, ``DD-MON-YYYY``,
+        ``DD MON YYYY`` and ``DDMONYYYY`` convert with no *format*.  A slash
+        date or a two-digit year raises until *format* names the layout.
+        Any other value becomes null, with one warning at collect that
+        gives the count and the first values.  With *time*, a blank time
+        leaves the date alone, a partial date takes a hyphen for each
+        missing component (``2021-03--T08:30``), and a time with no date
+        gives ``-----T08:30`` (SDTMIG 3.4 section 4.4.2).  Imputation
+        parameters are ignored.
 
         For DT/DTM targets: delegates to the shared imputation engine.
 
@@ -119,9 +137,13 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
             impute_time: Time-part imputation override (DTM only).
             highest: Imputation ceiling (DT/DTM only).
             flag: DTF/TMF flag control.
-            min_date: Lower clamp bound (DT/DTM only).
-            max_date: Upper clamp bound (DT/DTM only).
-            format: ``strptime`` format string for raw parsing (DTC only).
+            min_date: Lower bound for an imputed date.  Applies only when
+                the bound is inside the possible range of the partial value;
+                a complete date never changes.  DT targets only.
+            max_date: Upper bound for an imputed date, with the same rule.
+            format: ``strptime`` layout of the raw text (DTC only), e.g.
+                ``"%m/%d/%Y"``.  Use ``%y`` for a two-digit year: it reads
+                00-69 as 20xx and 70-99 as 19xx.
 
         Returns:
             SDTMNamespace: The namespace with *target* appended; call
@@ -166,27 +188,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         assert source is not None
 
         if output_type == "dtc":
-            # DTC: parse raw → ISO 8601 string
-            if time is not None:
-                # Combine date + time into DTC string
-                date_part = dtc_date_expr(source, "__dtc_date_tmp__", input_format=format)
-                time_part = pl.col(time) if not re.match(r"^\d{2}:\d{2}", time) else pl.lit(time)
-                combined = (pl.col("__dtc_date_tmp__") + pl.lit("T") + time_part).alias(target)
-                df = self._lazy.with_columns(date_part).collect()
-                result = df.with_columns(combined)
-                if "__dtc_date_tmp__" in result.columns:
-                    result = result.drop("__dtc_date_tmp__")
-                return self._materialise_then(result)
-
-            if format is not None:
-                # Use dtc_datetime_expr for datetime format, dtc_date_expr otherwise
-                if any(c in format for c in ("H", "M", "S")):
-                    expr = dtc_datetime_expr(source, target, input_format=format)
-                else:
-                    expr = dtc_date_expr(source, target, input_format=format)
-            else:
-                expr = dtc_date_expr(source, target)
-            return self._chain(expr, verb="date")
+            return self._dtc(target, source, time=time, format=format)
 
         # DT/DTM: delegate to imputation engine
         if time is not None and output_type != "dtm":
@@ -218,6 +220,60 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
             flag=flag,
         )
         return self._chain(*exprs, verb="date")
+
+    def _dtc(
+        self, target: str, source: str, *, time: str | None, format: str | None
+    ) -> SDTMNamespace:
+        """``--DTC`` text from raw text: ISO 8601 or null, never a guess, with warnings."""
+        raw = pl.col(source)
+        guessed = guessed_values(raw, input_format=format).fill_null(False)
+        sample = (
+            self._lazy.select(raw.cast(pl.String).filter(guessed).unique(maintain_order=True))
+            .head(3)
+            .collect()
+            .to_series()
+            .to_list()
+        )
+        if sample and format is None:
+            raise DerivationError(
+                f"date('{target}'): {source} needs a guess to become a date (the order of day "
+                "and month, or the century of a two-digit year). Name the layout with "
+                "format='%m/%d/%Y' (month first) or format='%d/%m/%Y' (day first); for a "
+                "two-digit year use %y, which reads 00-69 as 20xx and 70-99 as 19xx. "
+                f"Values: {sample}"
+            )
+        if sample:
+            raise DerivationError(
+                f"date('{target}', format='{format}'): {source} gives a year before 1000 with "
+                f"this layout, so the year has two digits: use %y in place of %Y. Values: {sample}"
+            )
+
+        text = dtc_text(raw, input_format=format)
+        given = raw.cast(pl.String).str.strip_chars().fill_null("") != ""
+        value = warn_on_collect(
+            text,
+            given & text.is_null(),
+            lambda n, values: (
+                f"date('{target}'): {n} value(s) of {source} are not ISO 8601 and could not be "
+                f"converted, so {target} is null for them (SDTMIG 3.4 section 4.4.1). Name the "
+                f"layout with format=. Values: {values}"
+            ),
+            dtype=pl.String,
+            shown=raw.cast(pl.String),
+        )
+        if time is not None:
+            raw_time = pl.lit(time) if TIME_LITERAL.match(time) else pl.col(time)
+            value = warn_on_collect(
+                dtc_with_time(value, raw, raw_time),
+                bad_time(raw_time),
+                lambda n, values: (
+                    f"date('{target}'): {n} time value(s) of {time} are not hh:mm[:ss], so "
+                    f"{target} keeps the date only. Values: {values}"
+                ),
+                dtype=pl.String,
+                shown=raw_time.cast(pl.String),
+            )
+        return self._chain(value.alias(target), verb="date")
 
     def _dtm_with_time(
         self,
@@ -400,8 +456,13 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         """Flag the last observation before the reference date as baseline.
 
         Sets *target* to ``"Y"`` for the last record (per subject and
-        optional grouping variables) that occurs on or before the
-        reference date, and ``null`` for all other records.
+        optional grouping variables) strictly before the reference
+        date/time, and ``null`` for all other records.  A record on the
+        reference date is eligible only when it and the reference both
+        have a time and the record time is earlier; a record on that date
+        with no time is not eligible, because it may follow the dose
+        (SDTMIG "prior to"; sdtm.oak ``derive_blfl``).  Among eligible
+        records the latest date, then the latest time, wins.
 
         Args:
             target: Name of the output flag variable
@@ -472,31 +533,33 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
             grp_keys.extend(by)
         grp_keys = list(dict.fromkeys(grp_keys))
 
-        # Parse dates, filter pre-reference, find last
-        date_parsed = pl.col(date_col).str.to_date(format="%Y-%m-%d", strict=False)
-        ref_parsed = pl.col(ref_col_name).str.to_date(format="%Y-%m-%d", strict=False)
+        # Last record strictly before the reference (Q1 B, 2026-11-02): on the reference
+        # date a record is eligible only when both times are known and it is earlier.
+        def day_and_time(name: str) -> tuple[pl.Expr, pl.Expr]:
+            dtype = df.schema[name]
+            if dtype == pl.String:
+                return date_part(pl.col(name)), datetime_part(pl.col(name))
+            if isinstance(dtype, pl.Datetime):
+                return pl.col(name).cast(pl.Date), pl.col(name).cast(pl.Datetime("us"))
+            return pl.col(name), pl.lit(None, dtype=pl.Datetime("us"))
+
+        day, time = day_and_time(date_col)
+        ref_day, ref_time = day_and_time(ref_col_name)
+        eligible = (day < ref_day) | ((day == ref_day) & (time < ref_time))
+        key = pl.coalesce(time, day.cast(pl.Datetime("us")))
+        df = df.with_columns(
+            pl.when(eligible.fill_null(False)).then(key).alias("__bl_key__"),
+        ).with_columns(pl.col("__bl_key__").max().over(grp_keys).alias("__bl_max__"))
 
         df = df.with_columns(
-            date_parsed.alias("__bl_date__"),
-            ref_parsed.alias("__bl_ref__"),
-        )
-
-        # For each group, find the max date on or before the reference date
-        # Then flag rows where the date matches that max
-        pre_ref = pl.when(pl.col("__bl_date__") <= pl.col("__bl_ref__")).then(pl.col("__bl_date__"))
-        max_pre_ref = pre_ref.max().over(grp_keys).alias("__bl_max__")
-
-        df = df.with_columns(max_pre_ref)
-
-        df = df.with_columns(
-            pl.when(pl.col("__bl_date__") == pl.col("__bl_max__"))
+            pl.when(pl.col("__bl_key__") == pl.col("__bl_max__"))
             .then(pl.lit("Y"))
             .otherwise(pl.lit(None, dtype=pl.String))
             .alias(target)
         )
 
         # Clean up temp columns
-        drop_cols = ["__bl_date__", "__bl_ref__", "__bl_max__"]
+        drop_cols = ["__bl_key__", "__bl_max__"]
         if ref_df is not None:
             drop_cols.append(_ref_tmp)
         df = df.drop([c for c in drop_cols if c in df.columns])
