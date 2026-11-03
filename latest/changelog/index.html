@@ -2299,6 +2299,14 @@
 <li>A CSV column with a leading zero (SITEID <code>001</code>) reads as text with a warning, types are inferred from every row, and <code>fleet run</code> reads define type <code>text</code> variables as text, so LBORRES <code>1.10</code> stays <code>1.10</code>.</li>
 <li><code>fleet compare</code> types CSV sides across both files: SITEID <code>001</code> against <code>1</code> differs, AVAL <code>1.10</code> against <code>1.1</code> is equal, and <code>--text</code> keeps a column text. New <code>blank_is_missing</code> / <code>--blank-is-missing</code> reads <code>""</code> as missing on both sides; the default stays exact.</li>
 <li><code>load_raw_data(..., encoding=)</code> reaches the SAS reader, and <code>--encoding</code> is on <code>fleet compare</code> and <code>fleet validate</code>, so a file from a WLATIN1 SAS session can be read. A keyword the reader does not take raises.</li>
+<li><strong>The bootstrap pins two CT packages and invents no text</strong> (ADR-0019, alpha audit package H, part 3):</li>
+<li><code>study_config.yaml</code> gets <code>ct.adam_package</code> (ADaM CT). <code>fleet init cfg</code> and <code>fleet new</code> with ADaM datasets pin <code>adamct-2023-06-30</code>, the latest ADaM package on or before the default SDTM package; with another <code>--package</code>, new <code>--adam-package</code> is required.</li>
+<li><code>fleet init ct</code> takes each codelist from the first pinned package that holds it, so DTYPE (C81224) comes from ADaM CT. Before, ADaM-only codelists were dropped with no message. A codelist that no pinned package holds stops the command with its ID, and no file is written; a 401 or a network error stops it too.</li>
+<li><code>fleet init ct</code> writes the terms and decodes into the <code>codelists:</code> entries of the <code>define.yaml</code> files, so <code>fleet define-xml</code> gives a valid <code>CodeList</code>. A codelist with no terms is named with the fix.</li>
+<li>A <code>codelists.py</code> from both pins has the marker <code>__ct_packages__</code>; <code>load_codelists</code> returns a tuple of packages. Two SDTM CT dates still fail <code>fleet check</code>.</li>
+<li>The ADaM <code>define.yaml</code> gets <code>adam_ct_version</code>, and its Define-XML lists SDTM CT and ADaM CT. <code>ct_version</code> now has the publishing set SDTM (SEND for SENDIG) in every define.</li>
+<li>The scaffold keeps <code>study.description</code> and <code>study.originator</code> empty when none is given; one message names the empty fields, with no traceback. New <code>--description</code> on <code>fleet init cfg</code> and <code>fleet new</code>. IG template names (TRxxSDT, ANLzzFL) are skipped by the schema name rule.</li>
+<li>The README python blocks run as written in an empty folder, with inline data, and a test runs them. The schema says that a raw input <code>path:</code> is relative to the study root.</li>
 <li><strong>Define-XML gaps are named, and <code>--strict</code> refuses</strong> (ADR-0018, alpha audit package H):</li>
 <li><code>fleet define-xml</code> emits a <code>&lt;MethodDef&gt;</code> per Derived variable by default. A Derived variable with no method text, a <code>text</code>, <code>integer</code> or <code>float</code> item with no <code>length:</code> and a <code>float</code> item with no <code>significant_digits:</code> are listed in one warning, as <code>DM.SAFFL: no method text (add a comment: or a derivation: block)</code>. Before, the MethodOID was left out with no message.</li>
 <li>New <code>--strict</code> (<code>DefineSpecGenerator(spec, strict=True)</code>) refuses: <code>SpecError</code>, exit code 1, no file.</li>
@@ -2461,7 +2469,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 19:44:29 UTC">November 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 20:16:30 UTC">November 3, 2026</span>
   </span>
 
     
