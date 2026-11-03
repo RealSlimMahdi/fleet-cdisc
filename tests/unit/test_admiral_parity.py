@@ -137,32 +137,35 @@ class TestMeanArterialPressure:
 class TestQTc:
     def test_fridericia(self):
         df = pl.from_repr("""\
-┌───────┬─────┐
-│ QT    ┆ RR  │
-│ ---   ┆ --- │
-│ f64   ┆ f64 │
-╞═══════╪═════╡
-│ 400.0 ┆ 1.0 │
-└───────┴─────┘
+┌───────┬───────┐
+│ QT    ┆ RR    │
+│ ---   ┆ ---   │
+│ f64   ┆ f64   │
+╞═══════╪═══════╡
+│ 400.0 ┆ 800.0 │
+│ 350.0 ┆ 857.0 │
+└───────┴───────┘
 """)
         result = df.select(qtc("QT", "RR", method="Fridericia"))
-        # QT / RR^(1/3) = 400 / 1.0 = 400
-        assert result["QTC"][0] == pytest.approx(400.0)
+        # admiral compute_qtc, RR in ms: 430.88693800637674, 368.47478182187422
+        assert result["QTC"].to_list() == [430.89, 368.47]
 
     def test_bazett(self):
         df = pl.from_repr("""\
-┌───────┬─────┐
-│ QT    ┆ RR  │
-│ ---   ┆ --- │
-│ f64   ┆ f64 │
-╞═══════╪═════╡
-│ 400.0 ┆ 1.0 │
-└───────┴─────┘
+┌───────┬───────┐
+│ QT    ┆ RR    │
+│ ---   ┆ ---   │
+│ f64   ┆ f64   │
+╞═══════╪═══════╡
+│ 400.0 ┆ 800.0 │
+│ 350.0 ┆ 857.0 │
+└───────┴───────┘
 """)
         result = df.select(qtc("QT", "RR", method="Bazett"))
-        assert result["QTC"][0] == pytest.approx(400.0)
+        # admiral compute_qtc, RR in ms: 447.21359549995793, 378.07471494623951
+        assert result["QTC"].to_list() == [447.21, 378.07]
 
-    def test_fridericia_nonunit_rr(self):
+    def test_fridericia_rr_in_seconds(self):
         df = pl.from_repr("""\
 ┌───────┬─────┐
 │ QT    ┆ RR  │
@@ -172,9 +175,8 @@ class TestQTc:
 │ 400.0 ┆ 0.8 │
 └───────┴─────┘
 """)
-        result = df.select(qtc("QT", "RR", method="Fridericia"))
-        expected = 400.0 / (0.8 ** (1.0 / 3.0))
-        assert result["QTC"][0] == pytest.approx(round(expected, 2))
+        result = df.select(qtc("QT", "RR", method="Fridericia", rr_unit="s"))
+        assert result["QTC"][0] == pytest.approx(430.89)
 
     def test_unknown_method_raises(self):
         with pytest.raises(ValueError, match="Unknown QTc method"):
@@ -318,13 +320,13 @@ class TestNamespaceMAP:
 class TestNamespaceQTc:
     def test_qtc_verb(self):
         df = pl.from_repr("""\
-┌─────────┬───────┬──────┐
-│ USUBJID ┆ QT    ┆ RR   │
-│ ---     ┆ ---   ┆ ---  │
-│ str     ┆ f64   ┆ f64  │
-╞═════════╪═══════╪══════╡
-│ 01      ┆ 400.0 ┆ 0.85 │
-└─────────┴───────┴──────┘
+┌─────────┬───────┬───────┐
+│ USUBJID ┆ QT    ┆ RR    │
+│ ---     ┆ ---   ┆ ---   │
+│ str     ┆ f64   ┆ f64   │
+╞═════════╪═══════╪═══════╡
+│ 01      ┆ 400.0 ┆ 850.0 │
+└─────────┴───────┴───────┘
 """)
         result = df.adam.qtc("QTCF", qt="QT", rr="RR").to_frame()
         expected = 400.0 / (0.85 ** (1.0 / 3.0))

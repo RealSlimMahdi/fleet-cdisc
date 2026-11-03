@@ -2296,7 +2296,7 @@
         },
         "rr": {
           "default": "RR",
-          "description": "RR interval column (ms).",
+          "description": "RR interval column.",
           "title": "Rr",
           "type": "string"
         },
@@ -2304,6 +2304,12 @@
           "default": "Fridericia",
           "description": "Correction formula.",
           "title": "Method",
+          "type": "string"
+        },
+        "rr_unit": {
+          "default": "ms",
+          "description": "Unit of the RR column: ms, msec, s or sec.",
+          "title": "Rr Unit",
           "type": "string"
         },
         "depends_on": {

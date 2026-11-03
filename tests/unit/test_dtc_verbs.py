@@ -125,6 +125,7 @@ def _vs(rows: list[tuple[str, str]], rfstdtc: str) -> pl.DataFrame:
             "USUBJID": ["S7"] * len(rows),
             "VSTESTCD": [t for t, _ in rows],
             "VSDTC": [d for _, d in rows],
+            "VSORRES": ["120"] * len(rows),
             "RFSTDTC": [rfstdtc] * len(rows),
         }
     )

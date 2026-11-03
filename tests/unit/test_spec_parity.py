@@ -879,7 +879,7 @@ ADAM_CASES: list[Case] = [
 └─────┴──────┘
 """),
         [{"target": "QTCF", "algorithm": "qtc"}],
-        lambda df: df["QTCF"][0] is not None,
+        lambda df: df["QTCF"][0] == 400.0,
     ),
     Case(
         "atoxgr",

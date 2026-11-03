@@ -28,6 +28,11 @@ All notable changes to Fleet are documented here.
   - `pick` with a top-level `order` keeps the extreme value over all events, as admiral `derive_vars_extreme_event`: `order=["LSTALVDT"], mode="last"` gives the latest date, not the first listed event's date. A tie goes to the first listed event; with no top-level `order` the first listed event with a record still wins. The result no longer depends on the sort engine's order.
   - `recode` types the output from the map: `{"MILD": 1, "MODERATE": 2, "SEVERE": 3}` gives an integer ASEVN, not text. A map that mixes text and numbers raises `DerivationError`.
   - The SAFFL recipes in the README, GUIDE, quickstart, installation, define-yaml and both pilot examples keep placebo subjects (EXDOSE = 0 with PLACEBO in EXTRT, the admiral template rule) and give N to non-members, as ADaMIG 1.3 requires. Both pilot examples now have SAFFL = Y for 5 of 5.
+- **One flagged record per group, and units stated for QTc** (ADR-0013, alpha audit package C):
+  - `baseline_flag` takes only a record with a result: not null or blank in `--STRESC` (else `--ORRES`, or new `result_col=`), and `--STAT` not NOT DONE. A NOT DONE record on the last date no longer takes the flag. With no result column the verb stops.
+  - `baseline_flag` flags one record on a tie: the last by new `order_by=` (default `--SEQ`), then input order, as SAS `LAST.`, with a warning when `order_by=` is not given. Before, every record on the last date got the flag.
+  - `flag(criteria="last", where=)` no longer loses the flag when a record that fails `where` ties on `order_by`; ABLFL, BASE and CHG come back. A tie among candidates goes to the last input record (`first`: the first). `flag_all=True` takes the extreme over the records that pass `where`.
+  - `qtc` reads RR in ms by default, as admiral `compute_qtc`: QT 400 and RR 800 give QTcF 430.89, not 43.09. New `rr_unit=` (`ms`, `msec`, `s`, `sec`). The verb stops when a value cannot be in its unit.
 
 ### Changed
 

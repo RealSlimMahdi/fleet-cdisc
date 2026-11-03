@@ -185,6 +185,8 @@ def mean_arterial_pressure(
 # Admiral-parity: Corrected QT interval                               #
 # ------------------------------------------------------------------ #
 
+_RR_UNITS = {"ms": 1000.0, "msec": 1000.0, "s": 1.0, "sec": 1.0}
+
 
 def qtc(
     qt: str = "QT",
@@ -192,6 +194,7 @@ def qtc(
     *,
     method: str = "Fridericia",
     target: str = "QTC",
+    rr_unit: str = "ms",
 ) -> pl.Expr:
     """
     Corrected QT interval.
@@ -201,10 +204,17 @@ def qtc(
     - ``"Fridericia"`` (default): ``QT / RR^(1/3)``
     - ``"Bazett"``: ``QT / RR^(1/2)``
 
-    *QT* is in ms; *RR* is in seconds.
+    *QT* is in ms; *RR* is in *rr_unit* (``"ms"``/``"msec"``, default, or
+    ``"s"``/``"sec"``) and enters the formula in seconds, as admiral
+    ``compute_qtc``.
     """
+    unit = rr_unit.lower()
+    if unit not in _RR_UNITS:
+        raise DerivationError(
+            f"qtc: rr_unit={rr_unit!r} is not supported. Use 'ms', 'msec', 's' or 'sec'."
+        )
     qt_col = pl.col(qt).cast(pl.Float64)
-    rr_col = pl.col(rr).cast(pl.Float64)
+    rr_col = pl.col(rr).cast(pl.Float64) / _RR_UNITS[unit]
     method_lower = method.lower()
     if method_lower == "fridericia":
         expr = qt_col / rr_col.pow(1.0 / 3.0)

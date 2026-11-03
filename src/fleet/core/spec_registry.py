@@ -1538,11 +1538,19 @@ spec_algorithm(
     verb="qtc",
     params=(
         Param("qt", annotation=str, default="QT", description="QT interval column (ms)."),
-        Param("rr", annotation=str, default="RR", description="RR interval column (ms)."),
+        Param("rr", annotation=str, default="RR", description="RR interval column."),
         Param("method", annotation=str, default="Fridericia", description="Correction formula."),
+        Param(
+            "rr_unit",
+            annotation=str,
+            default="ms",
+            description="Unit of the RR column: ms, msec, s or sec.",
+        ),
     ),
     description="Corrected QT interval.",
-    define_template="QT interval corrected using the {method} formula, from {qt} and {rr}.",
+    define_template=(
+        "QT interval corrected using the {method} formula, from {qt} (ms) and {rr} ({rr_unit})."
+    ),
 )
 
 spec_algorithm(
