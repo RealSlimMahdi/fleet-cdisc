@@ -24,13 +24,13 @@ working directory.
 
 from __future__ import annotations
 
-import importlib.util
+import ast
 import re
 import sys
 import warnings
 from collections import Counter
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fleet.core.exceptions import SpecError
 from fleet.core.study_context import (
@@ -52,12 +52,18 @@ _WARNED: set[str] = set()
 
 
 def load_codelists(path: Path) -> tuple[tuple[str, ...], dict[str, type]]:
-    """Import a generated ``codelists.py``: the CT packages it came from, and its classes.
+    """Read a generated ``codelists.py``: the CT packages it came from, and its classes.
+
+    The file is read as data, never run, so ``fleet check``, ``fleet
+    doctor`` and ``from_spec`` execute no code from a received study.  It
+    may hold only what the generator writes: docstrings, literal
+    assignments, aliases (``SEX = C66731``), ``__all__`` and classes with
+    no base class whose body is literal assignments.
 
     The packages are the ``__ct_packages__`` marker (an SDTM and an ADaM
     package) or the ``__ct_package__`` marker.  A file generated before the
     markers existed gives the one package the ``_cdisc_url`` of its classes
-    names.  The module is not added to ``sys.modules``.
+    names.
 
     Args:
         path: The ``codelists.py`` file.
@@ -67,7 +73,8 @@ def load_codelists(path: Path) -> tuple[tuple[str, ...], dict[str, type]]:
             unknown) and the classes by ``_concept_id``.
 
     Raises:
-        SpecError: When the file cannot be imported.
+        SpecError: When the file cannot be read, or holds a statement that
+            a generated file does not hold (named with its line).
 
     Examples:
         The packages of a study's codelists, and its AESEV class::
@@ -77,25 +84,79 @@ def load_codelists(path: Path) -> tuple[tuple[str, ...], dict[str, type]]:
             packages, classes = load_codelists(Path("metadata/sdtm/codelists.py"))
             AESEV = classes["C66769"]
     """
-    spec = importlib.util.spec_from_file_location("_fleet_study_codelists", path)
-    if spec is None or spec.loader is None:
-        raise SpecError(f"{path}: cannot import the study's codelists module.")
-    module = importlib.util.module_from_spec(spec)
-    try:
-        spec.loader.exec_module(module)
-    except Exception as err:
-        raise SpecError(f"{path}: cannot import the study's codelists module: {err}") from err
+    names = _read_codelists(path)
     classes = {
         cls._concept_id: cls
-        for cls in vars(module).values()
+        for cls in names.values()
         if isinstance(cls, type) and isinstance(getattr(cls, "_concept_id", None), str)
     }
-    packages = getattr(module, "__ct_packages__", None)
+    packages = names.get("__ct_packages__")
     if packages is None:
-        single = getattr(module, "__ct_package__", None)
+        single = names.get("__ct_package__")
         found = {_class_package(cls) for cls in classes.values()} - {None}
         packages = (single,) if single else (tuple(found) if len(found) == 1 else ())
     return tuple(packages), classes
+
+
+def _read_codelists(path: Path) -> dict[str, Any]:
+    """The module-level names of a generated ``codelists.py``, read with :mod:`ast`."""
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (OSError, SyntaxError, ValueError) as err:
+        raise SpecError(f"{path}: cannot read the study's codelists module: {err}") from err
+
+    def refuse(node: ast.stmt) -> SpecError:
+        return SpecError(
+            f"{path}:{node.lineno}: codelists.py holds a statement that a generated "
+            "file does not hold, so Fleet does not read it. Regenerate it: "
+            "fleet init ct --force"
+        )
+
+    def literal(node: ast.stmt) -> tuple[str, Any]:
+        if not (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+        ):
+            raise refuse(node)
+        try:
+            return node.targets[0].id, ast.literal_eval(node.value)
+        except ValueError:
+            raise refuse(node) from None
+
+    def is_docstring(node: ast.stmt) -> bool:
+        return isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)
+
+    names: dict[str, Any] = {}
+    for node in tree.body:
+        if is_docstring(node):
+            continue
+        if isinstance(node, ast.ClassDef):
+            if node.bases or node.keywords or node.decorator_list:
+                raise refuse(node)
+            attrs: dict[str, Any] = {"__module__": "_fleet_study_codelists"}
+            doc = ast.get_docstring(node, clean=False)
+            if doc is not None:
+                attrs["__doc__"] = doc
+            for item in node.body:
+                if is_docstring(item) or isinstance(item, ast.Pass):
+                    continue
+                key, value = literal(item)
+                attrs[key] = value
+            names[node.name] = type(node.name, (), attrs)
+        elif (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and isinstance(node.value, ast.Name)
+        ):
+            if node.value.id not in names:
+                raise refuse(node)
+            names[node.targets[0].id] = names[node.value.id]
+        else:
+            key, value = literal(node)
+            names[key] = value
+    return names
 
 
 def check_codelists(ctx: StudyContext, *, references: bool = False) -> list[str]:
@@ -114,7 +175,7 @@ def check_codelists(ctx: StudyContext, *, references: bool = False) -> list[str]
         list[str]: The problems; empty when the file agrees with the study.
 
     Raises:
-        SpecError: When ``codelists.py`` cannot be imported.
+        SpecError: When ``codelists.py`` cannot be read.
 
     Examples:
         The codelists part of ``fleet check``::
@@ -185,7 +246,7 @@ def spec_codelists(define_path: Path) -> dict[str, type]:
             ``_concept_id``; empty outside a study or without the file.
 
     Raises:
-        SpecError: When ``codelists.py`` exists but cannot be imported.
+        SpecError: When ``codelists.py`` exists but cannot be read.
 
     Examples:
         Resolve ``ct: C66769`` the way ``from_spec`` does::

@@ -40,6 +40,8 @@ bootstrapping studies, executing derivation pipelines, validating datasets,
 generating Define-XML, managing CDISC Controlled Terminology, and rendering
 TLGs. Commands that query the CDISC Library require a valid `CDISC_API_KEY` —
 set it in a `.env` file at your project root or as an environment variable.
+Fleet reads only this key from `.env`; set `CDISC_BASE_URL`, proxies and
+`FLEET_*` variables in the shell.
 
 ```bash title=".env"
 CDISC_API_KEY=your-api-key-here

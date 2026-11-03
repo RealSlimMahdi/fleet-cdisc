@@ -203,7 +203,12 @@ class DefineSpecGenerator:
         xml_path: Path,
         xsl_path: str | Path | None,
     ) -> None:
-        """Apply the define2-1.xsl transform and write an HTML preview file."""
+        """Apply the define2-1.xsl transform and write an HTML preview file.
+
+        The stylesheet often comes with a received define package, so it
+        runs with no file or network access.  A stylesheet that cannot run
+        skips the preview; the Define-XML is already written.
+        """
         resolved_xsl = Path(xsl_path) if xsl_path else xml_path.parent / "define2-1.xsl"
 
         if not resolved_xsl.exists():
@@ -214,10 +219,17 @@ class DefineSpecGenerator:
             )
             return
 
-        xml_doc = lxml_etree.parse(str(xml_path))  # noqa: S320 — local file, not user input
-        xsl_doc = lxml_etree.parse(str(resolved_xsl))  # noqa: S320 — local file, not user input
-        transform = lxml_etree.XSLT(xsl_doc)
-        html_doc = transform(xml_doc)
+        parser = lxml_etree.XMLParser(resolve_entities=False, no_network=True)
+        try:
+            xml_doc = lxml_etree.parse(str(xml_path), parser)  # noqa: S320 — entities off
+            xsl_doc = lxml_etree.parse(str(resolved_xsl), parser)  # noqa: S320 — entities off
+            transform = lxml_etree.XSLT(
+                xsl_doc, access_control=lxml_etree.XSLTAccessControl.DENY_ALL
+            )
+            html_doc = transform(xml_doc)
+        except (lxml_etree.XSLTError, lxml_etree.XMLSyntaxError) as exc:
+            print(f"HTML preview skipped: {resolved_xsl} cannot run: {exc}")
+            return
 
         html_path = xml_path.with_name(xml_path.stem + "_preview.html")
         html_path.write_bytes(lxml_etree.tostring(html_doc, pretty_print=True, method="html"))

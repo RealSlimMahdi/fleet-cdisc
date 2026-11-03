@@ -3,11 +3,12 @@
 Wraps ``httpx`` to authenticate against the CDISC Library REST API and
 retrieve CT packages, codelists, and individual term metadata.
 
-Configuration is loaded from environment variables (or a ``.env`` file)
-via ``pydantic-settings``:
+Configuration comes from environment variables:
 
-- ``CDISC_API_KEY`` — required API key issued by CDISC.
+- ``CDISC_API_KEY`` — required API key issued by CDISC.  It can also come
+  from a ``.env`` file (see :func:`try_load_dotenv`).
 - ``CDISC_BASE_URL`` — optional override (default: ``https://library.cdisc.org/api``).
+  Only the real environment sets it, never a ``.env`` file.
 """
 
 from __future__ import annotations
@@ -34,8 +35,8 @@ class CDISCClientConfig:
     Values are resolved in order:
     1. Explicit constructor arguments.
     2. Environment variables (``CDISC_API_KEY``, ``CDISC_BASE_URL``).
-    3. A ``.env`` file in the working directory (loaded lazily via *dotenv*
-       if the ``python-dotenv`` package is installed).
+    3. For the key only: a ``.env`` file in the working directory or a
+       parent (see :func:`try_load_dotenv`).
 
     Args:
         api_key: CDISC Library API key.
@@ -56,22 +57,22 @@ class CDISCClientConfig:
 
 
 def try_load_dotenv() -> None:
-    """Best-effort load of a ``.env`` file into ``os.environ``.
+    """Set ``CDISC_API_KEY`` from a ``.env`` file when the environment has none.
 
     Walks up from the current directory (git-style, like ``study_config.yaml``
-    discovery) so a study-root ``.env`` is found when running from any
-    subdirectory.  Uses ``python-dotenv`` when available, otherwise a
-    minimal stdlib parser that handles ``KEY=VALUE`` lines.
+    discovery) to the first ``.env``.  Only the ``CDISC_API_KEY`` line is
+    read: a ``.env`` in a received study package must not redirect the key
+    to another host (``CDISC_BASE_URL``), set a proxy or a trust store, or
+    name a rules engine or an XSD.  Set those in the shell.
+
+    Examples:
+        The CLI calls it once, before any command reads the key::
+
+            try_load_dotenv()
+            key = os.environ.get("CDISC_API_KEY", "")
     """
-    try:
-        from dotenv import find_dotenv, load_dotenv
-
-        load_dotenv(find_dotenv(usecwd=True))
+    if os.environ.get("CDISC_API_KEY"):
         return
-    except ImportError:
-        pass
-
-    # Stdlib fallback: walk up from the cwd to find .env
     for parent in (Path.cwd(), *Path.cwd().parents):
         env_path = parent / ".env"
         if env_path.is_file():
@@ -79,16 +80,12 @@ def try_load_dotenv() -> None:
     else:
         return
     for line in env_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        key = key.strip()
-        value = value.strip().strip("\"'")
-        if key and key not in os.environ:
-            os.environ[key] = value
+        key, sep, value = line.strip().removeprefix("export ").partition("=")
+        if sep and key.strip() == "CDISC_API_KEY":
+            value = value.strip().strip("\"'")
+            if value:
+                os.environ["CDISC_API_KEY"] = value
+            return
 
 
 @dataclass

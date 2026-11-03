@@ -173,7 +173,23 @@ class TestValidate:
         elsewhere = tmp_path / "server"
         elsewhere.mkdir()
         monkeypatch.chdir(elsewhere)
+        monkeypatch.setattr("fleet.mcp_server._TRUST_STUDY_ENGINE", True)
         return root
+
+    def test_a_study_engine_runs_only_on_a_trusting_server(
+        self, study: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        marker = study / "engine_ran"
+        engine = study / "bin" / "core"
+        engine.write_text(f"#!/bin/sh\ntouch '{marker}'\n", encoding="utf-8")
+        engine.chmod(0o755)
+        monkeypatch.setattr("fleet.mcp_server._TRUST_STUDY_ENGINE", False)
+
+        result = fleet_validate(str(study / "data" / "sdtm" / "dm.parquet"))
+
+        assert result["outcome"] == "could not run"
+        assert "fleet mcp --trust-study-engine" in result["reason"]
+        assert not marker.exists()
 
     def test_the_dataset_study_drives_the_engine_from_outside_it(
         self, study: Path, engine_calls: list[list[str]]

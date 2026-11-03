@@ -302,6 +302,92 @@ def _validate_ast(expr_str: str) -> ast.Expression:
 #: transform — only the ``pl`` namespace is exposed to expressions.
 _EXPR_NAMESPACES = frozenset({"pl"})
 
+#: ``pl.<name>`` an expression string may use: expression constructors and
+#: data types.  The rest of the module (``pl.read_csv``, ``pl.DataFrame``,
+#: ``pl.os``) reads, writes or runs code, so it is refused.
+_PL_NAMES: frozenset[str] = frozenset(
+    {
+        # expression constructors
+        "col", "lit", "when", "len", "count", "all", "any", "sum", "mean", "min", "max",
+        "median", "std", "var", "quantile", "first", "last", "n_unique", "approx_n_unique",
+        "concat_str", "concat_list", "concat_arr", "coalesce", "format", "struct",
+        "exclude", "element", "field", "nth", "head", "tail", "implode", "repeat",
+        "int_range", "int_ranges", "date", "datetime", "duration", "time", "date_range",
+        "date_ranges", "datetime_range", "datetime_ranges", "time_range", "time_ranges",
+        "max_horizontal", "min_horizontal", "sum_horizontal", "mean_horizontal",
+        "any_horizontal", "all_horizontal", "cum_sum", "cum_sum_horizontal", "cum_count",
+        "arg_where", "arg_sort_by", "corr", "cov", "rolling_corr", "rolling_cov",
+        "arctan2", "zeros", "ones", "business_day_count",
+        # data types
+        "Int8", "Int16", "Int32", "Int64", "Int128", "UInt8", "UInt16", "UInt32",
+        "UInt64", "Float32", "Float64", "Decimal", "Boolean", "String", "Utf8", "Binary",
+        "Date", "Datetime", "Duration", "Time", "Categorical", "Enum", "List", "Array",
+        "Struct", "Field", "Null",
+    }
+)  # fmt: skip
+
+#: Methods refused on any object: they take a callable, run a plugin,
+#: format text with attribute access, or (de)serialise an expression.
+_BLOCKED_METHODS: frozenset[str] = frozenset(
+    {
+        "deserialize",
+        "format",
+        "format_map",
+        "inspect",
+        "meta",
+        "pipe",
+        "plugins",
+        "register_plugin",
+    }
+)
+
+
+def _expression_methods() -> frozenset[str]:
+    """Public methods of ``pl.Expr``, its namespaces and ``when``/``then`` chains."""
+    expr = pl.col("x")
+    when = pl.when(expr)
+    chained = when.then(expr).when(expr)
+    names = {n for n in dir(pl.Expr) if not n.startswith("_")}
+    for namespace in ("arr", "bin", "cat", "dt", "list", "name", "str", "struct"):
+        names |= {n for n in dir(getattr(expr, namespace)) if not n.startswith("_")}
+    for step in (when, when.then(expr), chained, chained.then(expr)):
+        names |= {n for n in dir(step) if not n.startswith("_")}
+    return frozenset(n for n in names - _BLOCKED_METHODS if "map" not in n)
+
+
+_EXPR_METHODS = _expression_methods()
+
+
+def _check_names(tree: ast.Expression, expr_str: str) -> None:
+    """Refuse a ``pl`` attribute or method that is not an expression constructor or method.
+
+    Runs on the tree after bare names became ``pl.col(...)``.  ``pl`` may
+    only appear before a dot.
+    """
+    pl_heads = {
+        id(node.value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+    }
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and id(node) not in pl_heads:
+            raise DerivationError(
+                f"'pl' can only start an expression such as pl.col('X'), in {expr_str!r}"
+            )
+        if not isinstance(node, ast.Attribute):
+            continue
+        on_pl = isinstance(node.value, ast.Name)
+        if on_pl and node.attr not in _PL_NAMES:
+            raise DerivationError(
+                f"pl.{node.attr} is not allowed in expression {expr_str!r}: only Polars "
+                "expression constructors (pl.col, pl.lit, pl.when, ...) and data types are."
+            )
+        if not on_pl and node.attr not in _EXPR_METHODS:
+            raise DerivationError(
+                f".{node.attr} is not allowed in expression {expr_str!r}: only methods "
+                "of Polars expressions are."
+            )
+
 
 class _BareNameToColumn(ast.NodeTransformer):
     """Rewrite bare ``ast.Name`` nodes to ``pl.col(name)`` calls.
@@ -334,10 +420,14 @@ def parse_expression(expr_str: str) -> pl.Expr:
 
     Supports column references — ``pl.col("NAME")`` or plain ``NAME`` —
     and mixed forms like ``"AVAL * 2"`` or ``"VSSTRESN > LBSTNRHI"``:
-    bare names resolve to ``pl.col(name)``.  Expressions are validated
-    against an AST whitelist before evaluation to prevent code
-    injection; only the ``pl`` namespace, literals, and column
-    references are available.
+    bare names resolve to ``pl.col(name)``.  Before evaluation the string
+    is checked against three allow-lists: Python syntax nodes, ``pl``
+    names (expression constructors and data types) and Polars expression
+    methods.  Methods that take a function, run a plugin or
+    (de)serialise (``pipe``, ``map_*``, ``meta``) are refused, so a
+    string in a spec cannot read files or run commands.  A ``callable:``
+    or ``derivations_module:`` in a ``define.yaml`` still imports Python
+    code: a spec that holds one is a program to review.
 
     Args:
         expr_str: The expression string to parse.
@@ -365,6 +455,7 @@ def parse_expression(expr_str: str) -> pl.Expr:
 
     tree = _validate_ast(expr_str)
     tree = ast.fix_missing_locations(_BareNameToColumn().visit(tree))
+    _check_names(tree, expr_str)
     code = compile(tree, "<fleet-expression>", "eval")
 
     local_ns: dict[str, Any] = {"pl": pl}

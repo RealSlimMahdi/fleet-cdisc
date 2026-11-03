@@ -28,6 +28,13 @@ Teams can pin a shared engine instead via `validation.engine_path` in
 `FLEET_RULES_ENGINE` environment variable, so that every programmer runs the
 same engine build. Outside a study, `FLEET_RULES_ENGINE` still applies.
 
+`validation.engine_path` names a program, so treat a received study config
+like code. `fleet validate`, the `.validate()` verb and `fleet doctor` start
+the pinned engine. `fleet check` only prints its path. The MCP tool
+`fleet_validate` refuses an engine that a study config names unless the
+server was started with `fleet mcp --trust-study-engine`: an assistant can
+pass any dataset path.
+
 ### Engine version
 
 Every report header prints the engine version, so a QC programmer can check
@@ -103,7 +110,8 @@ uv run fleet validate --report findings.html   # HTML findings report
 ### The CI gate: `fleet check`
 
 `fleet check` builds the same run setup for SDTM and ADaM, with no datasets.
-It catches a setup error before delivery, without an engine:
+It catches a setup error before delivery, without an engine: it starts no
+program and runs no study code (`codelists.py` is read as data):
 
 - `sdtm.ig_version: 3-5`, or any IG version not in the supported list, fails
   the gate.

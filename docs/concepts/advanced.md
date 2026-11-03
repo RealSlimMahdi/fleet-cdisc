@@ -10,7 +10,9 @@ While Fleet provides verbs like `.study_day()` or `.baseline()`, you will often 
 
 For row-by-row logic or straightforward column math, use the `.derivation()` verb. It accepts four forms:
 
-**String expression (YAML-compatible, AST-sandboxed):**
+**String expression (YAML-compatible, checked before it runs):**
+
+A string may use Polars expression constructors (`pl.col`, `pl.lit`, `pl.when`, ...), data types and expression methods. Fleet refuses anything else before evaluation: file and module access such as `pl.read_csv`, and methods that take a function or (de)serialise, such as `pipe` and `map_elements`. A `callable:` or `derivations_module:` in a `define.yaml` imports Python code, so review a received spec that holds them as a program.
 
 ```python
 adsl = dm.adam.adsl.derivation(

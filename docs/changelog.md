@@ -4,6 +4,17 @@ All notable changes to Fleet are documented here.
 
 ## [Unreleased]
 
+### Security
+
+- **A received study package runs no code on read-only commands** (alpha audit 5.2):
+  - Expression strings (`derivation(expression=)`, `where=`, `case_when`, `define.yaml` and TLG filters) may use only Polars expression constructors, data types and expression methods. `pl.os.system(...)`, `pl.read_csv(...)`, `pl.DataFrame(...).write_csv(...)`, `.meta`, `.pipe` and `map_*` are refused before evaluation (`c1-88`).
+  - `fleet check`, `fleet doctor` and `from_spec` read `codelists.py` as data and no longer run it. A statement that a generated file does not hold stops with its line number; `fleet doctor` prints its other lines (`c1-768`).
+  - `fleet check` starts no engine: the run setup asks for the engine version only when a run needs it. The MCP tool `fleet_validate` refuses an engine named by `validation.engine_path` unless the server runs with the new `fleet mcp --trust-study-engine` (`c1-835`).
+  - A `.env` file gives Fleet only `CDISC_API_KEY`, and only when the shell has none. `CDISC_BASE_URL`, proxies, `FLEET_RULES_ENGINE` and `FLEET_DEFINE_XSD` now come from the shell only: move them out of `.env` (`c1-763`).
+  - The working directory is appended to `sys.path` after the `.env` read, so a file in the study folder never replaces an installed package (`c1-298`).
+  - A `define.yaml` dataset name must match `^[A-Z][A-Z0-9]{1,7}$` and an input name `^[A-Za-z][A-Za-z0-9_]*$`, so a name cannot leave the data folder or reach a Snakefile line (`c1-744`).
+  - The Define-XML HTML preview runs `define2-1.xsl` with no file or network access; a stylesheet that cannot run skips the preview (`c1-575`).
+
 ### Fixed
 
 - **Toxicity grades equal admiral** (ADR-0014, alpha audit package D). The 8 bundled criteria files are generated from the admiral 1.4.1 metadata by `scripts/regen_grading_criteria.R` and keep the admiral text of each term; a frozen admiral grid of 34,146 rows is the CI test.
