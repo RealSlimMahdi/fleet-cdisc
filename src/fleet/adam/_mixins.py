@@ -91,6 +91,14 @@ if TYPE_CHECKING:
     pass
 
 
+def _value_kind(value: Any) -> str:
+    """The kind of a recode value: ``bool``, ``int``, ``float``, ``str`` or its type name."""
+    for kind in (bool, int, float, str):
+        if isinstance(value, kind):
+            return kind.__name__
+    return type(value).__name__
+
+
 class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
     """Base mixin providing the shared verbs and chaining infrastructure.
 
@@ -146,8 +154,8 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                 adae = (
                     ae_with_trt.adam.occds("ADAE")
                     .source("USUBJID")
-                    .treatment_emergent("TRTEMFL", start_date="AESTDTC",
-                                        trtsdt="TRTSDT", trtedt="TRTEDT")
+                    .treatment_emergent("TRTEMFL", start_date="ASTDT",
+                                        end_date="AENDT", trtsdt="TRTSDT")
                     .to_frame()
                 )
         """
@@ -274,7 +282,12 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
     ) -> Self:
         """Map values in *source* to recoded values in *target*.
 
-        Unmapped values fall back to *default*.
+        Unmapped values fall back to *default*.  The output type follows
+        the map values and a literal *default*, ignoring ``None``: integers
+        give an integer column, integers with floats a float column (ADaM
+        ``*N`` variables such as ASEVN and AVISITN are Num), and text gives
+        text.  A map that mixes kinds raises, so a typing slip cannot give a
+        text ``*N`` variable.
 
         Args:
             target: Name of the output ADaM variable.
@@ -286,6 +299,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             Self: The namespace with *target* appended; call ``.to_frame()``
                 to materialise.
 
+        Raises:
+            DerivationError: When the map values and *default* mix kinds.
+
         Examples:
             Recode numeric sex to character::
 
@@ -295,17 +311,36 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                             recode_map={1: "M", 2: "F"})
                     .to_frame()
                 )
+
+            Code severity to a number::
+
+                adae = (
+                    ae_df.adam.occds
+                    .recode("ASEVN", source="ASEV",
+                            recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
+                    .to_frame()
+                )
         """
-        if recode_map:
-            default_expr = default if isinstance(default, pl.Expr) else pl.lit(default)
-            expr = (
-                pl.col(source)
-                .replace_strict(recode_map, default=default_expr, return_dtype=pl.String)
-                .alias(target)
+        default_expr = default if isinstance(default, pl.Expr) else pl.lit(default)
+        if not recode_map:
+            return self._chain(default_expr.alias(target), verb="recode")
+        values = [*recode_map.values(), *([] if isinstance(default, pl.Expr) else [default])]
+        kinds = {_value_kind(v) for v in values if v is not None}
+        return_dtype: pl.DataType | None = None
+        if kinds == {"int", "float"}:
+            recode_map = {k: None if v is None else float(v) for k, v in recode_map.items()}
+        elif len(kinds) > 1:
+            raise DerivationError(
+                f"recode('{target}'): the map values and default mix {sorted(kinds)}. "
+                f"Give one kind, so {target} is numeric or text."
             )
-        else:
-            default_expr = default if isinstance(default, pl.Expr) else pl.lit(default)
-            expr = default_expr.alias(target)
+        elif kinds != {"int"} and kinds != {"float"}:
+            return_dtype = pl.String()
+        expr = (
+            pl.col(source)
+            .replace_strict(recode_map, default=default_expr, return_dtype=return_dtype)
+            .alias(target)
+        )
         return self._chain(expr, verb="recode")
 
     # ------------------------------------------------------------------ #
@@ -321,17 +356,22 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         order: str | list[str] | None = None,
         mode: str = "first",
     ) -> Self:
-        """Derive targets from the highest-priority matching event per group.
+        """Derive targets from one event per group, chosen across the events.
 
-        Each event in the ordered list defines a candidate source, a filter
-        condition, and values to set when that event is selected.  Events are
-        evaluated in list order (first = highest priority).  Within each
-        event's matching records, *mode* and *order* select which record
-        provides the final values.
+        Each event in the list defines a candidate source, a filter
+        condition, and values to set when that event is selected.  Within
+        each event's matching records, the event's *order* and *mode* (or
+        the top-level ones) select one record.  Then one event wins:
 
-        This is Fleet's answer to multi-source cascading derivations such as
-        last-date-known-alive (LSTALVDT), death cause (DTHCAUS), or any
-        variable that requires "try source A first, else B, else C" logic.
+        - with a top-level *order*, every event's record competes on that
+          order and *mode*, as admiral ``derive_vars_extreme_event`` does:
+          ``order=["LSTALVDT"], mode="last"`` gives the latest date over all
+          sources.  A tie goes to the first listed event.
+        - with no top-level *order*, the first listed event with a matching
+          record wins (a priority cascade, as the admiral DTHCAUS template).
+
+        This is Fleet's answer to multi-source derivations such as
+        last-date-known-alive (LSTALVDT) or death cause (DTHCAUS).
 
         Event dict keys:
 
@@ -351,10 +391,11 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         Args:
             targets: Target column name(s) to derive.
-            events: Ordered list of event dicts (highest priority first).
+            events: List of event dicts.  List position breaks ties and,
+                with no top-level *order*, decides the winner.
             by: Grouping columns (default ``["USUBJID"]``).
-            order: Sort column(s) for selecting within an event's matches.
-                Required when multiple records may match a single event.
+            order: Sort column(s).  Within an event they select the record;
+                at top level they also select the event (see above).
             mode: ``"first"`` or ``"last"`` — which record to select
                 after sorting by *order* (default ``"first"``).
 
@@ -511,12 +552,13 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                     evt_order,
                     descending=[descending] * len(evt_order),
                     nulls_last=True,
+                    maintain_order=True,
                 )
             candidates = candidates.group_by(by_vars, maintain_order=True).first()
 
-            # Keep only by_vars + targets + event_nr
-            keep = by_vars + target_list + ["__pick_event_nr__"]
-            available = [c for c in keep if c in candidates.columns]
+            # Keep only by_vars + targets + the cross-event order + event_nr
+            keep = by_vars + target_list + (global_order or []) + ["__pick_event_nr__"]
+            available = [c for c in dict.fromkeys(keep) if c in candidates.columns]
             candidates = candidates.select(available)
 
             candidate_frames.append(candidates)
@@ -526,13 +568,19 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             null_exprs = [pl.lit(None).alias(t) for t in target_list]
             return self._materialise_then(df.with_columns(null_exprs))
 
-        # Stack all candidates and pick the winning event per group.
-        # Each event contributed at most one row per group, so event priority
-        # alone decides the winner — per-event order/mode already selected the
-        # record *within* each event. (Sorting by *order* here would also
-        # crash: order columns that are not targets were dropped above.)
+        # Each event gave at most one row per group.  A top-level order makes
+        # them compete (admiral derive_vars_extreme_event); a tie goes to the
+        # first listed event.  With no top-level order, list position decides.
         all_candidates = pl.concat(candidate_frames, how="diagonal_relaxed")
-        all_candidates = all_candidates.sort("__pick_event_nr__")
+        if global_order:
+            all_candidates = all_candidates.sort(
+                [*global_order, "__pick_event_nr__"],
+                descending=[mode == "last"] * len(global_order) + [False],
+                nulls_last=True,
+                maintain_order=True,
+            )
+        else:
+            all_candidates = all_candidates.sort("__pick_event_nr__", maintain_order=True)
         winners = all_candidates.group_by(by_vars, maintain_order=True).first()
         winners = winners.select(by_vars + target_list)
 

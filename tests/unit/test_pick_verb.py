@@ -1,8 +1,8 @@
-"""Tests for the pick() verb — priority-ordered event selection.
+"""Tests for the pick() verb — event selection across sources.
 
 Tests use deliberately dirty / edge-case data to stress the implementation:
 - Subjects with NO matching events at all
-- Subjects matching MULTIPLE events (priority must win)
+- Subjects matching MULTIPLE events (top-level order, else list position, wins)
 - Null values scattered across source columns
 - Duplicate records per subject within a single event
 - Mixed types (dates vs strings vs numerics as targets)
@@ -101,15 +101,17 @@ def ds_dirty() -> pl.DataFrame:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Tests: LSTALVDT — multi-source, multi-target, priority cascade
+# Tests: LSTALVDT — multi-source, multi-target, latest date over all events
 # ═══════════════════════════════════════════════════════════════════════════
 
 
 class TestPickLSTALVDT:
     """Last Date Known Alive: death > AE end > lab date > treatment end."""
 
-    def test_basic_priority_cascade(self, adsl_base, ae_dirty, lb_dirty):
-        """Death date wins when present; AE/lab/trt as fallback."""
+    def test_top_level_order_takes_the_latest_date_over_all_sources(
+        self, adsl_base, ae_dirty, lb_dirty
+    ):
+        """admiral LSTALVDT: order=[LSTALVDT], mode last acts across events."""
         result = (
             adsl_base.adam.adsl.pick(  # type: ignore[attr-defined]
                 ["LSTALVDT", "DTHFL"],
@@ -151,29 +153,28 @@ class TestPickLSTALVDT:
             .sort("USUBJID")
         )
 
-        # SUBJ-01: has death date 2024-06-15 → wins (priority 1)
+        # SUBJ-01: death date 2024-06-15 is the latest (lab 2024-06-10)
         row1 = result.filter(pl.col("USUBJID") == "SUBJ-01")
         assert row1["DTHFL"][0] == "Y"
         assert row1["LSTALVDT"][0] == date(2024, 6, 15)
 
-        # SUBJ-02: no death, AE end latest is 2024-04-19 (RASH), lab=2024-04-25
-        # Priority 2 (AE end 2024-04-19) vs Priority 3 (lab 2024-04-25)
-        # Priority wins over recency → AE (priority 2) should win
+        # SUBJ-02: no death; AE end 2024-04-19, lab 2024-04-25, TRTEDT 2024-04-20
+        # The latest date wins over list position → lab
         row2 = result.filter(pl.col("USUBJID") == "SUBJ-02")
         assert row2["DTHFL"][0] == "N"
-        assert row2["LSTALVDT"][0] == date(2024, 4, 19)
+        assert row2["LSTALVDT"][0] == date(2024, 4, 25)
 
         # SUBJ-03: no death, no AE end (all null), lab=2024-02-01, no TRTEDT
-        # Priority 3 (lab) wins
+        # Only the lab event has a record
         row3 = result.filter(pl.col("USUBJID") == "SUBJ-03")
         assert row3["DTHFL"][0] == "N"
         assert row3["LSTALVDT"][0] == date(2024, 2, 1)
 
         # SUBJ-04: no death, AE end=2024-01-05, lab=2024-03-15, TRTEDT=2024-03-10
-        # Priority 2 (AE end) wins
+        # The latest date (lab) wins
         row4 = result.filter(pl.col("USUBJID") == "SUBJ-04")
         assert row4["DTHFL"][0] == "N"
-        assert row4["LSTALVDT"][0] == date(2024, 1, 5)
+        assert row4["LSTALVDT"][0] == date(2024, 3, 15)
 
         # SUBJ-05: death date 2024-07-01 → wins
         row5 = result.filter(pl.col("USUBJID") == "SUBJ-05")
@@ -316,8 +317,8 @@ class TestPickEdgeCases:
             ).to_frame()
 
     def test_global_order_on_non_target_column_does_not_crash(self, adsl_base):
-        """order= may name a source column that is not a target — within-event
-        selection uses it; the cross-event winner is decided by priority."""
+        """order= may name a source column that is not a target — it selects
+        the record within the event and also ranks the events."""
         ae = pl.from_repr("""\
 ┌─────────┬────────────┬──────┐
 │ USUBJID ┆ AEENDTC    ┆ ASEQ │
