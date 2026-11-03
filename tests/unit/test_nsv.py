@@ -64,7 +64,7 @@ def nsv_spec_yaml(tmp_path: Path) -> Path:
                 type: text
                 origin: Assigned
                 derivation:
-                  algorithm: hardcode_no_ct
+                  algorithm: assign
                   value: "TEST01"
 
               - name: DOMAIN
@@ -72,7 +72,7 @@ def nsv_spec_yaml(tmp_path: Path) -> Path:
                 type: text
                 origin: Assigned
                 derivation:
-                  algorithm: hardcode_no_ct
+                  algorithm: assign
                   value: "DM"
 
               - name: USUBJID
@@ -80,7 +80,7 @@ def nsv_spec_yaml(tmp_path: Path) -> Path:
                 type: text
                 origin: Collected
                 derivation:
-                  algorithm: assign_no_ct
+                  algorithm: assign
                   source: patient_number
 
               - name: SAFETY

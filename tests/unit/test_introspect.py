@@ -34,6 +34,7 @@ EXPECTED_ALL = [
     "algorithms",
     "define_schema",
     "get_algorithm",
+    "load_spec_yaml",  # ADR-0008: tools parse define.yaml with Fleet's loader (on: stays a key)
     "suggest_algorithm",
 ]
 
@@ -109,12 +110,12 @@ def test_algorithms_returns_populated_algorithm_info(standard: str) -> None:
 
 
 def test_algorithms_exposes_parameter_metadata() -> None:
-    algo = introspect.get_algorithm("sdtm", "assign_ct")
+    algo = introspect.get_algorithm("sdtm", "assign")
 
     assert algo is not None
-    assert algo.name == "assign_ct"
+    assert algo.name == "assign"
     assert all(isinstance(param, introspect.ParamInfo) for param in algo.params)
-    assert "ct_codelist" in {param.name for param in algo.params}
+    assert "ct" in {param.name for param in algo.params}
 
 
 def test_required_parameters_stay_flagged() -> None:
@@ -125,9 +126,10 @@ def test_required_parameters_stay_flagged() -> None:
     assert {param.name for param in algo.params if param.required} == {"start", "end"}
 
 
-def test_get_algorithm_resolves_aliases() -> None:
-    """Aliases are accepted spellings, so the adapter must not special-case them."""
-    assert introspect.get_algorithm("sdtm", "assign_dtc") is not None
+def test_get_algorithm_knows_only_verb_names() -> None:
+    """The verb is the algorithm (ADR-0008): an old spec name is unknown."""
+    assert introspect.get_algorithm("sdtm", "date") is not None
+    assert introspect.get_algorithm("sdtm", "assign_dtc") is None
 
 
 def test_get_algorithm_returns_none_for_unknown_name() -> None:
@@ -135,7 +137,7 @@ def test_get_algorithm_returns_none_for_unknown_name() -> None:
 
 
 def test_algorithm_doc_returns_summary_and_verb_path() -> None:
-    doc = introspect.algorithm_doc("assign_ct")
+    doc = introspect.algorithm_doc("assign")
 
     assert doc is not None
     assert doc.summary
@@ -147,7 +149,7 @@ def test_algorithm_doc_returns_none_for_unknown_name() -> None:
 
 
 def test_suggest_algorithm_finds_the_near_miss() -> None:
-    assert introspect.suggest_algorithm("sdtm", "asign_ct") == "assign_ct"
+    assert introspect.suggest_algorithm("sdtm", "asign") == "assign"
 
 
 def test_suggest_algorithm_returns_none_when_nothing_is_close() -> None:
@@ -163,8 +165,8 @@ def test_suggest_algorithm_returns_none_when_nothing_is_close() -> None:
     "call",
     [
         lambda: introspect.algorithms("nope"),
-        lambda: introspect.get_algorithm("nope", "assign_ct"),
-        lambda: introspect.suggest_algorithm("nope", "assign_ct"),
+        lambda: introspect.get_algorithm("nope", "assign"),
+        lambda: introspect.suggest_algorithm("nope", "assign"),
     ],
     ids=["algorithms", "get_algorithm", "suggest_algorithm"],
 )

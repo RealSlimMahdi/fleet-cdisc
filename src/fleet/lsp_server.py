@@ -36,7 +36,7 @@ from typing import Any, get_args
 
 import yaml
 
-from fleet.introspect import Standard
+from fleet.introspect import Standard, load_spec_yaml
 
 #: Seconds to wait after the last keystroke before re-validating.
 _DEBOUNCE_S = 0.3
@@ -54,7 +54,7 @@ _STANDARDS = get_args(Standard)
 def _safe_load(text: str) -> dict[str, Any]:
     """Parse YAML, returning ``{}`` on any error or non-mapping document."""
     try:
-        data = yaml.safe_load(text)
+        data = load_spec_yaml(text)
     except yaml.YAMLError:
         return {}
     return data if isinstance(data, dict) else {}
@@ -181,7 +181,7 @@ def compute_diagnostics(text: str, path: str = "") -> list[dict[str, Any]]:
     from fleet.introspect import define_schema, get_algorithm, suggest_algorithm
 
     try:
-        data = yaml.safe_load(text)
+        data = load_spec_yaml(text)
     except yaml.YAMLError as exc:
         mark = getattr(exc, "problem_mark", None)
         problem = getattr(exc, "problem", None) or str(exc)
@@ -301,7 +301,7 @@ def compute_completions(
             from fleet.lsp_server import compute_completions
 
             items = compute_completions("derivation:\\n  algorithm: ", 1, 13)
-            assert any(i["label"] == "assign_ct" for i in items)
+            assert any(i["label"] == "assign" for i in items)
     """
     from fleet import introspect
 
@@ -326,7 +326,7 @@ def compute_completions(
                 )
         return sorted(seen.values(), key=lambda i: i["label"])
 
-    if re.match(r"^(-\s+)?(ct_codelist|codelist):", stripped):
+    if re.match(r"^(-\s+)?(ct|codelist):", stripped):
         codelists = data.get("codelists")
         return [
             {"label": str(cl["oid"]), "detail": str(cl.get("name", ""))}
@@ -383,8 +383,8 @@ def compute_hover(text: str, line: int, character: int, path: str = "") -> str |
 
             from fleet.lsp_server import compute_hover
 
-            md = compute_hover("derivation:\\n  algorithm: assign_ct", 1, 15)
-            assert "assign_ct" in md
+            md = compute_hover("derivation:\\n  algorithm: assign", 1, 15)
+            assert "assign" in md
     """
     from fleet import introspect
 

@@ -123,7 +123,7 @@ class TestUnknownAlgorithm:
             _define(
                 [
                     {"name": "X", "derivation": {"algorithm": "frobnicate"}},
-                    {"name": "STUDYID", "derivation": {"algorithm": "assigned", "value": "S01"}},
+                    {"name": "STUDYID", "derivation": {"algorithm": "assign", "value": "S01"}},
                 ]
             )
         )
@@ -197,7 +197,7 @@ class TestOverwriteGuard:
         """source: USUBJID on variable USUBJID is a declared carry-through."""
         spec = write_spec(
             _define(
-                [{"name": "USUBJID", "derivation": {"algorithm": "source", "source": "USUBJID"}}]
+                [{"name": "USUBJID", "derivation": {"algorithm": "assign", "source": "USUBJID"}}]
             )
         )
         result = subjects.adam.from_spec(spec, dataset="ADSL").to_frame()
@@ -219,11 +219,11 @@ class TestOverwriteGuard:
                 [
                     {
                         "name": "USUBJID",
-                        "derivation": {"algorithm": "assign_no_ct", "source": "subject_id"},
+                        "derivation": {"algorithm": "assign", "source": "subject_id"},
                     },
                     {
                         "name": "DOMAIN",
-                        "derivation": {"algorithm": "hardcode_no_ct", "value": "DM"},
+                        "derivation": {"algorithm": "assign", "value": "DM"},
                     },
                 ],
                 dataset="DM",
@@ -290,19 +290,37 @@ class TestErrorContext:
 
 
 class TestSpecVersion:
-    def test_version_1_accepted(self, subjects, write_spec):
+    def test_version_2_accepted(self, subjects, write_spec):
+        spec = write_spec(
+            _define(
+                [{"name": "STUDYID", "derivation": {"algorithm": "assign", "value": "S01"}}],
+                fleet_spec_version=2,
+            )
+        )
+        result = subjects.adam.from_spec(spec, dataset="ADSL").to_frame()
+        assert result["STUDYID"].to_list() == ["S01", "S01"]
+
+    def test_version_1_names_the_migration(self, subjects, write_spec):
+        """The pre-ADR-0008 dialect is a hard cut: the error says how to rewrite the file."""
         spec = write_spec(
             _define(
                 [{"name": "STUDYID", "derivation": {"algorithm": "assigned", "value": "S01"}}],
                 fleet_spec_version=1,
             )
         )
-        result = subjects.adam.from_spec(spec, dataset="ADSL").to_frame()
-        assert result["STUDYID"].to_list() == ["S01", "S01"]
+        with pytest.raises(SpecError, match=r"fleet_spec_version 1.*fleet migrate --spec"):
+            subjects.adam.from_spec(spec, dataset="ADSL")
+
+    def test_old_algorithm_name_names_the_migration(self, subjects, write_spec):
+        spec = write_spec(
+            _define([{"name": "STUDYID", "derivation": {"algorithm": "assigned", "value": "S01"}}])
+        )
+        with pytest.raises(SpecError, match=r"'assigned' is the pre-ADR-0008 spelling of 'assign'"):
+            subjects.adam.from_spec(spec, dataset="ADSL")
 
     def test_future_version_rejected(self, subjects, write_spec):
-        spec = write_spec(_define([], fleet_spec_version=2))
-        with pytest.raises(SpecError, match="unsupported fleet_spec_version 2"):
+        spec = write_spec(_define([], fleet_spec_version=3))
+        with pytest.raises(SpecError, match="unsupported fleet_spec_version 3"):
             subjects.adam.from_spec(spec, dataset="ADSL")
 
     def test_define_spec_generator_rejects_future_version(self, tmp_path):
@@ -433,7 +451,7 @@ class TestDependsOn:
         spec = write_spec(
             _define(
                 [
-                    {"name": "ADTC", "derivation": {"algorithm": "rename", "source": "vsdtc"}},
+                    {"name": "ADTC", "derivation": {"algorithm": "assign", "source": "vsdtc"}},
                     {
                         "name": "ADY",
                         "derivation": {
@@ -449,3 +467,51 @@ class TestDependsOn:
         )
         result = df.adam.from_spec(spec, dataset="ADVS").to_frame()
         assert result["ADY"].to_list() == [1]
+
+
+# ──────────────────────────────────────────────────────────────────────
+# ADR-0008: ct defaults to the variable's codelist
+# ──────────────────────────────────────────────────────────────────────
+
+
+class TestCodelistDefault:
+    def test_assign_without_ct_checks_the_variable_codelist(self, subjects, write_spec):
+        """DM.SEX with ``codelist: C66731`` and no ``ct:`` still maps and checks the values."""
+        spec = write_spec(
+            _define(
+                [
+                    {
+                        "name": "SEX",
+                        "codelist": "C66731",
+                        "derivation": {
+                            "algorithm": "assign",
+                            "source": "sex_raw",
+                            "ct_map": {"male": "M", "female": "F"},
+                        },
+                    }
+                ]
+            )
+        )
+        frame = subjects.with_columns(pl.Series("sex_raw", ["male", "female"]))
+        ns = frame.adam.from_spec(spec, dataset="ADSL")
+        assert ns.to_frame()["SEX"].to_list() == ["M", "F"]
+        (node,) = [n for n in ns._lineage if n.name == "SEX"]
+        assert node.spec["ct"] == "C66731"
+
+    def test_ct_map_without_any_codelist_is_a_load_error(self, subjects, write_spec):
+        spec = write_spec(
+            _define(
+                [
+                    {
+                        "name": "SEX",
+                        "derivation": {
+                            "algorithm": "assign",
+                            "source": "sex_raw",
+                            "ct_map": {"male": "M"},
+                        },
+                    }
+                ]
+            )
+        )
+        with pytest.raises(SpecError, match="ct_map needs a codelist"):
+            subjects.adam.from_spec(spec, dataset="ADSL")

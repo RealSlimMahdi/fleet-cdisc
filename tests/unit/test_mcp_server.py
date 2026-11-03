@@ -281,7 +281,7 @@ def test_code_to_spec_rows_carry_registry_blocks():
             "standard": "sdtm",
             "line": 1,
             "status": "ok",
-            "block": {"algorithm": "hardcode_no_ct", "value": "DM"},
+            "block": {"algorithm": "assign", "value": "DM"},
             "reason": "",
             "meta": {},
         }

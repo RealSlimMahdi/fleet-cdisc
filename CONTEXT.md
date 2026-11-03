@@ -174,5 +174,5 @@ _Avoid_: boundary day, switch date
 ### Spec
 
 **Spec algorithm**:
-The name a define.yaml gives to one way of calling one verb, with the spec fields that call accepts. Several spec algorithms may drive one verb, each with its own required fields, and the spec fields may be fewer than the verb's arguments.
-_Avoid_: algorithm, derivation type, spec verb, dialect
+The verb a define.yaml names in `algorithm:`. The keys of the block are the keyword arguments of that verb, so one verb is one spec algorithm (ADR-0008). A declaration adds only what the signature cannot say: excluded arguments, exclusive groups, a stricter required key, the target default of `source`, and the Define-XML method text.
+_Avoid_: derivation type, spec verb, dialect, alias

@@ -45,9 +45,9 @@ from fleet.sdtm.namespace import SDTMNamespace
     [(SDTMAlgorithm, "sdtm"), (ADAMAlgorithm, "adam")],
 )
 def test_enum_matches_registry(algorithm_enum: type, standard: str) -> None:
-    """Enum values == registry names (including accepted aliases)."""
+    """Enum values == registry names: the verb names (ADR-0008)."""
     enum_values = {a.value for a in algorithm_enum}
-    registry_values = set(spec_registry.algorithm_names(standard, include_aliases=True))
+    registry_values = set(spec_registry.algorithm_names(standard))
     assert enum_values == registry_values, (
         f"{algorithm_enum.__name__} out of sync with spec_registry: "
         f"enum-only={sorted(enum_values - registry_values)}, "
@@ -128,12 +128,9 @@ def test_every_public_verb_is_registered_or_allowlisted(namespace_cls: type, sta
     """The coverage matrix is complete: verb → algorithm or explicit opt-out."""
     public = _public_verbs(namespace_cls)
     registry_verbs = {a.verb for a in spec_registry.algorithms(standard)}
-    # Alias spellings that are also real methods (e.g. dataset_level) count
-    # as covered — they are reachable from a spec under their own name.
-    registry_names = set(spec_registry.algorithm_names(standard, include_aliases=True))
     allowlisted = spec_registry.SPEC_UNSUPPORTED[standard]
 
-    unaccounted = public - registry_verbs - registry_names - allowlisted - _INFRASTRUCTURE
+    unaccounted = public - registry_verbs - allowlisted - _INFRASTRUCTURE
     assert not unaccounted, (
         f"{namespace_cls.__name__} verbs with no spec story: {sorted(unaccounted)}. "
         "Register them in fleet.core.spec_registry or add them to SPEC_UNSUPPORTED."
@@ -152,7 +149,7 @@ def test_every_public_verb_is_registered_or_allowlisted(namespace_cls: type, sta
 def test_coverage_matrix_shape() -> None:
     """The published matrix has one well-formed row per canonical algorithm."""
     matrix = spec_registry.coverage_matrix()
-    keys = {"standard", "algorithm", "aliases", "verb", "params", "required"}
+    keys = {"standard", "algorithm", "verb", "params", "required"}
     assert all(keys <= set(row) for row in matrix)
     per_standard = {
         s: {r["algorithm"] for r in matrix if r["standard"] == s} for s in ("sdtm", "adam")
@@ -162,74 +159,129 @@ def test_coverage_matrix_shape() -> None:
 
 
 # ──────────────────────────────────────────────────────────────────────
-# 2b. Parameter facts: Param tables ↔ verb signatures (ADR-0007)
+# 2b. The verb is the algorithm: YAML keys == verb keywords (ADR-0008)
 # ──────────────────────────────────────────────────────────────────────
 
-#: Algorithms with a custom ``dispatch`` have no verb signature to compare
-#: against (``callable_ref`` is not a keyword of any verb).
 _NAMESPACES: dict[str, type] = {"sdtm": SDTMNamespace, "adam": AdamNamespace}
 
+#: Keyword arguments no spec exposes: validators and runtime switches.
+_NEVER_IN_YAML = {"ct_validator", "validate_values", "check_uniqueness"}
 
-def _default_dispatch_algorithms() -> list[spec_registry.SpecAlgorithm]:
-    return [
-        algo
-        for standard in ("sdtm", "adam")
-        for algo in spec_registry.algorithms(standard)
-        if algo.dispatch is None
-    ]
+
+def _all_algorithms() -> list[spec_registry.SpecAlgorithm]:
+    return [algo for standard in ("sdtm", "adam") for algo in spec_registry.algorithms(standard)]
 
 
 def _signature_facts(algo: spec_registry.SpecAlgorithm) -> dict[str, inspect.Parameter]:
     verb = getattr(_NAMESPACES[algo.standard], algo.verb)
-    return {
-        name: param
-        for name, param in inspect.signature(verb).parameters.items()
-        if name != "self" and param.kind not in (param.VAR_POSITIONAL, param.VAR_KEYWORD)
-    }
+    params = [p for name, p in inspect.signature(verb).parameters.items() if name != "self"]
+    if algo.takes_target:
+        params = params[1:]  # the first argument is the variable name
+    return {p.name: p for p in params if p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD)}
 
 
-@pytest.mark.parametrize(
-    "algo",
-    _default_dispatch_algorithms(),
-    ids=lambda a: f"{a.standard}.{a.name}",
-)
-def test_param_table_matches_verb_signature(algo: spec_registry.SpecAlgorithm) -> None:
-    """ADR-0007: the spec may be stricter than the verb, never looser.
+@pytest.mark.parametrize("algo", _all_algorithms(), ids=lambda a: f"{a.standard}.{a.name}")
+def test_yaml_keys_are_the_verb_keywords(algo: spec_registry.SpecAlgorithm) -> None:
+    """ADR-0008: the ``algorithm:`` value is the verb, the keys are its keywords.
 
-    1. Every ``Param`` keyword exists in the verb signature.
-    2. A default-to-target ``Param`` skips the default check.
-    3. ``required=True`` where the signature has a default is allowed
-       (stricter). A spec default where the signature requires a value, or
-       a spec default that differs from the signature's, is not (looser).
-    4. When both sides are optional, the defaults are equal.
-    5. Signature arguments absent from the registry are ignored: the spec
-       surface is a curated subset.
+    1. The algorithm name is the verb name.
+    2. Every keyword of the verb is a YAML key, except the ones the
+       declaration excludes and the validators no spec exposes.
+    3. A YAML key is the keyword without a trailing underscore (``else``).
+    4. ``required`` and ``default`` come from the signature. A declared
+       ``required`` may make the spec stricter, a ``target_default`` makes
+       the key optional, nothing else may differ.
     """
+    assert algo.name == algo.verb
     sig = _signature_facts(algo)
-    problems: list[str] = []
-    for p in algo.params:
-        kwarg = p.kwarg or p.name
-        if kwarg not in sig:  # rule 1
-            problems.append(f"{p.name}: kwarg {kwarg!r} is not a parameter of .{algo.verb}()")
-            continue
-        if p.default_to_target:  # rule 2
-            continue
-        sig_param = sig[kwarg]
-        sig_required = sig_param.default is inspect.Parameter.empty
-        if p.required:  # rule 3, stricter side: always fine
-            continue
-        if sig_required:  # rule 3, looser side
-            problems.append(
-                f"{p.name}: spec default {p.default!r} but .{algo.verb}() requires {kwarg!r}"
-            )
-        elif p.default != sig_param.default:  # rule 4
-            problems.append(
-                f"{p.name}: spec default {p.default!r} != verb default {sig_param.default!r}"
-            )
-    assert not problems, (
-        f"{algo.standard}.{algo.name} → .{algo.verb}(): Param table drifted from the verb "
-        "signature (ADR-0007):\n  " + "\n  ".join(problems)
+    excluded = set(algo.exclude) | _NEVER_IN_YAML
+    expected = {name for name in sig if name not in excluded}
+    declared = {f.kwarg for f in algo.params if not f.extra}
+    assert declared == expected, (
+        f"{algo.standard}.{algo.name}: YAML keys {sorted(declared)} != "
+        f"verb keywords {sorted(expected)}"
     )
+    for f in algo.params:
+        if f.extra:
+            continue
+        sp = sig[f.kwarg]
+        assert f.name == (f.kwarg[:-1] if f.kwarg.endswith("_") else f.kwarg)
+        if f.kwarg in algo.target_default:
+            assert not f.required, f"{f.kwarg} defaults to the target, so it is optional"
+            continue
+        if f.kwarg in algo.required:
+            assert f.required, f"{f.kwarg} is declared required"
+            continue
+        sig_required = sp.default is inspect.Parameter.empty
+        assert f.required == sig_required, f"{f.kwarg}: required differs from the signature"
+        if not sig_required:
+            assert f.default == sp.default, f"{f.kwarg}: default differs from the signature"
+
+
+def test_assign_model_has_the_verb_keywords() -> None:
+    """The DM.SEX block of ADR-0008 validates: ``ct`` and ``ct_map`` are the keys."""
+    var = spec_registry.parse_variable_spec(
+        "sdtm",
+        {
+            "target": "SEX",
+            "algorithm": "assign",
+            "source": "sex",
+            "ct": "C66731",
+            "ct_map": {"F": "F", "M": "M"},
+        },
+    )
+    assert var.source == "sex"
+    assert var.ct == "C66731"
+    assert var.ct_map == {"F": "F", "M": "M"}
+    keys = set(spec_registry.model_for("sdtm", "assign").model_fields)
+    assert {"algorithm", "target", "source", "value", "ct", "ct_map"} <= keys
+    assert not {"ct_validator", "validate_values", "ct_codelist", "ct_mapping"} & keys
+
+
+def test_else_is_written_without_the_underscore() -> None:
+    """``else_`` of case_when is ``else:`` in YAML, and comes back as ``else`` in a block."""
+    var = spec_registry.parse_variable_spec(
+        "sdtm",
+        {
+            "target": "ARMCD",
+            "algorithm": "case_when",
+            "when": [{"condition": 'pl.col("ARM") == "Placebo"', "value": "Pbo"}],
+            "else": "X",
+        },
+    )
+    assert var.else_ == "X"
+    assert spec_registry._spec_block(var)["else"] == "X"
+    with pytest.raises(Exception, match="else_"):
+        spec_registry.parse_variable_spec(
+            "sdtm", {"target": "ARMCD", "algorithm": "case_when", "when": [], "else_": "X"}
+        )
+
+
+def test_assign_source_and_value_exclude_each_other() -> None:
+    """One assign cannot both copy a column and set a constant."""
+    with pytest.raises(Exception, match="source, value"):
+        spec_registry.parse_variable_spec(
+            "sdtm", {"target": "DOMAIN", "algorithm": "assign", "source": "dom", "value": "DM"}
+        )
+
+
+def test_derivation_needs_an_expression_or_a_callable() -> None:
+    """``derivation`` with neither key is a load-time error, not a null column."""
+    with pytest.raises(Exception, match="expression, callable"):
+        spec_registry.parse_variable_spec("adam", {"target": "AVAL", "algorithm": "derivation"})
+
+
+def test_old_spec_names_are_not_algorithms() -> None:
+    """The hard cut of ADR-0008: the old spec vocabulary is gone from the registry."""
+    for standard, old in (
+        ("sdtm", "assign_ct"),
+        ("sdtm", "hardcode_no_ct"),
+        ("sdtm", "if_then_else"),
+        ("adam", "source"),
+        ("adam", "lookup"),
+        ("adam", "study_day"),
+    ):
+        assert spec_registry.get_algorithm(standard, old) is None
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -276,7 +328,7 @@ def _register_adam_callable() -> None:
 
 SDTM_CASES: list[Case] = [
     Case(
-        "assign_no_ct",
+        "assign",
         lambda: pl.from_repr("""\
 ┌────────────┐
 │ subject_id │
@@ -287,11 +339,11 @@ SDTM_CASES: list[Case] = [
 │ B          │
 └────────────┘
 """),
-        [{"target": "USUBJID", "algorithm": "assign_no_ct", "source": "subject_id"}],
+        [{"target": "USUBJID", "algorithm": "assign", "source": "subject_id"}],
         lambda df: df["USUBJID"].to_list() == ["A", "B"],
     ),
     Case(
-        "assign_ct",
+        "assign",
         lambda: pl.from_repr("""\
 ┌─────────┐
 │ sex_raw │
@@ -305,10 +357,10 @@ SDTM_CASES: list[Case] = [
         [
             {
                 "target": "SEX",
-                "algorithm": "assign_ct",
+                "algorithm": "assign",
                 "source": "sex_raw",
-                "ct_codelist": "C66731",
-                "ct_mapping": {"male": "M", "female": "F"},
+                "ct": "C66731",
+                "ct_map": {"male": "M", "female": "F"},
             }
         ],
         lambda df: df["SEX"].to_list() == ["M", "F"],
@@ -324,19 +376,19 @@ SDTM_CASES: list[Case] = [
 │ 2024-01-02 │
 └────────────┘
 """),
-        [{"target": "BRTHDTC", "algorithm": "assign_dtc", "source": "birth_date"}],
+        [{"target": "BRTHDTC", "algorithm": "date", "source": "birth_date"}],
         lambda df: df["BRTHDTC"].to_list() == ["2024-01-02"],
     ),
     Case(
-        "hardcode_ct",
+        "assign",
         lambda: _subjects(),
-        [{"target": "SEX", "algorithm": "hardcode_ct", "value": "M", "ct_codelist": "C66731"}],
+        [{"target": "SEX", "algorithm": "assign", "value": "M", "ct": "C66731"}],
         lambda df: df["SEX"].to_list() == ["M", "M"],
     ),
     Case(
-        "hardcode_no_ct",
+        "assign",
         lambda: _subjects(),
-        [{"target": "DOMAIN", "algorithm": "hardcode_no_ct", "value": "DM"}],
+        [{"target": "DOMAIN", "algorithm": "assign", "value": "DM"}],
         lambda df: df["DOMAIN"].to_list() == ["DM", "DM"],
     ),
     Case(
@@ -353,14 +405,14 @@ SDTM_CASES: list[Case] = [
         lambda df: df["AGEGRP"].to_list() == ["ELDERLY", None],
     ),
     Case(
-        "if_then_else",
+        "case_when",
         lambda: _subjects(),
         [
             {
                 "target": "AGEGR1",
-                "algorithm": "if_then_else",
+                "algorithm": "case_when",
                 "when": [{"condition": 'pl.col("AGE") > 64', "value": ">=65"}],
-                "else_value": "<65",
+                "else": "<65",
             }
         ],
         lambda df: df["AGEGR1"].to_list() == [">=65", "<65"],
@@ -420,7 +472,7 @@ SDTM_CASES: list[Case] = [
             {
                 "target": "VAL",
                 "algorithm": "group_by",
-                "group_cols": ["USUBJID"],
+                "by": ["USUBJID"],
                 "agg": ["pl.col('val').max()"],
             }
         ],
@@ -479,7 +531,7 @@ SDTM_CASES: list[Case] = [
             {
                 "target": "AESEQ",
                 "algorithm": "seq",
-                "groups": ["USUBJID"],
+                "by": ["USUBJID"],
                 "order_by": ["USUBJID"],
             }
         ],
@@ -528,9 +580,9 @@ SDTM_CASES: list[Case] = [
         lambda df: df["AEDUR"].to_list() == [5],
     ),
     Case(
-        "callable",
+        "derivation",
         lambda: _subjects(),
-        [{"target": "SPEC_RT_SDTM", "algorithm": "callable", "callable": "SPEC_RT_SDTM"}],
+        [{"target": "SPEC_RT_SDTM", "algorithm": "derivation", "callable": "SPEC_RT_SDTM"}],
         lambda df: df["SPEC_RT_SDTM"].to_list() == ["70", "50"],
         setup=_register_sdtm_callable,
     ),
@@ -553,7 +605,7 @@ def _vs_frame() -> pl.DataFrame:
 
 ADAM_CASES: list[Case] = [
     Case(
-        "source",
+        "assign",
         lambda: pl.from_repr("""\
 ┌────────────┐
 │ subject_id │
@@ -563,7 +615,7 @@ ADAM_CASES: list[Case] = [
 │ A          │
 └────────────┘
 """),
-        [{"target": "USUBJID", "algorithm": "source", "source": "subject_id"}],
+        [{"target": "USUBJID", "algorithm": "assign", "source": "subject_id"}],
         lambda df: df["USUBJID"].to_list() == ["A"],
     ),
     Case(
@@ -581,9 +633,9 @@ ADAM_CASES: list[Case] = [
         lambda df: df["AVAL"].to_list() == [4.0],
     ),
     Case(
-        "assigned",
+        "assign",
         lambda: _subjects(),
-        [{"target": "STUDYID", "algorithm": "assigned", "value": "S01"}],
+        [{"target": "STUDYID", "algorithm": "assign", "value": "S01"}],
         lambda df: df["STUDYID"].to_list() == ["S01", "S01"],
     ),
     Case(
@@ -609,7 +661,7 @@ ADAM_CASES: list[Case] = [
         lambda df: df["SEXN"].to_list() == ["Male", "Female"],
     ),
     Case(
-        "rename",
+        "assign",
         lambda: pl.from_repr("""\
 ┌────────────┐
 │ vsdtc      │
@@ -619,29 +671,29 @@ ADAM_CASES: list[Case] = [
 │ 2024-01-01 │
 └────────────┘
 """),
-        [{"target": "ADTC", "algorithm": "rename", "source": "vsdtc"}],
+        [{"target": "ADTC", "algorithm": "assign", "source": "vsdtc"}],
         lambda df: df["ADTC"].to_list() == ["2024-01-01"],
     ),
     Case(
-        "condderivation",
+        "case_when",
         lambda: _subjects(),
         [
             {
                 "target": "AGEGR1",
-                "algorithm": "condderivation",
-                "conditions": [{"condition": 'pl.col("AGE") < 65', "value": "<65"}],
-                "else_value": ">=65",
+                "algorithm": "case_when",
+                "when": [{"condition": 'pl.col("AGE") < 65', "value": "<65"}],
+                "else": ">=65",
             }
         ],
         lambda df: df["AGEGR1"].to_list() == [">=65", "<65"],
     ),
     Case(
-        "lookup",
+        "merge",
         lambda: _subjects(),
         [
             {
                 "target": "TRTSDT",
-                "algorithm": "lookup",
+                "algorithm": "merge",
                 "dataset": "ADSL",
                 "on": "USUBJID",
             }
@@ -667,7 +719,7 @@ ADAM_CASES: list[Case] = [
         lambda df: df.height == 1,
     ),
     Case(
-        "study_day",
+        "duration",
         lambda: pl.from_repr("""\
 ┌────────────┬────────────┐
 │ ADT        ┆ TRTSDT     │
@@ -680,9 +732,9 @@ ADAM_CASES: list[Case] = [
         [
             {
                 "target": "ADY",
-                "algorithm": "study_day",
-                "analysis_date": "ADT",
-                "reference_date": "TRTSDT",
+                "algorithm": "duration",
+                "end": "ADT",
+                "start": "TRTSDT",
             }
         ],
         lambda df: df["ADY"].to_list() == [10],
@@ -696,7 +748,7 @@ ADAM_CASES: list[Case] = [
             {
                 "target": "BASE",
                 "algorithm": "baseline",
-                "groups": ["USUBJID", "PARAMCD"],
+                "by": ["USUBJID", "PARAMCD"],
             }
         ],
         lambda df: df.sort("USUBJID", "VISITNUM")["BASE"].to_list() == [120.0, 120.0, 110.0],
@@ -737,7 +789,7 @@ ADAM_CASES: list[Case] = [
                 "target": "ABLFL",
                 "algorithm": "flag",
                 "criteria": 'pl.col("VISITNUM") == 1',
-                "groups": ["USUBJID"],
+                "by": ["USUBJID"],
             }
         ],
         lambda df: df.sort("USUBJID", "VISITNUM")["ABLFL"].to_list() == ["Y", None, "Y"],
@@ -773,7 +825,7 @@ ADAM_CASES: list[Case] = [
             {
                 "target": "LBNRIND",
                 "algorithm": "nrind",
-                "aval": "AVAL",
+                "value": "AVAL",
                 "low": "LBSTNRLO",
                 "high": "LBSTNRHI",
             }
@@ -796,8 +848,8 @@ ADAM_CASES: list[Case] = [
             {
                 "target": "ONTRTFL",
                 "algorithm": "on_treatment",
-                "analysis_date": "ADT",
-                "reference_date": "TRTSDT",
+                "adt": "ADT",
+                "trtsdt": "TRTSDT",
                 "trtedt": "TRTEDT",
             }
         ],
@@ -836,7 +888,7 @@ ADAM_CASES: list[Case] = [
 │ S1      │
 └─────────┘
 """),
-        [{"target": "ASEQ", "algorithm": "seq", "groups": ["USUBJID"]}],
+        [{"target": "ASEQ", "algorithm": "seq", "by": ["USUBJID"]}],
         lambda df: df["ASEQ"].to_list() == [1, 2],
     ),
     Case(
@@ -864,7 +916,7 @@ ADAM_CASES: list[Case] = [
 │ 120   ┆ 80    │
 └───────┴───────┘
 """),
-        [{"target": "MAP", "algorithm": "mean_arterial_pressure"}],
+        [{"target": "MAP", "algorithm": "map"}],
         lambda df: 90 < df["MAP"][0] < 96,
     ),
     Case(
@@ -1037,7 +1089,7 @@ ADAM_CASES: list[Case] = [
         [
             {
                 "target": "NUMAE",
-                "algorithm": "count",  # documented alias of count_events
+                "algorithm": "count_events",
                 "from_dataset": "AE",
                 "where": 'pl.col("AESER") == "Y"',
             }
@@ -1058,9 +1110,9 @@ ADAM_CASES: list[Case] = [
         },
     ),
     Case(
-        "callable",
+        "derivation",
         lambda: _subjects(),
-        [{"target": "SPEC_RT_ADAM", "algorithm": "callable", "callable": "SPEC_RT_ADAM"}],
+        [{"target": "SPEC_RT_ADAM", "algorithm": "derivation", "callable": "SPEC_RT_ADAM"}],
         lambda df: df["SPEC_RT_ADAM"].to_list() == ["70", "50"],
         setup=_register_adam_callable,
     ),
@@ -1112,7 +1164,7 @@ def test_adam_round_trip(tmp_path, case: Case) -> None:
 
 
 def test_seq_and_pin_merge_from_yaml(tmp_path) -> None:
-    """seq + pin-resolved merge run end-to-end from YAML (legacy join_on key)."""
+    """seq + pin-resolved merge run end-to-end from the simplified single-dataset YAML."""
     raw = pl.from_repr("""
     ┌────────────┬─────┐
     │ subject_id ┆ val │
@@ -1138,16 +1190,30 @@ def test_seq_and_pin_merge_from_yaml(tmp_path) -> None:
         "domain: AE\n"
         "variables:\n"
         "  - target: USUBJID\n"
-        "    algorithm: assign_no_ct\n"
+        "    algorithm: assign\n"
         "    source: subject_id\n"
         "  - target: AESEQ\n"
         "    algorithm: seq\n"
-        "    groups: [USUBJID]\n"
+        "    by: [USUBJID]\n"
         "    order_by: [USUBJID]\n"
         "  - target: EXTRA\n"
         "    algorithm: merge\n"
         "    dataset: SUPP\n"
-        "    join_on: USUBJID\n"
+        "    on: USUBJID\n"
     )
     out = raw.sdtm.pin("SUPP", supp, join_on="USUBJID").from_spec(spec, dataset="AE").to_frame()
     assert {"AESEQ", "EXTRA"} <= set(out.columns)
+
+
+def test_type_checking_only_names_do_not_erase_the_yaml_type() -> None:
+    """``expression`` is typed through ``Callable`` imported under TYPE_CHECKING: still a string."""
+    (field,) = [
+        f
+        for f in spec_registry.get_algorithm("adam", "derivation").params
+        if f.name == "expression"
+    ]
+    assert field.annotation == (str | None)
+    with pytest.raises(Exception, match="expression"):
+        spec_registry.parse_variable_spec(
+            "adam", {"target": "AVAL", "algorithm": "derivation", "expression": 42}
+        )

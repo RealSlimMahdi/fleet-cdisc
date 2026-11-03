@@ -8,8 +8,8 @@ Covers §4.3 items:
   pin evidence in both directions (warnings), raw inputs exempt;
 * ``build_dag`` — per-dataset ``output:`` and ``output_format:`` keys
   drive node paths, threaded through the JSON/Snakemake exports;
-* spec-dispatch verb attribution — a spec ``study_day`` records verb
-  ``study_day`` (not the underlying ``duration`` verb);
+* spec-dispatch attribution — a spec ``duration`` records the verb
+  ``duration`` and carries the validated block (ADR-0008);
 * lineage re-derivation policy — ``_lineage`` keeps full history,
   consumers dedupe last-write-wins.
 """
@@ -240,7 +240,7 @@ class TestBuildDagOutputs:
 
 
 class TestSpecDispatchAttribution:
-    def test_spec_study_day_records_study_day_not_duration(self, tmp_path):
+    def test_spec_duration_records_the_verb_and_its_block(self, tmp_path):
         spec = {
             "datasets": [
                 {
@@ -249,9 +249,9 @@ class TestSpecDispatchAttribution:
                         {
                             "name": "ADY",
                             "derivation": {
-                                "algorithm": "study_day",
-                                "analysis_date": "ADT",
-                                "reference_date": "TRTSDT",
+                                "algorithm": "duration",
+                                "end": "ADT",
+                                "start": "TRTSDT",
                             },
                         }
                     ],
@@ -271,12 +271,8 @@ class TestSpecDispatchAttribution:
 """)
         ns = df.adam.from_spec(p, dataset="ADVS")
         (node,) = [n for n in lineage_of(ns) if n.name == "ADY"]
-        assert node.verb == "study_day"
-        assert node.spec == {
-            "algorithm": "study_day",
-            "analysis_date": "ADT",
-            "reference_date": "TRTSDT",
-        }
+        assert node.verb == "duration"
+        assert node.spec == {"algorithm": "duration", "end": "ADT", "start": "TRTSDT"}
 
     def test_inline_duration_still_records_duration(self):
         df = pl.from_repr("""\

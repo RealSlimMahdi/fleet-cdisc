@@ -2,7 +2,7 @@
 
 The inline ``assign("AESEV", source="ae_severity", ct=AESEV)`` validates
 against the class it is given.  :func:`spec_codelists` gives ``from_spec``
-the same classes for its ``ct_codelist:`` IDs, read from the study's
+the same classes for its ``ct:`` IDs, read from the study's
 ``codelists.py``, so both notations of one step check the same terms.
 
 Because both then trust the file, :func:`check_codelists` compares it with
@@ -11,7 +11,7 @@ the study:
 a. a CT package it was generated from is not pinned in ``study_config.yaml``
    (``ct.package``, ``ct.adam_package``);
 b. its classes name two packages of one product (two SDTM CT dates);
-c. a ``codelist:`` or ``ct_codelist:`` ID of a ``define.yaml`` has no class
+c. a ``codelist:`` or ``ct:`` ID of a ``define.yaml`` has no class
    in it;
 d. the ``define.yaml`` files reference codelists, but it does not exist.
 
@@ -188,7 +188,7 @@ def spec_codelists(define_path: Path) -> dict[str, type]:
         SpecError: When ``codelists.py`` exists but cannot be imported.
 
     Examples:
-        Resolve ``ct_codelist: C66769`` the way ``from_spec`` does::
+        Resolve ``ct: C66769`` the way ``from_spec`` does::
 
             from fleet.ct.study_codelists import spec_codelists
 

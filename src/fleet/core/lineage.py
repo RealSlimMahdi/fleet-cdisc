@@ -367,7 +367,7 @@ def _append_lineage_nodes(ns: Any, drv: Any) -> Any:
 
     lineage: list[VariableNode] = list(getattr(ns, "_lineage", []))
     domain: str | None = getattr(ns, "_domain", None)
-    spec_block = {"algorithm": "callable", "callable": drv.dotted_path}
+    spec_block = {"algorithm": "derivation", "callable": drv.dotted_path}
     for t in drv.targets:
         lineage.append(
             VariableNode(

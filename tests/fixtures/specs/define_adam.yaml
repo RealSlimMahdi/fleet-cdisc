@@ -3,6 +3,7 @@
 # Single source of truth: describes output structure AND drives from_spec() derivations.
 # Used for: (1) Define-XML 2.1 generation  (2) post-dataset structure checks  (3) pipeline execution.
 
+fleet_spec_version: 2
 study:
   id: CDISCPILOT01
   name: CDISCPILOT01
@@ -60,7 +61,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: assigned
+          algorithm: assign
           value: "CDISCPILOT01"
 
       - name: USUBJID
@@ -70,7 +71,7 @@ datasets:
         mandatory: true
         origin: Derived
         derivation:
-          algorithm: source
+          algorithm: assign
           source: USUBJID
 
       - name: SUBJID
@@ -80,7 +81,7 @@ datasets:
         mandatory: true
         origin: Collected
         derivation:
-          algorithm: source
+          algorithm: assign
           source: SUBJID
 
       - name: SITEID
@@ -90,7 +91,7 @@ datasets:
         mandatory: true
         origin: Collected
         derivation:
-          algorithm: source
+          algorithm: assign
           source: SITEID
 
       - name: AGE
@@ -99,7 +100,7 @@ datasets:
         mandatory: true
         origin: Collected
         derivation:
-          algorithm: source
+          algorithm: assign
           source: AGE
 
       - name: AGEU
@@ -109,7 +110,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: source
+          algorithm: assign
           source: AGEU
 
       - name: SEX
@@ -120,7 +121,7 @@ datasets:
         origin: Collected
         codelist: C66731
         derivation:
-          algorithm: source
+          algorithm: assign
           source: SEX
 
       - name: RACE
@@ -130,7 +131,7 @@ datasets:
         mandatory: false
         origin: Collected
         derivation:
-          algorithm: source
+          algorithm: assign
           source: RACE
 
       - name: ETHNIC
@@ -140,7 +141,7 @@ datasets:
         mandatory: false
         origin: Collected
         derivation:
-          algorithm: source
+          algorithm: assign
           source: ETHNIC
 
       - name: ARMCD
@@ -150,7 +151,7 @@ datasets:
         mandatory: true
         origin: Protocol
         derivation:
-          algorithm: source
+          algorithm: assign
           source: ARMCD
 
       - name: ARM
@@ -160,7 +161,7 @@ datasets:
         mandatory: true
         origin: Protocol
         derivation:
-          algorithm: source
+          algorithm: assign
           source: ARM
 
       - name: ACTARMCD
@@ -170,7 +171,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: source
+          algorithm: assign
           source: ACTARMCD
 
       - name: ACTARM
@@ -180,7 +181,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: source
+          algorithm: assign
           source: ACTARM
 
       - name: TRT01P
@@ -190,7 +191,7 @@ datasets:
         mandatory: false
         origin: Protocol
         derivation:
-          algorithm: source
+          algorithm: assign
           source: ARM
 
       - name: TRT01A
@@ -200,7 +201,7 @@ datasets:
         mandatory: false
         origin: Assigned
         derivation:
-          algorithm: source
+          algorithm: assign
           source: ACTARM
 
       - name: TRTSDT
@@ -227,7 +228,7 @@ datasets:
         mandatory: false
         origin: Collected
         derivation:
-          algorithm: source
+          algorithm: assign
           source: RFSTDTC
 
       - name: RFENDTC
@@ -236,7 +237,7 @@ datasets:
         mandatory: false
         origin: Collected
         derivation:
-          algorithm: source
+          algorithm: assign
           source: RFENDTC
 
       - name: RFICDTC
@@ -245,7 +246,7 @@ datasets:
         mandatory: false
         origin: Collected
         derivation:
-          algorithm: source
+          algorithm: assign
           source: RFICDTC
 
       - name: DTHFL
@@ -284,7 +285,7 @@ datasets:
         mandatory: true
         origin: Assigned
         derivation:
-          algorithm: assigned
+          algorithm: assign
           value: "CDISCPILOT01"
 
       - name: USUBJID
@@ -294,7 +295,7 @@ datasets:
         mandatory: true
         origin: Derived
         derivation:
-          algorithm: source
+          algorithm: assign
           source: patient_number
 
       - name: PARAMCD
@@ -304,7 +305,7 @@ datasets:
         mandatory: true
         origin: Derived
         derivation:
-          algorithm: source
+          algorithm: assign
           source: vstestcd
 
       - name: PARAM
@@ -314,7 +315,7 @@ datasets:
         mandatory: true
         origin: Derived
         derivation:
-          algorithm: source
+          algorithm: assign
           source: vstest
 
       - name: AVAL
@@ -334,7 +335,7 @@ datasets:
         mandatory: false
         origin: Derived
         derivation:
-          algorithm: source
+          algorithm: assign
           source: vsorresu
 
       - name: BASE
@@ -369,7 +370,7 @@ datasets:
         mandatory: false
         origin: Derived
         derivation:
-          algorithm: rename
+          algorithm: assign
           source: vsdtc
 
       - name: ADY
@@ -378,9 +379,9 @@ datasets:
         mandatory: false
         origin: Derived
         derivation:
-          algorithm: study_day
-          analysis_date: ADT
-          reference_date: TRTSDT
+          algorithm: duration
+          end: ADT
+          start: TRTSDT
 
       - name: VISITNUM
         label: Visit Number
@@ -388,7 +389,7 @@ datasets:
         mandatory: false
         origin: Protocol
         derivation:
-          algorithm: source
+          algorithm: assign
           source: visitnum
 
       - name: VISIT
@@ -398,7 +399,7 @@ datasets:
         mandatory: false
         origin: Protocol
         derivation:
-          algorithm: source
+          algorithm: assign
           source: visit
 
       - name: DTYPE

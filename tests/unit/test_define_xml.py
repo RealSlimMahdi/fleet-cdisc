@@ -79,21 +79,21 @@ FIXTURE_SPEC: dict = {
                     "label": "Study Identifier",
                     "type": "text",
                     "mandatory": True,
-                    "derivation": {"algorithm": "assigned", "value": "TESTSTUDY"},
+                    "derivation": {"algorithm": "assign", "value": "TESTSTUDY"},
                 },
                 {
                     "name": "USUBJID",
                     "label": "Unique Subject Identifier",
                     "type": "text",
                     "mandatory": True,
-                    "derivation": {"algorithm": "source", "source": "USUBJID"},
+                    "derivation": {"algorithm": "assign", "source": "USUBJID"},
                 },
                 {
                     "name": "PARAMCD",
                     "label": "Parameter Code",
                     "type": "text",
                     "codelist": "CL.PARAMCD",
-                    "derivation": {"algorithm": "source", "source": "vstestcd"},
+                    "derivation": {"algorithm": "assign", "source": "vstestcd"},
                 },
                 {
                     "name": "SEX",
@@ -112,7 +112,7 @@ FIXTURE_SPEC: dict = {
                     "type": "text",
                     # Importable dotted path — the callable enrichment branch.
                     "derivation": {
-                        "algorithm": "callable",
+                        "algorithm": "derivation",
                         "callable": "fleet.core.lineage.lineage_of",
                     },
                 },
@@ -160,7 +160,7 @@ FIXTURE_SPEC: dict = {
                     "name": "STUDYID",
                     "label": "Study Identifier",
                     "type": "text",
-                    "derivation": {"algorithm": "assigned", "value": "TESTSTUDY"},
+                    "derivation": {"algorithm": "assign", "value": "TESTSTUDY"},
                 },
             ],
         },
@@ -285,7 +285,7 @@ class TestDocstringXML:
                 "label": "Age 65+ Flag",
                 "type": "text",
                 "derivation": {
-                    "algorithm": "callable",
+                    "algorithm": "derivation",
                     "callable": "tmp_derivations.AGE65FL",
                 },
             }
@@ -369,7 +369,7 @@ class TestDocstringXML:
                 "name": "POPFL",
                 "label": "Population Flag",
                 "type": "text",
-                "derivation": {"algorithm": "callable", "callable": "POP_FLAG"},
+                "derivation": {"algorithm": "derivation", "callable": "POP_FLAG"},
             }
         )
         spec_file = tmp_path / "define.yaml"

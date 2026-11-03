@@ -82,7 +82,7 @@ import fleet  # registers df.sdtm, df.adam (+ .adsl/.occds/…), df.tlg everywhe
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `loader.py`    | `load_controlled_terminology(ct_path, codelist_name=None)` — reads a YAML or CSV CT file (or downloads from a URL) and returns a nested dict: `{codelist_code: {term: decoded_value}}` |
 | `validator.py` | `CTValidator` — a **thread-safe process-wide singleton** that caches loaded CT files and provides validation helpers                                                                   |
-| `study_codelists.py` | The study's generated `codelists.py`: `spec_codelists()` gives `from_spec` its classes for `ct_codelist:` IDs; `check_codelists()` runs the stale checks for `from_spec`, `fleet check` and `fleet doctor`; `warn_if_class_stale()` checks an inline `ct=` class |
+| `study_codelists.py` | The study's generated `codelists.py`: `spec_codelists()` gives `from_spec` its classes for `ct:` IDs; `check_codelists()` runs the stale checks for `from_spec`, `fleet check` and `fleet doctor`; `warn_if_class_stale()` checks an inline `ct=` class |
 
 **`CTValidator` key methods:**
 
@@ -330,14 +330,14 @@ datasets:
     variables:
       - name: STUDYID
         derivation:
-          algorithm: hardcode_no_ct
+          algorithm: assign
           value: "CDISCPILOT01"
       - name: SEX
         derivation:
-          algorithm: assign_ct
+          algorithm: assign
           source: sex
-          ct_codelist: C66731
-          ct_mapping:
+          ct: C66731
+          ct_map:
             "F": "F"
             "M": "M"
 ```
