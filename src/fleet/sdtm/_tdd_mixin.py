@@ -61,6 +61,11 @@ def _load_packaged_structure(domain: str, ig_version: str) -> dict[str, Any] | N
     return yaml.safe_load(_PACKAGED_STRUCTURES.read_text(encoding="utf-8")).get(domain)
 
 
+def packaged_structure(domain: str) -> dict[str, Any] | None:
+    """Return the packaged SDTMIG 3.4 label and variables of a trial design domain."""
+    return _load_packaged_structure(domain.upper(), _PACKAGED_IG_VERSION)
+
+
 def _same_day_rule(date_col: str, same_day: str) -> Literal["earlier", "later"]:
     """The element a record with no time takes on a transition date."""
     if same_day in ("earlier", "later"):

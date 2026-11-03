@@ -707,7 +707,7 @@ class FlagCriterionMixin:
         all_keys = pl.concat(key_frames).unique()
 
         if len(on) == 1:
-            is_member = pl.col(on[0]).is_in(all_keys[on[0]].to_list())
+            is_member = pl.col(on[0]).is_in(all_keys[on[0]].implode(), nulls_equal=True)
             expr = pl.when(is_member).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
             return self._chain(expr, verb="flag")
 
@@ -719,7 +719,7 @@ class FlagCriterionMixin:
             .join(
                 df_with_idx.select(on + ["__flag_idx__"])
                 .unique()
-                .join(all_keys, on=on, how="semi")
+                .join(all_keys, on=on, how="semi", nulls_equal=True)
                 .with_columns(pl.lit(flag_value).alias(target)),
                 on="__flag_idx__",
                 how="left",
@@ -830,7 +830,9 @@ class FlagCriterionMixin:
             pl.when(condition & cmp).then(pl.lit(flag_value)).otherwise(pl.lit(None)).alias(target)
         )
         lf = (
-            self._lazy.join(src_agg.lazy(), on=on, how="left", maintain_order="left")
+            self._lazy.join(
+                src_agg.lazy(), on=on, how="left", maintain_order="left", nulls_equal=True
+            )
             .with_columns(flag_expr)
             .drop(tmp)
         )

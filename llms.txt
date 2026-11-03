@@ -2154,7 +2154,7 @@ JSON contract (`fleet.comparison.JSON_KEYS`, additive-only within a major versio
 
 The chain is the candidate, the argument is the base. `on_fail` is `"warn"` (default, `UserWarning`), `"raise"` (`ComparisonError`) or `"ignore"`, exactly as for `.validate()`; the report stays on the namespace as `.last_comparison` and the chain continues.
 
-- `compare(base: pl.DataFrame | pl.LazyFrame, *, keys: str | Sequence[str], by: str | Sequence[str] | None = None, pairs: Mapping[str, str] | None = None, variables: str | Sequence[str] | None = None, abs_tol: float = 0.0, rel_tol: float = 0.0, ignore_trailing_whitespace: bool = False, allow_duplicates: bool = False, max_print: MaxPrint = 50, base_name: str | None = None, candidate_name: str | None = None, on_fail: "Literal['warn', 'raise', 'ignore']" = 'warn') -> Self` — Compare the chain against a base dataset, PROC COMPARE style.
+- `compare(base: pl.DataFrame | pl.LazyFrame, *, keys: str | Sequence[str], by: str | Sequence[str] | None = None, pairs: Mapping[str, str] | None = None, variables: str | Sequence[str] | None = None, abs_tol: float = 0.0, rel_tol: float = 0.0, ignore_trailing_whitespace: bool = False, blank_is_missing: bool = False, allow_duplicates: bool = False, max_print: MaxPrint = 50, base_name: str | None = None, candidate_name: str | None = None, on_fail: "Literal['warn', 'raise', 'ignore']" = 'warn') -> Self` — Compare the chain against a base dataset, PROC COMPARE style.
 
 ```python
 adae_qc = (

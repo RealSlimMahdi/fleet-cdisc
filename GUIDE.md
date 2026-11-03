@@ -6,7 +6,7 @@
 
 ## Prerequisites
 
-- **Python 3.12+**
+- **Python 3.12 to 3.14**
 - **uv** — the only supported package manager ([install uv](https://docs.astral.sh/uv/getting-started/installation/))
 - **CDISC Library API key** — required for CLI bootstrapping and codelist generation. Get one at [library.cdisc.org](https://library.cdisc.org). Set `CDISC_API_KEY` in a `.env` file at your project root.
 
@@ -1530,7 +1530,7 @@ save_xpt(advs, "outputs/adam/advs.xpt")
 save_xpt(adae, "outputs/adam/adae.xpt")
 ```
 
-> **Note:** XPT export requires `pyreadstat`. Install with `uv sync --extra io`. Column names are automatically upper-cased and truncated to 8 characters per SAS Transport format.
+> **Note:** XPT export requires `pyreadstat`. Install with `uv add "fleet-cdisc[io]"`. The file is SAS transport version 5, and the member is named as the file (FDA TCG 3.1.1). Names are upper-cased. A name over 8 characters, a label over 40 or a value over 200 bytes stops the write; nothing is cut. Dates are stored as SAS dates with DATE9.
 
 ### CDISC Dataset-JSON v1.1 (recommended)
 

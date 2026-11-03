@@ -197,7 +197,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             [c for c in dict.fromkeys(join_key + list(cols)) if c in ref_df.columns]
         ).unique(subset=join_key)
 
-        df = self._lazy.collect().join(ref_slim, on=join_key, how="left")
+        df = self._lazy.collect().join(ref_slim, on=join_key, how="left", nulls_equal=True)
         new = self._materialise_then(df)
 
         for col in cols:
@@ -541,7 +541,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         if drop_existing:
             df = df.drop(drop_existing)
 
-        result = df.join(winners, on=by_vars, how="left")
+        result = df.join(winners, on=by_vars, how="left", nulls_equal=True)
         return self._materialise_then(result)
 
     def whereclauses(self, *, where: str | pl.Expr) -> Self:
@@ -607,7 +607,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             extra = [c for c in join_keys if c not in keep]
             adsl = adsl.select(keep + extra)
         df = self.to_frame()
-        joined = df.join(adsl, on=join_keys, how="left")
+        joined = df.join(adsl, on=join_keys, how="left", nulls_equal=True)
         return self._materialise_then(joined)
 
     # ------------------------------------------------------------------ #
@@ -856,7 +856,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
             src = src.filter(where_expr)
         agg_df = src.group_by(grps).agg(pl.len().alias(target))
-        df = self.to_frame().join(agg_df, on=grps, how="left")
+        df = self.to_frame().join(agg_df, on=grps, how="left", nulls_equal=True)
         df = df.with_columns(pl.col(target).fill_null(0))
         return self._materialise_then(df)
 

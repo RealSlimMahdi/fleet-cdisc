@@ -256,7 +256,7 @@ class OncoNamespace(SharedADaMVerbsMixin):
             .select(grps)
         )
 
-        joined = df.join(confirmed_subjs, on=grps, how="left")
+        joined = df.join(confirmed_subjs, on=grps, how="left", nulls_equal=True)
         # Mark as confirmed if subject has confirmed response AND current row is a response
         in_confirmed = joined.with_columns(
             pl.when(pl.col(source).is_in(rsp) & pl.col(grps[0]).is_in(confirmed_subjs[grps[0]]))
@@ -316,7 +316,7 @@ class OncoNamespace(SharedADaMVerbsMixin):
             .agg(pl.col(date_col).min().alias("_first_pd"))
         )
 
-        joined = df.join(pd_dates, on=grps, how="left")
+        joined = df.join(pd_dates, on=grps, how="left", nulls_equal=True)
         filtered = joined.filter(
             pl.col("_first_pd").is_null() | (pl.col(date_col).cast(pl.Date) <= pl.col("_first_pd"))
         ).drop("_first_pd")

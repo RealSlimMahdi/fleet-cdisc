@@ -484,7 +484,10 @@ def select_tte(
     # Window truncation: an event after the subject's end date does not count.
     if not event_win.is_empty() and not end_win.is_empty():
         event_win = event_win.join(
-            end_win.select(keys + [pl.col(_ADT).alias("__end__")]), on=keys, how="left"
+            end_win.select(keys + [pl.col(_ADT).alias("__end__")]),
+            on=keys,
+            how="left",
+            nulls_equal=True,
         )
         event_win = event_win.filter(
             pl.col("__end__").is_null() | (pl.col(_ADT) <= pl.col("__end__"))
@@ -498,7 +501,11 @@ def select_tte(
         if fallback.is_empty():
             continue
         taken = chosen.select(keys).unique() if not chosen.is_empty() else None
-        extra = fallback if taken is None else fallback.join(taken, on=keys, how="anti")
+        extra = (
+            fallback
+            if taken is None
+            else fallback.join(taken, on=keys, how="anti", nulls_equal=True)
+        )
         chosen = extra if chosen.is_empty() else pl.concat([chosen, extra], how="diagonal_relaxed")
 
     # Universe join: STARTDT, strata expansion, and retain policy.
@@ -513,7 +520,7 @@ def select_tte(
         )
         base = base.join(strata, how="cross") if not strata.is_empty() else base
     rows = (
-        base.join(chosen, on=keys, how="left")
+        base.join(chosen, on=keys, how="left", nulls_equal=True)
         if not chosen.is_empty()
         else base.with_columns(
             pl.lit(None, dtype=date_dtype).alias(_ADT),
@@ -565,7 +572,9 @@ def select_tte(
         winners = rows.select(keys + [_ADT, _KIND, _SRC_IDX, "__floored__"]).with_columns(
             pl.lit(True).alias("selected")
         )
-        trace = trace_pool.join(winners, on=keys + [_KIND, _SRC_IDX], how="left", suffix="_w")
+        trace = trace_pool.join(
+            winners, on=keys + [_KIND, _SRC_IDX], how="left", suffix="_w", nulls_equal=True
+        )
         trace = trace.with_columns(
             pl.col("selected").fill_null(False),
             pl.when(pl.col("selected") & (pl.col(_KIND) == "event") & pl.col("__floored__"))

@@ -261,6 +261,61 @@ def test_run_unknown_dataset_errors(
     assert "unknown dataset" in capsys.readouterr().err
 
 
+def test_run_reads_the_source_of_a_define_text_variable_as_text(
+    study: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """USUBJID is type text: raw 1.10 stays 1.10, not the number 1.1."""
+    (study / "data" / "raw" / "dm.csv").write_text(
+        "patient_number,age\n1.10,45\n2.50,60\n", encoding="utf-8"
+    )
+    monkeypatch.chdir(study)
+
+    assert _run(["run", "--format", "parquet"]) == 0
+
+    dm = pl.read_parquet(study / "data" / "sdtm" / "dm.parquet")
+    assert dm["USUBJID"].to_list() == ["1.10", "2.50"]
+    assert dm["AGE"].to_list() == [45, 60]
+
+
+def test_run_xpt_writes_v5_with_the_define_labels(
+    study: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pyreadstat = pytest.importorskip("pyreadstat")
+    monkeypatch.chdir(study)
+
+    assert _run(["run", "--format", "xpt"]) == 0
+
+    _, meta = pyreadstat.read_xport(str(study / "data" / "sdtm" / "dm.xpt"), metadataonly=True)
+    assert meta.table_name == "DM"
+    assert meta.file_label == "Demographics"
+    assert meta.column_names_to_labels["USUBJID"] == "Unique Subject Identifier"
+
+
+def test_checker_write_xpt_carries_the_define_labels(study: Path) -> None:
+    pyreadstat = pytest.importorskip("pyreadstat")
+    from fleet.define_xml import DatasetChecker
+
+    checker = DatasetChecker(study / "metadata" / "sdtm" / "define.yaml")
+    dm = pl.DataFrame({"USUBJID": ["P1"], "STUDYID": ["TESTRUN"], "_TMP": [1]})
+
+    path = checker.write_xpt(dm, dataset="DM", path=study / "out" / "dm.xpt")
+
+    _, meta = pyreadstat.read_xport(str(path), metadataonly=True)
+    assert meta.column_names == ["STUDYID", "USUBJID"]
+    assert meta.file_label == "Demographics"
+    assert meta.column_names_to_labels["STUDYID"] == "Study Identifier"
+
+
+def test_checker_write_xpt_refuses_a_file_named_after_another_dataset(study: Path) -> None:
+    from fleet.core.exceptions import IOError as FleetIOError
+    from fleet.define_xml import DatasetChecker
+
+    checker = DatasetChecker(study / "metadata" / "sdtm" / "define.yaml")
+
+    with pytest.raises(FleetIOError, match="dm.xpt"):
+        checker.write_xpt(pl.DataFrame({"USUBJID": ["P1"]}), dataset="DM", path=study / "ae.xpt")
+
+
 # ------------------------------------------------------------------ #
 # fleet check                                                         #
 # ------------------------------------------------------------------ #
@@ -655,6 +710,19 @@ def test_tdd_build_resolves_paths_from_config(
     assert (study / "data" / "sdtm" / "te.parquet").exists()
     assert (study / "data" / "sdtm" / "ta.parquet").exists()
     assert not list(nested.iterdir())  # nothing written to the cwd
+
+
+def test_tdd_build_xpt_carries_the_ig_labels(study: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pyreadstat = pytest.importorskip("pyreadstat")
+    (study / "metadata" / "sdtm" / "trial_design.yaml").write_text(_TRIAL_DESIGN, encoding="utf-8")
+    monkeypatch.chdir(study)
+
+    assert _run(["tdd", "build", "--force", "--format", "xpt"]) == 0
+
+    _, meta = pyreadstat.read_xport(str(study / "data" / "sdtm" / "te.xpt"), metadataonly=True)
+    assert meta.table_name == "TE"
+    assert meta.file_label == "Trial Elements"
+    assert meta.column_names_to_labels["ETCD"] == "Element Code"
 
 
 def test_tdd_audit_accepts_unquoted_yaml_dates(
@@ -1308,14 +1376,11 @@ def test_compare_report_that_cannot_be_written_exits_2(
 def test_compare_reads_xpt_through_the_io_extra(
     tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:
-    pyreadstat = pytest.importorskip("pyreadstat")
-    import pandas as pd
+    pytest.importorskip("pyreadstat")
+    from fleet.io import save_xpt
 
-    # The fixture is written with pyreadstat directly: ``fleet.io.save_xpt``
-    # goes through ``DataFrame.to_pandas()``, which needs pyarrow, and the
-    # ``io`` extra does not declare it.  pandas is pyreadstat's own dependency.
-    base, candidate = tmp_path / "adsl_prod.xpt", tmp_path / "adsl_qc.parquet"
-    pyreadstat.write_xport(pd.DataFrame(_adsl().to_dict(as_series=False)), str(base))
+    base, candidate = tmp_path / "adsl.xpt", tmp_path / "adsl_qc.parquet"
+    save_xpt(_adsl(), base)
     _adsl().with_columns(pl.col("AGE").cast(pl.Float64)).write_parquet(candidate)
 
     code = _run(["compare", str(base), str(candidate), "--keys", "USUBJID"])
@@ -1323,6 +1388,32 @@ def test_compare_reads_xpt_through_the_io_extra(
     captured = capsys.readouterr()
     assert code == 0, captured
     assert "EQUAL: no differences found." in captured.out
+
+
+def test_compare_a_sas_blank_equals_a_parquet_null(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """An XPT cannot tell a blank from a missing value: both are the SAS missing value."""
+    pytest.importorskip("pyreadstat")
+    from fleet.io import save_xpt
+
+    adae = pl.from_repr("""
+┌─────────┬───────┬───────────────────────────┐
+│ USUBJID ┆ AESEQ ┆ AEOUT                     │
+│ ---     ┆ ---   ┆ ---                       │
+│ str     ┆ f64   ┆ str                       │
+╞═════════╪═══════╪═══════════════════════════╡
+│ 01-002  ┆ 1.0   ┆ null                      │
+│ 01-003  ┆ 1.0   ┆ RECOVERED/RESOLVED        │
+└─────────┴───────┴───────────────────────────┘
+""")
+    base, candidate = tmp_path / "adae.xpt", tmp_path / "adae_qc.parquet"
+    save_xpt(adae.with_columns(pl.col("AEOUT").fill_null("")), base)
+    adae.write_parquet(candidate)
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "USUBJID,AESEQ"])
+
+    assert code == 0, capsys.readouterr()
 
 
 def test_compare_tolerance_flags_reach_the_engine(
