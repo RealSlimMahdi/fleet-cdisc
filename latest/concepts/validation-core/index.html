@@ -2313,9 +2313,34 @@ first source that gives it:</p>
   dataset. Every cell is HTML-escaped.</li>
 <li><strong>Could not run</strong>: a dataset whose directory and file name disagree
   (<code>data/sdtm/adsl.parquet</code>), or an unsupported IG version, is not validated.
-  The reason is printed, and the other datasets still run.</li>
-<li>Exit codes: 0 no errors, 1 any dataset has errors, 2 any dataset could not
-  run. So <code>fleet validate</code> drops straight into CI.</li>
+  The reason is printed, and the other datasets still run. An engine that
+  crashes, writes no report, or does not finish within the timeout also
+  gives "could not run", not a data failure.</li>
+<li><strong>Timeout</strong>: <code>--timeout SECONDS</code>, else <code>validation.timeout</code> in the study
+  config, else 300 s. On timeout Fleet stops the engine and its workers.</li>
+<li><strong>Every finding blocks</strong> (ADR-0017). CORE gives no severity, so Fleet does
+  not invent one. A finding stops blocking only when <code>validation.accepted</code>
+  lists its rule and dataset with a reason, as an SDRG explanation does:</li>
+</ul>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">validation</span><span class="p">:</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">accepted</span><span class="p">:</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">rule</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CORE-000767</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">      </span><span class="nt">dataset</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AE</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">      </span><span class="nt">reason</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">No FA domain in this study; see SDRG section 4.2.</span>
+</span></code></pre></div>
+<ul>
+<li><strong>Status words</strong>: <code>PASS</code> (at least one rule executed, no finding),
+  <code>FINDINGS (n)</code> (every finding accepted), <code>NOT ASSESSED</code> (no rule executed),
+  <code>FAIL</code> (a finding blocks), <code>COULD NOT RUN</code>. Study-level findings
+  (dataset <code>STUDY</code>) get their own block in a sweep. In a single-dataset run
+  (the verb, the MCP tool) they are information only, because one dataset
+  cannot show what the study lacks.</li>
+<li>Exit codes: 0 nothing blocks, 1 a finding blocks, 2 a dataset could not
+  run. So <code>fleet validate</code> drops straight into CI. The last line counts each
+  status and the findings.</li>
+<li><strong>Engine version</strong>: <code>fleet install-engine</code> installs the newest tested CORE
+  release. The report header and <code>fleet doctor</code> name a version Fleet is not
+  tested with. A weekly CI job runs Fleet on the newest CORE release.</li>
 </ul>
 <h3 id="the-ci-gate-fleet-check">The CI gate: <code>fleet check</code><a class="headerlink" href="#the-ci-gate-fleet-check" title="Permanent link">&para;</a></h3>
 <p><code>fleet check</code> builds the same run setup for SDTM and ADaM, with no datasets.
@@ -2336,11 +2361,11 @@ directory of the dataset, not from the working directory of the server. A
 refused setup returns <code>{"outcome": "could not run", "reason": ...}</code> and does
 not raise. See <a href="../../getting-started/ide-tooling/">IDE tooling</a>.</p>
 <p>The same run from Python, chainable at the end of a pipeline:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">result</span> <span class="o">=</span> <span class="p">(</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">raw_df</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;DOMAIN&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">&quot;AE&quot;</span><span class="p">)</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="c1"># ... derivations ...</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">&quot;AE&quot;</span><span class="p">)</span>  <span class="c1"># runs CORE on the materialised frame</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">result</span> <span class="o">=</span> <span class="p">(</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">raw_df</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">assign</span><span class="p">(</span><span class="s2">&quot;DOMAIN&quot;</span><span class="p">,</span> <span class="n">value</span><span class="o">=</span><span class="s2">&quot;AE&quot;</span><span class="p">)</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="c1"># ... derivations ...</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="s2">&quot;AE&quot;</span><span class="p">)</span>  <span class="c1"># runs CORE on the materialised frame</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="p">)</span>
 </span></code></pre></div>
 <h3 id="where-the-verb-takes-its-inputs">Where the verb takes its inputs<a class="headerlink" href="#where-the-verb-takes-its-inputs" title="Permanent link">&para;</a></h3>
 <p>The verb builds a <strong>run setup</strong> before the engine starts. Each input comes
@@ -2391,12 +2416,12 @@ each parent. <code>version=</code> accepts <code>"3-4"</code> and <code>"3.4"</c
 are SDTMIG 3.2, 3.3, 3.4 and ADaMIG 1.0, 1.1, 1.2, 1.3.</p>
 <p>The report header prints each input with its source and the study config
 used:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>Standard:     SDTMIG (namespace)
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>IG version:   3.3 (study config)
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>Custom rules: /study/metadata/custom_rules (study config)
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>Engine:       /study/tools/core/core (study config)
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>CORE version: 0.15.0
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>Study config: /study/study_config.yaml
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Standard:     SDTMIG (namespace)
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>IG version:   3.3 (study config)
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>Custom rules: /study/metadata/custom_rules (study config)
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>Engine:       /study/tools/core/core (study config)
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>CORE version: 0.15.0
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>Study config: /study/study_config.yaml
 </span></code></pre></div>
 <h3 id="could-not-run">Could not run<a class="headerlink" href="#could-not-run" title="Permanent link">&para;</a></h3>
 <p>Some setups are refused before the engine starts. The verb then raises
@@ -2509,7 +2534,7 @@ control next to the study.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 2, 2026 11:40:38 UTC">November 2, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 17:49:56 UTC">November 3, 2026</span>
   </span>
 
     
