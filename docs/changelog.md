@@ -23,6 +23,13 @@ All notable changes to Fleet are documented here.
   - A CSV column with a leading zero (SITEID `001`) reads as text with a warning, types are inferred from every row, and `fleet run` reads define type `text` variables as text, so LBORRES `1.10` stays `1.10`.
   - `fleet compare` types CSV sides across both files: SITEID `001` against `1` differs, AVAL `1.10` against `1.1` is equal, and `--text` keeps a column text. New `blank_is_missing` / `--blank-is-missing` reads `""` as missing on both sides; the default stays exact.
   - `load_raw_data(..., encoding=)` reaches the SAS reader, and `--encoding` is on `fleet compare` and `fleet validate`, so a file from a WLATIN1 SAS session can be read. A keyword the reader does not take raises.
+- **Toxicity grades equal admiral** (ADR-0014, alpha audit package D). The 8 bundled criteria files are generated from the admiral 1.4.1 metadata by `scripts/regen_grading_criteria.R` and keep the admiral text of each term; a frozen admiral grid of 34,146 rows is the CI test.
+  - A null BNRIND takes the ULN criteria: ALT 900 with ULN 40 is grade 4, not 0.
+  - The unit matches without case: potassium 7.5 in `mmol/L` is grade 4, not null.
+  - Each row is graded with the entry of its own DAIDS subgroup and unit: DAIDS `Hemoglobin, Low` 60 g/L is grade 4 for adults and neonates. A term with criteria for several units needs `unit_var=`. Every row keeps its place.
+  - CTCAE v5 and v6 INR take the worse of the absolute and the baseline cut-offs (INR 3.0 is grade 3, also with no BASE), as admiral. v4 `Hemoglobin increased` no longer raises; Fibrinogen, Creatinine clearance and Alkaline phosphatase follow admiral.
+  - `atoxgr(signif_dig=)` defaults to 15, as admiral.
+  - A custom criteria file needs `schema_version: 2` (ordered `case_when` arms); a file in the old format stops with a message.
 
 ### Changed
 

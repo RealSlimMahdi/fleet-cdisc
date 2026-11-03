@@ -809,28 +809,48 @@ class AdamNamespace(SharedADaMVerbsMixin):
         direction: str,
         term_var: str,
         unit_var: str | None = None,
-        signif_dig: int = 5,
+        signif_dig: int = 15,
         indicators: dict[str, list[str]] | None = None,
     ) -> AdamNamespace:
-        """Derive a toxicity grade column using a criteria-file grading system.
+        """Derive a toxicity grade, as admiral ``derive_var_atoxgr_dir``.
 
-        Materialises the pipeline, applies the grading engine for every
-        matching lab term, and returns a fresh namespace with *target*
-        appended.
+        Materialises the pipeline and grades every row whose term has
+        criteria in *direction*.  The bundled criteria are generated from the
+        admiral metadata (``scripts/regen_grading_criteria.R``), so each term
+        follows the admiral ``case_when``: for example, a null ``BNRIND``
+        counts as not abnormal and the ULN criteria apply, and CTCAE v5 INR
+        takes the worse of the absolute and the baseline cut-offs (admiral
+        COMMENT: worst case, assume on anticoagulation).  The term and the
+        unit match without case.  A row with another unit, a null unit, no
+        criteria or a population no criteria cover gets a null grade.  Every
+        row stays, in its order.
 
         Args:
             target: Name of the output grade column (e.g. ``"ATOXGRL"``).
             system: Grading system name (e.g. ``"ctcae_v5"``, ``"daids"``)
-                or path to a custom JSON criteria file.
+                or path to a custom JSON criteria file (schema version 2).
             direction: ``"L"`` (low) or ``"H"`` (high).
             term_var: Column holding the lab-test / term name.
-            unit_var: Optional column holding the unit of measure.
-            signif_dig: Significant figures for comparison (default 5).
-            indicators: Optional indicator parameter map for branch
-                conditions (e.g. ``{"H": ["HIGH"], "L": ["LOW"]}``).
+            unit_var: Column holding the unit of measure.  Required when a
+                term has criteria for more than one unit.
+            signif_dig: Significant digits for comparison (default 15, as
+                admiral ``signif_digits``).
+            indicators: Values of the indicator params of the criteria
+                (default ``{"high_indicator": ["HIGH", "H"],
+                "low_indicator": ["LOW", "L"]}``).
 
         Returns:
             AdamNamespace: A fresh namespace wrapping the graded frame.
+
+        Raises:
+            DerivationError: When a term has criteria for several units and
+                *unit_var* is not given, or a needed column is missing.
+
+        References:
+            admiral ``derive_var_atoxgr_dir`` and the metadata tables
+            ``atoxgr_criteria_ctcv4/5/6`` and ``atoxgr_criteria_daids``
+            (SI and USCV), admiral 1.4.1; NCI CTCAE v4.03, v5.0, v6.0;
+            DAIDS grading table v2.1.
 
         Examples:
             Grade low-direction anemia using CTCAE v5::

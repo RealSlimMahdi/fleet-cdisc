@@ -14,9 +14,8 @@ import pytest
 
 import fleet  # noqa: F401 — triggers namespace registration
 from fleet.adam.grading import (
-    ComparisonRule,
+    Arm,
     CriteriaFile,
-    GradeRule,
     GradingSystem,
     TermCriteria,
     list_systems,
@@ -33,31 +32,14 @@ from fleet.adam.grading._compiler import (
 # ---------------------------------------------------------------------------
 
 
+def _bundled(system: str, term: str) -> TermCriteria:
+    return next(c for c in load_criteria(system).criteria if c.term == term)
+
+
 @pytest.fixture()
 def anemia_criteria() -> TermCriteria:
     """Anemia (CTCAE v5 SI): low direction, grades 1-3."""
-    return TermCriteria(
-        term="Anemia",
-        direction="L",
-        unit="g/L",
-        required_vars=["AVAL", "ANRLO"],
-        na_check=["AVAL"],
-        grades=[
-            GradeRule(
-                grade=3,
-                rules=[ComparisonRule(left="AVAL", op="lt", right=80)],
-            ),
-            GradeRule(
-                grade=2,
-                rules=[ComparisonRule(left="AVAL", op="lt", right=100)],
-            ),
-            GradeRule(
-                grade=1,
-                na_guard=["ANRLO"],
-                rules=[ComparisonRule(left="AVAL", op="lt", right_var="ANRLO")],
-            ),
-        ],
-    )
+    return _bundled("ctcae_v5", "Anemia")
 
 
 @pytest.fixture()
@@ -80,66 +62,18 @@ def anemia_df() -> pl.DataFrame:
 
 @pytest.fixture()
 def alt_criteria() -> TermCriteria:
-    """ALT increased (CTCAE v5 SI): high direction with branch rules."""
-    from fleet.adam.grading._models import BranchCondition, BranchRule
-
-    def _branch(
-        indicator_dir: str, col: str, op: str, mult: float | None = None, var: str | None = None
-    ) -> BranchRule:
-        if indicator_dir == "not_in":
-            cond = BranchCondition(var="BNRIND", not_in_values="high_indicator")
-        else:
-            cond = BranchCondition(var="BNRIND", in_values="high_indicator")
-        if mult is not None:
-            comp = ComparisonRule(left="AVAL", op=op, right_expr={"multiply": [col, mult]})
-        elif var is not None:
-            comp = ComparisonRule(left="AVAL", op=op, right_var=var)
-        else:
-            raise AssertionError  # pragma: no cover
-        return BranchRule(when=cond, then=comp)
-
-    return TermCriteria(
-        term="Alanine aminotransferase increased",
-        direction="H",
-        required_vars=["AVAL", "ANRHI", "BASE", "BNRIND"],
-        na_check=["AVAL", "ANRHI"],
-        grades=[
-            GradeRule(
-                grade=4,
-                branches=[
-                    _branch("not_in", "ANRHI", "gt", mult=20),
-                    _branch("in", "BASE", "gt", mult=20),
-                ],
-            ),
-            GradeRule(
-                grade=3,
-                branches=[
-                    _branch("not_in", "ANRHI", "gt", mult=5),
-                    _branch("in", "BASE", "gt", mult=5),
-                ],
-            ),
-            GradeRule(
-                grade=2,
-                branches=[
-                    _branch("not_in", "ANRHI", "gt", mult=3),
-                    _branch("in", "BASE", "gt", mult=3),
-                ],
-            ),
-            GradeRule(
-                grade=1,
-                branches=[
-                    _branch("not_in", "ANRHI", "gt", var="ANRHI"),
-                    _branch("in", "BASE", "ge", mult=1.5),
-                ],
-            ),
-        ],
-    )
+    """ALT increased (CTCAE v5 SI): high direction, BNRIND decides the reference."""
+    return _bundled("ctcae_v5", "Alanine aminotransferase increased")
 
 
 @pytest.fixture()
 def indicators() -> dict[str, list[str]]:
     """Default indicator parameter map."""
     return {"high_indicator": ["HIGH", "H"], "low_indicator": ["LOW", "L"]}
+
+
+def _age(unit: str) -> dict:
+    return {"op": "age", "unit": unit, "args": [{"var": "BRTHDT"}, {"var": "ADT"}]}
 
 
 # ---------------------------------------------------------------------------
@@ -150,18 +84,23 @@ def indicators() -> dict[str, list[str]]:
 class TestModels:
     """Pydantic model validation rules."""
 
-    def test_comparison_rule_requires_exactly_one_rhs(self):
-        """ComparisonRule rejects zero or multiple RHS specifications."""
-        with pytest.raises(ValueError, match="Exactly one"):
-            ComparisonRule(left="AVAL", op="lt")
+    def test_arm_rejects_an_unknown_op(self):
+        with pytest.raises(ValueError, match="unknown op 'max'"):
+            Arm(when={"op": "max", "args": [{"var": "AVAL"}, 1]}, then="1")
 
-        with pytest.raises(ValueError, match="Exactly one"):
-            ComparisonRule(left="AVAL", op="lt", right=5.0, right_var="ANRHI")
+    def test_arm_rejects_a_grade_out_of_range(self):
+        with pytest.raises(ValueError):
+            Arm(when=True, then="5")
 
-    def test_grade_rule_requires_at_least_one_rule_source(self):
-        """GradeRule rejects grades with no rules and no branches."""
-        with pytest.raises(ValueError, match="At least one"):
-            GradeRule(grade=1)
+    def test_in_needs_a_param(self):
+        with pytest.raises(ValueError, match="must be a param"):
+            Arm(when={"op": "in", "args": [{"var": "BNRIND"}, {"str": "HIGH"}]}, then="1")
+
+    def test_every_bundled_term_keeps_its_admiral_source(self):
+        for gs in GradingSystem:
+            cf = load_criteria(gs)
+            assert cf.source and cf.source["package"] == "admiral"
+            assert all(c.source and c.source["grade_criteria_code"] for c in cf.criteria)
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +129,7 @@ class TestRegistry:
 
     def test_load_custom_path(self, tmp_path: Path):
         custom = {
+            "schema_version": 2,
             "version": "custom_v1",
             "unit_system": "SI",
             "criteria": [
@@ -197,9 +137,10 @@ class TestRegistry:
                     "term": "TestParam",
                     "direction": "H",
                     "required_vars": ["AVAL"],
-                    "na_check": ["AVAL"],
-                    "grades": [
-                        {"grade": 1, "rules": [{"left": "AVAL", "op": "gt", "right": 10}]},
+                    "arms": [
+                        {"when": {"op": "is_na", "args": [{"var": "AVAL"}]}, "then": None},
+                        {"when": {"op": "gt", "args": [{"var": "AVAL"}, 10]}, "then": "1"},
+                        {"when": True, "then": "0"},
                     ],
                 }
             ],
@@ -209,6 +150,13 @@ class TestRegistry:
         cf = load_criteria(p)
         assert cf.version == "custom_v1"
         assert len(cf.criteria) == 1
+
+    def test_old_format_file_raises_with_the_way_out(self, tmp_path: Path):
+        old = {"version": "custom_v1", "unit_system": "SI", "criteria": []}
+        p = tmp_path / "old.json"
+        p.write_text(json.dumps(old))
+        with pytest.raises(ValueError, match="schema_version 2"):
+            load_criteria(p)
 
     def test_load_unknown_raises(self):
         with pytest.raises(ValueError, match="Unknown grading system"):
@@ -346,8 +294,10 @@ class TestCompiler:
         assert high_low["GR"][0] == "0"
 
     def test_compile_filter_age_days(self):
-        """Parse age_days(BRTHDT, ADT) > 28 and evaluate."""
-        expr = compile_filter_expr("age_days(BRTHDT, ADT) > 28")
+        """Age in days (admiral compute_duration, out_unit days) > 28."""
+        expr = compile_filter_expr(
+            {"op": "gt", "args": [_age("days"), 28]},
+        )
         df = pl.from_repr("""\
 ┌────────────┬────────────┐
 │ BRTHDT     ┆ ADT        │
@@ -362,16 +312,16 @@ class TestCompiler:
         assert result["PASS"].to_list() == [True, False]
 
     def test_compile_filter_age_years(self):
-        """Parse age_years(BRTHDT, ADT) >= 18."""
-        expr = compile_filter_expr("age_years(BRTHDT, ADT) >= 18")
+        """Calendar age in years >= 18; one day before the birthday is still 17."""
+        expr = compile_filter_expr({"op": "ge", "args": [_age("years"), 18]})
         df = pl.from_repr("""\
 ┌────────────┬────────────┐
 │ BRTHDT     ┆ ADT        │
 │ ---        ┆ ---        │
 │ date       ┆ date       │
 ╞════════════╪════════════╡
-│ 2000-06-15 ┆ 2024-06-15 │
-│ 2015-06-15 ┆ 2024-06-15 │
+│ 2000-06-15 ┆ 2018-06-15 │
+│ 2000-06-15 ┆ 2018-06-14 │
 └────────────┴────────────┘
 """)
         result = df.with_columns(expr.alias("PASS"))
@@ -657,6 +607,7 @@ class TestAtoxgrVerb:
     def test_custom_criteria_file(self, tmp_path: Path):
         """Load a custom single-term JSON and grade through the verb."""
         custom = {
+            "schema_version": 2,
             "version": "custom_test",
             "unit_system": "SI",
             "criteria": [
@@ -664,10 +615,11 @@ class TestAtoxgrVerb:
                     "term": "MyParam",
                     "direction": "H",
                     "required_vars": ["AVAL"],
-                    "na_check": ["AVAL"],
-                    "grades": [
-                        {"grade": 2, "rules": [{"left": "AVAL", "op": "gt", "right": 100}]},
-                        {"grade": 1, "rules": [{"left": "AVAL", "op": "gt", "right": 50}]},
+                    "arms": [
+                        {"when": {"op": "is_na", "args": [{"var": "AVAL"}]}, "then": None},
+                        {"when": {"op": "gt", "args": [{"var": "AVAL"}, 100]}, "then": "2"},
+                        {"when": {"op": "gt", "args": [{"var": "AVAL"}, 50]}, "then": "1"},
+                        {"when": True, "then": "0"},
                     ],
                 }
             ],

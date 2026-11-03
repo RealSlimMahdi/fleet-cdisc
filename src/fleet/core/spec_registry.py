@@ -1562,8 +1562,8 @@ spec_algorithm(
         Param(
             "signif_dig",
             annotation=int,
-            default=5,
-            description="Significant digits for comparisons.",
+            default=15,
+            description="Significant digits for comparisons (admiral signif_digits).",
         ),
         Param(
             "indicators",
