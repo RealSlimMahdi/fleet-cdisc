@@ -39,6 +39,9 @@ _UNIT_SCALE: dict[str, float] = {
     "d": 86400.0,
 }
 
+# Default BLQ texts in --STRESC; the data transfer agreement decides the real list.
+BLQ_TEXT = r"(?i)^\s*(<|(BLQ|BQL|BLOQ|LLOQ)\s*$)"
+
 
 class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
     """
@@ -58,24 +61,72 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
     # PK-specific verbs                                                    #
     # ------------------------------------------------------------------ #
 
+    def _is_blq(
+        self,
+        verb: str,
+        conc: pl.Expr,
+        lloq_col: str | None,
+        text_col: str | None,
+        blq_text: str,
+        numeric_below_lloq: bool,
+    ) -> pl.Expr:
+        """BLQ on positive evidence: a number below the LLOQ, or no number and a BLQ text."""
+        parts: list[pl.Expr] = []
+        if numeric_below_lloq and lloq_col is not None:
+            parts.append((conc < pl.col(lloq_col).cast(pl.Float64)).fill_null(False))
+        if text_col is not None:
+            if text_col not in self._lazy.collect_schema().names():
+                raise DerivationError(
+                    f"{verb}: text_col={text_col!r} is not in the frame. SDTM keeps a BLQ "
+                    "result only as text in --STRESC; pass text_col= for that column, or "
+                    "text_col=None if the frame holds numeric results only."
+                )
+            text = pl.col(text_col).cast(pl.String).str.contains(blq_text).fill_null(False)
+            parts.append(conc.is_null() & text)
+        out = pl.lit(False)
+        for part in parts:
+            out = out | part
+        return out
+
     def blq_flag(
         self,
         target: str,
         *,
         conc_col: str,
         lloq_col: str,
+        text_col: str | None = "PCSTRESC",
+        blq_text: str = BLQ_TEXT,
+        numeric_below_lloq: bool = True,
     ) -> Self:
-        """Flag records where concentration is below the LLOQ.
+        """Flag records below the LLOQ (``"Y"``, else null).
 
-        Sets *target* to ``"Y"`` when *conc_col* < *lloq_col*, null otherwise.
+        A record is BLQ when *conc_col* is below *lloq_col*, or *conc_col* is
+        null and *text_col* matches *blq_text* (``"<0.1"``, ``"BLQ"``).
+        ``"ALQ"``, ``">1000"`` and a missed sample are not BLQ.
 
         Args:
             target: Name of the output flag column.
-            conc_col: Column containing the observed concentration.
+            conc_col: Numeric concentration column (``PCSTRESN``).
             lloq_col: Column containing the lower limit of quantification.
+            text_col: Character result column (default ``"PCSTRESC"``);
+                ``None`` when the frame holds numeric results only.
+            blq_text: Regular expression of the BLQ texts.  The default
+                matches a text that starts with ``<`` or is ``BLQ``, ``BQL``,
+                ``BLOQ`` or ``LLOQ`` (any case); the data transfer agreement
+                decides the real list.
+            numeric_below_lloq: Count a number below the LLOQ as BLQ
+                (default ``True``, ADaM popPK 1.0 BLQFL).  ``False`` lets only
+                the text decide, as admiral.
 
         Returns:
             Self: The namespace with *target* appended.
+
+        Raises:
+            DerivationError: When *text_col* is not in the frame.
+
+        References:
+            SDTMIG 3.4 PC (PCSTRESC holds every result as text, PCSTRESN
+            numeric results only); ADaMIG-NCA 1.0 and ADaM popPK 1.0 BLQFL.
 
         Examples:
             Derive BLQ flag from PC data::
@@ -87,7 +138,14 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
                     .to_frame()
                 )
         """
-        cond = pl.col(conc_col).cast(pl.Float64) < pl.col(lloq_col).cast(pl.Float64)
+        cond = self._is_blq(
+            "blq_flag",
+            pl.col(conc_col).cast(pl.Float64),
+            lloq_col,
+            text_col,
+            blq_text,
+            numeric_below_lloq,
+        )
         return self._chain(pl.when(cond).then(pl.lit("Y")).otherwise(pl.lit(None)).alias(target))
 
     def blq_impute(
@@ -97,18 +155,30 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         conc_col: str,
         lloq_col: str,
         method: str = "half_lloq",
+        text_col: str | None = "PCSTRESC",
+        blq_text: str = BLQ_TEXT,
+        numeric_below_lloq: bool = True,
     ) -> Self:
         """Impute BLQ concentrations with a standard substitution method.
 
+        BLQ follows :meth:`blq_flag`.  Other records keep *conc_col*.
+
         Args:
             target: Name of the output numeric column.
-            conc_col: Column containing the observed concentration.
+            conc_col: Numeric concentration column (``PCSTRESN``).
             lloq_col: Column containing the LLOQ.
             method: One of ``"half_lloq"`` (default), ``"zero"``, ``"lloq"``,
                 or ``"missing"``.
+            text_col: Character result column; see :meth:`blq_flag`.
+            blq_text: BLQ texts; see :meth:`blq_flag`.
+            numeric_below_lloq: See :meth:`blq_flag`.
 
         Returns:
             Self: The namespace with *target* appended.
+
+        Raises:
+            DerivationError: When *method* is unknown or *text_col* is not in
+                the frame.
 
         Examples:
             Impute BLQ values with half the LLOQ::
@@ -129,7 +199,7 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
 
         conc = pl.col(conc_col).cast(pl.Float64)
         lloq = pl.col(lloq_col).cast(pl.Float64)
-        is_blq = conc < lloq
+        is_blq = self._is_blq("blq_impute", conc, lloq_col, text_col, blq_text, numeric_below_lloq)
 
         if method == "half_lloq":
             imputed = lloq / 2.0
@@ -320,18 +390,28 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         *,
         conc_col: str,
         lloq_col: str,
+        text_col: str | None = "PCSTRESC",
+        blq_text: str = BLQ_TEXT,
+        numeric_below_lloq: bool = True,
     ) -> Self:
         """Derive a numeric BLQ flag (``1`` / ``0``).
 
-        Complements :meth:`blq_flag` which returns character ``"Y"``/null.
+        Complements :meth:`blq_flag` which returns character ``"Y"``/null;
+        BLQ follows the same rule.
 
         Args:
             target: Name of the output column.
-            conc_col: Column containing the observed concentration.
+            conc_col: Numeric concentration column (``PCSTRESN``).
             lloq_col: Column containing the LLOQ.
+            text_col: Character result column; see :meth:`blq_flag`.
+            blq_text: BLQ texts; see :meth:`blq_flag`.
+            numeric_below_lloq: See :meth:`blq_flag`.
 
         Returns:
             Self: The namespace with *target* appended.
+
+        Raises:
+            DerivationError: When *text_col* is not in the frame.
 
         Examples:
             Derive numeric BLQ indicator::
@@ -343,7 +423,14 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
                     .to_frame()
                 )
         """
-        cond = pl.col(conc_col).cast(pl.Float64) < pl.col(lloq_col).cast(pl.Float64)
+        cond = self._is_blq(
+            "blqfn",
+            pl.col(conc_col).cast(pl.Float64),
+            lloq_col,
+            text_col,
+            blq_text,
+            numeric_below_lloq,
+        )
         return self._chain(
             pl.when(cond).then(pl.lit(1)).otherwise(pl.lit(0)).cast(pl.Int64).alias(target)
         )
@@ -517,43 +604,49 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         conc_col: str,
         lloq_col: str | None = None,
         blq_label: str = "BLQ",
+        text_col: str | None = "PCSTRESC",
+        blq_text: str = BLQ_TEXT,
+        numeric_below_lloq: bool = True,
     ) -> Self:
         """Derive a listing-ready categorised analysis value (AVALCAT1).
 
-        Encodes BLQ records as *blq_label* and formats numeric concentrations
-        as strings.
+        A BLQ record (as :meth:`blq_flag`) gets *blq_label*.  Another record
+        gets its number as text, else the *text_col* text (``">1000"``,
+        ``"NQ"``), else null (a missed sample).
 
         Args:
             target: Name of the output column.
-            conc_col: Column containing the concentration value.
-            lloq_col: Optional LLOQ column for numeric BLQ check.
+            conc_col: Concentration column (numeric, or text that holds
+                numbers).
+            lloq_col: Optional LLOQ column for the numeric BLQ check.
             blq_label: Label for BLQ records (default ``"BLQ"``).
+            text_col: Character result column; see :meth:`blq_flag`.
+            blq_text: BLQ texts; see :meth:`blq_flag`.
+            numeric_below_lloq: See :meth:`blq_flag`.
 
         Returns:
             Self: The namespace with *target* appended.
+
+        Raises:
+            DerivationError: When *text_col* is not in the frame.
 
         Examples:
             Derive AVALCAT1 from concentration and LLOQ::
 
                 adpc = (
                     pc_raw.adam.pk
-                    .avalcat("AVALCAT1", conc_col="PCSTRESC",
+                    .avalcat("AVALCAT1", conc_col="PCSTRESN",
                              lloq_col="PCLLOQ")
                     .to_frame()
                 )
         """
-        if lloq_col is not None:
-            conc_num = pl.col(conc_col).cast(pl.Float64, strict=False)
-            lloq_num = pl.col(lloq_col).cast(pl.Float64)
-            is_blq = conc_num.is_null() | (conc_num < lloq_num)
-        else:
-            is_blq = pl.col(conc_col).cast(pl.String) == "<BLQ"
+        conc_num = pl.col(conc_col).cast(pl.Float64, strict=False)
+        is_blq = self._is_blq("avalcat", conc_num, lloq_col, text_col, blq_text, numeric_below_lloq)
+        shown = conc_num.cast(pl.String)
+        if text_col is not None:
+            shown = pl.coalesce(shown, pl.col(text_col).cast(pl.String))
 
-        conc_str = pl.col(conc_col).cast(pl.Float64, strict=False).cast(pl.String)
-
-        return self._chain(
-            pl.when(is_blq).then(pl.lit(blq_label)).otherwise(conc_str).alias(target)
-        )
+        return self._chain(pl.when(is_blq).then(pl.lit(blq_label)).otherwise(shown).alias(target))
 
     def anl_flag(
         self,

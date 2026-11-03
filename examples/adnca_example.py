@@ -256,6 +256,8 @@ adpc = (
     # ── Step 10. BLQ flags ───────────────────────────────────────────────────
     # admiral: mutate(BLQFL = case_when(PCSTRESC == "<BLQ" ~ "Y", TRUE ~ "N"))
     # admiral: mutate(BLQFN = case_when(PCSTRESC == "<BLQ" ~ 1, TRUE ~ 0))
+    # Fleet reads the BLQ text in PCSTRESC ("<...", "BLQ"; blq_text= sets the list)
+    # and also counts a number below PCLLOQ (numeric_below_lloq=False turns it off).
     .blq_flag("BLQFL", conc_col="PCSTRESN", lloq_col="PCLLOQ")
     .blqfn("BLQFN", conc_col="PCSTRESN", lloq_col="PCLLOQ")
     # ── Step 11. AVAL — BLQ imputed to LLOQ / 2 ────────────────────────────
@@ -307,6 +309,13 @@ adpc = (
 # admiral: derive_vars_merged(dataset_add = vs, filter_add = VSTESTCD == "HEIGHT",
 #                             new_vars = exprs(HTBL = VSSTRESN))
 adpc = adpc.join(htbl, on="USUBJID", how="left")
+
+_blq_text = adpc.filter(pl.col("PCSTRESC") == "BLQ")
+print(
+    f"   BLQ text rows: {_blq_text.height}, flagged and imputed: "
+    f"{_blq_text.filter((pl.col('BLQFL') == 'Y') & pl.col('AVAL').is_not_null()).height}"
+)
+assert (_blq_text["BLQFL"] == "Y").all(), "every PCSTRESC 'BLQ' record is BLQ"
 
 # ── Step 19. ADSL variables already merged via merge_adsl() in the pipeline ──
 
@@ -397,8 +406,8 @@ adppk = (
     .evid("EVID", from_col="EVID")  # already set; re-declares via verb
     # ── DV / DVL ─────────────────────────────────────────────────────────────
     # admiral: mutate(DV = PCSTRESN, DVL = case_when(DV != 0 ~ log(DV)))
-    .blq_impute("AVAL", conc_col="PCSTRESN", lloq_col="PCLLOQ", method="half_lloq")
-    .assign("DV", source="AVAL")
+    # DV is the measured value: a BLQ record keeps DV null and MDV 1.
+    .assign("DV", source="PCSTRESN")
     .log_conc("DVL", conc_col="DV")
     # ── MDV — Missing Dependent Variable ─────────────────────────────────────
     # admiral: mutate(MDV = case_when(EVID == 1 ~ 1, is.na(DV) ~ 1, TRUE ~ 0))

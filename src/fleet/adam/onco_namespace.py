@@ -234,38 +234,16 @@ class OncoNamespace(SharedADaMVerbsMixin):
         rsp = responses if responses is not None else ["CR", "PR"]
         grps = by or ["USUBJID"]
 
-        df = self.to_frame()
-
-        # Candidate responder records
-        resp_df = df.filter(pl.col(source).is_in(rsp))
-
-        # For each group, check whether there exist two response dates ≥ N days apart
-        confirmed_subjs = (
-            resp_df.with_columns(pl.col(date_col).cast(pl.Date))
-            .group_by(grps)
-            .agg(
-                [
-                    pl.col(date_col).min().alias("_first_resp"),
-                    pl.col(date_col).max().alias("_last_resp"),
-                ]
-            )
-            .with_columns(
-                (pl.col("_last_resp") - pl.col("_first_resp")).dt.total_days().alias("_gap")
-            )
-            .filter(pl.col("_gap") >= confirmation_days)
-            .select(grps)
-        )
-
-        joined = df.join(confirmed_subjs, on=grps, how="left", nulls_equal=True)
-        # Mark as confirmed if subject has confirmed response AND current row is a response
-        in_confirmed = joined.with_columns(
-            pl.when(pl.col(source).is_in(rsp) & pl.col(grps[0]).is_in(confirmed_subjs[grps[0]]))
+        # Window over every by column: a null by value is a group, as a SAS BY statement.
+        is_resp = pl.col(source).is_in(rsp)
+        resp_date = pl.when(is_resp).then(pl.col(date_col).cast(pl.Date))
+        gap = (resp_date.max().over(grps) - resp_date.min().over(grps)).dt.total_days()
+        return self._chain(
+            pl.when(is_resp & (gap >= confirmation_days))
             .then(pl.lit(flag_value))
             .otherwise(pl.lit(None))
             .alias(target)
-        ).select(df.columns + [target])
-
-        return self._materialise_then(in_confirmed)
+        )
 
     # ------------------------------------------------------------------ #
     # 5. filter_pd — keep records up to first PD per group               #

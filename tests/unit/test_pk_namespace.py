@@ -46,6 +46,20 @@ def pc_frame():
                 0.88,
             ],
             "PCLLOQ": [1.0] * 12,
+            "PCSTRESC": [
+                None,
+                "10.27",
+                "22.31",
+                "0.73",
+                None,
+                "9.56",
+                "20.54",
+                None,
+                None,
+                "11.78",
+                "24.67",
+                "0.88",
+            ],
             # Pre-dose datetimes and dose reference datetimes (ISO 8601)
             "PCDTC": [
                 "2014-01-17T08:00:00",
@@ -177,7 +191,7 @@ class TestBlqFlag:
         assert high_row["BLQFL"][0] is None
 
     def test_blq_flag_null_conc_not_flagged(self, pc_frame):
-        """Null concentrations (e.g. BLQ already coded as null) should not propagate."""
+        """No number and no BLQ text in PCSTRESC (a missed sample) is not BLQ."""
         result = pc_frame.adam.pk.blq_flag(
             "BLQFL", conc_col="PCSTRESN", lloq_col="PCLLOQ"
         ).to_frame()

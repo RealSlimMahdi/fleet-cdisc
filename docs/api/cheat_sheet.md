@@ -92,7 +92,7 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 
 | Verb                                                                        | Description                                                         | Example                                                          |
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| [`.blq_flag()`][fleet.adam.pk_namespace.PKNamespace.blq_flag]               | Flag BLQ records: `"Y"` when `conc < LLOQ`.                         | `.blq_flag("BLQFL", conc_col="PCSTRESN", lloq_col="PCLLOQ")`     |
+| [`.blq_flag()`][fleet.adam.pk_namespace.PKNamespace.blq_flag]               | Flag BLQ: `conc < LLOQ`, or no number and a BLQ text in `PCSTRESC`. | `.blq_flag("BLQFL", conc_col="PCSTRESN", lloq_col="PCLLOQ")`     |
 | [`.blq_impute()`][fleet.adam.pk_namespace.PKNamespace.blq_impute]           | Impute BLQ concentrations (`half_lloq`, `zero`, `lloq`, `missing`). | `.blq_impute("AVAL", conc_col="PCSTRESN", lloq_col="PCLLOQ")`    |
 | [`.blqfn()`][fleet.adam.pk_namespace.PKNamespace.blqfn]                     | Numeric BLQ flag: `1` when BLQ, `0` otherwise.                      | `.blqfn("BLQFN", conc_col="PCSTRESN", lloq_col="PCLLOQ")`        |
 | [`.nominal_time()`][fleet.adam.pk_namespace.PKNamespace.nominal_time]       | Nominal elapsed time with unit conversion.                          | `.nominal_time("NTIME", from_col="PCTPTNUM")`                    |
@@ -105,7 +105,7 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 | [`.mdv()`][fleet.adam.pk_namespace.PKNamespace.mdv]                         | Derive `MDV` for PopPK datasets.                                    | `.mdv("MDV", conc_col="DV", evid_col="EVID")`                    |
 | [`.amt()`][fleet.adam.pk_namespace.PKNamespace.amt]                         | Derive `AMT`: dose amount on dosing records.                        | `.amt("AMT", dose_col="EXDOSE", evid_col="EVID")`                |
 | [`.cmt()`][fleet.adam.pk_namespace.PKNamespace.cmt]                         | Derive `CMT` compartment number (NONMEM).                           | `.cmt("CMT", evid_col="EVID", dose_cmt=1, conc_cmt=2)`           |
-| [`.avalcat()`][fleet.adam.pk_namespace.PKNamespace.avalcat]                 | Listing-ready categorised analysis value.                           | `.avalcat("AVALCAT1", conc_col="PCSTRESC", lloq_col="PCLLOQ")`   |
+| [`.avalcat()`][fleet.adam.pk_namespace.PKNamespace.avalcat]                 | Listing-ready categorised analysis value.                           | `.avalcat("AVALCAT1", conc_col="PCSTRESN", lloq_col="PCLLOQ")`   |
 | [`.anl_flag()`][fleet.adam.pk_namespace.PKNamespace.anl_flag]               | Analysis flag (`ANL01FL` / `ANL02FL`).                              | `.anl_flag("ANL01FL")`                                           |
 
 ## Time-to-event (`df.adam.tte`)
