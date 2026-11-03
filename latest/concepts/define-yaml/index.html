@@ -914,6 +914,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#define-xml-gaps-warning-or-refusal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Define-XML gaps: warning or refusal
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -982,10 +993,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#layer-2-json-schema-business-rule-validation-definevalidator" class="md-nav__link">
+  <a href="#layer-2-define-xml-generation-in-strict-mode-fleet-check" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Layer 2 — JSON Schema + business rule validation (DefineValidator)
+        Layer 2 — Define-XML generation in strict mode (fleet check)
       
     </span>
   </a>
@@ -2411,6 +2422,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#define-xml-gaps-warning-or-refusal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Define-XML gaps: warning or refusal
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2479,10 +2501,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#layer-2-json-schema-business-rule-validation-definevalidator" class="md-nav__link">
+  <a href="#layer-2-define-xml-generation-in-strict-mode-fleet-check" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Layer 2 — JSON Schema + business rule validation (DefineValidator)
+        Layer 2 — Define-XML generation in strict mode (fleet check)
       
     </span>
   </a>
@@ -2815,9 +2837,8 @@ callable is found either (a) by short name, when its module has been imported
 and the function is <code>@derivation</code>-registered, or (b) by fully qualified
 dotted path. Declare <code>derivations_module:</code> at the top of the spec and
 <code>from_spec()</code> imports it for you, so short names always resolve.</p>
-<p>Both <code>algorithm:</code> and <code>callable:</code> plug into Define-XML method enrichment:
-running <code>DefineSpecGenerator(spec, enrich_methods=True)</code> (or
-<code>fleet define-xml --enrich-methods</code>) emits one <code>&lt;MethodDef&gt;</code> per
+<p>Both <code>algorithm:</code> and <code>callable:</code> plug into the Define-XML methods:
+<code>DefineSpecGenerator(spec)</code> (or <code>fleet define-xml</code>) emits one <code>&lt;MethodDef&gt;</code> per
 <strong>Derived</strong> variable, named <code>Algorithm for &lt;VARIABLE&gt;</code>. The
 <code>&lt;Description&gt;</code> is submission text, resolved in this order:</p>
 <ol>
@@ -2903,7 +2924,7 @@ to <code>define.yaml</code> first):</p>
     B --&gt;|derivation specs| D[namespace.from_spec]
     D --&gt;|applies verbs| E[Polars pipeline]
     E --&gt;|calls .to_frame| F[ADSL DataFrame]
-    A --&gt;|variable metadata| C[DefineSpecGenerator / DefineXMLGenerator]
+    A --&gt;|variable metadata| C[DefineSpecGenerator]
     C --&gt; G[define_adam.xml]
     F --&gt; H[adsl.parquet / adsl.json]
     F --&gt; I[DatasetChecker / ValidationService]</code></pre>
@@ -2931,27 +2952,64 @@ hard-code paths; it exposes <code>sdtm_spec</code> / <code>adam_spec</code> / <c
 <p>One CLI command — inside a study workspace, spec and output default from
 <code>study_config.yaml</code>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>define-xml<span class="w"> </span>--standard<span class="w"> </span>adam<span class="w">                 </span><span class="c1"># config-based defaults</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>define-xml<span class="w"> </span>-s<span class="w"> </span>specs/define.yaml<span class="w"> </span>-o<span class="w"> </span>out.xml<span class="w"> </span>--enrich-methods
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>define-xml<span class="w"> </span>-s<span class="w"> </span>specs/define.yaml<span class="w"> </span>-o<span class="w"> </span>out.xml<span class="w"> </span>--strict
 </span></code></pre></div>
 <p>The same generation from Python:</p>
 <!-- docs:no-run -->
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet</span><span class="w"> </span><span class="kn">import</span> <span class="n">DefineSpecGenerator</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet</span><span class="w"> </span><span class="kn">import</span> <span class="n">DefineXMLGenerator</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="n">gen</span> <span class="o">=</span> <span class="n">DefineXMLGenerator</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;examples/cdiscpilot01/adam/define.yaml&quot;</span><span class="p">))</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="n">gen</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;outputs/cdiscpilot01/define_adam.xml&quot;</span><span class="p">))</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">DefineSpecGenerator</span><span class="p">(</span><span class="s2">&quot;examples/cdiscpilot01/adam/define.yaml&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">generate</span><span class="p">(</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>    <span class="s2">&quot;outputs/cdiscpilot01/define_adam.xml&quot;</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="p">)</span>
 </span></code></pre></div>
-<p><code>DefineSpecGenerator(spec, enrich_methods=True).generate(out)</code> additionally emits
-a <code>&lt;MethodDef&gt;</code> per <strong>Derived</strong> variable (see <em>Define-XML method enrichment</em>
-above for the text-source rule); variables with <code>origin: Collected</code>,
+<p><code>DefineSpecGenerator</code> emits a <code>&lt;MethodDef&gt;</code> per <strong>Derived</strong> variable (see
+the method text rule above); variables with <code>origin: Collected</code>,
 <code>Assigned</code>, <code>Protocol</code>, or <code>Predecessor</code> never reference a method. Generated
 documents are validated on the way out — against the vendored CDISC XSDs
 <em>and</em> a semantic lint (<code>fleet.define_xml.semantic_errors</code>) that rejects
 reviewer-facing defects such as a <code>MethodOID</code> on a non-Derived variable or
-API markup inside <code>TranslatedText</code>; <code>validate_xml=False</code> bypasses both.
-Both generators honour the same new spec keys:</p>
+API markup inside <code>TranslatedText</code>; <code>validate_xml=False</code> bypasses both.</p>
+<h3 id="define-xml-gaps-warning-or-refusal">Define-XML gaps: warning or refusal<a class="headerlink" href="#define-xml-gaps-warning-or-refusal" title="Permanent link">&para;</a></h3>
+<p>Define-XML 2.1 requires three things that a spec can leave out:</p>
+<ul>
+<li>a <code>MethodOID</code> on each Derived <code>ItemRef</code>, so a Derived variable needs a
+  <code>comment:</code> or a <code>derivation:</code> block that gives method text;</li>
+<li>a <code>Length</code> on <code>text</code>, <code>integer</code> and <code>float</code> items (characters for text,
+  digits for numbers);</li>
+<li>a <code>SignificantDigits</code> on <code>float</code> items (<code>significant_digits:</code> in the spec,
+  on a variable or on a value-level entry).</li>
+</ul>
+<p>The generator names each gap, one line per item:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>specs/define.yaml: 2 Define-XML gap(s):
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>  DM.SAFFL: no method text (add a comment: or a derivation: block)
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>  VS.AVAL (PARAMCD = SYSBP): no SignificantDigits (required on float)
+</span></code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Entry point</th>
+<th>A gap gives</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>fleet define-xml</code>, <code>DefineSpecGenerator(spec)</code></td>
+<td>the file, and one warning with the list</td>
+</tr>
+<tr>
+<td><code>fleet define-xml --strict</code>, <code>DefineSpecGenerator(spec, strict=True)</code></td>
+<td><code>SpecError</code>, exit code 1, no file</td>
+</tr>
+<tr>
+<td><code>fleet check</code></td>
+<td>a FAIL row <code>define (sdtm)</code> or <code>define (adam)</code> with the list</td>
+</tr>
+</tbody>
+</table>
+<p>The schema refuses <code>significant_digits:</code> on a type other than <code>float</code>, and
+<code>length:</code> on <code>date</code> and <code>datetime</code>.</p>
+<p>The spec keys below apply to every generation:</p>
 <ul>
 <li><strong><code>fleet_spec_version: 1</code></strong> — spec dialect version (checked on load).</li>
 <li><strong><code>derivations_module:</code></strong> — a dotted module that <code>from_spec</code> imports itself, so
@@ -2966,13 +3024,13 @@ Both generators honour the same new spec keys:</p>
 <hr />
 <h2 id="codelist-references">Codelist References<a class="headerlink" href="#codelist-references" title="Permanent link">&para;</a></h2>
 <p>Variables can reference codelists declared in the <code>codelists</code> block:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SEX</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Sex</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">  </span><span class="nt">codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66731</span><span class="w"> </span><span class="c1"># references the oid in codelists[]</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">  </span><span class="nt">derivation</span><span class="p">:</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">    </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">source</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">    </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SEX</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SEX</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">label</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Sex</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">  </span><span class="nt">codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66731</span><span class="w"> </span><span class="c1"># references the oid in codelists[]</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">  </span><span class="nt">derivation</span><span class="p">:</span>
+</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">    </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">source</span>
+</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">    </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SEX</span>
 </span></code></pre></div>
 <h3 id="controlled-terminology-in-the-spec-path">Controlled terminology in the spec path<a class="headerlink" href="#controlled-terminology-in-the-spec-path" title="Permanent link">&para;</a></h3>
 <p>A spec step and its inline call check the same terms. Inside a study, a
@@ -2980,12 +3038,12 @@ Both generators honour the same new spec keys:</p>
 <code>codelists.py</code>, the module <code>fleet init ct</code> generates. So this entry:</p>
 <!-- docs:no-run -->
 
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AESEV</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66769</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">  </span><span class="nt">derivation</span><span class="p">:</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">    </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign_ct</span>
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">    </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ae_severity</span>
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">    </span><span class="nt">ct_codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66769</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">AESEV</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66769</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="nt">derivation</span><span class="p">:</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign_ct</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ae_severity</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span><span class="nt">ct_codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66769</span>
 </span></code></pre></div>
 <p>runs as <code>.assign("AESEV", source="ae_severity", ct=AESEV)</code> with the <code>AESEV</code>
 class of <code>codelists.py</code>, and a raw <code>Mild</code> gives the same warning in both
@@ -3045,18 +3103,18 @@ of the spec, mapped ones included; out-of-codelist values emit a warning
 naming the dataset, variable, and codelist:</p>
 <!-- docs:no-run -->
 
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">ct</span><span class="p">:</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">validate</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">  </span><span class="nt">file</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ct/cdisc_ct.yaml</span><span class="w">   </span><span class="c1"># optional — loaded into the CT cache before the run</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="nt">datasets</span><span class="p">:</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DM</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span><span class="nt">variables</span><span class="p">:</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SEX</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">        </span><span class="nt">codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66731</span>
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">        </span><span class="nt">derivation</span><span class="p">:</span>
-</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="w">          </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign_ct</span>
-</span><span id="__span-14-11"><a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a><span class="w">          </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sex</span>
-</span><span id="__span-14-12"><a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a><span class="w">          </span><span class="nt">ct_codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66731</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">ct</span><span class="p">:</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="nt">validate</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span><span class="nt">file</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ct/cdisc_ct.yaml</span><span class="w">   </span><span class="c1"># optional — loaded into the CT cache before the run</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="nt">datasets</span><span class="p">:</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DM</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">    </span><span class="nt">variables</span><span class="p">:</span>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SEX</span>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="w">        </span><span class="nt">codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66731</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="w">        </span><span class="nt">derivation</span><span class="p">:</span>
+</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="w">          </span><span class="nt">algorithm</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">assign_ct</span>
+</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="w">          </span><span class="nt">source</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sex</span>
+</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="w">          </span><span class="nt">ct_codelist</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">C66731</span>
 </span></code></pre></div>
 <p>When datasets are checked with <code>DatasetChecker(spec, check_ct=True)</code>, the values
 are also verified against the spec's own inline <code>codelists:</code>, and codelist
@@ -3085,98 +3143,40 @@ Here is the real message for a typo'd field (<code>ct_codelst</code> instead of
 <code>ct_codelist</code>):</p>
 <!-- docs:no-run -->
 
-<div class="language-python highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># derivation block with a typo:</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="c1">#   - name: SEX</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="c1">#     derivation:</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="c1">#       algorithm: assign_ct</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="c1">#       source: sex</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="c1">#       ct_codelst: C66731        # ← typo: should be ct_codelist</span>
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="n">dm</span> <span class="o">=</span> <span class="n">raw_df</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">from_spec</span><span class="p">(</span><span class="s2">&quot;specs/define.yaml&quot;</span><span class="p">,</span> <span class="n">dataset</span><span class="o">=</span><span class="s2">&quot;DM&quot;</span><span class="p">)</span>
-</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="c1"># fleet.core.exceptions.SpecError:</span>
-</span><span id="__span-15-10"><a id="__codelineno-15-10" name="__codelineno-15-10" href="#__codelineno-15-10"></a><span class="c1"># specs/define.yaml → dataset DM → variable SEX: 1 validation error for SDTMAssignCtSpec</span>
-</span><span id="__span-15-11"><a id="__codelineno-15-11" name="__codelineno-15-11" href="#__codelineno-15-11"></a><span class="c1"># ct_codelst</span>
-</span><span id="__span-15-12"><a id="__codelineno-15-12" name="__codelineno-15-12" href="#__codelineno-15-12"></a><span class="c1">#   Extra inputs are not permitted [type=extra_forbidden, input_value=&#39;C66731&#39;, input_type=str]</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># derivation block with a typo:</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="c1">#   - name: SEX</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="c1">#     derivation:</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1">#       algorithm: assign_ct</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="c1">#       source: sex</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="c1">#       ct_codelst: C66731        # ← typo: should be ct_codelist</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="n">dm</span> <span class="o">=</span> <span class="n">raw_df</span><span class="o">.</span><span class="n">sdtm</span><span class="o">.</span><span class="n">from_spec</span><span class="p">(</span><span class="s2">&quot;specs/define.yaml&quot;</span><span class="p">,</span> <span class="n">dataset</span><span class="o">=</span><span class="s2">&quot;DM&quot;</span><span class="p">)</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="c1"># fleet.core.exceptions.SpecError:</span>
+</span><span id="__span-16-10"><a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a><span class="c1"># specs/define.yaml → dataset DM → variable SEX: 1 validation error for SDTMAssignCtSpec</span>
+</span><span id="__span-16-11"><a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="c1"># ct_codelst</span>
+</span><span id="__span-16-12"><a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="c1">#   Extra inputs are not permitted [type=extra_forbidden, input_value=&#39;C66731&#39;, input_type=str]</span>
 </span></code></pre></div>
 <p>(Note: a well-formed <code>assign_ct</code> <em>without</em> any codelist does <strong>not</strong> error — it
 copies the value through and emits a <code>UserWarning</code> that CT could not be validated.
 <code>assign</code> never fabricates a missing-field error for an optional field.)</p>
-<h3 id="layer-2-json-schema-business-rule-validation-definevalidator">Layer 2 — JSON Schema + business rule validation (<code>DefineValidator</code>)<a class="headerlink" href="#layer-2-json-schema-business-rule-validation-definevalidator" title="Permanent link">&para;</a></h3>
-<p><code>DefineValidator</code> runs a deeper structural check against the bundled JSON Schema
-(<code>src/fleet/define_xml/schemas/define_xml_2_1_schema.json</code>) and a set of CDISC business rules.
-This layer fires <strong>on demand</strong>, not automatically during pipeline execution.</p>
-<p>From the CLI, this layer is part of the one-shot CI gate — it validates every
-define.yaml the study config points at:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>check
-</span></code></pre></div>
-<p>Or trigger it explicitly from Python — before generating Define-XML or before
-submission:</p>
-<!-- docs:no-run -->
-
-<div class="language-python highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">fleet.define_xml</span><span class="w"> </span><span class="kn">import</span> <span class="n">DefineValidator</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="n">validator</span> <span class="o">=</span> <span class="n">DefineValidator</span><span class="p">()</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="n">is_valid</span> <span class="o">=</span> <span class="n">validator</span><span class="o">.</span><span class="n">validate</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;examples/cdiscpilot01/sdtm/define.yaml&quot;</span><span class="p">))</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="k">for</span> <span class="n">issue</span> <span class="ow">in</span> <span class="n">validator</span><span class="o">.</span><span class="n">issues</span><span class="p">:</span>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[</span><span class="si">{</span><span class="n">issue</span><span class="o">.</span><span class="n">severity</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">}</span><span class="s2">] </span><span class="si">{</span><span class="n">issue</span><span class="o">.</span><span class="n">rule</span><span class="si">}</span><span class="s2"> @ </span><span class="si">{</span><span class="n">issue</span><span class="o">.</span><span class="n">location</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">issue</span><span class="o">.</span><span class="n">message</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>
-</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="c1"># Example output:</span>
-</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="c1"># [ERROR]   SCHEMA_001 @ datasets.0.variables.2: &#39;type&#39; is a required property</span>
-</span><span id="__span-17-12"><a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a><span class="c1"># [ERROR]   BR03 @ datasets.0.variables.5.codelist: CodeListRef &#39;C99999&#39; not found in codelists[]</span>
-</span><span id="__span-17-13"><a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a><span class="c1"># [WARNING] ALG02 @ datasets.0.variables.3: assign_ct should have ct_codelist declared</span>
+<h3 id="layer-2-define-xml-generation-in-strict-mode-fleet-check">Layer 2 — Define-XML generation in strict mode (<code>fleet check</code>)<a class="headerlink" href="#layer-2-define-xml-generation-in-strict-mode-fleet-check" title="Permanent link">&para;</a></h3>
+<p><code>fleet check</code> generates the Define-XML of every define.yaml the study config
+points at, in strict mode, and writes no file. The row passes only when the
+generator gives a valid document. This layer fires <strong>on demand</strong>, not
+automatically during pipeline execution.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>uv<span class="w"> </span>run<span class="w"> </span>fleet<span class="w"> </span>check
 </span></code></pre></div>
 <p>What it catches:</p>
-<table>
-<thead>
-<tr>
-<th>Rule</th>
-<th>Checks</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>SCHEMA_001</code></td>
-<td>All fields conform to the JSON Schema (types, required properties)</td>
-</tr>
-<tr>
-<td><code>BR01</code></td>
-<td>Every dataset has at least one key variable</td>
-</tr>
-<tr>
-<td><code>BR02</code></td>
-<td>All <code>ItemRef</code> references resolve to declared variables</td>
-</tr>
-<tr>
-<td><code>BR03</code></td>
-<td>All <code>codelist:</code> references resolve to codelists declared in the spec</td>
-</tr>
-<tr>
-<td><code>BR04</code></td>
-<td>All <code>MethodDef</code> references resolve</td>
-</tr>
-<tr>
-<td><code>ALG01</code></td>
-<td><code>assign_no_ct</code> has <code>source_variable</code></td>
-</tr>
-<tr>
-<td><code>ALG02</code></td>
-<td><code>assign_ct</code> has both <code>source_variable</code> and <code>ct_codelist</code></td>
-</tr>
-<tr>
-<td><code>ALG03</code></td>
-<td><code>hardcode_*</code> has <code>constant_value</code></td>
-</tr>
-<tr>
-<td><code>ALG05</code></td>
-<td><code>merge</code> has <code>merge_dataset</code> and <code>merge_key</code></td>
-</tr>
-</tbody>
-</table>
-<p><code>validator.issues</code> is a list of <code>DefineIssue</code> dataclasses with fields <code>severity</code>, <code>location</code>,
-<code>message</code>, and <code>rule</code>. <code>validator.has_errors()</code> returns <code>True</code> when any <code>"error"</code> severity
-issues exist. Warnings do not block Define-XML generation.</p>
+<ul>
+<li>a spec that does not conform to <code>define_spec_schema.json</code> (<code>SpecSchemaError</code>,
+  with the path of the bad entry);</li>
+<li>a <code>codelist:</code> reference to a codelist that the spec does not declare;</li>
+<li>a Define-XML gap: method text, <code>Length</code> or <code>SignificantDigits</code> (see
+  <em>Define-XML gaps</em> above);</li>
+<li>a generated document that fails the CDISC XSDs or the semantic lint.</li>
+</ul>
+<p>The same check from Python: <code>DefineSpecGenerator(path, strict=True).to_xml_string()</code>
+raises on the first of these problems and returns the XML text otherwise.</p>
 <h3 id="when-to-run-each-layer">When to run each layer<a class="headerlink" href="#when-to-run-each-layer" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
@@ -3193,9 +3193,9 @@ issues exist. Warnings do not block Define-XML generation.</p>
 <td>Yes — raises <code>SpecError</code> (file → dataset → variable)</td>
 </tr>
 <tr>
-<td><code>DefineValidator</code></td>
-<td>Manually, before Define-XML generation</td>
-<td>Only <code>has_errors()</code> returns <code>True</code>; you decide how to handle it</td>
+<td><code>fleet check</code></td>
+<td>Manually or in CI, before submission</td>
+<td>Yes — a FAIL row and exit code 1</td>
 </tr>
 <tr>
 <td>CDISC Rules Engine</td>
@@ -3247,8 +3247,7 @@ Subject</code>. The Define-XML 2.0 spellings <code>CRF</code> and <code>eDT</cod
   inline pipeline, <code>to_spec_yaml(dataset="ADSL", predecessor="DM")</code> pre-fills
   these entries for carry-through columns and pure <code>source</code> copies — the
   emitted YAML stays the explicit, reviewable source of truth.</li>
-<li><strong><code>Derived</code></strong> describes the derivation in its <code>MethodDef</code> (or in the Origin
-  description via <code>comment:</code> when method enrichment is off).</li>
+<li><strong><code>Derived</code></strong> describes the derivation in its <code>MethodDef</code>.</li>
 <li><strong><code>Assigned</code> / <code>Protocol</code></strong> show the <code>comment:</code> — e.g.
   <code>comment: DM.ARM</code> renders <code>Assigned: DM.ARM</code>.</li>
 <li><strong><code>Collected</code></strong> with CRF pages renders the page links; Investigator-collected
@@ -3353,7 +3352,7 @@ declared alongside the annotated CRF:</p>
 <ul>
 <li>The <code>inputs</code> block declares which upstream datasets the pipeline should join/merge.</li>
 <li>Variables with no <code>derivation</code> block are expected to flow in via the <code>source</code> dataset — they appear in Define-XML as <code>origin: Collected</code>.</li>
-<li>Run <code>DefineValidator("...").validate(Path("specs/.../define.yaml"))</code> to catch schema and business rule errors before generating Define-XML or running pipelines.</li>
+<li>Run <code>uv run fleet check</code> (or <code>fleet define-xml --strict</code>) to catch schema errors and Define-XML gaps before submission.</li>
 </ul>
 
 
@@ -3377,7 +3376,7 @@ declared alongside the annotated CRF:</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 09:14:56 UTC">November 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 19:44:29 UTC">November 3, 2026</span>
   </span>
 
     

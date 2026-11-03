@@ -2299,6 +2299,13 @@
 <li>A CSV column with a leading zero (SITEID <code>001</code>) reads as text with a warning, types are inferred from every row, and <code>fleet run</code> reads define type <code>text</code> variables as text, so LBORRES <code>1.10</code> stays <code>1.10</code>.</li>
 <li><code>fleet compare</code> types CSV sides across both files: SITEID <code>001</code> against <code>1</code> differs, AVAL <code>1.10</code> against <code>1.1</code> is equal, and <code>--text</code> keeps a column text. New <code>blank_is_missing</code> / <code>--blank-is-missing</code> reads <code>""</code> as missing on both sides; the default stays exact.</li>
 <li><code>load_raw_data(..., encoding=)</code> reaches the SAS reader, and <code>--encoding</code> is on <code>fleet compare</code> and <code>fleet validate</code>, so a file from a WLATIN1 SAS session can be read. A keyword the reader does not take raises.</li>
+<li><strong>Define-XML gaps are named, and <code>--strict</code> refuses</strong> (ADR-0018, alpha audit package H):</li>
+<li><code>fleet define-xml</code> emits a <code>&lt;MethodDef&gt;</code> per Derived variable by default. A Derived variable with no method text, a <code>text</code>, <code>integer</code> or <code>float</code> item with no <code>length:</code> and a <code>float</code> item with no <code>significant_digits:</code> are listed in one warning, as <code>DM.SAFFL: no method text (add a comment: or a derivation: block)</code>. Before, the MethodOID was left out with no message.</li>
+<li>New <code>--strict</code> (<code>DefineSpecGenerator(spec, strict=True)</code>) refuses: <code>SpecError</code>, exit code 1, no file.</li>
+<li>New spec key <code>significant_digits:</code> on a variable and on a value-level entry, emitted as <code>SignificantDigits</code>. The schema refuses it on a type other than <code>float</code>, and refuses <code>length:</code> on <code>date</code> and <code>datetime</code>. A schema error is a <code>SpecSchemaError</code> that names the path.</li>
+<li><code>fleet check</code> runs the real generator in strict mode. Before, it ran <code>DefineValidator</code>, which read a retired dialect.</li>
+<li><code>DefineXMLGenerator</code>, <code>DefineValidator</code>, <code>StudyContext.define_schema()</code> and <code>define_xml_2_1_schema.json</code> are removed; use <code>DefineSpecGenerator(spec).generate(out)</code> and <code>fleet check</code>.</li>
+<li>The CDISC pilot specs carry <code>length:</code>, <code>significant_digits:</code>, method text for the inline derivations and <code>origin: Predecessor</code> for the ADSL copies; four variables the pipeline does not make are removed from the ADaM spec.</li>
 <li><strong>TLG numbers count only what the spec states</strong> (ADR-0016, alpha audit package G):</li>
 <li><code>adsl_filter</code> now selects the subjects of n as well as N: an ADAE record of a subject with SAFFL N is not counted (before, a percentage could pass 100). A subject in ADSL but outside the filter is left out with an INFO note on the <code>fleet</code> logger; a subject not in ADSL is left out with a warning. An <code>adsl_filter</code> with no <code>adsl</code> stops. The deaths table and <code>lb.t_abnormal</code> follow the same rule.</li>
 <li>On a table with continuous statistics, n is the count of non-missing values in the cell, as PROC MEANS N: a null value never counts, and two records of one subject count twice. Q1 and Q3 follow SAS QNTLDEF=5 (1, 2, 3, 4 gives 1.5 and 3.5).</li>
@@ -2454,7 +2461,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 17:49:56 UTC">November 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 19:44:29 UTC">November 3, 2026</span>
   </span>
 
     
