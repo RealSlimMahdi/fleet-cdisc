@@ -22,12 +22,13 @@ from typing import TYPE_CHECKING, Literal
 
 from fleet.core.exceptions import ValidationSetupError
 from fleet.core.study_context import (
+    AcceptedFinding,
     StudyConfigError,
     StudyContext,
     find_study_config,
     load_study_context,
 )
-from fleet.validation.engine import engine_version, find_engine
+from fleet.validation.engine import engine_version, find_engine, untested_note
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -54,6 +55,10 @@ SUPPORTED_IG_VERSIONS: dict[str, tuple[str, ...]] = {
 #: IG version used when neither an argument nor the study config gives one.
 DEFAULT_IG_VERSIONS: dict[str, str] = {"sdtm": "3.4", "adam": "1.3"}
 
+#: Seconds before an engine run is stopped when neither --timeout nor the
+#: study config gives a limit.
+DEFAULT_TIMEOUT = 300.0
+
 _IG_LABELS: dict[str, str] = {"sdtm": "SDTMIG", "adam": "ADaMIG"}
 
 
@@ -78,6 +83,8 @@ class RunSetup:
         study_config: The ``study_config.yaml`` used, or ``None``.
         engine_version: The engine version (see
             :func:`~fleet.validation.engine.engine_version`), or ``"unknown"``.
+        timeout: Seconds before an engine run is stopped.
+        accepted: The findings ``validation.accepted`` accepts (ADR-0017).
     """
 
     standard: Resolved[Standard]
@@ -86,6 +93,8 @@ class RunSetup:
     engine: Resolved[Path | None]
     study_config: Path | None
     engine_version: str = "unknown"
+    timeout: Resolved[float] = Resolved(DEFAULT_TIMEOUT, "default")
+    accepted: tuple[AcceptedFinding, ...] = ()
 
     @property
     def engine_ig_version(self) -> str:
@@ -101,7 +110,9 @@ class RunSetup:
             f"IG version:   {self.ig_version.value} ({self.ig_version.source})",
             f"Custom rules: {rules if rules is not None else 'none'} ({self.custom_rules.source})",
             f"Engine:       {engine if engine is not None else 'not found'} ({self.engine.source})",
-            f"CORE version: {self.engine_version}",
+            f"CORE version: {self.engine_version}{untested_note(self.engine_version)}",
+            f"Timeout:      {self.timeout.value:g} s ({self.timeout.source})",
+            f"Accepted:     {len(self.accepted)} finding rule(s)",
             f"Study config: {self.study_config or 'no study config'}",
         ]
 
@@ -115,6 +126,7 @@ def build_run_setup(
     version: str | None = None,
     custom_rules: str | Path | None = None,
     engine: str | Path | None = None,
+    timeout: float | None = None,
     config: Path | None = None,
     start: Path | None = None,
     environ: Mapping[str, str] | None = None,
@@ -131,6 +143,7 @@ def build_run_setup(
         version: IG version, ``"3-4"`` or ``"3.4"``.
         custom_rules: Directory of custom CORE rules.
         engine: Engine executable.
+        timeout: Seconds before an engine run is stopped.
         config: Study config file; replaces the search from *start*.
         start: Directory the study config is looked for from
             (default: the working directory).
@@ -167,6 +180,8 @@ def build_run_setup(
         engine=exe,
         study_config=config_path,
         engine_version=engine_version(exe.value) if exe.value is not None else "unknown",
+        timeout=_resolve_timeout(timeout, ctx),
+        accepted=tuple(ctx.config.validation.accepted) if ctx is not None else (),
     )
 
 
@@ -221,6 +236,7 @@ def build_sweep(
     version: str | None = None,
     custom_rules: str | Path | None = None,
     engine: str | Path | None = None,
+    timeout: float | None = None,
     config: Path | None = None,
     start: Path | None = None,
     environ: Mapping[str, str] | None = None,
@@ -239,6 +255,7 @@ def build_sweep(
         version: IG version, ``"3-4"`` or ``"3.4"``.
         custom_rules: Directory of custom CORE rules.
         engine: Engine executable.
+        timeout: Seconds before an engine run is stopped.
         config: Study config file; replaces the search from *start*.
         start: Directory the study config is looked for from
             (default: the working directory).
@@ -272,6 +289,7 @@ def build_sweep(
                 version=version,
                 custom_rules=custom_rules,
                 engine=engine,
+                timeout=timeout,
                 config=config_path,
                 environ=environ,
             )
@@ -416,6 +434,17 @@ def _resolve_custom_rules(
     if not rules.is_dir():
         raise _refuse(f"the custom rules directory {rules} (from the {source}) does not exist.")
     return Resolved(rules, source)
+
+
+def _resolve_timeout(timeout: float | None, ctx: StudyContext | None) -> Resolved[float]:
+    configured = ctx.config.validation.timeout if ctx is not None else None
+    if timeout is not None:
+        if timeout <= 0:
+            raise _refuse(f"the timeout must be a positive number of seconds, not {timeout}.")
+        return Resolved(float(timeout), "argument")
+    if configured is not None:
+        return Resolved(float(configured), "study config")
+    return Resolved(DEFAULT_TIMEOUT, "default")
 
 
 def _resolve_engine(

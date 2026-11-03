@@ -167,8 +167,8 @@ class TestCustomRulesEngineIntegration:
             rules_dir = Path(tmpdir) / "rules"
             rules_dir.mkdir()
 
-            # Mock subprocess.run to capture the command
-            with patch("fleet.validation.official.subprocess.run") as mock_run:
+            # Mock the engine run to capture the command
+            with patch("fleet.validation.official._run_command") as mock_run:
                 mock_run.return_value.returncode = 0
                 mock_run.return_value.stdout = ""
                 mock_run.return_value.stderr = ""
@@ -206,15 +206,15 @@ class TestCustomRulesEngineIntegration:
                             pass  # May fail on output parsing — that's fine
 
                     # Check the command included -lr
-                    if mock_run.called:
-                        cmd = mock_run.call_args[0][0]
-                        assert "-lr" in cmd
-                        lr_idx = cmd.index("-lr")
-                        assert cmd[lr_idx + 1] == str(rules_dir)
+                    assert mock_run.called
+                    cmd = mock_run.call_args[0][0]
+                    assert "-lr" in cmd
+                    lr_idx = cmd.index("-lr")
+                    assert cmd[lr_idx + 1] == str(rules_dir)
 
     def test_validate_dataset_no_lr_without_custom_rules(self):
         """Verify -lr is NOT added when custom_rules is None."""
-        with patch("fleet.validation.official.subprocess.run") as mock_run:
+        with patch("fleet.validation.official._run_command") as mock_run:
             mock_run.return_value.returncode = 0
             mock_run.return_value.stdout = ""
             mock_run.return_value.stderr = ""
@@ -250,9 +250,9 @@ class TestCustomRulesEngineIntegration:
                     except Exception:
                         pass
 
-                if mock_run.called:
-                    cmd = mock_run.call_args[0][0]
-                    assert "-lr" not in cmd
+                assert mock_run.called
+                cmd = mock_run.call_args[0][0]
+                assert "-lr" not in cmd
 
     def test_custom_rules_invalid_path_raises(self):
         """Verify error when custom_rules path doesn't exist."""

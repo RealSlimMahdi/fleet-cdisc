@@ -41,6 +41,7 @@ from fleet.core.exceptions import (
     DerivationError,
     SpecError,
     ValidationError,
+    ValidationSetupError,
     VerbUsageError,
 )
 
@@ -59,6 +60,9 @@ logger = fleet_log.get_logger(__name__)
 
 #: What ``on_fail`` accepts on the checking verbs (``validate``, ``compare``).
 _ON_FAIL_VALUES = ("warn", "raise", "ignore")
+
+#: Metadata attributes of a generated codelist class (``fleet.ct.generator``), not terms.
+_CODELIST_META = frozenset({"_concept_id", "_cdisc_url", "_preferred_term"})
 
 
 def _check_on_fail(verb: str, on_fail: str) -> None:
@@ -608,13 +612,15 @@ class SharedVerbsMixin:
                 the literal is validated at pipeline-build time.
             ct_map: Explicit ``{raw_value: ct_value}`` mapping applied to
                 *source* (raw codes that need remapping).  Requires
-                *source*.
+                *source*.  A raw value outside the map is kept as it is,
+                as SAS PUT with no OTHER= keeps it.
             ct_validator: Optional pre-built validator instance.
-            validate_values: Controls the pass-through validation (no
-                effect when *ct_map* is given).  ``None`` (default):
-                validate whenever codelist terms are available and warn
-                about the degradation otherwise.  ``False``: skip
-                validation silently.
+            validate_values: Controls the codelist check of the values the
+                column will hold (after *ct_map*).  ``None`` (default):
+                check whenever codelist terms are available, warn with the
+                values not in the codelist, and warn about the degradation
+                otherwise.  Null and blank values are never findings.
+                ``False``: skip the check silently.
 
         Returns:
             Self: The namespace with *target* appended; call
@@ -726,15 +732,23 @@ class SharedVerbsMixin:
             )
             if fk:
                 ns._auto_fk_check(target)
-            if validate_values is True and ct_id:
+            if validate_values is not False and ct_id:
                 if ct_validator is None:
                     from fleet.ct.validator import get_validator
 
                     ct_validator = get_validator()
                 # Validate the post-mapping values the column will contain.
-                self._warn_invalid_values(
+                validated = self._warn_invalid_values(
                     source, ct_id, ct_validator, ct_cls, target=target, value_map=ct_map
                 )
+                if not validated:
+                    warnings.warn(
+                        f"{verb}('{target}'): codelist '{ct_id}' not found / CT not "
+                        f"loaded — values mapped from '{source}' are unvalidated. Load CT "
+                        "via fleet.get_validator().load_ct_file(...), or pass "
+                        "validate_values=False to silence this warning.",
+                        stacklevel=3,
+                    )
             return ns
 
         ns = self._chain(pl.col(source).alias(target), verb=verb, params=lineage_params)
@@ -795,12 +809,14 @@ class SharedVerbsMixin:
         if ct_validator is not None:
             valid_values = set(ct_validator.get_valid_values(ct_codelist))
 
-        # Strategy 2: introspect the codelist class (works without CT loaded)
+        # Strategy 2: introspect the codelist class (works without CT loaded).
+        # A term that starts with a digit (10^9/L) has an attribute name that
+        # starts with "_", so only the class metadata is left out.
         if not valid_values and ct_codelist_cls is not None:
-            valid_values = {
+            valid_values = set(getattr(ct_codelist_cls, "_terms", ())) or {
                 v
                 for k, v in vars(ct_codelist_cls).items()
-                if not k.startswith("_") and isinstance(v, str)
+                if not k.startswith("__") and k not in _CODELIST_META and isinstance(v, str)
             }
 
         if not valid_values:
@@ -818,15 +834,20 @@ class SharedVerbsMixin:
             return False
         if value_map:
             unique_vals = list(dict.fromkeys(value_map.get(v, v) for v in unique_vals))
-        invalid = [v for v in unique_vals if v not in valid_values]
+        # Null and blank are missing values, not CT findings.
+        invalid = [v for v in unique_vals if v not in (None, "") and v not in valid_values]
         if invalid:
             domain = getattr(self, "_domain", None)
             where = f"{domain}.{target}" if domain and target else (target or source)
+            hint = (
+                "Add the raw value to ct_map, or correct the map target."
+                if value_map
+                else "Consider providing a ct_map parameter."
+            )
             warnings.warn(
                 f"{where}: column '{source}' contains values not in codelist "
                 f"'{ct_codelist}': {invalid}. "
-                f"Valid values: {sorted(valid_values)}. "
-                f"Consider providing a ct_map parameter.",
+                f"Valid values: {sorted(valid_values)}. {hint}",
                 stacklevel=3,
             )
         return True
@@ -1743,9 +1764,10 @@ class SharedVerbsMixin:
                 deduplicated view grouping identical findings with row
                 ranges, ``"summary"`` for one line per issue, ``"full"``
                 for every individual finding expanded.
-            on_fail: What to do when validation reports errors —
-                ``"warn"`` (default) emits a ``UserWarning`` and
-                continues, ``"raise"`` raises
+            on_fail: What to do when a finding blocks (every CORE finding
+                that ``validation.accepted`` in the study config does not
+                list, ADR-0017) — ``"warn"`` (default) emits a
+                ``UserWarning`` and continues, ``"raise"`` raises
                 :class:`~fleet.core.exceptions.ValidationError`,
                 ``"ignore"`` continues silently.
 
@@ -1757,8 +1779,10 @@ class SharedVerbsMixin:
             ValidationSetupError: The validation could not run, in every
                 *on_fail* mode: the dataset name belongs to the other
                 standard (``adae.adam.validate("AE")``), the IG version is
-                not supported, or the custom rules directory is missing.
-            ValidationError: When errors are found and
+                not supported, the custom rules directory is missing, or
+                the engine crashed, timed out (``validation.timeout``) or
+                wrote no report.
+            ValidationError: When a finding blocks and
                 ``on_fail="raise"``.
             DerivationError: On an invalid *on_fail* value.
 
@@ -1801,6 +1825,7 @@ class SharedVerbsMixin:
                 dataset=dataset_or_domain,
                 version=setup.ig_version.value,
                 custom_rules=setup.custom_rules.value,
+                timeout=setup.timeout.value,
             )
         else:
             result = svc.validate_sdtm(
@@ -1808,19 +1833,24 @@ class SharedVerbsMixin:
                 domain=dataset_or_domain,
                 version=setup.ig_version.value,
                 custom_rules=setup.custom_rules.value,
+                timeout=setup.timeout.value,
             )
 
-        result.setup = setup
+        result.apply_setup(setup)
         enrich_with_lineage(result, latest_lineage_of(self))
         result.print_report(report_type=report)
+        if result.could_not_run is not None:
+            raise ValidationSetupError(
+                f"CDISC validation of '{dataset_or_domain}' could not run: {result.could_not_run}"
+            )
 
         new = copy.copy(self)
         new._last_validation = result
         if not result.is_valid:
             summary = (
                 f"CDISC validation failed for '{dataset_or_domain}': "
-                f"{len(result.errors)} error(s), {len(result.warnings)} warning(s). "
-                "Access details via .last_validation."
+                f"{len(result.errors)} error(s): findings that validation.accepted "
+                "does not list. Access details via .last_validation."
             )
             _settle_on_fail(on_fail, summary, ValidationError)
         return new
@@ -2272,6 +2302,10 @@ class SharedVerbsMixin:
                     ) from err
             ns = copy.copy(ns)
             ns._spec_ct_validate = True
+        elif "enabled" in spec.ct.model_fields_set:
+            # An explicit `ct: {validate: false}` switches the default CT check off.
+            ns = copy.copy(ns)
+            ns._spec_ct_validate = False
 
         # ct_codelist IDs resolve to the study's codelists.py classes, as ct=<class> inline.
         if any(drv.get("ct_codelist") for _, drv in raw_vars):

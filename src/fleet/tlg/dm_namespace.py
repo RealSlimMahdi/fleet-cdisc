@@ -19,6 +19,7 @@ from ._ard import (
 from ._ard import (
     expand_pools,
     prepare_frame,
+    restrict_to_population,
     summarize_ard,
 )
 from ._ard import (
@@ -29,7 +30,6 @@ from ._specs import (
     Row,
     Statistic,
     SummarySpecBase,
-    resolve_filter,
 )
 
 #: Statistics describing a continuous variable (e.g. age).
@@ -138,10 +138,7 @@ class DMTLGNamespace(BuilderVerbsMixin):
         # population filter applies to numerators and continuous stats
         # too — filtering only the denominators would let out-of-population
         # subjects into the counts (pct > 100%).
-        analysis_df = self._df
-        population_filter = resolve_filter(spec.adsl_filter)
-        if population_filter is not None:
-            analysis_df = analysis_df.filter(population_filter)
+        analysis_df = restrict_to_population(self._df, denom_src, spec.adsl_filter)
         analysis_df = prepare_frame(analysis_df, spec)
 
         # --- Categorical breakdowns (big-N + n / %) via shared engine ---

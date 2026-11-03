@@ -15,6 +15,7 @@ import pytest
 import fleet  # noqa: F401 — registers df.tlg
 from fleet.core.exceptions import SchemaError
 from fleet.tlg._registry import TEMPLATES
+from fleet.tlg.lb_namespace import LBAbnormalSpec, LBShiftSpec
 
 ADSL = pl.from_repr("""
 ┌─────────┬─────────┐
@@ -222,6 +223,8 @@ class TestLabChange:
 
 
 class TestLabShift:
+    # No ONTRTFL in these rows: the SAP rule is stated as the prefilter.
+    SPEC = LBShiftSpec(prefilter='pl.col("ABLFL").ne_missing("Y")')
     ADLB = pl.from_repr("""\
 ┌─────────┬─────────┬─────────┬───────┬────────┬────────┐
 │ USUBJID ┆ TRTA    ┆ PARAMCD ┆ ABLFL ┆ BNRIND ┆ ANRIND │
@@ -236,7 +239,7 @@ class TestLabShift:
 """)
 
     def test_true_cross_tab_at_worst_post_baseline(self) -> None:
-        ard = self.ADLB.tlg.lb.t_shift(groupby="TRTA", adsl=ADSL)
+        ard = self.ADLB.tlg.lb.t_shift(groupby="TRTA", adsl=ADSL, spec=self.SPEC)
         shifts = ard.filter((pl.col("variable") == "SHIFT") & (pl.col("stat_name") == "n"))
         by_cell = {
             (r["group2_level"], r["variable_level"]): r["stat"]
@@ -248,11 +251,12 @@ class TestLabShift:
         assert by_cell[("ALT", "LOW to NORMAL")] == 1.0
 
     def test_no_percentages_emitted(self) -> None:
-        ard = self.ADLB.tlg.lb.t_shift(groupby="TRTA", adsl=ADSL)
+        ard = self.ADLB.tlg.lb.t_shift(groupby="TRTA", adsl=ADSL, spec=self.SPEC)
         assert "pct" not in ard["stat_name"].to_list()
 
 
 class TestLabAbnormal:
+    SPEC = LBAbnormalSpec(prefilter='pl.col("ABLFL").ne_missing("Y")')
     ADLB = pl.from_repr("""\
 ┌─────────┬─────────┬─────────┬───────┬────────┬────────┐
 │ USUBJID ┆ TRTA    ┆ PARAMCD ┆ ABLFL ┆ BNRIND ┆ ANRIND │
@@ -280,7 +284,7 @@ class TestLabAbnormal:
 """)
 
     def test_baseline_abnormal_excluded_from_both_sides(self) -> None:
-        ard = self.ADLB.tlg.lb.t_abnormal(groupby="TRTA", adsl=self.ADSL3)
+        ard = self.ADLB.tlg.lb.t_abnormal(groupby="TRTA", adsl=self.ADSL3, spec=self.SPEC)
         high = ard.filter(
             (pl.col("variable") == "ABNORMAL")
             & (pl.col("variable_level") == "High")
@@ -294,7 +298,7 @@ class TestLabAbnormal:
         assert stats["pct"] == 50.0
 
     def test_low_direction_has_full_denominator(self) -> None:
-        ard = self.ADLB.tlg.lb.t_abnormal(groupby="TRTA", adsl=self.ADSL3)
+        ard = self.ADLB.tlg.lb.t_abnormal(groupby="TRTA", adsl=self.ADSL3, spec=self.SPEC)
         low = ard.filter(
             (pl.col("variable") == "ABNORMAL")
             & (pl.col("variable_level") == "Low")

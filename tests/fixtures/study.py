@@ -128,18 +128,18 @@ ADMH = _with_trt01p(
 
 ADLB = _with_trt01p(
     pl.from_repr("""\
-┌─────────┬─────────┬─────────┬──────────┬───────┬──────┬──────┬────────┬────────┐
-│ USUBJID ┆ TRTA    ┆ PARAMCD ┆ AVISIT   ┆ ABLFL ┆ AVAL ┆ CHG  ┆ BNRIND ┆ ANRIND │
-│ ---     ┆ ---     ┆ ---     ┆ ---      ┆ ---   ┆ ---  ┆ ---  ┆ ---    ┆ ---    │
-│ str     ┆ str     ┆ str     ┆ str      ┆ str   ┆ f64  ┆ f64  ┆ str    ┆ str    │
-╞═════════╪═════════╪═════════╪══════════╪═══════╪══════╪══════╪════════╪════════╡
-│ S01     ┆ Placebo ┆ ALT     ┆ BASELINE ┆ Y     ┆ 10   ┆ null ┆ NORMAL ┆ NORMAL │
-│ S01     ┆ Placebo ┆ ALT     ┆ WEEK 1   ┆ null  ┆ 16   ┆ 6    ┆ NORMAL ┆ HIGH   │
-│ S02     ┆ Placebo ┆ ALT     ┆ BASELINE ┆ Y     ┆ 40   ┆ null ┆ HIGH   ┆ HIGH   │
-│ S02     ┆ Placebo ┆ ALT     ┆ WEEK 1   ┆ null  ┆ 44   ┆ 4    ┆ HIGH   ┆ HIGH   │
-│ S05     ┆ Drug A  ┆ ALT     ┆ BASELINE ┆ Y     ┆ 20   ┆ null ┆ NORMAL ┆ NORMAL │
-│ S05     ┆ Drug A  ┆ ALT     ┆ WEEK 1   ┆ null  ┆ 18   ┆ -2   ┆ NORMAL ┆ NORMAL │
-└─────────┴─────────┴─────────┴──────────┴───────┴──────┴──────┴────────┴────────┘
+┌─────────┬─────────┬─────────┬──────────┬───────┬─────────┬──────┬──────┬────────┬────────┐
+│ USUBJID ┆ TRTA    ┆ PARAMCD ┆ AVISIT   ┆ ABLFL ┆ ONTRTFL ┆ AVAL ┆ CHG  ┆ BNRIND ┆ ANRIND │
+│ ---     ┆ ---     ┆ ---     ┆ ---      ┆ ---   ┆ ---     ┆ ---  ┆ ---  ┆ ---    ┆ ---    │
+│ str     ┆ str     ┆ str     ┆ str      ┆ str   ┆ str     ┆ f64  ┆ f64  ┆ str    ┆ str    │
+╞═════════╪═════════╪═════════╪══════════╪═══════╪═════════╪══════╪══════╪════════╪════════╡
+│ S01     ┆ Placebo ┆ ALT     ┆ BASELINE ┆ Y     ┆ null    ┆ 10   ┆ null ┆ NORMAL ┆ NORMAL │
+│ S01     ┆ Placebo ┆ ALT     ┆ WEEK 1   ┆ null  ┆ Y       ┆ 16   ┆ 6    ┆ NORMAL ┆ HIGH   │
+│ S02     ┆ Placebo ┆ ALT     ┆ BASELINE ┆ Y     ┆ null    ┆ 40   ┆ null ┆ HIGH   ┆ HIGH   │
+│ S02     ┆ Placebo ┆ ALT     ┆ WEEK 1   ┆ null  ┆ Y       ┆ 44   ┆ 4    ┆ HIGH   ┆ HIGH   │
+│ S05     ┆ Drug A  ┆ ALT     ┆ BASELINE ┆ Y     ┆ null    ┆ 20   ┆ null ┆ NORMAL ┆ NORMAL │
+│ S05     ┆ Drug A  ┆ ALT     ┆ WEEK 1   ┆ null  ┆ Y       ┆ 18   ┆ -2   ┆ NORMAL ┆ NORMAL │
+└─────────┴─────────┴─────────┴──────────┴───────┴─────────┴──────┴──────┴────────┴────────┘
 """)
 )
 

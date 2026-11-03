@@ -55,6 +55,18 @@ class CTConfig(BaseModel):
     package: str = Field(default="sdtmct-2023-12-15")
 
 
+class AcceptedFinding(BaseModel):
+    """A CORE finding the study accepts, as an SDRG explanation does (ADR-0017).
+
+    Every CORE finding blocks the job unless an entry lists its rule and
+    dataset with a reason.
+    """
+
+    rule: str = Field(min_length=1, description="CORE rule ID, e.g. ``CORE-000767``.")
+    dataset: str = Field(min_length=1, description="Dataset name, e.g. ``AE`` or ``STUDY``.")
+    reason: str = Field(min_length=1, description="Why the finding is accepted (SDRG text).")
+
+
 class ValidationConfig(BaseModel):
     """CDISC Rules Engine configuration.
 
@@ -73,6 +85,15 @@ class ValidationConfig(BaseModel):
             "Directory containing custom validation rule YAML files. "
             "Passed to the engine via -lr flag. Absolute or relative to study root."
         ),
+    )
+    timeout: float | None = Field(
+        default=None,
+        gt=0,
+        description="Seconds before an engine run is stopped (default 300).",
+    )
+    accepted: list[AcceptedFinding] = Field(
+        default_factory=list,
+        description="Findings that do not block: rule, dataset and reason for each.",
     )
 
 

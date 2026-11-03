@@ -38,9 +38,33 @@ if TYPE_CHECKING:
 _GITHUB_REPO = "cdisc-org/cdisc-rules-engine"
 _RELEASES_API = f"https://api.github.com/repos/{_GITHUB_REPO}/releases/latest"
 
-#: GitHub release tag of the CORE version that Fleet is tested with (CORE 0.15.0).
-#: ``fleet install-engine`` installs this tag unless the user asks for another one.
-DEFAULT_ENGINE_TAG = "v0.15"
+#: CORE versions Fleet is tested with, as ``engine version`` prints them, to
+#: their GitHub release tag.  Add a row only after the CORE canary workflow
+#: (``.github/workflows/core-canary.yml``) passes on that release.
+TESTED_ENGINE_VERSIONS: dict[str, str] = {"0.15.0": "v0.15", "1.0.0": "v1.0.0"}
+
+#: GitHub release tag that ``fleet install-engine`` installs unless the user
+#: asks for another one: the newest tested version.
+DEFAULT_ENGINE_TAG = TESTED_ENGINE_VERSIONS["0.15.0"]
+
+
+def untested_note(version: str) -> str:
+    """Return the report note for an engine version Fleet is not tested with.
+
+    Args:
+        version: The engine version (``"0.17.1"``), or ``"unknown"``.
+
+    Returns:
+        str: ``""`` for a tested or unknown version, else
+        ``" (not tested with Fleet; tested: 0.15.0, 1.0.0)"``.
+
+    Examples:
+        ``untested_note("0.17.1")`` gives
+        ``" (not tested with Fleet; tested: 0.15.0, 1.0.0)"``.
+    """
+    if version == "unknown" or version in TESTED_ENGINE_VERSIONS:
+        return ""
+    return f" (not tested with Fleet; tested: {', '.join(TESTED_ENGINE_VERSIONS)})"
 
 
 def _fleet_home() -> Path:
@@ -505,6 +529,9 @@ def doctor(study_root: Path | None = None, engine: Path | None = None) -> dict[s
         checks["status"] = "ERROR — timed out"
     except Exception as exc:
         checks["status"] = f"ERROR — {exc}"
+
+    version = engine_version(found)
+    checks["version"] = version + (untested_note(version) or " (tested with Fleet)")
 
     # pyreadstat
     checks["pyreadstat"] = _check_pyreadstat()

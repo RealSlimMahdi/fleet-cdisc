@@ -19,7 +19,7 @@ from typing import ClassVar
 import polars as pl
 from pydantic import Field
 
-from ._ard import prepare_frame, summarize_ard, summarize_spec
+from ._ard import prepare_frame, restrict_to_population, summarize_ard, summarize_spec
 from ._builder import BuilderVerbsMixin
 from ._specs import (
     OverallStat,
@@ -172,6 +172,8 @@ class DSTLGNamespace(BuilderVerbsMixin):
         # The dataset filter must bite before deaths are identified, so the
         # numerators, the deaths denominator, and the cause rows agree.
         analysis = prepare_frame(self._df, spec)
+        # A death outside the population must not decide the cause block's arms.
+        analysis = restrict_to_population(analysis, population, spec.adsl_filter)
         deaths_filter = pl.col("DTHFL") == "Y" if "DTHFL" in analysis.columns else None
         deaths = analysis.filter(deaths_filter) if deaths_filter is not None else analysis
 

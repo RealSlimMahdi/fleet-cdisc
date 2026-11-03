@@ -297,37 +297,39 @@ The report printed to stdout makes conformance issues immediately visible:
 ======================================================================
 CDISC Validation Report: AE
 ======================================================================
-Dataset Type: SDTM 3.4
+Dataset Type: sdtmig v3.4
 Status: FAIL
+Rules executed: 93
 Total Issues: 2
-  Errors: 2, Warnings: 0, Info: 0
+  Errors: 2, Warnings (accepted): 0, Info: 0
 ----------------------------------------------------------------------
 
 ERRORS (2 unique, 2 total):
 
-1. [SDTM.AE.R0001] AESEQ is required but missing
+1. [CORE-000355] (official) At least one required variable is missing from dataset
    Variable: AESEQ
 
-2. [SDTM.AE.R0014] AEBODSYS must be populated when AEDECOD is present
-   Variable: AEBODSYS
-   Rows affected: 1-43 (43 occurrences)
-   Suggested fix: Map AEBODSYS from MedDRA lookup or hardcode domain SOC
+2. [CORE-000328] (official) The Study Day of Start of Observation (AESTDY) is not present in the dataset when Start Date/Time of Observation (AESTDTC) is present
 
 ======================================================================
 
 ======================================================================
 CDISC Validation Report: ADAE
 ======================================================================
-Dataset Type: ADaM 1.3
+Dataset Type: adamig v1.3
 Status: PASS
 Total Issues: 0
-  Errors: 0, Warnings: 0, Info: 0
+  Errors: 0, Warnings (accepted): 0, Info: 0
 ----------------------------------------------------------------------
 
   No issues found.
 
 ======================================================================
 ```
+
+Every CORE finding blocks until the study config accepts it with a reason
+(`validation.accepted`, ADR-0017). An accepted finding gives
+`Status: FINDINGS (1)` and shows its reason.
 
 ### Layer 4b — Trace an issue back to its verb
 

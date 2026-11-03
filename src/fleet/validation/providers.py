@@ -20,6 +20,7 @@ class ValidationProvider(ABC):
         domain: str,
         version: str,
         custom_rules: Path | None = None,
+        timeout: float = 300,
     ) -> ValidationResult:
         pass
 
@@ -30,6 +31,7 @@ class ValidationProvider(ABC):
         dataset: str,
         version: str,
         custom_rules: Path | None = None,
+        timeout: float = 300,
     ) -> ValidationResult:
         pass
 
@@ -39,11 +41,12 @@ class ValidationProvider(ABC):
         standard: str,
         version: str,
         custom_rules: Path | None = None,
+        timeout: float = 300,
     ) -> dict[str, ValidationResult]:
         """Validate several datasets of one standard; one at a time unless overridden."""
         validate = self.validate_adam if standard == "adam" else self.validate_sdtm
         return {
-            name: validate(df, name, version, custom_rules=custom_rules)
+            name: validate(df, name, version, custom_rules=custom_rules, timeout=timeout)
             for name, df in datasets.items()
         }
 
@@ -60,6 +63,7 @@ class OfficialRulesEngineProvider(ValidationProvider):
         domain: str,
         version: str,
         custom_rules: Path | None = None,
+        timeout: float = 300,
     ) -> ValidationResult:
         return self.validator.validate_dataset(
             data=df,
@@ -68,6 +72,7 @@ class OfficialRulesEngineProvider(ValidationProvider):
             dataset_name=domain.upper(),
             domain=domain,
             custom_rules=custom_rules,
+            timeout=timeout,
         )
 
     def validate_adam(
@@ -76,6 +81,7 @@ class OfficialRulesEngineProvider(ValidationProvider):
         dataset: str,
         version: str,
         custom_rules: Path | None = None,
+        timeout: float = 300,
     ) -> ValidationResult:
         return self.validator.validate_dataset(
             data=df,
@@ -84,6 +90,7 @@ class OfficialRulesEngineProvider(ValidationProvider):
             dataset_name=dataset.upper(),
             domain=dataset,
             custom_rules=custom_rules,
+            timeout=timeout,
         )
 
     def validate_datasets(
@@ -92,10 +99,12 @@ class OfficialRulesEngineProvider(ValidationProvider):
         standard: str,
         version: str,
         custom_rules: Path | None = None,
+        timeout: float = 300,
     ) -> dict[str, ValidationResult]:
         return self.validator.validate_datasets(
             datasets,
             standard=f"{standard}ig",
             version=version.replace(".", "-"),
             custom_rules=custom_rules,
+            timeout=timeout,
         )

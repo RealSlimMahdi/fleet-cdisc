@@ -1,0 +1,39 @@
+name: CORE canary
+
+# Runs Fleet's validation on the newest CDISC Rules Engine release every week,
+# so a CORE release that breaks `fleet validate` is found before a user finds it.
+# A version joins fleet.validation.engine.TESTED_ENGINE_VERSIONS only after this passes.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "CORE release tag (default: latest)"
+        required: false
+        default: "latest"
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Install CORE
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run fleet install-engine --version "${{ inputs.version || 'latest' }}" --force
+
+      - name: Validate a small study
+        run: uv run python scripts/core_canary.py --engine ~/.fleet/cdisc-rules-engine/core/core

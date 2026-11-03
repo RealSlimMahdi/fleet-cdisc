@@ -231,14 +231,15 @@ Total Issues: 0
 ```
 
 For a CI pipeline, make compliance a hard gate — `on_fail="raise"` turns
-findings into a `ValidationError` instead of a warning:
+a finding that `validation.accepted` does not list into a `ValidationError`
+instead of a warning:
 
 ```python
 adsl = (
     dm.adam.adsl.source("STUDYID", "USUBJID", "ARM", "SEX")
     .assign("TRT01P", source="ARM")
     .date("TRTSDT", source="RFSTDTC")
-    .validate("ADSL", on_fail="raise")  # ← errors stop the build
+    .validate("ADSL", on_fail="raise")  # ← a finding not accepted stops the build
     .to_frame()
 )
 ```

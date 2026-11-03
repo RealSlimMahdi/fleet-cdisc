@@ -735,10 +735,14 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         source: str = "ae_relationship",
         aerel_map: dict[str, str] | None = None,
     ) -> SDTMNamespace:
-        """Map free-text AE causality strings to controlled ``AEREL`` values.
+        """Map free-text AE causality strings to ``AEREL`` values.
 
-        Mapping is case-insensitive against *aerel_map* (defaults to the
-        built-in CDISC causality mapping).
+        Mapping is case-insensitive against *aerel_map*.  The default map
+        is Fleet's own convention, not CDISC terminology: SDTM IG v3.4
+        gives AEREL no codelist, so the sponsor defines the terms.  The
+        AE relationship table (``AERelationshipSpec.relationship_order``)
+        must list the same terms; a term it does not list stops the
+        table.
 
         Args:
             target: Output column name (default ``"AEREL"``).
@@ -748,6 +752,9 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         Returns:
             SDTMNamespace: The namespace with *target* appended; call
                 ``.to_frame()`` to materialise.
+
+        References:
+            SDTM IG v3.4, AE domain, AEREL (no controlled terminology).
 
         Examples:
             Derive ``AEREL`` from raw causality using the default mapping::

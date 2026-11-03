@@ -28,6 +28,9 @@ _SUBJECTS = pl.from_repr("""\
 └─────────┘
 """)
 
+#: What the engine writes when no rule fires: one rule executed, no finding.
+_CLEAN_REPORT = {"Issue_Details": [], "Rules_Report": [{"core_id": "X", "status": "SUCCESS"}]}
+
 
 @dataclass
 class FakeEngine:
@@ -57,12 +60,12 @@ def engine(monkeypatch: pytest.MonkeyPatch) -> FakeEngine:
         data_dir = Path(cmd[cmd.index("-d") + 1])
         fake.datasets.append(sorted(p.name for p in data_dir.iterdir()))
         report = fake.custom_report if "-lr" in cmd else fake.report
-        if report is not None:
-            out = Path(cmd[cmd.index("-o") + 1]).with_suffix(".json")
-            out.write_text(json.dumps(report), encoding="utf-8")
+        out = Path(cmd[cmd.index("-o") + 1]).with_suffix(".json")
+        out.write_text(json.dumps(report or _CLEAN_REPORT), encoding="utf-8")
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     monkeypatch.setattr("fleet.validation.official.subprocess.run", run)
+    monkeypatch.setattr("fleet.validation.official._run_command", run)
     monkeypatch.delenv("FLEET_RULES_ENGINE", raising=False)
     return fake
 
@@ -102,7 +105,9 @@ class TestSweep:
         assert engine.datasets == [["AE.json", "DM.json", "VS.json"], ["ADAE.json", "ADSL.json"]]
         out = capsys.readouterr().out
         assert out.count("CDISC Validation Report:") == 5
-        assert "5 passed, 0 failed, 0 could not run" in out
+        assert (
+            "5 passed, 0 with accepted findings, 0 not assessed, 0 failed, 0 could not run" in out
+        )
 
     def test_the_directory_names_the_standard_in_the_header(
         self, study: Path, engine: FakeEngine, capsys: pytest.CaptureFixture
@@ -125,7 +130,6 @@ class TestSweep:
                     "core_id": "CORE-000001",
                     "message": "AESTDTC after AEENDTC",
                     "dataset": "ae.json",
-                    "Severity": "Error",
                 }
             ]
         }
@@ -135,7 +139,7 @@ class TestSweep:
         out = capsys.readouterr().out
         ae_report = out.split("CDISC Validation Report: AE")[1].split("CDISC Validation Report:")[0]
         assert "CORE-000001" in ae_report
-        assert "2 passed, 1 failed" in out
+        assert "2 passed, 0 with accepted findings, 0 not assessed, 1 failed" in out
 
     def test_directory_and_name_conflict_could_not_run_and_others_run(
         self, study: Path, engine: FakeEngine, capsys: pytest.CaptureFixture
@@ -204,7 +208,7 @@ def test_no_paths_outside_a_study_could_not_run(
 
 
 def _finding(rule: str, dataset: str) -> dict:
-    return {"core_id": rule, "message": f"{rule} fired", "dataset": dataset, "Severity": "Error"}
+    return {"core_id": rule, "message": f"{rule} fired", "dataset": dataset}
 
 
 class TestCustomRules:
@@ -254,7 +258,9 @@ class TestCustomRules:
         assert ["-lr" in cmd for cmd in engine.calls] == [False, True, False, True]
         out = capsys.readouterr().out
         assert out.count("CDISC Validation Report:") == 5
-        assert "5 passed, 0 failed, 0 could not run" in out
+        assert (
+            "5 passed, 0 with accepted findings, 0 not assessed, 0 failed, 0 could not run" in out
+        )
 
     def test_without_custom_rules_one_run_per_standard(
         self, study: Path, engine: FakeEngine

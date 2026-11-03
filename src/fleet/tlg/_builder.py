@@ -153,9 +153,10 @@ class TLGBuilder:
 
         Args:
             adsl: ADSL DataFrame for big-N denominators.
-            adsl_filter: Optional filter applied to ADSL only — a
+            adsl_filter: Optional population filter on ADSL — a
                 ``pl.Expr`` or a string expression (the
-                YAML-serializable form).
+                YAML-serializable form).  Only the analysis records of
+                the selected subjects are counted.
 
         Returns:
             TLGBuilder: Builder with population set.
@@ -1144,8 +1145,9 @@ class BuilderVerbsMixin:
 
         Args:
             adsl: ADSL DataFrame for big-N denominators.
-            adsl_filter: Optional filter applied to ADSL only — a
-                ``pl.Expr`` or a string expression.
+            adsl_filter: Optional population filter on ADSL — a
+                ``pl.Expr`` or a string expression.  Only the analysis
+                records of the selected subjects are counted.
 
         Returns:
             TLGBuilder: A new builder with population set.
