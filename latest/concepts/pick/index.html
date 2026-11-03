@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#event-priority-derivation-with-pick" class="md-skip">
+        <a href="#multi-source-event-derivation-with-pick" class="md-skip">
           Skip to content
         </a>
       
@@ -2229,8 +2229,8 @@
   
 
 
-<h1 id="event-priority-derivation-with-pick">Event-Priority Derivation with <code>pick()</code><a class="headerlink" href="#event-priority-derivation-with-pick" title="Permanent link">&para;</a></h1>
-<p>Many ADaM variables require scanning multiple data sources in a defined priority order and selecting the first (or last) qualifying value.  Admiral calls this pattern <code>derive_vars_extreme_event</code> / <code>event()</code>.  Fleet provides <code>pick()</code> — a single verb that replaces multi-step joins, coalesces, and manual priority logic.</p>
+<h1 id="multi-source-event-derivation-with-pick">Multi-Source Event Derivation with <code>pick()</code><a class="headerlink" href="#multi-source-event-derivation-with-pick" title="Permanent link">&para;</a></h1>
+<p>Many ADaM variables scan several data sources and keep one value per subject: the latest date over all sources, or the first source that has a value.  Admiral calls this pattern <code>derive_vars_extreme_event</code> / <code>event()</code>.  Fleet provides <code>pick()</code>, one verb that replaces multi-step joins, coalesces, and manual priority logic.</p>
 <h2 id="the-problem">The Problem<a class="headerlink" href="#the-problem" title="Permanent link">&para;</a></h2>
 <p>Consider <strong>LSTALVDT</strong> (Last Date Known Alive).  The derivation spec typically reads:</p>
 <blockquote>
@@ -2242,19 +2242,21 @@
 <li>Treatment end date (TRTEDT) — fallback</li>
 </ol>
 </blockquote>
-<p>Each "event" has its own source dataset, filter condition, and column to extract.  The first event that matches (in priority order) wins for each subject.</p>
+<p>Each "event" has its own source dataset, filter condition, and column to extract.  The latest date over all events wins for each subject, whatever the list position.</p>
 <p>Without <code>pick()</code>, you'd need:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Manual approach — 4 last_date lookups + coalesce</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Manual approach — 3 last_date lookups + a row-wise maximum</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">adsl</span> <span class="o">=</span> <span class="p">(</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">adsl</span><span class="o">.</span><span class="n">adam</span><span class="o">.</span><span class="n">adsl</span><span class="o">.</span><span class="n">last_date</span><span class="p">(</span><span class="s2">&quot;_dth&quot;</span><span class="p">,</span> <span class="n">from_dataset</span><span class="o">=</span><span class="n">adsl_df</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;DTHDT&quot;</span><span class="p">)</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="o">.</span><span class="n">last_date</span><span class="p">(</span><span class="s2">&quot;_ae_end&quot;</span><span class="p">,</span> <span class="n">from_dataset</span><span class="o">=</span><span class="n">ae</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;AEENDTC&quot;</span><span class="p">)</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="o">.</span><span class="n">last_date</span><span class="p">(</span><span class="s2">&quot;_ae_start&quot;</span><span class="p">,</span> <span class="n">from_dataset</span><span class="o">=</span><span class="n">ae</span><span class="p">,</span> <span class="n">date_col</span><span class="o">=</span><span class="s2">&quot;AESTDTC&quot;</span><span class="p">)</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="o">.</span><span class="n">derivation</span><span class="p">(</span><span class="s2">&quot;LSTALVDT&quot;</span><span class="p">,</span> <span class="n">expression</span><span class="o">=</span><span class="s1">&#39;pl.coalesce(&quot;_dth&quot;, &quot;_ae_end&quot;, &quot;_ae_start&quot;, &quot;TRTEDT&quot;)&#39;</span><span class="p">)</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="o">.</span><span class="n">drop</span><span class="p">([</span><span class="s2">&quot;_dth&quot;</span><span class="p">,</span> <span class="s2">&quot;_ae_end&quot;</span><span class="p">,</span> <span class="s2">&quot;_ae_start&quot;</span><span class="p">])</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">)</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="o">.</span><span class="n">derivation</span><span class="p">(</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>        <span class="s2">&quot;LSTALVDT&quot;</span><span class="p">,</span> <span class="n">expression</span><span class="o">=</span><span class="s1">&#39;pl.max_horizontal(&quot;_dth&quot;, &quot;_ae_end&quot;, &quot;_ae_start&quot;, &quot;TRTEDT&quot;)&#39;</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="p">)</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="o">.</span><span class="n">drop</span><span class="p">([</span><span class="s2">&quot;_dth&quot;</span><span class="p">,</span> <span class="s2">&quot;_ae_end&quot;</span><span class="p">,</span> <span class="s2">&quot;_ae_start&quot;</span><span class="p">])</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="p">)</span>
 </span></code></pre></div>
-<p>This is verbose, error-prone (column ordering = priority), and loses traceability.</p>
+<p>This is verbose, error-prone, and loses traceability: the record behind each date is gone.</p>
 <h2 id="the-solution-pick">The Solution: <code>pick()</code><a class="headerlink" href="#the-solution-pick" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">adsl</span> <span class="o">=</span> <span class="n">adsl</span><span class="o">.</span><span class="n">adam</span><span class="o">.</span><span class="n">adsl</span><span class="o">.</span><span class="n">pick</span><span class="p">(</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="s2">&quot;LSTALVDT&quot;</span><span class="p">,</span>
@@ -2288,30 +2290,30 @@
 </span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>    <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;last&quot;</span><span class="p">,</span>
 </span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a><span class="p">)</span><span class="o">.</span><span class="n">to_frame</span><span class="p">()</span>
 </span></code></pre></div>
-<p>Priority is explicit in list order.  Each event's <code>"label"</code> documents intent.  No temporary columns needed.</p>
+<p><code>order=["LSTALVDT"], mode="last"</code> at top level makes every event compete on the date: the latest one wins.  Each event's <code>"label"</code> documents intent.  No temporary columns needed.</p>
 <h2 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>flowchart TD
-    A[Events list&lt;br/&gt;ordered by priority] --&gt; PE
+    A[Events list] --&gt; PE
 
-    subgraph PE["For each event · in priority order"]
+    subgraph PE["For each event"]
         direction TB
         C[Filter source by 'when' condition]
         D[Apply 'set' mappings to targets]
         E[Group by 'by' vars]
         F[Select record per mode / order]
-        G[Tag with event priority number]
+        G[Tag with event list position]
         C --&gt; D --&gt; E --&gt; F --&gt; G
     end
 
     PE --&gt; H[Stack all candidate records]
-    H --&gt; I[Sort by priority, then order]
+    H --&gt; I[Sort by top-level order, then list position]
     I --&gt; J[Keep first per group = winner]
     J --&gt; K[Left-join targets back to base frame]</code></pre>
 <p><strong>Key properties:</strong></p>
 <ol>
-<li><strong>Priority = list position.</strong>  Event at index 0 beats index 1, regardless of dates.</li>
-<li><strong>Within-event selection</strong> uses <code>mode</code> ("first" or "last") + <code>order</code> (sort columns).</li>
-<li><strong>Cross-event winner</strong> is the highest-priority event that has qualifying records.</li>
+<li><strong>Within-event selection</strong> uses the event's <code>mode</code> and <code>order</code>, or the top-level ones.</li>
+<li><strong>With a top-level <code>order</code></strong>, every event's record competes on that order and <code>mode</code>, as admiral <code>derive_vars_extreme_event</code> does.  <code>order=["LSTALVDT"], mode="last"</code> gives the latest date over all sources.  A tie goes to the first listed event.</li>
+<li><strong>With no top-level <code>order</code></strong>, the first listed event that has a record wins: a priority cascade, as the admiral DTHCAUS template.</li>
 <li><strong>Subjects with no matching events</strong> get <code>null</code> for all targets.</li>
 </ol>
 <h2 id="event-dict-reference">Event Dict Reference<a class="headerlink" href="#event-dict-reference" title="Permanent link">&para;</a></h2>
@@ -2365,7 +2367,7 @@
 </tbody>
 </table>
 <h2 id="multiple-targets">Multiple Targets<a class="headerlink" href="#multiple-targets" title="Permanent link">&para;</a></h2>
-<p><code>pick()</code> can derive several columns simultaneously from the same event cascade:</p>
+<p><code>pick()</code> can derive several columns simultaneously from the same events:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">adsl</span> <span class="o">=</span> <span class="n">adsl</span><span class="o">.</span><span class="n">adam</span><span class="o">.</span><span class="n">adsl</span><span class="o">.</span><span class="n">pick</span><span class="p">(</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="p">[</span><span class="s2">&quot;LSTALVDT&quot;</span><span class="p">,</span> <span class="s2">&quot;DTHFL&quot;</span><span class="p">],</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">events</span><span class="o">=</span><span class="p">[</span>
@@ -2411,8 +2413,16 @@
 <td><code>.pick(targets, events=..., by=..., order=..., mode=...)</code></td>
 </tr>
 <tr>
-<td>Priority = position in <code>event()</code> list</td>
-<td>Priority = position in <code>events</code> list</td>
+<td><code>order = exprs(LSTALVDT), mode = "last"</code>: latest value over all events</td>
+<td><code>order=["LSTALVDT"], mode="last"</code></td>
+</tr>
+<tr>
+<td>Ties on <code>order</code> go to the first event in the list</td>
+<td>Ties on <code>order</code> go to the first event in <code>events</code></td>
+</tr>
+<tr>
+<td>DTHCAUS template: first listed event with a record</td>
+<td>No top-level <code>order</code>: first listed event with a record</td>
 </tr>
 <tr>
 <td>Requires pre-built event objects + explicit dataset references</td>
@@ -2437,7 +2447,7 @@
 </thead>
 <tbody>
 <tr>
-<td>Multi-source priority cascade (LSTALVDT, DTHCAUS, LDDTHELD)</td>
+<td>Multi-source extreme value or first-source cascade (LSTALVDT, DTHCAUS, LDDTHELD)</td>
 <td><code>pick()</code></td>
 </tr>
 <tr>
@@ -2454,7 +2464,7 @@
 </tr>
 </tbody>
 </table>
-<p><strong>Rule of thumb:</strong> If your logic is "try source A, then B, then C" — use <code>pick()</code>.  If it requires comparing multiple records within the same subject to determine a single result (e.g., sustained response confirmation), use a <code>@derivation</code>.</p>
+<p><strong>Rule of thumb:</strong> If your logic is "the latest (or first) value over sources A, B and C", or "try source A, then B, then C", use <code>pick()</code>.  If it requires comparing multiple records within the same subject to determine a single result (e.g., sustained response confirmation), use a <code>@derivation</code>.</p>
 <h2 id="spec-driven-usage">Spec-Driven Usage<a class="headerlink" href="#spec-driven-usage" title="Permanent link">&para;</a></h2>
 <p>In a <code>define.yaml</code>, the pick algorithm maps directly:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">variables</span><span class="p">:</span>
@@ -2496,7 +2506,7 @@
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="July 24, 2026 09:19:43 UTC">July 24, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 09:14:56 UTC">November 3, 2026</span>
   </span>
 
     
