@@ -123,8 +123,10 @@ def compare(
             the exact default compares them in their own dtype.
         ignore_trailing_whitespace: Strip trailing whitespace from both
             sides of a string before comparing, so SAS's padded character
-            values equal Fleet's stripped ones.  Leading whitespace still
-            differs.
+            values equal Fleet's stripped ones.  String keys are stripped
+            too, before the duplicate-key check, so ``"S1 "`` pairs with
+            ``"S1"``; the listing shows the keys stripped and the values as
+            they are.  Leading whitespace still differs.
         blank_is_missing: Read an empty string as null on both sides, keys
             included, as SAS does: SAS has one character missing value, the
             blank.  Use it when one side comes from a tool that kept ``""``
@@ -544,6 +546,7 @@ def _prepare(
     key_casts: dict[str, pl.DataType],
     marker: str,
     blank_is_missing: bool,
+    strip_keys: bool,
 ) -> pl.LazyFrame:
     """One side, presenting every compared variable under its base name; *compared* maps that name to this side's column."""
     columns = [pl.col(k).cast(key_casts[k]) if k in key_casts else pl.col(k) for k in keys]
@@ -551,6 +554,9 @@ def _prepare(
     side = lf.select(columns)
     if blank_is_missing:
         side = side.with_columns(cs.string().replace("", None))
+    if strip_keys:
+        # Before the position index, so padded twins count as duplicates.
+        side = side.with_columns((cs.by_name(keys) & cs.string()).str.strip_chars_end())
     return side.with_columns(
         pl.int_range(pl.len()).over(keys).alias(_IDX),
         pl.lit(True).alias(marker),
@@ -568,7 +574,13 @@ def _join(
 ) -> pl.DataFrame:
     """Full-join both sides on the keys and evaluate the inequality flags; the one collect."""
     joined = _prepare(
-        base, keys, {c: c for c in compared}, key_casts, _IN_BASE, settings.blank_is_missing
+        base,
+        keys,
+        {c: c for c in compared},
+        key_casts,
+        _IN_BASE,
+        settings.blank_is_missing,
+        settings.ignore_trailing_whitespace,
     ).join(
         _prepare(
             candidate,
@@ -577,6 +589,7 @@ def _join(
             key_casts,
             _IN_CANDIDATE,
             settings.blank_is_missing,
+            settings.ignore_trailing_whitespace,
         ),
         on=[*keys, _IDX],
         how="full",
