@@ -27,7 +27,9 @@ from ._ard import (
 )
 from ._builder import BuilderVerbsMixin
 from ._specs import (
+    MissingLevel,
     Row,
+    SchemaError,
     Statistic,
     SummarySpecBase,
 )
@@ -47,13 +49,19 @@ class DMSummarySpec(SummarySpecBase):
 
     Defaults provide zero-config convenience for a standard ADSL
     demographics table mixing continuous age statistics with categorical
-    breakdowns of sex, race, ethnicity and age group.  Each field's
+    breakdowns of sex, race, ethnicity and age group.  A subject with a
+    null category value counts in a ``"Missing"`` row, last in the
+    block (``missing``).  Each field's
     ``description`` documents it (rendered by mkdocstrings) — a docstring
     ``Args:`` section would duplicate them and confuse griffe, since
     Pydantic fields are not ``__init__`` parameters.
     """
 
     context: ClassVar[str] = "t_dm_summary"
+
+    missing: MissingLevel | None = Field(
+        default_factory=lambda: MissingLevel(columns=["SEX", "AGEGR1", "RACE", "ETHNIC"]),
+    )
 
     age_var: str = Field(
         default="AGE",
@@ -143,8 +151,13 @@ class DMTLGNamespace(BuilderVerbsMixin):
 
         # --- Categorical breakdowns (big-N + n / %) via shared engine ---
         # Each categorical variable carries its display label so the
-        # renderer can head its block ("Sex", "Race", …).
-        cat_rows = [Row(field=f, label=spec.category_labels.get(f)) for f in spec.categorical_vars]
+        # renderer can head its block ("Sex", "Race", …).  A default
+        # variable that ADSL lacks is left out; a variable the user named
+        # must exist (the engine raises).
+        cat_vars = spec.categorical_vars
+        if spec.uses_default("categorical_vars"):
+            cat_vars = [f for f in cat_vars if f in analysis_df.columns]
+        cat_rows = [Row(field=f, label=spec.category_labels.get(f)) for f in cat_vars]
         cat_ard = summarize_ard(
             analysis_df,
             rows=cat_rows,
@@ -159,6 +172,8 @@ class DMTLGNamespace(BuilderVerbsMixin):
             value_col=spec.value_col,
             label_col=spec.label_col,
             decimals=spec.decimals,
+            missing=spec.missing,
+            adsl_group_col=spec.adsl_group_col,
         )
 
         # --- Continuous age statistics ---
@@ -170,7 +185,17 @@ class DMTLGNamespace(BuilderVerbsMixin):
 
         age_var = spec.age_var if spec.age_var in df.columns else None
         if age_var is None:
+            if not spec.uses_default("age_var"):
+                raise SchemaError(
+                    f"age_var '{spec.age_var}' is not in the analysis dataset. "
+                    f"Available: {sorted(df.columns)}"
+                )
             return cat_ard
+        if not df[age_var].dtype.is_numeric():
+            raise SchemaError(
+                f"Age statistics need a numeric {age_var}; {age_var} is "
+                f"{df[age_var].dtype}. Cast it: pl.col('{age_var}').cast(pl.Float64)"
+            )
 
         fmt = spec.decimals or {}
         age_rows: list[dict[str, Any]] = []

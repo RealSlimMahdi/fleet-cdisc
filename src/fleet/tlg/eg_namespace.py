@@ -109,7 +109,7 @@ class EGQtcatSpec(SummarySpecBase):
     nested: ClassVar[bool] = True
 
     _unconsumed_spec_fields: ClassVar[frozenset[str]] = frozenset(
-        {"rows", "header_rows", "value_col", "label_col"}
+        {"rows", "header_rows", "value_col", "label_col", "missing"}
     )
 
     percent_base: Literal["visit", "adsl"] = Field(
@@ -326,6 +326,7 @@ class EGTLGNamespace(BuilderVerbsMixin):
             adsl_filter=spec.adsl_filter,
             nested=True,
             decimals=spec.decimals,
+            adsl_group_col=spec.adsl_group_col,
         )
         big_n = ard.filter(pl.col("variable") == "")
         block_n = ard.filter(pl.col("variable") == _QTC_BLOCK).with_columns(
