@@ -270,16 +270,26 @@ class AdamNamespace(SharedADaMVerbsMixin):
         *,
         weight: str,
         height: str,
+        round_digits: int | None = None,
     ) -> AdamNamespace:
         """Derive Body Mass Index: ``weight_kg / (height_cm / 100) ** 2``.
+
+        The value keeps full precision.  A height of 0 gives null, as SAS
+        gives a missing value for a division by zero.
 
         Args:
             target: Name of the output column.
             weight: Column containing weight in kg.
             height: Column containing height in cm.
+            round_digits: Decimal places, rounded as SAS ``ROUND`` (half away
+                from zero).  Default ``None``: no rounding.
 
         Returns:
             AdamNamespace: The namespace with *target* appended.
+
+        References:
+            admiral ``compute_bmi`` (pharmaverse): full precision, NA for height 0.
+            ADR-0025: a derived value is rounded only when the call says so.
 
         Examples:
             Compute BMI from weight and height::
@@ -290,7 +300,10 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        return self._chain(_bmi_expr(weight=weight, height=height, target=target), verb="bmi")
+        return self._chain(
+            _bmi_expr(weight=weight, height=height, target=target, round_digits=round_digits),
+            verb="bmi",
+        )
 
     # ------------------------------------------------------------------ #
     # 14. nrind — normal range indicator                                   #
@@ -303,17 +316,28 @@ class AdamNamespace(SharedADaMVerbsMixin):
         value: str,
         low: str,
         high: str,
+        signif_dig: int = 15,
     ) -> AdamNamespace:
         """Categorise *value* relative to normal range: LOW / NORMAL / HIGH.
+
+        The value and the limits are compared at *signif_dig* significant
+        digits, so float noise (1.3 x 88.4 = 114.92000000000002) does not
+        move a value at the limit out of the range.  A null or NaN value gives
+        null.
 
         Args:
             target: Name of the output column (e.g. ``"NRIND"``).
             value: Column containing the numeric result.
             low: Column containing the lower limit of normal.
             high: Column containing the upper limit of normal.
+            signif_dig: Significant digits for the comparison (default 15).
 
         Returns:
             AdamNamespace: The namespace with *target* appended.
+
+        References:
+            admiral ``derive_var_anrind`` (pharmaverse): ``signif(x, 15)`` on AVAL,
+            ANRLO and ANRHI before the comparison.
 
         Examples:
             Derive normal range indicator for lab results::
@@ -326,7 +350,8 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 )
         """
         return self._chain(
-            _nrind_expr(value=value, low=low, high=high, target=target), verb="nrind"
+            _nrind_expr(value=value, low=low, high=high, target=target, signif_dig=signif_dig),
+            verb="nrind",
         )
 
     # ------------------------------------------------------------------ #
@@ -427,8 +452,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
         weight: str,
         height: str,
         method: str = "Mosteller",
+        round_digits: int | None = None,
     ) -> AdamNamespace:
-        """Derive Body Surface Area in m².
+        """Derive Body Surface Area in m², at full precision.
 
         Args:
             target: Name of the output column.
@@ -436,9 +462,15 @@ class AdamNamespace(SharedADaMVerbsMixin):
             height: Column containing height in cm.
             method: Formula to use — ``"Mosteller"`` (default), ``"DuBois"``,
                 ``"Haycock"``, or ``"Gehan-George"``.
+            round_digits: Decimal places, rounded as SAS ``ROUND`` (half away
+                from zero).  Default ``None``: no rounding.
 
         Returns:
             AdamNamespace: The namespace with *target* appended.
+
+        References:
+            admiral ``compute_bsa`` (pharmaverse): full precision.
+            ADR-0025: a derived value is rounded only when the call says so.
 
         Examples:
             Compute BSA using the Mosteller formula::
@@ -450,7 +482,14 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 )
         """
         return self._chain(
-            _bsa_expr(weight=weight, height=height, method=method, target=target), verb="bsa"
+            _bsa_expr(
+                weight=weight,
+                height=height,
+                method=method,
+                target=target,
+                round_digits=round_digits,
+            ),
+            verb="bsa",
         )
 
     # ------------------------------------------------------------------ #
@@ -463,16 +502,23 @@ class AdamNamespace(SharedADaMVerbsMixin):
         *,
         systolic: str = "SYSBP",
         diastolic: str = "DIABP",
+        round_digits: int | None = None,
     ) -> AdamNamespace:
-        """Derive Mean Arterial Pressure: ``DBP + (SBP - DBP) / 3``.
+        """Derive Mean Arterial Pressure: ``DBP + (SBP - DBP) / 3``, at full precision.
 
         Args:
             target: Name of the output column (default ``"MAP"``).
             systolic: Systolic blood pressure column.
             diastolic: Diastolic blood pressure column.
+            round_digits: Decimal places, rounded as SAS ``ROUND`` (half away
+                from zero).  Default ``None``: no rounding.
 
         Returns:
             AdamNamespace: The namespace with *target* appended.
+
+        References:
+            admiral ``compute_map`` (pharmaverse): full precision.
+            ADR-0025: a derived value is rounded only when the call says so.
 
         Examples:
             Compute MAP from blood pressure columns::
@@ -484,7 +530,10 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 )
         """
         return self._chain(
-            _map_expr(systolic=systolic, diastolic=diastolic, target=target), verb="map"
+            _map_expr(
+                systolic=systolic, diastolic=diastolic, target=target, round_digits=round_digits
+            ),
+            verb="map",
         )
 
     # ------------------------------------------------------------------ #
@@ -499,8 +548,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
         rr: str = "RR",
         method: str = "Fridericia",
         rr_unit: str = "ms",
+        round_digits: int | None = None,
     ) -> AdamNamespace:
-        """Derive corrected QT interval, as admiral ``compute_qtc``.
+        """Derive corrected QT interval, as admiral ``compute_qtc``, at full precision.
 
         Args:
             target: Name of the output column (default ``"QTC"``).
@@ -510,6 +560,8 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 ``"Bazett"``.
             rr_unit: Unit of *rr*: ``"ms"`` (default) or ``"msec"``, or
                 ``"s"`` or ``"sec"``.
+            round_digits: Decimal places, rounded as SAS ``ROUND`` (half away
+                from zero).  Default ``None``: no rounding.
 
         Returns:
             AdamNamespace: The namespace with *target* appended.
@@ -520,7 +572,8 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 seconds, or a QT under 10 ms.
 
         References:
-            admiral ``compute_qtc`` (pharmaverse): RR in ms, QT in ms.
+            admiral ``compute_qtc`` (pharmaverse): RR in ms, QT in ms, full precision.
+            ADR-0025: a derived value is rounded only when the call says so.
 
         Examples:
             Derive QTcF from QT and RR, both in ms::
@@ -531,7 +584,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        expr = _qtc_expr(qt=qt, rr=rr, method=method, target=target, rr_unit=rr_unit)
+        expr = _qtc_expr(
+            qt=qt, rr=rr, method=method, target=target, rr_unit=rr_unit, round_digits=round_digits
+        )
         schema_names = self._lazy.collect_schema().names()
         if qt in schema_names and rr in schema_names:
             seconds = rr_unit.lower() in ("s", "sec")
@@ -711,6 +766,10 @@ class AdamNamespace(SharedADaMVerbsMixin):
         pivot (e.g. restrict to ``ANL01FL == "Y"`` or baseline rows) —
         the current dataset's rows are never dropped.
 
+        A new AVAL that is infinite or NaN (for example a division by zero)
+        becomes null, with a warning that gives the count, as SAS gives a
+        missing value.
+
         Materialises the pipeline before appending.
 
         Examples:
@@ -810,6 +869,19 @@ class AdamNamespace(SharedADaMVerbsMixin):
             else parse_expression(str(analysis_value))
         )
         new_rows = joined.with_columns(aval_expr.alias("AVAL")).select(grps + ["AVAL"])
+        if new_rows.schema["AVAL"].is_float():
+            non_finite = new_rows.select((~pl.col("AVAL").is_finite()).sum()).item()
+            if non_finite:
+                import warnings
+
+                warnings.warn(
+                    f"derive_param(): {non_finite} new AVAL value(s) are infinite or NaN "
+                    "(for example a division by zero) and are set to null.",
+                    stacklevel=2,
+                )
+                new_rows = new_rows.with_columns(
+                    pl.when(pl.col("AVAL").is_finite()).then(pl.col("AVAL")).alias("AVAL")
+                )
 
         # Apply set_values_to constants
         for col_name, col_val in set_values_to.items():
@@ -841,9 +913,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
         target: str,
         *,
         system: str = "ctcae_v5",
-        direction: str,
+        direction: Literal["L", "H"],
         term_var: str,
-        unit_var: str | None = None,
+        unit_var: str,
         signif_dig: int = 15,
         indicators: dict[str, list[str]] | None = None,
     ) -> AdamNamespace:
@@ -860,14 +932,20 @@ class AdamNamespace(SharedADaMVerbsMixin):
         criteria or a population no criteria cover gets a null grade.  Every
         row stays, in its order.
 
+        The ``ctcae_*``, ``daids`` systems hold SI cut-offs (hemoglobin in
+        g/L); the ``*_uscv`` systems hold US conventional units (g/dL).  A
+        row whose unit is not a unit of the criteria gets null, with a
+        warning that gives the count.
+
         Args:
             target: Name of the output grade column (e.g. ``"ATOXGRL"``).
             system: Grading system name (e.g. ``"ctcae_v5"``, ``"daids"``)
                 or path to a custom JSON criteria file (schema version 2).
             direction: ``"L"`` (low) or ``"H"`` (high).
             term_var: Column holding the lab-test / term name.
-            unit_var: Column holding the unit of measure.  Required when a
-                term has criteria for more than one unit.
+            unit_var: Column holding the unit of measure (e.g. ``"AVALU"``).
+                Required, as admiral: each row is graded with the cut-offs
+                of its own unit.
             signif_dig: Significant digits for comparison (default 15, as
                 admiral ``signif_digits``).
             indicators: Values of the indicator params of the criteria
@@ -878,14 +956,14 @@ class AdamNamespace(SharedADaMVerbsMixin):
             AdamNamespace: A fresh namespace wrapping the graded frame.
 
         Raises:
-            DerivationError: When a term has criteria for several units and
-                *unit_var* is not given, or a needed column is missing.
+            DerivationError: When *direction* is not ``"L"`` or ``"H"``, or a
+                needed column is missing.
 
         References:
             admiral ``derive_var_atoxgr_dir`` and the metadata tables
             ``atoxgr_criteria_ctcv4/5/6`` and ``atoxgr_criteria_daids``
-            (SI and USCV), admiral 1.4.1; NCI CTCAE v4.03, v5.0, v6.0;
-            DAIDS grading table v2.1.
+            (SI and USCV), admiral 1.4.1, where ``get_unit_expr`` is required;
+            NCI CTCAE v4.03, v5.0, v6.0; DAIDS grading table v2.1. ADR-0028.
 
         Examples:
             Grade low-direction anemia using CTCAE v5::
@@ -931,39 +1009,60 @@ class AdamNamespace(SharedADaMVerbsMixin):
         *,
         low_var: str = "ATOXGRL",
         high_var: str = "ATOXGRH",
-        low_desc_var: str | None = None,
-        high_desc_var: str | None = None,
+        low_desc_var: str = "ATOXDSCL",
+        high_desc_var: str = "ATOXDSCH",
     ) -> AdamNamespace:
-        """Combine low and high toxicity grades into a signed grade.
+        """Combine low and high toxicity grades into a signed grade, as admiral.
 
         Low grades are prefixed with ``"-"``; high grades are kept as-is.
-        Both null → null.
+        Both null → null.  ``"0"`` only when each side is ``"0"`` or its
+        description is null (no criteria in that direction).  Low ``"0"``
+        with a null high grade and a present high description gives null:
+        the high grade is unknown (for example ANRHI is missing).
 
         Args:
             target: Name of the output column (default ``"ATOXGR"``).
             low_var: Low-direction grade column (default ``"ATOXGRL"``).
             high_var: High-direction grade column (default ``"ATOXGRH"``).
-            low_desc_var: Optional low-grade term description column.
-            high_desc_var: Optional high-grade term description column.
+            low_desc_var: Low-grade term description column (default
+                ``"ATOXDSCL"``).  Required in the data; for a
+                one-direction study, add it as a null column.
+            high_desc_var: High-grade term description column (default
+                ``"ATOXDSCH"``).  Required in the data, as *low_desc_var*.
 
         Returns:
             AdamNamespace: The namespace with *target* appended.
+
+        Raises:
+            DerivationError: When a grade or description column is missing.
+
+        References:
+            admiral ``derive_var_atoxgr`` (admiral 1.4.1): ``lowgrade == "0" |
+            is.na(lowdesc)`` and the same for high give "0". ADR-0028.
 
         Examples:
             Combine low/high grades into ATOXGR::
 
                 adlb = (
                     lb_raw.adam
-                    .atoxgr("ATOXGRL", system="ctcae_v5",
-                            direction="L", term_var="PARAMCD")
-                    .atoxgr("ATOXGRH", system="ctcae_v5",
-                            direction="H", term_var="PARAMCD")
+                    .atoxgr("ATOXGRL", system="ctcae_v5", direction="L",
+                            term_var="ATOXDSCL", unit_var="AVALU")
+                    .atoxgr("ATOXGRH", system="ctcae_v5", direction="H",
+                            term_var="ATOXDSCH", unit_var="AVALU")
                     .combine_grades("ATOXGR")
                     .to_frame()
                 )
         """
         from .grading._compiler import combine_grades_expr
 
+        names = self._lazy.collect_schema().names()
+        missing = [c for c in (low_var, high_var, low_desc_var, high_desc_var) if c not in names]
+        if missing:
+            raise DerivationError(
+                f"combine_grades('{target}'): column(s) {missing} are missing. The "
+                "descriptions tell a direction with no criteria from an unknown grade; "
+                "for a one-direction study add the other description as a null column."
+            )
         return self._chain(
             combine_grades_expr(
                 low_var,

@@ -78,7 +78,7 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 | [`.flag()`][fleet.adam.FlagCriterionMixin.flag]                | Generalised `"Y"` flag (first/last/max/min/exists/before/after/expression). | `.flag("SAFFL", criteria='pl.col("TRTSDT").is_not_null()', false_value="N")` |
 | [`.count_events()`][fleet.adam.SharedADaMVerbsMixin.count_events] | Tally events for each subject.                                   | `.count_events("NUMAE", from_dataset=ae)`                     |
 | [`.age_years()`][fleet.adam.ADSLNamespace.age_years]           | Unit-aware age conversion (YEARS, MONTHS, WEEKS, DAYS).                     | `.age_years("AAGE", age_col="AGE", age_unit_col="AGEU")`      |
-| [`.age_from_dates()`][fleet.adam.ADSLNamespace.age_from_dates] | Compute age between two dates.                                              | `.age_from_dates("AGE", birth="BRTHDT", reference="RFSTDTC")` |
+| [`.age_from_dates()`][fleet.adam.ADSLNamespace.age_from_dates] | Age in completed years between two dates (`unit="decimal"` for days / 365.25). | `.age_from_dates("AAGE", birth_date="BRTHDT", reference_date="TRTSDT")` |
 | [`.derive_period()`][fleet.adam.ADSLNamespace.derive_period]   | Create APxxSDT / APxxEDT / TRTxxP subperiod variables.                      | `.derive_period(periods=[{"number": 1, ...}])`                |
 
 ## OCCDS namespace (`df.adam.occds`)

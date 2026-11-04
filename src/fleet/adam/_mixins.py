@@ -876,7 +876,8 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
     ) -> Self:
         """Derive *target* as the count of matching records in *from_dataset*.
 
-        Returns 0 for subjects with no matching records (never null).
+        Returns 0 for subjects with no matching records (never null).  The
+        count is Int64, so a later subtraction can go below zero.
 
         Args:
             target: Name of the output count column.
@@ -903,7 +904,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         if where is not None:
             where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
             src = src.filter(where_expr)
-        agg_df = src.group_by(grps).agg(pl.len().alias(target))
+        agg_df = src.group_by(grps).agg(pl.len().cast(pl.Int64).alias(target))
         df = self.to_frame().join(agg_df, on=grps, how="left", nulls_equal=True)
         df = df.with_columns(pl.col(target).fill_null(0))
         return self._materialise_then(df)
