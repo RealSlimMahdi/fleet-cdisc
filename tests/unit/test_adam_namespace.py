@@ -182,6 +182,20 @@ class TestBMI:
         result = df.adam.bmi("BMI", weight="weight_kg", height="height_cm").to_frame()
         assert result["BMI"][0] == pytest.approx(22.9, abs=0.1)
 
+    def test_a_height_of_zero_gives_null_not_infinity(self):
+        """c1-578: inf would reach Parquet, compare and TLG output."""
+        df = pl.from_repr("""┌───────────┬───────────┐
+│ weight_kg ┆ height_cm │
+│ ---       ┆ ---       │
+│ f64       ┆ f64       │
+╞═══════════╪═══════════╡
+│ 70.0      ┆ 0.0       │
+│ 70.0      ┆ null      │
+└───────────┴───────────┘
+""")
+        result = df.adam.bmi("BMI", weight="weight_kg", height="height_cm").to_frame()
+        assert result["BMI"].to_list() == [None, None]
+
 
 class TestNrind:
     def test_low_normal_high(self):

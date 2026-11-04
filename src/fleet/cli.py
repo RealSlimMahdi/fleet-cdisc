@@ -870,15 +870,17 @@ def _run_run(args: argparse.Namespace) -> None:
     """
     from fleet.core.define_spec import load_define_spec
     from fleet.io import save_dataset_json, save_parquet, save_xpt
+    from fleet.io.dataset_json import metadata_from_define
     from fleet.run import plan_study, run_study
 
     ctx = _load_ctx(args.config)
     plan = plan_study(ctx, datasets=args.dataset)
-    entries = {
-        e.name.upper(): e
-        for define in {s.define for s in plan.steps}
-        for e in load_define_spec(define).datasets or []
+    specs = {
+        e.name.upper(): spec
+        for spec in map(load_define_spec, {s.define for s in plan.steps})
+        for e in spec.datasets or []
     }
+    entries = {name: spec.select(name) for name, spec in specs.items()}
 
     writers: dict[str, Callable[[pl.DataFrame, Path, str], Path]] = {
         "parquet": lambda df, d, n: save_parquet(df, d / f"{n.lower()}.parquet"),
@@ -888,7 +890,9 @@ def _run_run(args: argparse.Namespace) -> None:
             label=entries[n].label,
             column_labels={v.name: v.label for v in entries[n].variables},
         ),
-        "dataset-json": lambda df, d, n: save_dataset_json(df, d / f"{n.lower()}.json", domain=n),
+        "dataset-json": lambda df, d, n: save_dataset_json(
+            df, d / f"{n.lower()}.json", domain=n, **metadata_from_define(specs[n], n)
+        ),
     }
     writer = writers[args.format]
     out_override = Path(args.out) if args.out else None
@@ -1880,10 +1884,20 @@ def _run_tdd_build(args: argparse.Namespace) -> None:
             column_labels={v["name"]: v.get("label") for v in ig.get("variables", [])},
         )
 
+    def dataset_json(df: pl.DataFrame, d: Path, n: str) -> Path:
+        ig = packaged_structure(n) or {}
+        return save_dataset_json(
+            df,
+            d / f"{n.lower()}.json",
+            domain=n,
+            label=ig.get("label"),
+            columns={v["name"]: {"label": v.get("label")} for v in ig.get("variables", [])},
+        )
+
     writers: dict[str, Callable[[pl.DataFrame, Path, str], Path]] = {
         "parquet": lambda df, d, n: save_parquet(df, d / f"{n.lower()}.parquet"),
         "xpt": xpt,
-        "dataset-json": lambda df, d, n: save_dataset_json(df, d / f"{n.lower()}.json", domain=n),
+        "dataset-json": dataset_json,
     }
     writer = writers[args.format]
     out_dir = Path(args.out) if args.out else _load_ctx(args.config).sdtm_data_dir

@@ -295,6 +295,30 @@ def test_run_xpt_writes_v5_with_the_define_labels(
     assert meta.column_names_to_labels["USUBJID"] == "Unique Subject Identifier"
 
 
+def test_run_dataset_json_writes_the_define_labels_and_oids(
+    study: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """c1-576: the Dataset-JSON of fleet run carries the define metadata."""
+    monkeypatch.chdir(study)
+
+    assert _run(["run", "--format", "dataset-json"]) == 0
+
+    payload = json.loads((study / "data" / "sdtm" / "dm.json").read_text(encoding="utf-8"))
+    cols = {c["name"]: c for c in payload["columns"]}
+    assert payload["label"] == "Demographics"
+    assert payload["studyOID"] == "STDY.TESTRUN"
+    assert payload["metaDataVersionOID"] == "MDV.TESTRUN.1.SDTMIG.3.4"
+    assert cols["USUBJID"] == {
+        "itemOID": "IT.USUBJID",
+        "name": "USUBJID",
+        "label": "Unique Subject Identifier",
+        "dataType": "string",
+        "length": 20,
+        "keySequence": 2,
+    }
+    assert cols["AGE"]["itemOID"] == "IT.AGE"
+
+
 def test_checker_write_xpt_carries_the_define_labels(study: Path) -> None:
     pyreadstat = pytest.importorskip("pyreadstat")
     from fleet.define_xml import DatasetChecker

@@ -35,6 +35,7 @@ from fleet.core._verb_mixin import _import_derivations_module
 from fleet.core.algorithm_resolver import docstring_summary, resolve_callable_docstring
 from fleet.core.define_spec import load_define_spec, load_spec_yaml
 from fleet.core.exceptions import SpecError
+from fleet.core.oids import item_oid, metadata_version_oid, study_oid
 
 _SCHEMA_PATH = Path(__file__).parent / "schemas" / "define_spec_schema.json"
 
@@ -489,7 +490,7 @@ class DefineSpecGenerator:
     # ------------------------------------------------------------------ #
 
     def _build_study(self, study: dict[str, Any], std_oid: str) -> ET.Element:
-        elem = ET.Element("Study", {"OID": f"STDY.{study['id']}"})
+        elem = ET.Element("Study", {"OID": study_oid(study["id"])})
         gv = ET.SubElement(elem, "GlobalVariables")
         ET.SubElement(gv, "StudyName").text = study["name"]
         ET.SubElement(gv, "StudyDescription").text = study["description"].strip()
@@ -499,7 +500,7 @@ class DefineSpecGenerator:
 
     def _build_metadata_version(self, study: dict[str, Any], std_oid: str) -> ET.Element:
         ig = study["standard"]
-        mdv_oid = f"MDV.{study['id']}.1.{ig}.{study['standard_version']}"
+        mdv_oid = metadata_version_oid(study["id"], ig, study["standard_version"])
         attribs = {
             "OID": mdv_oid,
             "Name": f"{study['id']} {ig} Data Definitions",
@@ -1101,33 +1102,7 @@ class DefineSpecGenerator:
     # Helpers                                                              #
     # ------------------------------------------------------------------ #
 
-    @staticmethod
-    def _item_oid(dataset_name: str, var_name: str) -> str:
-        """Build a stable ItemDef OID.
-
-        Common variables (STUDYID, USUBJID, ...) that appear in multiple datasets
-        are given a shared OID *without* the dataset prefix so they share a single
-        ItemDef element in the XML — matching CDISC best practice.
-        """
-        _SHARED = {
-            "STUDYID",
-            "USUBJID",
-            "DOMAIN",
-            "SUBJID",
-            "SITEID",
-            "AGE",
-            "AGEU",
-            "SEX",
-            "RACE",
-            "ETHNIC",
-            "ARMCD",
-            "ARM",
-            "ACTARMCD",
-            "ACTARM",
-        }
-        if var_name in _SHARED:
-            return f"IT.{var_name}"
-        return f"IT.{dataset_name}.{var_name}"
+    _item_oid = staticmethod(item_oid)
 
     @staticmethod
     def _to_pretty_xml(root: ET.Element) -> str:

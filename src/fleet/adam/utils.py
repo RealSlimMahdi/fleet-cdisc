@@ -66,8 +66,8 @@ def pchg(aval: str = "AVAL", base: str = "BASE", target: str = "PCHG") -> pl.Exp
 
 
 def bmi(weight: str = "weight_kg", height: str = "height_cm", target: str = "BMI") -> pl.Expr:
-    """BMI = weight_kg / (height_m^2). Height input assumed in cm."""
-    height_m = pl.col(height) / 100.0
+    """BMI = weight_kg / (height_m^2). Height input assumed in cm; a height of 0 gives null."""
+    height_m = pl.when(pl.col(height) != 0).then(pl.col(height) / 100.0)
     return (pl.col(weight) / (height_m * height_m)).round(1).alias(target)
 
 
