@@ -13,11 +13,14 @@ from collections.abc import Callable
 
 import polars as pl
 
+from fleet.core.exceptions import DerivationError
+
 __all__ = [
     "date_part",
     "datetime_part",
     "has_time",
     "is_iso8601",
+    "refuse_number",
     "time_groups",
     "to_day",
     "warn_on_collect",
@@ -163,19 +166,59 @@ def is_iso8601(dtc: pl.Expr) -> pl.Expr:
     )
 
 
-def to_day(expr: pl.Expr, dtype: pl.DataType | None) -> pl.Expr:
+def refuse_number(name: str, dtype: pl.DataType | None, *, verb: str | None = None) -> None:
+    """Raise when a date column holds numbers, because the origin of a number is a guess.
+
+    A SAS date counts days from 1960-01-01 and a SAS date-time counts
+    seconds from the same day; Polars counts from 1970-01-01.  The
+    message gives both conversions, so the programmer states the origin.
+
+    Args:
+        name: The column name, quoted in the message.
+        dtype: Its dtype in the frame, or ``None`` when unknown.
+        verb: The verb call, quoted at the start of the message.
+
+    Raises:
+        DerivationError: When *dtype* is numeric.
+
+    References:
+        ADR-0022 (a date verb reads the column type); SAS date and
+        date-time values count from 1 January 1960.
+
+    Examples:
+        Check a column before day arithmetic::
+
+            refuse_number("BRTHDT", adsl.collect_schema().get("BRTHDT"), verb="age")
+    """
+    if dtype is None or not dtype.is_numeric():
+        return
+    where = f"{verb}: " if verb else ""
+    raise DerivationError(
+        f"{where}{name} is a number ({dtype}), not a date, and Fleet does not guess its "
+        f"origin. A SAS date counts days from 1960-01-01: convert it with "
+        f"pl.date(1960, 1, 1) + pl.duration(days=pl.col('{name}')). A SAS date-time counts "
+        f"seconds: use pl.datetime(1960, 1, 1) + pl.duration(seconds=pl.col('{name}'))."
+    )
+
+
+def to_day(expr: pl.Expr, dtype: pl.DataType | None, *, verb: str | None = None) -> pl.Expr:
     """Reduce a text, date-time or date column to its date, for day arithmetic.
 
     Text uses :func:`date_part`, a ``pl.Datetime`` its date, and a
     ``pl.Date`` stays as it is (SDTMIG 3.4 section 4.4.4: study day uses
-    the date portion).  Any other type is returned unchanged.
+    the date portion).  A number raises (see :func:`refuse_number`).  Any
+    other type is returned unchanged.
 
     Args:
         expr: The column expression.
         dtype: Its dtype in the frame, or ``None`` when unknown.
+        verb: The verb call, quoted in the error for a number.
 
     Returns:
         pl.Expr: A ``pl.Date`` expression for the three temporal sources.
+
+    Raises:
+        DerivationError: When *dtype* is numeric.
 
     Examples:
         Day difference between a timed text and a date::
@@ -186,6 +229,9 @@ def to_day(expr: pl.Expr, dtype: pl.DataType | None) -> pl.Expr:
         return date_part(expr)
     if isinstance(dtype, pl.Datetime):
         return expr.cast(pl.Date)
+    refuse_number(
+        expr.meta.output_name(raise_if_undetermined=False) or "the column", dtype, verb=verb
+    )
     return expr
 
 
