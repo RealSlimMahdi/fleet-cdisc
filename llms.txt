@@ -1841,8 +1841,8 @@ Available on `df.adam` (BDS base namespace). Shared verbs (source, assign, case_
 - `nrind(target: str, *, value: str, low: str, high: str) -> AdamNamespace` — Categorise *value* relative to normal range: LOW / NORMAL / HIGH.
 - `on_treatment(target: str = 'ONTRTFL', *, adt: str, trtsdt: str, trtedt: str, open_ended: bool = True) -> AdamNamespace` — Set *target* to ``"Y"`` when *adt* is within [trtsdt, trtedt].
 - `shift(target: str, *, baseline_cat: str, post_cat: str, sep: str = ' to ') -> AdamNamespace` — Derive a categorical shift label: ``"<baseline><sep><post>"``.
-- `derive_summary_records(*, by: list[str], analysis_var: str = 'AVAL', set_values_to: dict[str, Any], stat: "Literal['mean', 'sum', 'min', 'max', 'median', 'count']" = 'mean') -> AdamNamespace` — Compute a summary statistic per group and append the results as new records.
-- `derive_locf_records(*, by: list[str] | None = None, analysis_var: str = 'AVAL', order_by: str = 'ADT') -> AdamNamespace` — Forward-fill *analysis_var* within each group (LOCF).
+- `derive_summary_records(*, by: list[str], analysis_var: str = 'AVAL', set_values_to: dict[str, Any], stat: "Literal['mean', 'sum', 'min', 'max', 'median', 'count']" = 'mean', where: str | pl.Expr | None = None) -> AdamNamespace` — Compute a summary statistic per group and append the results as new records.
+- `derive_locf_records(*, dataset_ref: pl.DataFrame, by: list[str], order_by: str | list[str], analysis_var: str = 'AVAL', imputation: "Literal['add', 'update', 'update_add']" = 'add', keep_vars: list[str] | None = None) -> AdamNamespace` — Add LOCF records for missed visits and for a null *analysis_var*.
 - `derive_param(*, by: list[str] | None = None, set_values_to: dict[str, Any], parameter_filter: dict[str, str], analysis_value: pl.Expr | str, from_dataset: pl.DataFrame | None = None, where: str | pl.Expr | None = None) -> AdamNamespace` — Derive a new parameter (e.g. BMI) from existing records and append
 - `atoxgr(target: str, *, system: str = 'ctcae_v5', direction: str, term_var: str, unit_var: str | None = None, signif_dig: int = 15, indicators: dict[str, list[str]] | None = None) -> AdamNamespace` — Derive a toxicity grade, as admiral ``derive_var_atoxgr_dir``.
 - `transform(fn: str | Callable[[pl.DataFrame], pl.DataFrame], *, label: str | None = None) -> AdamNamespace` — Apply an arbitrary ``(pl.DataFrame) -> pl.DataFrame`` function.
@@ -1892,7 +1892,7 @@ Available on `df.adam.occds` (and `df.adam.pk` for sequence). Shared verbs (sour
 | Normal range indicator | `nrind` | `adam` | Returns `LOW / NORMAL / HIGH` |
 | On-treatment flag | `on_treatment` | `adam` | `TRTSDT ≤ ADT ≤ TRTEDT` |
 | Categorical shift | `shift` | `adam` | `"BASELINE / POST-BASELINE"` string |
-| LOCF imputation records | `derive_locf_records` | `adam` | Forward-fill within patient groups |
+| LOCF imputation records | `derive_locf_records` | `adam` | Add LOCF records (DTYPE "LOCF") for expected visits |
 | Summary records | `derive_summary_records` | `adam` | Aggregate and append summary rows |
 | Derived parameter rows | `derive_param` | `adam` | New parameter rows from existing ones |
 | Join reference dataset | `merge` | `adam` / `sdtm` | Left-join another DataFrame into lazy plan |
