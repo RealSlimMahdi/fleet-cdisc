@@ -545,7 +545,7 @@ def _verb_mapping_section() -> str:
 | Normal range indicator | `nrind` | `adam` | Returns `LOW / NORMAL / HIGH` |
 | On-treatment flag | `on_treatment` | `adam` | `TRTSDT ≤ ADT ≤ TRTEDT` |
 | Categorical shift | `shift` | `adam` | `"BASELINE / POST-BASELINE"` string |
-| LOCF imputation records | `derive_locf_records` | `adam` | Forward-fill within patient groups |
+| LOCF imputation records | `derive_locf_records` | `adam` | Add LOCF records (DTYPE "LOCF") for expected visits |
 | Summary records | `derive_summary_records` | `adam` | Aggregate and append summary rows |
 | Derived parameter rows | `derive_param` | `adam` | New parameter rows from existing ones |
 | Join reference dataset | `merge` | `adam` / `sdtm` | Left-join another DataFrame into lazy plan |
