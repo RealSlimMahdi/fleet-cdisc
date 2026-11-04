@@ -67,13 +67,13 @@ Each link is a versioned, reviewable artefact stored alongside the study specifi
 
 ### Pillar 2 — Cross-Language Benchmark: `{admiral}` Parity
 
-`{admiral}`[^4] is the Roche/Atorus R package for ADaM derivations; it is the de-facto gold standard in R-based clinical programming and is documented in multiple regulatory submissions. Fleet's test suite contains `tests/unit/test_admiral_parity.py` — 400+ lines of tests that benchmark Fleet's Python outputs against documented `{admiral}` algorithm specifications.
+`{admiral}`[^4] is the Roche/Atorus R package for ADaM derivations; it is the de-facto gold standard in R-based clinical programming and is documented in multiple regulatory submissions. Fleet's test suite contains `tests/unit/test_admiral_parity.py`: 39 tests that check selected `{admiral}` formulas and patterns, adapted to Polars, against expected values written into the tests. They do not cover every ADaM verb. The known differences are listed below.
 
 **Coverage as of v0.1.0:**
 
 | Test class                 | Algorithms verified                                                                |
 | -------------------------- | ---------------------------------------------------------------------------------- |
-| `TestBSA`                  | Dubois-DuBois, Mosteller, Haycock, Gehan-George (4 methods)                        |
+| `TestBSA`                  | DuBois, Mosteller, Haycock, Gehan-George (4 methods)                               |
 | `TestMeanArterialPressure` | Standard MAP formula                                                               |
 | `TestQTc`                  | Bazett, Fridericia (2 methods)                                                     |
 | `TestAgeInYears`           | Day-accurate age in years, months, weeks                                           |
@@ -86,10 +86,20 @@ Each link is a versioned, reviewable artefact stored alongside the study specifi
 
 **No R runtime is required.** The parity tests work in two ways:
 
-- **Formula transcription** — mathematical formulas (BSA, QTc, MAP, age conversion) are transcribed directly from `{admiral}`'s published R source code. The tests then assert that Fleet's Polars implementation produces numerically identical results for the same inputs, using analytically-derived expected values computed in pure Python from the same formula.
+- **Formula transcription**: selected formulas (BSA, QTc, MAP, age conversion) are written from the `{admiral}` R source. The tests compare the Fleet result with an expected value that pure Python computes from the same formula, at the number of decimals that the verb keeps. This is the same formula, not a run of `{admiral}`.
 - **Behavioural specification** — for higher-level patterns such as ANL01FL flagging, the expected output rows and flag values are transcribed verbatim from `{admiral}`'s documented examples (the test comments quote the equivalent R code). Fleet's Python implementation is then verified to reproduce that exact output.
 
-This approach means the validation does not depend on an R installation, a specific R version, or `rpy2`. The published `{admiral}` specification is the invariant; Fleet's implementation is validated against it.
+This approach means the validation does not depend on an R installation, a specific R version, or `rpy2`. It covers only the formulas and patterns in the tests. The weekly admiral oracle job (`scripts/admiral_oracle.py`) runs `{admiral}` itself on study day, duration, TRTEMFL and ANL01FL.
+
+**Known differences from `{admiral}`:**
+
+| Class              | Fleet                                                                     | `{admiral}`                                                    |
+| ------------------ | ------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Sign               | `pchg`: `(AVAL - BASE) / BASE * 100`. AVAL -5, BASE -10 gives PCHG -50.   | `derive_var_pchg` divides by `abs(BASE)`: the same row gives 50. |
+| Rounding           | `bsa` keeps 4 decimals, `map` and `qtc` keep 2, `bmi` keeps 1.            | `compute_bsa`, `compute_map`, `compute_qtc` do not round.      |
+| Record structure   | `derive_locf_records` fills the null values in place and adds no DTYPE.   | `derive_locf_records` adds new records with `DTYPE = "LOCF"`.  |
+| Missing values     | `pchg` gives null when BASE is 0.                                         | Same: `NA` when BASE is 0.                                     |
+| Units              | `qtc` reads RR in ms (ADR-0013).                                          | Same: RR in ms.                                                |
 
 ```python
 # Example: ANL01FL last-valid-row parity test

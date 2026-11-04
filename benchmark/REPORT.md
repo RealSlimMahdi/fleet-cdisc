@@ -2,13 +2,15 @@
 
 **Date:** 2025-07-22  
 **System:** macOS, Apple Silicon, 64 GB RAM  
-**Data:** 11.5M AE rows inflated from real CDISCPILOT01 raw data (Parquet I/O for all)
+**Data:** 11,468,544 AE rows (6,988,644 subjects) inflated from a synthetic 64-row AE extract (study STUDY001, 39 subjects, `benchmark/data`); Parquet I/O for all  
+**Threads:** Polars at its default thread count  
+**Timings:** from the run of this date. The ANL01FL tie rule and the ASEQ order of both scripts changed later (section 6); the timings were not run again.
 
 ---
 
 ## 1. What Was Benchmarked
 
-All pipelines derive identical ADAE variables from raw AE + ADSL inputs:
+All pipelines derive the same ADAE variables from raw AE + ADSL inputs:
 
 | Step            | Variables                                                                                    |
 | --------------- | -------------------------------------------------------------------------------------------- |
@@ -55,17 +57,19 @@ All tools read Parquet (via Arrow for R, native for Polars) to ensure I/O parity
 ### Scaling behaviour
 
 - **Fleet:** Near-linear. Doubling rows roughly doubles time. At 2M rows the pipeline finishes in **1.5 seconds**. At full scale (11.5M rows) it completes in **9.0 seconds** (SDTM 3.2s + ADaM 5.9s).
-- **Oak + Admiral:** Super-linear growth driven by oak's join-per-column SDTM architecture, admiral's `derive_vars_dt()` date parsing, and `derive_var_extreme_flag()` per-group operations. At 2M rows: **56.5 seconds**. At full scale (11.5M rows) it completes in **318.1 seconds** (SDTM 89.2s + ADaM 228.9s) — over 5 minutes.
-- **rpy2 overhead:** At small scale (100K), rpy2's fixed cost of data loading per iteration dominates (+254%). At larger scales (1M–2M), the overhead stabilises to ~28–31%, confirming that rpy2 adds a constant-ish marshalling cost on top of the R pipeline execution.
+- **Oak + Admiral:** Also near-linear from 500K rows, at about 27 to 31 seconds per million rows. Most of the time is in oak's join-per-column SDTM mapping, admiral's `derive_vars_dt()` date parsing and `derive_var_extreme_flag()` per-group operations. At 2M rows: **56.5 seconds**. At full scale (11.5M rows) it completes in **318.1 seconds** (SDTM 89.2s + ADaM 228.9s) — over 5 minutes.
+- **rpy2 overhead:** At small scale (100K), rpy2's fixed cost of data loading per iteration dominates (+279%). At 1M and 2M rows the overhead is about 36% (table above).
 
 ---
 
 ## 3. Pipeline Code Comparison
 
-### Fleet (Python / Polars) — 37 LOC
+Line counts: non-blank, non-comment lines between the timers of `run_pipeline` in each script (Fleet 18 + 37 = 55, Oak + Admiral 58 + 31 = 89). The excerpts below are shorter than the scripts.
+
+### Fleet (Python / Polars)
 
 ```python
-# SDTM (15 LOC)
+# SDTM
 ae = (
     ae_raw.sdtm
     .assign("STUDYID", value="STUDY001")
@@ -85,7 +89,7 @@ ae = (
     .to_frame()
 )
 
-# ADaM (22 LOC)
+# ADaM
 adae = (
     ae_merged.adam
     .source("USUBJID").source("AETERM")
@@ -101,17 +105,17 @@ adae = (
         start_date="ASTDT", end_date="AENDT", trtsdt="TRTSDT")
     .recode("AESEVN", source="AESEV",
         recode_map={"Mild": 1, "Moderate": 2, "Severe": 3})
-    .flag("ANL01FL", criteria="max",
-        value_col="AESEVN", by=["USUBJID", "AETERM"])
-    .seq("ASEQ", by=["USUBJID"])
+    .flag("ANL01FL", criteria="last",
+        order_by=["AESEVN", "AESEQ"], by=["USUBJID", "AETERM"])
+    .seq("ASEQ", by=["USUBJID"], order_by=["AESEQ"])
     .to_frame()
 )
 ```
 
-### Oak + Admiral (R / pharmaverse) — 54 LOC
+### Oak + Admiral (R / pharmaverse)
 
 ```r
-# SDTM using sdtm.oak (26 LOC)
+# SDTM using sdtm.oak
 ae_oak <- ae_raw %>%
   mutate(oak_id = row_number(), raw_source = "AE_RAW",
          patient_number = as.integer(factor(subject_id)))
@@ -145,7 +149,7 @@ ae_sdtm <-
     rec_vars = c("STUDYID", "USUBJID", "AESTDTC"),
     sbj_vars = c("STUDYID", "USUBJID"))
 
-# ADaM using admiral (28 LOC)
+# ADaM using admiral
 adae <- ae_sdtm %>%
   derive_vars_merged(dataset_add = adsl_vars,
     by_vars = exprs(USUBJID),
@@ -161,8 +165,9 @@ adae <- ae_sdtm %>%
     AESEV == "Moderate" ~ 2L,
     AESEV == "Severe" ~ 3L)) %>%
   derive_var_extreme_flag(by_vars = exprs(USUBJID, AETERM),
-    order = exprs(AESEVN), new_var = ANL01FL, mode = "last") %>%
-  derive_var_obs_number(by_vars = exprs(USUBJID), new_var = ASEQ)
+    order = exprs(AESEVN, AESEQ), new_var = ANL01FL, mode = "last") %>%
+  derive_var_obs_number(by_vars = exprs(USUBJID),
+    order = exprs(AESEQ), new_var = ASEQ)
 ```
 
 ---
@@ -186,9 +191,9 @@ Oak + Admiral pulls in 54 transitive dependencies (including admiraldev, sdtm.oa
 
 The rpy2 benchmark runs the **exact same R code** (oak SDTM + admiral ADaM) from within a Python process via `rpy2.robjects`. Key findings:
 
-1. **Fixed overhead at small scale.** At 100K rows, rpy2 takes 10.6s vs Rscript's 3.0s — the gap is mostly data I/O (reading parquet into the embedded R session for each scale factor) and rpy2 marshalling overhead.
-2. **Converges at large scale.** At 2M rows, the overhead drops to ~31% — the R pipeline itself dominates, and rpy2's per-call cost becomes proportionally smaller.
-3. **Pipeline time is near-identical.** The SDTM+ADaM computation times (e.g. 18.8s + 53.4s = 72.2s at 2M) are only ~23% slower than native Rscript (14.8s + 43.8s = 58.6s). The remaining gap is data load and R-Python object marshalling.
+1. **Fixed overhead at small scale.** At 100K rows, rpy2 takes 10.6s vs Rscript's 2.8s. The gap is mostly data I/O (reading Parquet into the embedded R session for each scale factor) and rpy2 marshalling.
+2. **Smaller share at large scale.** At 1M and 2M rows, the overhead is about 36%. The R pipeline itself takes most of the time.
+3. **Pipeline time.** The SDTM + ADaM time under rpy2 is 72.2s at 2M rows (18.8s + 53.4s), against 56.5s in total for native Rscript. The rest of the rpy2 time is data load.
 4. **Practical implication.** rpy2 is viable for embedding pharmaverse pipelines within Python workflows, but adds measurable overhead. For benchmarking, native Rscript is fairer; for production, the overhead may be acceptable if it avoids language switching in a Python-centric stack.
 
 ---
@@ -201,7 +206,15 @@ The rpy2 benchmark runs the **exact same R code** (oak SDTM + admiral ADaM) from
 | Study day variable    | `ADY` (single)                            | `ASTDY` + `AENDY` (separate)    |
 | Date imputation flags | `ASTDTF`, `AENDTF` generated              | Not generated                   |
 
-Both produce the same core ADAE variables. Fleet carries forward all source columns by default (useful for traceability); Oak + Admiral pipelines explicitly select only target variables. This is a design choice, not a correctness difference.
+Fleet carries forward all source columns by default (useful for traceability); Oak + Admiral pipelines explicitly select only target variables. This is a design choice.
+
+**Row-by-row check.** `run_benchmark.py` compares the full outputs of the smallest scale on 17 variables (STUDYID, USUBJID, AETERM, AESTDTC, AEENDTC, AESEV, AESER, AEREL, AEOUT, AEACN, AESEQ, ASTDT, AENDT, TRTEMFL, AESEVN, ANL01FL, ASEQ) and exits 1 on a difference. Both sides use the same rules:
+
+- TRTEMFL: start on or after TRTSDT, no upper limit (Fleet passes no `trtedt`; the R call sets no `end_window`).
+- ANL01FL: the last record by AESEVN, then AESEQ, within USUBJID and AETERM, so one record per group on a tie.
+- ASEQ: numbered by AESEQ within USUBJID.
+
+On an 11,520-row inflated input, all 17 variables have the same value on every row.
 
 ---
 
@@ -211,7 +224,7 @@ To ensure objectivity:
 
 1. **Symmetric SDTM frameworks.** Both sides use CDISC-aware verb-based SDTM mapping (Fleet's `.sdtm` namespace / oak's `assign_no_ct` + `hardcode_no_ct`). Neither uses raw `dplyr::transmute`.
 2. **Same data, same I/O format.** Both read the same Parquet files (Snappy-compressed).
-3. **Same derivation logic.** AESER recoding, date parsing, TRTEMFL, severity flag, sequencing — all matched step-for-step.
+3. **Same derivation rules.** AESER recoding, date parsing, TRTEMFL, the severity flag and sequencing follow the rules in section 6; `run_benchmark.py` checks every row of the smallest scale.
 4. **Both run as clean subprocesses** (no warm JIT caches). The rpy2 benchmark runs in a fresh Python process with an embedded R session.
 5. **Memory measurement caveat.** R's `gc()` reports GC-tracked allocations only; Python's RSS includes the full process. The numbers are not directly comparable.
 6. **Oak's join-per-column architecture** is inherently more expensive than Fleet's lazy Polars expressions — each `assign_no_ct()` call performs a join on `oak_id_vars`. This is a design trade-off in oak (row-level traceability and provenance), not inefficiency.
@@ -226,16 +239,16 @@ To ensure objectivity:
 | --------------------- | ------------------------- | ---------------------- | ------------ |
 | Speed (2M rows)       | 1.5s                      | 56.5s (native R)       | Fleet (~38×) |
 | Speed (11.5M rows)    | 9.0s                      | 318.1s (native R)      | Fleet (~35×) |
-| Speed via rpy2        | —                         | 76.7s (+31% vs native) | Native R     |
-| Scaling linearity     | Near-linear               | Super-linear           | Fleet        |
-| Pipeline LOC          | 37                        | 54                     | Fleet        |
+| Speed via rpy2        | —                         | 76.7s (+36% vs native) | Native R     |
+| Scaling linearity     | Near-linear               | Near-linear            | Comparable   |
+| Pipeline LOC          | 55                        | 89                     | Fleet        |
 | Dependency count      | 23                        | 54                     | Fleet        |
 | SDTM framework        | `.sdtm` namespace         | sdtm.oak               | Comparable   |
 | Regulatory maturity   | Emerging                  | Established            | Oak+Admiral  |
 | Community / ecosystem | Small                     | Large (pharmaverse)    | Oak+Admiral  |
 | CDISC CT integration  | Built-in codelist classes | External lookups       | Fleet        |
 
-Fleet delivers order-of-magnitude speed gains at scale through Polars' columnar engine, with fewer lines of pipeline code and a lighter dependency tree. Oak + Admiral remains the pharmaverse standard with deeper regulatory acceptance and a broader R-based ecosystem. The rpy2 bridge is functional but adds ~31% overhead at scale, making native Rscript the appropriate baseline for performance comparison.
+Fleet delivers order-of-magnitude speed gains at scale through Polars' columnar engine, with fewer lines of pipeline code and a lighter dependency tree. Oak + Admiral remains the pharmaverse standard with deeper regulatory acceptance and a broader R-based ecosystem. The rpy2 bridge is functional but adds about 36% overhead at 1M and 2M rows, making native Rscript the appropriate baseline for performance comparison.
 
 ---
 

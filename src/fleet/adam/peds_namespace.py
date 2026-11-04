@@ -3,7 +3,7 @@ ADaM Pediatrics namespace extension (admiralpeds-inspired).
 
 Accessed via ``df.adam.peds`` on any Polars DataFrame.
 
-Key derivations ported from pharmaverse/admiralpeds and pediatric standards:
+Key derivations, inspired by pharmaverse/admiralpeds and pediatric standards (not ports; values can differ):
   - ``age_days``          — age in whole days between two date columns
   - ``age_months``        — age in whole calendar months
   - ``age_years``         — age in completed years (or decimal years)

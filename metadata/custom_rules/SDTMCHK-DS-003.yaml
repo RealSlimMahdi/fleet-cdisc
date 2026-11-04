@@ -1,55 +1,53 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-DS-003: Duplicate randomization records
-# Source: sdtmchecks::check_ds_duplicate_randomization
+# Based on: sdtmchecks::check_ds_duplicate_randomization. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-DS-003
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [EVENTS]
+    Include:
+    - EVENTS
   Domains:
-    Include: [DS]
-
+    Include:
+    - DS
 Check:
   all:
-    - name: DSDECOD
-      operator: equal_to
-      value: "RANDOMIZED"
-      value_is_literal: true
-    - name: DSDECOD
-      operator: present_on_multiple_rows_within
-      within: USUBJID
-
+  - name: DSDECOD
+    operator: contains_case_insensitive
+    value: RANDOMIZ
+  - name: DSDECOD
+    operator: present_on_multiple_rows_within
+    within: USUBJID
 Outcome:
-  Message: >-
-    Subject has multiple randomization records (DSDECOD='RANDOMIZED') in DS.
-    Each subject should have at most one randomization disposition record.
-  Output Variables: [USUBJID, DSDECOD, DSTERM, DSSCAT, DSSTDTC, DSSEQ]
-
-Description: >-
-  Each subject should have only one record with DSDECOD='RANDOMIZED' in DS.
-  Multiple randomization records indicate a data entry error.
-
+  Message: The subject has more than one randomization record (DSDECOD contains RANDOMIZ).
+  Output Variables:
+  - USUBJID
+  - DSDECOD
+  - DSTERM
+  - DSSCAT
+  - DSSTDTC
+  - DSSEQ
+Description: 'Flags: The subject has more than one randomization record (DSDECOD contains RANDOMIZ). Based
+  on sdtmchecks::check_ds_duplicate_randomization. Difference from the R function: Two different RANDOMIZ
+  terms for one subject (RANDOMIZED and RANDOMIZATION) are not flagged. R counts them together.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-DS-003
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_ds_duplicate_randomization
-                Document: pharmaverse sdtmchecks
-                Section: DS Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-DS-003
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_ds_duplicate_randomization
+        Document: pharmaverse sdtmchecks
+        Section: DS Domain

@@ -1,54 +1,65 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-QS-005: NOT DONE status but QSSTRESC responses populated
-# Source: sdtmchecks::check_qs_qsstat_qsstresc
+# Based on: sdtmchecks::check_qs_qsstat_qsstresc. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-QS-005
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [FINDINGS]
+    Include:
+    - FINDINGS
   Domains:
-    Include: [QS]
-
+    Include:
+    - QS
 Check:
   all:
-    - name: QSSTAT
-      operator: equal_to
-      value: "NOT DONE"
-      value_is_literal: true
-    - name: QSSTRESC
-      operator: non_empty
-
+  - name: QSSTRESC
+    operator: non_empty
+  - name: $n_not_done
+    operator: greater_than
+    value: 0
 Outcome:
-  Message: >-
-    QSSTAT is 'NOT DONE' but QSSTRESC is populated. When a questionnaire
-    is marked as not done, response values should be empty.
-  Output Variables: [USUBJID, QSTESTCD, QSCAT, QSSTAT, QSSTRESC, VISIT]
-
-Description: >-
-  When QSSTAT='NOT DONE', QSSTRESC (and result fields) should be empty.
-  Having response values for a not-done assessment is contradictory.
-
+  Message: The questionnaire is NOT DONE (QSTESTCD = 'QSALL') but QSSTRESC is populated at the same visit
+    and date.
+  Output Variables:
+  - USUBJID
+  - QSTESTCD
+  - QSCAT
+  - QSSTAT
+  - QSSTRESC
+  - VISIT
+  - $n_not_done
+Description: 'Flags: The questionnaire is NOT DONE (QSTESTCD = ''QSALL'') but QSSTRESC is populated at
+  the same visit and date. Based on sdtmchecks::check_qs_qsstat_qsstresc. Same conditions as the R function.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-QS-005
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_qs_qsstat_qsstresc
-                Document: pharmaverse sdtmchecks
-                Section: QS Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-QS-005
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_qs_qsstat_qsstresc
+        Document: pharmaverse sdtmchecks
+        Section: QS Domain
+Operations:
+- operator: record_count
+  domain: QS
+  id: $n_not_done
+  group:
+  - USUBJID
+  - VISIT
+  - QSCAT
+  - QSDTC
+  filter:
+    QSTESTCD: QSALL
+    QSSTAT: NOT DONE

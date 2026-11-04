@@ -191,6 +191,20 @@ Some setups are refused before the engine starts. The verb then raises
 - the IG version is not supported, for example SDTMIG 3.1.3,
 - the custom rules directory does not exist.
 
+## What a PASS does not cover: controlled terminology
+
+CORE checks only a few controlled terminology values. A `PASS` or a `FAIL`
+for other rules does not mean that the codelist values are correct. Fleet
+checks a value against its codelist at the line that assigns it
+(`assign(..., ct=SEX)`), and warns.
+
+Example: a DM with `SEX = "X"`, `AGEU = "DECADES"`, `RACE = "MARTIAN"` and
+`ETHNIC = "UNKNOWN ETHNIC"`, and an AE with `AESER = "YES"`,
+`AESEV = "HORRIBLE"`, `AEOUT = "BETTER"` and `AESTDTC = "2020-13-45"`.
+`fleet validate` (CORE 0.15.0) reports only CORE-000087 and CORE-000266
+(AESER) and CORE-000726 (ETHNIC) for these values. It names no finding for
+SEX, AGEU, RACE, AESEV, AEOUT or the bad ISO 8601 date.
+
 ## Which rules actually exist upstream
 
 CORE executes the rule sets CDISC has published to its Library. As of

@@ -132,7 +132,7 @@ ADaM sub-structures and therapeutic-area extensions are nested under `df.adam`:
 | `df.adam.neuro`     | Neuroscience        | Centiloid, MMSE, CDR-SoB                                                                    |
 | `df.adam.tte`       | ADTTE               | Event/censor sources, TTE params, AVAL/AVALU, KM inputs                                     |
 
-These mirror the [admiral TA packages](https://pharmaverse.github.io/admiral/).
+These are inspired by the [admiral TA packages](https://pharmaverse.github.io/admiral/). They are not ports: a verb can give other values. Each verb docstring names its source under `References:`.
 
 ---
 

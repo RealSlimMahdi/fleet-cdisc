@@ -1,58 +1,75 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-EX-011: EXOCCUR missing/N but EXDOSE>0 or EXSTDTC populated
-# Source: sdtmchecks::check_ex_exoccur_exdose_exstdtc
+# Based on: sdtmchecks::check_ex_exoccur_exdose_exstdtc. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-EX-011
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [INTERVENTIONS]
+    Include:
+    - INTERVENTIONS
   Domains:
-    Include: [EX]
-
+    Include:
+    - EX
 Check:
   all:
+  - any:
+    - name: EXOCCUR
+      operator: not_exists
     - name: EXOCCUR
       operator: equal_to
-      value: "N"
+      value: Y
       value_is_literal: true
-    - any:
-        - name: EXDOSE
-          operator: greater_than
-          value: 0
-        - name: EXSTDTC
-          operator: non_empty
-
+  - any:
+    - name: EXSTDTC
+      operator: empty
+    - name: EXSTDTC
+      operator: is_incomplete_date
+    - name: EXDOSE
+      operator: empty
+    - all:
+      - name: EXDOSE
+        operator: less_than_or_equal_to
+        value: 0
+      - name: EXTRT
+        operator: does_not_contain
+        value: PLACEBO
+      - name: EXTRT
+        operator: does_not_contain
+        value: DUMMY
+    - name: EXDOSE
+      operator: less_than
+      value: 0
 Outcome:
-  Message: >-
-    EXOCCUR is 'N' (did not occur) but EXDOSE > 0 or EXSTDTC is populated.
-    Non-occurring exposure records should not have positive doses or dates.
-  Output Variables: [USUBJID, EXTRT, EXOCCUR, EXDOSE, EXSTDTC, VISIT]
-
-Description: >-
-  When EXOCCUR='N', EXDOSE should be 0 or missing and EXSTDTC should be empty.
-  Positive dose or populated start date with EXOCCUR='N' is contradictory.
-
+  Message: A valid dose (EXOCCUR = 'Y' or no EXOCCUR) has no full EXSTDTC, no EXDOSE, or EXDOSE <= 0 for
+    an active treatment.
+  Output Variables:
+  - USUBJID
+  - EXTRT
+  - EXOCCUR
+  - EXDOSE
+  - EXSTDTC
+  - VISIT
+Description: 'Flags: A valid dose (EXOCCUR = ''Y'' or no EXOCCUR) has no full EXSTDTC, no EXDOSE, or EXDOSE
+  <= 0 for an active treatment. Based on sdtmchecks::check_ex_exoccur_exdose_exstdtc. Same conditions
+  as the R function.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-EX-011
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_ex_exoccur_exdose_exstdtc
-                Document: pharmaverse sdtmchecks
-                Section: EX Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-EX-011
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_ex_exoccur_exdose_exstdtc
+        Document: pharmaverse sdtmchecks
+        Section: EX Domain

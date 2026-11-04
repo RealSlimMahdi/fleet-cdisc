@@ -1,49 +1,55 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-TU-001: TUDTC missing for tumor identification records
-# Source: sdtmchecks::check_tu_tudtc
+# Based on: sdtmchecks::check_tu_tudtc. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-TU-001
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [FINDINGS]
+    Include:
+    - FINDINGS
   Domains:
-    Include: [TU]
-
+    Include:
+    - TU
 Check:
   all:
-    - name: TUDTC
+  - name: TUDTC
+    operator: empty
+  - any:
+    - name: TUEVAL
+      operator: not_exists
+    - name: TUEVAL
       operator: empty
-
+    - name: TUEVAL
+      operator: equal_to_case_insensitive
+      value: INVESTIGATOR
 Outcome:
-  Message: >-
-    TUDTC is missing for a tumor identification record. All tumor
-    assessments must have a date recorded.
-  Output Variables: [USUBJID, TUTESTCD, TULOC, VISIT, TUDTC]
-
-Description: >-
-  TUDTC must be populated for all TU records.
-
+  Message: Investigator TU record with no TUDTC.
+  Output Variables:
+  - USUBJID
+  - TUTESTCD
+  - TULOC
+  - VISIT
+  - TUDTC
+Description: 'Flags: Investigator TU record with no TUDTC. Based on sdtmchecks::check_tu_tudtc. Same conditions
+  as the R function.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-TU-001
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_tu_tudtc
-                Document: pharmaverse sdtmchecks
-                Section: TU Domain (ONC)
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-TU-001
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_tu_tudtc
+        Document: pharmaverse sdtmchecks
+        Section: TU Domain (ONC)

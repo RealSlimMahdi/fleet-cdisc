@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-EX-002: EXDOSE > 0 but EXOCCUR is not Y
-# Source: sdtmchecks::check_ex_exdose_pos_exoccur_no
+# Based on: sdtmchecks::check_ex_exdose_pos_exoccur_no. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-EX-002
@@ -33,6 +33,7 @@ Outcome:
 
 Description: >-
   When EXDOSE > 0, EXOCCUR should be 'Y'.
+  Based on sdtmchecks::check_ex_exdose_pos_exoccur_no. Same conditions as the R function.
 
 Sensitivity: Record
 Executability: Fully Executable

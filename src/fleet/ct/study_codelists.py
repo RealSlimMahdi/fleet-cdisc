@@ -286,7 +286,9 @@ def spec_codelists(define_path: Path) -> dict[str, type]:
     *define_path*.  Each problem of checks a, b and d warns once per
     process, at the caller of ``from_spec`` (see :func:`check_codelists`).
     Values are still checked against the terms in the file: the warning
-    names the fix, and CORE stays the authority.
+    names the fix. CORE checks only a few terminology values (for example
+    AESER and ETHNIC), so this check at the assign line is the main
+    codelist check.
 
     Args:
         define_path: The ``define.yaml`` that ``from_spec`` runs.

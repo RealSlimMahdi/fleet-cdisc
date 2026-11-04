@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-EX-003: EXDOSU missing when exposure occurred
-# Source: sdtmchecks::check_ex_exdosu
+# Based on: sdtmchecks::check_ex_exdosu. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-EX-003
@@ -35,6 +35,7 @@ Outcome:
 
 Description: >-
   EXDOSU must be populated when EXOCCUR is 'Y' or EXOCCUR does not exist.
+  Based on sdtmchecks::check_ex_exdosu. Same conditions as the R function.
 
 Sensitivity: Record
 Executability: Fully Executable

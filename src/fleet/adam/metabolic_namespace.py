@@ -3,7 +3,7 @@ ADaM Metabolic namespace extension (admiralmetabolic-inspired).
 
 Accessed via ``df.adam.metabolic`` on any Polars DataFrame.
 
-Key derivations ported from pharmaverse/admiralmetabolic:
+Key derivations, inspired by pharmaverse/admiralmetabolic (not ports; values can differ):
   - ``waist_hip_ratio``    — WAISTHIP = WSTCIR / HIPCIR (per subject/visit)
   - ``waist_height_ratio`` — WAISTHGT = WSTCIR / height (same units)
   - ``body_fat_pct``       — estimated body fat % via Deurenberg formula

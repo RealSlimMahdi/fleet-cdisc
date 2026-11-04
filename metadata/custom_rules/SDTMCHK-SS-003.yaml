@@ -1,68 +1,62 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-SS-003: DEAD status date inconsistent with DM DTHDTC
-# Source: sdtmchecks::check_ss_ssdtc_dead_dthdtc
+# Based on: sdtmchecks::check_ss_ssdtc_dead_dthdtc. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-SS-003
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [EVENTS]
+    Include:
+    - FINDINGS
   Domains:
-    Include: [SS]
-
+    Include:
+    - SS
 Check:
   all:
-    - name: SSSTRESC
-      operator: equal_to
-      value: "DEAD"
-      value_is_literal: true
-    - name: SSDTC
-      operator: non_empty
-    - name: $dm_dthdtc
-      operator: non_empty
-    - name: SSDTC
-      operator: date_not_equal_to
-      value: $dm_dthdtc
-      date_component: auto
-
+  - name: SSSTRESC
+    operator: equal_to_case_insensitive
+    value: DEAD
+  - name: SSDTC
+    operator: non_empty
+  - name: $dm_dthdtc
+    operator: non_empty
+  - name: SSDTC
+    operator: date_less_than
+    value: $dm_dthdtc
+    date_component: auto
 Operations:
-  - operator: max_date
-    domain: DM
-    name: DTHDTC
-    id: $dm_dthdtc
-    group:
-      - USUBJID
-
+- operator: max_date
+  domain: DM
+  name: DTHDTC
+  id: $dm_dthdtc
+  group:
+  - USUBJID
 Outcome:
-  Message: >-
-    Subject survival status is DEAD but SSDTC does not match the death date
-    (DTHDTC) in DM. The death assessment date should be consistent with DM.
-  Output Variables: [USUBJID, SSSTRESC, SSDTC, $dm_dthdtc]
-
-Description: >-
-  When SSSTRESC='DEAD', SSDTC should match DTHDTC in DM.
-  Inconsistency between the death date in SS and DM indicates a data quality issue.
-
+  Message: SSSTRESC is DEAD but SSDTC is before the death date (DM.DTHDTC).
+  Output Variables:
+  - USUBJID
+  - SSSTRESC
+  - SSDTC
+  - $dm_dthdtc
+Description: 'Flags: SSSTRESC is DEAD but SSDTC is before the death date (DM.DTHDTC). Based on sdtmchecks::check_ss_ssdtc_dead_dthdtc.
+  Same conditions as the R function.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-SS-003
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_ss_ssdtc_dead_dthdtc
-                Document: pharmaverse sdtmchecks
-                Section: SS Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-SS-003
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_ss_ssdtc_dead_dthdtc
+        Document: pharmaverse sdtmchecks
+        Section: SS Domain

@@ -98,11 +98,11 @@ def run_pipeline(ae_raw: pl.DataFrame, adsl: pl.DataFrame) -> dict:
         )
         .flag(
             "ANL01FL",
-            criteria="max",
-            value_col="AESEVN",
+            criteria="last",
+            order_by=["AESEVN", "AESEQ"],
             by=["USUBJID", "AETERM"],
         )
-        .seq("ASEQ", by=["USUBJID"])
+        .seq("ASEQ", by=["USUBJID"], order_by=["AESEQ"])
         .to_frame()
     )
     adam_sec = time.perf_counter() - t_adam
@@ -175,6 +175,9 @@ def run() -> dict:
             }
         )
         last_result = result
+        if len(scaling) == 1:
+            # Full output at the smallest scale, for the row-by-row check in run_benchmark.py
+            result["adae"].write_parquet(DATA / "fleet_adae_check.parquet")
 
     # ── Dependency count ──────────────────────────────────────────────
     import importlib.metadata
@@ -223,9 +226,10 @@ def run() -> dict:
         "time_total_sec": last_result["total_sec"],
         "peak_memory_tracemalloc_mb": last_result["peak_traced_mb"],
         "peak_rss_mb": last_result["peak_rss_mb"],
-        "pipeline_loc_sdtm": 15,
-        "pipeline_loc_adam": 22,
-        "pipeline_loc_total": 37,
+        # Non-blank, non-comment lines between the timers of run_pipeline
+        "pipeline_loc_sdtm": 18,
+        "pipeline_loc_adam": 37,
+        "pipeline_loc_total": 55,
         "n_total_dependencies": len(all_deps),
         "dependency_names": sorted(all_deps),
         "output_columns": last_result["columns"],

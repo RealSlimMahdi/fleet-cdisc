@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-LB-001: LBORRES populated but LBSTRESN and LBSTRESC both missing
-# Source: sdtmchecks::check_lb_lbstresn_missing
+# Based on: sdtmchecks::check_lb_lbstresn_missing. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-LB-001
@@ -33,6 +33,7 @@ Outcome:
 Description: >-
   When LBORRES is populated, at least one of LBSTRESN or LBSTRESC must
   also be populated.
+  Based on sdtmchecks::check_lb_lbstresn_missing. Same conditions as the R function.
 
 Sensitivity: Record
 Executability: Fully Executable

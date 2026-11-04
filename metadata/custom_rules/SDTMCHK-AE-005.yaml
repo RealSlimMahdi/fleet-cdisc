@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-AE-005: AEOUT is FATAL but AEDTHDTC missing
-# Source: sdtmchecks::check_ae_aeout (second condition)
+# Based on: sdtmchecks::check_ae_aeout (second condition). Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-AE-005
@@ -32,6 +32,7 @@ Outcome:
 
 Description: >-
   When AEOUT is 'FATAL', AEDTHDTC must be populated.
+  Based on sdtmchecks::check_ae_aeout. Same conditions as the R function.
 
 Sensitivity: Record
 Executability: Fully Executable

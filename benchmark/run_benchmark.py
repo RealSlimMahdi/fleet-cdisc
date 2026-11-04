@@ -11,7 +11,10 @@ Using subprocesses for both ensures each tool gets a clean memory space
 and neither benefits from warm caches of the other.
 
 Usage:
-    uv run python benchmark/run_benchmark.py [--target-gb 2.0] [--skip-inflate]
+    uv run python benchmark/run_benchmark.py [--target-gb 2.0] [--skip-inflate] [--max-rows N]
+
+The run exits 1 when the Fleet and admiral outputs at the smallest scale
+differ in any compared variable on any row.
 """
 
 from __future__ import annotations
@@ -23,9 +26,49 @@ import sys
 import time
 from pathlib import Path
 
+import polars as pl
+
 ROOT = Path(__file__).parent
 DATA = ROOT / "data"
 REPO = ROOT.parent
+
+# The SDTM and ADaM variables that both pipelines derive.
+COMPARED = [
+    "STUDYID", "USUBJID", "AETERM", "AESTDTC", "AEENDTC", "AESEV", "AESER",
+    "AEREL", "AEOUT", "AEACN", "AESEQ", "ASTDT", "AENDT", "TRTEMFL",
+    "AESEVN", "ANL01FL", "ASEQ",
+]  # fmt: skip
+
+
+def compare_outputs(fleet: pl.DataFrame, admiral: pl.DataFrame) -> list[str]:
+    """Compare the two ADAE outputs row by row and return one line per difference."""
+
+    def norm(df: pl.DataFrame) -> pl.DataFrame:
+        cols = [c for c in COMPARED if c in df.columns]
+        return (
+            df.select(cols)
+            .with_columns(
+                pl.col(c).cast(pl.Int64) for c in ("AESEQ", "AESEVN", "ASEQ") if c in cols
+            )
+            .with_columns(pl.col(c).cast(pl.Date) for c in ("ASTDT", "AENDT") if c in cols)
+            .sort(["USUBJID", "ASEQ"])
+        )
+
+    f, a = norm(fleet), norm(admiral)
+    problems = [f"{c}: missing in Fleet" for c in COMPARED if c not in f.columns]
+    problems += [f"{c}: missing in admiral" for c in COMPARED if c not in a.columns]
+    if f.height != a.height:
+        return [*problems, f"row count: Fleet {f.height}, admiral {a.height}"]
+    for c in (c for c in COMPARED if c in f.columns and c in a.columns):
+        diff = ~f[c].eq_missing(a[c])
+        n = int(diff.sum())
+        if n:
+            i = int(diff.arg_max())
+            problems.append(
+                f"{c}: {n} row(s) differ, first at USUBJID {f['USUBJID'][i]} ASEQ "
+                f"{f['ASEQ'][i]}: Fleet {f[c][i]!r}, admiral {a[c][i]!r}"
+            )
+    return problems
 
 
 def run_cmd(cmd: list[str], label: str) -> tuple[float, str, str]:
@@ -55,7 +98,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--target-gb", type=float, default=2.0)
     parser.add_argument("--skip-inflate", action="store_true")
+    parser.add_argument("--max-rows", type=int, default=None, help="cap the largest scale")
     args = parser.parse_args()
+    cap = [str(args.max_rows)] if args.max_rows else []
 
     # ── Step 1: Inflate data ──────────────────────────────────────────
     if not args.skip_inflate and not (DATA / "ae_inflated.parquet").exists():
@@ -74,13 +119,13 @@ def main() -> None:
 
     # ── Step 2: Fleet benchmark ───────────────────────────────────────
     fleet_wall, _, _ = run_cmd(
-        [sys.executable, str(ROOT / "fleet_adae_benchmark.py")],
+        [sys.executable, str(ROOT / "fleet_adae_benchmark.py"), *cap],
         "Fleet ADAE benchmark",
     )
 
     # ── Step 3: Admiral benchmark ─────────────────────────────────────
     admiral_wall, _, _ = run_cmd(
-        ["Rscript", str(ROOT / "admiral_adae_benchmark.R")],
+        ["Rscript", str(ROOT / "admiral_adae_benchmark.R"), *cap],
         "Admiral ADAE benchmark",
     )
 
@@ -180,38 +225,23 @@ def main() -> None:
     row("Recursive dependencies", str(fm["n_total_dependencies"]), str(am["n_total_dependencies"]))
     row("Language / engine", "Python + Polars (Rust)", "R + dplyr (C++)")
 
-    # ── Equivalence check ─────────────────────────────────────────────
-    print("\n  Output Equivalence Check")
+    # ── Equivalence check (full rows, smallest scale) ─────────────────────────────
+    print("\n  Output Equivalence Check (every row, smallest scale)")
     print(sep)
-    try:
-        import polars as pl
-
-        f_sample = pl.read_parquet(DATA / "fleet_adae_sample.parquet")
-        a_sample = pl.read_parquet(DATA / "admiral_adae_sample.parquet")
-        common = sorted(set(f_sample.columns) & set(a_sample.columns))
-        fleet_only = sorted(set(f_sample.columns) - set(a_sample.columns))
-        admiral_only = sorted(set(a_sample.columns) - set(f_sample.columns))
-        print(f"  Common columns        : {len(common)}")
-        if fleet_only:
-            print(f"  Fleet-only columns    : {fleet_only}")
-        if admiral_only:
-            print(f"  Admiral-only columns  : {admiral_only}")
-        for col in common[:12]:
-            try:
-                fv = f_sample[col].head(3).to_list()
-                av = a_sample[col].head(3).to_list()
-                match = "✓" if str(fv) == str(av) else "≈"
-                print(f"    {match}  {col:<14}  Fleet={fv}  Admiral={av}")
-            except Exception:
-                print(f"    ?  {col}")
-    except Exception as e:
-        print(f"  ⚠ Could not compare samples: {e}")
+    problems = compare_outputs(
+        pl.read_parquet(DATA / "fleet_adae_check.parquet"),
+        pl.read_parquet(DATA / "admiral_adae_check.parquet"),
+    )
+    for p in problems:
+        print(f"    DIFF  {p}")
+    if not problems:
+        print(f"    Same values in {len(COMPARED)} variables on every row.")
 
     # ── Notes ─────────────────────────────────────────────────────────
     print(f"\n{'=' * W}")
     print("  Notes:")
     print("  • Both pipelines ran in separate clean subprocesses")
-    print("  • Same Parquet input, same derivation steps, same target variables")
+    print("  • Same Parquet input, same target variables; differences are printed above")
     print("  • Fleet uses Polars (Rust columnar engine, lazy evaluation)")
     print("  • Admiral uses dplyr (C++ backed, eager row-major data.frame)")
     print("  • R memory via gc() can underreport; Fleet reports process RSS")
@@ -228,6 +258,8 @@ def main() -> None:
     rpt = DATA / "benchmark_report.json"
     rpt.write_text(json.dumps(report, indent=2, default=str))
     print(f"\n  Full report → {rpt}")
+    if problems:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

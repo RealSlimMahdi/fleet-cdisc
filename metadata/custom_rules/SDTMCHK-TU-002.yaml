@@ -1,53 +1,59 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-TU-002: TULOC missing for target lesions
-# Source: sdtmchecks::check_tu_tuloc_missing
+# Based on: sdtmchecks::check_tu_tuloc_missing. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-TU-002
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [FINDINGS]
+    Include:
+    - FINDINGS
   Domains:
-    Include: [TU]
-
+    Include:
+    - TU
 Check:
   all:
-    - name: TUORRES
-      operator: equal_to
-      value: "TARGET"
-      value_is_literal: true
-    - name: TULOC
+  - name: TUORRES
+    operator: equal_to_case_insensitive
+    value: TARGET
+  - name: TULOC
+    operator: empty
+  - any:
+    - name: TUEVAL
+      operator: not_exists
+    - name: TUEVAL
       operator: empty
-
+    - name: TUEVAL
+      operator: equal_to_case_insensitive
+      value: INVESTIGATOR
 Outcome:
-  Message: >-
-    TUORRES is 'TARGET' but TULOC (tumor location) is missing.
-    Target lesions must have their anatomical location recorded.
-  Output Variables: [USUBJID, TUTESTCD, TUORRES, TULOC, VISIT, TUDTC]
-
-Description: >-
-  TULOC must be populated when TUORRES is 'TARGET'.
-
+  Message: Investigator TARGET lesion (any case) with no TULOC.
+  Output Variables:
+  - USUBJID
+  - TUTESTCD
+  - TUORRES
+  - TULOC
+  - VISIT
+  - TUDTC
+Description: 'Flags: Investigator TARGET lesion (any case) with no TULOC. Based on sdtmchecks::check_tu_tuloc_missing.
+  Same conditions as the R function.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-TU-002
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_tu_tuloc_missing
-                Document: pharmaverse sdtmchecks
-                Section: TU Domain (ONC)
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-TU-002
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_tu_tuloc_missing
+        Document: pharmaverse sdtmchecks
+        Section: TU Domain (ONC)

@@ -1,55 +1,66 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-TR-004: Same TR date across different visits
-# Source: sdtmchecks::check_tr_trdtc_across_visit
+# Based on: sdtmchecks::check_tr_trdtc_across_visit. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-TR-004
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [FINDINGS]
+    Include:
+    - FINDINGS
   Domains:
-    Include: [TR]
-
+    Include:
+    - TR
 Check:
   all:
-    - name: TRDTC
-      operator: non_empty
-    - name: TRDTC
-      operator: is_inconsistent_across_dataset
-      value:
-        - USUBJID
-        - VISITNUM
-
+  - name: TRTESTCD
+    operator: equal_to
+    value: LDIAM
+    value_is_literal: true
+  - name: TRDTC
+    operator: non_empty
+  - any:
+    - name: TREVAL
+      operator: not_exists
+    - name: TREVAL
+      operator: empty
+    - name: TREVAL
+      operator: equal_to_case_insensitive
+      value: INVESTIGATOR
+  - name: VISITNUM
+    operator: is_inconsistent_across_dataset
+    value:
+    - USUBJID
+    - TRDTC
 Outcome:
-  Message: >-
-    Same TRDTC date appears across different visits for the subject.
-    Each tumor response assessment visit should have a unique date.
-  Output Variables: [USUBJID, TRLINKID, TRTESTCD, TRDTC, VISIT, VISITNUM]
-
-Description: >-
-  TR assessment dates should differ across visits. The same date at multiple
-  visits suggests date transcription errors or improper visit assignment.
-
+  Message: The same TRDTC is at more than one visit (investigator LDIAM records).
+  Output Variables:
+  - USUBJID
+  - TRLINKID
+  - TRTESTCD
+  - TRDTC
+  - VISIT
+  - VISITNUM
+Description: 'Flags: The same TRDTC is at more than one visit (investigator LDIAM records). Based on sdtmchecks::check_tr_trdtc_across_visit.
+  Difference from the R function: Independent assessor records count when the engine compares the visits
+  of one date. R keeps investigator records only.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-TR-004
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_tr_trdtc_across_visit
-                Document: pharmaverse sdtmchecks
-                Section: TR Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-TR-004
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_tr_trdtc_across_visit
+        Document: pharmaverse sdtmchecks
+        Section: TR Domain

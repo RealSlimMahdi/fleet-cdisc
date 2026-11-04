@@ -1,53 +1,51 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-QS-001: QSSTAT=NOT DONE but QSREASND missing
-# Source: sdtmchecks::check_qs_qsstat_qsreasnd
+# Based on: sdtmchecks::check_qs_qsstat_qsreasnd. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-QS-001
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [FINDINGS]
+    Include:
+    - FINDINGS
   Domains:
-    Include: [QS]
-
+    Include:
+    - QS
 Check:
   all:
-    - name: QSSTAT
-      operator: equal_to
-      value: "NOT DONE"
-      value_is_literal: true
-    - name: QSREASND
-      operator: empty
-
+  - name: QSSTAT
+    operator: equal_to_case_insensitive
+    value: NOT DONE
+  - name: QSREASND
+    operator: empty
 Outcome:
-  Message: >-
-    QSSTAT is 'NOT DONE' but QSREASND (reason not done) is missing.
-    A reason must be provided when a questionnaire is not completed.
-  Output Variables: [USUBJID, QSCAT, QSTESTCD, VISIT, QSSTAT, QSREASND]
-
-Description: >-
-  When QSSTAT is 'NOT DONE', QSREASND must be populated.
-
+  Message: QSSTAT is 'NOT DONE' (any case) but QSREASND is missing.
+  Output Variables:
+  - USUBJID
+  - QSCAT
+  - QSTESTCD
+  - VISIT
+  - QSSTAT
+  - QSREASND
+Description: 'Flags: QSSTAT is ''NOT DONE'' (any case) but QSREASND is missing. Based on sdtmchecks::check_qs_qsstat_qsreasnd.
+  Difference from the R function: Leading and trailing blanks in QSSTAT are not removed. R trims them.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-QS-001
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_qs_qsstat_qsreasnd
-                Document: pharmaverse sdtmchecks
-                Section: QS Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-QS-001
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_qs_qsstat_qsreasnd
+        Document: pharmaverse sdtmchecks
+        Section: QS Domain

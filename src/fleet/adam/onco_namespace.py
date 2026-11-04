@@ -3,7 +3,7 @@ ADaM Oncology namespace extension (admiralonco-inspired).
 
 Accessed via ``df.adam.onco`` on any Polars DataFrame.
 
-Key derivations ported from pharmaverse/admiralonco:
+Key derivations, inspired by pharmaverse/admiralonco (not ports; values can differ):
   - ``aval_resp``             — RECIST response text → numeric code
   - ``tumor_response_flag``   — flag responders ("CR"/"PR") as "Y"
   - ``best_overall_response`` — best (most favourable) response per group,

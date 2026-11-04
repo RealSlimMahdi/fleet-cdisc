@@ -1,55 +1,62 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-RS-003: Same RS date across different visits
-# Source: sdtmchecks::check_rs_rsdtc_across_visit
+# Based on: sdtmchecks::check_rs_rsdtc_across_visit. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-RS-003
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [FINDINGS]
+    Include:
+    - FINDINGS
   Domains:
-    Include: [RS]
-
+    Include:
+    - RS
 Check:
   all:
-    - name: RSDTC
-      operator: non_empty
-    - name: RSDTC
-      operator: is_inconsistent_across_dataset
-      value:
-        - USUBJID
-        - VISITNUM
-
+  - name: RSDTC
+    operator: non_empty
+  - any:
+    - name: RSEVAL
+      operator: not_exists
+    - name: RSEVAL
+      operator: empty
+    - name: RSEVAL
+      operator: equal_to_case_insensitive
+      value: INVESTIGATOR
+  - name: VISITNUM
+    operator: is_inconsistent_across_dataset
+    value:
+    - USUBJID
+    - RSDTC
 Outcome:
-  Message: >-
-    Same RSDTC date appears across different visits for the subject.
-    Each assessment visit should typically have a unique collection date.
-  Output Variables: [USUBJID, RSCAT, RSTESTCD, RSDTC, VISIT, VISITNUM]
-
-Description: >-
-  RS assessment dates should differ across visits. The same date at multiple
-  visits suggests date transcription errors or improper visit assignment.
-
+  Message: The same RSDTC is at more than one visit (investigator records).
+  Output Variables:
+  - USUBJID
+  - RSCAT
+  - RSTESTCD
+  - RSDTC
+  - VISIT
+  - VISITNUM
+Description: 'Flags: The same RSDTC is at more than one visit (investigator records). Based on sdtmchecks::check_rs_rsdtc_across_visit.
+  Difference from the R function: Independent assessor records count when the engine compares the visits
+  of one date. R keeps investigator records only.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-RS-003
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_rs_rsdtc_across_visit
-                Document: pharmaverse sdtmchecks
-                Section: RS Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-RS-003
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_rs_rsdtc_across_visit
+        Document: pharmaverse sdtmchecks
+        Section: RS Domain
