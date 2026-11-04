@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import polars as pl
+import pytest
 
 import fleet  # noqa: F401
 from fleet.tlg.ae_namespace import AESocPtSpec
@@ -141,3 +142,54 @@ def test_tlg_export_rejects_an_invalid_population(tmp_path: Path, capsys) -> Non
     )
     assert code == 1
     assert "--population" in capsys.readouterr().err
+
+
+# c1-813: a wide listing PDF keeps every column on the page.
+
+_AE_LISTING_ROW = {
+    "USUBJID": "01-701-1015",
+    "TRTA": "Xanomeline High Dose",
+    "AEBODSYS": "GENERAL DISORDERS AND ADMINISTRATION SITE CONDITIONS",
+    "AEDECOD": "APPLICATION SITE ERYTHEMA",
+    "AETERM": "REDNESS AT APPLICATION SITE",
+    "AESEV": "MODERATE",
+    "AESER": "N",
+    "AEREL": "PROBABLE",
+    "AEACN": "DOSE NOT CHANGED",
+    "AEOUT": "NOT RECOVERED/NOT RESOLVED",
+    "ASTDT": "2014-01-03",
+    "AENDT": "2014-01-20",
+    "ASTDY": "2",
+    "AENDY": "19",
+    "TRTEMFL": "Y",
+}
+
+
+def test_wide_listing_pdf_keeps_every_column_on_the_page(tmp_path: Path, monkeypatch) -> None:
+    weasyprint = pytest.importorskip("weasyprint")
+    from fleet.tlg.render import RenderMetadata, listing_to_model, render_listing_pdf
+
+    # Programmatic frame: one 15-column AE row, repeated.
+    listing = pl.DataFrame([_AE_LISTING_ROW] * 3)
+    model = listing_to_model(listing, RenderMetadata(title="Listing 16.2.7"))
+
+    rendered = {}
+
+    def keep_layout(self, target=None, **kwargs):
+        rendered["doc"] = self.render()
+        return rendered["doc"].write_pdf(target)
+
+    monkeypatch.setattr(weasyprint.HTML, "write_pdf", keep_layout)
+    render_listing_pdf(model, tmp_path / "ael01.pdf")
+
+    def boxes(box):
+        yield box
+        for child in getattr(box, "children", None) or []:
+            yield from boxes(child)
+
+    page = rendered["doc"].pages[0]
+    right_limit = page.width - 96 / 2.54  # 1 cm page margin, in CSS px
+    text_right = max(
+        b.position_x + b.width for b in boxes(page._page_box) if type(b).__name__ == "TextBox"
+    )
+    assert text_right <= right_limit + 0.5

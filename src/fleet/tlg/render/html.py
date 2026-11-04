@@ -172,7 +172,13 @@ table.fleet-listing tbody tr:last-child td {
 }
 @media print {
   .fleet-listing-container { max-width: none; overflow: visible; }
-  table.fleet-listing { page-break-inside: auto; }
+  table.fleet-listing { page-break-inside: auto; table-layout: fixed; }
+  table.fleet-listing thead th, table.fleet-listing tbody td {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    padding-left: 3px;
+    padding-right: 3px;
+  }
   table.fleet-listing tr { page-break-inside: avoid; }
   .fleet-page { page-break-after: always; }
   .fleet-page:last-child { page-break-after: auto; }
