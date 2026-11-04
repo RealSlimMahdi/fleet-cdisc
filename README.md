@@ -535,7 +535,7 @@ For detailed module-by-module documentation, see [STRUCTURE.md](https://github.c
 - [x] CDISC Rules Engine integration
 - [x] SAS XPT / Dataset-JSON export
 - [x] ADTTE time-to-event framework (`df.adam.tte` — typed event/censor sources, KM inputs)
-- [ ] Additional ADaM dataset structures (ADPC)
+- [ ] ADPC and ADPPK: `examples/adnca_example.py` builds both with the PK verbs; no test compares their values with admiral yet
 - [ ] Enhanced validation reporting
 
 See the [open issues](https://github.com/RealSlimMahdi/fleet-cdisc/issues) for a full list of proposed features and known issues.

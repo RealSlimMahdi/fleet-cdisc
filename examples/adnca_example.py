@@ -7,14 +7,14 @@ flow in Python / Fleet:
 
 Fleet<>admiral verb mapping
 -----------------------------
-The table below shows how each admiral derivation step maps to a Fleet verb.
+The table below shows which Fleet verb this example uses for each admiral step.
+It is a map of names, not a parity claim: no test compares these values with admiral.
 
 | admiral step / function             | Fleet verb                        |
 |-------------------------------------|-----------------------------------|
-| derive_vars_dtm / derive_vars_dy    | pk.actual_time()                  |
 | derive_var_nfrlt                    | pk.nominal_time()                 |
 | mutate(EVID = 0/1)                  | pk.evid()                         |
-| derive_vars_duration (AFRLT/ARRLT)  | pk.actual_time()                  |
+| derive_vars_duration (AFRLT/ARRLT)  | duration(unit="hours")            |
 | MRRLT = if_else(ARRLT<0, 0, ARRLT) | pk.mrrlt()                        |
 | BLQFL = case_when(PCSTRESC=="<BLQ") | pk.blq_flag()                    |
 | BLQFN (numeric 0/1)                 | pk.blqfn()                        |
@@ -463,44 +463,45 @@ print(f"   {adpc_out}  ({adpc.shape[0]} rows, {adpc.shape[1]} cols)")
 print(f"   {adppk_out} ({adppk.shape[0]} rows, {adppk.shape[1]} cols)")
 
 # ════════════════════════════════════════════════════════════════════════════
-# Fleet <> admiral feature parity summary
+# Fleet <> admiral verb map
 # ════════════════════════════════════════════════════════════════════════════
 print("""
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║  Fleet PK Feature Parity vs. admiral pk_adnca.Rmd                          ║
+║  Verb map: Fleet verbs used here for the admiral pk_adnca.Rmd steps.         ║
+║  A map of names only. No test compares these values with admiral.            ║
 ╠══════════════════════════════════════════════════════════════════════════════╣
-║  ADPC (NCA) features                                                        ║
-║  ✓  NFRLT / NRRLT  nominal_time()         admiral: derive_var_nfrlt()      ║
-║  ✓  AFRLT / ARRLT  actual_time()          admiral: derive_vars_duration()  ║
-║  ✓  MRRLT          mrrlt()                admiral: if_else(ARRLT<0,0,…)    ║
-║  ✓  EVID           evid()                 admiral: mutate(EVID=0/1)        ║
-║  ✓  BLQFL          blq_flag()             admiral: case_when BLQ flag      ║
-║  ✓  BLQFN          blqfn()               admiral: numeric BLQ flag         ║
-║  ✓  AVAL (BLQ)     blq_impute()           admiral: ALLOQ * 0.5             ║
-║  ✓  AVALCAT1       avalcat()              admiral: prettyNum(signif(…))    ║
-║  ✓  ABLFL / PREDFL predose_flag()         admiral: ATPT == "Pre-dose"      ║
-║  ✓  DTYPE          derivation()           admiral: set_values_to DTYPE     ║
-║  ✓  ANL01FL        anl_flag()             admiral: mutate(ANL01FL = "Y")   ║
-║  ✓  ANL02FL        anl_flag(exclude_…)    admiral: if_else(is.na(DTYPE)…) ║
-║  ✓  ASEQ           seq()                  admiral: derive_var_obs_number() ║
-║  ✓  ADSL merge     merge_adsl()           admiral: derive_vars_merged()    ║
-║  ✓  DOSEA/DOSEP    derivation()           admiral: mutate(DOSEA=…)         ║
-║                                                                             ║
-║  ADPPK (Population PK) features                                             ║
-║  ✓  DV / DVL       source() / log_conc()  admiral: DV=PCSTRESN, log(DV)   ║
-║  ✓  MDV            mdv()                  admiral: MDV=case_when(…)        ║
-║  ✓  AMT            amt()                  admiral: AMT=case_when(EVID==1)  ║
-║  ✓  CMT            cmt()                  admiral: CMT=case_when(EVID==1)  ║
-║  ✓  AFRLT/APRLT    actual_time()          admiral: derive_vars_duration()  ║
-║  ✓  NFRLT/NPRLT    nominal_time()         admiral: NFRLT - NFRLT_prev     ║
-║  ✓  SEXN/ARMN      adsl derivation        admiral: covariate mutates       ║
-║  ✓  ASEQ           seq()                  admiral: derive_var_obs_number() ║
-║                                                                             ║
-║  Advanced admiral steps not yet covered by Fleet verbs (use plain Polars): ║
-║  ~  create_single_dose_dataset()  — multi-dose expansion                   ║
-║  ~  derive_vars_joined() prev/next dose temporal joins                     ║
-║  ~  compute_egfr() / compute_bsa() renal function / body-surface area      ║
-║  ~  COPY DTYPE duplicate records for pre-dose NCA                          ║
-║  ~  BASE / CHG from baseline via ABLFL grouping                             ║
+║  ADPC (NCA)                                                                  ║
+║     NFRLT / NRRLT  nominal_time()          admiral: derive_var_nfrlt()       ║
+║     AFRLT / ARRLT  duration(unit="hours")  admiral: derive_vars_duration()   ║
+║     MRRLT          mrrlt()                 admiral: if_else(ARRLT<0,0,...)   ║
+║     EVID           evid()                  admiral: mutate(EVID=0/1)         ║
+║     BLQFL          blq_flag()              admiral: case_when BLQ flag       ║
+║     BLQFN          blqfn()                 admiral: numeric BLQ flag         ║
+║     AVAL (BLQ)     blq_impute()            admiral: ALLOQ * 0.5              ║
+║     AVALCAT1       avalcat()               no rounding; admiral: signif()    ║
+║     ABLFL / PREDFL predose_flag()          admiral: ATPT == "Pre-dose"       ║
+║     DTYPE          derivation()            admiral: set_values_to DTYPE      ║
+║     ANL01FL        anl_flag()              admiral: mutate(ANL01FL = "Y")    ║
+║     ANL02FL        anl_flag(exclude_...)   admiral: if_else(is.na(DTYPE)...) ║
+║     ASEQ           seq()                   admiral: derive_var_obs_number()  ║
+║     ADSL merge     merge_adsl()            admiral: derive_vars_merged()     ║
+║     DOSEA/DOSEP    derivation()            admiral: mutate(DOSEA=...)        ║
+║                                                                              ║
+║  ADPPK (Population PK)                                                       ║
+║     DV / DVL       source() / log_conc()   admiral: DV=PCSTRESN, log(DV)     ║
+║     MDV            mdv()                   admiral: MDV=case_when(...)       ║
+║     AMT            amt()                   admiral: AMT=case_when(EVID==1)   ║
+║     CMT            cmt()                   admiral: CMT=case_when(EVID==1)   ║
+║     AFRLT/APRLT    duration(unit="hours")  admiral: derive_vars_duration()   ║
+║     NFRLT/NPRLT    nominal_time()          admiral: NFRLT - NFRLT_prev       ║
+║     SEXN/ARMN      adsl derivation         admiral: covariate mutates        ║
+║     ASEQ           seq()                   admiral: derive_var_obs_number()  ║
+║                                                                              ║
+║  admiral steps with no Fleet verb (use plain Polars):                        ║
+║     create_single_dose_dataset()  multi-dose expansion                       ║
+║     derive_vars_joined() prev/next dose temporal joins                       ║
+║     compute_egfr() renal function                                            ║
+║     COPY DTYPE duplicate records for pre-dose NCA                            ║
+║     BASE / CHG from baseline via ABLFL grouping                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """)

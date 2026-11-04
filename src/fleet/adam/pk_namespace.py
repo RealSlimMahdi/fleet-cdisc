@@ -14,7 +14,7 @@ Usage
         .blq_flag("BLQFL", conc_col="PCSTRESN", lloq_col="PCLLOQ")
         .blq_impute("AVAL", conc_col="PCSTRESN", lloq_col="PCLLOQ", method="half_lloq")
         .nominal_time("NTIME", from_col="PCTPTNUM")
-        .actual_time("ATIME", sample_dtm="PCDTC", dose_dtm="EXSTDTC")
+        .duration("ATIME", start="EXSTDTC", end="PCDTC", unit="hours", add_one=False)
         .predose_flag("PREDFL", time_col="ATIME")
         .dose_normalized("AVALDNM", conc_col="AVAL", dose_col="DOSE")
         .seq("PCSEQ", by=["USUBJID"])
