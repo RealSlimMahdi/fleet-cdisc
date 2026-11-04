@@ -298,8 +298,12 @@ def _namespace_method(standard: str, verb: str) -> Any | None:
         if fget is None:
             return None
         sub = _eval_annotation(inspect.signature(fget).return_annotation, fget)
-        if not isinstance(sub, type):
-            return None
+        if sub is Any or not isinstance(sub, type):
+            # A TYPE_CHECKING-only annotation: ask the property on an empty frame.
+            try:
+                sub = type(fget(cls(pl.DataFrame())))
+            except Exception:
+                return None
         cls = sub
     fn = getattr(cls, name, None)
     return fn if callable(fn) else None
@@ -909,6 +913,24 @@ def _fmt_value(value: Any) -> str:
     return str(value)
 
 
+def _is_study_day(algorithm: str, params: Mapping[str, Any], target: str | None) -> bool:
+    """Whether a ``duration`` block follows the study-day rule of the verb.
+
+    The verb applies the SDTMIG study-day rule (no day 0) to a ``*DY``
+    target in days when ``add_one`` is not given.
+
+    References:
+        SDTMIG 3.4, section 4.4.4 (Use of the Study Day Variables).
+    """
+    return (
+        algorithm == "duration"
+        and bool(target)
+        and str(target).endswith("DY")
+        and params.get("unit", "days") in (None, "days")
+        and params.get("add_one") is None
+    )
+
+
 def render_method_text(
     standard: str,
     algorithm: str,
@@ -951,6 +973,8 @@ def render_method_text(
         return None
 
     given = {k for k, v in params.items() if v is not None}
+    if _is_study_day(algorithm, params, target):
+        return _STUDY_DAY_TEXT.format(start=params.get("start"), end=params.get("end"))
     values: dict[str, Any] = {"target": target or ""}
     for f in algo.params:
         raw = params.get(f.name)
@@ -1008,7 +1032,11 @@ def render_formal_expression(
     from fleet.core.lineage import defining_method_path
 
     # The class from_spec runs on, so the path is the one lineage records.
-    dotted = defining_method_path(_namespace_class(standard), algo.verb)
+    if "." in algo.verb:
+        fn = _namespace_method(standard, algo.verb)
+        dotted = f"{fn.__module__}.{fn.__qualname__}"
+    else:
+        dotted = defining_method_path(_namespace_class(standard), algo.verb)
     args: list[str] = []
     if target and algo.takes_target:
         args.append(repr(target))
@@ -1089,6 +1117,8 @@ _ASSIGN_TEXT = (
 _DATE_TEXT = ((set(), "ISO 8601 date/time derived from {source} (imputation: {impute})."),)
 _MERGE_TEXT = ((set(), "Records merged from {dataset} (join key: {on})."),)
 _DURATION_TEXT = ((set(), "Duration from {start} to {end}, in {unit}."),)
+#: ``duration`` on a ``*DY`` target in days is a study day (no day 0), not a span.
+_STUDY_DAY_TEXT = "Study day of {end} relative to {start}."
 _DERIVATION_TEXT = (({"expression"}, "Derived as: {expression}."),)
 _CALLABLE_FIELD = (("callable", str | None, None),)
 
@@ -1382,6 +1412,31 @@ spec_verb(
     standard="adam",
     description="Count matching records per subject from a pinned dataset.",
     method_text=((set(), "Count of qualifying records per subject from {from_dataset}."),),
+)
+
+
+def _trtemfl_text() -> tuple[tuple[set[str], str], ...]:
+    """Method text shapes of ``treatment_emergent``, most specific first."""
+    shapes: list[tuple[set[str], str]] = []
+    for offset in (True, False):
+        for window in (True, False):
+            for ended in (True, False):
+                ref = "{trtsdt} + {offset_days} days" if offset else "{trtsdt}"
+                text = "Set to 'Y' when {start_date} is on or after " + ref
+                if window:
+                    text += " and on or before {trtedt} + {end_window} days"
+                text += ", or when {start_date} is missing; null when {trtsdt} is missing"
+                text += " or {end_date} is before {trtsdt}." if ended else "."
+                keys = {"offset_days"} if offset else set()
+                shapes.append((keys | ({"end_window"} if window else set()), text))
+    return tuple(shapes)
+
+
+spec_verb(
+    "occds.treatment_emergent",
+    standard="adam",
+    description="Treatment-emergent flag, as admiral derive_var_trtemfl.",
+    method_text=_trtemfl_text(),
 )
 
 

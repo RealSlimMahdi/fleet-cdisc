@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <?xml-stylesheet type="text/xsl" href="define2-1.xsl"?>
-<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:def="http://www.cdisc.org/ns/def/v2.1" ODMVersion="1.3.2" FileOID="CDISC.CDISCPILOT01.1.Define-XML_2.1.0" FileType="Snapshot" CreationDateTime="2026-11-03T20:54:44" Originator="Fleet Team" SourceSystem="Fleet" SourceSystemVersion="0.1.0" def:Context="Submission">
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:def="http://www.cdisc.org/ns/def/v2.1" ODMVersion="1.3.2" FileOID="CDISC.CDISCPILOT01.1.Define-XML_2.1.0" FileType="Snapshot" CreationDateTime="2026-11-04T23:41:58" Originator="Fleet Team" SourceSystem="Fleet" SourceSystemVersion="0.1.0" def:Context="Submission">
   <Study OID="STDY.CDISCPILOT01">
     <GlobalVariables>
       <StudyName>CDISCPILOT01</StudyName>
@@ -16,19 +16,19 @@
         <Description>
           <TranslatedText xml:lang="en">Subject-Level Analysis Dataset</TranslatedText>
         </Description>
-        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
-        <ItemRef ItemOID="IT.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2" MethodOID="MT.ADSL.USUBJID"/>
-        <ItemRef ItemOID="IT.SUBJID" OrderNumber="3" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.SITEID" OrderNumber="4" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.AGE" OrderNumber="5" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.AGEU" OrderNumber="6" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.SEX" OrderNumber="7" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.RACE" OrderNumber="8" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ETHNIC" OrderNumber="9" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ARMCD" OrderNumber="10" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.ARM" OrderNumber="11" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.ACTARMCD" OrderNumber="12" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.ACTARM" OrderNumber="13" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADSL.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
+        <ItemRef ItemOID="IT.ADSL.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2" MethodOID="MT.ADSL.USUBJID"/>
+        <ItemRef ItemOID="IT.ADSL.SUBJID" OrderNumber="3" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADSL.SITEID" OrderNumber="4" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADSL.AGE" OrderNumber="5" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADSL.AGEU" OrderNumber="6" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADSL.SEX" OrderNumber="7" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADSL.RACE" OrderNumber="8" Mandatory="No"/>
+        <ItemRef ItemOID="IT.ADSL.ETHNIC" OrderNumber="9" Mandatory="No"/>
+        <ItemRef ItemOID="IT.ADSL.ARMCD" OrderNumber="10" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADSL.ARM" OrderNumber="11" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADSL.ACTARMCD" OrderNumber="12" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADSL.ACTARM" OrderNumber="13" Mandatory="Yes"/>
         <ItemRef ItemOID="IT.ADSL.TRT01P" OrderNumber="14" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADSL.TRT01A" OrderNumber="15" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADSL.TRTSDT" OrderNumber="16" Mandatory="No" MethodOID="MT.ADSL.TRTSDT"/>
@@ -47,8 +47,8 @@
         <Description>
           <TranslatedText xml:lang="en">Analysis Dataset for Vital Signs</TranslatedText>
         </Description>
-        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
-        <ItemRef ItemOID="IT.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2" MethodOID="MT.ADVS.USUBJID"/>
+        <ItemRef ItemOID="IT.ADVS.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
+        <ItemRef ItemOID="IT.ADVS.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2"/>
         <ItemRef ItemOID="IT.ADVS.PARAMCD" OrderNumber="3" Mandatory="Yes" KeySequence="3" MethodOID="MT.ADVS.PARAMCD"/>
         <ItemRef ItemOID="IT.ADVS.PARAM" OrderNumber="4" Mandatory="Yes" MethodOID="MT.ADVS.PARAM"/>
         <ItemRef ItemOID="IT.ADVS.AVAL" OrderNumber="5" Mandatory="No" MethodOID="MT.ADVS.AVAL"/>
@@ -61,17 +61,17 @@
         <ItemRef ItemOID="IT.ADVS.PCHG" OrderNumber="12" Mandatory="No" MethodOID="MT.ADVS.PCHG"/>
         <ItemRef ItemOID="IT.ADVS.VISITNUM" OrderNumber="13" Mandatory="No" KeySequence="4"/>
         <ItemRef ItemOID="IT.ADVS.VISIT" OrderNumber="14" Mandatory="No"/>
-        <ItemRef ItemOID="IT.SUBJID" OrderNumber="15" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.SITEID" OrderNumber="16" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.AGE" OrderNumber="17" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.AGEU" OrderNumber="18" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.SEX" OrderNumber="19" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.RACE" OrderNumber="20" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ETHNIC" OrderNumber="21" Mandatory="No"/>
-        <ItemRef ItemOID="IT.ARMCD" OrderNumber="22" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.ARM" OrderNumber="23" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.ACTARMCD" OrderNumber="24" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.ACTARM" OrderNumber="25" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADVS.SUBJID" OrderNumber="15" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADVS.SITEID" OrderNumber="16" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADVS.AGE" OrderNumber="17" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADVS.AGEU" OrderNumber="18" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADVS.SEX" OrderNumber="19" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADVS.RACE" OrderNumber="20" Mandatory="No"/>
+        <ItemRef ItemOID="IT.ADVS.ETHNIC" OrderNumber="21" Mandatory="No"/>
+        <ItemRef ItemOID="IT.ADVS.ARMCD" OrderNumber="22" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADVS.ARM" OrderNumber="23" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADVS.ACTARMCD" OrderNumber="24" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADVS.ACTARM" OrderNumber="25" Mandatory="Yes"/>
         <ItemRef ItemOID="IT.ADVS.TRT01P" OrderNumber="26" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADVS.TRT01A" OrderNumber="27" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADVS.TRTSDT" OrderNumber="28" Mandatory="No"/>
@@ -90,8 +90,8 @@
         <Description>
           <TranslatedText xml:lang="en">Adverse Event Analysis Dataset</TranslatedText>
         </Description>
-        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
-        <ItemRef ItemOID="IT.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2" MethodOID="MT.ADAE.USUBJID"/>
+        <ItemRef ItemOID="IT.ADAE.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
+        <ItemRef ItemOID="IT.ADAE.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2"/>
         <ItemRef ItemOID="IT.ADAE.AETERM" OrderNumber="3" Mandatory="Yes"/>
         <ItemRef ItemOID="IT.ADAE.AESTDTC" OrderNumber="4" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADAE.AEENDTC" OrderNumber="5" Mandatory="No"/>
@@ -109,8 +109,8 @@
         <ItemRef ItemOID="IT.ADAE.TRTSDT" OrderNumber="17" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADAE.TRTEDT" OrderNumber="18" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADAE.TRT01P" OrderNumber="19" Mandatory="No"/>
-        <ItemRef ItemOID="IT.AGE" OrderNumber="20" Mandatory="Yes"/>
-        <ItemRef ItemOID="IT.SEX" OrderNumber="21" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADAE.AGE" OrderNumber="20" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADAE.SEX" OrderNumber="21" Mandatory="Yes"/>
         <ItemRef ItemOID="IT.ADAE.SAFFL" OrderNumber="22" Mandatory="No"/>
         <def:Class Name="OCCURRENCE DATA STRUCTURE"/>
         <def:leaf ID="LF.ADAE" xlink:href="adae.parquet">
@@ -121,8 +121,8 @@
         <Description>
           <TranslatedText xml:lang="en">Exposure Analysis Dataset</TranslatedText>
         </Description>
-        <ItemRef ItemOID="IT.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
-        <ItemRef ItemOID="IT.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2" MethodOID="MT.ADEX.USUBJID"/>
+        <ItemRef ItemOID="IT.ADEX.STUDYID" OrderNumber="1" Mandatory="Yes" KeySequence="1"/>
+        <ItemRef ItemOID="IT.ADEX.USUBJID" OrderNumber="2" Mandatory="Yes" KeySequence="2" MethodOID="MT.ADEX.USUBJID"/>
         <ItemRef ItemOID="IT.ADEX.EXTRT" OrderNumber="3" Mandatory="Yes"/>
         <ItemRef ItemOID="IT.ADEX.EXDOSE" OrderNumber="4" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADEX.EXDOSU" OrderNumber="5" Mandatory="No"/>
@@ -133,26 +133,26 @@
         <ItemRef ItemOID="IT.ADEX.TRTSDT" OrderNumber="10" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADEX.TRTEDT" OrderNumber="11" Mandatory="No"/>
         <ItemRef ItemOID="IT.ADEX.TRT01P" OrderNumber="12" Mandatory="No"/>
-        <ItemRef ItemOID="IT.AGE" OrderNumber="13" Mandatory="Yes"/>
+        <ItemRef ItemOID="IT.ADEX.AGE" OrderNumber="13" Mandatory="Yes"/>
         <ItemRef ItemOID="IT.ADEX.SAFFL" OrderNumber="14" Mandatory="No"/>
         <def:Class Name="BASIC DATA STRUCTURE"/>
         <def:leaf ID="LF.ADEX" xlink:href="adex.parquet">
           <def:title>adex.parquet</def:title>
         </def:leaf>
       </ItemGroupDef>
-      <ItemDef OID="IT.STUDYID" Name="STUDYID" DataType="text" SASFieldName="STUDYID" Length="12">
+      <ItemDef OID="IT.ADSL.STUDYID" Name="STUDYID" DataType="text" SASFieldName="STUDYID" Length="12">
         <Description>
           <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
         </Description>
         <def:Origin Type="Assigned"/>
       </ItemDef>
-      <ItemDef OID="IT.USUBJID" Name="USUBJID" DataType="text" SASFieldName="USUBJID" Length="40">
+      <ItemDef OID="IT.ADSL.USUBJID" Name="USUBJID" DataType="text" SASFieldName="USUBJID" Length="40">
         <Description>
           <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
         </Description>
         <def:Origin Type="Derived"/>
       </ItemDef>
-      <ItemDef OID="IT.SUBJID" Name="SUBJID" DataType="text" SASFieldName="SUBJID" Length="20">
+      <ItemDef OID="IT.ADSL.SUBJID" Name="SUBJID" DataType="text" SASFieldName="SUBJID" Length="20">
         <Description>
           <TranslatedText xml:lang="en">Subject Identifier for the Study</TranslatedText>
         </Description>
@@ -162,7 +162,7 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.SITEID" Name="SITEID" DataType="text" SASFieldName="SITEID" Length="20">
+      <ItemDef OID="IT.ADSL.SITEID" Name="SITEID" DataType="text" SASFieldName="SITEID" Length="20">
         <Description>
           <TranslatedText xml:lang="en">Study Site Identifier</TranslatedText>
         </Description>
@@ -172,7 +172,7 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.AGE" Name="AGE" DataType="integer" SASFieldName="AGE" Length="2">
+      <ItemDef OID="IT.ADSL.AGE" Name="AGE" DataType="integer" SASFieldName="AGE" Length="2">
         <Description>
           <TranslatedText xml:lang="en">Age</TranslatedText>
         </Description>
@@ -182,13 +182,13 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.AGEU" Name="AGEU" DataType="text" SASFieldName="AGEU" Length="10">
+      <ItemDef OID="IT.ADSL.AGEU" Name="AGEU" DataType="text" SASFieldName="AGEU" Length="10">
         <Description>
           <TranslatedText xml:lang="en">Age Units</TranslatedText>
         </Description>
         <def:Origin Type="Assigned"/>
       </ItemDef>
-      <ItemDef OID="IT.SEX" Name="SEX" DataType="text" SASFieldName="SEX" Length="2">
+      <ItemDef OID="IT.ADSL.SEX" Name="SEX" DataType="text" SASFieldName="SEX" Length="2">
         <Description>
           <TranslatedText xml:lang="en">Sex</TranslatedText>
         </Description>
@@ -199,7 +199,7 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.RACE" Name="RACE" DataType="text" SASFieldName="RACE" Length="60">
+      <ItemDef OID="IT.ADSL.RACE" Name="RACE" DataType="text" SASFieldName="RACE" Length="60">
         <Description>
           <TranslatedText xml:lang="en">Race</TranslatedText>
         </Description>
@@ -209,7 +209,7 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ETHNIC" Name="ETHNIC" DataType="text" SASFieldName="ETHNIC" Length="60">
+      <ItemDef OID="IT.ADSL.ETHNIC" Name="ETHNIC" DataType="text" SASFieldName="ETHNIC" Length="60">
         <Description>
           <TranslatedText xml:lang="en">Ethnicity</TranslatedText>
         </Description>
@@ -219,25 +219,25 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <ItemDef OID="IT.ARMCD" Name="ARMCD" DataType="text" SASFieldName="ARMCD" Length="20">
+      <ItemDef OID="IT.ADSL.ARMCD" Name="ARMCD" DataType="text" SASFieldName="ARMCD" Length="20">
         <Description>
           <TranslatedText xml:lang="en">Planned Arm Code</TranslatedText>
         </Description>
         <def:Origin Type="Protocol"/>
       </ItemDef>
-      <ItemDef OID="IT.ARM" Name="ARM" DataType="text" SASFieldName="ARM" Length="200">
+      <ItemDef OID="IT.ADSL.ARM" Name="ARM" DataType="text" SASFieldName="ARM" Length="200">
         <Description>
           <TranslatedText xml:lang="en">Description of Planned Arm</TranslatedText>
         </Description>
         <def:Origin Type="Protocol"/>
       </ItemDef>
-      <ItemDef OID="IT.ACTARMCD" Name="ACTARMCD" DataType="text" SASFieldName="ACTARMCD" Length="20">
+      <ItemDef OID="IT.ADSL.ACTARMCD" Name="ACTARMCD" DataType="text" SASFieldName="ACTARMCD" Length="20">
         <Description>
           <TranslatedText xml:lang="en">Actual Arm Code</TranslatedText>
         </Description>
         <def:Origin Type="Assigned"/>
       </ItemDef>
-      <ItemDef OID="IT.ACTARM" Name="ACTARM" DataType="text" SASFieldName="ACTARM" Length="200">
+      <ItemDef OID="IT.ADSL.ACTARM" Name="ACTARM" DataType="text" SASFieldName="ACTARM" Length="200">
         <Description>
           <TranslatedText xml:lang="en">Description of Actual Arm</TranslatedText>
         </Description>
@@ -308,6 +308,22 @@
           <TranslatedText xml:lang="en">Intent-To-Treat Population Flag</TranslatedText>
         </Description>
         <def:Origin Type="Derived"/>
+      </ItemDef>
+      <ItemDef OID="IT.ADVS.STUDYID" Name="STUDYID" DataType="text" SASFieldName="STUDYID" Length="12">
+        <Description>
+          <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned"/>
+      </ItemDef>
+      <ItemDef OID="IT.ADVS.USUBJID" Name="USUBJID" DataType="text" SASFieldName="USUBJID" Length="40">
+        <Description>
+          <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">VS.USUBJID</TranslatedText>
+          </Description>
+        </def:Origin>
       </ItemDef>
       <ItemDef OID="IT.ADVS.PARAMCD" Name="PARAMCD" DataType="text" SASFieldName="PARAMCD" Length="8">
         <Description>
@@ -381,17 +397,136 @@
         </Description>
         <def:Origin Type="Protocol"/>
       </ItemDef>
+      <ItemDef OID="IT.ADVS.SUBJID" Name="SUBJID" DataType="text" SASFieldName="SUBJID" Length="20">
+        <Description>
+          <TranslatedText xml:lang="en">Subject Identifier for the Study</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL.SUBJID</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADVS.SITEID" Name="SITEID" DataType="text" SASFieldName="SITEID" Length="20">
+        <Description>
+          <TranslatedText xml:lang="en">Study Site Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL.SITEID</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADVS.AGE" Name="AGE" DataType="integer" SASFieldName="AGE" Length="2">
+        <Description>
+          <TranslatedText xml:lang="en">Age</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL.AGE</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADVS.AGEU" Name="AGEU" DataType="text" SASFieldName="AGEU" Length="10">
+        <Description>
+          <TranslatedText xml:lang="en">Age Units</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL.AGEU</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADVS.SEX" Name="SEX" DataType="text" SASFieldName="SEX" Length="2">
+        <Description>
+          <TranslatedText xml:lang="en">Sex</TranslatedText>
+        </Description>
+        <CodeListRef CodeListOID="C66731"/>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL.SEX</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADVS.RACE" Name="RACE" DataType="text" SASFieldName="RACE" Length="60">
+        <Description>
+          <TranslatedText xml:lang="en">Race</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL.RACE</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADVS.ETHNIC" Name="ETHNIC" DataType="text" SASFieldName="ETHNIC" Length="60">
+        <Description>
+          <TranslatedText xml:lang="en">Ethnicity</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL.ETHNIC</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADVS.ARMCD" Name="ARMCD" DataType="text" SASFieldName="ARMCD" Length="20">
+        <Description>
+          <TranslatedText xml:lang="en">Planned Arm Code</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL.ARMCD</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADVS.ARM" Name="ARM" DataType="text" SASFieldName="ARM" Length="200">
+        <Description>
+          <TranslatedText xml:lang="en">Description of Planned Arm</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL.ARM</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADVS.ACTARMCD" Name="ACTARMCD" DataType="text" SASFieldName="ACTARMCD" Length="20">
+        <Description>
+          <TranslatedText xml:lang="en">Actual Arm Code</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL.ACTARMCD</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADVS.ACTARM" Name="ACTARM" DataType="text" SASFieldName="ACTARM" Length="200">
+        <Description>
+          <TranslatedText xml:lang="en">Description of Actual Arm</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL.ACTARM</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
       <ItemDef OID="IT.ADVS.TRT01P" Name="TRT01P" DataType="text" SASFieldName="TRT01P" Length="200">
         <Description>
           <TranslatedText xml:lang="en">Planned Treatment for Period 01</TranslatedText>
         </Description>
-        <def:Origin Type="Protocol"/>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL.TRT01P</TranslatedText>
+          </Description>
+        </def:Origin>
       </ItemDef>
       <ItemDef OID="IT.ADVS.TRT01A" Name="TRT01A" DataType="text" SASFieldName="TRT01A" Length="200">
         <Description>
           <TranslatedText xml:lang="en">Actual Treatment for Period 01</TranslatedText>
         </Description>
-        <def:Origin Type="Assigned"/>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL.TRT01A</TranslatedText>
+          </Description>
+        </def:Origin>
       </ItemDef>
       <ItemDef OID="IT.ADVS.TRTSDT" Name="TRTSDT" DataType="date" SASFieldName="TRTSDT">
         <Description>
@@ -417,9 +552,9 @@
         <Description>
           <TranslatedText xml:lang="en">Subject Reference Start Date/Time</TranslatedText>
         </Description>
-        <def:Origin Type="Collected" Source="Investigator">
+        <def:Origin Type="Predecessor">
           <Description>
-            <TranslatedText xml:lang="en">Case Report Form</TranslatedText>
+            <TranslatedText xml:lang="en">ADSL.RFSTDTC</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -427,9 +562,9 @@
         <Description>
           <TranslatedText xml:lang="en">Subject Reference End Date/Time</TranslatedText>
         </Description>
-        <def:Origin Type="Collected" Source="Investigator">
+        <def:Origin Type="Predecessor">
           <Description>
-            <TranslatedText xml:lang="en">Case Report Form</TranslatedText>
+            <TranslatedText xml:lang="en">ADSL.RFENDTC</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -437,9 +572,9 @@
         <Description>
           <TranslatedText xml:lang="en">Date/Time of Informed Consent</TranslatedText>
         </Description>
-        <def:Origin Type="Collected" Source="Investigator">
+        <def:Origin Type="Predecessor">
           <Description>
-            <TranslatedText xml:lang="en">Case Report Form</TranslatedText>
+            <TranslatedText xml:lang="en">ADSL.RFICDTC</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -460,6 +595,22 @@
         <def:Origin Type="Predecessor">
           <Description>
             <TranslatedText xml:lang="en">ADSL.ITTFL</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADAE.STUDYID" Name="STUDYID" DataType="text" SASFieldName="STUDYID" Length="12">
+        <Description>
+          <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned"/>
+      </ItemDef>
+      <ItemDef OID="IT.ADAE.USUBJID" Name="USUBJID" DataType="text" SASFieldName="USUBJID" Length="40">
+        <Description>
+          <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">AE.USUBJID</TranslatedText>
           </Description>
         </def:Origin>
       </ItemDef>
@@ -603,7 +754,31 @@
         <Description>
           <TranslatedText xml:lang="en">Planned Treatment for Period 01</TranslatedText>
         </Description>
-        <def:Origin Type="Protocol"/>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL.TRT01P</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADAE.AGE" Name="AGE" DataType="integer" SASFieldName="AGE" Length="2">
+        <Description>
+          <TranslatedText xml:lang="en">Age</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL.AGE</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADAE.SEX" Name="SEX" DataType="text" SASFieldName="SEX" Length="2">
+        <Description>
+          <TranslatedText xml:lang="en">Sex</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL.SEX</TranslatedText>
+          </Description>
+        </def:Origin>
       </ItemDef>
       <ItemDef OID="IT.ADAE.SAFFL" Name="SAFFL" DataType="text" SASFieldName="SAFFL" Length="2">
         <Description>
@@ -614,6 +789,18 @@
             <TranslatedText xml:lang="en">ADSL.SAFFL</TranslatedText>
           </Description>
         </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADEX.STUDYID" Name="STUDYID" DataType="text" SASFieldName="STUDYID" Length="12">
+        <Description>
+          <TranslatedText xml:lang="en">Study Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Assigned"/>
+      </ItemDef>
+      <ItemDef OID="IT.ADEX.USUBJID" Name="USUBJID" DataType="text" SASFieldName="USUBJID" Length="40">
+        <Description>
+          <TranslatedText xml:lang="en">Unique Subject Identifier</TranslatedText>
+        </Description>
+        <def:Origin Type="Derived"/>
       </ItemDef>
       <ItemDef OID="IT.ADEX.EXTRT" Name="EXTRT" DataType="text" SASFieldName="EXTRT" Length="200">
         <Description>
@@ -693,7 +880,21 @@
         <Description>
           <TranslatedText xml:lang="en">Planned Treatment for Period 01</TranslatedText>
         </Description>
-        <def:Origin Type="Protocol"/>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL.TRT01P</TranslatedText>
+          </Description>
+        </def:Origin>
+      </ItemDef>
+      <ItemDef OID="IT.ADEX.AGE" Name="AGE" DataType="integer" SASFieldName="AGE" Length="2">
+        <Description>
+          <TranslatedText xml:lang="en">Age</TranslatedText>
+        </Description>
+        <def:Origin Type="Predecessor">
+          <Description>
+            <TranslatedText xml:lang="en">ADSL.AGE</TranslatedText>
+          </Description>
+        </def:Origin>
       </ItemDef>
       <ItemDef OID="IT.ADEX.SAFFL" Name="SAFFL" DataType="text" SASFieldName="SAFFL" Length="2">
         <Description>
@@ -705,7 +906,7 @@
           </Description>
         </def:Origin>
       </ItemDef>
-      <CodeList OID="C66731" Name="Sex" DataType="text">
+      <CodeList OID="C66731" Name="Sex" DataType="text" def:StandardOID="STD.CT">
         <CodeListItem CodedValue="M">
           <Decode>
             <TranslatedText xml:lang="en">MALE</TranslatedText>
@@ -719,7 +920,7 @@
       </CodeList>
       <MethodDef OID="MT.ADAE.ADY" Name="Algorithm for ADY" Type="Computation">
         <Description>
-          <TranslatedText xml:lang="en">Duration from TRTSDT to ASTDT, in days.</TranslatedText>
+          <TranslatedText xml:lang="en">Study day of ASTDT relative to TRTSDT.</TranslatedText>
         </Description>
         <FormalExpression Context="Python/Fleet">fleet.core._verb_mixin.SharedVerbsMixin.duration('ADY', start='TRTSDT', end='ASTDT')</FormalExpression>
       </MethodDef>
@@ -747,14 +948,9 @@
       </MethodDef>
       <MethodDef OID="MT.ADAE.TRTEMFL" Name="Algorithm for TRTEMFL" Type="Computation">
         <Description>
-          <TranslatedText xml:lang="en">Y if AESTDTC is on or after TRTSDT and on or before TRTEDT. An AE with no start date is Y unless AEENDTC is before TRTSDT (end window 0 days).</TranslatedText>
+          <TranslatedText xml:lang="en">Set to 'Y' when ASTDT is on or after TRTSDT and on or before TRTEDT + 0 days, or when ASTDT is missing; null when TRTSDT is missing or AENDT is before TRTSDT.</TranslatedText>
         </Description>
-      </MethodDef>
-      <MethodDef OID="MT.ADAE.USUBJID" Name="Algorithm for USUBJID" Type="Computation">
-        <Description>
-          <TranslatedText xml:lang="en">Direct copy of USUBJID.</TranslatedText>
-        </Description>
-        <FormalExpression Context="Python/Fleet">fleet.core._verb_mixin.SharedVerbsMixin.assign('USUBJID', source='USUBJID')</FormalExpression>
+        <FormalExpression Context="Python/Fleet">fleet.adam.occds_namespace.OCCDSNamespace.treatment_emergent('TRTEMFL', start_date='ASTDT', end_date='AENDT', trtsdt='TRTSDT', trtedt='TRTEDT', end_window=0)</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.ADEX.AENDT" Name="Algorithm for AENDT" Type="Computation">
         <Description>
@@ -796,15 +992,15 @@
       </MethodDef>
       <MethodDef OID="MT.ADSL.TRTEDT" Name="Algorithm for TRTEDT" Type="Computation">
         <Description>
-          <TranslatedText xml:lang="en">Derived as: RFENDTC.</TranslatedText>
+          <TranslatedText xml:lang="en">Latest EXENDTC per subject from EX.</TranslatedText>
         </Description>
-        <FormalExpression Context="Python/Fleet">fleet.core._verb_mixin.SharedVerbsMixin.derivation('TRTEDT', expression='RFENDTC')</FormalExpression>
+        <FormalExpression Context="Python/Fleet">fleet.adam._mixins.SharedADaMVerbsMixin.last_date('TRTEDT', from_dataset='EX', date_col='EXENDTC')</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.ADSL.TRTSDT" Name="Algorithm for TRTSDT" Type="Computation">
         <Description>
-          <TranslatedText xml:lang="en">Derived as: RFSTDTC.</TranslatedText>
+          <TranslatedText xml:lang="en">Earliest EXSTDTC per subject from EX.</TranslatedText>
         </Description>
-        <FormalExpression Context="Python/Fleet">fleet.core._verb_mixin.SharedVerbsMixin.derivation('TRTSDT', expression='RFSTDTC')</FormalExpression>
+        <FormalExpression Context="Python/Fleet">fleet.adam._mixins.SharedADaMVerbsMixin.first_date('TRTSDT', from_dataset='EX', date_col='EXSTDTC')</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.ADSL.USUBJID" Name="Algorithm for USUBJID" Type="Computation">
         <Description>
@@ -826,7 +1022,7 @@
       </MethodDef>
       <MethodDef OID="MT.ADVS.ADY" Name="Algorithm for ADY" Type="Computation">
         <Description>
-          <TranslatedText xml:lang="en">Duration from TRTSDT to ADT, in days.</TranslatedText>
+          <TranslatedText xml:lang="en">Study day of ADT relative to TRTSDT.</TranslatedText>
         </Description>
         <FormalExpression Context="Python/Fleet">fleet.core._verb_mixin.SharedVerbsMixin.duration('ADY', start='TRTSDT', end='ADT')</FormalExpression>
       </MethodDef>
@@ -871,12 +1067,6 @@
           <TranslatedText xml:lang="en">Percent change from baseline: 100 * (AVAL - BASE) / BASE.</TranslatedText>
         </Description>
         <FormalExpression Context="Python/Fleet">fleet.adam.namespace.AdamNamespace.pchg('PCHG', aval='AVAL', base='BASE')</FormalExpression>
-      </MethodDef>
-      <MethodDef OID="MT.ADVS.USUBJID" Name="Algorithm for USUBJID" Type="Computation">
-        <Description>
-          <TranslatedText xml:lang="en">Direct copy of patient_number.</TranslatedText>
-        </Description>
-        <FormalExpression Context="Python/Fleet">fleet.core._verb_mixin.SharedVerbsMixin.assign('USUBJID', source='patient_number')</FormalExpression>
       </MethodDef>
     </MetaDataVersion>
   </Study>

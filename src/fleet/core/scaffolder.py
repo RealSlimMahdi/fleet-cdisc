@@ -32,6 +32,8 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
+from fleet.core.define_spec import default_repeating
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -174,7 +176,7 @@ def parse_ig_dataset(detail: dict[str, Any]) -> dict[str, Any]:
         or description
         or f"One record per {name}"
     )
-    repeating = name not in ("DM", "ADSL")
+    repeating = default_repeating(name)
 
     variables = []
     keys: list[str] = []

@@ -196,17 +196,19 @@ def check_codelists(ctx: StudyContext, *, references: bool = False) -> list[str]
         )
         if define.is_file()
     }
+    versions = ct_version_problems(ctx) if references else []
     if not path.is_file():
         referenced = set().union(*(extract_concept_ids(d) for d in defines.values()))
         if not referenced:
-            return []
+            return versions
         return [
             f"define.yaml references {_count(len(referenced), 'codelist', 'codelists')}, but "
-            f"{path} does not exist. Run: fleet init ct"
+            f"{path} does not exist. Run: fleet init ct",
+            *versions,
         ]
 
     packages, classes = load_codelists(path)
-    problems: list[str] = []
+    problems: list[str] = list(versions)
     pins = ctx.config.ct.pins
     if any(p not in pins for p in packages):
         problems.append(_package_mismatch(", ".join(packages), ", ".join(pins)))
@@ -227,6 +229,54 @@ def check_codelists(ctx: StudyContext, *, references: bool = False) -> list[str]
                     f"which is not in codelists.py{_missing_fix(ctx, standard, dataset)}"
                 )
     return list(dict.fromkeys(problems))
+
+
+def ct_version_problems(ctx: StudyContext) -> list[str]:
+    """Return each define.yaml CT version that differs from the CT package the study pins.
+
+    The Define-XML ``def:Standard Type="CT"`` states ``study.ct_version``
+    (and ``study.adam_ct_version``).  After a CT upgrade (``ct.package``
+    changed, ``fleet init ct --force``) the define.yaml keeps the old date
+    unless the author edits it.  A define with no version is not checked.
+
+    Args:
+        ctx: The study.
+
+    Returns:
+        list[str]: One message per mismatch; it names both values and the
+            field to edit.
+
+    Examples:
+        Report a define that still states the old CT::
+
+            from fleet.core.study_context import load_study_context
+            from fleet.ct.study_codelists import ct_version_problems
+
+            ctx = load_study_context(Path("study_config.yaml"))
+            for problem in ct_version_problems(ctx):
+                print(problem)
+    """
+    from fleet.core.define_spec import load_spec_yaml
+
+    pins = (("ct_version", ctx.config.ct.package), ("adam_ct_version", ctx.config.ct.adam_package))
+    problems: list[str] = []
+    for define in (ctx.metadata_sdtm_dir / "define.yaml", ctx.metadata_adam_dir / "define.yaml"):
+        if not define.is_file():
+            continue
+        data = load_spec_yaml(define.read_text(encoding="utf-8"))
+        study = data.get("study") if isinstance(data, dict) else None
+        if not isinstance(study, dict):
+            continue
+        for field, package in pins:
+            stated = study.get(field)
+            if not stated or not package or "-" not in package:
+                continue
+            if str(stated) != package.split("-", 1)[1]:
+                problems.append(
+                    f"{define} states CT {stated}, but study_config.yaml pins {package}. "
+                    f"Edit study.{field} in {define}."
+                )
+    return problems
 
 
 def spec_codelists(define_path: Path) -> dict[str, type]:

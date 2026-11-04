@@ -162,6 +162,12 @@ FIXTURE_SPEC: dict = {
                     "type": "text",
                     "derivation": {"algorithm": "assign", "value": "TESTSTUDY"},
                 },
+                {
+                    "name": "USUBJID",
+                    "label": "Unique Subject Identifier",
+                    "type": "text",
+                    "derivation": {"algorithm": "assign", "source": "USUBJID"},
+                },
             ],
         },
     ],
@@ -217,7 +223,7 @@ class TestMethodPlacement:
         by_item = {r.get("ItemOID"): r for r in advs.findall(f"{ODM}ItemRef")}
         # One MethodDef per derived variable — OID carries the usage site,
         # never the Fleet-internal algorithm id.
-        assert by_item["IT.STUDYID"].get("MethodOID") == "MT.ADVS.STUDYID"
+        assert by_item["IT.ADVS.STUDYID"].get("MethodOID") == "MT.ADVS.STUDYID"
         assert by_item["IT.ADVS.CUSTOM"].get("MethodOID") == "MT.ADVS.CUSTOM"
         # Variables without a derivation get no MethodOID.
         assert by_item["IT.ADVS.AVAL"].get("MethodOID") is None

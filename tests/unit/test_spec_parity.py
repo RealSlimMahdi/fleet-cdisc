@@ -136,8 +136,9 @@ def test_every_public_verb_is_registered_or_allowlisted(namespace_cls: type, sta
         "Register them in fleet.core.spec_registry or add them to SPEC_UNSUPPORTED."
     )
 
-    # Every registry verb must actually exist on the namespace.
-    missing = {v for v in registry_verbs if not callable(getattr(namespace_cls, v, None))}
+    # Every registry verb must actually exist on the namespace (a dotted
+    # verb on its sub-namespace, ADR-0008).
+    missing = {v for v in registry_verbs if spec_registry._namespace_method(standard, v) is None}
     assert not missing, f"Registry references verbs missing on {namespace_cls.__name__}: {missing}"
 
     # The allowlist must stay honest: no overlap, no stale entries.
@@ -173,7 +174,7 @@ def _all_algorithms() -> list[spec_registry.SpecAlgorithm]:
 
 
 def _signature_facts(algo: spec_registry.SpecAlgorithm) -> dict[str, inspect.Parameter]:
-    verb = getattr(_NAMESPACES[algo.standard], algo.verb)
+    verb = spec_registry._namespace_method(algo.standard, algo.verb)
     params = [p for name, p in inspect.signature(verb).parameters.items() if name != "self"]
     if algo.takes_target:
         params = params[1:]  # the first argument is the variable name
@@ -1108,6 +1109,31 @@ ADAM_CASES: list[Case] = [
 └─────────┴───────┘
 """)
         },
+    ),
+    Case(
+        "occds.treatment_emergent",
+        lambda: pl.from_repr("""\
+┌─────────┬────────────┬────────────┬────────────┬────────────┐
+│ USUBJID ┆ ASTDT      ┆ AENDT      ┆ TRTSDT     ┆ TRTEDT     │
+│ ---     ┆ ---        ┆ ---        ┆ ---        ┆ ---        │
+│ str     ┆ date       ┆ date       ┆ date       ┆ date       │
+╞═════════╪════════════╪════════════╪════════════╪════════════╡
+│ S1      ┆ 2024-01-05 ┆ 2024-01-06 ┆ 2024-01-01 ┆ 2024-01-31 │
+│ S2      ┆ 2023-12-01 ┆ 2023-12-02 ┆ 2024-01-01 ┆ 2024-01-31 │
+└─────────┴────────────┴────────────┴────────────┴────────────┘
+"""),
+        [
+            {
+                "target": "TRTEMFL",
+                "algorithm": "occds.treatment_emergent",
+                "start_date": "ASTDT",
+                "end_date": "AENDT",
+                "trtsdt": "TRTSDT",
+                "trtedt": "TRTEDT",
+                "end_window": 0,
+            }
+        ],
+        lambda df: df.sort("USUBJID")["TRTEMFL"].to_list() == ["Y", None],
     ),
     Case(
         "derivation",
