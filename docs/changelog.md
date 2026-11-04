@@ -83,6 +83,7 @@ All notable changes to Fleet are documented here.
   - `baseline_flag` flags one record on a tie: the last by new `order_by=` (default `--SEQ`), then input order, as SAS `LAST.`, with a warning when `order_by=` is not given. Before, every record on the last date got the flag.
   - `flag(criteria="last", where=)` no longer loses the flag when a record that fails `where` ties on `order_by`; ABLFL, BASE and CHG come back. A tie among candidates goes to the last input record (`first`: the first). `flag_all=True` takes the extreme over the records that pass `where`.
   - `qtc` reads RR in ms by default, as admiral `compute_qtc`: QT 400 and RR 800 give QTcF 430.89, not 43.09. New `rr_unit=` (`ms`, `msec`, `s`, `sec`). The verb stops when a value cannot be in its unit.
+- **A missing sort key sorts last, as admiral** (ADR-0020). In `flag(criteria="first"/"last")`, `flag_first` and `flag_last` a missing `order_by` value sorts last in each key, as `derive_var_extreme_flag`: `last` now flags an AE with no AESEVN or ASTDT, and `first` flags a record with a missing key when every record of the group misses it. Before, such records never got the flag. Give `where=` for the last non-missing record.
 
 ### Changed
 

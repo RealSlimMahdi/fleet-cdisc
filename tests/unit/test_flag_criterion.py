@@ -91,6 +91,45 @@ class TestFlagFirstLast:
         # Row 0: null AVISITN → None; USUBJID=3: (3,10) < (3,14) → row 4 is first
         assert result["firstfl"].to_list() == [None, "Y", "Y", None, "Y"]
 
+    @pytest.mark.parametrize(
+        ("mode", "flag_all", "expected"),
+        [
+            ("first", False, ["Y", None, "Y", "Y", None, "Y", None]),
+            ("last", False, [None, "Y", "Y", None, "Y", None, "Y"]),
+            ("first", True, ["Y", None, "Y", "Y", "Y", "Y", "Y"]),
+            ("last", True, [None, "Y", "Y", "Y", "Y", "Y", "Y"]),
+        ],
+    )
+    def test_a_missing_order_value_sorts_last_as_admiral(self, mode, flag_all, expected):
+        """admiral 1.4.1 derive_var_extreme_flag, run on these rows (ADR-0020).
+
+        dplyr::arrange puts a missing value last in each key: "last" takes the
+        missing record (USUBJID 1), and "first" takes one only when every
+        record misses the key (USUBJID 4, then AVAL decides).
+        """
+        input_na = pl.from_repr("""\
+┌─────────┬─────────┬──────┐
+│ USUBJID ┆ AVISITN ┆ AVAL │
+│ ---     ┆ ---     ┆ ---  │
+│ i64     ┆ i64     ┆ i64  │
+╞═════════╪═════════╪══════╡
+│ 1       ┆ 3       ┆ 9    │
+│ 1       ┆ null    ┆ 12   │
+│ 2       ┆ 2       ┆ 42   │
+│ 3       ┆ 3       ┆ 10   │
+│ 3       ┆ 3       ┆ 14   │
+│ 4       ┆ null    ┆ 5    │
+│ 4       ┆ null    ┆ 6    │
+└─────────┴─────────┴──────┘
+""")
+        order_by = ["AVISITN"] if flag_all else ["AVISITN", "AVAL"]
+
+        result = input_na.adam.flag(
+            "FL", criteria=mode, order_by=order_by, by=["USUBJID"], flag_all=flag_all
+        ).to_frame()
+
+        assert result["FL"].to_list() == expected
+
     def test_flag_all_ties(self):
         """Admiral Test 4: flag_all=True (ties)."""
         input_ties = pl.from_repr("""\
