@@ -883,8 +883,9 @@ class TestVisitMap:
             tolerance={"before": 3, "after": 3},
         ).to_frame()
         # Day 7 (3 before) and day 13 (3 after) sit ON the boundary → mapped;
-        # day 14 (4 after) is outside → null, not force-mapped.
-        assert result["VISITNUM"].to_list() == [1, 1, None]
+        # day 14 (4 after) is outside → unscheduled 1.1 (c2-950), not force-mapped.
+        assert result["VISITNUM"].to_list() == [1, 1, 1.1]
+        assert result["VISIT"][2] == "UNSCHEDULED 1.1"
 
     def test_unparsable_date_maps_to_null_not_arbitrary_visit(self, tv_rows):
         raw = pl.from_repr("""\

@@ -869,6 +869,21 @@ def _run_define_xml(args: argparse.Namespace) -> None:
 # ────────────────────────────────────────────────────────────────────── #
 
 
+#: SDTMIG 3.4 SUPPQUAL variable labels, for a SUPP dataset that no define declares.
+_SUPP_LABELS = {
+    "STUDYID": "Study Identifier",
+    "RDOMAIN": "Related Domain Abbreviation",
+    "USUBJID": "Unique Subject Identifier",
+    "IDVAR": "Identifying Variable",
+    "IDVARVAL": "Identifying Variable Value",
+    "QNAM": "Qualifier Variable Name",
+    "QLABEL": "Qualifier Variable Label",
+    "QVAL": "Data Value",
+    "QORIG": "Origin",
+    "QEVAL": "Evaluator",
+}
+
+
 def _run_run(args: argparse.Namespace) -> None:
     """``fleet run``: print the study plan, build it, write each dataset.
 
@@ -894,8 +909,10 @@ def _run_run(args: argparse.Namespace) -> None:
         "xpt": lambda df, d, n: save_xpt(
             df,
             d / f"{n.lower()}.xpt",
-            label=entries[n].label,
-            column_labels={v.name: v.label for v in entries[n].variables},
+            label=entries[n].label if n in entries else f"Supplemental Qualifiers for {n[4:]}",
+            column_labels=(
+                {v.name: v.label for v in entries[n].variables} if n in entries else _SUPP_LABELS
+            ),
         ),
         "dataset-json": lambda df, d, n: save_dataset_json(df, d / f"{n.lower()}.json", domain=n),
     }
@@ -916,6 +933,9 @@ def _run_run(args: argparse.Namespace) -> None:
         out_path = writer(built.frame, out_dir, step.dataset)
         rows, cols = built.frame.shape
         print(f"[{i}/{total}] {step.dataset}: {rows} rows × {cols} cols → {out_path}")
+        if built.supp is not None:
+            supp_path = writer(built.supp, out_dir, f"SUPP{step.dataset}")
+            print(f"        SUPP{step.dataset}: {built.supp.height} rows → {supp_path}")
 
     print()
     print(f"Done — {total} dataset(s) written.")
@@ -1814,7 +1834,9 @@ def _run_tdd_ctgov(args: argparse.Namespace) -> None:
             f"trial design spec not found: {design_path}. "
             "Create it first, or run without --write to print the YAML."
         )
-    data = yaml.safe_load(design_path.read_text(encoding="utf-8"))
+    from fleet.sdtm.design import load_strict_yaml
+
+    data = load_strict_yaml(design_path.read_text(encoding="utf-8"))
     root = data.get("trial_design", data)
     existing = {(p.get("tsparmcd"), p.get("tsseq", 1)) for p in root.get("parameters") or []}
     added = [p for p in params if (p["tsparmcd"], p.get("tsseq", 1)) not in existing]

@@ -5,7 +5,8 @@ Demonstrates the two ways to create trial design datasets:
 
 1. **StudyDesign aggregate** (recommended) — define the design once, derive
    every protocol-reference domain (TE, TA, TV, TS, TI, TD, TM), audit it
-   against P21-style conformance rules, and round-trip through Mermaid/YAML.
+   against P21-style conformance rules, render it as a Mermaid review
+   diagram, and round-trip it losslessly through YAML.
 
 2. **Row-level pipeline** — the fixed-sequence verb chain
    ``fetch_structure() → study_header() → add_*() → to_frame()``
@@ -116,14 +117,18 @@ def main() -> None:
     print(findings.head(5))
 
     # ════════════════════════════════════════════════════════════════════
-    # 3. Mermaid round trip — diagram in, diagram out
+    # 3. Mermaid review diagram — it carries the arm paths, not ARM or rules
     # ════════════════════════════════════════════════════════════════════
-    print("\n── 3. Mermaid round trip ───────────────────────────────────")
+    print("\n── 3. Mermaid review diagram ───────────────────────────────")
 
     mermaid = design.to_mermaid()
     print(mermaid)
-    reparsed = fleet.StudyDesign.from_mermaid(mermaid, study_id="CDISCPILOT01")
-    print(f"   Round trip OK: {reparsed.arms == design.arms}")
+    reparsed = fleet.StudyDesign.from_mermaid(
+        mermaid, study_id="CDISCPILOT01", arm_names=design.arm_names
+    )
+    ta_cols = ["ARMCD", "ARM", "TAETORD", "ETCD", "ELEMENT", "EPOCH"]
+    same_ta = reparsed.to_ta().select(ta_cols).equals(design.to_ta().select(ta_cols))
+    print(f"   Arm paths and TA read back: {same_ta} (TESTRL/TEENRL need the YAML)")
 
     # ════════════════════════════════════════════════════════════════════
     # 4. Row-level pipeline — fetch_structure → study_header → add_*

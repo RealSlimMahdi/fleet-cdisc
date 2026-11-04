@@ -35,6 +35,7 @@ from fleet.sdtm.tdd import (
     TrialParameters,
     TrialVisits,
 )
+from fleet.sdtm.utils import to_char
 
 if TYPE_CHECKING:
     from typing import Self
@@ -166,6 +167,74 @@ def _epoch_from_se(
         "__row_idx__",
         pl.when(pl.col("__n__") == 1).then(pl.col("__first__")).otherwise(choice).alias(target),
     )
+
+
+def _unscheduled_visits(
+    df: pl.DataFrame,
+    crossed: pl.DataFrame,
+    best: pl.DataFrame,
+    verb: str,
+    tv_slim: pl.DataFrame,
+) -> pl.DataFrame:
+    """Number each dated row with no planned visit as last planned VISITNUM + .1, .2, ..."""
+    dated = df.filter(
+        pl.col("__actual_dy__").is_not_null()
+        & ~pl.col("__row_idx__").is_in(best["__row_idx__"].implode())
+    )
+    if dated.is_empty():
+        return best.clear()
+    subject = ["USUBJID"] if "USUBJID" in df.columns else []
+    base = (
+        crossed.filter(pl.col("__tv_dy__") <= pl.col("__actual_dy__"))
+        .sort("__row_idx__", "__tv_dy__", "__tv_num__")
+        .group_by("__row_idx__", maintain_order=True)
+        .last()
+        .select("__row_idx__", pl.col("__tv_num__").cast(pl.Float64).alias("__base__"))
+    )
+    rows = (
+        dated.select("__row_idx__", *subject, "__actual_dy__")
+        .join(base, on="__row_idx__", how="left")
+        .with_columns(pl.col("__base__").fill_null(0.0))
+        .sort("__actual_dy__", "__row_idx__")
+        .with_columns(pl.int_range(1, pl.len() + 1).over([*subject, "__base__"]).alias("__k__"))
+        .with_columns((pl.col("__base__") + pl.col("__k__") / 10).round(6).alias("__tv_num__"))
+    )
+    too_many = rows.filter(pl.col("__tv_num__") >= pl.col("__base__").floor() + 1)
+    planned = rows.filter(
+        pl.col("__tv_num__").is_in(tv_slim["__tv_num__"].cast(pl.Float64).implode())
+    )
+    if too_many.height or planned.height:
+        raise DerivationError(
+            f"{verb}: an unscheduled visit would take the number "
+            f"{(too_many if too_many.height else planned)['__tv_num__'][0]}, which reaches "
+            "the next whole number or repeats a planned VISITNUM. Map these visits by hand."
+        )
+    return rows.select(
+        "__row_idx__",
+        "__tv_num__",
+        (pl.lit("UNSCHEDULED ") + to_char(pl.col("__tv_num__"), pl.Float64)).alias("__tv_name__"),
+    )
+
+
+def _warn_visit_map(df: pl.DataFrame, verb: str, target_num: str, unscheduled: int) -> None:
+    """One warning for null and unscheduled rows, one for repeated SV keys."""
+    parts = []
+    if nulls := df[target_num].null_count():
+        parts.append(f"{nulls} row(s) have no study day, so {target_num} is null")
+    if unscheduled:
+        parts.append(f"{unscheduled} row(s) are outside every window and get an unscheduled number")
+    if parts:
+        warnings.warn(f"{verb}: " + "; ".join(parts) + ".", stacklevel=3)
+    if "DOMAIN" not in df.columns or "USUBJID" not in df.columns:
+        return
+    sv = df.filter((pl.col("DOMAIN") == "SV") & pl.col(target_num).is_not_null())
+    repeats = sv.group_by("USUBJID", target_num).len().filter(pl.col("len") > 1)
+    if repeats.height:
+        warnings.warn(
+            f"{verb}: {repeats.height} USUBJID + {target_num} key(s) repeat on "
+            f"{repeats['len'].sum()} row(s). The SV key must be unique (SDTMIG 3.4).",
+            stacklevel=3,
+        )
 
 
 # Stage labels for error messages
@@ -538,39 +607,68 @@ class TrialDesignMixin:
         ref_date: str | None = None,
         tolerance: dict[str, int] | None = None,
     ) -> Self:  # type: ignore[type-var]
-        """Map raw visit dates to planned visits from TV.
+        """Map raw visit dates to planned visits from TV, by nearest study day.
 
-        For each row, finds the planned visit whose ``VISITDY`` is closest
-        to the actual study day (computed from *date_col* − *ref_date*),
-        within the optional *tolerance* window.  Ties (a date equidistant
-        between two planned visits) resolve deterministically to the
-        earlier ``VISITNUM``; rows whose date cannot be parsed, or that
-        fall outside the tolerance window, map to null — never to an
-        arbitrary visit.
+        Use it only when the CRF does not collect the visit: it never
+        replaces a collected VISITNUM.  For each row, the verb takes the
+        planned visit whose ``VISITDY`` is nearest to the actual study day
+        (from *date_col* and *ref_date*), within the optional *tolerance*
+        window.  The distance is the difference of the study-day numbers,
+        as ``abs(SVSTDY - VISITDY)`` in a SAS program: across the missing
+        Day 0, Day -1 is 2 days from ``VISITDY`` 1.  Ties resolve to the
+        earlier ``VISITNUM``.  When TV has ``ARMCD`` values, a row only
+        takes a visit of its own arm or a visit with a blank ``ARMCD``.
+
+        A dated row outside every window is an unscheduled visit.  It gets
+        the ``VISITNUM`` of the last planned visit on or before its study
+        day plus .1, .2, ... in date order within the subject, and the
+        ``VISIT`` ``UNSCHEDULED <VISITNUM>``.  A row with no study day gets
+        a null.  One warning gives both counts.  With ``DOMAIN`` SV, one
+        warning gives the ``USUBJID`` + ``VISITNUM`` keys that repeat.
 
         Args:
-            target_num: Name of the output ``VISITNUM`` column.
-            target_name: Name of the output ``VISIT`` column.
+            target_num: Name of the output ``VISITNUM`` column.  An
+                existing column of that name is replaced.
+            target_name: Name of the output ``VISIT`` column.  An existing
+                column of that name is replaced.
             date_col: Column containing the actual visit date (ISO 8601 string).
             planned_visits: A ``TrialVisits`` collection or a DataFrame with
-                ``VISITNUM``, ``VISIT``, and ``VISITDY`` columns.
-            ref_date: Column with the reference date for study day calculation.
-                When ``None``, the raw study day is expected in the data.
-            tolerance: Optional ``{"before": n, "after": n}`` window in days,
-                boundaries inclusive: the actual day may precede the planned
-                ``VISITDY`` by up to *before* days and follow it by up to
-                *after* days.  Rows outside every window get null.
+                ``VISITNUM``, ``VISIT``, and ``VISITDY`` columns (and
+                optionally ``ARMCD``).
+            ref_date: Column with the reference date for the study day.
+                When it is not a column of the frame, it is read from the
+                pinned DM, as ``study_day()`` does.  When ``None``, the
+                frame must hold the study day in a ``VISITDY`` column.
+            tolerance: Optional ``{"before": n, "after": n}`` window in
+                study days, boundaries inclusive: the actual study day may
+                precede the planned ``VISITDY`` by up to *before* and
+                follow it by up to *after*.
 
         Returns:
             Self: The namespace with *target_num* and *target_name* appended.
+
+        Raises:
+            DerivationError: When *date_col* or *ref_date* cannot be found,
+                when TV has arm-specific visits and the frame has no
+                ``ARMCD``, or when an unscheduled number would repeat a
+                planned ``VISITNUM`` or reach the next whole number.
+
+        References:
+            SDTMIG 3.4 SV and TV: ``USUBJID`` + ``VISITNUM`` is the SV key,
+            ``VISITNUM`` is Req, a null TV ``ARMCD`` means all arms.  The
+            decimal number of an unscheduled visit is a sponsor convention
+            (the CDISC pilot uses ``UNSCHEDULED 5.1``); see
+            ``docs/adr/0035-visit-map-numbers-an-unscheduled-visit.md``.
 
         Examples:
             Map subject visits to planned visits::
 
                 sv = (
                     raw_visits.sdtm
+                    .assign("DOMAIN", value="SV")
                     .assign("USUBJID", source="subject_id")
-                    .assign_dtc("SVSTDTC", source="visit_date")
+                    .date("SVSTDTC", source="visit_date")
+                    .pin("DM", dm)
                     .visit_map("VISITNUM", "VISIT",
                                date_col="SVSTDTC",
                                planned_visits=tv_rows,
@@ -584,73 +682,99 @@ class TrialDesignMixin:
             if isinstance(planned_visits, TrialVisits)
             else planned_visits
         )
+        verb = f"visit_map({target_num})"
+        df = self._lazy.collect().with_row_index("__row_idx__")  # type: ignore[attr-defined]
+        df = df.drop([c for c in (target_num, target_name) if c in df.columns])
+        actual = self._visit_map_study_day(df, verb, date_col, ref_date)
+        df = df.with_columns(actual.alias("__actual_dy__"))
 
-        # Materialise so we can do a cross-join + window
-        df = self._lazy.collect()  # type: ignore[attr-defined]
-
-        # Calculate actual study day if ref_date is given
-        if ref_date and ref_date in df.columns and date_col in df.columns:
-            df = df.with_columns(
-                (
-                    to_day(pl.col(date_col), df.schema[date_col])
-                    - to_day(pl.col(ref_date), df.schema[ref_date])
-                )
-                .dt.total_days()
-                .alias("__actual_dy__")
-            )
-            # CDISC: no day 0
-            df = df.with_columns(
-                pl.when(pl.col("__actual_dy__") >= 0)
-                .then(pl.col("__actual_dy__") + 1)
-                .otherwise(pl.col("__actual_dy__"))
-                .alias("__actual_dy__")
-            )
-        elif "VISITDY" in df.columns:
-            df = df.with_columns(pl.col("VISITDY").alias("__actual_dy__"))
-        else:
-            df = df.with_columns(pl.lit(None).cast(pl.Int64).alias("__actual_dy__"))
-
-        # Cross join with planned visits to find closest
+        tv_arm = (
+            pl.col("ARMCD").cast(pl.String).replace("", None)
+            if "ARMCD" in tv_df.columns
+            else pl.lit(None, dtype=pl.String)
+        )
         tv_slim = tv_df.select(
             pl.col("VISITNUM").alias("__tv_num__"),
             pl.col("VISIT").alias("__tv_name__"),
             pl.col("VISITDY").alias("__tv_dy__"),
+            tv_arm.alias("__tv_arm__"),
         )
+        arm_specific = tv_slim["__tv_arm__"].is_not_null().any()
+        if arm_specific and "ARMCD" not in df.columns:
+            raise DerivationError(
+                f"{verb}: the planned visits hold arm-specific ARMCD values, and the frame "
+                "has no ARMCD column. Add ARMCD so each subject takes only the visits of its arm."
+            )
 
-        df = df.with_row_index("__row_idx__")
-        crossed = df.join(tv_slim, how="cross")
-        crossed = crossed.with_columns(
-            (pl.col("__actual_dy__") - pl.col("__tv_dy__")).abs().alias("__diff__")
+        crossed = df.select("__row_idx__", "__actual_dy__", *(["ARMCD"] if arm_specific else []))
+        crossed = crossed.join(tv_slim, how="cross").filter(pl.col("__actual_dy__").is_not_null())
+        if arm_specific:
+            crossed = crossed.filter(
+                pl.col("__tv_arm__").is_null() | (pl.col("__tv_arm__") == pl.col("ARMCD"))
+            )
+        offset = pl.col("__actual_dy__") - pl.col("__tv_dy__")
+        candidates = crossed.filter(offset.is_not_null()).with_columns(
+            offset.abs().alias("__diff__")
         )
-
-        # Rows with an unresolvable study day (unparsable/missing dates) must
-        # map to no visit at all — never to an arbitrary one.
-        crossed = crossed.filter(pl.col("__diff__").is_not_null())
-
-        # Apply tolerance filter (boundaries inclusive): `before` bounds how
-        # many days the actual visit may precede the planned day, `after` how
-        # many days it may follow it.
         if tolerance:
             before = tolerance.get("before", 999999)
             after = tolerance.get("after", 999999)
-            crossed = crossed.filter(
-                (pl.col("__actual_dy__") - pl.col("__tv_dy__") >= -before)
-                & (pl.col("__actual_dy__") - pl.col("__tv_dy__") <= after)
-            )
+            candidates = candidates.filter((offset >= -before) & (offset <= after))
 
-        # Pick the closest visit per row; equidistant candidates resolve
-        # deterministically to the earliest VISITNUM.
         best = (
-            crossed.sort("__row_idx__", "__diff__", "__tv_num__")
+            candidates.sort("__row_idx__", "__diff__", "__tv_num__")
             .group_by("__row_idx__", maintain_order=True)
             .first()
             .select("__row_idx__", "__tv_num__", "__tv_name__")
-            .rename({"__tv_num__": target_num, "__tv_name__": target_name})
+        )
+        unscheduled = _unscheduled_visits(df, crossed, best, verb, tv_slim)
+        best = pl.concat([best, unscheduled], how="vertical_relaxed").rename(
+            {"__tv_num__": target_num, "__tv_name__": target_name}
         )
 
-        df = df.join(best, on="__row_idx__", how="left").drop("__row_idx__", "__actual_dy__")
-
+        df = (
+            df.join(best, on="__row_idx__", how="left")
+            .sort("__row_idx__")
+            .drop("__row_idx__", "__actual_dy__")
+        )
+        _warn_visit_map(df, verb, target_num, unscheduled.height)
         return self._materialise_then(df)  # type: ignore[attr-defined]
+
+    def _visit_map_study_day(
+        self, df: pl.DataFrame, verb: str, date_col: str, ref_date: str | None
+    ) -> pl.Series:
+        """The study day of each row, with no Day 0, from *ref_date* or VISITDY."""
+        if ref_date is None:
+            if "VISITDY" not in df.columns:
+                raise DerivationError(
+                    f"{verb}: with ref_date=None the study day is read from a VISITDY column, "
+                    "and the frame has none. Pass ref_date= (for example RFSTDTC)."
+                )
+            return df["VISITDY"]
+        if date_col not in df.columns:
+            raise DerivationError(f"{verb}: date_col '{date_col}' is not a column of the frame.")
+        ref = df
+        if ref_date not in df.columns:
+            pin = getattr(self, "_STUDY_DAY_REF_PIN", "DM").upper()
+            pinned = getattr(self, "_pinned", {})
+            if pin not in pinned or ref_date not in pinned[pin][0].columns:
+                raise DerivationError(
+                    f"{verb}: ref_date '{ref_date}' is not a column of the frame, and no "
+                    f'pinned {pin} holds it. Check the name, or add .pin("{pin}", dm).'
+                )
+            key = self._pin_join_key(pin)  # type: ignore[attr-defined]
+            source = self._require_pin(pin, "visit_map", columns=[ref_date])  # type: ignore[attr-defined]
+            ref = df.join(
+                source.select(*key, ref_date).unique(subset=key, keep="first"),
+                on=key,
+                how="left",
+                nulls_equal=True,
+            ).sort("__row_idx__")
+        diff = (
+            to_day(pl.col(date_col), ref.schema[date_col])
+            - to_day(pl.col(ref_date), ref.schema[ref_date])
+        ).dt.total_days()
+        return ref.select(pl.when(diff >= 0).then(diff + 1).otherwise(diff)).to_series()
 
     def element_boundaries(
         self,
@@ -665,7 +789,10 @@ class TrialDesignMixin:
 
         For each *element_col* value, maps the corresponding column from
         *milestones* to produce *target_start*.  The end date is the start
-        of the next element (by row order within each subject).
+        of the next element by start date within the subject: the verb
+        sorts on the ISO 8601 start text (a null start last, then the row
+        order), so the input row order does not matter.  The output keeps
+        the input row order.  The last element gets a null end.
 
         Args:
             target_start: Name of the output start-date column (e.g. ``"SESTDTC"``).
@@ -702,10 +829,15 @@ class TrialDesignMixin:
             expr = expr.when(pl.col(element_col) == code).then(pl.col(col))
         start_expr = expr.otherwise(pl.lit(None)).alias(target_start)
 
-        # End = next element's start within same subject
-        df = self._lazy.collect()  # type: ignore[attr-defined]
+        # End = next element's start within the subject, in start-date order
+        df = self._lazy.collect().with_row_index("__row_idx__")  # type: ignore[attr-defined]
         df = df.with_columns(start_expr)
-        df = df.with_columns(pl.col(target_start).shift(-1).over(subject_col).alias(target_end))
+        df = (
+            df.sort(subject_col, target_start, "__row_idx__", nulls_last=True)
+            .with_columns(pl.col(target_start).shift(-1).over(subject_col).alias(target_end))
+            .sort("__row_idx__")
+            .drop("__row_idx__")
+        )
 
         return self._materialise_then(df)  # type: ignore[attr-defined]
 
@@ -782,7 +914,11 @@ class TrialDesignMixin:
             rule = _same_day_rule(date_col, same_day)
             df = self._lazy.collect().with_row_index("__row_idx__")  # type: ignore[attr-defined]
             best = _epoch_from_se(df, se, target, date_col, subject_col, rule, same_day)
-            out = df.join(best, on="__row_idx__", how="left").drop("__row_idx__")
+            out = (
+                df.drop(target, strict=False)
+                .join(best, on="__row_idx__", how="left")
+                .drop("__row_idx__")
+            )
             return self._materialise_then(out)  # type: ignore[attr-defined]
 
         if isinstance(epoch_ranges, pl.DataFrame):
@@ -938,11 +1074,22 @@ _DOMAIN_FIELDS: dict[str, set[str]] = {
         "TATRANS",
         "EPOCH",
     },
-    "TV": {"STUDYID", "DOMAIN", "VISITNUM", "VISIT", "VISITDY", "ARMCD", "TVSTRL", "TVENRL"},
+    "TV": {
+        "STUDYID",
+        "DOMAIN",
+        "VISITNUM",
+        "VISIT",
+        "VISITDY",
+        "ARMCD",
+        "ARM",
+        "TVSTRL",
+        "TVENRL",
+    },
     "TS": {
         "STUDYID",
         "DOMAIN",
         "TSSEQ",
+        "TSGRPID",
         "TSPARMCD",
         "TSPARM",
         "TSVAL",

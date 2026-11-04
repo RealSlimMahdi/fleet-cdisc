@@ -267,6 +267,7 @@ adpc = (
     # ── Step 12. Categorised analysis value (listing-ready) ─────────────────
     # admiral: mutate(AVALCAT1 = if_else(PCSTRESC == "<BLQ", PCSTRESC,
     #                            prettyNum(signif(AVAL, digits = 3))))
+    # Fleet keeps 15 significant digits and drops a ".0" end; round first for 3.
     .avalcat("AVALCAT1", conc_col="PCSTRESN", lloq_col="PCLLOQ", blq_label="BLQ")
     # ── Step 13. Analysis identifiers ────────────────────────────────────────
     # admiral: mutate(ATPT = PCTPT, ATPTREF = AVISIT_prev, BASETYPE = paste(ATPTREF, "Baseline"))

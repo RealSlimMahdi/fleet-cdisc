@@ -127,8 +127,10 @@ uv run fleet tdd build --format xpt   # audit + write te/ta/tv/ts/... to <sdtm_d
 ## Bonus: the design is a diagram
 
 `to_mermaid()` renders the arm/element/epoch structure for protocol review
-decks — and `StudyDesign.from_mermaid()` parses it back, so the diagram and
-the datasets can never drift:
+decks. `StudyDesign.from_mermaid()` reads the arm paths, ETCD, ELEMENT, TEDUR
+and the epochs back. The diagram does not carry ARM, TESTRL, TEENRL, TABRANCH,
+TATRANS or a crossover, so `to_mermaid()` warns when a design cannot be read
+back. YAML (`design.to_yaml()`) is the lossless round trip:
 
 ```python
 print(design.to_mermaid())

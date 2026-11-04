@@ -64,6 +64,23 @@ def test_avalcat_keeps_the_text_of_a_record_that_is_not_blq() -> None:
     assert out["AVALCAT1"].to_list() == CAT
 
 
+def test_avalcat_writes_a_whole_number_with_no_point_zero() -> None:
+    """c1-101: 5.0 is listed as 5, and float noise is not shown."""
+    pc = pl.from_repr("""
+┌──────────┬──────────┐
+│ PCSTRESC ┆ PCSTRESN │
+│ ---      ┆ ---      │
+│ str      ┆ f64      │
+╞══════════╪══════════╡
+│ 5        ┆ 5.0      │
+│ 100      ┆ 100.0    │
+│ 0.3      ┆ 0.3      │
+└──────────┴──────────┘
+""").with_columns(pl.Series("PCSTRESN", [5.0, 100.0, 0.1 + 0.2]))
+    out = pc.adam.pk.avalcat("AVALCAT1", conc_col="PCSTRESN").to_frame()
+    assert out["AVALCAT1"].to_list() == ["5", "100", "0.3"]
+
+
 def test_numeric_below_lloq_false_lets_only_the_text_decide() -> None:
     out = (
         _pk()

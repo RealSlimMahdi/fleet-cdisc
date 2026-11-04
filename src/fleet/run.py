@@ -98,6 +98,8 @@ class Step:
             columns their derivations name as ``source``.  A CSV input
             reads them as text, so SUBJID ``0012`` and LBORRES ``1.10``
             keep their characters.
+        qualifiers: The SDTM variables with ``role: qualifier`` or
+            ``algorithm: nsv``.  The run moves them to a SUPP dataset.
     """
 
     define: Path
@@ -106,6 +108,7 @@ class Step:
     inputs: tuple[DeclaredInput, ...]
     carry_through: tuple[str, ...]
     text_columns: tuple[str, ...] = ()
+    qualifiers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -127,13 +130,17 @@ class BuiltDataset:
 
     Attributes:
         step: The step that was built.
-        frame: The built dataset, materialised.
+        frame: The built dataset, materialised.  An SDTM dataset leaves out
+            its qualifier variables, which are in *supp*.
         inputs: Each input of the step, by name, with where it came from.
+        supp: The ``SUPP<domain>`` dataset of an SDTM step with qualifier
+            variables (SDTMIG 3.4 section 8.4), else ``None``.
     """
 
     step: Step
     frame: pl.DataFrame
     inputs: dict[str, ResolvedInput]
+    supp: pl.DataFrame | None = None
 
 
 def plan_study(ctx: StudyContext, *, datasets: Sequence[str] | None = None) -> StudyPlan:
@@ -185,6 +192,7 @@ def plan_study(ctx: StudyContext, *, datasets: Sequence[str] | None = None) -> S
                     ),
                     carry_through=tuple(v.name for v in entry.variables if v.derivation is None),
                     text_columns=_text_columns(entry),
+                    qualifiers=_qualifiers(entry) if standard == "sdtm" else (),
                 )
             )
 
@@ -283,6 +291,17 @@ def run_study(
             .to_frame()
         )
         held[step.dataset] = _Held(built_frame, ResolvedInput(path=None, source="built"))
+        if step.qualifiers:
+            seq = f"{step.dataset}SEQ"
+            supp = _frame(built_frame).sdtm.export_supp(
+                spec=step.define,
+                dataset=step.dataset,
+                idvar=seq if seq in built_frame.columns else None,
+                domain=step.dataset,
+            )
+            parent = built_frame.drop(step.qualifiers, strict=False)
+            yield BuiltDataset(step=step, frame=parent, inputs=resolved, supp=supp)
+            continue
         yield BuiltDataset(step=step, frame=built_frame, inputs=resolved)
 
 
@@ -329,6 +348,15 @@ def _text_columns(entry: DatasetEntry) -> tuple[str, ...]:
         if isinstance(source, str):
             columns[source] = None
     return tuple(columns)
+
+
+def _qualifiers(entry: DatasetEntry) -> tuple[str, ...]:
+    """The SDTM variables that belong in SUPP, as ``export_supp(spec=)`` reads them."""
+    return tuple(
+        v.name
+        for v in entry.variables
+        if v.role == "qualifier" or (v.derivation or {}).get("algorithm") == "nsv"
+    )
 
 
 def _namespace(df: pl.DataFrame, standard: Standard) -> SDTMNamespace | AdamNamespace:

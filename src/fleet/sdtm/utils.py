@@ -38,6 +38,34 @@ def _blank_to_null(expr: pl.Expr) -> pl.Expr:
     return pl.when(text == "").then(None).otherwise(text)
 
 
+def to_char(expr: pl.Expr, dtype: pl.DataType) -> pl.Expr:
+    """Write a value as SDTM character text, with no float noise.
+
+    A float keeps 15 significant digits and loses a ``.0`` end, so ``1.0``
+    gives ``"1"`` and ``0.1 + 0.2`` gives ``"0.3"``.  A Date or Datetime
+    gives ISO 8601 text.  Any other type is cast to ``pl.String``.
+
+    Args:
+        expr: The value expression.
+        dtype: The Polars type of *expr*.
+
+    Returns:
+        pl.Expr: A ``pl.String`` expression.
+
+    Examples:
+        IDVARVAL from a Float64 AESEQ read from XPT::
+
+            supp = ae.with_columns(to_char(pl.col("AESEQ"), pl.Float64).alias("IDVARVAL"))
+    """
+    if dtype.is_float():
+        return expr.round_sig_figs(15).cast(pl.String).str.replace(r"\.0$", "")
+    if dtype == pl.Date:
+        return expr.dt.strftime("%Y-%m-%d")
+    if isinstance(dtype, pl.Datetime):
+        return expr.dt.strftime("%Y-%m-%dT%H:%M:%S")
+    return expr.cast(pl.String)
+
+
 def dtc_text(raw: pl.Expr, *, input_format: str | None = None) -> pl.Expr:
     """Convert raw text to ``--DTC`` text, or null; never guess a layout.
 
@@ -253,8 +281,6 @@ _ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.LtE,
         ast.Gt,
         ast.GtE,
-        ast.Is,
-        ast.IsNot,
         ast.In,
         ast.NotIn,
         ast.And,
@@ -283,6 +309,14 @@ def _validate_ast(expr_str: str) -> ast.Expression:
         ) from exc
 
     for node in ast.walk(tree):
+        if isinstance(node, ast.Compare) and any(
+            isinstance(side, ast.Constant) and side.value is None
+            for side in (node.left, *node.comparators)
+        ):
+            raise DerivationError(
+                f"A compare with None is always null in {expr_str!r}: use "
+                "COL.is_null() or COL.is_not_null()."
+            )
         if type(node) not in _ALLOWED_AST_NODES:
             raise DerivationError(
                 f"Disallowed construct {type(node).__name__!r} in expression {expr_str!r}"

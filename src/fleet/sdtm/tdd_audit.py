@@ -195,6 +195,23 @@ def audit(
         for code in dup:
             add("SD1286", "error", "TI", f"Duplicate IETESTCD '{code}' within protocol version")
 
+    # -- Char values over the XPT V5 limit ------------------------------- #
+    for domain, frame in (("TE", te), ("TA", ta), ("TV", tv), ("TS", ts), ("TI", ti)):
+        if frame is None:
+            continue
+        for col, dtype in frame.schema.items():
+            if dtype != pl.String or (domain == "TS" and col.startswith("TSVAL")):
+                continue
+            long = frame.filter(pl.col(col).str.len_chars() > 200).height
+            if long:
+                add(
+                    "FLEETTD03",
+                    "warning",
+                    domain,
+                    f"{domain}.{col} holds {long} value(s) over 200 characters, the XPT V5 "
+                    "limit. Reword the text; only TSVAL splits into TSVAL1-TSVALn.",
+                )
+
     # -- DM ↔ TA -------------------------------------------------------- #
     if dm is not None and ta is not None and "ARMCD" in dm.columns:
         ta_arms = set(ta["ARMCD"].to_list())

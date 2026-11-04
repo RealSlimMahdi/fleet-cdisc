@@ -32,15 +32,20 @@ Usage::
 from __future__ import annotations
 
 import datetime
+import html
 import re
+import warnings
 from pathlib import Path
 from typing import Any
 
 import polars as pl
 import yaml
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from fleet.sdtm.tdd import (
+    ElementCode,
+    EpochLike,
+    RuleExpression,
     TrialArm,
     TrialArms,
     TrialCriteria,
@@ -74,6 +79,68 @@ def _dates_to_iso(value: Any) -> Any:
     return value
 
 
+class _StrictLoader(yaml.SafeLoader):
+    """A SafeLoader that refuses a repeated mapping key."""
+
+
+def _mapping_with_unique_keys(loader: _StrictLoader, node: yaml.MappingNode) -> dict:
+    seen: set[Any] = set()
+    for key_node, _ in node.value:
+        key = loader.construct_object(key_node, deep=True)
+        if key in seen:
+            raise yaml.constructor.ConstructorError(
+                None, None, f"repeated key {key!r}", key_node.start_mark
+            )
+        seen.add(key)
+    return loader.construct_mapping(node, deep=True)
+
+
+_StrictLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _mapping_with_unique_keys
+)
+
+
+def load_strict_yaml(text: str) -> Any:
+    """Parse YAML like ``yaml.safe_load``, but raise on a repeated key.
+
+    Args:
+        text: The YAML document.
+
+    Returns:
+        Any: The parsed document.
+
+    Raises:
+        yaml.constructor.ConstructorError: When a mapping repeats a key.
+
+    Examples:
+        Load a trial design spec::
+
+            data = load_strict_yaml(Path("trial_design.yaml").read_text())
+    """
+    return yaml.load(text, Loader=_StrictLoader)  # noqa: S506 - a SafeLoader subclass
+
+
+class ArmStep(BaseModel):
+    """One position of an arm path, with the TA values of that position.
+
+    A plain ETCD string in a path is the short form of a step with no
+    override.  *epoch* replaces the element's epoch at this position (a
+    crossover, an element that repeats).  *tabranch* replaces the default
+    ``Randomized to <arm>`` text, and *tatrans* gives the TATRANS rule.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    etcd: ElementCode
+    epoch: EpochLike | None = None
+    tabranch: RuleExpression = ""
+    tatrans: RuleExpression = ""
+
+
+def _etcd(entry: str | ArmStep) -> str:
+    return entry if isinstance(entry, str) else entry.etcd
+
+
 def _sdtm_code(name: str, max_len: int, taken: set[str]) -> str:
     """Derive a unique upper-case SDTM short code from a free-text name."""
     base = re.sub(r"[^A-Z0-9]", "", name.upper())[:max_len] or "X"
@@ -86,19 +153,99 @@ def _sdtm_code(name: str, max_len: int, taken: set[str]) -> str:
     return code
 
 
+_USDM_TAG_RE = re.compile(r"<usdm:tag\s+name=\"([^\"]+)\"\s*/>")
+_MARKUP_RE = re.compile(r"<[^>]+>")
+
+
+def _usdm_text(text: str, name: str, dictionary: dict[str, str]) -> str:
+    """Plain criterion text: usdm:tag resolved through the dictionary, XHTML removed."""
+
+    def resolve(match: re.Match[str]) -> str:
+        if match.group(1) not in dictionary:
+            raise ValueError(
+                f"USDM criterion '{name}': tag '{match.group(1)}' is not in its syntax dictionary"
+            )
+        return dictionary[match.group(1)]
+
+    text = _USDM_TAG_RE.sub(resolve, text)
+    left = re.search(r"<usdm:[^>]*>", text)
+    if left:
+        raise ValueError(f"USDM criterion '{name}': cannot resolve {left.group(0)}")
+    return " ".join(html.unescape(_MARKUP_RE.sub(" ", text)).split())
+
+
+def _usdm_criteria(study: dict, version: dict, sd: dict) -> list[TrialCriterion]:
+    """TI rows from USDM v4 criterion items or USDM v3 population criteria."""
+    items = {i.get("id"): i for i in version.get("eligibilityCriterionItems") or []}
+    dictionaries = {
+        d.get("id"): {p.get("tag"): p.get("reference", "") for p in d.get("parameterMaps") or []}
+        for d in version.get("dictionaries") or study.get("dictionaries") or []
+    }
+    raw = list(sd.get("eligibilityCriteria") or version.get("eligibilityCriteria") or [])
+    by_id = {c.get("id"): c for c in raw}
+    for entry in (sd.get("population") or {}).get("criteria") or []:
+        crit = by_id.get(entry) if isinstance(entry, str) else entry
+        if crit is not None and crit not in raw:
+            raw.append(crit)
+
+    criteria: list[TrialCriterion] = []
+    codes: set[str] = set()
+    cut: list[str] = []
+    for crit in raw:
+        name = crit.get("name") or crit.get("identifier") or crit.get("id", "")
+        source = items.get(crit.get("criterionItemId")) or crit
+        if not source.get("text"):
+            raise ValueError(f"USDM criterion '{name}' has no text")
+        text = _usdm_text(source["text"], name, dictionaries.get(source.get("dictionaryId"), {}))
+        category = str((crit.get("category") or {}).get("decode", "")).upper()
+        if "EXCL" in category:
+            iecat, prefix = "EXCLUSION", "EX"
+        elif "INCL" in category:
+            iecat, prefix = "INCLUSION", "IN"
+        else:
+            raise ValueError(f"USDM criterion '{name}' has no inclusion or exclusion category")
+        code = str(crit.get("identifier") or crit.get("name") or "").upper()
+        if code[:1].isdigit():
+            code = prefix + code  # SDTMIG 3.4 section 4.5.3: --TESTCD cannot start with a digit
+        if code in codes:
+            raise ValueError(f"USDM criteria give IETESTCD '{code}' twice")
+        codes.add(code)
+        if len(text) > 200:
+            cut.append(code)
+        criteria.append(TrialCriterion(ietestcd=code, ietest=text[:200], iecat=iecat))
+    if cut:
+        warnings.warn(
+            f"from_usdm: {len(cut)} criterion text(s) are over 200 characters and are cut at "
+            f"200 in TI.IETEST: {cut}. Keep the full text in the protocol.",
+            stacklevel=3,
+        )
+    return criteria
+
+
 class StudyDesign(BaseModel):
     """Typed aggregate of a study's trial design.
 
     ``arms`` maps each ARMCD to its ordered path of element codes — the
     per-arm element name/epoch/TAETORD repetition of raw TA rows is derived,
-    never written by hand.  All fields accept plain dicts (Pydantic coerces),
-    so a ``trial_design.yaml`` deserialises directly via :meth:`from_yaml`.
+    never written by hand.  A path entry is an ETCD string or an
+    :class:`ArmStep` (``{"etcd": ..., "epoch": ..., "tabranch": ...,
+    "tatrans": ...}``) for the TA values of one position.  All fields accept
+    plain dicts (Pydantic coerces), so a ``trial_design.yaml`` deserialises
+    directly via :meth:`from_yaml`.  An unknown key raises.
+
+    TABRANCH defaults to ``Randomized to <arm>`` on the last element that
+    every arm shares, or on the *randomized_at* element when it is given.
+    A step's *tabranch* replaces that text: state the real rule when the
+    branch is not a randomization.
     """
+
+    model_config = ConfigDict(extra="forbid")
 
     study_id: str = Field(min_length=1)
     elements: list[TrialElement] = []
-    arms: dict[str, list[str]] = {}
+    arms: dict[str, list[str | ArmStep]] = {}
     arm_names: dict[str, str] = {}
+    randomized_at: str | None = None
     visits: list[TrialVisit] = []
     criteria: list[TrialCriterion] = []
     parameters: list[TrialParameter] = []
@@ -112,9 +259,14 @@ class StudyDesign(BaseModel):
         for armcd, path in self.arms.items():
             if not path:
                 raise ValueError(f"Arm '{armcd}' has an empty element path")
-            missing = [etcd for etcd in path if etcd not in known]
+            missing = [_etcd(entry) for entry in path if _etcd(entry) not in known]
             if missing:
                 raise ValueError(f"Arm '{armcd}' references undefined elements: {missing}")
+        stray_names = sorted(set(self.arm_names) - set(self.arms))
+        if stray_names:
+            raise ValueError(f"arm_names holds ARMCD(s) that are not in arms: {stray_names}")
+        if self.randomized_at is not None and self.randomized_at not in known:
+            raise ValueError(f"randomized_at '{self.randomized_at}' is not a defined element")
         for visit in self.visits:
             if visit.armcd and visit.armcd not in self.arms:
                 raise ValueError(f"Visit '{visit.visit}' references undefined arm '{visit.armcd}'")
@@ -138,7 +290,7 @@ class StudyDesign(BaseModel):
         ponytail: single randomized-branch designs only; nested or adaptive
         branch points need explicit TrialArm rows built by hand.
         """
-        paths = list(self.arms.values())
+        paths = [[_etcd(e) for e in p] for p in self.arms.values()]
         if len(paths) < 2:
             return None
         prefix = 0
@@ -153,8 +305,14 @@ class StudyDesign(BaseModel):
 
         Returns:
             TrialArms: One row per arm/element with TAETORD, ELEMENT, EPOCH
-                looked up from the element definitions and TABRANCH rendered
-                at the randomization branch point.
+                looked up from the element definitions (or the step's epoch)
+                and TABRANCH rendered at the branch point (or the step's
+                tabranch).
+
+        References:
+            SDTMIG 3.4 TA: EPOCH is the epoch of this element of the arm,
+            TABRANCH the condition met at the end of the element; see
+            ``docs/adr/0036-an-arm-path-entry-is-an-element-or-a-step.md``.
 
         Examples:
             Derive TA rows from a design::
@@ -164,21 +322,27 @@ class StudyDesign(BaseModel):
                 ta_rows = design.arm_collection()
         """
         lookup = {e.etcd: e for e in self.elements}
-        branch_at = self._branch_index()
+        branch_at = None if self.randomized_at else self._branch_index()
         rows = []
         for armcd, path in self.arms.items():
             arm = self.arm_names.get(armcd) or armcd.replace("_", " ").title()
-            for order, etcd in enumerate(path, start=1):
-                el = lookup[etcd]
+            codes = [_etcd(e) for e in path]
+            randomized = codes.index(self.randomized_at) if self.randomized_at in codes else None
+            for order, entry in enumerate(path, start=1):
+                step = ArmStep(etcd=entry) if isinstance(entry, str) else entry
+                el = lookup[step.etcd]
+                at_branch = order - 1 in (branch_at, randomized)
+                default = f"Randomized to {arm}" if at_branch else ""
                 rows.append(
                     TrialArm(
                         armcd=armcd,
                         arm=arm,
                         taetord=order,
-                        etcd=etcd,
+                        etcd=step.etcd,
                         element=el.element,
-                        tabranch=f"Randomized to {arm}" if branch_at == order - 1 else "",
-                        epoch=el.epoch,
+                        tabranch=step.tabranch or default,
+                        tatrans=step.tatrans,
+                        epoch=step.epoch or el.epoch,
                     )
                 )
         return TrialArms(arms=rows)
@@ -301,6 +465,10 @@ class StudyDesign(BaseModel):
     def audit(self, *, dm: pl.DataFrame | None = None) -> pl.DataFrame:
         """Run the P21-style conformance pre-check over the derived domains.
 
+        Two design checks come first: arms with the same path
+        (``FLEETTD04``), and an element that repeats in one arm with no
+        per-position epoch (``FLEETTD05``).
+
         Args:
             dm: Optional DM domain for cross-checking ARMCD assignments.
 
@@ -317,7 +485,7 @@ class StudyDesign(BaseModel):
         from fleet.sdtm.tdd_audit import audit
 
         frames = self.domains()
-        return audit(
+        findings = audit(
             te=frames.get("TE"),
             ta=frames.get("TA"),
             tv=frames.get("TV"),
@@ -327,6 +495,41 @@ class StudyDesign(BaseModel):
             ti=frames.get("TI"),
             dm=dm,
         )
+        return pl.concat([pl.DataFrame(self._design_findings(), schema=findings.schema), findings])
+
+    def _design_findings(self) -> list[dict[str, str]]:
+        """Findings on the arm paths that the derived domains cannot show."""
+        found = []
+        by_path: dict[tuple[str, ...], list[str]] = {}
+        for armcd, path in self.arms.items():
+            by_path.setdefault(tuple(_etcd(e) for e in path), []).append(armcd)
+            codes = [_etcd(e) for e in path]
+            for etcd in sorted({c for c in codes if codes.count(c) > 1}):
+                plain = [
+                    e for e in path if _etcd(e) == etcd and (isinstance(e, str) or not e.epoch)
+                ]
+                if plain:
+                    found.append(
+                        {
+                            "rule_id": "FLEETTD05",
+                            "severity": "warning",
+                            "domain": "TA",
+                            "message": f"Arm '{armcd}' repeats element '{etcd}' with no "
+                            "per-position epoch: give each position {etcd, epoch}.",
+                        }
+                    )
+        for arms in by_path.values():
+            if len(arms) > 1:
+                found.append(
+                    {
+                        "rule_id": "FLEETTD04",
+                        "severity": "warning",
+                        "domain": "TA",
+                        "message": f"Arms {arms} have the same element path, so TA cannot "
+                        "tell them apart: check the protocol.",
+                    }
+                )
+        return found
 
     # ------------------------------------------------------------------ #
     # Interchange                                                          #
@@ -338,7 +541,8 @@ class StudyDesign(BaseModel):
 
         The YAML mirrors the model schema; a top-level ``trial_design:``
         wrapper key is accepted so the section can live inside a larger
-        study file.
+        study file.  A repeated key or a key the model does not read
+        raises, so a typo cannot drop a rule, a visit or an arm.
 
         Args:
             path: Path to the YAML file.
@@ -346,13 +550,18 @@ class StudyDesign(BaseModel):
         Returns:
             StudyDesign: The validated design.
 
+        Raises:
+            yaml.constructor.ConstructorError: When a mapping repeats a key.
+            pydantic.ValidationError: When a key is unknown or a value is
+                not valid.
+
         Examples:
             Load and build every domain::
 
                 design = fleet.StudyDesign.from_yaml("metadata/trial_design.yaml")
                 frames = design.domains()
         """
-        data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+        data = load_strict_yaml(Path(path).read_text(encoding="utf-8"))
         return cls(**_dates_to_iso(data.get("trial_design", data)))
 
     def to_yaml(self, path: str | Path | None = None) -> str:
@@ -383,15 +592,23 @@ class StudyDesign(BaseModel):
     def from_mermaid(cls, mermaid_text: str, *, study_id: str, **sections: Any) -> StudyDesign:
         """Build a design from a Mermaid flowchart.
 
+        The diagram gives the elements and the arm paths.  ARM comes from
+        *arm_names* when given, else from the ARMCD.
+
         Args:
             mermaid_text: A Mermaid ``flowchart TD`` string (see
                 :func:`fleet.sdtm.tdd.parse_trial_design`).
             study_id: The study identifier.
-            **sections: Extra design sections (``visits=``, ``criteria=``,
-                ``parameters=``, ...) passed through to the constructor.
+            **sections: Extra design sections (``arm_names=``, ``visits=``,
+                ``criteria=``, ``parameters=``, ...) passed through to the
+                constructor.
 
         Returns:
             StudyDesign: Design with elements and arm paths from the diagram.
+
+        Raises:
+            ValueError: When the diagram cannot give a design (see
+                :func:`fleet.sdtm.tdd.parse_trial_design`).
 
         Examples:
             Diagram in, datasets out::
@@ -401,11 +618,12 @@ class StudyDesign(BaseModel):
                 ta = design.to_ta()
         """
         te, ta = parse_trial_design(mermaid_text)
-        arms: dict[str, list[str]] = {}
+        arms: dict[str, list[str | ArmStep]] = {}
         arm_names: dict[str, str] = {}
         for row in sorted(ta.arms, key=lambda a: (a.armcd, a.taetord)):
             arms.setdefault(row.armcd, []).append(row.etcd)
             arm_names[row.armcd] = row.arm
+        arm_names.update(sections.pop("arm_names", None) or {})
         return cls(
             study_id=study_id,
             elements=te.elements,
@@ -415,12 +633,16 @@ class StudyDesign(BaseModel):
         )
 
     def to_mermaid(self) -> str:
-        """Render the design as a Mermaid flowchart (inverse of ``from_mermaid``).
+        """Render the design as a Mermaid flowchart for a review document.
 
         Elements are grouped into epoch subgraphs; edges follow the arm
-        paths, labelled with the ARMCD where the design branches — so the
-        output round-trips through :meth:`from_mermaid` and drops straight
-        into protocol documents or review decks.
+        paths, labelled with the ARMCD where the design branches (on the
+        first edge for a single arm).  The diagram is a review view: it
+        carries ETCD, ELEMENT, TEDUR, the element epochs and the arm paths,
+        but not ARM, TESTRL, TEENRL, TABRANCH, TATRANS or a per-position
+        epoch.  When :meth:`from_mermaid` cannot read the paths back (arms
+        with the same path, a repeated element, a crossover), a warning says
+        so.  YAML (:meth:`to_yaml`) is the lossless round trip.
 
         Returns:
             str: A Mermaid ``flowchart TD`` document.
@@ -438,26 +660,52 @@ class StudyDesign(BaseModel):
             lines.append(f"    subgraph EP{i}[{epoch}]")
             for el in els:
                 dur = f"<br/>{el.tedur}" if el.tedur else ""
-                lines.append(f'        {el.etcd}["{el.element}{dur}"]')
+                name = el.element.replace('"', "#quot;")
+                lines.append(f'        {el.etcd}["{name}{dur}"]')
             lines.append("    end")
-        branch_at = self._branch_index()
+        branch_at = 0 if len(self.arms) == 1 else self._branch_index()
+        paths = {armcd: [_etcd(e) for e in path] for armcd, path in self.arms.items()}
         seen: set[tuple[str, str, str]] = set()
-        for armcd, path in self.arms.items():
+        for armcd, path in paths.items():
             for i, (src, dst) in enumerate(zip(path, path[1:])):
                 label = f"|{armcd}|" if branch_at is not None and i == branch_at else ""
                 edge = (src, label, dst)
                 if edge not in seen:
                     seen.add(edge)
                     lines.append(f"    {src} -->{label} {dst}")
-        return "\n".join(lines)
+        text = "\n".join(lines)
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                _, ta = parse_trial_design(text)
+            back: dict[str, list[str]] = {}
+            for row in ta.arms:
+                back.setdefault(row.armcd, []).append(row.etcd)
+            lossless = back == paths and not any(
+                isinstance(e, ArmStep) and e.epoch for path in self.arms.values() for e in path
+            )
+        except ValueError:
+            lossless = False
+        if not lossless:
+            warnings.warn(
+                "to_mermaid: from_mermaid cannot read this design back (arms with the same "
+                "path, a repeated element, a crossover or a per-position epoch). Use to_yaml() "
+                "for a lossless copy.",
+                stacklevel=2,
+            )
+        return text
 
     @classmethod
     def from_usdm(cls, data: dict, *, study_id: str | None = None) -> StudyDesign:
         """Build a design from a CDISC USDM (DDF) study definition.
 
         Maps the structural subset of USDM v3/v4 JSON: arms + epochs +
-        elements + studyCells become the arm paths, encounters become
-        visits, and eligibility criteria become TI rows.
+        elements + studyCells become the arm paths (with the epoch of each
+        cell), encounters become visits, and eligibility criteria become TI
+        rows.  TI text comes from the v4 criterion item (or the v3
+        population criteria), with ``usdm:tag`` resolved through the syntax
+        dictionary and XHTML removed.  An identifier that starts with a
+        digit takes an IN or EX prefix (SDTMIG 3.4 section 4.5.3).
 
         ponytail: schedule timelines, objectives/endpoints, and biomedical
         concepts are intentionally not mapped — extend when a consumer needs
@@ -471,6 +719,11 @@ class StudyDesign(BaseModel):
 
         Returns:
             StudyDesign: Design with the mapped structural subset.
+
+        Raises:
+            ValueError: When a criterion has no text or no inclusion or
+                exclusion category, a tag cannot be resolved, or two
+                criteria give the same IETESTCD.
 
         Examples:
             Import an OpenStudyBuilder / DDF export::
@@ -516,7 +769,7 @@ class StudyDesign(BaseModel):
         arm_taken: set[str] = set()
         armcd_by_id = {aid: _sdtm_code(name, 20, arm_taken) for aid, name in arm_label.items()}
 
-        arms: dict[str, list[str]] = {}
+        arms: dict[str, list[str | ArmStep]] = {}
         cells = sorted(
             sd.get("studyCells", []),
             key=lambda c: epoch_order.index(c["epochId"]) if c.get("epochId") in epoch_order else 0,
@@ -525,12 +778,14 @@ class StudyDesign(BaseModel):
             armcd = armcd_by_id.get(cell.get("armId", ""))
             if armcd is None:
                 continue
+            cell_epoch = epoch_label.get(cell.get("epochId", ""), "TREATMENT")
             for element_id in cell.get("elementIds", []):
                 if element_id in element_models:
-                    element_models[element_id].setdefault(
-                        "epoch", epoch_label.get(cell.get("epochId", ""), "TREATMENT")
+                    epoch = element_models[element_id].setdefault("epoch", cell_epoch)
+                    etcd = etcd_by_id[element_id]
+                    arms.setdefault(armcd, []).append(
+                        etcd if epoch == cell_epoch else ArmStep(etcd=etcd, epoch=cell_epoch)
                     )
-                    arms.setdefault(armcd, []).append(etcd_by_id[element_id])
 
         elements = [
             TrialElement(**{"epoch": "TREATMENT", **model}) for model in element_models.values()
@@ -541,27 +796,11 @@ class StudyDesign(BaseModel):
             for num, enc in enumerate(sd.get("encounters", []), start=1)
         ]
 
-        criteria = []
-        raw_criteria = sd.get("eligibilityCriteria") or version.get("eligibilityCriteria") or []
-        crit_taken: set[str] = set()
-        for crit in raw_criteria:
-            category = str((crit.get("category") or {}).get("decode", "")).upper()
-            iecat = "EXCLUSION" if "EXCL" in category else "INCLUSION"
-            criteria.append(
-                TrialCriterion(
-                    ietestcd=_sdtm_code(
-                        crit.get("identifier") or crit.get("name", "C"), 8, crit_taken
-                    ),
-                    ietest=(crit.get("text") or label(crit))[:200],
-                    iecat=iecat,
-                )
-            )
-
         return cls(
             study_id=study_id,
             elements=elements,
             arms=arms,
             arm_names={armcd_by_id[aid]: name for aid, name in arm_label.items()},
             visits=visits,
-            criteria=criteria,
+            criteria=_usdm_criteria(study, version, sd),
         )

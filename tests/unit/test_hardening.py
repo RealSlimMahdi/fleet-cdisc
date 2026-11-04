@@ -323,3 +323,40 @@ class TestASTWhitelist:
 
         with pytest.raises(ValueError, match="Disallowed construct"):
             parse_expression("list(x for x in [1,2,3])")
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "AVAL is None",
+            "AVAL is not None",
+            "AVAL == None",
+            "AVAL != None",
+            "None == AVAL",
+            "AVAL is None or AVAL < 0",
+            "(AVAL is None) | (AVAL < 0)",
+            "(AVAL > 0) & (AVAL != None)",
+        ],
+    )
+    def test_a_compare_with_none_names_is_null(self, text):
+        """c1-93: a None compare is always null, so the missing test vanished."""
+        from fleet.core.exceptions import DerivationError
+        from fleet.sdtm.utils import parse_expression
+
+        with pytest.raises(DerivationError, match=r"is_null\(\) or COL.is_not_null\(\)"):
+            parse_expression(text)
+
+    def test_is_null_flags_the_missing_record(self):
+        """c1-93: the spelling the error names flags the null and the negative record."""
+        advs = pl.from_repr("""
+┌─────────┬──────┐
+│ USUBJID ┆ AVAL │
+│ ---     ┆ ---  │
+│ str     ┆ f64  │
+╞═════════╪══════╡
+│ 1       ┆ null │
+│ 2       ┆ -1.0 │
+│ 3       ┆ 5.0  │
+└─────────┴──────┘
+""")
+        out = advs.adam.flag("CHKFL", criteria="AVAL.is_null() | (AVAL < 0)").to_frame()
+        assert out["CHKFL"].to_list() == ["Y", "Y", None]

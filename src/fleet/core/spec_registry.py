@@ -1395,7 +1395,7 @@ spec_verb(
 SPEC_UNSUPPORTED: dict[str, set[str]] = {
     "sdtm": {
         "study_day",  # pin-based reference join; no spec form yet (duration gives a day 0)
-        "export_supp",  # terminal exporter, not a derivation
+        "export_supp",  # terminal exporter; fleet run calls it for qualifier variables
         "baseline_flag",  # inline flag sugar; no per-variable spec semantics yet
         "epoch_assign",  # trial-design lookup (TrialDesignMixin)
         "element_boundaries",  # trial-design lookup (TrialDesignMixin)
