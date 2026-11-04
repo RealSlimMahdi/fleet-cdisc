@@ -107,7 +107,7 @@ def default_repeating(name: str) -> bool:
         bool: True when the dataset repeats per subject.
 
     References:
-        CDISC Define-XML 2.1 example ``defineV21-SDTM.xml``; ADR-0042.
+        CDISC Define-XML 2.1 example ``defineV21-SDTM.xml``; ADR-0041.
 
     Examples:
         The defaults of DM and AE::
@@ -134,7 +134,7 @@ def default_is_reference_data(name: str, dataset_class: str | None) -> bool:
         bool: True when the dataset is reference data.
 
     References:
-        CDISC Define-XML 2.1 example ``defineV21-SDTM.xml``; ADR-0042.
+        CDISC Define-XML 2.1 example ``defineV21-SDTM.xml``; ADR-0041.
 
     Examples:
         TS is reference data, AE is not::

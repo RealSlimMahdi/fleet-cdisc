@@ -278,7 +278,7 @@ move freely between the YAML and Python views without grepping.
 !!! note "The spec is the engine contract"
     A summary spec carries every argument the shared engine takes, three
     record rules included: `uncoded` (the label a null coding term gets),
-    `missing` (the "Missing" row of a null category, ADR-0039)
+    `missing` (the "Missing" row of a null category, ADR-0038)
     and `prefilter` (the template's own record filter, applied after
     `dataset_filter`; every column it names is required). Each template
     sets its own defaults and `null` switches a rule off. A row field
@@ -418,7 +418,7 @@ members:
 The ARD keeps every statistic unrounded. `format_ard` and `apply_fmt_fn`
 round only for display. A tie rounds half away from zero, as SAS `ROUND`
 and the {cards} default: 5/16 = 31.25 % prints `31.3` at `xx.x`. A value
-that rounds to zero prints `0.0`, never `-0.0` (ADR-0038).
+that rounds to zero prints `0.0`, never `-0.0` (ADR-0037).
 
 <!-- mkdocstrings: reference public re-exports, not the private _ard module -->
 

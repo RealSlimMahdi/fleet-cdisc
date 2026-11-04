@@ -438,7 +438,7 @@ def ard_to_table_model(
         TableModel: A display-ready table model suitable for any renderer.
 
     References:
-        ADR-0040 (SOC row count, ``n (%) E`` and ``n/N (%)`` cells).
+        ADR-0039 (SOC row count, ``n (%) E`` and ``n/N (%)`` cells).
 
     Examples:
         Shape an ARD for rendering::
@@ -840,7 +840,7 @@ def paginate(
         no pagination applies).
 
     References:
-        ADR-0041 (continued parent rows).  SAS PROC REPORT keeps a block
+        ADR-0040 (continued parent rows).  SAS PROC REPORT keeps a block
         together or repeats its parent on the next page.
 
     Examples:

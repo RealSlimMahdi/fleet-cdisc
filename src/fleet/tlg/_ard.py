@@ -188,7 +188,7 @@ def apply_fmt_fn(value: float | None, fmt: str) -> str:
 
     References:
         SAS ROUND function (half away from zero); {cards}
-        ``round_type`` default; ADR-0038.
+        ``round_type`` default; ADR-0037.
 
     Examples:
         ``apply_fmt_fn(31.25, "xx.x") == "31.3"``
@@ -443,7 +443,7 @@ def compute_big_n(
     A subject in the population with a null arm is in no column, as
     PROC FREQ leaves out a missing class level.  The subjects are left
     out of every N, a ``"*"`` pool included, with one ``UserWarning``
-    that names the column and the count (ADR-0039).
+    that names the column and the count (ADR-0038).
 
     Args:
         adsl: The ADSL DataFrame.
@@ -455,7 +455,7 @@ def compute_big_n(
         dict[str, int]: Mapping from arm label to subject count.
 
     References:
-        SAS PROC FREQ, missing class levels; ADR-0039.
+        SAS PROC FREQ, missing class levels; ADR-0038.
 
     Examples:
         ``compute_big_n(adsl, "TRT01A", [], filter_expr=pl.col("SAFFL") == "Y")``
@@ -1157,7 +1157,7 @@ def summarize_ard(
         missing: The missing-level rule.  A null or blank value of its
             columns is counted under ``missing.label``, last in the
             block; with ``label=None`` the count goes to the ARD
-            ``warning`` column (ADR-0039).
+            ``warning`` column (ADR-0038).
         leaf_rank: ``(order, order_field)`` of a worst-case table.  At
             the last depth of a nested hierarchy each subject is counted
             once, at the worst value of the last row field, within its
@@ -1181,7 +1181,7 @@ def summarize_ard(
     References:
         ADaMIG v1.3 (TRTxxA on ADSL, TRTA on OCCDS/BDS); FDA CDER
         Standard Safety Tables and Figures IG v2.0, 2.1.2 (missing row);
-        ADR-0039.
+        ADR-0038.
 
     Examples:
         ``summarize_ard(adae, rows=["AEBODSYS", "AEDECOD"], stats=[Statistic.N_PCT],

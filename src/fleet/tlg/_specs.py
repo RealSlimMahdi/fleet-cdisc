@@ -248,7 +248,7 @@ class MissingLevel(BaseModel):
 
     References:
         FDA CDER Standard Safety Tables and Figures IG v2.0, 2.1.2;
-        ADR-0039.
+        ADR-0038.
     """
 
     columns: list[str] = Field(

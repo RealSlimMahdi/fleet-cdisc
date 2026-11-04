@@ -13,7 +13,7 @@ NUMPAGES fields, so each physical page carries its own number.
 Pagination comes from the model layer
 (:func:`~fleet.tlg.render.paginate`), with a page budget measured in
 points: title, header lines, footnotes and wrapped rows all count, and
-``rows_per_page`` stays as a cap.  See ADR-0041.
+``rows_per_page`` stays as a cap.  See ADR-0040.
 
 Usage::
 
@@ -311,7 +311,7 @@ def render_rtf(
         str: The complete RTF document.
 
     References:
-        ADR-0041 (title placement, page fields, page budget).  SAS ODS
+        ADR-0040 (title placement, page fields, page budget).  SAS ODS
         RTF: titles and footnotes in the page header and footer unless
         BODYTITLE.  r2rtf ``rtf_page(nrow=)`` counts title, header and
         footnote lines in the page budget.
@@ -416,7 +416,7 @@ def render_listing_rtf(
         str: The complete RTF document.
 
     References:
-        ADR-0041 (title placement, page fields, page budget).
+        ADR-0040 (title placement, page fields, page budget).
 
     Examples:
         Lab abnormalities listing to RTF::

@@ -607,7 +607,7 @@ class DefineSpecGenerator:
 
         References:
             SDTMIG 3.4, section 8.4 (Relating Non-Standard Variable Values
-            to a Parent Domain); ADR-0042.
+            to a Parent Domain); ADR-0041.
 
         Raises:
             SpecError: Naming each DATASET.VARIABLE and its SUPP-- dataset.

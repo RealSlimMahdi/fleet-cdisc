@@ -49,7 +49,7 @@ def render_pdf(
         ImportError: If WeasyPrint is not installed.
 
     References:
-        ADR-0041 (40 rows per page by default, continued parent rows).
+        ADR-0040 (40 rows per page by default, continued parent rows).
 
     Examples:
         Render an AE summary to PDF::

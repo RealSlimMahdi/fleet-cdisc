@@ -510,7 +510,7 @@ class TestCodeLists:
 
 
 class TestItemRefRole:
-    """c1-268 (ADR 0043): the SDTM role of a variable is the ItemRef Role (CORE CG0010)."""
+    """c1-268 (ADR 0042): the SDTM role of a variable is the ItemRef Role (CORE CG0010)."""
 
     def test_sdtm_role_becomes_the_itemref_role_and_the_file_validates(self, tmp_path):
         spec = yaml.safe_load(yaml.safe_dump(FIXTURE_SPEC))

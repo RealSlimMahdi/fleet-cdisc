@@ -72,7 +72,7 @@ uv run fleet validate --report findings.html   # HTML findings report
 - **Define-XML**: `--define outputs/define_sdtm.xml` gives the define to
   CORE (`-dxp`), so the define rules (for example CG0010 on the ItemRef
   Role) run. It is opt-in: Fleet never passes a define by default
-  (ADR 0043).
+  (ADR 0042).
 - The report header of each dataset shows every input with its source, as on
   the verb.
 - **HTML report**: `--report findings.html` writes one page: a status row
