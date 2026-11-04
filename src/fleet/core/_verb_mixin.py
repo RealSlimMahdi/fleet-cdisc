@@ -151,7 +151,7 @@ def _extract_spec_variables(
                 value = getattr(var, meta, None)
                 if value and meta not in merged:
                     merged[meta] = value
-            codelist = (var.model_extra or {}).get("codelist")
+            codelist = var.codelist
             out.append((var.name, merged, str(codelist) if codelist else None))
         return ds.name, out
 

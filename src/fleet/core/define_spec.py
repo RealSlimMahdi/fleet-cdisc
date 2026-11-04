@@ -13,6 +13,7 @@ is interpreted in exactly one place.
 
 from __future__ import annotations
 
+import difflib
 import re
 from pathlib import Path
 from typing import Any
@@ -36,26 +37,49 @@ class CTBlock(BaseModel):
 class VariableEntry(BaseModel):
     """One entry in a dataset's ``variables:`` list.
 
-    Only the keys Fleet's execution path reads are declared; the rest of
-    the define metadata (``length``, ``mandatory``, ``codelist``, …) is
-    carried through untouched.
+    Every key of the define-spec JSON schema ``$defs.variable`` is declared,
+    and an unknown key is refused, so a misspelled ``derivaton:`` cannot
+    drop a derivation with no message.  The JSON schema type-checks the
+    metadata keys in the define_xml path.
     """
 
-    # ponytail: extra="allow" — define metadata varies by standard and is
-    # type-checked by the JSON schema in the define_xml path.  Strictness
-    # that matters here is `name` being present and the *derivation* block,
-    # which the algorithm registry validates with extra="forbid".
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     name: str
     type: str | None = None
     label: str | None = None
+    length: Any = None
+    significant_digits: Any = None
+    mandatory: Any = None
+    core: Any = None
     origin: str | None = None
     origin_source: str | None = None
     predecessor: str | None = None
+    codelist: Any = None
     role: str | None = None
     evaluator: str | None = None
+    comment: Any = None
+    crf_pages: Any = None
     derivation: dict[str, Any] | None = None
+
+
+def _unknown_variable_keys(dataset: str, variables: Any) -> None:
+    """Raise ``ValueError`` that names the first unknown key of a variable entry."""
+    if not isinstance(variables, list):
+        return
+    known = set(VariableEntry.model_fields)
+    for var in variables:
+        if not isinstance(var, dict):
+            continue
+        for key in var:
+            if key in known:
+                continue
+            hint = difflib.get_close_matches(str(key), sorted(known), n=1)
+            did_you_mean = f" (did you mean {hint[0]!r}?)" if hint else ""
+            raise ValueError(
+                f"{dataset}.{var.get('name', '?')}: unknown key {key!r}{did_you_mean}. "
+                f"A variable takes only: {', '.join(VariableEntry.model_fields)}."
+            )
 
 
 #: A SAS dataset name (``DM``, ``ADSL``).  Dataset names become file names
@@ -82,6 +106,13 @@ class DatasetEntry(BaseModel):
     keys: Any = None
     value_level: Any = None
     class_: Any = Field(default=None, alias="class")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _variable_keys(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            _unknown_variable_keys(str(data.get("name", "?")), data.get("variables"))
+        return data
 
     @model_validator(mode="after")
     def _input_names(self) -> DatasetEntry:
@@ -160,12 +191,29 @@ class DefineSpec(BaseModel):
 
 
 class SpecYamlLoader(yaml.SafeLoader):
-    """``yaml.SafeLoader`` with YAML 1.2 booleans: only ``true`` and ``false``.
+    """``yaml.SafeLoader`` that keeps define values as written.
 
     PyYAML follows YAML 1.1, where a bare ``on``, ``off``, ``yes`` or ``no``
     is a boolean.  A define.yaml names the join key of ``merge`` with
-    ``on:``, so that key must stay a string (#87).
+    ``on:``, so that key must stay a string (#87).  YAML 1.1 also reads
+    ``010`` as octal 8, ``12:30`` as 750 and ``2024-01-15`` as a date, so
+    only plain decimal numbers are resolved: ``010``, ``12:30`` and
+    ``2024-01-15`` stay text.  A duplicate key is refused with its line.
     """
+
+    def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict:
+        seen: set[Any] = set()
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=True)
+            if key in seen:
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping",
+                    node.start_mark,
+                    f"found duplicate key {key!r}",
+                    key_node.start_mark,
+                )
+            seen.add(key)
+        return super().construct_mapping(node, deep=deep)
 
 
 SpecYamlLoader.add_implicit_resolver(
@@ -181,6 +229,30 @@ for _first in list("yYnNoOtTfF"):
         if tag != "tag:yaml.org,2002:bool"
         or regexp.pattern == r"^(?:true|True|TRUE|false|False|FALSE)$"
     ]
+# Drop the YAML 1.1 int (octal, sexagesimal), float (sexagesimal) and date resolvers.
+_YAML11_NUMBER_TAGS = {
+    "tag:yaml.org,2002:int",
+    "tag:yaml.org,2002:float",
+    "tag:yaml.org,2002:timestamp",
+}
+for _first, _resolvers in list(SpecYamlLoader.yaml_implicit_resolvers.items()):
+    SpecYamlLoader.yaml_implicit_resolvers[_first] = [
+        (tag, regexp) for tag, regexp in _resolvers if tag not in _YAML11_NUMBER_TAGS
+    ]
+SpecYamlLoader.add_implicit_resolver(
+    "tag:yaml.org,2002:int",
+    re.compile(r"^[-+]?(?:0|[1-9][0-9]*)$"),
+    list("-+0123456789"),
+)
+SpecYamlLoader.add_implicit_resolver(
+    "tag:yaml.org,2002:float",
+    re.compile(
+        r"^(?:[-+]?(?:0|[1-9][0-9]*)?\.[0-9]+(?:[eE][-+]?[0-9]+)?"
+        r"|[-+]?(?:0|[1-9][0-9]*)\.(?:[eE][-+]?[0-9]+)?"
+        r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$"
+    ),
+    list("-+0123456789."),
+)
 
 
 def load_spec_yaml(text: str) -> Any:

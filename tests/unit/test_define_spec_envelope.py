@@ -157,6 +157,106 @@ def test_model_accepts_every_key_the_published_schema_allows():
     dataset_keys = {f.alias or n for n, f in DatasetEntry.model_fields.items()}
     assert set(schema["$defs"]["dataset"]["properties"]) == dataset_keys
 
+    from fleet.core.define_spec import VariableEntry
+
+    assert set(schema["$defs"]["variable"]["properties"]) == set(VariableEntry.model_fields)
+
+
+class TestUnknownVariableKey:
+    """c1-743: a misspelled variable key used to drop its derivation with no message."""
+
+    @pytest.mark.parametrize(
+        ("key", "hint"),
+        [("derivaton", "derivation"), ("derviation", "derivation"), ("codelst", "codelist")],
+    )
+    def test_misspelled_variable_key_names_the_variable(self, raw, tmp_path, key, hint):
+        spec = _write(
+            tmp_path,
+            {
+                "datasets": [
+                    {
+                        "name": "TEST",
+                        "variables": [
+                            {"name": "MYVAR", key: {"algorithm": "assign", "value": "X"}}
+                        ],
+                    }
+                ]
+            },
+        )
+        with pytest.raises(SpecError, match=rf"TEST\.MYVAR: unknown key '{key}'.*'{hint}'"):
+            raw.sdtm.from_spec(spec, dataset="TEST").to_frame()
+
+    def test_pick_keys_on_the_variable_level_are_refused(self, raw, tmp_path):
+        """c1-651: ``algorithm: pick`` beside ``name:`` used to derive nothing."""
+        spec = _write(
+            tmp_path,
+            {
+                "datasets": [
+                    {
+                        "name": "ADSL",
+                        "variables": [{"name": "LSTALVDT", "algorithm": "pick", "events": []}],
+                    }
+                ]
+            },
+        )
+        with pytest.raises(SpecError, match=r"ADSL\.LSTALVDT: unknown key 'algorithm'"):
+            load_define_spec(spec)
+
+
+class TestYamlValuesStayAsWritten:
+    """c1-741: YAML 1.1 read 010 as 8, 12:30 as 750 and a bare date as a date."""
+
+    def test_bare_constants_stay_text(self):
+        from fleet.core.define_spec import load_spec_yaml
+
+        doc = load_spec_yaml(
+            "a: 010\nb: 12:30\nc: 12:30.5\nd: 2024-01-15\ne: {001: A, 002: B}\n"
+            "f: 10\ng: 0.5\nh: -3\ni: true\n"
+        )
+        assert doc == {
+            "a": "010",
+            "b": "12:30",
+            "c": "12:30.5",
+            "d": "2024-01-15",
+            "e": {"001": "A", "002": "B"},
+            "f": 10,
+            "g": 0.5,
+            "h": -3,
+            "i": True,
+        }
+
+    def test_siteid_constant_keeps_its_leading_zero(self, raw, tmp_path):
+        p = tmp_path / "define.yaml"
+        p.write_text(
+            "datasets:\n"
+            "  - name: DM\n"
+            "    variables:\n"
+            "      - name: SITEID\n"
+            "        type: text\n"
+            "        derivation:\n"
+            "          algorithm: assign\n"
+            "          value: 010\n",
+            encoding="utf-8",
+        )
+        out = raw.sdtm.from_spec(p, dataset="DM").to_frame()
+        assert out["SITEID"].to_list() == ["010"]
+
+    def test_duplicate_key_is_refused_with_its_line(self, tmp_path):
+        p = tmp_path / "define.yaml"
+        p.write_text(
+            "datasets:\n"
+            "  - name: DM\n"
+            "    variables:\n"
+            "      - name: USUBJID\n"
+            "        derivation:\n"
+            "          algorithm: assign\n"
+            "          source: FIRST\n"
+            "          source: SECOND\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(SpecError, match=r"duplicate key 'source'[\s\S]*line 8"):
+            load_define_spec(p)
+
 
 def test_nsv_metadata_keys_are_valid_against_the_published_schema():
     """``role:``/``evaluator:`` drive supp() but used to fail schema validation."""
