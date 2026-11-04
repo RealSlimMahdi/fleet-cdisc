@@ -74,3 +74,70 @@ def test_no_source_docstring_calls_the_ard_cards_compatible() -> None:
         if "{cards}-compatible" in p.read_text(encoding="utf-8")
     ]
     assert hits == []
+
+
+# c1-302: fleet tlg export --population passes the filter to adsl_filter.
+
+
+def _export(argv: list[str]) -> int:
+    from fleet import cli
+
+    try:
+        cli.main(argv)
+    except SystemExit as exc:
+        return int(exc.code or 0)
+    return 0
+
+
+def test_tlg_export_population_filters_the_big_n(tmp_path: Path) -> None:
+    adsl = pl.from_repr("""
+┌─────────┬──────┬───────┐
+│ USUBJID ┆ TRTA ┆ SAFFL │
+│ ---     ┆ ---  ┆ ---   │
+│ str     ┆ str  ┆ str   │
+╞═════════╪══════╪═══════╡
+│ S1      ┆ A    ┆ Y     │
+│ S2      ┆ A    ┆ Y     │
+│ S3      ┆ A    ┆ N     │
+└─────────┴──────┴───────┘
+""")
+    adae = _adae().filter(pl.col("AEBODSYS").is_not_null())
+    adsl_path, adae_path = tmp_path / "adsl.csv", tmp_path / "adae.csv"
+    adsl.write_csv(adsl_path)
+    adae.write_csv(adae_path)
+    base = ["tlg", "export", "--domain", "ae", "--data", str(adae_path), "--adsl", str(adsl_path)]
+
+    all_out, saf_out = tmp_path / "all.html", tmp_path / "saf.html"
+    assert _export([*base, "-o", str(all_out)]) == 0
+    population = 'pl.col("SAFFL") == "Y"'
+    assert _export([*base, "--population", population, "-o", str(saf_out)]) == 0
+
+    assert "N=3" in all_out.read_text(encoding="utf-8")
+    saf = saf_out.read_text(encoding="utf-8")
+    assert "N=2" in saf
+    assert "N=3" not in saf
+    assert "Population:" in saf
+
+
+def test_tlg_export_rejects_an_invalid_population(tmp_path: Path, capsys) -> None:
+    adsl_path, adae_path = tmp_path / "adsl.csv", tmp_path / "adae.csv"
+    _adsl().write_csv(adsl_path)
+    _adae().write_csv(adae_path)
+    code = _export(
+        [
+            "tlg",
+            "export",
+            "--domain",
+            "ae",
+            "--data",
+            str(adae_path),
+            "--adsl",
+            str(adsl_path),
+            "--population",
+            "__import__('os')",
+            "-o",
+            str(tmp_path / "x.html"),
+        ]
+    )
+    assert code == 1
+    assert "--population" in capsys.readouterr().err
