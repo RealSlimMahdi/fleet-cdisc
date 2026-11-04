@@ -487,7 +487,8 @@ class TestRenderRtf:
         assert "Table 14.2.1" in rtf
         assert "Vital Signs" in rtf
         assert "Source: ADVS" in rtf
-        assert "Page 1 of 1" in rtf
+        assert r"{\footer " in rtf
+        assert r"\fldinst PAGE}" in rtf and r"\fldinst NUMPAGES}" in rtf
 
     def test_headers_flagged_for_repetition_with_borders(self) -> None:
         rtf = render_rtf(self._model())
@@ -499,7 +500,7 @@ class TestRenderRtf:
         rtf = render_rtf(model, rows_per_page=8, page_by="PARAMCD")
         assert rtf.count(r"\page") == 2  # 3 pages → 2 breaks
         assert rtf.count(r"\trhdr") == 3
-        assert "Page 2 of 3" in rtf
+        assert rtf.count(r"\fldinst NUMPAGES}") == 1  # one footer serves every page
 
     def test_escapes_control_characters(self) -> None:
         meta = RenderMetadata(title=r"50% {of} \subjects — ±2")
@@ -530,7 +531,7 @@ class TestRenderRtf:
         model = listing_to_model(listing, RenderMetadata(title="Listing 16.1"))
         rtf = render_listing_rtf(model, tmp_path / "l.rtf")
         assert "Listing 16.1" in rtf
-        assert "S01" in rtf and "Page 1 of 1" in rtf
+        assert "S01" in rtf and r"\fldinst PAGE}" in rtf
         assert (tmp_path / "l.rtf").exists()
 
     def test_listing_rtf_paginates(self) -> None:
@@ -538,7 +539,7 @@ class TestRenderRtf:
         model = listing_to_model(listing)
         rtf = render_listing_rtf(model)  # default 40 rows/page → 3 pages
         assert rtf.count(r"\page") == 2
-        assert "Page 3 of 3" in rtf
+        assert r"\fldinst NUMPAGES}" in rtf
 
     def test_builder_to_rtf(self, tmp_path: Path) -> None:
         out = tmp_path / "builder.rtf"

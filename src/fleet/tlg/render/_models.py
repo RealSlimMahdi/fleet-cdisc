@@ -74,6 +74,7 @@ Display contract (derived from NEST AET01 / pharma conventions)
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import polars as pl
@@ -606,63 +607,128 @@ def _is_stub_only(row: TableRow) -> bool:
     return all(v == "" for v in row.cells.values())
 
 
-def _chunk_rows(rows: list[TableRow], rows_per_page: int) -> list[list[TableRow]]:
-    """Split *rows* into chunks, never orphaning a stub row at a page end."""
-    chunks: list[list[TableRow]] = []
-    chunk: list[TableRow] = []
-    for row in rows:
-        chunk.append(row)
-        if len(chunk) >= rows_per_page:
-            carried: list[TableRow] = []
-            while chunk and _is_stub_only(chunk[-1]):
-                carried.append(chunk.pop())
-            if not chunk:
-                # A page of nothing but stubs — keep it whole rather
-                # than looping forever.
-                chunk = list(reversed(carried))
-                carried = []
-            chunks.append(chunk)
-            chunk = list(reversed(carried))
-    if chunk:
-        chunks.append(chunk)
-    return chunks
+def _is_heading(row: TableRow) -> bool:
+    """Whether a row is a heading that must not end a page."""
+    return row.row_type != "stat" and _is_stub_only(row)
 
 
-def paginate(
+def _ancestors(rows: list[TableRow], idx: int) -> list[TableRow]:
+    """The rows that ``rows[idx]`` belongs to (by indent), top level first."""
+    found: list[TableRow] = []
+    level = rows[idx].indent
+    for row in reversed(rows[:idx]):
+        if level == 0:
+            break
+        if row.indent < level:
+            found.append(row)
+            level = row.indent
+    return found[::-1]
+
+
+def _continued(row: TableRow) -> TableRow:
+    """An empty-cell copy of a parent row, repeated at the top of a page."""
+    return TableRow(
+        label=f"{row.label} (continued)",
+        row_type=row.row_type,
+        indent=row.indent,
+        cells=dict.fromkeys(row.cells, ""),
+        bold=row.bold,
+        variable=row.variable,
+    )
+
+
+def _units(rows: list[TableRow]) -> list[list[int]]:
+    """Row indices grouped into units to keep on one page.
+
+    A run of statistic rows is one unit, and stub-only rows join the
+    unit that follows them, so a heading never ends a page.
+    """
+    units: list[list[int]] = []
+    pending: list[int] = []
+    i = 0
+    while i < len(rows):
+        if _is_heading(rows[i]):
+            pending.append(i)
+            i += 1
+            continue
+        j = i + 1
+        if rows[i].row_type == "stat":
+            while j < len(rows) and rows[j].row_type == "stat" and rows[j].indent == rows[i].indent:
+                j += 1
+        units.append(pending + list(range(i, j)))
+        pending = []
+        i = j
+    if pending:
+        units.append(pending)
+    return units
+
+
+def _chunk_rows(
+    rows: list[TableRow],
+    rows_per_page: int | None,
+    *,
+    row_cost: Callable[[TableRow], float] | None = None,
+    budget: float | None = None,
+) -> list[list[TableRow]]:
+    """Split *rows* into pages by row count and, optionally, by a cost budget.
+
+    A page that starts inside a block repeats the open parent rows as
+    empty-cell ``(continued)`` rows, counted in the page.  A statistic
+    block stays on one page when it fits, and a heading never ends a
+    page.  A unit larger than a page is split row by row.
+    """
+    cost = row_cost or (lambda _row: 0.0)
+    pages: list[list[TableRow]] = []
+    page: list[TableRow] = []
+    used = 0.0
+    real = False  # the page holds at least one row of its own
+
+    def fits(extra_cost: float, extra_rows: int) -> bool:
+        within_rows = rows_per_page is None or len(page) + extra_rows <= rows_per_page
+        within_budget = budget is None or used + extra_cost <= budget
+        return within_rows and within_budget
+
+    def new_page(first: int) -> None:
+        nonlocal page, used, real
+        pages.append(page)
+        page = [_continued(a) for a in _ancestors(rows, first)]
+        used = sum(cost(r) for r in page)
+        real = False
+
+    def add(i: int) -> None:
+        nonlocal used, real
+        page.append(rows[i])
+        used += cost(rows[i])
+        real = True
+
+    for unit in _units(rows):
+        unit_cost = sum(cost(rows[i]) for i in unit)
+        if real and not fits(unit_cost, len(unit)):
+            new_page(unit[0])
+        if fits(unit_cost, len(unit)):
+            for i in unit:
+                add(i)
+            continue
+        for i in unit:
+            if real and not _is_heading(page[-1]) and not fits(cost(rows[i]), 1):
+                new_page(i)
+            add(i)
+    if page:
+        pages.append(page)
+    return pages
+
+
+def _paginate(
     model: TableModel,
     *,
     rows_per_page: int | None = None,
     page_by: str | None = None,
+    row_cost: Callable[[TableRow], float] | None = None,
+    budget: float | None = None,
 ) -> list[TableModel]:
-    """Split a ``TableModel`` into display pages.
-
-    Pagination lives in the model layer so every renderer (HTML, PDF,
-    RTF, PPTX) inherits identical page composition: each page repeats
-    the title, subtitle, column headers, and footnote blocks.
-
-    Args:
-        model: The display-ready table model.
-        rows_per_page: Maximum body rows per page.  A stub-only row
-            (group/section heading) is never left orphaned at the bottom
-            of a page.  ``None`` means no row-count splitting.
-        page_by: ARD variable whose stub rows force a page break (e.g.
-            ``"PARAMCD"`` → one page per parameter).  Defaults to
-            ``model.metadata.page_by``.
-
-    Returns:
-        list[TableModel]: One model per page (a single-element list when
-        no pagination applies).
-
-    Examples:
-        One page per lab parameter, at most 20 rows each::
-
-            from fleet.tlg.render import ard_to_table_model, paginate
-
-            model = ard_to_table_model(ard)
-            pages = paginate(model, rows_per_page=20, page_by="PARAMCD")
-    """
+    """Body of :func:`paginate`, with an optional per-row cost budget (RTF)."""
     effective_page_by = page_by or model.metadata.page_by
-    if rows_per_page is None and not effective_page_by:
+    if rows_per_page is None and budget is None and not effective_page_by:
         return [model]
 
     # ── 1. Split into blocks at page_by stub boundaries ──
@@ -677,15 +743,15 @@ def paginate(
             blocks.append([])
         blocks[-1].append(row)
 
-    # ── 2. Split blocks by row count ──
+    # ── 2. Split blocks by row count and budget ──
     pages_rows: list[list[TableRow]] = []
     for block in blocks:
         if not block:
             continue
-        if rows_per_page is None:
+        if rows_per_page is None and budget is None:
             pages_rows.append(block)
         else:
-            pages_rows.extend(_chunk_rows(block, rows_per_page))
+            pages_rows.extend(_chunk_rows(block, rows_per_page, row_cost=row_cost, budget=budget))
 
     if not pages_rows:
         return [model]
@@ -698,6 +764,51 @@ def paginate(
         )
         for rows in pages_rows
     ]
+
+
+def paginate(
+    model: TableModel,
+    *,
+    rows_per_page: int | None = None,
+    page_by: str | None = None,
+) -> list[TableModel]:
+    """Split a ``TableModel`` into display pages.
+
+    Pagination lives in the model layer so every renderer (HTML, PDF,
+    RTF, PPTX) inherits identical page composition: each page repeats
+    the title, subtitle, column headers, and footnote blocks.  A page
+    that starts inside a block repeats its parent rows (parameter,
+    visit, SOC) with the label suffix ``(continued)`` and empty cells;
+    these rows count in *rows_per_page*.  The statistic rows of one
+    level stay on one page when they fit.
+
+    Args:
+        model: The display-ready table model.
+        rows_per_page: Maximum body rows per page.  A stub-only row
+            (group/section heading) is never left orphaned at the bottom
+            of a page.  ``None`` means no row-count splitting.
+        page_by: ARD variable whose stub rows force a page break (e.g.
+            ``"PARAMCD"`` → one page per parameter).  Defaults to
+            ``model.metadata.page_by``.  The first page of each block
+            has no ``(continued)`` row.
+
+    Returns:
+        list[TableModel]: One model per page (a single-element list when
+        no pagination applies).
+
+    References:
+        ADR-0041 (continued parent rows).  SAS PROC REPORT keeps a block
+        together or repeats its parent on the next page.
+
+    Examples:
+        One page per lab parameter, at most 20 rows each::
+
+            from fleet.tlg.render import ard_to_table_model, paginate
+
+            model = ard_to_table_model(ard)
+            pages = paginate(model, rows_per_page=20, page_by="PARAMCD")
+    """
+    return _paginate(model, rows_per_page=rows_per_page, page_by=page_by)
 
 
 def paginate_listing(
@@ -729,6 +840,37 @@ def paginate_listing(
             data=model.data[i : i + rows_per_page],
         )
         for i in range(0, len(model.data), rows_per_page)
+    ]
+
+
+def _paginate_listing(
+    model: ListingModel,
+    *,
+    rows_per_page: int | None,
+    row_cost: Callable[[dict[str, str]], float],
+    budget: float,
+) -> list[ListingModel]:
+    """Split a listing by row count and a per-row cost budget (RTF).
+
+    Each page holds at least one row, so a row taller than the budget
+    still gets a page.
+    """
+    pages: list[list[dict[str, str]]] = []
+    page: list[dict[str, str]] = []
+    used = 0.0
+    for row in model.data:
+        cost = row_cost(row)
+        full = rows_per_page is not None and len(page) >= rows_per_page
+        if page and (full or used + cost > budget):
+            pages.append(page)
+            page, used = [], 0.0
+        page.append(row)
+        used += cost
+    if page or not pages:
+        pages.append(page)
+    return [
+        ListingModel(metadata=model.metadata, column_labels=model.column_labels, data=data)
+        for data in pages
     ]
 
 

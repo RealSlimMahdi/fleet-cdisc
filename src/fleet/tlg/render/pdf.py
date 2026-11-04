@@ -23,21 +23,22 @@ def render_pdf(
     path: str | Path,
     *,
     html_wrapper: str | None = None,
-    rows_per_page: int | None = None,
+    rows_per_page: int | None = 40,
     page_by: str | None = None,
 ) -> Path:
     """Render a ``TableModel`` to a PDF file via WeasyPrint.
 
     Pagination comes from the model layer: pages break on real PDF
     pages with repeated title, column headers, and footnotes, plus a
-    ``Page X of Y`` footer.
+    ``Page X of Y`` footer.  A page that starts inside a block repeats
+    its parent rows with ``(continued)``.
 
     Args:
         model: The display-ready table model.
         path: Output PDF file path.
         html_wrapper: Optional HTML template with ``{table}`` placeholder.
-        rows_per_page: Maximum body rows per page; ``None`` disables
-            row-count splitting.
+        rows_per_page: Maximum body rows per page (default 40, as
+            ``render_rtf``); ``None`` disables row-count splitting.
         page_by: ARD variable to page-break on (e.g. ``"PARAMCD"``).
             Defaults to ``model.metadata.page_by``.
 
@@ -46,6 +47,9 @@ def render_pdf(
 
     Raises:
         ImportError: If WeasyPrint is not installed.
+
+    References:
+        ADR-0041 (40 rows per page by default, continued parent rows).
 
     Examples:
         Render an AE summary to PDF::

@@ -9,6 +9,7 @@ import pytest
 
 import fleet  # noqa: F401
 from fleet.tlg.ae_namespace import AESocPtSpec
+from fleet.tlg.render import RenderMetadata
 
 _SRC = Path(__file__).resolve().parents[2] / "src" / "fleet"
 
@@ -293,3 +294,175 @@ def test_a_saved_variant_loads_and_its_default_is_that_variant() -> None:
     batch = run_spec(promoted, adae, adsl=adsl)
     assert batch.equals(run_spec(v0.spec, adae, adsl=adsl))
     assert batch.equals(run_spec(chosen.spec, adae, adsl=adsl))
+
+
+# c1-456: a page that starts inside a block repeats its parents.
+
+
+def _lbt01_model():
+    """Programmatic LBT01 layout: parameter, visit, six statistic rows."""
+    from fleet.tlg.render._models import ColumnHeader, TableModel, TableRow
+
+    stats = ["n", "Mean", "SD", "Median", "Min", "Max"]
+    rows = []
+    for param in ["ALT", "AST"]:
+        rows.append(TableRow(param, "group", 0, {"A": ""}, True, "PARAMCD"))
+        for visit in ["Baseline", "Week 2", "Week 4", "Week 8"]:
+            rows.append(TableRow(visit, "data", 1, {"A": ""}, False, "AVISIT"))
+            rows += [TableRow(s, "stat", 2, {"A": "1.0"}, False, "AVISIT") for s in stats]
+    return TableModel(
+        metadata=RenderMetadata(title="Table 14.3.4.1"),
+        columns=[ColumnHeader(label="A", big_n=4)],
+        rows=rows,
+    )
+
+
+def _aet02_model(n_soc: int = 3, n_pt: int = 23, label: str = "PT"):
+    """Programmatic AET02 layout: SOC rows and PT rows, all with counts."""
+    from fleet.tlg.render._models import ColumnHeader, TableModel, TableRow
+
+    rows = []
+    for s in range(n_soc):
+        rows.append(TableRow(f"SOC {s}", "group", 0, {"Placebo": "5 (50.0%)"}, True, "AEBODSYS"))
+        rows += [
+            TableRow(f"{label} {s}-{p}", "data", 1, {"Placebo": "1 (10.0%)"}, False, "AEDECOD")
+            for p in range(n_pt)
+        ]
+    return TableModel(
+        metadata=RenderMetadata(
+            title="Table 14.3.1.2",
+            subtitle="Safety population",
+            footnotes=["MedDRA 26.0.", "Subjects counted once per SOC and PT."],
+        ),
+        columns=[ColumnHeader(label="Placebo", big_n=84)],
+        rows=rows,
+    )
+
+
+def _real_rows(page):
+    return [r for r in page.rows if not r.label.endswith(" (continued)")]
+
+
+def _assert_parents_on_page(pages) -> None:
+    for page in pages:
+        seen: list = []
+        for row in page.rows:
+            if row.indent > 0:
+                parents = [r for r in seen if r.indent < row.indent]
+                assert parents, f"{row.label!r} has no parent on its page"
+                assert parents[-1].indent == row.indent - 1
+            seen.append(row)
+
+
+def test_lbt01_pages_repeat_parameter_and_visit() -> None:
+    from fleet.tlg.render import paginate
+
+    model = _lbt01_model()
+    pages = paginate(model, rows_per_page=12)
+    _assert_parents_on_page(pages)
+    assert not pages[0].rows[0].label.endswith("(continued)")
+    assert pages[1].rows[0].label == "ALT (continued)"
+    assert pages[1].rows[0].cells == {"A": ""}
+    # Each statistic block stays whole on one page.
+    for page in pages:
+        assert sum(r.row_type == "stat" for r in page.rows) % 6 == 0
+    # No row is lost or duplicated.
+    assert [r for p in pages for r in _real_rows(p)] == model.rows
+
+
+def test_aet02_pages_repeat_the_soc_with_empty_cells() -> None:
+    from fleet.tlg.render import paginate
+
+    pages = paginate(_aet02_model(), rows_per_page=40)
+    _assert_parents_on_page(pages)
+    first = pages[1].rows[0]
+    assert first.label == "SOC 1 (continued)"
+    assert first.cells == {"Placebo": ""}
+
+
+def test_no_continued_row_on_the_first_page_of_a_page_by_block() -> None:
+    from fleet.tlg.render import paginate
+
+    pages = paginate(_lbt01_model(), rows_per_page=40, page_by="PARAMCD")
+    assert [p.rows[0].label for p in pages] == ["ALT", "AST"]
+
+
+def test_a_stat_block_larger_than_the_page_is_split() -> None:
+    from fleet.tlg.render import paginate
+
+    model = _lbt01_model()
+    pages = paginate(model, rows_per_page=4)
+    assert [r for p in pages for r in _real_rows(p)] == model.rows
+    _assert_parents_on_page(pages)
+
+
+def test_render_pdf_paginates_by_default() -> None:
+    import inspect
+
+    from fleet.tlg.render import render_pdf, render_rtf
+
+    pdf_default = inspect.signature(render_pdf).parameters["rows_per_page"].default
+    assert pdf_default == inspect.signature(render_rtf).parameters["rows_per_page"].default == 40
+
+
+# c1-820: the RTF page counter is a field, and the page budget is in points.
+
+
+def _groups(rtf: str) -> tuple[str, str, str]:
+    """(header group, footer group, body) of a Fleet RTF document."""
+    head_start = rtf.find(r"{\header ")
+    foot_start = rtf.find(r"{\footer ")
+    foot_end = rtf.index("}\n", rtf.index(r"\fldinst NUMPAGES}")) + 1
+    header = rtf[head_start:foot_start] if head_start >= 0 else ""
+    return header, rtf[foot_start:foot_end], rtf[foot_end:]
+
+
+def test_rtf_default_puts_title_in_header_and_footnotes_in_footer() -> None:
+    from fleet.tlg.render import render_rtf
+
+    rtf = render_rtf(_aet02_model())
+    header, footer, body = _groups(rtf)
+    assert "Table 14.3.1.2" in header and "Safety population" in header
+    assert "MedDRA 26.0." in footer
+    assert r"{\field{\*\fldinst PAGE}" in footer
+    assert r"{\field{\*\fldinst NUMPAGES}" in footer
+    assert "Table 14.3.1.2" not in body and "MedDRA" not in body
+    assert "Page 1 of" not in rtf
+
+
+def test_rtf_body_title_repeats_title_and_footnotes_per_page() -> None:
+    from fleet.tlg.render import render_rtf
+
+    rtf = render_rtf(_aet02_model(), body_title=True)
+    header, footer, body = _groups(rtf)
+    n_pages = rtf.count(r"\trhdr")
+    assert header == ""
+    assert r"\fldinst PAGE}" in footer and "MedDRA" not in footer
+    assert body.count("Table 14.3.1.2") == n_pages
+    assert body.count("MedDRA 26.0.") == n_pages
+
+
+def test_rtf_page_budget_counts_title_footnotes_and_wrapped_rows() -> None:
+    from fleet.tlg.render import render_rtf
+
+    # 72 single-line rows: 40-row cap with title and footnotes in the margins.
+    assert render_rtf(_aet02_model()).count(r"\trhdr") == 2
+    # Title and footnotes in the body leave room for fewer rows.
+    assert render_rtf(_aet02_model(), body_title=True).count(r"\trhdr") == 3
+    # A long term wraps to several lines, so fewer rows fit on a page.
+    long = "Aspartate aminotransferase increased " * 3
+    wrapped = render_rtf(_aet02_model(n_soc=1, n_pt=40, label=long))
+    assert wrapped.count(r"\trhdr") >= 4
+
+
+def test_rtf_listing_has_footer_fields_and_a_budget() -> None:
+    from fleet.tlg.render import RenderMetadata, listing_to_model, render_listing_rtf
+
+    listing = pl.DataFrame([_AE_LISTING_ROW] * 40)
+    model = listing_to_model(listing, RenderMetadata(title="Listing 16.2.7"))
+    rtf = render_listing_rtf(model)
+    _, footer, body = _groups(rtf)
+    assert r"\fldinst NUMPAGES}" in footer
+    # Each AE row wraps to many lines in 15 columns: 40 rows need several pages.
+    assert rtf.count(r"\trhdr") > 2
+    assert "Listing 16.2.7" not in body
