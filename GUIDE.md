@@ -187,7 +187,7 @@ collected frame and continues — but each checkpoint is one Polars `collect()`.
 
 | Fully lazy (accumulate into one pass)                                                                                                  | Checkpoints (collect mid-chain)                                                                                                                                                                                                                                       |
 | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `assign`, `case_when`, `derivation`, `recode`, `keep`, `source`, `ae_aerel`, `notsubmitted`; `duration` (numeric & ISO paths); `study_day` (in-frame `ref_col=`); `seq`; `select`; `merge`/`lookup`; SDTM `group_by`; `multiple_responses` | `date` (DTC-with-time & DTM-with-time paths), `baseline`/`baseline_flag`, `study_day` with a pinned-domain join, `join_adsl`, `merge_adsl`, `whereclauses`, `first_date`/`last_date`/`count_events`, `pick`, `derive_summary_records`/`derive_locf_records`/`derive_param`, `atoxgr`, `transform`, `nodup`, `inspect`, `validate`, frame-kind `@derivation`, multi-column `flag(criteria="exists")` |
+| `assign`, `case_when`, `derivation`, `recode`, `keep`, `source`, `ae_aerel`, `notsubmitted`; `duration` (numeric & ISO paths); `study_day` (in-frame `ref_col=`); `seq`; `select`; `merge`/`lookup`; SDTM `group_by`; `multiple_responses` | `date` (DTC paths: a check of the raw layout; DTM-with-time path), `baseline`/`baseline_flag`, `study_day` with a pinned-domain join, `join_adsl`, `merge_adsl`, `whereclauses`, `first_date`/`last_date`/`count_events`, `pick`, `derive_summary_records`/`derive_locf_records`/`derive_param`, `atoxgr`, `transform`, `nodup`, `inspect`, `validate`, frame-kind `@derivation`, multi-column `flag(criteria="exists")` |
 
 Use `.explain()` to print the Polars logical plan without materialising, and
 `.inspect()` to force one checkpoint and log schema/shape/head.
@@ -322,9 +322,10 @@ print(dm.select("STUDYID", "DOMAIN", "USUBJID", "SEX", "RACE", "ARMCD", "RFSTDTC
 
 ### 4.2 Spec-driven DM pipeline
 
-Put the derivation logic in `define.yaml`. The spec path accepts both canonical
-and legacy algorithm names (the registry maps them onto the same verbs), so an
-existing define.yaml keeps working:
+Put the derivation logic in `define.yaml`. The `algorithm:` value is the verb
+name, and the keys are its keyword arguments (ADR-0008). `from_spec` refuses an
+old spec name (`assign_ct`, `callable`, ...) and names the migration: run
+`fleet migrate --spec <define.yaml> --write` to rewrite an old define.yaml.
 
 <!-- docs:no-run -->
 
@@ -591,8 +592,10 @@ adae = (
     ae.adam.occds.merge(_adsl_lookup, on="USUBJID")
     .assign("STUDYID", value="CDISCPILOT01")
     .source("USUBJID", "AETERM", "AESTDTC", "AEENDTC", "AESEV", "AESER", "AEREL", "AEOUT", "AEACN")
-    .date("ASTDT", source="AESTDTC")
-    .date("AENDT", source="AEENDTC")
+    # Partial dates as in admiral ad_adae.R: the start gets the first day but not
+    # before TRTSDT, the end gets the last day. The SAP decides the rule.
+    .date("ASTDT", source="AESTDTC", min_date="TRTSDT")
+    .date("AENDT", source="AEENDTC", impute="last")
     .duration("ADY", start="TRTSDT", end="ASTDT")
     # OCCDS-specific verbs — same chain; the SAP decides the window after the last dose
     .treatment_emergent(
@@ -1320,9 +1323,12 @@ uv run fleet init rules --force
 fetches **all** conformance rules for that IG from the CDISC Library API, and writes one
 YAML file per domain into `metadata/sdtm/rules/` and `metadata/adam/rules/`.
 
-Each YAML file contains the rule's CORE ID, description, check logic, scope, severity, and
-citations. Commit these files to VCS — they serve as a **permanent, version-locked audit
-trail** of the exact rules that were in scope for the study at the time of validation.
+Each YAML file contains the rule's CORE ID, description, check logic, scope and citations.
+The files are a **reference copy** for reviewers. Validation does not read them: the CORE
+engine runs the rules bundled in its own release. So the engine version fixes the rules
+that a study is validated against. Pin it with `fleet install-engine --version <tag>`, or
+with `validation.engine_path` in `study_config.yaml` (see 11.1 and 11.2). The
+`fleet validate` report prints the engine version.
 
 ### 11.6 Custom validation rules
 
@@ -1792,7 +1798,7 @@ fleet derivation add BMI --dataset ADVS --kind param
 - name: AGEGR1
   label: Pooled Age Group 1
   derivation:
-    algorithm: callable
+    algorithm: derivation
     callable: examples.cdiscpilot01.adam.derivations.AGEGR1
 ```
 

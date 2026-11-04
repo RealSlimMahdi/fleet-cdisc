@@ -352,8 +352,8 @@ def _append_lineage_nodes(ns: Any, drv: Any) -> Any:
 
     Called from ``_apply_derivation()`` after ``_materialise_then()``, because
     those code paths bypass ``_chain()`` and therefore miss ``record_lineage()``.
-    The node's ``spec`` is set to an ``algorithm: callable`` block referencing
-    the derivation's dotted path, so ``to_spec_yaml()`` round-trips it.
+    The node's ``spec`` is set to an ``algorithm: derivation`` block whose
+    ``callable:`` is the derivation's dotted path, so ``to_spec_yaml()`` round-trips it.
 
     Args:
         ns:  The namespace instance (already materialised).

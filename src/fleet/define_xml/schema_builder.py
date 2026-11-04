@@ -81,7 +81,7 @@ def build_schema(schema_path: str | Path = SCHEMA_PATH) -> dict[str, Any]:
         "description": (
             "Dotted Python module imported by from_spec() before execution so "
             "that its @derivation / register_transform callables are available "
-            "(removes the import-order footgun for `algorithm: callable`)."
+            "(removes the import-order footgun for `algorithm: derivation` with `callable:`)."
         ),
     }
     schema["properties"] = properties

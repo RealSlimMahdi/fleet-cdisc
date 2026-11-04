@@ -388,7 +388,10 @@ def _run_init_rules(args: argparse.Namespace) -> None:
                 print(f"Warning: {exc}")
 
     print()
-    print("Rules cached. Commit to VCS for a permanent audit trail.")
+    print(
+        "Rules cached for reference. CORE runs its own rules; "
+        "pin the engine with fleet install-engine --version."
+    )
 
 
 def _run_init_ct_pipeline(args: argparse.Namespace) -> None:

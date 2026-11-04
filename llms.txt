@@ -255,6 +255,26 @@ dm = (
     .date("RFSTDTC", source="first_dose_date")
     .date("RFENDTC", source="last_dose_date")
     .date("RFICDTC", source="informed_consent_date")
+    # Only DM variables, in SDTMIG order: the raw columns are not written to dm.json.
+    .keep(
+        "STUDYID",
+        "DOMAIN",
+        "USUBJID",
+        "SUBJID",
+        "RFSTDTC",
+        "RFENDTC",
+        "RFICDTC",
+        "SITEID",
+        "AGE",
+        "AGEU",
+        "SEX",
+        "RACE",
+        "ETHNIC",
+        "ARMCD",
+        "ARM",
+        "ACTARMCD",
+        "ACTARM",
+    )
     .to_frame()
 )
 print(f"\n── 2a. SDTM DM : {dm.shape[0]} subjects × {dm.shape[1]} variables")
@@ -856,9 +876,10 @@ adae = (
     .source("AEREL")
     .source("AEOUT")
     .source("AEACN")
-    # admiral: derive_vars_dt
-    .date("ASTDT", source="AESTDTC")
-    .date("AENDT", source="AEENDTC")
+    # admiral: derive_vars_dt (ad_adae.R: partial start to the first day but not
+    # before TRTSDT, partial end to the last day; the SAP decides the rule)
+    .date("ASTDT", source="AESTDTC", min_date="TRTSDT")
+    .date("AENDT", source="AEENDTC", impute="last")
     .duration("ADY", start="TRTSDT", end="ASTDT")
     .to_frame()
     .adam.occds.treatment_emergent(  # admiral: derive_var_trtemfl

@@ -47,8 +47,9 @@ print(dm)
 ```
 
 `assign` is the one assignment verb: `source=` copies a column, `value=`
-hardcodes a literal. All derivations accumulate lazily and collapse into a
-single optimized Polars pass at `.to_frame()`.
+hardcodes a literal. Most verbs append to one lazy plan, and Polars runs it at
+`.to_frame()`. `date` to a DTC variable first reads a few rows to check the raw
+date layout.
 
 !!! tip "More zero-setup wins"
     The Trial Design domains work fully offline too — SDTMIG 3.4 structures
@@ -68,7 +69,7 @@ CDISC_API_KEY=your-key-here
 Then bootstrap typed codelist constants for your study's domains:
 
 ```bash
-fleet add-ct --domains DM,AE,VS,EX --output codelists.py
+uv run fleet add-ct --domains DM,AE,VS,EX --output codelists.py
 ```
 
 This queries the **SDTM Implementation Guide** to discover every codelist referenced by variables in those domains, downloads the term definitions from the CDISC Library, and generates a typed Python module with IDE auto-completion. Now the same pipeline validates and recodes against real CT:
@@ -193,14 +194,15 @@ It creates the folder tree, queries the CDISC Library IG to generate
 
 ```bash
 # Step 1 — create study_config.yaml + directory structure
-fleet init cfg --study-id MYSTUDY01 --company "Acme Pharma" \
+uv run fleet init cfg --study-id MYSTUDY01 --company "Acme Pharma" \
   --domains DM,AE,VS,EX --adam-datasets ADSL,ADVS --root ./studies/MYSTUDY01
+cd studies/MYSTUDY01
 
 # Step 2 — generate define.yaml from the CDISC Library IG
-fleet init define
+uv run fleet init define
 
 # Step 3 — generate codelists.py from define.yaml codelist references
-fleet init ct
+uv run fleet init ct
 ```
 
 See the [CLI Reference](cli.md) for full argument details and standalone
