@@ -633,7 +633,13 @@ class TestVerbsListing:
 """)
         v = df.adam.metabolic.verbs()
         own = v.filter(pl.col("origin") == "adam.metabolic")["verb"].to_list()
-        assert own == ["body_fat_pct", "visceral_fat_flag", "waist_height_ratio", "waist_hip_ratio"]
+        assert own == [
+            "bmi_category_adult",
+            "body_fat_pct",
+            "visceral_fat_flag",
+            "waist_height_ratio",
+            "waist_hip_ratio",
+        ]
         origins = set(v["origin"].to_list())
         assert origins == {"core", "adam", "adam.metabolic"}
         assert v.filter(pl.col("verb") == "derivation")["origin"][0] == "core"
