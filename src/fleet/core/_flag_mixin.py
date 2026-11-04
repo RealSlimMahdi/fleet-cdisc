@@ -136,7 +136,12 @@ class FlagCriterionMixin:
                 and ``"before"``/``"after"``.  On a tie among candidates,
                 ``"last"`` takes the last input record and ``"first"`` the
                 first (SAS ``LAST.``/``FIRST.``); add a sequence variable
-                to remove the dependence on input order.
+                to remove the dependence on input order.  For
+                ``"first"``/``"last"`` a missing value sorts last in each
+                key, as admiral (ADR-0020): ``"last"`` takes a record with a
+                missing key, and ``"first"`` takes one only when every
+                candidate misses it.  SAS sorts a missing value first, so a
+                QC program with PROC SORT differs on such a group.
             value_col: Value column required for ``"max"``/``"min"``.
             where: Optional pre-filter — only matching rows are candidates;
                 rows that fail it take no part, even on a tie.
@@ -170,6 +175,10 @@ class FlagCriterionMixin:
             DerivationError: When a mode-required parameter is missing,
                 or a bare-identifier *criteria* matches neither a
                 keyword nor a column.
+
+        References:
+            admiral ``derive_var_extreme_flag`` (pharmaverse): the order of
+            ``"first"``/``"last"``, a missing value last in each key (ADR-0020).
 
         Examples:
             First observation per group::
@@ -334,7 +343,9 @@ class FlagCriterionMixin:
         Args:
             target: Name of the output flag column.
             order_by: Sort column(s) defining "first" within each group.
-                A tie goes to the first input record.
+                A tie goes to the first input record.  A missing value sorts
+                last, as admiral: it is first only when every candidate
+                misses it.
             by: Partition columns (default ``["USUBJID"]``).
             where: Optional pre-filter — only matching rows are candidates.
             flag_all: Flag every tied extreme record instead of one.
@@ -382,7 +393,8 @@ class FlagCriterionMixin:
         Args:
             target: Name of the output flag column.
             order_by: Sort column(s) defining "last" within each group.
-                A tie goes to the last input record.
+                A tie goes to the last input record.  A missing value sorts
+                last, as admiral, so a record with a missing key is last.
             by: Partition columns (default ``["USUBJID"]``).
             where: Optional pre-filter — only matching rows are candidates.
             flag_all: Flag every tied extreme record instead of one.
@@ -627,33 +639,45 @@ class FlagCriterionMixin:
         flag_value,
         false_lit,
     ) -> Self:
-        """Handle first/last rank-based flag criteria (pure window exprs)."""
+        """Handle first/last rank-based flag criteria (pure window exprs).
+
+        The order is admiral's (``dplyr::arrange``): ascending on each key,
+        a missing value last, then input order.  ``"first"`` takes the first
+        record of that order and ``"last"`` the last one, so a record with a
+        missing key is the last record, and it is first only when every
+        candidate of the group misses that key.
+        """
         if not order_cols:
             raise DerivationError(f"flag criteria='{criteria_lower}' requires order_by.")
+        # "last" reads admiral's order backwards: descending, so missing values come first.
         descending = criteria_lower == "last"
-        null_mask = pl.all_horizontal([pl.col(c).is_not_null() for c in order_cols])
-        eligible = null_mask if where_expr is None else (where_expr & null_mask)
+        eligible = pl.lit(True) if where_expr is None else where_expr.fill_null(False)
+
+        def ordered(expr: pl.Expr) -> pl.Expr:
+            # is_null() before each key puts a missing value last: Polars 1.x ignores
+            # nulls_last when a window order_by has more than one key.
+            keys = [
+                k
+                for i, c in enumerate(order_cols)
+                for k in (pl.col(c).is_null().alias(f"__null_{i}"), pl.col(c))
+            ]
+            return expr.over(
+                grps,
+                order_by=[*keys, pl.int_range(pl.len()).alias("__tie")],
+                descending=descending,
+            )
 
         if flag_all:
-            if len(order_cols) == 1:
-                val_expr = pl.col(order_cols[0])
-            else:
-                val_expr = pl.struct(order_cols)
-            candidate = pl.when(eligible).then(val_expr)
-            extreme = candidate.max().over(grps) if descending else candidate.min().over(grps)
-            row_cond = eligible & (val_expr == extreme)
-            expr = pl.when(row_cond).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
-            return self._chain(expr, verb="flag")
-
-        # Records that fail `where` take no part; a tie goes to the last (first) input row.
-        position = pl.int_range(pl.len())
-        winner = pl.when(eligible).then(position).otherwise(None).min()
-        row_cond = ((position == winner) & eligible).over(
-            grps,
-            order_by=[*(pl.col(c) for c in order_cols), pl.int_range(pl.len()).alias("__flag_tie")],
-            descending=descending,
-            nulls_last=True,
-        )
+            # Every candidate whose keys equal the winner's, a missing value equal to a missing one.
+            row_cond = eligible & pl.all_horizontal(
+                pl.col(c).eq_missing(ordered(pl.col(c).filter(eligible).first()))
+                for c in order_cols
+            )
+        else:
+            # Records that fail `where` take no part; a tie goes to the last (first) input row.
+            position = pl.int_range(pl.len())
+            winner = pl.when(eligible).then(position).otherwise(None).min()
+            row_cond = ordered((position == winner) & eligible)
         expr = pl.when(row_cond).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
         return self._chain(expr, verb="flag")
 
