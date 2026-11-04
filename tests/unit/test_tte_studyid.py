@@ -103,5 +103,5 @@ def test_join_adsl_after_param_adds_treatment() -> None:
 
 def test_join_adsl_of_a_column_on_the_frame_raises() -> None:
     ns = _chain(pl.from_repr(ADSL), retain="censor_at_start")
-    with pytest.raises(DerivationError, match="already on the frame"):
+    with pytest.raises(DerivationError, match="on both sides of the join"):
         ns.join_adsl("STUDYID")
