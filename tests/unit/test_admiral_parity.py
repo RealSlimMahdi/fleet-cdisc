@@ -374,28 +374,31 @@ class TestDeriveSummaryRecords:
 
 
 class TestDeriveLOCFRecords:
-    def test_forward_fill(self):
+    def test_update_fills_in_place_with_dtype(self):
         df = pl.from_repr("""\
-┌─────────┬─────────┬───────┬────────────┐
-│ USUBJID ┆ PARAMCD ┆ AVAL  ┆ ADT        │
-│ ---     ┆ ---     ┆ ---   ┆ ---        │
-│ str     ┆ str     ┆ f64   ┆ str        │
-╞═════════╪═════════╪═══════╪════════════╡
-│ 01      ┆ SBP     ┆ 120.0 ┆ 2014-01-01 │
-│ 01      ┆ SBP     ┆ null  ┆ 2014-01-02 │
-│ 01      ┆ SBP     ┆ null  ┆ 2014-01-03 │
-│ 02      ┆ SBP     ┆ 110.0 ┆ 2014-01-01 │
-│ 02      ┆ SBP     ┆ null  ┆ 2014-01-02 │
-└─────────┴─────────┴───────┴────────────┘
+┌─────────┬─────────┬───────┬─────────┐
+│ USUBJID ┆ PARAMCD ┆ AVAL  ┆ AVISITN │
+│ ---     ┆ ---     ┆ ---   ┆ ---     │
+│ str     ┆ str     ┆ f64   ┆ i64     │
+╞═════════╪═════════╪═══════╪═════════╡
+│ 01      ┆ SBP     ┆ 120.0 ┆ 1       │
+│ 01      ┆ SBP     ┆ null  ┆ 2       │
+│ 01      ┆ SBP     ┆ null  ┆ 3       │
+│ 02      ┆ SBP     ┆ 110.0 ┆ 1       │
+│ 02      ┆ SBP     ┆ null  ┆ 2       │
+└─────────┴─────────┴───────┴─────────┘
 """)
+        visits = pl.DataFrame({"AVISITN": [1, 2]})
         result = df.adam.derive_locf_records(
+            dataset_ref=visits,
             by=["USUBJID", "PARAMCD"],
-            analysis_var="AVAL",
-            order_by="ADT",
+            order_by="AVISITN",
+            imputation="update",
         ).to_frame()
-        vals = result.sort(["USUBJID", "ADT"])["AVAL"].to_list()
+        out = result.sort(["USUBJID", "AVISITN"])
         # 01: 120, 120 (filled), 120 (filled); 02: 110, 110 (filled)
-        assert vals == [120.0, 120.0, 120.0, 110.0, 110.0]
+        assert out["AVAL"].to_list() == [120.0, 120.0, 120.0, 110.0, 110.0]
+        assert out["DTYPE"].to_list() == [None, "LOCF", "LOCF", None, "LOCF"]
 
 
 class TestDeriveParam:

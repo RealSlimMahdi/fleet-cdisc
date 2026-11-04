@@ -38,6 +38,7 @@ from fleet.adam.tte import AE_EVENT, CensorSource, DEATH_EVENT, LASTALIVE_CENSOR
 
 adsl = pl.DataFrame(
     {
+        "STUDYID": ["S1", "S1", "S1"],
         "USUBJID": ["01", "02", "03"],
         "TRT01P": ["Drug A", "Placebo", "Drug A"],
         "TRTSDT": [date(2023, 1, 1), date(2023, 1, 2), date(2023, 1, 3)],
@@ -113,6 +114,7 @@ adtte_ns = (
         censors=[EOS],
         explain=True,
     )  # ← prints the decision trace below
+    .join_adsl("TRT01P")  # after the last param(): earlier rows would get null
     .aval(unit="days")  # AVAL = ADT − STARTDT + 1, AVALU stamped
     .seq("ASEQ", order_by=["PARAMCD"])
 )
@@ -120,20 +122,22 @@ adtte = adtte_ns.to_frame()
 ```
 
 ```text
-┌─────────┬─────────┬─────────────────────────────┬────────────┬────────────┬──────┬───────────────────┬────────┬──────────┬────────┬───────┬───────┬──────┐
-│ USUBJID ┆ PARAMCD ┆ PARAM                       ┆ STARTDT    ┆ ADT        ┆ CNSR ┆ EVNTDESC          ┆ SRCDOM ┆ SRCVAR   ┆ SRCSEQ ┆ AVAL  ┆ AVALU ┆ ASEQ │
-╞═════════╪═════════╪═════════════════════════════╪════════════╪════════════╪══════╪═══════════════════╪════════╪══════════╪════════╪═══════╪═══════╪══════╡
-│ 01      ┆ OS      ┆ Overall Survival            ┆ 2023-01-01 ┆ 2023-03-01 ┆ 0    ┆ DEATH             ┆ ADSL   ┆ DTHDT    ┆ null   ┆ 60.0  ┆ DAYS  ┆ 1    │
-│ 02      ┆ OS      ┆ Overall Survival            ┆ 2023-01-02 ┆ 2023-06-30 ┆ 1    ┆ ALIVE             ┆ ADSL   ┆ LSTALVDT ┆ null   ┆ 180.0 ┆ DAYS  ┆ 1    │
-│ 03      ┆ OS      ┆ Overall Survival            ┆ 2023-01-03 ┆ 2023-01-03 ┆ 1    ┆ NO EVENT OBSERVED ┆ ADSL   ┆ TRTSDT   ┆ null   ┆ 1.0   ┆ DAYS  ┆ 1    │
-│ 01      ┆ TTAE    ┆ Time to First Adverse Event ┆ 2023-01-01 ┆ 2023-01-10 ┆ 0    ┆ ADVERSE EVENT     ┆ ADAE   ┆ ASTDT    ┆ 1      ┆ 10.0  ┆ DAYS  ┆ 2    │
-│ 02      ┆ TTAE    ┆ Time to First Adverse Event ┆ 2023-01-02 ┆ 2023-02-05 ┆ 0    ┆ ADVERSE EVENT     ┆ ADAE   ┆ ASTDT    ┆ 1      ┆ 35.0  ┆ DAYS  ┆ 2    │
-│ 03      ┆ TTAE    ┆ Time to First Adverse Event ┆ 2023-01-03 ┆ 2023-02-01 ┆ 1    ┆ END OF STUDY      ┆ ADSL   ┆ EOSDT    ┆ null   ┆ 30.0  ┆ DAYS  ┆ 2    │
-└─────────┴─────────┴─────────────────────────────┴────────────┴────────────┴──────┴───────────────────┴────────┴──────────┴────────┴───────┴───────┴──────┘
+┌─────────┬─────────┬─────────┬─────────────────────────────┬────────────┬────────────┬──────┬───────────────────┬────────┬──────────┬────────┬───────┬───────┬─────────┬──────┐
+│ STUDYID ┆ USUBJID ┆ PARAMCD ┆ PARAM                       ┆ STARTDT    ┆ ADT        ┆ CNSR ┆ EVNTDESC          ┆ SRCDOM ┆ SRCVAR   ┆ SRCSEQ ┆ AVAL  ┆ AVALU ┆ TRT01P  ┆ ASEQ │
+╞═════════╪═════════╪═════════╪═════════════════════════════╪════════════╪════════════╪══════╪═══════════════════╪════════╪══════════╪════════╪═══════╪═══════╪═════════╪══════╡
+│ S1      ┆ 01      ┆ OS      ┆ Overall Survival            ┆ 2023-01-01 ┆ 2023-03-01 ┆ 0    ┆ DEATH             ┆ ADSL   ┆ DTHDT    ┆ null   ┆ 60.0  ┆ DAYS  ┆ Drug A  ┆ 1    │
+│ S1      ┆ 02      ┆ OS      ┆ Overall Survival            ┆ 2023-01-02 ┆ 2023-06-30 ┆ 1    ┆ ALIVE             ┆ ADSL   ┆ LSTALVDT ┆ null   ┆ 180.0 ┆ DAYS  ┆ Placebo ┆ 1    │
+│ S1      ┆ 03      ┆ OS      ┆ Overall Survival            ┆ 2023-01-03 ┆ 2023-01-03 ┆ 1    ┆ NO EVENT OBSERVED ┆ ADSL   ┆ TRTSDT   ┆ null   ┆ 1.0   ┆ DAYS  ┆ Drug A  ┆ 1    │
+│ S1      ┆ 01      ┆ TTAE    ┆ Time to First Adverse Event ┆ 2023-01-01 ┆ 2023-01-10 ┆ 0    ┆ ADVERSE EVENT     ┆ ADAE   ┆ ASTDT    ┆ 1      ┆ 10.0  ┆ DAYS  ┆ Drug A  ┆ 2    │
+│ S1      ┆ 02      ┆ TTAE    ┆ Time to First Adverse Event ┆ 2023-01-02 ┆ 2023-02-05 ┆ 0    ┆ ADVERSE EVENT     ┆ ADAE   ┆ ASTDT    ┆ 1      ┆ 35.0  ┆ DAYS  ┆ Placebo ┆ 2    │
+│ S1      ┆ 03      ┆ TTAE    ┆ Time to First Adverse Event ┆ 2023-01-03 ┆ 2023-02-01 ┆ 1    ┆ END OF STUDY      ┆ ADSL   ┆ EOSDT    ┆ null   ┆ 30.0  ┆ DAYS  ┆ Drug A  ┆ 2    │
+└─────────┴─────────┴─────────┴─────────────────────────────┴────────────┴────────────┴──────┴───────────────────┴────────┴──────────┴────────┴───────┴───────┴─────────┴──────┘
 ```
 
 Worth noticing:
 
+- STUDYID comes from ADSL on every row. Other ADSL variables, such as
+  TRT01P, come from `.join_adsl()` after the last `.param()`.
 - Subject 01's TTAE picked the **earlier** AE, with `order=["AESEQ"]`
   breaking same-date ties deterministically (`SRCSEQ = 1`).
 - Subject 03 survived the OS derivation thanks to

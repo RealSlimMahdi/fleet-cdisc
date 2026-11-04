@@ -618,4 +618,14 @@ def select_tte(
     rows = rows.rename({"__startdt__": start_name, _ADT: adt_name, _CNSR: "CNSR"}).drop(
         _KIND, _SRC_IDX, "__floored__"
     )
+    if "STUDYID" in universe.columns and "STUDYID" not in rows.columns:
+        study = universe.select(subject_keys + ["STUDYID"]).unique()
+        if study.select(subject_keys).is_duplicated().any():
+            raise DerivationError(
+                f"select_tte(): a subject key {subject_keys} has two STUDYID values in ADSL. "
+                'Give subject_keys=["STUDYID", "USUBJID"].'
+            )
+        rows = rows.join(study, on=subject_keys, how="left", nulls_equal=True).select(
+            "STUDYID", pl.exclude("STUDYID")
+        )
     return rows, trace

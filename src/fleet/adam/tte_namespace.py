@@ -84,6 +84,10 @@ class TTENamespace(SharedADaMVerbsMixin):
         derived rows (the base frame is the subject universe, not output
         rows); subsequent calls append, so one chain builds the whole ADTTE.
 
+        STUDYID is carried from ADSL as the first column. Other ADSL
+        variables come from ``join_adsl()`` after the last ``param()``: a
+        join between two ``param()`` calls leaves null on the later rows.
+
         Args:
             paramcd: PARAMCD for the new parameter (may be an expression
                 string when *by* is used, e.g. ``'"TTAE" + pl.col("AEDECOD")'``

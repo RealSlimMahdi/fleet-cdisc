@@ -184,7 +184,10 @@ class TestStableSorts:
             .rename({"AEDECOD": "PARAMCD", "AESTDTC": "ADT"})
             .with_columns(pl.col("ROWID").cast(pl.Float64).alias("AVAL"))
         )
-        result = df.adam.derive_locf_records(by=["USUBJID", "PARAMCD"]).to_frame()
+        visits = df.select("USUBJID", "PARAMCD", "ADT").unique()
+        result = df.adam.derive_locf_records(
+            by=["USUBJID", "PARAMCD"], dataset_ref=visits, order_by="ADT"
+        ).to_frame()
         expected = df.sort(["USUBJID", "PARAMCD", "ADT", "ROWID"])
         assert result["ROWID"].to_list() == expected["ROWID"].to_list()
 

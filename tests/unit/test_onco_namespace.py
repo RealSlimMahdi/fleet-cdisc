@@ -19,6 +19,9 @@ _RECIST_MAPPING = [
     ("UNKNOWN", None),
 ]
 
+# The rank tests have no dates: min_sd_days=0 does not read the date columns.
+NO_SD_MINIMUM = {"date_col": "ADT", "reference_date": "RANDDT", "min_sd_days": 0}
+
 
 @pytest.fixture
 def onco_frame():
@@ -202,9 +205,10 @@ class TestBestOverallResponse:
     """
     Test 3: Best Overall Response per subject group.
 
-    Admiral derives BOR as the response with the lowest numeric rank (most
-    favourable).  Multi-subject cases are crucial: each subject must receive
-    its own BOR independently.
+    The verb takes the response with the lowest numeric rank (most
+    favourable), as admiralonco derive_param_bor. These rows test the rank
+    only, so the SD minimum is off (NO_SD_MINIMUM). Multi-subject cases are
+    crucial: each subject must receive its own BOR independently.
     """
 
     def test_best_response_is_pr(self):
@@ -220,7 +224,7 @@ class TestBestOverallResponse:
 └─────────┴──────────┘
 """)
         result = df.adam.onco.best_overall_response(
-            "BOR", source="OVRLRESP", by=["USUBJID"]
+            "BOR", **NO_SD_MINIMUM, source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
         # PR is rank 2, SD=3, PD=5 → best is PR
         assert all(r == "PR" for r in result["BOR"].to_list())
@@ -237,7 +241,7 @@ class TestBestOverallResponse:
 └─────────┴──────────┘
 """)
         result = df.adam.onco.best_overall_response(
-            "BOR", source="OVRLRESP", by=["USUBJID"]
+            "BOR", **NO_SD_MINIMUM, source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
         assert all(r == "NE" for r in result["BOR"].to_list())
 
@@ -256,7 +260,7 @@ class TestBestOverallResponse:
 └──────────────┴─────────────┴──────────┘
 """)
         result = df.adam.onco.best_overall_response(
-            "BOR", source="OVRLRESP", by=["USUBJID"]
+            "BOR", **NO_SD_MINIMUM, source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
         bor = dict(zip(result["USUBJID"].to_list(), result["BOR"].to_list()))
         assert bor["01-701-1015"] == "CR"  # CR beats SD
@@ -274,7 +278,7 @@ class TestBestOverallResponse:
 └─────────┴──────────┘
 """)
         result = df.adam.onco.best_overall_response(
-            "BOR", source="OVRLRESP", by=["USUBJID"]
+            "BOR", **NO_SD_MINIMUM, source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
         assert all(r == "PD" for r in result["BOR"].to_list())
 
@@ -435,7 +439,7 @@ class TestChaining:
         result = (
             df.adam.onco.aval_resp("AVAL", source="OVRLRESP")
             .tumor_response_flag("RSPFL", source="OVRLRESP")
-            .best_overall_response("BOR", source="OVRLRESP", by=["USUBJID"])
+            .best_overall_response("BOR", **NO_SD_MINIMUM, source="OVRLRESP", by=["USUBJID"])
             .to_frame()
         )
         assert "AVAL" in result.columns
@@ -468,7 +472,7 @@ class TestOncoProgressionAmbiguity:
 └─────────┴──────────┴────────────┘
 """)
         result = df.adam.onco.best_overall_response(
-            "BOR", source="OVRLRESP", by=["USUBJID"]
+            "BOR", **NO_SD_MINIMUM, source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
         assert all(v == "NE" for v in result["BOR"].to_list())
 
@@ -486,7 +490,7 @@ class TestOncoProgressionAmbiguity:
 └─────────┴──────────┴────────────┘
 """)
         result = df.adam.onco.best_overall_response(
-            "BOR", source="OVRLRESP", by=["USUBJID"]
+            "BOR", **NO_SD_MINIMUM, source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
         # BOR should be CR (best non-null response)
         bor_vals = result["BOR"].drop_nulls().unique().to_list()
@@ -505,7 +509,7 @@ class TestOncoProgressionAmbiguity:
 └─────────┴──────────┴────────────┘
 """)
         result = df.adam.onco.best_overall_response(
-            "BOR", source="OVRLRESP", by=["USUBJID"]
+            "BOR", **NO_SD_MINIMUM, source="OVRLRESP", by=["USUBJID"]
         ).to_frame()
         bor_vals = result["BOR"].unique().to_list()
         assert "CR" in bor_vals
