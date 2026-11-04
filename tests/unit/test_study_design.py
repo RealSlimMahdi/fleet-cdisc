@@ -259,7 +259,7 @@ class TestCtgovSeeding:
                         "allocation": "RANDOMIZED",
                         "maskingInfo": {"masking": "DOUBLE"},
                     },
-                    "enrollmentInfo": {"count": 300},
+                    "enrollmentInfo": {"count": 300, "type": "ACTUAL"},
                 },
                 "eligibilityModule": {
                     "minimumAge": "50 Years",
@@ -288,6 +288,7 @@ class TestCtgovSeeding:
         assert by_code[("HLTSUBJI", 1)] == "N"
         assert by_code[("SENDTC", 1)] == "2015-06-30"
         assert by_code[("NARMS", 1)] == "2"
+        assert by_code[("ACTSUB", 1)] == "300"
         assert by_code[("OUTMSPRI", 2)] == "CIBIC+"
         assert by_code[("FCNTRY", 1)] == "United States"
 

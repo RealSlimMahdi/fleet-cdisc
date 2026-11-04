@@ -337,9 +337,14 @@ TrialParameter(
 )
 ```
 
+A TSVAL over 200 characters is split at a word boundary into TSVAL,
+TSVAL1, ..., TSVALn (SDTMIG 3.4 TS assumption 8). TSPARM holds 40
+characters at most.
+
 `TrialParameters.from_ctgov("NCT00048217")` seeds the registry-derivable
 parameters (REGID, TITLE, TPHASE, STYPE, INTMODEL, RANDOM, TBLIND, NARMS,
-PLANSUB, AGEMIN/AGEMAX, SEXPOP, HLTSUBJI, SSTDTC/SENDTC, SPONSOR, OUTMSPRI,
+PLANSUB (estimated enrollment) or ACTSUB (actual enrollment), AGEMIN/AGEMAX,
+SEXPOP, HLTSUBJI, SSTDTC/SENDTC, SPONSOR, OUTMSPRI,
 FCNTRY) from the ClinicalTrials.gov v2 API. It is a starting point —
 dictionary-bound parameters are deliberately not guessed.
 

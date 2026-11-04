@@ -172,7 +172,7 @@ class TrialParameter(BaseModel):
 
     tsseq: int = Field(default=1, ge=1)
     tsparmcd: str = Field(min_length=1, max_length=8, pattern=r"^[A-Z0-9_]+$")
-    tsparm: str = Field(min_length=1, max_length=200)
+    tsparm: str = Field(min_length=1, max_length=40)
     tsval: str = ""
     tsvalnf: str = ""
     tsvalcd: str = ""
@@ -251,6 +251,18 @@ def _rows_to_polars(rows: list[BaseModel]) -> pl.DataFrame:
         for row in rows
     ]
     return pl.DataFrame(dicts)
+
+
+def _split_tsval(text: str, size: int = 200) -> list[str]:
+    """Split *text* into pieces of at most *size* characters at a word boundary."""
+    pieces: list[str] = []
+    while len(text) > size:
+        cut = text.rfind(" ", 1, size + 1)
+        cut = cut if cut > 0 else size
+        pieces.append(text[:cut])
+        text = text[cut:]
+    pieces.append(text)
+    return pieces
 
 
 class TrialElements(BaseModel):
@@ -489,6 +501,11 @@ class TrialParameters(BaseModel):
     def to_polars(self) -> pl.DataFrame:
         """Convert validated parameters to a Polars DataFrame with SDTM names.
 
+        A TSVAL over 200 characters is split at a word boundary into TSVAL,
+        TSVAL1, ..., TSVALn (SDTMIG 3.4 TS assumption 8).  The space goes to
+        the start of the next piece, so the pieces joined give the source
+        text.  A word over 200 characters is cut at 200.
+
         Returns:
             pl.DataFrame: DataFrame with columns named per CDISC SDTM (e.g.
                 ``TSPARMCD``, ``TSPARM``, ``TSVAL``).
@@ -499,7 +516,19 @@ class TrialParameters(BaseModel):
                 ts = TrialParameters(parameters=[...])
                 df = ts.to_polars()
         """
-        return _rows_to_polars(self.parameters)
+        df = _rows_to_polars(self.parameters)
+        pieces = [_split_tsval(p.tsval) for p in self.parameters]
+        width = max((len(p) for p in pieces), default=1)
+        if width == 1:
+            return df
+        split = pl.DataFrame(
+            {
+                ("TSVAL" if i == 0 else f"TSVAL{i}"): [p[i] if i < len(p) else "" for p in pieces]
+                for i in range(width)
+            }
+        )
+        at = df.columns.index("TSVAL")
+        return df.select(df.columns[:at]).hstack(split).hstack(df.select(df.columns[at + 1 :]))
 
 
 class TrialCriteria(BaseModel):
@@ -640,7 +669,14 @@ def _ctgov_to_parameters(study: dict) -> list[TrialParameter]:
     add("TBLIND", "Trial Blinding Schema", _CTGOV_MASKING.get(masking, masking))
     arms = proto.get("armsInterventionsModule", {}).get("armGroups", [])
     add("NARMS", "Planned Number of Arms", len(arms) or None)
-    add("PLANSUB", "Planned Number of Subjects", design.get("enrollmentInfo", {}).get("count"))
+    enrollment = design.get("enrollmentInfo", {})
+    # C66738: PLANSUB is the planned count, ACTSUB the enrolled count; no type, no row.
+    enrollment_parm = {
+        "ESTIMATED": ("PLANSUB", "Planned Number of Subjects"),
+        "ACTUAL": ("ACTSUB", "Actual Number of Subjects"),
+    }.get(enrollment.get("type", ""))
+    if enrollment_parm:
+        add(*enrollment_parm, enrollment.get("count"))
     add("AGEMIN", "Planned Minimum Age of Subjects", _ctgov_age_to_iso(elig.get("minimumAge")))
     add("AGEMAX", "Planned Maximum Age of Subjects", _ctgov_age_to_iso(elig.get("maximumAge")))
     add("SEXPOP", "Sex of Participants", _CTGOV_SEX.get(elig.get("sex", "")))
