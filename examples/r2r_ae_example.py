@@ -91,7 +91,7 @@ print(f"  ae_raw           : {ae_raw.shape[0]:>3} rows × {ae_raw.shape[1]} cols
 
 
 # ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-# ┃  LAYER 1 — SDTM AE: standardise raw AE into submission-ready domain   ┃
+# ┃  LAYER 1 — SDTM AE: standardise raw AE into an SDTM-shaped domain     ┃
 # ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 print("\n━━ Layer 1 · SDTM AE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
@@ -108,6 +108,21 @@ ae = (
     .assign("AEACN", source="ae_action_taken")
     .assign("AEREL", source="ae_relationship")
     .seq("AESEQ", order_by=["AESTDTC"])
+    # Only AE variables, in SDTMIG order: the raw columns are not written to ae.json.
+    .keep(
+        "STUDYID",
+        "DOMAIN",
+        "USUBJID",
+        "AESEQ",
+        "AETERM",
+        "AESEV",
+        "AESER",
+        "AEACN",
+        "AEREL",
+        "AEOUT",
+        "AESTDTC",
+        "AEENDTC",
+    )
     .to_frame()
 )
 
@@ -140,8 +155,10 @@ _adae_base_ns = (
     .source("AEACN")
     .source("TRTA")
     .source("SAFFL")
-    .date("ASTDT", source="AESTDTC")
-    .date("AENDT", source="AEENDTC")
+    # admiral ad_adae.R: partial start to the first day but not before TRTSDT,
+    # partial end to the last day. The SAP decides the rule.
+    .date("ASTDT", source="AESTDTC", min_date="TRTSDT")
+    .date("AENDT", source="AEENDTC", impute="last")
     .duration("ADY", start="TRTSDT", end="ASTDT")
 )
 

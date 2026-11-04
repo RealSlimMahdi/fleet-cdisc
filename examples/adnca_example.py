@@ -355,7 +355,7 @@ print("(Stacking concentration rows [EVID=0] with synthetic dosing rows [EVID=1]
 # admiral: create_single_dose_dataset() / expand dosing records
 # Here we keep the first-dose record per subject (single-dose study).
 ex_records = (
-    pc.group_by("USUBJID")
+    pc.group_by("USUBJID", maintain_order=True)
     .agg(
         [
             pl.col("EXSTDTC").first().alias("PCDTC"),  # reuse PCDTC for dose record
@@ -424,7 +424,9 @@ adppk = (
     .blqfn("BLQFN", conc_col="PCSTRESN", lloq_col="PCLLOQ")
     # ── ASEQ ───────────────────────────────────────────────────────────────────
     # admiral: derive_var_obs_number(new_var = ASEQ, order = exprs(AFRLT, EVID, CMT))
-    .seq("ASEQ", by=["USUBJID"])
+    # The frame is sorted by order_by, so the file has subjects together and the
+    # dose after the pre-dose sample at the same time.
+    .seq("ASEQ", by=["USUBJID"], order_by=["USUBJID", "AFRLT", "EVID", "CMT"])
     .to_frame()
 )
 
