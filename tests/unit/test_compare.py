@@ -33,6 +33,7 @@ from fleet.core.exceptions import FleetError, VerbUsageError
 from tests.helpers import shuffle_rows
 
 NAN = float("nan")
+INF = float("inf")
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -1080,6 +1081,28 @@ class TestTolerances:
         report = compare(b, c, keys="ID", abs_tol=1e9, rel_tol=1e9)
         assert report.is_equal is (not differs)
         assert report.listing.height == (1 if differs else 0)
+
+    @pytest.mark.parametrize(
+        "tolerance", [{}, {"abs_tol": 1.0}, {"rel_tol": 0.01}], ids=["exact", "abs", "rel"]
+    )
+    @pytest.mark.parametrize(
+        "base_value, candidate_value, differs",
+        [
+            (INF, INF, False),
+            (-INF, -INF, False),
+            (INF, 5.0, True),
+            (INF, -INF, True),
+            (5.0, INF, True),
+            (INF, None, True),
+            (INF, NAN, True),
+        ],
+    )
+    def test_infinity_differs_unless_both_are_the_same_infinity(
+        self, tolerance, base_value, candidate_value, differs
+    ):
+        """c1-514: PCHG with BASE 0 is inf; R all.equal(Inf, 5, tolerance=.01) is FALSE."""
+        b, c = _numeric(base_value, candidate_value)
+        assert compare(b, c, keys="ID", **tolerance).is_equal is (not differs)
 
     def test_the_listing_reports_the_values_that_survived_the_tolerance(self):
         b, c = _numeric(10.0, 12.0)

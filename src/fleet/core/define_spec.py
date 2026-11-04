@@ -57,6 +57,7 @@ class VariableEntry(BaseModel):
     predecessor: str | None = None
     codelist: Any = None
     role: str | None = None
+    sdtm_role: str | None = None
     evaluator: str | None = None
     comment: Any = None
     crf_pages: Any = None

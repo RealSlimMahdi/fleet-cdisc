@@ -41,6 +41,7 @@ class FakeEngine:
     """
 
     calls: list[list[str]] = field(default_factory=list)
+    cwds: list[str] = field(default_factory=list)
     datasets: list[list[str]] = field(default_factory=list)
     report: dict | None = None
     custom_report: dict | None = None
@@ -57,6 +58,7 @@ def engine(monkeypatch: pytest.MonkeyPatch) -> FakeEngine:
         if "validate" not in cmd or "--help" in cmd:
             return subprocess.CompletedProcess(cmd, 0, "0.15.0\n", "")
         fake.calls.append(cmd)
+        fake.cwds.append(str(kwargs["cwd"]))
         data_dir = Path(cmd[cmd.index("-d") + 1])
         fake.datasets.append(sorted(p.name for p in data_dir.iterdir()))
         report = fake.custom_report if "-lr" in cmd else fake.report
@@ -129,7 +131,7 @@ class TestSweep:
                 {
                     "core_id": "CORE-000001",
                     "message": "AESTDTC after AEENDTC",
-                    "dataset": "ae.json",
+                    "dataset": "AE.json",
                 }
             ]
         }
@@ -235,8 +237,8 @@ class TestCustomRules:
     def test_findings_of_both_runs_join_in_one_report_with_their_source(
         self, rules_study: Path, engine: FakeEngine, capsys: pytest.CaptureFixture
     ) -> None:
-        engine.report = {"Issue_Details": [_finding("CORE-000001", "ae.json")]}
-        engine.custom_report = {"Issue_Details": [_finding("FLEET-AE-001", "ae.json")]}
+        engine.report = {"Issue_Details": [_finding("CORE-000001", "AE.json")]}
+        engine.custom_report = {"Issue_Details": [_finding("FLEET-AE-001", "AE.json")]}
         report = rules_study / "report.html"
 
         assert _run(["validate", "data/sdtm/ae.parquet", "--report", str(report)]) == 1
@@ -353,3 +355,206 @@ class TestCheck:
         out = capsys.readouterr().out
         assert "[WARN] rules engine" in out
         assert "0 failure(s)" in out
+
+
+# ── Frozen real CORE 0.15.0 reports (c1-842) ────────────────────────────────
+#
+# tests/fixtures/core holds reports the real engine wrote, trimmed to a few rows:
+#   dirty_report.json   DM and AE, official rules: 2 executed (SUCCESS), 3 with findings,
+#                       2 skipped, 2 could not run (TA, TV absent), one study-level finding.
+#   clean_report.json   AE with AESEV filled, custom rule FLEET-AE-001: SUCCESS, no finding.
+#   custom_report.json  AE with one AESEV null, custom rules: FLEET-AE-001 and -004 fire,
+#                       -002 has a bad operator (EXECUTION_ERROR), -003 names AESERR (SKIPPED).
+
+_CORE = Path(__file__).parents[1] / "fixtures" / "core"
+
+
+def _frozen(name: str) -> dict:
+    return json.loads((_CORE / name).read_text(encoding="utf-8"))
+
+
+class TestFrozenCoreReports:
+    def test_the_dirty_report_splits_its_findings_and_drops_rules_that_could_not_run(
+        self,
+    ) -> None:
+        from fleet.validation.official import _split_validation_result
+
+        results = _split_validation_result(_frozen("dirty_report.json"), ["DM", "AE"])
+
+        rules = {name: [i.rule_id for i in r.errors] for name, r in results.items()}
+        assert rules == {
+            "DM": ["CORE-000355"],
+            "AE": ["CORE-000355", "CORE-000701", "CORE-000701"],
+            "STUDY": ["CORE-000739", "CORE-000739"],
+        }
+        assert results["AE"].status == "FAIL"
+        run = results["AE"].rule_runs[0]
+        assert (run.executed, run.skipped) == (5, 2)
+        assert set(run.could_not_run) == {"CORE-000047", "CORE-000140"}
+        assert "Domain TA does not exist" in run.could_not_run["CORE-000047"]
+        assert run.count_line() == (
+            "Rules (engine run, official): 5 executed, 2 skipped, 2 could not run"
+        )
+
+    def test_the_clean_report_passes_with_one_executed_rule(self) -> None:
+        from fleet.validation.official import _split_validation_result
+
+        result = _split_validation_result(_frozen("clean_report.json"), ["AE"])["AE"]
+
+        assert (result.status, result.is_valid, result.rules_executed) == ("PASS", True, 1)
+
+    def test_a_status_spelled_with_a_space_is_the_same_status(self) -> None:
+        """CORE 0.16 writes EXECUTION ERROR and ISSUE REPORTED."""
+        from fleet.validation.official import _split_validation_result
+
+        report = _frozen("dirty_report.json")
+        for row in report["Rules_Report"]:
+            row["status"] = row["status"].replace("_", " ")
+
+        run = _split_validation_result(report, ["DM", "AE"])["AE"].rule_runs[0]
+
+        assert (run.executed, run.skipped, len(run.could_not_run)) == (5, 2, 2)
+
+    def test_the_dirty_report_exits_1(
+        self, study: Path, engine: FakeEngine, capsys: pytest.CaptureFixture
+    ) -> None:
+        engine.report = _frozen("dirty_report.json")
+
+        assert _run(["validate", "data/sdtm"]) == 1
+
+        out = capsys.readouterr().out
+        assert "Rules (engine run, official): 5 executed, 2 skipped, 2 could not run" in out
+        assert "Could not run (official): CORE-000047, CORE-000140" in out
+        assert out.count("Could not run (official)") == 1, "the list is printed once per run"
+        assert "1 passed, 0 with accepted findings, 0 not assessed, 3 failed" in out
+
+    def test_the_clean_report_exits_0(self, study: Path, engine: FakeEngine) -> None:
+        engine.report = _frozen("clean_report.json")
+
+        assert _run(["validate", "data/sdtm"]) == 0
+
+    def test_the_engine_runs_in_its_own_folder(self, study: Path, engine: FakeEngine) -> None:
+        _run(["validate", "data/sdtm"])
+
+        assert engine.cwds == [str((study / "bin").resolve())]
+
+
+class TestCustomRuleProblems:
+    """c1-264: rules that could not run or were not loaded are named apart from findings."""
+
+    @pytest.fixture
+    def rules_study(self, study: Path) -> Path:
+        rules = study / "rules"
+        rules.mkdir()
+        for number in (1, 2, 3, 4, 9):
+            rid = f"FLEET-AE-00{number}"
+            (rules / f"{rid}.yaml").write_text(f"Core:\n  Id: {rid}\n", encoding="utf-8")
+        (rules / "broken.yaml").write_text("Core: {Id: FLEET-AE-005\n  bad: [", encoding="utf-8")
+        (study / "study_config.yaml").write_text(
+            "study_id: S01\nvalidation:\n  engine_path: bin/core\n  custom_rules: rules\n",
+            encoding="utf-8",
+        )
+        return study
+
+    def test_the_cli_counts_and_names_the_rule_problems(
+        self, rules_study: Path, engine: FakeEngine, capsys: pytest.CaptureFixture
+    ) -> None:
+        engine.custom_report = _frozen("custom_report.json")
+
+        assert _run(["validate", "data/sdtm/ae.parquet"]) == 1
+
+        out = capsys.readouterr().out
+        assert (
+            "Rules (engine run, custom): 2 executed, 1 skipped, 1 could not run, 2 not loaded"
+            in out
+        )
+        assert "Could not run (custom): FLEET-AE-002 (Rule contains invalid operator)" in out
+        assert "Not loaded (custom): FLEET-AE-009, broken.yaml" in out
+
+    def test_a_true_finding_is_kept_whatever_its_message_says(
+        self, rules_study: Path, engine: FakeEngine, capsys: pytest.CaptureFixture
+    ) -> None:
+        engine.custom_report = _frozen("custom_report.json")
+
+        _run(["validate", "data/sdtm/ae.parquet"])
+
+        out = capsys.readouterr().out
+        assert "[FLEET-AE-004] (custom) AESEV is empty: the corrective operation failed" in out
+        assert "[FLEET-AE-002]" not in out.split("Rule problems")[0]
+
+    def test_rule_problems_alone_do_not_change_the_exit_code(
+        self, rules_study: Path, engine: FakeEngine
+    ) -> None:
+        report = _frozen("custom_report.json")
+        for key in ("Issue_Details", "Issue_Summary"):
+            report[key] = [i for i in report[key] if i["core_id"] == "FLEET-AE-002"]
+        engine.custom_report = report
+
+        assert _run(["validate", "data/sdtm/ae.parquet"]) == 0
+
+
+class TestRelativePaths:
+    """c1-269: CORE runs in its own folder, so Fleet resolves paths against the user's."""
+
+    def test_a_relative_custom_rules_flag_reaches_the_engine_absolute(
+        self, study: Path, engine: FakeEngine
+    ) -> None:
+        (study / "rules").mkdir()
+
+        _run(["validate", "data/sdtm/ae.parquet", "--custom-rules", "rules"])
+
+        custom = engine.calls[1]
+        assert custom[custom.index("-lr") + 1] == str((study / "rules").resolve())
+
+    def test_a_relative_custom_rules_string_through_the_service_reaches_the_engine_absolute(
+        self, study: Path, engine: FakeEngine
+    ) -> None:
+        from fleet.validation import ValidationService
+
+        (study / "rules").mkdir()
+
+        ValidationService(rules_engine_path=Path("bin/core")).validate_datasets(
+            {"AE": _SUBJECTS}, standard="sdtm", version="3.4", custom_rules="rules"
+        )
+
+        custom = engine.calls[1]
+        assert custom[0] == str((study / "bin" / "core").resolve())
+        assert custom[custom.index("-lr") + 1] == str((study / "rules").resolve())
+
+    def test_a_relative_fleet_rules_engine_reaches_the_engine_absolute(
+        self, study: Path, engine: FakeEngine, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        (study / "study_config.yaml").write_text("study_id: S01\n", encoding="utf-8")
+        monkeypatch.setenv("FLEET_RULES_ENGINE", "bin/core")
+
+        _run(["validate", "data/sdtm/ae.parquet"])
+
+        assert engine.calls[0][0] == str((study / "bin" / "core").resolve())
+
+
+class TestDefineXml:
+    """c1-268: --define passes a Define-XML to CORE (-dxp); never by default."""
+
+    def test_no_define_is_passed_by_default(self, study: Path, engine: FakeEngine) -> None:
+        _run(["validate", "data/sdtm/ae.parquet"])
+
+        assert "-dxp" not in engine.calls[0]
+
+    def test_the_define_flag_reaches_the_engine_absolute_and_the_header(
+        self, study: Path, engine: FakeEngine, capsys: pytest.CaptureFixture
+    ) -> None:
+        (study / "define_sdtm.xml").write_text("<ODM/>", encoding="utf-8")
+
+        assert _run(["validate", "data/sdtm/ae.parquet", "--define", "define_sdtm.xml"]) == 0
+
+        cmd = engine.calls[0]
+        assert cmd[cmd.index("-dxp") + 1] == str((study / "define_sdtm.xml").resolve())
+        assert "Define-XML:   " in capsys.readouterr().out
+
+    def test_a_define_that_does_not_exist_could_not_run(
+        self, study: Path, engine: FakeEngine, capsys: pytest.CaptureFixture
+    ) -> None:
+        assert _run(["validate", "data/sdtm/ae.parquet", "--define", "nowhere.xml"]) == 2
+
+        assert "nowhere.xml" in capsys.readouterr().err
+        assert engine.calls == []

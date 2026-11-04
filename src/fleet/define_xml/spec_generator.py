@@ -40,6 +40,7 @@ from fleet.core.define_spec import (
     load_spec_yaml,
 )
 from fleet.core.exceptions import SpecError
+from fleet.core.oids import item_oid, metadata_version_oid, study_oid
 from fleet.define_xml.semantic_checks import REST_EMPHASIS
 
 _SCHEMA_PATH = Path(__file__).parent / "schemas" / "define_spec_schema.json"
@@ -507,6 +508,20 @@ class DefineSpecGenerator:
             declared.add(_ADAM_CT_OID)
         return declared
 
+    def leaf_hrefs(self) -> dict[str, str]:
+        """Return the ``def:leaf`` href of each dataset, by dataset name.
+
+        Returns:
+            dict[str, str]: Dataset name to href, as the Define-XML writes it.
+
+        Examples:
+            Check that each leaf names a file that exists::
+
+                gen = DefineSpecGenerator("metadata/sdtm/define.yaml")
+                missing = [h for h in gen.leaf_hrefs().values() if not Path("data/sdtm", h).exists()]
+        """
+        return {ds["name"]: self._leaf_href(ds) for ds in self._data.get("datasets") or []}
+
     def _leaf_href(self, ds: dict[str, Any]) -> str:
         """Resolve the ``def:leaf`` href for a dataset.
 
@@ -678,7 +693,7 @@ class DefineSpecGenerator:
     # ------------------------------------------------------------------ #
 
     def _build_study(self, study: dict[str, Any], std_oid: str) -> ET.Element:
-        elem = ET.Element("Study", {"OID": f"STDY.{study['id']}"})
+        elem = ET.Element("Study", {"OID": study_oid(study["id"])})
         gv = ET.SubElement(elem, "GlobalVariables")
         ET.SubElement(gv, "StudyName").text = study["name"]
         ET.SubElement(gv, "StudyDescription").text = study["description"].strip()
@@ -688,7 +703,7 @@ class DefineSpecGenerator:
 
     def _build_metadata_version(self, study: dict[str, Any], std_oid: str) -> ET.Element:
         ig = study["standard"]
-        mdv_oid = f"MDV.{study['id']}.1.{ig}.{study['standard_version']}"
+        mdv_oid = metadata_version_oid(study["id"], ig, study["standard_version"])
         attribs = {
             "OID": mdv_oid,
             "Name": f"{study['id']} {ig} Data Definitions",
@@ -872,6 +887,8 @@ class DefineSpecGenerator:
             }
             if var_name in key_vars:
                 ref_attrs["KeySequence"] = str(key_order[var_name])
+            if var.get("sdtm_role"):
+                ref_attrs["Role"] = var["sdtm_role"]
             # Define-XML 2.1 places MethodOID on the ItemRef (usage site),
             # not on the ItemDef — and only Derived-origin variables carry
             # a computational method (a collected column rename is not a
@@ -1350,14 +1367,7 @@ class DefineSpecGenerator:
     # Helpers                                                              #
     # ------------------------------------------------------------------ #
 
-    @staticmethod
-    def _item_oid(dataset_name: str, var_name: str) -> str:
-        """Build the ItemDef OID ``IT.<DATASET>.<VARIABLE>``.
-
-        Each dataset variable has its own ItemDef, so ADSL.AGE and ADAE.AGE
-        each keep their own type, length, origin and codelist.
-        """
-        return f"IT.{dataset_name}.{var_name}"
+    _item_oid = staticmethod(item_oid)
 
     @staticmethod
     def _to_pretty_xml(root: ET.Element) -> str:

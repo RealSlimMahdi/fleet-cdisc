@@ -117,7 +117,11 @@ def parse_ig_variable(var: dict[str, Any]) -> dict[str, Any]:
     """Parse an IG variable response into define.yaml variable format.
 
     This is the module-level equivalent of
-    ``DefineScaffolder._parse_ig_variable``.
+    ``DefineScaffolder._parse_ig_variable``.  The Library ``role`` of an
+    SDTMIG variable becomes ``sdtm_role:``, the Define-XML ItemRef Role.
+
+    References:
+        ADR 0043; Define-XML 2.1 (ItemRef Role); CORE rule CG0010.
     """
     name = var.get("name", "")
     label = var.get("label", "")
@@ -137,6 +141,9 @@ def parse_ig_variable(var: dict[str, Any]) -> dict[str, Any]:
 
     result["mandatory"] = mandatory
     result["core"] = core
+    if var.get("role"):
+        # Define-XML ItemRef Role; CORE CG0010 reports a define without it (ADR 0043).
+        result["sdtm_role"] = var["role"]
 
     if name in ("STUDYID", "DOMAIN"):
         result["origin"] = "Assigned"

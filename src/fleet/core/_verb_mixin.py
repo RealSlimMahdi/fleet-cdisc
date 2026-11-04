@@ -518,12 +518,15 @@ class SharedVerbsMixin:
         """Materialise the pipeline and write a CDISC Dataset-JSON v1.1 file.
 
         This is a terminal verb — it collects the lazy plan and writes the
-        result.  No further chaining is possible after this call.
+        result.  No further chaining is possible after this call.  After
+        :meth:`from_spec` on a define.yaml, the file gets the define labels,
+        lengths, key sequence and OIDs of the dataset.
 
         Args:
             path: Destination file path (should end in ``.json``).
             domain: Dataset / domain name (e.g. ``"DM"``, ``"ADSL"``).
-            label: Optional human-readable dataset label.
+            label: Optional human-readable dataset label; it wins over
+                the define label.
 
         Returns:
             Path: Path to the written file.
@@ -542,9 +545,15 @@ class SharedVerbsMixin:
                     .to_dataset_json("outputs/dm.json", domain="DM")
                 )
         """
-        from fleet.io.dataset_json import save_dataset_json
+        from fleet.io.dataset_json import metadata_from_define, save_dataset_json
 
-        return save_dataset_json(self.to_frame(), path, domain=domain, label=label)
+        meta: dict[str, Any] = {}
+        source = getattr(self, "_spec_source", None)
+        if source is not None and source[1].upper() == domain.upper():
+            meta = metadata_from_define(source[0], source[1])
+        if label is not None:
+            meta["label"] = label
+        return save_dataset_json(self.to_frame(), path, domain=domain, **meta)
 
     def inspect(self, prefix: str = "DEBUG") -> Self:
         """Materialise the pipeline at this point and log its state.
@@ -2649,7 +2658,11 @@ class SharedVerbsMixin:
                     f"Add it to keep:, or check that dataset '{drv.get('dataset')}' has it."
                 )
 
-        return _flush(ns, len(all_names) + 1)
+        ns = _flush(ns, len(all_names) + 1)
+        if spec.datasets is not None:
+            ns = copy.copy(ns)
+            ns._spec_source = (spec, ds_name)
+        return ns
 
     # ------------------------------------------------------------------ #
     # to_spec_yaml — round-trip: pipeline lineage → define.yaml            #

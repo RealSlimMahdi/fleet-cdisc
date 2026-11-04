@@ -323,6 +323,8 @@ What the options do **not** change:
 - **Nulls and NaN keep their rule.** Null still equals null, NaN still equals
   NaN, and null against NaN — or NaN against a number — still differs, however
   wide the tolerance. A NaN is never *within* a tolerance of a number.
+  Infinity follows R `all.equal`: `inf` equals `inf`, and `inf` against a
+  number or against `-inf` differs in every mode.
 - **Only trailing whitespace is ignored.** `"M "` equals `"M"` when asked;
   `" M"` never does.
 - **The listing shows the values as they are.** A difference that survives the

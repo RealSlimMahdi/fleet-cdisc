@@ -50,6 +50,7 @@ if TYPE_CHECKING:
 
     import polars as pl
 
+    from fleet.core.define_spec import DatasetEntry, DefineSpec
     from fleet.core.study_context import StudyContext
 
 #: Optional-dependency probes for ``fleet doctor`` / ``fleet check``:
@@ -669,7 +670,7 @@ def _run_check_rule(args: argparse.Namespace) -> None:
         # Also print a summary of what was found
         import yaml as _yaml
 
-        with open(rule_path) as f:
+        with open(rule_path, encoding="utf-8") as f:
             rule = _yaml.safe_load(f)
         core_id = rule.get("Core", {}).get("Id", "?")
         rule_type = rule.get("Rule Type", "?")
@@ -820,6 +821,15 @@ def _generate_define_xml(args: argparse.Namespace) -> None:
     gen = DefineSpecGenerator(str(spec), strict=getattr(args, "strict", False))
     gen.generate(str(output), html_preview=not args.no_preview)
     print(f"Generated Define-XML → {output}")
+    ctx = _try_ctx(getattr(args, "config", None))
+    if ctx is not None and getattr(args, "standard", None) in ("sdtm", "adam"):
+        data_dir = ctx.data_dir(args.standard)
+        absent = [href for href in gen.leaf_hrefs().values() if not (data_dir / href).is_file()]
+        if absent:
+            _err(
+                f"warning: no file in {data_dir} for leaf href(s) {', '.join(absent)}. "
+                "Run fleet run, or check output_format: and output: in define.yaml."
+            )
     if not args.no_preview:
         # The generator skips the preview (with its own message) when the
         # XSL stylesheet is unavailable — only report a file that exists.
@@ -918,15 +928,17 @@ def _run_run(args: argparse.Namespace) -> None:
     """
     from fleet.core.define_spec import load_define_spec
     from fleet.io import save_dataset_json, save_parquet, save_xpt
+    from fleet.io.dataset_json import metadata_from_define
     from fleet.run import plan_study, run_study
 
     ctx = _load_ctx(args.config)
     plan = plan_study(ctx, datasets=args.dataset)
-    entries = {
-        e.name.upper(): e
-        for define in {s.define for s in plan.steps}
-        for e in load_define_spec(define).datasets or []
+    specs = {
+        e.name.upper(): spec
+        for spec in map(load_define_spec, {s.define for s in plan.steps})
+        for e in spec.datasets or []
     }
+    entries = {name: spec.select(name) for name, spec in specs.items()}
 
     writers: dict[str, Callable[[pl.DataFrame, Path, str], Path]] = {
         "parquet": lambda df, d, n: save_parquet(df, d / f"{n.lower()}.parquet"),
@@ -938,14 +950,19 @@ def _run_run(args: argparse.Namespace) -> None:
                 {v.name: v.label for v in entries[n].variables} if n in entries else _SUPP_LABELS
             ),
         ),
-        "dataset-json": lambda df, d, n: save_dataset_json(df, d / f"{n.lower()}.json", domain=n),
+        "dataset-json": lambda df, d, n: save_dataset_json(
+            df, d / f"{n.lower()}.json", domain=n, **metadata_from_define(specs[n], n)
+        ),
     }
-    writer = writers[args.format]
+    formats = {
+        s.dataset: _run_format(args.format, specs[s.dataset], entries[s.dataset])
+        for s in plan.steps
+    }
     out_override = Path(args.out) if args.out else None
     total = len(plan.steps)
 
     print(f"Config:  {ctx.study_root / 'study_config.yaml'}")
-    print(f"Format:  {args.format}")
+    print(f"Format:  {', '.join(f'{name} {fmt}' for name, fmt in formats.items())}")
     print(f"Plan:    {total} dataset(s)")
     for i, step in enumerate(plan.steps, start=1):
         print(f"  [{i}/{total}] {step.dataset} ({step.standard}, {step.define.name})")
@@ -953,16 +970,58 @@ def _run_run(args: argparse.Namespace) -> None:
 
     for i, built in enumerate(run_study(plan, strict=args.strict), start=1):
         step = built.step
+        _check_built(built.frame, step.define, step.dataset, strict=args.strict)
         out_dir = out_override or ctx.data_dir(step.standard)
-        out_path = writer(built.frame, out_dir, step.dataset)
+        out_path = writers[formats[step.dataset]](built.frame, out_dir, step.dataset)
         rows, cols = built.frame.shape
         print(f"[{i}/{total}] {step.dataset}: {rows} rows × {cols} cols → {out_path}")
         if built.supp is not None:
-            supp_path = writer(built.supp, out_dir, f"SUPP{step.dataset}")
+            supp_path = writers[formats[step.dataset]](built.supp, out_dir, f"SUPP{step.dataset}")
             print(f"        SUPP{step.dataset}: {built.supp.height} rows → {supp_path}")
+        for name, source in built.inputs.items():
+            where = source.path or ("built in this run" if source.source == "built" else "seed")
+            print(f"    input {name} -> {where}")
+        declared = entries[step.dataset].output
+        if declared and Path(declared).name != out_path.name:
+            _err(
+                f"warning: {step.dataset}: define.yaml output: {declared} is the Define-XML "
+                f"leaf; fleet run wrote {out_path.name}."
+            )
 
     print()
     print(f"Done — {total} dataset(s) written.")
+
+
+def _check_built(frame: pl.DataFrame, define: Path, dataset: str, *, strict: bool) -> None:
+    """Stop before the write when the built dataset does not match its define; the old file stays."""
+    from fleet.core.exceptions import StudyRunError
+    from fleet.define_xml import DatasetChecker
+
+    if frame.width == 0:
+        raise StudyRunError(f"dataset {dataset}: the build has no column. The old file is kept.")
+    checker = DatasetChecker(define, check_types=False, check_ct=False, validate_schema=False)
+    errors = checker.check(frame, dataset, strict=strict).errors
+    if errors:
+        raise StudyRunError(
+            f"dataset {dataset} does not match {define.name}: {'; '.join(errors)}. "
+            "The old file is kept."
+        )
+
+
+def _run_format(flag: str | None, spec: DefineSpec, entry: DatasetEntry) -> str:
+    """The format of one dataset: --format, then its output_format, then the spec's, then parquet.
+
+    This is the rule of the Define-XML leaf href, so the leaf names the file
+    fleet run writes.  A flag that differs from the define warns.
+    """
+    spec_level = spec.output_format if "output_format" in spec.model_fields_set else None
+    declared = entry.output_format or spec_level
+    if flag and declared and flag != declared:
+        _err(
+            f"warning: {entry.name}: --format {flag} overrides output_format: {declared} "
+            "of define.yaml, so the Define-XML leaf names another file."
+        )
+    return flag or declared or "parquet"
 
 
 # ────────────────────────────────────────────────────────────────────── #
@@ -987,6 +1046,7 @@ def _run_validate(args: argparse.Namespace) -> None:
             custom_rules=args.custom_rules,
             timeout=args.timeout,
             config=Path(args.config) if args.config else None,
+            define_xml=args.define,
         )
     except ValidationSetupError as exc:
         _fail(str(exc), code=_VALIDATE_COULD_NOT_RUN)
@@ -1004,12 +1064,21 @@ def _run_validate(args: argparse.Namespace) -> None:
             version=setup.ig_version.value,
             custom_rules=setup.custom_rules.value,
             timeout=setup.timeout.value,
+            define_xml=setup.define_xml.value,
         )
         setups = {d.name: d.setup for d in datasets}
         for name, result in by_name.items():
             result.apply_setup(setups.get(name) or setup)
             result.print_report()
             results.append(result)
+        runs = {id(run): run for r in by_name.values() for run in r.rule_runs}.values()
+        problems = [line for run in runs for line in run.problem_lines()]
+        if problems:
+            print(
+                f"Rule problems in the {standard} engine run (not data findings; exit code kept):"
+            )
+            for line in problems:
+                print(f"  {line}")
 
     could_not_run = sweep.could_not_run
     for d in could_not_run:
@@ -1951,10 +2020,20 @@ def _run_tdd_build(args: argparse.Namespace) -> None:
             column_labels={v["name"]: v.get("label") for v in ig.get("variables", [])},
         )
 
+    def dataset_json(df: pl.DataFrame, d: Path, n: str) -> Path:
+        ig = packaged_structure(n) or {}
+        return save_dataset_json(
+            df,
+            d / f"{n.lower()}.json",
+            domain=n,
+            label=ig.get("label"),
+            columns={v["name"]: {"label": v.get("label")} for v in ig.get("variables", [])},
+        )
+
     writers: dict[str, Callable[[pl.DataFrame, Path, str], Path]] = {
         "parquet": lambda df, d, n: save_parquet(df, d / f"{n.lower()}.parquet"),
         "xpt": xpt,
-        "dataset-json": lambda df, d, n: save_dataset_json(df, d / f"{n.lower()}.json", domain=n),
+        "dataset-json": dataset_json,
     }
     writer = writers[args.format]
     out_dir = Path(args.out) if args.out else _load_ctx(args.config).sdtm_data_dir
@@ -2473,14 +2552,19 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         default=None,
         help=(
             "Output directory for every dataset. Default: the configured "
-            "data/sdtm and data/adam directories."
+            "data/sdtm and data/adam directories. Fleet only writes here: inputs "
+            "are read from the run, a declared path:, the raw directory (type: raw) "
+            "or the data directory of the input's standard (type: dataset)."
         ),
     )
     run.add_argument(
         "--format",
-        default="parquet",
+        default=None,
         choices=["parquet", "xpt", "dataset-json"],
-        help="Output format (default: parquet).",
+        help=(
+            "Output format of every dataset. Default: the output_format of the dataset, "
+            "else of define.yaml, else parquet (the rule of the Define-XML leaf)."
+        ),
     )
     run.add_argument(
         "--strict",
@@ -2527,11 +2611,20 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         ),
     )
     validate.add_argument(
+        "--define",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Define-XML file that CORE checks with the datasets (CORE -dxp). Opt-in: "
+            "Fleet never passes a define by default."
+        ),
+    )
+    validate.add_argument(
         "--custom-rules",
         default=None,
         help=(
-            "Directory of custom validation rule YAML files. "
-            "Default: validation.custom_rules from the discovered study_config.yaml."
+            "Directory of custom validation rule YAML files, relative to the working "
+            "directory. Default: validation.custom_rules from the discovered study_config.yaml."
         ),
     )
     validate.add_argument(
@@ -3316,6 +3409,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         SystemExit: ``0`` on success, ``1`` on any Fleet error (single
             clean message on stderr), ``2`` on argparse usage errors.
     """
+    # A cp1252 pipe on Windows cannot encode a check mark; print \u2713 instead of crashing.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="backslashreplace")
     parser = _build_parser()
     args = parser.parse_args(argv)
 

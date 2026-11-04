@@ -70,7 +70,7 @@ def _download_ct(url: str) -> Path:
 
 def _load_ct_yaml(ct_path: Path, codelist_name: str | None) -> dict[str, dict[str, str]]:
     try:
-        with open(ct_path) as f:
+        with open(ct_path, encoding="utf-8") as f:
             data: dict[str, Any] = yaml.safe_load(f)
 
         if codelist_name:

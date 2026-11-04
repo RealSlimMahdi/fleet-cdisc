@@ -1414,7 +1414,7 @@ Rule Type: Record Data
 
 Scope:
   Classes:
-    Include: [EVENTS]
+    Include: [ALL]
   Domains:
     Include: [AE]
 

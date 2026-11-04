@@ -74,6 +74,15 @@ class TestRuleScaffolder:
             assert rule["Scope"]["Domains"]["Include"] == ["AE"]
             assert rule["Rule Type"] == "Record Data"
 
+    @pytest.mark.parametrize("domain", ["DM", "VS", "ADSL"])
+    def test_scaffold_scopes_by_domain_not_by_class(self, domain, tmp_path):
+        """c1-526: Classes EVENTS made a DM or VS rule never fire."""
+        out = scaffold_rule(domain=domain, description="x", output_dir=tmp_path)
+
+        scope = yaml.safe_load(out.read_text(encoding="utf-8"))["Scope"]
+
+        assert scope == {"Classes": {"Include": ["ALL"]}, "Domains": {"Include": [domain]}}
+
     def test_scaffold_auto_increment(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create first rule
@@ -210,7 +219,7 @@ class TestCustomRulesEngineIntegration:
                     cmd = mock_run.call_args[0][0]
                     assert "-lr" in cmd
                     lr_idx = cmd.index("-lr")
-                    assert cmd[lr_idx + 1] == str(rules_dir)
+                    assert cmd[lr_idx + 1] == str(rules_dir.resolve())
 
     def test_validate_dataset_no_lr_without_custom_rules(self):
         """Verify -lr is NOT added when custom_rules is None."""

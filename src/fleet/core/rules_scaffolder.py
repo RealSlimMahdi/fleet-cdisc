@@ -49,7 +49,7 @@ def _read_define_version(define_path: Path) -> str:
         FileNotFoundError: If the define.yaml does not exist.
         KeyError: If the version key is missing.
     """
-    with open(define_path) as f:
+    with open(define_path, encoding="utf-8") as f:
         spec = yaml.safe_load(f) or {}
     study = spec.get("study", {})
     version = study.get("standard_version")

@@ -258,7 +258,7 @@ Applying the R Validation Hub risk-based framework to Fleet:
 | Cross-language algorithm benchmark | `tests/unit/test_admiral_parity.py`             | BSA, MAP, QTc, LOCF, BMI, ANL01FL, age/period (frozen admiral values) | Runs in CI on every commit  |
 | admiral oracle                     | `scripts/admiral_oracle.py`                     | Study day, duration, TRTEMFL, ANL01FL on real ADAE shapes, run by admiral 1.4.1 | Runs in CI weekly           |
 | SDTM conformance                   | `ValidationService.validate_sdtm()`             | All SDTM domains, SDTMIG 3.4                              | Run at study delivery       |
-| ADaM conformance                   | `ValidationService.validate_adam()`             | ADSL, BDS, OCCDS datasets, ADaMIG 1.3                     | Run at study delivery       |
+| ADaM conformance                   | `ValidationService.validate_adam()`             | ADSL, BDS, OCCDS datasets, ADaMIG 1.3                     | Gives NOT ASSESSED until CORE ships ADaM rules, so it is not a qualification activity today |
 | Unit and integration tests         | `pytest` (2,900+ tests)                         | Namespace verbs, CT validation, Define-XML, TDD workflows | Runs in CI on every commit, Python 3.12 to 3.14 |
 | Static analysis                    | `ruff check` + `ruff format`                    | Full source tree                                          | Runs in CI on every commit  |
 | End-to-end smoke tests             | `examples/*.py` (8 scripts, CDISCPILOT01 study) | Full SDTM + ADaM pipelines and TLGs                       | Runs in CI on every commit  |

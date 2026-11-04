@@ -539,6 +539,21 @@
             "qualifier"
           ]
         },
+        "sdtm_role": {
+          "type": "string",
+          "description": "The SDTM role of the variable, written as the ItemRef Role of the Define-XML (CORE rule CG0010 reads it). fleet init define fills it from the CDISC Library; check a sponsor-specific role by hand.",
+          "enum": [
+            "Identifier",
+            "Topic",
+            "Timing",
+            "Grouping Qualifier",
+            "Result Qualifier",
+            "Synonym Qualifier",
+            "Record Qualifier",
+            "Variable Qualifier",
+            "Rule"
+          ]
+        },
         "evaluator": {
           "type": "string",
           "description": "Evaluator for a Non-Standard Variable \u2014 becomes QEVAL in the generated SUPPQUAL dataset (e.g. 'INVESTIGATOR')."

@@ -1,0 +1,36 @@
+{
+  "Conformance_Details": {
+    "Report_Generation": "2026-11-05T00:07:57",
+    "Total_Runtime": "1.27 seconds",
+    "CORE_Engine_Version": "0.15.0",
+    "Issue_Limit_Per_Rule": "None",
+    "Issue_Limit_Per_Dataset": "None",
+    "Issue_Limit_Per_Sheet": null,
+    "Standard": "SDTMIG",
+    "Version": "V3.4",
+    "CT_Version": "",
+    "Define_XML_Version": null
+  },
+  "Dataset_Details": [
+    {
+      "filename": "AE",
+      "label": "AE dataset",
+      "path": "/tmp/hp-io-core/data_clean",
+      "modification_date": "2026-11-04T23:07:53",
+      "size_kb": 0.912,
+      "length": 1
+    }
+  ],
+  "Issue_Summary": [],
+  "Issue_Details": [],
+  "Rules_Report": [
+    {
+      "core_id": "FLEET-AE-001",
+      "version": "1",
+      "cdisc_rule_id": "",
+      "fda_rule_id": "",
+      "message": "AESEV is empty",
+      "status": "SUCCESS"
+    }
+  ]
+}

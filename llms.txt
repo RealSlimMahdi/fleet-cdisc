@@ -1968,7 +1968,7 @@ A **study run** reads the study's define files, builds every dataset they declar
 import fleet
 
 ctx = fleet.load_study_context("study_config.yaml")
-plan = fleet.plan_study(ctx)  # SDTM define first, then ADaM, each in file order
+plan = fleet.plan_study(ctx)  # each dataset after the planned datasets it reads; else file order
 [(s.standard, s.dataset) for s in plan.steps]  # [("sdtm", "DM"), ("sdtm", "AE"), ("adam", "ADSL"), ...]
 
 for built in fleet.run_study(plan):  # a generator: each dataset as soon as it is built
@@ -1979,7 +1979,7 @@ plan = fleet.plan_study(ctx, datasets=["ADVS"])
 advs = next(fleet.run_study(plan, inputs={"ADSL": adsl_fixed})).frame
 ```
 
-Rules (ADR 0006): each input is taken from the first source that gives it — a seed, a dataset built earlier in the run, the input's `path:` relative to the study root, then its name in the raw / SDTM / ADaM data directories (`.parquet`, `.csv`, `.xpt`, `.sas7bdat`). The first input is the base frame. Every other input is **pinned** under its dataset name, so `merge`, `lookup`, `first_date`, `last_date` and `count_events` reach it. Only **carry-through columns** (declared with no `derivation:`) are left-joined from the other inputs on USUBJID; a column with a derivation comes from its algorithm alone. A seed that is also a step is refused. Every refusal is a `StudyRunError`, which `fleet run` turns into exit 1.
+Rules (ADR 0006): each input is taken from the first source that gives it — a seed, a dataset built earlier in the run, the input's `path:` relative to the study root, then a search by name that honours `type:`. A `type: raw` input, or one named as the dataset being built, comes from the raw directory only. A `type: dataset` input never comes from the raw directory: from the data directory of the standard a define declares it in, else ADaM then SDTM for an ADaM step and SDTM then ADaM for an SDTM step (`.parquet`, `.csv`, `.xpt`, `.sas7bdat`, `.json`). Two files for one dataset in one directory stop the run. The first input is the base frame. Every other input is **pinned** under its dataset name, so `merge`, `lookup`, `first_date`, `last_date` and `count_events` reach it. Only **carry-through columns** (declared with no `derivation:`) are left-joined from the other inputs on USUBJID, and an input with two records for one USUBJID stops the join; a column with a derivation comes from its algorithm alone. A seed that is also a step is refused. Every refusal is a `StudyRunError`, which `fleet run` turns into exit 1. `fleet run` writes each dataset in `--format`, else its `output_format:`, else the define's, else parquet: the rule of the Define-XML leaf.
 
 ## Controlled Terminology
 

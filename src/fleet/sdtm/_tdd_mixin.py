@@ -342,7 +342,7 @@ class TrialDesignMixin:
 
         cache_path = Path(save_to) if save_to else None
         if meta is None and cache_path and cache_path.exists():
-            meta = yaml.safe_load(cache_path.read_text())
+            meta = yaml.safe_load(cache_path.read_text(encoding="utf-8"))
 
         if meta is None:
             meta = _load_packaged_structure(domain, ig_version)
@@ -357,7 +357,9 @@ class TrialDesignMixin:
                     ) from exc
             if cache_path:
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
-                cache_path.write_text(yaml.dump(meta, default_flow_style=False, sort_keys=False))
+                cache_path.write_text(
+                    yaml.dump(meta, default_flow_style=False, sort_keys=False), encoding="utf-8"
+                )
 
         # Propagate to the new namespace instance
         new = self._chain()  # type: ignore[attr-defined]

@@ -1,0 +1,281 @@
+{
+  "Conformance_Details": {
+    "Report_Generation": "2026-11-05T00:07:28",
+    "Total_Runtime": "7.48 seconds",
+    "CORE_Engine_Version": "0.15.0",
+    "Issue_Limit_Per_Rule": "None",
+    "Issue_Limit_Per_Dataset": "None",
+    "Issue_Limit_Per_Sheet": null,
+    "Standard": "SDTMIG",
+    "Version": "V3.4",
+    "CT_Version": "",
+    "Define_XML_Version": null
+  },
+  "Dataset_Details": [
+    {
+      "filename": "AE",
+      "label": "AE dataset",
+      "path": "/tmp/hp-io-core/data_dirty",
+      "modification_date": "2026-11-04T23:07:18",
+      "size_kb": 0.953,
+      "length": 2
+    },
+    {
+      "filename": "DM",
+      "label": "DM dataset",
+      "path": "/tmp/hp-io-core/data_dirty",
+      "modification_date": "2026-11-04T23:07:18",
+      "size_kb": 1.136,
+      "length": 2
+    }
+  ],
+  "Issue_Summary": [
+    {
+      "dataset": "AE.json",
+      "core_id": "CORE-000140",
+      "message": "rule evaluation error - operation failed",
+      "issues": 1
+    },
+    {
+      "dataset": "AE.json",
+      "core_id": "CORE-000355",
+      "message": "At least one required variable is missing from dataset",
+      "issues": 1
+    },
+    {
+      "dataset": "AE.json",
+      "core_id": "CORE-000701",
+      "message": "EPOCH is missing for clinical subject-level observation.",
+      "issues": 2
+    },
+    {
+      "dataset": "DM.json",
+      "core_id": "CORE-000047",
+      "message": "rule evaluation error - operation failed",
+      "issues": 1
+    },
+    {
+      "dataset": "DM.json",
+      "core_id": "CORE-000140",
+      "message": "rule evaluation error - operation failed",
+      "issues": 1
+    },
+    {
+      "dataset": "DM.json",
+      "core_id": "CORE-000355",
+      "message": "At least one required variable is missing from dataset",
+      "issues": 1
+    },
+    {
+      "dataset": "STUDY",
+      "core_id": "CORE-000739",
+      "message": "EX is not present in study when study includes protocol-specified study treatment",
+      "issues": 1
+    },
+    {
+      "dataset": "STUDY",
+      "core_id": "CORE-000739",
+      "message": "EX is not present in study when study includes protocol-specified study treatment",
+      "issues": 1
+    }
+  ],
+  "Issue_Details": [
+    {
+      "core_id": "CORE-000047",
+      "message": "rule evaluation error - operation failed - Error occurred during operation execution",
+      "executability": "partially executable - possible overreporting",
+      "dataset": "DM.json",
+      "USUBJID": "",
+      "row": "",
+      "SEQ": "",
+      "variables": "",
+      "values": "Failed to execute rule operation. Operation: distinct, Target: ARM, Domain: TA, Error: Failed to execute rule operation. Domain TA does not exist. Operation: distinct, Target: ARM, Core ID: CORE-000047"
+    },
+    {
+      "core_id": "CORE-000140",
+      "message": "rule evaluation error - operation failed - Error occurred during operation execution",
+      "executability": "fully executable",
+      "dataset": "AE.json",
+      "USUBJID": "",
+      "row": "",
+      "SEQ": "",
+      "variables": "",
+      "values": "Failed to execute rule operation. Operation: distinct, Target: VISITNUM, Domain: TV, Error: Failed to execute rule operation. Domain TV does not exist. Operation: distinct, Target: VISITNUM, Core ID: CORE-000140"
+    },
+    {
+      "core_id": "CORE-000140",
+      "message": "rule evaluation error - operation failed - Error occurred during operation execution",
+      "executability": "fully executable",
+      "dataset": "DM.json",
+      "USUBJID": "",
+      "row": "",
+      "SEQ": "",
+      "variables": "",
+      "values": "Failed to execute rule operation. Operation: distinct, Target: VISITNUM, Domain: TV, Error: Failed to execute rule operation. Domain TV does not exist. Operation: distinct, Target: VISITNUM, Core ID: CORE-000140"
+    },
+    {
+      "core_id": "CORE-000355",
+      "message": "At least one required variable is missing from dataset",
+      "executability": "fully executable",
+      "dataset": "AE.json",
+      "USUBJID": "",
+      "row": "",
+      "SEQ": "",
+      "variables": [
+        "$dataset_variables",
+        "$required_variables"
+      ],
+      "values": [
+        "['STUDYID', 'DOMAIN', 'USUBJID', 'AESEQ', 'AETERM', 'AESEV']",
+        "['STUDYID', 'DOMAIN', 'USUBJID', 'AESEQ', 'AETERM', 'AEDECOD']"
+      ]
+    },
+    {
+      "core_id": "CORE-000355",
+      "message": "At least one required variable is missing from dataset",
+      "executability": "fully executable",
+      "dataset": "DM.json",
+      "USUBJID": "",
+      "row": "",
+      "SEQ": "",
+      "variables": [
+        "$dataset_variables",
+        "$required_variables"
+      ],
+      "values": [
+        "['STUDYID', 'DOMAIN', 'USUBJID', 'SUBJID', 'SITEID', 'AGE', 'AGEU', 'SEX']",
+        "['STUDYID', 'DOMAIN', 'USUBJID', 'SUBJID', 'SITEID', 'SEX', 'COUNTRY']"
+      ]
+    },
+    {
+      "core_id": "CORE-000701",
+      "message": "EPOCH is missing for clinical subject-level observation.",
+      "executability": "partially executable - possible overreporting",
+      "dataset": "AE.json",
+      "USUBJID": "S-1",
+      "row": 1,
+      "SEQ": 1,
+      "variables": [
+        "EPOCH"
+      ],
+      "values": [
+        "Not in dataset"
+      ]
+    },
+    {
+      "core_id": "CORE-000701",
+      "message": "EPOCH is missing for clinical subject-level observation.",
+      "executability": "partially executable - possible overreporting",
+      "dataset": "AE.json",
+      "USUBJID": "S-2",
+      "row": 2,
+      "SEQ": 1,
+      "variables": [
+        "EPOCH"
+      ],
+      "values": [
+        "Not in dataset"
+      ]
+    },
+    {
+      "core_id": "CORE-000739",
+      "message": "EX is not present in study when study includes protocol-specified study treatment",
+      "executability": "fully executable",
+      "dataset": "STUDY",
+      "USUBJID": "",
+      "row": "",
+      "SEQ": "",
+      "variables": [],
+      "values": [
+        "null"
+      ]
+    },
+    {
+      "core_id": "CORE-000739",
+      "message": "EX is not present in study when study includes protocol-specified study treatment",
+      "executability": "fully executable",
+      "dataset": "STUDY",
+      "USUBJID": "",
+      "row": "",
+      "SEQ": "",
+      "variables": [],
+      "values": [
+        "null"
+      ]
+    }
+  ],
+  "Rules_Report": [
+    {
+      "core_id": "CORE-000001",
+      "version": "1",
+      "cdisc_rule_id": "CG0176, TIG0405",
+      "fda_rule_id": "",
+      "message": "IEORRES is not equal to 'N' when IECAT equals 'INCLUSION'.",
+      "status": "SKIPPED"
+    },
+    {
+      "core_id": "CORE-000002",
+      "version": "1",
+      "cdisc_rule_id": "CG0208",
+      "fda_rule_id": "",
+      "message": "SESTDTC is required.",
+      "status": "SKIPPED"
+    },
+    {
+      "core_id": "CORE-000012",
+      "version": "1",
+      "cdisc_rule_id": "CG0040, TIG0319",
+      "fda_rule_id": "",
+      "message": "AEOCCUR is present in AE dataset.",
+      "status": "SUCCESS"
+    },
+    {
+      "core_id": "CORE-000013",
+      "version": "1",
+      "cdisc_rule_id": "CG0044, TIG0323",
+      "fda_rule_id": "",
+      "message": "AESTAT variable is present in AE dataset.",
+      "status": "SUCCESS"
+    },
+    {
+      "core_id": "CORE-000047",
+      "version": "1",
+      "cdisc_rule_id": "CG0518, TIG0613",
+      "fda_rule_id": "",
+      "message": "ARM value in DM dataset is not among the values of ARM variable in TA dataset. This is allowed only in a multistage study with incomplete ARM assignment. Please confirm if your study is a multistage assignment study",
+      "status": "EXECUTION_ERROR"
+    },
+    {
+      "core_id": "CORE-000140",
+      "version": "1",
+      "cdisc_rule_id": "CG0225, TIG0438",
+      "fda_rule_id": "",
+      "message": "VISITDY is not null when VISITNUM is not in TV.VISITNUM",
+      "status": "EXECUTION_ERROR"
+    },
+    {
+      "core_id": "CORE-000355",
+      "version": "1",
+      "cdisc_rule_id": "CG0014, SEND12, TIG0057, TIG0299",
+      "fda_rule_id": "",
+      "message": "At least one required variable is missing from dataset",
+      "status": "ISSUE_REPORTED"
+    },
+    {
+      "core_id": "CORE-000701",
+      "version": "1",
+      "cdisc_rule_id": "",
+      "fda_rule_id": "FB2201",
+      "message": "EPOCH is missing for clinical subject-level observation.",
+      "status": "ISSUE_REPORTED"
+    },
+    {
+      "core_id": "CORE-000739",
+      "version": "1",
+      "cdisc_rule_id": "CG0407",
+      "fda_rule_id": "",
+      "message": "EX is not present in study when study includes protocol-specified study treatment",
+      "status": "ISSUE_REPORTED"
+    }
+  ]
+}

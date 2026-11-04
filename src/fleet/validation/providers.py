@@ -42,8 +42,11 @@ class ValidationProvider(ABC):
         version: str,
         custom_rules: Path | None = None,
         timeout: float = 300,
+        define_xml: Path | None = None,
     ) -> dict[str, ValidationResult]:
         """Validate several datasets of one standard; one at a time unless overridden."""
+        if define_xml is not None:
+            raise NotImplementedError(f"{type(self).__name__} cannot check a Define-XML.")
         validate = self.validate_adam if standard == "adam" else self.validate_sdtm
         return {
             name: validate(df, name, version, custom_rules=custom_rules, timeout=timeout)
@@ -100,6 +103,7 @@ class OfficialRulesEngineProvider(ValidationProvider):
         version: str,
         custom_rules: Path | None = None,
         timeout: float = 300,
+        define_xml: Path | None = None,
     ) -> dict[str, ValidationResult]:
         return self.validator.validate_datasets(
             datasets,
@@ -107,4 +111,5 @@ class OfficialRulesEngineProvider(ValidationProvider):
             version=version.replace(".", "-"),
             custom_rules=custom_rules,
             timeout=timeout,
+            define_xml=define_xml,
         )

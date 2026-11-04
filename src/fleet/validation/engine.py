@@ -135,7 +135,7 @@ def find_engine(
 
     env = (os.environ if environ is None else environ).get("FLEET_RULES_ENGINE")
     if env and Path(env).is_file():
-        return Path(env), "environment"
+        return Path(env).resolve(), "environment"
 
     managed = engine_path()
     if managed.is_file():
@@ -238,7 +238,7 @@ def _engine_path_from_study_config(study_root: Path) -> Path | None:
         return None
 
     try:
-        with open(config_file) as f:
+        with open(config_file, encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
     except Exception:
         return None

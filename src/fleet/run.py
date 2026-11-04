@@ -11,16 +11,16 @@ rule on inputs and ``CONTEXT.md``, section "Running a study", for the terms.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 import polars as pl
 
 from fleet.core.define_spec import load_define_spec
-from fleet.core.exceptions import DerivationError, StudyRunError
+from fleet.core.exceptions import PinError, SpecError, StudyRunError
 from fleet.core.frames import frame as _frame
-from fleet.core.joins import refuse_repeated_keys
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping, Sequence
@@ -52,7 +52,7 @@ InputSource = Literal[
 ]
 
 #: Dataset file extensions searched by name in the data directories.
-DATASET_EXTENSIONS = (".parquet", ".csv", ".xpt", ".sas7bdat")
+DATASET_EXTENSIONS = (".parquet", ".csv", ".xpt", ".sas7bdat", ".json")
 
 
 @dataclass(frozen=True)
@@ -62,10 +62,13 @@ class DeclaredInput:
     Attributes:
         name: The input's name, as declared.
         path: Its ``path:``, relative to the study root, or ``None``.
+        type: ``"raw"`` for a source file, ``"dataset"`` for an upstream
+            dataset (ADR 0006).
     """
 
     name: str
     path: str | None
+    type: Literal["raw", "dataset"] = "dataset"
 
 
 @dataclass(frozen=True)
@@ -118,10 +121,13 @@ class StudyPlan:
     Attributes:
         ctx: The study context the steps resolve against.
         steps: The steps, in run order.
+        declared: Every dataset the define files declare, with its
+            standard, also those the ``datasets=`` filter left out.
     """
 
     ctx: StudyContext
     steps: tuple[Step, ...]
+    declared: Mapping[str, Standard] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -146,7 +152,9 @@ class BuiltDataset:
 def plan_study(ctx: StudyContext, *, datasets: Sequence[str] | None = None) -> StudyPlan:
     """Read the study's define files and return the steps of a study run.
 
-    The SDTM define comes first, then the ADaM define, each in file order.
+    A dataset runs after the datasets of the plan that it names as
+    ``type: dataset`` inputs, so ADVS reads the ADSL of the same run.
+    Datasets with no such link keep their file order, SDTM first.
 
     Args:
         ctx: The study context, from :func:`fleet.load_study_context`.
@@ -158,8 +166,8 @@ def plan_study(ctx: StudyContext, *, datasets: Sequence[str] | None = None) -> S
 
     Raises:
         StudyRunError: When neither define file exists, a name in
-            *datasets* is not declared in them, or a planned dataset
-            declares no inputs.
+            *datasets* is not declared in them, a planned dataset
+            declares no inputs, or two datasets need each other.
 
     Examples:
         List what ``fleet run`` would build::
@@ -188,7 +196,12 @@ def plan_study(ctx: StudyContext, *, datasets: Sequence[str] | None = None) -> S
                     standard=standard,
                     dataset=entry.name.upper(),
                     inputs=tuple(
-                        DeclaredInput(name=i["name"], path=i.get("path")) for i in entry.inputs
+                        DeclaredInput(
+                            name=i["name"],
+                            path=i.get("path"),
+                            type="raw" if i.get("type") == "raw" else "dataset",
+                        )
+                        for i in entry.inputs
                     ),
                     carry_through=tuple(v.name for v in entry.variables if v.derivation is None),
                     text_columns=_text_columns(entry),
@@ -196,6 +209,7 @@ def plan_study(ctx: StudyContext, *, datasets: Sequence[str] | None = None) -> S
                 )
             )
 
+    declared = {s.dataset: s.standard for s in steps}
     if datasets is not None:
         wanted = {d.upper() for d in datasets}
         known = sorted({s.dataset for s in steps})
@@ -214,7 +228,34 @@ def plan_study(ctx: StudyContext, *, datasets: Sequence[str] | None = None) -> S
                 "run cannot determine the source data. Add an inputs: block."
             )
 
-    return StudyPlan(ctx=ctx, steps=tuple(steps))
+    return StudyPlan(ctx=ctx, steps=_in_dependency_order(steps), declared=declared)
+
+
+def _in_dependency_order(steps: list[Step]) -> tuple[Step, ...]:
+    """*steps* with each one after the planned datasets it reads; file order breaks ties."""
+    planned = {s.dataset for s in steps}
+    needs = {
+        s.dataset: {
+            d.name.upper()
+            for d in s.inputs
+            if d.type == "dataset" and d.name.upper() in planned - {s.dataset}
+        }
+        for s in steps
+    }
+    ordered: list[Step] = []
+    pending = list(steps)
+    while pending:
+        done = {s.dataset for s in ordered}
+        ready = next((s for s in pending if needs[s.dataset] <= done), None)
+        if ready is None:
+            cycle = ", ".join(s.dataset for s in pending)
+            raise StudyRunError(
+                f"datasets {cycle} read each other as inputs, so no run order exists. "
+                "Remove one of the type: dataset inputs."
+            )
+        ordered.append(ready)
+        pending.remove(ready)
+    return tuple(ordered)
 
 
 def run_study(
@@ -261,7 +302,7 @@ def run_study(
         )
 
     for step in plan.steps:
-        resolved = {d.name: _resolve_input(plan.ctx, d, held, text_columns) for d in step.inputs}
+        resolved = {d.name: _resolve_input(plan, step, d, held, text_columns) for d in step.inputs}
         frames = [held[d.name.upper()].frame for d in step.inputs]
         base, extras = frames[0], list(zip(step.inputs[1:], frames[1:], strict=True))
 
@@ -274,22 +315,20 @@ def run_study(
                     f"dataset {step.dataset}: cannot carry {', '.join(cols)} from input "
                     f"'{declared.name}' because both frames must carry USUBJID."
                 )
-            try:
-                carried = refuse_repeated_keys(
-                    "fleet run", extra.select(["USUBJID", *cols]), ["USUBJID"], source=declared.name
-                )
-            except DerivationError as err:
-                raise StudyRunError(f"dataset {step.dataset}: {err}") from err
-            base = base.join(carried, on="USUBJID", how="left")
+            base = _carry(step.dataset, declared.name, base, extra.select(["USUBJID", *cols]))
 
         ns = _namespace(base, step.standard)
         for declared, extra in extras:
             ns = ns.pin(declared.name.upper(), extra)
-        built_frame = (
-            ns.from_spec(step.define, dataset=step.dataset, strict=strict)
-            .select(spec=step.define, dataset=step.dataset)
-            .to_frame()
-        )
+        try:
+            built_frame = (
+                ns.from_spec(step.define, dataset=step.dataset, strict=strict)
+                .select(spec=step.define, dataset=step.dataset)
+                .to_frame()
+            )
+        except SpecError as err:
+            _undeclared_source(step, err)
+            raise
         held[step.dataset] = _Held(built_frame, ResolvedInput(path=None, source="built"))
         if step.qualifiers:
             seq = f"{step.dataset}SEQ"
@@ -306,14 +345,19 @@ def run_study(
 
 
 def find_dataset_file(name: str, dirs: Sequence[Path]) -> Path | None:
-    """Find ``<name>.<ext>`` (lower or upper stem) in the first directory that has it.
+    """Find ``<name>.<ext>``, in any case, in the first directory that has it.
 
     Args:
         name: The dataset name, in any case.
         dirs: Directories to search, in order.
 
     Returns:
-        Path | None: The first file found, or ``None``.
+        Path | None: The file found, or ``None``.
+
+    Raises:
+        StudyRunError: When one directory holds two files for *name*, for
+            example ``dm.parquet`` and ``dm.xpt``: Fleet does not guess
+            which one is current.
 
     Examples:
         Locate ADSL under the configured ADaM directory::
@@ -321,11 +365,22 @@ def find_dataset_file(name: str, dirs: Sequence[Path]) -> Path | None:
             path = fleet.run.find_dataset_file("ADSL", [ctx.adam_data_dir])
     """
     for directory in dirs:
-        for stem in (name.lower(), name.upper()):
-            for ext in DATASET_EXTENSIONS:
-                candidate = directory / f"{stem}{ext}"
-                if candidate.is_file():
-                    return candidate
+        if not directory.is_dir():
+            continue
+        found = sorted(
+            p
+            for p in directory.iterdir()
+            if p.stem.upper() == name.upper()
+            and p.suffix.lower() in DATASET_EXTENSIONS
+            and p.is_file()
+        )
+        if len(found) > 1:
+            raise StudyRunError(
+                f"{', '.join(p.name for p in found)} in {directory} all hold dataset "
+                f"{name.upper()}. Remove the files that are not current."
+            )
+        if found:
+            return found[0]
     return None
 
 
@@ -359,13 +414,43 @@ def _qualifiers(entry: DatasetEntry) -> tuple[str, ...]:
     )
 
 
+def _carry(dataset: str, name: str, base: pl.DataFrame, extra: pl.DataFrame) -> pl.DataFrame:
+    """Join carry-through columns from *extra*, refusing a second record per USUBJID."""
+    try:
+        return base.join(extra, on="USUBJID", how="left", validate="m:1")
+    except pl.exceptions.ComputeError:
+        repeated = extra.group_by("USUBJID").len().filter(pl.col("len") > 1).sort("USUBJID").row(0)
+        raise StudyRunError(
+            f"dataset {dataset}: input {name} has {repeated[1]} records for USUBJID "
+            f"{repeated[0]}, so carrying its columns would repeat base records "
+            "(ADaMIG: one record per subject in ADSL). List the many-row input first."
+        ) from None
+
+
+def _undeclared_source(step: Step, err: SpecError) -> None:
+    """Name the inputs: block when a variable reads a dataset the step does not declare."""
+    if not isinstance(err.__cause__, PinError):
+        return
+    match = re.search(r"pinned '(\w+)'", str(err.__cause__))
+    variable = re.search(r"variable (\w+)", str(err))
+    if match is None:
+        return
+    reads = match.group(1)
+    where = f", variable {variable.group(1)}" if variable else ""
+    raise StudyRunError(
+        f"dataset {step.dataset}{where} reads {reads}: add {reads} to the inputs: block "
+        f"of {step.dataset} in {step.define.name}."
+    ) from err
+
+
 def _namespace(df: pl.DataFrame, standard: Standard) -> SDTMNamespace | AdamNamespace:
     """The namespace a step runs in: the one place that branches on the standard."""
     return _frame(df).sdtm if standard == "sdtm" else _frame(df).adam
 
 
 def _resolve_input(
-    ctx: StudyContext,
+    plan: StudyPlan,
+    step: Step,
     declared: DeclaredInput,
     held: dict[str, _Held],
     text_columns: frozenset[str] = frozenset(),
@@ -373,13 +458,23 @@ def _resolve_input(
     """Find one declared input, loading it into *held* when it comes from a file.
 
     In order: a seed or a dataset built earlier in this run, then the
-    input's ``path:`` relative to the study root, then the input's name in
-    the raw, SDTM and ADaM data directories.  A declared path that does
-    not exist is refused; it does not fall back to the name search.  A CSV
-    input reads *text_columns* as text.
+    input's ``path:`` relative to the study root, then a search by name
+    that honours ``type:`` (ADR 0006):
+
+    * ``type: raw``, or the name of the dataset being built: the raw
+      directory only.
+    * ``type: dataset`` that a define declares: the data directory of its
+      standard only, never the raw directory.
+    * any other ``type: dataset``: the ADaM then SDTM directory for an
+      ADaM step, the SDTM then ADaM directory for an SDTM step.
+
+    A declared path that does not exist is refused; it does not fall back
+    to the name search.  A CSV input reads *text_columns* as text, and a
+    ``.json`` input reads as Dataset-JSON.
     """
     from fleet.io import load_raw_data
 
+    ctx = plan.ctx
     key = declared.name.upper()
     if key in held:
         return held[key].origin
@@ -403,18 +498,26 @@ def _resolve_input(
             )
         return hold(file, "declared path")
 
-    directories: tuple[tuple[Path, InputSource], ...] = (
-        (ctx.raw_data_dir, "raw directory"),
-        (ctx.sdtm_data_dir, "sdtm directory"),
-        (ctx.adam_data_dir, "adam directory"),
-    )
+    data_dirs: dict[Standard, tuple[Path, InputSource]] = {
+        "sdtm": (ctx.sdtm_data_dir, "sdtm directory"),
+        "adam": (ctx.adam_data_dir, "adam directory"),
+    }
+    directories: tuple[tuple[Path, InputSource], ...]
+    if declared.type == "raw" or key == step.dataset:
+        directories = ((ctx.raw_data_dir, "raw directory"),)
+    elif key in plan.declared:
+        directories = (data_dirs[plan.declared[key]],)
+    elif step.standard == "adam":
+        directories = (data_dirs["adam"], data_dirs["sdtm"])
+    else:
+        directories = (data_dirs["sdtm"], data_dirs["adam"])
     for directory, source in directories:
         found = find_dataset_file(declared.name, [directory])
         if found is not None:
             return hold(found, source)
 
     raise StudyRunError(
-        f"input dataset '{declared.name}' not found. Searched for "
+        f"input dataset '{declared.name}' not found (type: {declared.type}). Searched for "
         f"{declared.name.lower()}/{declared.name.upper()} with extensions "
         f"{', '.join(DATASET_EXTENSIONS)} under: {', '.join(str(d) for d, _ in directories)}. "
         "Run the upstream dataset first (fleet run --dataset ...), place the file "
