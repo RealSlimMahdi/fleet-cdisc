@@ -440,6 +440,10 @@ def _run_init_ct_pipeline(args: argparse.Namespace) -> None:
         dest = gen.write(output)
 
     print(f"Generated {gen.codelist_count} codelists ({', '.join(cfg.ct.pins)}) → {dest}")
+    from fleet.ct.study_codelists import ct_version_problems
+
+    for problem in ct_version_problems(ctx):
+        print(f"Note: {problem}")
     terms = gen.define_terms()
     for dpath in (sdtm_define, adam_define):
         if dpath.is_file():
@@ -521,7 +525,8 @@ def _run_add_ct(args: argparse.Namespace) -> None:
             _fail(
                 f"{output} was generated from {', '.join(current)}, not {args.package}; "
                 "fleet add-ct does not change the CT package of existing codelists. "
-                "Set ct.package in study_config.yaml, then run: fleet init ct --force"
+                "Set ct.package in study_config.yaml, then run: fleet init ct --force, "
+                "and set study.ct_version in each define.yaml to the package date"
             )
     existing = existing_concept_ids(output)
 
@@ -1158,7 +1163,8 @@ def _run_check(args: argparse.Namespace) -> None:
                 continue
             found_define = True
             try:
-                DefineSpecGenerator(path, strict=True).to_xml_string()
+                # Read-only: the study's derivations_module is not imported.
+                DefineSpecGenerator(path, strict=True, import_study_code=False).to_xml_string()
                 rows.append(("PASS", label, f"{path} — generates a valid Define-XML"))
             except Exception as exc:
                 rows.append(("FAIL", label, str(exc)))
@@ -2281,6 +2287,11 @@ def _add_define_xml_parser(sub: argparse._SubParsersAction) -> None:
     defxml = sub.add_parser(
         "define-xml",
         help="Generate Define-XML 2.1 from a define.yaml specification.",
+        description=(
+            "Generate Define-XML 2.1 from a define.yaml specification. This imports the "
+            "spec's derivations_module (study Python code) to describe callable: "
+            "derivations: run it only on a study you trust."
+        ),
     )
     defxml.add_argument(
         "--spec",
@@ -2319,7 +2330,8 @@ def _add_define_xml_parser(sub: argparse._SubParsersAction) -> None:
         action="store_true",
         help=(
             "Kept for old scripts: MethodDefs are on by default. Every Derived "
-            "variable with a comment: or a derivation: gets a MethodDef."
+            "variable with a comment: or a derivation: gets a MethodDef. This "
+            "imports the spec's derivations_module (study Python code)."
         ),
     )
     defxml.add_argument(

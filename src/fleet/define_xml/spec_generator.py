@@ -33,10 +33,18 @@ from lxml import etree as lxml_etree
 from fleet.core import spec_registry
 from fleet.core._verb_mixin import _import_derivations_module
 from fleet.core.algorithm_resolver import docstring_summary, resolve_callable_docstring
-from fleet.core.define_spec import load_define_spec, load_spec_yaml
+from fleet.core.define_spec import (
+    default_is_reference_data,
+    default_repeating,
+    load_define_spec,
+    load_spec_yaml,
+)
 from fleet.core.exceptions import SpecError
 
 _SCHEMA_PATH = Path(__file__).parent / "schemas" / "define_spec_schema.json"
+
+#: An NCI concept code used as a codelist OID (C66731): a CDISC CT list.
+_NCI_CODE = re.compile(r"^C\d+$")
 
 # ODM/Define-XML 2.1 namespaces
 _NS_ODM = "http://www.cdisc.org/ns/odm/v1.3"
@@ -121,7 +129,13 @@ class DefineSpecGenerator:
         anyway (e.g. to inspect what failed).
     enrich_methods:
         When *True* (default), every Derived variable with a ``comment:``
-        or a ``derivation:`` gets a MethodDef.
+        or a ``derivation:`` gets a MethodDef.  This imports the spec's
+        ``derivations_module`` (study Python code); *False* imports nothing.
+    import_study_code:
+        When *False*, the generator imports no study code even with
+        *enrich_methods*: a ``callable:`` derivation is described by its
+        ``comment:`` or its dotted path.  ``fleet check`` uses this, so a
+        received study runs no code on a read-only command.
     strict:
         When *True*, refuse (``SpecError``) a define with gaps: a Derived
         variable with no method text, a text, integer or float variable
@@ -137,12 +151,14 @@ class DefineSpecGenerator:
         validate_schema: bool = True,
         validate_xml: bool = True,
         enrich_methods: bool = True,
+        import_study_code: bool = True,
         strict: bool = False,
     ) -> None:
         self._path = Path(define_yaml_path)
         self._data: dict[str, Any] = load_spec_yaml(self._path.read_text(encoding="utf-8"))
         self._check_spec_version()
         self._enrich_methods = enrich_methods
+        self._import_study_code = import_study_code
         self._strict = strict
         self._validate_xml = validate_xml
         #: "DATASET.VARIABLE: reason" for each define gap of the last build.
@@ -155,11 +171,11 @@ class DefineSpecGenerator:
         # ItemDef OID → ValueListDef OID (populated by _build_value_level;
         # consumed by _build_item_def to emit def:ValueListRef).
         self._value_list_refs: dict[str, str] = {}
-        # Resolve the CRF page map once (merges external page_map with
-        # inline crf_pages; inline takes precedence).
-        self._page_map: dict[str, str | dict[str, Any]] = self._load_page_map()
         if validate_schema:
             self._validate()
+        # Resolve the CRF page map once (merges external page_map with
+        # inline crf_pages; inline takes precedence).
+        self._page_map: dict[str, dict[str, Any]] = self._load_page_map()
 
     # ------------------------------------------------------------------ #
     # Public API                                                           #
@@ -271,36 +287,90 @@ class DefineSpecGenerator:
     # CRF page map                                                         #
     # ------------------------------------------------------------------ #
 
-    def _load_page_map(self) -> dict[str, str | dict[str, Any]]:
+    def _load_page_map(self) -> dict[str, dict[str, Any]]:
         """Build a merged CRF page map from external file and inline values.
 
-        Returns a dict keyed by ``"DOMAIN.VARIABLE"`` whose values are
-        either a plain page-number string (Layer 1) or a dict with rich
-        reference info (Layer 2).  Inline ``crf_pages`` on each variable
-        take precedence over entries in the external ``page_map`` file.
+        Returns a dict keyed by ``"DOMAIN.VARIABLE"`` (value level:
+        ``"DOMAIN.VARIABLE.<where values>"``) whose values are page
+        references in the dict form; a page string or number becomes
+        ``{"pages": "7"}``.  Inline ``crf_pages`` take precedence over
+        entries in the external ``page_map`` file.  A declared page that
+        cannot reach the Define-XML raises or warns: it is never lost
+        silently.
         """
-        merged: dict[str, str | dict[str, Any]] = {}
+        merged: dict[str, dict[str, Any]] = {}
+        known = self._page_map_keys()
 
         # Layer 3: external page_map YAML
-        docs = self._data.get("study", {}).get("documents", {})
-        acrf = docs.get("annotated_crf", {})
-        page_map_path = acrf.get("page_map")
+        page_map_path = (self._get_acrf_config() or {}).get("page_map")
         if page_map_path:
             resolved = (self._path.parent / page_map_path).resolve()
-            if resolved.is_file():
-                raw = yaml.safe_load(resolved.read_text(encoding="utf-8"))
-                if isinstance(raw, dict):
-                    merged.update(raw)
+            if not resolved.is_file():
+                raise SpecError(
+                    f"{self._path}: annotated_crf page_map {page_map_path} does not exist "
+                    f"(looked for {resolved})."
+                )
+            raw = yaml.safe_load(resolved.read_text(encoding="utf-8"))
+            if not isinstance(raw, dict):
+                raise SpecError(
+                    f"{resolved}: a page map is a mapping of DATASET.VARIABLE to pages, "
+                    f"not {type(raw).__name__}."
+                )
+            for key, value in raw.items():
+                merged[str(key)] = self._page_ref_value(value, f"{resolved}: {key}")
+            unknown = sorted(k for k in merged if k not in known)
+            if unknown:
+                shown = ", ".join(unknown[:10]) + (" ..." if len(unknown) > 10 else "")
+                warnings.warn(
+                    f"{resolved}: {len(unknown)} page map key(s) match no variable of "
+                    f"{self._path.name}: {shown}. Their pages are not in the Define-XML.",
+                    UserWarning,
+                    stacklevel=3,
+                )
 
-        # Layer 1 / 2: inline crf_pages on each variable (overrides external)
+        # Layer 1 / 2: inline crf_pages (overrides external)
+        for key, var in known.items():
+            if var.get("crf_pages") is not None:
+                merged[key] = self._page_ref_value(var["crf_pages"], key)
+
+        if not self._get_acrf_config():
+            lost = [key for key, ref in merged.items() if not ref.get("doc")]
+            if lost:
+                warnings.warn(
+                    f"{self._path}: {', '.join(lost)} declare crf_pages, but "
+                    "study.documents has no annotated_crf. Their pages are not in the "
+                    "Define-XML. Add study.documents.annotated_crf.",
+                    UserWarning,
+                    stacklevel=3,
+                )
+        return merged
+
+    def _page_map_keys(self) -> dict[str, dict[str, Any]]:
+        """Map each page map key of the spec to its variable entry."""
+        keys: dict[str, dict[str, Any]] = {}
         for ds in self._data.get("datasets", []):
             ds_name = ds["name"]
             for var in ds.get("variables", []):
-                crf = var.get("crf_pages")
-                if crf is not None:
-                    merged[f"{ds_name}.{var['name']}"] = crf
+                keys[f"{ds_name}.{var['name']}"] = var
+            for entry in ds.get("value_level") or []:
+                vl_key = "_".join(self._normalise_where(ds_name, entry)[2])
+                for var in entry.get("variables", []):
+                    keys[f"{ds_name}.{var['name']}.{vl_key}"] = var
+        return keys
 
-        return merged
+    def _page_ref_value(self, value: Any, where: str) -> dict[str, Any]:
+        """Normalise one page reference to the dict form (a YAML ``7`` is page "7")."""
+        if isinstance(value, (str, int)) and not isinstance(value, bool):
+            return {"pages": str(value)}
+        if isinstance(value, dict):
+            return {
+                k: str(v) if k in ("pages", "first_page", "last_page") else v
+                for k, v in value.items()
+            }
+        raise SpecError(
+            f"{where}: a CRF page reference is a page string such as '7 8' or a mapping "
+            f"with pages:, not {type(value).__name__}."
+        )
 
     def _get_acrf_config(self) -> dict[str, str] | None:
         """Return the annotated CRF document config, or None if absent."""
@@ -381,13 +451,39 @@ class DefineSpecGenerator:
                 f"{sorted(declared) or '(none)'}. Add the codelist to the "
                 f"spec's `codelists:` section or fix the reference."
             )
-        empty = [cl["oid"] for cl in self._data.get("codelists", []) if not cl.get("items")]
+        standards = self._declared_standards()
+        unknown = [
+            f"{cl['oid']} → '{cl['standard_oid']}'"
+            for cl in self._data.get("codelists", [])
+            if cl.get("standard_oid") and cl["standard_oid"] not in standards
+        ]
+        if unknown:
+            raise SpecError(
+                f"{self._path}: codelist standard_oid names no declared standard: "
+                f"{'; '.join(unknown)}. Declared standards: {sorted(standards)}. Set "
+                "study.ct_version (STD.CT) or study.adam_ct_version (STD.CT.ADAM)."
+            )
+        empty = [
+            cl["oid"]
+            for cl in self._data.get("codelists", [])
+            if not cl.get("items") and not cl.get("external")
+        ]
         if empty:
             raise SpecError(
                 f"{self._path}: codelist(s) with no terms: {', '.join(empty)}. A Define-XML "
                 "CodeList needs its terms. Run: fleet init ct (it writes the terms of the "
                 "pinned CT package into this file), or add items: by hand."
             )
+
+    def _declared_standards(self) -> set[str]:
+        """The def:Standard OIDs this define declares."""
+        study = self._data["study"]
+        declared = {_STANDARD_OIDS.get(study["standard"], f"STD.{study['standard']}")}
+        if study.get("ct_version"):
+            declared.add(_CT_OID)
+        if study.get("adam_ct_version"):
+            declared.add(_ADAM_CT_OID)
+        return declared
 
     def _leaf_href(self, ds: dict[str, Any]) -> str:
         """Resolve the ``def:leaf`` href for a dataset.
@@ -434,14 +530,85 @@ class DefineSpecGenerator:
                 stacklevel=2,
             )
 
+    def _validate_variable_refs(self) -> None:
+        """Fail loudly on keys and value-level names that are not dataset variables.
+
+        A key, a value-level variable or a where-clause variable that the
+        dataset does not declare gives a Define-XML reference to an
+        ItemDef that does not exist, or a key that is dropped.
+
+        Raises:
+            SpecError: Naming each DATASET.VARIABLE and where it is used.
+        """
+        problems: list[str] = []
+        for ds in self._data.get("datasets", []):
+            ds_name = ds["name"]
+            names = {var["name"] for var in ds.get("variables", [])}
+            for key in ds.get("keys") or []:
+                if key not in names:
+                    problems.append(f"{ds_name}.{key} (keys)")
+            for entry in ds.get("value_level") or []:
+                wc_var = self._normalise_where(ds_name, entry)[1]
+                if wc_var not in names:
+                    problems.append(f"{ds_name}.{wc_var} (value_level where)")
+                for var in entry.get("variables", []):
+                    if var["name"] not in names:
+                        problems.append(f"{ds_name}.{var['name']} (value_level variable)")
+        if problems:
+            raise SpecError(
+                f"{self._path}: not declared in the variables: of their dataset: "
+                f"{'; '.join(dict.fromkeys(problems))}. Declare each variable, or remove "
+                "the reference."
+            )
+
+    def _refuse_parent_qualifiers(self) -> None:
+        """Refuse an SDTMIG 3.4 (or earlier) spec with a qualifier in its parent domain.
+
+        Up to SDTMIG 3.4, a non-standard variable goes to SUPP--, not to
+        the parent domain.  Fleet does not build SUPP-- metadata itself:
+        the spec author moves the variable to a declared SUPP-- dataset.
+
+        References:
+            SDTMIG 3.4, section 8.4 (Relating Non-Standard Variable Values
+            to a Parent Domain); ADR-0042.
+
+        Raises:
+            SpecError: Naming each DATASET.VARIABLE and its SUPP-- dataset.
+        """
+        study = self._data["study"]
+        if study["standard"] != "SDTMIG":
+            return
+        version = tuple(int(p) for p in str(study["standard_version"]).split(".")[:2])
+        if version > (3, 4):
+            return
+        hits = [
+            (ds["name"], var["name"])
+            for ds in self._data.get("datasets", [])
+            if not ds["name"].startswith("SUPP")
+            for var in ds.get("variables", [])
+            if var.get("role") == "qualifier"
+            or (var.get("derivation") or {}).get("algorithm") == "nsv"
+        ]
+        if hits:
+            names = ", ".join(f"{ds}.{var}" for ds, var in hits)
+            supps = ", ".join(dict.fromkeys(f"SUPP{ds}" for ds, _ in hits))
+            raise SpecError(
+                f"{self._path}: {names} has role qualifier (a non-standard variable). "
+                f"SDTMIG {study['standard_version']} puts it in {supps}, not in the parent "
+                f"domain. Declare {supps} in this spec, move the variable there, then "
+                "generate the Define-XML again."
+            )
+
     def _build_odm(self) -> ET.Element:
         self._validate_codelist_refs()
+        self._validate_variable_refs()
+        self._refuse_parent_qualifiers()
         self._warn_predecessor_candidates()
         # Import the spec's derivations_module so short-name `callable:`
         # derivations are registered before their MethodDefs are resolved
-        # (from_spec does this too; without it the study's MethodDef is
-        # silently dropped).
-        _import_derivations_module(load_define_spec(self._path), source="define-xml")
+        # (from_spec does this too).  Study code runs only to write methods.
+        if self._enrich_methods and self._import_study_code:
+            _import_derivations_module(load_define_spec(self._path), source="define-xml")
         self._gaps = []
         study = self._data["study"]
         std_oid = _STANDARD_OIDS.get(study["standard"], f"STD.{study['standard']}")
@@ -632,15 +799,22 @@ class DefineSpecGenerator:
         ig_oid = f"IG.{name}"
         leaf_id = f"LF.{name}"
         std_oid = _STANDARD_OIDS.get(self._data["study"]["standard"], "STD.IG")
-        repeating = "Yes" if ds.get("repeating", True) else "No"
+        repeating = ds.get("repeating")
+        if repeating is None:
+            repeating = default_repeating(name)
+        reference = ds.get("is_reference_data")
+        if reference is None:
+            reference = default_is_reference_data(name, ds.get("class"))
+        # A SUPP-- dataset describes its parent domain (SUPPAE: Domain AE).
+        domain = name[4:] if name.startswith("SUPP") and len(name) > 4 else name
 
         attribs: dict[str, str] = {
             "OID": ig_oid,
             "Name": name,
-            "Repeating": repeating,
-            "IsReferenceData": "No",
+            "Repeating": "Yes" if repeating else "No",
+            "IsReferenceData": "Yes" if reference else "No",
             "SASDatasetName": name,
-            "Domain": name,
+            "Domain": domain,
             "def:Structure": ds["structure"],
             "Purpose": "Tabulation" if self._data["study"]["standard"] == "SDTMIG" else "Analysis",
             "def:StandardOID": std_oid,
@@ -692,7 +866,7 @@ class DefineSpecGenerator:
         return elem
 
     def _build_all_item_defs(self, datasets: list[dict[str, Any]]) -> list[ET.Element]:
-        """Build ItemDef elements; shared variables (same name & type) share an OID."""
+        """Build one ItemDef per dataset variable, from that dataset's metadata."""
         seen: dict[str, ET.Element] = {}  # item_oid → element
         result: list[ET.Element] = []
         for ds in datasets:
@@ -763,11 +937,12 @@ class DefineSpecGenerator:
             desc_text = comment
         if not desc_text and vl_oid:
             desc_text = "See Value Level Metadata"
+        crf_ref = self._crf_page_ref(dataset_name, var["name"], vl_key)
         if (
             not desc_text
             and origin_type == "Collected"
             and origin_attrs["Source"] == "Investigator"
-            and f"{dataset_name}.{var['name']}" not in self._page_map
+            and crf_ref is None
         ):
             desc_text = "Case Report Form"
         if desc_text:
@@ -775,7 +950,8 @@ class DefineSpecGenerator:
             ET.SubElement(orig_desc, "TranslatedText", {"xml:lang": "en"}).text = desc_text
 
         # CRF page references — emit DocumentRef/PDFPageRef inside Origin
-        self._append_crf_page_ref(orig_elem, dataset_name, var["name"])
+        if crf_ref is not None:
+            self._append_crf_page_ref(orig_elem, *crf_ref)
 
         # Value-level metadata: point the parent ItemDef at its ValueListDef
         if vl_oid:
@@ -867,7 +1043,12 @@ class DefineSpecGenerator:
         expression = ""
         problem: str | None = None
 
-        if callable_path and algorithm in ("", "derivation"):
+        if callable_path and algorithm in ("", "derivation") and not self._import_study_code:
+            # No study import: the comment, or the dotted path, describes it.
+            description = description or f"Study derivation {callable_path}."
+            expression = str(callable_path)
+            context = "Python"
+        elif callable_path and algorithm in ("", "derivation"):
             summary, dotted = self._resolve_callable(str(callable_path))
             if summary is None and dotted is None:
                 problem = f"callable {callable_path} does not import"
@@ -927,19 +1108,56 @@ class DefineSpecGenerator:
             formal.text = info["expression"]
         return elem
 
-    @staticmethod
-    def _build_codelist(cl: dict[str, Any]) -> ET.Element:
+    def _build_codelist(self, cl: dict[str, Any]) -> ET.Element:
+        """Render one CodeList in the form its terms call for.
+
+        Every term with a decode gives ``CodeListItem``; no term with a
+        decode gives ``EnumeratedItem``; ``external:`` gives
+        ``ExternalCodeList`` (MedDRA).  ``nci_code`` gives the NCI
+        ``Alias``, ``extended: true`` marks a sponsor term.
+
+        Raises:
+            SpecError: When some terms have a decode and some do not.
+        """
         attribs: dict[str, str] = {
             "OID": cl["oid"],
             "Name": cl["name"],
             "DataType": _TYPE_TO_ODM[cl["type"]],
         }
+        standard = cl.get("standard_oid")
+        if not standard and _CT_OID in self._declared_standards() and _NCI_CODE.match(cl["oid"]):
+            standard = _CT_OID
+        if standard:
+            attribs["def:StandardOID"] = standard
         elem = ET.Element("CodeList", attrib=attribs)
-        for item in cl.get("items", []):
-            ci = ET.SubElement(elem, "CodeListItem", {"CodedValue": item["coded_value"]})
+        external = cl.get("external")
+        if external:
+            ET.SubElement(
+                elem,
+                "ExternalCodeList",
+                {"Dictionary": external["dictionary"], "Version": str(external["version"])},
+            )
+        items = [] if external else cl.get("items", [])
+        undecoded = [item["coded_value"] for item in items if not item.get("decode")]
+        if undecoded and len(undecoded) < len(items):
+            raise SpecError(
+                f"{self._path}: codelist {cl['oid']} mixes terms with and without a decode "
+                f"(term {undecoded[0]!r} has none). Give every term a decode "
+                "(CodeListItem) or none (EnumeratedItem)."
+            )
+        tag = "EnumeratedItem" if undecoded else "CodeListItem"
+        for item in items:
+            item_attrs = {"CodedValue": item["coded_value"]}
+            if item.get("extended"):
+                item_attrs["def:ExtendedValue"] = "Yes"
+            ci = ET.SubElement(elem, tag, item_attrs)
             if item.get("decode"):
                 decode = ET.SubElement(ci, "Decode")
                 ET.SubElement(decode, "TranslatedText", {"xml:lang": "en"}).text = item["decode"]
+            if item.get("nci_code"):
+                ET.SubElement(ci, "Alias", {"Context": "nci:ExtCodeID", "Name": item["nci_code"]})
+        if cl.get("nci_code"):
+            ET.SubElement(elem, "Alias", {"Context": "nci:ExtCodeID", "Name": cl["nci_code"]})
         return elem
 
     # ------------------------------------------------------------------ #
@@ -1043,59 +1261,56 @@ class DefineSpecGenerator:
 
         return list(value_lists.values()), list(where_defs.values()), item_defs
 
-    def _append_crf_page_ref(
-        self, origin_elem: ET.Element, dataset_name: str, var_name: str
-    ) -> None:
-        """Append a ``def:DocumentRef`` with ``def:PDFPageRef`` to an Origin element.
+    def _crf_page_ref(
+        self, dataset_name: str, var_name: str, vl_key: str | None = None
+    ) -> tuple[str, dict[str, Any]] | None:
+        """Return the leaf ID and page reference of one variable, or None.
 
-        Resolves CRF page info from the merged page map.  Supports both
-        the simple string form (Layer 1) and the rich dict form (Layer 2).
+        A value-level item reads ``DATASET.VARIABLE.<where values>`` first,
+        then its parent ``DATASET.VARIABLE``.  ``doc:`` names the href of
+        the annotated CRF or of a supplemental document.
+
+        Raises:
+            SpecError: When ``doc:`` matches no declared document href.
         """
         key = f"{dataset_name}.{var_name}"
-        crf_ref = self._page_map.get(key)
+        crf_ref = self._page_map.get(f"{key}.{vl_key}") if vl_key else None
         if crf_ref is None:
-            return
-
+            crf_ref = self._page_map.get(key)
+        if crf_ref is None:
+            return None
         acrf_cfg = self._get_acrf_config()
-        default_leaf_id = self._acrf_leaf_id()
+        doc_href = crf_ref.get("doc")
+        if not doc_href:
+            # No annotated CRF: _load_page_map warned that the page is lost.
+            return (self._acrf_leaf_id(), crf_ref) if acrf_cfg else None
+        if acrf_cfg and doc_href == acrf_cfg.get("href"):
+            return self._acrf_leaf_id(), crf_ref
+        docs = self._data.get("study", {}).get("documents", {})
+        for sd in docs.get("supplemental_docs", []):
+            if sd["href"] == doc_href:
+                return sd["id"], crf_ref
+        raise SpecError(
+            f"{self._path}: {key} crf_pages doc {doc_href} matches no annotated_crf or "
+            "supplemental_docs href. Declare the document under study.documents."
+        )
 
-        if isinstance(crf_ref, str):
-            # Layer 1: simple page string — "7" or "8 9"
-            if not acrf_cfg:
-                return  # no aCRF document configured; skip silently
-            doc_ref = ET.SubElement(origin_elem, "def:DocumentRef", {"leafID": default_leaf_id})
-            ET.SubElement(
-                doc_ref,
-                "def:PDFPageRef",
-                {"PageRefs": crf_ref, "Type": "PhysicalRef"},
-            )
-        elif isinstance(crf_ref, dict):
-            # Layer 2: rich reference with optional doc, type, ranges
-            doc_href = crf_ref.get("doc")
-            if doc_href and acrf_cfg and doc_href != acrf_cfg.get("href"):
-                # Reference to a non-default document — resolve leaf ID
-                leaf_id = f"LF.{Path(doc_href).stem}"
-            else:
-                leaf_id = default_leaf_id
-
-            if not acrf_cfg and leaf_id == default_leaf_id:
-                return
-
-            doc_ref = ET.SubElement(origin_elem, "def:DocumentRef", {"leafID": leaf_id})
-            pages = crf_ref.get("pages")
-            ref_type = crf_ref.get("type", "PhysicalRef")
-            first_page = crf_ref.get("first_page")
-            last_page = crf_ref.get("last_page")
-
-            if pages or first_page:
-                pr_attrs: dict[str, str] = {"Type": ref_type}
-                if pages:
-                    pr_attrs["PageRefs"] = pages
-                if first_page:
-                    pr_attrs["FirstPage"] = first_page
-                if last_page:
-                    pr_attrs["LastPage"] = last_page
-                ET.SubElement(doc_ref, "def:PDFPageRef", pr_attrs)
+    @staticmethod
+    def _append_crf_page_ref(origin_elem: ET.Element, leaf_id: str, crf_ref: dict) -> None:
+        """Append a ``def:DocumentRef`` with ``def:PDFPageRef`` to an Origin element."""
+        doc_ref = ET.SubElement(origin_elem, "def:DocumentRef", {"leafID": leaf_id})
+        pages = crf_ref.get("pages")
+        first_page = crf_ref.get("first_page")
+        last_page = crf_ref.get("last_page")
+        if pages or first_page:
+            pr_attrs: dict[str, str] = {"Type": crf_ref.get("type", "PhysicalRef")}
+            if pages:
+                pr_attrs["PageRefs"] = pages
+            if first_page:
+                pr_attrs["FirstPage"] = first_page
+            if last_page:
+                pr_attrs["LastPage"] = last_page
+            ET.SubElement(doc_ref, "def:PDFPageRef", pr_attrs)
 
     # ------------------------------------------------------------------ #
     # Helpers                                                              #
@@ -1103,30 +1318,11 @@ class DefineSpecGenerator:
 
     @staticmethod
     def _item_oid(dataset_name: str, var_name: str) -> str:
-        """Build a stable ItemDef OID.
+        """Build the ItemDef OID ``IT.<DATASET>.<VARIABLE>``.
 
-        Common variables (STUDYID, USUBJID, ...) that appear in multiple datasets
-        are given a shared OID *without* the dataset prefix so they share a single
-        ItemDef element in the XML — matching CDISC best practice.
+        Each dataset variable has its own ItemDef, so ADSL.AGE and ADAE.AGE
+        each keep their own type, length, origin and codelist.
         """
-        _SHARED = {
-            "STUDYID",
-            "USUBJID",
-            "DOMAIN",
-            "SUBJID",
-            "SITEID",
-            "AGE",
-            "AGEU",
-            "SEX",
-            "RACE",
-            "ETHNIC",
-            "ARMCD",
-            "ARM",
-            "ACTARMCD",
-            "ACTARM",
-        }
-        if var_name in _SHARED:
-            return f"IT.{var_name}"
         return f"IT.{dataset_name}.{var_name}"
 
     @staticmethod

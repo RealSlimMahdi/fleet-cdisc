@@ -122,12 +122,21 @@ def _item_def(oid: str, origin: str, desc: str | None = None) -> str:
     )
 
 
+def _method_def(oid: str) -> str:
+    return (
+        f'<MethodDef OID="{oid}" Name="Algorithm for X" Type="Computation">'
+        "<Description><TranslatedText xml:lang='en'>t</TranslatedText></Description>"
+        "</MethodDef>"
+    )
+
+
 class TestSemanticLint:
     def test_method_on_non_derived_is_flagged(self):
         xml = _doc(
             '<ItemGroupDef OID="IG.DM" Name="DM" Repeating="No">'
             '<ItemRef ItemOID="IT.DM.SEX" MethodOID="MT.DM.SEX"/></ItemGroupDef>'
             + _item_def("IT.DM.SEX", "Collected")
+            + _method_def("MT.DM.SEX")
         )
         problems = semantic_errors(xml)
         assert len(problems) == 1 and "Collected" in problems[0]
@@ -137,6 +146,7 @@ class TestSemanticLint:
             '<ItemGroupDef OID="IG.DM" Name="DM" Repeating="No">'
             '<ItemRef ItemOID="IT.DM.AGEGR1" MethodOID="MT.DM.AGEGR1"/></ItemGroupDef>'
             + _item_def("IT.DM.AGEGR1", "Derived")
+            + _method_def("MT.DM.AGEGR1")
         )
         assert semantic_errors(xml) == []
 
@@ -217,6 +227,8 @@ class TestSemanticLint:
             "  originator: Fleet\n  standard: ADAMIG\n  standard_version: '1.1'\n"
             "datasets:\n  - name: ADAE\n    label: Adverse Events Analysis\n"
             "    structure: One record per event\n    keys: [USUBJID]\n    variables:\n"
+            "      - name: USUBJID\n        label: Unique Subject Identifier\n        type: text\n"
+            "        length: 20\n        origin: Predecessor\n        predecessor: ADSL.USUBJID\n"
             "      - name: TRTSDT\n        label: Date of First Exposure\n        type: date\n"
             "        origin: Derived\n        derivation:\n          algorithm: merge\n"
             "          dataset: ADSL\n          on: USUBJID\n"
@@ -744,7 +756,7 @@ class TestMethodTextShapes:
                     "name": "DM",
                     "label": "Demographics",
                     "structure": "One record per subject",
-                    "keys": ["USUBJID"],
+                    "keys": ["SEX"],
                     "variables": [
                         {
                             "name": "SEX",

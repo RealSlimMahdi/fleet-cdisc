@@ -67,7 +67,7 @@ datasets:
     label: Adverse Events
     structure: One record per adverse event per subject
     class: EVENTS
-    keys: [STUDYID, USUBJID, AESEQ]
+    keys: [DOMAIN, AESEV]
     inputs:
       - name: ae
         type: dataset

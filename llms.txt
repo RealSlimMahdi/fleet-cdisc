@@ -999,7 +999,7 @@ End-to-end CDISCPILOT01 pipeline — spec-driven style.
 
 Every ADaM column derivation is defined in examples/cdiscpilot01/adam/define.yaml
 and executed via ``df.adam.from_spec()``.  OCCDS-specific verbs that the spec
-cannot yet express (treatment_emergent, seq) are applied inline
+cannot yet express (worst-severity flag, seq) are applied inline
 immediately after the spec phase.
 
 Shared-verb mixin architecture
@@ -1197,19 +1197,16 @@ print(f"SDTM AE  : {ae.shape[0]} records  ·  {ae.shape[1]} columns")
 
 # ════════════════════════════════════════════════════════════════════════════
 # 5. ADaM ADSL — spec-driven
-#    Simple derivations (source/rename/assigned) live in the spec.
-#    Join-based pre-computations (TRTSDT from EX, AGEGR1, SAFFL, ITTFL,
-#    TRT01P/TRT01A) are added to the DM frame before from_spec() runs.
+#    Simple derivations (source/rename/assigned) live in the spec, and so do
+#    TRTSDT/TRTEDT (first_date/last_date on the pinned EX).
+#    Join-based pre-computations (AGEGR1, SAFFL, ITTFL, TRT01P/TRT01A)
+#    are added to the DM frame before from_spec() runs.
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── ADaM ADSL (spec-driven) ──────────────────────────────────────────────")
 
 dm_enriched = (
-    dm.adam.adsl.first_date(  # Treatment dates from EX (admiral: derive_vars_merged)
-        "TRTSDT", from_dataset=ex, date_col="EXSTDTC"
-    )
-    .last_date("TRTEDT", from_dataset=ex, date_col="EXENDTC")
     # Treatment variables (admiral: mutate TRT01P=ARM, TRT01A=ACTARM)
-    .assign("TRT01P", source="ARM")
+    dm.adam.adsl.assign("TRT01P", source="ARM")
     .assign("TRT01A", source="ACTARM")
     # Age grouping (admiral: derive_vars_cat)
     .case_when(
@@ -1239,11 +1236,13 @@ assert (dm_enriched["SAFFL"] == "Y").sum() == dm_enriched.height, "every pilot s
 # The columns below are derived inline above (or upstream in DM) with a
 # *different* method than the spec documents, so they are omitted from the
 # spec pass — from_spec()'s overwrite guard would (rightly) raise otherwise.
+# TRTSDT and TRTEDT run from the spec on the pinned EX.
 adsl = (
-    dm_enriched.adam.from_spec(
+    dm_enriched.adam.pin("EX", ex)
+    .from_spec(
         ADAM_SPEC,
         dataset="ADSL",
-        omit=["STUDYID", "TRT01P", "TRT01A", "TRTSDT", "TRTEDT"],
+        omit=["STUDYID", "TRT01P", "TRT01A"],
     )
     .select(spec=ADAM_SPEC, dataset="ADSL")
     .write_parquet(OUT / "adsl.parquet")
@@ -1289,9 +1288,9 @@ vs_with_adsl = (
     .to_frame()
 )
 
-# USUBJID is renamed inline above (the merge needs it) — omit the spec's copy.
+# The spec copies USUBJID as it is (an identity copy of the merge key).
 advs = (
-    vs_with_adsl.adam.from_spec(ADAM_SPEC, dataset="ADVS", omit=["USUBJID"])
+    vs_with_adsl.adam.from_spec(ADAM_SPEC, dataset="ADVS")
     .select(spec=ADAM_SPEC, dataset="ADVS")
     .write_parquet(OUT / "advs.parquet")
 )
@@ -1299,7 +1298,7 @@ print(f"   {advs.shape[0]} records × {advs.shape[1]} variables")
 print(f"   Parameters: {sorted(advs['PARAMCD'].unique().to_list())}")
 
 # ════════════════════════════════════════════════════════════════════════════
-# 7. ADaM ADAE — hybrid: spec for source columns, occds for OCCDS-specific verbs
+# 7. ADaM ADAE — hybrid: spec for source columns and TRTEMFL, occds for the rest
 #    admiral ref: https://pharmaverse.github.io/admiral/articles/adae.html
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── ADaM ADAE (spec-driven + occds verbs) ────────────────────────────────")
@@ -1307,17 +1306,12 @@ print("\n── ADaM ADAE (spec-driven + occds verbs) ────────�
 _adsl_trt = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "AGE", "SEX", "SAFFL"])
 ae_with_trt = fleet.frame(ae).adam.merge(dataset=_adsl_trt, on="USUBJID", how="left").to_frame()
 # STUDYID already exists on the SDTM AE frame — keep it, skip the spec's copy.
+# The spec derives TRTEMFL with occds.treatment_emergent (end window 0 days).
 adae_sourced = ae_with_trt.adam.from_spec(ADAM_SPEC, dataset="ADAE", omit=["STUDYID"]).to_frame()
 adae = (
-    adae_sourced.adam.occds.treatment_emergent(
-        "TRTEMFL",
-        start_date="AESTDTC",
-        end_date="AEENDTC",
-        trtsdt="TRTSDT",
-        trtedt="TRTEDT",
-        end_window=0,
+    adae_sourced.adam.occds.recode(
+        "AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3}
     )
-    .recode("AESEVN", source="AESEV", recode_map={"MILD": 1, "MODERATE": 2, "SEVERE": 3})
     .flag(
         "ANL01FL",
         criteria="max",

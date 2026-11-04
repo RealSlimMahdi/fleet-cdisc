@@ -257,7 +257,7 @@ def _define(standard: str, dataset: str, variable: str, codelist: str) -> dict[s
                 "name": dataset,
                 "label": dataset,
                 "structure": "One record per subject",
-                "keys": ["USUBJID"],
+                "keys": [variable],
                 "variables": [
                     {"name": variable, "label": variable, "type": "text", "codelist": codelist}
                 ],

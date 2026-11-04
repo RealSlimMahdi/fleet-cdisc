@@ -65,6 +65,62 @@ DATASET_NAME = r"^[A-Z][A-Z0-9]{1,7}$"
 #: The logical name of a ``dataset_input`` (``dm_raw``, ``DM``).
 INPUT_NAME = r"^[A-Za-z][A-Za-z0-9_]*$"
 
+#: SDTMIG trial design datasets: reference data, not records per subject.
+TRIAL_DESIGN_DATASETS = frozenset({"TA", "TE", "TV", "TI", "TS", "TD", "TM"})
+
+
+def default_repeating(name: str) -> bool:
+    """Return the Define-XML ``Repeating`` default of a dataset with no ``repeating:`` key.
+
+    DM, ADSL and the trial design datasets have no more than one record
+    per subject (or no subject at all): ``No``.  Every other dataset: ``Yes``.
+
+    Args:
+        name: The dataset name (``DM``, ``ADAE``).
+
+    Returns:
+        bool: True when the dataset repeats per subject.
+
+    References:
+        CDISC Define-XML 2.1 example ``defineV21-SDTM.xml``; ADR-0042.
+
+    Examples:
+        The defaults of DM and AE::
+
+            from fleet.core.define_spec import default_repeating
+
+            assert default_repeating("DM") is False
+            assert default_repeating("AE") is True
+    """
+    return name not in TRIAL_DESIGN_DATASETS | {"DM", "ADSL"}
+
+
+def default_is_reference_data(name: str, dataset_class: str | None) -> bool:
+    """Return the Define-XML ``IsReferenceData`` default of a dataset with no key.
+
+    A trial design dataset (TA, TE, TV, TI, TS, TD, TM, or class
+    ``TRIAL DESIGN``) is reference data: ``Yes``.  Every other dataset: ``No``.
+
+    Args:
+        name: The dataset name (``TS``).
+        dataset_class: The ``class:`` of the dataset, if any.
+
+    Returns:
+        bool: True when the dataset is reference data.
+
+    References:
+        CDISC Define-XML 2.1 example ``defineV21-SDTM.xml``; ADR-0042.
+
+    Examples:
+        TS is reference data, AE is not::
+
+            from fleet.core.define_spec import default_is_reference_data
+
+            assert default_is_reference_data("TS", None) is True
+            assert default_is_reference_data("AE", "EVENTS") is False
+    """
+    return name in TRIAL_DESIGN_DATASETS or (dataset_class or "").upper() == "TRIAL DESIGN"
+
 
 class DatasetEntry(BaseModel):
     """One entry in the top-level ``datasets:`` list."""
@@ -79,6 +135,7 @@ class DatasetEntry(BaseModel):
     label: str | None = None
     structure: str | None = None
     repeating: Any = None
+    is_reference_data: bool | None = None
     keys: Any = None
     value_level: Any = None
     class_: Any = Field(default=None, alias="class")

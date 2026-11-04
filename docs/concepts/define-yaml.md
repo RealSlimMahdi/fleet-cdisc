@@ -396,6 +396,41 @@ Variables can reference codelists declared in the `codelists` block:
     source: SEX
 ```
 
+The terms of a codelist decide its Define-XML form:
+
+- every term has a `decode:`: `CodeListItem`;
+- no term has a `decode:` (units, test codes): `EnumeratedItem`;
+- some terms have a `decode:` and some do not: a `SpecError` that names the
+  codelist and the first term without one;
+- `external: {dictionary: MedDRA, version: "26.0"}` in place of `items:`:
+  `ExternalCodeList`.
+
+`nci_code:` on a codelist or a term writes the NCI `Alias`, and
+`extended: true` on a term marks a sponsor term (`def:ExtendedValue="Yes"`).
+A codelist whose `oid` is an NCI code (`C66731`) gets
+`def:StandardOID="STD.CT"` when `study.ct_version` is set; `standard_oid:`
+sets another declared standard (`STD.CT.ADAM` with `study.adam_ct_version`).
+
+<!-- docs:no-run -->
+
+```yaml
+codelists:
+  - oid: C66731
+    name: Sex
+    type: text
+    nci_code: C66731
+    items:
+      - { coded_value: F, decode: Female, nci_code: C16576 }
+      - { coded_value: X, decode: X, extended: true }
+  - oid: CL.UNIT
+    name: Unit
+    type: text
+    items: [{ coded_value: mg }, { coded_value: kg }]
+```
+
+Each dataset variable has its own `ItemDef` (`IT.ADSL.AGE`, `IT.ADAE.AGE`), so
+each one keeps the type, length, origin and codelist of its own dataset.
+
 ### Controlled terminology in the spec path
 
 A spec step and its inline call check the same terms. Inside a study, the
@@ -562,9 +597,22 @@ What it catches:
 - a spec that does not conform to `define_spec_schema.json` (`SpecSchemaError`,
   with the path of the bad entry);
 - a `codelist:` reference to a codelist that the spec does not declare;
+- a key, a value-level variable or a where-clause variable that its dataset
+  does not declare, and a `crf_pages` document that `study.documents` does
+  not declare;
+- in an SDTMIG 3.4 (or earlier) spec, a `role: qualifier` variable in its
+  parent domain: SDTMIG 3.4 puts it in SUPP--. Declare the SUPP-- dataset
+  (its `Domain` is the parent domain) and move the variable there;
+- a `study.ct_version` (or `adam_ct_version`) that is not the date of the CT
+  package that `study_config.yaml` pins;
 - a Define-XML gap: method text, `Length` or `SignificantDigits` (see
   *Define-XML gaps* above);
 - a generated document that fails the CDISC XSDs or the semantic lint.
+
+`fleet check` imports no study code: it does not import the
+`derivations_module` of the spec, and a `callable:` derivation is described
+by its `comment:` or its dotted path. `fleet define-xml` imports the module to
+write the method text of each `callable:`.
 
 The derivation blocks themselves are checked by layer 1: the verb's model
 knows the required keys, so there are no separate per-algorithm rules.
@@ -702,7 +750,13 @@ variables:
 ```
 
 The string value maps directly to the `PageRefs` attribute with
-`Type="PhysicalRef"`.
+`Type="PhysicalRef"`. A number (`crf_pages: 8` in YAML) is read as the page
+string `"8"`. Without `study.documents.annotated_crf`, the pages cannot be
+written: Fleet gives a warning that names each variable.
+
+A value-level variable takes its own pages: the key of its page map entry is
+`DATASET.VARIABLE.<where values>` (for example `LB.LBORRES.ALB`), and the
+parent `DATASET.VARIABLE` is the fallback.
 
 ### Layer 2 — Rich references (named destinations, page ranges)
 
@@ -723,6 +777,10 @@ For PDF bookmarks or page ranges, use the dict form:
     first_page: "8" # optional range attributes
     last_page: "9"
 ```
+
+`doc:` names the `href` of the annotated CRF or of a supplemental document.
+A `doc:` that matches no declared document stops generation with a
+`SpecError` that names the variable.
 
 ### Layer 3 — External page map (EDC-driven workflows)
 
@@ -748,7 +806,9 @@ VS.VSTESTCD: "20"
 ```
 
 Inline `crf_pages` on individual variables always take precedence over the
-external page map.
+external page map. A `page_map` file that does not exist stops generation
+with a `SpecError`. Page map keys that match no variable of the spec give one
+warning that lists them.
 
 ### Supplemental documents
 

@@ -56,6 +56,8 @@ class ADAMAlgorithm(StrEnum):
     FIRST_DATE = "first_date"
     LAST_DATE = "last_date"
     COUNT_EVENTS = "count_events"
+    # OCCDS sub-namespace verbs (dotted, ADR-0008)
+    TREATMENT_EMERGENT = "occds.treatment_emergent"
 
 
 #: Discriminated union of all per-algorithm ADaM variable models.
