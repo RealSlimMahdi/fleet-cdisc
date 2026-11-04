@@ -272,6 +272,7 @@ def fleet_tlg_run(
     data_path: str,
     adsl_path: str | None = None,
     groupby: str | None = None,
+    adsl_groupby: str | None = None,
 ) -> str:
     """Execute a YAML TLG spec against a dataset and return rendered HTML.
 
@@ -280,8 +281,11 @@ def fleet_tlg_run(
         data_path: Primary analysis dataset file (e.g. ADAE for ``aet01``).
         adsl_path: ADSL dataset file for population denominators
             (tables only; defaults to *data_path* for ADSL templates).
-        groupby: Treatment-arm column (default: auto-detect
+        groupby: Treatment-arm column (default: the spec's ``columns:``
+            field when it declares one, else auto-detect
             TRTA → TRT01A → TRT01P).
+        adsl_groupby: ADSL arm column for the big N when ADSL lacks the
+            analysis arm (e.g. ``TRT01A`` for an ADAE grouped by ``TRTA``).
 
     Returns:
         str: The rendered HTML table or listing.
@@ -292,24 +296,26 @@ def fleet_tlg_run(
         OutputType,
         RenderMetadata,
         ard_to_table_model,
-        detect_groupby,
         listing_to_model,
         load_spec,
         render_html,
         render_listing_html,
+        resolve_groupby,
         run_spec,
     )
 
     spec = load_spec(spec_path)
     meta = TEMPLATES[spec.template]
     is_listing = meta.output_type is OutputType.LISTING
+    if adsl_groupby and not is_listing:
+        spec = spec.model_copy(update={"adsl_group_col": adsl_groupby})
     df = _load_frame(data_path)
     adsl = _load_frame(adsl_path) if adsl_path else None
     if adsl is None and meta.domains and meta.domains[-1] == "ADSL":
         adsl = df
-    if not is_listing and groupby is None:
-        groupby = detect_groupby(df.columns)
-        if groupby is None:
+    if not is_listing:
+        groupby, source = resolve_groupby(spec, df.columns, groupby)
+        if source == "none":
             raise ValueError(
                 "could not auto-detect a treatment-arm column "
                 f"(tried {', '.join(GROUPBY_CANDIDATES)}). Pass groupby=<column>."

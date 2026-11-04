@@ -101,7 +101,7 @@ Each is a thin wrapper over a public Fleet API:
 | `fleet_validate(dataset_path, standard?, version?, custom_rules?)` | CDISC Rules Engine validation from the run setup |
 | `fleet_ct_terms(codelist, ct_path?)` | valid terms for a codelist |
 | `fleet_tlg_catalog()` | all registered TLG templates |
-| `fleet_tlg_run(spec_path, data_path, adsl_path?, groupby?)` | run a TLG spec YAML, return rendered HTML |
+| `fleet_tlg_run(spec_path, data_path, adsl_path?, groupby?, adsl_groupby?)` | run a TLG spec YAML, return rendered HTML |
 | `fleet_dataset_check(data_path, define_yaml, dataset)` | conformance check against the spec |
 | `fleet_code_to_spec(source)` | derivation blocks reverse-mapped from a program's verb calls, without running it |
 | `fleet_spec_to_code(define_yaml, dataset)` | an inline program skeleton rendered from a dataset's spec |

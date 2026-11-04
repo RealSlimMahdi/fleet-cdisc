@@ -191,6 +191,25 @@ def _detect_groupby(df: pl.DataFrame, explicit: str | None) -> str:
     raise AssertionError("unreachable")
 
 
+def _spec_groupby(spec: Any, df: pl.DataFrame, explicit: str | None) -> str | None:
+    """Resolve a spec run's arm column: --groupby, the spec's columns:, detection."""
+    from fleet.tlg import resolve_groupby
+
+    if explicit:
+        return _detect_groupby(df, explicit)
+    groupby, source = resolve_groupby(spec, df.columns)
+    if source == "none":
+        return _detect_groupby(df, None)
+    return groupby
+
+
+def _with_adsl_groupby(spec: Any, adsl_groupby: str | None) -> Any:
+    """Apply ``--adsl-groupby`` to a summary spec (listings have no big N)."""
+    if adsl_groupby and "adsl_group_col" in type(spec).model_fields:
+        return spec.model_copy(update={"adsl_group_col": adsl_groupby})
+    return spec
+
+
 def _watch_loop(paths: Sequence[Path], run_once: Callable[[], None]) -> None:
     """Re-run *run_once* whenever any of *paths* changes (``--watch``)."""
     try:
@@ -1512,12 +1531,12 @@ def _tlg_run_once(args: argparse.Namespace) -> None:
         adsl_df = _load_dataset(args.adsl)
 
     for spec_path in spec_paths:
-        spec = load_spec(spec_path)
+        spec = _with_adsl_groupby(load_spec(spec_path), args.adsl_groupby)
         meta = TEMPLATES[spec.template]
         data_df, population, is_listing = _resolve_spec_frames(
             spec_path, meta, named_data, default_data, adsl_df, args.adsl, ctx
         )
-        groupby = None if is_listing else _detect_groupby(data_df, args.groupby)
+        groupby = None if is_listing else _spec_groupby(spec, data_df, args.groupby)
 
         result = run_spec(spec, data_df, adsl=population, groupby=groupby)
 
@@ -1565,16 +1584,16 @@ def _tlg_explore_once(args: argparse.Namespace) -> None:
 
     entries = []
     for spec_path in spec_paths:
-        spec = load_spec(spec_path)
+        spec = _with_adsl_groupby(load_spec(spec_path), args.adsl_groupby)
         meta = TEMPLATES[spec.template]
         data_df, population, is_listing = _resolve_spec_frames(
             spec_path, meta, named_data, default_data, adsl_df, args.adsl, ctx
         )
         # A declared groupby axis supplies the arm column per variant —
-        # only detect one when the spec leaves it fixed.
+        # only resolve one when the spec leaves it fixed.
         has_groupby_axis = spec.interactive is not None and spec.interactive.groupby is not None
         groupby = (
-            None if (is_listing or has_groupby_axis) else _detect_groupby(data_df, args.groupby)
+            None if (is_listing or has_groupby_axis) else _spec_groupby(spec, data_df, args.groupby)
         )
         n_variants = len(enumerate_variants(spec))
         print(f"{spec_path.name}: {n_variants} variant(s)")
@@ -2961,7 +2980,18 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
     tlg_run.add_argument(
         "--groupby",
         default=None,
-        help="Treatment-arm column. Default: auto-detect (TRTA → TRT01A → TRT01P).",
+        help=(
+            "Treatment-arm column. Default: the spec's columns: field when it "
+            "declares one, else auto-detect (TRTA → TRT01A → TRT01P)."
+        ),
+    )
+    tlg_run.add_argument(
+        "--adsl-groupby",
+        default=None,
+        help=(
+            "ADSL arm column for the big N when ADSL lacks the analysis arm "
+            "(e.g. TRT01A for an ADAE grouped by TRTA). Sets adsl_group_col."
+        ),
     )
     tlg_run.add_argument("--title", default="", help="Output title (default: template title).")
     tlg_run.add_argument("--subtitle", default="", help="Output subtitle.")
@@ -3032,7 +3062,16 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
         default=None,
         help=(
             "Treatment-arm column for specs without a groupby axis. "
-            "Default: auto-detect (TRTA → TRT01A → TRT01P)."
+            "Default: the spec's columns: field when it declares one, else "
+            "auto-detect (TRTA → TRT01A → TRT01P)."
+        ),
+    )
+    tlg_explore.add_argument(
+        "--adsl-groupby",
+        default=None,
+        help=(
+            "ADSL arm column for the big N when ADSL lacks the analysis arm "
+            "(e.g. TRT01A for an ADAE grouped by TRTA). Sets adsl_group_col."
         ),
     )
     tlg_explore.add_argument("--title", default="", help="Output title (default: template title).")
