@@ -198,11 +198,10 @@ Fleet's `fleet init rules` command caches the exact CDISC conformance rules for 
 uv run fleet init rules
 ```
 
-Each YAML file records the rule's CORE ID, description, check logic, scope, severity, and regulatory citations. When committed to VCS, these files provide:
+Each YAML file records the rule's CORE ID, description, check logic, scope, and regulatory citations. The files are a reference copy. Validation does not read them: the CORE engine runs the rules bundled in its own release, so the engine version fixes the rules that a study is validated against. Pin the engine with `fleet install-engine --version <tag>` or with `validation.engine_path` in `study_config.yaml`. When committed to VCS, the files provide:
 
-- **Version lock:** The exact rule definitions in effect when the study was validated, immune to upstream CDISC updates.
-- **Audit trail:** Reviewers (including regulators) can inspect which rules were applied without re-querying the CDISC Library.
-- **Diff visibility:** Any change in the rule set between study milestones is visible in version control history.
+- **Reference:** Reviewers can read the rule text for the IG version without re-querying the CDISC Library.
+- **Diff visibility:** Any change in the CDISC Library rule text between study milestones is visible in version control history.
 
 #### Custom rules
 
@@ -252,7 +251,7 @@ Applying the R Validation Hub risk-based framework to Fleet:
 | ---------------------------------- | ----------------------------------------------- | --------------------------------------------------------- | --------------------------- |
 | Standards metadata sourcing        | `fleet init define` → `define.yaml`             | SDTM IG + ADaM IG variable metadata from CDISC Library    | Automated at study setup    |
 | Controlled terminology generation  | `fleet init ct` → `codelists.py`                | NCI concept IDs for all study domains                     | Automated at study setup    |
-| Conformance rule snapshot          | `fleet init rules` → `metadata/*/rules/*.yaml`  | All CDISC CORE rules for IG version, version-locked       | Automated at study setup    |
+| Conformance rule snapshot          | `fleet init rules` → `metadata/*/rules/*.yaml`  | All CDISC CORE rules for IG version, reference copy       | Automated at study setup    |
 | Custom rule scaffolding            | `fleet add-rule` → `metadata/custom_rules/`     | Sponsor SOP / TCG gap rules, schema-validated             | On demand                   |
 | Custom rule schema check           | `fleet check-rule <file>`                       | YAML syntax + structure + JSON Schema validation          | On demand / CI gate         |
 | Cross-language algorithm benchmark | `tests/unit/test_admiral_parity.py`             | BSA, MAP, QTc, LOCF, BMI, ANL01FL, age/period (frozen admiral values) | Runs in CI on every commit  |

@@ -1442,7 +1442,7 @@ class SharedVerbsMixin:
             expr: pl.Expr = drv()
             ns = self._chain(expr.alias(drv.targets[0]), verb="derivation", params={})
             # Registered derivations round-trip via to_spec_yaml as
-            # `algorithm: callable` blocks referencing their dotted path.
+            # `algorithm: derivation` blocks with their dotted path as `callable:`.
             if ns._lineage:
                 ns._lineage[-1].spec = {"algorithm": "derivation", "callable": drv.dotted_path}
             return ns

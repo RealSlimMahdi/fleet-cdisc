@@ -49,7 +49,7 @@
     },
     "derivations_module": {
       "type": "string",
-      "description": "Dotted Python module imported by from_spec() before execution so that its @derivation / register_transform callables are available (removes the import-order footgun for `algorithm: callable`)."
+      "description": "Dotted Python module imported by from_spec() before execution so that its @derivation / register_transform callables are available (removes the import-order footgun for `algorithm: derivation` with `callable:`)."
     },
     "ct": {
       "type": "object",

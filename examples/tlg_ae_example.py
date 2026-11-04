@@ -193,8 +193,10 @@ adae = (
     .source("AEACN")
     .source("TRTA")
     .source("SAFFL")
-    .date("ASTDT", source="AESTDTC")
-    .date("AENDT", source="AEENDTC")
+    # admiral ad_adae.R: partial start to the first day but not before TRTSDT,
+    # partial end to the last day. The SAP decides the rule.
+    .date("ASTDT", source="AESTDTC", min_date="TRTSDT")
+    .date("AENDT", source="AEENDTC", impute="last")
     .duration("ADY", start="TRTSDT", end="ASTDT")
     .to_frame()
     .adam.occds.treatment_emergent(

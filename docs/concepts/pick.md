@@ -168,7 +168,7 @@ Compared with admiral, Fleet's `pick()`:
 - Eliminates the need for a separate `event()` constructor
 - Supports per-event mode/order overrides
 - Accepts literals (`pl.lit("Y")`) directly in `"set"` alongside column references
-- Chains naturally into the ADaM pipeline without materialisation breaks
+- Chains into the ADaM pipeline with no `.to_frame()` call (it reads the data once, at the verb)
 
 ## When to Use `pick()` vs `@derivation`
 

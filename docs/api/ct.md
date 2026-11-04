@@ -113,7 +113,7 @@ Use [`import_codelists()`][fleet.ct.import_codelists] to load it dynamically:
 ```python
 from fleet.ct import import_codelists
 
-# Strategy 1: auto-discover via study_config.yaml in CWD
+# Strategy 1: auto-discover via study_config.yaml in CWD or a parent folder
 ct = import_codelists()
 SEX = ct.SEX
 
@@ -128,10 +128,20 @@ ct = import_codelists("/absolute/path/to/codelists.py")
 !!! info "Resolution order"
     When called without arguments, `import_codelists()` resolves the file as follows:
 
-    1. `study_config.yaml` in CWD → reads `paths.metadata_sdtm` → appends `/codelists.py`
+    1. `study_config.yaml` in CWD or the nearest parent folder (git-style, as the
+       CLI does) → reads `paths.metadata_sdtm` → appends `/codelists.py`
     2. Falls back to `<CWD>/metadata/sdtm/codelists.py`
 
-    This means `cd`-ing into your study root before running a script is all you need.
+    So a script in `programs/sdtm` finds the codelists of its study with no path.
+
+!!! tip "Editor auto-completion"
+    `import_codelists()` loads the module at run time, so the editor does not
+    see `from codelists import SEX` by itself. Add the metadata folder to the
+    analysis paths in `.vscode/settings.json` at the study root:
+
+    ```json
+    {"python.analysis.extraPaths": ["metadata/sdtm"]}
+    ```
 
 ### Using generated codelists in pipelines
 
