@@ -50,11 +50,9 @@ GRID = pl.from_repr("""\
 """).with_columns(pl.col("ASTDT", "AENDT", "TRTSDT", "TRTEDT").str.to_date())
 
 #: Differences with an open decision, by (USUBJID, AESEQ, variable).  The job
-#: fails on any other difference, and when one of these disappears.
-KNOWN: dict[tuple[str, int, str], str] = {
-    ("S01", 5, "ANL01FL"): "c1-206: a null order key (ASTDT); admiral sorts it last",
-    ("S02", 4, "ANL01FL"): "c1-206: a null order key (AESEVN); admiral sorts it last",
-}
+#: fails on any other difference, and when one of these disappears.  Empty:
+#: the null-order-key cells of ANL01FL were decided in ADR-0020 (PR #205).
+KNOWN: dict[tuple[str, int, str], str] = {}
 
 #: The admiral program: one derivation per output column, as the Fleet chain below.
 ADMIRAL = r"""
