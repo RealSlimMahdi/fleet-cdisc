@@ -280,18 +280,19 @@ link between the submission metadata and the exact code above. Add
 `--strict` to refuse a define with a gap (a Derived variable with no method
 text, or a numeric variable with no `length:`).
 
-## 8. Bonus: hand the pipeline to an orchestrator
+## 8. Bonus: read the dependency graph
 
-The same define.yaml files describe the dependency graph — export it as an
-executable Snakefile or Airflow DAG (each rule/task shells out to
-`fleet run --dataset ...`):
+The same define.yaml files describe the dependency graph. Fleet gives it as
+data that an orchestrator can read. Fleet does not write a Snakefile or an
+Airflow DAG file: each step of a study run is `fleet run --dataset ...`.
 
 ```python
 from fleet import build_dag
 
-dag = build_dag("metadata/sdtm/define.yaml", "metadata/adam/define.yaml", output_dir="data")
-dag.to_snakefile("Snakefile")  # → snakemake -j1
-dag.to_airflow_dag(dag_id="study01", path="dags/study01.py")
+dag = build_dag("metadata/sdtm/define.yaml", "metadata/adam/define.yaml")
+dag.execution_order()  # → ["dm_raw", "DM", ..., "ADSL", ...]
+dag.to_airflow()  # → {"ADSL": ["DM", ...], ...}: upstream datasets per dataset
+dag.generate("dag.json")  # → the graph as JSON
 ```
 
 ## Conclusion
