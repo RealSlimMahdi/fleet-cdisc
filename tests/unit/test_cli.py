@@ -172,6 +172,32 @@ def test_unknown_command_exits_2(capsys: pytest.CaptureFixture) -> None:
     assert "err" in capsys.readouterr().err.lower()
 
 
+@pytest.mark.parametrize("argv", [["--help"], ["doctor"], ["check"]])
+def test_a_cp1252_stdout_prints_glyphs_escaped_not_a_traceback(
+    argv: list[str], tmp_path: Path
+) -> None:
+    """c1-314: a Windows pipe or redirect is cp1252; a check mark must not crash."""
+    import os
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "-c", "from fleet.cli import main; main()", *argv],
+        cwd=tmp_path,
+        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
+        capture_output=True,
+        encoding="cp1252",
+        errors="replace",
+        timeout=120,
+        check=False,
+    )
+
+    assert "Traceback" not in result.stderr
+    assert "UnicodeEncodeError" not in result.stderr
+    if argv == ["doctor"]:
+        assert "\\u2713" in result.stdout or "\\u2717" in result.stdout
+
+
 # ------------------------------------------------------------------ #
 # Config discovery                                                    #
 # ------------------------------------------------------------------ #

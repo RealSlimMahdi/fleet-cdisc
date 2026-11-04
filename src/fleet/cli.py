@@ -636,7 +636,7 @@ def _run_check_rule(args: argparse.Namespace) -> None:
         # Also print a summary of what was found
         import yaml as _yaml
 
-        with open(rule_path) as f:
+        with open(rule_path, encoding="utf-8") as f:
             rule = _yaml.safe_load(f)
         core_id = rule.get("Core", {}).get("Id", "?")
         rule_type = rule.get("Rule Type", "?")
@@ -3251,6 +3251,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         SystemExit: ``0`` on success, ``1`` on any Fleet error (single
             clean message on stderr), ``2`` on argparse usage errors.
     """
+    # A cp1252 pipe on Windows cannot encode a check mark; print \u2713 instead of crashing.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="backslashreplace")
     parser = _build_parser()
     args = parser.parse_args(argv)
 

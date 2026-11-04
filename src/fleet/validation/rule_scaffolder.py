@@ -72,7 +72,7 @@ def _scan_existing_ids(directory: Path) -> set[str]:
         return ids
     for f in directory.glob("*.yaml"):
         try:
-            with open(f) as fh:
+            with open(f, encoding="utf-8") as fh:
                 data = yaml.safe_load(fh)
             if isinstance(data, dict):
                 core_id = data.get("Core", {}).get("Id")
@@ -226,7 +226,7 @@ def check_rule(rule_path: Path) -> list[str]:
 
     # ── 1. YAML parse ─────────────────────────────────────────────────
     try:
-        with open(rule_path) as f:
+        with open(rule_path, encoding="utf-8") as f:
             rule = yaml.safe_load(f)
     except yaml.YAMLError as exc:
         mark = getattr(exc, "problem_mark", None)
@@ -274,7 +274,7 @@ def check_rule(rule_path: Path) -> list[str]:
         try:
             from jsonschema import Draft202012Validator
 
-            schema = json.loads(_SCHEMA_PATH.read_text())
+            schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
             validator = Draft202012Validator(schema)
             for error in sorted(validator.iter_errors(rule), key=lambda e: list(e.path)):
                 path = ".".join(str(p) for p in error.absolute_path) or "(root)"

@@ -374,7 +374,7 @@ class OfficialCDISCValidator:
         if not json_output.exists():
             return _CouldNotRun("the engine exited with code 0 but wrote no report.")
         try:
-            data = json.loads(json_output.read_text())
+            data = json.loads(json_output.read_text(encoding="utf-8"))
         except ValueError as exc:
             return _CouldNotRun(f"the engine report is not valid JSON: {exc}")
         if not isinstance(data, dict) or not {"Issue_Details", "Rules_Report"} & data.keys():
