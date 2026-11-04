@@ -847,7 +847,7 @@ class TLGBuilder:
         user template.
 
         Returns:
-            pl.DataFrame: Long-format {cards}-compatible ARD.
+            pl.DataFrame: ARD in the {cards} long layout.
 
         Raises:
             SchemaError: If the target template is a listing — call

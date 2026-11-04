@@ -404,7 +404,7 @@ def ard_to_table_model(
        under the level stub (the universal pharma layout).
 
     Args:
-        ard: A {cards}-compatible ARD DataFrame.
+        ard: An ARD DataFrame in the {cards} long layout.
         metadata: Optional render metadata.  If ``None``, a blank
             ``RenderMetadata`` is used.
 

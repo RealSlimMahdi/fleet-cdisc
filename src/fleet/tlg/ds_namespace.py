@@ -9,7 +9,7 @@ ADDV) data.  Covers the standard disposition table family:
 * ``t_enrollment``   → ENT01  (enrollment by site / region / investigator)
 * ``t_deviations``   → PDT01  (major protocol deviations by DVDECOD)
 
-All tables emit a long-format {cards}-compatible ARD.
+All tables emit an ARD in the {cards} long layout.
 """
 
 from __future__ import annotations
@@ -74,8 +74,8 @@ class DSTLGNamespace(BuilderVerbsMixin):
 
     Accessed as ``df.tlg.ds``.  Covers the four disposition
     tables — disposition (DST01), deaths (DTHT01), enrollment (ENT01),
-    and protocol deviations (PDT01).  Every method emits a long-format
-    {cards}-compatible ARD and accepts an inline spec override.
+    and protocol deviations (PDT01).  Every method emits an ARD in the
+    {cards} long layout and accepts an inline spec override.
 
     Args:
         df: A Polars DataFrame containing ADaM ADSL (or ADDV for
@@ -115,7 +115,7 @@ class DSTLGNamespace(BuilderVerbsMixin):
             spec: Optional ``DSDispositionSpec`` override.
 
         Returns:
-            pl.DataFrame: A {cards}-compatible disposition ARD.
+            pl.DataFrame: A disposition ARD in the {cards} long layout.
 
         Examples:
             Zero-config disposition table::
@@ -158,7 +158,7 @@ class DSTLGNamespace(BuilderVerbsMixin):
             spec: Optional ``DSDeathsSpec`` override.
 
         Returns:
-            pl.DataFrame: A {cards}-compatible deaths ARD.
+            pl.DataFrame: A deaths ARD in the {cards} long layout.
 
         Examples:
             Death counts and causes::
@@ -254,7 +254,7 @@ class DSTLGNamespace(BuilderVerbsMixin):
             spec: Optional ``DSEnrollmentSpec`` override.
 
         Returns:
-            pl.DataFrame: A {cards}-compatible enrollment ARD.
+            pl.DataFrame: An enrollment ARD in the {cards} long layout.
 
         Examples:
             Enrollment counts per site::
@@ -293,7 +293,7 @@ class DSTLGNamespace(BuilderVerbsMixin):
             spec: Optional ``DSDeviationsSpec`` override.
 
         Returns:
-            pl.DataFrame: A {cards}-compatible deviations ARD.
+            pl.DataFrame: A deviations ARD in the {cards} long layout.
 
         Examples:
             Deviation counts over ADDV::
