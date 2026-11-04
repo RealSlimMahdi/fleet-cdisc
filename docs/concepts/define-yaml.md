@@ -138,8 +138,11 @@ name or a fully qualified Python dotted path. The runtime dispatch depends
 on the callable's `kind`:
 
 - **`kind="column"`** (zero-arg, returns `pl.Expr`) — stays fully lazy,
-  no DataFrame materialisation.
-- **`kind="frame"` or `kind="param"`** (receives upstream DataFrame, returns
+  no DataFrame materialisation. It writes the column named as the
+  function, so the function name must be the variable name (or the
+  expression ends with `.alias("<variable>")`); otherwise `from_spec`
+  raises `SpecError`.
+- **`kind="frame"`** (receives upstream DataFrame, returns
   `pl.DataFrame`) — the pipeline is materialised at that point, the function
   is called, and the result is wrapped back into the namespace.
 

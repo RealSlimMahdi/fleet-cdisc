@@ -1247,8 +1247,8 @@ class SharedVerbsMixin:
         Routing:
 
         * ``kind="column"`` — expression stays lazy; lineage via ``_chain()``.
-        * ``kind="frame"`` or ``kind="param"`` — the frame is materialised,
-          the function called, and the result re-wrapped.
+        * ``kind="frame"`` — the frame is materialised, the function
+          called, and the result re-wrapped.
 
         Args:
             drv: The :class:`~fleet.core.derivation.Derivation` to execute.
@@ -1257,7 +1257,7 @@ class SharedVerbsMixin:
             Self: Updated namespace.
 
         Raises:
-            TypeError: If a frame/param derivation returns a non-DataFrame.
+            TypeError: If a frame derivation returns a non-DataFrame.
         """
         from fleet.core.lineage import _append_lineage_nodes
 

@@ -1024,6 +1024,14 @@ def _dispatch_derivation(ns: Any, var: SpecVariableBase) -> Any:
 
         fn = resolve_callable(var.callable)
         if hasattr(fn, "kind"):
+            if fn.targets and var.target not in fn.targets:
+                from fleet.core.exceptions import SpecError
+
+                raise SpecError(
+                    f"callable {var.callable!r} writes {fn.targets}, not {var.target}. "
+                    f"Name the function {var.target}, or end its expression with "
+                    f".alias({var.target!r})."
+                )
             return ns.derivation(fn)
         return ns._materialise_then(fn(ns.to_frame()))
     return _default_dispatch(ns, var)
@@ -1042,10 +1050,19 @@ def _dispatch_nsv(ns: Any, var: SpecVariableBase) -> Any:
 
 
 def _dispatch_pick(ns: Any, var: SpecVariableBase) -> Any:
-    """pick(): multi-target verb; fall back to the variable name."""
+    """pick(): multi-target verb; fall back to the variable name.
+
+    A ``source:`` name in an event is a pinned dataset (ADR-0008 rule 3).
+    """
+    events = [
+        {**e, "source": ns._require_pin(e["source"].upper(), "pick")}
+        if isinstance(e, dict) and isinstance(e.get("source"), str)
+        else e
+        for e in var.events or []
+    ]
     return ns.pick(
         var.targets or [var.target],
-        events=var.events,
+        events=events,
         by=var.by,
         order=var.order,
         mode=var.mode,

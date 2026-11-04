@@ -395,7 +395,7 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
 | `--dataset` | `ADSL` | Target dataset name (default: ADSL). |
-| `--kind` | `column` | Derivation kind: column / frame / param (default: column). Choices: `column`, `frame`, `param`. |
+| `--kind` | `column` | Derivation kind: column / frame (default: column). For a new parameter row, use .adam.derive_param(). Choices: `column`, `frame`. |
 | `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 
 ---

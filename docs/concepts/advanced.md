@@ -53,34 +53,34 @@ adsl = dm.adam.adsl.derivation(
 
 For study-specific logic that should be versioned, reused, and automatically documented in Define-XML, use the `@derivation` decorator. This is the **primary escape-hatch pattern** for anything too complex for a one-liner.
 
-### Three `kind` values
+### Two `kind` values
 
-| Kind     | When to use                                  | Signature                                                       |
-| -------- | -------------------------------------------- | --------------------------------------------------------------- |
-| `column` | Row-by-row expression (no DataFrame needed)  | `() -> pl.Expr`                                                 |
-| `frame`  | Multi-column or aggregation logic            | `(df: pl.DataFrame) -> pl.DataFrame`                            |
-| `param`  | By-group reshape (e.g. tall/narrow BDS rows) | `(df: pl.DataFrame) -> pl.DataFrame` + `by=` / `set_values_to=` |
+| Kind     | When to use                                 | Signature                            |
+| -------- | ------------------------------------------- | ------------------------------------ |
+| `column` | Row-by-row expression (no DataFrame needed) | `() -> pl.Expr`                      |
+| `frame`  | Multi-column or aggregation logic           | `(df: pl.DataFrame) -> pl.DataFrame` |
 
 **What the function receives and returns:**
 
 - **`column`** — the function takes **no arguments** and returns a
   `pl.Expr`. Fleet splices the expression into the lazy pipeline, so
   nothing is materialised: it behaves exactly like an inline
-  `.derivation(expression=...)`, just versioned in its own file.
+  `.derivation(expression=...)`, just versioned in its own file. The
+  result goes to the column named as the function (`AGEGR1` below). An
+  explicit `.alias()` on the expression wins.
 - **`frame`** — the `df` parameter is **the pipeline's current state**,
   materialised as a plain `pl.DataFrame` at the point the derivation runs
   (every column derived by earlier verbs is present). The function returns
   a `pl.DataFrame` — usually `df.with_columns(...)` — and Fleet wraps the
   result back into the namespace so the chain continues.
-- **`param`** — same in/out contract as `frame` (upstream
-  `pl.DataFrame` in, `pl.DataFrame` out), but tagged for BDS parameter
-  derivation: the `by=` / `set_values_to=` metadata drives the by-group
-  reshape and the PARAMCD/PARAM stamping of the appended rows.
 
 You rarely need to pass `kind=` yourself — it is inferred from the
 signature: a return annotation of `pl.Expr` (or a zero-argument function)
-means `column`; `by=`/`set_values_to=` means `param`; everything else is
-`frame`.
+means `column`; everything else is `frame`.
+
+A new parameter row, such as BMI from WEIGHT and HEIGHT, is not a
+`@derivation`: use `.adam.derive_param()`. `@derivation(by=...,
+set_values_to=...)` raises `VerbUsageError`.
 
 ### `kind="column"` example
 
@@ -118,16 +118,15 @@ def add_pop_flags(df: pl.DataFrame) -> pl.DataFrame:
     )
 ```
 
-### `kind="param"` example
+### A new parameter row: `derive_param`
 
 ```python
-@derivation(
+advs = vs.adam.derive_param(
     by=["USUBJID", "ADT"],
     set_values_to={"PARAMCD": "BMI", "PARAM": "Body Mass Index"},
-)
-def BMI(df: pl.DataFrame) -> pl.DataFrame:
-    """Compute BMI per subject visit."""
-    return df.with_columns((pl.col("WEIGHT") / (pl.col("HEIGHT") / 100) ** 2).alias("AVAL"))
+    parameter_filter={"WEIGHT": "WEIGHT", "HEIGHT": "HEIGHT"},
+    analysis_value=pl.col("WEIGHT") / (pl.col("HEIGHT") / 100) ** 2,
+).to_frame()
 ```
 
 ### Derivations folder convention
