@@ -3,7 +3,7 @@ ADaM Vaccine namespace extension (admiralvaccine-inspired).
 
 Accessed via ``df.adam.vaccine`` on any Polars DataFrame.
 
-Key derivations ported from pharmaverse/admiralvaccine:
+Key derivations, inspired by pharmaverse/admiralvaccine (not ports; values can differ):
   - ``fever_flag``          — flag elevated temperature records (ADFACE)
   - ``seroconversion_flag`` — ≥ N-fold rise from baseline (ADIS)
   - ``seroresponse_flag``   — titer at or above a threshold (ADIS)
@@ -174,7 +174,7 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         """
         Derive ``AVAL`` for the ADIS domain following limit-of-quantification rules.
 
-        Rules (mirrors ``admiralvaccine::derive_var_aval_adis``):
+        Rules (based on ``admiralvaccine::derive_var_aval_adis``):
 
         1. If *stresn_col* is missing:
            - If *orres_col* starts with ``">"`` and *uloq_col* is present →
@@ -196,7 +196,7 @@ class VaccineNamespace(SharedADaMVerbsMixin):
 
         References:
             admiralvaccine ``derive_var_aval_adis`` (pharmaverse): the rule set this
-            verb mirrors. No CDISC standard fixes the LLOQ/2 imputation; it is an
+            verb is based on. No CDISC standard fixes the LLOQ/2 imputation; it is an
             analysis convention. Check the SAP for the rule in force.
         """
         stresn = pl.col(stresn_col)
@@ -274,7 +274,7 @@ class VaccineNamespace(SharedADaMVerbsMixin):
 
         Materialises the current pipeline.
 
-        Mirrors ``admiralvaccine::derive_vars_event_flag`` (new_var1 behaviour).
+        Based on ``admiralvaccine::derive_vars_event_flag`` (new_var1 behaviour).
 
         Example::
 

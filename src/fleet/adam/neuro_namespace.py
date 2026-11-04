@@ -3,7 +3,7 @@ ADaM Neuroscience namespace extension (admiralneuro-inspired).
 
 Accessed via ``df.adam.neuro`` on any Polars DataFrame.
 
-Key derivations ported from pharmaverse/admiralneuro and clinical neuroscience:
+Key derivations, inspired by pharmaverse/admiralneuro and clinical neuroscience (not ports; values can differ):
   - ``centiloid``       — amyloid PET SUVR → Centiloid scale (Navitsky et al.)
   - ``mmse_category``   — MMSE total score → severity category
   - ``cdrsob_total``    — CDR-SoB total from 6 domain box scores

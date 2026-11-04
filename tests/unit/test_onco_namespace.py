@@ -202,8 +202,9 @@ class TestBestOverallResponse:
     """
     Test 3: Best Overall Response per subject group.
 
-    Admiral derives BOR as the response with the lowest numeric rank (most
-    favourable).  Multi-subject cases are crucial: each subject must receive
+    Fleet derives BOR as the response with the lowest numeric rank (most
+    favourable). admiralonco derive_param_bor also applies date and stable
+    disease rules, which these tests do not cover.  Multi-subject cases are crucial: each subject must receive
     its own BOR independently.
     """
 
