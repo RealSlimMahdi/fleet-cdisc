@@ -2569,7 +2569,8 @@
 <p>While Fleet provides verbs like <code>.study_day()</code> or <code>.baseline()</code>, you will often need custom logic to derive variables specific to a study.</p>
 <h3 id="simple-inline-derivations">Simple Inline Derivations<a class="headerlink" href="#simple-inline-derivations" title="Permanent link">&para;</a></h3>
 <p>For row-by-row logic or straightforward column math, use the <code>.derivation()</code> verb. It accepts four forms:</p>
-<p><strong>String expression (YAML-compatible, AST-sandboxed):</strong></p>
+<p><strong>String expression (YAML-compatible, checked before it runs):</strong></p>
+<p>A string may use Polars expression constructors (<code>pl.col</code>, <code>pl.lit</code>, <code>pl.when</code>, ...), data types and expression methods. Fleet refuses anything else before evaluation: file and module access such as <code>pl.read_csv</code>, and methods that take a function or (de)serialise, such as <code>pipe</code> and <code>map_elements</code>. A <code>callable:</code> or <code>derivations_module:</code> in a <code>define.yaml</code> imports Python code, so review a received spec that holds them as a program.</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">adsl</span> <span class="o">=</span> <span class="n">dm</span><span class="o">.</span><span class="n">adam</span><span class="o">.</span><span class="n">adsl</span><span class="o">.</span><span class="n">derivation</span><span class="p">(</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="s2">&quot;AGEGR1&quot;</span><span class="p">,</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">expression</span><span class="o">=</span><span class="s2">&quot;pl.when(pl.col(&#39;AGE&#39;) &lt; 65).then(pl.lit(&#39;&lt;65 yrs&#39;)).otherwise(pl.lit(&#39;&gt;=65 yrs&#39;))&quot;</span><span class="p">,</span>
@@ -2942,7 +2943,7 @@ an explicit frame and defaults <code>by=</code> to <code>["USUBJID"]</code>.</p>
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 11:00:10 UTC">November 3, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 21:47:21 UTC">November 3, 2026</span>
   </span>
 
     
