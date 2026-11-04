@@ -381,3 +381,40 @@ def _append_lineage_nodes(ns: Any, drv: Any) -> Any:
         )
     ns._lineage = lineage
     return ns
+
+
+def append_verb_node(
+    ns: Any, name: str, verb: str, sources: list[str], params: dict[str, Any]
+) -> Any:
+    """Record one ``VariableNode`` for a verb that bypasses ``_chain()``.
+
+    Verbs that sort, join or materialise (``seq``, ``first_date``,
+    ``count_events``) call this so that ``to_spec_yaml()`` sees their
+    target: a spec-expressible call writes its block, any other call (an
+    inline ``from_dataset=`` frame) writes a TODO stub with a warning.
+
+    Args:
+        ns: The namespace the verb returns.
+        name: The target column.
+        verb: The user-facing verb name.
+        sources: Input column names.
+        params: The verb keyword arguments, ``target`` included.
+
+    Returns:
+        The same namespace with ``_lineage`` extended in place.
+    """
+    from fleet.core.dag import VariableNode
+
+    lineage: list[VariableNode] = list(getattr(ns, "_lineage", []))
+    lineage.append(
+        VariableNode(
+            name=name,
+            verb=verb,
+            sources=list(dict.fromkeys(sources)),
+            method=defining_method_path(type(ns), verb),
+            domain=getattr(ns, "_domain", None),
+            params=sanitise_params(params),
+        )
+    )
+    ns._lineage = lineage
+    return ns

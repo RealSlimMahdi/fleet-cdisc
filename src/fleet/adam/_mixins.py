@@ -705,7 +705,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                     .to_frame()
                 )
         """
-        return self._date_agg(
+        from fleet.core.lineage import append_verb_node
+
+        ns = self._date_agg(
             target,
             from_dataset=from_dataset,
             date_col=date_col,
@@ -714,6 +716,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             agg_fn="min",
             impute=impute,
         )
+        params = {"target": target, "from_dataset": from_dataset, "date_col": date_col}
+        params.update(where=where, by=by, impute=impute)
+        return append_verb_node(ns, target, "first_date", [date_col], params)
 
     def last_date(
         self,
@@ -752,7 +757,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                     .to_frame()
                 )
         """
-        return self._date_agg(
+        from fleet.core.lineage import append_verb_node
+
+        ns = self._date_agg(
             target,
             from_dataset=from_dataset,
             date_col=date_col,
@@ -761,6 +768,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             agg_fn="max",
             impute=impute,
         )
+        params = {"target": target, "from_dataset": from_dataset, "date_col": date_col}
+        params.update(where=where, by=by, impute=impute)
+        return append_verb_node(ns, target, "last_date", [date_col], params)
 
     def _date_agg(
         self,
@@ -906,7 +916,10 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         agg_df = src.group_by(grps).agg(pl.len().alias(target))
         df = self.to_frame().join(agg_df, on=grps, how="left", nulls_equal=True)
         df = df.with_columns(pl.col(target).fill_null(0))
-        return self._materialise_then(df)
+        from fleet.core.lineage import append_verb_node
+
+        params = {"target": target, "from_dataset": from_dataset, "where": where, "by": by}
+        return append_verb_node(self._materialise_then(df), target, "count_events", grps, params)
 
     # ------------------------------------------------------------------ #
     # Date derivation verbs                                                #

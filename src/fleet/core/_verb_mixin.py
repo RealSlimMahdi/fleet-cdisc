@@ -1716,7 +1716,18 @@ class SharedVerbsMixin:
                 )
 
         seq_expr = (pl.int_range(pl.len()).over(grps) + start_at).cast(pl.Int64).alias(target)
-        return self._with_lazy(lf.with_columns(seq_expr))
+        from fleet.core.lineage import append_verb_node
+
+        params = {"target": target, "order_by": order_by, "by": by}
+        if start_at != 1:
+            params["start_at"] = start_at
+        return append_verb_node(
+            self._with_lazy(lf.with_columns(seq_expr)),
+            target,
+            "seq",
+            [*grps, *(order_by or [])],
+            params,
+        )
 
     # ------------------------------------------------------------------ #
     # validate                                                             #

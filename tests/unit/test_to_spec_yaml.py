@@ -380,3 +380,70 @@ class TestSourceRoundTrip:
         assert "TODO_ADY" in text
         for name in ("USUBJID", "PARAMCD", "AVAL"):
             assert f"TODO_{name}" not in text
+
+
+class TestVerbsThatBypassChainLeaveANode:
+    """c1-695: seq, first_date, last_date and count_events wrote no block and no warning."""
+
+    def test_an_ae_chain_with_seq_round_trips_on_all_columns(self, tmp_path):
+        raw = pl.from_repr("""\
+┌────────────────┬──────────┬───────────────┬─────────────┐
+│ patient_number ┆ ae_term  ┆ ae_start_date ┆ ae_severity │
+│ ---            ┆ ---      ┆ ---           ┆ ---         │
+│ str            ┆ str      ┆ str           ┆ str         │
+╞════════════════╪══════════╪═══════════════╪═════════════╡
+│ 01-701-1015    ┆ HEADACHE ┆ 2014-01-05    ┆ MILD        │
+│ 01-701-1015    ┆ NAUSEA   ┆ 2014-01-03    ┆ MODERATE    │
+└────────────────┴──────────┴───────────────┴─────────────┘
+""")
+        ae_ns = (
+            raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
+            .assign("USUBJID", source="patient_number")
+            .assign("AETERM", source="ae_term")
+            .assign("AESTDTC", source="ae_start_date")
+            .seq("AESEQ", order_by=["AESTDTC"])
+        )
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            text = ae_ns.to_spec_yaml(dataset="AE", path=tmp_path / "define.yaml")
+
+        assert [str(w.message) for w in caught if "to_spec_yaml" in str(w.message)] == []
+        variables = yaml.safe_load(text)["datasets"][0]["variables"]
+        aeseq = next(v for v in variables if v["name"] == "AESEQ")
+        assert aeseq["derivation"]["algorithm"] == "seq"
+
+        inline = ae_ns.to_frame()
+        rerun = raw.sdtm.from_spec(tmp_path / "define.yaml", dataset="AE").to_frame()
+        cols = [v["name"] for v in variables]
+        assert cols == ["STUDYID", "USUBJID", "AETERM", "AESTDTC", "AESEQ"]
+        assert rerun.select(cols).sort("AESEQ").equals(inline.select(cols).sort("AESEQ"))
+        assert inline.sort("AESEQ")["AETERM"].to_list() == ["NAUSEA", "HEADACHE"]
+
+    def test_date_and_count_verbs_with_an_inline_frame_are_named_stubs(self):
+        dm = pl.from_repr("""\
+┌─────────┬─────────┐
+│ STUDYID ┆ USUBJID │
+│ ---     ┆ ---     │
+│ str     ┆ str     │
+╞═════════╪═════════╡
+│ X       ┆ S1      │
+└─────────┴─────────┘
+""")
+        ex = pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ EXSTDTC    │
+│ ---     ┆ ---        │
+│ str     ┆ str        │
+╞═════════╪════════════╡
+│ S1      ┆ 2024-01-02 │
+└─────────┴────────────┘
+""")
+        ns = (
+            dm.adam.adsl.first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")
+            .last_date("TRTEDT", from_dataset=ex, date_col="EXSTDTC")
+            .count_events("NUMEX", from_dataset=ex)
+        )
+        with pytest.warns(UserWarning, match="TRTSDT, TRTEDT, NUMEX"):
+            text = ns.to_spec_yaml(dataset="ADSL")
+
+        assert "verb 'first_date'" in text and "verb 'count_events'" in text
