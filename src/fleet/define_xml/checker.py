@@ -456,7 +456,11 @@ class DatasetChecker:
                 continue
             items = codelist.get("items") or []
             if not items:
-                continue  # declared without items — nothing to verify against
+                result.warnings.append(
+                    f"Column '{col_name}': codelist {oid} has no items, so its values "
+                    "are not checked; run fleet init ct."
+                )
+                continue
             coded: set[str] = {str(item["coded_value"]) for item in items}
             decode_of: dict[str, str] = {
                 str(item["decode"]): str(item["coded_value"])

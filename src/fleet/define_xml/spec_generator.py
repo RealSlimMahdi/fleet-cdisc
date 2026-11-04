@@ -264,7 +264,8 @@ class DefineSpecGenerator:
             raise SpecError(
                 f"{self._path}: generated Define-XML failed Define-XML 2.1 "
                 f"validation ({len(errors)} error(s)):\n  {shown}{more}\n"
-                "Pass validate_xml=False to generate it anyway."
+                "Correct define.yaml and generate again. From Python, "
+                "DefineSpecGenerator(..., validate_xml=False) writes the file anyway."
             )
         return xml_str
 

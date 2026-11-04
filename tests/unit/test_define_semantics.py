@@ -295,6 +295,22 @@ class TestGeneratorSemantics:
             ],
         }
 
+    def test_a_failed_validation_names_no_option_the_cli_lacks(self, tmp_path):
+        """c1-536: the error told a CLI user to pass validate_xml=False."""
+        spec = self._spec(
+            {
+                "name": "SEX",
+                "label": "Sex",
+                "type": "text",
+                "length": 1,
+                "origin": "Derived",
+                "comment": "Copy of ``sex``",
+            }
+        )
+        with pytest.raises(Exception, match="Correct define.yaml") as err:
+            _generate(spec, tmp_path)
+        assert "Pass validate_xml=False" not in str(err.value)
+
     def test_comment_becomes_the_method_description(self, tmp_path):
         spec = self._spec(
             {
