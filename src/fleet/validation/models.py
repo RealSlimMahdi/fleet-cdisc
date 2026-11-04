@@ -77,6 +77,49 @@ class ValidationIssue:
 
 
 @dataclass
+class RuleRun:
+    """What one engine run did with its rules, read from the CORE ``Rules_Report``.
+
+    The counts belong to the engine run, not to one dataset: CORE does not
+    say which dataset a rule ran on.  A rule that could not run or was not
+    loaded is a rule problem, not a data finding, so it never blocks.
+    """
+
+    source: RuleSource = "official"
+    #: Rules with status ``SUCCESS`` or ``ISSUE_REPORTED``.
+    executed: int = 0
+    #: Rules with status ``SKIPPED``: no dataset in scope, or a variable absent.
+    skipped: int = 0
+    #: Rule ID to the engine's reason, for each rule with status ``EXECUTION_ERROR``.
+    could_not_run: dict[str, str] = field(default_factory=dict)
+    #: Custom rule IDs, or files that do not parse, that are absent from the report.
+    not_loaded: list[str] = field(default_factory=list)
+
+    def count_line(self) -> str:
+        """One line of counts, the line the verb prints."""
+        line = (
+            f"Rules (engine run, {self.source}): {self.executed} executed, "
+            f"{self.skipped} skipped, {len(self.could_not_run)} could not run"
+        )
+        if self.source == "custom":
+            line += f", {len(self.not_loaded)} not loaded"
+        return line
+
+    def problem_lines(self) -> list[str]:
+        """The rules that could not run or were not loaded, for the CLI and HTML report."""
+        lines = []
+        if self.could_not_run:
+            if self.source == "custom":
+                named = (f"{rid} ({why})" for rid, why in self.could_not_run.items())
+            else:
+                named = iter(self.could_not_run)
+            lines.append(f"Could not run ({self.source}): {', '.join(named)}")
+        if self.not_loaded:
+            lines.append(f"Not loaded ({self.source}): {', '.join(self.not_loaded)}")
+        return lines
+
+
+@dataclass
 class ValidationResult:
     """Collected results of a CDISC validation run."""
 
@@ -94,6 +137,8 @@ class ValidationResult:
     rules_executed: int | None = None
     #: Why the engine could not run (crash, timeout, no report), or ``None``.
     could_not_run: str | None = None
+    #: One entry per engine run (official, custom) that gave a ``Rules_Report``.
+    rule_runs: list[RuleRun] = field(default_factory=list)
 
     @property
     def is_valid(self) -> bool:
@@ -173,7 +218,9 @@ class ValidationResult:
         _logger.info(f"Status: {self.status}")
         if self.could_not_run is not None:
             _logger.info(f"Could not run: {self.could_not_run}")
-        if self.rules_executed is not None:
+        for run in self.rule_runs:
+            _logger.info(run.count_line())
+        if self.rules_executed is not None and not self.rule_runs:
             _logger.info(f"Rules executed: {self.rules_executed}")
         _logger.info(f"Total Issues: {self.total_issues}")
         _logger.info(
@@ -208,7 +255,7 @@ class ValidationResult:
                     label += f" {issue.variable}:"
                 _logger.info(f"{label} {issue.message} Accepted: {issue.accepted}")
         if not self.errors and not self.warnings:
-            _logger.info("\n  No errors or warnings.")
+            _logger.info(self._nothing_found("No errors or warnings."))
 
     def _print_full(self) -> None:
         """Expanded view: all fields per issue, including info."""
@@ -228,7 +275,13 @@ class ValidationResult:
                 _logger.info(f"\n{i}. {issue}")
 
         if not self.errors and not self.warnings and not self.infos:
-            _logger.info("\n  No issues found.")
+            _logger.info(self._nothing_found("No issues found."))
+
+    def _nothing_found(self, text: str) -> str:
+        """The closing line of a report with no finding; NOT ASSESSED is not clean."""
+        if self.status == "NOT ASSESSED":
+            return "\n  No rule executed, so nothing was assessed."
+        return f"\n  {text}"
 
     def _print_smart(self) -> None:
         """Deduplicated view: groups identical findings and shows row ranges."""
@@ -295,7 +348,7 @@ class ValidationResult:
         _print_grouped("INFO", self.infos)
 
         if not self.errors and not self.warnings and not self.infos:
-            _logger.info("\n  No issues found.")
+            _logger.info(self._nothing_found("No issues found."))
 
     def save_html_report(self, output_path: str | Path) -> str:
         """Write this result as a self-contained HTML page and return its absolute path.
@@ -388,6 +441,11 @@ def write_html_report(
     setups = dict.fromkeys(
         "\n".join(r.setup.header_lines()) for r in results if r.setup is not None
     )
+    runs = {id(run): run for r in results for run in r.rule_runs}.values()
+    rule_lines = [line for run in runs for line in (run.count_line(), *run.problem_lines())]
+    if rule_lines:
+        rule_lines.append("Rule problems are not data findings: they do not change the status.")
+        setups["\n".join(rule_lines)] = None
     names = [r.dataset_name for r in results] + [d.name for d in could_not_run]
     title = names[0] if len(names) == 1 else f"{len(names)} datasets"
     html = (

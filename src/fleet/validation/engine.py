@@ -135,7 +135,7 @@ def find_engine(
 
     env = (os.environ if environ is None else environ).get("FLEET_RULES_ENGINE")
     if env and Path(env).is_file():
-        return Path(env), "environment"
+        return Path(env).resolve(), "environment"
 
     managed = engine_path()
     if managed.is_file():

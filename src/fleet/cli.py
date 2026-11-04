@@ -961,6 +961,14 @@ def _run_validate(args: argparse.Namespace) -> None:
             result.apply_setup(setups.get(name) or setup)
             result.print_report()
             results.append(result)
+        runs = {id(run): run for r in by_name.values() for run in r.rule_runs}.values()
+        problems = [line for run in runs for line in run.problem_lines()]
+        if problems:
+            print(
+                f"Rule problems in the {standard} engine run (not data findings; exit code kept):"
+            )
+            for line in problems:
+                print(f"  {line}")
 
     could_not_run = sweep.could_not_run
     for d in could_not_run:
@@ -2497,8 +2505,8 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         "--custom-rules",
         default=None,
         help=(
-            "Directory of custom validation rule YAML files. "
-            "Default: validation.custom_rules from the discovered study_config.yaml."
+            "Directory of custom validation rule YAML files, relative to the working "
+            "directory. Default: validation.custom_rules from the discovered study_config.yaml."
         ),
     )
     validate.add_argument(

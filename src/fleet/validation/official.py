@@ -12,9 +12,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import polars as pl
+import yaml
 
 from fleet.validation.engine import discover_engine
-from fleet.validation.models import RuleSource, Severity, ValidationIssue, ValidationResult
+from fleet.validation.models import (
+    RuleRun,
+    RuleSource,
+    Severity,
+    ValidationIssue,
+    ValidationResult,
+)
 
 #: ``Rules_Report`` statuses of a rule the engine executed.
 _EXECUTED_STATUSES = frozenset({"SUCCESS", "ISSUE_REPORTED"})
@@ -171,7 +178,7 @@ class OfficialCDISCValidator:
 
     def __init__(self, rules_engine_path: Path | None = None) -> None:
         if rules_engine_path is not None:
-            self._executable = Path(rules_engine_path)
+            self._executable = Path(rules_engine_path).resolve()
             if not self._executable.is_file():
                 raise FileNotFoundError(f"CDISC Rules Engine not found at {self._executable}.")
         else:
@@ -183,7 +190,7 @@ class OfficialCDISCValidator:
                     "  fleet install-engine\n\n"
                     "Or set FLEET_RULES_ENGINE to the path of an existing binary/script."
                 )
-            self._executable = found
+            self._executable = found.resolve()
 
         self._is_legacy = self._executable.suffix == ".py"
 
@@ -345,7 +352,8 @@ class OfficialCDISCValidator:
         )
 
         if custom_rules is not None:
-            rules_path = Path(custom_rules)
+            # The engine runs in its own folder: a relative path is the user's, so resolve it here.
+            rules_path = Path(custom_rules).resolve()
             if not rules_path.exists():
                 raise FileNotFoundError(f"Custom rules path does not exist: {rules_path}")
             if not rules_path.is_dir():
@@ -382,6 +390,8 @@ class OfficialCDISCValidator:
                 "the engine report has no Issue_Details and no Rules_Report: "
                 "Fleet cannot read this CORE report format."
             )
+        if custom_rules is not None:
+            data["_fleet_not_loaded"] = _not_loaded(rules_path, data.get("Rules_Report") or [])
         return data
 
     @staticmethod
@@ -407,13 +417,11 @@ class OfficialCDISCValidator:
         * ``Rules_Report``        — execution status of every rule
 
         When validating a single dataset, the engine still evaluates ALL
-        rules for the standard. This parser filters out:
-
-        - Engine-internal crashes and build failures (always noise).
-        - Rule evaluation/execution errors (rule couldn't run — expected
-          when other datasets aren't present).
-        - SKIPPED rules from ``Rules_Report`` (rules for other domains
-          that couldn't fire — expected in single-dataset validation).
+        rules for the standard.  A rule with status ``EXECUTION_ERROR`` in
+        ``Rules_Report`` could not run (often because a dataset it needs
+        is absent): its rows are left out of the findings and the rule is
+        counted as "could not run".  ``SKIPPED`` rules are only counted.
+        The filter reads the rule status, never the message text.
 
         A study-level finding (dataset ``STUDY``) is kept as information:
         one dataset cannot show whether the study lacks a domain.
@@ -454,11 +462,9 @@ def _parse_report(
     dataset_type = conformance.get("Standard", "unknown").lower()
     model_version = conformance.get("Version", "unknown").lower()
     rules_report = data.get("Rules_Report")
-    executed = (
-        sum(1 for r in rules_report if str(r.get("status", "")).upper() in _EXECUTED_STATUSES)
-        if isinstance(rules_report, list)
-        else None
-    )
+    run = _rule_run(data, rules_report) if isinstance(rules_report, list) else None
+    # A row of a rule that could not run is the engine's error, not a data finding.
+    failed_rules = set(run.could_not_run) if run is not None else set()
 
     issues: dict[str, list[ValidationIssue]] = {name: [] for name in names}
     note = data.get("_fleet_note")
@@ -474,9 +480,9 @@ def _parse_report(
 
     # ── Issue_Details: one entry per individual finding ──────────
     for item in data.get("Issue_Details", []):
-        message = item.get("message", item.get("Message", "No message"))
-        if _is_engine_noise(message):
+        if item.get("core_id") in failed_rules:
             continue
+        message = item.get("message", item.get("Message", "No message"))
         place(
             item,
             ValidationIssue(
@@ -492,21 +498,58 @@ def _parse_report(
     for item in data.get("Issue_Summary", []):
         rule_id = item.get("core_id", "UNKNOWN")
         message = item.get("message", "")
-        if _is_engine_noise(message):
+        if rule_id in failed_rules:
             continue
         # Issue_Summary is a rollup of Issue_Details: add a rule only once.
         if rule_id not in {i.rule_id for i in issues.get(dataset_of(item), [])}:
             place(item, ValidationIssue(severity=Severity.ERROR, rule_id=rule_id, message=message))
 
-    # ── Rules_Report: intentionally NOT surfacing SKIPPED rules ──
-    # When validating a single dataset, hundreds of rules for other
-    # domains are skipped. Surfacing them would flood the report with
-    # irrelevant noise.  Only the count of executed rules is kept.
-
+    # ── Rules_Report: counted per run, never turned into findings ──
+    # A skipped rule is expected (no dataset in scope, or a permissive
+    # variable not collected), and a rule that could not run is a rule
+    # problem: the CLI and HTML report list them apart from the findings.
+    runs = [run] if run is not None else []
     return {
-        name: _result_from_issues(name, dataset_type, model_version, found, executed)
+        name: _result_from_issues(name, dataset_type, model_version, found, runs)
         for name, found in issues.items()
     }
+
+
+def _status(row: dict) -> str:
+    """A Rules_Report status, one spelling: CORE 0.16 writes ``EXECUTION ERROR``."""
+    return str(row.get("status", "")).upper().replace(" ", "_")
+
+
+def _rule_run(data: dict, rules_report: list[dict]) -> RuleRun:
+    """Count the rules of one engine run by status, and name those that could not run."""
+    statuses = {row.get("core_id", "UNKNOWN"): _status(row) for row in rules_report}
+    failed = [rid for rid, status in statuses.items() if status == "EXECUTION_ERROR"]
+    reasons: dict[str, str] = {}
+    for item in data.get("Issue_Details", []):
+        rid, values = item.get("core_id"), item.get("values")
+        if rid in failed and rid not in reasons:
+            reasons[rid] = values if isinstance(values, str) and values else item.get("message")
+    return RuleRun(
+        executed=sum(status in _EXECUTED_STATUSES for status in statuses.values()),
+        skipped=sum(status == "SKIPPED" for status in statuses.values()),
+        could_not_run={rid: reasons.get(rid) or "no reason given" for rid in failed},
+        not_loaded=list(data.get("_fleet_not_loaded", [])),
+    )
+
+
+def _not_loaded(rules_dir: Path, rules_report: list[dict]) -> list[str]:
+    """The custom rules the engine did not load: an ID absent from its report, or a bad file."""
+    reported = {row.get("core_id") for row in rules_report}
+    missing = []
+    for path in sorted([*rules_dir.glob("*.yaml"), *rules_dir.glob("*.yml")]):
+        try:
+            rule_id = yaml.safe_load(path.read_text(encoding="utf-8"))["Core"]["Id"]
+        except (yaml.YAMLError, TypeError, KeyError, OSError):
+            missing.append(path.name)
+            continue
+        if rule_id not in reported:
+            missing.append(str(rule_id))
+    return missing
 
 
 def _join_sources(
@@ -515,24 +558,26 @@ def _join_sources(
     """Join the results of the official and custom runs, tagging each finding with its run.
 
     The type and version of a dataset come from its first run, the official one.
-    The executed rules add up; a run that could not run makes the dataset could not run.
+    The rule runs of both sources are kept; a run that could not run makes the
+    dataset could not run.
     """
     found: dict[str, list[ValidationIssue]] = {}
     meta: dict[str, tuple[str, str]] = {}
-    executed: dict[str, int | None] = {}
+    rule_runs: dict[str, list[RuleRun]] = {}
     failed: dict[str, list[str]] = {}
     for source, results in runs:
         for name, result in results.items():
             meta.setdefault(name, (result.dataset_type, result.model_version))
-            if result.rules_executed is not None:
-                executed[name] = (executed.get(name) or 0) + result.rules_executed
+            for run in result.rule_runs:
+                run.source = source
+                rule_runs.setdefault(name, []).append(run)
             if result.could_not_run is not None:
                 failed.setdefault(name, []).append(f"{source} run: {result.could_not_run}")
             for issue in (*result.errors, *result.warnings, *result.infos):
                 issue.source = source
                 found.setdefault(name, []).append(issue)
     joined = {
-        name: _result_from_issues(name, *meta[name], found.get(name, []), executed.get(name))
+        name: _result_from_issues(name, *meta[name], found.get(name, []), rule_runs.get(name, []))
         for name in meta
     }
     for name, reasons in failed.items():
@@ -553,7 +598,7 @@ def _result_from_issues(
     dataset_type: str,
     model_version: str,
     issues: list[ValidationIssue],
-    rules_executed: int | None = None,
+    rule_runs: list[RuleRun] | None = None,
 ) -> ValidationResult:
     result = _build_result(
         dataset_name=dataset_name,
@@ -563,7 +608,8 @@ def _result_from_issues(
         warnings=[i for i in issues if i.severity == Severity.WARNING],
         infos=[i for i in issues if i.severity == Severity.INFO],
     )
-    result.rules_executed = rules_executed
+    result.rule_runs = list(rule_runs or [])
+    result.rules_executed = sum(r.executed for r in result.rule_runs) if rule_runs else None
     return result
 
 
@@ -575,26 +621,3 @@ def _safe_int(val: object) -> int | None:
         return int(val)
     except (TypeError, ValueError):
         return None
-
-
-# Patterns that indicate engine-internal noise rather than real data issues.
-# When validating a single dataset, the engine runs ALL rules for the
-# standard.  Rules that reference missing datasets produce these messages.
-_ENGINE_NOISE_PATTERNS = (
-    "evaluation dataset failed to build",
-    "rule evaluation error",
-    "rule execution error",
-    "operation failed",
-    "An unknown exception has occurred",
-)
-
-
-def _is_engine_noise(message: str) -> bool:
-    """Return ``True`` if *message* is engine-internal noise.
-
-    These are messages produced when the CDISC Rules Engine cannot
-    execute a rule (missing datasets, internal errors).  They are not
-    real data-quality findings and should be suppressed.
-    """
-    msg = message.lower()
-    return any(p.lower() in msg for p in _ENGINE_NOISE_PATTERNS)

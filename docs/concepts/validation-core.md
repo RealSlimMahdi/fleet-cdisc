@@ -103,6 +103,16 @@ uv run fleet validate --report findings.html   # HTML findings report
 - Exit codes: 0 nothing blocks, 1 a finding blocks, 2 a dataset could not
   run. So `fleet validate` drops straight into CI. The last line counts each
   status and the findings.
+- **Rule counts**: each report states, per engine run (official, custom),
+  how many rules executed, were skipped and could not run, for example
+  `Rules (engine run, official): 90 executed, 313 skipped, 27 could not run`.
+  The counts belong to the engine run, not to one dataset. A rule that could
+  not run (status `EXECUTION_ERROR`, often because a dataset it needs is
+  absent) is a rule problem, not a data finding: its rows are left out of the
+  findings, and it does not change the status or the exit code. The rows are
+  chosen by the rule status in `Rules_Report`, never by the message text.
+  `fleet validate` and the HTML report also list the IDs of these rules; the
+  verb prints the count line only.
 - **Engine version**: `fleet install-engine` installs the newest tested CORE
   release. The report header and `fleet doctor` name a version Fleet is not
   tested with. A weekly CI job runs Fleet on the newest CORE release.

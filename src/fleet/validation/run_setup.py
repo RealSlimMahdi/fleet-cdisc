@@ -432,7 +432,7 @@ def _resolve_custom_rules(
 ) -> Resolved[Path | None]:
     configured = ctx.custom_rules_dir if ctx is not None else None
     if custom_rules is not None:
-        rules, source = Path(custom_rules), "argument"
+        rules, source = Path(custom_rules).resolve(), "argument"
     elif configured is not None:
         rules, source = configured, "study config"
     else:
@@ -457,7 +457,7 @@ def _resolve_engine(
     engine: str | Path | None, ctx: StudyContext | None, environ: Mapping[str, str]
 ) -> Resolved[Path | None]:
     if engine is not None:
-        return Resolved(Path(engine), "argument")
+        return Resolved(Path(engine).resolve(), "argument")
     found = find_engine(ctx.engine_file if ctx is not None else None, environ)
     if found is None:
         return Resolved(None, "default")

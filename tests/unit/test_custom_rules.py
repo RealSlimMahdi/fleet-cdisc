@@ -219,7 +219,7 @@ class TestCustomRulesEngineIntegration:
                     cmd = mock_run.call_args[0][0]
                     assert "-lr" in cmd
                     lr_idx = cmd.index("-lr")
-                    assert cmd[lr_idx + 1] == str(rules_dir)
+                    assert cmd[lr_idx + 1] == str(rules_dir.resolve())
 
     def test_validate_dataset_no_lr_without_custom_rules(self):
         """Verify -lr is NOT added when custom_rules is None."""

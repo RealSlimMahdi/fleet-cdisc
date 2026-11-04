@@ -727,7 +727,7 @@ USUBJID as the join key.
 
 | # | Function | Domain(s) | Status | Rule ID | Notes |
 |---|----------|-----------|--------|---------|-------|
-| 109 | `check_vs_sbp_lt_dbp` | VS | ✅ | SDTMCHK-VS-001 | DBP > SBP |
+| 109 | `check_vs_sbp_lt_dbp` | VS | ❌ | — | DBP > SBP compares two records (DIABP, SYSBP); the rule could not run in CORE, so it was removed |
 | 110 | `check_vs_height` | VS, DM | ✅ | SDTMCHK-VS-003 | `Operations: distinct` + `is_not_contained_by` |
 | 111 | `check_vs_vsdtc_after_dd` | AE, DS, VS | ✅ | SDTMCHK-VS-002 | `Operations: max_date` + `date_greater_than` |
 
@@ -848,7 +848,6 @@ SDTMCHK-TU-001.yaml   # TUDTC missing
 SDTMCHK-TU-002.yaml   # TULOC missing
 SDTMCHK-TU-003.yaml   # TU visit date ordering
 SDTMCHK-TU-004.yaml   # Same TU date across visits
-SDTMCHK-VS-001.yaml   # DBP > SBP
 SDTMCHK-VS-002.yaml   # VS date after death
 SDTMCHK-VS-003.yaml   # Height measurement missing
 ```
