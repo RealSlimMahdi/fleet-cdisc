@@ -329,60 +329,68 @@ class TestCompiler:
 
     def test_combine_grades_low_positive(self):
         """Low grade present → negative string (e.g. "-3")."""
-        expr = combine_grades_expr("ATOXGRL", "ATOXGRH")
+        expr = combine_grades_expr(
+            "ATOXGRL", "ATOXGRH", low_desc_var="ATOXDSCL", high_desc_var="ATOXDSCH"
+        )
         df = pl.from_repr("""\
-┌─────────┬─────────┐
-│ ATOXGRL ┆ ATOXGRH │
-│ ---     ┆ ---     │
-│ str     ┆ str     │
-╞═════════╪═════════╡
-│ 3       ┆ null    │
-└─────────┴─────────┘
+┌─────────┬─────────┬──────────┬──────────┐
+│ ATOXGRL ┆ ATOXGRH ┆ ATOXDSCL ┆ ATOXDSCH │
+│ ---     ┆ ---     ┆ ---      ┆ ---      │
+│ str     ┆ str     ┆ str      ┆ str      │
+╞═════════╪═════════╪══════════╪══════════╡
+│ 3       ┆ null    ┆ Anemia   ┆ null     │
+└─────────┴─────────┴──────────┴──────────┘
 """)
         result = df.with_columns(expr.alias("ATOXGR"))
         assert result["ATOXGR"][0] == "-3"
 
     def test_combine_grades_high_positive(self):
         """High grade present → positive string (e.g. "3")."""
-        expr = combine_grades_expr("ATOXGRL", "ATOXGRH")
+        expr = combine_grades_expr(
+            "ATOXGRL", "ATOXGRH", low_desc_var="ATOXDSCL", high_desc_var="ATOXDSCH"
+        )
         df = pl.from_repr("""\
-┌─────────┬─────────┐
-│ ATOXGRL ┆ ATOXGRH │
-│ ---     ┆ ---     │
-│ str     ┆ str     │
-╞═════════╪═════════╡
-│ null    ┆ 3       │
-└─────────┴─────────┘
+┌─────────┬─────────┬──────────┬──────────┐
+│ ATOXGRL ┆ ATOXGRH ┆ ATOXDSCL ┆ ATOXDSCH │
+│ ---     ┆ ---     ┆ ---      ┆ ---      │
+│ str     ┆ str     ┆ str      ┆ str      │
+╞═════════╪═════════╪══════════╪══════════╡
+│ null    ┆ 3       ┆ null     ┆ HGB Inc  │
+└─────────┴─────────┴──────────┴──────────┘
 """)
         result = df.with_columns(expr.alias("ATOXGR"))
         assert result["ATOXGR"][0] == "3"
 
     def test_combine_grades_both_zero(self):
         """Both sides zero → "0"."""
-        expr = combine_grades_expr("ATOXGRL", "ATOXGRH")
+        expr = combine_grades_expr(
+            "ATOXGRL", "ATOXGRH", low_desc_var="ATOXDSCL", high_desc_var="ATOXDSCH"
+        )
         df = pl.from_repr("""\
-┌─────────┬─────────┐
-│ ATOXGRL ┆ ATOXGRH │
-│ ---     ┆ ---     │
-│ str     ┆ str     │
-╞═════════╪═════════╡
-│ 0       ┆ 0       │
-└─────────┴─────────┘
+┌─────────┬─────────┬──────────┬──────────┐
+│ ATOXGRL ┆ ATOXGRH ┆ ATOXDSCL ┆ ATOXDSCH │
+│ ---     ┆ ---     ┆ ---      ┆ ---      │
+│ str     ┆ str     ┆ str      ┆ str      │
+╞═════════╪═════════╪══════════╪══════════╡
+│ 0       ┆ 0       ┆ K Dec    ┆ K Inc    │
+└─────────┴─────────┴──────────┴──────────┘
 """)
         result = df.with_columns(expr.alias("ATOXGR"))
         assert result["ATOXGR"][0] == "0"
 
     def test_combine_grades_both_null(self):
         """Both sides null → null."""
-        expr = combine_grades_expr("ATOXGRL", "ATOXGRH")
+        expr = combine_grades_expr(
+            "ATOXGRL", "ATOXGRH", low_desc_var="ATOXDSCL", high_desc_var="ATOXDSCH"
+        )
         df = pl.from_repr("""\
-┌─────────┬─────────┐
-│ ATOXGRL ┆ ATOXGRH │
-│ ---     ┆ ---     │
-│ str     ┆ str     │
-╞═════════╪═════════╡
-│ null    ┆ null    │
-└─────────┴─────────┘
+┌─────────┬─────────┬──────────┬──────────┐
+│ ATOXGRL ┆ ATOXGRH ┆ ATOXDSCL ┆ ATOXDSCH │
+│ ---     ┆ ---     ┆ ---      ┆ ---      │
+│ str     ┆ str     ┆ str      ┆ str      │
+╞═════════╪═════════╪══════════╪══════════╡
+│ null    ┆ null    ┆ K Dec    ┆ K Inc    │
+└─────────┴─────────┴──────────┴──────────┘
 """)
         result = df.with_columns(expr.alias("ATOXGR"))
         assert result["ATOXGR"][0] is None
@@ -430,6 +438,7 @@ class TestAtoxgrVerb:
                 system="ctcae_v5",
                 direction="H",
                 term_var="PARAMCD",
+                unit_var="AVALU",
             )
             .to_frame()
             .sort("USUBJID")
@@ -527,6 +536,7 @@ class TestAtoxgrVerb:
             system="ctcae_v5",
             direction="L",
             term_var="PARAMCD",
+            unit_var="AVALU",
         ).to_frame()
         assert result["ATOXGRL"][0] is None
 
@@ -551,6 +561,7 @@ class TestAtoxgrVerb:
                 system="daids",
                 direction="L",
                 term_var="PARAMCD",
+                unit_var="AVALU",
             )
             .to_frame()
             .sort("USUBJID")
@@ -581,17 +592,15 @@ class TestAtoxgrVerb:
             term_var="PARAMCD",
             unit_var="AVALU",
         ).to_frame()
-        # No high-direction criteria for Anemia, so ATOXGRH = null
-        graded = graded.with_columns(pl.lit(None, dtype=pl.Utf8).alias("ATOXGRH"))
+        # No high-direction criteria for Anemia: ATOXGRH and ATOXDSCH are null
+        graded = graded.with_columns(
+            pl.lit(None, dtype=pl.Utf8).alias("ATOXGRH"),
+            pl.col("PARAMCD").alias("ATOXDSCL"),
+            pl.lit(None, dtype=pl.Utf8).alias("ATOXDSCH"),
+        )
 
         result = (
-            graded.adam.combine_grades(
-                "ATOXGR",
-                low_var="ATOXGRL",
-                high_var="ATOXGRH",
-                low_desc_var=None,
-                high_desc_var=None,
-            )
+            graded.adam.combine_grades("ATOXGR", low_var="ATOXGRL", high_var="ATOXGRH")
             .to_frame()
             .sort("USUBJID")
         )
@@ -644,6 +653,7 @@ class TestAtoxgrVerb:
                 system=str(p),
                 direction="H",
                 term_var="PARAMCD",
+                unit_var="AVALU",
             )
             .to_frame()
             .sort("USUBJID")

@@ -971,6 +971,10 @@
         },
         "direction": {
           "description": "``\"L\"`` (low) or ``\"H\"`` (high).",
+          "enum": [
+            "L",
+            "H"
+          ],
           "title": "Direction",
           "type": "string"
         },
@@ -980,17 +984,9 @@
           "type": "string"
         },
         "unit_var": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Column holding the unit of measure.",
-          "title": "Unit Var"
+          "description": "Column holding the unit of measure (e.g.",
+          "title": "Unit Var",
+          "type": "string"
         },
         "signif_dig": {
           "default": 15,
@@ -1036,7 +1032,8 @@
       "required": [
         "algorithm",
         "direction",
-        "term_var"
+        "term_var",
+        "unit_var"
       ],
       "title": "ADAMAtoxgrSpec",
       "type": "object"
@@ -1125,6 +1122,19 @@
           "title": "Height",
           "type": "string"
         },
+        "round_digits": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Decimal places, rounded as SAS ``ROUND`` (half away from zero).",
+          "title": "Round Digits"
+        },
         "depends_on": {
           "anyOf": [
             {
@@ -1173,6 +1183,19 @@
           "description": "Formula to use \u2014 ``\"Mosteller\"`` (default), ``\"DuBois\"``, ``\"Haycock\"``, or ``\"Gehan-George\"``.",
           "title": "Method",
           "type": "string"
+        },
+        "round_digits": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Decimal places, rounded as SAS ``ROUND`` (half away from zero).",
+          "title": "Round Digits"
         },
         "depends_on": {
           "anyOf": [
@@ -1309,30 +1332,16 @@
           "type": "string"
         },
         "low_desc_var": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Optional low-grade term description column.",
-          "title": "Low Desc Var"
+          "default": "ATOXDSCL",
+          "description": "Low-grade term description column (default ``\"ATOXDSCL\"``).",
+          "title": "Low Desc Var",
+          "type": "string"
         },
         "high_desc_var": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Optional high-grade term description column.",
-          "title": "High Desc Var"
+          "default": "ATOXDSCH",
+          "description": "High-grade term description column (default ``\"ATOXDSCH\"``).",
+          "title": "High Desc Var",
+          "type": "string"
         },
         "depends_on": {
           "anyOf": [
@@ -2100,6 +2109,19 @@
           "title": "Diastolic",
           "type": "string"
         },
+        "round_digits": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Decimal places, rounded as SAS ``ROUND`` (half away from zero).",
+          "title": "Round Digits"
+        },
         "depends_on": {
           "anyOf": [
             {
@@ -2243,6 +2265,12 @@
           "description": "Column containing the upper limit of normal.",
           "title": "High",
           "type": "string"
+        },
+        "signif_dig": {
+          "default": 15,
+          "description": "Significant digits for the comparison (default 15).",
+          "title": "Signif Dig",
+          "type": "integer"
         },
         "depends_on": {
           "anyOf": [
@@ -2496,6 +2524,19 @@
           "description": "Unit of *rr*: ``\"ms\"`` (default) or ``\"msec\"``, or ``\"s\"`` or ``\"sec\"``.",
           "title": "Rr Unit",
           "type": "string"
+        },
+        "round_digits": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Decimal places, rounded as SAS ``ROUND`` (half away from zero).",
+          "title": "Round Digits"
         },
         "depends_on": {
           "anyOf": [

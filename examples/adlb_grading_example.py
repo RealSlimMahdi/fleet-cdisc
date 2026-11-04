@@ -70,6 +70,7 @@ def main() -> None:
             system="ctcae_v5",
             direction="H",
             term_var="ATOXDSCH",
+            unit_var="AVALU",
         )
         .combine_grades("ATOXGR")
         .to_frame()
@@ -107,6 +108,7 @@ def main() -> None:
         system="daids",
         direction="H",
         term_var="ATOXDSCH",
+        unit_var="AVALU",
     ).to_frame()
 
     print("── DAIDS grading results (high direction only) ──")

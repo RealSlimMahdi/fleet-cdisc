@@ -8,6 +8,7 @@ in its order.  The rules follow admiral ``derive_var_atoxgr_dir``.
 from __future__ import annotations
 
 import json
+import warnings
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -150,8 +151,13 @@ def grade_dataset(
         pl.DataFrame: *df* with *target* added.
 
     Raises:
-        DerivationError: When a term has criteria for several units and
-            *unit_var* is ``None``, or a column the criteria need is missing.
+        DerivationError: When *direction* is not ``"L"`` or ``"H"``, a term
+            has criteria for several units and *unit_var* is ``None``, or a
+            column the criteria need is missing.
+
+    Warns:
+        UserWarning: Once per term, with the count of rows whose unit
+            matches no criteria entry of the term (their grade is null).
 
     Examples:
         Grade the high direction::
@@ -161,6 +167,10 @@ def grade_dataset(
                 term_var="ATOXDSCH", unit_var="AVALU",
             )
     """
+    if direction not in ("L", "H"):
+        raise DerivationError(
+            f"atoxgr: direction={direction!r} is not supported. Use 'L' (low) or 'H' (high)."
+        )
     by_term: dict[str, list[TermCriteria]] = {}
     for entry in criteria_file.criteria:
         if entry.direction == direction:
@@ -187,8 +197,17 @@ def grade_dataset(
         missing = sorted(needed - set(df.columns))
         if missing:
             raise DerivationError(f"atoxgr: '{data_term}' needs the column(s) {missing}.")
-        term_expr = _term_expr(entries, unit_var=unit_var, signif_dig=signif_dig, indicators=ind)
         cond = pl.col(term_var).cast(pl.String) == data_term
+        if unit_var is not None and units and None not in {e.unit for e in entries}:
+            row_unit = pl.col(unit_var).cast(pl.String).str.to_uppercase()
+            n_other = df.select((cond & ~row_unit.is_in(sorted(units)).fill_null(False)).sum())
+            if n_other.item():
+                warnings.warn(
+                    f"atoxgr: {n_other.item()} '{data_term}' row(s) have a {unit_var} that is "
+                    f"not one of the criteria units {sorted(units)}; their grade is null.",
+                    stacklevel=3,
+                )
+        term_expr = _term_expr(entries, unit_var=unit_var, signif_dig=signif_dig, indicators=ind)
         chain = pl.when(cond).then(term_expr) if chain is None else chain.when(cond).then(term_expr)
 
     grade = _NULL if chain is None else chain.otherwise(_NULL)
@@ -204,28 +223,26 @@ def combine_grades_expr(
     low_var: str,
     high_var: str,
     *,
-    low_desc_var: str | None = None,
-    high_desc_var: str | None = None,
+    low_desc_var: str,
+    high_desc_var: str,
 ) -> pl.Expr:
     """Build a Polars expression that merges low and high toxicity grades.
 
-    Logic follows Admiral conventions:
+    Logic follows admiral ``derive_var_atoxgr``:
 
     * Both ``null`` → ``null``
     * Low grade ≥ ``"1"`` → prefix with ``"-"`` (e.g. ``"3"`` → ``"-3"``).
     * High grade ≥ ``"1"`` → keep as-is.
-    * Low ``"0"`` and (high ``"0"`` or high description missing) → ``"0"``.
-    * High ``"0"`` and (low ``"0"`` or low description missing) → ``"0"``.
-    * Otherwise → ``null``.
-
-    When neither ``low_desc_var`` nor ``high_desc_var`` are provided the
-    "description missing" legs are skipped.
+    * (Low ``"0"`` or low description null) and (high ``"0"`` or high
+      description null) → ``"0"``.
+    * Otherwise → ``null``: for example low ``"0"`` and high null while the
+      high description is present (the high grade is unknown).
 
     Args:
         low_var: Column name for the low-direction grade.
         high_var: Column name for the high-direction grade.
-        low_desc_var: Optional column for the low-grade term description.
-        high_desc_var: Optional column for the high-grade term description.
+        low_desc_var: Column for the low-grade term description.
+        high_desc_var: Column for the high-grade term description.
 
     Returns:
         pl.Expr: Utf8 expression producing the combined ATOXGR value.
@@ -234,7 +251,10 @@ def combine_grades_expr(
         Combine low/high into ATOXGR::
 
             df = df.with_columns(
-                combine_grades_expr("ATOXGRL", "ATOXGRH").alias("ATOXGR")
+                combine_grades_expr(
+                    "ATOXGRL", "ATOXGRH",
+                    low_desc_var="ATOXDSCL", high_desc_var="ATOXDSCH",
+                ).alias("ATOXGR")
             )
     """
     low = pl.col(low_var)
@@ -244,18 +264,8 @@ def combine_grades_expr(
     low_graded = low.is_not_null() & (low >= pl.lit("1"))
     high_graded = high.is_not_null() & (high >= pl.lit("1"))
 
-    # "0" on one side while the other side is "0" or has no grading criteria.
-    low_zero = low == pl.lit("0")
-    high_zero = high == pl.lit("0")
-
-    high_absent = high.is_null()
-    low_absent = low.is_null()
-    if high_desc_var is not None:
-        high_absent = high_absent | pl.col(high_desc_var).is_null()
-    if low_desc_var is not None:
-        low_absent = low_absent | pl.col(low_desc_var).is_null()
-
-    zero_cond = (low_zero & (high_zero | high_absent)) | (high_zero & (low_zero | low_absent))
+    low_ok = (low == pl.lit("0")) | pl.col(low_desc_var).is_null()
+    high_ok = (high == pl.lit("0")) | pl.col(high_desc_var).is_null()
 
     return (
         pl.when(both_null)
@@ -264,7 +274,7 @@ def combine_grades_expr(
         .then(pl.lit("-") + low)
         .when(high_graded)
         .then(high)
-        .when(zero_cond)
+        .when(low_ok & high_ok)
         .then(pl.lit("0"))
         .otherwise(pl.lit(None, dtype=pl.Utf8))
     )

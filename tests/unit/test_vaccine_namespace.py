@@ -4,6 +4,7 @@ import polars as pl
 import pytest
 
 import fleet  # noqa: F401 — triggers namespace registration
+from fleet.core.exceptions import DerivationError
 
 # ---------------------------------------------------------------------------
 # LOQ boundary scenarios for aval_adis — mirrors admiralvaccine
@@ -76,7 +77,7 @@ class TestBaseVerbs:
 
 
 class TestFeverFlag:
-    """Test 1: Temperature fever flag — strict > threshold."""
+    """Test 1: Temperature fever flag — >= threshold by default (FDA 2007, Brighton)."""
 
     def test_above_threshold_flagged(self):
         df = pl.from_repr("""\
@@ -92,11 +93,10 @@ class TestFeverFlag:
 └──────┘
 """)
         result = df.adam.vaccine.fever_flag("FEVFL", temp_col="TEMP").to_frame()
-        # > 38.0, not >=
-        assert result["FEVFL"].to_list() == [None, "Y", "Y", None]
+        assert result["FEVFL"].to_list() == [None, "Y", "Y", "Y"]
 
-    def test_at_exact_threshold_not_flagged(self):
-        """Exactly AT the threshold must NOT flag (strict >)."""
+    def test_at_exact_threshold_flagged(self):
+        """Exactly AT the threshold flags: grade 1 fever starts at 38.0 C."""
         df = pl.from_repr("""\
 ┌──────┐
 │ TEMP │
@@ -107,7 +107,7 @@ class TestFeverFlag:
 └──────┘
 """)
         result = df.adam.vaccine.fever_flag("FEVFL", temp_col="TEMP").to_frame()
-        assert result["FEVFL"][0] is None
+        assert result["FEVFL"][0] == "Y"
 
     def test_custom_threshold(self):
         df = pl.from_repr("""\
@@ -116,13 +116,30 @@ class TestFeverFlag:
 │ ---  │
 │ f64  │
 ╞══════╡
+│ 38.9 │
 │ 39.0 │
-│ 39.5 │
 │ 40.0 │
 └──────┘
 """)
         result = df.adam.vaccine.fever_flag("HIGHFL", temp_col="TEMP", threshold=39.0).to_frame()
         assert result["HIGHFL"].to_list() == [None, "Y", "Y"]
+
+    def test_inclusive_false_flags_strictly_above(self):
+        """FDA 2007 grade 4 is > 40.0 C: 40.0 gets no flag with inclusive=False."""
+        df = pl.from_repr("""\
+┌──────┐
+│ TEMP │
+│ ---  │
+│ f64  │
+╞══════╡
+│ 40.0 │
+│ 40.1 │
+└──────┘
+""")
+        result = df.adam.vaccine.fever_flag(
+            "G4FL", temp_col="TEMP", threshold=40.0, inclusive=False
+        ).to_frame()
+        assert result["G4FL"].to_list() == [None, "Y"]
 
     def test_custom_flag_value(self):
         df = pl.from_repr("""\
@@ -168,7 +185,7 @@ class TestSeroconversionFlag:
 └────────┴───────┘
 """)
         result = df.adam.vaccine.seroconversion_flag(
-            "SRCONVFL", aval_col="AVAL", base_col="BASE"
+            "SRCONVFL", aval_col="AVAL", base_col="BASE", lloq_col=None
         ).to_frame()
         assert result["SRCONVFL"].to_list() == ["Y", "Y", None]
 
@@ -184,7 +201,7 @@ class TestSeroconversionFlag:
 └───────┴───────┘
 """)
         result = df.adam.vaccine.seroconversion_flag(
-            "SRCONVFL", aval_col="AVAL", base_col="BASE"
+            "SRCONVFL", aval_col="AVAL", base_col="BASE", lloq_col=None
         ).to_frame()
         assert result["SRCONVFL"][0] == "Y"
 
@@ -200,7 +217,7 @@ class TestSeroconversionFlag:
 └───────┴──────┘
 """)
         result = df.adam.vaccine.seroconversion_flag(
-            "SRCONVFL", aval_col="AVAL", base_col="BASE"
+            "SRCONVFL", aval_col="AVAL", base_col="BASE", lloq_col=None
         ).to_frame()
         assert result["SRCONVFL"][0] is None
 
@@ -215,7 +232,7 @@ class TestSeroconversionFlag:
 └───────┴──────┘
 """)
         result = df.adam.vaccine.seroconversion_flag(
-            "SRCONVFL", aval_col="AVAL", base_col="BASE"
+            "SRCONVFL", aval_col="AVAL", base_col="BASE", lloq_col=None
         ).to_frame()
         assert result["SRCONVFL"][0] is None
 
@@ -231,9 +248,65 @@ class TestSeroconversionFlag:
 └───────┴───────┘
 """)
         result = df.adam.vaccine.seroconversion_flag(
-            "SRCONV2FL", aval_col="AVAL", base_col="BASE", fold_rise=2.0
+            "SRCONV2FL", aval_col="AVAL", base_col="BASE", lloq_col=None, fold_rise=2.0
         ).to_frame()
         assert result["SRCONV2FL"].to_list() == ["Y", "Y"]
+
+    def test_lloq_rule_needs_four_times_lloq_below_lloq(self):
+        """FDA CBER 2007 HI: pre < 1:10 needs post >= 1:40 (LLOQ 10, BASE LLOQ/2)."""
+        df = pl.from_repr("""\
+┌─────────┬────────┬────────┬──────┐
+│ USUBJID ┆ ISLLOQ ┆ BASE   ┆ AVAL │
+│ ---     ┆ ---    ┆ ---    ┆ ---  │
+│ str     ┆ f64    ┆ f64    ┆ f64  │
+╞═════════╪════════╪════════╪══════╡
+│ S01     ┆ 10.0   ┆ 5.0    ┆ 20.0 │
+│ S02     ┆ 10.0   ┆ 5.0    ┆ 39.0 │
+│ S03     ┆ 10.0   ┆ 5.0    ┆ 40.0 │
+│ S12     ┆ 10.0   ┆ 8.0    ┆ 32.0 │
+│ S20     ┆ 10.0   ┆ 10.0   ┆ 40.0 │
+│ S21     ┆ 10.0   ┆ 20.0   ┆ 79.0 │
+│ S30     ┆ null   ┆ 5.0    ┆ 80.0 │
+└─────────┴────────┴────────┴──────┘
+""")
+        lloq = df.adam.vaccine.seroconversion_flag(
+            "SRCONVFL", aval_col="AVAL", base_col="BASE", lloq_col="ISLLOQ"
+        ).to_frame()
+        ratio = df.adam.vaccine.seroconversion_flag(
+            "SRCONVFL", aval_col="AVAL", base_col="BASE", lloq_col=None
+        ).to_frame()
+
+        assert lloq["SRCONVFL"].to_list() == [None, None, "Y", None, "Y", None, None]
+        assert ratio["SRCONVFL"].to_list() == ["Y", "Y", "Y", "Y", "Y", None, "Y"]
+
+    def test_seronegative_fold_sets_the_arm_below_lloq(self):
+        df = pl.from_repr("""\
+┌────────┬──────┬──────┐
+│ ISLLOQ ┆ BASE ┆ AVAL │
+│ ---    ┆ ---  ┆ ---  │
+│ f64    ┆ f64  ┆ f64  │
+╞════════╪══════╪══════╡
+│ 8.0    ┆ 4.0  ┆ 8.0  │
+│ 8.0    ┆ 4.0  ┆ 7.0  │
+└────────┴──────┴──────┘
+""")
+        result = df.adam.vaccine.seroconversion_flag(
+            "SRCONVFL", aval_col="AVAL", base_col="BASE", lloq_col="ISLLOQ", seronegative_fold=1.0
+        ).to_frame()
+        assert result["SRCONVFL"].to_list() == ["Y", None]
+
+    def test_lloq_col_has_no_default(self):
+        df = pl.from_repr("""\
+┌──────┬──────┐
+│ BASE ┆ AVAL │
+│ ---  ┆ ---  │
+│ f64  ┆ f64  │
+╞══════╪══════╡
+│ 5.0  ┆ 20.0 │
+└──────┴──────┘
+""")
+        with pytest.raises(TypeError, match="lloq_col"):
+            df.adam.vaccine.seroconversion_flag("SRCONVFL", aval_col="AVAL", base_col="BASE")
 
 
 class TestSeroresponseFlag:
@@ -455,3 +528,75 @@ class TestEventFlag:
             "EVENTFL", aval_col="AVAL", cutoff=2.5, by=["USUBJID", "FAOBJ", "ATPTREF"]
         ).to_frame()
         assert all(f == "N" for f in result["EVENTFL"].to_list())
+
+    def test_avalc_y_counts_and_missing_diary_gives_null(self):
+        """admiralvaccine derive_vars_event_flag: AVALC Y is an event; no data gives NA."""
+        df = pl.from_repr("""\
+┌─────────┬──────────┬─────────┬──────┬──────────┐
+│ USUBJID ┆ FAOBJ    ┆ ATPTREF ┆ AVAL ┆ AVALC    │
+│ ---     ┆ ---      ┆ ---     ┆ ---  ┆ ---      │
+│ str     ┆ str      ┆ str     ┆ f64  ┆ str      │
+╞═════════╪══════════╪═════════╪══════╪══════════╡
+│ 1       ┆ FATIGUE  ┆ VAC1    ┆ 1.0  ┆ MILD     │
+│ 1       ┆ FATIGUE  ┆ VAC1    ┆ 2.0  ┆ MODERATE │
+│ 1       ┆ NAUSEA   ┆ VAC1    ┆ null ┆ Y        │
+│ 1       ┆ NAUSEA   ┆ VAC1    ┆ null ┆ N        │
+│ 1       ┆ PAIN     ┆ VAC1    ┆ null ┆ null     │
+│ 1       ┆ PAIN     ┆ VAC1    ┆ null ┆ null     │
+│ 1       ┆ VOMITING ┆ VAC1    ┆ null ┆ N        │
+│ 1       ┆ REDNESS  ┆ VAC1    ┆ 3.0  ┆ 3.0      │
+│ 1       ┆ SWELLING ┆ VAC1    ┆ 1.0  ┆ 1.0      │
+└─────────┴──────────┴─────────┴──────┴──────────┘
+""")
+        result = df.adam.vaccine.event_flag(
+            "EVENTFL", aval_col="AVAL", cutoff=2.5, by=["USUBJID", "FAOBJ", "ATPTREF"]
+        ).to_frame()
+        assert result["EVENTFL"].to_list() == ["Y", "Y", "Y", "Y", None, None, "N", "Y", "N"]
+
+    def test_severity_col_none_and_empty_values(self):
+        df = pl.from_repr("""\
+┌─────────┬─────────┬─────────┬──────┬───────┐
+│ USUBJID ┆ FAOBJ   ┆ ATPTREF ┆ AVAL ┆ AVALC │
+│ ---     ┆ ---     ┆ ---     ┆ ---  ┆ ---   │
+│ str     ┆ str     ┆ str     ┆ f64  ┆ str   │
+╞═════════╪═════════╪═════════╪══════╪═══════╡
+│ 1       ┆ FATIGUE ┆ VAC1    ┆ 1.0  ┆ MILD  │
+└─────────┴─────────┴─────────┴──────┴───────┘
+""")
+        by = ["USUBJID", "FAOBJ", "ATPTREF"]
+        no_sev = df.adam.vaccine.event_flag(
+            "EVENTFL", aval_col="AVAL", cutoff=2.5, by=by, severity_col=None
+        ).to_frame()
+        empty = df.adam.vaccine.event_flag(
+            "EVENTFL", aval_col="AVAL", cutoff=2.5, by=by, severity_values=[]
+        ).to_frame()
+        assert no_sev["EVENTFL"].to_list() == ["N"]
+        assert empty["EVENTFL"].to_list() == ["N"]
+
+    def test_by_is_required(self):
+        df = pl.from_repr("""\
+┌─────────┬──────┬───────┐
+│ USUBJID ┆ AVAL ┆ AVALC │
+│ ---     ┆ ---  ┆ ---   │
+│ str     ┆ f64  ┆ str   │
+╞═════════╪══════╪═══════╡
+│ 1       ┆ 3.0  ┆ 3.0   │
+└─────────┴──────┴───────┘
+""")
+        with pytest.raises(TypeError, match="by"):
+            df.adam.vaccine.event_flag("EVENTFL", aval_col="AVAL", cutoff=2.5)
+
+
+@pytest.mark.parametrize("rule", ["HALF", "Half", "half ", "half_lloq", "zero"])
+def test_aval_adis_refuses_an_unknown_lloq_rule(rule: str) -> None:
+    df = pl.from_repr("""\
+┌──────────┬────────┬────────┬─────────┐
+│ ISSTRESN ┆ ISLLOQ ┆ ISULOQ ┆ ISORRES │
+│ ---      ┆ ---    ┆ ---    ┆ ---     │
+│ f64      ┆ f64    ┆ f64    ┆ str     │
+╞══════════╪════════╪════════╪═════════╡
+│ 1.0      ┆ 4.0    ┆ 200.0  ┆ 1       │
+└──────────┴────────┴────────┴─────────┘
+""")
+    with pytest.raises(DerivationError, match="'half' or 'lloq'"):
+        df.adam.vaccine.aval_adis("AVAL", lloq_rule=rule)

@@ -148,7 +148,7 @@ def test_a_term_with_several_units_needs_unit_var() -> None:
 def test_a_missing_column_is_named() -> None:
     frame = pl.DataFrame({"TERM": ["Anemia"], "AVAL": [75.0]})
     with pytest.raises(DerivationError, match="ANRLO"):
-        frame.adam.atoxgr("GR", system="ctcae_v5", direction="L", term_var="TERM")
+        frame.adam.atoxgr("GR", system="ctcae_v5", direction="L", term_var="TERM", unit_var="AVALU")
 
 
 def test_rows_keep_their_order_and_count() -> None:

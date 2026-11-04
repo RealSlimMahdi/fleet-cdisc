@@ -959,13 +959,13 @@ ADAM_CASES: list[Case] = [
     Case(
         "combine_grades",
         lambda: pl.from_repr("""\
-┌─────────┬─────────┐
-│ ATOXGRL ┆ ATOXGRH │
-│ ---     ┆ ---     │
-│ str     ┆ str     │
-╞═════════╪═════════╡
-│ 3       ┆ null    │
-└─────────┴─────────┘
+┌─────────┬─────────┬──────────┬──────────┐
+│ ATOXGRL ┆ ATOXGRH ┆ ATOXDSCL ┆ ATOXDSCH │
+│ ---     ┆ ---     ┆ ---      ┆ ---      │
+│ str     ┆ str     ┆ str      ┆ str      │
+╞═════════╪═════════╪══════════╪══════════╡
+│ 3       ┆ null    ┆ Anemia   ┆ null     │
+└─────────┴─────────┴──────────┴──────────┘
 """),
         [{"target": "ATOXGR", "algorithm": "combine_grades"}],
         lambda df: df["ATOXGR"].to_list() == ["-3"],

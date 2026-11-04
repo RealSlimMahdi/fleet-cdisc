@@ -297,3 +297,131 @@ class TestChaining:
         )
         assert "WAISTHIP" in result.columns
         assert "WAISTHGT" in result.columns
+
+
+# WHO TRS 894 adult classes; exactly AT a cut-off goes to the upper class.
+_BMI_ADULT_CASES = [
+    (17.0, "Underweight"),
+    (18.4, "Underweight"),
+    (18.5, "Normal weight"),
+    (24.9, "Normal weight"),
+    (25.0, "Overweight"),
+    (29.9, "Overweight"),
+    (30.0, "Obese"),
+    (40.0, "Obese"),
+]
+
+
+class TestBmiCategoryAdult:
+    """c1-161: the adult rule moved from peds; c1-158: no class for a missing BMI."""
+
+    @pytest.mark.parametrize(("bmi", "expected"), _BMI_ADULT_CASES)
+    def test_boundaries(self, bmi, expected):
+        df = pl.DataFrame({"BMI": [bmi]})
+        result = df.adam.metabolic.bmi_category_adult("BMICG", bmi_col="BMI").to_frame()
+        assert result["BMICG"][0] == expected
+
+    def test_null_nan_and_inf_get_no_class(self):
+        df = pl.from_repr("""\
+┌─────────┬──────┐
+│ USUBJID ┆ BMI  │
+│ ---     ┆ ---  │
+│ str     ┆ f64  │
+╞═════════╪══════╡
+│ S1      ┆ 20.8 │
+│ S2      ┆ null │
+│ S3      ┆ NaN  │
+│ S4      ┆ inf  │
+└─────────┴──────┘
+""")
+        result = df.adam.metabolic.bmi_category_adult("BMICG", bmi_col="BMI").to_frame()
+        assert result["BMICG"].to_list() == ["Normal weight", None, None, None]
+
+    def test_custom_labels_give_null_at_or_above_the_last_bound(self):
+        df = pl.from_repr("""\
+┌──────┐
+│ BMI  │
+│ ---  │
+│ f64  │
+╞══════╡
+│ 17.0 │
+│ 22.0 │
+│ 35.0 │
+│ null │
+└──────┘
+""")
+        result = df.adam.metabolic.bmi_category_adult(
+            "BMICG", bmi_col="BMI", labels={"Low": 18.5, "High": 30.0}
+        ).to_frame()
+        assert result["BMICG"].to_list() == ["Low", "High", None, None]
+
+    def test_all_null_column_keeps_string(self):
+        df = pl.DataFrame({"BMI": [None, None]}, schema={"BMI": pl.Float64})
+        result = df.adam.metabolic.bmi_category_adult("BMICG", bmi_col="BMI").to_frame()
+        assert result["BMICG"].dtype == pl.String
+
+
+class TestSexOtherThanMaleOrFemale:
+    """c1-160, c1-706: U, UNDIFFERENTIATED and null have no Deurenberg or ATP III value."""
+
+    FRAME = """\
+┌─────────┬──────────────────┬──────┬──────┬────────┐
+│ USUBJID ┆ SEX              ┆ BMI  ┆ AGE  ┆ WSTCIR │
+│ ---     ┆ ---              ┆ ---  ┆ ---  ┆ ---    │
+│ str     ┆ str              ┆ f64  ┆ f64  ┆ f64    │
+╞═════════╪══════════════════╪══════╪══════╪════════╡
+│ 01      ┆ M                ┆ 25.0 ┆ 40.0 ┆ 95.0   │
+│ 02      ┆ F                ┆ 25.0 ┆ 40.0 ┆ 95.0   │
+│ 03      ┆ U                ┆ 25.0 ┆ 40.0 ┆ 95.0   │
+│ 04      ┆ UNDIFFERENTIATED ┆ 25.0 ┆ 40.0 ┆ 95.0   │
+│ 05      ┆ null             ┆ 25.0 ┆ 40.0 ┆ 95.0   │
+└─────────┴──────────────────┴──────┴──────┴────────┘
+"""
+
+    def test_body_fat_pct(self):
+        df = pl.from_repr(self.FRAME)
+        result = df.adam.metabolic.body_fat_pct(
+            "BFPCT", bmi_col="BMI", age_col="AGE", sex_col="SEX"
+        ).to_frame()
+        assert result["BFPCT"].to_list() == [23.0, 33.8, None, None, None]
+
+    def test_body_fat_pct_with_numeric_sex_codes(self):
+        df = pl.from_repr(self.FRAME).with_columns(pl.col("SEX").replace({"M": "1", "F": "2"}))
+        result = df.adam.metabolic.body_fat_pct(
+            "BFPCT",
+            bmi_col="BMI",
+            age_col="AGE",
+            sex_col="SEX",
+            sex_male_value="1",
+            sex_female_value="2",
+        ).to_frame()
+        assert result["BFPCT"].to_list() == [23.0, 33.8, None, None, None]
+
+    def test_visceral_fat_flag(self):
+        df = pl.from_repr(self.FRAME)
+        result = df.adam.metabolic.visceral_fat_flag(
+            "ABDFL", waist_col="WSTCIR", sex_col="SEX"
+        ).to_frame()
+        assert result["ABDFL"].to_list() == [None, "Y", None, None, None]
+
+
+def test_ratio_verbs_give_null_for_a_zero_denominator():
+    """c1-84: SAS gives a missing value for x / 0, not inf or NaN."""
+    df = pl.from_repr("""\
+┌────────┬────────┬────────┐
+│ WSTCIR ┆ HIPCIR ┆ HEIGHT │
+│ ---    ┆ ---    ┆ ---    │
+│ f64    ┆ f64    ┆ f64    │
+╞════════╪════════╪════════╡
+│ 90.0   ┆ 0.0    ┆ 0.0    │
+│ 0.0    ┆ 0.0    ┆ 0.0    │
+│ 90.0   ┆ 100.0  ┆ 180.0  │
+└────────┴────────┴────────┘
+""")
+    result = (
+        df.adam.metabolic.waist_hip_ratio("WAISTHIP", waist_col="WSTCIR", hip_col="HIPCIR")
+        .waist_height_ratio("WAISTHGT", waist_col="WSTCIR", height_col="HEIGHT")
+        .to_frame()
+    )
+    assert result["WAISTHIP"].to_list() == [None, None, 0.9]
+    assert result["WAISTHGT"].to_list() == [None, None, 0.5]

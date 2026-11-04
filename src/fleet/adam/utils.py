@@ -17,7 +17,7 @@ from fleet.core.dtc import (
     to_day,
     warn_on_collect,
 )
-from fleet.core.exceptions import DerivationError
+from fleet.core.exceptions import DerivationError, VerbUsageError
 
 
 def study_day(analysis_date: str, reference_date: str, target: str = "ADY") -> pl.Expr:
@@ -59,36 +59,61 @@ def baseline(
 
 
 def chg(aval: str = "AVAL", base: str = "BASE", target: str = "CHG") -> pl.Expr:
-    """Change from baseline: CHG = AVAL - BASE."""
-    return (pl.col(aval) - pl.col(base)).alias(target)
+    """Change from baseline: CHG = AVAL - BASE, as Float64 (an unsigned input cannot wrap)."""
+    return (pl.col(aval).cast(pl.Float64) - pl.col(base).cast(pl.Float64)).alias(target)
 
 
 def pchg(aval: str = "AVAL", base: str = "BASE", target: str = "PCHG") -> pl.Expr:
-    """Percent change from baseline: PCHG = (AVAL - BASE) / BASE * 100."""
-    return (
-        pl.when(pl.col(base).is_not_null() & (pl.col(base) != 0))
-        .then((pl.col(aval) - pl.col(base)) / pl.col(base) * 100)
-        .otherwise(None)
-        .alias(target)
-    )
+    """Percent change from baseline: PCHG = (AVAL - BASE) / BASE * 100, as Float64."""
+    a = pl.col(aval).cast(pl.Float64)
+    b = pl.col(base).cast(pl.Float64)
+    return pl.when(b.is_not_null() & (b != 0)).then((a - b) / b * 100).otherwise(None).alias(target)
 
 
-def bmi(weight: str = "weight_kg", height: str = "height_cm", target: str = "BMI") -> pl.Expr:
-    """BMI = weight_kg / (height_m^2). Height input assumed in cm."""
+def sas_round(expr: pl.Expr, digits: int | None) -> pl.Expr:
+    """Round as SAS ``ROUND(x, 10**-digits)``: half away from zero; ``None`` keeps *expr*.
+
+    The value is first rounded to 8 decimals of the scaled number, so a
+    binary value such as 24.25 rounds to 24.3, as SAS does.
+    """
+    if digits is None:
+        return expr
+    scale = 10.0**digits
+    # The last round(digits) removes the 1-ulp error of the division (93.30000000000001).
+    rounded = (expr * scale).round(8).round(0, mode="half_away_from_zero") / scale
+    return rounded.round(digits)
+
+
+def bmi(
+    weight: str = "weight_kg",
+    height: str = "height_cm",
+    target: str = "BMI",
+    *,
+    round_digits: int | None = None,
+) -> pl.Expr:
+    """BMI = weight_kg / (height_m^2). Height input assumed in cm; height 0 gives null."""
     height_m = pl.col(height) / 100.0
-    return (pl.col(weight) / (height_m * height_m)).round(1).alias(target)
+    value = pl.when(pl.col(height) != 0).then(pl.col(weight) / (height_m * height_m))
+    return sas_round(value, round_digits).alias(target)
 
 
-def nrind(value: str, low: str, high: str, target: str = "NRIND") -> pl.Expr:
+def nrind(
+    value: str, low: str, high: str, target: str = "NRIND", *, signif_dig: int = 15
+) -> pl.Expr:
     """Normal range indicator: LOW / NORMAL / HIGH (admiral semantics).
 
-    Null guard: a null analysis value, or both limits null, yields a
+    Null guard: a null or NaN analysis value, or both limits null, yields a
     null indicator instead of a spurious "NORMAL".  One-sided ranges
-    classify against the available limit only.
+    classify against the available limit only.  The three values are
+    compared at *signif_dig* significant digits, as admiral ``signif()``.
     """
-    value_col = pl.col(value)
-    low_col = pl.col(low)
-    high_col = pl.col(high)
+
+    def _signif(name: str) -> pl.Expr:
+        return pl.col(name).cast(pl.Float64).fill_nan(None).round_sig_figs(signif_dig)
+
+    value_col = _signif(value)
+    low_col = _signif(low)
+    high_col = _signif(high)
     return (
         pl.when(value_col.is_null() | (low_col.is_null() & high_col.is_null()))
         .then(pl.lit(None, dtype=pl.String))
@@ -151,6 +176,7 @@ def bsa(
     *,
     method: str = "Mosteller",
     target: str = "BSA",
+    round_digits: int | None = None,
 ) -> pl.Expr:
     """
     Body Surface Area (m²).
@@ -177,7 +203,7 @@ def bsa(
         raise DerivationError(
             f"Unknown BSA method '{method}'. Supported: Mosteller, DuBois, Haycock, Gehan-George."
         )
-    return expr.round(4).alias(target)
+    return sas_round(expr, round_digits).alias(target)
 
 
 # ------------------------------------------------------------------ #
@@ -190,13 +216,14 @@ def mean_arterial_pressure(
     diastolic: str = "DIABP",
     *,
     target: str = "MAP",
+    round_digits: int | None = None,
 ) -> pl.Expr:
     """
     Mean Arterial Pressure: ``MAP = DBP + (SBP - DBP) / 3``.
     """
     sbp = pl.col(systolic).cast(pl.Float64)
     dbp = pl.col(diastolic).cast(pl.Float64)
-    return (dbp + (sbp - dbp) / 3.0).round(2).alias(target)
+    return sas_round(dbp + (sbp - dbp) / 3.0, round_digits).alias(target)
 
 
 # ------------------------------------------------------------------ #
@@ -213,6 +240,7 @@ def qtc(
     method: str = "Fridericia",
     target: str = "QTC",
     rr_unit: str = "ms",
+    round_digits: int | None = None,
 ) -> pl.Expr:
     """
     Corrected QT interval.
@@ -240,7 +268,7 @@ def qtc(
         expr = qt_col / rr_col.sqrt()
     else:
         raise DerivationError(f"Unknown QTc method '{method}'. Supported: Fridericia, Bazett.")
-    return expr.round(2).alias(target)
+    return sas_round(expr, round_digits).alias(target)
 
 
 # ------------------------------------------------------------------ #
@@ -253,6 +281,7 @@ def age_in_years(
     age_unit_col: str = "AGEU",
     *,
     target: str = "AAGE",
+    round_digits: int | None = None,
 ) -> pl.Expr:
     """
     Convert age to years, handling common unit strings.
@@ -262,7 +291,7 @@ def age_in_years(
     """
     age = pl.col(age_col).cast(pl.Float64)
     unit = pl.col(age_unit_col).str.to_uppercase()
-    return (
+    years = (
         pl.when(unit == "YEARS")
         .then(age)
         .when(unit == "MONTHS")
@@ -272,9 +301,43 @@ def age_in_years(
         .when(unit == "DAYS")
         .then(age / 365.25)
         .otherwise(None)
-        .round(1)
-        .alias(target)
     )
+    return sas_round(years, round_digits).alias(target)
+
+
+def age_between(
+    birth: pl.Expr,
+    reference: pl.Expr,
+    *,
+    unit: Literal["years", "decimal"],
+    round_digits: int | None,
+    verb: str,
+) -> pl.Expr:
+    """Age from two date expressions: completed years (Int64) or decimal years.
+
+    ``"years"`` is SAS ``FLOOR(YRDIF(birth, reference, 'AGE'))``: the year
+    difference, minus 1 when the birthday of the reference year is not yet
+    reached.  A 29 February birthday is reached on 1 March in a non-leap
+    year.  A reference date before birth gives a negative age.
+    ``"decimal"`` is days / 365.25, rounded only with *round_digits*.
+    """
+    if unit == "years":
+        if round_digits is not None:
+            raise VerbUsageError(
+                f"{verb}: round_digits applies to unit='decimal' only; "
+                "unit='years' gives whole completed years."
+            )
+        before_birthday = (reference.dt.month() < birth.dt.month()) | (
+            (reference.dt.month() == birth.dt.month()) & (reference.dt.day() < birth.dt.day())
+        )
+        return (
+            reference.dt.year().cast(pl.Int64)
+            - birth.dt.year().cast(pl.Int64)
+            - before_birthday.cast(pl.Int64)
+        )
+    if unit == "decimal":
+        return sas_round((reference - birth).dt.total_days() / 365.25, round_digits)
+    raise VerbUsageError(f"{verb}: unit={unit!r} is not supported. Use 'years' or 'decimal'.")
 
 
 # ------------------------------------------------------------------ #

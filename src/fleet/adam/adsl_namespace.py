@@ -23,7 +23,7 @@ Usage
 
 from __future__ import annotations
 
-from typing import Any, Self
+from typing import Any, Literal, Self
 
 import polars as pl
 
@@ -66,19 +66,28 @@ class ADSLNamespace(SharedADaMVerbsMixin):
         *,
         age_col: str = "AGE",
         age_unit_col: str = "AGEU",
+        round_digits: int | None = None,
     ) -> Self:
         """Convert age to years, handling common unit strings.
 
         Recognises *AGEU* values: ``YEARS``, ``MONTHS``, ``WEEKS``, ``DAYS``
-        (case-insensitive).  Unknown units produce null.
+        (case-insensitive).  Unknown units produce null.  The value keeps full
+        precision (AGE 7 MONTHS gives 0.5833...).
 
         Args:
             target: Name of the output column (default ``"AAGE"``).
             age_col: Source age column.
             age_unit_col: Column containing the age unit string.
+            round_digits: Decimal places, rounded as SAS ``ROUND`` (half away
+                from zero).  Default ``None``: no rounding.
 
         Returns:
             Self: The namespace with *target* appended.
+
+        References:
+            admiral ``compute_age_years`` (pharmaverse): full precision; one year is
+            12 months, 52.1775 weeks or 365.25 days.
+            ADR-0025: a derived value is rounded only when the call says so.
 
         Examples:
             Derive age in years from DM variables::
@@ -92,7 +101,12 @@ class ADSLNamespace(SharedADaMVerbsMixin):
         from fleet.adam.utils import age_in_years as _age_in_years_expr
 
         return self._chain(
-            _age_in_years_expr(age_col=age_col, age_unit_col=age_unit_col, target=target)
+            _age_in_years_expr(
+                age_col=age_col,
+                age_unit_col=age_unit_col,
+                target=target,
+                round_digits=round_digits,
+            )
         )
 
     # ------------------------------------------------------------------ #
@@ -105,22 +119,38 @@ class ADSLNamespace(SharedADaMVerbsMixin):
         *,
         birth_date: str = "BRTHDT",
         reference_date: str = "TRTSDT",
-        round_digits: int | None = 1,
+        unit: Literal["years", "decimal"] = "years",
+        round_digits: int | None = None,
     ) -> Self:
-        """Compute age in years from two date columns.
+        """Compute age from two date columns, in completed years by default.
 
-        Uses ``(reference_date - birth_date) / 365.25`` for a more precise
-        calculation than unit-conversion from ``AGE``.  Null when either
-        date is missing.
+        ``unit="years"`` gives whole completed years (Int64): the year
+        difference, minus 1 when the birthday of the reference year is not
+        yet reached.  A subject born 1956-06-01 is 64 on 2021-05-31.  A 29
+        February birthday is reached on 1 March in a non-leap year.  A
+        reference date before birth gives a negative age.
+        ``unit="decimal"`` gives days / 365.25 at full precision.  Null when
+        either date is missing.
 
         Args:
             target: Name of the output column (default ``"AAGE"``).
             birth_date: Date-of-birth column (``pl.Date``).
             reference_date: Reference date column (``pl.Date``).
-            round_digits: Decimal places to round to (default ``1``).
+            unit: ``"years"`` (default) or ``"decimal"``.
+            round_digits: Decimal places for ``unit="decimal"``, rounded as
+                SAS ``ROUND``.  Default ``None``: no rounding.
 
         Returns:
             Self: The namespace with *target* appended.
+
+        Raises:
+            VerbUsageError: When *round_digits* is given with
+                ``unit="years"``, or *unit* is unknown.
+
+        References:
+            admiral ``derive_vars_aage`` (pharmaverse) and SAS
+            ``FLOOR(YRDIF(BRTHDT, TRTSDT, 'AGE'))``: completed years. ICH E7 and
+            E11 age bands use completed years. ADR-0025.
 
         Examples:
             Derive age from birth and randomisation dates::
@@ -132,15 +162,16 @@ class ADSLNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
+        from fleet.adam.utils import age_between
+
         schema = self._lazy.collect_schema()
-        ref, birth = (
+        reference, birth = (
             to_day(pl.col(c), schema.get(c), verb="age_from_dates").cast(pl.Date)
             for c in (reference_date, birth_date)
         )
-        days = (ref - birth).dt.total_days()
-        expr = days / 365.25
-        if round_digits is not None:
-            expr = expr.round(round_digits)
+        expr = age_between(
+            birth, reference, unit=unit, round_digits=round_digits, verb="age_from_dates"
+        )
         return self._chain(expr.alias(target))
 
     # ------------------------------------------------------------------ #

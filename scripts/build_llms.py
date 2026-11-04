@@ -1106,7 +1106,7 @@ _README_PEDS_SPECIFIC = [
     "age_years",
     "corrected_age",
     "prematurity_flag",
-    "bmi_category",
+    "bmi_percentile_category",
 ]
 
 _README_VACCINE_SPECIFIC = [
@@ -1122,6 +1122,7 @@ _README_METABOLIC_SPECIFIC = [
     "waist_height_ratio",
     "body_fat_pct",
     "visceral_fat_flag",
+    "bmi_category_adult",
 ]
 
 _README_NEURO_SPECIFIC = [
