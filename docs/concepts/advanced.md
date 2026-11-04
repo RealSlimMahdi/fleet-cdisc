@@ -38,6 +38,8 @@ adsl = dm.adam.adsl.derivation(
 ).to_frame()
 ```
 
+**Date differences are durations, not days.** In Polars, `TRTEDT - TRTSDT` gives a Duration, not a number of days as in SAS. In a string expression, `flag`, `case_when` and `derivation` refuse `TRTEDT - TRTSDT > 10` and name the correct form, `(TRTEDT - TRTSDT).dt.total_days() > 10`. A direct `pl.Expr` is not checked: write `(pl.col("TRTEDT") - pl.col("TRTSDT")).dt.total_days()` yourself, or `> 10` compares with 10 microseconds.
+
 **Lambda returning `pl.Expr` (inline, IDE auto-complete, no string sandbox):**
 
 ```python

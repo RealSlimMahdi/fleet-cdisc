@@ -912,8 +912,10 @@ class SharedVerbsMixin:
         """Implementation behind ``case_when``."""
         from fleet.sdtm.utils import parse_expression
 
+        schema = self._lazy.collect_schema()
+
         def _cond(raw: Any) -> pl.Expr:
-            return raw if isinstance(raw, pl.Expr) else parse_expression(str(raw))
+            return raw if isinstance(raw, pl.Expr) else parse_expression(str(raw), schema)
 
         params = {"target": target, "when": when, "else_": else_}
         if not when:
@@ -1238,7 +1240,9 @@ class SharedVerbsMixin:
 
         # Case 1: string through AST sandbox.
         return self._chain(
-            parse_expression(str(expression)).alias(target), verb="derivation", params=params
+            parse_expression(str(expression), self._lazy.collect_schema()).alias(target),
+            verb="derivation",
+            params=params,
         )
 
     def _apply_derivation(self, drv: Derivation) -> Self:

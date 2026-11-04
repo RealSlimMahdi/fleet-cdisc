@@ -884,7 +884,7 @@ class FlagCriterionMixin:
         if isinstance(criteria, pl.Expr):
             row_cond = criteria
         else:
-            row_cond = parse_expression(str(criteria))
+            row_cond = parse_expression(str(criteria), self._lazy.collect_schema())
         final_cond = (where_expr & row_cond) if where_expr is not None else row_cond
         expr = pl.when(final_cond).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
         return self._chain(expr, verb="flag")
