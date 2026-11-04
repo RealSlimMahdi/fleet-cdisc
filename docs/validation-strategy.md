@@ -238,7 +238,7 @@ Applying the R Validation Hub risk-based framework to Fleet:
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------- |
 | **Intended use**              | Generates submission-ready SDTM/ADaM datasets included in regulatory packages                                                                    | High intended-use criticality           |
 | **Consequence of inaccuracy** | Incorrect derivations could affect safety/efficacy conclusions; however, CORE validation provides an independent runtime check before submission | Mitigated by Pillar 3                   |
-| **Testability**               | 400+ admiral parity tests; CDISC Library traceability; CORE conformance checking; smoke test examples; ruff static analysis                      | High testability → lowers residual risk |
+| **Testability**               | 2,900+ unit tests; 39 parity tests with frozen admiral values and a weekly admiral oracle job; CORE conformance checking; example scripts in CI; ruff static analysis | High testability → lowers residual risk |
 | **Open source provenance**    | Public GitHub repository; MIT license; full source inspectable by sponsor QA                                                                     | Transparent                             |
 | **Dependency surface**        | Polars ≥ 1.0, Pydantic ≥ 2.0, PyYAML, httpx, lxml; all actively maintained, no high-CVE dependencies (check at installation)                     | Low-medium                              |
 
@@ -255,12 +255,13 @@ Applying the R Validation Hub risk-based framework to Fleet:
 | Conformance rule snapshot          | `fleet init rules` → `metadata/*/rules/*.yaml`  | All CDISC CORE rules for IG version, version-locked       | Automated at study setup    |
 | Custom rule scaffolding            | `fleet add-rule` → `metadata/custom_rules/`     | Sponsor SOP / TCG gap rules, schema-validated             | On demand                   |
 | Custom rule schema check           | `fleet check-rule <file>`                       | YAML syntax + structure + JSON Schema validation          | On demand / CI gate         |
-| Cross-language algorithm benchmark | `tests/unit/test_admiral_parity.py`             | BSA, MAP, QTc, LOCF, BMI, ANL01FL, age/period             | Runs in CI on every commit  |
+| Cross-language algorithm benchmark | `tests/unit/test_admiral_parity.py`             | BSA, MAP, QTc, LOCF, BMI, ANL01FL, age/period (frozen admiral values) | Runs in CI on every commit  |
+| admiral oracle                     | `scripts/admiral_oracle.py`                     | Study day, duration, TRTEMFL, ANL01FL on real ADAE shapes, run by admiral 1.4.1 | Runs in CI weekly           |
 | SDTM conformance                   | `ValidationService.validate_sdtm()`             | All SDTM domains, SDTMIG 3.4                              | Run at study delivery       |
 | ADaM conformance                   | `ValidationService.validate_adam()`             | ADSL, BDS, OCCDS datasets, ADaMIG 1.3                     | Run at study delivery       |
-| Unit and integration tests         | `pytest` (400+ tests across 20 test modules)    | Namespace verbs, CT validation, Define-XML, TDD workflows | Runs in CI on every commit  |
+| Unit and integration tests         | `pytest` (2,900+ tests)                         | Namespace verbs, CT validation, Define-XML, TDD workflows | Runs in CI on every commit, Python 3.12 to 3.14 |
 | Static analysis                    | `ruff check` + `ruff format`                    | Full source tree                                          | Runs in CI on every commit  |
-| End-to-end smoke tests             | `examples/*.py` (5 scripts, CDISCPILOT01 study) | Full SDTM + ADaM pipelines                                | Runs in CI on every commit  |
+| End-to-end smoke tests             | `examples/*.py` (8 scripts, CDISCPILOT01 study) | Full SDTM + ADaM pipelines and TLGs                       | Runs in CI on every commit  |
 | Validation HTML report             | `ValidationResult.save_html_report()`           | Per-domain, per-delivery, archivable                      | Generated at study delivery |
 
 ---

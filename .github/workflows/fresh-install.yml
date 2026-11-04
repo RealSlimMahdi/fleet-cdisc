@@ -1,0 +1,56 @@
+name: Fresh install
+
+# A user does not get uv.lock: pip or uv resolve the newest allowed versions.
+# This job installs the built wheel the way a user does, then runs the tests
+# and the examples against the installed package, not src/ (c1-618).
+# It runs weekly, on demand, and before every publish.
+
+on:
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  fresh-install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # hatch-vcs reads the version from the tag history
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Install the system libraries of the PDF renderer
+        run: sudo apt-get update && sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0
+
+      - name: Build the wheel
+        run: uv build --wheel
+
+      - name: Install the wheel with no lock
+        run: |
+          uv venv /tmp/fresh --python 3.12
+          wheel=$(ls dist/*.whl)
+          uv pip install -p /tmp/fresh/bin/python "${wheel}[dev,all]"
+          uv pip list -p /tmp/fresh/bin/python | grep -iE "^(polars|pydantic|httpx|mcp|pygls) "
+
+      - name: Run the tests against the installed package
+        # pythonpath=. keeps tests/ importable; fleet comes from site-packages, not src/.
+        run: |
+          /tmp/fresh/bin/python -c "import fleet, sys; assert 'site-packages' in fleet.__file__, fleet.__file__"
+          /tmp/fresh/bin/python -m pytest -q -o pythonpath=.
+
+      - name: Run the examples against the installed package
+        run: |
+          for example in full_pipeline_example cdiscpilot01_inline cdiscpilot01_spec_driven \
+                         adnca_example tdd_example r2r_ae_example tlg_ae_example tlg_vs_example; do
+            echo "::group::$example"
+            /tmp/fresh/bin/python "examples/$example.py"
+            echo "::endgroup::"
+          done

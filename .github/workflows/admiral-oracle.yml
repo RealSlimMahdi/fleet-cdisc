@@ -1,0 +1,43 @@
+name: admiral oracle
+
+# Runs a small grid of real ADAE shapes through admiral and through Fleet,
+# and compares every cell (alpha audit 5.3, gate 2). test_admiral_parity.py
+# holds frozen expected values; this job asks admiral itself.
+# Weekly, because installing R and admiral takes several minutes.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  oracle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true # binary R packages on Ubuntu
+
+      - name: Install admiral 1.4.1
+        run: |
+          Rscript -e 'install.packages("pak")'
+          Rscript -e 'pak::pkg_install("admiral@1.4.1")'
+          Rscript -e 'cat("admiral", as.character(packageVersion("admiral")), "\n")'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: uv sync --locked --extra dev
+
+      - name: Compare Fleet with admiral
+        run: uv run python scripts/admiral_oracle.py

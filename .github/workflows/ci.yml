@@ -3,8 +3,7 @@ name: CI
 on:
   push:
     branches: [main, master]
-  pull_request:
-    branches: [main, master]
+  pull_request: # every PR, also one stacked on another branch (c1-619)
 
 jobs:
   test:
@@ -13,6 +12,9 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.12", "3.13", "3.14"]
+    env:
+      # Without it, uv takes .python-version (3.12) on every leg (c1-617).
+      UV_PYTHON: ${{ matrix.python-version }}
 
     steps:
       - uses: actions/checkout@v5
@@ -27,8 +29,22 @@ jobs:
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
 
+      - name: Install the system libraries of the PDF renderer
+        if: matrix.python-version == '3.12'
+        run: sudo apt-get update && sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0
+
       - name: Install dependencies
-        run: uv sync --extra dev
+        # 3.12 installs every extra, so the LSP, MCP, migrate and render tests run (c1-620);
+        # 3.13 and 3.14 prove that the extras stay optional.
+        run: |
+          if [ "${{ matrix.python-version }}" = "3.12" ]; then
+            uv sync --locked --extra dev --extra all
+          else
+            uv sync --locked --extra dev
+          fi
+
+      - name: Check the interpreter is the one in the leg name
+        run: uv run python -c "import sys; assert sys.version.startswith('${{ matrix.python-version }}.'), sys.version"
 
       - name: Lint (ruff + blacken-docs)
         run: |
@@ -47,6 +63,16 @@ jobs:
 
       - name: Run tests
         run: uv run pytest --cov=fleet --cov-report=xml --cov-report=term-missing
+
+      - name: Run the examples (AGENTS.md, c1-621)
+        if: matrix.python-version == '3.12'
+        run: |
+          for example in full_pipeline_example cdiscpilot01_inline cdiscpilot01_spec_driven \
+                         adnca_example tdd_example r2r_ae_example tlg_ae_example tlg_vs_example; do
+            echo "::group::$example"
+            uv run python "examples/$example.py"
+            echo "::endgroup::"
+          done
 
       - name: Upload coverage
         uses: codecov/codecov-action@v5
@@ -69,7 +95,7 @@ jobs:
           version: "latest"
 
       - name: Install the io extra only
-        run: uv sync --extra io
+        run: uv sync --locked --extra io
 
       - name: Check that pandas and pyarrow are absent
         run: uv run --no-sync python -c "import importlib.util as u; assert u.find_spec('pandas') is None and u.find_spec('pyarrow') is None"

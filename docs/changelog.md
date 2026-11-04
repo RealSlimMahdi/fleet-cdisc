@@ -96,6 +96,12 @@ All notable changes to Fleet are documented here.
 ### Added
 
 - **`fleet migrate --spec <define.yaml> --write`** — rewrites a define.yaml to the verb vocabulary line by line (comments and layout survive) and sets `fleet_spec_version: 2`.
+- **Release gates in CI** (alpha audit 5.3):
+  - Each CI leg runs the Python in its name; before, the 3.13 and 3.14 legs ran 3.12 (`c1-617`). The define reproducibility test compares canonical XML, so it holds on every Python.
+  - The 3.12 leg installs every extra, so the LSP, MCP, migrate and render tests run (`c1-620`), and it runs the eight example scripts (`c1-621`). CI runs on every pull request, also a stacked one (`c1-619`).
+  - CI installs from `uv.lock` with `--locked`, and the lock no longer holds the yanked Polars 1.41.0 (now 1.44.2). New `fresh-install.yml` installs the built wheel with no lock, as a user gets it, and runs the tests and examples against it weekly and before each release (`c1-618`).
+  - New `scripts/admiral_oracle.py` and weekly `admiral-oracle.yml`: real ADAE shapes through admiral 1.4.1 and Fleet, every cell compared. It found the null-order-key rule of `ANL01FL`, fixed in ADR-0020 (`c1-206`).
+  - New tests: real SDTM shapes (time part, partial, blank, tie, missing key) through the date and flag verbs (`c2-972` to `c2-975`); statistics read back from RTF, PPTX and PDF (`c1-860`); every quickstart block runs as written (`c1-848`), which fixed the ADSL block and the `SDTMConfig` import of that page.
 
 ### Fixed
 
