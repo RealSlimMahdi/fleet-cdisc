@@ -168,12 +168,12 @@ run_pipeline <- function(ae_raw, adsl, n_label) {
     ) %>%
     derive_var_extreme_flag(
       by_vars = exprs(USUBJID, AETERM),
-      order   = exprs(AESEVN),
+      order   = exprs(AESEVN, AESEQ),
       new_var = ANL01FL,
       mode    = "last"
     ) %>%
     derive_var_obs_number(
-      by_vars = exprs(USUBJID),
+      by_vars = exprs(USUBJID), order = exprs(AESEQ),
       new_var = ASEQ
     )
   adam_sec <- (proc.time() - t_adam)["elapsed"]
@@ -253,9 +253,10 @@ metrics <- list(
   time_adam_sec          = last$adam_sec,
   time_total_sec        = last$total_sec,
   peak_memory_gc_mb     = last$peak_mb,
-  pipeline_loc_sdtm     = 26,
-  pipeline_loc_adam      = 28,
-  pipeline_loc_total    = 54,
+  # Non-blank, non-comment lines between the timers of run_pipeline
+  pipeline_loc_sdtm     = 58,
+  pipeline_loc_adam      = 31,
+  pipeline_loc_total    = 89,
   n_total_dependencies  = length(all_deps),
   dependency_names      = sort(all_deps),
   output_columns        = last$columns,
@@ -269,5 +270,7 @@ write(json_out, file.path(DATA, "admiral_metrics.json"))
 
 # Save sample for equivalence check
 arrow::write_parquet(head(last$adae, 100), file.path(DATA, "admiral_adae_sample.parquet"))
+# Full output at the smallest scale, for the row-by-row check in run_benchmark.py
+arrow::write_parquet(results[[1]]$adae, file.path(DATA, "admiral_adae_check.parquet"))
 
 cat("\n✓ Admiral benchmark complete\n")
