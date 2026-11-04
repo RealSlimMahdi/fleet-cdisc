@@ -184,6 +184,8 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         Raises:
             LookupError: If ADSL is not pinned.
+            DerivationError: If a requested column is already on the frame
+                and is not a join key.
 
         Examples:
             Carry TRTSDT and SAFFL from ADSL into an ADAE pipeline::
@@ -200,6 +202,14 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         ref_df = self._require_pin("ADSL", "join_adsl", columns=list(cols))
         join_key = self._pin_join_key("ADSL")
+        present = self._lazy.collect_schema().names()
+        clash = [c for c in cols if c in present and c not in join_key]
+        if clash:
+            raise DerivationError(
+                f"join_adsl(): column(s) {clash} are already on the frame. "
+                "A join would add a second copy named <col>_right. Drop them first, "
+                "or do not request them."
+            )
 
         ref_slim = ref_df.select(
             [c for c in dict.fromkeys(join_key + list(cols)) if c in ref_df.columns]
