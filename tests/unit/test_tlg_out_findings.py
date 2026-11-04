@@ -55,9 +55,7 @@ def test_uncoded_none_survives_the_yaml_round_trip() -> None:
 
 
 def test_builder_uncoded_none_writes_uncoded_null() -> None:
-    spec = (
-        _adae().tlg.ae.population(_adsl()).by("TRTA").template("aet02").uncoded(None).to_spec()
-    )
+    spec = _adae().tlg.ae.population(_adsl()).by("TRTA").template("aet02").uncoded(None).to_spec()
     assert "uncoded: null" in spec.to_yaml()
 
 
@@ -193,3 +191,105 @@ def test_wide_listing_pdf_keeps_every_column_on_the_page(tmp_path: Path, monkeyp
         b.position_x + b.width for b in boxes(page._page_box) if type(b).__name__ == "TextBox"
     )
     assert text_right <= right_limit + 0.5
+
+
+# c1-470: the explorer default variant is the batch output, checked at load.
+
+_AET01_INTERACTIVE = """\
+template: aet01
+adsl_filter: 'pl.col("SAFFL") == "Y"'
+statistics: [n_subjects, n_pct]
+interactive:
+  groupby: {choices: [TRTA, TRT01A], default: TRTA}
+  population:
+    - {label: Safety, filter: 'pl.col("SAFFL")=="Y"', default: true}
+    - {label: ITT, filter: 'pl.col("ITTFL") == "Y"'}
+  dataset_filter:
+    - {label: All AEs, filter: null, default: true}
+    - {label: Serious only, filter: 'pl.col("AESER") == "Y"'}
+  stats:
+    - {label: "n (%)", statistics: [n_subjects, n_pct], default: true}
+    - {label: "+ events", statistics: [n_subjects, n_pct, n_events]}
+"""
+
+
+def _overview_spec(text: str):
+    import yaml
+
+    from fleet.tlg.ae_namespace import AEOverviewSpec
+
+    return AEOverviewSpec.model_validate(yaml.safe_load(text))
+
+
+def test_axis_defaults_equal_to_the_spec_load() -> None:
+    # The population default differs in white space only: same expression.
+    assert _overview_spec(_AET01_INTERACTIVE).interactive is not None
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "axis"),
+    [
+        (
+            'adsl_filter: \'pl.col("SAFFL") == "Y"\'',
+            'adsl_filter: \'pl.col("ITTFL") == "Y"\'',
+            "population",
+        ),
+        ("statistics: [n_subjects, n_pct]\n", "statistics: [n_subjects]\n", "stats"),
+        ("default: TRTA}", "default: TRT01A}", "groupby"),
+        (
+            "statistics: [n_subjects, n_pct]\n",
+            'statistics: [n_subjects, n_pct]\ndataset_filter: \'pl.col("AESER") == "Y"\'\n',
+            "dataset_filter",
+        ),
+    ],
+)
+def test_axis_default_that_differs_from_the_spec_raises(old: str, new: str, axis: str) -> None:
+    from pydantic import ValidationError
+
+    text = _AET01_INTERACTIVE.replace(old, new, 1)
+    assert text != _AET01_INTERACTIVE
+    with pytest.raises(ValidationError, match=f"interactive.{axis} default"):
+        _overview_spec(text)
+
+
+def test_a_saved_variant_loads_and_its_default_is_that_variant() -> None:
+    from fleet.tlg import enumerate_variants, run_spec
+
+    adsl = pl.from_repr("""
+┌─────────┬──────┬────────┬───────┬───────┐
+│ USUBJID ┆ TRTA ┆ TRT01A ┆ SAFFL ┆ ITTFL │
+│ ---     ┆ ---  ┆ ---    ┆ ---   ┆ ---   │
+│ str     ┆ str  ┆ str    ┆ str   ┆ str   │
+╞═════════╪══════╪════════╪═══════╪═══════╡
+│ S1      ┆ A    ┆ A      ┆ Y     ┆ Y     │
+│ S2      ┆ A    ┆ A      ┆ Y     ┆ Y     │
+│ S3      ┆ A    ┆ A      ┆ Y     ┆ Y     │
+│ S4      ┆ A    ┆ A      ┆ N     ┆ Y     │
+└─────────┴──────┴────────┴───────┴───────┘
+""")
+    adae = pl.from_repr("""
+┌─────────┬──────┬────────┬───────┬──────────────────┬────────┐
+│ USUBJID ┆ TRTA ┆ TRT01A ┆ AESER ┆ AEACN            ┆ AESDTH │
+│ ---     ┆ ---  ┆ ---    ┆ ---   ┆ ---              ┆ ---    │
+│ str     ┆ str  ┆ str    ┆ str   ┆ str              ┆ str    │
+╞═════════╪══════╪════════╪═══════╪══════════════════╪════════╡
+│ S1      ┆ A    ┆ A      ┆ Y     ┆ DOSE NOT CHANGED ┆ N      │
+│ S2      ┆ A    ┆ A      ┆ N     ┆ DOSE NOT CHANGED ┆ N      │
+└─────────┴──────┴────────┴───────┴──────────────────┴────────┘
+""")
+    base = _overview_spec(_AET01_INTERACTIVE)
+    chosen = next(
+        v
+        for v in enumerate_variants(base)
+        if v.axis_labels["dataset_filter"] == "Serious only"
+        and v.axis_labels["population"] == "ITT"
+        and v.axis_labels["stats"] == "n (%)"
+        and v.axis_labels["groupby"] == "TRTA"
+    )
+    promoted = type(base).from_yaml(chosen.spec.to_yaml())
+    v0 = enumerate_variants(promoted)[0]
+    assert v0.is_default
+    assert v0.axis_labels == chosen.axis_labels
+    batch = run_spec(promoted, adae, adsl=adsl)
+    assert batch.equals(run_spec(v0.spec, adae, adsl=adsl))
+    assert batch.equals(run_spec(chosen.spec, adae, adsl=adsl))

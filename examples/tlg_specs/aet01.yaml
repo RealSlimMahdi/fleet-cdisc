@@ -36,8 +36,8 @@ required_columns:
 
 # Declared degrees of freedom for `fleet tlg explore` — every choice is
 # a value for an existing spec field above, and each axis's default
-# matches the fixed value, so the batch output (`fleet tlg run`) is the
-# explorer's default variant, byte for byte.
+# must match the fixed value (load_spec checks it), so the batch output
+# (`fleet tlg run`) is the explorer's default variant, byte for byte.
 interactive:
   population:
     - {label: Safety, filter: 'pl.col("SAFFL") == "Y"', default: true}

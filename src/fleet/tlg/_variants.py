@@ -17,7 +17,7 @@ from typing import Any, NamedTuple
 
 from fleet.core.exceptions import SchemaError
 
-from ._specs import TLGSpec
+from ._specs import InteractiveBlock, TLGSpec
 
 #: Hard cap on the variant-space size — beyond this the explorer file
 #: becomes unusable and a live server (future ``fleet tlg serve``) is
@@ -46,14 +46,21 @@ class Variant(NamedTuple):
     is_default: bool
 
 
-def _axis_options(spec: TLGSpec) -> list[tuple[str, list[tuple[str, dict[str, Any], bool]]]]:
-    """Declared axes as ``(axis_name, [(label, field_update, is_default)])``."""
+def _axis_options(
+    spec: TLGSpec,
+) -> list[tuple[str, list[tuple[str, dict[str, Any], bool, int]]]]:
+    """Declared axes as ``(axis_name, [(label, field_update, is_default, index)])``."""
     block = spec.interactive
     assert block is not None
-    axes: list[tuple[str, list[tuple[str, dict[str, Any], bool]]]] = []
+    axes: list[tuple[str, list[tuple[str, dict[str, Any], bool, int]]]] = []
     if block.groupby is not None:
         gb = block.groupby
-        axes.append(("groupby", [(c, {"columns": [c]}, c == gb.default) for c in gb.choices]))
+        axes.append(
+            (
+                "groupby",
+                [(c, {"columns": [c]}, c == gb.default, i) for i, c in enumerate(gb.choices)],
+            )
+        )
     for axis, field in (
         ("population", "adsl_filter"),
         ("dataset_filter", "dataset_filter"),
@@ -66,8 +73,13 @@ def _axis_options(spec: TLGSpec) -> list[tuple[str, list[tuple[str, dict[str, An
             (
                 axis,
                 [
-                    (o.label, {field: o.statistics if axis == "stats" else o.filter}, o.default)
-                    for o in options
+                    (
+                        o.label,
+                        {field: o.statistics if axis == "stats" else o.filter},
+                        o.default,
+                        i,
+                    )
+                    for i, o in enumerate(options)
                 ],
             )
         )
@@ -76,13 +88,31 @@ def _axis_options(spec: TLGSpec) -> list[tuple[str, list[tuple[str, dict[str, An
     return [(name, sorted(opts, key=lambda t: not t[2])) for name, opts in axes]
 
 
+def _block_with_defaults(block: InteractiveBlock, chosen: dict[str, int]) -> InteractiveBlock:
+    """Copy *block* with ``default`` moved to the chosen option of each axis."""
+    update: dict[str, Any] = {}
+    for axis, index in chosen.items():
+        if axis == "groupby":
+            gb = block.groupby
+            assert gb is not None
+            update[axis] = gb.model_copy(update={"default": gb.choices[index]})
+        else:
+            update[axis] = [
+                o.model_copy(update={"default": i == index})
+                for i, o in enumerate(getattr(block, axis))
+            ]
+    return block.model_copy(update=update)
+
+
 def enumerate_variants(spec: TLGSpec) -> list[Variant]:
     """Expand a spec's ``interactive:`` block into concrete spec variants.
 
     The all-defaults combination is always ``variants[0]`` and flagged
     ``is_default`` — it is byte-for-byte the batch output's spec.  A
     spec without an ``interactive:`` block yields exactly one default
-    variant (itself).
+    variant (itself).  In each variant spec, the ``interactive:`` block
+    marks the chosen options as ``default: true``, so the YAML of a
+    variant loads and its batch output is that variant.
 
     Args:
         spec: A validated spec, typically from
@@ -132,8 +162,13 @@ def enumerate_variants(spec: TLGSpec) -> list[Variant]:
     for i, combo in enumerate(product(*[opts for _, opts in axes])):
         update: dict[str, Any] = {}
         labels: dict[str, str] = {}
-        for (axis_name, _), (label, field_update, _default) in zip(axes, combo):
+        chosen: dict[str, int] = {}
+        for (axis_name, _), (label, field_update, _default, index) in zip(axes, combo):
             update.update(field_update)
             labels[axis_name] = label
+            chosen[axis_name] = index
+        # The chosen options become the defaults, so a variant saved as
+        # YAML loads and is its own batch output.
+        update["interactive"] = _block_with_defaults(spec.interactive, chosen)
         variants.append(Variant(f"v{i}", labels, spec.model_copy(update=update), i == 0))
     return variants
