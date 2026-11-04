@@ -3,6 +3,7 @@
 Adapted from pharmaversepy utils/data_loader.py.
 """
 
+import mmap
 import re
 import warnings
 from collections.abc import Mapping
@@ -189,11 +190,15 @@ def _load_sas(file_path: Path, **kwargs) -> pl.LazyFrame:
     except ImportError as exc:
         raise ImportError(f"pyreadstat is required for SAS file support. {_IO_EXTRA_HINT}") from exc
 
-    reader = (
-        pyreadstat.read_sas7bdat
-        if file_path.suffix.lower() == ".sas7bdat"
-        else pyreadstat.read_xport
-    )
+    is_sas7bdat = file_path.suffix.lower() == ".sas7bdat"
+    if not is_sas7bdat:
+        members = _xpt_members(file_path)
+        if len(members) > 1:
+            raise FleetIOError(
+                f"{file_path.name} holds {len(members)} members ({', '.join(members)}); "
+                "write one dataset per file (FDA TCG 3.1.1)."
+            )
+    reader = pyreadstat.read_sas7bdat if is_sas7bdat else pyreadstat.read_xport
     try:
         df, meta = reader(
             str(file_path),
@@ -224,6 +229,29 @@ def _load_sas(file_path: Path, **kwargs) -> pl.LazyFrame:
         lf._sas_labels = meta.column_names_to_labels  # type: ignore[attr-defined]
 
     return lf
+
+
+def _xpt_members(file_path: Path) -> list[str]:
+    """The member names of a SAS transport file, in file order."""
+    names = []
+    with (
+        file_path.open("rb") as handle,
+        mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ) as data,
+    ):
+        for header, width in (
+            (b"HEADER RECORD*******MEMBER  ", 8),
+            (b"HEADER RECORD*******MEMBV8  ", 32),
+        ):
+            pos = data.find(header)
+            while pos != -1:
+                if pos % 80 == 0:
+                    # member header, descriptor header, then "SAS     " + member name
+                    start = pos + 160 + 8
+                    names.append(
+                        (pos, data[start : start + width].decode("ascii", "replace").strip())
+                    )
+                pos = data.find(header, pos + 1)
+    return [name for _, name in sorted(names)]
 
 
 def _load_r(file_path: Path, *, dataset_name: str | None = None, **kwargs) -> pl.LazyFrame:
