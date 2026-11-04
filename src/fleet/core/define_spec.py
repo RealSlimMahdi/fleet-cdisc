@@ -106,6 +106,8 @@ class DatasetEntry(BaseModel):
     keys: Any = None
     value_level: Any = None
     class_: Any = Field(default=None, alias="class")
+    #: Row-removing steps in pipeline order, each anchored ``after:`` a variable (ADR-0034).
+    row_steps: list[dict[str, Any]] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod

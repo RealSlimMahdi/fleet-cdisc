@@ -134,6 +134,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
     def __init__(self, df: pl.DataFrame | pl.LazyFrame) -> None:
         self._lazy = df.lazy()
+        self._root_lazy = self._lazy  # the start of the chain, for to_spec_yaml()
         self._domain: str | None = None
         self._pinned: dict[str, tuple[pl.DataFrame, list[str]]] = {}
         self._pin_lineage: list = []
@@ -617,7 +618,11 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         df = self.to_frame()
         filter_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
-        return self._materialise_then(df.filter(filter_expr))
+        from fleet.core.lineage import record_row_step
+
+        return record_row_step(
+            self._materialise_then(df.filter(filter_expr)), "whereclauses", {"where": where}
+        )
 
     def merge_adsl(
         self,

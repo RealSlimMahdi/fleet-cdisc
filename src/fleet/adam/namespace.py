@@ -625,7 +625,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
         summary = summary.select(col_order)
 
         combined = pl.concat([df, summary], how="vertical_relaxed")
-        return self._materialise_then(combined)
+        from fleet.core.lineage import record_row_step
+
+        return record_row_step(self._materialise_then(combined), "derive_summary_records", {})
 
     # ------------------------------------------------------------------ #
     # 21. derive_locf_records — last observation carried forward          #
@@ -663,7 +665,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
         df = self.to_frame()
         df = df.sort(grps + [order_by])
         df = df.with_columns(pl.col(analysis_var).forward_fill().over(grps).alias(analysis_var))
-        return self._materialise_then(df)
+        from fleet.core.lineage import record_row_step
+
+        return record_row_step(self._materialise_then(df), "derive_locf_records", {})
 
     # ------------------------------------------------------------------ #
     # 22. derive_param — append a computed parameter as new records        #
@@ -826,7 +830,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
         new_rows = new_rows.select(df.columns)
 
         combined = pl.concat([df, new_rows], how="vertical_relaxed")
-        return self._materialise_then(combined)
+        from fleet.core.lineage import record_row_step
+
+        return record_row_step(self._materialise_then(combined), "derive_param", {})
 
     # ------------------------------------------------------------------ #
     # Private: YAML spec dispatcher for algorithm: std_function           #
@@ -1067,6 +1073,8 @@ class AdamNamespace(SharedADaMVerbsMixin):
         new._pinned = dict(getattr(self, "_pinned", {}))
         new._pin_lineage = list(getattr(self, "_pin_lineage", []))
         new._lineage = list(getattr(self, "_lineage", []))
+        new._row_steps = list(getattr(self, "_row_steps", []))
+        new._root_lazy = getattr(self, "_root_lazy", self._lazy)
         new._pending_fk_checks = list(getattr(self, "_pending_fk_checks", []))
         fk_severity = getattr(self, "_fk_severity", None)
         if fk_severity is not None:

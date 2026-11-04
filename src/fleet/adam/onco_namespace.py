@@ -299,4 +299,6 @@ class OncoNamespace(SharedADaMVerbsMixin):
             pl.col("_first_pd").is_null() | (pl.col(date_col).cast(pl.Date) <= pl.col("_first_pd"))
         ).drop("_first_pd")
 
-        return self._materialise_then(filtered)
+        from fleet.core.lineage import record_row_step
+
+        return record_row_step(self._materialise_then(filtered), "filter_pd", {})
