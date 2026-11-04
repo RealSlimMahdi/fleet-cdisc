@@ -18,10 +18,10 @@ Display contract (derived from NEST AET01 / pharma conventions)
     │ Subjects with any AE │  xx (xx.x%)  │  xx (xx.x%)  │  ...    │  ← header row
     │ ≥1 SAE               │  xx (xx.x%)  │  ... ...     │  ...    │  ← header row
     ├──────────────────────┼──────────────┼──────────────┼─────────┤
-    │ SOC Label            │              │              │         │  ← group2 stub
+    │ SOC Label            │  xx (xx.x%)  │  xx (xx.x%)  │  ...    │  ← group2 stub
     │   PT Label           │  xx (xx.x%)  │  xx (xx.x%)  │  ...    │  ← data row
     │   PT Label           │  xx (xx.x%)  │  ...         │  ...    │
-    │ SOC Label            │              │              │         │
+    │ SOC Label            │  xx (xx.x%)  │  ...         │  ...    │
     │   PT Label           │  xx (xx.x%)  │  ...         │  ...    │
     ├──────────────────────┴──────────────┴──────────────┴─────────┤
     │  Footnote 1                                                  │
@@ -56,7 +56,9 @@ Display contract (derived from NEST AET01 / pharma conventions)
 **Row types and indentation:**
 
   - ``header``:  ``variable == ""`` — no indent, bold, optional separator above hierarchy
-  - ``group``:   parent stub row — level-0 indent, bold (SOC or PARAMCD)
+  - ``group``:   parent stub row — level-0 indent, bold (SOC or PARAMCD);
+    a count parent (SOC) carries its own n (%) cells, a parent of
+    continuous rows (PARAMCD) stays blank
   - ``section``: variable-label heading above a flat block — level-0 indent, bold
   - ``data``:    level row under a group/section — level-1 indent
   - ``flat``:    level row without a section — level-0 indent, not bold
@@ -66,6 +68,10 @@ Display contract (derived from NEST AET01 / pharma conventions)
 
   - Count cells: ``n`` and ``pct`` merge into ``"n (xx.x%)"``; a nonzero
     percentage that would display as zero renders ``"n (<0.1%)"``.
+    With ``n_events`` the cell is ``"n (xx.x%) E"`` and a footnote
+    explains the form.  With a per-cell denominator (``N`` on a level
+    row, as LBT04) the cell is ``"n/N (xx.x%)"``, and ``"n/N"`` when
+    n or N is 0.
   - Continuous cells (any stat beyond N/n/pct/n_events): the level
     becomes a stub row and every statistic gets its own display row
     (label from ``stat_label``, order following the ARD) — the
@@ -74,7 +80,7 @@ Display contract (derived from NEST AET01 / pharma conventions)
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import polars as pl
 
@@ -248,6 +254,9 @@ def _pct_display(pct_str: str, pct_raw: float | None) -> str:
 #: Count-type stat names — everything else is a continuous statistic.
 _COUNT_STAT_NAMES = frozenset({"N", "n", "pct", "n_events"})
 
+#: Footnote added when count cells carry an event count.
+EVENTS_FOOTNOTE = "n (%) E: n = number of subjects, E = number of events."
+
 #: Display-row identity: (group2, group2_level, variable, variable_level).
 _RowKey = tuple[str, str, str, str]
 
@@ -281,6 +290,24 @@ def _collect_cell_stats(
     return stat_order, stat_labels, per_arm
 
 
+def _count_cell(stats: dict[str, tuple[str, float | None]]) -> str:
+    """One count cell: ``n (%)``, ``n/N (%)``, plus the event count."""
+    n_str = stats.get("n", ("", None))[0].strip()
+    pct_str = stats.get("pct", ("", None))[0]
+    if "N" in stats:
+        # Per-cell denominator (LBT04): the reader must see N.
+        den_str = stats["N"][0].strip()
+        if n_str in ("", "0") or den_str in ("", "0"):
+            return f"{n_str or '0'}/{den_str or '0'}"
+        merged = _merge_n_pct(den_str, pct_str)
+        return f"{n_str}/{merged}"
+    cell = _merge_n_pct(n_str, pct_str) if "pct" in stats else n_str
+    events = stats.get("n_events", ("", None))[0].strip()
+    if events and cell and cell != "0":
+        cell = f"{cell} {events}"
+    return cell
+
+
 def _merged_cells(
     arm_order: list[str],
     per_arm: dict[str, dict[str, tuple[str, float | None]]],
@@ -291,10 +318,8 @@ def _merged_cells(
         stats = per_arm.get(arm, {})
         if not stats:
             cells[arm] = ""
-        elif "n" in stats and "pct" in stats:
-            cells[arm] = _merge_n_pct(stats["n"][0], stats["pct"][0])
         elif "n" in stats:
-            cells[arm] = stats["n"][0]
+            cells[arm] = _count_cell(stats)
         elif "pct" in stats:
             cells[arm] = _pct_display(*stats["pct"])
         else:
@@ -411,6 +436,9 @@ def ard_to_table_model(
     Returns:
         TableModel: A display-ready table model suitable for any renderer.
 
+    References:
+        ADR-0040 (SOC row count, ``n (%) E`` and ``n/N (%)`` cells).
+
     Examples:
         Shape an ARD for rendering::
 
@@ -466,6 +494,16 @@ def ard_to_table_model(
     variable_set = {k[2] for k in row_keys}
     parent_vars = {k[0] for k in row_keys if k[0]}
     explicit_parents = parent_vars & variable_set
+    # A parent of continuous rows (PARAMCD) keeps a blank stub; a count
+    # parent (SOC) prints its own subject count.
+    continuous_parents = set(
+        data_rows.filter(~pl.col("stat_name").is_in(list(_COUNT_STAT_NAMES)))
+        .select(pl.col("group2").fill_null(""), pl.col("group2_level").fill_null(""))
+        .iter_rows()
+    )
+    stat_names = set(data_rows["stat_name"].unique().to_list())
+    if {"n", "n_events"} <= stat_names and EVENTS_FOOTNOTE not in meta.footnotes:
+        meta = replace(meta, footnotes=[*meta.footnotes, EVENTS_FOOTNOTE])
 
     # Stub column heading: one line per hierarchy level, top level first
     # and each child indented ("System Organ Class" / "  Preferred Term").
@@ -504,7 +542,7 @@ def ard_to_table_model(
             current_synth_parent = None
             row_type, indent, bold = "header", 0, False
         elif variable in explicit_parents and not g2:
-            # Parent stub row (SOC / PARAMCD): label only, no cells.
+            # Parent stub row: SOC prints its count, PARAMCD stays blank.
             current_section = None
             current_synth_parent = None
             table_rows.append(
@@ -512,7 +550,9 @@ def ard_to_table_model(
                     label=variable_level,
                     row_type="group",
                     indent=0,
-                    cells=dict(empty_cells),
+                    cells=dict(empty_cells)
+                    if (variable, variable_level) in continuous_parents
+                    else _merged_cells(arm_order, per_arm),
                     bold=True,
                     variable=variable,
                 )
@@ -602,8 +642,11 @@ def ard_to_table_model(
 
 
 def _is_stub_only(row: TableRow) -> bool:
-    """Whether a row carries no cell values (pure stub / heading row)."""
-    return all(v == "" for v in row.cells.values())
+    """Whether a row is a stub or heading that must not end a page.
+
+    A group or section row is a stub even when it carries a SOC count.
+    """
+    return row.row_type in ("group", "section") or all(v == "" for v in row.cells.values())
 
 
 def _chunk_rows(rows: list[TableRow], rows_per_page: int) -> list[list[TableRow]]:
