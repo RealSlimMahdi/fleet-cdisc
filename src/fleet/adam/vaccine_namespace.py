@@ -5,10 +5,10 @@ Accessed via ``df.adam.vaccine`` on any Polars DataFrame.
 
 Key derivations ported from pharmaverse/admiralvaccine:
   - ``fever_flag``          — flag elevated temperature records (ADFACE)
-  - ``seroconversion_flag`` — ≥ N-fold rise from baseline (ADIS)
+  - ``seroconversion_flag`` — ≥ N-fold rise from baseline, with an LLOQ rule (ADIS)
   - ``seroresponse_flag``   — titer at or above a threshold (ADIS)
   - ``aval_adis``           — AVAL derivation with LLOQ/ULOQ handling (ADIS)
-  - ``event_flag``          — group-level and day-level reactogenicity event flags
+  - ``event_flag``          — group-level reactogenicity event flag
 
 Usage
 -----
@@ -27,7 +27,13 @@ Usage
         is_df.adam.vaccine
         .aval_adis("AVAL", stresn_col="ISSTRESN", lloq_col="ISLLOQ",
                    uloq_col="ISULOQ", orres_col="ISORRES")
-        .seroconversion_flag("SRCONVFL", aval_col="AVAL", base_col="BASE")
+        .to_frame()
+        .adam.baseline("BASE", aval="AVAL", baseline_flag="ABLFL",
+                       by=["USUBJID", "PARAMCD"])
+        .to_frame()
+        .adam.vaccine
+        .seroconversion_flag("SRCONVFL", aval_col="AVAL", base_col="BASE",
+                             lloq_col="ISLLOQ")
         .seroresponse_flag("SRSFL", aval_col="AVAL", threshold=40.0)
         .to_frame()
     )
@@ -35,11 +41,12 @@ Usage
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
+from fleet.core.exceptions import DerivationError
 
 
 class VaccineNamespace(SharedADaMVerbsMixin):
@@ -59,29 +66,34 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         *,
         temp_col: str,
         threshold: float = 38.0,
+        inclusive: bool = True,
         flag_value: str = "Y",
     ) -> Self:
         """
-        Set *target* to *flag_value* when *temp_col* is strictly above *threshold*.
+        Set *target* to *flag_value* when *temp_col* is at or above *threshold*.
 
-        Default threshold of 38.0 °C aligns with the WHO/FDA fever definition
-        used in vaccine reactogenicity assessments.
+        The default 38.0 °C is the start of grade 1 fever on the FDA 2007
+        toxicity grading scale, so a record of exactly 38.0 °C gets the flag.
+        ``inclusive=False`` flags strictly above *threshold*, for a SAP limit
+        such as FDA grade 4 (> 40.0 °C).  With ``inclusive=False`` and the
+        default threshold, a record of 38.0 °C gets no flag.
 
         Example::
 
-            .fever_flag("FEVFL", temp_col="TEMP", threshold=38.0)
-            .fever_flag("HIGHFEVFL", temp_col="TEMP", threshold=39.0)
+            .fever_flag("FEVFL", temp_col="TEMP")
+            .fever_flag("G4FEVFL", temp_col="TEMP", threshold=40.0, inclusive=False)
 
         References:
             FDA, Guidance for Industry: Toxicity Grading Scale for Healthy Adult and
             Adolescent Volunteers Enrolled in Preventive Vaccine Clinical Trials
-            (2007): grade 1 fever starts at 38.0 °C. Brighton Collaboration fever case
-            definition (Marcy SM et al. Vaccine. 2004;22:551-556): >= 38.0 °C.
-            This verb flags strictly above *threshold*; see the FDA scale before
-            relying on the default at exactly 38.0.
+            (2007): grade 1 fever starts at 38.0 °C; grade 4 is > 40 °C. Brighton
+            Collaboration fever case definition (Marcy SM et al. Vaccine.
+            2004;22:551-556): >= 38.0 °C. admiralvaccine ``derive_fever_records``:
+            VSSTRESN >= 38. ADR-0027.
         """
+        temp = pl.col(temp_col)
         return self._chain(
-            pl.when(pl.col(temp_col) > threshold)
+            pl.when(temp >= threshold if inclusive else temp > threshold)
             .then(pl.lit(flag_value))
             .otherwise(pl.lit(None))
             .alias(target)
@@ -97,37 +109,58 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         *,
         aval_col: str,
         base_col: str,
+        lloq_col: str | None,
         fold_rise: float = 4.0,
+        seronegative_fold: float | None = None,
         flag_value: str = "Y",
     ) -> Self:
         """
-        Set *target* to *flag_value* when ``AVAL / BASE ≥ fold_rise``.
+        Flag seroconversion: a *fold_rise* rise from baseline, with an LLOQ rule.
 
-        The default four-fold rise threshold is the standard seroconversion
-        criterion for most immunogenicity assays.
+        *lloq_col* has no default, so the call states the rule of the SAP:
 
-        Null is returned when *base_col* is null or zero.
+        - ``lloq_col="ISLLOQ"`` (two-arm rule, FDA CBER 2007): when BASE is
+          below the LLOQ, the flag needs ``AVAL >= seronegative_fold × LLOQ``
+          (HI: pre < 1:10 needs post >= 1:40); when BASE is at or above the
+          LLOQ, it needs ``AVAL >= fold_rise × BASE``.  Null when AVAL, BASE
+          or the LLOQ is null.  *lloq_col* must hold the LLOQ of the baseline
+          record.
+        - ``lloq_col=None`` (plain ratio): ``AVAL / BASE >= fold_rise``, for a
+          SAP that states the ratio only.  Null when BASE is null or zero.
+
+        Rows that do not meet the rule get null.
 
         Example::
 
-            .seroconversion_flag("SRCONVFL", aval_col="AVAL", base_col="BASE")
+            .seroconversion_flag("SRCONVFL", aval_col="AVAL", base_col="BASE",
+                                  lloq_col="ISLLOQ")
             .seroconversion_flag("SRCONV2FL", aval_col="AVAL", base_col="BASE",
-                                  fold_rise=2.0)
+                                  lloq_col=None, fold_rise=2.0)
 
         References:
             FDA CBER, Guidance for Industry: Clinical Data Needed to Support the
             Licensure of Seasonal Inactivated Influenza Vaccines (2007): seroconversion
-            includes a >= 4-fold rise in HI titre from baseline. EMA CHMP,
-            CPMP/BWP/214/96, states the same criterion. Null when BASE is null or
-            zero, so a missing baseline never divides.
+            is a pre-vaccination HI titre < 1:10 and a post-vaccination titre
+            >= 1:40, or a pre-vaccination titre >= 1:10 and a >= 4-fold rise. EMA
+            CHMP, CPMP/BWP/214/96, states the same criterion. Some SAPs use the
+            plain ratio. ADR-0027.
         """
         aval = pl.col(aval_col)
         base = pl.col(base_col)
+        if lloq_col is None:
+            met = base.is_not_null() & (base != 0) & (aval / base >= fold_rise)
+        else:
+            lloq = pl.col(lloq_col)
+            neg_fold = fold_rise if seronegative_fold is None else seronegative_fold
+            met = (
+                pl.when(aval.is_null() | base.is_null() | lloq.is_null())
+                .then(pl.lit(False))
+                .when(base < lloq)
+                .then(aval >= neg_fold * lloq)
+                .otherwise(aval >= fold_rise * base)
+            )
         return self._chain(
-            pl.when(base.is_not_null() & (base != 0) & (aval / base >= fold_rise))
-            .then(pl.lit(flag_value))
-            .otherwise(pl.lit(None))
-            .alias(target)
+            pl.when(met).then(pl.lit(flag_value)).otherwise(pl.lit(None)).alias(target)
         )
 
     # ------------------------------------------------------------------ #
@@ -168,7 +201,7 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         lloq_col: str = "ISLLOQ",
         uloq_col: str | None = "ISULOQ",
         orres_col: str | None = "ISORRES",
-        lloq_rule: str = "half",
+        lloq_rule: Literal["half", "lloq"] = "half",
         round_digits: int | None = None,
     ) -> Self:
         """
@@ -187,6 +220,7 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         4. Otherwise → use *stresn_col*.
 
         *lloq_rule*: ``"half"`` (LLOQ ÷ 2) or ``"lloq"`` (retain LLOQ value).
+        Any other text raises ``DerivationError``.
 
         Example::
 
@@ -199,6 +233,10 @@ class VaccineNamespace(SharedADaMVerbsMixin):
             verb mirrors. No CDISC standard fixes the LLOQ/2 imputation; it is an
             analysis convention. Check the SAP for the rule in force.
         """
+        if lloq_rule not in ("half", "lloq"):
+            raise DerivationError(
+                f"aval_adis: lloq_rule={lloq_rule!r} is not supported. Use 'half' or 'lloq'."
+            )
         stresn = pl.col(stresn_col)
         lloq = pl.col(lloq_col)
         lloq_val = lloq / 2.0 if lloq_rule == "half" else lloq
@@ -255,8 +293,8 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         *,
         aval_col: str,
         cutoff: float,
-        by: list[str] | None = None,
-        severity_col: str | None = None,
+        by: list[str],
+        severity_col: str | None = "AVALC",
         severity_values: list[str] | None = None,
         flag_value: str = "Y",
         no_event_value: str = "N",
@@ -264,17 +302,17 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         """
         Flag whether a reactogenicity event occurred at least once per *by* group.
 
-        An event is considered to have occurred if:
-        - *aval_col* > *cutoff*, OR
-        - *severity_col* (if provided) is in *severity_values* (default:
-          ``["MILD", "MODERATE", "SEVERE"]``).
+        A record has an event if *aval_col* > *cutoff*, or *severity_col* is
+        in *severity_values* (default ``["Y", "MILD", "MODERATE", "SEVERE"]``;
+        ``[]`` means no value counts).  Every record of a group with an event
+        gets *flag_value*.  In a group with no event, a record gets
+        *no_event_value* when it shows no event (*aval_col* <= *cutoff*, or
+        *severity_col* is ``"N"``), and null when it has no assessable data
+        (both missing).  So a diary with only missing records gets null, not
+        *no_event_value*.
 
-        All records within the group are set to *flag_value* if the event
-        occurred at least once; otherwise *no_event_value*.
-
-        Materialises the current pipeline.
-
-        Mirrors ``admiralvaccine::derive_vars_event_flag`` (new_var1 behaviour).
+        *by* has no default: one event must not spread to the other FAOBJ or
+        ATPTREF of the subject.  ``severity_col=None`` uses *aval_col* only.
 
         Example::
 
@@ -282,26 +320,30 @@ class VaccineNamespace(SharedADaMVerbsMixin):
                         by=["USUBJID", "FAOBJ", "ATPTREF"])
 
         References:
-            admiralvaccine ``derive_vars_event_flag`` (pharmaverse), ``new_var1``
-            behaviour. FDA toxicity grading scale (2007) for the severity grades.
+            admiralvaccine ``derive_vars_event_flag`` (pharmaverse), ``new_var1``:
+            AVALC in Y, MILD, MODERATE, SEVERE; no default ``by_vars``; a record
+            with missing AVAL and AVALC gets NA. FDA toxicity grading scale (2007)
+            for the severity grades. ADR-0027.
         """
-        sev_vals = severity_values or ["MILD", "MODERATE", "SEVERE"]
-        grps = by or ["USUBJID"]
+        sev_vals = (
+            ["Y", "MILD", "MODERATE", "SEVERE"] if severity_values is None else severity_values
+        )
+        aval = pl.col(aval_col)
+        row_event = aval > cutoff
+        row_no_event = aval <= cutoff
+        if severity_col is not None:
+            sev = pl.col(severity_col)
+            row_event = row_event | sev.is_in(sev_vals).fill_null(False)
+            row_no_event = row_no_event | (sev == "N").fill_null(False)
 
-        df = self.to_frame()
-
-        # Build row-level event indicator
-        row_event = pl.col(aval_col) > cutoff
-        if severity_col:
-            row_event = row_event | pl.col(severity_col).is_in(sev_vals)
-
-        # Any-event per group (window max of boolean cast to int)
-        any_event = row_event.cast(pl.Int8).max().over(grps).cast(pl.Boolean)
-
-        result = df.with_columns(
+        # Kleene any, as R any(): True, else null when a record is unknown, else False.
+        any_event = row_event.any(ignore_nulls=False).over(by)
+        return self._chain(
             pl.when(any_event)
             .then(pl.lit(flag_value))
-            .otherwise(pl.lit(no_event_value))
-            .alias(target)
+            .when(row_no_event)
+            .then(pl.lit(no_event_value))
+            .otherwise(pl.lit(None, dtype=pl.String))
+            .alias(target),
+            verb="event_flag",
         )
-        return self._materialise_then(result)
