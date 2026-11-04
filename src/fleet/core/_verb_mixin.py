@@ -1732,7 +1732,8 @@ class SharedVerbsMixin:
             target: Name of the output sequence variable (e.g. ``"AESEQ"``,
                 ``"ASEQ"``).
             order_by: Columns that define the sort order within each group.
-                When ``None``, the current row order is preserved.
+                Records that tie keep their input order, as PROC SORT
+                EQUALS.  When ``None``, the current row order is preserved.
             by: Partition columns.  Defaults to class constant
                 ``_SEQ_DEFAULT_GROUPS``.
             start_at: First sequence value (default ``1``).
@@ -1765,7 +1766,7 @@ class SharedVerbsMixin:
 
         lf = self._lazy
         if order_by:
-            lf = lf.sort(order_by)
+            lf = lf.sort(order_by, maintain_order=True)
 
         if check_uniqueness and order_by:
             key_cols = grps + list(order_by)
@@ -2744,6 +2745,11 @@ class SharedVerbsMixin:
                 ``"first"``, ``"last"``, or ``None`` (report only, no removal).
             descending: Sort direction(s) for *sort_by*.  A single ``bool``
                 applies to all columns; a list must match *sort_by* length.
+                A missing value is the lowest value, as SAS: it sorts
+                first when ascending and last when descending.  Records
+                that tie on *sort_by* keep their input order, as PROC SORT
+                EQUALS, so ``keep="last"`` takes the last input record of a
+                tie.
 
         Returns:
             Self: A fresh namespace wrapping the (optionally deduplicated)
@@ -2753,6 +2759,10 @@ class SharedVerbsMixin:
         Raises:
             DerivationError: If ``keep`` is set but ``sort_by`` is not
                 provided, or ``keep`` is not one of the accepted values.
+
+        References:
+            SAS PROC SORT with EQUALS and NODUPKEY; ADR-0023 for the place
+            of a missing value.
 
         Examples:
             Report-only mode (audit duplicates without removing)::
@@ -2771,7 +2781,7 @@ class SharedVerbsMixin:
                     .nodup(
                         subset=["USUBJID", "AEDECOD"],
                         sort_by=["ASTDT", "ASEQ"],
-                        keep="last",
+                        keep="first",
                         descending=True,
                     )
                     .to_frame()
@@ -2825,8 +2835,9 @@ class SharedVerbsMixin:
             new._nodup_report = dup_rows
             return new
 
-        # Sort then deduplicate
-        df = df.sort(sort_by, descending=descending)
+        # Sort then deduplicate: a missing value is lowest, as SAS (ADR-0023); ties keep input order.
+        flags = list(descending) if isinstance(descending, list) else [descending] * len(sort_by)
+        df = df.sort(sort_by, descending=flags, nulls_last=flags, maintain_order=True)
         df = df.unique(subset=subset, keep=keep, maintain_order=True)
 
         logger.info(

@@ -617,7 +617,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
             raise DerivationError(f"Unknown stat '{stat}'. Supported: {', '.join(agg_map)}.")
 
         df = self.to_frame()
-        summary = df.group_by(by).agg(agg_map[stat_lower].alias(analysis_var))
+        summary = df.group_by(by, maintain_order=True).agg(agg_map[stat_lower].alias(analysis_var))
 
         # Apply constant values to the summary rows
         for col_name, col_val in set_values_to.items():
@@ -671,7 +671,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         """
         grps = by or ["USUBJID", "PARAMCD"]
         df = self.to_frame()
-        df = df.sort(grps + [order_by])
+        df = df.sort(grps + [order_by], maintain_order=True)
         df = df.with_columns(pl.col(analysis_var).forward_fill().over(grps).alias(analysis_var))
         return self._materialise_then(df)
 

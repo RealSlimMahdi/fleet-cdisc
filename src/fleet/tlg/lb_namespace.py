@@ -645,7 +645,7 @@ class LBTLGNamespace(BuilderVerbsMixin):
             if col_name in df.columns:
                 sort_cols.append(col_name)
         if sort_cols:
-            df = df.sort(sort_cols)
+            df = df.sort(sort_cols, maintain_order=True)
 
         return df
 

@@ -395,7 +395,13 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                 with no top-level *order*, decides the winner.
             by: Grouping columns (default ``["USUBJID"]``).
             order: Sort column(s).  Within an event they select the record;
-                at top level they also select the event (see above).
+                at top level they also select the event (see above).  An
+                event with more than one matching record in a group needs
+                an order (its own or the top-level one).  A missing order
+                value loses in both modes.  Records that tie on the order
+                keep their input order, so ``"last"`` takes the last tied
+                record, as SAS ``LAST.``; a warning names a tie whose
+                records set different values.
             mode: ``"first"`` or ``"last"`` — which record to select
                 after sorting by *order* (default ``"first"``).
 
@@ -405,9 +411,14 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         Raises:
             DerivationError: If *events* is empty, a required key is
-                missing, or an event contains an unknown key (with a
-                did-you-mean suggestion).  Also catchable as
-                ``ValueError``.
+                missing, an event contains an unknown key (with a
+                did-you-mean suggestion), or an event with no order has
+                more than one matching record in a group.  Also catchable
+                as ``ValueError``.
+
+        References:
+            admiral ``derive_vars_extreme_event`` (``order`` is required)
+            and SAS ``FIRST.``/``LAST.`` after PROC SORT EQUALS; ADR-0024.
 
         Examples:
             Derive last date known alive from death, AE, and treatment::
@@ -444,10 +455,10 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                         events=[
                             {"when": 'pl.col("AEOUT") == "FATAL"',
                              "set": {"DTHCAUS": "AEDECOD"},
-                             "source": ae},
+                             "source": ae, "order": ["AESTDTC", "AESEQ"]},
                             {"when": 'pl.col("DSDECOD") == "DEATH"',
                              "set": {"DTHCAUS": "DSTERM"},
-                             "source": ds},
+                             "source": ds, "order": ["DSSTDTC", "DSSEQ"]},
                         ],
                         by=["USUBJID"],
                     )
@@ -547,14 +558,32 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
             # Within-event selection: pick one record per group
             if evt_order:
-                descending = evt_mode == "last"
+                # A missing order value loses in both modes; a tie keeps input order,
+                # so "last" takes the last tied record (SAS LAST., admiral filter_extreme).
                 candidates = candidates.sort(
-                    evt_order,
-                    descending=[descending] * len(evt_order),
-                    nulls_last=True,
-                    maintain_order=True,
+                    evt_order, nulls_last=evt_mode == "first", maintain_order=True
                 )
-            candidates = candidates.group_by(by_vars, maintain_order=True).first()
+                self._warn_pick_ties(
+                    candidates, event_nr, by_vars, evt_order, evt_mode, target_list
+                )
+                grouped = candidates.group_by(by_vars, maintain_order=True)
+                candidates = grouped.first() if evt_mode == "first" else grouped.last()
+            else:
+                multi = (
+                    candidates.group_by(by_vars, maintain_order=True)
+                    .len()
+                    .filter(pl.col("len") > 1)
+                )
+                if not multi.is_empty():
+                    first = multi.row(0, named=True)
+                    key = ", ".join(f"{c}={first[c]!r}" for c in by_vars)
+                    raise DerivationError(
+                        f"pick() event #{event_nr} has no order and {multi.height} group(s) "
+                        f"with more than one matching record (first: {key}, "
+                        f"{first['len']} records). Give 'order' in the event or at top "
+                        "level, so the record does not depend on row order."
+                    )
+                candidates = candidates.group_by(by_vars, maintain_order=True).first()
 
             # Keep only by_vars + targets + the cross-event order + event_nr
             keep = by_vars + target_list + (global_order or []) + ["__pick_event_nr__"]
@@ -591,6 +620,38 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         result = df.join(winners, on=by_vars, how="left", nulls_equal=True)
         return self._materialise_then(result)
+
+    @staticmethod
+    def _warn_pick_ties(
+        candidates: pl.DataFrame,
+        event_nr: int,
+        by_vars: list[str],
+        order: list[str],
+        mode: str,
+        targets: list[str],
+    ) -> None:
+        """Warn when records tie with the selected one on *order* but set other values."""
+        pick_one = (lambda e: e.first()) if mode == "first" else (lambda e: e.last())
+        tied = candidates.filter(
+            pl.all_horizontal(
+                pl.col(c).eq_missing(pick_one(pl.col(c)).over(by_vars)) for c in order
+            )
+        )
+        differ = (
+            tied.group_by(by_vars, maintain_order=True)
+            .agg(pl.struct(targets).n_unique().alias("__n__"))
+            .filter(pl.col("__n__") > 1)
+        )
+        if differ.is_empty():
+            return
+        first = differ.row(0, named=True)
+        key = ", ".join(f"{c}={first[c]!r}" for c in by_vars)
+        warnings.warn(
+            f"pick() event #{event_nr}: {differ.height} group(s) have records that tie on "
+            f"{order} and set different values (first: {key}). mode={mode!r} takes the "
+            f"{mode} input record of the tie. Add a key to 'order' to break the tie.",
+            stacklevel=3,
+        )
 
     def whereclauses(self, *, where: str | pl.Expr) -> Self:
         """Filter records by a *where* expression.
