@@ -259,7 +259,8 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | `--adsl` | _(none)_ | ADSL dataset path (population denominators for tables). |
 | `--output` / `-o` | _(none)_ | Output directory. Default: the configured outputs directory (current directory outside a study workspace). |
 | `--format` | `html` | Output format (default: html). Choices: `html`, `rtf`, `pdf`, `pptx`. |
-| `--groupby` | _(none)_ | Treatment-arm column. Default: auto-detect (TRTA → TRT01A → TRT01P). |
+| `--groupby` | _(none)_ | Treatment-arm column. Default: the spec's columns: field when it declares one, else auto-detect (TRTA → TRT01A → TRT01P). |
+| `--adsl-groupby` | _(none)_ | ADSL arm column for the big N when ADSL lacks the analysis arm (e.g. TRT01A for an ADAE grouped by TRTA). Sets adsl_group_col. |
 | `--title` | `""` | Output title (default: template title). |
 | `--subtitle` | `""` | Output subtitle. |
 | `--footnote` | _(none)_ | Footnote (repeatable). |
@@ -278,7 +279,8 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | `--data` | _(none)_ | Analysis dataset path, repeatable. Plain PATH applies to every spec; NAME=PATH (e.g. ADAE=adae.parquet) targets the template's analysis domain. |
 | `--adsl` | _(none)_ | ADSL dataset path (population denominators for tables). |
 | `--output` / `-o` | _(none)_ | Output HTML file. Default: explorer.html in the configured outputs directory (current directory outside a study workspace). |
-| `--groupby` | _(none)_ | Treatment-arm column for specs without a groupby axis. Default: auto-detect (TRTA → TRT01A → TRT01P). |
+| `--groupby` | _(none)_ | Treatment-arm column for specs without a groupby axis. Default: the spec's columns: field when it declares one, else auto-detect (TRTA → TRT01A → TRT01P). |
+| `--adsl-groupby` | _(none)_ | ADSL arm column for the big N when ADSL lacks the analysis arm (e.g. TRT01A for an ADAE grouped by TRTA). Sets adsl_group_col. |
 | `--title` | `""` | Output title (default: template title). |
 | `--subtitle` | `""` | Output subtitle. |
 | `--footnote` | _(none)_ | Footnote (repeatable). |

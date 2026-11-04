@@ -22,6 +22,7 @@ from pydantic import Field
 from ._ard import prepare_frame, restrict_to_population, summarize_ard, summarize_spec
 from ._builder import BuilderVerbsMixin
 from ._specs import (
+    MissingLevel,
     OverallStat,
     Row,
     SummarySpecBase,
@@ -30,10 +31,17 @@ from ._specs import (
 
 
 class DSDispositionSpec(SummarySpecBase):
-    """Spec for subject disposition (DST01: EOSSTT → DCSREAS)."""
+    """Spec for subject disposition (DST01: EOSSTT → DCSREAS).
+
+    A null ``EOSSTT`` counts in a ``"Missing"`` row.  A null
+    ``DCSREAS`` (a completer) makes no row.
+    """
 
     context: ClassVar[str] = "t_ds_disposition"
 
+    missing: MissingLevel | None = Field(
+        default_factory=lambda: MissingLevel(columns=["EOSSTT"]),
+    )
     rows: list[Row] = Field(default_factory=lambda: [Row(field="EOSSTT"), Row(field="DCSREAS")])
     required_columns: list[str] = Field(
         default_factory=lambda: ["USUBJID", "TRTA", "EOSSTT", "DCSREAS"]
@@ -56,6 +64,10 @@ class DSEnrollmentSpec(SummarySpecBase):
 
     context: ClassVar[str] = "t_ds_enrollment"
 
+    missing: MissingLevel | None = Field(
+        default_factory=lambda: MissingLevel(columns=["SITEID"]),
+    )
+
     rows: list[Row] = Field(default_factory=lambda: [Row(field="SITEID")])
     required_columns: list[str] = Field(default_factory=lambda: ["USUBJID", "TRTA", "SITEID"])
 
@@ -64,6 +76,10 @@ class DSDeviationsSpec(SummarySpecBase):
     """Spec for major protocol deviations (PDT01: DVDECOD)."""
 
     context: ClassVar[str] = "t_ds_deviations"
+
+    missing: MissingLevel | None = Field(
+        default_factory=lambda: MissingLevel(columns=["DVDECOD"]),
+    )
 
     rows: list[Row] = Field(default_factory=lambda: [Row(field="DVDECOD")])
     required_columns: list[str] = Field(default_factory=lambda: ["USUBJID", "TRTA", "DVDECOD"])
@@ -193,6 +209,8 @@ class DSTLGNamespace(BuilderVerbsMixin):
             value_col=spec.value_col,
             label_col=spec.label_col,
             decimals=spec.decimals,
+            missing=spec.missing,
+            adsl_group_col=spec.adsl_group_col,
         )
 
         death_ids = deaths["USUBJID"].unique().to_list()
@@ -224,6 +242,8 @@ class DSTLGNamespace(BuilderVerbsMixin):
             value_col=spec.value_col,
             label_col=spec.label_col,
             decimals=spec.decimals,
+            missing=spec.missing,
+            adsl_group_col=spec.adsl_group_col,
         )
         # The headline block already carries the population N rows; drop
         # the cause block's deaths-denominator N rows to avoid two

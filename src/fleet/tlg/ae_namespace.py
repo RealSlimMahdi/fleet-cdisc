@@ -6,20 +6,22 @@ Accessed via ``df.tlg.ae`` on any Polars DataFrame containing ADaM AE data.
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import ClassVar, Self
 
 import polars as pl
-from pydantic import Field
+from pydantic import Field, model_validator
 
-from ._ard import prepare_frame, summarize_ard, summarize_spec, worst_case
+from ._ard import summarize_spec
 from ._builder import BuilderVerbsMixin
 from ._specs import (
     Column,
+    MissingLevel,
     OverallStat,
     Row,
     SummarySpecBase,
     TLGSpec,
     Uncoded,
+    check_listing_columns,
     resolve_filter,
 )
 
@@ -123,17 +125,58 @@ class AESocPtSpec(AESummarySpec):
     )
 
 
-class AESeveritySpec(AESummarySpec):
+class _WorstCaseAESpec(AESummarySpec):
+    """Shared rules of the worst-case AE tables (AET03, AET04, relationship).
+
+    The last row field is the ranked level; a subject is counted once at
+    its worst value within its arm and the other row levels.  Unless
+    set, the required columns and the missing level follow ``rows``.
+    """
+
+    #: Name of the spec field holding the rank, from least to most severe.
+    order_field: ClassVar[str] = ""
+
+    @model_validator(mode="after")
+    def _rows_drive_the_reduction(self) -> Self:
+        """Refuse empty rows; derive required columns and the missing level."""
+        if not self.rows:
+            raise ValueError(
+                f"{type(self).__name__}.rows is empty: the last row field is the "
+                "ranked level of the worst-case reduction. Give at least one row."
+            )
+        if self.uses_default("required_columns"):
+            self.required_columns = list(
+                dict.fromkeys(["USUBJID", "TRTA", *(r.field for r in self.rows)])
+            )
+        if "missing" not in self.model_fields_set:
+            self.missing = MissingLevel(columns=[self.rows[-1].field])
+        return self
+
+    def leaf_rank(self) -> tuple[list[str], str] | None:
+        """Return the rank of the last row field and its spec field name.
+
+        Returns:
+            tuple[list[str], str] | None: The rank and the field name.
+
+        Examples:
+            ``AEGradeSpec().leaf_rank() == (["1", "2", "3", "4", "5"], "grade_order")``
+        """
+        return list(getattr(self, self.order_field)), self.order_field
+
+
+class AESeveritySpec(_WorstCaseAESpec):
     """Spec for AE by greatest severity (AET03): n / % by SOC → worst intensity.
 
     Each subject is counted once per SOC at their greatest intensity
     (``severity_order`` rank, never alphabetical), so the intensity rows
-    partition the SOC's any-AE count.  PT-level intensity nesting needs
-    a third lineage slot (group3) and is deferred until the ARD schema
-    grows one.
+    partition the SOC's any-AE count.  The ranked level is the last row
+    field (``AESEV`` by default; ``ASEV`` when the rows say so).  A
+    record with a null intensity counts under ``"Missing"`` only when
+    the subject has no ranked intensity in the SOC.
     """
 
     context: ClassVar[str] = "t_ae_severity"
+    order_field: ClassVar[str] = "severity_order"
 
     rows: list[Row] = Field(
         default_factory=lambda: [
@@ -153,14 +196,16 @@ class AESeveritySpec(AESummarySpec):
     )
 
 
-class AEGradeSpec(AESummarySpec):
+class AEGradeSpec(_WorstCaseAESpec):
     """Spec for AE by highest NCI CTCAE grade (AET04): n / % by SOC → worst grade.
 
     Each subject is counted once per SOC at their highest toxicity grade
-    (``grade_order`` rank).
+    (``grade_order`` rank).  A numeric grade such as ``3.0`` reads as
+    ``"3"``.
     """
 
     context: ClassVar[str] = "t_ae_grade"
+    order_field: ClassVar[str] = "grade_order"
 
     rows: list[Row] = Field(
         default_factory=lambda: [
@@ -177,7 +222,7 @@ class AEGradeSpec(AESummarySpec):
     )
 
 
-class AERelationshipSpec(AESummarySpec):
+class AERelationshipSpec(_WorstCaseAESpec):
     """Spec for AE by relationship (n / % by SOC → relationship).
 
     Each subject is counted once per SOC — related if any of their
@@ -185,6 +230,7 @@ class AERelationshipSpec(AESummarySpec):
     """
 
     context: ClassVar[str] = "t_ae_relationship"
+    order_field: ClassVar[str] = "relationship_order"
 
     rows: list[Row] = Field(
         default_factory=lambda: [
@@ -347,7 +393,9 @@ class AETLGNamespace(BuilderVerbsMixin):
         Each subject is counted once per SOC at their greatest intensity
         (``spec.severity_order`` rank), so intensity rows partition the
         SOC's subject count instead of double-counting a subject at
-        every intensity they reported.
+        every intensity they reported.  The reduction runs after the
+        pools, so a subject on two arms counts once in Total; the SOC
+        rows and header rows count every record.
 
         Args:
             groupby: Treatment-arm column; overrides ``spec.columns[0]``.
@@ -357,38 +405,13 @@ class AETLGNamespace(BuilderVerbsMixin):
         Returns:
             pl.DataFrame: {cards}-compatible ARD.
 
+        References:
+            tern ``count_occurrences_by_grade``; GDSR AET03.
+
         Examples:
             ``ard = adae.tlg.ae.t_severity(groupby="TRTA", adsl=adsl)``
         """
-        spec = spec or AESeveritySpec()
-        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df, group_col=group_col)
-        # The dataset filter must bite before the worst-case reduction:
-        # a filtered-out record must not decide a subject's worst level.
-        df = prepare_frame(self._df, spec)
-        df = worst_case(
-            df,
-            by=["USUBJID", group_col, "AEBODSYS"],
-            order_col="AESEV",
-            order=spec.severity_order,
-            order_field="severity_order",
-        )
-        return summarize_ard(
-            df,
-            rows=spec.rows,
-            stats=spec.statistics,
-            context=spec.context,
-            group_col=group_col,
-            pools=spec.pools,
-            column_order=spec.column_order,
-            adsl=adsl,
-            adsl_filter=spec.adsl_filter,
-            header_rows=spec.header_rows,
-            nested=spec.nested,
-            value_col=spec.value_col,
-            label_col=spec.label_col,
-            decimals=spec.decimals,
-        )
+        return summarize_spec(self._df, spec or AESeveritySpec(), groupby=groupby, adsl=adsl)
 
     def t_grade(
         self,
@@ -414,33 +437,11 @@ class AETLGNamespace(BuilderVerbsMixin):
             ``ard = adae.tlg.ae.t_grade(groupby="TRTA", adsl=adsl)``
         """
         spec = spec or AEGradeSpec()
-        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df, group_col=group_col)
-        df = prepare_frame(self._df, spec)
-        df = df.with_columns(pl.col("AETOXGR").cast(pl.Utf8).str.replace(r"\.0$", ""))
-        df = worst_case(
-            df,
-            by=["USUBJID", group_col, "AEBODSYS"],
-            order_col="AETOXGR",
-            order=spec.grade_order,
-            order_field="grade_order",
-        )
-        return summarize_ard(
-            df,
-            rows=spec.rows,
-            stats=spec.statistics,
-            context=spec.context,
-            group_col=group_col,
-            pools=spec.pools,
-            column_order=spec.column_order,
-            adsl=adsl,
-            adsl_filter=spec.adsl_filter,
-            header_rows=spec.header_rows,
-            nested=spec.nested,
-            value_col=spec.value_col,
-            label_col=spec.label_col,
-            decimals=spec.decimals,
-        )
+        df = self._df
+        grade_col = spec.rows[-1].field
+        if grade_col in df.columns:
+            df = df.with_columns(pl.col(grade_col).cast(pl.Utf8).str.replace(r"\.0$", ""))
+        return summarize_spec(df, spec, groupby=groupby, adsl=adsl)
 
     def t_relationship(
         self,
@@ -465,33 +466,7 @@ class AETLGNamespace(BuilderVerbsMixin):
         Examples:
             ``ard = adae.tlg.ae.t_relationship(groupby="TRTA", adsl=adsl)``
         """
-        spec = spec or AERelationshipSpec()
-        group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
-        spec.validate_dataframe(self._df, group_col=group_col)
-        df = prepare_frame(self._df, spec)
-        df = worst_case(
-            df,
-            by=["USUBJID", group_col, "AEBODSYS"],
-            order_col="AEREL",
-            order=spec.relationship_order,
-            order_field="relationship_order",
-        )
-        return summarize_ard(
-            df,
-            rows=spec.rows,
-            stats=spec.statistics,
-            context=spec.context,
-            group_col=group_col,
-            pools=spec.pools,
-            column_order=spec.column_order,
-            adsl=adsl,
-            adsl_filter=spec.adsl_filter,
-            header_rows=spec.header_rows,
-            nested=spec.nested,
-            value_col=spec.value_col,
-            label_col=spec.label_col,
-            decimals=spec.decimals,
-        )
+        return summarize_spec(self._df, spec or AERelationshipSpec(), groupby=groupby, adsl=adsl)
 
     # ------------------------------------------------------------------ #
     # Listing                                                              #
@@ -540,6 +515,7 @@ class AETLGNamespace(BuilderVerbsMixin):
 
         # Select only requested columns (that exist)
         available = set(df.columns)
+        check_listing_columns(spec, available)
         select_cols = [c.field for c in spec.columns if c.field in available]
         df = df.select(select_cols)
 

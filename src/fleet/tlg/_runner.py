@@ -78,6 +78,42 @@ def detect_groupby(columns: Iterable[str]) -> str | None:
     return next((c for c in GROUPBY_CANDIDATES if c in present), None)
 
 
+def resolve_groupby(
+    spec: TLGSpec,
+    columns: Iterable[str],
+    explicit: str | None = None,
+) -> tuple[str | None, str]:
+    """Resolve the arm column of a run the way ``run_spec`` reads a spec.
+
+    The order is: the explicit flag, then the ``columns:`` field that
+    the spec declares (``None`` is returned, so the spec decides), then
+    auto-detection.  ``fleet tlg run``, ``fleet tlg explore`` and the
+    MCP tool share this rule, so one YAML file gives one table.
+
+    Args:
+        spec: The loaded spec.
+        columns: Column names of the analysis dataset.
+        explicit: A ``--groupby`` value, or ``None``.
+
+    Returns:
+        tuple[str | None, str]: The ``groupby`` value to pass to
+            :func:`run_spec` (``None`` lets the spec decide, or means
+            that detection found no column) and its source:
+            ``"flag"``, ``"spec"``, ``"detected"`` or ``"none"``.
+
+    Examples:
+        A spec with ``columns: [TRT01P]`` wins over a TRTA in the data::
+
+            groupby, source = resolve_groupby(spec, adae.columns)  # (None, "spec")
+    """
+    if explicit:
+        return explicit, "flag"
+    if "columns" in spec.model_fields_set and "statistics" in type(spec).model_fields:
+        return None, "spec"
+    detected = detect_groupby(columns)
+    return detected, "detected" if detected is not None else "none"
+
+
 def resolve_spec_cls(meta: TemplateMeta) -> type[TLGSpec]:
     """Return the spec model class validating YAML for *meta*.
 

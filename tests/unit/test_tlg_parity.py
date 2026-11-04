@@ -193,7 +193,9 @@ class TestEdgeBattery:
         adae = ADAE.with_columns(pl.lit(None, dtype=pl.Utf8).alias("AESEV"))
         ard = adae.tlg.ae.t_severity(groupby="TRTA", adsl=ADSL)
         assert ard.filter(pl.col("variable") == "AEBODSYS").height > 0
-        assert ard.filter(pl.col("variable") == "AESEV").height == 0
+        # c1-442: a null intensity counts under "Missing", so rows add up to the SOC.
+        levels = ard.filter(pl.col("variable") == "AESEV")["variable_level"].unique()
+        assert levels.to_list() == ["Missing"]
 
     def test_single_subject_arm_sd_is_null(self) -> None:
         advs = pl.from_repr("""\

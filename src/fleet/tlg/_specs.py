@@ -231,6 +231,74 @@ class Uncoded(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+#: Display label of the missing level (FDA CDER ST&F IG v2.0, 2.1.2).
+MISSING_LABEL = "Missing"
+
+
+class MissingLevel(BaseModel):
+    """The missing-level rule: count a null category under a visible row.
+
+    A subject whose category value is null (or blank) is counted in a
+    ``"Missing"`` row, last in the block, so the rows add up to N.  The
+    row appears only when a null exists.  ``label=None`` adds no row:
+    the count goes to the ARD ``warning`` column of that variable, with
+    one ``UserWarning``.  A spec carries one ``MissingLevel`` (or
+    ``None`` to switch the rule off); set inline via
+    [`TLGBuilder.missing()`][fleet.tlg.TLGBuilder.missing].
+
+    References:
+        FDA CDER Standard Safety Tables and Figures IG v2.0, 2.1.2;
+        ADR-0039.
+    """
+
+    columns: list[str] = Field(
+        ...,
+        description=(
+            "Category columns whose null or blank values get the missing "
+            "level (e.g. ``RACE``).  Names absent from the dataset are skipped."
+        ),
+    )
+    label: str | None = Field(
+        default=MISSING_LABEL,
+        description=(
+            "Row label of the missing level.  ``null`` adds no row and "
+            "writes the count to the ARD warning column instead."
+        ),
+    )
+
+    model_config = {"extra": "forbid"}
+
+
+def blank_filter_columns(expr: pl.Expr | None, df: pl.DataFrame) -> list[str]:
+    """Return the columns of *expr* that are null or blank on every record.
+
+    A filter on such a column selects no record, so its row prints 0
+    and looks like a true zero.  An empty *df* gives no column.
+
+    Args:
+        expr: A resolved filter expression, or ``None``.
+        df: The frame the filter runs on.
+
+    Returns:
+        list[str]: Column names in first-seen order.
+
+    Examples:
+        ``blank_filter_columns(pl.col("AEACN") == "DRUG WITHDRAWN", adae)``
+    """
+    if expr is None or df.height == 0:
+        return []
+    out: list[str] = []
+    for name in dict.fromkeys(expr.meta.root_names()):
+        if name not in df.columns:
+            continue
+        col = df[name]
+        if col.dtype == pl.Utf8:
+            col = col.str.strip_chars().replace("", None)
+        if col.null_count() == col.len():
+            out.append(name)
+    return out
+
+
 class ChoiceOption(BaseModel):
     """One selectable value for an ``interactive:`` axis.
 
@@ -512,9 +580,9 @@ class TLGSpec(BaseModel):
     def _validate_structural(self, df: pl.DataFrame, *, group_col: str | None = None) -> None:
         """Tier 1: check required columns exist."""
         required = list(self.required_columns)
-        default_group = getattr(self, "columns", None)
-        if group_col and default_group and isinstance(default_group[0], str):
-            required = [group_col if c == default_group[0] else c for c in required]
+        if group_col:
+            arm_names = self._default_arm_names()
+            required = [group_col if c in arm_names else c for c in required]
         available = set(df.columns)
         missing = [c for c in required if c not in available]
         if missing:
@@ -533,6 +601,39 @@ class TLGSpec(BaseModel):
                 f"{getattr(self, 'prefilter_hint', '')} "
                 f"Available: {sorted(available)}"
             )
+
+    def uses_default(self, name: str) -> bool:
+        """Return whether field *name* holds the template's default value.
+
+        A YAML round trip writes every field, so ``model_fields_set``
+        cannot tell a default from a user choice; the value can.
+
+        Args:
+            name: A field name of the spec.
+
+        Returns:
+            bool: ``True`` when the value equals the class default.
+
+        Examples:
+            ``DMSummarySpec().uses_default("categorical_vars") is True``
+        """
+        field = type(self).model_fields[name]
+        return getattr(self, name) == field.get_default(call_default_factory=True)
+
+    def _default_arm_names(self) -> set[str]:
+        """Arm column names that the effective group column replaces.
+
+        The class default arm (``TRTA``) and the instance's own
+        ``columns[0]``: after ``.by("TRT01A")`` the instance holds
+        ``TRT01A`` while ``required_columns`` still names ``TRTA``.
+        """
+        names: set[str] = set()
+        field = type(self).model_fields.get("columns")
+        default = field.get_default(call_default_factory=True) if field is not None else None
+        for value in (default, getattr(self, "columns", None)):
+            if value and isinstance(value[0], str):
+                names.add(value[0])
+        return names
 
     def prefilter_columns(self) -> list[str]:
         """Return the columns the spec's prefilter names.
@@ -596,6 +697,13 @@ class TLGSpec(BaseModel):
                 absent = [v for v in required_vals if v not in actual]
                 if absent:
                     diagnostics.append(f"MISSING VALUES: {col} missing {absent}.")
+        for hdr in getattr(self, "header_rows", []):
+            blank = blank_filter_columns(resolve_filter(hdr.filter), df)
+            if blank:
+                diagnostics.append(
+                    f"WARNING: filter column {', '.join(blank)} is null or blank on "
+                    f"every record (row '{hdr.label}'); the row counts 0."
+                )
         return diagnostics
 
     def to_yaml(self) -> str:
@@ -634,6 +742,8 @@ class TLGSpec(BaseModel):
         # off; dropping it would bring the default back on reload.
         if "prefilter" in self.model_fields_set and getattr(self, "prefilter", 0) is None:
             data["prefilter"] = None
+        if "missing" in self.model_fields_set and getattr(self, "missing", 0) is None:
+            data["missing"] = None
         # Convert enums to their values
         data = _enum_to_value(data)
         return yaml.dump(data, default_flow_style=False, sort_keys=False)
@@ -706,6 +816,27 @@ class SummarySpecBase(TLGSpec):
     )
 
     _validate_prefilter = field_validator("prefilter")(_check_filter_field)
+    missing: MissingLevel | None = Field(
+        default=None,
+        description=(
+            "The missing-level rule: category columns whose null or blank "
+            'values are counted in a "Missing" row, last in the block, '
+            "with big N as the percent base.  Each template sets its own "
+            "default; ``null`` switches the rule off.  Set inline via "
+            "[`TLGBuilder.missing()`][fleet.tlg.TLGBuilder.missing]."
+        ),
+    )
+    adsl_group_col: str | None = Field(
+        default=None,
+        description=(
+            "Arm column of ADSL for the big N when it differs from the "
+            "analysis arm column (e.g. ``TRT01A`` for an ADAE grouped by "
+            "``TRTA``).  The arm values must match.  In a crossover the "
+            "N is then the period 1 count.  Set inline via "
+            "[`TLGBuilder.population()`][fleet.tlg.TLGBuilder.population]; "
+            "CLI ``--adsl-groupby``."
+        ),
+    )
     columns: list[str] = Field(
         default_factory=lambda: ["TRTA"],
         description=(
@@ -790,8 +921,8 @@ class SummarySpecBase(TLGSpec):
         """Run the pre-validation diagnostic without computing.
 
         The base checks (required columns, prefilter columns, required
-        flag values) plus one warning per row field absent from *df*,
-        whose sub-analysis the engine would skip.
+        flag values) plus one line per row field absent from *df*, for
+        which the engine stops.
 
         Args:
             df: The DataFrame to check.
@@ -807,10 +938,28 @@ class SummarySpecBase(TLGSpec):
         for row_def in self.rows:
             if row_def.field not in available:
                 diagnostics.append(
-                    f"WARNING: Column '{row_def.field}' not present — "
-                    f"'{row_def.label or row_def.field}' sub-analysis will be skipped."
+                    f"MISSING ROW FIELD: Column '{row_def.field}' not present — "
+                    f"the '{row_def.label or row_def.field}' rows cannot be built "
+                    "and the table stops."
                 )
         return diagnostics
+
+    def leaf_rank(self) -> tuple[list[str], str] | None:
+        """Return the rank that reduces the last row level, or ``None``.
+
+        A worst-case table (greatest intensity, highest grade) counts a
+        subject once at the worst value of its last row field.  The
+        engine applies the rank after the pools, at the last depth only.
+
+        Returns:
+            tuple[list[str], str] | None: The values from least to most
+                severe and the spec field name that holds them; ``None``
+                for a table without a reduction.
+
+        Examples:
+            ``AESeveritySpec().leaf_rank() == (["MILD", "MODERATE", "SEVERE"], "severity_order")``
+        """
+        return None
 
     @field_validator("columns")
     @classmethod
@@ -829,6 +978,34 @@ class SummarySpecBase(TLGSpec):
                 "or file a feature request."
             )
         return value
+
+
+def check_listing_columns(spec: TLGSpec, available: set[str]) -> None:
+    """Raise when a listing column that the user set is not in the data.
+
+    The default columns of a listing template that the data lacks are
+    left out.  A column the user named is a request: a typo must stop
+    the listing, as SAS stops on an unknown variable.
+
+    Args:
+        spec: A listing spec with a ``columns`` list of ``Column``.
+        available: Column names of the listing frame.
+
+    Raises:
+        SchemaError: If ``columns`` differs from the template default and
+            names an absent column.
+
+    Examples:
+        ``check_listing_columns(AEListingSpec(columns=[Column(field="AEDECODE")]), set(adae.columns))``
+    """
+    if spec.uses_default("columns"):
+        return
+    absent = [c.field for c in getattr(spec, "columns", []) if c.field not in available]
+    if absent:
+        raise SchemaError(
+            f"Listing column(s) {absent} are not in the analysis dataset. "
+            f"Available: {sorted(available)}"
+        )
 
 
 def change_from_baseline_prefilter(value_col: str) -> str:
