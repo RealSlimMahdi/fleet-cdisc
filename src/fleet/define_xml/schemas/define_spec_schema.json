@@ -2985,7 +2985,7 @@
             }
           ],
           "default": null,
-          "description": "Imputation ceiling (DT/DTM only).",
+          "description": "Imputation ceiling, as admiral ``highest_imputation`` (DT only): ``\"n\"``, ``\"D\"`` or ``\"M\"``.",
           "title": "Highest"
         },
         "flag": {

@@ -1044,10 +1044,38 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         # source= path
         assert source is not None
+        from fleet.adam.utils import (
+            _resolve_flag_names,
+            _resolve_time,
+            dtf_expr,
+            dtm_with_time,
+            impute_dtc_to_date,
+            impute_dtc_to_datetime,
+            refuse_dtm_bounds,
+            source_text,
+            tmf_expr,
+            warn_unread,
+        )
+        from fleet.core.dtc import date_part
+
+        if output_type == "dtm":
+            refuse_dtm_bounds(target, min_date, max_date, highest=highest)
+            if time is not None:
+                return self._materialise_then(
+                    dtm_with_time(
+                        self._lazy,
+                        source=source,
+                        target=target,
+                        time=time,
+                        impute_time=impute_time,
+                        flag=flag,
+                    )
+                )
+        src = source_text(source, self._lazy.collect_schema().get(source), verb=f"date('{target}')")
 
         if output_type == "dt":
             exprs = impute_and_flag(
-                source,
+                src,
                 target,
                 output_type="dt",
                 impute=impute,
@@ -1058,38 +1086,20 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             )
             return self._chain(*exprs, verb="date")
 
-        # output_type == "dtm"
-        # DTM with partial dates requires materialisation (same as derive_dtm)
-        from fleet.adam.utils import (
-            _resolve_flag_names,
-            _resolve_time,
-            dtf_expr,
-            impute_dtc_to_date,
-            impute_dtc_to_datetime,
-            refuse_dtm_bounds,
-            tmf_expr,
-            warn_unread,
-        )
-        from fleet.core.dtc import date_part
-
-        refuse_dtm_bounds(target, min_date, max_date)
+        # output_type == "dtm": a partial date takes the imputed date and the imputed time
         dtf_name, tmf_name = _resolve_flag_names(target, flag, output_type)
         effective_time_impute = impute_time or impute
 
-        col = pl.col(source)
-
-        # Materialise for partial date handling
         date_expr = impute_dtc_to_date(
-            source,
+            src,
             "__dtm_date_tmp__",
             day_imputation=impute,
             month_imputation=impute,
         )
         df = self._lazy.with_columns(date_expr).collect()
 
-        # Build datetime expression
         dtm_expr = impute_dtc_to_datetime(
-            source,
+            src,
             target,
             day_imputation=impute,
             month_imputation=impute,
@@ -1111,20 +1121,20 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             ).str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
 
         dtm_full = (
-            pl.when(col.is_null() | (col.str.strip_chars() == ""))
+            pl.when(src.is_null() | (src.str.strip_chars() == ""))
             .then(pl.lit(None, dtype=pl.Datetime("us")))
-            .when(date_part(col).is_not_null())
+            .when(date_part(src).is_not_null())
             .then(dtm_expr)
             .otherwise(partial_dtm)
         )
 
         exprs_list: list[pl.Expr] = [
-            warn_unread(source, target, dtm_full, pl.Datetime("us")).alias(target)
+            warn_unread(src, target, dtm_full, pl.Datetime("us")).alias(target)
         ]
         if dtf_name is not None:
-            exprs_list.append(dtf_expr(source, dtf_name))
+            exprs_list.append(pl.when(dtm_full.is_not_null()).then(dtf_expr(src)).alias(dtf_name))
         if tmf_name is not None:
-            exprs_list.append(tmf_expr(source, tmf_name))
+            exprs_list.append(pl.when(dtm_full.is_not_null()).then(tmf_expr(src)).alias(tmf_name))
 
         result = df.with_columns(exprs_list)
         if "__dtm_date_tmp__" in result.columns:
