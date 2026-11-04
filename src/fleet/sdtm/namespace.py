@@ -559,9 +559,18 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         # Join reference if needed
         _ref_tmp = f"__pin_{ref_col}__"
         if ref_df is not None:
+            from fleet.core.joins import refuse_repeated_keys
+
             ref_slim = ref_df.select(
                 [c for c in dict.fromkeys(join_key + [ref_col]) if c in ref_df.columns]
-            ).unique(subset=join_key if join_key else None)
+            )
+            if join_key:
+                ref_slim = refuse_repeated_keys(
+                    "baseline_flag()",
+                    ref_slim,
+                    join_key,
+                    source="DM" if dm is not None else ref_pin.upper(),
+                )
             ref_slim = ref_slim.rename({ref_col: _ref_tmp})
             df = df.join(ref_slim, on=join_key, how="left", nulls_equal=True)
             ref_col_name = _ref_tmp

@@ -44,6 +44,12 @@ from fleet.core.exceptions import (
     ValidationSetupError,
     VerbUsageError,
 )
+from fleet.core.joins import (
+    JoinCheck,
+    refuse_repeated_keys,
+    refuse_shared_columns,
+    require_columns,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -336,7 +342,9 @@ class SharedVerbsMixin:
             DerivationError: When collection fails because a column is
                 missing — enriched with the lineage entries that
                 reference the column, so the error names the verb(s)
-                involved.
+                involved.  Also when a ``merge(validate=...)`` fails, with
+                the repeated keys named, or when a foreign-key check runs
+                under ``fk_policy("error")``.
 
         Examples:
             Collect the pipeline result::
@@ -356,9 +364,26 @@ class SharedVerbsMixin:
             pl.exceptions.StructFieldNotFoundError,
         ) as err:
             raise self._enrich_collect_error(err) from err
+        except pl.exceptions.ComputeError as err:
+            named = next(
+                (
+                    msg
+                    for check in getattr(self, "_pending_join_checks", [])
+                    if (msg := check.explain_validation()) is not None
+                ),
+                None,
+            )
+            if named is None:
+                raise
+            raise DerivationError(named) from err
         run_checks = getattr(self, "_run_pending_fk_checks", None)
         if run_checks is not None:
             run_checks(df)
+        join_checks = getattr(self, "_pending_join_checks", [])
+        # Rebind, never mutate: earlier chain copies keep their own queue.
+        self._pending_join_checks = []
+        for check in join_checks:
+            check.warn_many_to_many()
         return cast("DataFrame", df)
 
     def _enrich_collect_error(self, err: Exception) -> DerivationError:
@@ -401,6 +426,10 @@ class SharedVerbsMixin:
         Returns:
             Path: Path to the written file.
 
+        Raises:
+            DerivationError: When a foreign-key check fails under
+                ``fk_policy("error")``; no file is written.
+
         Examples:
             Export a dataset to Dataset-JSON::
 
@@ -413,7 +442,7 @@ class SharedVerbsMixin:
         """
         from fleet.io.dataset_json import save_dataset_json
 
-        return save_dataset_json(self._lazy.collect(), path, domain=domain, label=label)
+        return save_dataset_json(self.to_frame(), path, domain=domain, label=label)
 
     def inspect(self, prefix: str = "DEBUG") -> Self:
         """Materialise the pipeline at this point and log its state.
@@ -625,8 +654,10 @@ class SharedVerbsMixin:
                 the literal is validated at pipeline-build time.
             ct_map: Explicit ``{raw_value: ct_value}`` mapping applied to
                 *source* (raw codes that need remapping).  Requires
-                *source*.  A raw value outside the map is kept as it is,
-                as SAS PUT with no OTHER= keeps it.
+                *source*.  Keys match the text form of the value, so
+                ``{"1": "M"}`` and ``{1: "M"}`` both map a numeric 1; the
+                result is text.  A raw value outside the map is kept as
+                text, as SAS PUT with no OTHER= keeps it.
             ct_validator: Optional pre-built validator instance.
             validate_values: Controls the codelist check of the values the
                 column will hold (after *ct_map*).  ``None`` (default):
@@ -740,9 +771,11 @@ class SharedVerbsMixin:
         # ── source path ──
         assert source is not None
         if ct_map:
-            ns = self._chain(
-                pl.col(source).replace(ct_map).alias(target), verb=verb, params=lineage_params
+            text = pl.col(source).cast(pl.String)
+            mapped = text.replace_strict(
+                {str(k): v for k, v in ct_map.items()}, default=text, return_dtype=pl.String
             )
+            ns = self._chain(mapped.alias(target), verb=verb, params=lineage_params)
             if fk:
                 ns._auto_fk_check(target)
             if validate_values is not False and ct_id:
@@ -846,7 +879,8 @@ class SharedVerbsMixin:
             # Source values not retrievable — validation did not happen.
             return False
         if value_map:
-            unique_vals = list(dict.fromkeys(value_map.get(v, v) for v in unique_vals))
+            text_map = {str(k): v for k, v in value_map.items()}
+            unique_vals = list(dict.fromkeys(text_map.get(str(v), str(v)) for v in unique_vals))
         # Null and blank are missing values, not CT findings.
         invalid = [v for v in unique_vals if v not in (None, "") and v not in valid_values]
         if invalid:
@@ -932,42 +966,68 @@ class SharedVerbsMixin:
         how: str = "left",
         keep: list[str] | None = None,
         where: str | pl.Expr | None = None,
+        validate: Literal["m:1", "1:m", "1:1"] | None = None,
     ) -> Self:
         """Join *dataset* into the pipeline using key column(s) *on*.
 
         The one canonical join verb.  The join is appended to the lazy
-        plan; nothing is materialised.
+        plan; nothing is materialised.  It reads as SAS
+        ``merge left right(keep=...)``: every pipeline column stays, and
+        *keep* limits the columns taken from *dataset*.  Keys match
+        exactly: ``"S1 "`` and ``"S1"`` are two keys.
+
+        A non-key column on both sides raises: select or rename the
+        columns of *dataset* first.  A key that repeats on both sides
+        warns at ``to_frame()``, because the join then gives every pair
+        of rows.  ``how="full"`` gives one key column, as SAS MERGE.
 
         Args:
             dataset: The ``pl.DataFrame`` / ``pl.LazyFrame`` to merge in.
             on: Key column name(s) for the join.
             how: Join strategy (default ``"left"``).
-            keep: Optional columns to keep from the joined result — the
-                output is restricted to the *on* key(s) plus these
-                columns (order preserved).  When ``None``, all columns
-                are retained.
+            keep: Optional columns of *dataset* to bring in, besides the
+                *on* key(s).  When ``None``, every column of *dataset* is
+                brought in.
             where: Optional filter expression applied to *dataset*
-                before the join.
+                before the join; it may use a column that *keep* leaves
+                out.
+            validate: Optional key rule, checked at ``to_frame()``:
+                ``"m:1"`` (each key once in *dataset*), ``"1:m"`` (once in
+                the pipeline) or ``"1:1"`` (once on both sides).
 
         Returns:
             Self: The namespace continuing from the joined plan.
 
         Raises:
             VerbUsageError: When *dataset* or *on* is missing.
-            DerivationError: When a *keep* entry is absent from the
-                joined result (with a did-you-mean suggestion).
+            DerivationError: When a *keep* entry is absent from *dataset*
+                (with a did-you-mean suggestion), or a non-key column is on
+                both sides.  At ``to_frame()``, when *validate* fails; the
+                message names the repeated keys.
+
+        References:
+            ADR-0032 (docs/adr/0032-merge-reads-as-sas-merge-and-stops-on-a-clash.md).
+            admiral ``derive_vars_merged`` stops on a column on both sides.
 
         Examples:
-            Merge supplemental qualifier data onto the DM domain::
+            Merge one supplemental qualifier onto the DM domain::
 
                 dm = (
                     raw_df.sdtm
                     .assign("DOMAIN", value="DM")
-                    .merge(suppdm_df, on="USUBJID", keep=["QVAL"])
+                    .merge(
+                        suppdm_df,
+                        on="USUBJID",
+                        keep=["QVAL"],
+                        where='pl.col("QNAM") == "RACE1"',
+                        validate="m:1",
+                    )
                     .to_frame()
                 )
         """
-        return self._merge_impl(dataset, on=on, how=how, keep=keep, where=where, verb="merge")
+        return self._merge_impl(
+            dataset, on=on, how=how, keep=keep, where=where, validate=validate, verb="merge"
+        )
 
     def _merge_impl(
         self,
@@ -977,6 +1037,7 @@ class SharedVerbsMixin:
         how: str = "left",
         keep: list[str] | None = None,
         where: str | pl.Expr | None = None,
+        validate: Literal["m:1", "1:m", "1:1"] | None = None,
         verb: str = "merge",
     ) -> Self:
         """Implementation behind ``merge``."""
@@ -993,27 +1054,38 @@ class SharedVerbsMixin:
             )
         if on is None:
             raise VerbUsageError(f"{verb}() requires on= (join key column(s)).")
+        on_list = [on] if isinstance(on, str) else list(on)
         if where is not None:
             where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
             right = right.filter(where_expr)
-
-        joined = self._lazy.join(right, on=on, how=how, nulls_equal=True)
         if keep:
-            on_list = [on] if isinstance(on, str) else list(on)
-            keep_list = list(dict.fromkeys(on_list + list(keep)))
-            schema_names = joined.collect_schema().names()
-            missing = [c for c in keep_list if c not in schema_names]
-            if missing:
-                hints = []
-                for col in missing:
-                    close = difflib.get_close_matches(col, schema_names, n=1)
-                    hints.append(f"'{col}'" + (f" (did you mean '{close[0]}'?)" if close else ""))
-                raise DerivationError(
-                    f"{verb}(keep=...): column(s) {', '.join(hints)} not found "
-                    f"in the joined result. Available columns: {schema_names}"
-                )
-            joined = joined.select(keep_list)
-        return self._with_lazy(joined)
+            right_names = right.collect_schema().names()
+            require_columns(f"{verb}(keep=...)", keep, right_names, where="the right dataset")
+            right = right.select(list(dict.fromkeys(on_list + list(keep))))
+
+        adds_columns = how not in ("semi", "anti")
+        if adds_columns:
+            refuse_shared_columns(
+                verb,
+                self._lazy.collect_schema().names(),
+                right.collect_schema().names(),
+                on_list,
+                hint="Select or rename the columns of the right dataset, or drop them "
+                "from the pipeline first.",
+            )
+        joined = self._lazy.join(
+            right,
+            on=on_list,
+            how=how,  # type: ignore[arg-type]
+            nulls_equal=True,
+            coalesce=True if how == "full" else None,
+            validate=validate or "m:m",
+        )
+        new = self._with_lazy(joined)
+        if adds_columns:
+            check = JoinCheck(verb, tuple(on_list), self._lazy, right, validate)
+            new._pending_join_checks = [*getattr(self, "_pending_join_checks", []), check]
+        return new
 
     def keep(self, *columns: str | list[str]) -> Self:
         """Restrict the frame to *columns*, in the given order.
@@ -1047,17 +1119,7 @@ class SharedVerbsMixin:
             cols = [c for c in columns]  # type: ignore[misc]
         if not cols:
             raise DerivationError("keep() requires at least one column name.")
-        schema_names = self._lazy.collect_schema().names()
-        missing = [c for c in cols if c not in schema_names]
-        if missing:
-            hints = []
-            for col in missing:
-                close = difflib.get_close_matches(col, schema_names, n=1)
-                hints.append(f"'{col}'" + (f" (did you mean '{close[0]}'?)" if close else ""))
-            raise DerivationError(
-                f"keep(): column(s) {', '.join(hints)} not found in the frame. "
-                f"Available columns: {schema_names}"
-            )
+        require_columns("keep()", cols, self._lazy.collect_schema().names(), where="the frame")
         return self._with_lazy(self._lazy.select(cols))
 
     # ------------------------------------------------------------------ #
@@ -1525,6 +1587,8 @@ class SharedVerbsMixin:
                 any source.
             VerbUsageError: If more than one of *ref_df* / *dm* / *adsl*
                 is given.
+            DerivationError: If the reference frame has two different
+                reference dates for one subject (ADR-0032).
 
         Examples:
             Derive study day from pinned reference::
@@ -1582,9 +1646,14 @@ class SharedVerbsMixin:
         df = self._lazy.collect()
 
         # Join, compute, drop temp column
-        ref_slim = source_df.select(
-            [c for c in dict.fromkeys(join_key + [_ref_col]) if c in source_df.columns]
-        ).unique(subset=join_key)
+        ref_slim = refuse_repeated_keys(
+            "study_day()",
+            source_df.select(
+                [c for c in dict.fromkeys(join_key + [_ref_col]) if c in source_df.columns]
+            ),
+            join_key,
+            source=_ref_pin.upper() if ref_df is None else "the reference frame",
+        )
 
         _ref_tmp = f"__pin_{_ref_col}__"
         ref_slim = ref_slim.rename({_ref_col: _ref_tmp})
@@ -2064,7 +2133,7 @@ class SharedVerbsMixin:
 
     def select(
         self,
-        columns: list[str] | None = None,
+        columns: str | list[str] | None = None,
         *,
         spec: str | Path | None = None,
         dataset: str | None = None,
@@ -2090,15 +2159,22 @@ class SharedVerbsMixin:
         explicit selection — columns whose names match are removed.  This
         enforces the convention that ``_``-prefixed columns are scratch
         variables.  Set to ``None`` to disable (e.g. during debugging).
+        A scratch name listed in *columns* is removed too, unless
+        ``drop_pattern=None``.
 
         Args:
-            columns: Explicit list of columns to keep (in order).
+            columns: Explicit list of columns to keep (in order).  A single
+                string is one column name.
             spec: Path to a ``define.yaml`` file.
             dataset: Dataset name within the spec.
             drop_pattern: Regex for columns to auto-drop.
 
         Returns:
             Self: A fresh namespace continuing from the selected plan.
+
+        Raises:
+            DerivationError: When a name in *columns* is not in the frame
+                (with a did-you-mean suggestion).
 
         Examples:
             Keep only spec columns::
@@ -2111,6 +2187,10 @@ class SharedVerbsMixin:
         """
         schema = self._lazy.collect_schema()
         names = schema.names()
+
+        if spec is None and columns is not None:
+            columns = [columns] if isinstance(columns, str) else list(columns)
+            require_columns("select(columns=...)", columns, names, where="the frame")
 
         # Step 1: drop scratch variables matching the pattern
         if drop_pattern is not None:
@@ -2263,7 +2343,8 @@ class SharedVerbsMixin:
         Raises:
             SpecError: On unknown algorithms (strict mode), invalid or
                 misspelled derivation fields, column overwrites, unknown
-                ``fleet_spec_version``, or any error raised while executing
+                ``fleet_spec_version``, a ``merge`` block that does not
+                give its variable, or any error raised while executing
                 a variable — always naming file, dataset, and variable.
             ValueError: When both *only* and *omit* are given, or when
                 *dataset* is required/unknown.
@@ -2400,6 +2481,11 @@ class SharedVerbsMixin:
                 raise
             except Exception as err:
                 raise SpecError(f"{context}: {type(err).__name__}: {err}") from err
+            if algo.name == "merge" and var_name not in ns._lazy.collect_schema().names():
+                raise SpecError(
+                    f"{context}: the merge block does not give the column '{var_name}'. "
+                    f"Add it to keep:, or check that dataset '{drv.get('dataset')}' has it."
+                )
 
         return ns
 

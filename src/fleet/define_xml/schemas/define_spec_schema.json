@@ -2180,7 +2180,7 @@
             }
           ],
           "default": null,
-          "description": "Optional columns to keep from the joined result \u2014 the output is restricted to the *on* key(s) plus these columns (order preserved).",
+          "description": "Optional columns of *dataset* to bring in, besides the *on* key(s).",
           "title": "Keep"
         },
         "where": {
@@ -2193,7 +2193,7 @@
             }
           ],
           "default": null,
-          "description": "Optional filter expression applied to *dataset* before the join.",
+          "description": "Optional filter expression applied to *dataset* before the join; it may use a column that *keep* leaves out.",
           "title": "Where"
         },
         "depends_on": {
@@ -3246,7 +3246,7 @@
             }
           ],
           "default": null,
-          "description": "Optional columns to keep from the joined result \u2014 the output is restricted to the *on* key(s) plus these columns (order preserved).",
+          "description": "Optional columns of *dataset* to bring in, besides the *on* key(s).",
           "title": "Keep"
         },
         "where": {
@@ -3259,7 +3259,7 @@
             }
           ],
           "default": null,
-          "description": "Optional filter expression applied to *dataset* before the join.",
+          "description": "Optional filter expression applied to *dataset* before the join; it may use a column that *keep* leaves out.",
           "title": "Where"
         }
       },

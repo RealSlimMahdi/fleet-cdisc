@@ -1113,6 +1113,7 @@ spec_verb(
     standard="sdtm",
     required=("dataset", "on"),
     takes_target=False,
+    exclude=("validate",),
     description="Join a pinned reference dataset into the pipeline.",
     method_text=_MERGE_TEXT,
 )
@@ -1214,6 +1215,7 @@ spec_verb(
     standard="adam",
     required=("dataset", "on"),
     takes_target=False,
+    exclude=("validate",),
     description="SQL-style join against a pinned dataset.",
     method_text=_MERGE_TEXT,
 )

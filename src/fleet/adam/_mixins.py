@@ -86,9 +86,13 @@ from fleet.core._flag_mixin import (
 from fleet.core._pin_mixin import PinMixin
 from fleet.core._verb_mixin import SharedVerbsMixin
 from fleet.core.exceptions import DerivationError
+from fleet.core.joins import refuse_repeated_keys, refuse_shared_columns, require_columns
 
 if TYPE_CHECKING:
     pass
+
+#: What to do when an aggregation target is already a pipeline column.
+_CLASH_HINT = "Drop the column from the pipeline first, or choose another target name."
 
 
 def _value_kind(value: Any) -> str:
@@ -184,6 +188,13 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         Raises:
             LookupError: If ADSL is not pinned.
+            DerivationError: If a column is not in ADSL (with a
+                did-you-mean suggestion), is already in the pipeline, or
+                ADSL has two different rows for one subject.
+
+        References:
+            ADR-0032 (docs/adr/0032-merge-reads-as-sas-merge-and-stops-on-a-clash.md).
+            ADaMIG 1.3: ADSL holds one record per subject.
 
         Examples:
             Carry TRTSDT and SAFFL from ADSL into an ADAE pipeline::
@@ -198,12 +209,22 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         """
         from fleet.core.lineage import record_pin_lineage
 
-        ref_df = self._require_pin("ADSL", "join_adsl", columns=list(cols))
+        adsl = self._require_pin("ADSL", "join_adsl")
         join_key = self._pin_join_key("ADSL")
-
-        ref_slim = ref_df.select(
-            [c for c in dict.fromkeys(join_key + list(cols)) if c in ref_df.columns]
-        ).unique(subset=join_key)
+        require_columns("join_adsl()", cols, adsl.columns, where="the pinned ADSL")
+        refuse_shared_columns(
+            "join_adsl()",
+            self._lazy.collect_schema().names(),
+            cols,
+            join_key,
+            hint="Drop the column from the pipeline first, or leave it out of join_adsl().",
+        )
+        ref_slim = refuse_repeated_keys(
+            "join_adsl()",
+            adsl.select(list(dict.fromkeys(join_key + list(cols)))),
+            join_key,
+            source="ADSL",
+        )
 
         df = self._lazy.collect().join(ref_slim, on=join_key, how="left", nulls_equal=True)
         new = self._materialise_then(df)
@@ -630,6 +651,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         Materialises the pipeline, left-joins *adsl* (optionally restricted to
         *keep* plus the *by* key columns), and returns a fresh namespace.
+        Each *by* key must name one ADSL row, and a non-key column may be
+        on one side only: give *keep*, or add a shared column such as
+        STUDYID to *by*, as admiral ``derive_vars_merged`` asks.
 
         Args:
             adsl: The ADSL ``pl.DataFrame`` to merge in.
@@ -640,6 +664,15 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         Returns:
             Self: A fresh namespace wrapping the joined frame.
+
+        Raises:
+            DerivationError: When a *keep* column is not in *adsl*, a
+                non-key column is on both sides, or *adsl* has two
+                different rows for one key.
+
+        References:
+            ADR-0032 (docs/adr/0032-merge-reads-as-sas-merge-and-stops-on-a-clash.md).
+            ADaMIG 1.3: ADSL holds one record per subject.
 
         Examples:
             Merge treatment date columns from ADSL::
@@ -652,9 +685,17 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         """
         join_keys = by if by is not None else ["USUBJID"]
         if keep is not None:
-            extra = [c for c in join_keys if c not in keep]
-            adsl = adsl.select(keep + extra)
+            require_columns("merge_adsl(keep=...)", keep, adsl.columns, where="ADSL")
+            adsl = adsl.select(list(dict.fromkeys(keep + join_keys)))
         df = self.to_frame()
+        refuse_shared_columns(
+            "merge_adsl()",
+            df.columns,
+            adsl.columns,
+            join_keys,
+            hint="Pass keep= to choose the ADSL columns, or add the shared column to by=.",
+        )
+        adsl = refuse_repeated_keys("merge_adsl()", adsl, join_keys, source="ADSL")
         joined = df.join(adsl, on=join_keys, how="left", nulls_equal=True)
         return self._materialise_then(joined)
 
@@ -808,7 +849,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             agg_df = src.group_by(grps).agg(
                 (col.min() if agg_fn == "min" else col.max()).alias(target)
             )
-            df = self.to_frame().join(agg_df, on=grps, how="left", nulls_equal=True)
+            df = self.to_frame()
+            refuse_shared_columns(f"{verb}()", df.columns, agg_df.columns, grps, hint=_CLASH_HINT)
+            df = df.join(agg_df, on=grps, how="left", nulls_equal=True)
             return self._materialise_then(df)
 
         raw = pl.col(date_col)
@@ -863,7 +906,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                     f"values (impute='{impute}'); {flag} records it.",
                     stacklevel=3,
                 )
-        df = self.to_frame().join(winners, on=grps, how="left", nulls_equal=True)
+        df = self.to_frame()
+        refuse_shared_columns(f"{verb}()", df.columns, winners.columns, grps, hint=_CLASH_HINT)
+        df = df.join(winners, on=grps, how="left", nulls_equal=True)
         return self._materialise_then(df)
 
     def count_events(
@@ -904,7 +949,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
             src = src.filter(where_expr)
         agg_df = src.group_by(grps).agg(pl.len().alias(target))
-        df = self.to_frame().join(agg_df, on=grps, how="left", nulls_equal=True)
+        df = self.to_frame()
+        refuse_shared_columns("count_events()", df.columns, agg_df.columns, grps, hint=_CLASH_HINT)
+        df = df.join(agg_df, on=grps, how="left", nulls_equal=True)
         df = df.with_columns(pl.col(target).fill_null(0))
         return self._materialise_then(df)
 

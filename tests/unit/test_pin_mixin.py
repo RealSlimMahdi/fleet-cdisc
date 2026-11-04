@@ -211,8 +211,9 @@ class TestRequirePin:
 class TestFKCheck:
     def test_fk_check_clean(self, simple_ae, dm_ref):
         ns = simple_ae.sdtm.pin("DM", dm_ref).assign("USUBJID", source="patient_number")
-        orphans = ns._check_fk("USUBJID", pin="DM")
-        assert orphans == set()
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            ns.to_frame()
 
     def test_fk_check_orphans_warn(self, dm_ref):
         bad_df = pl.from_repr("""\
@@ -226,9 +227,8 @@ class TestFKCheck:
 └────────────────┘
 """)
         ns = bad_df.sdtm.pin("DM", dm_ref).assign("USUBJID", source="patient_number")
-        with pytest.warns(UserWarning, match="FK check"):
-            orphans = ns._check_fk("USUBJID", pin="DM")
-        assert "UNKNOWN_SUBJ" in orphans
+        with pytest.warns(UserWarning, match="FK check.*UNKNOWN_SUBJ"):
+            ns.to_frame()
 
     def test_fk_check_error_mode(self, dm_ref):
         bad_df = pl.from_repr("""\
@@ -244,10 +244,10 @@ class TestFKCheck:
             bad_df.sdtm.pin("DM", dm_ref)
             .fk_policy("error")
             .assign("DOMAIN", value="AE")
-            .assign("SUBJID", source="patient_number")
+            .assign("USUBJID", source="patient_number")
         )
         with pytest.raises(ValueError, match="FK check"):
-            ns._check_fk("SUBJID", pin="DM", ref_col="USUBJID")
+            ns.to_frame()
 
     def test_fk_check_off(self, dm_ref):
         bad_df = pl.from_repr("""\
@@ -264,8 +264,9 @@ class TestFKCheck:
             .fk_policy("off")
             .assign("USUBJID", source="patient_number")
         )
-        orphans = ns._check_fk("USUBJID", pin="DM")
-        assert orphans == set()
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            assert ns.to_frame()["USUBJID"].to_list() == ["UNKNOWN_SUBJ"]
 
     def test_fk_policy_invalid(self, simple_ae):
         with pytest.raises(ValueError, match="'warn', 'error', or 'off'"):

@@ -43,9 +43,10 @@ class TestMergeTargetCols:
 └─────────┴─────────┴───────┘
 """)
 
-    def test_sdtm_merge_restricts_columns(self, base, lookup_df):
+    def test_sdtm_merge_keep_limits_the_right_dataset_only(self, base, lookup_df):
+        """c1-17: keep= reads as SAS merge base right(keep=...); every left column stays."""
         result = base.sdtm.merge(dataset=lookup_df, on="USUBJID", keep=["RFSTDTC"]).to_frame()
-        assert result.columns == ["USUBJID", "RFSTDTC"]
+        assert result.columns == ["USUBJID", "AESEQ", "RFSTDTC"]
         assert "EXTRA" not in result.columns
 
     def test_sdtm_merge_without_target_cols_keeps_all(self, base, lookup_df):
@@ -56,9 +57,9 @@ class TestMergeTargetCols:
         with pytest.raises(DerivationError, match="RFSTDTC"):
             base.sdtm.merge(dataset=lookup_df, on="USUBJID", keep=["RFSTDTX"])
 
-    def test_adam_lookup_restricts_columns(self, base, lookup_df):
+    def test_adam_merge_keep_limits_the_right_dataset_only(self, base, lookup_df):
         result = base.adam.merge(dataset=lookup_df, on="USUBJID", keep=["RFSTDTC"]).to_frame()
-        assert result.columns == ["USUBJID", "RFSTDTC"]
+        assert result.columns == ["USUBJID", "AESEQ", "RFSTDTC"]
 
     def test_adam_lookup_no_dead_pipeline_attr(self, base, lookup_df):
         ns = base.adam.merge(dataset=lookup_df, on="USUBJID", keep=["RFSTDTC"])

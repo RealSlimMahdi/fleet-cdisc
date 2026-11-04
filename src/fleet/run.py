@@ -18,8 +18,9 @@ from typing import TYPE_CHECKING, Literal
 import polars as pl
 
 from fleet.core.define_spec import load_define_spec
-from fleet.core.exceptions import StudyRunError
+from fleet.core.exceptions import DerivationError, StudyRunError
 from fleet.core.frames import frame as _frame
+from fleet.core.joins import refuse_repeated_keys
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping, Sequence
@@ -231,7 +232,7 @@ def run_study(
     Raises:
         StudyRunError: When a seed is also a step of the plan, an input
             cannot be found, or a carry-through column needs a USUBJID
-            that one side lacks.
+            that one side lacks or that has two different rows in the input.
 
     Examples:
         Build ADVS from an ADSL held in memory::
@@ -265,7 +266,13 @@ def run_study(
                     f"dataset {step.dataset}: cannot carry {', '.join(cols)} from input "
                     f"'{declared.name}' because both frames must carry USUBJID."
                 )
-            base = base.join(extra.select(["USUBJID", *cols]), on="USUBJID", how="left")
+            try:
+                carried = refuse_repeated_keys(
+                    "fleet run", extra.select(["USUBJID", *cols]), ["USUBJID"], source=declared.name
+                )
+            except DerivationError as err:
+                raise StudyRunError(f"dataset {step.dataset}: {err}") from err
+            base = base.join(carried, on="USUBJID", how="left")
 
         ns = _namespace(base, step.standard)
         for declared, extra in extras:

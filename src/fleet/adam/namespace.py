@@ -1068,6 +1068,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         new._pin_lineage = list(getattr(self, "_pin_lineage", []))
         new._lineage = list(getattr(self, "_lineage", []))
         new._pending_fk_checks = list(getattr(self, "_pending_fk_checks", []))
+        new._pending_join_checks = list(getattr(self, "_pending_join_checks", []))
         fk_severity = getattr(self, "_fk_severity", None)
         if fk_severity is not None:
             new._fk_severity = fk_severity

@@ -264,6 +264,7 @@ _ADVS = """\
           algorithm: merge
           dataset: ADSL
           "on": USUBJID
+          keep: [AGEGR1]
 """
 
 VS = pl.from_repr("""\
