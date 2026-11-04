@@ -802,7 +802,8 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                 ``"VSSEQ"``).  A warning is emitted if the name does not end
                 in ``SEQ``.
             order_by: Columns that define the sort order within each group.
-                When ``None``, the current row order is preserved.
+                Records that tie keep their input order, as PROC SORT
+                EQUALS.  When ``None``, the current row order is preserved.
             by: Subject-level grouping columns (default
                 ``["STUDYID", "USUBJID"]``).  The sequence restarts at
                 *start_at* for each unique combination.
@@ -861,6 +862,9 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
     ) -> SDTMNamespace:
         """Group by *by* and apply *agg* aggregations (lazily).
 
+        The groups come out in the order of their first record, so the
+        same input gives the same row order at each run.
+
         Args:
             by: Column(s) to group by.
             agg: List of Polars aggregation expressions.
@@ -881,7 +885,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                     .to_frame()
                 )
         """
-        return self._with_lazy(self._lazy.group_by(by).agg(agg))
+        return self._with_lazy(self._lazy.group_by(by, maintain_order=True).agg(agg))
 
     # ------------------------------------------------------------------ #
     # 13. notsubmitted — mark variable as null / not-submitted            #

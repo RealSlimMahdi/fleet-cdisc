@@ -450,7 +450,7 @@ def select_tte(
     date_dtype = pl.Datetime("us") if create_datetime else pl.Date
     base = universe.select(
         subject_keys + [pl.col(start_date).cast(date_dtype).alias("__startdt__")]
-    ).unique(subject_keys)
+    ).unique(subject_keys, maintain_order=True)
 
     def pool(sources: list[TTESource], offset: int = 0) -> pl.DataFrame:
         frames = []
@@ -514,7 +514,7 @@ def select_tte(
             pl.concat(
                 [p.select(by) for p in (event_pool, censor_pool, end_pool) if not p.is_empty()],
                 how="vertical_relaxed",
-            ).unique()
+            ).unique(maintain_order=True)
             if not (event_pool.is_empty() and censor_pool.is_empty() and end_pool.is_empty())
             else pl.DataFrame()
         )
