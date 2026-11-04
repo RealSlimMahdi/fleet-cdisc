@@ -3119,7 +3119,7 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
         metavar="FILTER",
         help=(
             "ADSL population filter, passed to the spec's adsl_filter and shown in a "
-            "footnote, e.g. 'pl.col(\"SAFFL\") == \"Y\"'. Default: none (all ADSL subjects)."
+            'footnote, e.g. \'pl.col("SAFFL") == "Y"\'. Default: none (all ADSL subjects).'
         ),
     )
     tlg_export.add_argument(
