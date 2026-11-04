@@ -138,6 +138,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
     def __init__(self, df: pl.DataFrame | pl.LazyFrame) -> None:
         self._lazy = df.lazy()
+        self._root_lazy = self._lazy  # the start of the chain, for to_spec_yaml()
         self._domain: str | None = None
         self._pinned: dict[str, tuple[pl.DataFrame, list[str]]] = {}
         self._pin_lineage: list = []
@@ -699,7 +700,11 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         df = self.to_frame()
         filter_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
-        return self._materialise_then(df.filter(filter_expr))
+        from fleet.core.lineage import record_row_step
+
+        return record_row_step(
+            self._materialise_then(df.filter(filter_expr)), "whereclauses", {"where": where}
+        )
 
     def merge_adsl(
         self,
@@ -807,7 +812,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                     .to_frame()
                 )
         """
-        return self._date_agg(
+        from fleet.core.lineage import append_verb_node
+
+        ns = self._date_agg(
             target,
             from_dataset=from_dataset,
             date_col=date_col,
@@ -816,6 +823,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             agg_fn="min",
             impute=impute,
         )
+        params = {"target": target, "from_dataset": from_dataset, "date_col": date_col}
+        params.update(where=where, by=by, impute=impute)
+        return append_verb_node(ns, target, "first_date", [date_col], params)
 
     def last_date(
         self,
@@ -854,7 +864,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                     .to_frame()
                 )
         """
-        return self._date_agg(
+        from fleet.core.lineage import append_verb_node
+
+        ns = self._date_agg(
             target,
             from_dataset=from_dataset,
             date_col=date_col,
@@ -863,6 +875,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             agg_fn="max",
             impute=impute,
         )
+        params = {"target": target, "from_dataset": from_dataset, "date_col": date_col}
+        params.update(where=where, by=by, impute=impute)
+        return append_verb_node(ns, target, "last_date", [date_col], params)
 
     def _date_agg(
         self,
@@ -1015,7 +1030,10 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         refuse_shared_columns("count_events()", df.columns, agg_df.columns, grps, hint=_CLASH_HINT)
         df = df.join(agg_df, on=grps, how="left", nulls_equal=True)
         df = df.with_columns(pl.col(target).fill_null(0))
-        return self._materialise_then(df)
+        from fleet.core.lineage import append_verb_node
+
+        params = {"target": target, "from_dataset": from_dataset, "where": where, "by": by}
+        return append_verb_node(self._materialise_then(df), target, "count_events", grps, params)
 
     # ------------------------------------------------------------------ #
     # Date derivation verbs                                                #

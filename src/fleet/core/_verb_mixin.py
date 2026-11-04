@@ -203,7 +203,7 @@ def _extract_spec_variables(
                 value = getattr(var, meta, None)
                 if value and meta not in merged:
                     merged[meta] = value
-            codelist = (var.model_extra or {}).get("codelist")
+            codelist = var.codelist
             out.append((var.name, merged, str(codelist) if codelist else None))
         return ds.name, out
 
@@ -218,6 +218,62 @@ def _extract_spec_variables(
         codelist = entry.pop("codelist", None)
         out.append((name, entry, str(codelist) if codelist else None))
     return str(ds_name), out
+
+
+def _freeze_row_steps(ns: Any, var_names: list[str]) -> list[dict[str, Any]]:
+    """Return the chain's row steps for ``row_steps:``, anchored on written variables.
+
+    A step anchored on a variable the spec does not write moves back to the
+    nearest earlier written variable, so ``from_spec`` keeps its place.
+    """
+    written = set(var_names)
+    order = [n.name for n in getattr(ns, "_lineage", [])]
+    out: list[dict[str, Any]] = []
+    for step in getattr(ns, "_row_steps", []):
+        after = step.get("after")
+        if after is not None and after not in written:
+            before = order[: order.index(after) + 1] if after in order else []
+            after = next((n for n in reversed(before) if n in written), None)
+        out.append({**{k: v for k, v in step.items() if k != "after"}, "after": after})
+    return out
+
+
+def _run_row_step(ns: Any, step: dict[str, Any], context: str) -> Any:
+    """Execute one ``row_steps:`` entry of a define.yaml (ADR-0034)."""
+    from fleet.core.lineage import record_row_step
+    from fleet.sdtm.utils import parse_expression
+
+    params = {k: v for k, v in step.items() if k not in ("algorithm", "after")}
+    if step.get("algorithm") == "nodup":
+        return ns.nodup(**params)
+    where = str(params["where"])
+    df = ns.to_frame()
+    filtered = ns._materialise_then(df.filter(parse_expression(where, df.schema)))
+    return record_row_step(filtered, "whereclauses", {"where": where})
+
+
+def _check_row_steps(steps: list[dict[str, Any]], names: list[str], context: str) -> None:
+    """Refuse a TODO step, an unknown algorithm or an unknown anchor before any work."""
+    for nr, step in enumerate(steps, start=1):
+        algo = step.get("algorithm")
+        if algo == "TODO":
+            raise SpecError(
+                f"{context}: row_steps #{nr} is a TODO for verb {step.get('verb')!r}. "
+                "Write the step (algorithm: whereclauses or nodup) or remove it."
+            )
+        if algo not in ("whereclauses", "nodup"):
+            raise SpecError(
+                f"{context}: row_steps #{nr} has algorithm {algo!r}; "
+                "a row step is whereclauses or nodup."
+            )
+        if algo == "whereclauses" and "where" not in step:
+            raise SpecError(f"{context}: row_steps #{nr} (whereclauses) needs where:.")
+        after = step.get("after")
+        if after is not None and after not in names:
+            raise SpecError(
+                f"{context}: row_steps #{nr} is after {after!r}, which is not a variable "
+                "of the dataset."
+            )
 
 
 def _dtype_to_spec_type(dtype: pl.DataType | None) -> str:
@@ -992,8 +1048,10 @@ class SharedVerbsMixin:
         """Implementation behind ``case_when``."""
         from fleet.sdtm.utils import parse_expression
 
+        schema = self._lazy.collect_schema()
+
         def _cond(raw: Any) -> pl.Expr:
-            return raw if isinstance(raw, pl.Expr) else parse_expression(str(raw))
+            return raw if isinstance(raw, pl.Expr) else parse_expression(str(raw), schema)
 
         params = {"target": target, "when": when, "else_": else_}
         if not when:
@@ -1346,7 +1404,9 @@ class SharedVerbsMixin:
 
         # Case 1: string through AST sandbox.
         return self._chain(
-            parse_expression(str(expression)).alias(target), verb="derivation", params=params
+            parse_expression(str(expression), self._lazy.collect_schema()).alias(target),
+            verb="derivation",
+            params=params,
         )
 
     def _apply_derivation(self, drv: Derivation) -> Self:
@@ -1355,8 +1415,8 @@ class SharedVerbsMixin:
         Routing:
 
         * ``kind="column"`` — expression stays lazy; lineage via ``_chain()``.
-        * ``kind="frame"`` or ``kind="param"`` — the frame is materialised,
-          the function called, and the result re-wrapped.
+        * ``kind="frame"`` — the frame is materialised, the function
+          called, and the result re-wrapped.
 
         Args:
             drv: The :class:`~fleet.core.derivation.Derivation` to execute.
@@ -1365,7 +1425,7 @@ class SharedVerbsMixin:
             Self: Updated namespace.
 
         Raises:
-            TypeError: If a frame/param derivation returns a non-DataFrame.
+            TypeError: If a frame derivation returns a non-DataFrame.
         """
         from fleet.core.lineage import _append_lineage_nodes
 
@@ -1856,7 +1916,18 @@ class SharedVerbsMixin:
                 )
 
         seq_expr = (pl.int_range(pl.len()).over(grps) + start_at).cast(pl.Int64).alias(target)
-        return self._with_lazy(lf.with_columns(seq_expr))
+        from fleet.core.lineage import append_verb_node
+
+        params = {"target": target, "order_by": order_by, "by": by}
+        if start_at != 1:
+            params["start_at"] = start_at
+        return append_verb_node(
+            self._with_lazy(lf.with_columns(seq_expr)),
+            target,
+            "seq",
+            [*grps, *(order_by or [])],
+            params,
+        )
 
     # ------------------------------------------------------------------ #
     # validate                                                             #
@@ -2489,7 +2560,23 @@ class SharedVerbsMixin:
             if codelists:
                 ns = copy.copy(ns)
                 ns._spec_codelists = codelists
+        # Row steps run after the variable they are anchored on (ADR-0034).
+        all_names: list[str] = []
+        row_steps: list[dict[str, Any]] = []
+        if spec.datasets is not None:
+            ds_entry = spec.select(dataset)
+            all_names = [v.name for v in ds_entry.variables]
+            row_steps = list(ds_entry.row_steps)
+            _check_row_steps(row_steps, all_names, f"{path} → dataset {ds_name}")
+        position = {n: i for i, n in enumerate(all_names)}
+
+        def _flush(ns: Any, before: int) -> Any:
+            while row_steps and position.get(row_steps[0].get("after"), -1) < before:
+                ns = _run_row_step(ns, row_steps.pop(0), f"{path} → dataset {ds_name}")
+            return ns
+
         for var_name, drv, codelist in raw_vars:
+            ns = _flush(ns, position.get(var_name, len(all_names)))
             if only is not None and var_name not in only:
                 continue
             if omit is not None and var_name in omit:
@@ -2562,7 +2649,7 @@ class SharedVerbsMixin:
                     f"Add it to keep:, or check that dataset '{drv.get('dataset')}' has it."
                 )
 
-        return ns
+        return _flush(ns, len(all_names) + 1)
 
     # ------------------------------------------------------------------ #
     # to_spec_yaml — round-trip: pipeline lineage → define.yaml            #
@@ -2588,8 +2675,17 @@ class SharedVerbsMixin:
         not spec-expressible (or whose arguments cannot be serialised,
         e.g. inline Polars expressions) emit an ``algorithm: derivation``
         stub with a ``callable:`` placeholder and a ``# TODO`` comment carrying the verb name and
-        sources.  Auto-generated by-product columns (e.g. ``--DTF``
-        imputation flags) are listed without a derivation.
+        sources, and a warning names them.  A column that a verb added
+        with no lineage node (``merge``) also gets a stub.  Auto-generated
+        by-product columns (e.g. ``--DTF`` imputation flags) are listed
+        without a derivation.
+
+        A verb that removes or adds rows (``whereclauses``, ``nodup`` with
+        ``keep=``, ``derive_param``) goes to the dataset key
+        ``row_steps:``, in pipeline order, each step anchored ``after:``
+        the variable it follows (ADR-0034).  A step a define.yaml cannot
+        hold is written as ``algorithm: TODO`` and ``from_spec`` refuses
+        it until it is edited.
 
         The output validates against Fleet's define-spec JSON schema;
         study-level fields are placeholders to review before use.
@@ -2608,9 +2704,9 @@ class SharedVerbsMixin:
                 ``predecessor: '<DATASET>.<SOURCE>'``.  The emitted YAML
                 stays the explicit, reviewable source of truth; Fleet
                 never infers Predecessor at Define-XML generation time.
-                Columns brought in by ``merge()`` leave no lineage and
-                are labeled like carry-throughs — when the pipeline
-                contains a join, a review note is added to the header.
+                Only a column present at the start of the chain can be a
+                Predecessor: a column a verb added with no lineage (for
+                example ``merge()``) gets a TODO stub and the warning.
                 ADaM pipelines only.
 
         Returns:
@@ -2655,6 +2751,10 @@ class SharedVerbsMixin:
         schema = self._lazy.collect_schema()
         derived = {n.name: n for n in latest_lineage_of(self)}
         name_pattern = re.compile(r"^[A-Z_][A-Z0-9_]{0,7}$")
+        # The columns at the start of the chain: only they can be a carry-through
+        # or a Predecessor; a column a verb added with no lineage node is a stub.
+        root_lazy = getattr(self, "_root_lazy", None)
+        root_cols = set(root_lazy.collect_schema().names()) if root_lazy is not None else None
 
         entries: list[tuple[dict[str, Any], str | None]] = []
         for col in schema.names():
@@ -2667,7 +2767,14 @@ class SharedVerbsMixin:
                 "type": _dtype_to_spec_type(schema.get(col)),
             }
             comment: str | None = None
-            if node is not None:
+            if node is None and root_cols is not None and col not in root_cols:
+                comment = (
+                    f"TODO: column {col} was added by a verb that records no lineage "
+                    "(for example merge) — replace this stub with a registered "
+                    "derivation (algorithm: derivation, callable: <name>)."
+                )
+                entry["derivation"] = {"algorithm": "derivation", "callable": f"TODO_{col}"}
+            elif node is not None:
                 status, block, meta = spec_registry.derivation_from_lineage(standard, node)
                 if meta.get("label"):
                     entry["label"] = str(meta["label"])[:40]
@@ -2686,6 +2793,7 @@ class SharedVerbsMixin:
                         and block.get("value") is None
                         and not block.get("ct")
                         and name_pattern.match(source)
+                        and (root_cols is None or source in root_cols)
                     ):
                         entry["origin"] = "Predecessor"
                         entry["predecessor"] = f"{pred_ds}.{source}"
@@ -2717,14 +2825,24 @@ class SharedVerbsMixin:
         stubs = [entry["name"] for entry, comment in entries if comment]
         if stubs:
             warnings.warn(
-                f"to_spec_yaml: {len(stubs)} variable(s) have no reviewer-facing "
-                f"derivation text for Define-XML ({', '.join(stubs)}) — add a "
-                "`comment:` in the spec or wrap the logic in a @derivation callable.",
+                f"to_spec_yaml: {len(stubs)} variable(s) are TODO stubs "
+                f"({', '.join(stubs)}): from_spec fails on them until you replace each "
+                "callable: TODO_<name> with a registered @derivation, and Define-XML has "
+                "no method text for them.",
                 stacklevel=2,
             )
 
         var_names = [e["name"] for e, _ in entries]
         keys = [k for k in ("STUDYID", "USUBJID") if k in var_names] or var_names[:1]
+        row_steps = _freeze_row_steps(self, var_names)
+        todo_steps = [st["verb"] for st in row_steps if st["algorithm"] == "TODO"]
+        if todo_steps:
+            warnings.warn(
+                f"to_spec_yaml: {len(todo_steps)} row step(s) cannot be written "
+                f"({', '.join(todo_steps)}): from_spec fails on algorithm: TODO in "
+                "row_steps until you replace each one (ADR-0034).",
+                stacklevel=2,
+            )
 
         study = {
             "id": "STUDY",
@@ -2738,25 +2856,23 @@ class SharedVerbsMixin:
             "standard_version": DEFAULT_IG_VERSIONS[standard],
         }
         head = {"fleet_spec_version": SUPPORTED_SPEC_VERSION, "study": study}
-        ds_head = {
+        ds_head: dict[str, Any] = {
             "name": ds_name,
             "label": ds_name,
             "structure": "One record per observation (review)",
             "keys": keys,
         }
+        if row_steps:
+            ds_head["row_steps"] = row_steps
 
         lines: list[str] = [
             "# Generated by Fleet to_spec_yaml() — review study fields, labels, keys,",
             "# and TODO stubs before use.",
         ]
-        if pred_ds and "JOIN" in self._lazy.explain().upper():
+        if todo_steps:
             lines.append(
-                f"# predecessor={pred_ds!r}: this pipeline merges other datasets, and "
-                "merged-in columns"
-            )
-            lines.append(
-                f"# are indistinguishable from {pred_ds} carry-throughs — review each "
-                "predecessor: entry."
+                "# TODO: row_steps holds algorithm: TODO for "
+                f"{', '.join(todo_steps)} — write each step before from_spec runs."
             )
         lines += [
             yaml.safe_dump(head, sort_keys=False, allow_unicode=True).rstrip(),
@@ -2890,7 +3006,7 @@ class SharedVerbsMixin:
             logger.info("[NODUP] No duplicates found (subset: %s)", ", ".join(subset))
             new = self._materialise_then(df)
             new._nodup_report = dup_rows
-            return new
+            return self._record_nodup(new, subset, sort_by, keep, descending)
 
         # Summarise duplicate groups
         dup_groups = (
@@ -2935,4 +3051,22 @@ class SharedVerbsMixin:
         logger.info("[NODUP] Result: %d rows (removed %d)", len(df), n_dup - n_groups)
         new = self._materialise_then(df)
         new._nodup_report = dup_rows
-        return new
+        return self._record_nodup(new, subset, sort_by, keep, descending)
+
+    @staticmethod
+    def _record_nodup(
+        new: Any,
+        subset: list[str],
+        sort_by: list[str] | None,
+        keep: str | None,
+        descending: bool | list[bool],
+    ) -> Any:
+        """Record a removing ``nodup`` call as a row step (ADR-0034)."""
+        if keep is None:
+            return new
+        from fleet.core.lineage import record_row_step
+
+        params: dict[str, Any] = {"subset": subset, "sort_by": sort_by, "keep": keep}
+        if descending:
+            params["descending"] = descending
+        return record_row_step(new, "nodup", params)

@@ -309,6 +309,65 @@
           "items": {
             "$ref": "#/$defs/value_level_entry"
           }
+        },
+        "row_steps": {
+          "type": "array",
+          "description": "Steps that remove or add records, in pipeline order (ADR-0034). Each step runs after the variable named in after: (null: before the first variable). from_spec refuses algorithm: TODO. Rendered in Define-XML as the dataset comment.",
+          "items": {
+            "type": "object",
+            "required": [
+              "algorithm"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "algorithm": {
+                "enum": [
+                  "whereclauses",
+                  "nodup",
+                  "TODO"
+                ]
+              },
+              "after": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "where": {
+                "type": "string",
+                "description": "whereclauses: the records to keep."
+              },
+              "subset": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "nodup: the key of a duplicate."
+              },
+              "sort_by": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "keep": {
+                "enum": [
+                  "first",
+                  "last"
+                ]
+              },
+              "descending": {
+                "type": [
+                  "boolean",
+                  "array"
+                ]
+              },
+              "verb": {
+                "type": "string",
+                "description": "TODO: the inline verb that the spec does not describe yet."
+              }
+            }
+          }
         }
       }
     },

@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import keyword
 import os
 import sys
 from pathlib import Path
@@ -269,6 +270,14 @@ def _run_init_cfg(args: argparse.Namespace) -> None:
     hint = _config_flag_hint(config_path)
     print(f"Created study workspace → {ctx.study_root}")
     print(f"Config  → {config_path}")
+    if ctx.custom_rules_dir is not None and adam_datasets:
+        from fleet.validation.rule_scaffolder import scaffold_population_flag_rule
+
+        try:
+            rule_file = scaffold_population_flag_rule(ctx.custom_rules_dir)
+            print(f"Rule    → {rule_file} (ADSL population flags are Y or N)")
+        except FileExistsError:
+            pass
     print()
     print("Next steps:")
     print(f"  fleet init define{hint}")
@@ -1910,6 +1919,8 @@ def _run_derivation_add(args: argparse.Namespace) -> None:
     name: str = args.name.strip()
     dataset: str = args.dataset.strip().upper()
     kind: str = args.kind
+    if not name.isidentifier() or keyword.iskeyword(name):
+        _fail(f"derivation name {name!r} is not a Python identifier (for example AGEGR1).")
 
     # Resolve derivations directory from the study config — no silent
     # fallback to ./derivations (siblings hard-error too).
@@ -1949,9 +1960,9 @@ def {name}() -> pl.Expr:
                 .to_frame()
             )
     """
-    return pl.col("REPLACE_ME").cast(pl.String)  # TODO: replace with real logic
+    return pl.col("REPLACE_ME").cast(pl.String).alias("{name}")  # TODO: replace with real logic
 '''
-    elif kind == "frame":
+    else:  # frame
         template = f'''"""{name} — {dataset} custom derivation (frame-level)."""
 from fleet.core.derivation import derivation
 import polars as pl
@@ -1978,38 +1989,6 @@ def {name}(df: pl.DataFrame) -> pl.DataFrame:
     """
     return df.with_columns(
         pl.col("REPLACE_ME").cast(pl.String).alias("{name}")  # TODO: replace with real logic
-    )
-'''
-    else:  # param
-        template = f'''"""{name} — {dataset} custom derivation (param-level)."""
-from fleet.core.derivation import derivation
-import polars as pl
-
-
-@derivation(
-    by=["USUBJID"],  # TODO: set correct by-vars
-    set_values_to={{"PARAMCD": "{name}", "PARAM": "{name} description"}},
-)
-def {name}(df: pl.DataFrame) -> pl.DataFrame:
-    """One-sentence summary of {name} derivation.
-
-    Args:
-        df: Upstream DataFrame.
-
-    Returns:
-        pl.DataFrame: Frame with {name} parameter rows added.
-
-    Examples:
-        Use in an inline pipeline::
-
-            {dataset.lower()} = (
-                dm.adam
-                .derivation({name})
-                .to_frame()
-            )
-    """
-    return df.with_columns(
-        pl.col("REPLACE_ME").cast(pl.Float64).alias("AVAL")  # TODO: replace with real logic
     )
 '''
 
@@ -3191,8 +3170,11 @@ def _add_derivation_parsers(sub: argparse._SubParsersAction) -> None:
     drv_add.add_argument(
         "--kind",
         default="column",
-        choices=["column", "frame", "param"],
-        help="Derivation kind: column / frame / param (default: column).",
+        choices=["column", "frame"],
+        help=(
+            "Derivation kind: column / frame (default: column). "
+            "For a new parameter row, use .adam.derive_param()."
+        ),
     )
     _add_config_flag(drv_add)
     drv_add.set_defaults(func=_run_derivation_add)

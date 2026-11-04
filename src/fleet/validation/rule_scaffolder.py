@@ -200,6 +200,111 @@ def scaffold_rule(
     return out_file
 
 
+#: ADaMIG population flags: each holds Y or N on every ADSL record, never a null.
+POPULATION_FLAGS: tuple[str, ...] = (
+    "SAFFL",
+    "ITTFL",
+    "FASFL",
+    "PPROTFL",
+    "RANDFL",
+    "ENRLFL",
+    "COMPLFL",
+)
+
+
+def scaffold_population_flag_rule(
+    output_dir: Path,
+    *,
+    rule_id: str = "FLEET-ADSL-001",
+    organization: str | None = None,
+    ig_version: str = "1.3",
+) -> Path:
+    """Write the custom rule that a named ADSL population flag is Y or N.
+
+    The rule starts from :func:`scaffold_rule` and fills its ``Check``:
+    a record fails when one of :data:`POPULATION_FLAGS` exists in ADSL
+    and is null or holds a value other than Y or N.  A Y-or-null flag
+    such as DTHFL is not named, so it does not fail.
+
+    References:
+        ADaMIG 1.3, ADSL subject-level population flags (Y or N);
+        alpha audit c1-216.
+
+    Args:
+        output_dir: The study's custom rules directory.
+        rule_id: Core Id of the rule and stem of its file name.
+        organization: Organization name for the Authorities block.
+        ig_version: ADaMIG version for the Standards reference.
+
+    Returns:
+        Path: The written rule file.
+
+    Raises:
+        FileExistsError: If a rule with *rule_id* already exists.
+
+    Examples:
+        Add the rule to a study and validate ADSL with it::
+
+            from fleet.validation.rule_scaffolder import scaffold_population_flag_rule
+
+            scaffold_population_flag_rule(Path("metadata/custom_rules"))
+            adsl.adam.validate("ADSL", custom_rules="metadata/custom_rules")
+    """
+    description = (
+        f"A population flag ({', '.join(POPULATION_FLAGS)}) must be Y or N on every "
+        "ADSL record, never null."
+    )
+    out_file = scaffold_rule(
+        domain="ADSL",
+        description=description,
+        output_dir=output_dir,
+        rule_id=rule_id,
+        organization=organization,
+        ig_version=ig_version,
+    )
+    text = out_file.read_text(encoding="utf-8")
+    header = "".join(
+        line
+        for line in text.splitlines(keepends=True)
+        if line.startswith("# yaml-language-server") or line.startswith(f"# {rule_id}:")
+    )
+    rule = yaml.safe_load(text)
+    rule["Check"] = {
+        "any": [
+            {
+                "all": [
+                    {"name": flag, "operator": "exists"},
+                    {
+                        "any": [
+                            {"name": flag, "operator": "empty"},
+                            {"name": flag, "operator": "is_not_contained_by", "value": ["Y", "N"]},
+                        ]
+                    },
+                ]
+            }
+            for flag in POPULATION_FLAGS
+        ]
+    }
+    rule["Scope"] = {
+        "Data Structures": {"Include": ["SUBJECT LEVEL ANALYSIS DATASET"]},
+        "Domains": {"Include": ["ADSL"]},
+    }
+    rule["Outcome"]["Output Variables"] = ["USUBJID", *POPULATION_FLAGS]
+    standard = rule["Authorities"][0]["Standards"][0]
+    standard["Name"] = "ADaMIG"
+    citation = standard["References"][0]["Citations"][0]
+    citation["Cited Guidance"] = "Population indicator variables are Y or N."
+    citation["Document"] = "ADaMIG"
+    citation["Section"] = "ADSL population flags"
+    standard["References"][0]["Origin"] = "Fleet"
+    rule["Authorities"][0]["Category"]["Purpose"] = "ADaMIG population flags"
+    out_file.write_text(
+        header + yaml.dump(rule, default_flow_style=False, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    return out_file
+
+
 # ── Rule validation ───────────────────────────────────────────────────
 
 

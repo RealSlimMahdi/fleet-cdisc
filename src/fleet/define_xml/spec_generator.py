@@ -35,6 +35,7 @@ from fleet.core._verb_mixin import _import_derivations_module
 from fleet.core.algorithm_resolver import docstring_summary, resolve_callable_docstring
 from fleet.core.define_spec import load_define_spec, load_spec_yaml
 from fleet.core.exceptions import SpecError
+from fleet.define_xml.semantic_checks import REST_EMPHASIS
 
 _SCHEMA_PATH = Path(__file__).parent / "schemas" / "define_spec_schema.json"
 
@@ -95,7 +96,27 @@ def _is_plain_copy(block: dict) -> bool:
 
 #: reST formatting in study docstrings (````code````, ``ref``, *emphasis*)
 #: is noise in a regulatory document — content kept, markup dropped.
-_REST_MARKUP = re.compile(r"``([^`]+)``|`([^`]+)`|\*([^*\s][^*]*)\*")
+_REST_MARKUP = re.compile(r"``([^`]+)``|`([^`]+)`|" + REST_EMPHASIS.pattern)
+
+
+def _row_steps_text(steps: list[dict[str, Any]]) -> str:
+    """Describe a dataset's ``row_steps:`` in pipeline order, for its def:CommentDef."""
+    parts: list[str] = []
+    for step in steps:
+        after = step.get("after")
+        where = f"after {after}" if after else "before the first variable"
+        if step.get("algorithm") == "whereclauses":
+            action = f"keep the records where {step.get('where')}"
+        elif step.get("algorithm") == "nodup":
+            sort_by = ", ".join(step.get("sort_by") or [])
+            action = (
+                f"keep the {step.get('keep')} record per {', '.join(step.get('subset') or [])}"
+                f" sorted by {sort_by}"
+            )
+        else:
+            action = f"a record step by {step.get('verb')} that the spec does not describe yet"
+        parts.append(f"{where}, {action}")
+    return "Record selection, in derivation order: " + "; ".join(parts) + "."
 
 
 def _strip_rest_markup(text: str) -> str:
@@ -263,7 +284,8 @@ class DefineSpecGenerator:
             raise SpecError(
                 f"{self._path}: generated Define-XML failed Define-XML 2.1 "
                 f"validation ({len(errors)} error(s)):\n  {shown}{more}\n"
-                "Pass validate_xml=False to generate it anyway."
+                "Correct define.yaml and generate again. From Python, "
+                "DefineSpecGenerator(..., validate_xml=False) writes the file anyway."
             )
         return xml_str
 
@@ -586,6 +608,16 @@ class DefineSpecGenerator:
         for method_oid in sorted(self._method_defs):
             mdv.append(self._build_method_def(method_oid, self._method_defs[method_oid]))
 
+        # def:CommentDefs: the record selection of each dataset (row_steps, ADR-0034).
+        for ds in datasets:
+            if ds.get("row_steps"):
+                comment = ET.Element("def:CommentDef", {"OID": f"COM.{ds['name']}.ROWS"})
+                desc = ET.SubElement(comment, "Description")
+                ET.SubElement(desc, "TranslatedText", {"xml:lang": "en"}).text = _row_steps_text(
+                    ds["row_steps"]
+                )
+                mdv.append(comment)
+
         # Annotated CRF leaf
         if acrf_cfg:
             acrf_leaf = ET.Element(
@@ -646,6 +678,8 @@ class DefineSpecGenerator:
             "def:StandardOID": std_oid,
             "def:ArchiveLocationID": leaf_id,
         }
+        if ds.get("row_steps"):
+            attribs["def:CommentOID"] = f"COM.{name}.ROWS"
         elem = ET.Element("ItemGroupDef", attrib=attribs)
 
         desc = ET.SubElement(elem, "Description")

@@ -27,8 +27,9 @@ import xml.etree.ElementTree as ET
 _ODM = "{http://www.cdisc.org/ns/odm/v1.3}"
 _DEF = "{http://www.cdisc.org/ns/def/v2.1}"
 
-#: reST emphasis (``*target*``) — a lone asterisk (e.g. multiplication) is fine.
-_REST_EMPHASIS = re.compile(r"\*\S[^*]*\*")
+#: reST emphasis (``*target*``). An asterisk inside a formula (``AVAL*1000/WEIGHT*FREQ``,
+#: ``HEIGHT**0.725``) is not emphasis. The Define-XML generator strips the same pattern.
+REST_EMPHASIS = re.compile(r"(?<![\w*])\*([^*\s][^*]*)\*(?![\w*])")
 
 #: ``Predecessor`` descriptions must name their source as DATASET.VARIABLE.
 _PREDECESSOR_REF = re.compile(r"^[A-Z_][A-Z0-9_]{0,7}\.[A-Z_][A-Z0-9_]{0,7}$")
@@ -85,7 +86,7 @@ def semantic_errors(xml: str | bytes) -> list[str]:
     # 2. No API markup in any reviewer-facing text.
     for text_elem in root.iter(f"{_ODM}TranslatedText"):
         text = text_elem.text or ""
-        if "`" in text or _REST_EMPHASIS.search(text):
+        if "`" in text or REST_EMPHASIS.search(text):
             errors.append(f"TranslatedText contains API markup: {text[:80]!r}")
 
     # 3. MethodDef names are reviewer-facing, not Fleet algorithm ids.  The

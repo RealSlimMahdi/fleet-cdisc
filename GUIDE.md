@@ -1780,10 +1780,10 @@ fleet derivation add AGEGR1 --dataset ADSL --kind column
 
 # Frame-kind (receives DataFrame, returns DataFrame):
 fleet derivation add add_pop_flags --dataset ADSL --kind frame
-
-# Param-kind (by-group reshape):
-fleet derivation add BMI --dataset ADVS --kind param
 ```
+
+A new parameter row (BMI from WEIGHT and HEIGHT) is not a derivation: use
+`.adam.derive_param()`.
 
 ### How `callable:` in `define.yaml` links to runtime execution
 
@@ -1805,7 +1805,7 @@ which either:
 The `Derivation` object's `kind` determines routing:
 
 - `kind="column"` → expression added to lazy plan (no materialisation)
-- `kind="frame"` / `kind="param"` → pipeline materialised, function called, result re-wrapped
+- `kind="frame"` → pipeline materialised, function called, result re-wrapped
 
 ### How Define-XML MethodDef text is resolved
 

@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import re
 from typing import Any
 
 
@@ -55,10 +56,12 @@ def docstring_summary(doc: str | None) -> str:
     text = inspect.cleandoc(doc).strip()
     if not text:
         return ""
-    # Take everything up to the first blank line, then split on first period.
+    # Take everything up to the first blank line, then end at a period that a
+    # space or the end follows, so 18.5 and v2.1 stay whole.
     head = text.split("\n\n", 1)[0].strip().replace("\n", " ")
-    if "." in head:
-        head = head.split(".", 1)[0].strip() + "."
+    match = re.search(r"\.(?=\s|$)", head)
+    if match:
+        head = head[: match.start()].strip() + "."
     return head
 
 

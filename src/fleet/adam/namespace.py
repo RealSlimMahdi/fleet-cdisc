@@ -714,7 +714,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
         summary = summary.select(col_order)
 
         combined = pl.concat([df, summary], how="vertical_relaxed")
-        return self._materialise_then(combined)
+        from fleet.core.lineage import record_row_step
+
+        return record_row_step(self._materialise_then(combined), "derive_summary_records", {})
 
     # ------------------------------------------------------------------ #
     # 21. derive_locf_records — last observation carried forward          #
@@ -833,7 +835,10 @@ class AdamNamespace(SharedADaMVerbsMixin):
         )
         if imputation != "update":
             filled = pl.concat([filled, df.filter(is_null)], how="diagonal_relaxed")
-        return self._materialise_then(filled.select(list(dict.fromkeys([*df.columns, "DTYPE"]))))
+        from fleet.core.lineage import record_row_step
+
+        new = self._materialise_then(filled.select(list(dict.fromkeys([*df.columns, "DTYPE"]))))
+        return record_row_step(new, "derive_locf_records", {})
 
     # ------------------------------------------------------------------ #
     # 22. derive_param — append a computed parameter as new records        #
@@ -1013,7 +1018,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
         new_rows = new_rows.select(df.columns)
 
         combined = pl.concat([df, new_rows], how="vertical_relaxed")
-        return self._materialise_then(combined)
+        from fleet.core.lineage import record_row_step
+
+        return record_row_step(self._materialise_then(combined), "derive_param", {})
 
     # ------------------------------------------------------------------ #
     # Private: YAML spec dispatcher for algorithm: std_function           #
@@ -1281,6 +1288,8 @@ class AdamNamespace(SharedADaMVerbsMixin):
         new._pinned = dict(getattr(self, "_pinned", {}))
         new._pin_lineage = list(getattr(self, "_pin_lineage", []))
         new._lineage = list(getattr(self, "_lineage", []))
+        new._row_steps = list(getattr(self, "_row_steps", []))
+        new._root_lazy = getattr(self, "_root_lazy", self._lazy)
         new._pending_fk_checks = list(getattr(self, "_pending_fk_checks", []))
         new._pending_join_checks = list(getattr(self, "_pending_join_checks", []))
         fk_severity = getattr(self, "_fk_severity", None)

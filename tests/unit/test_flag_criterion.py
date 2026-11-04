@@ -746,6 +746,32 @@ class TestCriterion:
         assert result["CRIT1FL"].to_list() == ["N", "Y"]
         assert result["CRIT1FN"].to_list() == [0, 1]
 
+    def test_null_condition_gives_null_flags_as_admiral(self):
+        """c1-204: a missing AVAL is not 'criterion not met' (admiral derive_vars_crit_flag)."""
+        adlb = pl.from_repr("""\
+┌─────────┬──────┐
+│ USUBJID ┆ AVAL │
+│ ---     ┆ ---  │
+│ str     ┆ f64  │
+╞═════════╪══════╡
+│ S1      ┆ 12.0 │
+│ S2      ┆ null │
+│ S3      ┆ 5.0  │
+└─────────┴──────┘
+""")
+        result = adlb.adam.criterion(
+            1, condition=pl.col("AVAL") >= 10, description="AVAL >= 10"
+        ).to_frame()
+        assert result["CRIT1"].to_list() == ["AVAL >= 10"] * 3
+        assert result["CRIT1FL"].to_list() == ["Y", None, "N"]
+        assert result["CRIT1FN"].to_list() == [1, None, 0]
+
+        not_met = adlb.adam.criterion(
+            1, condition=(pl.col("AVAL") >= 10).fill_null(False)
+        ).to_frame()
+        assert not_met["CRIT1FL"].to_list() == ["Y", "N", "N"]
+        assert not_met["CRIT1FN"].to_list() == [1, 0, 0]
+
     def test_criterion_custom_prefix(self):
         """Custom prefix works."""
         df = pl.from_repr("""\

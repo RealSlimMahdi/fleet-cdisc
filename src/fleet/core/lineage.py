@@ -381,3 +381,72 @@ def _append_lineage_nodes(ns: Any, drv: Any) -> Any:
         )
     ns._lineage = lineage
     return ns
+
+
+def append_verb_node(
+    ns: Any, name: str, verb: str, sources: list[str], params: dict[str, Any]
+) -> Any:
+    """Record one ``VariableNode`` for a verb that bypasses ``_chain()``.
+
+    Verbs that sort, join or materialise (``seq``, ``first_date``,
+    ``count_events``) call this so that ``to_spec_yaml()`` sees their
+    target: a spec-expressible call writes its block, any other call (an
+    inline ``from_dataset=`` frame) writes a TODO stub with a warning.
+
+    Args:
+        ns: The namespace the verb returns.
+        name: The target column.
+        verb: The user-facing verb name.
+        sources: Input column names.
+        params: The verb keyword arguments, ``target`` included.
+
+    Returns:
+        The same namespace with ``_lineage`` extended in place.
+    """
+    from fleet.core.dag import VariableNode
+
+    lineage: list[VariableNode] = list(getattr(ns, "_lineage", []))
+    lineage.append(
+        VariableNode(
+            name=name,
+            verb=verb,
+            sources=list(dict.fromkeys(sources)),
+            method=defining_method_path(type(ns), verb),
+            domain=getattr(ns, "_domain", None),
+            params=sanitise_params(params),
+        )
+    )
+    ns._lineage = lineage
+    return ns
+
+
+#: Row verbs whose call a define.yaml ``row_steps:`` entry can hold (ADR-0034).
+ROW_STEP_ALGORITHMS: frozenset[str] = frozenset({"whereclauses", "nodup"})
+
+
+def record_row_step(ns: Any, verb: str, params: dict[str, Any]) -> Any:
+    """Record a verb that adds or removes rows, for ``to_spec_yaml()``.
+
+    The step is anchored ``after`` the variable last derived in the chain,
+    so ``from_spec`` runs it at the same place (ADR-0034).  A call a
+    define.yaml cannot hold (a ``pl.Expr`` filter, ``derive_param``) is
+    recorded as ``algorithm: TODO`` so the frozen file fails until it is
+    edited.
+
+    Args:
+        ns: The namespace the verb returns.
+        verb: The user-facing verb name.
+        params: The verb keyword arguments.
+
+    Returns:
+        The same namespace with ``_row_steps`` extended in place.
+    """
+    lineage = getattr(ns, "_lineage", [])
+    clean = sanitise_params(params)
+    if verb in ROW_STEP_ALGORITHMS and UNSERIALISABLE not in clean.values():
+        step: dict[str, Any] = {"algorithm": verb, **clean}
+    else:
+        step = {"algorithm": "TODO", "verb": verb}
+    step["after"] = lineage[-1].name if lineage else None
+    ns._row_steps = [*getattr(ns, "_row_steps", []), step]
+    return ns

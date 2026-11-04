@@ -878,7 +878,7 @@ class FlagCriterionMixin:
         if isinstance(criteria, pl.Expr):
             row_cond = criteria
         else:
-            row_cond = parse_expression(str(criteria))
+            row_cond = parse_expression(str(criteria), self._lazy.collect_schema())
         final_cond = (where_expr & row_cond) if where_expr is not None else row_cond
         expr = pl.when(final_cond).then(pl.lit(flag_value)).otherwise(false_lit).alias(target)
         return self._chain(expr, verb="flag")
@@ -900,8 +900,16 @@ class FlagCriterionMixin:
         Produces three columns following CDISC ADaM conventions:
 
         - ``{prefix}{number}`` — the criterion description (constant string).
-        - ``{prefix}{number}FL`` — ``"Y"`` if condition is met, ``"N"`` otherwise.
-        - ``{prefix}{number}FN`` — ``1`` if met, ``0`` otherwise.
+        - ``{prefix}{number}FL`` — ``"Y"`` if condition is met, ``"N"`` if not.
+        - ``{prefix}{number}FN`` — ``1`` if met, ``0`` if not.
+
+        When the condition is null (for example AVAL is missing), FL and FN are
+        null, as admiral ``derive_vars_crit_flag()``. For a SAP rule "missing is
+        not met", pass ``condition=(...).fill_null(False)``.
+
+        References:
+            admiral ``derive_vars_crit_flag(values_yn = TRUE,
+            create_numeric_flag = TRUE)``; ADR-0033.
 
         Args:
             number: Criterion number (e.g. 1 → CRIT1, CRIT1FL, CRIT1FN).
@@ -933,7 +941,9 @@ class FlagCriterionMixin:
             if description is not None
             else pl.lit(None).cast(pl.String).alias(col_crit)
         )
-        fl_expr = pl.when(condition).then(pl.lit("Y")).otherwise(pl.lit("N")).alias(col_fl)
-        fn_expr = pl.when(condition).then(pl.lit(1)).otherwise(pl.lit(0)).alias(col_fn)
+        fl_expr = (
+            pl.when(condition).then(pl.lit("Y")).when(~condition).then(pl.lit("N")).alias(col_fl)
+        )
+        fn_expr = pl.when(condition).then(pl.lit(1)).when(~condition).then(pl.lit(0)).alias(col_fn)
 
         return self._chain(desc_expr, fl_expr, fn_expr, verb="criterion")

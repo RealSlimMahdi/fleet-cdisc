@@ -138,8 +138,11 @@ name or a fully qualified Python dotted path. The runtime dispatch depends
 on the callable's `kind`:
 
 - **`kind="column"`** (zero-arg, returns `pl.Expr`) — stays fully lazy,
-  no DataFrame materialisation.
-- **`kind="frame"` or `kind="param"`** (receives upstream DataFrame, returns
+  no DataFrame materialisation. It writes the column named as the
+  function, so the function name must be the variable name (or the
+  expression ends with `.alias("<variable>")`); otherwise `from_spec`
+  raises `SpecError`.
+- **`kind="frame"`** (receives upstream DataFrame, returns
   `pl.DataFrame`) — the pipeline is materialised at that point, the function
   is called, and the result is wrapped back into the namespace.
 
@@ -268,6 +271,32 @@ adsl = dm.adam.adsl.first_date(
     "TRTSDT", from_dataset=ex, date_col="EXSTDTC", where=treated
 ).to_frame()
 ```
+
+### Record filters — `row_steps:`
+
+A step that removes records has no variable, so it does not sit in
+`variables:`. It sits in the dataset key `row_steps:`, in pipeline order
+(ADR-0034). Each step names the variable it follows with `after:` (`null`:
+before the first variable), and `from_spec()` runs it right after that
+variable. `whereclauses` keeps the records where `where:` is true; `nodup`
+keeps one record per `subset:` after the sort on `sort_by:`.
+
+```yaml
+datasets:
+  - name: ADSL
+    row_steps:
+      - algorithm: whereclauses
+        where: ARMCD != "SCRNFAIL"
+        after: ARMCD
+    variables:
+      - name: ARMCD
+        derivation: {algorithm: assign}
+```
+
+`to_spec_yaml()` writes these steps from an inline chain. A step it cannot
+write (a `pl.Expr` filter, `derive_param`) is written as `algorithm: TODO`
+with the verb name: `from_spec()` refuses the file until you write the step.
+Define-XML shows the steps as the dataset comment.
 
 ---
 
@@ -634,8 +663,10 @@ How the Origin **description** renders, per origin type:
   carried with `algorithm: assign` and `source:` but still marked `Collected`
   triggers a generation-time warning suggesting the Predecessor form. When
   freezing an inline pipeline, `to_spec_yaml(dataset="ADSL", predecessor="DM")`
-  pre-fills these entries for carry-through columns and pure copies — the
-  emitted YAML stays the explicit, reviewable source of truth.
+  pre-fills these entries for carry-through columns and pure copies of a
+  column present at the start of the chain. A column a verb added with no
+  lineage (`merge`) gets a TODO stub, never a Predecessor. The emitted YAML
+  stays the explicit, reviewable source of truth.
 - **`Derived`** describes the derivation in its `MethodDef`.
 - **`Assigned` / `Protocol`** show the `comment:` — e.g.
   `comment: DM.ARM` renders `Assigned: DM.ARM`.

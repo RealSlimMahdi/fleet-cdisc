@@ -74,6 +74,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
 
     def __init__(self, df: pl.DataFrame | pl.LazyFrame) -> None:
         self._lazy = df.lazy()
+        self._root_lazy = self._lazy  # the start of the chain, for to_spec_yaml()
         self._nsv_meta: list[NSVMeta] = []
         self._domain: str | None = None
         self._pinned: dict[str, tuple[pl.DataFrame, list[str]]] = {}
