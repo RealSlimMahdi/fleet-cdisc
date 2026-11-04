@@ -410,6 +410,50 @@ class TestRawPaths:
         assert ae_built.frame["AGE"].to_list() == [45, 45, 45]
 
 
+class TestSuppFromTheSpec:
+    """c1-105 step A: a qualifier variable goes to SUPP<domain>, not to the parent."""
+
+    def test_qualifier_moves_to_supp_and_later_steps_still_read_it(self, tmp_path: Path) -> None:
+        dm = _DM + (
+            "      - name: SAFETY\n"
+            "        label: Safety Population Flag\n"
+            "        type: text\n"
+            "        role: qualifier\n"
+            "        derivation:\n"
+            "          algorithm: assign\n"
+            "          source: saf\n"
+        )
+        adsl = _ADSL + (
+            "      - name: SAFFL\n"
+            "        type: text\n"
+            "        derivation:\n"
+            "          algorithm: assign\n"
+            "          source: SAFETY\n"
+        )
+        ctx = _write_study(tmp_path, sdtm=dm, adam=adsl)
+        raw = pl.from_repr("""\
+┌────────────────┬─────┬─────┐
+│ patient_number ┆ age ┆ saf │
+│ ---            ┆ --- ┆ --- │
+│ str            ┆ i64 ┆ str │
+╞════════════════╪═════╪═════╡
+│ P1             ┆ 45  ┆ Y   │
+│ P2             ┆ 60  ┆ N   │
+└────────────────┴─────┴─────┘
+""")
+        dm_built, adsl_built = run_study(plan_study(ctx), inputs={"dm_raw": raw})
+
+        assert "SAFETY" not in dm_built.frame.columns
+        assert dm_built.supp is not None
+        assert dm_built.supp.select("RDOMAIN", "USUBJID", "IDVAR", "QNAM", "QVAL").rows() == [
+            ("DM", "P1", None, "SAFETY", "Y"),
+            ("DM", "P2", None, "SAFETY", "N"),
+        ]
+        assert dm_built.supp["QLABEL"].unique().to_list() == ["Safety Population Flag"]
+        assert adsl_built.frame["SAFFL"].to_list() == ["Y", "N"]
+        assert adsl_built.supp is None
+
+
 class TestPlanRefusals:
     def test_a_dataset_without_inputs_is_refused_only_when_it_is_planned(
         self, tmp_path: Path

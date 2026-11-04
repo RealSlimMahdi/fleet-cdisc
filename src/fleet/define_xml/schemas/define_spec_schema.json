@@ -433,7 +433,7 @@
         },
         "role": {
           "type": "string",
-          "description": "Marks the variable as a Non-Standard Variable (qualifier) so supp() can build SUPPQUAL from this spec. Read by SDTMNamespace.supp(spec=...); 'qualifier' is the only value Fleet acts on.",
+          "description": "Marks the variable as a Non-Standard Variable (qualifier). fleet run moves it to SUPP<domain> with SDTMNamespace.export_supp(spec=...); 'qualifier' is the only value Fleet acts on.",
           "enum": [
             "qualifier"
           ]

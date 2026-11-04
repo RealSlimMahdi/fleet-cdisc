@@ -611,6 +611,18 @@ VS Code or any LSP-enabled editor:
 
 ---
 
+## Supplemental qualifiers
+
+An SDTM variable with `role: qualifier` (or `algorithm: nsv`) is a
+Non-Standard Variable. `fleet run` builds it, then moves it to a
+`SUPP<domain>` dataset (SDTMIG 3.4 section 8.4) and writes the parent
+without it. IDVAR is `<domain>SEQ`; only DM may have no IDVAR, so another
+domain with no `--SEQ` stops the run. Later datasets of the same run still
+read the qualifier from the full frame. `fleet define-xml` does not yet
+write a SUPP ItemGroupDef: it lists the qualifier on the parent.
+
+---
+
 ## CRF Page References
 
 Variables with `origin: Collected` can include page references to the annotated
