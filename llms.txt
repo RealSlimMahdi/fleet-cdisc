@@ -1834,17 +1834,17 @@ Available on `df.adam` (BDS base namespace). Shared verbs (source, assign, case_
 - `baseline(target: str, *, aval: str = 'AVAL', baseline_flag: str = 'ABLFL', by: list[str] | None = None, strict: bool = True) -> AdamNamespace` — Derive BASE as the AVAL where the baseline flag equals ``"Y"``.
 - `chg(target: str, *, aval: str = 'AVAL', base: str = 'BASE') -> AdamNamespace` — Compute change from baseline: ``CHG = AVAL - BASE``.
 - `pchg(target: str, *, aval: str = 'AVAL', base: str = 'BASE') -> AdamNamespace` — Compute percent change from baseline.
-- `bmi(target: str, *, weight: str, height: str) -> AdamNamespace` — Derive Body Mass Index: ``weight_kg / (height_cm / 100) ** 2``.
-- `bsa(target: str, *, weight: str, height: str, method: str = 'Mosteller') -> AdamNamespace` — Derive Body Surface Area in m².
-- `map(target: str = 'MAP', *, systolic: str = 'SYSBP', diastolic: str = 'DIABP') -> AdamNamespace` — Derive Mean Arterial Pressure: ``DBP + (SBP - DBP) / 3``.
-- `qtc(target: str = 'QTC', *, qt: str = 'QT', rr: str = 'RR', method: str = 'Fridericia', rr_unit: str = 'ms') -> AdamNamespace` — Derive corrected QT interval, as admiral ``compute_qtc``.
-- `nrind(target: str, *, value: str, low: str, high: str) -> AdamNamespace` — Categorise *value* relative to normal range: LOW / NORMAL / HIGH.
+- `bmi(target: str, *, weight: str, height: str, round_digits: int | None = None) -> AdamNamespace` — Derive Body Mass Index: ``weight_kg / (height_cm / 100) ** 2``.
+- `bsa(target: str, *, weight: str, height: str, method: str = 'Mosteller', round_digits: int | None = None) -> AdamNamespace` — Derive Body Surface Area in m², at full precision.
+- `map(target: str = 'MAP', *, systolic: str = 'SYSBP', diastolic: str = 'DIABP', round_digits: int | None = None) -> AdamNamespace` — Derive Mean Arterial Pressure: ``DBP + (SBP - DBP) / 3``, at full precision.
+- `qtc(target: str = 'QTC', *, qt: str = 'QT', rr: str = 'RR', method: str = 'Fridericia', rr_unit: str = 'ms', round_digits: int | None = None) -> AdamNamespace` — Derive corrected QT interval, as admiral ``compute_qtc``, at full precision.
+- `nrind(target: str, *, value: str, low: str, high: str, signif_dig: int = 15) -> AdamNamespace` — Categorise *value* relative to normal range: LOW / NORMAL / HIGH.
 - `on_treatment(target: str = 'ONTRTFL', *, adt: str, trtsdt: str, trtedt: str, open_ended: bool = True) -> AdamNamespace` — Set *target* to ``"Y"`` when *adt* is within [trtsdt, trtedt].
 - `shift(target: str, *, baseline_cat: str, post_cat: str, sep: str = ' to ') -> AdamNamespace` — Derive a categorical shift label: ``"<baseline><sep><post>"``.
 - `derive_summary_records(*, by: list[str], analysis_var: str = 'AVAL', set_values_to: dict[str, Any], stat: "Literal['mean', 'sum', 'min', 'max', 'median', 'count']" = 'mean') -> AdamNamespace` — Compute a summary statistic per group and append the results as new records.
 - `derive_locf_records(*, by: list[str] | None = None, analysis_var: str = 'AVAL', order_by: str = 'ADT') -> AdamNamespace` — Forward-fill *analysis_var* within each group (LOCF).
 - `derive_param(*, by: list[str] | None = None, set_values_to: dict[str, Any], parameter_filter: dict[str, str], analysis_value: pl.Expr | str, from_dataset: pl.DataFrame | None = None, where: str | pl.Expr | None = None) -> AdamNamespace` — Derive a new parameter (e.g. BMI) from existing records and append
-- `atoxgr(target: str, *, system: str = 'ctcae_v5', direction: str, term_var: str, unit_var: str | None = None, signif_dig: int = 15, indicators: dict[str, list[str]] | None = None) -> AdamNamespace` — Derive a toxicity grade, as admiral ``derive_var_atoxgr_dir``.
+- `atoxgr(target: str, *, system: str = 'ctcae_v5', direction: "Literal['L', 'H']", term_var: str, unit_var: str, signif_dig: int = 15, indicators: dict[str, list[str]] | None = None) -> AdamNamespace` — Derive a toxicity grade, as admiral ``derive_var_atoxgr_dir``.
 - `transform(fn: str | Callable[[pl.DataFrame], pl.DataFrame], *, label: str | None = None) -> AdamNamespace` — Apply an arbitrary ``(pl.DataFrame) -> pl.DataFrame`` function.
 - `from_spec(spec_path: str | Path, *, dataset: str | None = None, only: list[str] | None = None, omit: list[str] | None = None, strict: bool = True, overwrite: bool = False) -> Self` — Build a derivation pipeline from a YAML specification file.
 
@@ -1854,7 +1854,7 @@ Available on `df.adam` (BDS base namespace). Shared verbs (source, assign, case_
 - `last_date(target: str, *, from_dataset: pl.DataFrame, date_col: str, where: str | pl.Expr | None = None, by: list[str] | None = None, impute: str | None = None) -> Self` — Derive *target* as the latest date in *date_col* from *from_dataset*.
 - `duration(target: str, *, start: str | pl.Expr, end: str | pl.Expr, unit: "Literal['seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years']" = 'days', add_one: bool | None = None, out: "Literal['numeric', 'iso8601']" = 'numeric') -> Self` — Compute the duration between two date/datetime columns.
 - `count_events(target: str, *, from_dataset: pl.DataFrame, where: str | pl.Expr | None = None, by: list[str] | None = None) -> Self` — Derive *target* as the count of matching records in *from_dataset*.
-- `age_years(target: str = 'AAGE', *, age_col: str = 'AGE', age_unit_col: str = 'AGEU') -> Self` — Convert age to years, handling common unit strings.
+- `age_years(target: str = 'AAGE', *, age_col: str = 'AGE', age_unit_col: str = 'AGEU', round_digits: int | None = None) -> Self` — Convert age to years, handling common unit strings.
 - `derive_period(*, periods: list[dict[str, Any]]) -> Self` — Create standard Subperiod / Phase variables.
 
 ## OCCDS verbs

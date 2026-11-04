@@ -260,7 +260,7 @@ Importing `fleet` registers chainable namespaces on **every** Polars DataFrame. 
 <details>
 <summary><b><code>df.adam.peds</code></b> — Pediatrics (26 verbs: 6 specific + 20 shared)</summary>
 
-**Specific:** `age_days` · `age_months` · `age_years` · `corrected_age` · `prematurity_flag` · `bmi_category`
+**Specific:** `age_days` · `age_months` · `age_years` · `corrected_age` · `prematurity_flag` · `bmi_percentile_category`
 
 **Shared:** `source` · `assign` · `case_when` · `derivation` · `recode` · `merge` · `keep` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `pick` · `pin` · `repin` · `join_adsl` · `study_day` · `nodup` · `fk_policy` · `pins`
 
@@ -276,9 +276,9 @@ Importing `fleet` registers chainable namespaces on **every** Polars DataFrame. 
 </details>
 
 <details>
-<summary><b><code>df.adam.metabolic</code></b> — Metabolic (24 verbs: 4 specific + 20 shared)</summary>
+<summary><b><code>df.adam.metabolic</code></b> — Metabolic (25 verbs: 5 specific + 20 shared)</summary>
 
-**Specific:** `waist_hip_ratio` · `waist_height_ratio` · `body_fat_pct` · `visceral_fat_flag`
+**Specific:** `waist_hip_ratio` · `waist_height_ratio` · `body_fat_pct` · `visceral_fat_flag` · `bmi_category_adult`
 
 **Shared:** `source` · `assign` · `case_when` · `derivation` · `recode` · `merge` · `keep` · `whereclauses` · `merge_adsl` · `date` · `duration` · `flag` · `pick` · `pin` · `repin` · `join_adsl` · `study_day` · `nodup` · `fk_policy` · `pins`
 
