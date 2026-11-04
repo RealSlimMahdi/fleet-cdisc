@@ -58,7 +58,7 @@ _RULE_TEMPLATE: dict = {
     },
     "Rule Type": "Record Data",
     "Scope": {
-        "Classes": {"Include": ["EVENTS"]},
+        "Classes": {"Include": ["ALL"]},
         "Domains": {"Include": []},
     },
     "Sensitivity": "Record",

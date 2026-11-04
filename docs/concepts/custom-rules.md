@@ -121,7 +121,7 @@ Rule Type: Record Data       # Record-level check
 
 Scope:
   Classes:
-    Include: [EVENTS]
+    Include: [ALL]           # Every class; Domains below sets the scope
   Domains:
     Include: [AE]            # Restrict to the AE domain
 
