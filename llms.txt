@@ -1311,8 +1311,8 @@ adae_sourced = ae_with_trt.adam.from_spec(ADAM_SPEC, dataset="ADAE", omit=["STUD
 adae = (
     adae_sourced.adam.occds.treatment_emergent(
         "TRTEMFL",
-        start_date="AESTDTC",
-        end_date="AEENDTC",
+        start_date="ASTDT",
+        end_date="AENDT",
         trtsdt="TRTSDT",
         trtedt="TRTEDT",
         end_window=0,

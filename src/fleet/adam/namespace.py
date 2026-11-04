@@ -346,6 +346,11 @@ class AdamNamespace(SharedADaMVerbsMixin):
 
         When *open_ended* is ``True`` (default) and *trtedt* is null, the
         interval is treated as ongoing (``adt >= trtsdt`` suffices).
+        ``--DTC`` text is read by its date portion (a partial or blank
+        value gives null); a number raises.  When *adt* and *trtsdt* are
+        both ``pl.Datetime``, the start comparison keeps the time, so a
+        pre-dose record on the first dose day is not on treatment; the end
+        comparison is at date level.
 
         Args:
             target: Name of the output column (default ``"ONTRTFL"``).
@@ -356,6 +361,10 @@ class AdamNamespace(SharedADaMVerbsMixin):
 
         Returns:
             AdamNamespace: The namespace with *target* appended.
+
+        References:
+            admiral ``derive_var_ontrtfl`` (start compared with time when
+            both are date-times); ADR-0011 and ADR-0022.
 
         Examples:
             Derive on-treatment flag::
@@ -374,6 +383,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 trtedt=trtedt,
                 target=target,
                 open_ended=open_ended,
+                dtypes=self._lazy.collect_schema(),
             ),
             verb="on_treatment",
         )

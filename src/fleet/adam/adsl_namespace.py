@@ -28,6 +28,7 @@ from typing import Any, Self
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
+from fleet.core.dtc import to_day
 
 
 @pl.api.register_lazyframe_namespace("adsl")
@@ -131,9 +132,12 @@ class ADSLNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        days = (
-            pl.col(reference_date).cast(pl.Date) - pl.col(birth_date).cast(pl.Date)
-        ).dt.total_days()
+        schema = self._lazy.collect_schema()
+        ref, birth = (
+            to_day(pl.col(c), schema.get(c), verb="age_from_dates").cast(pl.Date)
+            for c in (reference_date, birth_date)
+        )
+        days = (ref - birth).dt.total_days()
         expr = days / 365.25
         if round_digits is not None:
             expr = expr.round(round_digits)

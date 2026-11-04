@@ -123,7 +123,7 @@ class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         schema = self._lazy.collect_schema()
 
         def day(name: str) -> pl.Expr:
-            return to_day(pl.col(name), schema.get(name)).cast(pl.Date)
+            return to_day(pl.col(name), schema.get(name), verb="treatment_emergent").cast(pl.Date)
 
         start, trt_start = day(start_date), day(trtsdt)
         ref = trt_start + pl.duration(days=offset_days) if offset_days else trt_start
@@ -156,7 +156,8 @@ class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         """Flag events that started on/after the reference date and have recovered.
 
         Sets *target* to ``"Y"`` when *start_date* >= *ref_date* and
-        *end_date* is not null.
+        *end_date* is not null.  ``--DTC`` text is read by its date portion
+        (a partial or blank start gives no flag); a number raises.
 
         Args:
             target: Name of the output flag column.
@@ -177,7 +178,10 @@ class OCCDSNamespace(SharedADaMVerbsMixin, MultiRowMixin):
                     .to_frame()
                 )
         """
-        cond = (pl.col(start_date).cast(pl.Date) >= pl.col(ref_date).cast(pl.Date)) & pl.col(
-            end_date
-        ).is_not_null()
+        schema = self._lazy.collect_schema()
+
+        def day(name: str) -> pl.Expr:
+            return to_day(pl.col(name), schema.get(name), verb="onset_recovery").cast(pl.Date)
+
+        cond = (day(start_date) >= day(ref_date)) & pl.col(end_date).is_not_null()
         return self._chain(pl.when(cond).then(pl.lit("Y")).otherwise(pl.lit(None)).alias(target))
