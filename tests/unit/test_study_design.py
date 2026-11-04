@@ -111,9 +111,21 @@ class TestStudyDesignDerivation:
 
     def test_mermaid_round_trip(self, design):
         text = design.to_mermaid()
-        parsed = StudyDesign.from_mermaid(text, study_id=design.study_id)
+        parsed = StudyDesign.from_mermaid(
+            text, study_id=design.study_id, arm_names=design.arm_names
+        )
         assert parsed.arms == design.arms
         assert {e.etcd for e in parsed.elements} == {e.etcd for e in design.elements}
+        # c1-660: TA and TE agree on the columns the diagram carries.
+        ta_cols = ["ARMCD", "ARM", "TAETORD", "ETCD", "ELEMENT", "TABRANCH", "EPOCH"]
+        assert parsed.to_ta().select(ta_cols).equals(design.to_ta().select(ta_cols))
+        te_cols = ["ETCD", "ELEMENT", "TEDUR"]
+        assert (
+            parsed.to_te()
+            .select(te_cols)
+            .sort("ETCD")
+            .equals(design.to_te().select(te_cols).sort("ETCD"))
+        )
 
     def test_yaml_round_trip(self, design, tmp_path):
         path = tmp_path / "trial_design.yaml"

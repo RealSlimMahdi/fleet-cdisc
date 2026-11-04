@@ -1805,7 +1805,9 @@ def _run_tdd_ctgov(args: argparse.Namespace) -> None:
             f"trial design spec not found: {design_path}. "
             "Create it first, or run without --write to print the YAML."
         )
-    data = yaml.safe_load(design_path.read_text(encoding="utf-8"))
+    from fleet.sdtm.design import load_strict_yaml
+
+    data = load_strict_yaml(design_path.read_text(encoding="utf-8"))
     root = data.get("trial_design", data)
     existing = {(p.get("tsparmcd"), p.get("tsseq", 1)) for p in root.get("parameters") or []}
     added = [p for p in params if (p["tsparmcd"], p.get("tsseq", 1)) not in existing]

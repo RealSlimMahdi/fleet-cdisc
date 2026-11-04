@@ -4,7 +4,8 @@ Fleet provides first-class support for all nine CDISC Trial Design Model (TDD)
 domains through two complementary paths:
 
 1. **`fleet.StudyDesign`** — a typed aggregate: define the design once,
-   derive every domain, audit it, and round-trip through YAML / Mermaid / USDM.
+   derive every domain, audit it, round-trip it through YAML, import it from
+   USDM, and draw it as a Mermaid review diagram.
 2. **Row-level pipeline** — a fixed-sequence verb chain with rich Pydantic
    models and collection-level validators, for full row control.
 
@@ -77,14 +78,45 @@ frames = design.domains()  # or every populated domain: {"TE": df, "TA": df, ...
 
 Referential integrity is validated at construction: arm paths must reference
 defined elements, visit `armcd` values must reference defined arms, and
-element codes must be unique.
+element codes must be unique. A key that the model does not read raises, in
+Python and in `trial_design.yaml`, and so does a repeated YAML key.
+
+### Arm paths: steps, branches and epochs
+
+A path entry is an ETCD, or a step that gives the TA values of one position
+([ADR 0036](../adr/0036-an-arm-path-entry-is-an-element-or-a-step.md)):
+
+```python
+design = fleet.StudyDesign(
+    study_id="S1",
+    elements=[...],
+    arms={
+        "AB": ["SCRN", "A", "WO", "B"],
+        "BA": [
+            "SCRN",
+            {"etcd": "B", "epoch": "TREATMENT 1"},  # crossover: epoch by position
+            "WO",
+            {"etcd": "A", "epoch": "TREATMENT 2"},
+        ],
+    },
+    randomized_at="SCRN",  # TABRANCH "Randomized to <arm>" on SCRN
+)
+```
+
+TABRANCH defaults to `Randomized to <arm>` on the last element that every
+arm shares, or on the `randomized_at` element. When the branch is not a
+randomization (a responder extension, a cohort assignment), give the real
+rule on the step: `{"etcd": "CORE", "tabranch": "Responder at end of Core"}`.
+`tatrans` gives TATRANS the same way. `design.audit()` warns when two arms
+have the same path (FLEETTD04) and when an element repeats in an arm with no
+per-position epoch (FLEETTD05).
 
 ### Interchange formats
 
 | Method | Direction | Use case |
 | ------ | --------- | -------- |
 | `StudyDesign.from_yaml(path)` / `design.to_yaml(path)` | YAML ⇄ | `trial_design.yaml` spec, versioned next to `define.yaml` |
-| `StudyDesign.from_mermaid(text, study_id=...)` / `design.to_mermaid()` | Mermaid ⇄ | Diagram-as-code; protocol review decks |
+| `StudyDesign.from_mermaid(text, study_id=...)` / `design.to_mermaid()` | Mermaid ⇄ | Review diagram: arm paths, ETCD, ELEMENT, TEDUR, epochs. Not ARM, rules, TABRANCH or a crossover; YAML is the lossless path |
 | `StudyDesign.from_usdm(json_dict)` | USDM → | Import a CDISC USDM / DDF export (e.g. from OpenStudyBuilder): arms, epochs, elements, study cells, encounters, eligibility criteria |
 | `TrialParameters.from_ctgov("NCT...")` | ctgov → | Seed TS from the ClinicalTrials.gov v2 API |
 
@@ -397,5 +429,13 @@ design = fleet.StudyDesign.from_mermaid(
     study_id="CDISCPILOT01",
 )
 
-print(design.to_mermaid())  # and back out — protocol-vs-datasets QC
+print(design.to_mermaid())  # a review view; YAML is the lossless round trip
 ```
+
+The parser reads the drawn structure or raises. Every line must be a
+header, a `subgraph`, an `end`, a node, an edge or a `%%` comment. A fork
+must label each edge with its ARMCD. A cycle (a crossover or an element
+that repeats in an arm), a node with no edge, a node outside a subgraph,
+more than one start node and an empty diagram raise a `ValueError`. A
+subgraph title that is not a C99079 term is kept as a sponsor epoch, with a
+warning.
