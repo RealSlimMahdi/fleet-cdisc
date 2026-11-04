@@ -712,6 +712,31 @@ class TestMethodTextShapes:
     """One verb, several reviewer texts: the keys given in the block pick the shape."""
 
     @pytest.mark.parametrize(
+        "doc",
+        [
+            "Y when baseline BMI >= 18.5 kg/m2 and AGE >= 65.",
+            "Derived per SAP v2.1 section 3.4 using the LOCF rule.",
+            # formula case: asterisks are multiplication, not reST emphasis
+            "Dose per kg = AVAL*1000/WEIGHT*FREQ, rounded to 2 decimals.",
+            "BSA = 0.007184*HEIGHT**0.725*WEIGHT**0.425 (DuBois).",
+        ],
+    )
+    def test_a_docstring_method_text_keeps_numbers_and_operators(self, doc):
+        """c1-732: the summary cut at 18.5 and the markup strip removed asterisks."""
+        from fleet.core.algorithm_resolver import docstring_summary
+        from fleet.define_xml.semantic_checks import REST_EMPHASIS
+        from fleet.define_xml.spec_generator import _strip_rest_markup
+
+        text = _strip_rest_markup(docstring_summary(doc + "\n\nMore detail. Not in the text."))
+        assert text == doc
+        assert REST_EMPHASIS.search(text) is None
+
+    def test_rest_markup_is_still_stripped(self):
+        from fleet.define_xml.spec_generator import _strip_rest_markup
+
+        assert _strip_rest_markup("Copy of ``AGE`` into *target*.") == "Copy of AGE into target."
+
+    @pytest.mark.parametrize(
         ("params", "text"),
         [
             ({"source": "sex"}, "Direct copy of sex."),

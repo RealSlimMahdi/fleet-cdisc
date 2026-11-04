@@ -35,6 +35,7 @@ from fleet.core._verb_mixin import _import_derivations_module
 from fleet.core.algorithm_resolver import docstring_summary, resolve_callable_docstring
 from fleet.core.define_spec import load_define_spec, load_spec_yaml
 from fleet.core.exceptions import SpecError
+from fleet.define_xml.semantic_checks import REST_EMPHASIS
 
 _SCHEMA_PATH = Path(__file__).parent / "schemas" / "define_spec_schema.json"
 
@@ -95,7 +96,7 @@ def _is_plain_copy(block: dict) -> bool:
 
 #: reST formatting in study docstrings (````code````, ``ref``, *emphasis*)
 #: is noise in a regulatory document — content kept, markup dropped.
-_REST_MARKUP = re.compile(r"``([^`]+)``|`([^`]+)`|\*([^*\s][^*]*)\*")
+_REST_MARKUP = re.compile(r"``([^`]+)``|`([^`]+)`|" + REST_EMPHASIS.pattern)
 
 
 def _strip_rest_markup(text: str) -> str:
