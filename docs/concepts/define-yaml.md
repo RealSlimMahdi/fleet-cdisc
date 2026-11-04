@@ -379,6 +379,12 @@ The spec keys below apply to every generation:
 - **`output:`** — per-dataset Define-XML leaf href, used verbatim. It names
   the leaf only: `fleet run` still writes `<name>.<ext>` and warns when the
   two differ.
+- **`sdtm_role:`** — per-variable SDTM role (`Identifier`, `Topic`,
+  `Timing`, `Grouping Qualifier`, `Result Qualifier`, `Synonym Qualifier`,
+  `Record Qualifier`, `Variable Qualifier`, `Rule`), written as the ItemRef
+  `Role`. `fleet init define` fills it from the CDISC Library; check a
+  sponsor-specific role by hand (ADR 0043). It is apart from `role:
+  qualifier`, which only marks a Non-Standard Variable for `supp()`.
 - **`value_level:`** — value-level metadata entries emitted as Define-XML
   `<ValueListDef>` / where-clause elements.
 - **`ct: {validate: true, file: ...}`** — opt the spec into CT validation

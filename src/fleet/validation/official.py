@@ -250,6 +250,7 @@ class OfficialCDISCValidator:
         version: str,
         custom_rules: Path | None = None,
         timeout: float = 300,
+        define_xml: Path | None = None,
     ) -> dict[str, ValidationResult]:
         """Validate several datasets of one standard in one engine run.
 
@@ -264,6 +265,8 @@ class OfficialCDISCValidator:
             version: Engine IG version, dashed (``"3-4"``).
             custom_rules: Directory of custom CORE rules.
             timeout: Seconds before the engine run is stopped.
+            define_xml: A Define-XML file each engine run checks with the
+                datasets (``-dxp``), or ``None``.
 
         Returns:
             dict[str, ValidationResult]: One result per dataset name.  A
@@ -286,8 +289,14 @@ class OfficialCDISCValidator:
             data_dir.mkdir()
             for name, df in datasets.items():
                 self._write_dataset_json(df, data_dir / f"{name}.json", domain=name)
+            define_args = ["-dxp", str(define_xml)] if define_xml is not None else []
             outcomes = self._run_sources(
-                ["-d", str(data_dir)], standard, version, custom_rules, timeout, tmpdir_path
+                ["-d", str(data_dir), *define_args],
+                standard,
+                version,
+                custom_rules,
+                timeout,
+                tmpdir_path,
             )
         return _join_sources(
             (

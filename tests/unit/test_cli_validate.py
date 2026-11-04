@@ -530,3 +530,31 @@ class TestRelativePaths:
         _run(["validate", "data/sdtm/ae.parquet"])
 
         assert engine.calls[0][0] == str((study / "bin" / "core").resolve())
+
+
+class TestDefineXml:
+    """c1-268: --define passes a Define-XML to CORE (-dxp); never by default."""
+
+    def test_no_define_is_passed_by_default(self, study: Path, engine: FakeEngine) -> None:
+        _run(["validate", "data/sdtm/ae.parquet"])
+
+        assert "-dxp" not in engine.calls[0]
+
+    def test_the_define_flag_reaches_the_engine_absolute_and_the_header(
+        self, study: Path, engine: FakeEngine, capsys: pytest.CaptureFixture
+    ) -> None:
+        (study / "define_sdtm.xml").write_text("<ODM/>", encoding="utf-8")
+
+        assert _run(["validate", "data/sdtm/ae.parquet", "--define", "define_sdtm.xml"]) == 0
+
+        cmd = engine.calls[0]
+        assert cmd[cmd.index("-dxp") + 1] == str((study / "define_sdtm.xml").resolve())
+        assert "Define-XML:   " in capsys.readouterr().out
+
+    def test_a_define_that_does_not_exist_could_not_run(
+        self, study: Path, engine: FakeEngine, capsys: pytest.CaptureFixture
+    ) -> None:
+        assert _run(["validate", "data/sdtm/ae.parquet", "--define", "nowhere.xml"]) == 2
+
+        assert "nowhere.xml" in capsys.readouterr().err
+        assert engine.calls == []

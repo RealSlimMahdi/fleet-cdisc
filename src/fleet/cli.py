@@ -993,6 +993,7 @@ def _run_validate(args: argparse.Namespace) -> None:
             custom_rules=args.custom_rules,
             timeout=args.timeout,
             config=Path(args.config) if args.config else None,
+            define_xml=args.define,
         )
     except ValidationSetupError as exc:
         _fail(str(exc), code=_VALIDATE_COULD_NOT_RUN)
@@ -1010,6 +1011,7 @@ def _run_validate(args: argparse.Namespace) -> None:
             version=setup.ig_version.value,
             custom_rules=setup.custom_rules.value,
             timeout=setup.timeout.value,
+            define_xml=setup.define_xml.value,
         )
         setups = {d.name: d.setup for d in datasets}
         for name, result in by_name.items():
@@ -2559,6 +2561,15 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         help=(
             "IG version. Default: the sdtm/adam ig_version declared in the "
             "discovered study_config.yaml (3.4 / 1.3 outside a study)."
+        ),
+    )
+    validate.add_argument(
+        "--define",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Define-XML file that CORE checks with the datasets (CORE -dxp). Opt-in: "
+            "Fleet never passes a define by default."
         ),
     )
     validate.add_argument(

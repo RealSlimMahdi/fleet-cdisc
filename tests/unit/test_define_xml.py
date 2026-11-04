@@ -501,3 +501,40 @@ class TestCodeLists:
         assert "C99999" in message
         assert "ADVS.SEX" in message
         assert "CL.PARAMCD" in message and "C66731" in message  # declared OIDs listed
+
+
+class TestItemRefRole:
+    """c1-268 (ADR 0043): the SDTM role of a variable is the ItemRef Role (CORE CG0010)."""
+
+    def test_sdtm_role_becomes_the_itemref_role_and_the_file_validates(self, tmp_path):
+        spec = yaml.safe_load(yaml.safe_dump(FIXTURE_SPEC))
+        spec["datasets"][0]["variables"][0]["sdtm_role"] = "Identifier"
+        p = tmp_path / "define.yaml"
+        p.write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
+        out = tmp_path / "define.xml"
+
+        DefineSpecGenerator(p).generate(out, html_preview=False)
+
+        root = ET.fromstring(out.read_text(encoding="utf-8"))
+        name = spec["datasets"][0]["variables"][0]["name"]
+        refs = {
+            r.get("ItemOID"): r
+            for g in root.iter(f"{ODM}ItemGroupDef")
+            if g.get("Name") == spec["datasets"][0]["name"]
+            for r in g.iter(f"{ODM}ItemRef")
+        }
+        roles = {oid: r.get("Role") for oid, r in refs.items()}
+        assert [oid for oid, role in roles.items() if role] == [next(iter(refs))]
+        assert roles[next(iter(refs))] == "Identifier"
+        assert name in next(iter(refs))
+
+    def test_a_variable_without_sdtm_role_has_no_role(self, root):
+        assert all(r.get("Role") is None for r in root.iter(f"{ODM}ItemRef"))
+
+    def test_fleet_init_define_fills_the_role_from_the_library(self):
+        from fleet.core.scaffolder import parse_ig_variable
+
+        var = {"name": "STUDYID", "label": "Study Identifier", "core": "Req", "role": "Identifier"}
+
+        assert parse_ig_variable(var)["sdtm_role"] == "Identifier"
+        assert "sdtm_role" not in parse_ig_variable({"name": "AVAL", "core": "Cond"})

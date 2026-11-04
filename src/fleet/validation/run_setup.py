@@ -83,6 +83,8 @@ class RunSetup:
         study_config: The ``study_config.yaml`` used, or ``None``.
         timeout: Seconds before an engine run is stopped.
         accepted: The findings ``validation.accepted`` accepts (ADR-0017).
+        define_xml: The Define-XML CORE checks with the datasets (``-dxp``),
+            or ``None``.  Only an argument sets it; it is never a default.
     """
 
     standard: Resolved[Standard]
@@ -92,6 +94,7 @@ class RunSetup:
     study_config: Path | None
     timeout: Resolved[float] = Resolved(DEFAULT_TIMEOUT, "default")
     accepted: tuple[AcceptedFinding, ...] = ()
+    define_xml: Resolved[Path | None] = Resolved(None, "default")
 
     @property
     def engine_version(self) -> str:
@@ -112,10 +115,16 @@ class RunSetup:
         """Each input with its source, for the report header."""
         rules = self.custom_rules.value
         engine = self.engine.value
+        define = (
+            [f"Define-XML:   {self.define_xml.value} ({self.define_xml.source})"]
+            if self.define_xml.value is not None
+            else []
+        )
         return [
             f"Standard:     {_IG_LABELS[self.standard.value]} ({self.standard.source})",
             f"IG version:   {self.ig_version.value} ({self.ig_version.source})",
             f"Custom rules: {rules if rules is not None else 'none'} ({self.custom_rules.source})",
+            *define,
             f"Engine:       {engine if engine is not None else 'not found'} ({self.engine.source})",
             f"CORE version: {self.engine_version}{untested_note(self.engine_version)}",
             f"Timeout:      {self.timeout.value:g} s ({self.timeout.source})",
@@ -137,6 +146,7 @@ def build_run_setup(
     config: Path | None = None,
     start: Path | None = None,
     environ: Mapping[str, str] | None = None,
+    define_xml: str | Path | None = None,
 ) -> RunSetup:
     """Resolve every input of one validation and record where each came from.
 
@@ -156,6 +166,8 @@ def build_run_setup(
             (default: the working directory).
         environ: Environment for ``FLEET_RULES_ENGINE``
             (default: ``os.environ``).
+        define_xml: A Define-XML file CORE checks with the datasets.
+            Opt-in only: Fleet never passes a define by default.
 
     Returns:
         RunSetup: The frozen record of the inputs.
@@ -163,8 +175,8 @@ def build_run_setup(
     Raises:
         ValidationSetupError: The validation could not run: the study
             config is invalid, two sources name different standards, the
-            IG version is not supported, or the custom rules directory does
-            not exist.
+            IG version is not supported, the custom rules directory does
+            not exist, or the Define-XML file does not exist.
 
     Examples:
         The setup the ``.adam.validate("ADAE")`` verb builds inside a study::
@@ -188,7 +200,17 @@ def build_run_setup(
         study_config=config_path,
         timeout=_resolve_timeout(timeout, ctx),
         accepted=tuple(ctx.config.validation.accepted) if ctx is not None else (),
+        define_xml=_resolve_define_xml(define_xml),
     )
+
+
+def _resolve_define_xml(define_xml: str | Path | None) -> Resolved[Path | None]:
+    if define_xml is None:
+        return Resolved(None, "default")
+    path = Path(define_xml).resolve()
+    if not path.is_file():
+        raise _refuse(f"the Define-XML file {define_xml} (from the argument) does not exist.")
+    return Resolved(path, "argument")
 
 
 #: Dataset file types a sweep picks up from a directory.
@@ -246,6 +268,7 @@ def build_sweep(
     config: Path | None = None,
     start: Path | None = None,
     environ: Mapping[str, str] | None = None,
+    define_xml: str | Path | None = None,
 ) -> Sweep:
     """Resolve the run setup of every dataset a ``fleet validate`` call names.
 
@@ -267,6 +290,7 @@ def build_sweep(
             (default: the working directory).
         environ: Environment for ``FLEET_RULES_ENGINE``
             (default: ``os.environ``).
+        define_xml: A Define-XML file CORE checks with the datasets (opt-in).
 
     Returns:
         Sweep: Every dataset with its run setup or its reason.
@@ -298,6 +322,7 @@ def build_sweep(
                 timeout=timeout,
                 config=config_path,
                 environ=environ,
+                define_xml=define_xml,
             )
         except ValidationSetupError as exc:
             datasets.append(SweepDataset(path, None, str(exc)))

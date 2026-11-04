@@ -679,6 +679,8 @@ class DefineSpecGenerator:
             }
             if var_name in key_vars:
                 ref_attrs["KeySequence"] = str(key_order[var_name])
+            if var.get("sdtm_role"):
+                ref_attrs["Role"] = var["sdtm_role"]
             # Define-XML 2.1 places MethodOID on the ItemRef (usage site),
             # not on the ItemDef — and only Derived-origin variables carry
             # a computational method (a collected column rename is not a
