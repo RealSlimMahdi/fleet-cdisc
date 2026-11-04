@@ -229,7 +229,7 @@ def run_spec(
         groupby: Treatment-arm column override.
 
     Returns:
-        pl.DataFrame: The {cards}-compatible ARD (tables) or plain
+        pl.DataFrame: The ARD in the {cards} long layout (tables) or plain
             listing DataFrame (listings).
 
     Raises:

@@ -111,7 +111,7 @@ class CMTLGNamespace(BuilderVerbsMixin):
                 default spec is used.
 
         Returns:
-            pl.DataFrame: Long-format {cards}-compatible ARD with columns
+            pl.DataFrame: ARD in the {cards} long layout, with columns
                 ``group1``, ``group1_level``, ``group2``, ``group2_level``,
                 ``variable``, ``variable_level``, ``stat_name``,
                 ``stat_label``, ``stat``, ``fmt_fn``, ``stat_fmt``,
@@ -166,7 +166,7 @@ class CMTLGNamespace(BuilderVerbsMixin):
             spec: Optional ``CMByPTSpec`` override.
 
         Returns:
-            pl.DataFrame: Long-format {cards}-compatible ARD.
+            pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
             ``ard = adcm.tlg.cm.t_by_pt(groupby="TRTA", adsl=adsl)``

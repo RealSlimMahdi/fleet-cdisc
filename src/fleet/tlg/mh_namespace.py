@@ -65,7 +65,7 @@ class MHTLGNamespace(BuilderVerbsMixin):
             spec: Optional ``MHSummarySpec`` override.
 
         Returns:
-            pl.DataFrame: {cards}-compatible ARD.
+            pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
             ``ard = admh.tlg.mh.t_summary(groupby="TRTA", adsl=adsl)``

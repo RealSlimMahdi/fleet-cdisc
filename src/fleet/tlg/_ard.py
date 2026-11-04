@@ -247,7 +247,7 @@ def format_ard(ard: pl.DataFrame) -> pl.DataFrame:
 
 
 def validate_ard(df: pl.DataFrame, *, strict: bool = True) -> list[str]:
-    """Validate that *df* conforms to the {cards}-compatible ARD schema.
+    """Validate that *df* conforms to the Fleet ARD schema.
 
     Checks required column presence, data types, and structural integrity.
     Group columns (``group1``, ``group2``, etc.) are optional — matching
@@ -763,7 +763,7 @@ def ard_row(
     warning: str | None = None,
     error: str | None = None,
 ) -> dict[str, Any]:
-    """Build a single ARD row dict ({cards}-compatible).
+    """Build a single ARD row dict (the {cards} long layout).
 
     Args:
         group1: Primary grouping variable name.
@@ -804,7 +804,7 @@ def ard_row(
 
 
 def rows_to_ard(rows: list[dict[str, Any]]) -> pl.DataFrame:
-    """Convert a list of ARD row dicts to a {cards}-compatible Polars DataFrame.
+    """Convert a list of ARD row dicts to a Polars DataFrame in the {cards} long layout.
 
     The ARD ``stat`` column is Float64.  A value that cannot be coerced
     to a float raises instead of being silently nulled — a nulled
@@ -1099,7 +1099,12 @@ def summarize_ard(
     leaf_rank: tuple[Sequence[str], str] | None = None,
     adsl_group_col: str | None = None,
 ) -> pl.DataFrame:
-    """Build a {cards}-compatible ARD — the single shared TLG engine.
+    """Build an ARD in the {cards} long layout: the single shared TLG engine.
+
+    The layout follows {cards}, but the names differ: ``fmt_fn`` (not
+    ``fmt_fun``), ``pct`` on 0 to 100 (not ``p`` on 0 to 1), and big-N
+    rows with ``variable=""``.  Convert the ARD before you give it to R
+    tools such as gtsummary.
 
     Every summary table (categorical counts and continuous statistics)
     goes through this function: big-N rows, header rows (``OverallStat``),
@@ -1164,7 +1169,7 @@ def summarize_ard(
             ``TRT01A``).  The arm values must match.
 
     Returns:
-        pl.DataFrame: Validated {cards}-compatible ARD.
+        pl.DataFrame: Validated ARD in the {cards} long layout.
 
     Raises:
         SchemaError: On missing group column, missing percentage
@@ -1495,7 +1500,7 @@ def summarize_spec(
         adsl: ADSL for big-N denominators and the arm universe.
 
     Returns:
-        pl.DataFrame: Validated {cards}-compatible ARD.
+        pl.DataFrame: Validated ARD in the {cards} long layout.
 
     Raises:
         SchemaError: If the frame fails the spec's validation, or on any

@@ -170,7 +170,7 @@ class EGTLGNamespace(BuilderVerbsMixin):
                 default spec is used.
 
         Returns:
-            pl.DataFrame: Long-format {cards}-compatible ARD.
+            pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
             Zero-config EG summary::
@@ -212,7 +212,7 @@ class EGTLGNamespace(BuilderVerbsMixin):
             spec: Optional ``EGChgSpec`` override.
 
         Returns:
-            pl.DataFrame: {cards}-compatible ARD.
+            pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
             ``ard = adeg.tlg.eg.t_chg(groupby="TRTA", adsl=adsl)``
@@ -247,7 +247,7 @@ class EGTLGNamespace(BuilderVerbsMixin):
             spec: Optional ``EGQtcatSpec`` override.
 
         Returns:
-            pl.DataFrame: {cards}-compatible ARD.
+            pl.DataFrame: ARD in the {cards} long layout.
 
         Raises:
             SchemaError: If one subject has two records in one parameter

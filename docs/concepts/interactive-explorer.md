@@ -30,7 +30,10 @@ interactive:
 
 Axes: `groupby` (arm column), `population` (ADSL filter presets),
 `dataset_filter`, and `stats`. Each axis needs exactly one `default: true`;
-an absent axis stays fixed at the spec value.
+an absent axis stays fixed at the spec value. Each default must equal the spec
+field it maps onto (`groupby` to `columns[0]`, `population` to `adsl_filter`,
+`dataset_filter` to `dataset_filter`, `stats` to `statistics`). If not, the
+spec does not load, and the error names the axis.
 
 ## Two run modes, same artifact
 
@@ -53,10 +56,12 @@ requests.
 ## Why drift is impossible
 
 - The batch output **is** the explorer's default variant — same functions, same
-  build. A golden test pins them byte-identical.
+  build. A golden test pins them byte-identical, and the spec refuses to load
+  when an axis default differs from the spec field that batch reads.
 - Promotion needs no transcription: the "show definition" panel displays the
-  current view's spec YAML; adopting it means saving that YAML into your specs
-  directory, which the batch run then consumes.
+  current view's spec YAML, with that view's choices marked `default: true`;
+  adopting it means saving that YAML into your specs directory, which the
+  batch run then consumes.
 
 ## Limits
 

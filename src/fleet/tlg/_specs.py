@@ -550,7 +550,55 @@ class TLGSpec(BaseModel):
                 "interactive.groupby needs a summary spec — listings have no "
                 "column grouping. Remove the axis."
             )
+        self._check_interactive_defaults()
         return self
+
+    def _check_interactive_defaults(self) -> None:
+        """Reject an axis default that differs from the spec field it maps onto.
+
+        The explorer marks the all-defaults variant as the batch output.
+        That claim holds only when each axis default equals the
+        top-level field that ``fleet tlg run`` reads.  Filters compare
+        as parsed expressions, so a whitespace difference does not count.
+
+        Raises:
+            ValueError: Names the axis, its default and the spec value.
+        """
+        block = self.interactive
+        assert block is not None
+        mismatches: list[str] = []
+        gb = block.groupby
+        columns = getattr(self, "columns", None)
+        if gb is not None and columns and gb.default != columns[0]:
+            mismatches.append(
+                f"interactive.groupby default {gb.default!r} differs from columns[0] {columns[0]!r}"
+            )
+        for axis, field in (("population", "adsl_filter"), ("dataset_filter", "dataset_filter")):
+            options = getattr(block, axis)
+            if options is None:
+                continue
+            chosen = next(o for o in options if o.default)
+            expected, actual = resolve_filter(chosen.filter), resolve_filter(getattr(self, field))
+            if expected is None or actual is None:
+                same = expected is None and actual is None
+            else:
+                same = expected.meta.eq(actual)
+            if not same:
+                mismatches.append(
+                    f"interactive.{axis} default {chosen.label!r} ({chosen.filter!r}) "
+                    f"differs from {field} ({getattr(self, field)!r})"
+                )
+        if block.stats is not None:
+            chosen = next(o for o in block.stats if o.default)
+            if list(chosen.statistics or []) != list(getattr(self, "statistics", None) or []):
+                mismatches.append(
+                    f"interactive.stats default {chosen.label!r} differs from statistics"
+                )
+        if mismatches:
+            raise ValueError(
+                "; ".join(mismatches) + ". The default variant is the batch output: make each axis "
+                "default equal to the spec field."
+            )
 
     @field_validator("schema_version", mode="before")
     @classmethod
@@ -738,12 +786,11 @@ class TLGSpec(BaseModel):
                     "Use a string expression instead."
                 )
         data = self.model_dump(exclude_none=True, exclude_defaults=False)
-        # An explicit prefilter=None switches a template's default rule
-        # off; dropping it would bring the default back on reload.
-        if "prefilter" in self.model_fields_set and getattr(self, "prefilter", 0) is None:
-            data["prefilter"] = None
-        if "missing" in self.model_fields_set and getattr(self, "missing", 0) is None:
-            data["missing"] = None
+        # An explicit None switches a template's default rule off;
+        # dropping it would bring the default back on reload.
+        for field_name in ("prefilter", "uncoded", "missing"):
+            if field_name in self.model_fields_set and getattr(self, field_name, 0) is None:
+                data[field_name] = None
         # Convert enums to their values
         data = _enum_to_value(data)
         return yaml.dump(data, default_flow_style=False, sort_keys=False)

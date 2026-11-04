@@ -39,7 +39,7 @@ import keyword
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn, get_args, get_type_hints
 
 from fleet.core.define_spec import load_spec_yaml
 from fleet.core.study_context import find_study_config
@@ -1710,10 +1710,13 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
     )
 
     # Metadata (page_by flows through RenderMetadata into every renderer)
+    footnotes = list(args.footnote or [])
+    if args.population:
+        footnotes.append(f"Population: {args.population}")
     rmeta = RenderMetadata(
         title=args.title or "",
         subtitle=args.subtitle or "",
-        footnotes=args.footnote or [],
+        footnotes=footnotes,
         page_by=args.page_by,
     )
 
@@ -1733,11 +1736,23 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
     print(f"Data:     {data_arg} ({data_df.shape[0]} rows)")
     print(f"ADSL:     {adsl_arg} ({adsl_df.shape[0]} rows)")
     print(f"Groupby:  {group_col}")
+    if args.population:
+        print(f"Population: {args.population}")
     print(f"Output:   {output_path}")
     print()
 
     # Registry-driven dispatch: every TLG namespace exposes t_summary.
-    ard = NAMESPACE_CLASSES[domain](data_df).t_summary(groupby=group_col, adsl=adsl_df)
+    # --population goes to the default spec's adsl_filter, as in a YAML spec.
+    ns_cls = NAMESPACE_CLASSES[domain]
+    spec = None
+    if args.population:
+        spec_hint = get_type_hints(ns_cls.t_summary)["spec"]
+        spec_cls = next(a for a in get_args(spec_hint) if a is not type(None))
+        try:
+            spec = spec_cls(adsl_filter=args.population)
+        except ValueError as exc:
+            _fail(f"--population is not a valid filter: {exc}")
+    ard = ns_cls(data_df).t_summary(groupby=group_col, adsl=adsl_df, spec=spec)
     print(f"ARD:      {ard.shape[0]} rows × {ard.shape[1]} cols")
 
     _render_output(
@@ -3137,6 +3152,15 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
         "--groupby",
         default=None,
         help="Treatment-arm column. Default: auto-detect (TRTA → TRT01A → TRT01P).",
+    )
+    tlg_export.add_argument(
+        "--population",
+        default=None,
+        metavar="FILTER",
+        help=(
+            "ADSL population filter, passed to the spec's adsl_filter and shown in a "
+            'footnote, e.g. \'pl.col("SAFFL") == "Y"\'. Default: none (all ADSL subjects).'
+        ),
     )
     tlg_export.add_argument(
         "--title",

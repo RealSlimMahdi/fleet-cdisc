@@ -37,8 +37,8 @@ if TYPE_CHECKING:
     from ._specs import TLGSpec
 
 #: Signature every user-registered template function must implement:
-#: ``fn(df, *, adsl, spec, groupby) -> ARD`` (a {cards}-compatible
-#: long-format DataFrame).
+#: ``fn(df, *, adsl, spec, groupby) -> ARD`` (a DataFrame in the {cards}
+#: long layout).
 TemplateFunc = Callable[..., pl.DataFrame]
 
 
@@ -417,7 +417,7 @@ def register_template(meta: TemplateMeta, fn: TemplateFunc) -> TemplateMeta:
             template accepts (defaults to ``SummarySpecBase``).
         fn: Template function with signature
             ``fn(df, *, adsl, spec, groupby) -> ARD`` returning a
-            {cards}-compatible long-format DataFrame.
+            DataFrame in the {cards} long layout.
 
     Returns:
         TemplateMeta: The stored registry entry (*meta* with ``func``

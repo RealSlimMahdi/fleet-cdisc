@@ -283,7 +283,7 @@ class LBTLGNamespace(BuilderVerbsMixin):
                 default spec is used.
 
         Returns:
-            pl.DataFrame: Long-format {cards}-compatible ARD with columns
+            pl.DataFrame: ARD in the {cards} long layout, with columns
                 ``group1``, ``group1_level``, ``group2``, ``group2_level``,
                 ``variable``, ``variable_level``, ``stat_name``,
                 ``stat_label``, ``stat``, ``fmt_fn``, ``stat_fmt``,
@@ -331,7 +331,7 @@ class LBTLGNamespace(BuilderVerbsMixin):
             spec: Optional ``LBChgSpec`` override.
 
         Returns:
-            pl.DataFrame: {cards}-compatible ARD.
+            pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
             ``ard = adlb.tlg.lb.t_chg(groupby="TRTA", adsl=adsl)``
@@ -372,7 +372,7 @@ class LBTLGNamespace(BuilderVerbsMixin):
             spec: Optional ``LBShiftSpec`` override.
 
         Returns:
-            pl.DataFrame: {cards}-compatible ARD (subject counts).
+            pl.DataFrame: ARD in the {cards} long layout (subject counts).
 
         Raises:
             SchemaError: If the spec carries ``rows`` or ``header_rows``
@@ -463,7 +463,7 @@ class LBTLGNamespace(BuilderVerbsMixin):
             spec: Optional ``LBAbnormalSpec`` override.
 
         Returns:
-            pl.DataFrame: {cards}-compatible ARD.
+            pl.DataFrame: ARD in the {cards} long layout.
 
         Raises:
             SchemaError: If ANRIND holds abnormal codes and none of them
