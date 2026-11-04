@@ -269,6 +269,14 @@ def _run_init_cfg(args: argparse.Namespace) -> None:
     hint = _config_flag_hint(config_path)
     print(f"Created study workspace → {ctx.study_root}")
     print(f"Config  → {config_path}")
+    if ctx.custom_rules_dir is not None and adam_datasets:
+        from fleet.validation.rule_scaffolder import scaffold_population_flag_rule
+
+        try:
+            rule_file = scaffold_population_flag_rule(ctx.custom_rules_dir)
+            print(f"Rule    → {rule_file} (ADSL population flags are Y or N)")
+        except FileExistsError:
+            pass
     print()
     print("Next steps:")
     print(f"  fleet init define{hint}")
