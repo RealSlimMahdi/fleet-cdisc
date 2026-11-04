@@ -365,8 +365,9 @@ class TrialVisits(BaseModel):
             schedule: ``(visit_name, day_offset)`` pairs; offsets are days
                 relative to the *anchor* event (day 0).
             anchor: Name of the anchoring milestone (e.g. ``"RANDOMIZATION"``).
-            window: Allowed deviation in days — a single int for a symmetric
-                window or a ``(before, after)`` tuple.
+            window: Allowed deviation in study days (no Day 0, as
+                ``visit_map``) — a single int for a symmetric window or a
+                ``(before, after)`` tuple.
 
         Returns:
             TrialVisits: A validated collection ready for ``add_visits()``.
@@ -389,7 +390,7 @@ class TrialVisits(BaseModel):
                 )
         """
         before, after = (window, window) if isinstance(window, int) else (window or (0, 0))
-        window_txt = f"; window -{before}/+{after} days" if window else ""
+        window_txt = f"; window -{before}/+{after} study days, no Day 0" if window else ""
         visits = []
         for num, (name, offset) in enumerate(sorted(schedule, key=lambda p: p[1]), start=1):
             if offset == 0:

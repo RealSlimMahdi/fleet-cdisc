@@ -221,6 +221,7 @@ sv = (
     raw_visits.sdtm.assign("DOMAIN", value="SV")
     .assign("USUBJID", source="subject_id")
     .date("SVSTDTC", source="visit_date")
+    .pin("DM", dm)  # RFSTDTC comes from DM
     .visit_map(
         "VISITNUM",
         "VISIT",
@@ -229,10 +230,27 @@ sv = (
         ref_date="RFSTDTC",
         tolerance={"before": 3, "after": 3},
     )
-    .study_day("SVSTDY", date_col="SVSTDTC", ref_date_col="RFSTDTC")
+    .study_day("SVSTDY", date_col="SVSTDTC")
     .to_frame()
 )
 ```
+
+`visit_map()` is a nearest-day window. Use it only when the CRF does not
+collect the visit, and never to replace a collected VISITNUM. Its rules:
+
+- The distance is the difference of study-day numbers, as
+  `abs(SVSTDY - VISITDY)`: across the missing Day 0, Day -1 is 2 days from
+  VISITDY 1. `TrialVisits.from_schedule()` writes its TVSTRL window in the
+  same study days.
+- When TV has ARMCD values, a subject takes only the visits of its arm and
+  the visits with a blank ARMCD.
+- A dated record outside every window is an unscheduled visit: it gets the
+  VISITNUM of the last planned visit before it plus .1, .2, ... and the
+  VISIT `UNSCHEDULED 5.1`. This numbering is a sponsor convention: check it
+  against the SDRG ([ADR 0035](../adr/0035-visit-map-numbers-an-unscheduled-visit.md)).
+- A record with no study day keeps a null VISITNUM. One warning gives the
+  counts, and a second warning gives the USUBJID + VISITNUM keys that repeat
+  in SV.
 
 For SE, derive boundaries with `element_boundaries()` and the sequence
 number with the standard `seq()` verb:

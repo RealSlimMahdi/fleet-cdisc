@@ -233,10 +233,11 @@ class TestVisitSchedule:
         assert df["VISIT"].to_list() == ["Screening", "Baseline", "Week 4"]
         # CDISC no-day-zero: offset 0 → day 1, negatives unchanged
         assert df["VISITDY"].to_list() == [-14, 1, 29]
+        # c1-222: the window counts study days, as visit_map does
         assert df["TVSTRL"].to_list() == [
-            "14 days before RANDOMIZATION; window -3/+3 days",
-            "On day of RANDOMIZATION; window -3/+3 days",
-            "28 days after RANDOMIZATION; window -3/+3 days",
+            "14 days before RANDOMIZATION; window -3/+3 study days, no Day 0",
+            "On day of RANDOMIZATION; window -3/+3 study days, no Day 0",
+            "28 days after RANDOMIZATION; window -3/+3 study days, no Day 0",
         ]
 
 
