@@ -384,6 +384,40 @@ def test_run_warns_when_the_format_flag_differs_from_the_define(
     assert "--format parquet overrides output_format: xpt" in capsys.readouterr().err
 
 
+_EXTRA_MANDATORY = """\
+      - name: SITEID
+        label: Study Site Identifier
+        type: text
+        mandatory: true
+"""
+
+
+@pytest.mark.parametrize(
+    "variables",
+    [_EXTRA_MANDATORY, None],
+    ids=["a mandatory column is absent", "no column at all"],
+)
+def test_run_keeps_the_old_file_when_the_build_does_not_match_its_define(
+    variables: str | None,
+    study: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """c1-286 step 6: a build that misses its define stops before the write."""
+    head, _ = _SDTM_DEFINE.split("    variables:\n")
+    body = _SDTM_DEFINE + variables if variables else head + "    variables:\n" + _EXTRA_MANDATORY
+    (study / "metadata" / "sdtm" / "define.yaml").write_text(body, encoding="utf-8")
+    old = study / "data" / "sdtm" / "dm.parquet"
+    old.parent.mkdir(parents=True)
+    old.write_bytes(b"old file")
+    monkeypatch.chdir(study)
+
+    assert _run(["run", "--format", "parquet"]) == 1
+
+    assert "The old file is kept." in capsys.readouterr().err
+    assert old.read_bytes() == b"old file"
+
+
 def test_define_xml_warns_when_a_leaf_names_no_file(
     study: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:

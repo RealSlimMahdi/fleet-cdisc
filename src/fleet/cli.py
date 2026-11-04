@@ -920,6 +920,7 @@ def _run_run(args: argparse.Namespace) -> None:
 
     for i, built in enumerate(run_study(plan, strict=args.strict), start=1):
         step = built.step
+        _check_built(built.frame, step.define, step.dataset, strict=args.strict)
         out_dir = out_override or ctx.data_dir(step.standard)
         out_path = writers[formats[step.dataset]](built.frame, out_dir, step.dataset)
         rows, cols = built.frame.shape
@@ -936,6 +937,22 @@ def _run_run(args: argparse.Namespace) -> None:
 
     print()
     print(f"Done — {total} dataset(s) written.")
+
+
+def _check_built(frame: pl.DataFrame, define: Path, dataset: str, *, strict: bool) -> None:
+    """Stop before the write when the built dataset does not match its define; the old file stays."""
+    from fleet.core.exceptions import StudyRunError
+    from fleet.define_xml import DatasetChecker
+
+    if frame.width == 0:
+        raise StudyRunError(f"dataset {dataset}: the build has no column. The old file is kept.")
+    checker = DatasetChecker(define, check_types=False, check_ct=False, validate_schema=False)
+    errors = checker.check(frame, dataset, strict=strict).errors
+    if errors:
+        raise StudyRunError(
+            f"dataset {dataset} does not match {define.name}: {'; '.join(errors)}. "
+            "The old file is kept."
+        )
 
 
 def _run_format(flag: str | None, spec: DefineSpec, entry: DatasetEntry) -> str:
