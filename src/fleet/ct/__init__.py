@@ -23,8 +23,10 @@ def import_codelists(
     Resolves the codelist module location using these strategies (in order):
 
     1. If *path* is given explicitly, use it directly.
-    2. Look for ``study_config.yaml`` in the current working directory and
-       resolve the SDTM metadata path from it.
+    2. Look for ``study_config.yaml`` in the current working directory or in
+       a parent folder (git-style, as the CLI does), and resolve the SDTM
+       metadata path from it. A program in ``programs/sdtm`` finds the
+       study at the root.
     3. Fall back to ``metadata/sdtm/codelists.py`` relative to CWD.
 
     The module is registered in ``sys.modules`` under *module_name* so that
@@ -80,13 +82,11 @@ def _resolve_codelists_path(path: str | Path | None) -> Path:
     if path is not None:
         return Path(path).resolve()
 
-    # Try study_config.yaml in CWD
-    config_file = Path.cwd() / "study_config.yaml"
-    if config_file.is_file():
-        from fleet.core.study_context import load_study_context
+    from fleet.core.study_context import find_study_config, load_study_context
 
-        ctx = load_study_context(config_file)
-        return ctx.codelists_file
+    config_file = find_study_config()
+    if config_file is not None:
+        return load_study_context(config_file).codelists_file
 
     # Fallback: conventional location
     return (Path.cwd() / "metadata" / "sdtm" / "codelists.py").resolve()

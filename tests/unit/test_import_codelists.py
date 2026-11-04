@@ -1,5 +1,6 @@
 """Unit tests for fleet.ct.import_codelists dynamic module loader."""
 
+import re
 import sys
 import textwrap
 from pathlib import Path
@@ -76,6 +77,23 @@ class TestImportCodelists:
         mod = import_codelists(module_name="test_cl_auto")
         assert mod.RACE.WHITE == "WHITE"
         sys.modules.pop("test_cl_auto", None)
+
+    def test_auto_discover_from_a_subfolder(self, study_workspace: Path, monkeypatch):
+        """c1-481: a program in programs/sdtm finds study_config.yaml at the study root."""
+        subfolder = study_workspace / "programs" / "sdtm"
+        subfolder.mkdir(parents=True)
+        monkeypatch.chdir(subfolder)
+        mod = import_codelists(module_name="test_cl_subfolder")
+        assert mod.RACE.WHITE == "WHITE"
+        sys.modules.pop("test_cl_subfolder", None)
+
+    def test_no_study_config_falls_back_to_cwd(self, tmp_path: Path, monkeypatch):
+        """With no study_config.yaml up the tree, the CWD fallback path is named."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr("fleet.core.study_context.find_study_config", lambda start=None: None)
+        expected = tmp_path.resolve() / "metadata" / "sdtm" / "codelists.py"
+        with pytest.raises(FileNotFoundError, match=re.escape(str(expected))):
+            import_codelists(module_name="test_cl_fallback")
 
     def test_missing_file_raises(self, tmp_path: Path):
         missing = tmp_path / "nonexistent" / "codelists.py"
