@@ -47,6 +47,20 @@ from fleet.sdtm.utils import (
     dtc_with_time,
     guessed_values,
     parse_expression,
+    to_char,
+)
+
+_SUPP_COLUMNS = (
+    "STUDYID",
+    "RDOMAIN",
+    "USUBJID",
+    "IDVAR",
+    "IDVARVAL",
+    "QNAM",
+    "QLABEL",
+    "QVAL",
+    "QORIG",
+    "QEVAL",
 )
 
 
@@ -995,15 +1009,22 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                 to discover ``role: qualifier`` variables.
             dataset: Dataset name within the spec (e.g. ``"DM"``).
             idvar: Name of the identifying variable column (e.g.
-                ``"DMSEQ"``).  When ``None``, IDVAR and IDVARVAL are
-                set to null (typical for DM).
+                ``"AESEQ"``).  Required for every RDOMAIN except DM;
+                for DM, IDVAR and IDVARVAL are null.
             domain: Explicit RDOMAIN value.  When ``None``, inferred
                 from the ``DOMAIN`` column in the frame.
 
         Returns:
             pl.DataFrame: Vertical SUPPQUAL frame with columns STUDYID,
                 RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL, QVAL,
-                QORIG, QEVAL.
+                QORIG, QEVAL.  A null or blank value gives no record.  A
+                float is written with no ``.0`` end and a date as ISO 8601.
+
+        Raises:
+            DerivationError: When no source gives qualifier metadata, a
+                qualifier or *idvar* is not a column, *idvar* is missing
+                for a domain other than DM, RDOMAIN is unknown, or the
+                *spec* dataset is not found.
 
         Examples:
             Export from pipeline metadata (Pattern A)::
@@ -1020,8 +1041,13 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
             Export from define.yaml spec (Pattern D)::
 
                 dm = raw_df.sdtm.from_spec("define.yaml", dataset="DM").to_frame()
-                suppdm = dm.sdtm.export_supp(
-                    spec="define.yaml", dataset="DM", idvar="DMSEQ"
+                suppdm = dm.sdtm.export_supp(spec="define.yaml", dataset="DM")
+
+            Export an AE qualifier linked by AESEQ::
+
+                suppae = ae.sdtm.export_supp(
+                    qualifiers={"AETOXGR": {"label": "AE Toxicity Grade"}},
+                    idvar="AESEQ",
                 )
 
             Export with explicit qualifier dict (Pattern C)::
@@ -1033,71 +1059,68 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                         "SAFETY": {"label": "Safety Population Flag",
                                    "origin": "Derived"},
                     },
-                    idvar="DMSEQ",
                 )
         """
         # Resolve qualifier metadata from one of three sources
         meta: list[NSVMeta] = self._resolve_supp_meta(qualifiers, spec, dataset)
 
         if not meta:
-            # Return empty frame with correct schema
-            return pl.DataFrame(
-                schema={
-                    "STUDYID": pl.String,
-                    "RDOMAIN": pl.String,
-                    "USUBJID": pl.String,
-                    "IDVAR": pl.String,
-                    "IDVARVAL": pl.String,
-                    "QNAM": pl.String,
-                    "QLABEL": pl.String,
-                    "QVAL": pl.String,
-                    "QORIG": pl.String,
-                    "QEVAL": pl.String,
-                }
-            )
+            if qualifiers is None and spec is None:
+                raise DerivationError(
+                    "export_supp(): no NSV metadata. Pass qualifiers= or spec=, or call "
+                    "export_supp() before to_frame(), which drops the nsv() metadata."
+                )
+            # qualifiers={} or a spec dataset with no qualifier: a legal empty SUPP
+            return pl.DataFrame(schema=dict.fromkeys(_SUPP_COLUMNS, pl.String))
 
         df = self._lazy.collect()
 
-        # Determine RDOMAIN
-        rdomain = domain or (df["DOMAIN"][0] if "DOMAIN" in df.columns else None)
-
-        # Filter to only qualifier columns present in the frame
-        present_meta = [m for m in meta if m.target in df.columns]
-        if not present_meta:
+        if domain:
+            rdomain = domain
+        elif "DOMAIN" in df.columns and not df.is_empty():
+            rdomain = df["DOMAIN"][0]
+        else:
             raise DerivationError(
-                f"No qualifier columns found in frame. "
-                f"Expected: {[m.target for m in meta]}. "
-                f"Available: {df.columns}"
+                "export_supp(): RDOMAIN is unknown, because the frame has no DOMAIN value. "
+                "Pass domain=."
             )
 
-        # Build SUPP rows via unpivot
-        qual_cols = [m.target for m in present_meta]
-        label_map = {m.target: m.label for m in present_meta}
-        origin_map = {m.target: m.origin for m in present_meta}
-        eval_map = {m.target: m.evaluator for m in present_meta}
+        absent = [m.target for m in meta if m.target not in df.columns]
+        if absent:
+            raise DerivationError(
+                f"export_supp(): qualifier(s) {absent} are not columns of the frame. "
+                f"Available: {df.columns}"
+            )
+        if idvar is not None and idvar not in df.columns:
+            raise DerivationError(f"export_supp(): idvar '{idvar}' is not a column of the frame.")
+        if idvar is None and rdomain != "DM":
+            raise DerivationError(
+                f"export_supp(): give idvar= (for example {rdomain}SEQ) for RDOMAIN "
+                f"{rdomain}. Only DM may have no IDVAR (SDTMIG 3.4 section 8.4)."
+            )
 
-        # Determine base columns needed
-        base_cols = []
-        if "STUDYID" in df.columns:
-            base_cols.append("STUDYID")
-        if "USUBJID" in df.columns:
-            base_cols.append("USUBJID")
+        qual_cols = [m.target for m in meta]
+        label_map = {m.target: m.label for m in meta}
+        origin_map = {m.target: m.origin for m in meta}
+        eval_map = {m.target: m.evaluator for m in meta}
 
-        # Unpivot qualifier columns
+        base_cols = [c for c in ("STUDYID", "USUBJID") if c in df.columns]
+        id_cols = [idvar] if idvar is not None and idvar not in base_cols else []
+
+        # Each qualifier becomes text before the unpivot, so mixed types keep their value.
         supp = df.select(
-            base_cols + ([idvar] if idvar and idvar in df.columns else []) + qual_cols
+            *base_cols,
+            *id_cols,
+            *(to_char(pl.col(c), df.schema[c]).alias(c) for c in qual_cols),
         ).unpivot(
             on=qual_cols,
-            index=base_cols + ([idvar] if idvar and idvar in df.columns else []),
+            index=base_cols + id_cols,
             variable_name="QNAM",
             value_name="QVAL",
         )
 
-        # Cast QVAL to string
-        supp = supp.with_columns(pl.col("QVAL").cast(pl.String))
-
-        # Drop null QVAL rows
-        supp = supp.filter(pl.col("QVAL").is_not_null())
+        # SDTMIG 3.4: no SUPP record with a null QVAL; a blank is missing too.
+        supp = supp.filter(pl.col("QVAL").is_not_null() & (pl.col("QVAL").str.strip_chars() != ""))
 
         # Add SUPPQUAL metadata columns
         supp = supp.with_columns(
@@ -1110,12 +1133,13 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
             pl.col("QNAM").replace_strict(eval_map, default=None).cast(pl.String).alias("QEVAL"),
         )
 
-        # Handle IDVAR / IDVARVAL
-        if idvar and idvar in supp.columns:
+        if idvar is not None:
             supp = supp.with_columns(
                 pl.lit(idvar).alias("IDVAR"),
-                pl.col(idvar).cast(pl.String).alias("IDVARVAL"),
-            ).drop(idvar)
+                to_char(pl.col(idvar), df.schema[idvar]).alias("IDVARVAL"),
+            )
+            if id_cols:
+                supp = supp.drop(idvar)
         else:
             supp = supp.with_columns(
                 pl.lit(None, dtype=pl.String).alias("IDVAR"),
@@ -1130,19 +1154,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         if "USUBJID" not in supp.columns:
             supp = supp.with_columns(pl.lit(None, dtype=pl.String).alias("USUBJID"))
 
-        # Select final columns in CDISC order
-        return supp.select(
-            "STUDYID",
-            "RDOMAIN",
-            "USUBJID",
-            "IDVAR",
-            "IDVARVAL",
-            "QNAM",
-            "QLABEL",
-            "QVAL",
-            "QORIG",
-            "QEVAL",
-        )
+        return supp.select(_SUPP_COLUMNS)
 
     def _resolve_supp_meta(
         self,
@@ -1167,11 +1179,8 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         if spec is not None:
             spec_data = load_define_spec(spec)
             if not spec_data.datasets:
-                return []
-            try:
-                ds = spec_data.select(dataset)
-            except DerivationError:
-                return []
+                raise DerivationError(f"export_supp(spec='{spec}'): the spec has no datasets.")
+            ds = spec_data.select(dataset)
             meta = []
             for var in ds.variables:
                 is_qual = (
