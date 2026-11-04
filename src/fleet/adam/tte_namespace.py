@@ -25,6 +25,7 @@ import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
 from fleet.adam.tte import CensorSource, EventSource, select_tte
+from fleet.core.dtc import to_day
 from fleet.core.exceptions import DerivationError
 
 logger = logging.getLogger("fleet")
@@ -237,7 +238,10 @@ class TTENamespace(SharedADaMVerbsMixin):
         ``AVAL = (ADT − STARTDT [+ 1 day]) / unit`` using the CDISC
         conventions (7, 30.4375, 365.25 days per week/month/year).  The
         ``+ 1`` inclusive convention matches admiral's
-        ``derive_vars_duration(add_one=TRUE)``.
+        ``derive_vars_duration(add_one=TRUE)``.  Each row takes its end as
+        the date of ``ADTM``, else ``ADT``, and its start as the date of
+        ``STARTDTM``, else ``STARTDT``, so one chain can mix date and
+        date-time parameters.
 
         Args:
             unit: Output unit (default ``"days"``).
@@ -265,8 +269,16 @@ class TTENamespace(SharedADaMVerbsMixin):
                 f"aval() unit={unit!r} is not supported. Choose one of {sorted(_UNIT_DAYS)}."
             )
         schema = self._lazy.collect_schema()
-        start, end = ("STARTDTM", "ADTM") if "ADTM" in schema.names() else ("STARTDT", "ADT")
-        days = (pl.col(end).cast(pl.Date) - pl.col(start).cast(pl.Date)).dt.total_days()
+
+        def day(*names: str) -> pl.Expr:
+            present = [
+                to_day(pl.col(n), schema.get(n), verb="aval").cast(pl.Date)
+                for n in names
+                if n in schema.names()
+            ]
+            return pl.coalesce(present) if present else pl.lit(None, dtype=pl.Date)
+
+        days = (day("ADTM", "ADT") - day("STARTDTM", "STARTDT")).dt.total_days()
         if add_one:
             days = pl.when(days >= 0).then(days + 1).otherwise(days)
         exprs = [(days / _UNIT_DAYS[unit]).alias("AVAL")]

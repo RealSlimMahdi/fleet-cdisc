@@ -38,6 +38,7 @@ from typing import Self
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
+from fleet.core.dtc import to_day
 
 
 class PedsNamespace(SharedADaMVerbsMixin):
@@ -46,6 +47,15 @@ class PedsNamespace(SharedADaMVerbsMixin):
 
     Inherits shared verbs from ``SharedADaMVerbsMixin``.
     """
+
+    def _age_in_days(self, verb: str, birth_date: str, analysis_date: str) -> pl.Expr:
+        """Days from *birth_date* to *analysis_date*; ``--DTC`` text by its date, a number raises."""
+        schema = self._lazy.collect_schema()
+        analysis, birth = (
+            to_day(pl.col(c), schema.get(c), verb=verb).cast(pl.Date)
+            for c in (analysis_date, birth_date)
+        )
+        return (analysis - birth).dt.total_days()
 
     # ------------------------------------------------------------------ #
     # 1. age_days — age in whole days                                     #
@@ -78,12 +88,7 @@ class PedsNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        expr = (
-            (pl.col(analysis_date).cast(pl.Date) - pl.col(birth_date).cast(pl.Date))
-            .dt.total_days()
-            .cast(pl.Int64)
-            .alias(target)
-        )
+        expr = self._age_in_days("age_days", birth_date, analysis_date).cast(pl.Int64).alias(target)
         return self._chain(expr)
 
     # ------------------------------------------------------------------ #
@@ -121,9 +126,7 @@ class PedsNamespace(SharedADaMVerbsMixin):
             admiral ``derive_vars_duration`` (pharmaverse): one month = 30.4375 days
             (365.25 / 12). A month of 30 days gives a different answer.
         """
-        days = (
-            pl.col(analysis_date).cast(pl.Date) - pl.col(birth_date).cast(pl.Date)
-        ).dt.total_days()
+        days = self._age_in_days("age_months", birth_date, analysis_date)
         expr = (days / 30.4375).floor().cast(pl.Int64).alias(target)
         return self._chain(expr)
 
@@ -164,9 +167,7 @@ class PedsNamespace(SharedADaMVerbsMixin):
             admiral ``derive_vars_duration`` and ``compute_age_years`` (pharmaverse):
             one year = 365.25 days.
         """
-        days = (
-            pl.col(analysis_date).cast(pl.Date) - pl.col(birth_date).cast(pl.Date)
-        ).dt.total_days()
+        days = self._age_in_days("age_years", birth_date, analysis_date)
         expr = days / 365.25
         if round_digits is not None:
             expr = expr.round(round_digits)

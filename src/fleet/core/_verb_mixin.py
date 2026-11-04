@@ -35,7 +35,7 @@ import yaml
 
 from fleet.core import log as fleet_log
 from fleet.core.define_spec import DefineSpec, load_define_spec
-from fleet.core.dtc import date_part, datetime_part, to_day, warn_on_collect
+from fleet.core.dtc import date_part, datetime_part, refuse_number, to_day, warn_on_collect
 from fleet.core.exceptions import (
     ComparisonError,
     DerivationError,
@@ -82,6 +82,52 @@ def _settle_on_fail(on_fail: str, summary: str, error: type[Exception]) -> None:
         raise error(summary)
     if on_fail == "warn":
         warnings.warn(summary, stacklevel=3)
+
+
+_CLOCK_UNITS = {"seconds": (1, "S"), "minutes": (60, "M"), "hours": (3600, "H")}
+
+
+def _iso_sign(value: pl.Expr) -> pl.Expr:
+    """``"-"`` for a negative span, else empty text."""
+    return pl.when(value < 0).then(pl.lit("-")).otherwise(pl.lit(""))
+
+
+def _iso_clock(seconds: pl.Expr, unit: str, *, add_one: bool) -> pl.Expr:
+    """ISO 8601 duration ``[-]PTnHnMnS`` of a signed count of seconds (PT1H30M, -PT15M)."""
+    size, letter = _CLOCK_UNITS[unit]
+    if add_one:
+        seconds = pl.when(seconds >= 0).then(seconds + size).otherwise(seconds)
+    total = seconds.abs()
+
+    def part(value: pl.Expr, mark: str) -> pl.Expr:
+        return pl.when(value > 0).then(value.cast(pl.String) + pl.lit(mark)).otherwise(pl.lit(""))
+
+    body = pl.concat_str(
+        part(total // 3600, "H"), part(total % 3600 // 60, "M"), part(total % 60, "S")
+    )
+    body = pl.when(total == 0).then(pl.lit(f"0{letter}")).otherwise(body)
+    return pl.when(seconds.is_null()).then(None).otherwise(_iso_sign(seconds) + "PT" + body)
+
+
+def _iso_days(days: pl.Expr, unit: str, *, add_one: bool, call: str, target: str) -> pl.Expr:
+    """ISO 8601 duration ``[-]PnD`` or ``[-]PnW``; a span that is not whole weeks gives null."""
+    if add_one:
+        days = pl.when(days >= 0).then(days + 1).otherwise(days)
+    count = days.abs()
+    if unit == "days":
+        return _iso_sign(days) + "P" + count.cast(pl.String) + "D"
+    whole = count % 7 == 0
+    text = _iso_sign(days) + "P" + pl.when(whole).then((count // 7).cast(pl.String)) + "W"
+    return warn_on_collect(
+        text,
+        days.is_not_null() & ~whole,
+        lambda n, values: (
+            f"{call}: {n} span(s) are not whole weeks, so {target} is null for them. "
+            f"Use unit='days'. Days: {values}"
+        ),
+        dtype=pl.String,
+        shown=days,
+    )
 
 
 #: Spec-format version this Fleet build writes (``fleet_spec_version``).
@@ -1297,9 +1343,11 @@ class SharedVerbsMixin:
         """Compute the duration between two date/datetime columns.
 
         Supports column references (``str``) and Polars expressions
-        for *start* and *end*.  ``--DTC`` text is read by its date part for
+        for *start* and *end*; an expression is read by its type, as a
+        column is.  ``--DTC`` text is read by its date part for
         day-based units and by its date-time for hours, minutes and
-        seconds; a partial value gives null.
+        seconds; a partial value gives null, and for hours, minutes and
+        seconds a warning gives the count of text values with no time.
 
         The ``add_one`` parameter controls inclusive counting:
 
@@ -1325,19 +1373,30 @@ class SharedVerbsMixin:
                 ``"days"`` (default), ``"weeks"``, ``"months"``, ``"years"``.
             add_one: Override for inclusive counting.
             out: Output format — ``"numeric"`` (default) or ``"iso8601"``.
-                ``"iso8601"`` is incompatible with the ``*DY`` study-day
-                convention: pass ``add_one`` explicitly (or use a non-DY
-                target) to combine them.
+                ``"iso8601"`` keeps the sign (``-PT15M``), writes hours,
+                minutes and seconds from the total (``PT1H30M``) and adds
+                one only when ``add_one=True`` is given (an elapsed time,
+                ``P9D`` for 1 to 10 January).  Weeks give null with a
+                warning for a span that is not whole weeks; months and
+                years raise.  ``"iso8601"`` is incompatible with the
+                ``*DY`` study-day convention: pass ``add_one`` explicitly
+                (or use a non-DY target) to combine them.
 
         Returns:
             Self: The namespace with *target* appended; call ``.to_frame()``
                 to materialise.
 
         Raises:
-            DerivationError: On an unknown *unit*/*out* value, or when
+            DerivationError: On an unknown *unit*/*out* value, when
                 ``out="iso8601"`` is combined with a ``*DY`` target while
                 ``add_one`` is unset (the study-day convention would
-                silently override the requested format).
+                silently override the requested format), with months or
+                years, or when a column holds numbers (no date origin is
+                guessed).
+
+        References:
+            ISO 8601 durations and SDTMIG 3.4 ``--ELTM``; admiral
+            ``compute_duration``; ADR-0011 and ADR-0022.
 
         Examples:
             ISO 8601 duration::
@@ -1387,18 +1446,35 @@ class SharedVerbsMixin:
 
         schema = self._lazy.collect_schema()
         sub_day = unit in ("seconds", "minutes", "hours")
+        call = f"duration('{target}')"
 
         def _to_date_expr(col_or_expr: str | pl.Expr) -> pl.Expr:
-            """Resolve a column reference to a date (day units) or a date-time (sub-day)."""
-            if not isinstance(col_or_expr, str):
-                return col_or_expr
-            dtype = schema.get(col_or_expr)
-            col = pl.col(col_or_expr)
+            """Resolve a column or an expression to a date (day units) or a date-time (sub-day)."""
+            if isinstance(col_or_expr, str):
+                col, dtype = pl.col(col_or_expr), schema.get(col_or_expr)
+            else:
+                col = col_or_expr
+                dtype = self._lazy.select(col).collect_schema().dtypes()[0]
             if not sub_day:
-                return to_day(col, dtype)
-            if dtype == pl.String:
-                return datetime_part(col)
-            return col
+                return to_day(col, dtype, verb=call)
+            refuse_number(
+                col.meta.output_name(raise_if_undetermined=False) or "the column", dtype, verb=call
+            )
+            if dtype != pl.String:
+                return col
+            name = col.meta.output_name(raise_if_undetermined=False) or "the text"
+            given = col.str.strip_chars().fill_null("") != ""
+            return warn_on_collect(
+                datetime_part(col),
+                given & datetime_part(col).is_null(),
+                lambda n, values: (
+                    f"{call}: {n} value(s) of {name} have no hour and minute, or are not "
+                    f"ISO 8601, so {target} is null for them. To impute a time with a flag, "
+                    f"derive a *DTM variable with .date() first. Values: {values}"
+                ),
+                dtype=pl.Datetime("us"),
+                shown=col,
+            )
 
         s_expr = _to_date_expr(start)
         e_expr = _to_date_expr(end)
@@ -1420,7 +1496,8 @@ class SharedVerbsMixin:
         if sub_day:
             s_dtm = s_expr.cast(pl.Datetime("us"))
             e_dtm = e_expr.cast(pl.Datetime("us"))
-            diff_s = (e_dtm - s_dtm).dt.total_seconds().cast(pl.Float64)
+            seconds = (e_dtm - s_dtm).dt.total_seconds()
+            diff_s = seconds.cast(pl.Float64)
             if unit == "seconds":
                 diff = diff_s.cast(pl.Int64)
             elif unit == "minutes":
@@ -1431,6 +1508,20 @@ class SharedVerbsMixin:
             diff_days = (e_expr - s_expr).dt.total_days()
             divisor = {"days": 1, "weeks": 7.0, "months": 30.4375, "years": 365.25}[unit]
             diff = diff_days if unit == "days" else diff_days.cast(pl.Float64) / divisor
+
+        if out == "iso8601":
+            if unit in ("months", "years"):
+                raise DerivationError(
+                    f"{call}: out='iso8601' with unit='{unit}' would cut the day count to whole "
+                    f"{unit}, because a month or a year has no fixed length. Use unit='days'."
+                )
+            if sub_day:
+                iso_expr = _iso_clock(seconds, unit, add_one=add_one is True)
+            else:
+                iso_expr = _iso_days(
+                    diff_days, unit, add_one=add_one is True, call=call, target=target
+                )
+            return self._chain(iso_expr.alias(target), verb="duration", params=duration_params)
 
         # Resolve add_one
         if add_one is None:
@@ -1451,23 +1542,6 @@ class SharedVerbsMixin:
             ).alias(target)
         else:
             result_expr = diff.alias(target)
-
-        if out == "iso8601":
-            abs_val = diff.abs()
-            unit_suffix_map = {
-                "days": ("P", "D"),
-                "hours": ("PT", "H"),
-                "weeks": ("P", "W"),
-                "months": ("P", "M"),
-                "years": ("P", "Y"),
-                "minutes": ("PT", "M"),
-                "seconds": ("PT", "S"),
-            }
-            prefix, suffix = unit_suffix_map[unit]
-            iso_expr = (
-                pl.lit(prefix) + abs_val.cast(pl.Int64).cast(pl.String) + pl.lit(suffix)
-            ).alias(target)
-            return self._chain(iso_expr, verb="duration", params=duration_params)
 
         return self._chain(result_expr, verb="duration", params=duration_params)
 
@@ -1566,8 +1640,8 @@ class SharedVerbsMixin:
             join_key = ["USUBJID"]
         elif _ref_col in schema.names():
             # ref_col already in frame — no join needed; stays lazy.
-            date_expr = to_day(pl.col(date_col), schema.get(date_col))
-            ref_expr = to_day(pl.col(_ref_col), schema.get(_ref_col))
+            date_expr = to_day(pl.col(date_col), schema.get(date_col), verb="study_day")
+            ref_expr = to_day(pl.col(_ref_col), schema.get(_ref_col), verb="study_day")
             diff = (date_expr - ref_expr).dt.total_days()
             study_day_expr = pl.when(diff >= 0).then(diff + 1).otherwise(diff).alias(target)
             return self._chain(
@@ -1591,8 +1665,8 @@ class SharedVerbsMixin:
 
         df = df.join(ref_slim, on=join_key, how="left", nulls_equal=True)
 
-        date_expr = to_day(pl.col(date_col), df.schema.get(date_col))
-        ref_expr = to_day(pl.col(_ref_tmp), df.schema.get(_ref_tmp))
+        date_expr = to_day(pl.col(date_col), df.schema.get(date_col), verb="study_day")
+        ref_expr = to_day(pl.col(_ref_tmp), df.schema.get(_ref_tmp), verb="study_day")
 
         diff = (date_expr - ref_expr).dt.total_days()
         study_day_expr = pl.when(diff >= 0).then(diff + 1).otherwise(diff).alias(target)

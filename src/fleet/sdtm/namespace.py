@@ -25,7 +25,6 @@ Discover every available verb programmatically with ``df.sdtm.verbs()``.
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any
 
@@ -42,7 +41,6 @@ from fleet.sdtm.models import NSVMeta
 from fleet.sdtm.utils import (
     TIME_LITERAL,
     bad_time,
-    dtc_date_expr,
     dtc_text,
     dtc_with_time,
     guessed_values,
@@ -123,7 +121,10 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         gives ``-----T08:30`` (SDTMIG 3.4 section 4.4.2).  Imputation
         parameters are ignored.
 
-        For DT/DTM targets: delegates to the shared imputation engine.
+        For DT/DTM targets: delegates to the shared imputation engine.  A
+        ``pl.Date`` or ``pl.Datetime`` source is read as its ISO 8601 text;
+        a number raises, because Fleet does not guess its origin.
+        With *time*, a partial date gives null.
 
         Args:
             target: Name of the output column.
@@ -135,7 +136,8 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
             time: Time column or literal to combine with date (DTM/DTC).
             impute: Imputation strategy (DT/DTM only).
             impute_time: Time-part imputation override (DTM only).
-            highest: Imputation ceiling (DT/DTM only).
+            highest: Imputation ceiling, as admiral ``highest_imputation``
+                (DT only): ``"n"``, ``"D"`` or ``"M"``.  A DTM target raises.
             flag: DTF/TMF flag control.
             min_date: Lower bound for an imputed date.  Applies only when
                 the bound is inside the possible range of the partial value;
@@ -167,7 +169,13 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                     .to_frame()
                 )
         """
-        from fleet.adam.utils import _resolve_output_type, impute_and_flag
+        from fleet.adam.utils import (
+            _resolve_output_type,
+            dtm_with_time,
+            impute_and_flag,
+            refuse_dtm_bounds,
+            source_text,
+        )
 
         # Validate source / value mutual exclusivity
         if source is not None and value is not None:
@@ -196,20 +204,26 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                 f"time= parameter is only valid for DTM targets, "
                 f"but target '{target}' resolves to output='{output_type}'."
             )
+        if output_type == "dtm":
+            refuse_dtm_bounds(target, min_date, max_date, highest=highest)
 
         # DTM + time=: combine date source with explicit time column/literal
         if time is not None and output_type == "dtm":
-            return self._dtm_with_time(
-                source=source,
-                target=target,
-                time=time,
-                impute_time=impute_time,
-                flag=flag,
-                format=format,
+            return self._materialise_then(
+                dtm_with_time(
+                    self._lazy,
+                    source=source,
+                    target=target,
+                    time=time,
+                    impute_time=impute_time,
+                    flag=flag,
+                    input_format=format,
+                )
             )
 
+        schema = self._lazy.collect_schema()
         exprs = impute_and_flag(
-            source,
+            source_text(source, schema.get(source), verb=f"date('{target}')"),
             target,
             output_type=output_type,
             impute=impute,
@@ -274,96 +288,6 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                 shown=raw_time.cast(pl.String),
             )
         return self._chain(value.alias(target), verb="date")
-
-    def _dtm_with_time(
-        self,
-        source: str,
-        target: str,
-        time: str,
-        impute_time: str | None,
-        flag: bool | str,
-        format: str | None,
-    ) -> SDTMNamespace:
-        """Combine a date column with an explicit time column or literal into DTM.
-
-        When *time* is a column reference that does not exist in the current
-        schema, raises ``ValueError``.  For rows where the time column is null,
-        falls back to the *impute_time* strategy.
-        """
-        from fleet.adam.utils import _resolve_flag_names, _resolve_time
-
-        _TIME_LITERAL_RE = re.compile(r"^\d{2}:\d{2}(:\d{2})?$")
-        time_is_literal = bool(_TIME_LITERAL_RE.match(time))
-
-        # Validate column existence when time is a column reference
-        if not time_is_literal:
-            schema_cols = self._lazy.collect_schema().names()
-            if time not in schema_cols:
-                raise DerivationError(
-                    f"time='{time}' column not found in the DataFrame. "
-                    f"Available columns: {schema_cols}"
-                )
-
-        # Resolve fallback for null time values
-        fallback_strategy = impute_time or "first"
-        fallback_time = _resolve_time(fallback_strategy)
-
-        # Build time expression: literal broadcast or column reference
-        if time_is_literal:
-            # Pad HH:MM → HH:MM:SS
-            padded = time if len(time) == 8 else time + ":00"
-            time_expr = pl.lit(padded)
-        else:
-            # Column reference: pad HH:MM → HH:MM:SS, fallback for nulls
-            raw_time = pl.col(time).cast(pl.String)
-            padded_time = (
-                pl.when(raw_time.str.len_chars() == 5)
-                .then(raw_time + pl.lit(":00"))
-                .otherwise(raw_time)
-            )
-            if fallback_time is None:
-                # impute_time="none" → null when time column is null
-                time_expr = padded_time
-            elif isinstance(fallback_time, str) and fallback_time.startswith("T"):
-                time_expr = (
-                    pl.when(raw_time.is_null())
-                    .then(pl.lit(fallback_time[1:]))
-                    .otherwise(padded_time)
-                )
-            else:
-                # fallback is a column name
-                time_expr = (
-                    pl.when(raw_time.is_null())
-                    .then(pl.col(fallback_time).cast(pl.String))
-                    .otherwise(padded_time)
-                )
-
-        # Parse the date source column
-        date_expr = dtc_date_expr(source, "__dtm_date_tmp__", input_format=format)
-
-        # Combine date + time → Datetime
-        combined = (
-            (pl.col("__dtm_date_tmp__") + pl.lit("T") + time_expr)
-            .str.to_datetime("%Y-%m-%dT%H:%M:%S", strict=False)
-            .alias(target)
-        )
-
-        # Materialise and clean up temp column
-        df = self._lazy.with_columns(date_expr).collect()
-        result = df.with_columns(combined)
-        if "__dtm_date_tmp__" in result.columns:
-            result = result.drop("__dtm_date_tmp__")
-
-        # Flags: DTF from source precision, TMF is null (time was observed)
-        dtf_name, tmf_name = _resolve_flag_names(target, flag, "dtm")
-        if dtf_name is not None:
-            from fleet.adam.utils import dtf_expr
-
-            result = result.with_columns(dtf_expr(source, dtf_name))
-        if tmf_name is not None:
-            result = result.with_columns(pl.lit(None, dtype=pl.String).alias(tmf_name))
-
-        return self._materialise_then(result)
 
     # ------------------------------------------------------------------ #
     # 5b. nsv — Non-Standard Variable (qualifier) derivation               #
