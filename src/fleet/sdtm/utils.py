@@ -253,8 +253,6 @@ _ALLOWED_AST_NODES: frozenset[type] = frozenset(
         ast.LtE,
         ast.Gt,
         ast.GtE,
-        ast.Is,
-        ast.IsNot,
         ast.In,
         ast.NotIn,
         ast.And,
@@ -283,6 +281,14 @@ def _validate_ast(expr_str: str) -> ast.Expression:
         ) from exc
 
     for node in ast.walk(tree):
+        if isinstance(node, ast.Compare) and any(
+            isinstance(side, ast.Constant) and side.value is None
+            for side in (node.left, *node.comparators)
+        ):
+            raise DerivationError(
+                f"A compare with None is always null in {expr_str!r}: use "
+                "COL.is_null() or COL.is_not_null()."
+            )
         if type(node) not in _ALLOWED_AST_NODES:
             raise DerivationError(
                 f"Disallowed construct {type(node).__name__!r} in expression {expr_str!r}"
