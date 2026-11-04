@@ -49,6 +49,7 @@ if TYPE_CHECKING:
 
     import polars as pl
 
+    from fleet.core.define_spec import DatasetEntry, DefineSpec
     from fleet.core.study_context import StudyContext
 
 #: Optional-dependency probes for ``fleet doctor`` / ``fleet check``:
@@ -787,6 +788,15 @@ def _generate_define_xml(args: argparse.Namespace) -> None:
     gen = DefineSpecGenerator(str(spec), strict=getattr(args, "strict", False))
     gen.generate(str(output), html_preview=not args.no_preview)
     print(f"Generated Define-XML → {output}")
+    ctx = _try_ctx(getattr(args, "config", None))
+    if ctx is not None and getattr(args, "standard", None) in ("sdtm", "adam"):
+        data_dir = ctx.data_dir(args.standard)
+        absent = [href for href in gen.leaf_hrefs().values() if not (data_dir / href).is_file()]
+        if absent:
+            _err(
+                f"warning: no file in {data_dir} for leaf href(s) {', '.join(absent)}. "
+                "Run fleet run, or check output_format: and output: in define.yaml."
+            )
     if not args.no_preview:
         # The generator skips the preview (with its own message) when the
         # XSL stylesheet is unavailable — only report a file that exists.
@@ -894,12 +904,15 @@ def _run_run(args: argparse.Namespace) -> None:
             df, d / f"{n.lower()}.json", domain=n, **metadata_from_define(specs[n], n)
         ),
     }
-    writer = writers[args.format]
+    formats = {
+        s.dataset: _run_format(args.format, specs[s.dataset], entries[s.dataset])
+        for s in plan.steps
+    }
     out_override = Path(args.out) if args.out else None
     total = len(plan.steps)
 
     print(f"Config:  {ctx.study_root / 'study_config.yaml'}")
-    print(f"Format:  {args.format}")
+    print(f"Format:  {', '.join(f'{name} {fmt}' for name, fmt in formats.items())}")
     print(f"Plan:    {total} dataset(s)")
     for i, step in enumerate(plan.steps, start=1):
         print(f"  [{i}/{total}] {step.dataset} ({step.standard}, {step.define.name})")
@@ -908,12 +921,37 @@ def _run_run(args: argparse.Namespace) -> None:
     for i, built in enumerate(run_study(plan, strict=args.strict), start=1):
         step = built.step
         out_dir = out_override or ctx.data_dir(step.standard)
-        out_path = writer(built.frame, out_dir, step.dataset)
+        out_path = writers[formats[step.dataset]](built.frame, out_dir, step.dataset)
         rows, cols = built.frame.shape
         print(f"[{i}/{total}] {step.dataset}: {rows} rows × {cols} cols → {out_path}")
+        for name, source in built.inputs.items():
+            where = source.path or ("built in this run" if source.source == "built" else "seed")
+            print(f"    input {name} -> {where}")
+        declared = entries[step.dataset].output
+        if declared and Path(declared).name != out_path.name:
+            _err(
+                f"warning: {step.dataset}: define.yaml output: {declared} is the Define-XML "
+                f"leaf; fleet run wrote {out_path.name}."
+            )
 
     print()
     print(f"Done — {total} dataset(s) written.")
+
+
+def _run_format(flag: str | None, spec: DefineSpec, entry: DatasetEntry) -> str:
+    """The format of one dataset: --format, then its output_format, then the spec's, then parquet.
+
+    This is the rule of the Define-XML leaf href, so the leaf names the file
+    fleet run writes.  A flag that differs from the define warns.
+    """
+    spec_level = spec.output_format if "output_format" in spec.model_fields_set else None
+    declared = entry.output_format or spec_level
+    if flag and declared and flag != declared:
+        _err(
+            f"warning: {entry.name}: --format {flag} overrides output_format: {declared} "
+            "of define.yaml, so the Define-XML leaf names another file."
+        )
+    return flag or declared or "parquet"
 
 
 # ────────────────────────────────────────────────────────────────────── #
@@ -2448,14 +2486,19 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         default=None,
         help=(
             "Output directory for every dataset. Default: the configured "
-            "data/sdtm and data/adam directories."
+            "data/sdtm and data/adam directories. Fleet only writes here: inputs "
+            "are read from the run, a declared path:, the raw directory (type: raw) "
+            "or the data directory of the input's standard (type: dataset)."
         ),
     )
     run.add_argument(
         "--format",
-        default="parquet",
+        default=None,
         choices=["parquet", "xpt", "dataset-json"],
-        help="Output format (default: parquet).",
+        help=(
+            "Output format of every dataset. Default: the output_format of the dataset, "
+            "else of define.yaml, else parquet (the rule of the Define-XML leaf)."
+        ),
     )
     run.add_argument(
         "--strict",

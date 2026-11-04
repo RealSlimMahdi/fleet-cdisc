@@ -345,6 +345,61 @@ def test_run_dataset_json_writes_the_define_labels_and_oids(
     assert cols["AGE"]["itemOID"] == "IT.AGE"
 
 
+def test_run_prints_each_input_with_its_file(
+    study: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """c1-286: the log names the file each input came from."""
+    monkeypatch.chdir(study)
+
+    assert _run(["run"]) == 0
+
+    assert f"    input dm_raw -> {study / 'data' / 'raw' / 'dm.csv'}" in capsys.readouterr().out
+
+
+def test_run_writes_the_format_the_define_declares(
+    study: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """c1-287: with no --format, output_format: drives the file, as it drives the leaf href."""
+    pytest.importorskip("pyreadstat")
+    define = study / "metadata" / "sdtm" / "define.yaml"
+    define.write_text("output_format: xpt\n" + _SDTM_DEFINE, encoding="utf-8")
+    monkeypatch.chdir(study)
+
+    assert _run(["run"]) == 0
+
+    assert (study / "data" / "sdtm" / "dm.xpt").is_file()
+    assert not (study / "data" / "sdtm" / "dm.parquet").exists()
+    assert "Format:  DM xpt" in capsys.readouterr().out
+
+
+def test_run_warns_when_the_format_flag_differs_from_the_define(
+    study: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    define = study / "metadata" / "sdtm" / "define.yaml"
+    define.write_text("output_format: xpt\n" + _SDTM_DEFINE, encoding="utf-8")
+    monkeypatch.chdir(study)
+
+    assert _run(["run", "--format", "parquet"]) == 0
+
+    assert "--format parquet overrides output_format: xpt" in capsys.readouterr().err
+
+
+def test_define_xml_warns_when_a_leaf_names_no_file(
+    study: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """c1-287: the leaf href must name a file the data folder holds."""
+    monkeypatch.chdir(study)
+
+    assert _run(["define-xml", "--standard", "sdtm", "--no-preview"]) == 0
+
+    assert "no file in" in capsys.readouterr().err
+
+    assert _run(["run"]) == 0
+    capsys.readouterr()
+    assert _run(["define-xml", "--standard", "sdtm", "--no-preview"]) == 0
+    assert "no file in" not in capsys.readouterr().err
+
+
 def test_checker_write_xpt_carries_the_define_labels(study: Path) -> None:
     pyreadstat = pytest.importorskip("pyreadstat")
     from fleet.define_xml import DatasetChecker

@@ -390,6 +390,20 @@ class DefineSpecGenerator:
                 "pinned CT package into this file), or add items: by hand."
             )
 
+    def leaf_hrefs(self) -> dict[str, str]:
+        """Return the ``def:leaf`` href of each dataset, by dataset name.
+
+        Returns:
+            dict[str, str]: Dataset name to href, as the Define-XML writes it.
+
+        Examples:
+            Check that each leaf names a file that exists::
+
+                gen = DefineSpecGenerator("metadata/sdtm/define.yaml")
+                missing = [h for h in gen.leaf_hrefs().values() if not Path("data/sdtm", h).exists()]
+        """
+        return {ds["name"]: self._leaf_href(ds) for ds in self._data.get("datasets") or []}
+
     def _leaf_href(self, ds: dict[str, Any]) -> str:
         """Resolve the ``def:leaf`` href for a dataset.
 

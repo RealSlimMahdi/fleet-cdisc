@@ -25,7 +25,12 @@ uv run fleet tdd build --format xpt           # trial design domains → <sdtm_d
 
 Declare the format once in `define.yaml` — per dataset or spec-wide. The
 choice is recorded in the pipeline DAG and drives the Define-XML leaf
-`href`s, so the metadata always points at the files you actually ship:
+`href`s. `fleet run` writes each dataset in the same format: `--format`,
+else the dataset's `output_format:`, else the spec's, else parquet. A
+`--format` that differs from the define warns, and `fleet define-xml` warns
+when a leaf names a file that the data folder does not hold. `output:`
+names the leaf `href` only; `fleet run` warns when it writes another file
+name:
 
 ```yaml
 output_format: parquet          # spec-level default

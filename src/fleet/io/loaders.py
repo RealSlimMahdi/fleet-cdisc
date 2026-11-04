@@ -68,7 +68,8 @@ def download_raw_data(
 
 def load_raw_data(
     file_path: Path | str,
-    file_type: Literal["csv", "excel", "parquet", "sas", "xpt", "rds", "rdata"] | None = None,
+    file_type: Literal["csv", "excel", "parquet", "sas", "xpt", "rds", "rdata", "dataset-json"]
+    | None = None,
     *,
     rdata_dataset: str | None = None,
     **kwargs,
@@ -76,7 +77,8 @@ def load_raw_data(
     """Load a raw data file as a Polars LazyFrame.
 
     File type is auto-detected from the extension if not provided.
-    Supports CSV, Excel, Parquet, SAS7BDAT, XPT, RDS, and RData formats.
+    Supports CSV, Excel, Parquet, SAS7BDAT, XPT, RDS, RData and
+    Dataset-JSON (``.json``, read by :func:`fleet.io.read_dataset_json`).
 
     SAS files (XPT, SAS7BDAT) follow the SAS rule for missing values: a
     blank character value reads as null, so ``is_null()`` finds it.  A
@@ -130,6 +132,7 @@ def load_raw_data(
             ".rds": "rds",
             ".rda": "rdata",
             ".rdata": "rdata",
+            ".json": "dataset-json",
         }
         file_type = type_map.get(suffix)
         if file_type is None:
@@ -146,6 +149,10 @@ def load_raw_data(
             return _load_sas(file_path, **kwargs)
         elif file_type in ("rds", "rdata"):
             return _load_r(file_path, dataset_name=rdata_dataset, **kwargs)
+        elif file_type == "dataset-json":
+            from fleet.io.dataset_json import read_dataset_json
+
+            return read_dataset_json(file_path).lazy()
         else:
             raise FleetIOError(f"Unsupported file type: {file_type}")
     except (FleetIOError, ImportError):
