@@ -2699,7 +2699,7 @@ cannot replace the engine the team pinned. An explicit <code>rules_engine_path=<
 </tr>
 <tr>
 <td><strong>Testability</strong></td>
-<td>400+ admiral parity tests; CDISC Library traceability; CORE conformance checking; smoke test examples; ruff static analysis</td>
+<td>2,900+ unit tests; 39 parity tests with frozen admiral values and a weekly admiral oracle job; CORE conformance checking; example scripts in CI; ruff static analysis</td>
 <td>High testability → lowers residual risk</td>
 </tr>
 <tr>
@@ -2760,8 +2760,14 @@ cannot replace the engine the team pinned. An explicit <code>rules_engine_path=<
 <tr>
 <td>Cross-language algorithm benchmark</td>
 <td><code>tests/unit/test_admiral_parity.py</code></td>
-<td>BSA, MAP, QTc, LOCF, BMI, ANL01FL, age/period</td>
+<td>BSA, MAP, QTc, LOCF, BMI, ANL01FL, age/period (frozen admiral values)</td>
 <td>Runs in CI on every commit</td>
+</tr>
+<tr>
+<td>admiral oracle</td>
+<td><code>scripts/admiral_oracle.py</code></td>
+<td>Study day, duration, TRTEMFL, ANL01FL on real ADAE shapes, run by admiral 1.4.1</td>
+<td>Runs in CI weekly</td>
 </tr>
 <tr>
 <td>SDTM conformance</td>
@@ -2777,9 +2783,9 @@ cannot replace the engine the team pinned. An explicit <code>rules_engine_path=<
 </tr>
 <tr>
 <td>Unit and integration tests</td>
-<td><code>pytest</code> (400+ tests across 20 test modules)</td>
+<td><code>pytest</code> (2,900+ tests)</td>
 <td>Namespace verbs, CT validation, Define-XML, TDD workflows</td>
-<td>Runs in CI on every commit</td>
+<td>Runs in CI on every commit, Python 3.12 to 3.14</td>
 </tr>
 <tr>
 <td>Static analysis</td>
@@ -2789,8 +2795,8 @@ cannot replace the engine the team pinned. An explicit <code>rules_engine_path=<
 </tr>
 <tr>
 <td>End-to-end smoke tests</td>
-<td><code>examples/*.py</code> (5 scripts, CDISCPILOT01 study)</td>
-<td>Full SDTM + ADaM pipelines</td>
+<td><code>examples/*.py</code> (8 scripts, CDISCPILOT01 study)</td>
+<td>Full SDTM + ADaM pipelines and TLGs</td>
 <td>Runs in CI on every commit</td>
 </tr>
 <tr>
@@ -2830,7 +2836,7 @@ cannot replace the engine the team pinned. An explicit <code>rules_engine_path=<
     <span class="md-icon" title="Last update">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M21 13.1c-.1 0-.3.1-.4.2l-1 1 2.1 2.1 1-1c.2-.2.2-.6 0-.8l-1.3-1.3c-.1-.1-.2-.2-.4-.2m-1.9 1.8-6.1 6V23h2.1l6.1-6.1zM12.5 7v5.2l4 2.4-1 1L11 13V7zM11 21.9c-5.1-.5-9-4.8-9-9.9C2 6.5 6.5 2 12 2c5.3 0 9.6 4.1 10 9.3-.3-.1-.6-.2-1-.2s-.7.1-1 .2C19.6 7.2 16.2 4 12 4c-4.4 0-8 3.6-8 8 0 4.1 3.1 7.5 7.1 7.9l-.1.2z"/></svg>
     </span>
-    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 2, 2026 11:40:41 UTC">November 2, 2026</span>
+    <span class="git-revision-date-localized-plugin git-revision-date-localized-plugin-date" title="November 3, 2026 22:02:25 UTC">November 3, 2026</span>
   </span>
 
     
