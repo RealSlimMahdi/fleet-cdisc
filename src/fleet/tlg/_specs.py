@@ -630,10 +630,11 @@ class TLGSpec(BaseModel):
                     "Use a string expression instead."
                 )
         data = self.model_dump(exclude_none=True, exclude_defaults=False)
-        # An explicit prefilter=None switches a template's default rule
-        # off; dropping it would bring the default back on reload.
-        if "prefilter" in self.model_fields_set and getattr(self, "prefilter", 0) is None:
-            data["prefilter"] = None
+        # An explicit None switches a template's default rule off;
+        # dropping it would bring the default back on reload.
+        for field_name in ("prefilter", "uncoded"):
+            if field_name in self.model_fields_set and getattr(self, field_name, 0) is None:
+                data[field_name] = None
         # Convert enums to their values
         data = _enum_to_value(data)
         return yaml.dump(data, default_flow_style=False, sort_keys=False)
