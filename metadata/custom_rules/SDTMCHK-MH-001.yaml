@@ -1,58 +1,57 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-MH-001: MH date missing month (incomplete date)
-# Source: sdtmchecks::check_mh_missing_month
+# Based on: sdtmchecks::check_mh_missing_month. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-MH-001
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [EVENTS]
+    Include:
+    - EVENTS
   Domains:
-    Include: [MH]
-
+    Include:
+    - MH
 Check:
   any:
-    - all:
-        - name: MHSTDTC
-          operator: non_empty
-        - name: MHSTDTC
-          operator: is_incomplete_date
-    - all:
-        - name: MHENDTC
-          operator: non_empty
-        - name: MHENDTC
-          operator: is_incomplete_date
-
+  - all:
+    - name: MHSTDTC
+      operator: exists
+    - name: MHSTDTC
+      operator: matches_regex
+      value: ^\d{4}---
+  - all:
+    - name: MHENDTC
+      operator: exists
+    - name: MHENDTC
+      operator: matches_regex
+      value: ^\d{4}---
 Outcome:
-  Message: >-
-    MH date (MHSTDTC or MHENDTC) is an incomplete (partial) date. Medical history
-    dates should have at least month-level precision when available.
-  Output Variables: [USUBJID, MHTERM, MHDECOD, MHSTDTC, MHENDTC]
-
-Description: >-
-  Medical history start/end dates should include at minimum month precision.
-  Year-only dates (YYYY) indicate potential data quality issues.
-
+  Message: An MH date (MHSTDTC or MHENDTC) has a year and a day but no month (yyyy---dd).
+  Output Variables:
+  - USUBJID
+  - MHTERM
+  - MHDECOD
+  - MHSTDTC
+  - MHENDTC
+Description: 'Flags: An MH date (MHSTDTC or MHENDTC) has a year and a day but no month (yyyy---dd). Based
+  on sdtmchecks::check_mh_missing_month. Same conditions as the R function.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-MH-001
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_mh_missing_month
-                Document: pharmaverse sdtmchecks
-                Section: MH Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-MH-001
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_mh_missing_month
+        Document: pharmaverse sdtmchecks
+        Section: MH Domain

@@ -1,53 +1,56 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-AE-022: AEACNOTH=MULTIPLE but AEACNOT1/AEACNOT2 missing
-# Source: sdtmchecks::check_ae_aeacnoth
+# Based on: sdtmchecks::check_ae_aeacnoth. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-AE-022
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [EVENTS]
+    Include:
+    - EVENTS
   Domains:
-    Include: [AE]
-
+    Include:
+    - AE
 Check:
   all:
-    - name: AEACNOTH
-      operator: equal_to_case_insensitive
-      value: "MULTIPLE"
+  - name: AEACNOTH
+    operator: equal_to
+    value: MULTIPLE
+    value_is_literal: true
+  - any:
     - name: AEACNOT1
       operator: empty
-
+    - all:
+      - name: AEACNOT2
+        operator: exists
+      - name: AEACNOT2
+        operator: empty
 Outcome:
-  Message: >-
-    AEACNOTH is 'MULTIPLE' indicating multiple other actions but AEACNOT1 is
-    missing. When multiple actions are indicated, the detail fields should be populated.
-  Output Variables: [USUBJID, AETERM, AEACNOTH, AEACNOT1]
-
-Description: >-
-  When AEACNOTH='MULTIPLE', at least AEACNOT1 should be populated to describe
-  the specific other actions taken.
-
+  Message: AEACNOTH is 'MULTIPLE' but AEACNOT1 or AEACNOT2 is missing.
+  Output Variables:
+  - USUBJID
+  - AETERM
+  - AEACNOTH
+  - AEACNOT1
+Description: 'Flags: AEACNOTH is ''MULTIPLE'' but AEACNOT1 or AEACNOT2 is missing. Based on sdtmchecks::check_ae_aeacnoth.
+  Same conditions as the R function.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-AE-022
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_ae_aeacnoth
-                Document: pharmaverse sdtmchecks
-                Section: AE Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-AE-022
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_ae_aeacnoth
+        Document: pharmaverse sdtmchecks
+        Section: AE Domain

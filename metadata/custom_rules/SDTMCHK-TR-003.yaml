@@ -1,55 +1,66 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-TR-003: Duplicate TR records (same date across visits)
-# Source: sdtmchecks::check_tr_dup / check_tr_trdtc_across_visit
+# Based on: sdtmchecks::check_tr_dup / check_tr_trdtc_across_visit. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-TR-003
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [FINDINGS]
+    Include:
+    - FINDINGS
   Domains:
-    Include: [TR]
-
+    Include:
+    - TR
 Check:
   all:
-    - name: TRTESTCD
-      operator: is_not_unique_set
-      value:
-        - USUBJID
-        - TRLINKID
-        - TRDTC
-        - VISITNUM
-
+  - any:
+    - name: TREVAL
+      operator: not_exists
+    - name: TREVAL
+      operator: empty
+    - name: TREVAL
+      operator: equal_to_case_insensitive
+      value: INVESTIGATOR
+  - name: TRSTRESC
+    operator: is_not_unique_set
+    value:
+    - USUBJID
+    - TRCAT
+    - TRTESTCD
+    - TRLINKID
+    - TRSPID
+    - TRDTC
 Outcome:
-  Message: >-
-    Duplicate TR record detected. The combination of USUBJID, TRLINKID,
-    TRTESTCD, TRDTC, and VISITNUM is not unique.
-  Output Variables: [USUBJID, TRLINKID, TRTESTCD, TRDTC, VISIT, VISITNUM, TRSEQ]
-
-Description: >-
-  TR records should be unique per subject, lesion link, test, date, and visit.
-  Duplicates suggest data entry errors or improper lesion tracking.
-
+  Message: 'Duplicate investigator TR record: USUBJID, TRCAT, TRTESTCD, TRLINKID, TRSPID, TRDTC and TRSTRESC
+    are not unique.'
+  Output Variables:
+  - USUBJID
+  - TRLINKID
+  - TRTESTCD
+  - TRDTC
+  - VISIT
+  - VISITNUM
+  - TRSEQ
+Description: 'Flags: Duplicate investigator TR record: USUBJID, TRCAT, TRTESTCD, TRLINKID, TRSPID, TRDTC
+  and TRSTRESC are not unique. Based on sdtmchecks::check_tr_dup. Difference from the R function: The
+  key is computed on all records; R drops independent assessor records first.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-TR-003
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_tr_dup
-                Document: pharmaverse sdtmchecks
-                Section: TR Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-TR-003
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_tr_dup
+        Document: pharmaverse sdtmchecks
+        Section: TR Domain

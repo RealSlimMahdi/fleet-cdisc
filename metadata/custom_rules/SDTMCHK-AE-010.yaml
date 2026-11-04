@@ -1,58 +1,63 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-AE-010: AEOUT=FATAL but AEENDTC does not match AEDTHDTC
-# Source: sdtmchecks::check_ae_aeout_aeendtc_aedthdtc
+# Based on: sdtmchecks::check_ae_aeout_aeendtc_aedthdtc. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-AE-010
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [EVENTS]
+    Include:
+    - EVENTS
   Domains:
-    Include: [AE]
-
+    Include:
+    - AE
 Check:
   all:
-    - name: AEOUT
-      operator: equal_to
-      value: "FATAL"
-      value_is_literal: true
-    - name: AEDTHDTC
-      operator: non_empty
+  - name: AEOUT
+    operator: equal_to
+    value: FATAL
+    value_is_literal: true
+  - any:
     - name: AEENDTC
-      operator: non_empty
-    - name: AEENDTC
-      operator: not_equal_to
-      value: AEDTHDTC
-
+      operator: empty
+    - all:
+      - name: AEENDTC
+        operator: non_empty
+      - name: AEDTHDTC
+        operator: non_empty
+      - name: AEENDTC
+        operator: not_equal_to
+        value: AEDTHDTC
 Outcome:
-  Message: >-
-    AEOUT is 'FATAL' and both AEENDTC and AEDTHDTC are populated but do not
-    match. For fatal AEs, the end date should equal the death date.
-  Output Variables: [USUBJID, AETERM, AEDECOD, AEOUT, AEENDTC, AEDTHDTC]
-
-Description: >-
-  When AEOUT is 'FATAL', AEENDTC and AEDTHDTC should be equal.
-
+  Message: AEOUT is 'FATAL' but AEENDTC is missing or does not equal AEDTHDTC. Query only if the team
+    agrees (note of the R function).
+  Output Variables:
+  - USUBJID
+  - AETERM
+  - AEDECOD
+  - AEOUT
+  - AEENDTC
+  - AEDTHDTC
+Description: 'Flags: AEOUT is ''FATAL'' but AEENDTC is missing or does not equal AEDTHDTC. Query only
+  if the team agrees (note of the R function). Based on sdtmchecks::check_ae_aeout_aeendtc_aedthdtc. Same
+  conditions as the R function.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-AE-010
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_ae_aeout_aeendtc_aedthdtc
-                Document: pharmaverse sdtmchecks
-                Section: AE Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-AE-010
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_ae_aeout_aeendtc_aedthdtc
+        Document: pharmaverse sdtmchecks
+        Section: AE Domain

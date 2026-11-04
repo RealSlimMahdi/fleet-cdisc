@@ -1,59 +1,46 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-AE-021: AEREL array check — unexpected relationship values
-# Source: sdtmchecks::check_ae_aerel
+# Based on: sdtmchecks::check_ae_aerel. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-AE-021
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [EVENTS]
+    Include:
+    - EVENTS
   Domains:
-    Include: [AE]
-
+    Include:
+    - AE
 Check:
   all:
-    - name: AEREL
-      operator: non_empty
-    - name: AEREL
-      operator: is_not_contained_by
-      value:
-        - "RELATED"
-        - "NOT RELATED"
-        - "POSSIBLY RELATED"
-        - "PROBABLY RELATED"
-        - "UNLIKELY RELATED"
-        - "DEFINITELY RELATED"
-
+  - name: AEREL
+    operator: empty
 Outcome:
-  Message: >-
-    AEREL contains an unexpected value. Acceptable values include standard
-    causality terms (RELATED, NOT RELATED, POSSIBLY/PROBABLY/UNLIKELY/DEFINITELY RELATED).
-  Output Variables: [USUBJID, AETERM, AEDECOD, AEREL]
-
-Description: >-
-  AEREL should contain a valid causality assessment term. Non-standard
-  values may indicate data entry issues or unmapped source data.
-
+  Message: AEREL is missing.
+  Output Variables:
+  - USUBJID
+  - AETERM
+  - AEDECOD
+  - AEREL
+Description: 'Flags: AEREL is missing. Based on sdtmchecks::check_ae_aerel. Difference from the R function:
+  The AERELn logic of R (AEREL derived from AEREL1, AEREL2, ...) is not checked.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-AE-021
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_ae_aerel
-                Document: pharmaverse sdtmchecks
-                Section: AE Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-AE-021
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_ae_aerel
+        Document: pharmaverse sdtmchecks
+        Section: AE Domain

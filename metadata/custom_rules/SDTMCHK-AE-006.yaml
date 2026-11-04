@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-AE-006: Grade 5 AE with inconsistent death variables
-# Source: sdtmchecks::check_ae_death
+# Based on: sdtmchecks::check_ae_death. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-AE-006
@@ -42,6 +42,7 @@ Outcome:
 Description: >-
   When AETOXGR is '5', AEOUT must be 'FATAL', AEDTHDTC must be populated,
   and AESDTH must be 'Y'.
+  Based on sdtmchecks::check_ae_death. Same conditions as the R function.
 
 Sensitivity: Record
 Executability: Fully Executable

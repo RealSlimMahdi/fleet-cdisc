@@ -1,53 +1,54 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-AE-012: AE laterality missing for eye-related AEs
-# Source: sdtmchecks::check_ae_aelat
+# Based on: sdtmchecks::check_ae_aelat. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-AE-012
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [EVENTS]
+    Include:
+    - EVENTS
   Domains:
-    Include: [AE]
-
+    Include:
+    - AE
 Check:
   all:
-    - name: AEBODSYS
-      operator: equal_to
-      value: "EYE DISORDERS"
-      value_is_literal: true
-    - name: AELAT
-      operator: empty
-
+  - name: AESOC
+    operator: contains_case_insensitive
+    value: EYE
+  - name: AELAT
+    operator: is_not_contained_by_case_insensitive
+    value:
+    - LEFT
+    - RIGHT
+    - BILATERAL
 Outcome:
-  Message: >-
-    AEBODSYS indicates an eye disorder but AELAT (laterality) is missing.
-    Eye-related AEs should specify LEFT, RIGHT, or BILATERAL.
-  Output Variables: [USUBJID, AETERM, AEDECOD, AEBODSYS, AELAT]
-
-Description: >-
-  Eye-related AEs (AEBODSYS='EYE DISORDERS') must have AELAT populated.
-
+  Message: AESOC is an eye disorder but AELAT is not LEFT, RIGHT or BILATERAL.
+  Output Variables:
+  - USUBJID
+  - AETERM
+  - AEDECOD
+  - AEBODSYS
+  - AELAT
+Description: 'Flags: AESOC is an eye disorder but AELAT is not LEFT, RIGHT or BILATERAL. Based on sdtmchecks::check_ae_aelat.
+  Same conditions as the R function.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-AE-012
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_ae_aelat
-                Document: pharmaverse sdtmchecks
-                Section: AE Domain (OPHTH)
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-AE-012
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_ae_aelat
+        Document: pharmaverse sdtmchecks
+        Section: AE Domain (OPHTH)

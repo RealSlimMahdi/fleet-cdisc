@@ -1,63 +1,63 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-SS-004: DEAD status without DS death record
-# Source: sdtmchecks::check_ss_ssdtc_dead_ds
+# Based on: sdtmchecks::check_ss_ssdtc_dead_ds. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-SS-004
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [EVENTS]
+    Include:
+    - FINDINGS
   Domains:
-    Include: [SS]
-
+    Include:
+    - SS
 Check:
   all:
-    - name: SSSTRESC
-      operator: equal_to
-      value: "DEAD"
-      value_is_literal: true
-    - name: USUBJID
-      operator: is_not_contained_by
-      value: $ds_death_subjects
-
+  - name: SSSTRESC
+    operator: equal_to_case_insensitive
+    value: DEAD
+  - name: SSDTC
+    operator: non_empty
+  - name: USUBJID
+    operator: is_not_contained_by
+    value: $ds_death_subjects
 Operations:
-  - operator: distinct
-    domain: DS
-    name: USUBJID
-    id: $ds_death_subjects
-    filter:
-      DSDECOD: DEATH
-
+- operator: distinct
+  domain: DS
+  name: USUBJID
+  id: $ds_death_subjects
+  filter:
+    DSDECOD: DEATH
+    DSCAT: DISPOSITION EVENT
 Outcome:
-  Message: >-
-    Subject has SSSTRESC='DEAD' but no death record (DSDECOD='DEATH') in DS.
-    Subject survival status of dead should have corresponding DS disposition.
-  Output Variables: [USUBJID, SSSTRESC, SSDTC, VISIT]
-
-Description: >-
-  When SSSTRESC='DEAD', there should be a corresponding DSDECOD='DEATH'
-  record in DS. Missing death disposition is a data consistency issue.
-
+  Message: SSSTRESC is DEAD but DS has no death disposition record (DSDECOD = 'DEATH', DSCAT = 'DISPOSITION
+    EVENT').
+  Output Variables:
+  - USUBJID
+  - SSSTRESC
+  - SSDTC
+  - VISIT
+Description: 'Flags: SSSTRESC is DEAD but DS has no death disposition record (DSDECOD = ''DEATH'', DSCAT
+  = ''DISPOSITION EVENT''). Based on sdtmchecks::check_ss_ssdtc_dead_ds. Difference from the R function:
+  The date order (SSDTC before the DS death date) is not checked, and a DS death record with no date counts
+  as a death record. R checks both.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-SS-004
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_ss_ssdtc_dead_ds
-                Document: pharmaverse sdtmchecks
-                Section: SS Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-SS-004
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_ss_ssdtc_dead_ds
+        Document: pharmaverse sdtmchecks
+        Section: SS Domain

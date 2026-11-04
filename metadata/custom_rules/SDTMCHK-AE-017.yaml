@@ -1,52 +1,51 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-AE-017: Partial death dates in AE/DS
-# Source: sdtmchecks::check_ae_ds_partial_death_dates
+# Based on: sdtmchecks::check_ae_ds_partial_death_dates. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-AE-017
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [EVENTS]
+    Include:
+    - EVENTS
   Domains:
-    Include: [AE]
-
+    Include:
+    - AE
 Check:
   all:
-    - name: AEDTHDTC
-      operator: non_empty
-    - name: AEDTHDTC
-      operator: is_incomplete_date
-
+  - name: AEDTHDTC
+    operator: non_empty
+  - name: AEDTHDTC
+    operator: shorter_than
+    value: 10
 Outcome:
-  Message: >-
-    AEDTHDTC is a partial (incomplete) date. Death dates should be complete
-    dates (YYYY-MM-DD) for accurate safety reporting.
-  Output Variables: [USUBJID, AETERM, AEDTHDTC, AESDTH, AEOUT]
-
-Description: >-
-  AEDTHDTC should be a complete date (minimum YYYY-MM-DD precision).
-  Partial death dates are problematic for safety analysis.
-
+  Message: AEDTHDTC is a partial date (fewer than 10 characters).
+  Output Variables:
+  - USUBJID
+  - AETERM
+  - AEDTHDTC
+  - AESDTH
+  - AEOUT
+Description: 'Flags: AEDTHDTC is a partial date (fewer than 10 characters). Based on sdtmchecks::check_ae_ds_partial_death_dates.
+  Difference from the R function: Only AEDTHDTC is checked. R also checks the DS death date (DSSTDTC of
+  DEATH records).'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-AE-017
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_ae_ds_partial_death_dates
-                Document: pharmaverse sdtmchecks
-                Section: AE Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-AE-017
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_ae_ds_partial_death_dates
+        Document: pharmaverse sdtmchecks
+        Section: AE Domain

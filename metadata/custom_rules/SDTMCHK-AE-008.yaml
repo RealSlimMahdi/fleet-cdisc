@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-AE-008: AEOUT=RECOVERED/RESOLVED but AEENDTC missing
-# Source: sdtmchecks::check_ae_aeout_aeendtc_nonfatal
+# Based on: sdtmchecks::check_ae_aeout_aeendtc_nonfatal. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-AE-008
@@ -32,6 +32,7 @@ Outcome:
 Description: >-
   When AEOUT is 'RECOVERED/RESOLVED' or 'RECOVERED/RESOLVED WITH SEQUELAE',
   AEENDTC should be populated.
+  Based on sdtmchecks::check_ae_aeout_aeendtc_nonfatal. Same conditions as the R function.
 
 Sensitivity: Record
 Executability: Fully Executable

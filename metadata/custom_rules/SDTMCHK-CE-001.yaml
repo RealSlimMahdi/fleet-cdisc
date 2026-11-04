@@ -1,52 +1,62 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-CE-001: CE dates missing month (incomplete date)
-# Source: sdtmchecks::check_ce_missing_month
+# Based on: sdtmchecks::check_ce_missing_month. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-CE-001
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [EVENTS]
+    Include:
+    - EVENTS
   Domains:
-    Include: [CE]
-
+    Include:
+    - CE
 Check:
-  all:
+  any:
+  - all:
     - name: CESTDTC
-      operator: non_empty
+      operator: exists
     - name: CESTDTC
-      operator: is_incomplete_date
-
+      operator: matches_regex
+      value: ^\d{4}---
+  - all:
+    - name: CEENDTC
+      operator: exists
+    - name: CEENDTC
+      operator: matches_regex
+      value: ^\d{4}---
+  - all:
+    - name: CEDTC
+      operator: exists
+    - name: CEDTC
+      operator: matches_regex
+      value: ^\d{4}---
 Outcome:
-  Message: >-
-    CESTDTC is an incomplete (partial) date. Clinical event dates should
-    have at least month-level precision (YYYY-MM or YYYY-MM-DD).
-  Output Variables: [USUBJID, CETERM, CESTDTC, VISIT]
-
-Description: >-
-  CE start dates should be complete or at minimum include month precision.
-  Year-only dates (YYYY) or dates missing month indicate data quality issues.
-
+  Message: A CE date (CESTDTC, CEENDTC or CEDTC) has a year and a day but no month (yyyy---dd).
+  Output Variables:
+  - USUBJID
+  - CETERM
+  - CESTDTC
+  - VISIT
+Description: 'Flags: A CE date (CESTDTC, CEENDTC or CEDTC) has a year and a day but no month (yyyy---dd).
+  Based on sdtmchecks::check_ce_missing_month. Same conditions as the R function.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-CE-001
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_ce_missing_month
-                Document: pharmaverse sdtmchecks
-                Section: CE Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-CE-001
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_ce_missing_month
+        Document: pharmaverse sdtmchecks
+        Section: CE Domain

@@ -1,22 +1,22 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-DM-002: ARM != ACTARM
-# Source: sdtmchecks::check_dm_actarm_arm
+# Based on: sdtmchecks::check_dm_actarm_arm. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-DM-002
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [SPECIAL PURPOSE]
+    Include:
+    - SPECIAL PURPOSE
   Domains:
-    Include: [DM]
-
+    Include:
+    - DM
 Check:
-  all:
+  any:
+  - all:
     - name: ARM
       operator: non_empty
     - name: ACTARM
@@ -24,31 +24,38 @@ Check:
     - name: ARM
       operator: not_equal_to
       value: ACTARM
-
+  - all:
+    - name: ARM
+      operator: non_empty
+    - name: ACTARM
+      operator: empty
+  - all:
+    - name: ARM
+      operator: empty
+    - name: ACTARM
+      operator: non_empty
 Outcome:
-  Message: >-
-    ARM does not equal ACTARM. In most studies, planned and actual arms
-    should match. Mismatches require review.
-  Output Variables: [USUBJID, ARM, ACTARM]
-
-Description: >-
-  ARM and ACTARM should be equal unless there is a documented protocol deviation.
-
+  Message: ARM does not equal ACTARM (a missing value counts as a value).
+  Output Variables:
+  - USUBJID
+  - ARM
+  - ACTARM
+Description: 'Flags: ARM does not equal ACTARM (a missing value counts as a value). Based on sdtmchecks::check_dm_actarm_arm.
+  Same conditions as the R function.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-DM-002
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_dm_actarm_arm
-                Document: pharmaverse sdtmchecks
-                Section: DM Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-DM-002
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_dm_actarm_arm
+        Document: pharmaverse sdtmchecks
+        Section: DM Domain

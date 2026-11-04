@@ -1,58 +1,79 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-AE-007: AEOUT=FATAL with inconsistent death variables
-# Source: sdtmchecks::check_ae_fatal
+# Based on: sdtmchecks::check_ae_fatal. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-AE-007
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [EVENTS]
+    Include:
+    - EVENTS
   Domains:
-    Include: [AE]
-
+    Include:
+    - AE
 Check:
   all:
-    - name: AEOUT
-      operator: equal_to
-      value: "FATAL"
+  - name: AEOUT
+    operator: equal_to
+    value: FATAL
+    value_is_literal: true
+  - any:
+    - name: AEDTHDTC
+      operator: empty
+    - name: AESDTH
+      operator: empty
+    - name: AESDTH
+      operator: not_equal_to
+      value: Y
       value_is_literal: true
-    - any:
-        - name: AESDTH
-          operator: not_equal_to
-          value: "Y"
-          value_is_literal: true
-        - name: AEDTHDTC
-          operator: empty
-
+    - all:
+      - name: AETOXGR
+        operator: exists
+      - name: AETOXGR
+        operator: non_empty
+      - name: AETOXGR
+        operator: not_equal_to
+        value: '5'
+        value_is_literal: true
+    - all:
+      - name: AESEV
+        operator: exists
+      - name: AESEV
+        operator: non_empty
+      - name: AESEV
+        operator: not_equal_to
+        value: SEVERE
+        value_is_literal: true
 Outcome:
-  Message: >-
-    AEOUT is 'FATAL' but AESDTH is not 'Y' or AEDTHDTC is missing.
-    Fatal AEs require consistent death indicators.
-  Output Variables: [USUBJID, AETERM, AEDECOD, AEOUT, AESDTH, AEDTHDTC]
-
-Description: >-
-  When AEOUT is 'FATAL', AESDTH must be 'Y' and AEDTHDTC must be populated.
-
+  Message: AEOUT is 'FATAL' but AEDTHDTC is missing, AESDTH is not 'Y', AETOXGR is not 5 or AESEV is not
+    SEVERE.
+  Output Variables:
+  - USUBJID
+  - AETERM
+  - AEDECOD
+  - AEOUT
+  - AESDTH
+  - AEDTHDTC
+Description: 'Flags: AEOUT is ''FATAL'' but AEDTHDTC is missing, AESDTH is not ''Y'', AETOXGR is not 5
+  or AESEV is not SEVERE. Based on sdtmchecks::check_ae_fatal. Difference from the R function: A null
+  AETOXGR or AESEV is not flagged. R flags a null AETOXGR when the study maps AETOXGR.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-AE-007
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_ae_fatal
-                Document: pharmaverse sdtmchecks
-                Section: AE Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-AE-007
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_ae_fatal
+        Document: pharmaverse sdtmchecks
+        Section: AE Domain

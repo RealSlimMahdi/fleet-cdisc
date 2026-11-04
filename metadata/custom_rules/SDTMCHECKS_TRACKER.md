@@ -445,14 +445,14 @@ USUBJID as the join key.
 
 ### Summary
 
-| Status | Count |
-|--------|-------|
-| ✅ YAML translated | 53 |
-| 🔵 Covered by CORE | 14 |
-| ⚠️ Not expressible | 8 |
-| 🟡 COVID/OPHTH-specific (skipped) | 15 |
-| 🔄 Partially expressible (simplified) | 19 |
-| **Total functions** | **109** |
+This page keeps no typed totals: count the rows of the tables below. The
+rule files are the reference (`ls metadata/custom_rules/SDTMCHK-*.yaml`).
+
+**Fidelity** (c2-918). A rule follows the condition of its R function. When
+the engine cannot express a part of it, the rule file states the difference
+in `Description`. When the engine cannot express the check at all, the rule
+was removed. `tests/unit/test_sdtmchecks_rules.py` runs every rule on one
+frame the R function fails and one frame it passes.
 
 ---
 
@@ -464,278 +464,279 @@ USUBJID as the join key.
 | **Domain(s)** | SDTM domain(s) involved |
 | **Status** | ✅ Translated / 🔵 CORE covered / ⚠️ Not expressible / 🟡 Skipped / 🔄 Partial |
 | **Rule ID** | Fleet custom rule ID or CORE ID |
+| **Fidelity** | Same as R / Differs (the rule file states how) / Removed (the engine cannot express the R condition) |
 | **Notes** | Coverage details and engine mechanism used |
 
 ---
 
 ### AE Domain Checks
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 1 | `check_ae_aedecod` | AE | ✅ | SDTMCHK-AE-001 | `empty` operator |
-| 2 | `check_ae_aedthdtc_aesdth` | AE | ✅ | SDTMCHK-AE-002 | `non_empty` + `not_equal_to` |
-| 3 | `check_ae_aesdth_aedthdtc` | AE | ✅ | SDTMCHK-AE-003 | `equal_to` + `empty` |
-| 4 | `check_ae_aeout` (part 1) | AE | ✅ | SDTMCHK-AE-004 | AEDTHDTC present, AEOUT≠FATAL |
-| 5 | `check_ae_aeout` (part 2) | AE | ✅ | SDTMCHK-AE-005 | AEOUT=FATAL, AEDTHDTC missing |
-| 6 | `check_ae_death` | AE | ✅ | SDTMCHK-AE-006 | Grade 5 death inconsistency |
-| 7 | `check_ae_fatal` | AE | ✅ | SDTMCHK-AE-007 | AEOUT=FATAL inconsistency |
-| 8 | `check_ae_aeout_aeendtc_nonfatal` (part 1) | AE | ✅ | SDTMCHK-AE-008 | Resolved AE, AEENDTC missing |
-| 9 | `check_ae_aeout_aeendtc_nonfatal` (part 2) | AE | ✅ | SDTMCHK-AE-009 | NOT RECOVERED, AEENDTC populated |
-| 10 | `check_ae_aeout_aeendtc_aedthdtc` | AE | ✅ | SDTMCHK-AE-010 | FATAL: AEENDTC≠AEDTHDTC |
-| 11 | `check_ae_aetoxgr` | AE | ✅ | SDTMCHK-AE-011 | Both AETOXGR and AESEV missing |
-| 12 | `check_ae_aelat` | AE | ✅ | SDTMCHK-AE-012 | Eye AE missing laterality |
-| 13 | `check_ae_aestdtc_after_aeendtc` | AE | 🔵 | CORE-000717 | AESTDTC > AEENDTC |
-| 14 | `check_ae_aerel` | AE | ✅ | SDTMCHK-AE-021 | `is_not_contained_by` value list |
-| 15 | `check_ae_dup` | AE | ✅ | SDTMCHK-AE-014 | `is_not_unique_set` |
-| 16 | `check_ae_aeacnoth` | AE | ✅ | SDTMCHK-AE-022 | MULTIPLE but AEACNOT1 missing |
-| 17 | `check_ae_aestdtc_after_dd` | AE, DS | ✅ | SDTMCHK-AE-013 | `Operations: max_date` + `date_greater_than` |
-| 18 | `check_ae_aedthdtc_ds_death` | AE, DS | ✅ | SDTMCHK-AE-015 | `Operations: distinct` + `is_not_contained_by` |
-| 19 | `check_ae_death_ds_discon` | AE, DS | ✅ | SDTMCHK-AE-019 | `Operations: distinct` + `is_not_contained_by` |
-| 20 | `check_ae_ds_partial_death_dates` | AE | ✅ | SDTMCHK-AE-017 | `is_incomplete_date` |
-| 21 | `check_ae_withdr_ds_discon` | AE, DS | ✅ | SDTMCHK-AE-018 | `Operations: distinct` + `is_not_contained_by` |
-| 22 | `check_ae_aeacn_ds_disctx_covid` | AE, DS | 🟡 | — | COVID-specific |
-| 23 | `check_ae_aeacnoth_ds_disctx` | AE, DS | ✅ | SDTMCHK-AE-020 | `contains_case_insensitive` + cross-domain |
-| 24 | `check_ae_aeacnoth_ds_stddisc_covid` | AE, DS | 🟡 | — | COVID-specific |
-| — | `check_dd_ae_aedthdtc_ds_dsstdtc` | AE, DS | ✅ | SDTMCHK-AE-016 | `Operations: max_date` + `date_not_equal_to` |
-| — | `check_dd_ae_aeout_aedthdtc` | AE | 🔵 | SDTMCHK-AE-004/005 | Covered by existing rules |
-| — | `check_dd_death_date` | AE, DS | 🔄 | SDTMCHK-AE-015 | Partially covered via AE-015 |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 1 | `check_ae_aedecod` | AE | ✅ | SDTMCHK-AE-001 | Same as R | `empty` operator |
+| 2 | `check_ae_aedthdtc_aesdth` | AE | ✅ | SDTMCHK-AE-002 | Same as R | `non_empty` + `not_equal_to` |
+| 3 | `check_ae_aesdth_aedthdtc` | AE | ✅ | SDTMCHK-AE-003 | Same as R | `equal_to` + `empty` |
+| 4 | `check_ae_aeout` (part 1) | AE | ✅ | SDTMCHK-AE-004 | Same as R | AEDTHDTC present, AEOUT≠FATAL |
+| 5 | `check_ae_aeout` (part 2) | AE | ✅ | SDTMCHK-AE-005 | Same as R | AEOUT=FATAL, AEDTHDTC missing |
+| 6 | `check_ae_death` | AE | ✅ | SDTMCHK-AE-006 | Same as R | Grade 5 death inconsistency |
+| 7 | `check_ae_fatal` | AE | ✅ | SDTMCHK-AE-007 | Differs (stated in the rule) | AEOUT is 'FATAL' but AEDTHDTC is missing, AESDTH is not 'Y', AETOXGR is not 5 or AESEV is not SEVERE. |
+| 8 | `check_ae_aeout_aeendtc_nonfatal` (part 1) | AE | ✅ | SDTMCHK-AE-008 | Same as R | Resolved AE, AEENDTC missing |
+| 9 | `check_ae_aeout_aeendtc_nonfatal` (part 2) | AE | ✅ | SDTMCHK-AE-009 | Same as R | AEOUT is UNKNOWN, NOT RECOVERED/NOT RESOLVED or RECOVERING/RESOLVING but AEENDTC is populated. |
+| 10 | `check_ae_aeout_aeendtc_aedthdtc` | AE | ✅ | SDTMCHK-AE-010 | Same as R | AEOUT is 'FATAL' but AEENDTC is missing or does not equal AEDTHDTC. Query only if the team agrees (note of the R function). |
+| 11 | `check_ae_aetoxgr` | AE | ✅ | SDTMCHK-AE-011 | Same as R | The severity or grade is missing: AETOXGR and AESEV are both missing, or the only one of them that the study has is missing. |
+| 12 | `check_ae_aelat` | AE | ✅ | SDTMCHK-AE-012 | Same as R | AESOC is an eye disorder but AELAT is not LEFT, RIGHT or BILATERAL. |
+| 13 | `check_ae_aestdtc_after_aeendtc` | AE | 🔵 | CORE-000718 | — | AESTDTC > AEENDTC |
+| 14 | `check_ae_aerel` | AE | ✅ | SDTMCHK-AE-021 | Differs (stated in the rule) | AEREL is missing. |
+| 15 | `check_ae_dup` | AE | ✅ | SDTMCHK-AE-014 | Differs (stated in the rule) | Duplicate AE record: USUBJID, AETERM, AEDECOD, AESTDTC, AEENDTC and AESEV are not unique. |
+| 16 | `check_ae_aeacnoth` | AE | ✅ | SDTMCHK-AE-022 | Same as R | AEACNOTH is 'MULTIPLE' but AEACNOT1 or AEACNOT2 is missing. |
+| 17 | `check_ae_aestdtc_after_dd` | AE, DS | ✅ | SDTMCHK-AE-013 | Differs (stated in the rule) | AESTDTC is after the death date (DM.DTHDTC). |
+| 18 | `check_ae_aedthdtc_ds_death` | AE, DS | ✅ | SDTMCHK-AE-015 | Same as R | DS records a death due to an adverse event, but no AE record of the subject has AEDTHDTC. |
+| 19 | `check_ae_death_ds_discon` | AE, DS | ⚠️ | — (was SDTMCHK-AE-019) | Removed | Removed (c2-918): R selects the study discontinuation record by partial DSSCAT text; an operation filter takes exact values only |
+| 20 | `check_ae_ds_partial_death_dates` | AE | ✅ | SDTMCHK-AE-017 | Differs (stated in the rule) | AEDTHDTC is a partial date (fewer than 10 characters). |
+| 21 | `check_ae_withdr_ds_discon` | AE, DS | ⚠️ | — (was SDTMCHK-AE-018) | Removed | Removed (c2-918): R needs a single-agent study (TS) and DS records selected by partial text; an operation filter takes exact values only |
+| 22 | `check_ae_aeacn_ds_disctx_covid` | AE, DS | 🟡 | — | — | COVID-specific |
+| 23 | `check_ae_aeacnoth_ds_disctx` | AE, DS | ⚠️ | — (was SDTMCHK-AE-020) | Removed | Removed (c2-918): R reads every AEACNOTx and selects DS records by partial DSSCAT text; an operation filter takes exact values only |
+| 24 | `check_ae_aeacnoth_ds_stddisc_covid` | AE, DS | 🟡 | — | — | COVID-specific |
+| — | `check_dd_ae_aedthdtc_ds_dsstdtc` | AE, DS | ✅ | SDTMCHK-AE-016 | Differs (stated in the rule) | AEDTHDTC equals none of the DS death dates (DSSTDTC where DSDECOD = 'DEATH'). |
+| — | `check_dd_ae_aeout_aedthdtc` | AE | ✅ | SDTMCHK-AE-004/005 | Same as R | Covered by the custom rules AE-004 and AE-005, not by CORE |
+| — | `check_dd_death_date` | AE, DS | 🔄 | SDTMCHK-AE-015 | Partial | DS records a death due to an adverse event, but no AE record of the subject has AEDTHDTC. |
 
 ---
 
 ### CE Domain Checks
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 25 | `check_ce_missing_month` | CE | ✅ | SDTMCHK-CE-001 | `is_incomplete_date` |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 25 | `check_ce_missing_month` | CE | ✅ | SDTMCHK-CE-001 | Same as R | A CE date (CESTDTC, CEENDTC or CEDTC) has a year and a day but no month (yyyy---dd). |
 
 ---
 
 ### CM Domain Checks
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 26 | `check_cm_cmdecod` | CM | ✅ | SDTMCHK-CM-001 | `empty` operator |
-| 27 | `check_cm_cmindc` | CM | 🟡 | — | OPHTH-specific |
-| 28 | `check_cm_cmlat` | CM | 🟡 | — | OPHTH-specific |
-| 29 | `check_cm_cmlat_prior_ocular` | CM | 🟡 | — | OPHTH-specific |
-| 30 | `check_cm_missing_month` | CM | ✅ | SDTMCHK-CM-002 | `is_incomplete_date` (any: start or end) |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 26 | `check_cm_cmdecod` | CM | ✅ | SDTMCHK-CM-001 | Same as R | `empty` operator |
+| 27 | `check_cm_cmindc` | CM | 🟡 | — | — | OPHTH-specific |
+| 28 | `check_cm_cmlat` | CM | 🟡 | — | — | OPHTH-specific |
+| 29 | `check_cm_cmlat_prior_ocular` | CM | 🟡 | — | — | OPHTH-specific |
+| 30 | `check_cm_missing_month` | CM | ✅ | SDTMCHK-CM-002 | Same as R | A CM date (CMSTDTC or CMENDTC) has a year and a day but no month (yyyy---dd). |
 
 ---
 
 ### DM Domain Checks
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 34 | `check_dm_actarm_arm` | DM | ✅ | SDTMCHK-DM-002 | ARM ≠ ACTARM |
-| 35 | `check_dm_age_missing` | DM | ✅ | SDTMCHK-DM-001 | AGE missing |
-| 36 | `check_dm_armcd` | DM | 🔵 | CORE-000119 | ARM/ARMCD missing |
-| 37 | `check_dm_dthfl_dthdtc` | DM | 🔵 | CORE-000006/007 | DTHFL/DTHDTC consistency |
-| 38 | `check_dm_usubjid_dup` | DM | 🔵 | CORE-000186 | Duplicate SUBJID |
-| 39 | `check_dm_ae_ds_death` | DM, AE, DS | ✅ | SDTMCHK-DM-003 | `Operations: distinct` + `is_not_contained_by` |
-| 40 | `check_dm_usubjid_ae_usubjid` | DM, AE, DS, EX | ⚠️ | — | Multi-domain merge + conditional logic beyond DSL |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 34 | `check_dm_actarm_arm` | DM | ✅ | SDTMCHK-DM-002 | Same as R | ARM does not equal ACTARM (a missing value counts as a value). |
+| 35 | `check_dm_age_missing` | DM | ✅ | SDTMCHK-DM-001 | Same as R | AGE missing |
+| 36 | `check_dm_armcd` | DM | 🔵 | CORE-000119 (partial) | — | ARM/ARMCD missing; CORE covers only part of the R check |
+| 37 | `check_dm_dthfl_dthdtc` | DM | 🔵 | CORE-000007, CORE-000705 | — | DTHFL/DTHDTC consistency |
+| 38 | `check_dm_usubjid_dup` | DM | 🔵 | CORE-000186, CORE-000351 | — | Duplicate SUBJID |
+| 39 | `check_dm_ae_ds_death` | DM, AE, DS | ⚠️ | — (was SDTMCHK-DM-003) | Removed | Removed (c2-918): R looks for a death in four AE variables and in DS; an operation filter cannot select a non-missing AEDTHDTC |
+| 40 | `check_dm_usubjid_ae_usubjid` | DM, AE, DS, EX | ⚠️ | — | — | Multi-domain merge + conditional logic beyond DSL |
 
 ---
 
 ### DS Domain Checks
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 41 | `check_ds_dsdecod_dsstdtc` | DS | ✅ | SDTMCHK-DS-001 | DEATH without date |
-| 42 | `check_ds_dsterm_death_due_to` | DS | ✅ | SDTMCHK-DS-002 | Blank death cause |
-| 43 | `check_ds_dsdecod_death` | DS | ✅ | SDTMCHK-DS-006 | `Operations: distinct` cross-record |
-| 44 | `check_ds_dsscat` | DS | 🔵 | CORE-000213 | Multiple study discon |
-| 45 | `check_ds_duplicate_randomization` | DS | ✅ | SDTMCHK-DS-003 | `present_on_multiple_rows_within` |
-| 46 | `check_ds_multdeath_dsstdtc` | DS | ✅ | SDTMCHK-DS-004 | `is_inconsistent_across_dataset` |
-| 47 | `check_ds_ae_discon` | DS, AE | ✅ | SDTMCHK-DS-007 | `Operations: distinct` + `is_not_contained_by` |
-| 48 | `check_ds_ex_after_discon` | DS, EX | ✅ | SDTMCHK-DS-005 | `Operations: max_date` + `date_greater_than` |
-| 49 | `check_ds_sc_strat` | DS, SC | ⚠️ | — | Requires SC domain with specific stratification logic |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 41 | `check_ds_dsdecod_dsstdtc` | DS | ✅ | SDTMCHK-DS-001 | Same as R | The subject has a DEATH record in DS, and no DEATH record has DSSTDTC. |
+| 42 | `check_ds_dsterm_death_due_to` | DS | ✅ | SDTMCHK-DS-002 | Same as R | Blank death cause |
+| 43 | `check_ds_dsdecod_death` | DS | ⚠️ | — (was SDTMCHK-DS-006) | Removed | Removed (c2-918): R selects the study discontinuation record by partial DSSCAT text; an operation filter takes exact values only |
+| 44 | `check_ds_dsscat` | DS | 🔵 | CORE-000213 (partial) | — | Multiple study discon; CORE covers only part of the R check |
+| 45 | `check_ds_duplicate_randomization` | DS | ✅ | SDTMCHK-DS-003 | Differs (stated in the rule) | The subject has more than one randomization record (DSDECOD contains RANDOMIZ). |
+| 46 | `check_ds_multdeath_dsstdtc` | DS | ✅ | SDTMCHK-DS-004 | Same as R | The subject has DEATH records in DS with more than one DSSTDTC. |
+| 47 | `check_ds_ae_discon` | DS, AE | ✅ | SDTMCHK-DS-007 | Differs (stated in the rule) | Treatment discontinuation due to an adverse event (DSSPID contains DISCTX) but no AE record with AEACN = 'DRUG WITHDRAWN'. |
+| 48 | `check_ds_ex_after_discon` | DS, EX | ⚠️ | — (was SDTMCHK-DS-005) | Removed | Removed (c2-918): R compares the study discontinuation date with the last valid dose; an operation filter cannot select those DS and EX records |
+| 49 | `check_ds_sc_strat` | DS, SC | ⚠️ | — | — | Requires SC domain with specific stratification logic |
 
 ---
 
 ### DV Domain Checks
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 50 | `check_dv_ae_aedecod_covid` | AE, DV | 🟡 | — | COVID-specific |
-| 51 | `check_dv_covid` | DV | 🟡 | — | COVID-specific |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 50 | `check_dv_ae_aedecod_covid` | AE, DV | 🟡 | — | — | COVID-specific |
+| 51 | `check_dv_covid` | DV | 🟡 | — | — | COVID-specific |
 
 ---
 
 ### EC Domain Checks
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 52 | `check_ec_sc_lat` | EC, SC | 🟡 | — | OPHTH-specific |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 52 | `check_ec_sc_lat` | EC, SC | 🟡 | — | — | OPHTH-specific |
 
 ---
 
 ### EG Domain Checks
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 53 | `check_eg_egdtc_visit_ordinal_error` | EG | ✅ | SDTMCHK-EG-001 | `target_is_not_sorted_by` |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 53 | `check_eg_egdtc_visit_ordinal_error` | EG | ⚠️ | — (was SDTMCHK-EG-001) | Removed | Removed (c2-918): visit order: the engine sorts all records, so unscheduled and NOT DONE records cannot be left out as R does |
 
 ---
 
 ### EX Domain Checks
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 54 | `check_ex_exdose_exoccur` | EX | ✅ | SDTMCHK-EX-001 | EXDOSE missing when occurred |
-| 55 | `check_ex_exdose_pos_exoccur_no` | EX | ✅ | SDTMCHK-EX-002 | EXDOSE>0 but EXOCCUR≠Y |
-| 56 | `check_ex_exdosu` | EX | ✅ | SDTMCHK-EX-003 | EXDOSU missing |
-| 57 | `check_ex_extrt_exoccur` | EX | ✅ | SDTMCHK-EX-004 | EXTRT missing |
-| 58 | `check_ex_visit` | EX | ✅ | SDTMCHK-EX-005 | VISIT missing |
-| 59 | `check_ex_exoccur_mis_exdose_nonmis` | EX | ✅ | SDTMCHK-EX-006 | EXOCCUR missing, EXDOSE present |
-| 60 | `check_ex_exstdtc_after_exendtc` | EX | 🔵 | CORE-000718 | --STDTC > --ENDTC |
-| 61 | `check_ex_dup` | EX | ✅ | SDTMCHK-EX-007 | `is_not_unique_set` |
-| 62 | `check_ex_exoccur_exdose_exstdtc` | EX | ✅ | SDTMCHK-EX-011 | EXOCCUR=N but dose/date present |
-| 63 | `check_ex_exstdtc_after_dd` | AE, DS, EX | ✅ | SDTMCHK-EX-008 | `Operations: max_date` + `date_greater_than` |
-| 64 | `check_ex_exstdtc_visit_ordinal_error` | EX | ✅ | SDTMCHK-EX-009 | `target_is_not_sorted_by` |
-| 65 | `check_ex_infusion_exstdtc_exendtc` | EX | ✅ | SDTMCHK-EX-010 | IV route + `date_equal_to` (same datetime) |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 54 | `check_ex_exdose_exoccur` | EX | ✅ | SDTMCHK-EX-001 | Same as R | EXDOSE missing when occurred |
+| 55 | `check_ex_exdose_pos_exoccur_no` | EX | ✅ | SDTMCHK-EX-002 | Same as R | EXDOSE>0 but EXOCCUR≠Y |
+| 56 | `check_ex_exdosu` | EX | ✅ | SDTMCHK-EX-003 | Same as R | EXDOSU missing |
+| 57 | `check_ex_extrt_exoccur` | EX | ✅ | SDTMCHK-EX-004 | Same as R | EXTRT missing |
+| 58 | `check_ex_visit` | EX | ✅ | SDTMCHK-EX-005 | Same as R | VISIT missing |
+| 59 | `check_ex_exoccur_mis_exdose_nonmis` | EX | ✅ | SDTMCHK-EX-006 | Same as R | EXOCCUR missing, EXDOSE present |
+| 60 | `check_ex_exstdtc_after_exendtc` | EX | 🔵 | CORE-000718 | — | --STDTC > --ENDTC |
+| 61 | `check_ex_dup` | EX | ✅ | SDTMCHK-EX-007 | Differs (stated in the rule) | Duplicate EX record: USUBJID, EXTRT, EXDOSE and EXSTDTC are not unique. |
+| 62 | `check_ex_exoccur_exdose_exstdtc` | EX | ✅ | SDTMCHK-EX-011 | Same as R | A valid dose (EXOCCUR = 'Y' or no EXOCCUR) has no full EXSTDTC, no EXDOSE, or EXDOSE <= 0 for an active treatment. |
+| 63 | `check_ex_exstdtc_after_dd` | AE, DS, EX | ✅ | SDTMCHK-EX-008 | Differs (stated in the rule) | EXSTDTC is after the death date (DM.DTHDTC). |
+| 64 | `check_ex_exstdtc_visit_ordinal_error` | EX | ⚠️ | — (was SDTMCHK-EX-009) | Removed | Removed (c2-918): visit order: the engine sorts all records, so unscheduled records cannot be left out as R does |
+| 65 | `check_ex_infusion_exstdtc_exendtc` | EX | ✅ | SDTMCHK-EX-010 | Same as R | IV infusion: a start or end date is missing, the start and end dates differ, or the start is after the end. |
 
 ---
 
 ### LB Domain Checks
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 66 | `check_lb_lbstresn_missing` | LB | ✅ | SDTMCHK-LB-001 | LBORRES present, standardized missing |
-| 67 | `check_lb_lbstresu` | LB | ✅ | SDTMCHK-LB-002 | Units missing |
-| 68 | `check_lb_lbstresc_char` | LB | ✅ | SDTMCHK-LB-003 | < or > prefix in results |
-| 69 | `check_lb_lbstnrlo_lbstnrhi` | LB | ✅ | SDTMCHK-LB-007 | Reference range missing for numeric |
-| 70 | `check_lb_lbdtc_after_dd` | AE, DS, LB | ✅ | SDTMCHK-LB-006 | `Operations: max_date` + `date_greater_than` |
-| 71 | `check_lb_lbdtc_visit_ordinal_error` | LB | ✅ | SDTMCHK-LB-004 | `target_is_not_sorted_by` |
-| 72 | `check_lb_missing_month` | LB | ✅ | SDTMCHK-LB-005 | `is_incomplete_date` |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 66 | `check_lb_lbstresn_missing` | LB | ✅ | SDTMCHK-LB-001 | Same as R | LBORRES present, standardized missing |
+| 67 | `check_lb_lbstresu` | LB | ✅ | SDTMCHK-LB-002 | Same as R | LBSTRESU is missing when LBORRES is populated (qualitative, NOT DONE, PH and SPGRAV results excluded). |
+| 68 | `check_lb_lbstresc_char` | LB | ✅ | SDTMCHK-LB-003 | Same as R | LBSTRESC holds '<' or '>' followed by a number, and LBSTRESN is missing. |
+| 69 | `check_lb_lbstnrlo_lbstnrhi` | LB | ✅ | SDTMCHK-LB-007 | Same as R | Reference range missing for numeric |
+| 70 | `check_lb_lbdtc_after_dd` | AE, DS, LB | ✅ | SDTMCHK-LB-006 | Differs (stated in the rule) | LBDTC is after the death date (DM.DTHDTC) for a record with a result. |
+| 71 | `check_lb_lbdtc_visit_ordinal_error` | LB | ⚠️ | — (was SDTMCHK-LB-004) | Removed | Removed (c2-918): visit order: the engine sorts all records, so unscheduled and NOT DONE records cannot be left out as R does |
+| 72 | `check_lb_missing_month` | LB | ✅ | SDTMCHK-LB-005 | Same as R | LBDTC has a year and a day but no month (yyyy---dd). |
 
 ---
 
 ### MH Domain Checks
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 73 | `check_mh_missing_month` | MH | ✅ | SDTMCHK-MH-001 | `is_incomplete_date` |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 73 | `check_mh_missing_month` | MH | ✅ | SDTMCHK-MH-001 | Same as R | An MH date (MHSTDTC or MHENDTC) has a year and a day but no month (yyyy---dd). |
 
 ---
 
 ### MI Domain Checks
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 74 | `check_mi_mispec` | MI | ✅ | SDTMCHK-MI-001 | MISPEC missing |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 74 | `check_mi_mispec` | MI | ✅ | SDTMCHK-MI-001 | Same as R | MISPEC missing |
 
 ---
 
 ### OE Domain Checks (Ophthalmology)
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 75 | `check_oe_bcva_1m_late_early_tot` | OE | 🟡 | — | OPHTH: BCVA arithmetic scoring |
-| 76 | `check_oe_bcva_4m_late_early_tot` | OE | 🟡 | — | OPHTH: BCVA arithmetic scoring |
-| 77 | `check_oe_bcva_4m_vs_1m_req` | OE | 🟡 | — | OPHTH: BCVA 4m vs 1m requirement |
-| 78 | `check_oe_bcva_tot_mismatch` | OE | 🟡 | — | OPHTH: BCVA total mismatch |
-| 79 | `check_oe_sc_lat_count_fingers` | OE, SC | 🟡 | — | OPHTH: laterality mismatch |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 75 | `check_oe_bcva_1m_late_early_tot` | OE | 🟡 | — | — | OPHTH: BCVA arithmetic scoring |
+| 76 | `check_oe_bcva_4m_late_early_tot` | OE | 🟡 | — | — | OPHTH: BCVA arithmetic scoring |
+| 77 | `check_oe_bcva_4m_vs_1m_req` | OE | 🟡 | — | — | OPHTH: BCVA 4m vs 1m requirement |
+| 78 | `check_oe_bcva_tot_mismatch` | OE | 🟡 | — | — | OPHTH: BCVA total mismatch |
+| 79 | `check_oe_sc_lat_count_fingers` | OE, SC | 🟡 | — | — | OPHTH: laterality mismatch |
 
 ---
 
 ### PR Domain Checks
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 80 | `check_pr_missing_month` | PR | ✅ | SDTMCHK-PR-001 | `is_incomplete_date` |
-| 81 | `check_pr_prlat` | PR | 🟡 | — | OPHTH: ocular procedure laterality |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 80 | `check_pr_missing_month` | PR | ✅ | SDTMCHK-PR-001 | Same as R | A PR date (PRSTDTC or PRENDTC) has a year and a day but no month (yyyy---dd). |
+| 81 | `check_pr_prlat` | PR | 🟡 | — | — | OPHTH: ocular procedure laterality |
 
 ---
 
 ### QS Domain Checks
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 82 | `check_qs_qsstat_qsreasnd` | QS | ✅ | SDTMCHK-QS-001 | NOT DONE without reason |
-| 83 | `check_qs_qsstat_qsstresc` | QS | ✅ | SDTMCHK-QS-005 | NOT DONE but responses populated |
-| 84 | `check_qs_dup` | QS | ✅ | SDTMCHK-QS-004 | `is_not_unique_set` |
-| 85 | `check_qs_qsdtc_after_dd` | AE, DS, QS | ✅ | SDTMCHK-QS-003 | `Operations: max_date` + `date_greater_than` |
-| 86 | `check_qs_qsdtc_visit_ordinal_error` | QS | ✅ | SDTMCHK-QS-002 | `target_is_not_sorted_by` |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 82 | `check_qs_qsstat_qsreasnd` | QS | ✅ | SDTMCHK-QS-001 | Differs (stated in the rule) | QSSTAT is 'NOT DONE' (any case) but QSREASND is missing. |
+| 83 | `check_qs_qsstat_qsstresc` | QS | ✅ | SDTMCHK-QS-005 | Same as R | The questionnaire is NOT DONE (QSTESTCD = 'QSALL') but QSSTRESC is populated at the same visit and date. |
+| 84 | `check_qs_dup` | QS | ✅ | SDTMCHK-QS-004 | Same as R | The subject has more than one QSDTC at one visit of a questionnaire (QSCAT). |
+| 85 | `check_qs_qsdtc_after_dd` | AE, DS, QS | ✅ | SDTMCHK-QS-003 | Differs (stated in the rule) | QSDTC is after the death date (DM.DTHDTC) for a record with a result. |
+| 86 | `check_qs_qsdtc_visit_ordinal_error` | QS | ⚠️ | — (was SDTMCHK-QS-002) | Removed | Removed (c2-918): visit order: the engine sorts all records, so unscheduled records cannot be left out as R does |
 
 ---
 
 ### RS Domain Checks (Oncology)
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 87 | `check_rs_rscat_rsscat` | RS | ✅ | SDTMCHK-RS-001 | RSSCAT without RSCAT |
-| 88 | `check_rs_rsdtc_visit` | RS | ✅ | SDTMCHK-RS-004 | INV assessment missing date/visit |
-| 89 | `check_rs_rsdtc_across_visit` | RS | ✅ | SDTMCHK-RS-003 | `is_inconsistent_across_dataset` |
-| 90 | `check_rs_rsdtc_visit_ordinal_error` | RS | ✅ | SDTMCHK-RS-002 | `target_is_not_sorted_by` |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 87 | `check_rs_rscat_rsscat` | RS | ✅ | SDTMCHK-RS-001 | Same as R | RSSCAT without RSCAT |
+| 88 | `check_rs_rsdtc_visit` | RS | ✅ | SDTMCHK-RS-004 | Differs (stated in the rule) | An investigator RS record with a result has no RSDTC or no VISIT. |
+| 89 | `check_rs_rsdtc_across_visit` | RS | ✅ | SDTMCHK-RS-003 | Differs (stated in the rule) | The same RSDTC is at more than one visit (investigator records). |
+| 90 | `check_rs_rsdtc_visit_ordinal_error` | RS | ⚠️ | — (was SDTMCHK-RS-002) | Removed | Removed (c2-918): visit order: the engine sorts all records, so unscheduled, NOT DONE and independent assessor records cannot be left out as R does |
 
 ---
 
 ### SC Domain Checks (Ophthalmology)
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 91 | `check_sc_dm_eligcrit` | DM, SC | 🟡 | — | OPHTH: eye eligibility |
-| 92 | `check_sc_dm_seyeselc` | DM, SC | 🟡 | — | OPHTH: study eye selection |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 91 | `check_sc_dm_eligcrit` | DM, SC | 🟡 | — | — | OPHTH: eye eligibility |
+| 92 | `check_sc_dm_seyeselc` | DM, SC | 🟡 | — | — | OPHTH: study eye selection |
 
 ---
 
 ### SS Domain Checks
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 93 | `check_ss_ssstat_ssorres` | SS | ✅ | SDTMCHK-SS-001 | NOT DONE but SSORRES populated |
-| 94 | `check_ss_ssdtc_alive_dm` | SS, DM | ✅ | SDTMCHK-SS-002 | `Operations: max_date` + `date_greater_than` |
-| 95 | `check_ss_ssdtc_dead_ds` | SS, DS | ✅ | SDTMCHK-SS-004 | `Operations: distinct` + `is_not_contained_by` |
-| 96 | `check_ss_ssdtc_dead_dthdtc` | SS, DM | ✅ | SDTMCHK-SS-003 | `Operations: max_date` + `date_not_equal_to` |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 93 | `check_ss_ssstat_ssorres` | SS | ✅ | SDTMCHK-SS-001 | Same as R | NOT DONE but SSORRES populated |
+| 94 | `check_ss_ssdtc_alive_dm` | SS, DM | ✅ | SDTMCHK-SS-002 | Same as R | SSTESTCD is SURVSTAT and SSORRES is ALIVE, but SSDTC is after the death date (DM.DTHDTC). |
+| 95 | `check_ss_ssdtc_dead_ds` | SS, DS | ✅ | SDTMCHK-SS-004 | Differs (stated in the rule) | SSSTRESC is DEAD but DS has no death disposition record (DSDECOD = 'DEATH', DSCAT = 'DISPOSITION EVENT'). |
+| 96 | `check_ss_ssdtc_dead_dthdtc` | SS, DM | ✅ | SDTMCHK-SS-003 | Same as R | SSSTRESC is DEAD but SSDTC is before the death date (DM.DTHDTC). |
 
 ---
 
 ### TR Domain Checks (Oncology)
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 97 | `check_tr_trstresn_ldiam` | TR | ✅ | SDTMCHK-TR-001 | LDIAM missing TRSTRESN |
-| 98 | `check_tr_dup` | TR | ✅ | SDTMCHK-TR-003 | `is_not_unique_set` |
-| 99 | `check_tr_trdtc_across_visit` | TR | ✅ | SDTMCHK-TR-004 | `is_inconsistent_across_dataset` |
-| 100 | `check_tr_trdtc_visit_ordinal_error` | TR | ✅ | SDTMCHK-TR-002 | `target_is_not_sorted_by` |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 97 | `check_tr_trstresn_ldiam` | TR | ✅ | SDTMCHK-TR-001 | Same as R | Investigator LDIAM record with no TRSTRESN. |
+| 98 | `check_tr_dup` | TR | ✅ | SDTMCHK-TR-003 | Differs (stated in the rule) | Duplicate investigator TR record: USUBJID, TRCAT, TRTESTCD, TRLINKID, TRSPID, TRDTC and TRSTRESC are not unique. |
+| 99 | `check_tr_trdtc_across_visit` | TR | ✅ | SDTMCHK-TR-004 | Differs (stated in the rule) | The same TRDTC is at more than one visit (investigator LDIAM records). |
+| 100 | `check_tr_trdtc_visit_ordinal_error` | TR | ⚠️ | — (was SDTMCHK-TR-002) | Removed | Removed (c2-918): visit order: the engine sorts all records, so unscheduled, NOT DONE and independent assessor records cannot be left out as R does |
 
 ---
 
 ### TS Domain Checks
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 101 | `check_ts_aedict` | TS | ⚠️ | — | External dictionary version; requires MedDRA cache config |
-| 102 | `check_ts_cmdict` | TS | ⚠️ | — | External dictionary version; requires WHODrug cache config |
-| 103 | `check_ts_sstdtc_ds_consent` | TS, DS | ⚠️ | — | TS parameter extraction + date compare; complex TS structure |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 101 | `check_ts_aedict` | TS | ⚠️ | — | — | External dictionary version; requires MedDRA cache config |
+| 102 | `check_ts_cmdict` | TS | ⚠️ | — | — | External dictionary version; requires WHODrug cache config |
+| 103 | `check_ts_sstdtc_ds_consent` | TS, DS | ⚠️ | — | — | TS parameter extraction + date compare; complex TS structure |
 
 ---
 
 ### TU Domain Checks (Oncology)
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 104 | `check_tu_tudtc` | TU | ✅ | SDTMCHK-TU-001 | TUDTC missing |
-| 105 | `check_tu_tuloc_missing` | TU | ✅ | SDTMCHK-TU-002 | TULOC missing |
-| 106 | `check_tu_rs_new_lesions` | TU, RS | ⚠️ | — | Complex cross-domain: new TU lesion without PD in RS |
-| 107 | `check_tu_tudtc_across_visit` | TU | ✅ | SDTMCHK-TU-004 | `is_inconsistent_across_dataset` |
-| 108 | `check_tu_tudtc_visit_ordinal_error` | TU | ✅ | SDTMCHK-TU-003 | `target_is_not_sorted_by` |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 104 | `check_tu_tudtc` | TU | ✅ | SDTMCHK-TU-001 | Same as R | Investigator TU record with no TUDTC. |
+| 105 | `check_tu_tuloc_missing` | TU | ✅ | SDTMCHK-TU-002 | Same as R | Investigator TARGET lesion (any case) with no TULOC. |
+| 106 | `check_tu_rs_new_lesions` | TU, RS | ⚠️ | — | — | Complex cross-domain: new TU lesion without PD in RS |
+| 107 | `check_tu_tudtc_across_visit` | TU | ✅ | SDTMCHK-TU-004 | Differs (stated in the rule) | The same TUDTC is at more than one visit (investigator records). |
+| 108 | `check_tu_tudtc_visit_ordinal_error` | TU | ⚠️ | — (was SDTMCHK-TU-003) | Removed | Removed (c2-918): visit order: the engine sorts all records, so unscheduled and independent assessor records cannot be left out as R does |
 
 ---
 
 ### VS Domain Checks
 
-| # | Function | Domain(s) | Status | Rule ID | Notes |
-|---|----------|-----------|--------|---------|-------|
-| 109 | `check_vs_sbp_lt_dbp` | VS | ✅ | SDTMCHK-VS-001 | DBP > SBP |
-| 110 | `check_vs_height` | VS, DM | ✅ | SDTMCHK-VS-003 | `Operations: distinct` + `is_not_contained_by` |
-| 111 | `check_vs_vsdtc_after_dd` | AE, DS, VS | ✅ | SDTMCHK-VS-002 | `Operations: max_date` + `date_greater_than` |
+| # | Function | Domain(s) | Status | Rule ID | Fidelity | Notes |
+|---|----------|-----------|--------|---------|----------|-------|
+| 109 | `check_vs_sbp_lt_dbp` | VS | ⚠️ | — (was SDTMCHK-VS-001) | Removed | Removed (c2-918): R merges SYSBP and DIABP records by USUBJID, VISIT and VSSPID; the engine compares values within one record only |
+| 110 | `check_vs_height` | VS, DM | ✅ | SDTMCHK-VS-003 | Differs (stated in the rule) | `Operations: distinct` + `is_not_contained_by` |
+| 111 | `check_vs_vsdtc_after_dd` | AE, DS, VS | ✅ | SDTMCHK-VS-002 | Differs (stated in the rule) | VSDTC is after the death date (DM.DTHDTC) for a record with a result. |
 
 ---
 
 ## Part 3: Why Some Checks Remain Not Expressible
 
-### Truly not expressible (⚠️ — 8 remaining)
+### Truly not expressible (⚠️)
 
 | Check | Reason |
 |-------|--------|
@@ -746,6 +747,20 @@ USUBJID as the join key.
 | `check_ts_sstdtc_ds_consent` | TS single-value extraction (TSPARMCD=SSTDTC) + DS date compare |
 | `check_tu_rs_new_lesions` | Cross-domain: new TU TULINKID not matching any RS with RSSTRESC=PD |
 | BCVA scoring (x4) | Arithmetic sums across multiple OE rows — beyond DSL capabilities |
+| SDTMCHK-EG-001 (removed, c2-918) | visit order: the engine sorts all records, so unscheduled and NOT DONE records cannot be left out as R does |
+| SDTMCHK-EX-009 (removed, c2-918) | visit order: the engine sorts all records, so unscheduled records cannot be left out as R does |
+| SDTMCHK-LB-004 (removed, c2-918) | visit order: the engine sorts all records, so unscheduled and NOT DONE records cannot be left out as R does |
+| SDTMCHK-QS-002 (removed, c2-918) | visit order: the engine sorts all records, so unscheduled records cannot be left out as R does |
+| SDTMCHK-RS-002 (removed, c2-918) | visit order: the engine sorts all records, so unscheduled, NOT DONE and independent assessor records cannot be left out as R does |
+| SDTMCHK-TR-002 (removed, c2-918) | visit order: the engine sorts all records, so unscheduled, NOT DONE and independent assessor records cannot be left out as R does |
+| SDTMCHK-TU-003 (removed, c2-918) | visit order: the engine sorts all records, so unscheduled and independent assessor records cannot be left out as R does |
+| SDTMCHK-DS-005 (removed, c2-918) | R compares the study discontinuation date with the last valid dose; an operation filter cannot select those DS and EX records |
+| SDTMCHK-AE-018 (removed, c2-918) | R needs a single-agent study (TS) and DS records selected by partial text; an operation filter takes exact values only |
+| SDTMCHK-AE-019 (removed, c2-918) | R selects the study discontinuation record by partial DSSCAT text; an operation filter takes exact values only |
+| SDTMCHK-AE-020 (removed, c2-918) | R reads every AEACNOTx and selects DS records by partial DSSCAT text; an operation filter takes exact values only |
+| SDTMCHK-DM-003 (removed, c2-918) | R looks for a death in four AE variables and in DS; an operation filter cannot select a non-missing AEDTHDTC |
+| SDTMCHK-DS-006 (removed, c2-918) | R selects the study discontinuation record by partial DSSCAT text; an operation filter takes exact values only |
+| SDTMCHK-VS-001 (removed, c2-918) | R merges SYSBP and DIABP records by USUBJID, VISIT and VSSPID; the engine compares values within one record only |
 
 ### Resolution paths for remaining checks
 
@@ -767,7 +782,7 @@ USUBJID as the join key.
 
 ## Part 4: File Listing
 
-All 53 translated rules + this tracker in `metadata/custom_rules/`:
+The rule files in `metadata/custom_rules/` (the 14 removed rules of c2-918 are not listed):
 
 ```
 SDTMCHK-AE-001.yaml   # AEDECOD missing
@@ -787,9 +802,6 @@ SDTMCHK-AE-014.yaml   # Duplicate AE records
 SDTMCHK-AE-015.yaml   # DS death but no AEDTHDTC
 SDTMCHK-AE-016.yaml   # AEDTHDTC ≠ DS death date
 SDTMCHK-AE-017.yaml   # Partial AEDTHDTC (incomplete date)
-SDTMCHK-AE-018.yaml   # DRUG WITHDRAWN without DS treatment discon
-SDTMCHK-AE-019.yaml   # AEOUT=FATAL without DS death record
-SDTMCHK-AE-020.yaml   # AEACNOTH mentions discontinuation, no DS
 SDTMCHK-AE-021.yaml   # AEREL unexpected value
 SDTMCHK-AE-022.yaml   # AEACNOTH=MULTIPLE, AEACNOT1 missing
 SDTMCHK-CE-001.yaml   # Incomplete CE date
@@ -797,15 +809,11 @@ SDTMCHK-CM-001.yaml   # CMDECOD missing
 SDTMCHK-CM-002.yaml   # Incomplete CM dates
 SDTMCHK-DM-001.yaml   # AGE missing
 SDTMCHK-DM-002.yaml   # ARM≠ACTARM
-SDTMCHK-DM-003.yaml   # DTHFL=Y, no DS death record
 SDTMCHK-DS-001.yaml   # Death without date in DS
 SDTMCHK-DS-002.yaml   # Blank death cause
 SDTMCHK-DS-003.yaml   # Duplicate randomization
 SDTMCHK-DS-004.yaml   # Multiple death dates inconsistent
-SDTMCHK-DS-005.yaml   # EX after treatment discontinuation
-SDTMCHK-DS-006.yaml   # Death without study discon record
 SDTMCHK-DS-007.yaml   # Trt discon due to AE, no matching AE
-SDTMCHK-EG-001.yaml   # EG visit date ordering
 SDTMCHK-EX-001.yaml   # EXDOSE missing when occurred
 SDTMCHK-EX-002.yaml   # EXDOSE>0 but EXOCCUR≠Y
 SDTMCHK-EX-003.yaml   # EXDOSU missing
@@ -814,13 +822,11 @@ SDTMCHK-EX-005.yaml   # VISIT missing
 SDTMCHK-EX-006.yaml   # EXOCCUR missing, EXDOSE present
 SDTMCHK-EX-007.yaml   # Duplicate EX records
 SDTMCHK-EX-008.yaml   # EX date after death
-SDTMCHK-EX-009.yaml   # EX visit date ordering
 SDTMCHK-EX-010.yaml   # IV infusion same start/end time
 SDTMCHK-EX-011.yaml   # EXOCCUR=N but dose/date present
 SDTMCHK-LB-001.yaml   # LBORRES present, standardized missing
 SDTMCHK-LB-002.yaml   # Lab units missing
 SDTMCHK-LB-003.yaml   # < or > prefix in lab results
-SDTMCHK-LB-004.yaml   # LB visit date ordering
 SDTMCHK-LB-005.yaml   # Incomplete LB date
 SDTMCHK-LB-006.yaml   # LB date after death
 SDTMCHK-LB-007.yaml   # Reference ranges missing
@@ -828,12 +834,10 @@ SDTMCHK-MH-001.yaml   # Incomplete MH dates
 SDTMCHK-MI-001.yaml   # MISPEC missing
 SDTMCHK-PR-001.yaml   # Incomplete PR dates
 SDTMCHK-QS-001.yaml   # NOT DONE without reason
-SDTMCHK-QS-002.yaml   # QS visit date ordering
 SDTMCHK-QS-003.yaml   # QS date after death
 SDTMCHK-QS-004.yaml   # Duplicate QS records
 SDTMCHK-QS-005.yaml   # NOT DONE but responses populated
 SDTMCHK-RS-001.yaml   # RSSCAT without RSCAT
-SDTMCHK-RS-002.yaml   # RS visit date ordering
 SDTMCHK-RS-003.yaml   # Same RS date across visits
 SDTMCHK-RS-004.yaml   # INV assessment missing date/visit
 SDTMCHK-SS-001.yaml   # NOT DONE but SSORRES populated
@@ -841,34 +845,33 @@ SDTMCHK-SS-002.yaml   # ALIVE date after DM death date
 SDTMCHK-SS-003.yaml   # DEAD date ≠ DM death date
 SDTMCHK-SS-004.yaml   # DEAD without DS death record
 SDTMCHK-TR-001.yaml   # LDIAM missing TRSTRESN
-SDTMCHK-TR-002.yaml   # TR visit date ordering
 SDTMCHK-TR-003.yaml   # Duplicate TR records
 SDTMCHK-TR-004.yaml   # Same TR date across visits
 SDTMCHK-TU-001.yaml   # TUDTC missing
 SDTMCHK-TU-002.yaml   # TULOC missing
-SDTMCHK-TU-003.yaml   # TU visit date ordering
 SDTMCHK-TU-004.yaml   # Same TU date across visits
-SDTMCHK-VS-001.yaml   # DBP > SBP
 SDTMCHK-VS-002.yaml   # VS date after death
 SDTMCHK-VS-003.yaml   # Height measurement missing
 ```
 
 ---
 
-## Part 5: Engine Mechanism Usage Summary
+## Part 5: Engine Mechanisms Used
 
-| Engine Mechanism | Rules Using It | Example |
-|------------------|---------------|---------|
-| Simple `empty`/`non_empty` | 12 | SDTMCHK-AE-001 |
-| `equal_to` + `not_equal_to` | 14 | SDTMCHK-AE-002 |
-| `is_not_contained_by` (value list) | 1 | SDTMCHK-AE-021 |
-| `is_incomplete_date` | 7 | SDTMCHK-CE-001 |
-| `is_not_unique_set` | 5 | SDTMCHK-AE-014 |
-| `present_on_multiple_rows_within` | 1 | SDTMCHK-DS-003 |
-| `is_inconsistent_across_dataset` | 4 | SDTMCHK-DS-004 |
-| `target_is_not_sorted_by` | 8 | SDTMCHK-EG-001 |
-| `Operations: max_date` + date compare | 9 | SDTMCHK-AE-013 |
-| `Operations: distinct` + existence | 8 | SDTMCHK-DM-003 |
-| `date_equal_to` / `date_not_equal_to` | 3 | SDTMCHK-AE-016 |
-| `contains_case_insensitive` | 1 | SDTMCHK-AE-020 |
-| Mixed multi-condition (`any`/`all`) | 5 | SDTMCHK-CM-002 |
+| Engine Mechanism | Example |
+|------------------|---------|
+| Simple `empty`/`non_empty` | SDTMCHK-AE-001 |
+| `equal_to` + `not_equal_to` | SDTMCHK-AE-002 |
+| `exists` / `not_exists` (a variable the study may not have) | SDTMCHK-AE-011 |
+| `matches_regex` (`yyyy---dd`) | SDTMCHK-CM-002 |
+| `is_not_unique_set` | SDTMCHK-AE-014 |
+| `present_on_multiple_rows_within` | SDTMCHK-DS-003 |
+| `is_inconsistent_across_dataset` | SDTMCHK-DS-004 |
+| `Operations: max_date` on DM.DTHDTC + date compare | SDTMCHK-AE-013 |
+| `Operations: max_date` grouped by a second key | SDTMCHK-DS-001 |
+| `Operations: distinct` + existence | SDTMCHK-DS-007 |
+| `Operations: record_count` with a filter | SDTMCHK-QS-005 |
+
+An operation `filter` works for `distinct` and `record_count`. The engine
+ignores it for `max_date` and `min_date`, so a rule cannot take the death date
+from the DS records with DSDECOD = DEATH.

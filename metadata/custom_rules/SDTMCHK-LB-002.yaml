@@ -1,59 +1,80 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-LB-002: LBSTRESU missing when result is populated
-# Source: sdtmchecks::check_lb_lbstresu
+# Based on: sdtmchecks::check_lb_lbstresu. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-LB-002
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [FINDINGS]
+    Include:
+    - FINDINGS
   Domains:
-    Include: [LB]
-
+    Include:
+    - LB
 Check:
   all:
-    - name: LBORRES
-      operator: non_empty
-    - name: LBSTRESU
+  - name: LBORRES
+    operator: non_empty
+  - name: LBSTRESU
+    operator: empty
+  - name: LBTESTCD
+    operator: is_not_contained_by
+    value:
+    - PH
+    - SPGRAV
+  - name: LBORRES
+    operator: is_not_contained_by_case_insensitive
+    value:
+    - NEGATIVE
+    - POSITIVE
+    - NOT DONE
+  - any:
+    - name: LBMETHOD
+      operator: not_exists
+    - name: LBMETHOD
       operator: empty
-    - name: LBTESTCD
-      operator: is_not_contained_by
-      value: ["PH", "SPGRAV"]
-    - name: LBORRES
-      operator: is_not_contained_by
-      value: ["NEGATIVE", "POSITIVE", "NOT DONE"]
-
+    - name: LBMETHOD
+      operator: not_equal_to
+      value: QUALITATIVE
+      value_is_literal: true
+  - any:
+    - name: LBSTAT
+      operator: not_exists
+    - name: LBSTAT
+      operator: empty
+    - name: LBSTAT
+      operator: not_equal_to
+      value: NOT DONE
+      value_is_literal: true
 Outcome:
-  Message: >-
-    LBSTRESU (standard units) is missing when LBORRES is populated.
-    Lab units must be recorded for quantitative results (excluding PH,
-    SPGRAV, and qualitative results).
-  Output Variables: [USUBJID, LBTESTCD, LBDTC, LBORRES, LBSTRESN, LBSTRESU]
-
-Description: >-
-  LBSTRESU must be populated when LBORRES has a quantitative value,
-  excluding unitless tests (PH, SPGRAV) and qualitative results.
-
+  Message: LBSTRESU is missing when LBORRES is populated (qualitative, NOT DONE, PH and SPGRAV results
+    excluded).
+  Output Variables:
+  - USUBJID
+  - LBTESTCD
+  - LBDTC
+  - LBORRES
+  - LBSTRESN
+  - LBSTRESU
+Description: 'Flags: LBSTRESU is missing when LBORRES is populated (qualitative, NOT DONE, PH and SPGRAV
+  results excluded). Based on sdtmchecks::check_lb_lbstresu. Same conditions as the R function.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-LB-002
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_lb_lbstresu
-                Document: pharmaverse sdtmchecks
-                Section: LB Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-LB-002
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_lb_lbstresu
+        Document: pharmaverse sdtmchecks
+        Section: LB Domain

@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-RS-001: RSSCAT populated but RSCAT missing
-# Source: sdtmchecks::check_rs_rscat_rsscat
+# Based on: sdtmchecks::check_rs_rscat_rsscat. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-RS-001
@@ -30,6 +30,7 @@ Outcome:
 
 Description: >-
   RSCAT must be populated when RSSCAT has a value.
+  Based on sdtmchecks::check_rs_rscat_rsscat. Same conditions as the R function.
 
 Sensitivity: Record
 Executability: Fully Executable

@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-AE-003: AESDTH="Y" but AEDTHDTC is missing
-# Source: sdtmchecks::check_ae_aesdth_aedthdtc
+# Based on: sdtmchecks::check_ae_aesdth_aedthdtc. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-AE-003
@@ -32,6 +32,7 @@ Outcome:
 
 Description: >-
   When AESDTH equals 'Y', AEDTHDTC (death date) should be populated.
+  Based on sdtmchecks::check_ae_aesdth_aedthdtc. Same conditions as the R function.
 
 Sensitivity: Record
 Executability: Fully Executable

@@ -1,65 +1,72 @@
 # yaml-language-server: $schema=../../src/fleet/validation/schemas/cdisc_rule_schema.json
 # SDTMCHK-QS-003: QS date after death date
-# Source: sdtmchecks::check_qs_qsdtc_after_dd
+# Based on: sdtmchecks::check_qs_qsdtc_after_dd. Conditions follow the R function; a difference is stated in Description.
 
 Core:
   Id: SDTMCHK-QS-003
   Status: Draft
-  Version: "1"
-
+  Version: '1'
 Rule Type: Record Data
-
 Scope:
   Classes:
-    Include: [FINDINGS]
+    Include:
+    - FINDINGS
   Domains:
-    Include: [QS]
-
+    Include:
+    - QS
 Check:
   all:
-    - name: QSDTC
-      operator: non_empty
-    - name: $ds_death_date
-      operator: non_empty
-    - name: QSDTC
-      operator: date_greater_than
-      value: $ds_death_date
-      date_component: auto
-
+  - name: QSORRES
+    operator: non_empty
+  - any:
+    - name: QSSTAT
+      operator: not_exists
+    - name: QSSTAT
+      operator: empty
+    - name: QSSTAT
+      operator: not_equal_to
+      value: NOT DONE
+      value_is_literal: true
+  - name: QSDTC
+    operator: non_empty
+  - name: $dm_dthdtc
+    operator: non_empty
+  - name: QSDTC
+    operator: date_greater_than
+    value: $dm_dthdtc
+    date_component: auto
 Operations:
-  - operator: max_date
-    domain: DS
-    name: DSSTDTC
-    id: $ds_death_date
-    group:
-      - USUBJID
-    filter:
-      DSDECOD: DEATH
-
+- operator: max_date
+  domain: DM
+  name: DTHDTC
+  id: $dm_dthdtc
+  group:
+  - USUBJID
 Outcome:
-  Message: >-
-    Questionnaire date (QSDTC) is after the death date from DS.
-    Subjects should not have QS records after death.
-  Output Variables: [USUBJID, QSTESTCD, QSCAT, QSDTC, $ds_death_date]
-
-Description: >-
-  QSDTC should not be after the death date (DSSTDTC where DSDECOD='DEATH').
-
+  Message: QSDTC is after the death date (DM.DTHDTC) for a record with a result.
+  Output Variables:
+  - USUBJID
+  - QSTESTCD
+  - QSCAT
+  - QSDTC
+  - $dm_dthdtc
+Description: 'Flags: QSDTC is after the death date (DM.DTHDTC) for a record with a result. Based on sdtmchecks::check_qs_qsdtc_after_dd.
+  Difference from the R function: The death date is DM.DTHDTC. The R function takes the earliest of AEDTHDTC
+  and the DS death dates. Partial dates are compared at their common precision; R imputes day 01.'
 Sensitivity: Record
 Executability: Fully Executable
-
 Authorities:
-  - Organization: sdtmchecks
-    Standards:
-      - Name: SDTMIG
-        Version: "3.4"
-        References:
-          - Origin: sdtmchecks R package
-            Rule Identifier:
-              Id: SDTMCHK-QS-003
-              Version: "1"
-            Version: "1"
-            Citations:
-              - Cited Guidance: check_qs_qsdtc_after_dd
-                Document: pharmaverse sdtmchecks
-                Section: QS Domain
+- Organization: sdtmchecks
+  Standards:
+  - Name: SDTMIG
+    Version: '3.4'
+    References:
+    - Origin: sdtmchecks R package
+      Rule Identifier:
+        Id: SDTMCHK-QS-003
+        Version: '1'
+      Version: '1'
+      Citations:
+      - Cited Guidance: check_qs_qsdtc_after_dd
+        Document: pharmaverse sdtmchecks
+        Section: QS Domain
