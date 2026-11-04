@@ -71,3 +71,53 @@ class TestSchemaDirective:
         assert directive.startswith("# yaml-language-server: $schema=")
         target = directive.split("=", 1)[1]
         assert (spec_path.parent / target).resolve().is_file()
+
+
+class TestDatasetStructureAndClass:
+    """c1-538: the IG description was written as structure, and no class was written."""
+
+    def test_sdtm_structure_and_class_come_from_the_library_keys(self) -> None:
+        from fleet.core.scaffolder import parse_ig_dataset
+
+        ae = {
+            "name": "AE",
+            "description": (
+                "An events domain that contains data describing untoward medical occurrences."
+            ),
+            "datasetStructure": "One record per adverse event per subject",
+            "_links": {"parentClass": {"title": "Events"}},
+        }
+        ds = parse_ig_dataset(ae)
+
+        assert ds["structure"] == "One record per adverse event per subject"
+        assert ds["class"] == "EVENTS"
+
+    def test_special_purpose_class_has_a_space(self) -> None:
+        from fleet.core.scaffolder import parse_ig_dataset
+
+        dm = {"name": "DM", "_links": {"parentClass": {"title": "Special-Purpose"}}}
+
+        assert parse_ig_dataset(dm)["class"] == "SPECIAL PURPOSE"
+
+    def test_adam_class_only_for_adsl_and_not_for_a_bds_clone(self, caplog) -> None:
+        class _Client:
+            def _get(self, path: str) -> dict:
+                return {
+                    "dataStructures": [
+                        {"name": "ADSL", "label": "Subject-Level", "analysisVariableSets": []},
+                        {
+                            "name": "BDS",
+                            "label": "Basic Data Structure",
+                            "analysisVariableSets": [],
+                        },
+                    ]
+                }
+
+        result = DefineScaffolder(cast(Any, _Client()))._fetch_adam_datasets(
+            "1-3", ["ADSL", "ADAE"]
+        )
+        by_name = {d["name"]: d for d in result}
+
+        assert by_name["ADSL"]["class"] == "SUBJECT LEVEL ANALYSIS DATASET"
+        assert "class" not in by_name["ADAE"]
+        assert "ADAE" in caplog.text and "class" in caplog.text

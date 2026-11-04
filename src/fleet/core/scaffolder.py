@@ -67,6 +67,12 @@ _CORE_MAP: dict[str, bool] = {
     "Conditionally Required": False,
 }
 
+#: Define-XML 2.1 def:Class of the ADaM IG structures Fleet scaffolds as they are.
+_ADAM_CLASSES: dict[str, str] = {
+    "ADSL": "SUBJECT LEVEL ANALYSIS DATASET",
+    "BDS": "BASIC DATA STRUCTURE",
+}
+
 
 def _ig_version_dotted(ver: str) -> str:
     """Convert ``"3-4"`` → ``"3.4"``."""
@@ -155,9 +161,19 @@ def parse_ig_dataset(detail: dict[str, Any]) -> dict[str, Any]:
     name = detail.get("name", "")
     label = detail.get("label", "")
     description = detail.get("description", "")
-    ds_class = detail.get("datasetClass", detail.get("class", ""))
+    # Define-XML 2.1 def:Class: the Library sends the SDTM class as _links.parentClass.title
+    # ("Special-Purpose", "Events"); the Define-XML value is upper case with a space.
+    parent_class = detail.get("_links", {}).get("parentClass", {}).get("title", "")
+    ds_class = detail.get("datasetClass", detail.get("class", "")) or parent_class
+    if ds_class:
+        ds_class = ds_class.upper().replace("-", " ")
 
-    structure = detail.get("structure", description or f"One record per {name}")
+    structure = (
+        detail.get("datasetStructure")
+        or detail.get("structure")
+        or description
+        or f"One record per {name}"
+    )
     repeating = name not in ("DM", "ADSL")
 
     variables = []
@@ -349,6 +365,14 @@ class DefineScaffolder:
                     "structure": "One record per subject per parameter per analysis visit",
                     "repeating": True,
                 }
+                # The clone may be OCCDS or TTE: a BDS class would be false.
+                clone.pop("class", None)
+                logger.warning(
+                    "%s is scaffolded from the BDS template and has no class: in define.yaml. "
+                    "Set class: by hand (for example BASIC DATA STRUCTURE or OCCURRENCE "
+                    "DATA STRUCTURE).",
+                    ds_name,
+                )
                 # Deep-copy variables so edits don't leak
                 clone["variables"] = [dict(v) for v in bds["variables"]]
                 result.append(clone)
@@ -389,6 +413,9 @@ class DefineScaffolder:
             "keys": keys,
             "variables": variables,
         }
+        ds_class = ds.get("className") or ds.get("class") or _ADAM_CLASSES.get(name)
+        if ds_class:
+            result["class"] = str(ds_class).upper()
         return result
 
     def _parse_ig_dataset(self, detail: dict[str, Any]) -> dict[str, Any]:
