@@ -319,3 +319,64 @@ class TestDedupAndEdgeCases:
         data = yaml.safe_load(ns.to_spec_yaml())
         jsonschema.Draft202012Validator(_schema()).validate(data)
         assert data["datasets"][0]["name"] == "DATASET"
+
+
+class TestSourceRoundTrip:
+    """c1-168, c1-185: source() wrote callable: TODO_<name>, so the frozen file did not run."""
+
+    @pytest.fixture
+    def dm(self) -> pl.DataFrame:
+        return pl.from_repr("""\
+┌─────────┬─────┬─────┐
+│ USUBJID ┆ AGE ┆ age │
+│ ---     ┆ --- ┆ --- │
+│ str     ┆ i64 ┆ i64 │
+╞═════════╪═════╪═════╡
+│ S1      ┆ 40  ┆ 41  │
+└─────────┴─────┴─────┘
+""")
+
+    def test_source_freezes_as_assign_and_reruns(self, dm, tmp_path):
+        ns = dm.adam.source("USUBJID", "AGE").source("AGE2", from_col="age")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            text = ns.to_spec_yaml(dataset="ADSL", path=tmp_path / "define.yaml")
+
+        assert "TODO_" not in text and "# TODO:" not in text
+        assert [str(w.message) for w in caught if "to_spec_yaml" in str(w.message)] == []
+        variables = yaml.safe_load(text)["datasets"][0]["variables"]
+        blocks = {v["name"]: v.get("derivation") for v in variables}
+        assert blocks["USUBJID"] == {"algorithm": "assign"}
+        assert blocks["AGE2"] == {"algorithm": "assign", "source": "age"}
+
+        rerun = dm.adam.from_spec(tmp_path / "define.yaml", dataset="ADSL").to_frame()
+        inline = ns.to_frame()
+        assert rerun.select("USUBJID", "AGE", "AGE2").equals(
+            inline.select("USUBJID", "AGE", "AGE2")
+        )
+
+    def test_the_readme_advs_chain_stubs_only_study_day(self):
+        vs_sdtm = pl.from_repr("""\
+┌─────────┬─────────┬───────┬────────────┬────────────┬──────────┐
+│ USUBJID ┆ PARAMCD ┆ AVAL  ┆ ADT        ┆ TRTSDT     ┆ VISITNUM │
+│ ---     ┆ ---     ┆ ---   ┆ ---        ┆ ---        ┆ ---      │
+│ str     ┆ str     ┆ f64   ┆ date       ┆ date       ┆ i64      │
+╞═════════╪═════════╪═══════╪════════════╪════════════╪══════════╡
+│ 001     ┆ SYSBP   ┆ 120.0 ┆ 2024-01-15 ┆ 2024-01-15 ┆ 1        │
+│ 001     ┆ SYSBP   ┆ 115.0 ┆ 2024-02-15 ┆ 2024-01-15 ┆ 2        │
+└─────────┴─────────┴───────┴────────────┴────────────┴──────────┘
+""")
+        chain = (
+            vs_sdtm.adam.source("USUBJID", "PARAMCD", "AVAL")
+            .study_day("ADY", date_col="ADT", ref_col="TRTSDT")
+            .flag("ABLFL", criteria='pl.col("VISITNUM") == 1', by=["USUBJID", "PARAMCD"])
+            .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
+            .chg("CHG", aval="AVAL", base="BASE")
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            text = chain.to_spec_yaml(dataset="ADVS")
+
+        assert "TODO_ADY" in text
+        for name in ("USUBJID", "PARAMCD", "AVAL"):
+            assert f"TODO_{name}" not in text

@@ -26,8 +26,9 @@
 
     ---
 
-    Chain verbs inline **or** drive the same pipeline from `define.yaml` —
-    and round-trip between the two.
+    Chain verbs inline **or** drive the same pipeline from `define.yaml`.
+    `to_spec_yaml()` writes a draft: verbs listed in `fleet.spec_coverage()`
+    round-trip, other verbs emit a TODO stub to complete.
 
     [:octicons-arrow-right-24: How define.yaml works](concepts/define-yaml.md)
 

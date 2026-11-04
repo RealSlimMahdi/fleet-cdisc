@@ -857,6 +857,13 @@ def derivation_from_lineage(standard: str, node: Any) -> tuple[str, dict | None,
 
     if node.spec:
         return ("ok", dict(node.spec), {})
+    if node.verb == "source":
+        # source() is carry-through sugar: a define.yaml writes it as assign.
+        src = node.sources[0] if node.sources else node.name
+        block: dict[str, Any] = {"algorithm": "assign"}
+        if src != node.name:
+            block["source"] = src
+        return ("ok", block, {})
     params = node.params
     if params is None:
         return ("stub", None, {})
@@ -1385,7 +1392,7 @@ spec_verb(
 #: above or listed here — nothing falls through the cracks silently.
 SPEC_UNSUPPORTED: dict[str, set[str]] = {
     "sdtm": {
-        "study_day",  # pin-based reference join; a define.yaml uses duration
+        "study_day",  # pin-based reference join; no spec form yet (duration gives a day 0)
         "export_supp",  # terminal exporter, not a derivation
         "baseline_flag",  # inline flag sugar; no per-variable spec semantics yet
         "epoch_assign",  # trial-design lookup (TrialDesignMixin)
@@ -1411,8 +1418,8 @@ SPEC_UNSUPPORTED: dict[str, set[str]] = {
         "verbs",  # discoverability helper, not a derivation
     },
     "adam": {
-        "study_day",  # pin-based reference join; a define.yaml uses duration
-        "source",  # variadic carry-through sugar; a define.yaml uses assign
+        "study_day",  # pin-based reference join; no spec form yet (duration gives a day 0)
+        "source",  # variadic carry-through sugar; to_spec_yaml writes it as assign
         "join_adsl",  # variadic pin sugar; a define.yaml uses merge
         "merge_adsl",  # pin sugar; a define.yaml uses merge
         "transform",  # spec equivalent is derivation with callable:

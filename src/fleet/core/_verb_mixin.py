@@ -2560,9 +2560,10 @@ class SharedVerbsMixin:
         stubs = [entry["name"] for entry, comment in entries if comment]
         if stubs:
             warnings.warn(
-                f"to_spec_yaml: {len(stubs)} variable(s) have no reviewer-facing "
-                f"derivation text for Define-XML ({', '.join(stubs)}) — add a "
-                "`comment:` in the spec or wrap the logic in a @derivation callable.",
+                f"to_spec_yaml: {len(stubs)} variable(s) are TODO stubs "
+                f"({', '.join(stubs)}): from_spec fails on them until you replace each "
+                "callable: TODO_<name> with a registered @derivation, and Define-XML has "
+                "no method text for them.",
                 stacklevel=2,
             )
 

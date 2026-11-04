@@ -73,7 +73,7 @@ Clinical statistical programming often requires hundreds of lines of boilerplate
 - **Lazy-first evaluation** — most verbs accumulate into a single Polars `with_columns` pass; window verbs (`baseline`, cross-domain joins) checkpoint internally without breaking the chain, and `pl.scan_parquet(...).sdtm` keeps a whole pipeline lazy
 - **Zero Pandas** — built entirely on Polars for blazing-fast, multi-threaded execution
 - **AI-native by consequence** — a sharp workflow is what makes LLM-assisted programming reliable; the MCP server, language server and `llms.txt` just expose it
-- **Dual workflow** — the same pipeline chained inline in Python _or_ declared in `define.yaml`, and round-trippable between the two
+- **Dual workflow** — the same pipeline chained inline in Python _or_ declared in `define.yaml`. `to_spec_yaml()` writes a draft define.yaml from a chain: verbs listed in `fleet.spec_coverage()` round-trip, other verbs emit a TODO stub to complete
 - **Six core dependencies** — minimal footprint (`polars`, `pydantic`, `pyyaml`, `httpx`, `jsonschema`, `lxml`); everything else is an opt-in extra
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -529,7 +529,7 @@ For detailed module-by-module documentation, see [STRUCTURE.md](https://github.c
 - [x] OCCDS occurrence namespace (ADAE, ADCM)
 - [x] Therapeutic area extensions (Oncology, Ophthalmology, Pediatrics, Vaccine, Metabolic, Neuroscience, PK)
 - [x] Trial Design Domain support (TE, TA, TV, TS, TI, TD, TM) — `fleet.StudyDesign` define-once aggregate, P21-style conformance audit, `fleet tdd` CLI, USDM/Mermaid/ClinicalTrials.gov import
-- [x] Spec-driven pipeline (`define.yaml` → `from_spec()`) + code→spec round-trip (`to_spec_yaml()`)
+- [x] Spec-driven pipeline (`define.yaml` → `from_spec()`) + code→spec draft (`to_spec_yaml()`: verbs in `fleet.spec_coverage()` round-trip, other verbs emit a TODO stub)
 - [x] TLG engine — tables, listings, template registry, HTML/RTF/PDF/PPTX render
 - [x] Executable CLI (`fleet run/validate/check/tlg/migrate`) + Define-XML generation
 - [x] CDISC Rules Engine integration
