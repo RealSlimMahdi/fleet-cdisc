@@ -629,7 +629,9 @@ def _outside_tolerance(
     the rule that NaN equals NaN.  The second branch states the other half of
     that rule — a NaN is never within a tolerance of a number — which the same
     ordering happens to give anyway; it is written out so the guarantee does
-    not rest on how Polars chooses to order NaN.
+    not rest on how Polars chooses to order NaN.  Infinity follows R
+    ``all.equal``: two equal infinities agree, and an infinity is never
+    within a tolerance of a finite number or of the other infinity.
     """
     # Float64 is the arithmetic a tolerance is expressed in; an integer or a
     # decimal beyond 2**53 loses precision on the way in (see the compare docstring).
@@ -638,11 +640,14 @@ def _outside_tolerance(
         pl.lit(settings.abs_tol, pl.Float64), base_number.abs() * settings.rel_tol
     )
     base_nan, candidate_nan = base_number.is_nan(), candidate_number.is_nan()
+    either_infinite = base_number.is_infinite() | candidate_number.is_infinite()
     return (
         pl.when(base_nan & candidate_nan)
         .then(False)
         .when(base_nan | candidate_nan)
         .then(True)
+        .when(either_infinite)
+        .then(base_number != candidate_number)
         .otherwise((base_number - candidate_number).abs() > tolerance)
     )
 
