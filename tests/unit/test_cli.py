@@ -555,7 +555,7 @@ def test_define_xml_enriches_project_local_callable(
     ``fixtures.derivations``) failed to import — and the study's own
     ``callable:`` MethodDef was dropped.
 
-    ``main()`` now prepends the cwd to ``sys.path``. This test runs the CLI
+    ``main()`` now appends the cwd to ``sys.path``. This test runs the CLI
     from a project directory whose derivations module is importable *only*
     via the cwd, and asserts the callable's docstring reaches the MethodDef.
     It fails without the fix (the import raises ``SpecError`` → exit 1).

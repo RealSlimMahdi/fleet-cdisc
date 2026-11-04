@@ -35,6 +35,10 @@ except ImportError:  # mcp 1.x
 if TYPE_CHECKING:
     import polars as pl
 
+#: Set by ``fleet mcp --trust-study-engine``: ``fleet_validate`` may start the
+#: engine that a study config names.
+_TRUST_STUDY_ENGINE = False
+
 
 def _load_frame(path: str) -> pl.DataFrame:
     """Load a dataset file (CSV / Parquet / XPT / SAS) as a DataFrame."""
@@ -117,7 +121,10 @@ def fleet_validate(
 
     The inputs come from the run setup, the same as ``fleet validate``.
     The study config is looked for from the dataset's directory, so a
-    dataset inside a study uses its IG version, custom rules and engine.
+    dataset inside a study uses its IG version and custom rules.  An
+    engine that the study config names (``validation.engine_path``) runs
+    only when the server was started with ``fleet mcp
+    --trust-study-engine``; otherwise the result is "could not run".
     An explicit argument overrides the study config.
 
     Args:
@@ -165,6 +172,13 @@ def fleet_validate(
         return _could_not_run(
             "CDISC Rules Engine not found. Install it with `fleet install-engine` "
             "or set validation.engine_path / FLEET_RULES_ENGINE."
+        )
+    if setup.engine.source == "study config" and not _TRUST_STUDY_ENGINE:
+        return _could_not_run(
+            f"{setup.study_config} names the engine {setup.engine.value}. The MCP server "
+            "does not start a program that a study file names, because an assistant "
+            "can pass any dataset path. Restart the server with "
+            "`fleet mcp --trust-study-engine` for a study you trust."
         )
 
     name = path.stem.upper()
@@ -417,8 +431,15 @@ def create_server() -> FastMCP:
     return server
 
 
-def main() -> None:
-    """Run the Fleet MCP server over stdio (entry point for ``fleet mcp``)."""
+def main(*, trust_study_engine: bool = False) -> None:
+    """Run the Fleet MCP server over stdio (entry point for ``fleet mcp``).
+
+    Args:
+        trust_study_engine: Let ``fleet_validate`` start the engine that
+            ``validation.engine_path`` of a study config names.
+    """
+    global _TRUST_STUDY_ENGINE
+    _TRUST_STUDY_ENGINE = trust_study_engine
     create_server().run(transport="stdio")
 
 

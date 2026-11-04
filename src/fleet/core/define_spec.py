@@ -58,12 +58,20 @@ class VariableEntry(BaseModel):
     derivation: dict[str, Any] | None = None
 
 
+#: A SAS dataset name (``DM``, ``ADSL``).  Dataset names become file names
+#: and Snakefile lines, so the pattern also keeps ``../`` and ``;`` out.
+DATASET_NAME = r"^[A-Z][A-Z0-9]{1,7}$"
+
+#: The logical name of a ``dataset_input`` (``dm_raw``, ``DM``).
+INPUT_NAME = r"^[A-Za-z][A-Za-z0-9_]*$"
+
+
 class DatasetEntry(BaseModel):
     """One entry in the top-level ``datasets:`` list."""
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    name: str
+    name: str = Field(pattern=DATASET_NAME)
     variables: list[VariableEntry] = Field(default_factory=list)
     inputs: list[dict[str, Any]] = Field(default_factory=list)
     output: str | None = None
@@ -74,6 +82,17 @@ class DatasetEntry(BaseModel):
     keys: Any = None
     value_level: Any = None
     class_: Any = Field(default=None, alias="class")
+
+    @model_validator(mode="after")
+    def _input_names(self) -> DatasetEntry:
+        for entry in self.inputs:
+            name = entry.get("name")
+            if not isinstance(name, str) or not re.match(INPUT_NAME, name):
+                raise ValueError(
+                    f"dataset {self.name}: input name {name!r} must match {INPUT_NAME} "
+                    "(a logical name such as dm_raw or DM, not a path)"
+                )
+        return self
 
 
 class DefineSpec(BaseModel):

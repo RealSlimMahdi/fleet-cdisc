@@ -1256,7 +1256,7 @@ uv run fleet install-engine --force
 Fleet finds the engine automatically using a 4-tier discovery chain (first match wins):
 
 1. **`study_config.yaml`** — `validation.engine_path` (relative or absolute); committed to VCS for team use. Inside a study it beats the environment variable.
-2. **`FLEET_RULES_ENGINE` env var** — set in `.env` or shell; applies when the study config pins no engine, and outside a study.
+2. **`FLEET_RULES_ENGINE` env var** — set in the shell (a `.env` file gives Fleet only `CDISC_API_KEY`); applies when the study config pins no engine, and outside a study.
 3. **Managed install** — `~/.fleet/cdisc-rules-engine/` from `fleet install-engine`.
 4. **Legacy** — `../cdisc-rules-engine/core.py` (development fallback).
 

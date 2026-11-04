@@ -689,6 +689,7 @@ def _check_extras() -> list[tuple[str, bool, str]]:
 
 def _print_codelists_status(config_path: Path) -> None:
     """The doctor line of the study's codelists.py: its CT package, or each problem."""
+    from fleet.core.exceptions import SpecError
     from fleet.core.study_context import StudyConfigError, load_study_context
     from fleet.ct.study_codelists import check_codelists, load_codelists
 
@@ -696,12 +697,16 @@ def _print_codelists_status(config_path: Path) -> None:
         ctx = load_study_context(config_path)
     except StudyConfigError:
         return  # fleet check reports the invalid config
-    problems = check_codelists(ctx)
+    try:
+        problems = check_codelists(ctx)
+        packages = load_codelists(ctx.codelists_file)[0] if ctx.codelists_file.is_file() else ()
+    except SpecError as exc:
+        print(f"  ✗ codelists.py ....... {exc}")
+        return
     for problem in problems:
         print(f"  ✗ codelists.py ....... {problem}")
     if problems or not ctx.codelists_file.is_file():
         return
-    packages = load_codelists(ctx.codelists_file)[0]
     if not packages:
         print(f"  ✓ codelists.py ....... {ctx.codelists_file} (no CT package recorded)")
     else:
@@ -1745,7 +1750,7 @@ def _run_mcp(args: argparse.Namespace) -> None:
     _require_extra("mcp.server.fastmcp", "mcp", "mcp")
     from fleet.mcp_server import main as mcp_main
 
-    mcp_main()
+    mcp_main(trust_study_engine=args.trust_study_engine)
 
 
 def _run_lsp(args: argparse.Namespace) -> None:
@@ -3138,6 +3143,14 @@ def _add_server_parsers(sub: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Serve over stdio (the only supported transport; accepted for explicitness).",
     )
+    mcp.add_argument(
+        "--trust-study-engine",
+        action="store_true",
+        help=(
+            "Let fleet_validate start the engine that validation.engine_path of a "
+            "study config names. Without it, such a run could not run."
+        ),
+    )
     mcp.set_defaults(func=_run_mcp)
 
     lsp = sub.add_parser(
@@ -3227,18 +3240,17 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
-    # Make project-local modules (e.g. a spec's `derivations_module:
-    # fixtures.derivations`) importable when Fleet is invoked as the bare
-    # `fleet` console script, which — unlike `python -m fleet.cli` — does not
-    # put the current working directory on sys.path.
-    if "" not in sys.path and os.getcwd() not in sys.path:
-        sys.path.insert(0, os.getcwd())
-
-    # Load a study .env (walking up from the cwd) before any handler reads
-    # CDISC_API_KEY & co. — commands must work from any study subdirectory.
+    # Read the CDISC_API_KEY of a study .env (walking up from the cwd) before
+    # any handler needs it; commands must work from any study subdirectory.
     from fleet.ct.api import try_load_dotenv
 
     try_load_dotenv()
+
+    # Make project-local modules (e.g. a spec's `derivations_module:
+    # fixtures.derivations`) importable from the bare `fleet` console script.
+    # Appended, so a file in the study folder never shadows an installed package.
+    if "" not in sys.path and os.getcwd() not in sys.path:
+        sys.path.append(os.getcwd())
 
     from fleet.core.exceptions import FleetError
     from fleet.core.study_context import StudyConfigError

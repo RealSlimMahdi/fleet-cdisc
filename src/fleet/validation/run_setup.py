@@ -81,8 +81,6 @@ class RunSetup:
         custom_rules: Directory of custom CORE rules, or ``None``.
         engine: Engine executable, or ``None`` when none was found.
         study_config: The ``study_config.yaml`` used, or ``None``.
-        engine_version: The engine version (see
-            :func:`~fleet.validation.engine.engine_version`), or ``"unknown"``.
         timeout: Seconds before an engine run is stopped.
         accepted: The findings ``validation.accepted`` accepts (ADR-0017).
     """
@@ -92,9 +90,18 @@ class RunSetup:
     custom_rules: Resolved[Path | None]
     engine: Resolved[Path | None]
     study_config: Path | None
-    engine_version: str = "unknown"
     timeout: Resolved[float] = Resolved(DEFAULT_TIMEOUT, "default")
     accepted: tuple[AcceptedFinding, ...] = ()
+
+    @property
+    def engine_version(self) -> str:
+        """The engine version (see :func:`~fleet.validation.engine.engine_version`).
+
+        Asked only when read, because it starts the engine: building a run
+        setup, as ``fleet check`` does, runs no program a study file names.
+        ``"unknown"`` when no engine was found.
+        """
+        return engine_version(self.engine.value) if self.engine.value is not None else "unknown"
 
     @property
     def engine_ig_version(self) -> str:
@@ -179,7 +186,6 @@ def build_run_setup(
         custom_rules=rules,
         engine=exe,
         study_config=config_path,
-        engine_version=engine_version(exe.value) if exe.value is not None else "unknown",
         timeout=_resolve_timeout(timeout, ctx),
         accepted=tuple(ctx.config.validation.accepted) if ctx is not None else (),
     )

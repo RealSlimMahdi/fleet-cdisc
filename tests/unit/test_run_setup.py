@@ -217,15 +217,16 @@ class TestEngineVersion:
     def _setup(self, engine: Path, tmp_path: Path):
         return build_run_setup(name="AE", engine=engine, start=tmp_path, environ={})
 
-    def test_from_the_version_command(
+    def test_from_the_version_command_only_when_read(
         self, engine: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         calls = self._version_command(monkeypatch, 0, "0.15.0\n")
 
         setup = self._setup(engine, tmp_path)
+        assert calls == []  # fleet check builds a setup and must start no program
 
-        assert calls == [[str(engine), "version"]]
         assert setup.engine_version == "0.15.0"
+        assert calls == [[str(engine), "version"]]
         assert "CORE version: 0.15.0" in setup.header_lines()
 
     def test_from_the_marker_file_when_the_command_fails(
