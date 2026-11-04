@@ -87,9 +87,9 @@ def run_pipeline(ae_raw: pl.DataFrame, adsl: pl.DataFrame) -> dict:
         .to_frame()
         .adam.occds.treatment_emergent(
             "TRTEMFL",
-            start_date="AESTDTC",
+            start_date="ASTDT",
+            end_date="AENDT",
             trtsdt="TRTSDT",
-            trtedt="TRTEDT",
         )
         .recode(
             "AESEVN",
@@ -155,7 +155,7 @@ def run() -> dict:
         print(f"\n── Scale: {n:,} rows ──────────────────────────────────")
         ae_sub = ae_full.head(n) if n < full_n else ae_full
         subj = ae_sub["subject_id"].unique()
-        adsl_sub = adsl_full.filter(pl.col("USUBJID").is_in(subj))
+        adsl_sub = adsl_full.filter(pl.col("USUBJID").is_in(subj.implode()))
 
         result = run_pipeline(ae_sub, adsl_sub)
         print(

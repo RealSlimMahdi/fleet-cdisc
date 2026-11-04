@@ -98,7 +98,7 @@ adae = (
     .to_frame()
     .adam.occds
     .treatment_emergent("TRTEMFL",
-        start_date="AESTDTC", trtsdt="TRTSDT", trtedt="TRTEDT")
+        start_date="ASTDT", end_date="AENDT", trtsdt="TRTSDT")
     .recode("AESEVN", source="AESEV",
         recode_map={"Mild": 1, "Moderate": 2, "Severe": 3})
     .flag("ANL01FL", criteria="max",
