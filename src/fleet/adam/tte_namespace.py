@@ -8,7 +8,8 @@ Polars frame with ``USUBJID`` and ``ADT``::
         .param("OS", "Overall Survival", start="TRTSDT",
                events={"DEATH": adsl.filter(pl.col("DTHFL") == "Y")
                                     .select("USUBJID", ADT="DTHDT")},
-               censors={1: adsl.select("USUBJID", ADT="LSTALVDT")})
+               censors={1: adsl.select("USUBJID", ADT="LSTALVDT",
+                                       EVNTDESC=pl.lit("ALIVE"))})
         .aval(unit="days")
         .seq("ASEQ", order_by=["PARAMCD"])
         .to_frame()
@@ -23,7 +24,7 @@ from typing import Any, Literal
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
-from fleet.adam.tte import select_tte
+from fleet.adam.tte import param_label, select_tte
 from fleet.core.dtc import to_day
 from fleet.core.exceptions import DerivationError
 
@@ -77,13 +78,23 @@ class TTENamespace(SharedADaMVerbsMixin):
         without an event is censored at the last censor record left:
         ``CNSR`` = its key (on a date tie, the frame given last wins). A
         subject with no record left is dropped with a warning. ``STARTDT``
-        comes from ADSL (the pinned ADSL, else the base frame); a date
-        before it is set to it. AVAL comes from :meth:`aval`.
+        comes from ADSL (the pinned ADSL, else the base frame). An event or
+        censor date before it is set to it (admiral: ADT = max(ADT,
+        STARTDT)); the CNSR does not change. AVAL comes from :meth:`aval`.
 
         A source frame may also carry ``EVNTDESC`` (censors only),
         ``CNSDTDSC``, ``SRCDOM``, ``SRCVAR`` and ``SRCSEQ``; they go onto the
         selected row, and ``SRCSEQ`` breaks a tie on one date. A censor
-        without an ``EVNTDESC`` column gets a null ``EVNTDESC``.
+        frame without an ``EVNTDESC`` column gives a null ``EVNTDESC`` and a
+        warning that names the frame: the reason of the censoring is study
+        text, so Fleet does not invent it.
+
+        Without *param* (and without PARAM in *set_values_to*), PARAM is
+        the decode of *paramcd* in the study CT: the codelist of the
+        ``PARAMCD`` variable in the ADaM ``define.yaml`` of the first
+        ``study_config.yaml`` in the working directory or above it (ADTTE
+        first). CDISC ADaM CT has no time-to-event PARAMCD codelist. If no
+        decode is found, ``param()`` raises and names the places searched.
 
         For a favorable event (admiral ``event_type = "positive"``), censor
         at the stop date: add ``{1: adsl.select("USUBJID",
@@ -96,7 +107,8 @@ class TTENamespace(SharedADaMVerbsMixin):
 
         Args:
             paramcd: PARAMCD of the new parameter.
-            param: PARAM label (or give PARAM in *set_values_to*).
+            param: PARAM label (or give PARAM in *set_values_to*). When
+                neither is given, the study CT gives it (see above).
             start: Date column in ADSL that starts the clock (``STARTDT``).
             events: ``EVNTDESC -> frame`` of event records.
             censors: ``CNSR -> frame`` of censor records (CNSR >= 1).
@@ -122,18 +134,24 @@ class TTENamespace(SharedADaMVerbsMixin):
         Raises:
             DerivationError: On unknown columns (with did-you-mean), date
                 columns that are not Date/Datetime, bad dict keys, PARAMCD
-                collisions, or by-group 1:1 violations.
+                collisions, by-group 1:1 violations, or no PARAM label.
 
         References:
             admiral 1.5 ``derive_param_tte`` (``end_dates``,
             ``event_type = "negative"``: records after the first end date
-            are not used); ADR-0043
+            are not used; ADT = max(ADT, STARTDT); ``censor_source`` has no
+            default EVNTDESC). ADaM BDS-TTE v1.0: EVNTDESC is permissible
+            free text with no codelist. ADaMIG v1.3: PARAM and PARAMCD map
+            one to one. ADR-0043
             (docs/adr/0043-tte-censors-at-the-last-record-before-the-stop-date.md).
 
         Examples:
             PFS censored at the last assessment before new therapy::
 
-                last_assessment = adrs.select("USUBJID", "ADT", CNSDTDSC=pl.lit("LAST ASSESSMENT"))
+                last_assessment = adrs.select(
+                    "USUBJID", "ADT", EVNTDESC=pl.lit("NO PROGRESSION"),
+                    CNSDTDSC=pl.lit("LAST ASSESSMENT"),
+                )
                 adtte = (
                     adsl.adam.tte
                     .param(
@@ -152,6 +170,12 @@ class TTENamespace(SharedADaMVerbsMixin):
         pinned = getattr(self, "_pinned", {})
         universe = pinned["ADSL"][0] if "ADSL" in pinned else base
         keys = subject_keys or (self._pin_join_key("ADSL") if "ADSL" in pinned else ["USUBJID"])
+        if param is None and "PARAM" not in (set_values_to or {}):
+            if "PARAMCD" in (set_values_to or {}):
+                raise DerivationError(
+                    "param(): PARAMCD comes from set_values_to, so give PARAM there too."
+                )
+            param = param_label(paramcd, self._domain)
 
         rows, trace = select_tte(
             universe=universe,
@@ -266,7 +290,8 @@ class TTENamespace(SharedADaMVerbsMixin):
                     .param("OS", "Overall Survival", start="TRTSDT",
                            events={"DEATH": adsl.filter(pl.col("DTHFL") == "Y")
                                                 .select("USUBJID", ADT="DTHDT")},
-                           censors={1: adsl.select("USUBJID", ADT="LSTALVDT")})
+                           censors={1: adsl.select("USUBJID", ADT="LSTALVDT",
+                                                   EVNTDESC=pl.lit("ALIVE"))})
                     .aval(unit="months")
                     .to_frame()
                 )

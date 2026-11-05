@@ -145,6 +145,7 @@ class TestSelection:
 """)
         result = adsl.adam.tte.param(
             "TTAE",
+            "Time to First AE",
             start="TRTSDT",
             events={"AE": adae.select("USUBJID", ADT="ASTDT", SRCSEQ="AESEQ")},
             censors={1: adsl.select("USUBJID", ADT="EOSDT")},
@@ -158,6 +159,7 @@ class TestSelection:
             return (
                 adsl.adam.tte.param(
                     "TTAE",
+                    "Time to First AE",
                     start="TRTSDT",
                     events={"AE": _ae(ae)},
                     censors={1: adsl.select("USUBJID", ADT="EOSDT")},
@@ -184,6 +186,7 @@ class TestSelection:
         def run(ae: pl.DataFrame) -> pl.DataFrame:
             return adsl.adam.tte.param(
                 "TTAE",
+                "Time to First AE",
                 start="TRTSDT",
                 events={"AE": ae.select("USUBJID", "AEDECOD", ADT="ASTDT")},
                 censors={1: adsl.select("USUBJID", ADT="EOSDT")},
@@ -200,6 +203,7 @@ class TestSelection:
         universe = adsl.with_columns(pl.lit(date(2023, 4, 1)).alias("TRTSDT"))
         result = universe.adam.tte.param(
             "X",
+            "Time to Death",
             start="TRTSDT",
             events={"DEATH": _death(adsl)},
             censors={1: adsl.select("USUBJID", ADT="EOSDT")},
@@ -271,6 +275,7 @@ def _pfs(censors: dict[int, pl.DataFrame] | None = None, **kwargs) -> pl.DataFra
     return (
         adsl.adam.tte.param(
             "PFS",
+            "Progression-Free Survival",
             start="TRTSDT",
             events={"PD": adrs.filter(pl.col("AVALC") == "PD")},
             censors=censors
@@ -368,6 +373,7 @@ class TestStopAt:
         result = (
             adsl.adam.tte.param(
                 "TTWORSE",
+                "Time to Worsening",
                 start="TRTSDT",
                 events={"WORSENING": adqs.filter(pl.col("CHG") <= -10)},
                 censors={
@@ -419,6 +425,7 @@ class TestByStrata:
         with pytest.raises(Exception, match="1:1"):
             adsl.adam.tte.param(
                 "TT",
+                "Time to AE",
                 start="TRTSDT",
                 events={"AE": _ae(adae)},
                 censors={1: _ae(adae)},
@@ -429,7 +436,11 @@ class TestByStrata:
         """admiral #6/#7: a by column absent from a source frame errors cleanly."""
         with pytest.raises(Exception, match="column 'AEDECOD' not found"):
             adsl.adam.tte.param(
-                "TT", start="TRTSDT", events={"DEATH": _death(adsl)}, by=["AEDECOD"]
+                "TT",
+                "Time to Death",
+                start="TRTSDT",
+                events={"DEATH": _death(adsl)},
+                by=["AEDECOD"],
             )
 
 
@@ -540,6 +551,7 @@ class TestAvalAndKm:
             _os(adsl.adam.tte, adsl, retain="censor_at_start")
             .param(
                 "TTAE",
+                "Time to First AE",
                 start="TRTSDT",
                 events={"AE": _ae(adae)},
                 censors={1: adsl.select("USUBJID", ADT="EOSDT")},
@@ -584,3 +596,108 @@ class TestKmDataGrouping:
         ns = _os(adsl.adam.tte.pin("ADSL", adsl), adsl, retain="censor_at_start").aval()
         with pytest.raises(Exception, match="nor in the pinned ADSL"):
             ns.km_data("OS", by=["NOPE"])
+
+
+# ------------------------------------------------------------------ #
+# c1-355 follow-up: start floor, censor EVNTDESC, PARAM from CT        #
+# ------------------------------------------------------------------ #
+
+TTE_ADSL = """
+┌─────────┬────────────┬────────────┬────────────┐
+│ USUBJID ┆ TRTSDT     ┆ DTHDT      ┆ LSTALVDT   │
+│ ---     ┆ ---        ┆ ---        ┆ ---        │
+│ str     ┆ date       ┆ date       ┆ date       │
+╞═════════╪════════════╪════════════╪════════════╡
+│ 01      ┆ 2024-02-01 ┆ 2024-01-20 ┆ 2024-01-20 │
+│ 02      ┆ 2024-02-01 ┆ null       ┆ 2024-05-01 │
+└─────────┴────────────┴────────────┴────────────┘
+"""
+
+STUDY_DEFINE = """\
+codelists:
+  - oid: CL.PARAMCD.ADTTE
+    name: ADTTE Parameter Code
+    type: text
+    items:
+      - coded_value: OS
+        decode: Overall Survival
+datasets:
+  - name: ADTTE
+    variables:
+      - name: PARAMCD
+        codelist: CL.PARAMCD.ADTTE
+"""
+
+
+def _os_frames(adsl: pl.DataFrame, **censor_cols) -> dict:
+    return dict(
+        start="TRTSDT",
+        events={"DEATH": adsl.filter(pl.col("DTHDT").is_not_null()).select("USUBJID", ADT="DTHDT")},
+        censors={1: adsl.select("USUBJID", ADT="LSTALVDT", **censor_cols)},
+    )
+
+
+@pytest.fixture
+def study(tmp_path, monkeypatch):
+    (tmp_path / "study_config.yaml").write_text("study_id: S1\n", encoding="utf-8")
+    (tmp_path / "metadata" / "adam").mkdir(parents=True)
+    (tmp_path / "metadata" / "adam" / "define.yaml").write_text(STUDY_DEFINE, encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
+
+
+class TestStartFloorAndCensorText:
+    def test_event_before_start_is_set_to_start_and_stays_an_event(self):
+        """admiral ADT = max(ADT, STARTDT): death 2024-01-20 before TRTSDT 2024-02-01."""
+        adsl = pl.from_repr(TTE_ADSL)
+        row = _row(
+            adsl.adam.tte.param("OS", "Overall Survival", **_os_frames(adsl, EVNTDESC=pl.lit("A")))
+            .aval()
+            .to_frame(),
+            "01",
+        )
+        assert (row["ADT"], row["CNSR"], row["EVNTDESC"], row["AVAL"]) == (
+            date(2024, 2, 1),
+            0,
+            "DEATH",
+            1.0,
+        )
+
+    def test_censor_without_evntdesc_is_null_and_warns(self):
+        """BDS-TTE: EVNTDESC is study text, so Fleet leaves it null and says so."""
+        adsl = pl.from_repr(TTE_ADSL)
+        with pytest.warns(UserWarning, match=r"CNSR 1 have no EVNTDESC column"):
+            result = adsl.adam.tte.param("OS", "Overall Survival", **_os_frames(adsl)).to_frame()
+        assert _row(result, "02")["EVNTDESC"] is None
+
+    def test_censor_with_evntdesc_gives_no_warning(self, recwarn):
+        adsl = pl.from_repr(TTE_ADSL)
+        adsl.adam.tte.param("OS", "Overall Survival", **_os_frames(adsl, EVNTDESC=pl.lit("ALIVE")))
+        assert not [w for w in recwarn if "EVNTDESC" in str(w.message)]
+
+
+class TestParamFromCT:
+    def test_param_is_the_decode_of_the_study_paramcd_codelist(self, study):
+        adsl = pl.from_repr(TTE_ADSL)
+        result = adsl.adam.tte.param("OS", **_os_frames(adsl, EVNTDESC=pl.lit("ALIVE"))).to_frame()
+        assert result["PARAM"].unique().to_list() == ["Overall Survival"]
+
+    def test_unknown_paramcd_names_the_places_searched(self, study):
+        adsl = pl.from_repr(TTE_ADSL)
+        with pytest.raises(Exception, match=r"'PFS'.*PARAMCD codelists of .*define.yaml.*param="):
+            adsl.adam.tte.param("PFS", **_os_frames(adsl, EVNTDESC=pl.lit("ALIVE")))
+
+    def test_no_study_raises_and_asks_for_param(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        adsl = pl.from_repr(TTE_ADSL)
+        with pytest.raises(Exception, match=r"no study_config.yaml.*CDISC ADaM CT.*param="):
+            adsl.adam.tte.param("OS", **_os_frames(adsl, EVNTDESC=pl.lit("ALIVE")))
+
+    def test_paramcd_from_set_values_to_needs_param_there(self, study):
+        adsl = pl.from_repr(TTE_ADSL)
+        with pytest.raises(Exception, match="give PARAM there too"):
+            adsl.adam.tte.param(
+                "OS",
+                **_os_frames(adsl, EVNTDESC=pl.lit("ALIVE")),
+                set_values_to={"PARAMCD": pl.lit("OS2")},
+            )
