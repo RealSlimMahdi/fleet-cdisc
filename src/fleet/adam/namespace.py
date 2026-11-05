@@ -1262,6 +1262,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 f"Transform function must return a polars DataFrame, got {type(result).__name__!r}."
             )
 
+        self._note_row_change(f"transform {getattr(fn, '__name__', 'fn')}", committed, result)
         return self._materialise_then(result)
 
     # ------------------------------------------------------------------ #

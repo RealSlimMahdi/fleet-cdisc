@@ -1543,8 +1543,30 @@ class SharedVerbsMixin:
                 f"Derivation '{drv.name}' is kind={drv.kind!r} but fn() returned "
                 f"{type(result).__name__!r} — expected pl.DataFrame."
             )
+        self._note_row_change(f"derivation {drv.name}", df, result)
+        missing = [t for t in drv.targets if t not in result.columns]
+        if missing:
+            warnings.warn(
+                f"derivation '{drv.name}': declared target(s) {missing} are not in the "
+                "frame it returned; lineage records only the columns it holds.",
+                stacklevel=3,
+            )
+        # Lineage names the columns the frame holds: the declared targets that are
+        # there, or the new columns when the derivation declares none.
+        targets = (
+            [t for t in drv.targets if t in result.columns]
+            if drv.targets
+            else [c for c in result.columns if c not in df.columns]
+        )
         ns = self._materialise_then(result)
-        return _append_lineage_nodes(ns, drv)
+        return _append_lineage_nodes(ns, drv, targets=targets)
+
+    @staticmethod
+    def _note_row_change(step: str, before: pl.DataFrame, after: pl.DataFrame) -> None:
+        """Log a SAS-log-like NOTE when a frame step changes the number of rows."""
+        if before.height != after.height:
+            fleet_log.ensure_default_handler()
+            logger.info("NOTE: %s: %d -> %d rows", step, before.height, after.height)
 
     # ------------------------------------------------------------------ #
     # duration                                                             #

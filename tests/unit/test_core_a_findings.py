@@ -1090,3 +1090,65 @@ def test_c1_547_library_paths_use_the_dashed_version(version):
         "/mdr/adam/adamig-1-4",
         "/mdr/sdtmig/3-4/datasets",
     ]
+
+
+# --------------------------------------------------------------------- #
+# c1-43: a frame step notes a row change; lineage names real columns     #
+# --------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def _clean_transforms():
+    from fleet.adam.transforms import clear_transforms
+
+    yield
+    clear_transforms()
+
+
+def _log_text(caplog) -> str:
+    return "\n".join(r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.usefixtures("_clean_transforms")
+def test_c1_43_a_frame_derivation_that_drops_rows_is_noted(caplog):
+    import logging
+
+    from fleet.core.derivation import derivation
+
+    @derivation(targets=["FLG"])
+    def ml_core_a_drop_rows(df: pl.DataFrame) -> pl.DataFrame:
+        return df.filter(pl.col("AGE") > 60).with_columns(pl.lit("Y").alias("FLG"))
+
+    with caplog.at_level(logging.INFO, logger="fleet"):
+        out = _AGES.adam.derivation(ml_core_a_drop_rows).to_frame()
+    assert out.height == 1
+    assert "NOTE: derivation ml_core_a_drop_rows: 2 -> 1 rows" in _log_text(caplog)
+
+
+@pytest.mark.usefixtures("_clean_transforms")
+def test_c1_43_lineage_names_only_columns_in_the_frame():
+    from fleet.core.derivation import derivation
+    from fleet.core.lineage import lineage_of
+
+    @derivation(targets=["DECLARED"])
+    def ml_core_a_wrong_target(df: pl.DataFrame) -> pl.DataFrame:
+        return df.with_columns(pl.lit(1).alias("UNDECLARED"))
+
+    with pytest.warns(UserWarning, match=r"declared target\(s\) \['DECLARED'\]"):
+        ns = _AGES.adam.derivation(ml_core_a_wrong_target)
+    assert [n.name for n in lineage_of(ns)] == []
+
+    @derivation
+    def ml_core_a_no_targets(df: pl.DataFrame) -> pl.DataFrame:
+        return df.with_columns(pl.lit(1).alias("UNDECLARED"))
+
+    ns = _AGES.adam.derivation(ml_core_a_no_targets)
+    assert [n.name for n in lineage_of(ns)] == ["UNDECLARED"]
+
+
+def test_c1_43_a_transform_that_drops_rows_is_noted(caplog):
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="fleet"):
+        _AGES.adam.transform(lambda d: d.filter(pl.col("AGE") > 60)).to_frame()
+    assert "2 -> 1 rows" in _log_text(caplog)

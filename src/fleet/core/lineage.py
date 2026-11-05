@@ -390,7 +390,7 @@ def pin_lineage_of(namespace: Any) -> list:
     return list(getattr(namespace, "_pin_lineage", []))
 
 
-def _append_lineage_nodes(ns: Any, drv: Any) -> Any:
+def _append_lineage_nodes(ns: Any, drv: Any, targets: list[str] | None = None) -> Any:
     """Inject ``VariableNode`` entries for frame-level / param-level ``Derivation`` s.
 
     Called from ``_apply_derivation()`` after ``_materialise_then()``, because
@@ -402,6 +402,8 @@ def _append_lineage_nodes(ns: Any, drv: Any) -> Any:
         ns:  The namespace instance (already materialised).
         drv: The :class:`~fleet.core.derivation.Derivation` whose ``targets``
              and ``sources`` are to be recorded.
+        targets: The columns to record, when they differ from ``drv.targets``
+             (the columns the returned frame holds).
 
     Returns:
         The same namespace instance with ``_lineage`` extended in place.
@@ -411,7 +413,7 @@ def _append_lineage_nodes(ns: Any, drv: Any) -> Any:
     lineage: list[VariableNode] = list(getattr(ns, "_lineage", []))
     domain: str | None = getattr(ns, "_domain", None)
     spec_block = {"algorithm": "derivation", "callable": drv.dotted_path}
-    for t in drv.targets:
+    for t in drv.targets if targets is None else targets:
         lineage.append(
             VariableNode(
                 name=t,
