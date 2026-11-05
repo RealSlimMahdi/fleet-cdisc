@@ -182,8 +182,12 @@ def fleet_validate(
         )
 
     name = path.stem.upper()
+    try:
+        frame = _load_frame(dataset_path)
+    except Exception as exc:  # a reader error of any kind: the file cannot be read
+        return _could_not_run(f"cannot read the file {path}: {' '.join(str(exc).split())}")
     result = ValidationService(rules_engine_path=setup.engine.value).validate_datasets(
-        {name: _load_frame(dataset_path)},
+        {name: frame},
         standard=setup.standard.value,
         version=setup.ig_version.value,
         custom_rules=setup.custom_rules.value,

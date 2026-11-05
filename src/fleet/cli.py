@@ -1184,10 +1184,21 @@ _VALIDATE_ERRORS = 1
 _VALIDATE_COULD_NOT_RUN = 2
 
 
+#: What CORE sees of the labels: Fleet writes the Dataset-JSON from the frame alone.
+_LABEL_NOTE = (
+    "Note: the variable labels and the dataset label that CORE checks come from Fleet "
+    "(each label is the variable name), not from the file."
+)
+
+
 def _run_validate(args: argparse.Namespace) -> None:
-    from fleet.core.exceptions import ValidationSetupError
+    import polars as pl
+
+    from fleet.core.exceptions import FleetError, ValidationSetupError
+    from fleet.io import load_raw_data
     from fleet.validation import ValidationService, build_sweep
     from fleet.validation.models import write_html_report
+    from fleet.validation.run_setup import SweepDataset
 
     try:
         sweep = build_sweep(
@@ -1203,14 +1214,29 @@ def _run_validate(args: argparse.Namespace) -> None:
         _fail(str(exc), code=_VALIDATE_COULD_NOT_RUN)
 
     results = []
-    for standard, datasets in sweep.runs().items():
+    unreadable: list[SweepDataset] = []
+    for standard, all_datasets in sweep.runs().items():
+        # One file that cannot be read is "could not run"; the others still run.
+        frames: dict[str, pl.DataFrame] = {}
+        for d in all_datasets:
+            try:
+                frames[d.name] = load_raw_data(
+                    d.path, **_encoding_option(d.path, args.encoding)
+                ).collect()
+            except (FleetError, pl.exceptions.PolarsError, OSError, UnicodeError) as exc:
+                reason = f"could not run: cannot read the file: {_error_line(exc)}"
+                unreadable.append(SweepDataset(path=d.path, setup=None, reason=reason))
+        datasets = [d for d in all_datasets if d.name in frames]
+        if not datasets:
+            continue
         setup = datasets[0].setup
         assert setup is not None  # runs() holds only datasets with a setup
         print(f"Validating {len(datasets)} {standard} dataset(s) in one engine run:")
         for d in datasets:
             print(f"  {d.name} — {d.path}")
+        print(f"  {_LABEL_NOTE}")
         by_name = ValidationService(rules_engine_path=setup.engine.value).validate_datasets(
-            {d.name: _load_dataset(str(d.path), args.encoding) for d in datasets},
+            frames,
             standard=standard,
             version=setup.ig_version.value,
             custom_rules=setup.custom_rules.value,
@@ -1231,14 +1257,19 @@ def _run_validate(args: argparse.Namespace) -> None:
             for line in problems:
                 print(f"  {line}")
 
-    could_not_run = sweep.could_not_run
+    could_not_run = [*sweep.could_not_run, *unreadable]
     for d in could_not_run:
         _err(f"{d.name} ({d.path}): {d.reason}")
 
+    report_failed = False
     if args.report:
         report_path = Path(args.report)
-        write_html_report(results, report_path, could_not_run=could_not_run)
-        print(f"HTML report → {report_path}")
+        try:
+            write_html_report(results, report_path, could_not_run=could_not_run)
+            print(f"HTML report → {report_path}")
+        except OSError as exc:
+            _err(f"Error: cannot write the HTML report {report_path}: {exc}")
+            report_failed = True
 
     engine_failed = sum(1 for r in results if r.could_not_run is not None)
     failed = sum(1 for r in results if r.could_not_run is None and r.errors)
@@ -1256,7 +1287,7 @@ def _run_validate(args: argparse.Namespace) -> None:
         f"{failed} failed, {len(could_not_run) + engine_failed} could not run. "
         f"Findings: {findings} ({accepted} accepted)."
     )
-    if could_not_run or engine_failed:
+    if could_not_run or engine_failed or report_failed:
         sys.exit(_VALIDATE_COULD_NOT_RUN)
     if failed:
         sys.exit(_VALIDATE_ERRORS)

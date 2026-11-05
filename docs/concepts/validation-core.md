@@ -191,6 +191,17 @@ Some setups are refused before the engine starts. The verb then raises
 - the IG version is not supported, for example SDTMIG 3.1.3,
 - the custom rules directory does not exist.
 
+## What a PASS does not cover: labels
+
+Fleet gives CORE each dataset as a Dataset-JSON file that it writes from the
+data frame alone. So the variable labels and the dataset label that CORE
+checks come from Fleet, not from the file: each variable label is the
+variable name. A label rule (for example CORE-000594, a label that is not in
+title case) does not fire through `fleet validate`, even when the XPT file
+holds a wrong label. `fleet validate` prints this note in each engine run.
+Check the labels of a submission file against the define with
+`DatasetChecker`, or in the Define-XML.
+
 ## What a PASS does not cover: controlled terminology
 
 CORE checks only a few controlled terminology values. A `PASS` or a `FAIL`
