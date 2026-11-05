@@ -291,6 +291,10 @@ move freely between the YAML and Python views without grepping.
     group_col="TRT01A")` (builder) or `--adsl-groupby TRT01A` (CLI). In a
     crossover the N is then the period 1 count. The CLI, the explorer and
     the MCP tool group by the spec's `columns:` when it declares one.
+    The subject-level tables on ADSL (`dmt01`, `dst01`, `dtht01`,
+    `ent01`) group by `TRT01A` by default, else by `TRT01P` when ADSL
+    has no `TRT01A`
+    ([ADR-0046](https://github.com/RealSlimMahdi/fleet-cdisc/blob/main/docs/adr/0046-a-subject-level-table-takes-the-adsl-arm.md)).
 
 ### TLGSpec (base)
 

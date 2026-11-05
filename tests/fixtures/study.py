@@ -6,7 +6,8 @@ Deliberate properties (mirroring the NEST testthat setup):
   the zero-event-arm guarantee (N row + zero cells) is exercised by
   every template.
 - ``TRT01P`` duplicates ``TRTA`` on every frame so each template also
-  runs with a custom ``by``.
+  runs with a custom ``by``.  ADSL also carries ``TRT01A``, the default
+  arm of the subject-level templates (DM, DS; ADR-0046).
 - Big-N differs from subjects-in-data everywhere (each analysis dataset
   covers a subset of ADSL).
 - S01 carries multi-severity / multi-grade AEs (worst-case dedup),
@@ -80,7 +81,7 @@ ADSL = _with_trt01p(
             "DTHCAT": [None, "ADVERSE EVENT", None, None, None, None, None, None, None, None],
         }
     )
-)
+).with_columns(pl.col("TRTA").alias("TRT01A"))
 
 ADAE = _with_trt01p(
     pl.from_repr("""\

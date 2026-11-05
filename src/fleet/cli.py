@@ -166,12 +166,14 @@ def _load_dataset(path_str: str, encoding: str | None = None) -> pl.DataFrame:
     return load_raw_data(p, **_encoding_option(p, encoding)).collect()
 
 
-def _detect_groupby(df: pl.DataFrame, explicit: str | None) -> str:
+def _detect_groupby(
+    df: pl.DataFrame, explicit: str | None, candidates: tuple[str, ...] = ()
+) -> str:
     """Resolve the treatment-arm column against the *analysis data* frame.
 
     Uses ``--groupby`` when given (validated against the frame), otherwise
-    auto-detects TRTA → TRT01A → TRT01P.  On failure, errors out listing
-    the candidate columns actually present in the data.
+    auto-detects from *candidates*, by default TRTA → TRT01A → TRT01P.
+    On failure, errors out listing the candidate columns tried.
     """
     if explicit:
         if explicit not in df.columns:
@@ -182,12 +184,13 @@ def _detect_groupby(df: pl.DataFrame, explicit: str | None) -> str:
         return explicit
     from fleet.tlg import GROUPBY_CANDIDATES, detect_groupby
 
-    detected = detect_groupby(df.columns)
+    candidates = candidates or GROUPBY_CANDIDATES
+    detected = detect_groupby(df.columns, candidates)
     if detected is not None:
         return detected
     _fail(
         "could not auto-detect a treatment-arm column "
-        f"(tried {', '.join(GROUPBY_CANDIDATES)}). Pass --groupby <column>. "
+        f"(tried {', '.join(candidates)}). Pass --groupby <column>. "
         f"Columns present in the data: {', '.join(df.columns)}"
     )
     raise AssertionError("unreachable")
@@ -1807,7 +1810,11 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
         html_wrapper = wp.read_text(encoding="utf-8")
 
     # Detect the treatment-arm column against the DATA frame (not ADSL).
-    group_col = _detect_groupby(data_df, args.groupby)
+    # A subject-level table (dm, ds) takes the ADSL arm, TRT01A then TRT01P.
+    ns_cls = NAMESPACE_CLASSES[domain]
+    spec_hint = get_type_hints(ns_cls.t_summary)["spec"]
+    spec_cls = next(a for a in get_args(spec_hint) if a is not type(None))
+    group_col = _detect_groupby(data_df, args.groupby, spec_cls.arm_fallback)
 
     print(f"Domain:   {domain}")
     print(f"Format:   {fmt}")
@@ -1821,13 +1828,10 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
 
     # Registry-driven dispatch: every TLG namespace exposes t_summary.
     # --population goes to the default spec's adsl_filter, as in a YAML spec.
-    ns_cls = NAMESPACE_CLASSES[domain]
     spec = None
-    if args.population:
-        spec_hint = get_type_hints(ns_cls.t_summary)["spec"]
-        spec_cls = next(a for a in get_args(spec_hint) if a is not type(None))
+    if args.population or args.adsl_groupby:
         try:
-            spec = spec_cls(adsl_filter=args.population)
+            spec = spec_cls(adsl_filter=args.population, adsl_group_col=args.adsl_groupby)
         except ValueError as exc:
             _fail(f"--population is not a valid filter: {exc}")
     ard = ns_cls(data_df).t_summary(groupby=group_col, adsl=adsl_df, spec=spec)
@@ -3259,7 +3263,18 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
     tlg_export.add_argument(
         "--groupby",
         default=None,
-        help="Treatment-arm column. Default: auto-detect (TRTA → TRT01A → TRT01P).",
+        help=(
+            "Treatment-arm column. Default: auto-detect (TRTA → TRT01A → TRT01P); "
+            "TRT01A → TRT01P for the ADSL domains dm and ds."
+        ),
+    )
+    tlg_export.add_argument(
+        "--adsl-groupby",
+        default=None,
+        help=(
+            "ADSL arm column for the big N when ADSL lacks the analysis arm "
+            "(e.g. TRT01A for an ADAE grouped by TRTA). Sets adsl_group_col."
+        ),
     )
     tlg_export.add_argument(
         "--population",

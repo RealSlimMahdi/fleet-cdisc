@@ -11,6 +11,7 @@ flag values, pool arm existence).
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from enum import Enum
 from typing import Any, ClassVar, Literal, Self
 
@@ -20,6 +21,10 @@ from pydantic import BaseModel, Field, ValidationInfo, field_validator, model_va
 
 from fleet.core.exceptions import SchemaError
 from fleet.sdtm.utils import parse_expression
+
+#: The arm of a subject-level (ADSL) table: actual arm, then planned arm
+#: (ADaMIG 1.3, section 3.1.4; ADR-0046).
+ADSL_ARM_FALLBACK: tuple[str, ...] = ("TRT01A", "TRT01P")
 
 
 def resolve_filter(value: Any) -> pl.Expr | None:
@@ -715,18 +720,25 @@ class TLGSpec(BaseModel):
                     f"Available: {sorted(actual)}"
                 )
 
-    def check(self, df: pl.DataFrame) -> list[str]:
+    def check(self, df: pl.DataFrame, *, group_col: str | None = None) -> list[str]:
         """Pre-validation diagnostic — returns warnings without raising.
 
         Args:
             df: The DataFrame to check.
+            group_col: Effective treatment-arm column.  It replaces the
+                default arm column in the required columns, as in
+                [`validate_dataframe()`][fleet.tlg.TLGSpec.validate_dataframe].
 
         Returns:
             list[str]: Diagnostic messages (empty if all checks pass).
         """
         diagnostics: list[str] = []
         available = set(df.columns)
-        missing = [c for c in self.required_columns if c not in available]
+        required = list(self.required_columns)
+        if group_col:
+            arm_names = self._default_arm_names()
+            required = [group_col if c in arm_names else c for c in required]
+        missing = [c for c in required if c not in available]
         if missing:
             diagnostics.append(
                 f"MISSING COLUMNS: {missing} required by {self.__class__.__name__} are not present."
@@ -831,6 +843,9 @@ class SummarySpecBase(TLGSpec):
     #: Extra text for the missing-prefilter-column error (e.g. how to
     #: state a post-baseline rule without ONTRTFL).
     prefilter_hint: ClassVar[str] = ""
+    #: Arm columns tried in order when ``columns`` is not set: the first
+    #: one in the data is the arm.  Empty: ``columns[0]`` is the arm.
+    arm_fallback: ClassVar[tuple[str, ...]] = ()
 
     output_type: str = "summary"
     rows: list[Row] = Field(
@@ -964,7 +979,33 @@ class SummarySpecBase(TLGSpec):
             return []
         return list(dict.fromkeys(expr.meta.root_names()))
 
-    def check(self, df: pl.DataFrame) -> list[str]:
+    def default_group_col(self, columns: Iterable[str]) -> str:
+        """Return the arm column of a run that gives no ``groupby``.
+
+        A subject-level template (DM, DS on ADSL) sets
+        ``arm_fallback = ("TRT01A", "TRT01P")``: when ``columns`` is not
+        set, the first of them in the data is the arm.  In all other
+        cases the arm is ``columns[0]``.
+
+        Args:
+            columns: Column names of the analysis dataset.
+
+        Returns:
+            str: The arm column.  When no fallback column is in the
+                data, ``columns[0]``, so the required-columns error
+                names it.
+
+        Examples:
+            ``DMSummarySpec().default_group_col(["USUBJID", "TRT01P"]) == "TRT01P"``
+        """
+        if self.arm_fallback and "columns" not in self.model_fields_set:
+            present = set(columns)
+            found = next((c for c in self.arm_fallback if c in present), None)
+            if found is not None:
+                return found
+        return self.columns[0] if self.columns else "TRTA"
+
+    def check(self, df: pl.DataFrame, *, group_col: str | None = None) -> list[str]:
         """Run the pre-validation diagnostic without computing.
 
         The base checks (required columns, prefilter columns, required
@@ -973,6 +1014,9 @@ class SummarySpecBase(TLGSpec):
 
         Args:
             df: The DataFrame to check.
+            group_col: Treatment-arm column.  ``None`` takes the arm a
+                run without ``groupby`` takes
+                ([`default_group_col()`][fleet.tlg.SummarySpecBase.default_group_col]).
 
         Returns:
             list[str]: Diagnostic messages (empty if all checks pass).
@@ -980,7 +1024,8 @@ class SummarySpecBase(TLGSpec):
         Examples:
             ``MHSummarySpec().check(admh)``
         """
-        diagnostics = super().check(df)
+        group_col = group_col or self.default_group_col(df.columns)
+        diagnostics = super().check(df, group_col=group_col)
         available = set(df.columns)
         for row_def in self.rows:
             if row_def.field not in available:

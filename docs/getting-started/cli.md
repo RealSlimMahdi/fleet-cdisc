@@ -296,7 +296,8 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | `--data` | _(none)_ | Path to the primary analysis dataset. Default: the analysis dataset the domain's t_summary template declares (e.g. ADAE for ae, ADSL for dm/ds), found in the configured data directories. |
 | `--adsl` | _(none)_ | Path to the ADSL dataset. Default: ADSL found in the configured adam_data directory. |
 | `--output` / `-o` | _(none)_ | Output file path. Default: <domain>_summary.<format> in the configured outputs directory (current directory outside a study). |
-| `--groupby` | _(none)_ | Treatment-arm column. Default: auto-detect (TRTA → TRT01A → TRT01P). |
+| `--groupby` | _(none)_ | Treatment-arm column. Default: auto-detect (TRTA → TRT01A → TRT01P); TRT01A → TRT01P for the ADSL domains dm and ds. |
+| `--adsl-groupby` | _(none)_ | ADSL arm column for the big N when ADSL lacks the analysis arm (e.g. TRT01A for an ADAE grouped by TRTA). Sets adsl_group_col. |
 | `--population` | _(none)_ | ADSL population filter, passed to the spec's adsl_filter and shown in a footnote, e.g. 'pl.col("SAFFL") == "Y"'. Default: none (all ADSL subjects). |
 | `--title` | `""` | Table title. |
 | `--subtitle` | `""` | Table subtitle. |
