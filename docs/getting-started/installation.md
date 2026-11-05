@@ -185,6 +185,6 @@ DefineSpecGenerator("examples/cdiscpilot01/adam/define.yaml").generate(
 ## Next steps
 
 - [Quickstart](quickstart.md)
-- [Full ADSL pipeline example (notebook)](../examples/02_spec_driven_pipeline.ipynb)
+- [Full pipeline walkthrough](../examples/full_pipeline.md)
 - [define.yaml concept guide](../concepts/define-yaml.md)
 - [API reference](../api/index.md)

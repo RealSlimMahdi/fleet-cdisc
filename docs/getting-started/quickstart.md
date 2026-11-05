@@ -253,7 +253,10 @@ ctx = load_study_context(Path("./studies/MYSTUDY01/study_config.yaml"))
 
 ## Full pipeline example
 
-See the [ADSL Pipeline notebook](../examples/02_spec_driven_pipeline.ipynb) for a complete, pre-executed walkthrough using the CDISCPILOT01 dataset — covering all 10 admiral-equivalent steps from raw data to final ADSL.
+See [`examples/cdiscpilot01_spec_driven.py`](https://github.com/RealSlimMahdi/fleet-cdisc/blob/main/examples/cdiscpilot01_spec_driven.py)
+for the CDISCPILOT01 pipeline driven by `define.yaml`: SDTM DM, then ADSL,
+ADVS, ADAE and ADEX with `from_spec()`. Run it from the repository root with
+`uv run python examples/cdiscpilot01_spec_driven.py`.
 
 ---
 

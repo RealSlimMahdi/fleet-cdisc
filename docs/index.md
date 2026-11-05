@@ -169,6 +169,6 @@ flowchart TD
 - [Trial Design, fully offline](examples/tdd_pipeline.md) — no API key needed
 - [ADTTE in one chain](examples/adtte_pipeline.md) — event/censor frames, stop_at window, decision trace, KM inputs
 - [TLG from a Spec](examples/tlg_pipeline.md) — one YAML → table, explorer, QC trail
-- [ADSL pipeline walkthrough (notebook)](examples/02_spec_driven_pipeline.ipynb)
+- [Code-driven pipeline (notebook)](examples/01_code_driven_pipeline.ipynb)
 - [API Reference](api/index.md)
 - [Test Status](test-status.md)

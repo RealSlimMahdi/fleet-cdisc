@@ -125,7 +125,6 @@ nav:
       - "ADTTE (time-to-event)": examples/adtte_pipeline.md
       - TLG from a Spec: examples/tlg_pipeline.md
       - Code-Driven Workflow: examples/01_code_driven_pipeline.ipynb
-      - Spec-Driven Workflow: examples/02_spec_driven_pipeline.ipynb
   - API Reference:
       - Overview: api/index.md
       - Verb Cheat Sheet: api/cheat_sheet.md

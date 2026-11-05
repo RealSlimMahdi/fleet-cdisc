@@ -473,3 +473,21 @@ def test_tdd_page_blocks_execute(tmp_path, monkeypatch):
     assert se["SEENDTC"].to_list() == ["2024-01-15", None]
     assert se["SESEQ"].to_list() == [1, 2]
     assert ns["ae"]["EPOCH"].to_list() == ["SCREENING", "TREATMENT"]
+
+
+def test_code_driven_notebook_cells_execute(tmp_path, monkeypatch):
+    """c1-655: every code cell of the kept notebook runs, in order, in an empty folder."""
+    import json
+
+    nb = json.loads(
+        (REPO_ROOT / "docs" / "examples" / "01_code_driven_pipeline.ipynb").read_text(
+            encoding="utf-8"
+        )
+    )
+    monkeypatch.chdir(tmp_path)
+    ns: dict = {}
+    cells = [c for c in nb["cells"] if c["cell_type"] == "code"]
+    for cell in cells:
+        exec(compile("".join(cell["source"]), "<notebook 01>", "exec"), ns)  # noqa: S102
+    assert len(cells) >= 3
+    assert "AGE40FL" in ns["adsl"].columns
