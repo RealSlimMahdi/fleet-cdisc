@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from fleet.core.dag import VariableNode
-from fleet.core.define_spec import load_spec_yaml
+from fleet.core.define_spec import load_spec_yaml, standard_of
 from fleet.core.lineage import UNSERIALISABLE
 from fleet.core.spec_registry import (
     SPEC_UNSUPPORTED,
@@ -118,7 +118,7 @@ def program_from_spec(spec_path: str | Path, dataset: str) -> str:
         known = ", ".join(str(ds.get("name")) for ds in datasets)
         raise ValueError(f"dataset {dataset!r} not in {path}. Known: {known}")
     study = data.get("study") if isinstance(data.get("study"), dict) else {}
-    standard = "adam" if "ADAM" in str(study.get("standard", "")).upper() else "sdtm"
+    standard = standard_of(study.get("standard"), path) or "sdtm"
 
     name = dataset.upper()
     var = name.lower()

@@ -142,6 +142,20 @@ def test_program_from_spec_imports_study_callables(tmp_path):
     assert "    .derivation(AGEGR1)  # TODO: import AGEGR1" in program_from_spec(spec, "ADSL")
 
 
+def test_program_from_spec_reads_the_standard_from_the_nearest_folder(tmp_path):
+    """c1-614: an ADaM spec with no study block, under metadata/adam, writes .adam calls."""
+    folder = tmp_path / "sdtm" / "S01" / "metadata" / "adam"
+    folder.mkdir(parents=True)
+    spec = folder / "define.yaml"
+    spec.write_text(
+        "datasets:\n  - name: ADVS\n    variables:\n"
+        "      - name: CHG\n        derivation:\n          algorithm: chg\n",
+        encoding="utf-8",
+    )
+    code = program_from_spec(spec, "ADVS")
+    assert ".adam" in code and ".sdtm" not in code
+
+
 def test_program_from_spec_renders_one_call_per_derivation():
     code = program_from_spec(ADAM_SPEC, "adsl")
     assert code.startswith("# ADSL")

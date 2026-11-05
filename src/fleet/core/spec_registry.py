@@ -599,8 +599,8 @@ def parse_variable_spec(standard: str, data: Mapping[str, Any]) -> SpecVariableB
 
 
 def suggest_algorithm(standard: str, name: str) -> str | None:
-    """Return the closest registered algorithm name to *name*, if any."""
-    matches = difflib.get_close_matches(name, list(_DECLARED[standard]), n=1, cutoff=0.6)
+    """Return the closest registered algorithm name to *name*, if any; case is ignored."""
+    matches = difflib.get_close_matches(name.lower(), list(_DECLARED[standard]), n=1, cutoff=0.6)
     return matches[0] if matches else None
 
 

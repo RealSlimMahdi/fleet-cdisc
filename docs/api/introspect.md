@@ -44,6 +44,27 @@ options:
 show_root_heading: true
 heading_level: 3
 
+## renamed_algorithm
+
+::: fleet.introspect.renamed_algorithm
+options:
+show_root_heading: true
+heading_level: 3
+
+## check_derivation
+
+::: fleet.introspect.check_derivation
+options:
+show_root_heading: true
+heading_level: 3
+
+## standard_of
+
+::: fleet.introspect.standard_of
+options:
+show_root_heading: true
+heading_level: 3
+
 ## algorithm_doc
 
 ::: fleet.introspect.algorithm_doc
@@ -79,6 +100,14 @@ filters: ["!^_"]
 ## AlgorithmDoc
 
 ::: fleet.introspect.AlgorithmDoc
+options:
+show_root_heading: true
+heading_level: 3
+filters: ["!^_"]
+
+## DerivationProblem
+
+::: fleet.introspect.DerivationProblem
 options:
 show_root_heading: true
 heading_level: 3

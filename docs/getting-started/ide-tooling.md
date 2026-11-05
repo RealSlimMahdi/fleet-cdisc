@@ -41,9 +41,10 @@ Fleet package (never hardcoded):
 
 | Capability | Source of truth |
 | --- | --- |
-| Diagnostics on open/change | generated JSON schema (`define_spec_schema.json`) |
-| Unknown `algorithm:` did-you-mean | spec-algorithm registry |
-| Completions: algorithm ids and per-algorithm parameter keys | registry (required params first) |
+| Diagnostics on open/change | generated JSON schema (`define_spec_schema.json`); a key only `fleet define-xml` needs (a study key, a dataset or variable `label`) is a warning |
+| Unexpected keys, each on its own line; a refused `derivation:` block in the words of `from_spec()` | JSON schema, per-algorithm models |
+| Unknown `algorithm:` did-you-mean (case ignored); a pre-ADR-0008 name names `fleet migrate --spec` | spec-algorithm registry |
+| Completions: algorithm ids and per-algorithm parameter keys | registry (required params first; keys the block holds are left out) |
 | Completions: codelist OIDs | the file's own `codelists:` section |
 | Hover: algorithm docs, codelist name + terms | verb docstrings / inline codelists |
 

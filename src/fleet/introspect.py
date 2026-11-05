@@ -45,13 +45,17 @@ from typing import Any, Literal
 __all__ = [
     "AlgorithmDoc",
     "AlgorithmInfo",
+    "DerivationProblem",
     "ParamInfo",
     "Standard",
     "algorithm_doc",
     "algorithms",
+    "check_derivation",
     "define_schema",
     "get_algorithm",
     "load_spec_yaml",
+    "renamed_algorithm",
+    "standard_of",
     "suggest_algorithm",
 ]
 
@@ -104,6 +108,20 @@ class AlgorithmDoc:
 
     summary: str
     verb_path: str
+
+
+@dataclass(frozen=True, slots=True)
+class DerivationProblem:
+    """One reason ``from_spec()`` refuses a ``derivation:`` block.
+
+    Args:
+        key: The block key the problem is about, or ``None`` when it is
+            about the block as a whole (two keys that exclude each other).
+        message: The text ``from_spec()`` gives, prefixed with the key.
+    """
+
+    key: str | None
+    message: str
 
 
 def _check_standard(standard: str) -> None:
@@ -199,6 +217,119 @@ def suggest_algorithm(standard: Standard, name: str) -> str | None:
     from fleet.core import spec_registry
 
     return spec_registry.suggest_algorithm(standard, name)
+
+
+def renamed_algorithm(name: str) -> str | None:
+    """Return the current name of a pre-ADR-0008 algorithm name, or ``None``.
+
+    ``fleet migrate --spec`` rewrites a file that still uses the old
+    names, so a tool can point the user to it.
+
+    Args:
+        name: The algorithm name as written in the file.
+
+    Returns:
+        str | None: The current name (``"assign"`` for ``"hardcode_no_ct"``),
+            or ``None`` when *name* is not an old name.
+
+    Examples:
+        Turn an old name into a migrate hint::
+
+            from fleet import introspect
+
+            new = introspect.renamed_algorithm("hardcode_no_ct")
+            message = f"Old name of '{new}'. Run fleet migrate --spec." if new else ""
+    """
+    from fleet.tools.migrate_spec import ALGORITHM_RENAMES
+
+    return ALGORITHM_RENAMES.get(name)
+
+
+def check_derivation(
+    standard: Standard,
+    block: dict[str, Any],
+    *,
+    target: str = "VAR",
+    codelist: str | None = None,
+) -> tuple[DerivationProblem, ...]:
+    """Return why ``from_spec()`` would refuse one ``derivation:`` block.
+
+    The block is checked by the same per-algorithm model ``from_spec()``
+    uses, after the variable's ``codelist:`` fills ``ct`` (ADR-0008).  An
+    unknown algorithm gives one problem; use :func:`suggest_algorithm` for
+    a better message.
+
+    Args:
+        standard: ``"sdtm"`` or ``"adam"``.
+        block: The ``derivation:`` block, with its ``algorithm`` key.
+        target: The variable the block derives.
+        codelist: The ``codelist:`` of the variable, if any.
+
+    Returns:
+        tuple[DerivationProblem, ...]: Empty when the block is valid.
+
+    Raises:
+        ValueError: If *standard* is not a known CDISC standard.
+
+    Examples:
+        Put a red line on a misspelled key::
+
+            from fleet import introspect
+
+            problems = introspect.check_derivation(
+                "sdtm", {"algorithm": "assign", "sorce": "sex"}
+            )
+            assert problems[0].key == "sorce"
+    """
+    _check_standard(standard)
+
+    from pydantic import ValidationError
+
+    from fleet.core import spec_registry
+
+    try:
+        data = spec_registry.with_codelist(standard, block, codelist)
+    except ValueError as exc:
+        return (DerivationProblem(None, str(exc)),)
+    try:
+        spec_registry.parse_variable_spec(standard, {"target": target, **data})
+    except ValidationError as exc:
+        problems = []
+        for error in exc.errors():
+            location = error["loc"]
+            message = str(error["msg"]).removeprefix("Value error, ")
+            key = str(location[1]) if len(location) > 1 else None
+            problems.append(DerivationProblem(key, f"{key}: {message}" if key else message))
+        return tuple(problems)
+    return ()
+
+
+def standard_of(study_standard: object, path: str = "") -> Standard | None:
+    """Return the standard a spec targets, from its ``study.standard`` or its path.
+
+    The spec's own ``study.standard`` wins; without it, the nearest folder
+    named ``sdtm`` or ``adam`` above the file decides.  ``fleet define-xml``
+    and ``fleet spec-to-code`` decide the same way.
+
+    Args:
+        study_standard: The ``study.standard`` value, or ``None``.
+        path: The spec file path.
+
+    Returns:
+        Standard | None: ``"sdtm"``, ``"adam"``, or ``None`` when neither
+            source says.
+
+    Examples:
+        Offer only the algorithms of the file's standard::
+
+            from fleet import introspect
+
+            std = introspect.standard_of(None, "/study/metadata/adam/define.yaml")
+            names = [a.name for a in introspect.algorithms(std)] if std else []
+    """
+    from fleet.core.define_spec import standard_of as _standard_of
+
+    return _standard_of(study_standard, path)  # type: ignore[return-value]
 
 
 def algorithm_doc(name: str) -> AlgorithmDoc | None:

@@ -38,6 +38,7 @@ from fleet.core.define_spec import (
     default_repeating,
     load_define_spec,
     load_spec_yaml,
+    standard_of,
 )
 from fleet.core.exceptions import SpecError
 from fleet.core.oids import item_oid, metadata_version_oid, study_oid
@@ -87,14 +88,6 @@ _FORMAT_EXT: dict[str, str] = {
     "parquet": ".parquet",
     "xpt": ".xpt",
     "dataset-json": ".json",
-}
-
-#: Spec ``study.standard`` → the algorithm-registry standard (SEND shares
-#: the SDTM verb set).
-_REGISTRY_STANDARDS: dict[str, str] = {
-    "SDTMIG": "sdtm",
-    "ADAMIG": "adam",
-    "SENDIG": "sdtm",
 }
 
 
@@ -1253,7 +1246,7 @@ class DefineSpecGenerator:
             expression = dotted or ""
             context = "Python"
         elif algorithm:
-            std = _REGISTRY_STANDARDS.get(self._data["study"]["standard"], "sdtm")
+            std = standard_of(self._data["study"]["standard"], self._path) or "sdtm"
             # The variable's codelist: is the ct: of its assign (ADR-0008), so the
             # method text says "mapped to controlled terminology" when it applies.
             try:
