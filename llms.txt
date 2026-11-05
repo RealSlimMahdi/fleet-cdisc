@@ -1399,8 +1399,9 @@ for checker, df, ds in [
 # a gap: a Derived variable with no method text, a numeric item with no
 # Length or a float with no SignificantDigits.
 # XSD validation + the semantic lint run automatically on the way out.
-DefineSpecGenerator(SDTM_SPEC, strict=True).generate(OUT / "define_sdtm.xml")
-DefineSpecGenerator(ADAM_SPEC, strict=True).generate(OUT / "define_adam.xml")
+XSL = SPECS / "define2-1.xsl"  # the CDISC stylesheet for the HTML preview
+DefineSpecGenerator(SDTM_SPEC, strict=True).generate(OUT / "define_sdtm.xml", xsl_path=XSL)
+DefineSpecGenerator(ADAM_SPEC, strict=True).generate(OUT / "define_adam.xml", xsl_path=XSL)
 print(f"\nDefine-XML written to {OUT}/")
 print("  Serve with: python -m http.server 8080 --directory outputs/cdiscpilot01")
 
