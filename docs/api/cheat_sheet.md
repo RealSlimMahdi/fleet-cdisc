@@ -110,13 +110,13 @@ Fleet's documentation is generated directly from Python docstrings via [mkdocstr
 
 ## Time-to-event (`df.adam.tte`)
 
-Typed `EventSource` / `CensorSource` objects describe the candidates; the
-prebuilt library (`DEATH_EVENT`, `AE_EVENT`, ...) is browsable via
-`prebuilt_sources_frame()`. Source frames attach by nickname with `.pin()`.
+Each event or censor source is a plain frame with `USUBJID` and `ADT`. The key of
+`events=` is the EVNTDESC; the key of `censors=` is the CNSR. Records after the
+first `stop_at=` date are dropped (ADR-0043).
 
 | Verb                                                             | Description                                                        | Example                                                              |
 | ---------------------------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------- |
-| [`.param()`][fleet.adam.TTENamespace.param]                      | Derive one TTE parameter: earliest event wins, else latest censor. | `.param("OS", "Overall Survival", start_date="TRTSDT", events=[...])` |
+| [`.param()`][fleet.adam.TTENamespace.param]                      | Derive one TTE parameter: earliest event wins, else latest censor. | `.param("PFS", start="TRTSDT", events={"PD": pd}, censors={2: last_assessment}, stop_at=["EOSDT", "NACTDT"])` |
 | [`.aval()`][fleet.adam.TTENamespace.aval]                        | AVAL (+AVALU) from STARTDT/ADT with CDISC unit conventions.        | `.aval(unit="months")`                                                |
 | [`.km_data()`][fleet.adam.TTENamespace.km_data]                  | `(duration, event)` frame for lifelines / scikit-survival.         | `.km_data("OS", by=["TRT01P"])`                                       |
 

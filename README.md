@@ -537,7 +537,7 @@ For detailed module-by-module documentation, see [STRUCTURE.md](https://github.c
 - [x] Executable CLI (`fleet run/validate/check/tlg/migrate`) + Define-XML generation
 - [x] CDISC Rules Engine integration
 - [x] SAS XPT / Dataset-JSON export
-- [x] ADTTE time-to-event framework (`df.adam.tte` — typed event/censor sources, KM inputs)
+- [x] ADTTE time-to-event framework (`df.adam.tte` — event/censor frames, stop_at window, KM inputs)
 - [ ] ADPC and ADPPK: `examples/adnca_example.py` builds both with the PK verbs; no test compares their values with admiral yet
 - [ ] Enhanced validation reporting
 

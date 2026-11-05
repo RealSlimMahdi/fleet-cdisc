@@ -5,7 +5,6 @@ from contextlib import nullcontext
 import polars as pl
 import pytest
 
-from fleet.adam.tte import AE_EVENT, DEATH_EVENT, LASTALIVE_CENSOR
 from fleet.core.exceptions import DerivationError
 
 ADSL = """\
@@ -33,23 +32,25 @@ ADAE = """\
 
 
 def _chain(adsl: pl.DataFrame, adae: pl.DataFrame | None = None, **kwargs):
+    keys = kwargs.get("subject_keys", ["USUBJID"])
+    adae = pl.from_repr(ADAE) if adae is None else adae
+    alive = {1: adsl.select(*keys, ADT="LSTALVDT")}
     return (
         adsl.adam.tte.pin("ADSL", adsl)
-        .pin("ADAE", pl.from_repr(ADAE) if adae is None else adae)
         .param(
             "OS",
             "Overall Survival",
-            start_date="TRTSDT",
-            events=[DEATH_EVENT],
-            censors=[LASTALIVE_CENSOR],
+            start="TRTSDT",
+            events={"DEATH": adsl.filter(pl.col("DTHFL") == "Y").select(*keys, ADT="DTHDT")},
+            censors=alive,
             **kwargs,
         )
         .param(
             "TTAE",
             "Time to First AE",
-            start_date="TRTSDT",
-            events=[AE_EVENT],
-            censors=[LASTALIVE_CENSOR],
+            start="TRTSDT",
+            events={"ADVERSE EVENT": adae.select(*keys, ADT="ASTDT")},
+            censors=alive,
             **kwargs,
         )
     )

@@ -130,7 +130,7 @@ ADaM sub-structures and therapeutic-area extensions are nested under `df.adam`:
 | `df.adam.vaccine`   | Vaccine             | Fever, seroconversion, ADIS AVAL                                                            |
 | `df.adam.metabolic` | Metabolic           | Waist ratios, body fat %                                                                    |
 | `df.adam.neuro`     | Neuroscience        | Centiloid, MMSE, CDR-SoB                                                                    |
-| `df.adam.tte`       | ADTTE               | Event/censor sources, TTE params, AVAL/AVALU, KM inputs                                     |
+| `df.adam.tte`       | ADTTE               | Event/censor frames, TTE params, AVAL/AVALU, KM inputs                                      |
 
 These are inspired by the [admiral TA packages](https://pharmaverse.github.io/admiral/). They are not ports: a verb can give other values. Each verb docstring names its source under `References:`.
 
@@ -167,7 +167,7 @@ flowchart TD
 - [CLI Reference](getting-started/cli.md) — bootstrapping pipeline (`fleet init cfg/define/ct`) and standalone CT commands
 - [How define.yaml drives DataFrame creation](concepts/define-yaml.md)
 - [Trial Design, fully offline](examples/tdd_pipeline.md) — no API key needed
-- [ADTTE in one chain](examples/adtte_pipeline.md) — typed event/censor sources, decision trace, KM inputs
+- [ADTTE in one chain](examples/adtte_pipeline.md) — event/censor frames, stop_at window, decision trace, KM inputs
 - [TLG from a Spec](examples/tlg_pipeline.md) — one YAML → table, explorer, QC trail
 - [ADSL pipeline walkthrough (notebook)](examples/02_spec_driven_pipeline.ipynb)
 - [API Reference](api/index.md)

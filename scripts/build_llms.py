@@ -331,7 +331,7 @@ dates, sequence number)
 - `df.adam.vaccine` — Vaccine: fever flag, seroconversion, ADIS AVAL
 - `df.adam.metabolic` — Metabolic: waist-to-hip ratio, body fat %
 - `df.adam.neuro` — Neuroscience: Centiloid, MMSE, CDR-SoB
-- `df.adam.tte` — Time-to-event (ADTTE): EventSource/CensorSource objects, param, AVAL/AVALU, KM inputs\
+- `df.adam.tte` — Time-to-event (ADTTE): param from plain event/censor frames, stop_at window, AVAL/AVALU, KM inputs\
 """
 
 

@@ -22,13 +22,6 @@ from fleet.adam.transforms import (
     list_transforms,
     register_transform,
 )
-from fleet.adam.tte import (
-    PREBUILT_SOURCES,
-    CensorSource,
-    EventSource,
-    prebuilt_sources_frame,
-    sources_frame,
-)
 from fleet.adam.tte_namespace import TTENamespace  # accessed via df.adam.tte
 from fleet.adam.vaccine_namespace import VaccineNamespace
 
@@ -46,12 +39,6 @@ __all__ = [
     "OCCDSNamespace",
     "PKNamespace",
     "TTENamespace",
-    # TTE sources
-    "EventSource",
-    "CensorSource",
-    "PREBUILT_SOURCES",
-    "sources_frame",
-    "prebuilt_sources_frame",
     # Transform registry
     "register_transform",
     "get_transform",

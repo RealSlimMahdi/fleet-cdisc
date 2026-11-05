@@ -13,7 +13,6 @@ import polars as pl
 import pytest
 
 import fleet  # noqa: F401 — registers namespaces
-from fleet.adam.tte import DEATH_EVENT, LASTALIVE_CENSOR
 from fleet.core.exceptions import DerivationError, VerbUsageError
 
 
@@ -226,17 +225,13 @@ class TestGroupOrder:
             pl.lit(None, pl.String).alias("DTHFL"),
             pl.lit(None, pl.Date).alias("DTHDT"),
         )
-        result = (
-            adsl.adam.tte.pin("ADSL", adsl)
-            .param(
-                "OS",
-                "Overall Survival",
-                start_date="TRTSDT",
-                events=[DEATH_EVENT],
-                censors=[LASTALIVE_CENSOR],
-            )
-            .to_frame()
-        )
+        result = adsl.adam.tte.param(
+            "OS",
+            "Overall Survival",
+            start="TRTSDT",
+            events={"DEATH": adsl.filter(pl.col("DTHFL") == "Y").select("USUBJID", ADT="DTHDT")},
+            censors={1: adsl.select("USUBJID", ADT="LSTALVDT")},
+        ).to_frame()
         assert result["USUBJID"].to_list() == ids
 
 
