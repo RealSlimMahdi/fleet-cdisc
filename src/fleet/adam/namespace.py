@@ -95,8 +95,8 @@ class AdamNamespace(SharedADaMVerbsMixin):
     """
     Immutable pipeline builder for ADaM derivations.
 
-    Each verb appends to a lazy expression list; ``to_frame()`` materialises
-    everything in one ``with_columns`` call (unless the verb requires a join/filter).
+    Each verb adds one step to the plan of one LazyFrame; ``to_frame()``
+    collects the plan once (a verb that needs data earlier says so).
     Accepts both ``pl.DataFrame`` and ``pl.LazyFrame`` inputs, so scanned
     sources stay lazy end-to-end.
 

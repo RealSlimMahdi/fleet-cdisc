@@ -22,6 +22,9 @@ df.tlg.vs  # Vital-signs summary
 df.tlg.catalog()  # every registered template as a DataFrame
 ```
 
+`.tlg` works on a `pl.DataFrame` only. A `pl.LazyFrame` has no `.tlg`: call
+`.collect()` first.
+
 ## Template registry
 
 Every table/listing is a registered **template**: an id, its CDISC class, the
