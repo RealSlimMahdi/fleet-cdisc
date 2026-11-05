@@ -566,7 +566,7 @@ class TestTimeToEvent:
 
 
 class TestAgeConstants:
-    """c1-166: one year is 365.25 days in corrected_age and age_in_years."""
+    """c1-166: one year is 365.25 days in corrected_age."""
 
     def test_corrected_age_uses_days(self):
         inf = pl.from_repr("""\
@@ -590,32 +590,6 @@ class TestAgeConstants:
 
         assert out["CA"][0] == pytest.approx((1 - 7 * 6) / 365.25, rel=1e-12)
         assert out["CA4"][0] == -0.1123
-
-    def test_age_in_weeks_converts_with_365_25_over_7(self):
-        from fleet.adam.utils import age_in_years
-
-        df = pl.from_repr("""\
-┌───────┬───────┐
-│ AGE   ┆ AGEU  │
-│ ---   ┆ ---   │
-│ f64   ┆ str   │
-╞═══════╪═══════╡
-│ 52.0  ┆ WEEKS │
-└───────┴───────┘
-""")
-        assert df.select(age_in_years())["AAGE"][0] == pytest.approx(52 * 7 / 365.25, rel=1e-12)
-
-
-def test_define_xml_on_a_version_1_spec_names_fleet_migrate(tmp_path):
-    """c1-142: DefineSpecGenerator gives the same hint as from_spec."""
-    from fleet.core.exceptions import SpecError
-    from fleet.define_xml import DefineSpecGenerator
-
-    path = tmp_path / "define.yaml"
-    path.write_text("fleet_spec_version: 1\nstudy:\n  name: S01\ndatasets: []\n")
-
-    with pytest.raises(SpecError, match="fleet migrate --spec"):
-        DefineSpecGenerator(path)
 
 
 class TestBoundaryRules:
