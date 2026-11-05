@@ -51,6 +51,8 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
+from fleet.core.study_context import DEFAULT_SDTM_CT
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -258,7 +260,7 @@ class CodelistGenerator:
         client: CDISCClient,
         concept_ids: set[str],
         *,
-        package: str = "sdtmct-2023-12-15",
+        package: str = DEFAULT_SDTM_CT,
         adam_package: str | None = None,
         include_docs: bool = True,
     ) -> CodelistGenerator:
@@ -326,7 +328,7 @@ class CodelistGenerator:
         domains: list[str],
         *,
         ig_version: str = "3-4",
-        package: str = "sdtmct-2023-12-15",
+        package: str = DEFAULT_SDTM_CT,
         include_docs: bool = True,
     ) -> CodelistGenerator:
         """Build a generator from the SDTM IG — the authoritative source of truth.

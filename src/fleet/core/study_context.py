@@ -6,7 +6,7 @@ Adapted from pharmaversepy study/config.py.
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class StudyPathConfig(BaseModel):
@@ -37,6 +37,12 @@ class SDTMConfig(BaseModel):
     ig_version: str | None = Field(default=None)
     domains: list[str] = Field(default_factory=list)
 
+    @field_validator("ig_version")
+    @classmethod
+    def _dashed(cls, value: str | None) -> str | None:
+        """``3.4`` becomes ``3-4``, the form of the CDISC Library paths."""
+        return None if value is None else value.replace(".", "-")
+
 
 class ADAMConfig(BaseModel):
     """ADaM Implementation Guide configuration.
@@ -47,6 +53,12 @@ class ADAMConfig(BaseModel):
 
     ig_version: str | None = Field(default=None)
     datasets: list[str] = Field(default_factory=list)
+
+    @field_validator("ig_version")
+    @classmethod
+    def _dashed(cls, value: str | None) -> str | None:
+        """``1.3`` becomes ``1-3``, the form of the CDISC Library paths."""
+        return None if value is None else value.replace(".", "-")
 
 
 #: The default SDTM CT package of a new study.
@@ -339,7 +351,8 @@ class StudyContext:
         if config_file.exists():
             raise StudyConfigError(
                 f"Study already initialized — '{config_file}' already exists. "
-                "Use load_study_context() to load an existing study."
+                "Run the next step with fleet init define, fleet init ct or fleet init rules "
+                "(--force to write a file again), or load it with load_study_context()."
             )
 
         # ── Create directory tree (idempotent) ────────────────────────────

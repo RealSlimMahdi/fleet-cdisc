@@ -482,3 +482,192 @@ def test_c1_289_validate_finds_an_upper_case_extension(tmp_path: Path) -> None:
     (tmp_path / "notes.txt").write_text("not data", encoding="utf-8")
 
     assert _collect_files([tmp_path]) == [tmp_path / "DM.PARQUET"]
+
+
+_DM_IG = {
+    "name": "DM",
+    "label": "Demographics",
+    "structure": "One record per subject",
+    "keys": ["USUBJID"],
+    "variables": [
+        {
+            "name": "USUBJID",
+            "label": "Unique Subject Identifier",
+            "type": "text",
+            "length": 11,
+            "mandatory": True,
+            "origin": "Collected",
+        },
+        {
+            "name": "SEX",
+            "label": "Sex",
+            "type": "text",
+            "length": 1,
+            "codelist": "C66731",
+            "origin": "Collected",
+        },
+    ],
+}
+
+#: One rule as the CDISC Library rules endpoint returns it, cut to what Fleet reads.
+_RULES = {
+    "rules": {
+        "CORE-000001": {
+            "Core": {"Id": "CORE-000001", "Version": "1", "Status": "Published"},
+            "Description": "SEX is in the Sex codelist.",
+            "Scope": {"Domains": {"Include": ["DM"]}},
+            "Outcome": {"Message": "SEX is not in the codelist."},
+        }
+    }
+}
+
+
+class _OfflineLibrary:
+    """The CDISC Library for one SDTM study: DM, the Sex codelist and one rule."""
+
+    def __enter__(self) -> _OfflineLibrary:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        return None
+
+    def get_codelist(self, concept_id: str, *, package: str) -> dict:
+        assert concept_id == "C66731"
+        return {
+            "conceptId": "C66731",
+            "name": "Sex",
+            "submissionValue": "SEX",
+            "terms": [
+                {"submissionValue": "F", "preferredTerm": "Female"},
+                {"submissionValue": "M", "preferredTerm": "Male"},
+            ],
+        }
+
+    def _get(self, path: str) -> dict:
+        assert path == "/mdr/rules/sdtmig/3-4", path
+        return _RULES
+
+
+class TestFirstRun:
+    def test_c1_313_new_then_check_then_check_rule(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ) -> None:
+        from fleet.core.scaffolder import DefineScaffolder
+
+        monkeypatch.setenv("CDISC_API_KEY", "offline")
+        monkeypatch.setattr("fleet.ct.api.CDISCClient", _OfflineLibrary)
+        monkeypatch.setattr(DefineScaffolder, "_fetch_sdtm_datasets", lambda *_: [_DM_IG])
+        monkeypatch.chdir(tmp_path)
+
+        new = ["new", "S01", "-y", "--domains", "DM", "--description", "Test", "--company", "P"]
+        assert _run(new) == 0
+        study = tmp_path / "S01"
+        out = capsys.readouterr().out
+        assert "CT package: sdtmct-2023-12-15 (default)" in out
+        assert (study / "study_config.yaml").is_file()
+        assert list((study / "metadata").rglob("DM.yaml"))
+
+        monkeypatch.chdir(study)
+        assert _run(["check"]) == 0
+        assert "0 failure(s)" in capsys.readouterr().out
+
+        assert _run(["add-rule", "--domain", "DM", "--description", "SEX is F or M."]) == 0
+        rule = next((study / "metadata" / "custom_rules").glob("*-DM-*.yaml"))
+        assert _run(["check-rule", str(rule)]) == 0
+        assert _run(["check"]) == 0
+
+    def test_c1_313_init_rules_with_no_define_exits_1(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ) -> None:
+        monkeypatch.setattr("fleet.ct.api.CDISCClient", _OfflineLibrary)
+        assert _run(["init", "cfg", "--study-id", "S01", "--root", str(tmp_path)]) == 0
+        monkeypatch.chdir(tmp_path)
+
+        assert _run(["init", "rules"]) == 1
+
+        assert "no rule file is cached" in capsys.readouterr().err
+
+
+class TestNewAndInit:
+    def test_c1_309_new_creates_the_study_folder(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("CDISC_API_KEY", raising=False)
+        monkeypatch.chdir(tmp_path)
+
+        assert _run(["new", "STUDY01", "-y"]) == 0
+        assert _run(["new", "STUDY02", "-y"]) == 0
+
+        assert (tmp_path / "STUDY01" / "study_config.yaml").is_file()
+        assert (tmp_path / "STUDY02" / "study_config.yaml").is_file()
+        assert not (tmp_path / "study_config.yaml").exists()
+
+    def test_c1_309_root_dot_keeps_the_current_folder(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ) -> None:
+        monkeypatch.delenv("CDISC_API_KEY", raising=False)
+        monkeypatch.chdir(tmp_path)
+
+        assert _run(["new", "STUDY01", "-y", "--root", "."]) == 0
+        assert (tmp_path / "study_config.yaml").is_file()
+
+        assert _run(["new", "STUDY02", "-y", "--root", "."]) == 1
+        err = capsys.readouterr().err
+        assert "fleet init define" in err
+
+    @pytest.mark.parametrize("command", ["new", "init"])
+    def test_c1_310_new_and_init_say_when_to_use_them(self, command: str, capsys) -> None:
+        assert _run([command, "--help"]) == 0
+
+        assert "Use it" in capsys.readouterr().out
+
+    @pytest.mark.parametrize("step", ["rules", "define"])
+    def test_c1_311_sdtm_only_and_adam_only_exclude_each_other(self, step: str, capsys) -> None:
+        assert _run(["init", step, "--sdtm-only", "--adam-only"]) == 2
+
+        assert "not allowed with argument" in capsys.readouterr().err
+
+    def test_c1_311_a_dotted_ig_version_is_stored_dashed(self) -> None:
+        from fleet.core.study_context import ADAMConfig, SDTMConfig
+
+        assert SDTMConfig(ig_version="3.4").ig_version == "3-4"
+        assert ADAMConfig(ig_version="1.3").ig_version == "1-3"
+
+
+class TestAddCt:
+    PINNED = "sdtmct-2026-09-25"
+
+    def _codelists(self, path: Path) -> None:
+        path.write_text(f'__ct_package__ = "{self.PINNED}"\n', encoding="utf-8")
+
+    def test_c1_283_outside_a_study_the_file_package_is_used(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ) -> None:
+        from fleet.ct import generator
+
+        self._codelists(tmp_path / "codelists.py")
+        monkeypatch.chdir(tmp_path)
+        seen: dict[str, str] = {}
+
+        def fake_from_ids(client, ids, *, package, include_docs):
+            seen["package"] = package
+            raise SystemExit(0)
+
+        monkeypatch.setattr("fleet.ct.api.CDISCClient", _OfflineLibrary)
+        monkeypatch.setattr(generator, "extract_ig_concept_ids", lambda *a: {"C66731"})
+        monkeypatch.setattr(generator.CodelistGenerator, "from_concept_ids", fake_from_ids)
+
+        assert _run(["add-ct", "--domains", "DM"]) == 0
+
+        assert f"IG / package:   3-4 / {self.PINNED}" in capsys.readouterr().out
+        assert seen["package"] == self.PINNED
+
+    def test_c1_283_inside_a_study_another_pin_is_refused(
+        self, study: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ) -> None:
+        self._codelists(study / "metadata" / "sdtm" / "codelists.py")
+        monkeypatch.chdir(study)
+
+        assert _run(["add-ct", "--domains", "DM"]) == 1
+
+        assert f"was generated from {self.PINNED}, not sdtmct-2023-12-15" in capsys.readouterr().err

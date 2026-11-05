@@ -44,7 +44,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn, get_args, get_type_hints
 
 from fleet.core.define_spec import load_spec_yaml
-from fleet.core.study_context import find_study_config
+from fleet.core.study_context import DEFAULT_SDTM_CT, find_study_config
 from fleet.run import find_dataset_file
 
 if TYPE_CHECKING:
@@ -328,7 +328,8 @@ def _run_init_define(args: argparse.Namespace) -> None:
         _fail("nothing to generate — configure domains/datasets in study_config.yaml.")
 
     # Extract CT version date from package string (e.g. "sdtmct-2023-12-15" → "2023-12-15")
-    ct_version = cfg.ct.package.split("-", 1)[-1] if "-" in cfg.ct.package else "2023-12-15"
+    ct_version = cfg.ct.package.split("-", 1)[-1] if "-" in cfg.ct.package else None
+    ct_version = ct_version or DEFAULT_SDTM_CT.split("-", 1)[-1]
     adam_ct = cfg.ct.adam_package
     adam_ct_version = adam_ct.split("-", 1)[-1] if adam_ct and "-" in adam_ct else None
 
@@ -404,25 +405,29 @@ def _run_init_rules(args: argparse.Namespace) -> None:
     do_sdtm = not args.adam_only
     do_adam = not args.sdtm_only
 
+    dirs: list[Path] = []
     with CDISCClient() as client:
         scaffolder = RulesScaffolder(client)
 
         if do_sdtm:
             try:
-                scaffolder.scaffold_sdtm(ctx, force=args.force)
+                dirs.append(scaffolder.scaffold_sdtm(ctx, force=args.force))
             except FileNotFoundError as exc:
                 print(f"Warning: {exc}")
 
         if do_adam:
             try:
-                scaffolder.scaffold_adam(ctx, force=args.force)
+                dirs.append(scaffolder.scaffold_adam(ctx, force=args.force))
             except FileNotFoundError as exc:
                 print(f"Warning: {exc}")
 
+    cached = [d for d in dirs if d.is_dir() and any(d.glob("*.yaml"))]
+    if not cached:
+        _fail("no rule file is cached: no define.yaml was found, or CDISC returned no rules.")
     print()
     print(
-        "Rules cached for reference. CORE runs its own rules; "
-        "pin the engine with fleet install-engine --version."
+        f"Rules cached for reference in {', '.join(map(str, cached))}. CORE runs its own "
+        "rules; pin the engine with fleet install-engine --version."
     )
 
 
@@ -550,19 +555,22 @@ def _run_add_ct(args: argparse.Namespace) -> None:
     # discovered study config, then the hard default. Regenerating existing
     # codelists against a different CT package than the study pins would
     # silently change already-reviewed terms.
-    ig = args.ig or (ctx.config.sdtm.ig_version if ctx else None) or _default_ig("sdtm")
-    package = args.package or (ctx.config.ct.package if ctx else "sdtmct-2023-12-15")
-    if args.package and output.is_file():
-        from fleet.ct.study_codelists import load_codelists
+    from fleet.ct.study_codelists import load_codelists
 
-        current = load_codelists(output)[0]
-        if current and args.package not in current:
-            _fail(
-                f"{output} was generated from {', '.join(current)}, not {args.package}; "
-                "fleet add-ct does not change the CT package of existing codelists. "
-                "Set ct.package in study_config.yaml, then run: fleet init ct --force, "
-                "and set study.ct_version in each define.yaml to the package date"
-            )
+    ig = args.ig or (ctx.config.sdtm.ig_version if ctx else None) or _default_ig("sdtm")
+    # The package the existing file was generated from wins over the default.
+    current = load_codelists(output)[0] if output.is_file() else ()
+    sdtm_marker = next((p for p in current if p.startswith("sdtmct-")), None)
+    package = (
+        args.package or (ctx.config.ct.package if ctx else None) or sdtm_marker or DEFAULT_SDTM_CT
+    )
+    if current and package not in current:
+        _fail(
+            f"{output} was generated from {', '.join(current)}, not {package}; "
+            "fleet add-ct does not change the CT package of existing codelists. "
+            "Set ct.package in study_config.yaml, then run: fleet init ct --force, "
+            "and set study.ct_version in each define.yaml to the package date"
+        )
     existing = existing_concept_ids(output)
 
     print(f"Adding domains: {', '.join(domains)}")
@@ -1593,7 +1601,8 @@ def _derivation_problems(path: Path, standard: str) -> list[str]:
 
 
 def _run_new(args: argparse.Namespace) -> None:
-    study_root = Path(args.root).resolve()
+    # The study gets its own folder unless --root names one (#52).
+    study_root = Path(args.root if args.root is not None else args.study_id).resolve()
     config_path = study_root / "study_config.yaml"
     api_key_set = bool(os.environ.get("CDISC_API_KEY"))
     hint = _config_flag_hint(config_path)
@@ -1608,6 +1617,8 @@ def _run_new(args: argparse.Namespace) -> None:
         print("  2. fleet init define  — SKIPPED (CDISC_API_KEY not set)")
         print("  3. fleet init ct      — SKIPPED (CDISC_API_KEY not set)")
         print("  4. fleet init rules   — SKIPPED (CDISC_API_KEY not set)")
+    default = " (default)" if args.package == DEFAULT_SDTM_CT else ""
+    print(f"CT package: {args.package}{default}")
     print()
 
     if not args.yes:
@@ -2409,6 +2420,12 @@ def _add_init_parsers(sub: argparse._SubParsersAction) -> None:
     init_parser = sub.add_parser(
         "init",
         help="Bootstrapping pipeline: cfg → define → ct → rules.",
+        description=(
+            "Run one step of the study bootstrap: cfg, then define, then ct, then rules. "
+            "Use it to continue a study that fleet new started, to run a step again with "
+            "--force, or to build a study one step at a time. For a new study in one "
+            "command, use fleet new."
+        ),
     )
     init_sub = init_parser.add_subparsers(dest="init_command", required=True)
 
@@ -2454,8 +2471,8 @@ def _add_init_parsers(sub: argparse._SubParsersAction) -> None:
     )
     cfg.add_argument(
         "--package",
-        default="sdtmct-2023-12-15",
-        help="SDTM CT package version (default: sdtmct-2023-12-15).",
+        default=DEFAULT_SDTM_CT,
+        help=f"SDTM CT package version (default: {DEFAULT_SDTM_CT}).",
     )
     cfg.add_argument(
         "--adam-package",
@@ -2480,12 +2497,13 @@ def _add_init_parsers(sub: argparse._SubParsersAction) -> None:
         help="Generate define.yaml from the CDISC Library IG.",
     )
     _add_config_flag(define)
-    define.add_argument(
+    define_only = define.add_mutually_exclusive_group()
+    define_only.add_argument(
         "--sdtm-only",
         action="store_true",
         help="Generate SDTM define.yaml only (skip ADaM).",
     )
-    define.add_argument(
+    define_only.add_argument(
         "--adam-only",
         action="store_true",
         help="Generate ADaM define.yaml only (skip SDTM).",
@@ -2521,12 +2539,13 @@ def _add_init_parsers(sub: argparse._SubParsersAction) -> None:
         help="Cache CDISC conformance rules as YAML from the CDISC Library.",
     )
     _add_config_flag(rules)
-    rules.add_argument(
+    rules_only = rules.add_mutually_exclusive_group()
+    rules_only.add_argument(
         "--sdtm-only",
         action="store_true",
         help="Fetch SDTM rules only (skip ADaM).",
     )
-    rules.add_argument(
+    rules_only.add_argument(
         "--adam-only",
         action="store_true",
         help="Fetch ADaM rules only (skip SDTM).",
@@ -2563,7 +2582,8 @@ def _add_ct_parsers(sub: argparse._SubParsersAction) -> None:
         default=None,
         help=(
             "CT package version. Default: ct.package from the discovered "
-            "study_config.yaml (sdtmct-2023-12-15 outside a study). Refused when it "
+            f"study_config.yaml, else the package of the existing codelists.py, else "
+            f"{DEFAULT_SDTM_CT}. Refused when it "
             "differs from the package an existing codelists.py was generated from."
         ),
     )
@@ -3098,6 +3118,12 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     new = sub.add_parser(
         "new",
         help="Bootstrap a study: init cfg → define → ct → rules, one confirmation.",
+        description=(
+            "Create a new study in the folder ./STUDY_ID: the study_config.yaml and the "
+            "folders, then the define.yaml files, codelists.py and the cached rules from "
+            "the CDISC Library. Use it once, at the start of a study. To run one step "
+            "again, or to continue after a missing CDISC_API_KEY, use fleet init."
+        ),
     )
     new.add_argument(
         "study_id",
@@ -3135,8 +3161,8 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     )
     new.add_argument(
         "--package",
-        default="sdtmct-2023-12-15",
-        help="SDTM CT package version (default: sdtmct-2023-12-15).",
+        default=DEFAULT_SDTM_CT,
+        help=f"SDTM CT package version (default: {DEFAULT_SDTM_CT}).",
     )
     new.add_argument(
         "--adam-package",
@@ -3150,8 +3176,8 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     new.add_argument(
         "--root",
         "-r",
-        default=".",
-        help="Study root directory (default: current directory).",
+        default=None,
+        help="Study root directory (default: ./STUDY_ID). Pass --root . to use the current one.",
     )
     new.add_argument(
         "--yes",

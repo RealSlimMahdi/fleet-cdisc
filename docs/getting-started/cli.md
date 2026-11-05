@@ -68,6 +68,8 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 
 ## `fleet init`
 
+Run one step of the study bootstrap: cfg, then define, then ct, then rules. Use it to continue a study that fleet new started, to run a step again with --force, or to build a study one step at a time. For a new study in one command, use fleet new.
+
 ### `fleet init cfg`
 
 | Option | Default | Description |
@@ -184,6 +186,8 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 
 ## `fleet new`
 
+Create a new study in the folder ./STUDY_ID: the study_config.yaml and the folders, then the define.yaml files, codelists.py and the cached rules from the CDISC Library. Use it once, at the start of a study. To run one step again, or to continue after a missing CDISC_API_KEY, use fleet init.
+
 | Argument | Description |
 | -------- | ----------- |
 | `study_id` | Study identifier (e.g. STUDY01). |
@@ -198,7 +202,7 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | `--adam-ig` | `1-3` | ADaM IG version (default: 1-3). |
 | `--package` | `sdtmct-2023-12-15` | SDTM CT package version (default: sdtmct-2023-12-15). |
 | `--adam-package` | _(none)_ | ADaM CT package, for the codelists only ADaM CT holds (DTYPE). Default with ADaM datasets: adamct-2023-06-30, the latest on or before the default SDTM package; required with another --package. |
-| `--root` / `-r` | `.` | Study root directory (default: current directory). |
+| `--root` / `-r` | _(none)_ | Study root directory (default: ./STUDY_ID). Pass --root . to use the current one. |
 | `--yes` / `-y` | _(none)_ | Skip the confirmation prompt. |
 
 ---
@@ -354,7 +358,7 @@ Generate Define-XML 2.1 from a define.yaml specification. This imports the spec'
 | ------ | ------- | ----------- |
 | `--domains` | _(required)_ | Comma-separated SDTM domain abbreviations to add. |
 | `--ig` | _(none)_ | SDTM IG version. Default: sdtm.ig_version from the discovered study_config.yaml (3-4 outside a study). |
-| `--package` | _(none)_ | CT package version. Default: ct.package from the discovered study_config.yaml (sdtmct-2023-12-15 outside a study). Refused when it differs from the package an existing codelists.py was generated from. |
+| `--package` | _(none)_ | CT package version. Default: ct.package from the discovered study_config.yaml, else the package of the existing codelists.py, else sdtmct-2023-12-15. Refused when it differs from the package an existing codelists.py was generated from. |
 | `--output` / `-o` | _(none)_ | Path to the existing codelists.py. Default: <metadata_sdtm>/codelists.py from the discovered study_config.yaml (./codelists.py outside a study). |
 | `--no-docs` | _(none)_ | Omit definitions and preferred terms from generated code. |
 

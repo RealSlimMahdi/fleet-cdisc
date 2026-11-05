@@ -455,7 +455,7 @@ tree — see the **[CLI reference](https://realslimmahdi.github.io/fleet-cdisc/g
 
 ```bash
 uv run fleet new STUDY01 --domains DM,AE,VS --adam-datasets ADSL,ADVS,ADAE \
-  --description "Phase II study of drug X" --company "Pharma Inc"           # chains the init steps
+  --description "Phase II study of drug X" --company "Pharma Inc"           # creates ./STUDY01
 # or step by step:
 uv run fleet init cfg --study-id CDISCPILOT01 --company "CDISC" \
   --domains DM,AE,VS,EX --adam-datasets ADSL,ADVS,ADAE --root ./my_study

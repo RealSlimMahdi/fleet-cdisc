@@ -22,6 +22,7 @@ from typing import Any
 import httpx
 
 from fleet.core.exceptions import CTError, CTNotFoundError
+from fleet.core.study_context import DEFAULT_SDTM_CT
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +147,7 @@ class CDISCClient:
         self,
         concept_id: str,
         *,
-        package: str = "sdtmct-2023-12-15",
+        package: str = DEFAULT_SDTM_CT,
     ) -> dict[str, Any]:
         """Download a single codelist by NCI concept ID.
 
