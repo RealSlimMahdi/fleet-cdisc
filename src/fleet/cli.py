@@ -46,7 +46,7 @@ from fleet.core.study_context import find_study_config
 from fleet.run import find_dataset_file
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Iterator, Sequence
 
     import polars as pl
 
@@ -220,10 +220,7 @@ def _watch_loop(paths: Sequence[Path], run_once: Callable[[], None]) -> None:
     try:
         from watchfiles import watch
     except ImportError:
-        _fail(
-            "watchfiles is required for --watch. Install it with: "
-            "uv sync --extra watch  (or: uv pip install 'fleet-cdisc[watch]')"
-        )
+        _fail("watchfiles is required for --watch. Install it with: uv add 'fleet-cdisc[watch]'")
 
     from fleet.core.exceptions import FleetError
 
@@ -599,7 +596,7 @@ def _run_add_ct(args: argparse.Namespace) -> None:
 
 
 def _run_add_rule(args: argparse.Namespace) -> None:
-    from fleet.validation.rule_scaffolder import scaffold_rule
+    from fleet.validation.rule_scaffolder import scaffold_rule, schema_directive
 
     # Resolve config (optional here — only needed when --output is absent
     # or to pick up the organization name).
@@ -645,7 +642,7 @@ def _run_add_rule(args: argparse.Namespace) -> None:
             rule_id=args.rule_id,
             organization=organization,
         )
-    except FileExistsError as exc:
+    except (FileExistsError, ValueError) as exc:
         _fail(str(exc))
         return
 
@@ -657,6 +654,9 @@ def _run_add_rule(args: argparse.Namespace) -> None:
     print(f"  1. Edit the Check block in {out_file.name}")
     print(f"  2. Validate:  uv run fleet check-rule {out_file}")
     print('  3. Run in pipeline: .validate(..., custom_rules="<dir>")')
+    print()
+    print("Optional: for schema completion in your editor, add this first line to the file:")
+    print(f"  {schema_directive(out_file)}")
 
 
 def _run_check_rule(args: argparse.Namespace) -> None:
@@ -721,7 +721,7 @@ def _check_extras() -> list[tuple[str, bool, str]]:
     results: list[tuple[str, bool, str]] = []
     for module, (extra, purpose) in _OPTIONAL_EXTRAS.items():
         installed = _module_available(module)
-        hint = f"{purpose} — install with: uv sync --extra {extra}"
+        hint = f"{purpose} — install with: uv add 'fleet-cdisc[{extra}]'"
         if installed and module == "weasyprint":
             # find_spec passes a package whose native libraries fail at load.
             import contextlib
@@ -769,6 +769,35 @@ def _print_codelists_status(config_path: Path) -> None:
         print(f"  ✓ codelists.py ....... {', '.join(packages)} (matches study_config)")
 
 
+def _pinned_engine_missing(config_path: Path | None) -> str | None:
+    """The message for a ``validation.engine_path`` that names no file, else ``None``.
+
+    The YAML is read as text, so the check also runs on a study config
+    that does not validate.  Validation refuses such a study: it does not
+    fall back to another engine (ADR 0003).
+    """
+    import yaml
+
+    if config_path is None or not config_path.is_file():
+        return None
+    try:
+        data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        configured = (data.get("validation") or {}).get("engine_path")
+    except (yaml.YAMLError, AttributeError, OSError):
+        return None
+    if not configured:
+        return None
+    pinned = Path(configured)
+    if not pinned.is_absolute():
+        pinned = (config_path.parent / pinned).resolve()
+    if pinned.is_file():
+        return None
+    return (
+        f"validation.engine_path names {pinned}, and that file does not exist: "
+        "validation will not run"
+    )
+
+
 def _run_doctor(args: argparse.Namespace) -> None:
     from fleet.core.exceptions import ValidationSetupError
     from fleet.validation import build_run_setup
@@ -794,10 +823,9 @@ def _run_doctor(args: argparse.Namespace) -> None:
         study_root = config_path.parent if config_path and config_path.is_file() else None
         engine, where = discover_engine(study_root), ""
 
-    if engine is None:
-        print("  ✗ rules engine ....... NOT FOUND — run `fleet install-engine`")
-    elif not Path(engine).is_file():
-        print(f"  ✗ rules engine ....... pinned engine {engine}{where} not found")
+    if engine is None or _pinned_engine_missing(config_path) is not None:
+        reason = _pinned_engine_missing(config_path) or "NOT FOUND — run `fleet install-engine`"
+        print(f"  ✗ rules engine ....... {reason}")
     else:
         checks = doctor(engine=engine)
         print(f"  ✓ rules engine ....... {engine}{where}")
@@ -992,7 +1020,9 @@ def _run_run(args: argparse.Namespace) -> None:
         print(f"  [{i}/{total}] {step.dataset} ({step.standard}, {step.define.name})")
     print()
 
-    for i, built in enumerate(run_study(plan, strict=args.strict), start=1):
+    for i, built in enumerate(
+        _cli_spec_hints(run_study(plan, strict=args.strict, overwrite=args.overwrite)), start=1
+    ):
         step = built.step
         _check_built(built.frame, step.define, step.dataset, strict=args.strict)
         out_dir = out_override or ctx.data_dir(step.standard)
@@ -1014,6 +1044,28 @@ def _run_run(args: argparse.Namespace) -> None:
 
     print()
     print(f"Done — {total} dataset(s) written.")
+
+
+def _cli_spec_hints[T](built: Iterator[T]) -> Iterator[T]:
+    """Yield from *built*; a SpecError names the ``fleet run`` flag, not the Python argument."""
+    import re
+
+    from fleet.core.exceptions import SpecError
+
+    try:
+        yield from built
+    except SpecError as exc:
+        text = str(exc).replace(
+            "Pass strict=False to warn and skip instead.",
+            "Pass --no-strict to warn and skip instead.",
+        )
+        text = re.sub(
+            r"Pass overwrite=True to allow spec overwrites, or omit=\[.*?\] to keep the "
+            r"inline derivation\.",
+            "Pass --overwrite to allow spec overwrites (omit= has no fleet run form).",
+            text,
+        )
+        raise SpecError(text) from exc
 
 
 def _check_built(frame: pl.DataFrame, define: Path, dataset: str, *, strict: bool) -> None:
@@ -1075,6 +1127,9 @@ def _run_validate(args: argparse.Namespace) -> None:
     except ValidationSetupError as exc:
         _fail(str(exc), code=_VALIDATE_COULD_NOT_RUN)
 
+    for skipped in sweep.skipped:
+        print(f"Skipped: {skipped.name} (not a dataset file)")
+
     results = []
     for standard, datasets in sweep.runs().items():
         setup = datasets[0].setup
@@ -1120,8 +1175,9 @@ def _run_validate(args: argparse.Namespace) -> None:
     passed = sum(1 for r in results if r.status == "PASS")
     accepted = sum(len(r.warnings) for r in results)
     findings = sum(len(r.errors) for r in results) + accepted
-    datasets = sum(1 for r in results if r.dataset_name != "STUDY")
-    study = " and the study-level rules" if datasets < len(results) else ""
+    given = {d.name for d in sweep.datasets}
+    datasets = sum(1 for r in results if r.dataset_name in given)
+    study = " and the study-level rules" if any(r.dataset_name == "STUDY" for r in results) else ""
     print()
     print(
         f"Validated {datasets} dataset(s){study}: {passed} passed, "
@@ -1376,27 +1432,40 @@ def _run_check(args: argparse.Namespace) -> None:
         if rules_dir is None:
             rows.append(("WARN", "custom rules", "no validation.custom_rules directory configured"))
         elif rules_dir.is_dir():
+            import yaml
+
             from fleet.validation.rule_scaffolder import check_rule
 
             rule_files = sorted([*rules_dir.glob("*.yaml"), *rules_dir.glob("*.yml")])
             bad = 0
+            ids: dict[str, list[str]] = {}
             for rf in rule_files:
                 errors = check_rule(rf)
                 if errors:
                     bad += 1
                     rows.append(("FAIL", "custom rule", f"{rf.name}: {errors[0]}"))
+                    continue
+                rule = yaml.safe_load(rf.read_text(encoding="utf-8"))
+                ids.setdefault(str(rule["Core"]["Id"]), []).append(rf.name)
+            # The engine keeps one rule of an ID: the other file never runs.
+            for rule_id, names in ids.items():
+                if len(names) > 1:
+                    bad += 1
+                    detail = f"duplicate Core.Id {rule_id} in {', '.join(names)}"
+                    rows.append(("FAIL", "custom rule", detail))
             if not bad:
                 rows.append(("PASS", "custom rules", f"{len(rule_files)} rule file(s) valid"))
 
     # ── 5. Doctor essentials (informational — never fail the gate) ──
+    pinned_missing = _pinned_engine_missing(config_path)
     if setups:
         engine, where = setups[0].engine.value, f" ({setups[0].engine.source})"
     else:
         from fleet.validation.engine import discover_engine
 
         engine, where = discover_engine(ctx.study_root if ctx is not None else None), ""
-    if engine is not None and not Path(engine).is_file():
-        rows.append(("WARN", "rules engine", f"pinned engine {engine}{where} not found"))
+    if pinned_missing is not None:
+        rows.append(("WARN", "rules engine", pinned_missing))
     elif engine is not None:
         rows.append(("PASS", "rules engine", f"{engine}{where}"))
     else:
@@ -1940,7 +2009,7 @@ def _require_extra(module: str, extra: str, command: str) -> None:
     seen = f" (found {dist} {found})" if found else ""
     _fail(
         f"{dist} is required for `fleet {command}`{seen}. Install it with: "
-        f"uv sync --extra {extra}  (or: uv pip install 'fleet-cdisc[{extra}]')"
+        f"uv add 'fleet-cdisc[{extra}]'  (or: uv pip install 'fleet-cdisc[{extra}]')"
     )
 
 
@@ -2632,6 +2701,14 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         default=True,
         help="Raise on unknown spec algorithms (default). --no-strict warns and skips.",
     )
+    run.add_argument(
+        "--overwrite",
+        action="store_true",
+        help=(
+            "Let a spec derivation replace a column that the input already has. "
+            "Default off, so a QC run keeps the guard."
+        ),
+    )
     run.set_defaults(func=_run_run)
 
     # -- validate ---------------------------------------------------------- #
@@ -2666,7 +2743,8 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         dest="standard_version",
         default=None,
         help=(
-            "IG version. Default: the sdtm/adam ig_version declared in the "
+            "IG version. It applies to every dataset of the run, SDTM and ADaM. "
+            "Default: the sdtm/adam ig_version declared in the "
             "discovered study_config.yaml (3.4 / 1.3 outside a study)."
         ),
     )

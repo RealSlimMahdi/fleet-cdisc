@@ -21,6 +21,7 @@ import polars as pl
 from fleet.core.define_spec import load_define_spec
 from fleet.core.exceptions import PinError, SpecError, StudyRunError
 from fleet.core.frames import frame as _frame
+from fleet.validation.run_setup import DATA_EXTENSIONS
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping, Sequence
@@ -52,7 +53,7 @@ InputSource = Literal[
 ]
 
 #: Dataset file extensions searched by name in the data directories.
-DATASET_EXTENSIONS = (".parquet", ".csv", ".xpt", ".sas7bdat", ".json")
+DATASET_EXTENSIONS = DATA_EXTENSIONS
 
 
 @dataclass(frozen=True)
@@ -263,6 +264,7 @@ def run_study(
     *,
     inputs: Mapping[str, pl.DataFrame] | None = None,
     strict: bool = True,
+    overwrite: bool = False,
 ) -> Iterator[BuiltDataset]:
     """Build every step of a study plan, in order, and yield each built dataset.
 
@@ -274,6 +276,8 @@ def run_study(
             is used before any file.
         strict: Raise on an unknown spec algorithm (default).  ``False``
             warns and skips, as ``from_spec`` does.
+        overwrite: Let a spec derivation replace a column the input
+            already has, as ``from_spec(overwrite=True)``.  Default off.
 
     Yields:
         BuiltDataset: One per step, as soon as it is built.
@@ -322,7 +326,7 @@ def run_study(
             ns = ns.pin(declared.name.upper(), extra)
         try:
             built_frame = (
-                ns.from_spec(step.define, dataset=step.dataset, strict=strict)
+                ns.from_spec(step.define, dataset=step.dataset, strict=strict, overwrite=overwrite)
                 .select(spec=step.define, dataset=step.dataset)
                 .to_frame()
             )

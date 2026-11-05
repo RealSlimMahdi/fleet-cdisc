@@ -51,8 +51,7 @@ if TYPE_CHECKING:
 
 _INSTALL_HINT = (
     "fleet.tools.migrate requires libcst, which is not installed. "
-    "Install it with the 'migrate' extra: uv pip install 'fleet-cdisc[migrate]' "
-    "(or: uv sync --extra migrate)."
+    "Install it with the 'migrate' extra: uv add 'fleet-cdisc[migrate]'."
 )
 
 #: Deprecated verb → canonical verb (plain method rename).

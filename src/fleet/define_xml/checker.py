@@ -522,22 +522,49 @@ class DatasetChecker:
         Returns:
             ValidationResult: The engine findings.
 
+        Raises:
+            ValidationSetupError: The run setup is refused (an IG version
+                Fleet does not support), or no engine is found.  The
+                engine, custom rules, timeout and accepted findings come
+                from the study config, as for ``fleet validate``.
+
         Examples:
             Run CORE on DM with the define's standard::
 
                 checker = DatasetChecker("examples/cdiscpilot01/sdtm/define.yaml")
                 result = checker.validate(dm, "DM")
         """
+        from fleet.core.exceptions import ValidationSetupError
+        from fleet.validation.run_setup import build_run_setup, missing_engine_reason
         from fleet.validation.service import ValidationService
 
         study = self._data.get("study", {})
         detected_standard = (standard or study.get("standard", "SDTMIG")).upper()
-        detected_version = version or str(study.get("standard_version", "3.4"))
+        declared = study.get("standard_version")
+        setup = build_run_setup(
+            name=dataset,
+            standard="adam" if "ADAM" in detected_standard else "sdtm",
+            version=version or (str(declared) if declared is not None else None),
+        )
+        if setup.engine.value is None:
+            raise ValidationSetupError(missing_engine_reason(setup))
 
-        svc = ValidationService()
-        if "ADAM" in detected_standard:
-            return svc.validate_adam(df, dataset=dataset, version=detected_version)
-        return svc.validate_sdtm(df, domain=dataset, version=detected_version)
+        svc = ValidationService(rules_engine_path=setup.engine.value)
+        ig, rules, timeout = (
+            setup.ig_version.value,
+            setup.custom_rules.value,
+            setup.timeout.value,
+        )
+        if setup.standard.value == "adam":
+            result = svc.validate_adam(
+                df, dataset=dataset, version=ig, custom_rules=rules, timeout=timeout
+            )
+        else:
+            result = svc.validate_sdtm(
+                df, domain=dataset, version=ig, custom_rules=rules, timeout=timeout
+            )
+        result.apply_setup(setup)
+        return result
 
     # ------------------------------------------------------------------ #
     # XPT export                                                           #

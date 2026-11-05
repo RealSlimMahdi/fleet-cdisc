@@ -286,8 +286,15 @@ rules in the target directory to determine the next available sequence number.
 
 ### Uniqueness guarantee
 
-`fleet add-rule` checks all existing `.yaml` files in the target directory and refuses to
-create a rule if the `Core.Id` already exists. This prevents accidental overwrites.
+`fleet add-rule` checks all existing `.yaml` and `.yml` files in the target directory. It
+refuses to create a rule if the `Core.Id` or the file name already exists, so it never replaces
+a file. The engine loads `.yml` files too. `fleet check` fails when two rule files hold the
+same `Core.Id`, because the engine keeps only one of them.
+
+`fleet check-rule` fails on a scaffold whose `Check` block still holds the placeholder
+`VARIABLE_NAME`. The scaffold has no `yaml-language-server` line, because that path is
+specific to one machine. `fleet add-rule` prints the line, and you can add it for schema
+completion in your editor.
 
 ---
 

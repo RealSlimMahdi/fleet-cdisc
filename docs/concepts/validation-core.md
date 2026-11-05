@@ -28,6 +28,12 @@ Teams can pin a shared engine instead via `validation.engine_path` in
 `FLEET_RULES_ENGINE` environment variable, so that every programmer runs the
 same engine build. Outside a study, `FLEET_RULES_ENGINE` still applies.
 
+When `validation.engine_path` names a file that does not exist, validation
+could not run, and the message names the pinned path. Fleet does not fall
+back to `FLEET_RULES_ENGINE` or the managed install, because that engine can
+run another rule build. `fleet check` and `fleet doctor` show a warning with
+the pinned path.
+
 `validation.engine_path` names a program, so treat a received study config
 like code. `fleet validate`, the `.validate()` verb and `fleet doctor` start
 the pinned engine. `fleet check` only prints its path. The MCP tool

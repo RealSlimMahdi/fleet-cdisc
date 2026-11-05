@@ -348,9 +348,12 @@ ae = (
 )
 ```
 
-The join is **name-exact**: `ValidationIssue.variable` is matched against
-`VariableNode.name`, so an issue only gains a `Producing verb` when the chain
-derived that same column. A finding on `AETERM` carries its origin — the verb
+The join is **name-exact**: each name in `ValidationIssue.variable` is matched
+against `VariableNode.name`, so an issue only gains a `Producing verb` when the
+chain derived that same column. A finding that names several variables
+(`AESEQ, USUBJID, POOLID`) gets each verb with the variables it made
+(`assign (AESEQ, USUBJID)`). A finding that names more than five variables
+gets none. A finding on `AETERM` carries its origin — the verb
 name plus the dotted path to its implementation:
 
 ```

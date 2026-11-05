@@ -65,12 +65,28 @@ _RULE_TEMPLATE: dict = {
 }
 
 
+#: A rule ID, prefix or domain: also a file name, so no path or space characters.
+_ID_PART = re.compile(r"[A-Za-z0-9_-]+")
+
+#: Rule types the scaffold header names; each one passes :func:`check_rule`.
+HEADER_RULE_TYPES: tuple[str, ...] = (
+    "Record Data",
+    "Dataset Metadata Check",
+    "Variable Metadata Check",
+)
+
+
 def _scan_existing_ids(directory: Path) -> set[str]:
-    """Scan all YAML files in *directory* and extract Core.Id values."""
+    """The Core.Id values and file stems of every rule file in *directory*.
+
+    A file stem counts too: a file that does not parse, or holds another
+    Core.Id, still blocks its name.
+    """
     ids: set[str] = set()
     if not directory.is_dir():
         return ids
-    for f in directory.glob("*.yaml"):
+    for f in sorted([*directory.glob("*.yaml"), *directory.glob("*.yml")]):
+        ids.add(f.stem)
         try:
             with open(f, encoding="utf-8") as fh:
                 data = yaml.safe_load(fh)
@@ -120,9 +136,14 @@ def scaffold_rule(
         Path to the generated YAML file.
 
     Raises:
-        FileExistsError: If a rule with the same ID already exists.
-        FileNotFoundError: If *output_dir* does not exist.
+        FileExistsError: If a rule with the same ID, or a file with its
+            name, already exists.  An existing file is never replaced.
+        ValueError: If *rule_id*, *prefix* or *domain* holds a character
+            other than a letter, a digit, ``_`` or ``-``.
     """
+    for label, value in (("domain", domain), ("prefix", prefix), ("rule ID", rule_id)):
+        if value is not None and not _ID_PART.fullmatch(value):
+            raise ValueError(f"Invalid {label} {value!r}: use only letters, digits, '_' and '-'.")
     output_dir = Path(output_dir)
     if not output_dir.exists():
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -156,23 +177,15 @@ def scaffold_rule(
     if organization:
         rule["Authorities"][0]["Organization"] = organization
 
-    # Write YAML with schema directive and a helpful header comment
     out_file = output_dir / f"{rule_id}.yaml"
+    if out_file.exists():
+        raise FileExistsError(
+            f"File {out_file} already exists. Use a different ID or remove the existing rule."
+        )
 
-    # Resolve schema path relative to output file (works with installed package)
-    import importlib.resources
-    import os
-
-    schema_ref = (
-        importlib.resources.files("fleet") / "validation" / "schemas" / "cdisc_rule_schema.json"
-    )
-    with importlib.resources.as_file(schema_ref) as schema_abs:
-        schema_rel_path = os.path.relpath(schema_abs, output_dir.resolve())
-
+    first, *rest = description.splitlines() or [""]
     header = (
-        f"# yaml-language-server: $schema={schema_rel_path}\n"
-        f"# {rule_id}: {description}\n"
-        "#\n"
+        f"# {rule_id}: {first}\n" + "".join(f"# {line}\n" for line in rest) + "#\n"
         "# TODO: Edit the Check block below with your validation logic.\n"
         "#\n"
         "# Rule types and operators reference:\n"
@@ -183,21 +196,50 @@ def scaffold_rule(
         "#   greater_than, contains, does_not_contain, is_contained_by, etc.\n"
         "#\n"
         "# Rule types:\n"
-        "#   Record Data       — check within a single row\n"
-        "#   Record Data [VP]  — check across rows (value-level)\n"
-        "#   Dataset Data      — check across datasets\n"
+        "#   Record Data              - check within a single row\n"
+        "#   Dataset Metadata Check   - check the dataset metadata\n"
+        "#   Variable Metadata Check  - check the variable metadata\n"
         "#\n"
         "# Validate this rule:\n"
         f"#   uv run fleet check-rule {rule_id}.yaml\n"
         "#\n"
         "# Run via pipeline:\n"
-        f'#   .validate("{domain.upper()}", custom_rules="{output_dir}")\n'
+        f'#   .validate("{domain.upper()}", custom_rules="{_display_dir(output_dir)}")\n'
         "\n"
     )
     yaml_content = yaml.dump(rule, default_flow_style=False, allow_unicode=True, sort_keys=False)
     out_file.write_text(header + yaml_content, encoding="utf-8")
 
     return out_file
+
+
+def _display_dir(directory: Path) -> str:
+    """*directory* relative to the working directory when it is inside it, else as given."""
+    try:
+        return directory.resolve().relative_to(Path.cwd()).as_posix()
+    except ValueError:
+        return directory.as_posix()
+
+
+def schema_directive(rule_file: Path) -> str:
+    """The opt-in ``yaml-language-server`` line that points *rule_file* at the rule schema.
+
+    The scaffold does not write it, because the path holds the location of
+    one installation.  ``fleet add-rule`` prints it for an editor user.
+
+    Args:
+        rule_file: The rule YAML file.
+
+    Returns:
+        str: ``# yaml-language-server: $schema=<path>``.
+    """
+    import os
+
+    try:
+        schema = os.path.relpath(_SCHEMA_PATH, rule_file.resolve().parent)
+    except ValueError:  # another drive on Windows
+        schema = str(_SCHEMA_PATH)
+    return f"# yaml-language-server: $schema={schema}"
 
 
 #: ADaMIG population flags: each holds Y or N on every ADSL record, never a null.
@@ -264,9 +306,7 @@ def scaffold_population_flag_rule(
     )
     text = out_file.read_text(encoding="utf-8")
     header = "".join(
-        line
-        for line in text.splitlines(keepends=True)
-        if line.startswith("# yaml-language-server") or line.startswith(f"# {rule_id}:")
+        line for line in text.splitlines(keepends=True) if line.startswith(f"# {rule_id}:")
     )
     rule = yaml.safe_load(text)
     rule["Check"] = {
@@ -367,11 +407,13 @@ def check_rule(rule_path: Path) -> list[str]:
             errors.append(
                 "Check block must contain at least one combinator: 'all', 'any', or 'not'"
             )
+    if check is not None and "VARIABLE_NAME" in yaml.safe_dump(check):
+        errors.append("Check still holds the placeholder VARIABLE_NAME: name a real variable")
 
     scope = rule.get("Scope", {})
     if isinstance(scope, dict):
         domains = scope.get("Domains", {})
-        if isinstance(domains, dict) and not domains.get("Include"):
+        if isinstance(domains, dict) and not domains.get("Include") and not domains.get("Exclude"):
             errors.append("Scope.Domains.Include is empty — rule won't match any domain")
 
     # ── 3. Full JSON Schema validation ────────────────────────────────

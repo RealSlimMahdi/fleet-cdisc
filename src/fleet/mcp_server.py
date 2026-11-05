@@ -141,8 +141,10 @@ def fleet_validate(
     Returns:
         dict: ``{"outcome": "pass" | "fail", "status", "dataset", "standard",
             "is_valid", "setup": {input: {value, source}, ...},
-            "issues": [{severity, rule_id, message, variable, source, accepted}, ...]}``,
-            or ``{"outcome": "could not run", "reason"}`` when the run
+            "issues": [{severity, rule_id, message, variable, source, accepted,
+            row, usubjid, seq, values}, ...], "study_issues": [...]}``,
+            where ``study_issues`` holds the study-level findings (dataset
+            ``STUDY``), or ``{"outcome": "could not run", "reason"}`` when the run
             setup is refused, no engine is found, or the engine crashed or
             timed out.  ``status`` is ``PASS``, ``FINDINGS (n)``,
             ``NOT ASSESSED`` or ``FAIL``; only ``FAIL`` gives ``"fail"``.
@@ -169,10 +171,9 @@ def fleet_validate(
     except ValidationSetupError as exc:
         return _could_not_run(str(exc))
     if setup.engine.value is None:
-        return _could_not_run(
-            "CDISC Rules Engine not found. Install it with `fleet install-engine` "
-            "or set validation.engine_path / FLEET_RULES_ENGINE."
-        )
+        from fleet.validation import missing_engine_reason
+
+        return _could_not_run(missing_engine_reason(setup).removeprefix("Could not run: "))
     if setup.engine.source == "study config" and not _TRUST_STUDY_ENGINE:
         return _could_not_run(
             f"{setup.study_config} names the engine {setup.engine.value}. The MCP server "
@@ -182,13 +183,15 @@ def fleet_validate(
         )
 
     name = path.stem.upper()
-    result = ValidationService(rules_engine_path=setup.engine.value).validate_datasets(
+    results = ValidationService(rules_engine_path=setup.engine.value).validate_datasets(
         {name: _load_frame(dataset_path)},
         standard=setup.standard.value,
         version=setup.ig_version.value,
         custom_rules=setup.custom_rules.value,
         timeout=setup.timeout.value,
-    )[name]
+    )
+    result = results[name]
+    study_result = results.get("STUDY")
     result.apply_setup(setup)
     if result.could_not_run is not None:
         return _could_not_run(result.could_not_run)
@@ -214,16 +217,32 @@ def fleet_validate(
             "study_config": None if setup.study_config is None else str(setup.study_config),
         },
         "issues": [
-            {
-                "severity": issue.severity.value,
-                "rule_id": issue.rule_id,
-                "message": issue.message,
-                "variable": issue.variable,
-                "source": issue.source,
-                "accepted": issue.accepted,
-            }
-            for issue in (*result.errors, *result.warnings, *result.infos)
+            _issue_dict(issue) for issue in (*result.errors, *result.warnings, *result.infos)
         ],
+        "study_issues": [
+            _issue_dict(issue)
+            for issue in (
+                (*study_result.errors, *study_result.warnings, *study_result.infos)
+                if study_result is not None
+                else ()
+            )
+        ],
+    }
+
+
+def _issue_dict(issue: Any) -> dict[str, Any]:
+    """One finding as the MCP tool returns it, with the record the engine names."""
+    return {
+        "severity": issue.severity.value,
+        "rule_id": issue.rule_id,
+        "message": issue.message,
+        "variable": issue.variable,
+        "source": issue.source,
+        "accepted": issue.accepted,
+        "row": issue.row,
+        "usubjid": issue.usubjid,
+        "seq": issue.seq,
+        "values": issue.values,
     }
 
 

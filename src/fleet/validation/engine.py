@@ -122,7 +122,9 @@ def find_engine(
     ``FLEET_RULES_ENGINE``, then the managed install, then the legacy
     sibling checkout.  A configured path is returned even when it is not a
     file, so the caller refuses it and names the path; any other
-    candidate that is not a file is skipped.
+    candidate that is not a file is skipped.  A run setup refuses a
+    pinned path that is absent before it calls this (see
+    :func:`fleet.validation.run_setup.build_run_setup`).
 
     Args:
         configured: The engine path from the study config, already resolved.
@@ -265,7 +267,9 @@ def install_engine(*, version: str = DEFAULT_ENGINE_TAG, force: bool = False) ->
     equivalent).
 
     Args:
-        version: Release tag to download. The default is
+        version: Release tag to download, or the version the engine prints
+            (``"0.15.0"``), which :data:`TESTED_ENGINE_VERSIONS` maps to its
+            tag. The default is
             ``DEFAULT_ENGINE_TAG``, the CORE release that Fleet is tested
             with. ``"latest"`` downloads the newest release and prints a
             warning, because Fleet is not tested with that version.
@@ -275,14 +279,21 @@ def install_engine(*, version: str = DEFAULT_ENGINE_TAG, force: bool = False) ->
         Path to the installed executable.
 
     Raises:
-        RuntimeError: If the download or installation fails.
+        RuntimeError: If the download or installation fails.  The engine
+            already installed is kept.
     """
+    import tarfile
+    import zipfile
+
     import httpx
 
     dest = engine_path()
     if dest.is_file() and not force:
         print(f"Engine already installed at {dest}")
-        print("Use --force to re-download.")
+        if version != DEFAULT_ENGINE_TAG:
+            print(f"CORE {version} was not installed; use --force to replace the engine.")
+        else:
+            print("Use --force to re-download.")
         return dest
 
     keywords = _platform_asset_keywords()
@@ -297,40 +308,61 @@ def install_engine(*, version: str = DEFAULT_ENGINE_TAG, force: bool = False) ->
         )
         release_url = _RELEASES_API
     else:
-        tag = version if version.startswith("v") else f"v{version}"
+        tag = TESTED_ENGINE_VERSIONS.get(version, version)
+        tag = tag if tag.startswith("v") else f"v{tag}"
         release_url = f"https://api.github.com/repos/{_GITHUB_REPO}/releases/tags/{tag}"
 
     print(f"Fetching release info from {_GITHUB_REPO} ({version})...")
 
-    with httpx.Client(follow_redirects=True, timeout=30) as client:
-        resp = client.get(release_url, headers={"Accept": "application/vnd.github+json"})
-        if resp.status_code == 404:
+    try:
+        with httpx.Client(follow_redirects=True, timeout=30) as client:
+            resp = client.get(release_url, headers={"Accept": "application/vnd.github+json"})
+            if resp.status_code == 404:
+                raise RuntimeError(
+                    f"Release '{version}' not found. "
+                    f"Check https://github.com/{_GITHUB_REPO}/releases for available versions."
+                )
+            resp.raise_for_status()
+            release = resp.json()
+
+        tag_name = release.get("tag_name", version)
+        assets = release.get("assets", [])
+
+        # Find the matching asset for this platform
+        asset = _match_asset(assets, keywords)
+        if asset is None:
+            available = [a["name"] for a in assets]
             raise RuntimeError(
-                f"Release '{version}' not found. "
-                f"Check https://github.com/{_GITHUB_REPO}/releases for available versions."
+                f"No binary found for this platform (keywords: {keywords}).\n"
+                f"Available assets: {available}\n"
+                f"You may need to build from source or open an issue at "
+                f"https://github.com/{_GITHUB_REPO}/issues"
             )
-        resp.raise_for_status()
-        release = resp.json()
 
-    tag_name = release.get("tag_name", version)
-    assets = release.get("assets", [])
+        asset_name = asset["name"]
+        download_url = asset["browser_download_url"]
+        print(f"Downloading {tag_name} ({asset_name})...")
 
-    # Find the matching asset for this platform
-    asset = _match_asset(assets, keywords)
-    if asset is None:
-        available = [a["name"] for a in assets]
+        digest = asset.get("digest")
+        if digest:
+            _download_and_install(download_url, asset_name, digest=digest)
+        else:
+            _download_and_install(download_url, asset_name)
+    except httpx.HTTPError as exc:
         raise RuntimeError(
-            f"No binary found for this platform (keywords: {keywords}).\n"
-            f"Available assets: {available}\n"
-            f"You may need to build from source or open an issue at "
-            f"https://github.com/{_GITHUB_REPO}/issues"
-        )
-
-    asset_name = asset["name"]
-    download_url = asset["browser_download_url"]
-    print(f"Downloading {tag_name} ({asset_name})...")
-
-    _download_and_install(download_url, asset_name)
+            f"could not download the engine: {type(exc).__name__}: {exc}. "
+            "Check the proxy or the GitHub rate limit."
+        ) from exc
+    except ValueError as exc:  # resp.json() on a page that is not JSON
+        raise RuntimeError(
+            f"could not read the GitHub release information: {exc}. "
+            "Check the proxy or the GitHub rate limit."
+        ) from exc
+    except (zipfile.BadZipFile, tarfile.TarError) as exc:
+        raise RuntimeError(
+            f"could not extract the engine archive: {type(exc).__name__}: {exc}. "
+            "The installed engine is kept."
+        ) from exc
 
     if not dest.is_file():
         raise RuntimeError(
@@ -361,16 +393,27 @@ def _match_asset(assets: list[dict], keywords: list[str]) -> dict | None:
     return None
 
 
-def _download_and_install(url: str, asset_name: str) -> None:
+def _download_and_install(url: str, asset_name: str, digest: str | None = None) -> None:
     """Download and extract the full engine bundle into ENGINE_DIR.
 
     The CDISC Rules Engine is a PyInstaller ``--onedir`` bundle: the archive
     contains a ``core/`` directory with the executable and all its
     dependencies. We extract the entire directory into ENGINE_DIR.
+
+    *digest* is the GitHub asset digest (``"sha256:<hex>"``).  A download
+    that does not match it is refused before extraction; with no digest the
+    check is skipped.  The installed engine is removed only after the new
+    bundle is extracted and holds the executable.
     """
+    import hashlib
     import shutil
 
     import httpx
+
+    algorithm, _, expected = (digest or "").partition(":")
+    hasher = (
+        hashlib.new(algorithm) if expected and algorithm in hashlib.algorithms_available else None
+    )
 
     # Download to a temp file
     suffix = "." + asset_name.rsplit(".", 1)[-1] if "." in asset_name else ""
@@ -388,6 +431,8 @@ def _download_and_install(url: str, asset_name: str) -> None:
                 with open(archive_path, "wb") as f:
                     for chunk in resp.iter_bytes(chunk_size=65536):
                         f.write(chunk)
+                        if hasher is not None:
+                            hasher.update(chunk)
                         downloaded += len(chunk)
                         if total:
                             pct = downloaded * 100 // total
@@ -399,7 +444,13 @@ def _download_and_install(url: str, asset_name: str) -> None:
                 if total:
                     print()
 
-        # Extract into a temp dir first, then move atomically
+        if hasher is not None and hasher.hexdigest() != expected.lower():
+            raise RuntimeError(
+                f"digest mismatch for {asset_name}: expected {digest}, "
+                f"got {algorithm}:{hasher.hexdigest()}. The download was not installed."
+            )
+
+        # Extract into a staging directory; the old engine is removed only after the check.
         with tempfile.TemporaryDirectory() as staging:
             staging_path = Path(staging)
             lower = asset_name.lower()
@@ -413,7 +464,7 @@ def _download_and_install(url: str, asset_name: str) -> None:
                 import tarfile
 
                 with tarfile.open(archive_path, "r:gz") as tf:
-                    tf.extractall(staging_path)  # noqa: S202
+                    tf.extractall(staging_path, filter="data")
             else:
                 raise RuntimeError(f"Unknown archive format: {asset_name}")
 
@@ -424,6 +475,12 @@ def _download_and_install(url: str, asset_name: str) -> None:
                 contents = [p.name for p in staging_path.iterdir()]
                 raise RuntimeError(
                     f"Could not find 'core' directory in archive.\nTop-level contents: {contents}"
+                )
+            if not (extracted_core / _engine_filename()).is_file():
+                contents = sorted(p.name for p in extracted_core.iterdir())
+                raise RuntimeError(
+                    f"The archive {asset_name} holds no {_engine_filename()} executable "
+                    f"(found: {contents}). The installed engine is kept."
                 )
 
             # Clean previous install
@@ -547,4 +604,4 @@ def _check_pyreadstat() -> str:
 
         return "installed"
     except ImportError:
-        return "NOT INSTALLED — run `uv sync --extra io`"
+        return "NOT INSTALLED — run `uv add 'fleet-cdisc[io]'`"

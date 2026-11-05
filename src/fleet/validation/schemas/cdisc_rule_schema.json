@@ -260,12 +260,6 @@
           "const": "define_dataset_structure"
         },
         {
-          "const": "define_dataset_variables"
-        },
-        {
-          "const": "define_dataset_variable_order"
-        },
-        {
           "const": "define_variable_allowed_terms"
         },
         {
@@ -285,9 +279,6 @@
         },
         {
           "const": "define_variable_has_comment"
-        },
-        {
-          "const": "define_variable_has_method"
         },
         {
           "const": "define_variable_has_no_data"
@@ -377,12 +368,6 @@
           "const": "library_variable_core"
         },
         {
-          "const": "library_variable_has_codelist"
-        },
-        {
-          "const": "library_variable_ccode"
-        },
-        {
           "const": "library_variable_data_type"
         },
         {
@@ -414,9 +399,6 @@
         },
         {
           "const": "variable_label"
-        },
-        {
-          "const": "variable_max_size"
         },
         {
           "const": "variable_name"
@@ -505,18 +487,6 @@
           "properties": {
             "operator": {
               "const": "domain_is_custom"
-            }
-          },
-          "required": [
-            "id",
-            "operator"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "operator": {
-              "const": "related_domain_is_custom"
             }
           },
           "required": [
@@ -766,20 +736,6 @@
             "id",
             "operator",
             "name"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "operator": {
-              "const": "minus"
-            }
-          },
-          "required": [
-            "id",
-            "operator",
-            "name",
-            "subtract"
           ],
           "type": "object"
         },
@@ -1256,9 +1212,6 @@
         "source": {
           "type": "string"
         },
-        "subtract": {
-          "type": "string"
-        },
         "term_value": {
           "type": "string"
         },
@@ -1299,6 +1252,28 @@
           "properties": {
             "operator": {
               "const": "additional_columns_not_empty"
+            }
+          },
+          "required": [
+            "operator"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "operator": {
+              "const": "conformant_value_data_type"
+            }
+          },
+          "required": [
+            "operator"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "operator": {
+              "const": "conformant_value_length"
             }
           },
           "required": [
@@ -1461,6 +1436,18 @@
             "ordering",
             "value",
             "within"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "operator": {
+              "const": "does_not_reference_correct_codelist"
+            }
+          },
+          "required": [
+            "operator",
+            "value"
           ],
           "type": "object"
         },
@@ -1909,6 +1896,28 @@
         {
           "properties": {
             "operator": {
+              "const": "non_conformant_value_data_type"
+            }
+          },
+          "required": [
+            "operator"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "operator": {
+              "const": "non_conformant_value_length"
+            }
+          },
+          "required": [
+            "operator"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "operator": {
               "const": "non_empty"
             }
           },
@@ -2117,6 +2126,18 @@
           "required": [
             "operator",
             "within"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "operator": {
+              "const": "references_correct_codelist"
+            }
+          },
+          "required": [
+            "operator",
+            "value"
           ],
           "type": "object"
         },
@@ -2496,13 +2517,6 @@
                 "properties": {
                   "name": {
                     "$ref": "#/$defs/Operator/properties/name"
-                  },
-                  "null_position": {
-                    "enum": [
-                      "first",
-                      "last"
-                    ],
-                    "type": "string"
                   },
                   "order": {
                     "$ref": "#/$defs/Operator/properties/order"
@@ -3315,6 +3329,10 @@
     "Rule_Type": {
       "anyOf": [
         {
+          "const": "Dataset Contents Check against Define XML and Library Metadata",
+          "title": "Content data at record level, define xml metadata at variable level, and library metadata at variable level"
+        },
+        {
           "const": "Dataset Contents Check against Define XML",
           "title": "Content data at record level, dataset metadata at dataset level, and define xml metadata at dataset level"
         },
@@ -3325,6 +3343,14 @@
         {
           "const": "Dataset Metadata Check against Define XML",
           "title": "Content metadata at dataset level and define xml metadata at dataset level"
+        },
+        {
+          "const": "Define Item Group Metadata Check",
+          "title": "Define xml metadata at dataset level"
+        },
+        {
+          "const": "Define Item Metadata Check",
+          "title": "Define xml metadata at variable level"
         },
         {
           "const": "Define Item Metadata Check against Library Metadata",
@@ -3359,8 +3385,8 @@
           "title": "Content data at value level and define xml metadata at value level"
         },
         {
-          "const": "Value Check against Library Metadata",
-          "title": "Content data at value level and Library Metadata at value level"
+          "const": "Value Level Metadata Check against Define XML",
+          "title": "Content data at record level and define xml metadata at value level"
         },
         {
           "const": "Variable Metadata Check",
@@ -3586,12 +3612,7 @@
             "additionalProperties": true
           }
         },
-        "required": [
-          "Organization",
-          "Standards"
-        ],
-        "type": "object",
-        "anyOf": [
+        "oneOf": [
           {
             "$ref": "#/$defs/Organization_CDISC"
           },
@@ -3601,7 +3622,12 @@
           {
             "$ref": "#/$defs/Organization_Custom"
           }
-        ]
+        ],
+        "required": [
+          "Organization",
+          "Standards"
+        ],
+        "type": "object"
       },
       "minItems": 1,
       "type": "array"
@@ -3905,5 +3931,6 @@
       "Grouping_Variables"
     ]
   },
-  "type": "object"
+  "type": "object",
+  "$comment": "Bundled by scripts/refresh_rule_schema.py from CORE 0.15.0."
 }

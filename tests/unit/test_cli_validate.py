@@ -373,10 +373,10 @@ class TestCheck:
         assert _run(["check"]) == 0
         out = capsys.readouterr().out
         assert "[WARN] rules engine" in out
-        assert f"pinned engine {study / 'bin' / 'core'}" in out
+        assert f"validation.engine_path names {study / 'bin' / 'core'}" in out
 
         assert _run(["validate"]) == 2
-        assert "pinned engine" in capsys.readouterr().err
+        assert "that file does not exist" in capsys.readouterr().err
         assert engine.calls == []
 
 

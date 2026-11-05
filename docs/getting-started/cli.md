@@ -110,6 +110,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | `--out` / `--output` / `-o` | _(none)_ | Output directory for every dataset. Default: the configured data/sdtm and data/adam directories. Fleet only writes here: inputs are read from the run, a declared path:, the raw directory (type: raw) or the data directory of the input's standard (type: dataset). |
 | `--format` | _(none)_ | Output format of every dataset. Default: the output_format of the dataset, else of define.yaml, else parquet (the rule of the Define-XML leaf). Choices: `parquet`, `xpt`, `dataset-json`. |
 | `--strict` / `--no-strict` | _(on)_ | Raise on unknown spec algorithms (default). --no-strict warns and skips. |
+| `--overwrite` | _(none)_ | Let a spec derivation replace a column that the input already has. Default off, so a QC run keeps the guard. |
 
 ---
 
@@ -123,7 +124,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | ------ | ------- | ----------- |
 | `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 | `--standard` | _(none)_ | Force the standard. Default: the configured data directory that holds the dataset, else AD* datasets → adam, others → sdtm. Choices: `sdtm`, `adam`. |
-| `--version` | _(none)_ | IG version. Default: the sdtm/adam ig_version declared in the discovered study_config.yaml (3.4 / 1.3 outside a study). |
+| `--version` | _(none)_ | IG version. It applies to every dataset of the run, SDTM and ADaM. Default: the sdtm/adam ig_version declared in the discovered study_config.yaml (3.4 / 1.3 outside a study). |
 | `--define` | _(none)_ | Define-XML file that CORE checks with the datasets (CORE -dxp). Opt-in: Fleet never passes a define by default. |
 | `--custom-rules` | _(none)_ | Directory of custom validation rule YAML files, relative to the working directory. Default: validation.custom_rules from the discovered study_config.yaml. |
 | `--timeout` | _(none)_ | Seconds before an engine run is stopped. Default: validation.timeout from the discovered study_config.yaml, else 300. |

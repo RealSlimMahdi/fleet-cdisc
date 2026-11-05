@@ -1,4 +1,4 @@
-"""The validation HTML page (#119): every cell escaped, ``rows_affected=0`` shown.
+"""The validation HTML page (#119): every cell escaped, ``row=0`` shown.
 
 ``ValidationResult.save_html_report`` and ``fleet validate --report`` write the
 page of :func:`fleet.validation.models.write_html_report`; the CLI side is
@@ -47,11 +47,11 @@ def test_every_value_is_escaped(tmp_path: Path) -> None:
     assert page.count(ESCAPED) == 12
 
 
-def test_rows_affected_zero_is_shown(tmp_path: Path) -> None:
-    issue = ValidationIssue(Severity.ERROR, "CORE-000001", "bad", rows_affected=0)
+def test_row_zero_is_shown(tmp_path: Path) -> None:
+    issue = ValidationIssue(Severity.ERROR, "CORE-000001", "bad", row=0)
     result = ValidationResult("AE", "sdtmig", "3-4", total_issues=1, errors=[issue])
 
     page = Path(result.save_html_report(tmp_path / "report.html")).read_text(encoding="utf-8")
 
     assert "<td>CORE-000001</td><td>official</td><td></td><td>0</td><td>bad</td>" in page
-    assert "Rows: 0" in str(issue)
+    assert "Row: 0" in str(issue)
