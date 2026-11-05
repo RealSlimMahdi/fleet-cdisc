@@ -55,7 +55,6 @@ from . import (
 )
 from ._version import __version__
 from .adam import (
-    ADAMAlgorithm,
     AdamNamespace,
     ADSLNamespace,
     MetabolicNamespace,
@@ -90,7 +89,7 @@ from .define_xml import (
 )
 from .io import load_datasets, load_raw_data, save_dataset_json, save_parquet
 from .run import BuiltDataset, ResolvedInput, Step, StudyPlan, plan_study, run_study
-from .sdtm import SDTMAlgorithm, SDTMNamespace, StudyDesign
+from .sdtm import SDTMNamespace, StudyDesign
 from .tlg import (
     AEListingSpec,
     AESummarySpec,
@@ -152,11 +151,9 @@ __all__ = [
     "save_parquet",
     "save_dataset_json",
     # SDTM
-    "SDTMAlgorithm",
     "SDTMNamespace",
     "StudyDesign",
     # ADaM core + sub-structures (accessed via df.adam, df.adam.adsl, df.adam.occds)
-    "ADAMAlgorithm",
     "AdamNamespace",
     "ADSLNamespace",
     "OCCDSNamespace",

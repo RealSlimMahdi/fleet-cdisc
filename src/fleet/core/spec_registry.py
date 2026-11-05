@@ -25,9 +25,8 @@ kept out of the spec, the ones that exclude each other, the ones the spec
 requires although the verb has a default, which argument is the input
 column, and the Define-XML method text.
 
-The ``SDTMAlgorithm`` / ``ADAMAlgorithm`` enums remain literal source
-code in ``fleet.sdtm.models`` / ``fleet.adam.models`` for import
-stability; a sync test asserts they always match this registry.
+The registry names the verbs: :func:`algorithm_names` lists the
+``algorithm:`` values of each standard.  There is no separate enum.
 
 Examples:
     Validate and execute one spec variable::
