@@ -279,7 +279,7 @@ A step that removes records has no variable, so it does not sit in
 (ADR-0034). Each step names the variable it follows with `after:` (`null`:
 before the first variable), and `from_spec()` runs it right after that
 variable. `whereclauses` keeps the records where `where:` is true; `nodup`
-keeps one record per `subset:` after the sort on `sort_by:`.
+keeps one record per `subset:` after the sort on `order_by:`.
 
 ```yaml
 datasets:

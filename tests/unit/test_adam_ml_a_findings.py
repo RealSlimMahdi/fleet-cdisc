@@ -749,3 +749,38 @@ class TestUncoveredPaths:
 
         assert out["LIT"].to_list() == [date(2021, 3, 15), date(2021, 6, 15)]
         assert out["COL"].to_list() == [date(2021, 3, 20), date(2021, 7, 20)]
+
+
+def test_fleet_migrate_renames_the_sort_keys_of_pick_and_nodup():
+    """c1-136: one name, order_by, for the sort key of pick and nodup."""
+    from fleet.tools.migrate_spec import migrate_block, migrate_spec_text
+
+    text = """\
+fleet_spec_version: 2
+datasets:
+  - name: ADSL
+    row_steps:
+      - algorithm: nodup
+        subset: [USUBJID]
+        sort_by: [ADT]
+        keep: first
+        after: null
+    variables:
+      - name: LSTALVDT
+        derivation:
+          algorithm: pick
+          events:
+            - when: 'pl.col("AENDT").is_not_null()'
+              set: {LSTALVDT: AENDT}
+              order: [AENDT]
+          order: [LSTALVDT]
+          mode: last
+"""
+    new, changes = migrate_spec_text(text)
+
+    assert "sort_by" not in new
+    assert "order:" not in new
+    assert new.count("order_by:") == 3
+    assert len(changes) == 3
+    block, _ = migrate_block({"algorithm": "pick", "order": ["X"], "events": [{"order": ["Y"]}]})
+    assert block == {"algorithm": "pick", "order_by": ["X"], "events": [{"order_by": ["Y"]}]}

@@ -420,21 +420,21 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         *,
         events: list[dict[str, Any]],
         by: list[str] | None = None,
-        order: str | list[str] | None = None,
+        order_by: str | list[str] | None = None,
         mode: str = "first",
     ) -> Self:
         """Derive targets from one event per group, chosen across the events.
 
         Each event in the list defines a candidate source, a filter
         condition, and values to set when that event is selected.  Within
-        each event's matching records, the event's *order* and *mode* (or
+        each event's matching records, the event's *order_by* and *mode* (or
         the top-level ones) select one record.  Then one event wins:
 
-        - with a top-level *order*, every event's record competes on that
+        - with a top-level *order_by*, every event's record competes on that
           order and *mode*, as admiral ``derive_vars_extreme_event`` does:
-          ``order=["LSTALVDT"], mode="last"`` gives the latest date over all
+          ``order_by=["LSTALVDT"], mode="last"`` gives the latest date over all
           sources.  A tie goes to the first listed event.
-        - with no top-level *order*, the first listed event with a matching
+        - with no top-level *order_by*, the first listed event with a matching
           record wins (a priority cascade, as the admiral DTHCAUS template).
 
         This is Fleet's answer to multi-source derivations such as
@@ -457,16 +457,16 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
           this event.  When omitted, the current pipeline frame is used.
         - ``"mode"`` (optional): Override the top-level *mode* for this
           event only (``"first"`` | ``"last"``).
-        - ``"order"`` (optional): Override the top-level *order* for this
+        - ``"order_by"`` (optional): Override the top-level *order_by* for this
           event only.
         - ``"label"`` (optional): Documentation-only description.
 
         Args:
             targets: Target column name(s) to derive.
             events: List of event dicts.  List position breaks ties and,
-                with no top-level *order*, decides the winner.
+                with no top-level *order_by*, decides the winner.
             by: Grouping columns (default ``["USUBJID"]``).
-            order: Sort column(s).  Within an event they select the record;
+            order_by: Sort column(s).  Within an event they select the record;
                 at top level they also select the event (see above).  An
                 event with more than one matching record in a group needs
                 an order (its own or the top-level one).  A missing order
@@ -475,7 +475,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                 record, as SAS ``LAST.``; a warning names a tie whose
                 records set different values.
             mode: ``"first"`` or ``"last"`` — which record to select
-                after sorting by *order* (default ``"first"``).
+                after sorting by *order_by* (default ``"first"``).
 
         Returns:
             Self: A fresh namespace with *targets* added; call
@@ -510,13 +510,13 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                              "source": adsl_df, "label": "Death date"},
                             {"when": pl.col("AENDT").is_not_null(),
                              "set": {"LSTALVDT": "AENDT", "DTHFL": pl.lit("N")},
-                             "source": adae, "mode": "last", "order": ["AENDT"]},
+                             "source": adae, "mode": "last", "order_by": ["AENDT"]},
                             {"when": pl.col("TRTEDT").is_not_null(),
                              "set": {"LSTALVDT": "TRTEDT", "DTHFL": pl.lit("N")},
                              "source": adsl_df},
                         ],
                         by=["USUBJID"],
-                        order=["LSTALVDT"],
+                        order_by=["LSTALVDT"],
                         mode="last",
                     )
                     .to_frame()
@@ -531,10 +531,10 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                         events=[
                             {"when": 'pl.col("AEOUT") == "FATAL"',
                              "set": {"DTHCAUS": "AEDECOD"},
-                             "source": ae, "order": ["AESTDTC", "AESEQ"]},
+                             "source": ae, "order_by": ["AESTDTC", "AESEQ"]},
                             {"when": 'pl.col("DSDECOD") == "DEATH"',
                              "set": {"DTHCAUS": "DSTERM"},
-                             "source": ds, "order": ["DSSTDTC", "DSSEQ"]},
+                             "source": ds, "order_by": ["DSSTDTC", "DSSEQ"]},
                         ],
                         by=["USUBJID"],
                     )
@@ -553,7 +553,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         target_list = [targets] if isinstance(targets, str) else list(targets)
         by_vars = by or ["USUBJID"]
         global_order: list[str] | None = (
-            [order] if isinstance(order, str) else list(order) if order else None
+            [order_by] if isinstance(order_by, str) else list(order_by) if order_by else None
         )
 
         df = self.to_frame()
@@ -561,7 +561,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         # Collect one candidate row per event per group.
         candidate_frames: list[pl.DataFrame] = []
 
-        valid_event_keys = {"when", "set", "source", "mode", "order", "label"}
+        valid_event_keys = {"when", "set", "source", "mode", "order_by", "label"}
         for event_nr, event in enumerate(events):
             unknown = sorted(set(event) - valid_event_keys)
             if unknown:
@@ -640,7 +640,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                     f"pick() event #{event_nr} mode={evt_mode!r} is not supported. "
                     "Choose 'first' or 'last'."
                 )
-            evt_order_raw = event.get("order", global_order)
+            evt_order_raw = event.get("order_by", global_order)
             evt_order: list[str] | None = (
                 [evt_order_raw] if isinstance(evt_order_raw, str) else evt_order_raw
             )
@@ -669,7 +669,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                     raise DerivationError(
                         f"pick() event #{event_nr} has no order and {multi.height} group(s) "
                         f"with more than one matching record (first: {key}, "
-                        f"{first['len']} records). Give 'order' in the event or at top "
+                        f"{first['len']} records). Give 'order_by' in the event or at top "
                         "level, so the record does not depend on row order."
                     )
                 candidates = candidates.group_by(by_vars, maintain_order=True).first()
@@ -754,7 +754,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         warnings.warn(
             f"pick() event #{event_nr}: {differ.height} group(s) have records that tie on "
             f"{order} and set different values (first: {key}). mode={mode!r} takes the "
-            f"{mode} input record of the tie. Add a key to 'order' to break the tie.",
+            f"{mode} input record of the tie. Add a key to 'order_by' to break the tie.",
             stacklevel=3,
         )
 

@@ -469,7 +469,7 @@ assert (adsl["SAFFL"] == "Y").sum() == adsl.height, "every pilot subject took a 
 # 9. Last Date Known Alive (LSTALVDT)
 #    Admiral: derive_vars_extreme_event(ae, lb, adsl; order=last)
 #    Fleet: pick() — the latest date over all sources.  Within each event
-#    the latest record is kept; then the top-level order=["LSTALVDT"],
+#    the latest record is kept; then the top-level order_by=["LSTALVDT"],
 #    mode="last" makes the events compete on the date, as admiral does.
 #    A tie on the date goes to the first listed event.
 #
@@ -513,7 +513,7 @@ adsl = (
             },
         ],
         by=["USUBJID"],
-        order=["LSTALVDT"],
+        order_by=["LSTALVDT"],
         mode="last",
     )
     .to_frame()

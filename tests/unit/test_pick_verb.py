@@ -129,7 +129,7 @@ class TestPickLSTALVDT:
                         "set": {"LSTALVDT": "AEENDTC", "DTHFL": pl.lit("N")},
                         "source": ae_dirty,
                         "mode": "last",
-                        "order": ["AEENDTC"],
+                        "order_by": ["AEENDTC"],
                     },
                     # Priority 3: Latest lab date
                     {
@@ -137,7 +137,7 @@ class TestPickLSTALVDT:
                         "set": {"LSTALVDT": "ADT", "DTHFL": pl.lit("N")},
                         "source": lb_dirty,
                         "mode": "last",
-                        "order": ["ADT"],
+                        "order_by": ["ADT"],
                     },
                     # Priority 4: Treatment end (from base frame)
                     {
@@ -147,7 +147,7 @@ class TestPickLSTALVDT:
                     },
                 ],
                 by=["USUBJID"],
-                order=["LSTALVDT"],
+                order_by=["LSTALVDT"],
                 mode="last",
             )
             .to_frame()
@@ -238,7 +238,7 @@ class TestPickDTHCAUS:
                         "set": {"DTHCAUS": "AEDECOD"},
                         "source": ae_with_fatal,
                         "mode": "last",
-                        "order": ["AEENDTC"],
+                        "order_by": ["AEENDTC"],
                     },
                     # Priority 2: DS death record
                     {
@@ -340,7 +340,7 @@ class TestPickEdgeCases:
                 }
             ],
             by=["USUBJID"],
-            order=["ASEQ"],  # not a target — used within the event only
+            order_by=["ASEQ"],  # not a target — used within the event only
             mode="last",
         ).to_frame()
         row = result.filter(pl.col("USUBJID") == "SUBJ-01")
@@ -402,7 +402,7 @@ class TestPickEdgeCases:
                         "set": {"LATEST_AE_END": "AEENDTC"},
                         "source": ae_dirty,
                         "mode": "last",
-                        "order": ["AEENDTC"],
+                        "order_by": ["AEENDTC"],
                     },
                 ],
                 by=["USUBJID"],
@@ -546,7 +546,7 @@ class TestPickEdgeCases:
                         "set": {"FIRST_AE_END": "AEENDTC"},
                         "source": ae_dirty,
                         "mode": "first",  # override: take earliest
-                        "order": ["AEENDTC"],
+                        "order_by": ["AEENDTC"],
                     },
                 ],
                 by=["USUBJID"],
@@ -682,7 +682,7 @@ class TestPickVerbSpecEquivalence:
                         "set": {"DTHCAUS": "AEDECOD", "DTHDOM": pl.lit("AE")},
                         "source": ae_source,
                         "mode": "last",
-                        "order": ["AEENDTC"],
+                        "order_by": ["AEENDTC"],
                     },
                     {
                         "when": pl.col("DSDECOD") == "DEATH",
@@ -706,7 +706,7 @@ class TestPickVerbSpecEquivalence:
                         "set": {"DTHCAUS": "AEDECOD", "DTHDOM": 'pl.lit("AE")'},
                         "source": ae_source,
                         "mode": "last",
-                        "order": ["AEENDTC"],
+                        "order_by": ["AEENDTC"],
                     },
                     {
                         "when": 'pl.col("DSDECOD") == "DEATH"',
@@ -757,7 +757,7 @@ class TestPickVerbSpecEquivalence:
                     },
                 ],
                 by=["USUBJID"],
-                order=["LSTALVDT"],
+                order_by=["LSTALVDT"],
                 mode="last",
             )
             .to_frame()
@@ -826,13 +826,13 @@ datasets:
             - when: 'pl.col("AEENDT").is_not_null()'
               set: {LSTALVDT: AEENDT}
               source: AE
-              order: [AEENDT]
+              order_by: [AEENDT]
               mode: last
             - when: 'pl.col("TRTEDT").is_not_null()'
               set: {LSTALVDT: TRTEDT}
               source: ADSL
           by: [USUBJID]
-          order: [LSTALVDT]
+          order_by: [LSTALVDT]
           mode: last
 """
 
@@ -936,7 +936,7 @@ class TestPickArgumentChecks:
             {"when": pl.col("AEENDTC").is_not_null(), "set": {"LSTALVDT": "AEENDTC"}, "source": ae},
         ]
         with pytest.raises(DerivationError, match="LSTALVDT from a Date.*String"):
-            adsl.adam.adsl.pick("LSTALVDT", events=events, order="LSTALVDT", mode="last")
+            adsl.adam.adsl.pick("LSTALVDT", events=events, order_by="LSTALVDT", mode="last")
 
     def test_no_matching_event_keeps_the_source_dtype(self):
         adsl = pl.from_repr("""\

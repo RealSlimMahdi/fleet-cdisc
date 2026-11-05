@@ -2924,7 +2924,7 @@ class SharedVerbsMixin:
         self,
         *,
         subset: list[str],
-        sort_by: list[str] | None = None,
+        order_by: list[str] | None = None,
         keep: Literal["first", "last"] | None = None,
         descending: bool | list[bool] = False,
     ) -> Self:
@@ -2941,15 +2941,15 @@ class SharedVerbsMixin:
 
         Args:
             subset: Column(s) that define the uniqueness key.
-            sort_by: Column(s) to sort by before deduplication.  Required
+            order_by: Column(s) to sort by before deduplication.  Required
                 when ``keep`` is not ``None``.
             keep: Which duplicate to retain after sorting:
                 ``"first"``, ``"last"``, or ``None`` (report only, no removal).
-            descending: Sort direction(s) for *sort_by*.  A single ``bool``
-                applies to all columns; a list must match *sort_by* length.
+            descending: Sort direction(s) for *order_by*.  A single ``bool``
+                applies to all columns; a list must match *order_by* length.
                 A missing value is the lowest value, as SAS: it sorts
                 first when ascending and last when descending.  Records
-                that tie on *sort_by* keep their input order, as PROC SORT
+                that tie on *order_by* keep their input order, as PROC SORT
                 EQUALS, so ``keep="last"`` takes the last input record of a
                 tie.
 
@@ -2959,7 +2959,7 @@ class SharedVerbsMixin:
                 call ``.to_frame()`` to materialise.
 
         Raises:
-            DerivationError: If ``keep`` is set but ``sort_by`` is not
+            DerivationError: If ``keep`` is set but ``order_by`` is not
                 provided, or ``keep`` is not one of the accepted values.
 
         References:
@@ -2982,15 +2982,15 @@ class SharedVerbsMixin:
                     ae_df.adam.occds
                     .nodup(
                         subset=["USUBJID", "AEDECOD"],
-                        sort_by=["ASTDT", "ASEQ"],
+                        order_by=["ASTDT", "ASEQ"],
                         keep="first",
                         descending=True,
                     )
                     .to_frame()
                 )
         """
-        if keep is not None and sort_by is None:
-            raise DerivationError("sort_by is required when keep is set.")
+        if keep is not None and order_by is None:
+            raise DerivationError("order_by is required when keep is set.")
         if keep is not None and keep not in ("first", "last"):
             raise DerivationError(f"keep must be 'first', 'last', or None — got {keep!r}.")
 
@@ -3006,7 +3006,7 @@ class SharedVerbsMixin:
             logger.info("[NODUP] No duplicates found (subset: %s)", ", ".join(subset))
             new = self._materialise_then(df)
             new._nodup_report = dup_rows
-            return self._record_nodup(new, subset, sort_by, keep, descending)
+            return self._record_nodup(new, subset, order_by, keep, descending)
 
         # Summarise duplicate groups
         dup_groups = (
@@ -3038,26 +3038,26 @@ class SharedVerbsMixin:
             return new
 
         # Sort then deduplicate: a missing value is lowest, as SAS (ADR-0023); ties keep input order.
-        flags = list(descending) if isinstance(descending, list) else [descending] * len(sort_by)
-        df = df.sort(sort_by, descending=flags, nulls_last=flags, maintain_order=True)
+        flags = list(descending) if isinstance(descending, list) else [descending] * len(order_by)
+        df = df.sort(order_by, descending=flags, nulls_last=flags, maintain_order=True)
         df = df.unique(subset=subset, keep=keep, maintain_order=True)
 
         logger.info(
             "[NODUP] Action: keeping '%s' after sorting by %s (descending=%s)",
             keep,
-            sort_by,
+            order_by,
             descending,
         )
         logger.info("[NODUP] Result: %d rows (removed %d)", len(df), n_dup - n_groups)
         new = self._materialise_then(df)
         new._nodup_report = dup_rows
-        return self._record_nodup(new, subset, sort_by, keep, descending)
+        return self._record_nodup(new, subset, order_by, keep, descending)
 
     @staticmethod
     def _record_nodup(
         new: Any,
         subset: list[str],
-        sort_by: list[str] | None,
+        order_by: list[str] | None,
         keep: str | None,
         descending: bool | list[bool],
     ) -> Any:
@@ -3066,7 +3066,7 @@ class SharedVerbsMixin:
             return new
         from fleet.core.lineage import record_row_step
 
-        params: dict[str, Any] = {"subset": subset, "sort_by": sort_by, "keep": keep}
+        params: dict[str, Any] = {"subset": subset, "order_by": order_by, "keep": keep}
         if descending:
             params["descending"] = descending
         return record_row_step(new, "nodup", params)

@@ -64,12 +64,12 @@ adsl = adsl.adam.adsl.pick(
         },
     ],
     by=["USUBJID"],
-    order=["LSTALVDT"],
+    order_by=["LSTALVDT"],
     mode="last",
 ).to_frame()
 ```
 
-`order=["LSTALVDT"], mode="last"` at top level makes every event compete on the date: the latest one wins.  Each event's `"label"` documents intent.  No temporary columns needed.
+`order_by=["LSTALVDT"], mode="last"` at top level makes every event compete on the date: the latest one wins.  Each event's `"label"` documents intent.  No temporary columns needed.
 
 All events set LSTALVDT from date columns (AENDT and ASTDT come from `.date()` on the AE text).  An event that sets a target from DTC text while another sets it from a date raises a `DerivationError`.
 
@@ -97,9 +97,9 @@ flowchart TD
 
 **Key properties:**
 
-1. **Within-event selection** uses the event's `mode` and `order`, or the top-level ones.
-2. **With a top-level `order`**, every event's record competes on that order and `mode`, as admiral `derive_vars_extreme_event` does.  `order=["LSTALVDT"], mode="last"` gives the latest date over all sources.  A tie goes to the first listed event.
-3. **With no top-level `order`**, the first listed event that has a record wins: a priority cascade, as the admiral DTHCAUS template.
+1. **Within-event selection** uses the event's `mode` and `order_by`, or the top-level ones.
+2. **With a top-level `order_by`**, every event's record competes on that order and `mode`, as admiral `derive_vars_extreme_event` does.  `order_by=["LSTALVDT"], mode="last"` gives the latest date over all sources.  A tie goes to the first listed event.
+3. **With no top-level `order_by`**, the first listed event that has a record wins: a priority cascade, as the admiral DTHCAUS template.
 4. **Subjects with no matching events** get `null` for all targets.  A target keeps the type of its source columns, also when no event has a record.
 5. **A target that is already a pipeline column** is replaced.
 
@@ -113,7 +113,7 @@ Each event is a Python `dict` with these keys:
 | `"set"` | Yes | `dict[str, str \| pl.Expr \| Any]` | Maps each target to a source column name, expression, or literal (`pl.lit("Y")`). A key that is not a target raises |
 | `"source"` | No | `pl.DataFrame` | External dataset to scan. Omit to use the current pipeline frame |
 | `"mode"` | No | `str` | Override top-level mode for this event (`"first"` / `"last"`) |
-| `"order"` | No | `str \| list[str]` | Override top-level sort for this event |
+| `"order_by"` | No | `str \| list[str]` | Override top-level sort for this event |
 | `"label"` | No | `str` | Documentation-only description (ignored at runtime) |
 
 ## Multiple Targets
@@ -136,7 +136,7 @@ adsl = adsl.adam.adsl.pick(
         },
     ],
     by=["USUBJID"],
-    order=["LSTALVDT"],
+    order_by=["LSTALVDT"],
     mode="last",
 ).to_frame()
 ```
@@ -160,10 +160,10 @@ This gives the same result as a `pl.Expr`, and a define.yaml can hold it. When a
 | Admiral | Fleet |
 |---------|-------|
 | `event(dataset, condition, set_values_to, order, mode)` | Event dict in `events` list |
-| `derive_vars_extreme_event(events, source_datasets, by_vars, order, mode, check_type)` | `.pick(targets, events=..., by=..., order=..., mode=...)` |
-| `order = exprs(LSTALVDT), mode = "last"`: latest value over all events | `order=["LSTALVDT"], mode="last"` |
-| Ties on `order` go to the first event in the list | Ties on `order` go to the first event in `events` |
-| DTHCAUS template: first listed event with a record | No top-level `order`: first listed event with a record |
+| `derive_vars_extreme_event(events, source_datasets, by_vars, order, mode, check_type)` | `.pick(targets, events=..., by=..., order_by=..., mode=...)` |
+| `order = exprs(LSTALVDT), mode = "last"`: latest value over all events | `order_by=["LSTALVDT"], mode="last"` |
+| Ties on `order` go to the first event in the list | Ties on `order_by` go to the first event in `events` |
+| DTHCAUS template: first listed event with a record | No top-level `order_by`: first listed event with a record |
 | Requires pre-built event objects + explicit dataset references | Inline dicts with optional `"source"` — current frame used by default |
 
 Compared with admiral, Fleet's `pick()`:
@@ -206,7 +206,7 @@ variables:
           set: {LSTALVDT: TRTEDT}
           source: ADSL
       by: [USUBJID]
-      order: [LSTALVDT]
+      order_by: [LSTALVDT]
       mode: last
 ```
 

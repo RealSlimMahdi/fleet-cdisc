@@ -386,7 +386,7 @@
                 },
                 "description": "nodup: the key of a duplicate."
               },
-              "sort_by": {
+              "order_by": {
                 "type": "array",
                 "items": {
                   "type": "string"
@@ -2640,7 +2640,7 @@
           "description": "Grouping columns (default ``[\"USUBJID\"]``).",
           "title": "By"
         },
-        "order": {
+        "order_by": {
           "anyOf": [
             {
               "type": "string"
@@ -2657,11 +2657,11 @@
           ],
           "default": null,
           "description": "Sort column(s).",
-          "title": "Order"
+          "title": "Order By"
         },
         "mode": {
           "default": "first",
-          "description": "``\"first\"`` or ``\"last\"`` \u2014 which record to select after sorting by *order* (default ``\"first\"``).",
+          "description": "``\"first\"`` or ``\"last\"`` \u2014 which record to select after sorting by *order_by* (default ``\"first\"``).",
           "title": "Mode",
           "type": "string"
         },

@@ -1098,7 +1098,7 @@ def _dispatch_pick(ns: Any, var: SpecVariableBase) -> Any:
         var.targets or [var.target],
         events=events,
         by=var.by,
-        order=var.order,
+        order_by=var.order_by,
         mode=var.mode,
     )
 

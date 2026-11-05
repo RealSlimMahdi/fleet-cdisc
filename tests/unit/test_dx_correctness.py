@@ -321,7 +321,7 @@ class TestPickUnknownKeys:
 """)
 
     def test_orderby_typo_rejected_with_did_you_mean(self, adsl):
-        with pytest.raises(DerivationError, match="did you mean 'order'"):
+        with pytest.raises(DerivationError, match="did you mean 'order_by'"):
             adsl.adam.pick(
                 "LSTALVDT",
                 events=[

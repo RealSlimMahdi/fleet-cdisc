@@ -31,7 +31,9 @@ What gets rewritten
 * Keys of a block, per old algorithm (:data:`KEY_RENAMES`): ``ct_codelist``
   to ``ct``, ``ct_mapping`` to ``ct_map``, ``else_value`` to ``else``,
   ``groups`` to ``by``, the ``study_day`` dates to ``start`` and ``end``, and
-  the legacy keys the registry used to accept (``join_on``, ``flag_where``).
+  the legacy keys the registry used to accept (``join_on``, ``flag_where``),
+  and the sort key of ``pick`` (``order``, also in each event) and of
+  ``nodup`` (``sort_by``) to ``order_by``.
 * ``ct:`` equal to the variable's ``codelist:`` is dropped: the id is written
   once and ``from_spec`` fills it in.
 * ``fleet_spec_version`` becomes 2, inserted when absent.
@@ -108,7 +110,14 @@ KEY_RENAMES: dict[str, dict[str, str]] = {
     "on_treatment": {"analysis_date": "adt", "reference_date": "trtsdt"},
     "ae_aerel": {"aerel_source": "source"},
     "callable": {"callable_ref": "callable"},
+    # c1-136: one name for the sort key across verbs.
+    "pick": {"order": "order_by"},
+    "nodup": {"sort_by": "order_by"},
 }
+
+#: Old ``algorithm:`` value → {old key: new key} for the keys of each item of
+#: its ``events:`` list (``pick``).
+EVENT_KEY_RENAMES: dict[str, dict[str, str]] = {"pick": {"order": "order_by"}}
 
 
 def migrate_block(
@@ -144,6 +153,23 @@ def migrate_block(
             changes.append(f"{key}: -> {target}:")
             key = target
         new[key] = value
+    event_renames = EVENT_KEY_RENAMES.get(str(old), {})
+    if event_renames and isinstance(new.get("events"), list):
+        events = []
+        for event in new["events"]:
+            if isinstance(event, Mapping):
+                event = {
+                    (
+                        event_renames[k]
+                        if k in event_renames and event_renames[k] not in event
+                        else k
+                    ): v
+                    for k, v in event.items()
+                }
+            events.append(event)
+        if events != new["events"]:
+            changes.append("events: order: -> order_by:")
+        new["events"] = events
     for key, target in renames.items():
         if key in block and target in block:
             changes.append(f"{key}: kept, {target}: is also given — resolve by hand")
@@ -271,8 +297,14 @@ def migrate_spec_text(text: str, *, set_version: bool = True) -> tuple[str, list
             if _key_of(lines[j]) and _key_of(lines[j])[0] == indent  # type: ignore[index]
         }
         codelist = _variable_codelist(lines, start, indent)
+        event_renames = EVENT_KEY_RENAMES.get(old, {})
         for j in range(start, end):
             key = _key_of(lines[j])
+            if key is not None and key[0] > indent and key[1] in event_renames:
+                new_key = event_renames[key[1]]
+                out[j] = re.sub(rf"\b{key[1]}:", f"{new_key}:", lines[j], count=1)
+                changes.append(f"line {j + 1}: events {key[1]}: -> {new_key}:")
+                continue
             if key is None or key[0] != indent:
                 continue
             eff, name, rest = key

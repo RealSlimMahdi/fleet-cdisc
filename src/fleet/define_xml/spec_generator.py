@@ -117,10 +117,10 @@ def _row_steps_text(steps: list[dict[str, Any]]) -> str:
         if step.get("algorithm") == "whereclauses":
             action = f"keep the records where {step.get('where')}"
         elif step.get("algorithm") == "nodup":
-            sort_by = ", ".join(step.get("sort_by") or [])
+            order_by = ", ".join(step.get("order_by") or [])
             action = (
                 f"keep the {step.get('keep')} record per {', '.join(step.get('subset') or [])}"
-                f" sorted by {sort_by}"
+                f" sorted by {order_by}"
             )
         else:
             action = f"a record step by {step.get('verb')} that the spec does not describe yet"
