@@ -167,8 +167,12 @@ def fleet_validate(
             result = fleet_validate("/study/data/adam/adsl.parquet")
             result["setup"]["ig_version"]  # {"value": "1.3", "source": "study config"}
     """
-    from fleet.validation import ValidationService, ValidationSetupError, build_run_setup
-    from fleet.validation.models import Severity
+    from fleet.validation import (
+        Severity,
+        ValidationService,
+        ValidationSetupError,
+        build_run_setup,
+    )
 
     path = Path(dataset_path)
     if not path.is_file():
@@ -336,7 +340,6 @@ def fleet_tlg_run(
     Raises:
         SchemaError: The table needs ADSL and *adsl_path* is not given.
     """
-    from fleet.core.exceptions import SchemaError
     from fleet.tlg import (
         GROUPBY_CANDIDATES,
         TEMPLATES,
@@ -358,10 +361,11 @@ def fleet_tlg_run(
     if adsl_groupby and not is_listing:
         spec = spec.model_copy(update={"adsl_group_col": adsl_groupby})
     df = _load_frame(data_path)
+    given = _load_frame(adsl_path) if adsl_path else None
     try:
-        adsl = resolve_population(meta, df, _load_frame(adsl_path) if adsl_path else None)
-    except SchemaError as exc:
-        raise SchemaError(f"{exc} Pass adsl_path=<ADSL file>.") from None
+        adsl = resolve_population(meta, df, given)
+    except Exception as exc:  # SchemaError: the table needs ADSL
+        raise type(exc)(f"{exc} Pass adsl_path=<ADSL file>.") from None
     if not is_listing:
         groupby, source = resolve_groupby(spec, df.columns, groupby)
         if source == "none":
@@ -495,7 +499,7 @@ def create_server() -> FastMCP:
     Returns:
         FastMCP: Server ready for ``.run(transport="stdio")``.
     """
-    from fleet import __version__
+    import fleet
 
     options: dict[str, Any] = {
         "instructions": (
@@ -505,11 +509,11 @@ def create_server() -> FastMCP:
         )
     }
     if "version" in inspect.signature(FastMCP.__init__).parameters:
-        options["version"] = __version__
+        options["version"] = fleet.__version__
     server = FastMCP("fleet", **options)
     low_level = getattr(server, "_mcp_server", None)
     if "version" not in options and hasattr(low_level, "version"):
-        low_level.version = __version__  # mcp 1.x: no constructor argument
+        low_level.version = fleet.__version__  # mcp 1.x: no constructor argument
     for fn in TOOLS:
         server.tool()(_as_tool_error(fn))
     return server
