@@ -120,7 +120,9 @@ def find_engine(
 
     Order: *configured* (``validation.engine_path``), then
     ``FLEET_RULES_ENGINE``, then the managed install, then the legacy
-    sibling checkout.  A candidate that is not a file is skipped.
+    sibling checkout.  A candidate that is not a file is skipped.  A run
+    setup never calls this with a pinned path that is absent: it refuses
+    that run instead (see :func:`fleet.validation.run_setup.build_run_setup`).
 
     Args:
         configured: The engine path from the study config, already resolved.

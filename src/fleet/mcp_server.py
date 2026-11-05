@@ -169,10 +169,9 @@ def fleet_validate(
     except ValidationSetupError as exc:
         return _could_not_run(str(exc))
     if setup.engine.value is None:
-        return _could_not_run(
-            "CDISC Rules Engine not found. Install it with `fleet install-engine` "
-            "or set validation.engine_path / FLEET_RULES_ENGINE."
-        )
+        from fleet.validation import missing_engine_reason
+
+        return _could_not_run(missing_engine_reason(setup).removeprefix("Could not run: "))
     if setup.engine.source == "study config" and not _TRUST_STUDY_ENGINE:
         return _could_not_run(
             f"{setup.study_config} names the engine {setup.engine.value}. The MCP server "

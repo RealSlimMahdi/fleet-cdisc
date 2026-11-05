@@ -753,6 +753,35 @@ def _print_codelists_status(config_path: Path) -> None:
         print(f"  ✓ codelists.py ....... {', '.join(packages)} (matches study_config)")
 
 
+def _pinned_engine_missing(config_path: Path | None) -> str | None:
+    """The message for a ``validation.engine_path`` that names no file, else ``None``.
+
+    The YAML is read as text, so the check also runs on a study config
+    that does not validate.  Validation refuses such a study: it does not
+    fall back to another engine (ADR 0003).
+    """
+    import yaml
+
+    if config_path is None or not config_path.is_file():
+        return None
+    try:
+        data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        configured = (data.get("validation") or {}).get("engine_path")
+    except (yaml.YAMLError, AttributeError, OSError):
+        return None
+    if not configured:
+        return None
+    pinned = Path(configured)
+    if not pinned.is_absolute():
+        pinned = (config_path.parent / pinned).resolve()
+    if pinned.is_file():
+        return None
+    return (
+        f"validation.engine_path names {pinned}, and that file does not exist: "
+        "validation will not run"
+    )
+
+
 def _run_doctor(args: argparse.Namespace) -> None:
     from fleet.core.exceptions import ValidationSetupError
     from fleet.validation import build_run_setup
@@ -778,8 +807,9 @@ def _run_doctor(args: argparse.Namespace) -> None:
         study_root = config_path.parent if config_path and config_path.is_file() else None
         engine, where = discover_engine(study_root), ""
 
-    if engine is None:
-        print("  ✗ rules engine ....... NOT FOUND — run `fleet install-engine`")
+    if engine is None or _pinned_engine_missing(config_path) is not None:
+        reason = _pinned_engine_missing(config_path) or "NOT FOUND — run `fleet install-engine`"
+        print(f"  ✗ rules engine ....... {reason}")
     else:
         checks = doctor(engine=engine)
         print(f"  ✓ rules engine ....... {engine}{where}")
@@ -1056,6 +1086,9 @@ def _run_validate(args: argparse.Namespace) -> None:
         )
     except ValidationSetupError as exc:
         _fail(str(exc), code=_VALIDATE_COULD_NOT_RUN)
+
+    for skipped in sweep.skipped:
+        print(f"Skipped: {skipped.name} (not a dataset file)")
 
     results = []
     for standard, datasets in sweep.runs().items():
@@ -1358,13 +1391,16 @@ def _run_check(args: argparse.Namespace) -> None:
                 rows.append(("PASS", "custom rules", f"{len(rule_files)} rule file(s) valid"))
 
     # ── 5. Doctor essentials (informational — never fail the gate) ──
+    pinned_missing = _pinned_engine_missing(config_path)
     if setups:
         engine, where = setups[0].engine.value, f" ({setups[0].engine.source})"
     else:
         from fleet.validation.engine import discover_engine
 
         engine, where = discover_engine(ctx.study_root if ctx is not None else None), ""
-    if engine is not None:
+    if pinned_missing is not None:
+        rows.append(("WARN", "rules engine", pinned_missing))
+    elif engine is not None:
         rows.append(("PASS", "rules engine", f"{engine}{where}"))
     else:
         rows.append(("WARN", "rules engine", "not found (run `fleet install-engine`)"))
@@ -2625,7 +2661,8 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         dest="standard_version",
         default=None,
         help=(
-            "IG version. Default: the sdtm/adam ig_version declared in the "
+            "IG version. It applies to every dataset of the run, SDTM and ADaM. "
+            "Default: the sdtm/adam ig_version declared in the "
             "discovered study_config.yaml (3.4 / 1.3 outside a study)."
         ),
     )

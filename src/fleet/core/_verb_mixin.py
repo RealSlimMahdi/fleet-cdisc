@@ -2043,7 +2043,7 @@ class SharedVerbsMixin:
         """
         from fleet.core.lineage import latest_lineage_of
         from fleet.validation.lineage_join import enrich_with_lineage
-        from fleet.validation.run_setup import build_run_setup
+        from fleet.validation.run_setup import build_run_setup, missing_engine_reason
         from fleet.validation.service import ValidationService
 
         _check_on_fail("validate", on_fail)
@@ -2054,6 +2054,8 @@ class SharedVerbsMixin:
             custom_rules=custom_rules,
             engine=rules_engine_path,
         )
+        if setup.engine.value is None:
+            raise ValidationSetupError(missing_engine_reason(setup))
         svc = ValidationService(rules_engine_path=setup.engine.value)
 
         if setup.standard.value == "adam":

@@ -305,3 +305,209 @@ def test_no_install_hint_names_a_repo_only_command_or_a_missing_extra() -> None:
     ]
 
     assert offenders == []
+
+
+# ── c1-834 c1-241 c1-836: the directory sweep ──
+
+
+def _write_study(root: Path, body: str = "") -> Path:
+    cfg = root / "study_config.yaml"
+    cfg.write_text("study_id: S01\n" + body, encoding="utf-8")
+    return cfg
+
+
+def _dataset_json(path: Path) -> None:
+    import polars as pl
+
+    from fleet.io.dataset_json import save_dataset_json
+
+    save_dataset_json(pl.DataFrame({"USUBJID": ["S1-001"]}), path, domain=path.stem.upper())
+
+
+class TestSweep:
+    def test_upper_case_suffixes_and_dataset_json_are_swept_others_skipped(
+        self, tmp_path: Path
+    ) -> None:
+        from fleet.validation.run_setup import build_sweep
+
+        data = tmp_path / "mixed"
+        data.mkdir()
+        for name in ("dm.parquet", "AE.XPT"):
+            (data / name).write_bytes(b"x")
+        _dataset_json(data / "vs.json")
+        (data / "pipeline_dag.json").write_text('{"nodes": []}', encoding="utf-8")
+        (data / ".hidden.parquet").write_bytes(b"x")
+
+        sweep = build_sweep([data], environ={}, start=tmp_path)
+
+        assert [d.path.name for d in sweep.datasets] == ["AE.XPT", "dm.parquet", "vs.json"]
+        assert [p.name for p in sweep.skipped] == ["pipeline_dag.json"]
+
+    def test_fleet_validate_names_each_skipped_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ) -> None:
+        from fleet.cli import main
+
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "notes.txt").write_text("x", encoding="utf-8")
+        with patch("sys.argv", ["fleet", "validate", str(tmp_path)]):
+            with pytest.raises(SystemExit):
+                main()
+
+        assert "Skipped: notes.txt" in capsys.readouterr().err
+
+    def test_a_folder_both_standards_share_is_swept_once_by_file_name(self, tmp_path: Path) -> None:
+        from fleet.validation.run_setup import build_sweep
+
+        _write_study(tmp_path, "paths:\n  sdtm_data: data\n  adam_data: data\n")
+        (tmp_path / "data").mkdir()
+        for name in ("dm.parquet", "adsl.parquet"):
+            (tmp_path / "data" / name).write_bytes(b"x")
+        (tmp_path / "core").touch()
+
+        sweep = build_sweep(
+            config=tmp_path / "study_config.yaml", engine=tmp_path / "core", environ={}
+        )
+
+        by_name = {d.name: d.setup.standard.value for d in sweep.datasets if d.setup}
+        assert by_name == {"ADSL": "adam", "DM": "sdtm"}
+        assert sweep.could_not_run == []
+
+    def test_a_nested_adam_folder_names_adam(self, tmp_path: Path) -> None:
+        from fleet.validation.run_setup import build_run_setup
+
+        _write_study(tmp_path, "paths:\n  sdtm_data: data\n  adam_data: data/adam\n")
+        (tmp_path / "data" / "adam").mkdir(parents=True)
+
+        adsl = build_run_setup(path=tmp_path / "data" / "adam" / "adsl.parquet", start=tmp_path)
+        dm = build_run_setup(path=tmp_path / "data" / "dm.parquet", start=tmp_path)
+
+        assert (adsl.standard.value, dm.standard.value) == ("adam", "sdtm")
+
+    def test_an_adam_name_in_the_sdtm_folder_is_still_refused(self, tmp_path: Path) -> None:
+        from fleet.core.exceptions import ValidationSetupError
+        from fleet.validation.run_setup import build_run_setup
+
+        _write_study(tmp_path)
+        (tmp_path / "data" / "sdtm").mkdir(parents=True)
+
+        with pytest.raises(ValidationSetupError, match="standard unclear"):
+            build_run_setup(path=tmp_path / "data" / "sdtm" / "adsl.parquet", start=tmp_path)
+
+
+# ── c1-838: ValidationService refuses an unsupported IG version ──
+
+
+class TestServiceVersion:
+    @pytest.mark.parametrize("version", ["banana", "3.1.3"])
+    def test_an_unsupported_version_is_refused(self, version: str) -> None:
+        from unittest.mock import MagicMock
+
+        import polars as pl
+
+        from fleet.core.exceptions import ValidationSetupError
+        from fleet.validation import ValidationService
+
+        provider = MagicMock()
+        svc = ValidationService(provider=provider)
+
+        with pytest.raises(ValidationSetupError, match=f"SDTMIG {version}"):
+            svc.validate_sdtm(pl.DataFrame({"A": [1]}), domain="AE", version=version)
+        with pytest.raises(ValidationSetupError):
+            svc.validate_datasets(
+                {"AE": pl.DataFrame({"A": [1]})}, standard="sdtm", version=version
+            )
+        provider.validate_sdtm.assert_not_called()
+
+    @pytest.mark.parametrize("version", ["3.4", "3-4"])
+    def test_a_supported_version_runs(self, version: str) -> None:
+        from unittest.mock import MagicMock
+
+        import polars as pl
+
+        from fleet.validation import ValidationService
+
+        provider = MagicMock()
+        ValidationService(provider=provider).validate_sdtm(
+            pl.DataFrame({"A": [1]}), domain="AE", version=version
+        )
+
+        assert provider.validate_sdtm.call_args.kwargs["version"] == "3.4"
+
+    def test_validate_core_refuses_3_1_3(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import polars as pl
+
+        from fleet.core.exceptions import ValidationSetupError
+        from fleet.define_xml.checker import DatasetChecker
+
+        monkeypatch.chdir(tmp_path)
+        checker = DatasetChecker.__new__(DatasetChecker)
+        checker._data = {"study": {"standard": "SDTMIG", "standard_version": "3.1.3"}}
+
+        with pytest.raises(ValidationSetupError, match="SDTMIG 3.1.3"):
+            checker.validate_core(pl.DataFrame({"A": [1]}), "AE")
+
+
+# ── c1-523: an absent pinned engine is refused, never replaced ──
+
+
+class TestPinnedEngine:
+    @pytest.fixture
+    def study(self, tmp_path: Path) -> Path:
+        _write_study(tmp_path, "validation:\n  engine_path: tools/core/core\n")
+        managed = tmp_path / "managed-core"
+        managed.touch()
+        return tmp_path
+
+    def test_the_run_setup_has_no_engine_and_names_the_pin(self, study: Path) -> None:
+        from fleet.validation.run_setup import build_run_setup, missing_engine_reason
+
+        setup = build_run_setup(
+            name="AE",
+            namespace="sdtm",
+            start=study,
+            environ={"FLEET_RULES_ENGINE": str(study / "managed-core")},
+        )
+
+        assert (setup.engine.value, setup.engine.source) == (None, "study config")
+        assert "tools/core/core" in missing_engine_reason(setup)
+
+    def test_the_verb_refuses(self, study: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        import polars as pl
+
+        from fleet.core.exceptions import ValidationSetupError
+
+        monkeypatch.chdir(study)
+        monkeypatch.setenv("FLEET_RULES_ENGINE", str(study / "managed-core"))
+        ae = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ S1-002  │
+└─────────┘
+""")
+
+        with pytest.raises(ValidationSetupError, match="tools/core/core"):
+            ae.sdtm.validate("AE")
+
+    def test_fleet_check_warns_with_the_pinned_path(
+        self, study: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ) -> None:
+        from fleet.cli import main
+
+        monkeypatch.setenv("FLEET_RULES_ENGINE", str(study / "managed-core"))
+        argv = ["fleet", "check", "--config", str(study / "study_config.yaml")]
+        with patch("sys.argv", argv):
+            try:
+                main()
+            except SystemExit:
+                pass
+
+        out = capsys.readouterr().out
+        assert "[WARN] rules engine" in out
+        assert "tools/core/core" in out
+        assert "[PASS] rules engine" not in out

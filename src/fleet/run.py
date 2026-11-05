@@ -21,6 +21,7 @@ import polars as pl
 from fleet.core.define_spec import load_define_spec
 from fleet.core.exceptions import PinError, SpecError, StudyRunError
 from fleet.core.frames import frame as _frame
+from fleet.validation.run_setup import DATA_EXTENSIONS
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping, Sequence
@@ -52,7 +53,7 @@ InputSource = Literal[
 ]
 
 #: Dataset file extensions searched by name in the data directories.
-DATASET_EXTENSIONS = (".parquet", ".csv", ".xpt", ".sas7bdat", ".json")
+DATASET_EXTENSIONS = DATA_EXTENSIONS
 
 
 @dataclass(frozen=True)
