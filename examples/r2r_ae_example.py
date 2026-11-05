@@ -159,7 +159,7 @@ _adae_base_ns = (
     # partial end to the last day. The SAP decides the rule.
     .date("ASTDT", source="AESTDTC", min_date="TRTSDT")
     .date("AENDT", source="AEENDTC", impute="last")
-    .duration("ADY", start="TRTSDT", end="ASTDT")
+    .study_day("ADY", date_col="ASTDT", ref_col="TRTSDT")
 )
 
 _adae_occds_ns = (

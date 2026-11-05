@@ -115,7 +115,7 @@ adae = (
     .source("AEREL").source("AEOUT").source("AEACN")
     .date("ASTDT", source="AESTDTC")
     .date("AENDT", source="AEENDTC")
-    .duration("ADY", start="TRTSDT", end="ASTDT")
+    .study_day("ADY", date_col="ASTDT", ref_col="TRTSDT")
     .to_frame()
     .adam.occds
     .treatment_emergent("TRTEMFL",

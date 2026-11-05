@@ -60,7 +60,7 @@ def test_to_spec_yaml_on_a_broken_plan_raises_a_derivation_error():
     ns = _ae().sdtm.derivation("X", expression=pl.col("AETERM"))
     broken = ns._with_lazy(ns._lazy.select(pl.col("NOPE")))
     with pytest.raises(DerivationError, match="NOPE"):
-        broken.to_spec_yaml("AE")
+        broken.to_spec_yaml(dataset="AE")
 
 
 # ── c1-59 seq(check_uniqueness=True) ─────────────────────────────────────
@@ -315,7 +315,7 @@ def test_to_spec_yaml_writes_the_codelist_and_its_terms():
 │ A       ┆ M   │
 └─────────┴─────┘
 """)
-    text = dm.sdtm.assign("SEX", source="sex", ct=_SEX).to_spec_yaml("DM")
+    text = dm.sdtm.assign("SEX", source="sex", ct=_SEX).to_spec_yaml(dataset="DM")
     data = yaml.safe_load(text)
     sex = next(v for v in data["datasets"][0]["variables"] if v["name"] == "SEX")
     assert sex["codelist"] == "C66731"
@@ -342,7 +342,7 @@ def test_to_spec_yaml_round_trip_gives_a_codelist_ref(tmp_path):
 └─────────┴─────────┴─────┘
 """)
     path = tmp_path / "define.yaml"
-    dm.sdtm.assign("SEX", source="sex", ct=_SEX).to_spec_yaml("DM", path)
+    dm.sdtm.assign("SEX", source="sex", ct=_SEX).to_spec_yaml(dataset="DM", path=path)
     xml = DefineSpecGenerator(path, validate_xml=False).to_xml_string()
     assert xml.count("<CodeListRef") == 1
 
@@ -359,7 +359,7 @@ def test_a_bare_codelist_id_with_no_terms_writes_a_todo_and_no_codelist():
 """)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        text = dm.sdtm.assign("SEX", source="sex", ct="C99999").to_spec_yaml("DM")
+        text = dm.sdtm.assign("SEX", source="sex", ct="C99999").to_spec_yaml(dataset="DM")
     assert "# TODO: no codelist terms were known for SEX (C99999)" in text
     assert "\ncodelists:" not in text
     assert "codelist: C99999" not in text
@@ -379,7 +379,7 @@ def test_to_spec_yaml_round_trip_keeps_the_nsv_evaluator(tmp_path):
         "AETOXG", source="tox", label="Toxicity Grade", origin="Collected", evaluator="INVESTIGATOR"
     )
     path = tmp_path / "define.yaml"
-    text = ns.to_spec_yaml("AE", path)
+    text = ns.to_spec_yaml(dataset="AE", path=path)
     assert "evaluator: INVESTIGATOR" in text
     supp = ae.sdtm.from_spec(path, dataset="AE").export_supp(idvar="AESEQ")
     row = supp.row(0, named=True)

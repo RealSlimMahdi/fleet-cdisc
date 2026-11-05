@@ -916,7 +916,7 @@ def test_c1_175_a_dotted_verb_round_trips_through_to_spec_yaml(tmp_path):
     ns = adae.adam.occds.treatment_emergent(
         "TRTEMFL", start_date="ASTDT", end_date="AENDT", trtsdt="TRTSDT"
     )
-    text = ns.to_spec_yaml("ADAE")
+    text = ns.to_spec_yaml(dataset="ADAE")
     blocks = {
         v["name"]: v.get("derivation") for v in yaml.safe_load(text)["datasets"][0]["variables"]
     }
@@ -1194,7 +1194,7 @@ def test_c1_202_a_target_changed_after_a_read_is_a_stub():
         .assign("FLG", value="B")
     )
     with pytest.warns(UserWarning, match="FLG is changed after COPY read it"):
-        text = ns.to_spec_yaml("ADX")
+        text = ns.to_spec_yaml(dataset="ADX")
     assert _blocks(text)["FLG"] == {"algorithm": "derivation", "callable": "TODO_FLG"}
 
 
@@ -1210,7 +1210,7 @@ def test_c1_737_a_target_derived_from_itself_is_a_stub():
 """)
     ns = adlb.adam.assign("AVAL", source="LBSTRESN").derivation("AVAL", expression="AVAL.round(2)")
     with pytest.warns(UserWarning, match="the last step of AVAL reads AVAL"):
-        text = ns.to_spec_yaml("ADLB")
+        text = ns.to_spec_yaml(dataset="ADLB")
     assert _blocks(text)["AVAL"]["callable"] == "TODO_AVAL"
 
 
@@ -1219,7 +1219,7 @@ def test_c1_737_a_plain_overwrite_still_writes_its_block():
     ns = df.sdtm.assign("COL", source="a").assign("COL", source="b")
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        text = ns.to_spec_yaml("DM")
+        text = ns.to_spec_yaml(dataset="DM")
     assert _blocks(text)["COL"] == {"algorithm": "assign", "source": "b"}
 
 

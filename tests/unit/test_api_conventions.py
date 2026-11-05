@@ -33,8 +33,6 @@ _POSITIONAL_ALLOWANCE: dict[str, int] = {
     # (name, frame) pairs — the pair IS the target; both positional-only.
     "pin": 2,
     "repin": 2,
-    # (dataset, path) — dataset selection plus optional output path.
-    "to_spec_yaml": 2,
     # (paramcd, param) — the PARAMCD/PARAM pair is the target of a TTE param.
     "param": 2,
     # TDD multi-target verbs: the target is a column pair, both positional.

@@ -235,7 +235,7 @@ def test_c1_256_c1_260_epoch_has_13_members() -> None:
 
 def test_c1_256_to_spec_yaml_with_ct_epoch_writes_the_concept_id() -> None:
     raw = pl.DataFrame({"ep": ["SCREENING"]})
-    text = raw.sdtm.assign("EPOCH", source="ep", ct=Epoch).to_spec_yaml("SE")
+    text = raw.sdtm.assign("EPOCH", source="ep", ct=Epoch).to_spec_yaml(dataset="SE")
     assert "C99079" in text
 
 
