@@ -111,9 +111,10 @@ class EXTLGNamespace(BuilderVerbsMixin):
             pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
-            Zero-config EX summary::
+            EX summary, ADSL arm in TRT01A::
 
-                ard = adex.tlg.ex.t_summary(groupby="TRTA", adsl=adsl)
+                spec = EXSummarySpec(adsl_group_col="TRT01A")
+                ard = adex.tlg.ex.t_summary(spec=spec, adsl=adsl)
 
             Custom spec with pooled arms::
 
@@ -121,6 +122,7 @@ class EXTLGNamespace(BuilderVerbsMixin):
 
                 spec = EXSummarySpec(
                     pools=[GroupPool(label="Total", arms="*")],
+                    adsl_group_col="TRT01A",
                 )
                 ard = adex.tlg.ex.t_summary(spec=spec, adsl=adsl)
         """

@@ -75,7 +75,7 @@ YAML-spec front door that reproduces a table from a file alone.
 
     ```python
     ard = (
-        adae.tlg.ae.population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
+        adae.tlg.ae.population(adsl, adsl_filter=pl.col("SAFFL") == "Y", group_col="TRT01A")
         .by("TRTA")
         .header_rows(
             [
@@ -100,8 +100,9 @@ YAML-spec front door that reproduces a table from a file alone.
             OverallStat(label="Serious AEs", filter=pl.col("AESER") == "Y"),
         ],
         pools=[GroupPool(label="Total", arms="*")],
+        adsl_group_col="TRT01A",
     )
-    ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl, spec=spec)
+    ard = adae.tlg.ae.t_summary(adsl=adsl, spec=spec)
     ```
 
 === "YAML spec file"

@@ -346,7 +346,8 @@ class DSTLGNamespace(BuilderVerbsMixin):
         Examples:
             Deviation counts over ADDV::
 
-                ard = addv.tlg.ds.t_deviations(groupby="TRTA", adsl=adsl)
+                spec = DSDeviationsSpec(adsl_group_col="TRT01A")
+                ard = addv.tlg.ds.t_deviations(spec=spec, adsl=adsl)
         """
         return summarize_spec(self._df, spec or DSDeviationsSpec(), groupby=groupby, adsl=adsl)
 

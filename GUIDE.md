@@ -1025,8 +1025,9 @@ spec = AESummarySpec(
     statistics=[Statistic.N_SUBJECTS, Statistic.N_PCT, Statistic.N_EVENTS],
     pools=[GroupPool(label="Total", arms="*")],
     column_order=["Placebo", "Drug A", "Drug B", "Total"],
+    adsl_group_col="TRT01A",
 )
-ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl, spec=spec)
+ard = adae.tlg.ae.t_summary(adsl=adsl, spec=spec)
 ```
 
 ### Inline fluent builder

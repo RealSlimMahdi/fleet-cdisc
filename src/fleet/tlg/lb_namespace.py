@@ -290,9 +290,10 @@ class LBTLGNamespace(BuilderVerbsMixin):
                 ``warning``, ``error``, ``context``.
 
         Examples:
-            Zero-config lab summary::
+            lab summary, ADSL arm in TRT01A::
 
-                ard = adlb.tlg.lb.t_summary(groupby="TRTA", adsl=adsl)
+                spec = LBSummarySpec(adsl_group_col="TRT01A")
+                ard = adlb.tlg.lb.t_summary(spec=spec, adsl=adsl)
 
             Custom spec with pooled arms::
 
@@ -300,7 +301,10 @@ class LBTLGNamespace(BuilderVerbsMixin):
 
                 from fleet.tlg.lb_namespace import LBSummarySpec
 
-                spec = LBSummarySpec(pools=[GroupPool(label="Total", arms="*")])
+                spec = LBSummarySpec(
+                    pools=[GroupPool(label="Total", arms="*")],
+                    adsl_group_col="TRT01A",
+                )
                 ard = adlb.tlg.lb.t_summary(spec=spec, adsl=adsl)
         """
         return summarize_spec(self._df, spec or LBSummarySpec(), groupby=groupby, adsl=adsl)
@@ -334,7 +338,10 @@ class LBTLGNamespace(BuilderVerbsMixin):
             pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
-            ``ard = adlb.tlg.lb.t_chg(groupby="TRTA", adsl=adsl)``
+            ADSL arm in TRT01A::
+
+                spec = LBChgSpec(adsl_group_col="TRT01A")
+                ard = adlb.tlg.lb.t_chg(spec=spec, adsl=adsl)
         """
         return summarize_spec(self._df, spec or LBChgSpec(), groupby=groupby, adsl=adsl)
 
@@ -381,7 +388,10 @@ class LBTLGNamespace(BuilderVerbsMixin):
                 missing.
 
         Examples:
-            ``ard = adlb.tlg.lb.t_shift(groupby="TRTA", adsl=adsl)``
+            ADSL arm in TRT01A::
+
+                spec = LBShiftSpec(adsl_group_col="TRT01A")
+                ard = adlb.tlg.lb.t_shift(spec=spec, adsl=adsl)
         """
         spec = spec or LBShiftSpec()
         if spec.rows or spec.header_rows:
@@ -470,10 +480,17 @@ class LBTLGNamespace(BuilderVerbsMixin):
                 is in ``low_values`` or ``high_values``.
 
         Examples:
-            ``ard = adlb.tlg.lb.t_abnormal(groupby="TRTA", adsl=adsl)``
+            ADSL arm in TRT01A::
 
-            ``ard = adlb.tlg.lb.t_abnormal(groupby="TRTA", adsl=adsl,
-            spec=LBAbnormalSpec(low_values=["L"], high_values=["H"]))``
+                spec = LBAbnormalSpec(adsl_group_col="TRT01A")
+                ard = adlb.tlg.lb.t_abnormal(spec=spec, adsl=adsl)
+
+            Sponsor low and high flags::
+
+                spec = LBAbnormalSpec(
+                    low_values=["L"], high_values=["H"], adsl_group_col="TRT01A"
+                )
+                ard = adlb.tlg.lb.t_abnormal(spec=spec, adsl=adsl)
         """
         spec = spec or LBAbnormalSpec()
         group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")

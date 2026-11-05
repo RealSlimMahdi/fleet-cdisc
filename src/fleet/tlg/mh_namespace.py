@@ -68,7 +68,10 @@ class MHTLGNamespace(BuilderVerbsMixin):
             pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
-            ``ard = admh.tlg.mh.t_summary(groupby="TRTA", adsl=adsl)``
+            ADSL arm in TRT01A::
+
+                spec = MHSummarySpec(adsl_group_col="TRT01A")
+                ard = admh.tlg.mh.t_summary(spec=spec, adsl=adsl)
         """
         return summarize_spec(self._df, spec or MHSummarySpec(), groupby=groupby, adsl=adsl)
 

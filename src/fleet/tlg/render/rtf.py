@@ -319,7 +319,8 @@ def render_rtf(
     Examples:
         Inline AE summary to a submission RTF::
 
-            ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl)
+            spec = AESummarySpec(adsl_group_col="TRT01A")
+            ard = adae.tlg.ae.t_summary(spec=spec, adsl=adsl)
             model = ard_to_table_model(ard, RenderMetadata(title="Table 14.3.1.1"))
             render_rtf(model, "outputs/t_ae_summary.rtf")
 

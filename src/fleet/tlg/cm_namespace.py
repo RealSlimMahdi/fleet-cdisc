@@ -118,16 +118,20 @@ class CMTLGNamespace(BuilderVerbsMixin):
                 ``warning``, ``error``, ``context``.
 
         Examples:
-            Zero-config CM summary (all records)::
+            CM summary (all records), ADSL arm in TRT01A::
 
-                ard = adcm.tlg.cm.t_summary(groupby="TRTA", adsl=adsl)
+                spec = CMSummarySpec(adsl_group_col="TRT01A")
+                ard = adcm.tlg.cm.t_summary(spec=spec, adsl=adsl)
 
             Concomitant medications only, as NEST CMT01A::
 
                 from fleet.tlg import CMSummarySpec
 
-                spec = CMSummarySpec(dataset_filter='pl.col("ATIREL") == "CONCOMITANT"')
-                ard = adcm.tlg.cm.t_summary(groupby="TRTA", adsl=adsl, spec=spec)
+                spec = CMSummarySpec(
+                    dataset_filter='pl.col("ATIREL") == "CONCOMITANT"',
+                    adsl_group_col="TRT01A",
+                )
+                ard = adcm.tlg.cm.t_summary(spec=spec, adsl=adsl)
 
             Custom spec with pooled arms::
 
@@ -135,6 +139,7 @@ class CMTLGNamespace(BuilderVerbsMixin):
 
                 spec = CMSummarySpec(
                     pools=[GroupPool(label="Total", arms="*")],
+                    adsl_group_col="TRT01A",
                 )
                 ard = adcm.tlg.cm.t_summary(spec=spec, adsl=adsl)
         """
@@ -169,7 +174,10 @@ class CMTLGNamespace(BuilderVerbsMixin):
             pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
-            ``ard = adcm.tlg.cm.t_by_pt(groupby="TRTA", adsl=adsl)``
+            ADSL arm in TRT01A::
+
+                spec = CMByPTSpec(adsl_group_col="TRT01A")
+                ard = adcm.tlg.cm.t_by_pt(spec=spec, adsl=adsl)
         """
         return summarize_spec(self._df, spec or CMByPTSpec(), groupby=groupby, adsl=adsl)
 

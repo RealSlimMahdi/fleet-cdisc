@@ -1263,7 +1263,7 @@ adsl = (
     .from_spec(
         ADAM_SPEC,
         dataset="ADSL",
-        omit=["STUDYID", "TRT01P", "TRT01A"],
+        omit=["TRT01P", "TRT01A"],
     )
     .select(spec=ADAM_SPEC, dataset="ADSL")
     .write_parquet(OUT / "adsl.parquet")

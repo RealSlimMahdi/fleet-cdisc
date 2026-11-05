@@ -215,6 +215,9 @@ The high findings of the alpha audit (`HIGH-REMAINING.md`), fixed with the decis
 - c1-355: the `param()` docstring and ADR-0043 state that an event or censor date before `start` is set to `start` and keeps its CNSR (admiral ADT = max(ADT, STARTDT)).
 - c1-119: a `--DTC` value with a hyphen in the time (`2021-03-15T08:-:45`) now gives 08:00:00 with TMF `M`, as admiral, not 00:00:00 with TMF `H`.
 - c1-487: the R benchmark scripts reported the R peak memory from the wrong `gc()` column (a cell count, not MB).
+- `fleet run` on the CDISCPILOT01 example stopped at ADSL with "would overwrite the existing column 'STUDYID'". The pilot ADSL now copies STUDYID from DM (Predecessor `DM.STUDYID`) and declares EX as an input for TRTSDT and TRTEDT. The SDTM AESEQ and EXSEQ get `algorithm: seq`. The run builds DM, AE, VS, EX and ADSL from the raw inputs.
+- The lineage capture compared a verb argument with a None default by `==`. A frame or expression argument (`flag_exists(from_dataset=...)`) gave the Polars warning "Comparisons with None". It now tests None by identity.
+- The TLG docstring examples (`t_summary(groupby="TRTA", adsl=adsl)` and the other `t_*` methods), the render examples, docs/api/tlg.md and GUIDE.md failed on an ADSL that holds the arm as TRT01A. They now set `adsl_group_col="TRT01A"` on the spec, or `population(adsl, group_col="TRT01A")` in the builder.
 
 #### Removed
 

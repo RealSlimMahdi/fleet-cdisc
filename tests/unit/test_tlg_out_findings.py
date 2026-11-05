@@ -76,6 +76,34 @@ def test_no_source_docstring_calls_the_ard_cards_compatible() -> None:
     assert hits == []
 
 
+# The t_summary example runs on an ADSL that holds the arm as TRT01A only.
+
+
+def test_the_t_summary_docstring_example_runs_on_an_adsl_with_trt01a() -> None:
+    import textwrap
+
+    from fleet.tlg import AESummarySpec
+    from fleet.tlg.ae_namespace import AETLGNamespace
+
+    doc = AETLGNamespace.t_summary.__doc__ or ""
+    block = doc.split("ADSL arm in TRT01A::\n\n")[1].split("\n\n")[0]
+    adsl = _adsl().rename({"TRTA": "TRT01A"})
+    scope = {"adae": _adae(), "adsl": adsl, "AESummarySpec": AESummarySpec}
+
+    exec(textwrap.dedent(block), scope)
+
+    assert scope["ard"].height > 0
+
+
+def test_no_tlg_docstring_groups_by_trta_on_the_adsl() -> None:
+    hits = [
+        str(p.relative_to(_SRC))
+        for p in (_SRC / "tlg").rglob("*.py")
+        if 'groupby="TRTA", adsl=adsl' in p.read_text(encoding="utf-8")
+    ]
+    assert hits == []
+
+
 # c1-302: fleet tlg export --population passes the filter to adsl_filter.
 
 

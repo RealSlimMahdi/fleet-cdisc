@@ -1508,7 +1508,7 @@ def summarize_spec(
             engine refusal (see :func:`summarize_ard`).
 
     Examples:
-        ``ard = summarize_spec(admh, MHSummarySpec(), groupby="TRTA", adsl=adsl)``
+        ``ard = summarize_spec(admh, MHSummarySpec(adsl_group_col="TRT01A"), adsl=adsl)``
     """
     group_col = groupby or spec.default_group_col(df.columns)
     spec.validate_dataframe(df, group_col=group_col)

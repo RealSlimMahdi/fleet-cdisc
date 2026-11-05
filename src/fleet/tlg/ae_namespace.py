@@ -308,9 +308,10 @@ class AETLGNamespace(BuilderVerbsMixin):
                 ``warning``, ``error``, ``context``.
 
         Examples:
-            Zero-config AE summary::
+            AE summary, ADSL arm in TRT01A::
 
-                ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl)
+                spec = AESummarySpec(adsl_group_col="TRT01A")
+                ard = adae.tlg.ae.t_summary(spec=spec, adsl=adsl)
 
             Custom spec with pooled arms::
 
@@ -318,6 +319,7 @@ class AETLGNamespace(BuilderVerbsMixin):
 
                 spec = AESummarySpec(
                     pools=[GroupPool(label="Total", arms="*")],
+                    adsl_group_col="TRT01A",
                 )
                 ard = adae.tlg.ae.t_summary(spec=spec, adsl=adsl)
         """
@@ -351,7 +353,10 @@ class AETLGNamespace(BuilderVerbsMixin):
             pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
-            ``ard = adae.tlg.ae.t_overview(groupby="TRTA", adsl=adsl)``
+            ADSL arm in TRT01A::
+
+                spec = AEOverviewSpec(adsl_group_col="TRT01A")
+                ard = adae.tlg.ae.t_overview(spec=spec, adsl=adsl)
         """
         return summarize_spec(self._df, spec or AEOverviewSpec(), groupby=groupby, adsl=adsl)
 
@@ -377,7 +382,10 @@ class AETLGNamespace(BuilderVerbsMixin):
             pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
-            ``ard = adae.tlg.ae.t_soc_pt(groupby="TRTA", adsl=adsl)``
+            ADSL arm in TRT01A::
+
+                spec = AESocPtSpec(adsl_group_col="TRT01A")
+                ard = adae.tlg.ae.t_soc_pt(spec=spec, adsl=adsl)
         """
         return summarize_spec(self._df, spec or AESocPtSpec(), groupby=groupby, adsl=adsl)
 
@@ -409,7 +417,10 @@ class AETLGNamespace(BuilderVerbsMixin):
             tern ``count_occurrences_by_grade``; GDSR AET03.
 
         Examples:
-            ``ard = adae.tlg.ae.t_severity(groupby="TRTA", adsl=adsl)``
+            ADSL arm in TRT01A::
+
+                spec = AESeveritySpec(adsl_group_col="TRT01A")
+                ard = adae.tlg.ae.t_severity(spec=spec, adsl=adsl)
         """
         return summarize_spec(self._df, spec or AESeveritySpec(), groupby=groupby, adsl=adsl)
 
@@ -434,7 +445,10 @@ class AETLGNamespace(BuilderVerbsMixin):
             pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
-            ``ard = adae.tlg.ae.t_grade(groupby="TRTA", adsl=adsl)``
+            ADSL arm in TRT01A::
+
+                spec = AEGradeSpec(adsl_group_col="TRT01A")
+                ard = adae.tlg.ae.t_grade(spec=spec, adsl=adsl)
         """
         spec = spec or AEGradeSpec()
         df = self._df
@@ -464,7 +478,10 @@ class AETLGNamespace(BuilderVerbsMixin):
             pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
-            ``ard = adae.tlg.ae.t_relationship(groupby="TRTA", adsl=adsl)``
+            ADSL arm in TRT01A::
+
+                spec = AERelationshipSpec(adsl_group_col="TRT01A")
+                ard = adae.tlg.ae.t_relationship(spec=spec, adsl=adsl)
         """
         return summarize_spec(self._df, spec or AERelationshipSpec(), groupby=groupby, adsl=adsl)
 

@@ -173,9 +173,10 @@ class EGTLGNamespace(BuilderVerbsMixin):
             pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
-            Zero-config EG summary::
+            EG summary, ADSL arm in TRT01A::
 
-                ard = adeg.tlg.eg.t_summary(groupby="TRTA", adsl=adsl)
+                spec = EGSummarySpec(adsl_group_col="TRT01A")
+                ard = adeg.tlg.eg.t_summary(spec=spec, adsl=adsl)
 
             Custom spec with pooled arms::
 
@@ -183,6 +184,7 @@ class EGTLGNamespace(BuilderVerbsMixin):
 
                 spec = EGSummarySpec(
                     pools=[GroupPool(label="Total", arms="*")],
+                    adsl_group_col="TRT01A",
                 )
                 ard = adeg.tlg.eg.t_summary(spec=spec, adsl=adsl)
         """
@@ -215,7 +217,10 @@ class EGTLGNamespace(BuilderVerbsMixin):
             pl.DataFrame: ARD in the {cards} long layout.
 
         Examples:
-            ``ard = adeg.tlg.eg.t_chg(groupby="TRTA", adsl=adsl)``
+            ADSL arm in TRT01A::
+
+                spec = EGChgSpec(adsl_group_col="TRT01A")
+                ard = adeg.tlg.eg.t_chg(spec=spec, adsl=adsl)
         """
         return summarize_spec(self._df, spec or EGChgSpec(), groupby=groupby, adsl=adsl)
 
@@ -257,7 +262,10 @@ class EGTLGNamespace(BuilderVerbsMixin):
                 statistics other than n and n (%).
 
         Examples:
-            ``ard = adeg.tlg.eg.t_qtcat(groupby="TRTA", adsl=adsl)``
+            ADSL arm in TRT01A::
+
+                spec = EGQtcatSpec(adsl_group_col="TRT01A")
+                ard = adeg.tlg.eg.t_qtcat(spec=spec, adsl=adsl)
         """
         spec = spec or EGQtcatSpec()
         if spec.rows or spec.header_rows:

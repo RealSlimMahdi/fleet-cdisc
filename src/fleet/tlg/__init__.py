@@ -9,8 +9,10 @@ accessed via properties:
 Usage
 -----
     import fleet
+    from fleet.tlg import AESummarySpec
 
-    ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl)
+    spec = AESummarySpec(adsl_group_col="TRT01A")
+    ard = adae.tlg.ae.t_summary(spec=spec, adsl=adsl)
 """
 
 from ._ard import (
