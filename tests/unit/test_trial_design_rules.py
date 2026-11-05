@@ -113,6 +113,7 @@ class TestTabranch:
             study_id="S",
             elements=EXT_ELEMENTS,
             arms={"C": ["SCRN", "CORE"], "E": ["SCRN", "CORE", "EXT"]},
+            arm_names={"C": "C", "E": "E"},
         )
         assert ("C", "CORE", "Randomized to C") in _ta_rows(design, "ARMCD", "ETCD", "TABRANCH")
 
@@ -132,6 +133,7 @@ class TestTabranch:
                     "EXT",
                 ],
             },
+            arm_names={"C": "C", "E": "E"},
         )
         rows = _ta_rows(design, "ARMCD", "ETCD", "TABRANCH", "TATRANS")
         assert ("C", "CORE", "Non-responder at end of Core", "") in rows
@@ -143,6 +145,7 @@ class TestTabranch:
             study_id="S",
             elements=EXT_ELEMENTS,
             arms={"C": ["SCRN", "CORE"], "E": ["SCRN", "CORE", "EXT"]},
+            arm_names={"C": "C", "E": "E"},
             randomized_at="SCRN",
         )
         rows = _ta_rows(design, "ARMCD", "ETCD", "TABRANCH")
@@ -153,7 +156,10 @@ class TestTabranch:
 
     def test_identical_paths_get_an_audit_warning(self):
         design = StudyDesign(
-            study_id="S", elements=EXT_ELEMENTS, arms={"A": ["SCRN", "CORE"], "B": ["SCRN", "CORE"]}
+            study_id="S",
+            elements=EXT_ELEMENTS,
+            arms={"A": ["SCRN", "CORE"], "B": ["SCRN", "CORE"]},
+            arm_names={"A": "Arm A", "B": "Arm B"},
         )
         assert "FLEETTD04" in design.audit()["rule_id"].to_list()
 
@@ -182,6 +188,7 @@ class TestPerPositionEpoch:
                     {"etcd": "A", "epoch": "TREATMENT 2"},
                 ],
             },
+            arm_names={"AB": "A then B", "BA": "B then A"},
         )
         rows = _ta_rows(design, "ARMCD", "TAETORD", "ETCD", "EPOCH")
         assert ("BA", 2, "B", "TREATMENT 1") in rows
@@ -196,6 +203,7 @@ class TestPerPositionEpoch:
                 {"etcd": "C1", "element": "Cycle", "epoch": "TREATMENT"},
             ],
             arms={"DRUGX": ["SCRN", "C1", "C1"]},
+            arm_names={"DRUGX": "Drug X"},
         )
         assert "FLEETTD05" in design.audit()["rule_id"].to_list()
 
@@ -204,6 +212,7 @@ class TestPerPositionEpoch:
             study_id="S",
             elements=XO_ELEMENTS,
             arms={"BA": ["SCRN", {"etcd": "B", "epoch": "TREATMENT 1"}, "WO", "A"]},
+            arm_names={"BA": "B then A"},
         )
         path = tmp_path / "td.yaml"
         design.to_yaml(path)
@@ -343,7 +352,10 @@ class TestMermaidStrict:
 
     def test_single_arm_keeps_its_armcd(self):
         design = StudyDesign(
-            study_id="S", elements=EXT_ELEMENTS, arms={"DRUGX": ["SCRN", "CORE", "EXT"]}
+            study_id="S",
+            elements=EXT_ELEMENTS,
+            arms={"DRUGX": ["SCRN", "CORE", "EXT"]},
+            arm_names={"DRUGX": "Drugx"},
         )
         back = StudyDesign.from_mermaid(design.to_mermaid(), study_id="S")
         assert back.arms == design.arms
@@ -353,6 +365,7 @@ class TestMermaidStrict:
             study_id="S",
             elements=XO_ELEMENTS,
             arms={"AB": ["SCRN", "A", "WO", "B"], "BA": ["SCRN", "B", "WO", "A"]},
+            arm_names={"AB": "A then B", "BA": "B then A"},
         )
         with pytest.warns(UserWarning, match="cannot read this design back"):
             text = design.to_mermaid()
@@ -367,6 +380,7 @@ class TestMermaidStrict:
                 {"etcd": "TRT", "element": "Treatment", "epoch": "TREATMENT"},
             ],
             arms={"A": ["SCRN", "TRT"]},
+            arm_names={"A": "Arm A"},
         )
         back = StudyDesign.from_mermaid(design.to_mermaid(), study_id="S")
         assert back.elements[0].element == 'Screening "Part 1"'

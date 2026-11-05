@@ -30,8 +30,8 @@ from __future__ import annotations
 
 import re
 import warnings
-from enum import Enum, StrEnum
-from typing import Annotated, ClassVar, Literal
+from enum import Enum, StrEnum, nonmember
+from typing import Annotated, ClassVar, Literal, get_args
 
 import polars as pl
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -42,7 +42,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class Epoch(StrEnum):
-    """EPOCH (C99079) — all 14 CDISC-standard trial epoch values."""
+    """EPOCH (C99079): the 13 terms of the default CT package."""
 
     SCREENING = "SCREENING"
     BASELINE = "BASELINE"
@@ -58,7 +58,7 @@ class Epoch(StrEnum):
     OBSERVATION = "OBSERVATION"
     PRE_SCREENING = "PRE-SCREENING"
 
-    _concept_id: ClassVar[str] = "C99079"
+    _concept_id = nonmember("C99079")
 
 
 # ------------------------------------------------------------------ #
@@ -69,18 +69,13 @@ class Epoch(StrEnum):
 # then any sponsor-defined term in CT casing (upper-case words).
 EpochLike = Epoch | Annotated[str, Field(min_length=1, max_length=40, pattern=r"^[A-Z0-9 /()\-]+$")]
 
-ElementCode = Annotated[
-    str,
-    Field(min_length=1, max_length=8, pattern=r"^[A-Z0-9_]+$"),
-]
-ArmCode = Annotated[
-    str,
-    Field(min_length=1, max_length=20, pattern=r"^[A-Z0-9_]+$"),
-]
-ISODuration = Annotated[
-    str,
-    Field(pattern=r"^P(?:\d+Y)?(?:\d+M)?(?:\d+W)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+S)?)?$"),
-]
+# SDTMIG 3.4 TE.ETCD and TA.ARMCD: length limits only, no character restriction.
+ElementCode = Annotated[str, Field(min_length=1, max_length=8)]
+ArmCode = Annotated[str, Field(min_length=1, max_length=20)]
+# SDTMIG 3.4 section 4.4.4: PnYnMnDTnHnMnS or PnW, at least one component.
+_ISO_DATE = r"(?:\d+Y(?:\d+M)?(?:\d+D)?|\d+M(?:\d+D)?|\d+D)"
+_ISO_TIME = r"T(?:\d+H(?:\d+M)?(?:\d+S)?|\d+M(?:\d+S)?|\d+S)"
+ISODuration = Annotated[str, Field(pattern=rf"^P(?:\d+W|{_ISO_DATE}(?:{_ISO_TIME})?|{_ISO_TIME})$")]
 RuleExpression = Annotated[str, Field(max_length=2000)]
 
 
@@ -93,8 +88,8 @@ class TrialElement(BaseModel):
     """One row in the TE (Trial Elements) domain.
 
     ``epoch`` is a design-time attribute: SDTMIG 3.4 has no EPOCH variable
-    in TE, so it is excluded from ``to_polars()`` output — but it drives the
-    element→epoch mapping used when deriving TA and SE.
+    in TE, so it is excluded from ``to_polars()`` output, but it drives the
+    element to epoch mapping used when deriving TA.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -156,7 +151,7 @@ class TrialVisit(BaseModel):
         "tvenrl": "TVENRL",
     }
 
-    visitnum: int = Field(ge=1)
+    visitnum: int | float
     visit: str = Field(min_length=1, max_length=200)
     visitdy: int | None = None
     armcd: ArmCode | Literal[""] = ""
@@ -207,7 +202,8 @@ class TrialCriterion(BaseModel):
         "tivers": "TIVERS",
     }
 
-    ietestcd: str = Field(min_length=1, max_length=8, pattern=r"^[A-Z0-9_]+$")
+    # SDTMIG 3.4 TI.IETESTCD: at most 8 characters, letters, digits and underscores, no digit first.
+    ietestcd: str = Field(min_length=1, max_length=8, pattern=r"^[A-Z_][A-Z0-9_]*$")
     ietest: str = Field(min_length=1, max_length=200)
     iecat: Literal["INCLUSION", "EXCLUSION"]
     iescat: str = ""
@@ -260,16 +256,39 @@ class TrialMilestone(BaseModel):
 # ------------------------------------------------------------------ #
 
 
-def _rows_to_polars(rows: list[BaseModel]) -> pl.DataFrame:
-    """Convert row models to a DataFrame with CDISC names via ``_SDTM_MAP``."""
+def _empty_dtype(annotation: object) -> pl.DataType:
+    """The column type of a row-model field when there is no row to infer from."""
+    kinds = {a for a in (get_args(annotation) or (annotation,)) if a is not type(None)}
+    if kinds == {int}:
+        return pl.Int64()
+    if kinds == {int, float}:
+        return pl.Float64()
+    return pl.String()
+
+
+def _rows_to_polars(rows: list[BaseModel], model: type[BaseModel]) -> pl.DataFrame:
+    """Convert row models to a DataFrame with CDISC names via ``_SDTM_MAP``.
+
+    An empty list gives a 0-row frame with every column.  VISITDY is Int64
+    even when every value is null.
+    """
+    sdtm_map: dict[str, str] = model._SDTM_MAP  # type: ignore[attr-defined]
+    if not rows:
+        return pl.DataFrame(
+            schema={
+                sdtm: _empty_dtype(model.model_fields[field].annotation)
+                for field, sdtm in sdtm_map.items()
+            }
+        )
     dicts = [
         {
             sdtm: v.value if isinstance(v := getattr(row, field), Enum) else v
-            for field, sdtm in type(row)._SDTM_MAP.items()
+            for field, sdtm in sdtm_map.items()
         }
         for row in rows
     ]
-    return pl.DataFrame(dicts)
+    overrides = {"VISITDY": pl.Int64} if "VISITDY" in sdtm_map.values() else None
+    return pl.DataFrame(dicts, schema_overrides=overrides)
 
 
 def _split_tsval(text: str, size: int = 200) -> list[str]:
@@ -297,15 +316,6 @@ class TrialElements(BaseModel):
             raise ValueError(f"Duplicate ETCD: {set(dupes)}")
         return self
 
-    @model_validator(mode="after")
-    def check_epochs_consistent(self) -> TrialElements:
-        mapping: dict[str, Epoch] = {}
-        for e in self.elements:
-            if e.etcd in mapping and mapping[e.etcd] != e.epoch:
-                raise ValueError(f"ETCD {e.etcd} maps to multiple EPOCHs")
-            mapping[e.etcd] = e.epoch
-        return self
-
     def to_polars(self) -> pl.DataFrame:
         """Convert validated elements to a Polars DataFrame with SDTM names.
 
@@ -319,7 +329,7 @@ class TrialElements(BaseModel):
                 te = TrialElements(elements=[...])
                 df = te.to_polars()
         """
-        return _rows_to_polars(self.elements)
+        return _rows_to_polars(self.elements, TrialElement)
 
 
 class TrialArms(BaseModel):
@@ -328,16 +338,14 @@ class TrialArms(BaseModel):
     arms: list[TrialArm]
 
     @model_validator(mode="after")
-    def check_taetord_sequential(self) -> TrialArms:
+    def check_taetord_unique(self) -> TrialArms:
+        # PHUSE DS22: TAETORD gives the order, it need not be 1..N with no gap.
         by_arm: dict[str, list[int]] = {}
         for a in self.arms:
             by_arm.setdefault(a.armcd, []).append(a.taetord)
         for armcd, orders in by_arm.items():
-            expected = list(range(1, len(orders) + 1))
-            if sorted(orders) != expected:
-                raise ValueError(
-                    f"TAETORD for {armcd} must be sequential 1..N, got {sorted(orders)}"
-                )
+            if len(orders) != len(set(orders)):
+                raise ValueError(f"TAETORD for {armcd} must be unique, got {sorted(orders)}")
         return self
 
     def to_polars(self) -> pl.DataFrame:
@@ -353,7 +361,7 @@ class TrialArms(BaseModel):
                 ta = TrialArms(arms=[...])
                 df = ta.to_polars()
         """
-        return _rows_to_polars(self.arms)
+        return _rows_to_polars(self.arms, TrialArm)
 
 
 class TrialVisits(BaseModel):
@@ -363,17 +371,14 @@ class TrialVisits(BaseModel):
 
     @model_validator(mode="after")
     def check_visitnum_unique(self) -> TrialVisits:
-        nums = [v.visitnum for v in self.visits]
-        if len(nums) != len(set(nums)):
+        # SDTMIG 3.4 TV: one record per planned visit per arm; a blank ARMCD means all arms.
+        keys = [(v.armcd, v.visitnum) for v in self.visits]
+        if len(keys) != len(set(keys)):
             raise ValueError("Duplicate VISITNUM values")
-        return self
-
-    @model_validator(mode="after")
-    def check_visitdy_ordering(self) -> TrialVisits:
-        sorted_visits = sorted(self.visits, key=lambda v: v.visitnum)
-        days = [v.visitdy for v in sorted_visits if v.visitdy is not None]
-        if days != sorted(days):
-            raise ValueError("VISITDY must increase with VISITNUM")
+        all_arms = {v.visitnum for v in self.visits if not v.armcd}
+        both = sorted({v.visitnum for v in self.visits if v.armcd and v.visitnum in all_arms})
+        if both:
+            raise ValueError(f"VISITNUM {both} has a blank-ARMCD row and an arm row")
         return self
 
     @classmethod
@@ -453,7 +458,7 @@ class TrialVisits(BaseModel):
                 tv = TrialVisits(visits=[...])
                 df = tv.to_polars()
         """
-        return _rows_to_polars(self.visits)
+        return _rows_to_polars(self.visits, TrialVisit)
 
 
 class TrialParameters(BaseModel):
@@ -535,7 +540,7 @@ class TrialParameters(BaseModel):
                 ts = TrialParameters(parameters=[...])
                 df = ts.to_polars()
         """
-        df = _rows_to_polars(self.parameters)
+        df = _rows_to_polars(self.parameters, TrialParameter)
         pieces = [_split_tsval(p.tsval) for p in self.parameters]
         width = max((len(p) for p in pieces), default=1)
         if width == 1:
@@ -557,9 +562,9 @@ class TrialCriteria(BaseModel):
 
     @model_validator(mode="after")
     def check_unique_ietestcd(self) -> TrialCriteria:
-        codes = [c.ietestcd for c in self.criteria]
-        if len(codes) != len(set(codes)):
-            raise ValueError("Duplicate IETESTCD values")
+        keys = [(c.ietestcd, c.tivers) for c in self.criteria]
+        if len(keys) != len(set(keys)):
+            raise ValueError("Duplicate IETESTCD values within one TIVERS")
         return self
 
     def to_polars(self) -> pl.DataFrame:
@@ -575,7 +580,7 @@ class TrialCriteria(BaseModel):
                 ti = TrialCriteria(criteria=[...])
                 df = ti.to_polars()
         """
-        return _rows_to_polars(self.criteria)
+        return _rows_to_polars(self.criteria, TrialCriterion)
 
 
 class TrialDiseaseAssessments(BaseModel):
@@ -603,7 +608,7 @@ class TrialDiseaseAssessments(BaseModel):
                 td = TrialDiseaseAssessments(assessments=[...])
                 df = td.to_polars()
         """
-        return _rows_to_polars(self.assessments)
+        return _rows_to_polars(self.assessments, TrialDiseaseAssessment)
 
 
 class TrialMilestones(BaseModel):
@@ -631,7 +636,7 @@ class TrialMilestones(BaseModel):
                 tm = TrialMilestones(milestones=[...])
                 df = tm.to_polars()
         """
-        return _rows_to_polars(self.milestones)
+        return _rows_to_polars(self.milestones, TrialMilestone)
 
 
 # ------------------------------------------------------------------ #

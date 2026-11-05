@@ -47,12 +47,6 @@ def _pin_frame(name: str, frame: Any) -> pl.DataFrame:
     return frame
 
 
-#: Pipeline columns that the foreign-key check reads.  VISITNUM, VISIT,
-#: EPOCH and ETCD are left out: an unscheduled visit or an unplanned
-#: epoch is a valid value that the trial design does not list.
-_FK_CHECKED: tuple[str, ...] = ("USUBJID",)
-
-
 class PinMixin:
     """Mixin that lets any namespace attach reference-domain DataFrames.
 
@@ -66,7 +60,8 @@ class PinMixin:
       | ``"off"``).
     """
 
-    # Namespace subclasses override with domain-specific rules.
+    # Namespace subclasses override with domain-specific rules. Rule keys: pin, ref_col,
+    # allow (space-separated legal values), max_severity ("warn"), note (added to the message).
     _FK_RULES: ClassVar[dict[str, dict[str, str]]] = {}
 
     # ------------------------------------------------------------------ #
@@ -242,7 +237,9 @@ class PinMixin:
         terminal verbs that call it), on the final frame, with the
         severity in force at that point.  The order of ``pin``,
         ``fk_policy`` and the verbs does not matter.  It checks
-        ``USUBJID`` against the pinned ``DM`` (SDTM) or ``ADSL`` (ADaM).
+        ``USUBJID`` against the pinned ``DM`` (SDTM) or ``ADSL`` (ADaM),
+        and the SDTM trial-design keys of ``_FK_RULES`` against a pinned
+        TA, TE or TV.
 
         Args:
             severity: One of ``"warn"`` (emit ``UserWarning``),
@@ -332,8 +329,8 @@ class PinMixin:
         """Check the foreign keys of the final frame *df* against the pins.
 
         Called by the public ``to_frame()`` only, with the ``fk_policy`` in
-        force on this namespace.  Each column of ``_FK_CHECKED`` that has
-        an ``_FK_RULES`` entry and a pinned reference is checked once.  A
+        force on this namespace.  Each ``_FK_RULES`` column of *df* with a
+        pinned reference is checked once.  A
         warning is given once per namespace; an error raises on every call.
         """
         severity = getattr(self, "_fk_severity", "warn")
@@ -342,9 +339,8 @@ class PinMixin:
         rules: dict[str, dict[str, str]] = self.__class__._FK_RULES
         pinned: dict[str, tuple[pl.DataFrame, list[str]]] = getattr(self, "_pinned", {})
         warned: frozenset[str] = getattr(self, "_fk_warned", frozenset())
-        for col in _FK_CHECKED:
-            rule = rules.get(col)
-            if rule is None or col not in df.columns:
+        for col, rule in rules.items():
+            if col not in df.columns:
                 continue
             pin = rule.get("pin", "").upper()
             ref_col = rule.get("ref_col", col)
@@ -353,14 +349,16 @@ class PinMixin:
             ref_df = pinned[pin][0]
             current_vals = set(df[col].drop_nulls().unique().to_list())
             ref_vals = set(ref_df[ref_col].drop_nulls().unique().to_list())
-            orphans = current_vals - ref_vals
+            orphans = current_vals - ref_vals - set(rule.get("allow", "").split())
             if not orphans:
                 continue
             msg = (
                 f"FK check: {len(orphans)} value(s) in '{col}' not found in "
                 f"pinned {pin}.{ref_col}: {sorted(orphans)[:5]}"
             )
-            if severity == "error":
+            if rule.get("note"):
+                msg += f". {rule['note']}"
+            if severity == "error" and rule.get("max_severity") != "warn":
                 raise DerivationError(msg)
             if msg not in warned:
                 # Rebind, never mutate: earlier chain copies keep their own memo.

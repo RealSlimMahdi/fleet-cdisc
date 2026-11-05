@@ -1239,7 +1239,7 @@ class SharedVerbsMixin:
             terms = set(ct_validator.get_valid_values(ct_codelist))
         if not terms and ct_codelist_cls is not None:
             terms = set(getattr(ct_codelist_cls, "_terms", ())) or {
-                v
+                str(getattr(v, "value", v))  # an Enum member gives its value
                 for k, v in vars(ct_codelist_cls).items()
                 if not k.startswith("__") and k not in _CODELIST_META and isinstance(v, str)
             }

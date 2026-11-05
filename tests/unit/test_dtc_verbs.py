@@ -134,7 +134,9 @@ def _vs(rows: list[tuple[str, str]], rfstdtc: str) -> pl.DataFrame:
 def test_baseline_on_the_reference_date_with_no_time_is_not_eligible() -> None:
     vs = _vs([("SYSBP", "2014-01-05"), ("SYSBP", "2014-01-10")], "2014-01-10T08:30")
 
-    out = vs.sdtm.baseline_flag("VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD").to_frame()
+    out = vs.sdtm.baseline_flag(
+        "VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD", ref_col="RFSTDTC"
+    ).to_frame()
 
     assert out["VSBLFL"].to_list() == ["Y", None]
 
@@ -145,7 +147,9 @@ def test_baseline_on_the_reference_date_before_the_dose_time_is_eligible() -> No
         "2014-01-10T08:30",
     )
 
-    out = vs.sdtm.baseline_flag("VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD").to_frame()
+    out = vs.sdtm.baseline_flag(
+        "VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD", ref_col="RFSTDTC"
+    ).to_frame()
 
     assert out["VSBLFL"].to_list() == [None, "Y", None]
 
@@ -153,7 +157,9 @@ def test_baseline_on_the_reference_date_before_the_dose_time_is_eligible() -> No
 def test_baseline_keeps_one_record_when_the_last_date_has_two_times() -> None:
     vs = _vs([("SYSBP", "2014-01-09T08:00"), ("SYSBP", "2014-01-09T09:00")], "2014-01-10")
 
-    out = vs.sdtm.baseline_flag("VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD").to_frame()
+    out = vs.sdtm.baseline_flag(
+        "VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD", ref_col="RFSTDTC"
+    ).to_frame()
 
     assert out["VSBLFL"].to_list() == [None, "Y"]
 

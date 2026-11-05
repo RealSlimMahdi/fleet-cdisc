@@ -519,7 +519,7 @@ def test_c1_203_baseline_flag_records_its_params():
 └─────────┴──────────┴────────────┴─────────┘
 """)
     ns = vs.sdtm.pin("DM", _DM_DAYS).baseline_flag(
-        "VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD"
+        "VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD", ref_col="RFSTDTC"
     )
     node = lineage_of(ns)[-1]
     assert node.params == {

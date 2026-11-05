@@ -182,9 +182,10 @@ class TestTrialElementValidation:
         with pytest.raises(Exception):
             TrialElement(etcd="TOOLONGCODE", element="Screening", epoch=Epoch.SCREENING)
 
-    def test_reject_lowercase_etcd(self):
-        with pytest.raises(Exception):
-            TrialElement(etcd="scrn", element="Screening", epoch=Epoch.SCREENING)
+    def test_lowercase_and_hyphen_etcd_accepted(self):
+        # c1-252: SDTMIG 3.4 ETCD has no special character restrictions.
+        assert TrialElement(etcd="scrn", element="Screening", epoch=Epoch.SCREENING).etcd == "scrn"
+        assert TrialElement(etcd="TRT-1", element="Treatment", epoch=Epoch.TREATMENT)
 
     def test_reject_empty_element(self):
         with pytest.raises(Exception):
@@ -252,9 +253,10 @@ class TestTrialVisitValidation:
         assert v.visitnum == 1
         assert v.visitdy is None
 
-    def test_reject_visitnum_zero(self):
-        with pytest.raises(Exception):
-            TrialVisit(visitnum=0, visit="Screening")
+    def test_visitnum_zero_and_decimal_accepted(self):
+        # c1-252: TV.VISITNUM is Num with no range.
+        assert TrialVisit(visitnum=0, visit="Screening").visitnum == 0
+        assert TrialVisit(visitnum=1.5, visit="Week 1").visitnum == 1.5
 
     def test_optional_armcd(self):
         v = TrialVisit(visitnum=1, visit="Screening", armcd="")
@@ -317,28 +319,21 @@ class TestTrialArmsCollection:
     def test_valid_collection(self, ta_rows):
         assert len(ta_rows.arms) == 3
 
-    def test_non_sequential_taetord_rejected(self):
-        with pytest.raises(ValueError, match="TAETORD.*sequential"):
-            TrialArms(
-                arms=[
-                    TrialArm(
-                        armcd="PBO",
-                        arm="Placebo",
-                        taetord=1,
-                        etcd="SCRN",
-                        element="Screening",
-                        epoch=Epoch.SCREENING,
-                    ),
-                    TrialArm(
-                        armcd="PBO",
-                        arm="Placebo",
-                        taetord=3,
-                        etcd="TRT",
-                        element="Treatment",
-                        epoch=Epoch.TREATMENT,
-                    ),
-                ]
+    def test_taetord_gap_accepted_and_repeat_rejected(self):
+        # c1-252: PHUSE DS22, TAETORD need not be sequential, only in order.
+        def arm(order: int, etcd: str) -> TrialArm:
+            return TrialArm(
+                armcd="PBO",
+                arm="Placebo",
+                taetord=order,
+                etcd=etcd,
+                element=etcd,
+                epoch=Epoch.TREATMENT,
             )
+
+        assert len(TrialArms(arms=[arm(1, "SCRN"), arm(3, "TRT")]).arms) == 2
+        with pytest.raises(ValueError, match="TAETORD.*unique"):
+            TrialArms(arms=[arm(1, "SCRN"), arm(1, "TRT")])
 
     def test_to_polars(self, ta_rows):
         df = ta_rows.to_polars()
@@ -360,14 +355,15 @@ class TestTrialVisitsCollection:
                 ]
             )
 
-    def test_visitdy_ordering_rejected(self):
-        with pytest.raises(ValueError, match="VISITDY must increase"):
-            TrialVisits(
-                visits=[
-                    TrialVisit(visitnum=1, visit="V1", visitdy=10),
-                    TrialVisit(visitnum=2, visit="V2", visitdy=5),
-                ]
-            )
+    def test_visitdy_out_of_visitnum_order_accepted(self):
+        # c2-958: the CDISC pilot TV has RETRIEVAL 201 with VISITDY 168.
+        tv = TrialVisits(
+            visits=[
+                TrialVisit(visitnum=13, visit="WEEK 26", visitdy=182),
+                TrialVisit(visitnum=201, visit="RETRIEVAL", visitdy=168),
+            ]
+        )
+        assert tv.to_polars()["VISITDY"].to_list() == [182, 168]
 
     def test_to_polars(self, tv_rows):
         df = tv_rows.to_polars()

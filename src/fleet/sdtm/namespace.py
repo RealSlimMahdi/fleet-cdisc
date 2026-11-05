@@ -25,6 +25,7 @@ Discover every available verb programmatically with ``df.sdtm.verbs()``.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Self
 
@@ -62,6 +63,25 @@ _SUPP_COLUMNS = (
 )
 
 
+_QNAM = re.compile(r"^[A-Z_][A-Z0-9_]{0,7}$")
+
+
+def _check_supp_meta(meta: list[NSVMeta]) -> None:
+    """Raise on a QNAM or QLABEL that breaks the SDTMIG 3.4 SUPPQUAL limits."""
+    for m in meta:
+        if not _QNAM.match(m.target):
+            raise DerivationError(
+                f"export_supp(): QNAM '{m.target}' is not valid. A QNAM has at most 8 "
+                "characters: upper-case letters, digits and underscores, and no digit first "
+                "(SDTMIG 3.4 section 8.4). Rename the column."
+            )
+        if not 1 <= len(m.label) <= 40:
+            raise DerivationError(
+                f"export_supp(): QLABEL of {m.target} has {len(m.label)} characters. A QLABEL "
+                "has 1 to 40 characters (SDTMIG 3.4 section 8.4): give label=."
+            )
+
+
 @pl.api.register_dataframe_namespace("sdtm")
 @pl.api.register_lazyframe_namespace("sdtm")
 class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignMixin):
@@ -80,10 +100,21 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
 
     _FK_RULES: dict[str, dict[str, str]] = {
         "USUBJID": {"pin": "DM", "ref_col": "USUBJID"},
-        "VISITNUM": {"pin": "TV", "ref_col": "VISITNUM"},
-        "VISIT": {"pin": "TV", "ref_col": "VISIT"},
-        "EPOCH": {"pin": "TE", "ref_col": "EPOCH"},
-        "ETCD": {"pin": "TE", "ref_col": "ETCD"},
+        # TV holds planned visits only, so an unscheduled visit is never an error.
+        "VISITNUM": {
+            "pin": "TV",
+            "ref_col": "VISITNUM",
+            "max_severity": "warn",
+            "note": "TV holds planned visits only",
+        },
+        "VISIT": {
+            "pin": "TV",
+            "ref_col": "VISIT",
+            "max_severity": "warn",
+            "note": "TV holds planned visits only",
+        },
+        "EPOCH": {"pin": "TA", "ref_col": "EPOCH"},
+        "ETCD": {"pin": "TE", "ref_col": "ETCD", "allow": "UNPLAN"},
     }
 
     def __init__(self, df: pl.DataFrame | pl.LazyFrame) -> None:
@@ -322,8 +353,8 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         ``assign(value=...)`` (when *value* is given) but additionally
         registers SUPPQUAL metadata (label, origin, evaluator) on the
         pipeline.  Use ``export_supp()`` to produce the vertical SUPPQUAL
-        structure for SDTM IG ≤3.4.  For IG 3.5+, NSVs remain in the
-        parent domain via ``to_frame()`` unchanged.
+        structure for SDTM IG ≤3.4.  For a future IG that keeps NSVs in
+        the parent domain, ``to_frame()`` keeps them unchanged.
 
         Args:
             target: Name of the qualifier variable (becomes QNAM in SUPP).
@@ -389,8 +420,8 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         target: str,
         *,
         date_col: str,
-        testcd_col: str | None = None,
-        ref_col: str = "RFSTDTC",
+        testcd_col: str | None,
+        ref_col: str,
         ref_pin: str = "DM",
         dm: pl.DataFrame | None = None,
         by: list[str] | None = None,
@@ -421,10 +452,13 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                 (e.g. ``"VSBLFL"``).
             date_col: Column containing the observation date
                 (e.g. ``"VSDTC"``).
-            testcd_col: Optional test code column to group by
-                (e.g. ``"VSTESTCD"``).  When set, baseline is
-                computed independently for each test.
-            ref_col: Reference date column in DM (default ``"RFSTDTC"``).
+            testcd_col: Test code column to group by (e.g.
+                ``"VSTESTCD"``), so each test gets its own flag.  Required:
+                pass ``None`` only when the frame holds one test.
+            ref_col: Reference date column, in the frame or in the pinned
+                DM.  Required, so the call shows the reference: SDTMIG 3.4
+                ``--LOBXFL`` uses ``"RFXSTDTC"``; a sponsor ``--BLFL``
+                often uses ``"RFSTDTC"``.
             ref_pin: Pinned domain for the reference date
                 (default ``"DM"``).
             dm: Optional explicit DataFrame override.
@@ -446,10 +480,12 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         References:
             SDTMIG 3.4, ``--LOBXFL``: the last non-missing value prior to
             RFXSTDTC; CDISC CORE FB2603/FB2604 (one flag per group);
-            admiral ``ad_advs.R`` order (ADT, VISITNUM, VSSEQ).
+            admiral ``ad_advs.R`` order (ADT, VISITNUM, VSSEQ); sdtm.oak
+            ``derive_blfl`` (no default for ``ref_var``);
+            ``docs/adr/0057-baseline-flag-names-its-reference-and-test-code.md``.
 
         Examples:
-            Flag baseline vital signs::
+            Flag the last value before first exposure::
 
                 vs = (
                     vs_raw.sdtm
@@ -459,8 +495,8 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                     .assign("VSORRES", source="vsresult")
                     .date("VSDTC", source="vs_date")
                     .pin("DM", dm_df)
-                    .baseline_flag("VSBLFL", date_col="VSDTC",
-                                   testcd_col="VSTESTCD")
+                    .baseline_flag("VSLOBXFL", date_col="VSDTC",
+                                   testcd_col="VSTESTCD", ref_col="RFXSTDTC")
                     .to_frame()
                 )
         """
@@ -648,7 +684,11 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         condition: str | pl.Expr,
         then_value: Any,
     ) -> Self:
-        """Set *target* to *then_value* where *condition* is true, else null.
+        """Set *target* to *then_value* where *condition* is true.
+
+        Other rows keep the current value of *target*, or get null when
+        *target* is a new column, as a SAS ``if ... then`` statement.  So
+        a chain of calls on one target keeps the value of each call.
 
         Args:
             target: Name of the output SDTM variable.
@@ -674,7 +714,8 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                 )
         """
         cond_expr = condition if isinstance(condition, pl.Expr) else parse_expression(condition)
-        expr = pl.when(cond_expr).then(pl.lit(then_value)).otherwise(pl.lit(None)).alias(target)
+        current = pl.col(target) if target in self._lazy.collect_schema() else pl.lit(None)
+        expr = pl.when(cond_expr).then(pl.lit(then_value)).otherwise(current).alias(target)
         return self._chain(expr, verb="condition_add")
 
     # ------------------------------------------------------------------ #
@@ -703,9 +744,12 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
     ) -> Self:
         """Map free-text AE causality strings to ``AEREL`` values.
 
-        Mapping is case-insensitive against *aerel_map*.  The default map
-        is Fleet's own convention, not CDISC terminology: SDTM IG v3.4
-        gives AEREL no codelist, so the sponsor defines the terms.  The
+        Mapping is case-insensitive against *aerel_map*, and leading and
+        trailing blanks do not count.  A value with no mapping becomes its
+        trimmed upper-case text, and one warning lists these values.  The
+        default map is Fleet's own convention, not CDISC terminology:
+        SDTM IG v3.4 gives AEREL no codelist, so the sponsor defines the
+        terms and the map must be complete.  The
         AE relationship table (``AERelationshipSpec.relationship_order``)
         must list the same terms; a term it does not list stops the
         table.
@@ -731,13 +775,30 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                     .to_frame()
                 )
         """
-        mapping = aerel_map or self._DEFAULT_AEREL_MAP
+        import warnings
+
+        given = aerel_map if aerel_map is not None else self._DEFAULT_AEREL_MAP
+        mapping = {k.strip().lower(): v for k, v in given.items()}
 
         raw = pl.col(source).cast(pl.String)
         normalised = raw.str.to_lowercase().str.strip_chars()
+        unmapped = (
+            self._lazy.select(raw.str.strip_chars().alias("v"))
+            .filter((pl.col("v") != "") & ~pl.col("v").str.to_lowercase().is_in(list(mapping)))
+            .unique()
+            .sort("v")
+            .collect()["v"]
+            .to_list()
+        )
+        if unmapped:
+            warnings.warn(
+                f"ae_aerel('{target}'): {len(unmapped)} value(s) have no mapping: {unmapped}; "
+                "pass aerel_map=. They are kept in upper case.",
+                stacklevel=2,
+            )
         expr = normalised.replace_strict(
             mapping,
-            default=raw.str.to_uppercase(),
+            default=normalised.str.to_uppercase(),
             return_dtype=pl.String,
         ).alias(target)
         return self._chain(expr, verb="ae_aerel")
@@ -900,8 +961,16 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
     ) -> Self:
         """Explode a delimited multi-response field into separate rows.
 
-        Splits *source* on *delimiter* and explodes — lazily, as part of
-        the accumulated plan.
+        Splits *source* on *delimiter* and explodes, lazily, as part of
+        the accumulated plan.  One row per response.  Blanks around a
+        response are removed, and an empty response gives no row, as SAS
+        ``scan()``.  A value with no response keeps one row with a null.
+
+        Not for non-result qualifiers such as DM RACE: DM has one record
+        per subject.  For two races, set RACE to ``"MULTIPLE"`` with
+        ``assign`` or ``case_when``, put RACE1, RACE2, ... in columns, and
+        write them to SUPPDM with ``nsv`` and ``export_supp`` (SDTMIG 3.4
+        section 4.2.8.3).
 
         Args:
             target: Name of the output column for the split values.
@@ -922,10 +991,16 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                     .to_frame()
                 )
         """
+        tokens = (
+            pl.col(source)
+            .str.split(delimiter)
+            .list.eval(pl.element().str.strip_chars())
+            .list.eval(pl.element().filter(pl.element() != ""))
+        )
         return self._with_lazy(
-            self._lazy.with_columns(pl.col(source).str.split(delimiter).alias("__split__"))
-            .explode("__split__")
-            .with_columns(pl.col("__split__").str.strip_chars().alias(target))
+            self._lazy.with_columns(tokens.alias("__split__"))
+            .explode("__split__", empty_as_null=True)
+            .with_columns(pl.col("__split__").alias(target))
             .drop("__split__")
         )
 
@@ -983,8 +1058,18 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         Raises:
             DerivationError: When no source gives qualifier metadata, a
                 qualifier or *idvar* is not a column, *idvar* is missing
-                for a domain other than DM, RDOMAIN is unknown, or the
-                *spec* dataset is not found.
+                for a domain other than DM, RDOMAIN is unknown, DOMAIN
+                holds more than one value and *domain* is not given,
+                STUDYID or USUBJID is not a column, a QNAM is not 1 to 8
+                upper-case letters, digits or underscores with no digit
+                first, a QLABEL is not 1 to 40 characters, or the *spec*
+                dataset is not found.  A QVAL over 200 characters gives a
+                warning.
+
+        References:
+            SDTMIG 3.4 section 8.4 (SUPPQUAL: STUDYID, RDOMAIN and
+            USUBJID are Req; QNAM and QLABEL limits) and section 4.5.3.2
+            (text over 200 characters).
 
         Examples:
             Export from pipeline metadata (Pattern A)::
@@ -1035,22 +1120,36 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
 
         df = self._lazy.collect()
 
+        domains = (
+            df["DOMAIN"].drop_nulls().unique().sort().to_list() if "DOMAIN" in df.columns else []
+        )
         if domain:
             rdomain = domain
-        elif "DOMAIN" in df.columns and not df.is_empty():
-            rdomain = df["DOMAIN"][0]
+        elif len(domains) == 1:
+            rdomain = domains[0]
+        elif domains:
+            raise DerivationError(
+                f"export_supp(): DOMAIN holds {' and '.join(domains)}; export one domain or "
+                "pass domain=."
+            )
         else:
             raise DerivationError(
                 "export_supp(): RDOMAIN is unknown, because the frame has no DOMAIN value. "
                 "Pass domain=."
             )
-
+        keys_absent = [c for c in ("STUDYID", "USUBJID") if c not in df.columns]
+        if keys_absent:
+            raise DerivationError(
+                f"export_supp(): the frame has no {' and no '.join(keys_absent)}. SUPP{rdomain} "
+                "needs STUDYID and USUBJID (Req in SUPPQUAL): add them before export_supp()."
+            )
         absent = [m.target for m in meta if m.target not in df.columns]
         if absent:
             raise DerivationError(
                 f"export_supp(): qualifier(s) {absent} are not columns of the frame. "
                 f"Available: {df.columns}"
             )
+        _check_supp_meta(meta)
         if idvar is not None and idvar not in df.columns:
             raise DerivationError(f"export_supp(): idvar '{idvar}' is not a column of the frame.")
         if idvar is None and rdomain != "DM":
@@ -1064,7 +1163,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         origin_map = {m.target: m.origin for m in meta}
         eval_map = {m.target: m.evaluator for m in meta}
 
-        base_cols = [c for c in ("STUDYID", "USUBJID") if c in df.columns]
+        base_cols = ["STUDYID", "USUBJID"]
         id_cols = [idvar] if idvar is not None and idvar not in base_cols else []
 
         # Each qualifier becomes text before the unpivot, so mixed types keep their value.
@@ -1081,6 +1180,16 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
 
         # SDTMIG 3.4: no SUPP record with a null QVAL; a blank is missing too.
         supp = supp.filter(pl.col("QVAL").is_not_null() & (pl.col("QVAL").str.strip_chars() != ""))
+        long = supp.filter(pl.col("QVAL").str.len_chars() > 200)
+        if long.height:
+            import warnings
+
+            warnings.warn(
+                f"export_supp(): {long.height} QVAL value(s) are over 200 characters "
+                f"(QNAM {sorted(set(long['QNAM'].to_list()))}). Split the text into QNAM, "
+                "QNAM1, ... (SDTMIG 3.4 section 4.5.3.2).",
+                stacklevel=2,
+            )
 
         # Add SUPPQUAL metadata columns
         supp = supp.with_columns(
@@ -1105,14 +1214,6 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                 pl.lit(None, dtype=pl.String).alias("IDVAR"),
                 pl.lit(None, dtype=pl.String).alias("IDVARVAL"),
             )
-
-        # Ensure STUDYID exists
-        if "STUDYID" not in supp.columns:
-            supp = supp.with_columns(pl.lit(None, dtype=pl.String).alias("STUDYID"))
-
-        # Ensure USUBJID exists
-        if "USUBJID" not in supp.columns:
-            supp = supp.with_columns(pl.lit(None, dtype=pl.String).alias("USUBJID"))
 
         return supp.select(_SUPP_COLUMNS)
 

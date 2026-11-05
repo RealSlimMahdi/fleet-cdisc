@@ -83,11 +83,22 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         such as FDA grade 4 (> 40.0 °C).  With ``inclusive=False`` and the
         default threshold, a record of 38.0 °C gets no flag.
 
+        Args:
+            target: Name of the output flag column.
+            temp_col: Column with the body temperature in °C.
+            threshold: Fever limit in °C (default ``38.0``).
+            inclusive: ``True`` flags at or above *threshold*, ``False``
+                strictly above.
+            flag_value: Value of the flag (default ``"Y"``).
+
+        Returns:
+            Self: The namespace with *target* appended.
+
         Examples:
-            Flag fever, and grade 4 fever::
+            Flag fever and grade 4 fever::
 
                 adface = (
-                    vs_df.adam.vaccine
+                    face_df.adam.vaccine
                     .fever_flag("FEVFL", temp_col="TEMP")
                     .fever_flag("G4FEVFL", temp_col="TEMP", threshold=40.0, inclusive=False)
                     .to_frame()
@@ -140,8 +151,22 @@ class VaccineNamespace(SharedADaMVerbsMixin):
 
         Rows that do not meet the rule get null.
 
+        Args:
+            target: Name of the output flag column.
+            aval_col: Post-vaccination titre column.
+            base_col: Baseline titre column.
+            lloq_col: LLOQ column of the baseline record, or ``None`` for
+                the plain ratio.
+            fold_rise: Rise from baseline that counts (default ``4.0``).
+            seronegative_fold: Multiple of the LLOQ for a baseline below the
+                LLOQ (default *fold_rise*).
+            flag_value: Value of the flag (default ``"Y"``).
+
+        Returns:
+            Self: The namespace with *target* appended.
+
         Examples:
-            Seroconversion with the LLOQ rule, and a two-fold rise::
+            Flag seroconversion with the LLOQ rule and with a plain ratio::
 
                 adis = (
                     is_df.adam.vaccine
@@ -262,6 +287,22 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         *lloq_rule*: ``"half"`` (LLOQ ÷ 2) or ``"lloq"`` (retain LLOQ value).
         Any other text raises ``DerivationError``.
 
+        Args:
+            target: Name of the output column.
+            stresn_col: Numeric result column (default ``"ISSTRESN"``).
+            lloq_col: LLOQ column (default ``"ISLLOQ"``).
+            uloq_col: ULOQ column, or ``None`` when there is no upper limit.
+            orres_col: Original result column, read for ``<`` and ``>``
+                when *stresn_col* is null; ``None`` skips it.
+            lloq_rule: ``"half"`` or ``"lloq"``.
+            round_digits: Decimal places, or ``None`` for no rounding.
+
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Raises:
+            DerivationError: When *lloq_rule* is not ``"half"`` or ``"lloq"``.
+
         Examples:
             ADIS AVAL with the LLOQ and ULOQ rules::
 
@@ -359,6 +400,19 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         Materialises the current pipeline.
 
         Based on ``admiralvaccine::derive_vars_event_flag`` (new_var1 behaviour).
+
+        Args:
+            target: Name of the output flag column.
+            aval_col: Numeric result column.
+            cutoff: A value above *cutoff* is an event.
+            by: Group columns, for example ``["USUBJID", "FAOBJ", "ATPTREF"]``.
+            severity_col: Severity column, or ``None`` to read *aval_col* only.
+            severity_values: Severity values that count as an event.
+            flag_value: Value for a group with an event (default ``"Y"``).
+            no_event_value: Value for a record with no event (default ``"N"``).
+
+        Returns:
+            Self: The namespace with *target* appended.
 
         Examples:
             Flag any event per subject, object and time point::

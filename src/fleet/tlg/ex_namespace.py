@@ -115,12 +115,14 @@ class EXTLGNamespace(BuilderVerbsMixin):
         Examples:
             EX summary, ADSL arm in TRT01A::
 
+                from fleet.tlg import EXSummarySpec
+
                 spec = EXSummarySpec(adsl_group_col="TRT01A")
                 ard = adex.tlg.ex.t_summary(spec=spec, adsl=adsl)
 
             Custom spec with pooled arms::
 
-                from fleet.tlg import GroupPool
+                from fleet.tlg import EXSummarySpec, GroupPool
 
                 spec = EXSummarySpec(
                     pools=[GroupPool(label="Total", arms="*")],
