@@ -401,7 +401,7 @@ def compute_hover(text: str, line: int, character: int, path: str = "") -> str |
             algo = introspect.get_algorithm(std, word)
             if algo is None:
                 continue
-            doc = introspect.algorithm_doc(algo.name)
+            doc = introspect.algorithm_doc(algo.name, standard=std)
             summary = doc.summary if doc else ""
             parts = [f"**{algo.name}** ({std}) — {algo.description or summary or ''}".rstrip(" —")]
             if summary and summary != algo.description:
@@ -422,9 +422,12 @@ def compute_hover(text: str, line: int, character: int, path: str = "") -> str |
     for cl in codelists if isinstance(codelists, list) else []:
         if isinstance(cl, dict) and str(cl.get("oid")) == word:
             items = [i for i in (cl.get("items") or []) if isinstance(i, dict)]
+            header = f"**{cl.get('name', word)}** (`{word}`)"
+            if not items:
+                return header
             terms = ", ".join(str(i.get("coded_value")) for i in items[:8])
             suffix = ", …" if len(items) > 8 else ""
-            return f"**{cl.get('name', word)}** (`{word}`)\n\nTerms: {terms}{suffix}"
+            return f"{header}\n\nTerms: {terms}{suffix}"
     return None
 
 

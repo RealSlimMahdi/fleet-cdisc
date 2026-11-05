@@ -199,6 +199,31 @@ class TestHover:
     def test_hover_on_plain_text_is_none(self):
         assert compute_hover(CODELIST_SPEC, 0, 1) is None
 
+    def test_codelist_hover_without_items_has_no_terms_line(self):
+        """c1-780: an empty codelist shows its name, not an empty "Terms:" line."""
+        text = CODELIST_SPEC.replace(
+            '    items:\n      - coded_value: "M"\n        decode: MALE\n'
+            '      - coded_value: "F"\n        decode: FEMALE\n',
+            "",
+        )
+        lines = text.splitlines()
+        line = next(i for i, ln in enumerate(lines) if "ct:" in ln)
+
+        md = compute_hover(text, line, lines[line].index("C66731") + 1)
+
+        assert md == "**Sex** (`C66731`)"
+
+    def test_adam_hover_names_the_adam_verb(self):
+        """c1-780: ``seq`` in an ADaM spec runs the ADaM verb; the hover names it."""
+        text = "study:\n  standard: ADaMIG\nvariables:\n  - target: ASEQ\n    algorithm: seq\n"
+        lines = text.splitlines()
+        line = next(i for i, ln in enumerate(lines) if "algorithm:" in ln)
+
+        md = compute_hover(text, line, lines[line].index("seq") + 1)
+
+        assert md is not None
+        assert "Verb: `fleet.core._verb_mixin.SharedVerbsMixin.seq`" in md
+
 
 class TestStandardInference:
     @pytest.mark.parametrize(
