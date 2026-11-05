@@ -97,4 +97,4 @@ jobs:
         run: uv run --no-sync python -c "import importlib.util as u; assert u.find_spec('pandas') is None and u.find_spec('pyarrow') is None"
 
       - name: Read and write SAS files
-        run: uv run --no-sync pytest tests/unit/test_io_sas.py tests/unit/test_compare_inputs.py
+        run: uv run --no-sync pytest tests/unit/test_io_sas.py tests/unit/test_compare_inputs.py tests/unit/test_real_files.py
