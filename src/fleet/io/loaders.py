@@ -89,7 +89,9 @@ def load_raw_data(
     column with a value that has a leading zero (SITEID ``001``) reads as
     text, with a warning, because a number would lose the zero.  Give
     ``schema_overrides={"SITEID": pl.String}`` for a text column, the
-    equivalent of a SAS ``$`` informat; the caller's types always win.
+    equivalent of a SAS ``$`` informat; the caller's types always win.  A
+    ``NaN`` cell in a float column reads as null, as SAS has no NaN, so a
+    threshold verb never sees it as a number.
 
     Args:
         file_path: Path to the data file.
@@ -140,7 +142,8 @@ def load_raw_data(
 
     try:
         if file_type == "csv":
-            return _load_csv(file_path, **kwargs)
+            # SAS has no NaN: a text NaN cell is a missing value.
+            return _load_csv(file_path, **kwargs).with_columns(cs.float().fill_nan(None))
         elif file_type == "excel":
             return pl.read_excel(file_path, **kwargs).lazy()
         elif file_type == "parquet":

@@ -50,3 +50,15 @@ def test_a_latin1_csv_reads_with_the_encoding_named(tmp_path: Path) -> None:
     ae = load_raw_data(path, encoding="iso-8859-1").collect()
 
     assert ae["AETERM"].to_list() == ["CAFé"]
+
+
+def test_a_nan_cell_reads_as_null_so_a_threshold_flag_is_null(tmp_path: Path) -> None:
+    """c1-423: SAS has no NaN; a missing value is never above a threshold."""
+    path = tmp_path / "face.csv"
+    path.write_text("USUBJID,AVAL\nA,NaN\nB,\nC,37.0\nD,38.5\n")
+
+    face = load_raw_data(path).collect()
+    out = face.adam.vaccine.fever_flag("FEVFL", temp_col="AVAL").to_frame()
+
+    assert face["AVAL"].to_list() == [None, None, 37.0, 38.5]
+    assert out["FEVFL"].to_list() == [None, None, None, "Y"]
