@@ -491,3 +491,14 @@ def test_code_driven_notebook_cells_execute(tmp_path, monkeypatch):
         exec(compile("".join(cell["source"]), "<notebook 01>", "exec"), ns)  # noqa: S102
     assert len(cells) >= 3
     assert "AGE40FL" in ns["adsl"].columns
+
+
+def test_coming_from_sas_page_blocks_execute(tmp_path, monkeypatch):
+    """c1-688: each SAS-trap sample of coming-from-sas.md runs and gives the value it states."""
+    ns, ran = _run_page("concepts/coming-from-sas.md", tmp_path, monkeypatch)
+    assert ran == 6
+    assert ns["crit"]["CRIT1FL"].to_list() == ["Y", None]
+    assert ns["worst"]["AESEVN"].to_list() == [2]
+    assert ns["apply_fmt_fn"](5 / 16 * 100, "xx.x") == "31.3"
+    assert ns["ae_dm"].columns == ["USUBJID", "AETERM", "AGE"]
+    assert ns["ex"]["EXSTDTC"].to_list() == ["2024-03-15", "2024-03"]

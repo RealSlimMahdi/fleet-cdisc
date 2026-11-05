@@ -110,6 +110,7 @@ nav:
   - Concepts:
       - How define.yaml Works: concepts/define-yaml.md
       - Namespace Pipeline: concepts/pipeline.md
+      - Coming from SAS: concepts/coming-from-sas.md
       - "Event-Priority Derivation (pick)": concepts/pick.md
       - Trial Design Domains: concepts/tdd.md
       - Validation with CORE: concepts/validation-core.md
