@@ -819,3 +819,42 @@ class TestDerivationsModule:
         err = capsys.readouterr().err
         assert "cannot import derivations_module 'study_c293b.derivations': RuntimeError" in err
         assert "Traceback" not in err
+
+
+def test_c1_698_regen_tlg_goldens_prints_each_changed_cell() -> None:
+    import importlib.util
+
+    script = Path(__file__).parents[2] / "scripts" / "regen_tlg_goldens.py"
+    spec = importlib.util.spec_from_file_location("regen_tlg_goldens", script)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    old = pl.from_repr("""\
+┌────────┬──────────────┬──────────┬───────────┬──────┐
+│ group1 ┆ group1_level ┆ variable ┆ stat_name ┆ stat │
+│ ---    ┆ ---          ┆ ---      ┆ ---       ┆ ---  │
+│ str    ┆ str          ┆ str      ┆ str       ┆ f64  │
+╞════════╪══════════════╪══════════╪═══════════╪══════╡
+│ TRTA   ┆ Drug A       ┆ AESER    ┆ n         ┆ 4.0  │
+│ TRTA   ┆ Placebo      ┆ AESER    ┆ n         ┆ 2.0  │
+└────────┴──────────────┴──────────┴───────────┴──────┘
+""")
+    new = pl.from_repr("""\
+┌────────┬──────────────┬──────────┬───────────┬──────┐
+│ group1 ┆ group1_level ┆ variable ┆ stat_name ┆ stat │
+│ ---    ┆ ---          ┆ ---      ┆ ---       ┆ ---  │
+│ str    ┆ str          ┆ str      ┆ str       ┆ f64  │
+╞════════╪══════════════╪══════════╪═══════════╪══════╡
+│ TRTA   ┆ Drug A       ┆ AESER    ┆ n         ┆ 5.0  │
+│ TRTA   ┆ Drug B       ┆ AESER    ┆ n         ┆ 1.0  │
+└────────┴──────────────┴──────────┴───────────┴──────┘
+""")
+
+    lines = module.changed_cells("aet01", old, new)
+
+    assert sorted(lines) == [
+        "aet01: group1=TRTA group1_level=Drug A variable=AESER stat_name=n: stat: 4.0 -> 5.0",
+        "aet01: row added: group1=TRTA group1_level=Drug B variable=AESER stat_name=n",
+        "aet01: row removed: group1=TRTA group1_level=Placebo variable=AESER stat_name=n",
+    ]
+    assert module.changed_cells("aet01", old, old) == []
