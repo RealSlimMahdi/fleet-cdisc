@@ -35,9 +35,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _normalise_ig_version(dotted: str) -> str:
-    """Convert ``"3.4"`` → ``"3-4"`` for API endpoint construction."""
-    return dotted.replace(".", "-")
+def normalise_ig_version(version: str) -> str:
+    """Return the CDISC Library spelling of an IG version: ``"3.4"`` gives ``"3-4"``.
+
+    Every CDISC Library path builder calls it, so a config may give either
+    spelling.
+    """
+    return version.replace(".", "-")
 
 
 def _read_define_version(define_path: Path) -> str:
@@ -225,7 +229,7 @@ class RulesScaffolder:
             )
 
         version_dotted = _read_define_version(define_path)
-        version_api = _normalise_ig_version(version_dotted)
+        version_api = normalise_ig_version(version_dotted)
         api_path = f"/mdr/rules/sdtmig/{version_api}"
 
         logger.info("Fetching SDTM rules from %s", api_path)
@@ -289,7 +293,7 @@ class RulesScaffolder:
             )
 
         version_dotted = _read_define_version(define_path)
-        version_api = _normalise_ig_version(version_dotted)
+        version_api = normalise_ig_version(version_dotted)
 
         rules: dict[str, Any] = {}
 

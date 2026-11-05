@@ -70,9 +70,9 @@ class TestSourceOnAllNamespaces:
         assert "USUBJID" in result.columns
         assert result["USUBJID"].to_list() == ["01-001", "01-002", "01-003"]
 
-    def test_source_from_col(self, base_frame, accessor, label):
+    def test_assign_renames(self, base_frame, accessor, label):
         ns = _get_ns(base_frame, accessor)
-        result = ns.source("SUBJECT", from_col="USUBJID").to_frame()
+        result = ns.assign("SUBJECT", source="USUBJID").to_frame()
         assert result["SUBJECT"].to_list() == base_frame["USUBJID"].to_list()
 
 

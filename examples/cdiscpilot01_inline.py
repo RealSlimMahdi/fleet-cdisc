@@ -684,7 +684,7 @@ advs = (
     .merge(dataset=_trtsdt_map, on="USUBJID", how="left")
     .duration("ADY", start="TRTSDT", end="ADT")
     # admiral: flag_variables — last pre-dose visit (vsdy ≤ 0)
-    .flag("ABLFL", criteria='pl.col("vsdy") <= 0', by=["USUBJID", "PARAMCD"])
+    .flag("ABLFL", criteria='pl.col("vsdy") <= 0')
     .to_frame()  # materialise — ABLFL must exist before baseline() window fn
     .adam.baseline(  # admiral: derive_var_base
         "BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"]

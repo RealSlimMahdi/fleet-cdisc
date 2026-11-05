@@ -26,8 +26,8 @@ class TestSource:
         result = vs_frame.adam.source("USUBJID").to_frame()
         assert "USUBJID" in result.columns
 
-    def test_source_from_col(self, vs_frame):
-        result = vs_frame.adam.source("SUBJECT", from_col="USUBJID").to_frame()
+    def test_assign_renames_where_source_from_col_did(self, vs_frame):
+        result = vs_frame.adam.assign("SUBJECT", source="USUBJID").to_frame()
         assert result["SUBJECT"].to_list() == vs_frame["USUBJID"].to_list()
 
 
@@ -146,7 +146,6 @@ class TestFlag:
         result = vs_frame.adam.flag(
             "ABLFL2",
             criteria='pl.col("ABLFL") == "Y"',
-            by=["USUBJID", "PARAMCD"],
         ).to_frame()
         assert result["ABLFL2"][0] == "Y"
 
@@ -310,7 +309,7 @@ class TestChaining:
 └─────────┴─────────┴──────┴──────┘
 """)
         advs = (
-            vs.adam.flag("ABLFL", criteria='pl.col("vsdy") <= 0', by=["USUBJID", "PARAMCD"])
+            vs.adam.flag("ABLFL", criteria='pl.col("vsdy") <= 0')
             .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
             .chg("CHG", aval="AVAL", base="BASE")
             .pchg("PCHG", aval="AVAL", base="BASE")

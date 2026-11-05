@@ -24,6 +24,7 @@ Usage
 
 from __future__ import annotations
 
+import dataclasses
 import warnings
 from collections import deque
 from dataclasses import dataclass, field
@@ -247,25 +248,27 @@ class PipelineDAG:
         cross-domain edge in the DAG).
 
         Declared ``inputs:`` are reconciled against the runtime pin
-        evidence in both directions:
-
-        * a dataset-type input declared in the spec but never consulted
-          at runtime emits a ``UserWarning`` (stale declaration);
-        * a runtime pin source missing from the declaration emits a
-          ``UserWarning`` *and* the edge is added (the DAG follows the
-          evidence).
-
-        Raw inputs carry no pin evidence and are exempt from the
-        declared-but-unused check.
+        evidence in one direction: a runtime pin source missing from the
+        declaration emits a ``UserWarning`` *and* the edge is added (the
+        DAG follows the evidence).  A declared input with no pin evidence
+        is not reported: a pipeline can read an input with no pin
+        (``study_day(adsl=...)``, a ``merge``), so the absence of
+        evidence is no proof that the input is not used.
 
         Args:
             namespace: A namespace instance with ``_lineage`` and
                 optionally ``_pin_lineage`` attributes.
             dataset_name: The logical node name to attach lineage to.
+
+        Raises:
+            KeyError: When *dataset_name* is not a node of the DAG; the
+                message names the nodes.
         """
         node = self.nodes.get(dataset_name)
         if node is None:
-            return
+            raise KeyError(
+                f"inject_lineage: no DAG node named {dataset_name!r}. Nodes: {sorted(self.nodes)}."
+            )
 
         from fleet.core.lineage import lineage_of, pin_lineage_of
 
@@ -276,13 +279,14 @@ class PipelineDAG:
             node.variables[vnode.name] = vnode
 
         # Merge pin lineage → enrich variable nodes + add DAG edges
-        runtime_domains: set[str] = set()
         for pdep in pin_lineage_of(namespace):
-            runtime_domains.add(pdep.source_domain)
             if pdep.target_col in node.variables:
                 vnode = node.variables[pdep.target_col]
                 if pdep not in vnode.pin_sources:
-                    vnode.pin_sources.append(pdep)
+                    # A copy: the namespace lineage shares the node.
+                    node.variables[pdep.target_col] = dataclasses.replace(
+                        vnode, pin_sources=[*vnode.pin_sources, pdep]
+                    )
             # Ensure the source domain is an input edge
             if pdep.source_domain in self.nodes and pdep.source_domain not in node.inputs:
                 warnings.warn(
@@ -294,19 +298,6 @@ class PipelineDAG:
                 )
                 node.inputs.append(pdep.source_domain)
 
-        # Reverse direction: declared dataset inputs with no runtime evidence.
-        for name in declared:
-            upstream = self.nodes.get(name)
-            if upstream is not None and upstream.node_type == "raw":
-                continue  # raw sources are consumed as columns, not pins
-            if name not in runtime_domains:
-                warnings.warn(
-                    f"inject_lineage('{dataset_name}'): input '{name}' is declared "
-                    f"in the spec but no runtime pin/lineage evidence consumed it. "
-                    f"Remove the declaration or check the pipeline wiring.",
-                    stacklevel=2,
-                )
-
     def trace(self, dataset: str, variable: str) -> list[dict[str, Any]]:
         """Return the full recursive provenance chain for a single variable.
 
@@ -314,7 +305,10 @@ class PipelineDAG:
         cross-domain pin sources into other DAG nodes — collecting every
         upstream *derived* variable exactly once (cycle-safe, deduped).
         Raw/leaf columns appear inside each entry's ``sources`` but do
-        not get entries of their own.
+        not get entries of their own.  Each variable holds its last
+        derivation only: when a variable is derived from itself
+        (``AVAL`` from ``LBSTRESN``, then ``AVAL.round(2)``), the first
+        step is not in the chain.
 
         Args:
             dataset: Logical node name (e.g. ``"AE"``).

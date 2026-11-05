@@ -47,7 +47,9 @@ class TTENamespace(SharedADaMVerbsMixin):
     new ``TTENamespace``; ``to_frame()`` materialises the result.
     """
 
-    _domain = "ADTTE"
+    def __init__(self, df: pl.DataFrame | pl.LazyFrame) -> None:
+        super().__init__(df)
+        self._domain = "ADTTE"  # an instance value: _sub_namespace keeps it
 
     # ------------------------------------------------------------------ #
     # 1. param — derive one TTE parameter (admiral derive_param_tte)       #

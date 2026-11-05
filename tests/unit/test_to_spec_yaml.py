@@ -228,7 +228,7 @@ class TestAdamInlineRoundTrip:
         ns = (
             vs.adam.date("ADT", source="vsdtc")
             .duration("ADY", start="TRTSDT", end="ADT")
-            .flag("ABLFL", criteria="pl.col('vsdy') <= 0", by=["USUBJID", "PARAMCD"])
+            .flag("ABLFL", criteria="pl.col('vsdy') <= 0")
             .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
             .chg("CHG")
             .pchg("PCHG")
@@ -247,7 +247,6 @@ class TestAdamInlineRoundTrip:
         assert by_name["ABLFL"] == {
             "algorithm": "flag",
             "criteria": "pl.col('vsdy') <= 0",
-            "by": ["USUBJID", "PARAMCD"],
         }
         assert by_name["BASE"] == {
             "algorithm": "baseline",
@@ -337,7 +336,7 @@ class TestSourceRoundTrip:
 """)
 
     def test_source_freezes_as_assign_and_reruns(self, dm, tmp_path):
-        ns = dm.adam.source("USUBJID", "AGE").source("AGE2", from_col="age")
+        ns = dm.adam.source("USUBJID", "AGE").assign("AGE2", source="age")
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             text = ns.to_spec_yaml(dataset="ADSL", path=tmp_path / "define.yaml")
@@ -369,7 +368,7 @@ class TestSourceRoundTrip:
         chain = (
             vs_sdtm.adam.source("USUBJID", "PARAMCD", "AVAL")
             .study_day("ADY", date_col="ADT", ref_col="TRTSDT")
-            .flag("ABLFL", criteria='pl.col("VISITNUM") == 1', by=["USUBJID", "PARAMCD"])
+            .flag("ABLFL", criteria='pl.col("VISITNUM") == 1')
             .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
             .chg("CHG", aval="AVAL", base="BASE")
         )

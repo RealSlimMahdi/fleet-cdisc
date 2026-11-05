@@ -58,7 +58,7 @@ _PACKAGED_IG_VERSION = "3-4"
 
 def _load_packaged_structure(domain: str, ig_version: str) -> dict[str, Any] | None:
     """Return the packaged IG metadata for *domain*, or None when unavailable."""
-    if ig_version != _PACKAGED_IG_VERSION:
+    if ig_version.replace(".", "-") != _PACKAGED_IG_VERSION:
         return None
     return yaml.safe_load(_PACKAGED_STRUCTURES.read_text(encoding="utf-8")).get(domain)
 
@@ -965,10 +965,12 @@ class TrialDesignMixin:
     @staticmethod
     def _fetch_ig_domain(domain: str, ig_version: str) -> dict[str, Any]:
         """Fetch domain metadata from the CDISC Library IG."""
+        from fleet.core.rules_scaffolder import normalise_ig_version
         from fleet.ct.api import CDISCClient
 
         with CDISCClient() as client:
-            detail = client._get(f"/mdr/sdtmig/{ig_version}/datasets/{domain}")
+            path = f"/mdr/sdtmig/{normalise_ig_version(ig_version)}/datasets/{domain}"
+            detail = client._get(path)
 
         # Parse into a lightweight dict
         variables: list[dict[str, str]] = []

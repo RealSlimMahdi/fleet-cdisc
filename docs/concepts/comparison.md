@@ -461,7 +461,7 @@ The verb speaks the same failure vocabulary as `.validate()`:
 | `on_fail` | Behaviour when the datasets differ |
 | --- | --- |
 | `"warn"` (default) | Emit a `UserWarning` and continue the chain. |
-| `"raise"` | Raise `ComparisonError` (a `FleetError`). |
+| `"raise"` | Raise `ComparisonFailed`, a subclass of `ComparisonError` (a `FleetError`). |
 | `"ignore"` | Continue silently; the report is still on `last_comparison`. |
 
 ```python

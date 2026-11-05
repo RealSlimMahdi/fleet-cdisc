@@ -87,9 +87,7 @@ class TestRegistryRendering:
         expr = spec_registry.render_formal_expression(
             "sdtm", "assign", {"source": "subject_id"}, target="USUBJID"
         )
-        assert expr == (
-            "fleet.core._verb_mixin.SharedVerbsMixin.assign('USUBJID', source='subject_id')"
-        )
+        assert expr == ("fleet.sdtm.namespace.SDTMNamespace.assign('USUBJID', source='subject_id')")
 
     def test_unknown_algorithm_returns_none(self):
         assert spec_registry.render_method_text("sdtm", "nope", {}) is None

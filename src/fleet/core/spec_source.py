@@ -38,7 +38,7 @@ from fleet.core.spec_registry import (
 
 _NAMESPACES = ("sdtm", "adam")
 _NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]{0,7}$")
-_NOT_PARAMS = ("algorithm", "depends_on")
+_NOT_PARAMS = ("algorithm",)
 #: Verbs whose first argument names a dataset, not a variable: pipeline plumbing.
 _PLUMBING = frozenset({"pin"})
 
@@ -154,7 +154,11 @@ def program_from_spec(spec_path: str | Path, dataset: str) -> str:
                 " — derive inline"
             )
         else:
-            chain.append(f"    .{text[text.rfind('.', 0, text.index('(')) + 1 :]}")
+            # The call from the namespace: a dotted verb keeps its sub-namespace (.occds).
+            algo = get_algorithm(standard, algorithm)
+            name_end = text.index("(")
+            verb = algo.verb if algo else text[text.rfind(".", 0, name_end) + 1 : name_end]
+            chain.append(f"    .{verb}{text[name_end:]}")
 
     lines = [
         f"# {name}" + (f" — {block['label']}" if block.get("label") else ""),

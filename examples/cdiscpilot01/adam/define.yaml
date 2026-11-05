@@ -364,7 +364,6 @@ datasets:
           algorithm: duration
           end: ADT
           start: TRTSDT
-          depends_on: [ADT]
 
       - name: ABLFL
         label: Baseline Record Flag
@@ -372,10 +371,10 @@ datasets:
         length: 2
         mandatory: false
         origin: Derived
+        comment: Y for the records on or before study day 0; else null.
         derivation:
           algorithm: flag
           criteria: "pl.col('vsdy') <= 0"
-          by: [USUBJID, PARAMCD]
 
       - name: BASE
         label: Baseline Value
@@ -389,7 +388,6 @@ datasets:
           aval: AVAL
           baseline_flag: ABLFL
           by: [USUBJID, PARAMCD]
-          depends_on: [ABLFL]
 
       - name: CHG
         label: Change from Baseline
@@ -402,7 +400,6 @@ datasets:
           algorithm: chg
           aval: AVAL
           base: BASE
-          depends_on: [BASE]
 
       - name: PCHG
         label: Percent Change from Baseline
@@ -415,7 +412,6 @@ datasets:
           algorithm: pchg
           aval: AVAL
           base: BASE
-          depends_on: [BASE]
 
       - name: VISITNUM
         label: Visit Number
@@ -736,7 +732,6 @@ datasets:
           algorithm: duration
           end: ASTDT
           start: TRTSDT
-          depends_on: [ASTDT]
 
       # ANL01FL and ASEQ use OCCDS verbs not expressible in from_spec;
       # derived inline in the pipeline after the spec phase.
@@ -753,7 +748,6 @@ datasets:
           trtsdt: TRTSDT
           trtedt: TRTEDT
           end_window: 0
-          depends_on: [ASTDT, AENDT]
 
       - name: ANL01FL
         label: Analysis Flag 01 (worst severity)

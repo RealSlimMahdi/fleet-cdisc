@@ -61,8 +61,8 @@ class TestChainColumnValidation:
         assert result["SUBJID"].to_list() == ["S001"]
 
     def test_adam_verbs_are_attributed(self, raw):
-        with pytest.raises(DerivationError, match=r"source\('USUBJID'\)"):
-            raw.adam.source("USUBJID", from_col="patient_numbr")
+        with pytest.raises(DerivationError, match=r"source\('patient_numbr'\)"):
+            raw.adam.source("patient_numbr")
 
     def test_legacy_catch_style_works(self, raw):
         with pytest.raises(ValueError):

@@ -136,12 +136,25 @@ def resolve_algorithm_docstring(
 
     for name in method_names:
         for cls in _candidate_namespaces():
-            method = getattr(cls, name, None)
+            method = _dotted_method(cls, name)
             if method is None or not callable(method):
                 continue
             summary = docstring_summary(method.__doc__)
             return (summary, defining_method_path(cls, name))
     return (None, None)
+
+
+def _dotted_method(cls: type, name: str) -> Any:
+    """The method *name* of *cls*; a dotted name walks the sub-namespace properties."""
+    from fleet.core.lineage import sub_namespace_class
+
+    *path, leaf = name.split(".")
+    for part in path:
+        sub = sub_namespace_class(cls, part)
+        if sub is None:
+            return None
+        cls = sub
+    return getattr(cls, leaf, None)
 
 
 def resolve_callable_docstring(

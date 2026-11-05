@@ -849,7 +849,8 @@ non-finite numbers are null, temporal keys are ISO 8601 strings.
 ### Pipeline verb (every namespace: `df.sdtm`, `df.adam`, `df.adam.adsl`, `df.adam.occds`, …)
 
 The chain is the candidate, the argument is the base. `on_fail` is `"warn"` (default, \
-`UserWarning`), `"raise"` (`ComparisonError`) or `"ignore"`, exactly as for `.validate()`; the \
+`UserWarning`), `"raise"` (`ComparisonFailed`, a `ComparisonError`) or `"ignore"`, exactly as \
+for `.validate()`; the \
 report stays on the namespace as `.last_comparison` and the chain continues.
 
 {verb}

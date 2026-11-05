@@ -311,7 +311,9 @@ class DefineScaffolder:
         domains: list[str],
     ) -> list[dict[str, Any]]:
         """Fetch dataset + variable metadata from the SDTM IG."""
-        ig = self._client._get(f"/mdr/sdtmig/{ig_version}/datasets")
+        from fleet.core.rules_scaffolder import normalise_ig_version
+
+        ig = self._client._get(f"/mdr/sdtmig/{normalise_ig_version(ig_version)}/datasets")
         ds_links = ig.get("_links", {}).get("datasets", [])
         domains_upper = {d.upper() for d in domains}
 
@@ -348,7 +350,9 @@ class DefineScaffolder:
         individual datasets.  ADSL maps directly; all other requested
         datasets (ADVS, ADAE, ADEX, …) are scaffolded from the BDS template.
         """
-        ig_path = f"/mdr/adam/adamig-{ig_version}"
+        from fleet.core.rules_scaffolder import normalise_ig_version
+
+        ig_path = f"/mdr/adam/adamig-{normalise_ig_version(ig_version)}"
         ig = self._client._get(ig_path)
         structures = ig.get("dataStructures", [])
 

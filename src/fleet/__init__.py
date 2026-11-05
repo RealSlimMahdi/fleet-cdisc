@@ -35,8 +35,7 @@ Usage
         vs_df.adam
         .source("USUBJID")
         .study_day("ADY", date_col="ADT")
-        .flag("ABLFL", criteria='pl.col("VISITNUM") == 1',
-              by=["USUBJID", "PARAMCD"])
+        .flag("ABLFL", criteria='pl.col("VISITNUM") == 1')
         .baseline("BASE", aval="AVAL", baseline_flag="ABLFL")
         .chg("CHG", aval="AVAL", base="BASE")
         .to_frame()

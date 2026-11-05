@@ -14,7 +14,7 @@ All ADaM sub-structures and extensions are accessed via properties:
 
 Usage
 -----
-    import fleet  # triggers registration of df.adam, df.adsl, df.occds
+    import fleet  # registers df.adam; df.adam.adsl, df.adam.occds, ... are its sub-namespaces
 
     result = (
         vs_sdtm.adam
@@ -22,8 +22,7 @@ Usage
         .date("ADT", source="VSDTC")
         .derivation("AVAL", expression="VSSTRESN")
         .duration("ADY", start="TRTSDT", end="ADT")
-        .flag("ABLFL", criteria='pl.col("VISITNUM") == 1',
-              by=["USUBJID", "PARAMCD"])
+        .flag("ABLFL", criteria='pl.col("VISITNUM") == 1')
         .baseline("BASE", aval="AVAL", baseline_flag="ABLFL")
         .chg("CHG", aval="AVAL", base="BASE")
         .pchg("PCHG", aval="AVAL", base="BASE")
@@ -1263,6 +1262,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 f"Transform function must return a polars DataFrame, got {type(result).__name__!r}."
             )
 
+        self._note_row_change(f"transform {getattr(fn, '__name__', 'fn')}", committed, result)
         return self._materialise_then(result)
 
     # ------------------------------------------------------------------ #

@@ -357,13 +357,13 @@ an explicit frame and defaults `by=` to `["USUBJID"]`.
 
 ### FK validation
 
-When a pin exists, Fleet can automatically check foreign-key integrity. By default it emits warnings for orphan values; use `.fk_policy()` to make it strict or silent:
+When a pin exists, Fleet checks foreign-key integrity at `.to_frame()`: every `USUBJID` of the final frame must be in the pinned `DM` (SDTM) or `ADSL` (ADaM). By default it emits a warning for orphan values; use `.fk_policy()` to make it strict or silent. The check runs once, on the final frame, with the last policy of the chain, so the order of `pin`, `fk_policy` and the verbs does not matter. `VISITNUM`, `VISIT` and `EPOCH` are not checked: an unscheduled visit is a valid value that the trial design does not list.
 
 ```python
 ae = (
     ae_raw.sdtm.pin("DM", dm)
-    .fk_policy("error")  # raise on FK violations
-    .assign("USUBJID", source="patient_number")  # FK auto-checked vs DM
+    .assign("USUBJID", source="patient_number")
+    .fk_policy("error")  # raise on FK violations, checked against DM at to_frame()
     .to_frame()
 )
 ```

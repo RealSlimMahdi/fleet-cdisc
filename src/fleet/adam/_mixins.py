@@ -249,28 +249,26 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
     # Shared verbs                                                         #
     # ------------------------------------------------------------------ #
 
-    def source(self, *targets: str, from_col: str | None = None) -> Self:
+    def source(self, *targets: str) -> Self:
         """Carry one or more source columns into the ADaM dataset.
 
-        With a single name and ``from_col=``, copies *from_col* to the
-        target (legacy 1:1 form — prefer ``assign(target, source=...)``).
-        With multiple names, each column is carried through as-is::
+        Each column is carried through as-is::
 
             .source("STUDYID", "USUBJID", "AETERM")
 
+        To copy a column under another name, use
+        ``assign(target, source=...)``.
+
         Args:
-            *targets: Output ADaM variable name(s).  Without *from_col*
-                each is an identity copy of the same-named input column.
-            from_col: Name of the input column to copy from (single
-                target only).  Defaults to the target name.
+            *targets: Output ADaM variable name(s); each is an identity
+                copy of the same-named input column.
 
         Returns:
             Self: The namespace with the target(s) appended; call
                 ``.to_frame()`` to materialise.
 
         Raises:
-            DerivationError: When no target is given, or *from_col* is
-                combined with more than one target.
+            DerivationError: When no target is given.
 
         Examples:
             Carry the key variables through in one call::
@@ -283,14 +281,6 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         """
         if not targets:
             raise DerivationError("source() requires at least one column name.")
-        if from_col is not None:
-            if len(targets) > 1:
-                raise DerivationError(
-                    "source(): from_col= applies to a single target — got "
-                    f"{len(targets)} targets. Use assign(target, source=...) "
-                    "for renames, or list the columns without from_col."
-                )
-            return self._chain(pl.col(from_col).alias(targets[0]), verb="source")
         exprs = [pl.col(t).alias(t) for t in targets]
         return self._chain(*exprs, verb="source")
 
@@ -374,7 +364,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         targets: str | list[str],
         *,
         events: list[dict[str, Any]],
-        by: list[str] | None = None,
+        by: str | list[str] | None = None,
         order: str | list[str] | None = None,
         mode: str = "first",
     ) -> Self:
@@ -497,7 +487,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             )
 
         target_list = [targets] if isinstance(targets, str) else list(targets)
-        by_vars = by or ["USUBJID"]
+        by_vars = [by] if isinstance(by, str) else (list(by) if by else ["USUBJID"])
         global_order: list[str] | None = (
             [order] if isinstance(order, str) else list(order) if order else None
         )
@@ -710,7 +700,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         self,
         adsl: pl.DataFrame,
         *,
-        by: list[str] | None = None,
+        by: str | list[str] | None = None,
         keep: list[str] | None = None,
     ) -> Self:
         """Left-join ADSL columns onto the current dataset.
@@ -749,7 +739,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                     .to_frame()
                 )
         """
-        join_keys = by if by is not None else ["USUBJID"]
+        join_keys = [by] if isinstance(by, str) else (list(by) if by is not None else ["USUBJID"])
         if keep is not None:
             require_columns("merge_adsl(keep=...)", keep, adsl.columns, where="ADSL")
             adsl = adsl.select(list(dict.fromkeys(keep + join_keys)))

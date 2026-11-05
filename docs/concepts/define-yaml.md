@@ -131,6 +131,12 @@ inline_only = fleet.SPEC_UNSUPPORTED  # {"sdtm": {...}, "adam": {...}}
 print(len(matrix), "algorithms;", len(inline_only["adam"]), "adam verbs are inline-only")
 ```
 
+The answer covers the verbs of `df.sdtm` and `df.adam`. The verbs of the
+sub-namespaces (`df.adam.onco`, `df.adam.pk`, `df.adam.occds` and the
+others) are inline only in this release, except the dotted algorithms in
+`fleet.spec_algorithms("adam")` (`occds.treatment_emergent`). For another
+one, use `algorithm: derivation` with `callable:`.
+
 ### Study-specific callables (`callable:`)
 
 When no built-in verb fits, point `derivation:` at a registered derivation
@@ -179,7 +185,10 @@ core registry and resolver. The resolver itself does no folder scanning: a
 callable is found either (a) by short name, when its module has been imported
 and the function is `@derivation`-registered, or (b) by fully qualified
 dotted path. Declare `derivations_module:` at the top of the spec and
-`from_spec()` imports it for you, so short names always resolve.
+`from_spec()` imports it for you, so short names always resolve. The module
+is study Python that runs: `from_spec()` and `fleet define-xml` print one
+line on stderr (`# fleet: importing study code derivations_module '...'`)
+when they import it.
 
 Both `algorithm:` and `callable:` plug into the Define-XML methods:
 `DefineSpecGenerator(spec)` (or `fleet define-xml`) emits one `<MethodDef>` per
@@ -200,10 +209,18 @@ identical across studies and unstable across Fleet versions. The
 (the verb the algorithm runs plus the spec params, or the callable's
 `dotted_path`), giving a verifiable link between the regulatory
 submission and the exact code that produced the data. The verb is named
-after the class that defines it, the way the run's lineage records it in
-`VariableNode.method`, so an ADaM `study_day` reads
-`fleet.core._verb_mixin.SharedVerbsMixin.duration('ADY', end='ASTDT', start='TRTSDT')`
-in the define and in the lineage of the dataset it documents.
+after the public namespace class it runs on, the way the run's lineage
+records it in `VariableNode.method`, so an ADaM `study_day` reads
+`fleet.adam.namespace.AdamNamespace.duration('ADY', end='ASTDT', start='TRTSDT')`
+in the define and in the lineage of the dataset it documents. The path is
+importable and does not change when Fleet moves a verb between its
+internal mixins.
+
+With no `comment:`, the template text of `case_when` reads each branch as
+"if <condition> then <value>", and an expression (`flag` criteria,
+`derivation` expression) stays verbatim. `fleet define-xml` warns for each
+variable whose method text holds a Polars expression: add a `comment:` in
+words for the reviewer.
 
 ### Example — TRTSDT (date of first dose)
 
@@ -297,6 +314,10 @@ datasets:
 write (a `pl.Expr` filter, `derive_param`) is written as `algorithm: TODO`
 with the verb name: `from_spec()` refuses the file until you write the step.
 Define-XML shows the steps as the dataset comment.
+
+A variable block with `algorithm: whereclauses` or `group_by` still runs, but
+the variable name becomes an ItemDef that no dataset holds, so `from_spec()`
+and `fleet define-xml` warn: move the filter to `row_steps:`.
 
 ---
 
@@ -495,8 +516,8 @@ notations:
 
 - The study is the first `study_config.yaml` above the folder of the
   `define.yaml`, never the working directory.
-- When the CT loaded in `fleet.get_validator()` holds the codelist (for
-  example through `ct: file:`, below), it checks the values in both
+- When the spec's `ct: file:` (below) or the CT loaded in
+  `fleet.get_validator()` holds the codelist, it checks the values in both
   notations. A constant (`assign` with `value:`) is checked against the loaded CT only.
 - Outside a study, before `fleet init ct`, or for an ID without a class,
   only the loaded CT can check the values.
@@ -556,7 +577,7 @@ naming the dataset, variable, and codelist:
 ```yaml
 ct:
   validate: true
-  file: ct/cdisc_ct.yaml   # optional — loaded into the CT cache before the run
+  file: ct/cdisc_ct.yaml   # optional — loaded for this spec only, also without validate:
 datasets:
   - name: DM
     variables:
