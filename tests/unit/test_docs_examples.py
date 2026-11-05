@@ -16,10 +16,10 @@ Marker convention
 -----------------
 A block is executed **by default**. To mark a block as intentionally
 illustrative (a fragment, or one that needs files/services not present
-in the harness), put the HTML comment ``<!-- docs:no-run -->`` on the
-line immediately before its opening fence::
+in the harness), put the HTML comment ``<!-- docs:no-run: <reason> -->`` on
+the line immediately before its opening fence; the reason is required::
 
-    <!-- docs:no-run -->
+    <!-- docs:no-run: reads the parquet files of a built study -->
 
     ```python
     # not executed by the guardrail
@@ -30,10 +30,15 @@ The same convention is documented at the top of ``docs/concepts/define-yaml.md``
 
 from __future__ import annotations
 
+import ast
+import importlib
+import importlib.util
 import re
+import textwrap
 from pathlib import Path
 
 import polars as pl
+import pytest
 import yaml
 
 import fleet  # noqa: F401 — registers the namespaces used by the doc blocks
@@ -43,7 +48,7 @@ DEFINE_YAML_DOC = REPO_ROOT / "docs" / "concepts" / "define-yaml.md"
 GUIDE = REPO_ROOT / "GUIDE.md"
 
 _FENCE_RE = re.compile(
-    r"(?P<marker><!--\s*docs:no-run\s*-->\s*\n\s*\n)?```(?P<lang>python|yaml)\n"
+    r"(?P<marker><!--\s*docs:no-run[^>]*-->\s*\n\s*\n)?```(?P<lang>python|yaml)\n"
     r"(?P<body>.*?)\n```",
     re.DOTALL,
 )
@@ -403,10 +408,99 @@ def test_docstring_examples_are_valid_python():
 def test_no_run_marker_is_respected():
     """A ``docs:no-run`` block is not counted as runnable."""
     sample = (
-        "<!-- docs:no-run -->\n\n```python\nraise RuntimeError('should not run')\n```\n\n"
+        "<!-- docs:no-run: a test -->\n\n```python\nraise RuntimeError('should not run')\n```\n\n"
         "```python\nx = 1\n```\n"
     )
     blocks = list(_iter_blocks(sample))
     runnable = [b for lang, b, run in blocks if run]
     assert len(runnable) == 1
     assert "x = 1" in runnable[0]
+
+
+# --------------------------------------------------------------------------- #
+# Level 1 for every docs page (c1-848): compile, resolve imports, load YAML     #
+# --------------------------------------------------------------------------- #
+
+DOC_PAGES = sorted((REPO_ROOT / "docs").rglob("*.md"))
+
+#: Any fence, also one indented in a list item; the closing fence has the same indent.
+_ANY_FENCE_RE = re.compile(
+    r"(?P<marker><!--\s*docs:no-run(?P<reason>[^>]*)-->[ \t]*\n[ \t]*\n)?"
+    r"^(?P<indent>[ \t]*)```(?P<lang>python|yaml)\n(?P<body>.*?)\n(?P=indent)```",
+    re.DOTALL | re.MULTILINE,
+)
+
+
+def _page_blocks(page: Path):
+    """Yield ``(line, lang, body, marker, reason)`` for every fence of *page*."""
+    text = page.read_text(encoding="utf-8")
+    for m in _ANY_FENCE_RE.finditer(text):
+        body = textwrap.dedent(m["body"])
+        line = text.count("\n", 0, m.start("indent")) + 1
+        yield line, m["lang"], body, m["marker"] is not None, (m["reason"] or "").strip(" :")
+
+
+def _fleet_imports(tree: ast.AST):
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and not node.level and node.module:
+            if node.module.split(".")[0] == "fleet":
+                yield node.module, [a.name for a in node.names if a.name != "*"]
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.split(".")[0] == "fleet":
+                    yield alias.name, []
+
+
+def _ids(page: Path) -> str:
+    return str(page.relative_to(REPO_ROOT))
+
+
+def test_every_docs_page_is_scanned():
+    assert len(DOC_PAGES) > 30
+    assert sum(1 for p in DOC_PAGES for b in _page_blocks(p) if b[1] == "python") > 100
+
+
+@pytest.mark.parametrize("page", DOC_PAGES, ids=_ids)
+def test_every_python_block_compiles_and_its_fleet_imports_resolve(page: Path):
+    problems = []
+    for line, lang, body, _, _ in _page_blocks(page):
+        if lang != "python":
+            continue
+        try:
+            tree = ast.parse(body)
+        except SyntaxError as exc:
+            problems.append(f"line {line}: {exc}")
+            continue
+        for module_name, names in _fleet_imports(tree):
+            try:
+                module = importlib.import_module(module_name)
+            except ImportError as exc:
+                problems.append(f"line {line}: import {module_name}: {exc}")
+                continue
+            missing = [
+                n
+                for n in names
+                if not hasattr(module, n) and importlib.util.find_spec(f"{module_name}.{n}") is None
+            ]
+            if missing:
+                problems.append(f"line {line}: {module_name} has no {missing}")
+    assert not problems, f"{_ids(page)}:\n" + "\n".join(problems)
+
+
+@pytest.mark.parametrize("page", DOC_PAGES, ids=_ids)
+def test_every_yaml_block_loads(page: Path):
+    problems = []
+    for line, lang, body, no_run, _ in _page_blocks(page):
+        if lang != "yaml" or no_run:
+            continue
+        try:
+            list(yaml.safe_load_all(body))
+        except yaml.YAMLError as exc:
+            problems.append(f"line {line}: {exc}")
+    assert not problems, f"{_ids(page)}:\n" + "\n".join(problems)
+
+
+@pytest.mark.parametrize("page", DOC_PAGES, ids=_ids)
+def test_every_no_run_marker_gives_a_reason(page: Path):
+    bare = [line for line, _, _, no_run, reason in _page_blocks(page) if no_run and not reason]
+    assert not bare, f"{_ids(page)}: docs:no-run without a reason before lines {bare}"
