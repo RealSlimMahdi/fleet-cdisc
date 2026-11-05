@@ -163,9 +163,8 @@ dm = (
 print(f"\n── 2a. SDTM DM : {dm.shape[0]} subjects × {dm.shape[1]} variables")
 
 # ── 2a-bis. SUPPDM: Non-Standard Variables (SUPPQUAL for IG ≤3.4) ──────
-# nsv() declares qualifier columns with inline metadata. For IG 3.5+ the
-# columns stay in DM unchanged. For IG ≤3.4, export_supp() unpivots them
-# to the vertical SUPPQUAL structure.
+# nsv() declares qualifier columns with inline metadata. For IG ≤3.4,
+# export_supp() unpivots them to the vertical SUPPQUAL structure.
 dm_ns = (
     dm_raw.sdtm.assign("STUDYID", value="CDISCPILOT01")
     .assign("DOMAIN", value="DM")
@@ -176,16 +175,14 @@ dm_ns = (
 suppdm = dm_ns.export_supp()
 print(f"        → SUPPDM: {suppdm.shape[0]} qualifier rows × {suppdm.shape[1]} variables")
 
-# Post-hoc pattern: export_supp with explicit qualifiers dict on existing frame
-suppdm_alt = (
-    dm.sdtm.export_supp(
-        qualifiers={"ARM": {"label": "Description of Planned Arm", "origin": "PROTOCOL"}},
-    )
-    if "ARM" in dm.columns
-    else None
+# Post-hoc pattern: a qualifiers dict on a built frame. SAFETY is a sponsor
+# population flag ("Y" for a subject with a first dose), not a DM variable.
+suppdm_alt = dm.with_columns(
+    SAFETY=pl.when(pl.col("RFSTDTC").is_not_null()).then(pl.lit("Y"))
+).sdtm.export_supp(
+    qualifiers={"SAFETY": {"label": "Safety Population Flag", "origin": "Derived"}},
 )
-if suppdm_alt is not None:
-    print(f"        → SUPPDM (post-hoc): {suppdm_alt.shape[0]} rows")
+print(f"        → SUPPDM (post-hoc): {suppdm_alt.shape[0]} rows")
 
 # Export DM as CDISC Dataset-JSON v1.1
 from fleet.io import save_dataset_json  # noqa: E402

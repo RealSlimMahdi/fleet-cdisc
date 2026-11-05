@@ -253,6 +253,36 @@ dm = (
 
 Only fall back to raw Polars for pre-processing that genuinely cannot be expressed as a Fleet verb (e.g. pivoting wide vendor files, multi-file concatenation), and re-enter the Fleet pipeline immediately afterwards.
 
+### Do not change a frame in place after a namespace call
+
+`df.sdtm` and `df.adam` keep the frame they saw at the first access.
+A Polars in-place method (`insert_column`, `replace_column`, `df["X"] = ...`) changes the frame, but not that copy.
+After a namespace call, add a column with `with_columns` (a new frame), not with an in-place method.
+
+### Two races in DM: RACE = "MULTIPLE"
+
+`multiple_responses` gives one row per response.
+Do not use it for DM RACE: DM has one record per subject.
+SDTMIG 3.4 section 4.2.8.3 puts `MULTIPLE` in RACE and each race in SUPPDM (RACE1, RACE2, ...):
+
+```python
+races = pl.col("race").str.split("|")
+ns = (
+    raw_dm.with_columns(
+        RACE1=races.list.get(0, null_on_oob=True),
+        RACE2=races.list.get(1, null_on_oob=True),
+    )
+    .sdtm.assign("DOMAIN", value="DM")
+    .assign("USUBJID", source="subject_id")
+    .assign("RACE", source="RACE1")
+    .condition_add("RACE", condition=pl.col("RACE2").is_not_null(), then_value="MULTIPLE")
+    .nsv("RACE1", source="RACE1", label="Race 1", origin="Collected")
+    .nsv("RACE2", source="RACE2", label="Race 2", origin="Collected")
+)
+suppdm = ns.export_supp()
+dm = ns.to_frame().drop("RACE1", "RACE2")
+```
+
 ## Cross-Domain Derivations with `.pin()`
 
 Many CDISC derivations require data from sibling domains — SDTM study day needs DM's `RFSTDTC`, ADaM datasets need ADSL columns like `TRTSDT` and population flags. Fleet's **Pipeline Passport** (`.pin()`) lets verbs _see_ reference data without polluting the frame.
@@ -272,7 +302,9 @@ vs = (
     .date("VSDTC", source="vs_date")
     .pin("DM", dm)  # ← attach reference (join_on="USUBJID" by default)
     .study_day("VSDY", date_col="VSDTC")  # ← consumes the pin
-    .baseline_flag("VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD")  # ← also consumes it
+    .baseline_flag(
+        "VSLOBXFL", date_col="VSDTC", testcd_col="VSTESTCD", ref_col="RFXSTDTC"
+    )  # ← also consumes it
     .to_frame()
 )
 ```
@@ -367,6 +399,11 @@ ae = (
     .to_frame()
 )
 ```
+
+The policy applies per verb: each verb takes the policy in force when you call it, so put `.fk_policy()` before the verbs it must cover.
+Three SDTM rules follow the IG. `ETCD` `UNPLAN` is legal in SE, so it is not an orphan of TE.
+`VISITNUM` and `VISIT` orphans stay warnings under `"error"`, because TV holds planned visits only and an unscheduled visit is legal.
+`EPOCH` is checked against a pinned TA, which holds EPOCH (TE has none).
 
 ### Lineage tracing
 

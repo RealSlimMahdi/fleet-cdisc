@@ -47,7 +47,8 @@ class PinMixin:
       | ``"off"``).
     """
 
-    # Namespace subclasses override with domain-specific rules.
+    # Namespace subclasses override with domain-specific rules. Rule keys: pin, ref_col,
+    # allow (space-separated legal values), max_severity ("warn"), note (added to the message).
     _FK_RULES: ClassVar[dict[str, dict[str, str]]] = {}
 
     # ------------------------------------------------------------------ #
@@ -322,6 +323,8 @@ class PinMixin:
         severity = getattr(self, "_fk_severity", "warn")
         if severity == "off":
             return
+        if rule.get("max_severity") == "warn":
+            severity = "warn"
         entry = (target, pin_domain, rule.get("ref_col", target), severity)
         pending: list[tuple[str, str, str, str]] = list(getattr(self, "_pending_fk_checks", []))
         if entry not in pending:
@@ -349,15 +352,18 @@ class PinMixin:
             ref_df, _ = pinned[pin.upper()]
             if ref_col not in ref_df.columns or col not in df.columns:
                 continue
+            rule = self.__class__._FK_RULES.get(col, {})
             current_vals = set(df[col].drop_nulls().to_list())
             ref_vals = set(ref_df[ref_col].drop_nulls().to_list())
-            orphans = current_vals - ref_vals
+            orphans = current_vals - ref_vals - set(rule.get("allow", "").split())
             if not orphans:
                 continue
             msg = (
                 f"FK check: {len(orphans)} value(s) in '{col}' not found in "
                 f"pinned {pin}.{ref_col}: {sorted(orphans)[:5]}"
             )
+            if rule.get("note"):
+                msg += f". {rule['note']}"
             if severity == "error":
                 raise DerivationError(msg)
             warnings.warn(msg, stacklevel=3)

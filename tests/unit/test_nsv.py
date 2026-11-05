@@ -380,10 +380,11 @@ class TestExportSuppPostHocDict:
 
     def test_explicit_qualifiers_dict(self, dm_raw_with_flags):
         # No nsv() calls — use explicit dict on an existing frame
-        supp = dm_raw_with_flags.sdtm.export_supp(
+        dm = dm_raw_with_flags.rename({"safety_flag": "SAFETY", "itt_flag": "ITT"})
+        supp = dm.sdtm.export_supp(
             qualifiers={
-                "safety_flag": {"label": "Safety Population Flag", "origin": "Derived"},
-                "itt_flag": {"label": "ITT Population Flag", "origin": "Derived"},
+                "SAFETY": {"label": "Safety Population Flag", "origin": "Derived"},
+                "ITT": {"label": "ITT Population Flag", "origin": "Derived"},
             },
         )
         assert supp.columns == [
@@ -398,17 +399,16 @@ class TestExportSuppPostHocDict:
             "QORIG",
             "QEVAL",
         ]
-        assert set(supp["QNAM"].to_list()) == {"safety_flag", "itt_flag"}
-        # null itt_flag row dropped
-        assert supp.filter(pl.col("QNAM") == "itt_flag").height == 2
+        assert set(supp["QNAM"].to_list()) == {"SAFETY", "ITT"}
+        # null ITT row dropped
+        assert supp.filter(pl.col("QNAM") == "ITT").height == 2
 
     def test_qualifiers_dict_priority_over_nsv_meta(self, dm_raw_with_flags):
-        ns = dm_raw_with_flags.sdtm.nsv("SAFETY", source="safety_flag", label="Safety Flag")
+        dm = dm_raw_with_flags.rename({"efficacy_flag": "EFFFL"})
+        ns = dm.sdtm.nsv("SAFETY", source="safety_flag", label="Safety Flag")
         # qualifiers dict should override _nsv_meta
-        supp = ns.export_supp(
-            qualifiers={"efficacy_flag": {"label": "Efficacy Flag", "origin": "Derived"}}
-        )
-        assert set(supp["QNAM"].to_list()) == {"efficacy_flag"}
+        supp = ns.export_supp(qualifiers={"EFFFL": {"label": "Efficacy Flag", "origin": "Derived"}})
+        assert set(supp["QNAM"].to_list()) == {"EFFFL"}
 
 
 # ──────────────────────────────────────────────────────────────────────

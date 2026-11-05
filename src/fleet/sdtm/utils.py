@@ -546,6 +546,12 @@ def parse_expression(expr_str: str, schema: pl.Schema | None = None) -> pl.Expr:
     except DerivationError:
         raise
     except Exception as exc:
+        if "truth value of an Expr is ambiguous" in str(exc):
+            raise DerivationError(
+                f"Cannot parse expression {expr_str!r}: write (AGE > 20) & (AGE < 75), not "
+                "AGE > 20 and AGE < 75 or 20 < AGE < 75. Use &, |, ~ and put each comparison "
+                "in parentheses."
+            ) from exc
         raise DerivationError(
             f"Cannot parse expression {expr_str!r}: {exc}. "
             "Reference columns as pl.col('X') or a bare name, "
