@@ -85,6 +85,8 @@ class TestDeriveDt:
         assert str(result["ADT"][2]) == "2014-12-31"
 
     def test_partial_yyyy_mid(self, dtc_frame):
+        # Pins today's result. admiral 1.4.1 gives 2014-06-30 for a missing month with
+        # "mid"; ADR-0045 records this as a separate defect, out of the admiral grid.
         result = dtc_frame.adam.date(
             "ADT",
             source="AESTDTC",
@@ -440,6 +442,8 @@ class TestFlagWherePreFilter:
 
 class TestAgeFromDates:
     def test_basic_age_calculation(self):
+        # Completed years (ADR-0025): the day before the birthday, the birthday, and a
+        # 29 February birthday, which is complete on 1 March of a common year.
         df = pl.from_repr("""\
 ┌─────────┬────────────┬────────────┐
 │ USUBJID ┆ BRTHDT     ┆ RANDDT     │
@@ -447,6 +451,11 @@ class TestAgeFromDates:
 │ str     ┆ str        ┆ str        │
 ╞═════════╪════════════╪════════════╡
 │ S01     ┆ 1950-06-15 ┆ 2014-01-15 │
+│ S02     ┆ 1950-06-15 ┆ 2014-06-14 │
+│ S03     ┆ 1950-06-15 ┆ 2014-06-15 │
+│ S04     ┆ 2000-02-29 ┆ 2023-02-28 │
+│ S05     ┆ 2000-02-29 ┆ 2023-03-01 │
+│ S06     ┆ 2000-02-29 ┆ 2024-02-29 │
 └─────────┴────────────┴────────────┘
 """).with_columns(
             pl.col("BRTHDT").str.to_date("%Y-%m-%d"),
@@ -455,8 +464,7 @@ class TestAgeFromDates:
         result = df.adam.adsl.age_from_dates(
             "AAGE", birth_date="BRTHDT", reference_date="RANDDT"
         ).to_frame()
-        age = result["AAGE"][0]
-        assert 63.0 <= age <= 64.0  # approximately 63.6
+        assert result["AAGE"].to_list() == [63, 63, 64, 22, 23, 24]
 
     def test_null_date_returns_null(self):
         df = pl.from_repr("""\

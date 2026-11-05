@@ -159,3 +159,24 @@ class TestOnsetRecovery:
         assert result["RCVRYFL"][0] == "Y"
         # Row 1: started on-trt, NO end date → null
         assert result["RCVRYFL"][1] is None
+
+    def test_outcomes_on_the_onset_boundary(self):
+        ae = pl.from_repr("""
+        ┌──────────────────┬────────────┬────────────┐
+        │ AESTDTC          ┆ AEENDTC    ┆ TRTSDT     │
+        │ ---              ┆ ---        ┆ ---        │
+        │ str              ┆ str        ┆ str        │
+        ╞══════════════════╪════════════╪════════════╡
+        │ 2024-01-10       ┆ 2024-01-12 ┆ 2024-01-10 │
+        │ 2024-01-10T08:00 ┆ 2024-01-11 ┆ 2024-01-10 │
+        │ 2024-01-05       ┆ 2024-01-12 ┆ 2024-01-10 │
+        │ 2024-01          ┆ 2024-01-20 ┆ 2024-01-10 │
+        │ null             ┆ 2024-01-20 ┆ 2024-01-10 │
+        └──────────────────┴────────────┴────────────┘
+        """)
+        result = ae.adam.occds.onset_recovery(
+            "RCVRYFL", start_date="AESTDTC", end_date="AEENDTC", ref_date="TRTSDT"
+        ).to_frame()
+        # Onset on the reference day (date or timed text) is on/after it; onset before
+        # it, a partial start and a null start give no flag.
+        assert result["RCVRYFL"].to_list() == ["Y", "Y", None, None, None]

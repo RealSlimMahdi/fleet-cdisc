@@ -620,26 +620,28 @@ class TestADSLAgeYears:
 class TestADSLDerivePeriod:
     def test_creates_period_columns(self):
         df = pl.from_repr("""\
-┌─────────┬────────────┬────────────┬────────┬────────────┬────────────┬─────────┐
-│ USUBJID ┆ AP01SDT    ┆ AP01EDT    ┆ TRT01P ┆ AP02SDT    ┆ AP02EDT    ┆ TRT02P  │
-│ ---     ┆ ---        ┆ ---        ┆ ---    ┆ ---        ┆ ---        ┆ ---     │
-│ str     ┆ str        ┆ str        ┆ str    ┆ str        ┆ str        ┆ str     │
-╞═════════╪════════════╪════════════╪════════╪════════════╪════════════╪═════════╡
-│ 01      ┆ 2014-01-01 ┆ 2014-06-30 ┆ Active ┆ 2014-07-01 ┆ 2014-12-31 ┆ Placebo │
-└─────────┴────────────┴────────────┴────────┴────────────┴────────────┴─────────┘
+┌─────────┬────────────┬────────────┬────────┬────────────┬────────────┐
+│ USUBJID ┆ P1START    ┆ P1END      ┆ ARM1   ┆ P2START    ┆ P2END      │
+│ ---     ┆ ---        ┆ ---        ┆ ---    ┆ ---        ┆ ---        │
+│ str     ┆ str        ┆ str        ┆ str    ┆ str        ┆ str        │
+╞═════════╪════════════╪════════════╪════════╪════════════╪════════════╡
+│ 01      ┆ 2014-01-01 ┆ 2014-06-30 ┆ Active ┆ 2014-07-01 ┆ 2014-12-31 │
+│ 02      ┆ 2014-02-01 ┆ 2014-07-31 ┆ Low    ┆ null       ┆ null       │
+└─────────┴────────────┴────────────┴────────┴────────────┴────────────┘
 """)
         result = df.adam.adsl.derive_period(
             periods=[
-                {"number": 1, "start": "AP01SDT", "end": "AP01EDT", "treatment": "TRT01P"},
-                {"number": 2, "start": "AP02SDT", "end": "AP02EDT", "treatment": "TRT02P"},
+                {"number": 1, "start": "P1START", "end": "P1END", "treatment": "ARM1"},
+                # Not a column name: the text is the planned treatment of every subject.
+                {"number": 2, "start": "P2START", "end": "P2END", "treatment": "Placebo"},
             ],
         ).to_frame()
-        assert result["AP01SDT"][0] == "2014-01-01"
-        assert result["AP01EDT"][0] == "2014-06-30"
-        assert result["TRT01P"][0] == "Active"
-        assert result["AP02SDT"][0] == "2014-07-01"
-        assert result["AP02EDT"][0] == "2014-12-31"
-        assert result["TRT02P"][0] == "Placebo"
+        assert result.select(
+            "AP01SDT", "AP01EDT", "TRT01P", "AP02SDT", "AP02EDT", "TRT02P"
+        ).rows() == [
+            ("2014-01-01", "2014-06-30", "Active", "2014-07-01", "2014-12-31", "Placebo"),
+            ("2014-02-01", "2014-07-31", "Low", None, None, "Placebo"),
+        ]
 
 
 # ══════════════════════════════════════════════════════════════════════
