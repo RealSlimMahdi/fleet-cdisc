@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import datetime as dt
+
 import polars as pl
 import pytest
 
@@ -121,7 +123,13 @@ class TestAdamDateDtm:
 
     def test_basic_dtm(self, dtc_df: pl.DataFrame) -> None:
         result = dtc_df.adam.date("ADTM", source="AESTDTC").to_frame()
-        assert "ADTM" in result.columns
+        assert result["ADTM"].to_list() == [
+            dt.datetime(2024, 1, 15),
+            dt.datetime(2024, 3, 20),
+            dt.datetime(2024, 6, 1),
+        ]
+        assert result["ADTF"].to_list() == [None, None, "D"]
+        assert result["ATMF"].to_list() == ["H", "H", "H"]
 
     def test_dtm_time_invalid_for_dt(self, dtc_df: pl.DataFrame) -> None:
         with pytest.raises(ValueError, match="time= parameter is only valid"):
@@ -133,7 +141,16 @@ class TestAdamDateValue:
 
     def test_value_broadcast_dt(self, dtc_df: pl.DataFrame) -> None:
         result = dtc_df.adam.date("ADT", value="2024-01-01").to_frame()
-        assert "ADT" in result.columns
+        assert result["ADT"].to_list() == [dt.date(2024, 1, 1)] * 3
+
+    def test_value_broadcast_dtm(self, dtc_df: pl.DataFrame) -> None:
+        result = dtc_df.adam.date("ADTM", value="2024-01-01T08:00:00").to_frame()
+        assert result["ADTM"].to_list() == [dt.datetime(2024, 1, 1, 8, 0)] * 3
+
+    @pytest.mark.xfail(strict=True, reason="c1-846: a value= literal with hh:mm only gives null")
+    def test_value_broadcast_dtm_without_seconds(self, dtc_df: pl.DataFrame) -> None:
+        result = dtc_df.adam.date("ADTM", value="2024-01-01T08:00").to_frame()
+        assert result["ADTM"].to_list() == [dt.datetime(2024, 1, 1, 8, 0)] * 3
 
 
 # ── SDTM .date() DTM + time= parameter tests ─────────────────────────
