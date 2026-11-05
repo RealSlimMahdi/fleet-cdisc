@@ -110,7 +110,7 @@ class Row(BaseModel):
     )
     label: str | None = Field(
         default=None,
-        description="Display label for this row group.  Defaults to *field*.",
+        description="Display label for this row group.  With no label, the row group has no heading.",
     )
     filter_value: str | None = Field(
         default=None,
@@ -142,7 +142,7 @@ class Column(BaseModel):
     )
     label: str | None = Field(
         default=None,
-        description="Display label for this column.  Defaults to *field*.",
+        description="Display label for this column.",
     )
     format: str | None = Field(
         default=None,

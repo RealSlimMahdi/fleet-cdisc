@@ -462,3 +462,14 @@ def test_full_pipeline_page_blocks_execute(tmp_path, monkeypatch):
     assert adsl["TRTSDT"].cast(pl.String).to_list() == ["2023-01-01", "2023-01-01"]
     assert adsl["TRTSDTF"].to_list() == [None, "D"]
     assert ns["advs"]["BNRIND"].to_list() == [None, "NORMAL", None, "HIGH"]
+
+
+def test_tdd_page_blocks_execute(tmp_path, monkeypatch):
+    """c1-654: the SE and EPOCH blocks of tdd.md define their inputs and run."""
+    ns, ran = _run_page("concepts/tdd.md", tmp_path, monkeypatch)
+    assert ran == 7
+    se = ns["se"]
+    assert se["SESTDTC"].to_list() == ["2024-01-01", "2024-01-15"]
+    assert se["SEENDTC"].to_list() == ["2024-01-15", None]
+    assert se["SESEQ"].to_list() == [1, 2]
+    assert ns["ae"]["EPOCH"].to_list() == ["SCREENING", "TREATMENT"]
