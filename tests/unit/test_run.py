@@ -664,3 +664,68 @@ class TestInputSearch:
         adsl = next(run_study(plan_study(ctx)))
 
         assert adsl.frame["AGE"].to_list() == [45, 60]
+
+
+class TestPilotStudy:
+    """The CDISCPILOT01 define files run from the raw inputs to ADSL."""
+
+    _PILOT = Path(__file__).parents[2] / "examples" / "cdiscpilot01" / "study_config.yaml"
+
+    _RAW = {
+        "dm_raw": pl.from_repr("""\
+┌────────────────┬─────────┬─────┬─────┬───────┬────────────────────────┬──────────┬─────────────────────┬─────────────────┬────────────────┬───────────────────────┐
+│ patient_number ┆ site_id ┆ age ┆ sex ┆ race  ┆ ethnic                 ┆ arm_code ┆ arm_description     ┆ first_dose_date ┆ last_dose_date ┆ informed_consent_date │
+│ ---            ┆ ---     ┆ --- ┆ --- ┆ ---   ┆ ---                    ┆ ---      ┆ ---                 ┆ ---             ┆ ---            ┆ ---                   │
+│ str            ┆ str     ┆ i64 ┆ str ┆ str   ┆ str                    ┆ str      ┆ str                 ┆ str             ┆ str            ┆ str                   │
+╞════════════════╪═════════╪═════╪═════╪═══════╪════════════════════════╪══════════╪═════════════════════╪═════════════════╪════════════════╪═══════════════════════╡
+│ 01-701-1015    ┆ 701     ┆ 63  ┆ F   ┆ WHITE ┆ NOT HISPANIC OR LATINO ┆ Pbo      ┆ Placebo             ┆ 2014-01-02      ┆ 2014-07-02     ┆ 2014-01-01            │
+│ 01-701-1023    ┆ 701     ┆ 64  ┆ M   ┆ WHITE ┆ NOT HISPANIC OR LATINO ┆ Xan_Lo   ┆ Xanomeline Low Dose ┆ 2014-01-03      ┆ 2014-07-04     ┆ 2014-01-02            │
+└────────────────┴─────────┴─────┴─────┴───────┴────────────────────────┴──────────┴─────────────────────┴─────────────────┴────────────────┴───────────────────────┘
+"""),
+        "ae_raw": pl.from_repr("""\
+┌────────────────┬───────────┬─────────────────┬───────────────┬─────────────┬─────────────┬────────────┬────────────────────┬──────────────────┬──────────────────┐
+│ patient_number ┆ ae_term   ┆ ae_decoded_term ┆ ae_start_date ┆ ae_end_date ┆ ae_severity ┆ ae_serious ┆ ae_outcome         ┆ ae_action        ┆ ae_relationship  │
+│ ---            ┆ ---       ┆ ---             ┆ ---           ┆ ---         ┆ ---         ┆ ---        ┆ ---                ┆ ---              ┆ ---              │
+│ str            ┆ str       ┆ str             ┆ str           ┆ str         ┆ str         ┆ str        ┆ str                ┆ str              ┆ str              │
+╞════════════════╪═══════════╪═════════════════╪═══════════════╪═════════════╪═════════════╪════════════╪════════════════════╪══════════════════╪══════════════════╡
+│ 01-701-1015    ┆ NAUSEA    ┆ Nausea          ┆ 2014-02-05    ┆ 2014-02-06  ┆ MODERATE    ┆ N          ┆ RECOVERED/RESOLVED ┆ DOSE NOT CHANGED ┆ NOT RELATED      │
+│ 01-701-1015    ┆ HEADACHE  ┆ Headache        ┆ 2014-01-10    ┆ 2014-01-12  ┆ MILD        ┆ N          ┆ RECOVERED/RESOLVED ┆ DOSE NOT CHANGED ┆ POSSIBLY RELATED │
+│ 01-701-1023    ┆ DIZZINESS ┆ Dizziness       ┆ 2014-01-15    ┆ 2014-01-16  ┆ MILD        ┆ N          ┆ RECOVERED/RESOLVED ┆ DOSE NOT CHANGED ┆ POSSIBLY RELATED │
+└────────────────┴───────────┴─────────────────┴───────────────┴─────────────┴─────────────┴────────────┴────────────────────┴──────────────────┴──────────────────┘
+"""),
+        "vs_raw": pl.from_repr("""\
+┌────────────────┬──────────┬─────────────────────────┬───────────┬──────────┬──────────┬──────────┬──────────┬──────────┬────────────┐
+│ patient_number ┆ vstestcd ┆ vstest                  ┆ vs_result ┆ vsorresu ┆ vsstresn ┆ vsstresu ┆ visitnum ┆ visit    ┆ vs_date    │
+│ ---            ┆ ---      ┆ ---                     ┆ ---       ┆ ---      ┆ ---      ┆ ---      ┆ ---      ┆ ---      ┆ ---        │
+│ str            ┆ str      ┆ str                     ┆ str       ┆ str      ┆ f64      ┆ str      ┆ f64      ┆ str      ┆ str        │
+╞════════════════╪══════════╪═════════════════════════╪═══════════╪══════════╪══════════╪══════════╪══════════╪══════════╪════════════╡
+│ 01-701-1015    ┆ SYSBP    ┆ Systolic Blood Pressure ┆ 120       ┆ mmHg     ┆ 120.0    ┆ mmHg     ┆ 1.0      ┆ BASELINE ┆ 2014-01-01 │
+│ 01-701-1023    ┆ SYSBP    ┆ Systolic Blood Pressure ┆ 130       ┆ mmHg     ┆ 130.0    ┆ mmHg     ┆ 1.0      ┆ BASELINE ┆ 2014-01-02 │
+└────────────────┴──────────┴─────────────────────────┴───────────┴──────────┴──────────┴──────────┴──────────┴──────────┴────────────┘
+"""),
+        "ex_raw": pl.from_repr("""\
+┌────────────────┬──────────────┬─────────┬───────────────┬─────────────┐
+│ patient_number ┆ ex_treatment ┆ ex_dose ┆ ex_start_date ┆ ex_end_date │
+│ ---            ┆ ---          ┆ ---     ┆ ---           ┆ ---         │
+│ str            ┆ str          ┆ i64     ┆ str           ┆ str         │
+╞════════════════╪══════════════╪═════════╪═══════════════╪═════════════╡
+│ 01-701-1015    ┆ PLACEBO      ┆ 0       ┆ 2014-01-02    ┆ 2014-07-02  │
+│ 01-701-1023    ┆ XANOMELINE   ┆ 54      ┆ 2014-01-03    ┆ 2014-07-04  │
+└────────────────┴──────────────┴─────────┴───────────────┴─────────────┘
+"""),
+    }
+
+    def test_the_pilot_runs_from_the_raw_inputs_to_adsl(self) -> None:
+        plan = plan_study(
+            load_study_context(self._PILOT), datasets=["DM", "AE", "VS", "EX", "ADSL"]
+        )
+
+        built = {b.step.dataset: b.frame for b in run_study(plan, inputs=self._RAW)}
+
+        assert built["AE"].select("USUBJID", "AESEQ", "AETERM").sort("USUBJID", "AESEQ").rows() == [
+            ("01-701-1015", 1, "HEADACHE"),
+            ("01-701-1015", 2, "NAUSEA"),
+            ("01-701-1023", 1, "DIZZINESS"),
+        ]
+        assert built["ADSL"]["STUDYID"].to_list() == ["CDISCPILOT01", "CDISCPILOT01"]
+        assert built["ADSL"]["TRTSDT"].cast(pl.String).to_list() == ["2014-01-02", "2014-01-03"]

@@ -328,7 +328,11 @@ datasets:
         type: integer
         length: 1
         mandatory: true
-        origin: Assigned
+        origin: Derived
+        derivation:
+          algorithm: seq
+          by: [USUBJID]
+          order_by: [ae_start_date, ae_term]
 
       - name: AETERM
         label: Reported Term for the Adverse Event
@@ -599,7 +603,11 @@ datasets:
         type: integer
         length: 1
         mandatory: true
-        origin: Assigned
+        origin: Derived
+        derivation:
+          algorithm: seq
+          by: [USUBJID]
+          order_by: [ex_start_date]
 
       - name: EXTRT
         label: Name of Actual Treatment

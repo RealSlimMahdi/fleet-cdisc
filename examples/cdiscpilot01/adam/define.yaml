@@ -40,16 +40,19 @@ datasets:
     inputs:
       - name: DM
         type: dataset
+      - name: EX
+        type: dataset
     variables:
       - name: STUDYID
         label: Study Identifier
         type: text
         length: 12
         mandatory: true
-        origin: Assigned
+        origin: Predecessor
+        predecessor: DM.STUDYID
         derivation:
           algorithm: assign
-          value: "CDISCPILOT01"
+          source: STUDYID
 
       - name: USUBJID
         label: Unique Subject Identifier
