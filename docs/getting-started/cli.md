@@ -201,7 +201,7 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
 | `--spec` | _(none)_ | Migrate define.yaml files to the verb vocabulary (fleet_spec_version 2). |
-| `--write` | _(none)_ | Rewrite files in place (default: print a unified diff). |
+| `--write` | _(none)_ | Rewrite files in place (default: print a unified diff). No backup file is kept: commit the files to git first. |
 
 ---
 

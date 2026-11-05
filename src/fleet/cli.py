@@ -2939,7 +2939,10 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     migrate.add_argument(
         "--write",
         action="store_true",
-        help="Rewrite files in place (default: print a unified diff).",
+        help=(
+            "Rewrite files in place (default: print a unified diff). No backup file is "
+            "kept: commit the files to git first."
+        ),
     )
     migrate.set_defaults(func=_run_migrate)
 
