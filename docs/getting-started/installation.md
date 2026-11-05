@@ -24,12 +24,18 @@ Fleet is pre-alpha. Only pre-release versions are on PyPI, so tell the installer
 
 ### Optional extras
 
-| Extra  | Installs         | When to use                    |
-| ------ | ---------------- | ------------------------------ |
-| `io`   | `pyreadstat`     | Reading SAS files (`.xpt`, `.sas7bdat`) and writing XPT |
-| `all`  | All extras       | Full feature set               |
-| `docs` | MkDocs + plugins | Building this documentation    |
-| `dev`  | pytest, ruff, io | Contributing to Fleet          |
+| Extra      | Installs         | When to use                                |
+| ---------- | ---------------- | ------------------------------------------ |
+| `io`       | `pyreadstat`     | Reading SAS files (`.xpt`, `.sas7bdat`) and writing XPT |
+| `tlg-pdf`  | `weasyprint`     | TLG PDF export                             |
+| `tlg-pptx` | `python-pptx`    | TLG PowerPoint export                      |
+| `migrate`  | `libcst`         | `fleet migrate` (old spellings to new)     |
+| `watch`    | `watchfiles`     | `--watch` on `fleet define-xml` and `tlg`  |
+| `lsp`      | `pygls`          | `fleet lsp --stdio` language server        |
+| `mcp`      | `mcp`            | `fleet mcp --stdio` MCP server             |
+| `all`      | All extras above | Full feature set                           |
+| `docs`     | MkDocs + plugins | Building this documentation                |
+| `dev`      | pytest, ruff, io | Contributing to Fleet                      |
 
 ```bash
 # SAS XPT support

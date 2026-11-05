@@ -90,7 +90,7 @@ set_values_to=...)` raises `VerbUsageError`.
 ### `kind="column"` example
 
 ```python
-# examples/cdiscpilot01/adam/derivations/AGEGR1.py
+# programs/derivations/AGEGR1.py
 from fleet.core.derivation import derivation
 import polars as pl
 
@@ -109,7 +109,7 @@ def AGEGR1() -> pl.Expr:
 Use it directly in a pipeline:
 
 ```python
-from examples.cdiscpilot01.adam.derivations import AGEGR1
+from programs.derivations import AGEGR1
 
 adsl = dm.adam.adsl.derivation(AGEGR1).to_frame()
 ```

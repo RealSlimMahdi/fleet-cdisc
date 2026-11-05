@@ -1,6 +1,6 @@
 # Fleet Compare — Spec
 
-> **Status:** spec, pre-implementation. Produced from the grilling session of 2026-09-08. Tracker: [RealSlimMahdi/fleet-cdisc#99](https://github.com/RealSlimMahdi/fleet-cdisc/issues/99), labelled `ready-for-agent`. Nothing here is built. Vocabulary follows `CONTEXT.md` (compare, base, candidate, comparison report, keys, variable pair). Decision record: `docs/adr/0002-own-comparison-engine-in-pure-polars.md`.
+> **Status:** built (issues #99 to #108, package `fleet.comparison`). Kept as the design record; the code is the reference now. Produced from the grilling session of 2026-09-08. Tracker: [RealSlimMahdi/fleet-cdisc#99](https://github.com/RealSlimMahdi/fleet-cdisc/issues/99). Vocabulary follows `CONTEXT.md` (compare, base, candidate, comparison report, keys, variable pair). Decision record: `docs/adr/0002-own-comparison-engine-in-pure-polars.md`.
 
 ## Problem Statement
 

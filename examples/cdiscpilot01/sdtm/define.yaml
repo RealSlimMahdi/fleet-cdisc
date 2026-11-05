@@ -84,7 +84,7 @@ datasets:
     inputs:
       - name: dm_raw
         type: raw
-        path: datasets/cdiscpilot01/raw/dm_raw.csv
+        path: raw/dm_raw.csv  # synthetic sample data
     variables:
       - name: STUDYID
         label: Study Identifier
@@ -290,7 +290,7 @@ datasets:
     inputs:
       - name: ae_raw
         type: raw
-        path: datasets/cdiscpilot01/raw/ae_raw.csv
+        path: raw/ae_raw.csv  # synthetic sample data
     variables:
       - name: STUDYID
         label: Study Identifier
@@ -431,7 +431,7 @@ datasets:
     inputs:
       - name: vs_raw
         type: raw
-        path: datasets/cdiscpilot01/raw/vs_raw.csv
+        path: raw/vs_raw.csv  # synthetic sample data
     variables:
       - name: STUDYID
         label: Study Identifier
@@ -565,7 +565,7 @@ datasets:
     inputs:
       - name: ex_raw
         type: raw
-        path: datasets/cdiscpilot01/raw/ex_raw.csv
+        path: raw/ex_raw.csv  # synthetic sample data
     variables:
       - name: STUDYID
         label: Study Identifier

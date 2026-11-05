@@ -6,7 +6,9 @@
 > interactive tool be, (3) how does each option feel to **create**, to
 > **maintain**, and to **put in production** in a pharma environment.
 
-**Status:** design, pre-implementation. Decisions marked ⬜ are open; ✅ are
+**Status:** design, pre-implementation (rechecked 2026-11-05). Open; tracked in
+[issue #144](https://github.com/RealSlimMahdi/fleet-cdisc/issues/144) and the
+ideas tracker. Decisions marked ⬜ are open; ✅ are
 recommended defaults that stand unless overruled.
 
 ---

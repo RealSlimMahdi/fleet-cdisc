@@ -42,7 +42,14 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class Epoch(StrEnum):
-    """EPOCH (C99079): the 13 terms of the default CT package."""
+    """EPOCH (C99079): the 13 CDISC-standard trial epoch values.
+
+    C99079 is extensible: a sponsor term is accepted as an upper-case string
+    (see ``EpochLike``).
+
+    References:
+        NCI EVS C99079 (sdtmct-2023-12-15): 13 terms.
+    """
 
     SCREENING = "SCREENING"
     BASELINE = "BASELINE"

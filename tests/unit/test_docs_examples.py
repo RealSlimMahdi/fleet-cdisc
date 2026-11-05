@@ -104,12 +104,16 @@ def _guide_namespace() -> dict:
 │ ---            ┆ ---         ┆ ---      ┆ ---                      ┆ ---     ┆ ---      ┆ ---        ┆ ---  │
 │ str            ┆ i64         ┆ str      ┆ str                      ┆ str     ┆ str      ┆ str        ┆ i64  │
 ╞════════════════╪═════════════╪══════════╪══════════════════════════╪═════════╪══════════╪════════════╪══════╡
+│ 01-701-1015    ┆ 701         ┆ SYSBP    ┆ Systolic Blood Pressure  ┆ 117     ┆ mmHg     ┆ 2013-12-26 ┆ -7   │
 │ 01-701-1015    ┆ 701         ┆ SYSBP    ┆ Systolic Blood Pressure  ┆ 121     ┆ mmHg     ┆ 2014-01-01 ┆ -1   │
 │ 01-701-1015    ┆ 701         ┆ SYSBP    ┆ Systolic Blood Pressure  ┆ 124     ┆ mmHg     ┆ 2014-01-16 ┆ 15   │
+│ 01-701-1015    ┆ 701         ┆ DIABP    ┆ Diastolic Blood Pressure ┆ 76      ┆ mmHg     ┆ 2013-12-26 ┆ -7   │
 │ 01-701-1015    ┆ 701         ┆ DIABP    ┆ Diastolic Blood Pressure ┆ 78      ┆ mmHg     ┆ 2014-01-01 ┆ -1   │
 │ 01-701-1015    ┆ 701         ┆ DIABP    ┆ Diastolic Blood Pressure ┆ 80      ┆ mmHg     ┆ 2014-01-16 ┆ 15   │
+│ 01-701-1023    ┆ 701         ┆ SYSBP    ┆ Systolic Blood Pressure  ┆ 112     ┆ mmHg     ┆ 2013-12-26 ┆ -7   │
 │ 01-701-1023    ┆ 701         ┆ SYSBP    ┆ Systolic Blood Pressure  ┆ 118     ┆ mmHg     ┆ 2014-01-01 ┆ -1   │
 │ 01-701-1023    ┆ 701         ┆ SYSBP    ┆ Systolic Blood Pressure  ┆ 115     ┆ mmHg     ┆ 2014-01-16 ┆ 15   │
+│ 01-701-1023    ┆ 701         ┆ DIABP    ┆ Diastolic Blood Pressure ┆ 71      ┆ mmHg     ┆ 2013-12-26 ┆ -7   │
 │ 01-701-1023    ┆ 701         ┆ DIABP    ┆ Diastolic Blood Pressure ┆ 74      ┆ mmHg     ┆ 2014-01-01 ┆ -1   │
 │ 01-701-1023    ┆ 701         ┆ DIABP    ┆ Diastolic Blood Pressure ┆ 73      ┆ mmHg     ┆ 2014-01-16 ┆ 15   │
 └────────────────┴─────────────┴──────────┴──────────────────────────┴─────────┴──────────┴────────────┴──────┘
@@ -225,6 +229,10 @@ def test_guide_pipeline_blocks_execute(tmp_path, monkeypatch):
     assert {"ABLFL", "BASE", "CHG", "PCHG", "ADY"}.issubset(advs.columns)
     baseline_rows = advs.filter(pl.col("ABLFL") == "Y")
     assert (baseline_rows["CHG"] == 0.0).all()  # CHG is 0 at baseline
+    # c1-587: two pre-dose records; the last one (day -1) is the baseline.
+    assert baseline_rows.height == 4
+    sysbp = advs.filter((pl.col("USUBJID") == "01-701-1015") & (pl.col("PARAMCD") == "SYSBP"))
+    assert sysbp["BASE"].unique().to_list() == [121.0]
     # Part 9 built ADAE with TRTEMFL + ASEQ.
     assert {"TRTEMFL", "ASEQ", "AESEVN"}.issubset(ns["adae"].columns)
     # Part 10 built the trial design domains offline (StudyDesign + pipeline).
@@ -596,3 +604,16 @@ def test_coming_from_sas_page_blocks_execute(tmp_path, monkeypatch):
     assert ns["apply_fmt_fn"](5 / 16 * 100, "xx.x") == "31.3"
     assert ns["ae_dm"].columns == ["USUBJID", "AETERM", "AGE"]
     assert ns["ex"]["EXSTDTC"].to_list() == ["2024-03-15", "2024-03"]
+
+
+def test_tdd_se_block_executes():
+    """c1-588: the SE block of docs/concepts/tdd.md runs and gives element boundaries."""
+    text = (REPO_ROOT / "docs" / "concepts" / "tdd.md").read_text(encoding="utf-8")
+    (body,) = [
+        b for lang, b, _ in _iter_blocks(text) if lang == "python" and ".element_boundaries(" in b
+    ]
+    ns: dict = {"pl": pl}
+    exec(compile(body, "<tdd.md>", "exec"), ns)  # noqa: S102 — trusted doc source
+    se = ns["se"]
+    assert se["SEENDTC"].to_list() == ["2024-01-15", None]
+    assert se["SESEQ"].to_list() == [1, 2]

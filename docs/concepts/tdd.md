@@ -1,7 +1,7 @@
 # Trial Design Domains
 
-Fleet provides first-class support for all nine CDISC Trial Design Model (TDD)
-domains through two complementary paths:
+Fleet provides first-class support for the seven CDISC Trial Design Model (TDD)
+domains, plus the subject-level SV and SE, through two complementary paths:
 
 1. **`fleet.StudyDesign`** — a typed aggregate: define the design once,
    derive every domain, audit it, round-trip it through YAML, import it from

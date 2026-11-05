@@ -15,7 +15,7 @@ e.g. ``df.sdtm.verbs()``, for the always-current catalogue):
   - ``df.adam.vaccine``   — Vaccine (admiralvaccine)
   - ``df.adam.metabolic`` — Metabolic (admiralmetabolic)
   - ``df.adam.neuro``     — Neuroscience (admiralneuro)
-  - ``df.adam.pk``        — Pharmacokinetics (ADPC, ADPP)
+  - ``df.adam.pk``        — Pharmacokinetics (ADPC, ADPP, ADPPK)
   - ``df.adam.tte``       — Time-to-event (ADTTE)
   - ``df.tlg``            — Tables, listings and their ARDs (``df.tlg.ae``, …)
 

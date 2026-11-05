@@ -218,7 +218,14 @@ advs = (
     .assign("ANRHI", source="VSSTNRHI")
     .nrind("ANRIND", value="AVAL", low="ANRLO", high="ANRHI")
     .join_adsl("TRT01P", "TRTSDT")  # carry forward on the ADSL pin's key
-    .flag("ABLFL", criteria='pl.col("VSDY") <= 1')
+    # the last pre-dose record per subject and parameter
+    .flag(
+        "ABLFL",
+        criteria="last",
+        order_by="VSDTC",
+        where='pl.col("VSDY") <= 1',
+        by=["USUBJID", "PARAMCD"],
+    )
     .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
     .baseline("BNRIND", aval="ANRIND", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
     .chg("CHG", aval="AVAL", base="BASE")

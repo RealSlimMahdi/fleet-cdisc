@@ -158,7 +158,7 @@ on the callable's `kind`:
 - name: AGEGR1
   derivation:
     algorithm: derivation
-    callable: examples.cdiscpilot01.adam.derivations.AGEGR1
+    callable: programs.derivations.AGEGR1
 ```
 
 Or use the registered short name (if the derivations module was imported):
