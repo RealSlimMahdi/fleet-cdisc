@@ -931,3 +931,86 @@ class TestLoaders:
         qs.write_bytes(bytes(data))
 
         assert load_raw_data(qs).collect()["QSSTRESN"].to_list() == [None]
+
+
+# ── c1-245: fleet run --overwrite, and library hints in CLI words ──
+
+
+class TestRunOverwrite:
+    @pytest.fixture
+    def study(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+        import polars as pl
+
+        from tests.unit.test_cli import _CONFIG, _SDTM_DEFINE
+
+        (tmp_path / "study_config.yaml").write_text(_CONFIG, encoding="utf-8")
+        sdtm = tmp_path / "metadata" / "sdtm"
+        sdtm.mkdir(parents=True)
+        (sdtm / "define.yaml").write_text(_SDTM_DEFINE, encoding="utf-8")
+        raw = tmp_path / "data" / "raw"
+        raw.mkdir(parents=True)
+        pl.from_repr("""\
+┌────────────────┬─────┬─────┐
+│ patient_number ┆ age ┆ AGE │
+│ ---            ┆ --- ┆ --- │
+│ str            ┆ i64 ┆ i64 │
+╞════════════════╪═════╪═════╡
+│ P1             ┆ 45  ┆ 1   │
+└────────────────┴─────┴─────┘
+""").write_csv(raw / "dm.csv")
+        monkeypatch.chdir(tmp_path)
+        return tmp_path
+
+    def _run(self, *extra: str) -> int:
+        from fleet.cli import main
+
+        with patch("sys.argv", ["fleet", "run", "--dataset", "DM", *extra]):
+            try:
+                main()
+            except SystemExit as exc:
+                return int(exc.code or 0)
+        return 0
+
+    def test_the_guard_names_the_cli_flag(self, study: Path, capsys) -> None:
+        assert self._run() == 1
+
+        err = capsys.readouterr().err
+        assert "Pass --overwrite to allow spec overwrites" in err
+        assert "overwrite=True" not in err
+
+    def test_overwrite_passes_the_guard(self, study: Path) -> None:
+        import polars as pl
+
+        assert self._run("--overwrite") == 0
+        assert pl.read_parquet(study / "data" / "sdtm" / "dm.parquet")["AGE"].to_list() == [45]
+
+    def test_strict_false_reads_as_no_strict(self) -> None:
+        from fleet.cli import _cli_spec_hints
+        from fleet.core.exceptions import SpecError
+
+        def built():
+            raise SpecError("x: unknown algorithm 'y'. Pass strict=False to warn and skip instead.")
+            yield
+
+        with pytest.raises(SpecError, match="Pass --no-strict to warn and skip instead"):
+            list(_cli_spec_hints(built()))
+
+
+# ── c1-837: the bundled rule schema follows CORE 0.15.0 ──
+
+
+def test_check_rule_accepts_a_core_0_15_operator(tmp_path: Path) -> None:
+    import json
+
+    from fleet.validation.rule_scaffolder import _SCHEMA_PATH
+
+    out = scaffold_rule(domain="AE", description="d", output_dir=tmp_path)
+    _edit_check(out)
+    rule = yaml.safe_load(out.read_text(encoding="utf-8"))
+    rule["Check"] = {
+        "all": [{"name": "AESEV", "operator": "references_correct_codelist", "value": "C66769"}]
+    }
+    out.write_text(yaml.safe_dump(rule, sort_keys=False), encoding="utf-8")
+
+    assert check_rule(out) == []
+    assert "CORE 0.15.0" in json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))["$comment"]
