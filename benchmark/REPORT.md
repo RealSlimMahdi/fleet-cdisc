@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-05 (one rerun on branch `wip/high2-bench`)  
 **Machine:** Apple M4 Max (Mac16,6), 16 cores (12 performance, 4 efficiency), 64 GB RAM, macOS 26.7.1. The machine was shared with other jobs: load average 12.4 when the Fleet runs started, 3 to 6 during the R runs.  
-**Data:** synthetic raw AE, inflated: a 64-row AE extract (study STUDY001, 39 subjects, `benchmark/data`) copied 179,196 times. Two inputs:
+**Data:** synthetic raw AE, inflated from a synthetic 64-row AE extract (study STUDY001, 39 subjects, `benchmark/data`) copied 179,196 times. Two inputs:
 
 - **Sparse:** each copy gets new subject IDs, so a subject holds 1 to 3 AE records (1.64 on average). The full input has 11,468,544 AE rows and 6,988,644 subjects.
 - **Dense:** copy *i* goes to subject group *i* modulo 1,283, so the 2,000,000 rows belong to 50,037 subjects (40 records per subject at 2M rows; the smaller sizes take the first rows, so 2, 10 and 20 records per subject).
@@ -231,7 +231,7 @@ Fleet carries forward all source columns by default (useful for traceability); O
 - ANL01FL: the last record by AESEVN, then AESEQ, within USUBJID and AETERM, so one record per group on a tie.
 - ASEQ: numbered by AESEQ within USUBJID.
 
-Result of this rerun: all 17 variables have the same value on every row at every checked size: sparse 100K to 5M rows, dense 100K to 2M rows (on the dense input a USUBJID and AETERM group holds several identical records, so the tie rule decides ANL01FL). The check did not run at 11,468,544 rows (section 2). A changed value in one row (ANL01FL, TRTEMFL or ASEQ) of a saved Fleet output makes the check report a difference.
+Result of this rerun: all 17 variables have the same value on every row at every checked size: sparse 100K to 5M rows, dense 100K to 2M rows (on the dense input a USUBJID and AETERM group holds several copies of the same record, so the tie rule decides ANL01FL). The check did not run at 11,468,544 rows (section 2). A changed value in one row (ANL01FL, TRTEMFL or ASEQ) of a saved Fleet output makes the check report a difference.
 
 ---
 
