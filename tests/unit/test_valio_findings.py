@@ -730,7 +730,7 @@ def test_fleet_validate_mcp_returns_study_issues(
     out = mcp_server.fleet_validate(str(data))
 
     assert [i["rule_id"] for i in out["study_issues"]] == ["CORE-000400"]
-    assert out["issues"] == []
+    assert [i["dataset"] for i in out["issues"]] == ["STUDY"]
 
 
 # ── io: c1-580 c1-581 c1-582 c1-583 c1-584 Dataset-JSON ──

@@ -1128,6 +1128,40 @@ def test_compare_different_csv_files_exit_1_and_list_the_difference(
     assert captured.err == ""
 
 
+def test_compare_a_duration_difference_exits_1_and_lists_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """c1-518: a Duration column is listed in ISO 8601, not a raw Polars error."""
+    base, candidate = tmp_path / "base.parquet", tmp_path / "candidate.parquet"
+    pl.from_repr("""\
+┌─────┬──────────────┐
+│ K   ┆ D            │
+│ --- ┆ ---          │
+│ i64 ┆ duration[μs] │
+╞═════╪══════════════╡
+│ 1   ┆ 1d           │
+│ 2   ┆ 1d           │
+└─────┴──────────────┘
+""").write_parquet(base)
+    pl.from_repr("""\
+┌─────┬──────────────┐
+│ K   ┆ D            │
+│ --- ┆ ---          │
+│ i64 ┆ duration[μs] │
+╞═════╪══════════════╡
+│ 1   ┆ 1d           │
+│ 2   ┆ 3d           │
+└─────┴──────────────┘
+""").write_parquet(candidate)
+
+    code = _run(["compare", str(base), str(candidate), "--keys", "K"])
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert "P1D" in captured.out and "P3D" in captured.out
+    assert captured.err == ""
+
+
 def test_compare_names_each_side_after_its_file(
     tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:

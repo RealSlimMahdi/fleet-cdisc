@@ -22,9 +22,11 @@ from .report import (
     PrintLimits,
     VariableDtypes,
     _cap,
+    _figure,
     _has_measures,
     _key_label,
     _plural,
+    _shown_value,
     _truncate_listing,
 )
 
@@ -176,7 +178,14 @@ def _values_section(report: ComparisonReport) -> list[str]:
     if not report.variables.compared:
         lines.append("  No variables compared.")
     elif values.total_differences == 0:
-        lines.append("  All compared values are equal.")
+        if values.within_tolerance:
+            lines.append(
+                "  All compared values are within the rule in effect; "
+                f"{values.within_tolerance} of them "
+                f"{'is' if values.within_tolerance == 1 else 'are'} not exactly equal."
+            )
+        else:
+            lines.append("  All compared values are equal.")
     else:
         unequal = values.per_variable.filter(pl.col("differences") > 0)
         width = max([_MIN_VARIABLE_WIDTH, *map(len, unequal["variable"].to_list())])
@@ -188,6 +197,12 @@ def _values_section(report: ComparisonReport) -> list[str]:
             f"  {'Variable':<{width}}  Unequal",
         ]
         lines += [f"  {variable:<{width}}  {n}" for variable, n in unequal.iter_rows()]
+        if values.within_tolerance:
+            lines += [
+                "",
+                f"  Values within the rule in effect but not exactly equal: "
+                f"{values.within_tolerance}",
+            ]
         if report.settings.by:
             lines += [
                 "",
@@ -293,11 +308,11 @@ def _verdict_section(report: ComparisonReport) -> list[str]:
 
 
 def _cell(value: str | None) -> str:
-    return "null" if value is None else value
+    return _shown_value(value)
 
 
 def _number(value: float | None) -> str:
-    return "" if value is None else f"{value:g}"
+    return "" if value is None else _figure(value)
 
 
 def _limit(value: int | None) -> str:

@@ -28,13 +28,17 @@ LSP_SERVER_SOURCE = Path(fleet.__file__).parent / "lsp_server.py"
 EXPECTED_ALL = [
     "AlgorithmDoc",
     "AlgorithmInfo",
+    "DerivationProblem",  # c1-608: from_spec()'s reasons, per block key
     "ParamInfo",
     "Standard",
     "algorithm_doc",
     "algorithms",
+    "check_derivation",  # c1-608
     "define_schema",
     "get_algorithm",
     "load_spec_yaml",  # ADR-0008: tools parse define.yaml with Fleet's loader (on: stays a key)
+    "renamed_algorithm",  # c1-615: the fleet migrate --spec hint
+    "standard_of",  # c1-614: one rule for the standard of a spec
     "suggest_algorithm",
 ]
 
@@ -154,6 +158,41 @@ def test_suggest_algorithm_finds_the_near_miss() -> None:
 
 def test_suggest_algorithm_returns_none_when_nothing_is_close() -> None:
     assert introspect.suggest_algorithm("sdtm", "zzzzzzzz") is None
+
+
+def test_suggest_algorithm_ignores_case() -> None:
+    """c1-615: CHG is a near miss of chg."""
+    assert introspect.suggest_algorithm("adam", "CHG") == "chg"
+
+
+def test_renamed_algorithm_names_the_current_spelling() -> None:
+    assert introspect.renamed_algorithm("hardcode_no_ct") == "assign"
+    assert introspect.renamed_algorithm("assign") is None
+
+
+def test_check_derivation_gives_from_spec_reasons_per_key() -> None:
+    """c1-608: the block key and the text of the per-algorithm model."""
+    problems = introspect.check_derivation("sdtm", {"algorithm": "assign", "sorce": "sex"})
+    assert problems == (
+        introspect.DerivationProblem("sorce", "sorce: Extra inputs are not permitted"),
+    )
+    both = introspect.check_derivation("sdtm", {"algorithm": "assign", "source": "s", "value": 1})
+    assert [p.key for p in both] == [None]
+    assert introspect.check_derivation("sdtm", {"algorithm": "assign", "source": "sex"}) == ()
+
+
+@pytest.mark.parametrize(
+    ("declared", "path", "expected"),
+    [
+        ("ADaMIG", "/x/sdtm/define.yaml", "adam"),
+        (None, "/work/sdtm/S01/metadata/adam/define.yaml", "adam"),
+        (None, "C:\\study\\sdtm\\define.yaml", "sdtm"),
+        (None, "/study/define.yaml", None),
+    ],
+)
+def test_standard_of_reads_the_spec_then_the_nearest_folder(declared, path, expected) -> None:
+    """c1-614."""
+    assert introspect.standard_of(declared, path) == expected
 
 
 # ------------------------------------------------------------------ #

@@ -13,7 +13,7 @@ comparison ran with, and the Fleet version.  Rendering lives in
 from __future__ import annotations
 
 import dataclasses
-import math
+import json
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -177,30 +177,6 @@ def _normalise_max_print(max_print: MaxPrint) -> PrintLimits:
     raise VerbUsageError("max_print must be an int, a (per_variable, total) pair or None")
 
 
-def _normalise_tolerance(value: object, name: str) -> float:
-    """Check one tolerance argument and return it as a float.
-
-    A tolerance is a finite, non-negative number.  Zero on both means exact,
-    which is the default; ``True`` is not a tolerance, however numeric
-    Python considers it.
-    """
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise VerbUsageError(f"{name} must be a non-negative number, got {type(value).__name__}")
-    tolerance = float(value)
-    if not math.isfinite(tolerance):
-        raise ComparisonError(f"{name} must be a finite number, got {value}")
-    if tolerance < 0:
-        raise ComparisonError(f"{name} must not be negative, got {value}")
-    return tolerance
-
-
-def _normalise_flag(value: object, name: str) -> bool:
-    """Check one switch argument and return it; only a real boolean passes."""
-    if not isinstance(value, bool):
-        raise VerbUsageError(f"{name} must be True or False, got {type(value).__name__}")
-    return value
-
-
 def _cap(frame: pl.DataFrame, limit: int | None) -> pl.DataFrame:
     """The first *limit* rows of *frame*; all of them when *limit* is ``None``."""
     return frame if limit is None else frame.head(limit)
@@ -225,6 +201,31 @@ def _key_label(keys: Iterable[str], values: Iterable[Any]) -> str:
 def _plural(count: int, noun: str) -> str:
     """``1 observation`` / ``2 observations``."""
     return f"{count} {noun}" + ("" if count == 1 else "s")
+
+
+def _figure(value: float) -> str:
+    """A statistic or a difference with 12 significant digits, as a SAS BEST format prints it."""
+    return f"{value:.12g}"
+
+
+def _shown_value(value: str | None) -> str:
+    """A listed base or candidate value as the reader must see it.
+
+    A value that would read the same as another one is quoted: an empty
+    string, the text ``null``, leading or trailing whitespace, a control
+    character, or a leading double quote.  So ``"M "`` against ``M`` shows
+    the cause of the difference.  A missing value prints ``null``.
+    """
+    if value is None:
+        return "null"
+    if (
+        value in ("", "null")
+        or value != value.strip()
+        or value.startswith('"')
+        or any(ord(ch) < 32 or ord(ch) == 127 for ch in value)
+    ):
+        return json.dumps(value, ensure_ascii=False)
+    return value
 
 
 @dataclass(frozen=True)
@@ -310,6 +311,9 @@ class ValuesSummary:
     #: (str), ``variables_with_differences``, ``observations_with_differences``,
     #: ``differences`` (int).  Empty without BY variables.
     per_group: pl.DataFrame = dataclasses.field(default_factory=lambda: _empty(GROUP_VALUES))
+    #: Matched values equal under the rule in effect (a tolerance, or trailing
+    #: whitespace ignored) but not exactly equal; always 0 under the exact rule.
+    within_tolerance: int = 0
 
     @property
     def variables_with_differences(self) -> int:
@@ -580,7 +584,7 @@ class ComparisonReport:
         """Write :meth:`to_json` to *path* (UTF-8, trailing newline).
 
         Args:
-            path: Where to write the document.
+            path: Where to write the document.  Missing parent folders are made.
             max_print: As for :meth:`to_json`.
 
         Examples:
@@ -589,6 +593,7 @@ class ComparisonReport:
                 report = fleet.compare(adsl_prod, adsl_qc, keys=["USUBJID"])
                 report.save_json("build/adsl_compare.json")
         """
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
         Path(path).write_text(self.to_json(max_print) + "\n", encoding="utf-8")
 
     def to_html(self) -> str:
@@ -623,7 +628,7 @@ class ComparisonReport:
         """Write :meth:`to_html` to *path* (UTF-8).
 
         Args:
-            path: Where to write the page.
+            path: Where to write the page.  Missing parent folders are made.
 
         Examples:
             Produce the sign-off page at the end of a QC comparison::
@@ -631,6 +636,7 @@ class ComparisonReport:
                 report = fleet.compare(adae_prod, adae_qc, keys=["USUBJID", "AESEQ"])
                 report.save_html_report("build/adae_compare.html")
         """
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
         Path(path).write_text(self.to_html(), encoding="utf-8")
 
     def save_listing(self, path: str | Path) -> None:
@@ -643,7 +649,7 @@ class ComparisonReport:
         empty frame with the same schema.
 
         Args:
-            path: Where to write the parquet file.
+            path: Where to write the parquet file.  Missing parent folders are made.
 
         Examples:
             Keep every difference for a reviewer, then query it lazily::
@@ -654,6 +660,7 @@ class ComparisonReport:
                     pl.col("percent_difference").abs() > 10
                 )
         """
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.listing.write_parquet(path)
 
     def _print_limits(self, max_print: MaxPrint | _Unset) -> PrintLimits:

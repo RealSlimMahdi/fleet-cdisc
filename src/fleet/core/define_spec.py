@@ -305,7 +305,11 @@ class SpecYamlLoader(yaml.SafeLoader):
         event = self.peek_event()
         if isinstance(event, yaml.AliasEvent) and event.anchor in open_anchors:
             raise yaml.composer.ComposerError(
-                None, None, f"alias *{event.anchor} refers to itself", event.start_mark
+                None,
+                None,
+                f"alias *{event.anchor} refers to itself: the file nests too deep "
+                "or expands too much",
+                event.start_mark,
             )
         anchor = None if isinstance(event, yaml.AliasEvent) else getattr(event, "anchor", None)
         if anchor:
@@ -378,8 +382,41 @@ SpecYamlLoader.add_implicit_resolver(
 )
 
 
+#: The largest define.yaml in the repository holds about 2,000 YAML nodes at
+#: depth 8.  These limits leave room for a study 500 times larger and still
+#: stop a recursive anchor or an alias bomb before it exhausts the process.
+_MAX_EXPANDED_NODES = 1_000_000
+_MAX_DEPTH = 100
+
+
+def _check_expansion(root: yaml.Node) -> None:
+    """Refuse a document whose aliases expand too much or that nests too deep.
+
+    The walk follows aliases as the constructor does, so a recursive anchor
+    expands forever and meets the node limit.  It uses an explicit stack, so
+    it cannot itself exhaust the Python stack.
+    """
+    count, stack = 0, [(root, 1)]
+    while stack:
+        node, depth = stack.pop()
+        count += 1
+        if count > _MAX_EXPANDED_NODES or depth > _MAX_DEPTH:
+            raise yaml.YAMLError(
+                "the file nests too deep or expands too much "
+                f"(limits: depth {_MAX_DEPTH}, {_MAX_EXPANDED_NODES:,} nodes after aliases)"
+            )
+        if isinstance(node, yaml.MappingNode):
+            stack.extend((value, depth + 1) for _, value in node.value)
+        elif isinstance(node, yaml.SequenceNode):
+            stack.extend((item, depth + 1) for item in node.value)
+
+
 def load_spec_yaml(text: str) -> Any:
     """Parse define.yaml text with :class:`SpecYamlLoader`.
+
+    A recursive anchor, an alias bomb or a very deep nesting is refused
+    with a ``yaml.YAMLError``, so every reader (``from_spec``, ``fleet
+    check``, ``fleet define-xml``, the language server) stays alive.
 
     Args:
         text: The YAML document.
@@ -387,6 +424,10 @@ def load_spec_yaml(text: str) -> Any:
     Returns:
         The parsed document (a mapping for a define.yaml), or ``None`` for
         an empty document.
+
+    Raises:
+        yaml.YAMLError: On invalid YAML, or a document that nests too deep
+            or expands too much.
 
     Examples:
         The ``on:`` key of a merge stays a string::
@@ -396,7 +437,52 @@ def load_spec_yaml(text: str) -> Any:
             block = load_spec_yaml("algorithm: merge\non: USUBJID\n")
             assert block == {"algorithm": "merge", "on": "USUBJID"}
     """
-    return yaml.load(text, Loader=SpecYamlLoader)  # noqa: S506 — SafeLoader subclass
+    loader = SpecYamlLoader(text)
+    try:
+        try:
+            root = loader.get_single_node()
+        except RecursionError:
+            raise yaml.YAMLError("the file nests too deep or expands too much") from None
+        if root is None:
+            return None
+        _check_expansion(root)
+        return loader.construct_document(root)
+    finally:
+        loader.dispose()
+
+
+def standard_of(study_standard: object, path: str | Path = "") -> str | None:
+    """The registry standard a spec targets: ``"sdtm"``, ``"adam"`` or ``None``.
+
+    The spec's own ``study.standard`` wins (SDTMIG and SENDIG give
+    ``"sdtm"``, ADaMIG gives ``"adam"``).  Without it, the nearest folder
+    named ``sdtm`` or ``adam`` above the file decides, so
+    ``/work/sdtm/S01/metadata/adam/define.yaml`` is ADaM.  The path is split
+    on both separators, so a Windows path reads the same on any system.
+
+    Args:
+        study_standard: The ``study.standard`` value, or ``None``.
+        path: The spec file path, used when the spec does not say.
+
+    Returns:
+        str | None: The standard, or ``None`` when neither source says.
+
+    Examples:
+        Pick the namespace for a spec with no study block::
+
+            from fleet.core.define_spec import standard_of
+
+            assert standard_of(None, "/work/sdtm/S01/metadata/adam/define.yaml") == "adam"
+    """
+    declared = str(study_standard or "").upper()
+    if "SDTM" in declared or "SEND" in declared:
+        return "sdtm"
+    if "ADAM" in declared:
+        return "adam"
+    for part in reversed(re.split(r"[\\/]", str(path))):
+        if part.lower() in ("sdtm", "adam"):
+            return part.lower()
+    return None
 
 
 #: The JSON schema of a define.yaml (hand-owned parts plus the generated derivations).

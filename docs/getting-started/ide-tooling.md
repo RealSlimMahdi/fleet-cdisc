@@ -41,9 +41,10 @@ Fleet package (never hardcoded):
 
 | Capability | Source of truth |
 | --- | --- |
-| Diagnostics on open/change | generated JSON schema (`define_spec_schema.json`) |
-| Unknown `algorithm:` did-you-mean | spec-algorithm registry |
-| Completions: algorithm ids and per-algorithm parameter keys | registry (required params first) |
+| Diagnostics on open/change | generated JSON schema (`define_spec_schema.json`); a key only `fleet define-xml` needs (a study key, a dataset or variable `label`) is a warning |
+| Unexpected keys, each on its own line; a refused `derivation:` block in the words of `from_spec()` | JSON schema, per-algorithm models |
+| Unknown `algorithm:` did-you-mean (case ignored); a pre-ADR-0008 name names `fleet migrate --spec` | spec-algorithm registry |
+| Completions: algorithm ids and per-algorithm parameter keys | registry (required params first; keys the block holds are left out) |
 | Completions: codelist OIDs | the file's own `codelists:` section |
 | Hover: algorithm docs, codelist name + terms | verb docstrings / inline codelists |
 
@@ -99,9 +100,9 @@ Each is a thin wrapper over a public Fleet API:
 | `fleet_impacted_by(spec_paths, node)` | what must re-run if a dataset changes |
 | `fleet_lineage(dag_json_path, dataset)` | variable-level lineage from a pipeline DAG export |
 | `fleet_validate(dataset_path, standard?, version?, custom_rules?)` | CDISC Rules Engine validation from the run setup |
-| `fleet_ct_terms(codelist, ct_path?)` | valid terms for a codelist |
+| `fleet_ct_terms(codelist, ct_path?)` | valid terms for a codelist (`ct_path` is a local CT file, never a URL) |
 | `fleet_tlg_catalog()` | all registered TLG templates |
-| `fleet_tlg_run(spec_path, data_path, adsl_path?, groupby?, adsl_groupby?)` | run a TLG spec YAML, return rendered HTML |
+| `fleet_tlg_run(spec_path, data_path, adsl_path?, groupby?, adsl_groupby?)` | run a TLG spec YAML, return rendered HTML; a table that uses ADSL needs `adsl_path`, as `fleet tlg run` needs `--adsl` |
 | `fleet_dataset_check(data_path, define_yaml, dataset)` | conformance check against the spec |
 | `fleet_code_to_spec(source)` | derivation blocks reverse-mapped from a program's verb calls, without running it |
 | `fleet_spec_to_code(define_yaml, dataset)` | an inline program skeleton rendered from a dataset's spec |
@@ -136,6 +137,22 @@ A refused run setup does not raise. The tool returns
 conflict (`data/adam/dm.parquet`), an unsupported IG version, a custom rules
 directory that does not exist, or no engine found.
 
+Each issue names its `dataset`. A study-level finding of the engine (dataset
+`STUDY`, for example "EX is not present in study") is listed as information,
+as `fleet validate` lists it, and does not change `is_valid`.
+
+An error inside a tool reaches the assistant with its reason, for example
+"codelist 'Sex' is not in cdisc_ct_sample.yaml. It holds 12 codelists: C170010, ...".
+
+### Trust model
+
+The tools run with your file rights, and there is no sandbox. An assistant
+can pass any path that you can read: a tool reads that file. The server does
+not fetch URLs (`ct_path` must be a local file), `fleet_lineage` reads only a
+`pipeline_dag.json`, and `fleet_validate` starts an engine that a study config
+names only when you start the server with `fleet mcp --trust-study-engine`.
+Connect the server only to an assistant that you let read your study files.
+
 ### What to ask your assistant
 
 Once connected, these workflows stop being copy-paste-the-error loops and
@@ -146,7 +163,7 @@ become one question each:
 - *"If I change DM, which downstream datasets must re-run?"* → `fleet_impacted_by`
 - *"Where does ADSL.TRTSDT come from?"* → `fleet_lineage`
 - *"Validate data/sdtm/ae.parquet and summarise the errors."* → `fleet_validate`
-- *"Is 'INTERVENTIONAL' a valid term for C99077? What are the others?"* → `fleet_ct_terms`
+- *"Is 'INTERVENTIONAL' a valid term for C99077 in metadata/ct/sdtm_ct.yaml? What are the others?"* → `fleet_ct_terms`
 - *"Which TLG template covers an AE overview table, and run it against my ADAE."*
   → `fleet_tlg_catalog` + `fleet_tlg_run`
 - *"Does data/sdtm/dm.parquet conform to its define.yaml spec?"* → `fleet_dataset_check`

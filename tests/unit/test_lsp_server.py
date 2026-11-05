@@ -9,6 +9,11 @@ from the registry, per-algorithm params, codelist OIDs), and hover
 
 from __future__ import annotations
 
+import json
+import queue
+import subprocess
+import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -159,7 +164,8 @@ class TestCompletions:
         text = INLINE_ALGO_SPEC + "    "
         lines = text.splitlines()
         labels = [i["label"] for i in compute_completions(text, len(lines) - 1, 4)]
-        assert set(labels) == {p.name for p in get_algorithm("sdtm", "duration").params}
+        # c1-611: the block already holds start, so it is not offered again
+        assert set(labels) == {p.name for p in get_algorithm("sdtm", "duration").params} - {"start"}
 
     def test_param_completions_stop_at_the_next_variable_entry(self):
         """A fresh entry has no algorithm yet, so the previous one's params must not leak."""
@@ -222,3 +228,202 @@ class TestStandardInference:
 
     def test_both_standards_when_nothing_says(self):
         assert infer_standards({}) == ("sdtm", "adam")
+
+    @pytest.mark.parametrize(
+        ("path", "expected"),
+        [
+            ("/work/sdtm/S01/metadata/adam/define.yaml", ("adam",)),
+            ("/work/sdtm/S01/metadata/adam", ("adam",)),
+            ("/adam/x/sdtm", ("sdtm",)),
+        ],
+    )
+    def test_the_nearest_folder_decides(self, path, expected):
+        """c1-614: the folder nearest the file wins, not the first substring."""
+        assert infer_standards({}, path) == expected
+
+
+# ── Medium and low audit findings ─────────────────────────────────────────────
+
+
+def _example_with(line_after: str, new_line: str) -> tuple[str, int]:
+    """The pilot SDTM spec with *new_line* inserted after the DM.SEX line holding *line_after*."""
+    lines = EXAMPLE_SPEC.read_text(encoding="utf-8").splitlines()
+    sex = next(i for i, ln in enumerate(lines) if ln.strip() == "- name: SEX")
+    at = next(i for i in range(sex, len(lines)) if lines[i].strip().startswith(line_after)) + 1
+    lines.insert(at, new_line)
+    return "\n".join(lines) + "\n", at
+
+
+class TestAuditDiagnostics:
+    def test_c1_608_an_unexpected_variable_key_is_on_its_own_line(self):
+        text, line = _example_with("- name: SEX", "        orgin: Collected")
+        assert compute_diagnostics(text, str(EXAMPLE_SPEC)) == [
+            {
+                "line": line,
+                "message": "Additional properties are not allowed ('orgin' was unexpected)",
+                "severity": "error",
+            }
+        ]
+
+    def test_c1_608_a_derivation_key_is_explained_like_from_spec(self):
+        text, line = _example_with("algorithm: assign", "          sorce: sex")
+        assert compute_diagnostics(text, str(EXAMPLE_SPEC)) == [
+            {"line": line, "message": "sorce: Extra inputs are not permitted", "severity": "error"}
+        ]
+
+    def test_c1_610_keys_only_define_xml_needs_are_warnings(self):
+        text = (
+            "output_format: parquet\n"
+            "datasets:\n"
+            "  - name: ADSL\n"
+            "    variables:\n"
+            "      - name: USUBJID\n"
+        )
+        diags = compute_diagnostics(text)
+        assert diags and all(d["severity"] == "warning" for d in diags)
+        assert {
+            "line": 2,
+            "message": "'label' is a required property (needed by fleet define-xml)",
+            "severity": "warning",
+        } in diags
+        assert not any("any of the given schemas" in d["message"] for d in diags)
+
+    def test_c1_610_a_spec_with_no_shape_is_still_an_error(self):
+        assert compute_diagnostics("output_format: parquet\n") == [
+            {
+                "line": 0,
+                "message": "A spec needs datasets: with study:, or variables:",
+                "severity": "error",
+            }
+        ]
+
+    def test_c1_612_a_unicode_line_separator_does_not_shift_lines(self):
+        text = 'study:\n  standard: SDTMIG\n  name: "a\u2028b"\ndatasets: 5\n'
+        assert [d["line"] for d in compute_diagnostics(text) if "array" in d["message"]] == [3]
+
+    def test_c1_615_an_upper_case_name_gets_a_hint(self):
+        text = BAD_ALGO_SPEC.replace("standard: SDTMIG", "standard: ADaMIG").replace("asign", "CHG")
+        assert any("Did you mean 'chg'?" in d["message"] for d in compute_diagnostics(text))
+
+    def test_c1_615_an_old_name_points_to_fleet_migrate(self):
+        text = BAD_ALGO_SPEC.replace("asign", "hardcode_no_ct")
+        algo = [d for d in compute_diagnostics(text) if "hardcode_no_ct" in d["message"]]
+        assert len(algo) == 1
+        assert "'assign'" in algo[0]["message"] and "fleet migrate --spec" in algo[0]["message"]
+
+    def test_c1_615_spec_version_1_points_to_fleet_migrate(self):
+        text = "fleet_spec_version: 1\n" + FLAT_SPEC
+        assert any("fleet migrate --spec" in d["message"] for d in compute_diagnostics(text))
+
+    @pytest.mark.parametrize(
+        "text", ["a: &x\n  - *x\n", "[" * 3000 + "]" * 3000], ids=["recursive-anchor", "deep"]
+    )
+    def test_c1_616_a_hostile_file_gives_one_diagnostic(self, text):
+        diags = compute_diagnostics(text)
+        assert len(diags) == 1
+        assert "nests too deep or expands too much" in diags[0]["message"]
+        assert compute_hover(text, 0, 1) is None
+        assert compute_completions(text, 0, 1) == []
+
+
+class TestAuditCompletions:
+    def test_c1_609_a_value_after_a_bare_colon_gets_a_space(self):
+        text = "study:\n  standard: SDTMIG\nderivation:\n  algorithm:"
+        items = compute_completions(text, 3, len("  algorithm:"))
+        assert items and all(i["insert_text"] == f" {i['label']}" for i in items)
+        after_space = compute_completions(text + " ", 3, len("  algorithm: "))
+        assert all("insert_text" not in i for i in after_space)
+
+    def test_c1_611_a_quoted_algorithm_offers_its_keys_less_the_held_ones(self):
+        text = (
+            "study:\n  standard: ADaMIG\nvariables:\n"
+            '  - target: ADY\n    algorithm: "duration"\n    start: TRTSDT\n    \n'
+        )
+        labels = {i["label"] for i in compute_completions(text, 6, 4)}
+        assert labels == {p.name for p in get_algorithm("adam", "duration").params} - {"start"}
+
+    def test_c1_611_a_key_inside_a_nested_mapping_offers_nothing(self):
+        text = CODELIST_SPEC.replace("ct: C66731", "ct_map:\n            Male: M\n            ")
+        lines = text.splitlines()
+        assert compute_completions(text, len(lines) - 1, 12) == []
+
+
+def test_c1_616_load_spec_yaml_refuses_a_recursive_anchor():
+    import yaml
+
+    from fleet.introspect import load_spec_yaml
+
+    with pytest.raises(yaml.YAMLError, match="nests too deep"):
+        load_spec_yaml("a: &x\n  - *x\n")
+
+
+# ── The server over stdio ─────────────────────────────────────────────────────
+
+
+def _frame(message: dict) -> bytes:
+    body = json.dumps(message).encode("utf-8")
+    return f"Content-Length: {len(body)}\r\n\r\n".encode("ascii") + body
+
+
+def _reader(stream, inbox: queue.Queue) -> None:
+    while True:
+        length = None
+        while True:
+            header = stream.readline()
+            if not header:
+                return
+            if header in (b"\r\n", b"\n"):
+                break
+            name, _, value = header.decode("ascii").partition(":")
+            if name.lower() == "content-length":
+                length = int(value)
+        inbox.put(json.loads(stream.read(length)))
+
+
+def _next(inbox: queue.Queue, method: str) -> dict:
+    while True:
+        message = inbox.get(timeout=30)
+        if message.get("method") == method or (method == "result" and "result" in message):
+            return message
+
+
+def test_c1_612_c1_613_the_server_over_stdio():
+    """Full sync, line numbers past U+2028, and an empty list when a file closes."""
+    server = subprocess.Popen(
+        [sys.executable, "-m", "fleet.lsp_server"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    inbox: queue.Queue = queue.Queue()
+    threading.Thread(target=_reader, args=(server.stdout, inbox), daemon=True).start()
+    uri = "file:///tmp/sdtm/define.yaml"
+    try:
+
+        def send(message: dict) -> None:
+            server.stdin.write(_frame({"jsonrpc": "2.0", **message}))
+            server.stdin.flush()
+
+        send({"id": 1, "method": "initialize", "params": {"capabilities": {}}})
+        capabilities = _next(inbox, "result")["result"]["capabilities"]
+        assert capabilities["textDocumentSync"]["change"] == 1  # Full
+        assert capabilities["completionProvider"]["triggerCharacters"] == [" "]
+        send({"method": "initialized", "params": {}})
+        text = 'study:\n  standard: SDTMIG\n  name: "a\u2028b"\ndatasets: 5\n'
+        send(
+            {
+                "method": "textDocument/didOpen",
+                "params": {
+                    "textDocument": {"uri": uri, "languageId": "yaml", "version": 1, "text": text}
+                },
+            }
+        )
+        published = _next(inbox, "textDocument/publishDiagnostics")["params"]
+        lines = [d["range"]["start"]["line"] for d in published["diagnostics"]]
+        assert 3 in lines and 4 not in lines
+        send({"method": "textDocument/didClose", "params": {"textDocument": {"uri": uri}}})
+        closed = _next(inbox, "textDocument/publishDiagnostics")["params"]
+        assert closed == {"uri": uri, "diagnostics": []}
+    finally:
+        server.kill()
+        server.wait(timeout=10)
