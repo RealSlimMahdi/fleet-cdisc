@@ -26,9 +26,6 @@ If your contribution doesn't make the library simpler for the end user, reconsid
 git clone https://github.com/RealSlimMahdi/fleet-cdisc.git
 cd fleet-cdisc
 uv sync --extra docs --extra all --extra dev
-
-# Add project root to the Python path (makes specs/ importable for examples)
-uv run python -c "import sysconfig; from pathlib import Path; (Path(sysconfig.get_path('purelib')) / 'fleet-dev.pth').write_text(str(Path.cwd()))"
 ```
 
 > **Never** use `pip`, `poetry`, `conda`, or `pipenv`.
@@ -234,22 +231,23 @@ We welcome thoughtful contributions regardless of whether you used AI tools to h
 ### Release steps
 
 1. Merge all release changes to `main`. CI must be green.
-2. Add a `## [X.Y.ZaN]` section to `docs/changelog.md`, under `[Unreleased]`.
-3. Check the build on your machine:
+2. Refresh the lock file with `uv lock --upgrade`, then run the Verification Order of `AGENTS.md`. Commit the new `uv.lock`.
+3. Add a `## [X.Y.ZaN]` section to `docs/changelog.md`, under `[Unreleased]`.
+4. Check the build on your machine:
 
    ```bash
    uv build && uvx twine check --strict dist/*
    ```
 
-4. Tag `main` and push the tag:
+5. Tag `main` and push the tag:
 
    ```bash
    git tag -a v0.2.0a1 -m "Fleet 0.2.0a1 (pre-alpha)"
    git push origin v0.2.0a1
    ```
 
-5. If the `pypi` environment has required reviewers, approve the deployment in the GitHub Actions run.
-6. Check the project page on pypi.org, then run `pip install --pre fleet-cdisc` in a clean environment.
+6. If the `pypi` environment has required reviewers, approve the deployment in the GitHub Actions run.
+7. Check the project page on pypi.org, then run `pip install --pre fleet-cdisc` in a clean environment.
 
 A bad release cannot be replaced. PyPI refuses to take the same version number twice. Yank the bad version on pypi.org and tag the next number.
 
@@ -262,7 +260,7 @@ A bad release cannot be replaced. PyPI refuses to take the same version number t
 | `test`     | every run              | `ruff check`, `ruff format --check`, `pytest`                        |
 | `build`    | after `test`           | `uv build`, `twine check --strict`, install the wheel and smoke-test |
 | `testpypi` | push to `devel`        | upload to TestPyPI with the `TEST_PYPI_API_TOKEN` secret             |
-| `pypi`     | push of a `v*` tag     | upload to PyPI with Trusted Publishing                               |
+| `pypi`     | push of a `vX.Y.Z*` tag | upload to PyPI with Trusted Publishing                              |
 
 ### Configuration outside this repository
 
@@ -273,7 +271,7 @@ A bad release cannot be replaced. PyPI refuses to take the same version number t
 ### What goes into the package
 
 - The wheel holds `src/fleet` only, with its JSON, YAML and XSD data files.
-- The sdist holds `src/fleet`, `tests`, `README.md`, `LICENSE` and `pyproject.toml`. The include list is in `[tool.hatch.build.targets.sdist]`. Do not widen it.
+- The sdist holds `src/fleet`, `README.md`, `LICENSE` and `pyproject.toml`. The include list is in `[tool.hatch.build.targets.sdist]`. Do not widen it. Run the tests from the git tag, not from the sdist.
 - The README is the PyPI project page. Use absolute URLs for links and images. Relative links break on pypi.org.
 - The Define-XML and ODM schemas in `src/fleet/define_xml/schemas/xsd/` come from `cdisc-org/data-definition-engine` under the MIT licence. Keep `LICENSE-CDISC` and `SOURCES.txt` next to them when you update the schemas.
 
