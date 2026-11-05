@@ -169,3 +169,139 @@ class TestScaffoldHeader:
         assert asked == (
             ["/mdr/sdtmig/3-4/datasets"] if method == "sdtm" else ["/mdr/adam/adamig-1-3"]
         )
+
+
+# ── c1-522 c1-524 c1-525: fleet install-engine ──
+
+
+def _zip_bytes(files: dict[str, bytes]) -> bytes:
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        for name, data in files.items():
+            zf.writestr(name, data)
+    return buf.getvalue()
+
+
+class TestInstallEngine:
+    @pytest.fixture
+    def eng(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        from fleet.validation import engine as eng
+
+        monkeypatch.setattr(eng, "ENGINE_DIR", tmp_path / "cdisc-rules-engine")
+        old = eng.engine_path()
+        old.parent.mkdir(parents=True)
+        old.write_text("old binary", encoding="utf-8")
+        return eng
+
+    def _serve(self, monkeypatch: pytest.MonkeyPatch, archive: bytes, digest: str | None):
+        httpx = pytest.importorskip("httpx")
+        from fleet.validation import engine as eng
+
+        keyword = eng._platform_asset_keywords()[0]
+        asset = {"name": f"core-{keyword}.zip", "browser_download_url": "https://dl/x.zip"}
+        if digest is not None:
+            asset["digest"] = digest
+        asked: list[str] = []
+
+        def handler(request: Any) -> Any:
+            asked.append(str(request.url))
+            if request.url.host == "dl":
+                return httpx.Response(200, content=archive)
+            return httpx.Response(200, json={"tag_name": "v0.15", "assets": [asset]})
+
+        real = httpx.Client
+        monkeypatch.setattr(
+            httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(handler), **kw)
+        )
+        return asked
+
+    def test_a_bundle_with_no_executable_keeps_the_old_engine(
+        self, eng: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._serve(monkeypatch, _zip_bytes({"bundle/readme.txt": b"x"}), None)
+
+        with pytest.raises(RuntimeError, match="holds no"):
+            eng.install_engine(force=True)
+        assert eng.engine_path().read_text(encoding="utf-8") == "old binary"
+
+    def test_a_broken_archive_is_a_runtime_error(
+        self, eng: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._serve(monkeypatch, b"not a zip", None)
+
+        with pytest.raises(RuntimeError, match="BadZipFile"):
+            eng.install_engine(force=True)
+        assert eng.engine_path().read_text(encoding="utf-8") == "old binary"
+
+    def test_a_network_error_is_a_runtime_error_with_a_hint(
+        self, eng: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        httpx = pytest.importorskip("httpx")
+
+        def refuse(request: Any) -> Any:
+            raise httpx.ConnectError("[Errno 61] Connection refused", request=request)
+
+        real = httpx.Client
+        monkeypatch.setattr(
+            httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(refuse), **kw)
+        )
+
+        with pytest.raises(RuntimeError, match="ConnectError.*proxy or the GitHub rate limit"):
+            eng.install_engine(force=True)
+
+    def test_a_digest_mismatch_stops_before_extraction(
+        self, eng: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        archive = _zip_bytes({"core/core": b"new", "core/core.exe": b"new"})
+        self._serve(monkeypatch, archive, "sha256:" + "0" * 64)
+
+        with pytest.raises(RuntimeError, match="digest mismatch"):
+            eng.install_engine(force=True)
+        assert eng.engine_path().read_text(encoding="utf-8") == "old binary"
+
+    def test_a_matching_digest_installs(self, eng: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+        import hashlib
+
+        archive = _zip_bytes({"core/core": b"new", "core/core.exe": b"new"})
+        self._serve(monkeypatch, archive, "sha256:" + hashlib.sha256(archive).hexdigest())
+
+        dest = eng.install_engine(force=True)
+
+        assert dest.read_text(encoding="utf-8") == "new"
+
+    def test_the_printed_version_maps_to_its_release_tag(
+        self, eng: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        archive = _zip_bytes({"core/core": b"new", "core/core.exe": b"new"})
+        asked = self._serve(monkeypatch, archive, None)
+
+        eng.install_engine(version="0.15.0", force=True)
+
+        assert asked[0].endswith("/releases/tags/v0.15")
+
+    def test_an_installed_engine_says_the_requested_version_was_not_installed(
+        self, eng: Any, capsys: pytest.CaptureFixture
+    ) -> None:
+        eng.install_engine(version="v9.9")
+
+        assert "CORE v9.9 was not installed; use --force" in capsys.readouterr().out
+
+
+# ── c1-244: install hints work in a user project ──
+
+
+def test_no_install_hint_names_a_repo_only_command_or_a_missing_extra() -> None:
+    import fleet
+
+    src = Path(fleet.__file__).parent
+    offenders = [
+        f"{path.relative_to(src)}: {needle}"
+        for path in src.rglob("*.py")
+        for needle in ("uv sync --extra", "clinical-io")
+        if needle in path.read_text(encoding="utf-8")
+    ]
+
+    assert offenders == []

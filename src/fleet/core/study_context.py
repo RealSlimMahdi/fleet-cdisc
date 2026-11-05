@@ -90,7 +90,8 @@ class ValidationConfig(BaseModel):
     """CDISC Rules Engine configuration.
 
     Optional — when omitted, Fleet auto-discovers the engine via
-    ``FLEET_RULES_ENGINE`` env var or the managed install at ``~/.fleet/bin``.
+    ``FLEET_RULES_ENGINE`` env var or the managed install at
+    ``~/.fleet/cdisc-rules-engine/core/core``.
     Set ``engine_path`` to share a team-wide path in version control.
     """
 

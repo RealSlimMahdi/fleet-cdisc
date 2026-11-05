@@ -172,8 +172,8 @@ class OfficialCDISCValidator:
     """Wrapper for the official CDISC Rules Engine CLI.
 
     Discovers the engine automatically via ``discover_engine()``
-    (env var → ``~/.fleet/bin/core`` → legacy ``../cdisc-rules-engine/core.py``),
-    or accepts an explicit *rules_engine_path*.
+    (env var → ``~/.fleet/cdisc-rules-engine/core/core`` → legacy
+    ``../cdisc-rules-engine/core.py``), or accepts an explicit *rules_engine_path*.
     """
 
     def __init__(self, rules_engine_path: Path | None = None) -> None:
@@ -276,7 +276,9 @@ class OfficialCDISCValidator:
         Examples:
             Validate DM and AE together, then read the AE result::
 
-                validator = OfficialCDISCValidator(Path("~/.fleet/core"))
+                validator = OfficialCDISCValidator(
+                    Path("~/.fleet/cdisc-rules-engine/core/core").expanduser()
+                )
                 results = validator.validate_datasets(
                     {"DM": dm, "AE": ae}, standard="sdtmig", version="3-4"
                 )

@@ -220,10 +220,7 @@ def _watch_loop(paths: Sequence[Path], run_once: Callable[[], None]) -> None:
     try:
         from watchfiles import watch
     except ImportError:
-        _fail(
-            "watchfiles is required for --watch. Install it with: "
-            "uv sync --extra watch  (or: uv pip install 'fleet-cdisc[watch]')"
-        )
+        _fail("watchfiles is required for --watch. Install it with: uv add 'fleet-cdisc[watch]'")
 
     from fleet.core.exceptions import FleetError
     from fleet.core.study_context import StudyConfigError
@@ -725,7 +722,7 @@ def _check_extras() -> list[tuple[str, bool, str]]:
     results: list[tuple[str, bool, str]] = []
     for module, (extra, purpose) in _OPTIONAL_EXTRAS.items():
         installed = _module_available(module)
-        hint = f"{purpose} — install with: uv sync --extra {extra}"
+        hint = f"{purpose} — install with: uv add 'fleet-cdisc[{extra}]'"
         results.append((module.split(".")[0], installed, hint))
     return results
 
@@ -1902,7 +1899,7 @@ def _require_extra(module: str, extra: str, command: str) -> None:
     seen = f" (found {dist} {found})" if found else ""
     _fail(
         f"{dist} is required for `fleet {command}`{seen}. Install it with: "
-        f"uv sync --extra {extra}  (or: uv pip install 'fleet-cdisc[{extra}]')"
+        f"uv add 'fleet-cdisc[{extra}]'  (or: uv pip install 'fleet-cdisc[{extra}]')"
     )
 
 
