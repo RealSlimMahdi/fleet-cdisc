@@ -413,7 +413,8 @@ The spec keys below apply to every generation:
   `Record Qualifier`, `Variable Qualifier`, `Rule`), written as the ItemRef
   `Role`. `fleet init define` fills it from the CDISC Library; check a
   sponsor-specific role by hand (ADR 0042). It is apart from `role:
-  qualifier`, which only marks a Non-Standard Variable for `supp()`.
+  qualifier`, which marks a Non-Standard Variable for `SUPP<domain>` (see
+  *Supplemental qualifiers* below).
 - **`value_level:`** — value-level metadata entries emitted as Define-XML
   `<ValueListDef>` / where-clause elements.
 - **`ct: {validate: true, file: ...}`** — opt the spec into CT validation
@@ -639,9 +640,9 @@ What it catches:
 - a key, a value-level variable or a where-clause variable that its dataset
   does not declare, and a `crf_pages` document that `study.documents` does
   not declare;
-- in an SDTMIG 3.4 (or earlier) spec, a `role: qualifier` variable in its
-  parent domain: SDTMIG 3.4 puts it in SUPP--. Declare the SUPP-- dataset
-  (its `Domain` is the parent domain) and move the variable there;
+- in an SDTMIG 3.4 (or earlier) spec, a `role: qualifier` variable that
+  cannot move to its generated `SUPP<domain>` (see *Supplemental qualifiers*
+  below). The message names `SUPP<domain>` and the reason;
 - a `study.ct_version` (or `adam_ct_version`) that is not the date of the CT
   package that `study_config.yaml` pins;
 - a Define-XML gap: method text, `Length` or `SignificantDigits` (see
@@ -705,8 +706,44 @@ Non-Standard Variable. `fleet run` builds it, then moves it to a
 `SUPP<domain>` dataset (SDTMIG 3.4 section 8.4) and writes the parent
 without it. IDVAR is `<domain>SEQ`; only DM may have no IDVAR, so another
 domain with no `--SEQ` stops the run. Later datasets of the same run still
-read the qualifier from the full frame. `fleet define-xml` does not yet
-write a SUPP ItemGroupDef: it lists the qualifier on the parent.
+read the qualifier from the full frame.
+
+The same define.yaml gives the Define-XML. For SDTMIG 3.4 or earlier,
+`fleet define-xml` and `fleet check` leave the qualifier out of the parent
+ItemGroupDef and add a `SUPP<domain>` ItemGroupDef (ADR 0044):
+
+- the variables STUDYID, RDOMAIN, USUBJID, IDVAR, IDVARVAL, QNAM, QLABEL,
+  QVAL, QORIG and QEVAL, with the keys STUDYID, RDOMAIN, USUBJID, IDVAR,
+  IDVARVAL and QNAM;
+- value-level metadata on QVAL: one where clause `QNAM EQ <name>` per
+  qualifier, with its label, type, length, codelist, origin and method;
+- IDVAR text `<domain>SEQ` (for DM: null), the rule of `fleet run`;
+- the leaf `supp<domain>` in the format of the parent.
+
+<!-- docs:no-run -->
+
+```yaml
+- name: AE
+  variables:
+    - name: AESEQ
+      # ...
+    - name: AETRTEM
+      label: Treatment Emergent Flag
+      type: text
+      length: 1
+      origin: Derived
+      role: qualifier  # fleet run: SUPPAE; define: IG.SUPPAE, QVAL where QNAM EQ AETRTEM
+      derivation:
+        algorithm: assign
+        source: trtem
+```
+
+The define refuses a qualifier that cannot move: the parent has no STUDYID
+or USUBJID, a parent other than DM has no `<domain>SEQ`, the spec also
+declares `SUPP<domain>`, the name has more than 8 characters (QNAM), the
+label has more than 40 characters (QLABEL), or the qualifier is a key of the
+parent. Give CRF pages of a qualifier with `crf_pages:` on the variable: a
+key `AE.AETRTEM` in an external page map does not reach `SUPPAE`.
 
 ---
 
