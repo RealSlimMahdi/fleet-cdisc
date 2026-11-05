@@ -59,6 +59,19 @@ def main():
 """)
     )
 
+    raw_ex = fleet.frame(
+        pl.from_repr("""\
+┌────────────┬────────────┐
+│ subject_id ┆ start      │
+│ ---        ┆ ---        │
+│ str        ┆ str        │
+╞════════════╪════════════╡
+│ S001       ┆ 2023-01-01 │
+│ S002       ┆ 2023-01-02 │
+└────────────┴────────────┘
+""")
+    )
+
     print("--- 2. Deriving SDTM ---")
     dm = (
         raw_dm.sdtm.assign("DOMAIN", value="DM")
@@ -97,12 +110,20 @@ def main():
     print("\nAE Dataset:")
     print(ae)
 
+    ex = (
+        raw_ex.sdtm.assign("DOMAIN", value="EX")
+        .assign("USUBJID", source="subject_id")
+        .date("EXSTDTC", source="start")
+        .to_frame()
+    )
+
     print("--- 3. Deriving ADaM ---")
+    # TRTSDT is the date of first exposure: it comes from EX (ADaMIG 1.3, ADSL).
     adsl = (
         dm.adam.adsl.source("USUBJID")
         .source("ARM")
         .source("SEX")
-        .first_date("TRTSDT", from_dataset=ae, date_col="AESTDTC")
+        .first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")
         .to_frame()
     )
     print("\nADSL Dataset:")

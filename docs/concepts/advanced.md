@@ -46,7 +46,10 @@ adsl = dm.adam.adsl.derivation(
 adsl = dm.adam.adsl.derivation(
     "AGEGR1",
     expression=lambda: (
-        pl.when(pl.col("AGE") < 65).then(pl.lit("<65 yrs")).otherwise(pl.lit(">=65 yrs"))
+        pl.when(pl.col("AGE") < 65)
+        .then(pl.lit("<65 yrs"))
+        .when(pl.col("AGE") >= 65)
+        .then(pl.lit(">=65 yrs"))  # a missing AGE stays missing
     ),
 ).to_frame()
 ```
@@ -96,7 +99,10 @@ import polars as pl
 def AGEGR1() -> pl.Expr:
     """Classify AGE into pooled age groups for ADSL."""
     return (
-        pl.when(pl.col("AGE") < 65).then(pl.lit("<65 yrs")).otherwise(pl.lit(">=65 yrs"))
+        pl.when(pl.col("AGE") < 65)
+        .then(pl.lit("<65 yrs"))
+        .when(pl.col("AGE") >= 65)
+        .then(pl.lit(">=65 yrs"))  # a missing AGE stays missing
     ).alias("AGEGR1")
 ```
 

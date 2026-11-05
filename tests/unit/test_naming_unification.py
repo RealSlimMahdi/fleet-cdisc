@@ -621,6 +621,18 @@ class TestVerbsListing:
         v = df.sdtm.verbs().filter(pl.col("verb") == "assign")
         assert v["summary"][0].startswith("Assign")
 
+    def test_summary_does_not_stop_at_eg_or_ie(self):
+        """c1-653: "e.g." and "i.e." do not end the first sentence."""
+        from fleet.core.algorithm_resolver import docstring_summary
+
+        assert (
+            docstring_summary("Derive a new parameter (e.g. MAP from SYSBP). More.")
+            == "Derive a new parameter (e.g. MAP from SYSBP)."
+        )
+        assert docstring_summary("Flag a record, i.e. the first one. More.") == (
+            "Flag a record, i.e. the first one."
+        )
+
     def test_origin_is_the_path_the_programmer_types(self):
         df = pl.from_repr("""\
 ┌─────┐

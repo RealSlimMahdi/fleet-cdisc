@@ -57,9 +57,9 @@ def docstring_summary(doc: str | None) -> str:
     if not text:
         return ""
     # Take everything up to the first blank line, then end at a period that a
-    # space or the end follows, so 18.5 and v2.1 stay whole.
+    # space or the end follows, so 18.5 and v2.1 stay whole; e.g. and i.e. too.
     head = text.split("\n\n", 1)[0].strip().replace("\n", " ")
-    match = re.search(r"\.(?=\s|$)", head)
+    match = re.search(r"(?<!\be\.g)(?<!\bi\.e)\.(?=\s|$)", head)
     if match:
         head = head[: match.start()].strip() + "."
     return head
