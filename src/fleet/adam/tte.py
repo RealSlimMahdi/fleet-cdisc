@@ -249,7 +249,8 @@ def select_tte(
         subject_keys: Subject identifier columns (usually ``["USUBJID"]``).
         stop_at: Date columns in *universe*; the earliest non-null one
             ends the observation of the subject.
-        by: Stratum columns, present in every source frame.
+        by: Stratum columns, present in every event frame. A censor frame
+            with none of them (ADSL) applies to every stratum of the events.
         create_datetime: Give ``ADTM``/``STARTDTM`` instead of dates.
         retain: ``"drop"`` (a subject with no record left is dropped with a
             warning) or ``"censor_at_start"`` (censored at ``STARTDT`` with
@@ -314,8 +315,15 @@ def select_tte(
     )
 
     pools: dict[str, list[pl.DataFrame]] = {"event": [], "censor": []}
+    strata_of_events = [
+        fr.select(by) for _, kd, _, fr in sources if kd == "event" and set(by) <= set(fr.columns)
+    ]
     for index, (label, kind, cnsr, frame) in enumerate(sources):
         where = f"TTE {kind} {label}"
+        if kind == "censor" and by and strata_of_events and not set(by) & set(frame.columns):
+            # A subject-level censor frame (ADSL) applies to every stratum of the events.
+            strata = pl.concat(strata_of_events, how="vertical_relaxed").unique(maintain_order=True)
+            frame = frame.join(strata, how="cross")
         _check_columns(where, frame, keys + ["ADT"])
         _check_date(where, frame, "ADT")
         cand = _candidates(label, kind, cnsr, index, frame, keys, stops, subject_keys, date_dtype)

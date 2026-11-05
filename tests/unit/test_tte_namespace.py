@@ -1,7 +1,9 @@
 """Unit tests for the ADTTE namespace (df.adam.tte).
 
-Ports the substance of admiral's ``test-derive_param_tte.R`` behavior
-catalog (each test docstring names the admiral scenario mirrored), plus the
+Covers the scenarios of admiral's ``test-derive_param_tte.R`` with hand-written
+rows that follow the same rules; each test docstring names the admiral test.
+TestByStrata.test_adsl_censor_applies_to_every_stratum holds the literal rows of
+admiral Test 5. Plus the
 Fleet additions: retain='censor_at_start', AVALU stamping, the explain
 trace, and km_data(). Sources are plain frames with USUBJID and ADT.
 """
@@ -408,7 +410,7 @@ class TestByStrata:
             "TT",
             start="TRTSDT",
             events={"AE": _ae(adae)},
-            # the censor frame carries the by column too (admiral #6)
+            # a censor frame with the by column censors within its stratum
             censors={1: _ae(adae).with_columns(EVNTDESC=pl.lit("LAST"))},
             by=["AEDECOD"],
             set_values_to={
@@ -433,7 +435,7 @@ class TestByStrata:
             )
 
     def test_by_missing_in_source_raises(self, adsl):
-        """admiral #6/#7: a by column absent from a source frame errors cleanly."""
+        """A by column absent from an EVENT frame errors cleanly (a Fleet rule)."""
         with pytest.raises(Exception, match="column 'AEDECOD' not found"):
             adsl.adam.tte.param(
                 "TT",
@@ -442,6 +444,50 @@ class TestByStrata:
                 events={"DEATH": _death(adsl)},
                 by=["AEDECOD"],
             )
+
+    def test_adsl_censor_applies_to_every_stratum(self):
+        """admiral 1.5.0 Test 5: by_vars with an ADSL censor (literal rows)."""
+        adsl = pl.from_repr("""
+        ┌─────────┬────────────┬────────────┐
+        │ USUBJID ┆ TRTSDT     ┆ EOSDT      │
+        │ ---     ┆ ---        ┆ ---        │
+        │ str     ┆ date       ┆ date       │
+        ╞═════════╪════════════╪════════════╡
+        │ 01      ┆ 2020-01-01 ┆ 2020-06-01 │
+        │ 02      ┆ 2020-01-01 ┆ 2020-06-01 │
+        └─────────┴────────────┴────────────┘
+        """)
+        adae = pl.from_repr("""
+        ┌─────────┬──────────┬────────────┐
+        │ USUBJID ┆ AEDECOD  ┆ ADT        │
+        │ ---     ┆ ---      ┆ ---        │
+        │ str     ┆ str      ┆ date       │
+        ╞═════════╪══════════╪════════════╡
+        │ 01      ┆ NAUSEA   ┆ 2020-02-01 │
+        │ 02      ┆ HEADACHE ┆ 2020-03-01 │
+        └─────────┴──────────┴────────────┘
+        """)
+
+        result = adsl.adam.tte.param(
+            "TT",
+            start="TRTSDT",
+            events={"AE": adae},
+            censors={1: adsl.select("USUBJID", ADT="EOSDT", EVNTDESC=pl.lit("END OF STUDY"))},
+            by=["AEDECOD"],
+            set_values_to={
+                "PARAMCD": pl.concat_str([pl.lit("TT"), pl.col("AEDECOD").str.slice(0, 6)]),
+                "PARAM": pl.concat_str([pl.lit("Time to "), pl.col("AEDECOD")]),
+            },
+        ).to_frame()
+
+        assert result.select("PARAMCD", "USUBJID", "ADT", "CNSR").sort(
+            "PARAMCD", "USUBJID"
+        ).rows() == [
+            ("TTHEADAC", "01", date(2020, 6, 1), 1),
+            ("TTHEADAC", "02", date(2020, 3, 1), 0),
+            ("TTNAUSEA", "01", date(2020, 2, 1), 0),
+            ("TTNAUSEA", "02", date(2020, 6, 1), 1),
+        ]
 
 
 # ------------------------------------------------------------------ #
