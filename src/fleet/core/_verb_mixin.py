@@ -2670,9 +2670,9 @@ class SharedVerbsMixin:
 
     def to_spec_yaml(
         self,
+        *,
         dataset: str | None = None,
         path: str | Path | None = None,
-        *,
         predecessor: str | None = None,
     ) -> str:
         """Serialise the pipeline's lineage into a define.yaml spec.
@@ -2725,6 +2725,9 @@ class SharedVerbsMixin:
         Returns:
             str: The define.yaml document.
 
+        Raises:
+            VerbUsageError: When *dataset* is not a valid dataset name.
+
         Examples:
             Freeze an inline DM prototype to a spec::
 
@@ -2746,6 +2749,11 @@ class SharedVerbsMixin:
 
         standard = self._VALIDATE_STANDARD
         ds_name = (dataset or getattr(self, "_domain", None) or "DATASET").upper()
+        if not re.match(r"^[A-Z_][A-Z0-9_]{0,7}$", ds_name):
+            raise VerbUsageError(
+                f"to_spec_yaml(): dataset {dataset!r} is not a valid dataset name "
+                "(expected e.g. 'AE' or 'ADSL'). Give the file path as path=."
+            )
 
         pred_ds = predecessor.upper() if predecessor else None
         if pred_ds:

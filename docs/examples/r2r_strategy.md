@@ -356,7 +356,7 @@ name plus the dotted path to its implementation:
 ```
 2. [SDTM.AE.R0004] AETERM must not be empty
    Variable: AETERM
-   Rows affected: 7 (1 occurrences)
+   Rows affected: 7 (1 occurrence)
    Producing verb: assign (fleet.core._verb_mixin.SharedVerbsMixin.assign)
 ```
 

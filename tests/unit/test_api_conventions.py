@@ -31,8 +31,6 @@ _POSITIONAL_ALLOWANCE: dict[str, int] = {
     # (name, frame) pairs — the pair IS the target; both positional-only.
     "pin": 2,
     "repin": 2,
-    # (dataset, path) — dataset selection plus optional output path.
-    "to_spec_yaml": 2,
     # (path/spec, dataset-ish) legacy two-positional readers.
     "from_spec": 2,
     # Largest legacy deviation: 6 positional-or-keyword params, shipped shape.

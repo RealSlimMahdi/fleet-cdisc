@@ -540,3 +540,36 @@ class TestRowStepsRoundTrip:
         with pytest.warns(UserWarning, match="TRT"):
             text = ns.to_spec_yaml(dataset="ADXX")
         assert "callable: TODO_TRT" in text
+
+
+class TestDatasetArgument:
+    """c1-349: a path passed by position became the dataset name, and no file was written."""
+
+    @pytest.fixture
+    def ae_ns(self):
+        raw = pl.from_repr("""\
+┌─────────┐
+│ subj    │
+│ ---     │
+│ str     │
+╞═════════╡
+│ 01-701  │
+└─────────┘
+""")
+        return raw.sdtm.assign("STUDYID", value="S1").assign("USUBJID", source="subj")
+
+    def test_a_positional_path_is_refused(self, ae_ns, tmp_path):
+        with pytest.raises(TypeError):
+            ae_ns.to_spec_yaml(str(tmp_path / "define.yaml"))
+
+    def test_an_invalid_dataset_name_is_refused(self, ae_ns, tmp_path):
+        from fleet.core.exceptions import VerbUsageError
+
+        with pytest.raises(VerbUsageError, match="not a valid dataset name"):
+            ae_ns.to_spec_yaml(dataset=str(tmp_path / "define.yaml"))
+
+    def test_keywords_write_the_file(self, ae_ns, tmp_path):
+        path = tmp_path / "define.yaml"
+        text = ae_ns.to_spec_yaml(dataset="ae", path=path)
+        assert path.read_text(encoding="utf-8") == text
+        assert "name: AE" in text
