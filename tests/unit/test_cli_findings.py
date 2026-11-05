@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import polars as pl
@@ -762,3 +763,59 @@ class TestTlg:
         assert _run([*argv, "--config", str(study / "study_config.yaml")]) == 0
 
         assert (study / "outputs" / "ae_summary.html").is_file()
+
+
+_DERIVATIONS = """\
+import polars as pl
+
+from fleet.core.derivation import derivation
+
+
+@derivation
+def AGE_c293() -> pl.Expr:
+    \"\"\"Age as given.\"\"\"
+    return pl.col("age").alias("AGE")
+"""
+
+
+class TestDerivationsModule:
+    def _study(self, study: Path, package: str, body: str) -> None:
+        pkg = study / package / "derivations"
+        pkg.mkdir(parents=True)
+        (study / package / "__init__.py").write_text("", encoding="utf-8")
+        (pkg / "__init__.py").write_text(body, encoding="utf-8")
+        spec = study / "metadata" / "sdtm" / "define.yaml"
+        text = _SDTM_DEFINE.replace(
+            "datasets:\n", f"derivations_module: {package}.derivations\ndatasets:\n"
+        )
+        text = text.replace(
+            "        derivation:\n          algorithm: assign\n          source: age\n",
+            "        derivation:\n          callable: AGE_c293\n",
+        )
+        spec.write_text(text, encoding="utf-8")
+
+    def test_c1_293_the_module_imports_from_a_subfolder(
+        self, study: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("sys.path", [*sys.path])
+        self._study(study, "study_c293a", _DERIVATIONS)
+        nested = study / "programs" / "adam"
+        nested.mkdir(parents=True)
+        monkeypatch.chdir(nested)
+
+        assert _run(["run"]) == 0
+
+        assert pl.read_parquet(study / "data" / "sdtm" / "dm.parquet")["AGE"].to_list() == [45, 60]
+
+    def test_c1_293_an_error_in_the_module_is_one_line(
+        self, study: Path, monkeypatch: pytest.MonkeyPatch, capsys
+    ) -> None:
+        monkeypatch.setattr("sys.path", [*sys.path])
+        self._study(study, "study_c293b", "raise RuntimeError('broken study module')\n")
+        monkeypatch.chdir(study)
+
+        assert _run(["run"]) == 1
+
+        err = capsys.readouterr().err
+        assert "cannot import derivations_module 'study_c293b.derivations': RuntimeError" in err
+        assert "Traceback" not in err

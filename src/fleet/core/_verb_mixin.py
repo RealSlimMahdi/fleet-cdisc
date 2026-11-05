@@ -161,15 +161,32 @@ def _check_spec_version(spec: DefineSpec, *, source: str) -> None:
     )
 
 
-def _import_derivations_module(spec: DefineSpec, *, source: str) -> None:
-    """Import the spec-declared ``derivations_module`` (callable registrations)."""
+def _import_derivations_module(spec: DefineSpec, *, source: str, path: Path | None = None) -> None:
+    """Import the spec-declared ``derivations_module`` (callable registrations).
+
+    The module path is relative to the study root: the folder of the first
+    ``study_config.yaml`` above the spec *path*.  So
+    ``derivations_module: programs.derivations`` imports from any working
+    directory.  With no config above the spec, the working directory is used.
+    """
     module = spec.derivations_module
     if not module:
         return
+    if path is not None:
+        from fleet.core.study_context import find_study_config
+
+        config = find_study_config(start=path.resolve().parent)
+        root = str(config.parent) if config is not None else None
+        if root is not None and root not in sys.path:
+            sys.path.append(root)  # appended: a study file never shadows an installed package
     try:
         importlib.import_module(str(module))
     except ImportError as err:
         raise SpecError(f"{source}: cannot import derivations_module '{module}': {err}") from err
+    except Exception as err:
+        raise SpecError(
+            f"{source}: cannot import derivations_module '{module}': {type(err).__name__}: {err}"
+        ) from err
 
 
 #: Variable-level metadata keys merged into the derivation dict so that
@@ -2532,7 +2549,7 @@ class SharedVerbsMixin:
         path = Path(spec_path)
         spec = load_define_spec(path)
         _check_spec_version(spec, source=str(path))
-        _import_derivations_module(spec, source=str(path))
+        _import_derivations_module(spec, source=str(path), path=path)
 
         standard = self._VALIDATE_STANDARD
         ds_name, raw_vars = _extract_spec_variables(spec, dataset)

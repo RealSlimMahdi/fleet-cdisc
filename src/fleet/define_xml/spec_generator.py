@@ -789,7 +789,9 @@ class DefineSpecGenerator:
         # derivations are registered before their MethodDefs are resolved
         # (from_spec does this too).  Study code runs only to write methods.
         if self._enrich_methods and self._import_study_code:
-            _import_derivations_module(load_define_spec(self._path), source="define-xml")
+            _import_derivations_module(
+                load_define_spec(self._path), source="define-xml", path=Path(self._path)
+            )
         self._gaps = []
         study = self._data["study"]
         std_oid = _STANDARD_OIDS.get(study["standard"], f"STD.{study['standard']}")
