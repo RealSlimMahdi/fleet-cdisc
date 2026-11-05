@@ -228,7 +228,11 @@ for (n in scale_factors) {
   adsl_sub <- adsl_full[adsl_full$USUBJID %in% ae_subj, ]
 
   runs <- list()
+  res <- NULL
   for (i in seq_len(reps)) {
+    # Free the previous run's output first: two 11.5M-row ADAEs do not fit in 64 GB
+    res <- NULL
+    invisible(gc())
     res <- run_pipeline(ae_sub, adsl_sub, n)
     cat(sprintf("  SDTM: %.2fs  ADaM: %.2fs  Total: %.2fs  Mem: %.0f MB  Out: %d×%d\n",
                 res$sdtm_sec, res$adam_sec, res$total_sec, res$peak_mb, res$out_rows, res$out_cols))
