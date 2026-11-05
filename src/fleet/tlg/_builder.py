@@ -369,7 +369,10 @@ class TLGBuilder:
         A single field maps to ``variable``.  Two fields drive two-level
         nesting: the first maps to ``variable``, the second to ``group2``.
         Entries may be plain column names or full ``Row`` objects
-        carrying ``label`` / ``filter_value`` / ``decimals``.
+        carrying ``label`` / ``filter_value`` / ``decimals``.  A plain
+        name takes the label of the template's default row for the same
+        field, so the stub header matches the shortcut.  Pass
+        ``Row(field=..., label="")`` for no label.
 
         Args:
             fields: One or two field names (or ``Row`` objects) for the
@@ -878,6 +881,21 @@ class TLGBuilder:
         row_objs = [f if isinstance(f, Row) else Row(field=f) for f in self._rows_fields]
         if "categorical_vars" not in self._spec_cls.model_fields:
             self._require_consumed_field("rows", "rows()")
+            # A plain name takes the label of the template's default Row for that field.
+            default_rows = self._spec_cls.model_fields["rows"].get_default(
+                call_default_factory=True
+            )
+            default_labels = {
+                r.field: r.label
+                for r in (default_rows if isinstance(default_rows, list) else [])
+                if isinstance(r, Row) and r.label
+            }
+            row_objs = [
+                Row(field=f, label=default_labels[f])
+                if isinstance(f, str) and f in default_labels
+                else r
+                for f, r in zip(self._rows_fields, row_objs, strict=True)
+            ]
             return {"rows": row_objs}
         unsupported = [
             r.field for r in row_objs if r.filter_value is not None or r.decimals is not None
