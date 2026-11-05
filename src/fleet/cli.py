@@ -542,7 +542,7 @@ def _run_add_ct(args: argparse.Namespace) -> None:
     )
 
     domains = _parse_domains(args.domains)
-    ctx = _try_ctx()
+    ctx = _try_ctx(args.config)
     output = (
         Path(args.output) if args.output else (ctx.codelists_file if ctx else Path("codelists.py"))
     )
@@ -1639,7 +1639,7 @@ def _tlg_run_once(args: argparse.Namespace) -> None:
 
     spec_paths = _collect_spec_paths(args.spec)
     named_data, default_data = _parse_data_args(args.data)
-    ctx = _try_ctx()
+    ctx = _try_ctx(args.config)
     out_dir = Path(args.output) if args.output else (ctx.outputs_dir if ctx else Path("."))
     fmt: str = args.fmt
 
@@ -1693,7 +1693,7 @@ def _tlg_explore_once(args: argparse.Namespace) -> None:
 
     spec_paths = _collect_spec_paths(args.spec)
     named_data, default_data = _parse_data_args(args.data)
-    ctx = _try_ctx()
+    ctx = _try_ctx(args.config)
 
     adsl_df: pl.DataFrame | None = None
     if args.adsl:
@@ -1754,7 +1754,7 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
 
     domain: str = args.domain
     fmt: str = args.fmt
-    ctx = _try_ctx()
+    ctx = _try_ctx(args.config)
 
     # Resolve datasets: explicit paths, else the study's configured data dirs.
     # The default dataset comes from the registry: the namespace's t_summary
@@ -2323,6 +2323,7 @@ def _add_ct_parsers(sub: argparse._SubParsersAction) -> None:
         "add-ct",
         help="Add domains to an existing codelists.py (preserves existing).",
     )
+    _add_config_flag(add)
     add.add_argument(
         "--domains",
         required=True,
@@ -3076,6 +3077,7 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
         "run",
         help="Execute YAML TLG spec(s) against datasets and render outputs.",
     )
+    _add_config_flag(tlg_run)
     tlg_run.add_argument(
         "spec",
         help="A spec .yaml file or a directory of spec files.",
@@ -3163,6 +3165,7 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
             "byte-identical to `tlg run`'s output)."
         ),
     )
+    _add_config_flag(tlg_explore)
     tlg_explore.add_argument(
         "spec",
         help="A spec .yaml file or a directory of spec files.",
@@ -3229,6 +3232,7 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
         "export",
         help="Render a domain summary (t_summary) to HTML, RTF, PDF, or slides.",
     )
+    _add_config_flag(tlg_export)
     tlg_export.add_argument(
         "--domain",
         required=True,
@@ -3440,11 +3444,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
-    # Read the CDISC_API_KEY of a study .env (walking up from the cwd) before
-    # any handler needs it; commands must work from any study subdirectory.
+    # Read the CDISC_API_KEY of a study .env (walking up from the --config
+    # folder, else the cwd) before any handler needs it.
     from fleet.ct.api import try_load_dotenv
 
-    try_load_dotenv()
+    config_arg = getattr(args, "config", None)
+    try_load_dotenv(Path(config_arg).resolve().parent if config_arg else None)
 
     # Make project-local modules (e.g. a spec's `derivations_module:
     # fixtures.derivations`) importable from the bare `fleet` console script.

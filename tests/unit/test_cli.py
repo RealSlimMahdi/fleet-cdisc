@@ -1812,3 +1812,41 @@ def test_tlg_run_with_a_template_id_says_how_to_write_the_spec(
     err = capsys.readouterr().err
     assert "aet02 is a template id" in err
     assert "template: aet02" in err
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["add-ct", "--domains", "DM", "--output", "x.py"],
+        ["tlg", "run", "missing.yaml"],
+        ["tlg", "explore", "missing.yaml"],
+        ["tlg", "export", "--domain", "dm"],
+    ],
+)
+def test_study_commands_take_config_and_read_its_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+    argv: list[str],
+) -> None:
+    """c1-662: --config is accepted, and the .env of the config folder is read."""
+    import contextlib
+    import os
+
+    study = tmp_path / "study"
+    study.mkdir()
+    (study / "study_config.yaml").write_text("study:\n  id: S1\n", encoding="utf-8")
+    (study / ".env").write_text("CDISC_API_KEY=from-study-env\n", encoding="utf-8")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    env = {k: v for k, v in os.environ.items() if k != "CDISC_API_KEY"}
+    monkeypatch.setattr(os, "environ", env)
+    monkeypatch.setattr("fleet.ct.api.CDISCClient", None)
+
+    # The command itself fails (no data, no network); only the setup is checked.
+    with contextlib.suppress(Exception):
+        _run([*argv, "--config", str(study / "study_config.yaml")])
+
+    assert "unrecognized arguments" not in capsys.readouterr().err
+    assert env.get("CDISC_API_KEY") == "from-study-env"

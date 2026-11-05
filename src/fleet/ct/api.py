@@ -56,12 +56,13 @@ class CDISCClientConfig:
                 self.base_url = env_url.rstrip("/")
 
 
-def try_load_dotenv() -> None:
+def try_load_dotenv(start: Path | None = None) -> None:
     """Set ``CDISC_API_KEY`` from a ``.env`` file when the environment has none.
 
-    Walks up from the current directory (git-style, like ``study_config.yaml``
-    discovery) to the first ``.env``.  Only the ``CDISC_API_KEY`` line is
-    read: a ``.env`` in a received study package must not redirect the key
+    Walks up from *start* (default: the current directory), git-style like
+    ``study_config.yaml`` discovery, to the first ``.env``.  Only the
+    ``CDISC_API_KEY`` line is read: a ``.env`` in a received study package
+    must not redirect the key
     to another host (``CDISC_BASE_URL``), set a proxy or a trust store, or
     name a rules engine or an XSD.  Set those in the shell.
 
@@ -73,7 +74,8 @@ def try_load_dotenv() -> None:
     """
     if os.environ.get("CDISC_API_KEY"):
         return
-    for parent in (Path.cwd(), *Path.cwd().parents):
+    origin = start or Path.cwd()
+    for parent in (origin, *origin.parents):
         env_path = parent / ".env"
         if env_path.is_file():
             break
