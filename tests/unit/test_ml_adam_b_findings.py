@@ -380,3 +380,159 @@ def test_c1_404_nominal_time_minutes_and_log2_exact():
     )
     assert out["NFRLT"].to_list() == [1.5]
     assert out["DVL"].to_list() == [3.0]
+
+
+# ------------------------------------------------------------------ #
+# Onco                                                                 #
+# ------------------------------------------------------------------ #
+
+RS_TEXT_DATES = """
+┌─────────┬───────┬──────────────────┐
+│ USUBJID ┆ AVALC ┆ ADT              │
+│ ---     ┆ ---   ┆ ---              │
+│ str     ┆ str   ┆ str              │
+╞═════════╪═══════╪══════════════════╡
+│ A       ┆ PR    ┆ 2024-01-01T10:30 │
+│ A       ┆ PR    ┆ 2024-03-01       │
+│ A       ┆ PD    ┆ 2024-05-01       │
+└─────────┴───────┴──────────────────┘
+"""
+
+
+def test_c1_413_filter_pd_text_date_with_time_raises():
+    rs = pl.from_repr(RS_TEXT_DATES)
+    with pytest.raises(
+        DerivationError, match=r"filter_pd\(\): ADT must be a complete date.*'2024-01-01T10:30'"
+    ):
+        rs.adam.onco.filter_pd(response_col="AVALC", date_col="ADT")
+
+
+def test_c1_413_confirmed_response_partial_date_raises():
+    rs = pl.from_repr(RS_TEXT_DATES).with_columns(
+        pl.when(pl.col("ADT").str.contains("T"))
+        .then(pl.lit("2024-01"))
+        .otherwise("ADT")
+        .alias("ADT")
+    )
+    with pytest.raises(DerivationError, match=r"complete date.*'2024-01'"):
+        rs.adam.onco.confirmed_response_flag("CRSPFL", source="AVALC", date_col="ADT")
+
+
+def test_c1_413_complete_text_dates_still_work():
+    rs = pl.from_repr(RS_TEXT_DATES).with_columns(pl.col("ADT").str.slice(0, 10))
+    out = rs.adam.onco.filter_pd(response_col="AVALC", date_col="ADT").to_frame()
+    assert out.height == 3
+
+
+@pytest.mark.parametrize("verb", ["filter_pd", "confirmed_response_flag"])
+def test_c1_413_wrong_column_names_the_verb(verb):
+    rs = pl.from_repr(RS_TEXT_DATES)
+    with pytest.raises(DerivationError, match=rf"{verb}\(\): column\(s\) \['AVALCX'\] not found"):
+        if verb == "filter_pd":
+            rs.adam.onco.filter_pd(response_col="AVALCX", date_col="ADT")
+        else:
+            rs.adam.onco.confirmed_response_flag("F", source="AVALCX", date_col="ADT")
+
+
+def test_c1_413_null_dtype_response_gives_null_or_missing():
+    rs = pl.DataFrame(
+        {"USUBJID": ["A"], "RESP": [None], "ADT": [None]},
+        schema={"USUBJID": pl.String, "RESP": pl.Null, "ADT": pl.Date},
+    )
+    out = (
+        rs.adam.onco.aval_resp("AVAL", source="RESP")
+        .best_overall_response(
+            "BOR", source="RESP", date_col="ADT", reference_date="ADT", min_sd_days=0
+        )
+        .to_frame()
+    )
+    assert out["AVAL"].to_list() == [None]
+    assert out["BOR"].to_list() == ["MISSING"]
+
+
+ADRS_409 = """
+┌─────────┬────────────┬──────────┐
+│ USUBJID ┆ ADT        ┆ OVRLRESP │
+│ ---     ┆ ---        ┆ ---      │
+│ str     ┆ date       ┆ str      │
+╞═════════╪════════════╪══════════╡
+│ B14     ┆ 2020-03-01 ┆ null     │
+│ B15     ┆ 2020-03-01 ┆ UNK      │
+│ B16     ┆ 2020-03-01 ┆ PR       │
+│ B16     ┆ 2020-04-01 ┆ null     │
+└─────────┴────────────┴──────────┘
+"""
+
+
+def test_c1_409_bor_is_missing_without_a_known_response():
+    out = (
+        pl.from_repr(ADRS_409)
+        .adam.onco.best_overall_response(
+            "BOR", source="OVRLRESP", date_col="ADT", reference_date="ADT", min_sd_days=0
+        )
+        .to_frame()
+    )
+    assert out["BOR"].to_list() == ["MISSING", "MISSING", "PR", "PR"]
+
+
+ADRS_410 = """
+┌─────────┬────────────┬──────────┐
+│ USUBJID ┆ ADT        ┆ OVRLRESP │
+│ ---     ┆ ---        ┆ ---      │
+│ str     ┆ date       ┆ str      │
+╞═════════╪════════════╪══════════╡
+│ S1      ┆ 2020-03-01 ┆ CR       │
+│ S1      ┆ 2020-04-01 ┆ SD       │
+│ S2      ┆ 2020-03-01 ┆ Partial  │
+│ S2      ┆ 2020-04-01 ┆ PD       │
+│ S3      ┆ 2020-03-01 ┆ pr       │
+└─────────┴────────────┴──────────┘
+"""
+
+
+def test_c1_410_unknown_response_values_raise_in_three_verbs():
+    adrs = pl.from_repr(ADRS_410).with_columns(
+        pl.when(pl.col("OVRLRESP") == "CR")
+        .then(pl.lit("CR "))
+        .otherwise("OVRLRESP")
+        .alias("OVRLRESP")
+    )
+    match = r"unknown response values \['CR ', 'Partial', 'pr'\]; known: CR, PR"
+    with pytest.raises(DerivationError, match=r"best_overall_response\(\): " + match):
+        adrs.adam.onco.best_overall_response(
+            "BOR", source="OVRLRESP", date_col="ADT", reference_date="ADT", min_sd_days=0
+        )
+    with pytest.raises(DerivationError, match=r"confirmed_response_flag\(\): " + match):
+        adrs.adam.onco.confirmed_response_flag("F", source="OVRLRESP", date_col="ADT")
+    with pytest.raises(DerivationError, match=r"filter_pd\(\): " + match):
+        adrs.adam.onco.filter_pd(response_col="OVRLRESP", date_col="ADT")
+
+
+RS_VERTICAL = """
+┌─────────┬──────────┬──────────┬────────────┐
+│ USUBJID ┆ PARAMCD  ┆ AVALC    ┆ ADT        │
+│ ---     ┆ ---      ┆ ---      ┆ ---        │
+│ str     ┆ str      ┆ str      ┆ date       │
+╞═════════╪══════════╪══════════╪════════════╡
+│ S1      ┆ TRGRESP  ┆ CR       ┆ 2020-03-01 │
+│ S1      ┆ OVRLRESP ┆ PR       ┆ 2020-03-01 │
+│ S2      ┆ TRGRESP  ┆ PR       ┆ 2020-03-01 │
+│ S2      ┆ OVRLRESP ┆ PD       ┆ 2020-03-01 │
+└─────────┴──────────┴──────────┴────────────┘
+"""
+
+
+def test_c1_411_vertical_adrs_filtered_to_one_parameter():
+    adrs = pl.from_repr(RS_VERTICAL)
+    bor = (
+        adrs.filter(pl.col("PARAMCD") == "OVRLRESP")
+        .adam.onco.best_overall_response(
+            "BOR", source="AVALC", date_col="ADT", reference_date="ADT", min_sd_days=0
+        )
+        .to_frame()
+        .sort("USUBJID")
+    )
+    assert bor["BOR"].to_list() == ["PR", "PD"]
+    from fleet.adam import onco_namespace
+
+    assert 'source="OVRLRESP"' not in (onco_namespace.__doc__ or "")
