@@ -28,6 +28,7 @@ from fleet.core.study_context import (
     find_study_config,
     load_study_context,
 )
+from fleet.io import DATASET_EXTENSIONS
 from fleet.validation.engine import engine_version, find_engine, untested_note
 
 if TYPE_CHECKING:
@@ -213,8 +214,9 @@ def _resolve_define_xml(define_xml: str | Path | None) -> Resolved[Path | None]:
     return Resolved(path, "argument")
 
 
-#: Dataset file types a sweep picks up from a directory.
-DATA_EXTENSIONS: tuple[str, ...] = (".parquet", ".csv", ".xpt", ".sas7bdat")
+#: Dataset file types a sweep picks up from a directory.  Not Dataset-JSON:
+#: a folder holds other JSON files too.
+DATA_EXTENSIONS: tuple[str, ...] = tuple(e for e in DATASET_EXTENSIONS if e != ".json")
 
 
 @dataclass(frozen=True)
@@ -365,8 +367,8 @@ def _collect_files(paths: Sequence[str | Path]) -> list[Path]:
     for raw in paths:
         p = Path(raw)
         if p.is_dir():
-            for ext in DATA_EXTENSIONS:
-                files.extend(sorted(p.glob(f"*{ext}")))
+            # The suffix in any case: DM.PARQUET on a case-sensitive disk too.
+            files.extend(sorted(f for f in p.iterdir() if f.suffix.lower() in DATA_EXTENSIONS))
         elif p.is_file():
             files.append(p)
         else:

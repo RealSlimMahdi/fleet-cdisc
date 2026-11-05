@@ -23,8 +23,18 @@ CDISC_API_KEY=your-api-key-here
 - **Exit codes** — `0` success, `1` on a Fleet error (a single clean message
   on stderr), `2` on a usage error (missing/unknown command or flag).
   `fleet compare` turns its verdict into the exit code: `0` equal, `1`
-  different, `2` the comparison could not run.
-- **Errors** go to **stderr**; results go to stdout.
+  different, `2` the comparison could not run. `fleet doctor` exits `1`
+  when the study config or the rules engine has a cross.
+- **Errors** go to **stderr**; results go to stdout. A bad YAML file, a
+  corrupt input file or a folder that cannot be written gives one line. Set
+  `FLEET_DEBUG=1` to see the Python traceback.
+- **Comments** — `fleet add-acrf` and `fleet tdd ctgov --write` edit the
+  YAML file as text, so its comments stay. When no parameter is new,
+  `fleet tdd ctgov --write` does not write the file. A layout that the text
+  edit does not handle (a flow-style block) is written again through YAML,
+  with a warning that counts the comment lines that are lost.
+- **Run log** — keep the output of a run in a file:
+  `fleet run > run.log 2>&1`.
 - `fleet --version` prints the installed version.
 
 Run `fleet <command> --help` for the authoritative, always-current usage.
@@ -110,6 +120,7 @@ Run `fleet <command> --help` for the authoritative, always-current usage.
 | `--out` / `--output` / `-o` | _(none)_ | Output directory for every dataset. Default: the configured data/sdtm and data/adam directories. Fleet only writes here: inputs are read from the run, a declared path:, the raw directory (type: raw) or the data directory of the input's standard (type: dataset). |
 | `--format` | _(none)_ | Output format of every dataset. Default: the output_format of the dataset, else of define.yaml, else parquet (the rule of the Define-XML leaf). Choices: `parquet`, `xpt`, `dataset-json`. |
 | `--strict` / `--no-strict` | _(on)_ | Raise on unknown spec algorithms (default). --no-strict warns and skips. |
+| `--check` | _(none)_ | Stop before the write when a variable's values do not match its define type (for CI). Without it the mismatch is a warning on stderr. |
 
 ---
 

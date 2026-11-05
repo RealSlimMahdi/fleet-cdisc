@@ -394,3 +394,91 @@ class TestDoctor:
         assert _run(["doctor"]) == 1
 
         assert "✗ study config" in capsys.readouterr().out
+
+
+class TestRun:
+    def test_c1_294_inputs_show_their_row_count_and_the_run_its_times(
+        self, study: Path, monkeypatch, capsys
+    ) -> None:
+        monkeypatch.chdir(study)
+
+        assert _run(["run"]) == 0
+
+        out = capsys.readouterr().out
+        assert f"input dm_raw -> {study / 'data' / 'raw' / 'dm.csv'} (2 rows)" in out
+        assert "Start:   " in out
+        assert "End: " in out
+
+    def test_c1_295_an_empty_datasets_list_is_an_error(
+        self, study: Path, monkeypatch, capsys
+    ) -> None:
+        head = _SDTM_DEFINE.split("datasets:\n")[0]
+        (study / "metadata" / "sdtm" / "define.yaml").write_text(
+            head + "datasets: []\n", encoding="utf-8"
+        )
+        monkeypatch.chdir(study)
+
+        assert _run(["run"]) == 1
+
+        assert "no dataset to build in" in capsys.readouterr().err
+
+    def test_c1_316_a_type_mismatch_warns_and_stops_with_check(
+        self, study: Path, monkeypatch, capsys
+    ) -> None:
+        pl.from_repr("""\
+┌────────────────┬───────┐
+│ patient_number ┆ age   │
+│ ---            ┆ ---   │
+│ str            ┆ str   │
+╞════════════════╪═══════╡
+│ P1             ┆ 34    │
+│ P2             ┆ fifty │
+└────────────────┴───────┘
+""").write_csv(study / "data" / "raw" / "dm.csv")
+        monkeypatch.chdir(study)
+
+        assert _run(["run"]) == 0
+        assert "warning: DM.AGE: define type integer" in capsys.readouterr().err
+
+        assert _run(["run", "--check"]) == 1
+        assert "do not match their define type (--check)" in capsys.readouterr().err
+
+
+class TestCheckDerivations:
+    @pytest.mark.parametrize(
+        ("block", "reason"),
+        [
+            (
+                "        derivation:\n          algorithm: assign\n          source: age\n"
+                "          ct_map: {a: b}\n",
+                "ct_map",
+            ),
+            (
+                "        derivation:\n          algorithm: assign\n          source: age\n"
+                "          value: 5\n",
+                "exclude each other",
+            ),
+        ],
+    )
+    def test_c1_299_a_block_that_fleet_run_refuses_fails_the_gate(
+        self, block: str, reason: str, study: Path, monkeypatch, capsys
+    ) -> None:
+        spec = study / "metadata" / "sdtm" / "define.yaml"
+        old = "        derivation:\n          algorithm: assign\n          source: age\n"
+        spec.write_text(_SDTM_DEFINE.replace(old, block), encoding="utf-8")
+        monkeypatch.chdir(study)
+
+        assert _run(["check"]) == 1
+
+        out = capsys.readouterr().out
+        assert "[FAIL] define (sdtm)" in out
+        assert "DM.AGE:" in out and reason in out
+
+
+def test_c1_289_validate_finds_an_upper_case_extension(tmp_path: Path) -> None:
+    from fleet.validation.run_setup import _collect_files
+
+    pl.from_repr(_ADSL).write_parquet(tmp_path / "DM.PARQUET")
+    (tmp_path / "notes.txt").write_text("not data", encoding="utf-8")
+
+    assert _collect_files([tmp_path]) == [tmp_path / "DM.PARQUET"]

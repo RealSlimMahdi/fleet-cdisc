@@ -402,7 +402,9 @@ class DatasetChecker:
         for col_name, var_def in vars_by_name.items():
             if col_name not in actual_cols:
                 continue  # already reported as missing
-            define_type = var_def["type"]
+            define_type = var_def.get("type")
+            if define_type is None:
+                continue  # the schema check reports a variable with no type
             actual_dtype = schema[col_name]
             # --DTC is ISO 8601 text whatever the define type says (SDTMIG 3.4 4.4)
             is_dtc = col_name.upper().endswith("DTC")

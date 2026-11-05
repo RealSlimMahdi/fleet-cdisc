@@ -335,7 +335,7 @@ def _run_init_define(args: argparse.Namespace) -> None:
     with CDISCClient() as client:
         scaffolder = DefineScaffolder(client)
 
-        force = getattr(args, "force", False)
+        force = args.force
         written: list[Path] = []
 
         if do_sdtm:
@@ -456,7 +456,7 @@ def _run_init_ct_pipeline(args: argparse.Namespace) -> None:
     print()
 
     output = ctx.metadata_sdtm_dir / "codelists.py"
-    force = getattr(args, "force", False)
+    force = args.force
     if output.exists() and not force:
         print(f"Warning: {output} already exists — skipping (use --force to overwrite).")
         return
@@ -832,11 +832,11 @@ def _generate_define_xml(args: argparse.Namespace) -> None:
     print(f"Output:   {output}")
     print()
 
-    gen = DefineSpecGenerator(str(spec), strict=getattr(args, "strict", False))
+    gen = DefineSpecGenerator(str(spec), strict=args.strict)
     gen.generate(str(output), html_preview=not args.no_preview)
     print(f"Generated Define-XML → {output}")
-    ctx = _try_ctx(getattr(args, "config", None))
-    if ctx is not None and getattr(args, "standard", None) in ("sdtm", "adam"):
+    ctx = _try_ctx(args.config)
+    if ctx is not None:
         data_dir = ctx.data_dir(args.standard)
         absent = [href for href in gen.leaf_hrefs().values() if not (data_dir / href).is_file()]
         if absent:
@@ -1026,16 +1026,28 @@ def _run_run(args: argparse.Namespace) -> None:
     :class:`~fleet.core.exceptions.StudyRunError` is turned into exit 1
     by :func:`main`.
     """
+    from datetime import datetime
+
     import polars as pl
 
     from fleet.core.define_spec import load_define_spec
     from fleet.core.exceptions import StudyRunError
-    from fleet.io import save_dataset_json, save_parquet, save_xpt
+    from fleet.io import write_dataset
     from fleet.io.dataset_json import metadata_from_define
     from fleet.run import plan_study, run_study
 
     ctx = _load_ctx(args.config)
     plan = plan_study(ctx, datasets=args.dataset)
+    if not plan.steps:
+        defines = [
+            str(p)
+            for p in (ctx.metadata_sdtm_dir / "define.yaml", ctx.metadata_adam_dir / "define.yaml")
+            if p.is_file()
+        ]
+        _fail(
+            f"no dataset to build in {', '.join(defines) or 'the define files'}. fleet run needs "
+            "the multi-dataset format (datasets:) with at least one dataset."
+        )
     specs = {
         e.name.upper(): spec
         for spec in map(load_define_spec, {s.define for s in plan.steps})
@@ -1043,20 +1055,18 @@ def _run_run(args: argparse.Namespace) -> None:
     }
     entries = {name: spec.select(name) for name, spec in specs.items()}
 
-    writers: dict[str, Callable[[pl.DataFrame, Path, str], Path]] = {
-        "parquet": lambda df, d, n: save_parquet(df, d / f"{n.lower()}.parquet"),
-        "xpt": lambda df, d, n: save_xpt(
+    def write(df: pl.DataFrame, out_dir: Path, name: str, fmt: str) -> Path:
+        entry = entries.get(name)
+        return write_dataset(
             df,
-            d / f"{n.lower()}.xpt",
-            label=entries[n].label if n in entries else f"Supplemental Qualifiers for {n[4:]}",
-            column_labels=(
-                {v.name: v.label for v in entries[n].variables} if n in entries else _SUPP_LABELS
-            ),
-        ),
-        "dataset-json": lambda df, d, n: save_dataset_json(
-            df, d / f"{n.lower()}.json", domain=n, **metadata_from_define(specs[n], n)
-        ),
-    }
+            out_dir,
+            name,
+            fmt,
+            label=entry.label if entry else f"Supplemental Qualifiers for {name[4:]}",
+            column_labels=({v.name: v.label for v in entry.variables} if entry else _SUPP_LABELS),
+            json_metadata=metadata_from_define(specs[name], name) if name in specs else None,
+        )
+
     formats = {
         s.dataset: _run_format(args.format, specs[s.dataset], entries[s.dataset])
         for s in plan.steps
@@ -1069,6 +1079,7 @@ def _run_run(args: argparse.Namespace) -> None:
     print(f"Plan:    {total} dataset(s)")
     for i, step in enumerate(plan.steps, start=1):
         print(f"  [{i}/{total}] {step.dataset} ({step.standard}, {step.define.name})")
+    print(f"Start:   {datetime.now().isoformat(timespec='seconds')}")
     print()
 
     builds = run_study(plan, strict=args.strict)
@@ -1081,17 +1092,19 @@ def _run_run(args: argparse.Namespace) -> None:
                 raise
             raise StudyRunError(f"{planned.dataset}: {_error_line(exc)}") from exc
         step = built.step
-        _check_built(built.frame, step.define, step.dataset, strict=args.strict)
+        _check_built(built.frame, step.define, step.dataset, strict=args.strict, check=args.check)
         out_dir = out_override or ctx.data_dir(step.standard)
-        out_path = writers[formats[step.dataset]](built.frame, out_dir, step.dataset)
+        fmt = formats[step.dataset]
+        out_path = write(built.frame, out_dir, step.dataset, fmt)
         rows, cols = built.frame.shape
         print(f"[{i}/{total}] {step.dataset}: {rows} rows × {cols} cols → {out_path}")
         if built.supp is not None:
-            supp_path = writers[formats[step.dataset]](built.supp, out_dir, f"SUPP{step.dataset}")
+            supp_path = write(built.supp, out_dir, f"SUPP{step.dataset}", fmt)
             print(f"        SUPP{step.dataset}: {built.supp.height} rows → {supp_path}")
         for name, source in built.inputs.items():
             where = source.path or ("built in this run" if source.source == "built" else "seed")
-            print(f"    input {name} -> {where}")
+            count = "" if source.rows is None else f" ({source.rows} rows)"
+            print(f"    input {name} -> {where}{count}")
         declared = entries[step.dataset].output
         if declared and Path(declared).name != out_path.name:
             _err(
@@ -1100,11 +1113,18 @@ def _run_run(args: argparse.Namespace) -> None:
             )
 
     print()
-    print(f"Done — {total} dataset(s) written.")
+    print(f"Done — {total} dataset(s) written. End: {datetime.now().isoformat(timespec='seconds')}")
 
 
-def _check_built(frame: pl.DataFrame, define: Path, dataset: str, *, strict: bool) -> None:
-    """Stop before the write when the built dataset does not match its define; the old file stays."""
+def _check_built(
+    frame: pl.DataFrame, define: Path, dataset: str, *, strict: bool, check: bool = False
+) -> None:
+    """Stop before the write when the built dataset does not match its define; the old file stays.
+
+    A missing column stops the run.  A value type that differs from the
+    define type is a warning, and stops the run only with *check*
+    (``fleet run --check``).
+    """
     from fleet.core.exceptions import StudyRunError
     from fleet.define_xml import DatasetChecker
 
@@ -1116,6 +1136,18 @@ def _check_built(frame: pl.DataFrame, define: Path, dataset: str, *, strict: boo
         raise StudyRunError(
             f"dataset {dataset} does not match {define.name}: {'; '.join(errors)}. "
             "The old file is kept."
+        )
+    typed = DatasetChecker(define, check_columns=False, check_ct=False, validate_schema=False)
+    mismatches = typed.check(frame, dataset, strict=strict).type_mismatches
+    for mm in mismatches:
+        _err(
+            f"warning: {dataset}.{mm.variable}: define type {mm.define_type}, "
+            f"but the data is {mm.actual_dtype}."
+        )
+    if mismatches and check:
+        raise StudyRunError(
+            f"dataset {dataset}: {len(mismatches)} variable(s) do not match their define "
+            "type (--check). The old file is kept."
         )
 
 
@@ -1419,12 +1451,13 @@ def _run_check(args: argparse.Namespace) -> None:
         from fleet.define_xml import DefineSpecGenerator
 
         found_define = False
-        for label, path in (
-            ("define (sdtm)", ctx.metadata_sdtm_dir / "define.yaml"),
-            ("define (adam)", ctx.metadata_adam_dir / "define.yaml"),
+        for standard, path in (
+            ("sdtm", ctx.metadata_sdtm_dir / "define.yaml"),
+            ("adam", ctx.metadata_adam_dir / "define.yaml"),
         ):
             if not path.is_file():
                 continue
+            label = f"define ({standard})"
             found_define = True
             try:
                 # Read-only: the study's derivations_module is not imported.
@@ -1432,6 +1465,10 @@ def _run_check(args: argparse.Namespace) -> None:
                 rows.append(("PASS", label, f"{path} — generates a valid Define-XML"))
             except Exception as exc:
                 rows.append(("FAIL", label, str(exc)))
+                continue
+            rows.extend(
+                ("FAIL", label, problem) for problem in _derivation_problems(path, standard)
+            )
         if not found_define:
             rows.append(
                 ("WARN", "define.yaml", "no define.yaml files found (run `fleet init define`)")
@@ -1516,6 +1553,38 @@ def _run_check(args: argparse.Namespace) -> None:
     print(f"{failures} failure(s), {warnings_} warning(s)")
     if failures:
         sys.exit(1)
+
+
+def _derivation_problems(path: Path, standard: str) -> list[str]:
+    """Each derivation block of *path* that ``fleet run`` would refuse, as ``DS.VAR: reason``.
+
+    The same static calls as ``from_spec``: fill ``ct`` from the variable's
+    codelist, then validate the block against its verb model.  No data is
+    read and no study code is imported.
+    """
+    from pydantic import ValidationError
+
+    from fleet.core import spec_registry
+
+    data = load_spec_yaml(path.read_text(encoding="utf-8")) or {}
+    problems: list[str] = []
+    for ds in data.get("datasets") or []:
+        for var in ds.get("variables") or []:
+            block = var.get("derivation")
+            if not isinstance(block, dict):
+                continue
+            algo = spec_registry.get_algorithm(standard, str(block.get("algorithm")))
+            if algo is None:
+                continue  # the Define-XML generator reports an unknown algorithm
+            try:
+                block = spec_registry.with_codelist(standard, block, var.get("codelist"))
+                model = spec_registry.model_for(standard, algo.name)
+                model.model_validate({**block, "target": var.get("name")})
+            except ValidationError as exc:
+                problems.append(f"{ds.get('name')}.{var.get('name')}: {_validation_message(exc)}")
+            except ValueError as exc:
+                problems.append(f"{ds.get('name')}.{var.get('name')}: {' '.join(str(exc).split())}")
+    return problems
 
 
 # ────────────────────────────────────────────────────────────────────── #
@@ -2179,7 +2248,7 @@ def _run_tdd_audit(args: argparse.Namespace) -> None:
 
 
 def _run_tdd_build(args: argparse.Namespace) -> None:
-    from fleet.io import save_dataset_json, save_parquet, save_xpt
+    from fleet.io import write_dataset
     from fleet.sdtm._tdd_mixin import packaged_structure
 
     design = _load_design(_resolve_design_path(args))
@@ -2192,31 +2261,17 @@ def _run_tdd_build(args: argparse.Namespace) -> None:
     if errors and not args.force:
         _fail(f"{errors} conformance error(s) — fix the design or re-run with --force")
 
-    def xpt(df: pl.DataFrame, d: Path, n: str) -> Path:
+    def writer(df: pl.DataFrame, d: Path, n: str) -> Path:
         ig = packaged_structure(n) or {}
-        return save_xpt(
+        return write_dataset(
             df,
-            d / f"{n.lower()}.xpt",
+            d,
+            n,
+            args.format,
             label=ig.get("label"),
             column_labels={v["name"]: v.get("label") for v in ig.get("variables", [])},
         )
 
-    def dataset_json(df: pl.DataFrame, d: Path, n: str) -> Path:
-        ig = packaged_structure(n) or {}
-        return save_dataset_json(
-            df,
-            d / f"{n.lower()}.json",
-            domain=n,
-            label=ig.get("label"),
-            columns={v["name"]: {"label": v.get("label")} for v in ig.get("variables", [])},
-        )
-
-    writers: dict[str, Callable[[pl.DataFrame, Path, str], Path]] = {
-        "parquet": lambda df, d, n: save_parquet(df, d / f"{n.lower()}.parquet"),
-        "xpt": xpt,
-        "dataset-json": dataset_json,
-    }
-    writer = writers[args.format]
     out_dir = Path(args.out) if args.out else _load_ctx(args.config).sdtm_data_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -2757,6 +2812,14 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Raise on unknown spec algorithms (default). --no-strict warns and skips.",
+    )
+    run.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "Stop before the write when a variable's values do not match its define "
+            "type (for CI). Without it the mismatch is a warning on stderr."
+        ),
     )
     run.set_defaults(func=_run_run)
 
