@@ -358,6 +358,11 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
             raise DerivationError("nsv() requires either 'source' or 'value'.")
         if source is not None and value is not None:
             raise DerivationError("nsv() accepts 'source' or 'value', not both.")
+        if not str(label or "").strip():
+            raise DerivationError(
+                f"nsv('{target}'): missing label. QLABEL is required in SUPP-- (SDTMIG 8.4); "
+                "give label= (label: on the define.yaml variable)."
+            )
 
         expr = pl.col(source).alias(target) if source else pl.lit(value).alias(target)
         new = self._chain(expr, verb="nsv")

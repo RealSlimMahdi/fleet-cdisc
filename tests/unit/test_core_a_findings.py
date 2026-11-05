@@ -796,3 +796,266 @@ def test_c1_215_string_condition_and_source_filter():
     assert out["F"].to_list() == ["Y"] * 4 + [None] * 2
     crit = _RS.adam.criterion(1, condition="pl.col('AVAL') > 5", description="AVAL > 5")
     assert crit.to_frame()["CRIT1FL"].to_list() == ["Y", "N", "N", "N", "N", "N"]
+
+
+# --------------------------------------------------------------------- #
+# Spec registry and from_spec                                           #
+# --------------------------------------------------------------------- #
+
+
+def _write_define(tmp_path, variables, *, dataset="DM", ds_extra=None, **top) -> str:
+    import yaml
+
+    spec = {"datasets": [{"name": dataset, **(ds_extra or {}), "variables": variables}], **top}
+    path = tmp_path / "define.yaml"
+    path.write_text(yaml.safe_dump(spec, sort_keys=False))
+    return str(path)
+
+
+def test_c1_171_case_when_method_text_reads_as_prose():
+    from fleet.core.spec_registry import render_method_text
+
+    text = render_method_text(
+        "adam",
+        "case_when",
+        {"when": [{"condition": "pl.col('AGE') < 65", "value": "<65"}], "else": "UNK"},
+    )
+    assert "if pl.col('AGE') < 65 then <65" in text
+    assert "{" not in text
+
+
+def test_c1_171_an_expression_method_text_warns_in_define_xml(tmp_path):
+    from fleet.define_xml.spec_generator import DefineSpecGenerator
+
+    spec = _write_define(
+        tmp_path,
+        [
+            {
+                "name": "X",
+                "label": "X",
+                "type": "text",
+                "length": 1,
+                "origin": "Derived",
+                "derivation": {"algorithm": "derivation", "expression": "pl.col('A') + 1"},
+            }
+        ],
+        study={
+            "id": "S01",
+            "name": "S01",
+            "description": "ml-core-a test study",
+            "protocol_name": "S01",
+            "originator": "Fleet Tests",
+            "standard": "SDTMIG",
+            "standard_version": "3.4",
+        },
+        ds_extra={"label": "Demographics", "structure": "One record per subject", "keys": ["X"]},
+    )
+    with pytest.warns(UserWarning, match=r"DM\.X: the method text holds a Polars expression"):
+        DefineSpecGenerator(spec, enrich_methods=True).to_xml_string()
+
+
+def test_c1_172_grading_method_texts():
+    from fleet.core.spec_registry import render_method_text
+
+    atox = render_method_text(
+        "adam", "atoxgr", {"direction": "L", "term_var": "ATOXDSCL", "unit_var": "AVALU"}
+    )
+    assert atox == "Toxicity grade from ATOXDSCL using the criteria ctcae_v5, direction L."
+    assert "takes precedence" in render_method_text("adam", "combine_grades", {})
+
+
+def test_c1_173_a_record_step_as_a_variable_warns(tmp_path):
+    spec = _write_define(
+        tmp_path,
+        [{"name": "FILTER", "derivation": {"algorithm": "whereclauses", "where": "AGE > 1"}}],
+        dataset="ADSL",
+    )
+    with pytest.warns(UserWarning, match="row_steps"):
+        _AGES.adam.from_spec(spec, dataset="ADSL").to_frame()
+
+
+def test_c1_174_a_sub_namespace_verb_names_the_limit(tmp_path):
+    from fleet.core.exceptions import SpecError
+
+    spec = _write_define(
+        tmp_path,
+        [{"name": "AVALC", "derivation": {"algorithm": "onco.best_overall_response"}}],
+        dataset="ADRS",
+    )
+    with pytest.raises(SpecError, match="inline only in this release"):
+        _AGES.adam.from_spec(spec, dataset="ADRS")
+
+
+def test_c1_175_dotted_paths_keep_the_sub_namespace():
+    from fleet.adam.namespace import AdamNamespace
+    from fleet.core.lineage import defining_method_path
+    from fleet.lsp_server import _ALGORITHM_RE
+
+    assert (
+        defining_method_path(AdamNamespace, "onco.best_overall_response")
+        == "fleet.adam.onco_namespace.OncoNamespace.best_overall_response"
+    )
+    assert _ALGORITHM_RE.match("algorithm: occds.treatment_emergent").group(1) == (
+        "occds.treatment_emergent"
+    )
+
+
+def test_c1_175_a_dotted_verb_round_trips_through_to_spec_yaml(tmp_path):
+    import yaml
+
+    adae = pl.from_repr("""\
+┌─────────┬────────────┬────────────┬────────────┐
+│ USUBJID ┆ ASTDT      ┆ AENDT      ┆ TRTSDT     │
+│ ---     ┆ ---        ┆ ---        ┆ ---        │
+│ str     ┆ date       ┆ date       ┆ date       │
+╞═════════╪════════════╪════════════╪════════════╡
+│ S1      ┆ 2021-03-05 ┆ 2021-03-06 ┆ 2021-03-01 │
+│ S2      ┆ 2021-02-05 ┆ 2021-02-06 ┆ 2021-03-01 │
+└─────────┴────────────┴────────────┴────────────┘
+""")
+    ns = adae.adam.occds.treatment_emergent(
+        "TRTEMFL", start_date="ASTDT", end_date="AENDT", trtsdt="TRTSDT"
+    )
+    text = ns.to_spec_yaml("ADAE")
+    blocks = {
+        v["name"]: v.get("derivation") for v in yaml.safe_load(text)["datasets"][0]["variables"]
+    }
+    assert blocks["TRTEMFL"]["algorithm"] == "occds.treatment_emergent"
+    path = tmp_path / "define.yaml"
+    path.write_text(text)
+    again = adae.adam.from_spec(str(path), dataset="ADAE").to_frame()
+    assert again["TRTEMFL"].to_list() == ns.to_frame()["TRTEMFL"].to_list()
+
+
+@pytest.mark.parametrize(
+    ("block", "message"),
+    [
+        ({"algorithm": "nsv", "source": "saf"}, "missing label"),
+        ({"algorithm": "nsv", "source": "saf", "value": "Y"}, "exclude each other"),
+        ({"algorithm": "assign", "value": None}, "null is not a value"),
+    ],
+)
+def test_c1_176_the_spec_is_never_looser_than_the_verb(tmp_path, block, message):
+    from fleet.core.exceptions import SpecError
+
+    dm = pl.from_repr("""\
+┌─────────┬─────┬─────┐
+│ USUBJID ┆ saf ┆ SEX │
+│ ---     ┆ --- ┆ --- │
+│ str     ┆ str ┆ str │
+╞═════════╪═════╪═════╡
+│ A       ┆ N   ┆ M   │
+└─────────┴─────┴─────┘
+""")
+    spec = _write_define(tmp_path, [{"name": "SEX", "derivation": block}])
+    with pytest.raises(SpecError, match=message):
+        dm.sdtm.from_spec(spec, dataset="DM", overwrite=True).to_frame()
+
+
+def test_c1_177_formal_expression_names_the_public_namespace():
+    from fleet.core.lineage import lineage_of
+    from fleet.core.spec_registry import render_formal_expression
+
+    expr = render_formal_expression("adam", "assign", {"source": "AEENDTC"}, target="AENDT")
+    assert expr == "fleet.adam.namespace.AdamNamespace.assign('AENDT', source='AEENDTC')"
+    ns = pl.DataFrame({"AEENDTC": ["2021"]}).adam.assign("AENDT", source="AEENDTC")
+    assert lineage_of(ns)[-1].method == expr.split("(")[0]
+
+
+def test_c1_54_migrate_spec_drops_depends_on():
+    from fleet.tools.migrate_spec import migrate_spec_text
+
+    text = (
+        "datasets:\n"
+        "  - name: ADVS\n"
+        "    variables:\n"
+        "      - name: ADY\n"
+        "        derivation:\n"
+        "          algorithm: duration\n"
+        "          start: TRTSDT\n"
+        "          end: ADT\n"
+        "          depends_on: [ADT]\n"
+    )
+    new, changes = migrate_spec_text(text, set_version=False)
+    assert "depends_on" not in new
+    assert any("depends_on" in c for c in changes)
+
+
+def test_c1_56_a_spec_ct_file_does_not_change_the_global_validator(tmp_path):
+    import yaml
+
+    from fleet.ct.validator import get_validator
+
+    ct_file = tmp_path / "ct.yaml"
+    ct_file.write_text(yaml.safe_dump({"C99999": {"A": "Alpha"}}))
+    before = get_validator().has_codelist("C99999")
+    dm = pl.DataFrame({"USUBJID": ["S1"], "raw": ["B"]})
+    spec = _write_define(
+        tmp_path,
+        [{"name": "X", "derivation": {"algorithm": "assign", "source": "raw", "ct": "C99999"}}],
+        ct={"validate": True, "file": str(ct_file)},
+    )
+    with pytest.warns(UserWarning, match="not in codelist 'C99999'"):
+        dm.sdtm.from_spec(spec, dataset="DM").to_frame()
+    assert get_validator().has_codelist("C99999") == before
+
+
+def test_c1_37_a_ct_file_without_validate_is_loaded(tmp_path):
+    import yaml
+
+    from fleet.core.exceptions import SpecError
+
+    ct_file = tmp_path / "ct.yaml"
+    ct_file.write_text(yaml.safe_dump({"C99998": {"A": "Alpha"}}))
+    dm = pl.DataFrame({"USUBJID": ["S1"], "raw": ["B"]})
+    variables = [
+        {"name": "X", "derivation": {"algorithm": "assign", "source": "raw", "ct": "C99998"}}
+    ]
+    spec = _write_define(tmp_path, variables, ct={"file": str(ct_file)})
+    with pytest.warns(UserWarning, match="not in codelist 'C99998'"):
+        dm.sdtm.from_spec(spec, dataset="DM").to_frame()
+    missing = _write_define(tmp_path, variables, ct={"file": "does_not_exist.yaml"})
+    with pytest.raises(SpecError, match="could not be loaded"):
+        dm.sdtm.from_spec(missing, dataset="DM")
+
+
+def test_c1_37_ct_and_codelist_two_c_codes_are_reported(tmp_path):
+    from pathlib import Path
+
+    from fleet.ct.study_codelists import ct_codelist_conflicts
+
+    spec = _write_define(
+        tmp_path,
+        [
+            {
+                "name": "SEX",
+                "codelist": "C66731",
+                "derivation": {"algorithm": "assign", "source": "sex", "ct": "C74457"},
+            },
+            {
+                "name": "VSTESTCD",
+                "codelist": "CL.VSTEST",
+                "derivation": {"algorithm": "assign", "source": "t", "ct": "C66741"},
+            },
+        ],
+    )
+    assert ct_codelist_conflicts(Path(spec)) == [
+        "DM.SEX: ct C74457 differs from codelist C66731; the values are checked against C74457."
+    ]
+
+
+def test_c1_60_importing_study_code_prints_a_notice(tmp_path, capsys, monkeypatch):
+    from fleet.core import _verb_mixin
+
+    (tmp_path / "ml_core_a_study_mod.py").write_text("X = 1\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(_verb_mixin, "_ANNOUNCED_MODULES", set())
+    spec = _write_define(
+        tmp_path,
+        [{"name": "DOMAIN", "derivation": {"algorithm": "assign", "value": "DM"}}],
+        derivations_module="ml_core_a_study_mod",
+    )
+    pl.DataFrame({"USUBJID": ["S1"]}).sdtm.from_spec(spec, dataset="DM")
+    assert "importing study code derivations_module 'ml_core_a_study_mod'" in (
+        capsys.readouterr().err
+    )

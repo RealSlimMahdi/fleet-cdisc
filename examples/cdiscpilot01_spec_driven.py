@@ -255,7 +255,7 @@ print(f"   {adsl.shape[0]} subjects × {adsl.shape[1]} variables")
 
 # ════════════════════════════════════════════════════════════════════════════
 # 6. ADaM ADVS — spec-driven
-#    depends_on: in the spec triggers auto-flush between dependent batches:
+#    The variables run in spec order, so each one reads the columns above it:
 #      ADT → ADY,  ABLFL → BASE,  BASE → CHG / PCHG
 #    The define declares `inputs: [VS, ADSL]`: the subject-level variables it
 #    lists (SUBJID … ITTFL) are merged in from the ADSL built above, exactly

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <?xml-stylesheet type="text/xsl" href="define2-1.xsl"?>
-<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:def="http://www.cdisc.org/ns/def/v2.1" ODMVersion="1.3.2" FileOID="CDISC.CDISCPILOT01.1.Define-XML_2.1.0" FileType="Snapshot" CreationDateTime="2026-11-05T13:02:27" Originator="Fleet Team" SourceSystem="Fleet" SourceSystemVersion="0.1.0" def:Context="Submission">
+<ODM xmlns="http://www.cdisc.org/ns/odm/v1.3" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:def="http://www.cdisc.org/ns/def/v2.1" ODMVersion="1.3.2" FileOID="CDISC.CDISCPILOT01.1.Define-XML_2.1.0" FileType="Snapshot" CreationDateTime="2026-11-05T13:13:14" Originator="Fleet Team" SourceSystem="Fleet" SourceSystemVersion="0.1.0" def:Context="Submission">
   <Study OID="STDY.CDISCPILOT01">
     <GlobalVariables>
       <StudyName>CDISCPILOT01</StudyName>
@@ -926,13 +926,13 @@
         <Description>
           <TranslatedText xml:lang="en">Study day of ASTDT relative to TRTSDT.</TranslatedText>
         </Description>
-        <FormalExpression Context="Python/Fleet">fleet.core._verb_mixin.SharedVerbsMixin.duration('ADY', start='TRTSDT', end='ASTDT')</FormalExpression>
+        <FormalExpression Context="Python/Fleet">fleet.adam.namespace.AdamNamespace.duration('ADY', start='TRTSDT', end='ASTDT')</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.ADAE.AENDT" Name="Algorithm for AENDT" Type="Computation">
         <Description>
           <TranslatedText xml:lang="en">Direct copy of AEENDTC.</TranslatedText>
         </Description>
-        <FormalExpression Context="Python/Fleet">fleet.core._verb_mixin.SharedVerbsMixin.assign('AENDT', source='AEENDTC')</FormalExpression>
+        <FormalExpression Context="Python/Fleet">fleet.adam.namespace.AdamNamespace.assign('AENDT', source='AEENDTC')</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.ADAE.ANL01FL" Name="Algorithm for ANL01FL" Type="Computation">
         <Description>
@@ -948,7 +948,7 @@
         <Description>
           <TranslatedText xml:lang="en">Direct copy of AESTDTC.</TranslatedText>
         </Description>
-        <FormalExpression Context="Python/Fleet">fleet.core._verb_mixin.SharedVerbsMixin.assign('ASTDT', source='AESTDTC')</FormalExpression>
+        <FormalExpression Context="Python/Fleet">fleet.adam.namespace.AdamNamespace.assign('ASTDT', source='AESTDTC')</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.ADAE.TRTEMFL" Name="Algorithm for TRTEMFL" Type="Computation">
         <Description>
@@ -960,7 +960,7 @@
         <Description>
           <TranslatedText xml:lang="en">Direct copy of EXENDTC.</TranslatedText>
         </Description>
-        <FormalExpression Context="Python/Fleet">fleet.core._verb_mixin.SharedVerbsMixin.assign('AENDT', source='EXENDTC')</FormalExpression>
+        <FormalExpression Context="Python/Fleet">fleet.adam.namespace.AdamNamespace.assign('AENDT', source='EXENDTC')</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.ADEX.ASEQ" Name="Algorithm for ASEQ" Type="Computation">
         <Description>
@@ -971,7 +971,7 @@
         <Description>
           <TranslatedText xml:lang="en">Direct copy of EXSTDTC.</TranslatedText>
         </Description>
-        <FormalExpression Context="Python/Fleet">fleet.core._verb_mixin.SharedVerbsMixin.assign('ASTDT', source='EXSTDTC')</FormalExpression>
+        <FormalExpression Context="Python/Fleet">fleet.adam.namespace.AdamNamespace.assign('ASTDT', source='EXSTDTC')</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.ADEX.EXDURD" Name="Algorithm for EXDURD" Type="Computation">
         <Description>
@@ -982,7 +982,7 @@
         <Description>
           <TranslatedText xml:lang="en">Direct copy of USUBJID.</TranslatedText>
         </Description>
-        <FormalExpression Context="Python/Fleet">fleet.core._verb_mixin.SharedVerbsMixin.assign('USUBJID', source='USUBJID')</FormalExpression>
+        <FormalExpression Context="Python/Fleet">fleet.adam.namespace.AdamNamespace.assign('USUBJID', source='USUBJID')</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.ADSL.ITTFL" Name="Algorithm for ITTFL" Type="Computation">
         <Description>
@@ -998,49 +998,49 @@
         <Description>
           <TranslatedText xml:lang="en">Latest EXENDTC per subject from EX.</TranslatedText>
         </Description>
-        <FormalExpression Context="Python/Fleet">fleet.adam._mixins.SharedADaMVerbsMixin.last_date('TRTEDT', from_dataset='EX', date_col='EXENDTC')</FormalExpression>
+        <FormalExpression Context="Python/Fleet">fleet.adam.namespace.AdamNamespace.last_date('TRTEDT', from_dataset='EX', date_col='EXENDTC')</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.ADSL.TRTSDT" Name="Algorithm for TRTSDT" Type="Computation">
         <Description>
           <TranslatedText xml:lang="en">Earliest EXSTDTC per subject from EX.</TranslatedText>
         </Description>
-        <FormalExpression Context="Python/Fleet">fleet.adam._mixins.SharedADaMVerbsMixin.first_date('TRTSDT', from_dataset='EX', date_col='EXSTDTC')</FormalExpression>
+        <FormalExpression Context="Python/Fleet">fleet.adam.namespace.AdamNamespace.first_date('TRTSDT', from_dataset='EX', date_col='EXSTDTC')</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.ADSL.USUBJID" Name="Algorithm for USUBJID" Type="Computation">
         <Description>
           <TranslatedText xml:lang="en">Direct copy of USUBJID.</TranslatedText>
         </Description>
-        <FormalExpression Context="Python/Fleet">fleet.core._verb_mixin.SharedVerbsMixin.assign('USUBJID', source='USUBJID')</FormalExpression>
+        <FormalExpression Context="Python/Fleet">fleet.adam.namespace.AdamNamespace.assign('USUBJID', source='USUBJID')</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.ADVS.ABLFL" Name="Algorithm for ABLFL" Type="Computation">
         <Description>
           <TranslatedText xml:lang="en">Y for the records on or before study day 0; else null.</TranslatedText>
         </Description>
-        <FormalExpression Context="Python/Fleet">fleet.core._flag_mixin.FlagCriterionMixin.flag('ABLFL', criteria=&quot;pl.col('vsdy') &lt;= 0&quot;)</FormalExpression>
+        <FormalExpression Context="Python/Fleet">fleet.adam.namespace.AdamNamespace.flag('ABLFL', criteria=&quot;pl.col('vsdy') &lt;= 0&quot;)</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.ADVS.ADT" Name="Algorithm for ADT" Type="Computation">
         <Description>
           <TranslatedText xml:lang="en">Direct copy of vsdtc.</TranslatedText>
         </Description>
-        <FormalExpression Context="Python/Fleet">fleet.core._verb_mixin.SharedVerbsMixin.assign('ADT', source='vsdtc')</FormalExpression>
+        <FormalExpression Context="Python/Fleet">fleet.adam.namespace.AdamNamespace.assign('ADT', source='vsdtc')</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.ADVS.ADY" Name="Algorithm for ADY" Type="Computation">
         <Description>
           <TranslatedText xml:lang="en">Study day of ADT relative to TRTSDT.</TranslatedText>
         </Description>
-        <FormalExpression Context="Python/Fleet">fleet.core._verb_mixin.SharedVerbsMixin.duration('ADY', start='TRTSDT', end='ADT')</FormalExpression>
+        <FormalExpression Context="Python/Fleet">fleet.adam.namespace.AdamNamespace.duration('ADY', start='TRTSDT', end='ADT')</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.ADVS.AVAL" Name="Algorithm for AVAL" Type="Computation">
         <Description>
           <TranslatedText xml:lang="en">Numeric analysis value; cast from raw vsorres string</TranslatedText>
         </Description>
-        <FormalExpression Context="Python/Fleet">fleet.core._verb_mixin.SharedVerbsMixin.derivation('AVAL', expression=&quot;pl.col('vsorres').cast(pl.Float64, strict=False)&quot;)</FormalExpression>
+        <FormalExpression Context="Python/Fleet">fleet.adam.namespace.AdamNamespace.derivation('AVAL', expression=&quot;pl.col('vsorres').cast(pl.Float64, strict=False)&quot;)</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.ADVS.AVALU" Name="Algorithm for AVALU" Type="Computation">
         <Description>
           <TranslatedText xml:lang="en">Direct copy of vsorresu.</TranslatedText>
         </Description>
-        <FormalExpression Context="Python/Fleet">fleet.core._verb_mixin.SharedVerbsMixin.assign('AVALU', source='vsorresu')</FormalExpression>
+        <FormalExpression Context="Python/Fleet">fleet.adam.namespace.AdamNamespace.assign('AVALU', source='vsorresu')</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.ADVS.BASE" Name="Algorithm for BASE" Type="Computation">
         <Description>
@@ -1058,13 +1058,13 @@
         <Description>
           <TranslatedText xml:lang="en">Direct copy of vstest.</TranslatedText>
         </Description>
-        <FormalExpression Context="Python/Fleet">fleet.core._verb_mixin.SharedVerbsMixin.assign('PARAM', source='vstest')</FormalExpression>
+        <FormalExpression Context="Python/Fleet">fleet.adam.namespace.AdamNamespace.assign('PARAM', source='vstest')</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.ADVS.PARAMCD" Name="Algorithm for PARAMCD" Type="Computation">
         <Description>
           <TranslatedText xml:lang="en">Direct copy of vstestcd.</TranslatedText>
         </Description>
-        <FormalExpression Context="Python/Fleet">fleet.core._verb_mixin.SharedVerbsMixin.assign('PARAMCD', source='vstestcd')</FormalExpression>
+        <FormalExpression Context="Python/Fleet">fleet.adam.namespace.AdamNamespace.assign('PARAMCD', source='vstestcd')</FormalExpression>
       </MethodDef>
       <MethodDef OID="MT.ADVS.PCHG" Name="Algorithm for PCHG" Type="Computation">
         <Description>

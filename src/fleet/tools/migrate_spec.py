@@ -34,6 +34,8 @@ What gets rewritten
   the legacy keys the registry used to accept (``join_on``, ``flag_where``).
 * ``ct:`` equal to the variable's ``codelist:`` is dropped: the id is written
   once and ``from_spec`` fills it in.
+* Keys Fleet no longer reads are removed (:data:`REMOVED_KEYS`):
+  ``depends_on`` did nothing, because every verb checks its own columns.
 * ``fleet_spec_version`` becomes 2, inserted when absent.
 """
 
@@ -111,6 +113,10 @@ KEY_RENAMES: dict[str, dict[str, str]] = {
 }
 
 
+#: Keys of a ``derivation:`` block that Fleet no longer reads; the rewrite drops them.
+REMOVED_KEYS: frozenset[str] = frozenset({"depends_on"})
+
+
 def migrate_block(
     block: Mapping[str, Any], *, codelist: str | None = None
 ) -> tuple[dict[str, Any], list[str]]:
@@ -139,6 +145,9 @@ def migrate_block(
     renames = KEY_RENAMES.get(str(old), {}) if old is not None else {}
     new: dict[str, Any] = {}
     for key, value in block.items():
+        if key in REMOVED_KEYS:
+            changes.append(f"{key}: removed (Fleet no longer reads it)")
+            continue
         target = renames.get(key, key)
         if target != key and target not in block:
             changes.append(f"{key}: -> {target}:")
@@ -276,6 +285,14 @@ def migrate_spec_text(text: str, *, set_version: bool = True) -> tuple[str, list
             if key is None or key[0] != indent:
                 continue
             eff, name, rest = key
+            if name in REMOVED_KEYS:
+                out[j] = ""
+                k = j + 1
+                while k < end and lines[k].strip().startswith("-") and _indent(lines[k]) > indent:
+                    out[k] = ""  # a block-style list under the removed key
+                    k += 1
+                changes.append(f"line {j + 1}: {name}: removed (Fleet no longer reads it)")
+                continue
             if j == i and old in ALGORITHM_RENAMES:
                 out[j] = re.sub(rf"\b{re.escape(old)}\b", ALGORITHM_RENAMES[old], lines[j], count=1)
                 changes.append(f"line {j + 1}: algorithm: {old} -> {ALGORITHM_RENAMES[old]}")

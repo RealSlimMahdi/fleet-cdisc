@@ -80,19 +80,35 @@ def _expr_sources(expr: pl.Expr) -> list[str]:
         return []
 
 
-def defining_method_path(cls: type, verb: str) -> str:
-    """Return ``module.Class.verb`` of the class in the MRO of *cls* that defines *verb*.
+def sub_namespace_class(cls: type, part: str) -> type | None:
+    """The class a sub-namespace property of *cls* returns (``adam.onco``)."""
+    fget = getattr(getattr(cls, part, None), "fget", None)
+    if fget is None:
+        return None
+    try:
+        return type(fget(cls(pl.DataFrame())))
+    except Exception:
+        return None
 
-    Lineage records this path in ``VariableNode.method``, and the Define-XML
-    ``FormalExpression`` names the same one.
+
+def defining_method_path(cls: type, verb: str) -> str:
+    """Return the importable ``module.Class.verb`` path of *verb* on *cls*.
+
+    The path names the class in the MRO of *cls* that defines *verb* when
+    that class sits in a public module, and *cls* itself when the verb
+    comes from a private mixin (``fleet.core._verb_mixin``).  So the path
+    stays the same when Fleet moves a verb between its internal mixins.
+    A dotted verb (``onco.best_overall_response``) walks the sub-namespace
+    properties first.  Lineage records this path in
+    ``VariableNode.method``, and the Define-XML ``FormalExpression`` names
+    the same one.
 
     Args:
         cls: The namespace class the verb runs on.
-        verb: The method name.
+        verb: The method name, dotted for a sub-namespace verb.
 
     Returns:
-        str: The dotted path of the defining class, or of *cls* when no
-            class in the MRO defines *verb*.
+        str: The dotted path of the method.
 
     Examples:
         Name the method an ADaM pipeline runs for ``.duration()``::
@@ -101,10 +117,22 @@ def defining_method_path(cls: type, verb: str) -> str:
             from fleet.core.lineage import defining_method_path
 
             defining_method_path(AdamNamespace, "duration")
-            # "fleet.core._verb_mixin.SharedVerbsMixin.duration"
+            # "fleet.adam.namespace.AdamNamespace.duration"
+            defining_method_path(AdamNamespace, "onco.best_overall_response")
+            # "fleet.adam.onco_namespace.OncoNamespace.best_overall_response"
     """
+    *path, name = verb.split(".")
+    for part in path:
+        sub = sub_namespace_class(cls, part)
+        if sub is None:
+            break
+        cls = sub
+    else:
+        verb = name
     for klass in cls.__mro__:
         if verb in klass.__dict__:
+            if any(part.startswith("_") for part in klass.__module__.split(".")):
+                break  # a private mixin: name the public namespace class
             return f"{klass.__module__}.{klass.__qualname__}.{verb}"
     return f"{cls.__module__}.{cls.__qualname__}.{verb}"
 

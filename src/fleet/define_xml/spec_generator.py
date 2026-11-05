@@ -1261,9 +1261,23 @@ class DefineSpecGenerator:
             except ValueError:
                 block = dict(derivation)
             params = {k: v for k, v in block.items() if k != "algorithm"}
-            description = description or (
-                spec_registry.render_method_text(std, algorithm, params, target=target) or ""
-            )
+            algo = spec_registry.get_algorithm(std, algorithm)
+            if algo is not None and not algo.takes_target and algorithm != "merge":
+                warnings.warn(
+                    f"{dataset}.{target}: algorithm '{algorithm}' is a record step, not a "
+                    "variable derivation; move it to row_steps: (ADR-0034).",
+                    stacklevel=2,
+                )
+            if not description:
+                description = (
+                    spec_registry.render_method_text(std, algorithm, params, target=target) or ""
+                )
+                if "pl." in description:
+                    warnings.warn(
+                        f"{dataset}.{target}: the method text holds a Polars expression. "
+                        "Add a comment: that states the rule in words for the reviewer.",
+                        stacklevel=2,
+                    )
             expression = (
                 spec_registry.render_formal_expression(std, algorithm, params, target=target)
                 or algorithm

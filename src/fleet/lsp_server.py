@@ -253,7 +253,7 @@ _WORD_RE = re.compile(r"[A-Za-z0-9_.\-]+")
 
 #: ``algorithm:`` as a plain key or as the opening key of a list entry
 #: (``- algorithm: duration``), which both spec shapes allow.
-_ALGORITHM_RE = re.compile(r"^-?\s*algorithm:\s*([\w-]*)")
+_ALGORITHM_RE = re.compile(r"^-?\s*algorithm:\s*([\w.-]*)")
 
 #: Any other ``- key:`` starts a new variable entry.
 _ENTRY_RE = re.compile(r"^-\s+[\w-]+:")

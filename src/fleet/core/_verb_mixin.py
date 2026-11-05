@@ -171,11 +171,22 @@ def _check_spec_version(spec: DefineSpec, *, source: str) -> None:
     )
 
 
+#: The ``derivations_module`` names already announced on stderr in this process.
+_ANNOUNCED_MODULES: set[str] = set()
+
+
 def _import_derivations_module(spec: DefineSpec, *, source: str) -> None:
-    """Import the spec-declared ``derivations_module`` (callable registrations)."""
+    """Import the spec-declared ``derivations_module`` (callable registrations).
+
+    The module is study Python that runs: one stderr line names it, once
+    per process.
+    """
     module = spec.derivations_module
     if not module:
         return
+    if str(module) not in _ANNOUNCED_MODULES:
+        _ANNOUNCED_MODULES.add(str(module))
+        print(f"# fleet: importing study code derivations_module '{module}'", file=sys.stderr)
     try:
         importlib.import_module(str(module))
     except ImportError as err:
@@ -2633,28 +2644,31 @@ class SharedVerbsMixin:
         standard = self._VALIDATE_STANDARD
         ds_name, raw_vars = _extract_spec_variables(spec, dataset)
 
-        ns = self
+        # Start clean: the CT state of one spec never reaches the next from_spec call.
+        ns = copy.copy(self)
+        ns._spec_ct_validate = None
+        ns._spec_codelists = None
+        ns._spec_ct_validator = None
 
-        # Spec-level CT config: `ct: {validate: true, file: <path>}`.
+        # Spec-level CT config: `ct: {validate: true, file: <path>}`.  The file is
+        # loaded into a validator of this spec only; the global one is unchanged.
+        ct_file = spec.ct.file
+        if ct_file:
+            from fleet.ct.validator import CTValidator
+
+            ct_path = Path(ct_file)
+            if not ct_path.is_absolute():
+                ct_path = path.parent / ct_path
+            private = CTValidator()
+            try:
+                private.load_ct_file(ct_path)
+            except Exception as err:
+                raise SpecError(f"{path}: ct.file '{ct_file}' could not be loaded: {err}") from err
+            ns._spec_ct_validator = private
         if spec.ct.enabled:
-            ct_file = spec.ct.file
-            if ct_file:
-                from fleet.ct.validator import get_validator
-
-                ct_path = Path(ct_file)
-                if not ct_path.is_absolute():
-                    ct_path = path.parent / ct_path
-                try:
-                    get_validator().load_ct_file(ct_path)
-                except Exception as err:
-                    raise SpecError(
-                        f"{path}: ct.file '{ct_file}' could not be loaded: {err}"
-                    ) from err
-            ns = copy.copy(ns)
             ns._spec_ct_validate = True
         elif "enabled" in spec.ct.model_fields_set:
             # An explicit `ct: {validate: false}` switches the default CT check off.
-            ns = copy.copy(ns)
             ns._spec_ct_validate = False
 
         # ct: IDs resolve to the study's codelists.py classes, as ct=<class> inline.
@@ -2663,7 +2677,6 @@ class SharedVerbsMixin:
 
             codelists = spec_codelists(path)
             if codelists:
-                ns = copy.copy(ns)
                 ns._spec_codelists = codelists
         # Row steps run after the variable they are anchored on (ADR-0034).
         all_names: list[str] = []
@@ -2701,6 +2714,11 @@ class SharedVerbsMixin:
                 else:
                     hint = spec_registry.suggest_algorithm(standard, str(alg))
                     suffix = f" Did you mean '{hint}'?" if hint else ""
+                    if spec_registry.is_sub_namespace_verb(standard, str(alg)):
+                        suffix += (
+                            " Sub-namespace verbs are inline only in this release; use "
+                            "algorithm: derivation with callable:."
+                        )
                 if strict:
                     raise SpecError(
                         f"{context}: unknown algorithm '{alg}' for the {standard} "
@@ -2713,6 +2731,12 @@ class SharedVerbsMixin:
                 )
                 continue
 
+            if not algo.takes_target and algo.name != "merge":
+                warnings.warn(
+                    f"{context}: algorithm '{algo.name}' is a record step, not a variable "
+                    "derivation. Use row_steps: for a record filter (ADR-0034).",
+                    stacklevel=2,
+                )
             try:
                 drv = spec_registry.with_codelist(standard, drv, codelist)
                 model = spec_registry.model_for(standard, algo.name)
@@ -2721,12 +2745,6 @@ class SharedVerbsMixin:
                 raise SpecError(f"{context}: {err}") from err
 
             columns = ns._lazy.collect_schema().names()
-
-            # Auto-flush when a declared dependency is not yet committed.
-            deps = getattr(var, "depends_on", None) or []
-            if deps and any(d not in columns for d in deps):
-                ns = ns._materialise_then(ns.to_frame())
-                columns = ns._lazy.collect_schema().names()
 
             if (
                 algo.takes_target
