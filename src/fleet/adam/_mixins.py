@@ -75,7 +75,7 @@ from __future__ import annotations
 import copy
 import difflib
 import warnings
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, Self, TypeVar
 
 import polars as pl
 
@@ -89,7 +89,7 @@ from fleet.core.exceptions import DerivationError
 from fleet.core.joins import refuse_repeated_keys, refuse_shared_columns, require_columns
 
 if TYPE_CHECKING:
-    pass
+    from fleet.adam.namespace import AdamNamespace
 
 #: What to do when an aggregation target is already a pipeline column.
 _CLASH_HINT = "Drop the column from the pipeline first, or choose another target name."
@@ -104,6 +104,9 @@ def _value_kind(value: Any) -> str:
         if isinstance(value, kind):
             return kind.__name__
     return type(value).__name__
+
+
+_SubNS = TypeVar("_SubNS", bound="SharedADaMVerbsMixin")
 
 
 class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
@@ -146,6 +149,45 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         self._pinned: dict[str, tuple[pl.DataFrame, list[str]]] = {}
         self._pin_lineage: list = []
         self._pending_fk_checks: list[tuple[str, str, str, str]] = []
+
+    def _sub_namespace(self, cls: type[_SubNS]) -> _SubNS:
+        """Hand the whole instance state over to another namespace class.
+
+        The lazy plan is passed through unchanged (no materialisation).
+        Every instance attribute carries over (pins, lineage, row steps,
+        pending checks, and the last comparison, validation and nodup
+        reports), with lists and dicts copied so the two do not share
+        them.  A namespace that sets its own domain (ADSL) keeps it.
+        """
+        new = cls(self._lazy)
+        own_domain = getattr(new, "_domain", None)
+        for name, value in vars(self).items():
+            if isinstance(value, list | dict):
+                value = copy.copy(value)
+            setattr(new, name, value)
+        if own_domain is not None:
+            new._domain = own_domain
+        return new
+
+    @property
+    def adam(self) -> AdamNamespace:
+        """The BDS namespace, with the pins, lineage and domain of this chain.
+
+        Examples:
+            Flag on-treatment records after an OCCDS verb::
+
+                adae = (
+                    ae_df.adam.occds("ADAE")
+                    .treatment_emergent("TRTEMFL", start_date="ASTDT",
+                                        end_date="AENDT", trtsdt="TRTSDT")
+                    .adam.on_treatment("ONTRTFL", adt="ASTDT",
+                                       trtsdt="TRTSDT", trtedt="TRTEDT")
+                    .to_frame()
+                )
+        """
+        from fleet.adam.namespace import AdamNamespace
+
+        return self._sub_namespace(AdamNamespace)
 
     def __call__(self, domain: str) -> Self:
         """Return a copy of this namespace with *domain* set for CDISC lineage.

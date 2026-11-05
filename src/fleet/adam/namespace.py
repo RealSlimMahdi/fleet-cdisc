@@ -41,7 +41,7 @@ from __future__ import annotations
 import difflib
 import warnings
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Literal
 
 import polars as pl
 
@@ -86,8 +86,6 @@ if TYPE_CHECKING:
     from .pk_namespace import PKNamespace
     from .tte_namespace import TTENamespace
     from .vaccine_namespace import VaccineNamespace
-
-_SubNS = TypeVar("_SubNS", bound=SharedADaMVerbsMixin)
 
 #: The grades that ``combine_grades`` accepts (admiral ``derive_var_atoxgr``).
 _GRADES = frozenset({"0", "1", "2", "3", "4"})
@@ -1387,30 +1385,6 @@ class AdamNamespace(SharedADaMVerbsMixin):
     # ------------------------------------------------------------------ #
     # ADaM sub-structures (accessed as df.adam.adsl / df.adam.occds)       #
     # ------------------------------------------------------------------ #
-
-    def _sub_namespace(self, cls: type[_SubNS]) -> _SubNS:
-        """Hand the accumulated state over to a sub-namespace.
-
-        The lazy plan is passed through unchanged (no materialisation)
-        and pins, pin lineage, variable lineage, pending FK checks, and
-        FK policy all propagate, so ``.pin("ADSL", adsl).occds`` keeps
-        its pins.  The parent domain tag carries over unless the
-        sub-namespace sets its own (ADSL).
-        """
-        new = cls(self._lazy)
-        new._pinned = dict(getattr(self, "_pinned", {}))
-        new._pin_lineage = list(getattr(self, "_pin_lineage", []))
-        new._lineage = list(getattr(self, "_lineage", []))
-        new._row_steps = list(getattr(self, "_row_steps", []))
-        new._root_lazy = getattr(self, "_root_lazy", self._lazy)
-        new._pending_fk_checks = list(getattr(self, "_pending_fk_checks", []))
-        new._pending_join_checks = list(getattr(self, "_pending_join_checks", []))
-        fk_severity = getattr(self, "_fk_severity", None)
-        if fk_severity is not None:
-            new._fk_severity = fk_severity
-        if getattr(new, "_domain", None) is None:
-            new._domain = getattr(self, "_domain", None)
-        return new
 
     @property
     def adsl(self) -> ADSLNamespace:

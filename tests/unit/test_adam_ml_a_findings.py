@@ -262,3 +262,47 @@ class TestGradingArguments:
 """)
         with pytest.raises(DerivationError, match="ATOXGRL is Int64, not text"):
             adlb.adam.combine_grades("ATOXGR")
+
+
+_SUBS = ["adsl", "occds", "onco", "ophtha", "peds", "vaccine", "metabolic", "neuro", "pk", "tte"]
+
+
+class TestSubNamespaceState:
+    """c1-336, c1-337: a sub-namespace switch keeps the reports, and .adam goes back."""
+
+    @pytest.fixture
+    def base(self) -> pl.DataFrame:
+        return pl.from_repr("""\
+┌─────────┬──────┐
+│ USUBJID ┆ AVAL │
+│ ---     ┆ ---  │
+│ str     ┆ f64  │
+╞═════════╪══════╡
+│ S1      ┆ 1.0  │
+│ S2      ┆ 2.0  │
+└─────────┴──────┘
+""")
+
+    @pytest.mark.parametrize("sub", _SUBS)
+    def test_the_last_comparison_survives_the_switch(self, base, sub):
+        cand = base.with_columns(pl.lit(9.0).alias("AVAL"))
+        ns = base.adam.compare(cand, keys="USUBJID")
+
+        switched = getattr(ns, sub)
+
+        assert switched.last_comparison is ns.last_comparison
+        assert switched.last_comparison.is_equal is False
+
+    def test_adam_after_occds_keeps_pins_lineage_and_domain(self, base):
+        adsl = base.select("USUBJID")
+        ns = base.adam.occds("ADAE").pin("ADSL", adsl).assign("AVAL2", source="AVAL")
+
+        back = ns.adam
+
+        assert type(back).__name__ == "AdamNamespace"
+        assert back._domain == "ADAE"
+        assert "ADSL" in back._pinned
+        assert len(back._lineage) == len(ns._lineage) > 0
+        assert back._pinned is not ns._pinned
+        out = back.chg("CHG", aval="AVAL2", base="AVAL").to_frame()
+        assert out["CHG"].to_list() == [0.0, 0.0]
