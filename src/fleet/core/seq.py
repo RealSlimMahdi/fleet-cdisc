@@ -1,8 +1,8 @@
 """Shared sequence-number derivation used by both SDTM and ADaM namespaces.
 
 This is the single implementation of the ``--SEQ`` / ``ASEQ`` logic.
-Both ``SDTMNamespace.seq()`` and ``MultiRowMixin.seq()`` delegate here
-to avoid code duplication across namespace trees.
+``SharedVerbsMixin.seq()``, the one ``seq`` verb of every SDTM and ADaM
+namespace, delegates here.
 """
 
 from __future__ import annotations

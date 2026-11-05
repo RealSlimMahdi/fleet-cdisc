@@ -39,8 +39,9 @@ GitHub Actions runs these checks:
 tests/
 ├── conftest.py          # Shared fixtures (raw DataFrames, SDTM domains)
 ├── fixtures/
+│   ├── core/            # CDISC CORE report samples (JSON)
 │   ├── ct/              # Sample controlled terminology YAML
-│   ├── raw/             # ae_raw.csv, dm_raw.csv, vs_raw.csv
+│   ├── goldens/         # Golden outputs (dates, grading, TLG)
 │   └── specs/           # define_adam.yaml, define_sdtm.yaml
 └── unit/
     ├── test_adam_namespace.py

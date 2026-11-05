@@ -23,7 +23,8 @@ uv add fleet-cdisc --prerelease=allow
 ### From TestPyPI (development builds)
 
 ```bash
-uv pip install -i https://test.pypi.org/simple/ fleet-cdisc
+uv pip install -i https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple \
+  --index-strategy unsafe-best-match --prerelease allow fleet-cdisc
 ```
 
 ### For development (source checkout)
@@ -78,7 +79,7 @@ sdtm:
   ig_version: "3-4"
   domains: [DM, AE, VS, EX, DS]
 adam:
-  ig_version: "1-1"
+  ig_version: "1-3"
   datasets: [ADSL, ADVS, ADAE]
 ct:
   package: "sdtmct-2023-12-15"
@@ -636,8 +637,8 @@ print(adae.select("USUBJID", "AETERM", "TRTEMFL", "AESEVN", "ASEQ"))
 
 ## Part 10 — Trial Design Domains (TDD)
 
-Fleet supports all nine CDISC Trial Design domains (TE, TA, TV, TS, TI, TD,
-TM protocol-reference; SV, SE subject-level) through two complementary paths:
+Fleet supports the seven Trial Design domains (TE, TA, TV, TS, TI, TD, TM),
+plus the subject-level SV and SE, through two complementary paths:
 
 1. **`fleet.StudyDesign`** — define the design once, derive every domain.
 2. **Row-level pipeline** — `fetch_structure() → study_header() → add_*() → to_frame()`
@@ -1118,8 +1119,9 @@ Header rows emit `variable=""` and `variable_level=label` in the ARD.
 
 ### Pre-merge stratification (C3 pattern)
 
-When a stratification column lives in another dataset (e.g. AGEGR1 from ADSL),
-pre-merge it before calling the namespace — no hidden joins:
+The builder groups by one column. For a table of one stratum whose column
+lives in another dataset (e.g. AGEGR1 from ADSL), pre-merge the column and
+filter both frames to the stratum, so the big N matches. There are no hidden joins:
 
 ```python
 adae_strat = adae.join(
@@ -1128,9 +1130,9 @@ adae_strat = adae.join(
     how="left",
 )
 ard = (
-    adae_strat.tlg.ae.population(adsl)
+    adae_strat.filter(pl.col("AGEGR1") == ">64")
+    .tlg.ae.population(adsl, adsl_filter=pl.col("AGEGR1") == ">64")
     .by("TRTA")
-    .by2("AGEGR1")
     .rows(["AEBODSYS", "AEDECOD"])
     .stats([Statistic.N_SUBJECTS, Statistic.N_PCT])
     .to_ard()
@@ -1252,15 +1254,15 @@ uv run fleet install-engine
 uv run fleet doctor
 ```
 
-Expected output:
+Expected output (excerpt):
 
 ```
 Fleet Doctor
-========================================
-  engine.............. /Users/you/.fleet/cdisc-rules-engine/core/core
-  type................ binary
-  status.............. OK — validate command available
-  pyreadstat.......... installed
+====================================================
+  ✓ rules engine ....... /Users/you/.fleet/cdisc-rules-engine/core/core (default)
+      version: 0.15.0 (tested with Fleet)
+      type: binary
+  ✓ engine status ...... OK — validate command available
 ```
 
 The engine is stored at:
@@ -1326,7 +1328,7 @@ advs_result.print_report()
 uv run fleet uninstall-engine
 ```
 
-> **Note:** `pyreadstat` is also required for validation (XPT serialization). Install it with `uv sync --extra io`.
+> **Note:** `pyreadstat` is needed only to read or write XPT. Install it with `uv sync --extra io`.
 
 ### 11.5 Cache CDISC conformance rules
 
@@ -1474,10 +1476,11 @@ The vendored JSON Schema at `src/fleet/validation/schemas/cdisc_rule_schema.json
 be used to validate your rule before running the engine:
 
 ```python
-from fleet.validation.rule_scaffolder import scaffold_rule
-from test_custom_rule import validate_rule_schema
+from pathlib import Path
 
-errors = validate_rule_schema(rule_dict)
+from fleet.validation.rule_scaffolder import check_rule
+
+errors = check_rule(Path("metadata/custom_rules/FLEET-AE-001.yaml"))  # [] when the rule is valid
 ```
 
 ---
@@ -1794,7 +1797,7 @@ uv run python scripts/build_llms.py --check   # CI stale-check
 Fleet creates this structure on `fleet init cfg`:
 
 ```
-specs/<study_id>/adam/derivations/
+programs/derivations/
     __init__.py    # import all derivations here for auto-registration
     AGEGR1.py
     BMI.py
@@ -1821,10 +1824,10 @@ A new parameter row (BMI from WEIGHT and HEIGHT) is not a derivation: use
   label: Pooled Age Group 1
   derivation:
     algorithm: derivation
-    callable: examples.cdiscpilot01.adam.derivations.AGEGR1
+    callable: programs.derivations.AGEGR1
 ```
 
-At runtime, `from_spec()` calls `_resolve_callable("examples.cdiscpilot01.adam.derivations.AGEGR1")`,
+At runtime, `from_spec()` calls `_resolve_callable("programs.derivations.AGEGR1")`,
 which either:
 
 1. Looks up the name in the transform registry (if the derivations module was imported), or

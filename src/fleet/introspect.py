@@ -116,7 +116,7 @@ def _check_standard(standard: str) -> None:
 def algorithms(standard: Standard) -> tuple[AlgorithmInfo, ...]:
     """Return every algorithm registered for *standard*.
 
-    Not cached: ``spec_algorithm()`` is public, so an algorithm registered
+    Not cached: ``spec_verb()`` is public, so an algorithm registered
     after the first call must still show up in completions.
 
     Args:

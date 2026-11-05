@@ -27,7 +27,7 @@ git clone https://github.com/RealSlimMahdi/fleet-cdisc.git
 cd fleet-cdisc
 uv sync --extra docs --extra all --extra dev
 
-# Add project root to the Python path (makes specs/ importable for examples)
+# Add project root to the Python path (makes examples/ importable)
 uv run python -c "import sysconfig; from pathlib import Path; (Path(sysconfig.get_path('purelib')) / 'fleet-dev.pth').write_text(str(Path.cwd()))"
 ```
 

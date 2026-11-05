@@ -1,7 +1,7 @@
 # Trial Design Domains
 
-Fleet provides first-class support for all nine CDISC Trial Design Model (TDD)
-domains through two complementary paths:
+Fleet provides first-class support for the seven CDISC Trial Design Model (TDD)
+domains, plus the subject-level SV and SE, through two complementary paths:
 
 1. **`fleet.StudyDesign`** — a typed aggregate: define the design once,
    derive every domain, audit it, round-trip it through YAML, import it from
@@ -287,10 +287,25 @@ collect the visit, and never to replace a collected VISITNUM. Its rules:
 For SE, derive boundaries with `element_boundaries()` and the sequence
 number with the standard `seq()` verb:
 
+The input has one row per subject and element, with the element code
+(ETCD) on each row:
+
 ```python
+disposition_df = pl.from_repr("""
+┌─────────────┬──────┬────────────────┬─────────────────┐
+│ subject_id  ┆ etcd ┆ screening_date ┆ first_dose_date │
+│ ---         ┆ ---  ┆ ---            ┆ ---             │
+│ str         ┆ str  ┆ str            ┆ str             │
+╞═════════════╪══════╪════════════════╪═════════════════╡
+│ 01-701-1015 ┆ SCRN ┆ 2013-12-26     ┆ 2014-01-02      │
+│ 01-701-1015 ┆ TRT  ┆ 2013-12-26     ┆ 2014-01-02      │
+└─────────────┴──────┴────────────────┴─────────────────┘
+""")
 se = (
-    disposition_df.sdtm.assign("DOMAIN", value="SE")
+    disposition_df.sdtm.assign("STUDYID", value="CDISCPILOT01")
+    .assign("DOMAIN", value="SE")
     .assign("USUBJID", source="subject_id")
+    .assign("ETCD", source="etcd")
     .element_boundaries(
         "SESTDTC", "SEENDTC", milestones={"SCRN": "screening_date", "TRT": "first_dose_date"}
     )
@@ -392,7 +407,7 @@ uv run fleet tdd build                       # → ts.parquet in <sdtm_data>/
 
 ## Epoch values
 
-The `Epoch` enum is bound to NCI C99079 with all 14 standard values.
+The `Epoch` enum is bound to NCI C99079 with its 13 standard values.
 C99079 is **extensible**: sponsor-defined terms are accepted as plain
 upper-case strings anywhere an epoch is expected:
 

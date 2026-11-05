@@ -151,7 +151,7 @@ Click any verb name in the tables above. Your browser navigates to the correspon
 This means:
 
 1. **Parameter accuracy** — the cheat sheet links never describe a parameter that doesn't exist in code.
-2. **Examples stay current** — code samples in docstrings are the same ones the test suite exercises.
+2. **Examples stay close to the code** — code samples in docstrings are syntax-checked; they are not all run by the test suite.
 3. **Discoverability** — IDE hover, docs site, and `help()` in a REPL all read from the same docstring.
 
 If you find a verb missing from this cheat sheet, file an issue or add a row — the link target itself is generated automatically once the method exists in source.

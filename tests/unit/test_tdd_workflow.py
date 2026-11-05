@@ -1052,3 +1052,11 @@ class TestSDTMRegression:
 """)
         result = raw.sdtm.to_frame()
         assert isinstance(result, pl.DataFrame)
+
+
+def test_epoch_holds_the_13_c99079_terms_and_not_the_codelist_code():
+    """c1-589: the codelist code is metadata, not a 14th epoch term."""
+    values = [m.value for m in Epoch]
+    assert "C99079" not in values
+    assert len(values) == 13
+    assert Epoch._concept_id == "C99079"

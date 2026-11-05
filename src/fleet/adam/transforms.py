@@ -39,7 +39,7 @@ Or in a YAML spec::
     - name: AGEGR1
       label: Pooled Age Group 1
       derivation:
-        algorithm: transform
+        algorithm: derivation
         callable: derive_agegr1
 
 Contract

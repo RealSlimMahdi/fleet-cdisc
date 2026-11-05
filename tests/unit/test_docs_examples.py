@@ -418,3 +418,16 @@ def test_no_run_marker_is_respected():
     runnable = [b for lang, b, run in blocks if run]
     assert len(runnable) == 1
     assert "x = 1" in runnable[0]
+
+
+def test_tdd_se_block_executes():
+    """c1-588: the SE block of docs/concepts/tdd.md runs and gives element boundaries."""
+    text = (REPO_ROOT / "docs" / "concepts" / "tdd.md").read_text(encoding="utf-8")
+    (body,) = [
+        b for lang, b, _ in _iter_blocks(text) if lang == "python" and ".element_boundaries(" in b
+    ]
+    ns: dict = {"pl": pl}
+    exec(compile(body, "<tdd.md>", "exec"), ns)  # noqa: S102 — trusted doc source
+    se = ns["se"]
+    assert se["SEENDTC"].to_list() == ["2014-01-02", None]
+    assert se["SESEQ"].to_list() == [1, 2]

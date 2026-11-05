@@ -42,7 +42,14 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class Epoch(StrEnum):
-    """EPOCH (C99079) — all 14 CDISC-standard trial epoch values."""
+    """EPOCH (C99079): the 13 CDISC-standard trial epoch values.
+
+    C99079 is extensible: a sponsor term is accepted as an upper-case string
+    (see ``EpochLike``).
+
+    References:
+        NCI EVS C99079 (sdtmct-2023-12-15): 13 terms.
+    """
 
     SCREENING = "SCREENING"
     BASELINE = "BASELINE"
@@ -58,7 +65,9 @@ class Epoch(StrEnum):
     OBSERVATION = "OBSERVATION"
     PRE_SCREENING = "PRE-SCREENING"
 
-    _concept_id: ClassVar[str] = "C99079"
+
+# Set after the class: inside a StrEnum body it would become a 14th member.
+Epoch._concept_id = "C99079"  # type: ignore[attr-defined]
 
 
 # ------------------------------------------------------------------ #
