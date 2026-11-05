@@ -1339,7 +1339,7 @@ class SharedVerbsMixin:
 
         Four call forms are supported:
 
-        **Case 1 — string (AST-sandboxed, YAML-compatible)**::
+        **Case 1 — string (checked against an allow-list, YAML-compatible)**::
 
             .derivation("COL", expression="pl.col('src').cast(pl.String)")
 
@@ -1427,7 +1427,7 @@ class SharedVerbsMixin:
                 )
             return self._chain(expr.alias(target), verb="derivation", params=params)
 
-        # Case 1: string through AST sandbox.
+        # Case 1: string checked against an allow-list.
         return self._chain(
             parse_expression(str(expression), self._lazy.collect_schema()).alias(target),
             verb="derivation",
