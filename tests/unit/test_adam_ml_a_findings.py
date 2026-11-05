@@ -616,3 +616,99 @@ def test_define_xml_on_a_version_1_spec_names_fleet_migrate(tmp_path):
 
     with pytest.raises(SpecError, match="fleet migrate --spec"):
         DefineSpecGenerator(path)
+
+
+class TestBoundaryRules:
+    """c1-149: one-day changes to these rules make a test fail."""
+
+    @staticmethod
+    def _temfl(ae: pl.DataFrame, **kwargs) -> list:
+        out = ae.adam.occds.treatment_emergent(
+            "TRTEMFL", start_date="ASTDT", end_date="AENDT", trtsdt="TRTSDT", **kwargs
+        ).to_frame()
+        return out["TRTEMFL"].to_list()
+
+    def test_the_end_window_includes_its_last_day(self):
+        ae = pl.from_repr("""\
+┌────────────┬────────────┬────────────┬────────────┐
+│ ASTDT      ┆ AENDT      ┆ TRTSDT     ┆ TRTEDT     │
+│ ---        ┆ ---        ┆ ---        ┆ ---        │
+│ date       ┆ date       ┆ date       ┆ date       │
+╞════════════╪════════════╪════════════╪════════════╡
+│ 2024-01-15 ┆ null       ┆ 2024-01-01 ┆ 2024-01-10 │
+│ 2024-01-16 ┆ null       ┆ 2024-01-01 ┆ 2024-01-10 │
+└────────────┴────────────┴────────────┴────────────┘
+""")
+        assert self._temfl(ae, trtedt="TRTEDT", end_window=5) == ["Y", None]
+
+    def test_an_event_that_ends_on_the_first_dose_day_has_not_ended_before(self):
+        ae = pl.from_repr("""\
+┌───────┬────────────┬────────────┐
+│ ASTDT ┆ AENDT      ┆ TRTSDT     │
+│ ---   ┆ ---        ┆ ---        │
+│ date  ┆ date       ┆ date       │
+╞═══════╪════════════╪════════════╡
+│ null  ┆ 2024-01-01 ┆ 2024-01-01 │
+│ null  ┆ 2023-12-31 ┆ 2024-01-01 │
+└───────┴────────────┴────────────┘
+""")
+        assert self._temfl(ae) == ["Y", None]
+
+    def test_offset_days_moves_the_start_later(self):
+        ae = pl.from_repr("""\
+┌────────────┬───────┬────────────┐
+│ ASTDT      ┆ AENDT ┆ TRTSDT     │
+│ ---        ┆ ---   ┆ ---        │
+│ date       ┆ date  ┆ date       │
+╞════════════╪═══════╪════════════╡
+│ 2023-12-31 ┆ null  ┆ 2024-01-01 │
+│ 2024-01-01 ┆ null  ┆ 2024-01-01 │
+│ 2024-01-02 ┆ null  ┆ 2024-01-01 │
+└────────────┴───────┴────────────┘
+""")
+        assert self._temfl(ae, offset_days=1) == [None, None, "Y"]
+
+    def test_study_day_from_the_pin_is_1_on_the_reference_day(self):
+        adsl = pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ TRTSDT     │
+│ ---     ┆ ---        │
+│ str     ┆ date       │
+╞═════════╪════════════╡
+│ S1      ┆ 2024-01-02 │
+└─────────┴────────────┘
+""")
+        ae = pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ ASTDT      │
+│ ---     ┆ ---        │
+│ str     ┆ date       │
+╞═════════╪════════════╡
+│ S1      ┆ 2024-01-01 │
+│ S1      ┆ 2024-01-02 │
+│ S1      ┆ 2024-01-03 │
+└─────────┴────────────┘
+""")
+        out = (
+            ae.adam.occds.pin("ADSL", adsl)
+            .study_day("ASTDY", date_col="ASTDT", ref_col="TRTSDT")
+            .to_frame()
+        )
+
+        assert "TRTSDT" not in out.columns
+        assert out["ASTDY"].to_list() == [-1, 1, 2]
+
+    def test_utils_study_day_is_1_on_the_reference_day(self):
+        from fleet.adam.utils import study_day
+
+        df = pl.from_repr("""\
+┌────────────┬────────────┐
+│ ADT        ┆ TRTSDT     │
+│ ---        ┆ ---        │
+│ date       ┆ date       │
+╞════════════╪════════════╡
+│ 2024-01-01 ┆ 2024-01-02 │
+│ 2024-01-02 ┆ 2024-01-02 │
+└────────────┴────────────┘
+""")
+        assert df.select(study_day("ADT", "TRTSDT"))["ADY"].to_list() == [-1, 1]
