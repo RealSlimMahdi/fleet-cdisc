@@ -189,7 +189,7 @@ class TestCorrectedAge:
     """Test 4: Gestational-age-corrected age."""
 
     def test_preterm_correction(self):
-        # Born at 32 weeks → 8 weeks premature → correction ≈ 8/52.18 ≈ 0.153 years
+        # Born at 32 weeks → 8 weeks premature → correction = 56 days / 365.25
         df = pl.from_repr("""\
 ┌─────────┬────────┐
 │ AGEDAYS ┆ GESTAG │
@@ -202,8 +202,8 @@ class TestCorrectedAge:
         result = df.adam.peds.corrected_age(
             "CORAGE", age_days_col="AGEDAYS", gestational_weeks_col="GESTAG"
         ).to_frame()
-        expected = 365 / 365.25 - (40 - 32) / 52.18
-        assert result["CORAGE"][0] == pytest.approx(expected, abs=0.001)
+        expected = (365 - 7 * (40 - 32)) / 365.25
+        assert result["CORAGE"][0] == pytest.approx(expected, rel=1e-12)
 
     def test_term_infant_no_correction(self):
         """Infant born at exactly 40 weeks → no correction applied."""

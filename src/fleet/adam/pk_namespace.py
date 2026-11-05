@@ -569,7 +569,9 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
         """Derive CMT (compartment number) for PopPK datasets.
 
         Assigns *dose_cmt* on dosing records and *conc_cmt* on observation
-        records, following NONMEM convention.
+        records, following NONMEM convention.  *conc_cmt* applies to all
+        non-dose records, whatever the specimen.  For a compartment by
+        specimen (PCSPEC), use ``.derivation``.
 
         Args:
             target: Name of the output column (default ``"CMT"``).

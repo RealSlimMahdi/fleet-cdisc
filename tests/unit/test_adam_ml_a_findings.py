@@ -563,3 +563,44 @@ class TestTimeToEvent:
 
         assert ns.to_frame().height == 2
         assert ns.km_data("OS", by=["TRT01P"]).height == 2
+
+
+class TestAgeConstants:
+    """c1-166: one year is 365.25 days in corrected_age and age_in_years."""
+
+    def test_corrected_age_uses_days(self):
+        inf = pl.from_repr("""\
+┌─────────┬────────┐
+│ AGEDAYS ┆ GESTAG │
+│ ---     ┆ ---    │
+│ i64     ┆ f64    │
+╞═════════╪════════╡
+│ 1       ┆ 34.0   │
+└─────────┴────────┘
+""")
+        out = (
+            inf.adam.peds.corrected_age(
+                "CA", age_days_col="AGEDAYS", gestational_weeks_col="GESTAG"
+            )
+            .adam.peds.corrected_age(
+                "CA4", age_days_col="AGEDAYS", gestational_weeks_col="GESTAG", round_digits=4
+            )
+            .to_frame()
+        )
+
+        assert out["CA"][0] == pytest.approx((1 - 7 * 6) / 365.25, rel=1e-12)
+        assert out["CA4"][0] == -0.1123
+
+    def test_age_in_weeks_converts_with_365_25_over_7(self):
+        from fleet.adam.utils import age_in_years
+
+        df = pl.from_repr("""\
+┌───────┬───────┐
+│ AGE   ┆ AGEU  │
+│ ---   ┆ ---   │
+│ f64   ┆ str   │
+╞═══════╪═══════╡
+│ 52.0  ┆ WEEKS │
+└───────┴───────┘
+""")
+        assert df.select(age_in_years())["AAGE"][0] == pytest.approx(52 * 7 / 365.25, rel=1e-12)

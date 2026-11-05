@@ -139,9 +139,9 @@ class NeuroNamespace(SharedADaMVerbsMixin):
     ) -> Self:
         """Categorise MMSE total score into severity levels.
 
-        Defaults: Normal >= 24, Mild 19-23, Moderate 10-18, Severe 0-9.
+        Defaults: Normal 24-30, Mild 19-23, Moderate 10-18, Severe 0-9.
         Each lower bound is an argument, so a SAP that uses other bands
-        passes its own cut-offs.
+        passes its own cut-offs.  A score below 0 or above 30 gets null.
 
         Args:
             target: Name of the output column.
@@ -181,7 +181,9 @@ class NeuroNamespace(SharedADaMVerbsMixin):
         """
         score = pl.col(score_col)
         return self._chain(
-            pl.when(score >= normal_threshold)
+            pl.when(score > 30)
+            .then(pl.lit(None, dtype=pl.String))
+            .when(score >= normal_threshold)
             .then(pl.lit("Normal"))
             .when(score >= mild_threshold)
             .then(pl.lit("Mild"))
@@ -247,7 +249,8 @@ class NeuroNamespace(SharedADaMVerbsMixin):
     ) -> Self:
         """Categorise MoCA total score into Normal / MCI / Impaired.
 
-        Defaults: Normal ≥ 26, MCI 18–25, Impaired < 18.
+        Defaults: Normal 26-30, MCI 18-25, Impaired 0-17.  A score below 0
+        or above 30 gets null.
 
         Args:
             target: Name of the output column.
@@ -274,7 +277,9 @@ class NeuroNamespace(SharedADaMVerbsMixin):
         """
         score = pl.col(score_col)
         return self._chain(
-            pl.when(score >= normal_threshold)
+            pl.when(score > 30)
+            .then(pl.lit(None, dtype=pl.String))
+            .when(score >= normal_threshold)
             .then(pl.lit("Normal"))
             .when(score >= mci_threshold)
             .then(pl.lit("MCI"))

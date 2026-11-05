@@ -297,7 +297,7 @@ def age_in_years(
         .when(unit == "MONTHS")
         .then(age / 12.0)
         .when(unit == "WEEKS")
-        .then(age / 52.1775)
+        .then(age * 7 / 365.25)
         .when(unit == "DAYS")
         .then(age / 365.25)
         .otherwise(None)
