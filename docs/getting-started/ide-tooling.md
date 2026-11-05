@@ -27,7 +27,14 @@ dm.tlg.ae  # typed downstream too, since to_frame() returns fleet.DataFrame
 
 `fleet.DataFrame` / `fleet.LazyFrame` are plain aliases of the Polars classes at
 runtime (`isinstance` behaves normally); the namespace properties exist only for
-type checkers. Wrap loads at IO boundaries and everything downstream stays typed.
+type checkers. Wrap loads at IO boundaries. A verb chain and `to_frame()` keep
+the typed view. A plain Polars step (`filter`, `join`, `with_columns`) returns
+the plain Polars type, so wrap its result again:
+
+```python
+safety = fleet.frame(dm.filter(pl.col("ARM") != "Screen Failure"))
+safety.adam.adsl  # typed again
+```
 
 ## Language server — `fleet lsp` (define.yaml intelligence)
 
@@ -53,6 +60,8 @@ Fleet package (never hardcoded):
 finds the server via the `fleet.server.path` setting, then the `FLEET_LSP` env
 var, then `.venv/bin/fleet`, then `uv run fleet`.
 **Other editors:** point any LSP client at `fleet lsp --stdio` for YAML files.
+The server checks only files named `define*.yaml` (or `.yml`); every other
+YAML file gets an empty list of diagnostics.
 
 ## AI assistants — `fleet mcp` (Model Context Protocol)
 
@@ -97,7 +106,7 @@ Each is a thin wrapper over a public Fleet API:
 | --- | --- |
 | `fleet_execution_order(spec_paths)` | topological dataset build order from define.yaml |
 | `fleet_impacted_by(spec_paths, node)` | what must re-run if a dataset changes |
-| `fleet_lineage(dag_json_path, dataset)` | variable-level lineage from a pipeline DAG export |
+| `fleet_lineage(dag_json_path, dataset)` | variable-level lineage from a pipeline DAG export (call `dag.inject_lineage(ns, "ADSL")` before `dag.generate(path)`, or the record has no variables) |
 | `fleet_validate(dataset_path, standard?, version?, custom_rules?)` | CDISC Rules Engine validation from the run setup |
 | `fleet_ct_terms(codelist, ct_path?)` | valid terms for a codelist |
 | `fleet_tlg_catalog()` | all registered TLG templates |
@@ -144,7 +153,7 @@ become one question each:
 - *"In what order do I need to build the datasets in metadata/adam/define.yaml?"*
   → `fleet_execution_order`
 - *"If I change DM, which downstream datasets must re-run?"* → `fleet_impacted_by`
-- *"Where does ADSL.TRTSDT come from?"* → `fleet_lineage`
+- *"Where does ADSL.TRTSDT come from?"* → `fleet_lineage` (on a DAG export written after `inject_lineage`)
 - *"Validate data/sdtm/ae.parquet and summarise the errors."* → `fleet_validate`
 - *"Is 'INTERVENTIONAL' a valid term for C99077? What are the others?"* → `fleet_ct_terms`
 - *"Which TLG template covers an AE overview table, and run it against my ADAE."*
