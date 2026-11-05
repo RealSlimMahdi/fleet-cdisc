@@ -183,10 +183,17 @@ def program_from_spec(spec_path: str | Path, dataset: str) -> str:
     return "\n".join(lines)
 
 
+#: A dotted Python name (``study.derivations.bmi``); spec text must match it to become code.
+_DOTTED = re.compile(r"[A-Za-z_][\w.]*", re.ASCII)
+
+
 def _callable_call(ref: str, module: str, imports: list[str]) -> str:
     """``.derivation(NAME)`` for a ``callable:`` reference, imported the way ``from_spec`` resolves it."""
     package, _, name = ref.rpartition(".")
     package = package or module
+    if not (_DOTTED.fullmatch(package or "x") and _DOTTED.fullmatch(name)):
+        # Spec text is not code: a reference that is not a dotted name is not copied in.
+        return f"    # TODO: callable: {ref!r} is not a dotted Python name; write the call by hand"
     if package:
         imports.append(f"from {package} import {name}")
         return f"    .derivation({name})"

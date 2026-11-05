@@ -3433,10 +3433,13 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
-    # Read the CDISC_API_KEY of a study .env (walking up from the cwd) before
-    # any handler needs it; commands must work from any study subdirectory.
+    # Read the CDISC_API_KEY of a study .env (walking up from the --config
+    # folder, then from the cwd) before any handler needs it; commands must
+    # work from any study subdirectory.
     from fleet.ct.api import try_load_dotenv
 
+    if getattr(args, "config", None):
+        try_load_dotenv(Path(args.config).parent)
     try_load_dotenv()
 
     # Make project-local modules (e.g. a spec's `derivations_module:

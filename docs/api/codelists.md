@@ -79,7 +79,12 @@ Each codelist class exposes:
 | `_concept_id`     | NCI concept ID (e.g. `"C66731"`).                                |
 | `_cdisc_url`      | Deep link to the CDISC Library Browser entry.                    |
 | `_preferred_term` | Preferred term as published by CDISC (when `include_docs=True`). |
+| `_terms`          | Every submission value of the codelist, as a tuple.              |
 | `<TERM>`          | One class attribute per submission value (`SEX.M`, `SEX.F`, …).  |
+
+A term that starts with a digit gets `T_` in front (`FREQ.T_2_TIMES_PER_WEEK`).
+A term with no letter or digit (`%`) is `T_<term NCI code>`. When two terms
+give one name, each name ends with the term NCI code, so no term is lost.
 
 ## Generated module
 

@@ -9,7 +9,7 @@ from types import ModuleType
 
 from fleet.ct.api import CDISCClient, CDISCClientConfig
 from fleet.ct.generator import CodelistGenerator
-from fleet.ct.loader import create_ct_lookup, load_controlled_terminology
+from fleet.ct.loader import load_controlled_terminology
 from fleet.ct.validator import CTValidator, get_validator
 
 
@@ -72,8 +72,17 @@ def import_codelists(
         raise ImportError(f"Cannot create module spec for: {resolved}")
 
     module = importlib.util.module_from_spec(spec)
+    previous = sys.modules.get(module_name)
     sys.modules[module_name] = module
-    spec.loader.exec_module(module)
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        # A file that fails leaves sys.modules as it was, not with a half-built module.
+        if previous is None:
+            sys.modules.pop(module_name, None)
+        else:
+            sys.modules[module_name] = previous
+        raise
     return module
 
 
@@ -100,5 +109,4 @@ __all__ = [
     "get_validator",
     "import_codelists",
     "load_controlled_terminology",
-    "create_ct_lookup",
 ]
