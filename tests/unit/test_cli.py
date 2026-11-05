@@ -10,6 +10,7 @@ built in ``tmp_path``.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import polars as pl
@@ -369,7 +370,7 @@ def test_run_writes_the_format_the_define_declares(
 
     assert (study / "data" / "sdtm" / "dm.xpt").is_file()
     assert not (study / "data" / "sdtm" / "dm.parquet").exists()
-    assert "Format:  DM xpt" in capsys.readouterr().out
+    assert re.search(r"Format:\s+DM xpt", capsys.readouterr().out)
 
 
 def test_run_warns_when_the_format_flag_differs_from_the_define(
@@ -1170,7 +1171,7 @@ def test_compare_accepts_composite_keys_with_spaces(
     code = _run(["compare", str(base), str(candidate), "--keys", "USUBJID, AESEQ"])
 
     assert code == 0
-    assert "Keys:      USUBJID, AESEQ" in capsys.readouterr().out
+    assert re.search(r"Keys:\s+USUBJID, AESEQ", capsys.readouterr().out)
 
 
 @pytest.mark.parametrize(
@@ -1738,7 +1739,7 @@ def test_compare_pairs_compare_a_renamed_variable_instead_of_reporting_it_missin
 
     captured = capsys.readouterr()
     assert code == 0
-    assert "Pairs:     AGE = AGEN" in captured.out
+    assert re.search(r"Pairs:\s+AGE = AGEN", captured.out)
     assert captured.err == ""
 
 
