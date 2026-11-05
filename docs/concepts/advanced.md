@@ -398,6 +398,7 @@ adsl = (
     dm.adam.adsl.source("USUBJID")
     .first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC")
     .inspect(prefix="After TRTSDT")  # prints and checkpoints
+    .last_date("TRTEDT", from_dataset=ex, date_col="EXENDTC")
     .duration("TRTDURD", start="TRTSDT", end="TRTEDT")
     .to_frame()
 )

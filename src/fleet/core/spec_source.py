@@ -32,6 +32,7 @@ from fleet.core.spec_registry import (
     SPEC_UNSUPPORTED,
     derivation_from_lineage,
     get_algorithm,
+    pinned_datasets,
     render_formal_expression,
     with_codelist,
 )
@@ -39,17 +40,38 @@ from fleet.core.spec_registry import (
 _NAMESPACES = ("sdtm", "adam")
 _NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]{0,7}$")
 _NOT_PARAMS = ("algorithm", "depends_on")
-#: Verbs whose first argument names a dataset, not a variable: pipeline plumbing.
-_PLUMBING = frozenset({"pin"})
+#: Calls on a chain that derive nothing: pipeline plumbing, output and inspection.
+_PLUMBING = frozenset(
+    {
+        "pin",
+        "repin",
+        "to_frame",
+        "inspect",
+        "explain",
+        "trail",
+        "verbs",
+        "write_parquet",
+        "to_dataset_json",
+        "to_spec_yaml",
+        "validate",
+        "compare",
+    }
+)
+
+#: Why a verb call with no target variable has no derivation block.
+_NO_TARGET = "no target variable: this step joins, filters or reshapes; add it by hand"
 
 
 def derivations_from_source(source: str) -> list[dict[str, Any]]:
     """Reverse-map every namespace verb call in *source* to a derivation block.
 
     Static: the program is parsed, never run. A call counts when it hangs
-    off ``.sdtm`` / ``.adam`` (through any chain, up to ``to_frame()``)
-    and its first argument is a CDISC-named string literal — the target.
-    Rows come back in call order.
+    off ``.sdtm`` / ``.adam`` (through any chain, up to ``to_frame()``).
+    A call whose first argument is a CDISC-named string literal derives
+    that target.  Any other verb call (``merge``, ``whereclauses``, a list
+    target, a non-CDISC target) gets a row with an empty ``name``, so a join
+    or a filter is never lost; plumbing, output and inspection calls
+    (``pin``, ``to_frame``, ``trail``) get none.  Rows come back in call order.
 
     Args:
         source: Python source of a program (a whole file or a selection).
@@ -59,8 +81,9 @@ def derivations_from_source(source: str) -> list[dict[str, Any]]:
             ``line`` (1-based, of the verb), ``status``, ``block``,
             ``reason`` and ``meta`` (captured ``label``/``origin``).
             *status* is ``"ok"`` (``block`` usable), ``"stub"``
-            (non-literal or unmatched arguments), ``"unsupported"`` (the
-            verb has no spec form) or ``"unknown"`` (not a registered verb).
+            (non-literal or unmatched arguments, or no target variable),
+            ``"unsupported"`` (the verb has no spec form) or ``"unknown"``
+            (not a registered verb).
     """
     tree = ast.parse(source)
     imported = _imports(tree)
@@ -79,14 +102,30 @@ def derivations_from_source(source: str) -> list[dict[str, Any]]:
     for call in calls:
         verb = call.func.attr  # type: ignore[attr-defined]
         standard = _chain_standard(call.func.value)  # type: ignore[attr-defined]
-        if standard is None or verb in _PLUMBING or not call.args:
+        if standard is None or verb in _PLUMBING:
             continue
-        target = call.args[0]
-        if isinstance(target, ast.Constant) and isinstance(target.value, str):
-            if _NAME_RE.match(target.value):
-                rows.append(_row(standard, call, target.value))
+        target = call.args[0] if call.args else None
+        if (
+            isinstance(target, ast.Constant)
+            and isinstance(target.value, str)
+            and _NAME_RE.match(target.value)
+        ):
+            rows.append(_row(standard, call, target.value))
         elif verb == "derivation" and isinstance(target, ast.Name | ast.Attribute):
             rows.append(_callable_row(standard, call, target, imported, defined))
+        else:
+            rows.append(
+                {
+                    "name": "",
+                    "verb": verb,
+                    "standard": standard,
+                    "line": call.func.end_lineno,
+                    "status": "stub" if get_algorithm(standard, verb) else "unknown",
+                    "block": None,
+                    "reason": _NO_TARGET,
+                    "meta": {},
+                }
+            )
     return rows
 
 
@@ -106,27 +145,38 @@ def program_from_spec(spec_path: str | Path, dataset: str) -> str:
         str: A Python program to review, never run blind.
 
     Raises:
-        ValueError: When *dataset* is not declared in the spec.
+        ValueError: When *dataset* is not declared in the spec, or the spec
+            has no ``study.standard`` (SDTMIG or ADAMIG).
     """
     path = Path(spec_path)
     data = load_spec_yaml(path.read_text(encoding="utf-8")) or {}
     datasets = [ds for ds in data.get("datasets", []) if isinstance(ds, dict)]
-    block = next(
+    entry = next(
         (ds for ds in datasets if str(ds.get("name", "")).upper() == dataset.upper()), None
     )
-    if block is None:
+    if entry is None:
         known = ", ".join(str(ds.get("name")) for ds in datasets)
         raise ValueError(f"dataset {dataset!r} not in {path}. Known: {known}")
     study = data.get("study") if isinstance(data.get("study"), dict) else {}
-    standard = "adam" if "ADAM" in str(study.get("standard", "")).upper() else "sdtm"
+    declared_standard = str(study.get("standard") or "").upper()
+    if not declared_standard:
+        raise ValueError(
+            f"{path}: study.standard is not given; write SDTMIG or ADAMIG so the program "
+            "uses the right namespace."
+        )
+    standard = "adam" if "ADAM" in declared_standard else "sdtm"
 
     name = dataset.upper()
     var = name.lower()
-    variables = [v for v in block.get("variables", []) if isinstance(v, dict)]
+    variables = [v for v in entry.get("variables", []) if isinstance(v, dict)]
     inputs = [
-        str(i["name"]) for i in block.get("inputs", []) if isinstance(i, dict) and i.get("name")
+        str(i["name"]) for i in entry.get("inputs", []) if isinstance(i, dict) and i.get("name")
     ]
-    pinned = [p for p in _pinned(standard, variables) if p not in inputs]
+    pinned = [
+        p
+        for p in pinned_datasets(standard, [v.get("derivation") for v in variables])
+        if p not in inputs
+    ]
     frames = inputs + pinned
 
     module = str(data.get("derivations_module") or "")
@@ -134,12 +184,14 @@ def program_from_spec(spec_path: str | Path, dataset: str) -> str:
     chain: list[str] = []
     for variable in variables:
         derivation = variable.get("derivation")
-        if not isinstance(derivation, dict) or "algorithm" not in derivation:
+        if not isinstance(derivation, dict):
             continue
-        algorithm = str(derivation["algorithm"])
         if derivation.get("callable"):
             chain.append(_callable_call(str(derivation["callable"]), module, imports))
             continue
+        if "algorithm" not in derivation:
+            continue
+        algorithm = str(derivation["algorithm"])
         try:
             block = with_codelist(standard, derivation, variable.get("codelist"))
         except ValueError:
@@ -154,10 +206,11 @@ def program_from_spec(spec_path: str | Path, dataset: str) -> str:
                 " — derive inline"
             )
         else:
+            text = _pins_as_frames(standard, algorithm, params, text)
             chain.append(f"    .{text[text.rfind('.', 0, text.index('(')) + 1 :]}")
 
     lines = [
-        f"# {name}" + (f" — {block['label']}" if block.get("label") else ""),
+        f"# {name}" + (f" — {entry['label']}" if entry.get("label") else ""),
         f"# Generated by Fleet from {path.name}: one call per derived variable, in spec order.",
         "# Review before use: carry-through variables and raw columns are not derived here.",
         "import fleet",
@@ -181,6 +234,20 @@ def program_from_spec(spec_path: str | Path, dataset: str) -> str:
         lines.append(f'    .pin("{pin}", {pin.lower()})')
     lines += [*chain, "    .to_frame()", ")", ""]
     return "\n".join(lines)
+
+
+def _pins_as_frames(standard: str, algorithm: str, params: dict[str, Any], text: str) -> str:
+    """Write each pinned dataset name of a rendered call as its frame variable.
+
+    ``from_spec`` resolves ``from_dataset: EX`` through the pin; the inline
+    verb takes the frame itself, so the program passes ``ex``.
+    """
+    algo = get_algorithm(standard, algorithm)
+    for param in algo.params if algo else ():
+        value = params.get(param.name)
+        if param.convert == "pin" and isinstance(value, str):
+            text = text.replace(f"{param.kwarg}={value!r}", f"{param.kwarg}={value.lower()}")
+    return text
 
 
 def _callable_call(ref: str, module: str, imports: list[str]) -> str:
@@ -309,18 +376,3 @@ def _row(standard: str, call: ast.Call, target: str) -> dict[str, Any]:
     else:
         row["reason"] = "the arguments match no spec algorithm"
     return row
-
-
-def _pinned(standard: str, variables: list[dict[str, Any]]) -> list[str]:
-    """Datasets the spec's derivations resolve through a pin, in first-use order."""
-    pinned: list[str] = []
-    for variable in variables:
-        derivation = variable.get("derivation")
-        if not isinstance(derivation, dict):
-            continue
-        algo = get_algorithm(standard, str(derivation.get("algorithm", "")))
-        for param in algo.params if algo else ():
-            value = derivation.get(param.name)
-            if param.convert == "pin" and isinstance(value, str) and value not in pinned:
-                pinned.append(value)
-    return pinned
