@@ -20,6 +20,7 @@ import polars as pl
 import pytest
 
 import fleet  # noqa: F401 — registers namespaces
+from fleet.core.exceptions import DerivationError
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Fixtures: deliberately messy data
@@ -886,3 +887,81 @@ class TestPickFromSpec:
 
         with pytest.raises((PinError, SpecError), match="AE"):
             adsl.adam.adsl.pin(ADSL=adsl).from_spec(spec, dataset="ADSL").to_frame()
+
+
+class TestPickArgumentChecks:
+    """c1-126, c1-127, c1-128, c1-140: pick() stops on a slip instead of a silent null."""
+
+    @pytest.fixture
+    def adsl(self) -> pl.DataFrame:
+        return pl.from_repr("""\
+┌─────────┬────────────┬────────────┬──────┐
+│ USUBJID ┆ DTHDT      ┆ TRTEDT     ┆ Z    │
+│ ---     ┆ ---        ┆ ---        ┆ ---  │
+│ str     ┆ date       ┆ date       ┆ str  │
+╞═════════╪════════════╪════════════╪══════╡
+│ S1      ┆ null       ┆ 2024-06-15 ┆ KEEP │
+│ S3      ┆ 2024-05-03 ┆ 2024-04-01 ┆ KEEP │
+└─────────┴────────────┴────────────┴──────┘
+""")
+
+    def test_a_set_key_that_is_not_a_target_raises(self, adsl):
+        events = [
+            {"when": pl.col("TRTEDT").is_not_null(), "set": {"LSTALVD": "TRTEDT"}},
+            {"when": pl.col("DTHDT").is_not_null(), "set": {"LSTALVDT": "DTHDT"}},
+        ]
+        with pytest.raises(DerivationError, match="'LSTALVD'.*Did you mean 'LSTALVDT'"):
+            adsl.adam.adsl.pick("LSTALVDT", events=events)
+
+    def test_an_existing_target_column_is_replaced(self, adsl):
+        events = [{"when": pl.col("DTHDT").is_not_null(), "set": {"Z": pl.lit("NEW")}}]
+
+        out = adsl.adam.adsl.pick("Z", events=events).to_frame()
+
+        assert out["Z"].to_list() == [None, "NEW"]
+
+    def test_a_date_and_a_text_for_one_target_raise(self, adsl):
+        ae = pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ AEENDTC    │
+│ ---     ┆ ---        │
+│ str     ┆ str        │
+╞═════════╪════════════╡
+│ S1      ┆ 2024-02    │
+│ S3      ┆ 2024-01-05 │
+└─────────┴────────────┘
+""")
+        events = [
+            {"when": pl.col("DTHDT").is_not_null(), "set": {"LSTALVDT": "DTHDT"}},
+            {"when": pl.col("AEENDTC").is_not_null(), "set": {"LSTALVDT": "AEENDTC"}, "source": ae},
+        ]
+        with pytest.raises(DerivationError, match="LSTALVDT from a Date.*String"):
+            adsl.adam.adsl.pick("LSTALVDT", events=events, order="LSTALVDT", mode="last")
+
+    def test_no_matching_event_keeps_the_source_dtype(self):
+        adsl = pl.from_repr("""\
+┌─────────┬───────┬────────────┐
+│ USUBJID ┆ DTHDT ┆ TRTEDT     │
+│ ---     ┆ ---   ┆ ---        │
+│ str     ┆ date  ┆ date       │
+╞═════════╪═══════╪════════════╡
+│ S1      ┆ null  ┆ 2024-06-15 │
+└─────────┴───────┴────────────┘
+""")
+        events = [{"when": pl.col("DTHDT").is_not_null(), "set": {"DTHDT": "DTHDT"}}]
+
+        out = (
+            adsl.adam.adsl.pick("DTHDT", events=events)
+            .study_day("DTHDY", date_col="DTHDT", ref_col="TRTEDT")
+            .duration("DTHDUR", start="TRTEDT", end="DTHDT")
+            .to_frame()
+        )
+
+        assert out.schema["DTHDT"] == pl.Date
+        assert out["DTHDY"].to_list() == [None]
+        assert out["DTHDUR"].to_list() == [None]
+
+    def test_a_bare_literal_in_set_names_pl_lit(self, adsl):
+        events = [{"when": pl.col("DTHDT").is_not_null(), "set": {"FLG": "Y"}}]
+        with pytest.raises(DerivationError, match=r"pl\.lit\(\)"):
+            adsl.adam.adsl.pick("FLG", events=events)

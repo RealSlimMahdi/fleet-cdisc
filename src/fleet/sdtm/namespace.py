@@ -121,6 +121,10 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
     ) -> SDTMNamespace:
         """Parse, convert, impute, and flag a date or datetime column.
 
+        For a DT or DTM target, a partial date is imputed to the first day
+        or month by default (ADR-0021).  Give ``highest="n"`` for no
+        imputation, as the admiral ``derive_vars_dt`` default.
+
         Dispatches behavior based on the CDISC suffix of *target* (DTC, DT,
         DTM) or an explicit *output* override.
 

@@ -94,6 +94,9 @@ if TYPE_CHECKING:
 #: What to do when an aggregation target is already a pipeline column.
 _CLASH_HINT = "Drop the column from the pipeline first, or choose another target name."
 
+#: The ``impute=`` values of ``date()``.
+_IMPUTE_CHOICES = ("first", "mid", "last", "none")
+
 
 def _value_kind(value: Any) -> str:
     """The kind of a recode value: ``bool``, ``int``, ``float``, ``str`` or its type name."""
@@ -395,14 +398,19 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         This is Fleet's answer to multi-source derivations such as
         last-date-known-alive (LSTALVDT) or death cause (DTHCAUS).
 
+        A target that is already a pipeline column is replaced.  A subject
+        with no event gets null, and the target keeps the type of its
+        source columns, also when no event has a record.  All events must
+        set a target from one type: a date column and a DTC text raise.
+
         Event dict keys:
 
         - ``"when"`` (required): Boolean expression (``str | pl.Expr``)
           filtering which records qualify.
         - ``"set"`` (required): ``dict[str, str | pl.Expr | Any]`` mapping
           each target name to a column reference, expression, or literal.
-          Column references use bare names (``"DTHDT"``); literals must be
-          wrapped in ``pl.lit()``.
+          Each key must be a target.  Column references use bare names
+          (``"DTHDT"``); literals must be wrapped in ``pl.lit()``.
         - ``"source"`` (optional): External ``pl.DataFrame`` to scan for
           this event.  When omitted, the current pipeline frame is used.
         - ``"mode"`` (optional): Override the top-level *mode* for this
@@ -433,14 +441,18 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         Raises:
             DerivationError: If *events* is empty, a required key is
-                missing, an event contains an unknown key (with a
-                did-you-mean suggestion), or an event with no order has
-                more than one matching record in a group.  Also catchable
-                as ``ValueError``.
+                missing, an event contains an unknown key or sets a name
+                that is not a target (with a did-you-mean suggestion), a
+                ``set`` names a column that is not in the source, two
+                events set one target from text and from another type, or
+                an event with no order has more than one matching record
+                in a group.  Also catchable as ``ValueError``.
 
         References:
             admiral ``derive_vars_extreme_event`` (``order`` is required)
             and SAS ``FIRST.``/``LAST.`` after PROC SORT EQUALS; ADR-0024.
+            ADaMIG 1.3: a ``*DT`` variable is a numeric date (admiral stops
+            with "Can't combine <date> and <character>").
 
         Examples:
             Derive last date known alive from death, AE, and treatment::
@@ -454,9 +466,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                             {"when": pl.col("DTHDT").is_not_null(),
                              "set": {"LSTALVDT": "DTHDT", "DTHFL": pl.lit("Y")},
                              "source": adsl_df, "label": "Death date"},
-                            {"when": pl.col("AEENDTC").is_not_null(),
-                             "set": {"LSTALVDT": "AEENDTC", "DTHFL": pl.lit("N")},
-                             "source": ae, "mode": "last", "order": ["AEENDTC"]},
+                            {"when": pl.col("AENDT").is_not_null(),
+                             "set": {"LSTALVDT": "AENDT", "DTHFL": pl.lit("N")},
+                             "source": adae, "mode": "last", "order": ["AENDT"]},
                             {"when": pl.col("TRTEDT").is_not_null(),
                              "set": {"LSTALVDT": "TRTEDT", "DTHFL": pl.lit("N")},
                              "source": adsl_df},
@@ -524,6 +536,14 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                     f"Event #{event_nr} must contain 'when' and 'set' keys. "
                     f"Got keys: {list(event.keys())}"
                 )
+            for key in event["set"]:
+                if key not in target_list:
+                    close = difflib.get_close_matches(str(key), target_list, n=1)
+                    raise DerivationError(
+                        f"pick() event #{event_nr} sets {key!r}, which is not a target. "
+                        + (f"Did you mean {close[0]!r}? " if close else "")
+                        + f"Targets: {target_list}."
+                    )
 
             # Resolve source frame
             source_df: pl.DataFrame = event.get("source", df)
@@ -534,10 +554,8 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                 when_raw if isinstance(when_raw, pl.Expr) else parse_expression(str(when_raw))
             )
 
-            # Filter candidates
+            # An event with no record stays in the stack, so the targets keep their dtype.
             candidates = source_df.filter(when_expr)
-            if candidates.is_empty():
-                continue
 
             # Build set-values expressions
             set_exprs: list[pl.Expr] = []
@@ -561,10 +579,17 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                     set_exprs.append(pl.lit(val).alias(tgt))
 
             # Apply set expressions + add event priority marker
-            candidates = candidates.with_columns(
-                *set_exprs,
-                pl.lit(event_nr).cast(pl.UInt32).alias("__pick_event_nr__"),
-            )
+            try:
+                candidates = candidates.with_columns(
+                    *set_exprs,
+                    pl.lit(event_nr).cast(pl.UInt32).alias("__pick_event_nr__"),
+                )
+            except pl.exceptions.ColumnNotFoundError as err:
+                raise DerivationError(
+                    f"pick() event #{event_nr}: 'set' names a column that is not in the "
+                    f"event source ({str(err).splitlines()[0]}). Wrap a literal value in "
+                    'pl.lit(), for example pl.lit("Y").'
+                ) from err
 
             # Resolve per-event mode/order
             evt_mode = event.get("mode", mode)
@@ -614,10 +639,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
             candidate_frames.append(candidates)
 
-        # No events matched at all — set all targets to null
-        if not candidate_frames:
-            null_exprs = [pl.lit(None).alias(t) for t in target_list]
-            return self._materialise_then(df.with_columns(null_exprs))
+        self._refuse_pick_text_mix(candidate_frames, target_list)
 
         # Each event gave at most one row per group.  A top-level order makes
         # them compete (admiral derive_vars_extreme_event); a tie goes to the
@@ -642,6 +664,25 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         result = df.join(winners, on=by_vars, how="left", nulls_equal=True)
         return self._materialise_then(result)
+
+    @staticmethod
+    def _refuse_pick_text_mix(frames: list[pl.DataFrame], targets: list[str]) -> None:
+        """Raise when one event sets a target from text and another from a non-text type."""
+        for tgt in targets:
+            kinds = {
+                i: f.schema[tgt]
+                for i, f in enumerate(frames)
+                if tgt in f.columns and f.schema[tgt] != pl.Null
+            }
+            text = [i for i, d in kinds.items() if d == pl.String]
+            other = [i for i, d in kinds.items() if d != pl.String]
+            if text and other:
+                raise DerivationError(
+                    f"pick(): event #{other[0]} sets {tgt} from a {kinds[other[0]]} column "
+                    f"and event #{text[0]} from a String column. Set every event from one "
+                    "type: for a date, use a date column (for example AENDT from .date()), "
+                    "not the DTC text."
+                )
 
     @staticmethod
     def _warn_pick_ties(
@@ -1060,6 +1101,10 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
     ) -> Self:
         """Parse, convert, impute, and flag a date or datetime column.
 
+        By default a partial date is imputed to the first day or month
+        (ADR-0021).  Give ``highest="n"`` for no imputation, as the admiral
+        ``derive_vars_dt`` default.
+
         Dispatches behavior based on the CDISC suffix of *target* (DT, DTM)
         or an explicit *output* override.  Supports both column references
         (``source=``) and literal values (``value=``).
@@ -1076,10 +1121,11 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                 with the date from *source* (DTM targets only).
             impute: Imputation strategy for missing date components:
                 ``"first"`` (default), ``"mid"``, ``"last"``, ``"none"``.
+                Another value raises.
             impute_time: Override for time-part imputation, separate from
                 *impute*.  Only relevant for DTM targets.
-            highest: Maximum imputation ceiling (``"D"``, ``"M"``, ``"Y"``,
-                ``"h"``, ``"m"``, ``"s"``).  Rows that exceed the ceiling
+            highest: Maximum imputation ceiling (``"n"`` for none, ``"D"``,
+                ``"M"``, ``"h"``, ``"m"``, ``"s"``).  Rows that exceed the ceiling
                 are set to null.
             flag: ``True`` to auto-generate DTF/TMF flag columns,
                 ``False`` to suppress, or a string to name the DTF flag
@@ -1171,6 +1217,13 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         # source= path: one engine for both namespaces; time= first, then imputation
         assert source is not None
+        if impute not in _IMPUTE_CHOICES:
+            close = difflib.get_close_matches(str(impute), _IMPUTE_CHOICES, n=1)
+            raise DerivationError(
+                f"date('{target}'): impute={impute!r} is not supported. "
+                + (f"Did you mean {close[0]!r}? " if close else "")
+                + f"Choose one of {list(_IMPUTE_CHOICES)}; impute_time= can name a column."
+            )
         from fleet.adam.utils import dtm_source_text, source_text
 
         schema = self._lazy.collect_schema()
