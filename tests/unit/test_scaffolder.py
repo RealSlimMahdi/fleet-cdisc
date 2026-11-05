@@ -101,7 +101,7 @@ class TestDatasetStructureAndClass:
 
     def test_adam_class_only_for_adsl_and_not_for_a_bds_clone(self, caplog) -> None:
         class _Client:
-            def _get(self, path: str) -> dict:
+            def get(self, path: str) -> dict:
                 return {
                     "dataStructures": [
                         {"name": "ADSL", "label": "Subject-Level", "analysisVariableSets": []},
