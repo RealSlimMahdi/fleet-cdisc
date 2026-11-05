@@ -64,6 +64,8 @@ from .adam import (
     OncoNamespace,
     OphthaNamespace,
     PedsNamespace,
+    PKNamespace,
+    TTENamespace,
     VaccineNamespace,
 )
 from .comparison import ComparisonReport, compare
@@ -75,9 +77,16 @@ from .core import (
     load_study_context,
     to_repr,
 )
+from .core.exceptions import (
+    ComparisonError,
+    DerivationError,
+    FleetError,
+    PinError,
+    SpecError,
+    ValidationError,
+)
 from .core.frames import DataFrame, LazyFrame, frame
-from .core.spec_registry import SPEC_UNSUPPORTED
-from .core.spec_registry import algorithm_names as spec_algorithms
+from .core.spec_registry import SPEC_UNSUPPORTED, spec_algorithms
 from .core.spec_registry import coverage_matrix as spec_coverage
 from .ct import CTValidator, get_validator, import_codelists, load_controlled_terminology
 
@@ -167,6 +176,8 @@ __all__ = [
     "VaccineNamespace",
     "MetabolicNamespace",
     "NeuroNamespace",
+    "PKNamespace",
+    "TTENamespace",
     # TLG namespace (accessed via df.tlg, df.tlg.ae)
     "TLGNamespace",
     "AETLGNamespace",
@@ -191,4 +202,11 @@ __all__ = [
     "ComparisonReport",
     # Utilities
     "to_repr",
+    # Exceptions (fleet.core.exceptions)
+    "FleetError",
+    "DerivationError",
+    "SpecError",
+    "ValidationError",
+    "ComparisonError",
+    "PinError",
 ]

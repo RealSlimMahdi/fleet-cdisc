@@ -74,6 +74,7 @@ __all__ = [
     "parse_variable_spec",
     "render_formal_expression",
     "render_method_text",
+    "spec_algorithms",
     "spec_verb",
     "suggest_algorithm",
     "variable_spec_union",
@@ -547,6 +548,31 @@ def algorithms(standard: str) -> list[SpecAlgorithm]:
 def algorithm_names(standard: str) -> list[str]:
     """Return the sorted ``algorithm:`` values for *standard*."""
     return sorted(_DECLARED[standard])
+
+
+def spec_algorithms(standard: str) -> list[str]:
+    """Return the sorted ``algorithm:`` values a ``define.yaml`` accepts for *standard*.
+
+    Args:
+        standard: ``"sdtm"`` or ``"adam"``, in any letter case.
+
+    Returns:
+        list[str]: The algorithm names, sorted.
+
+    Raises:
+        ValueError: If *standard* is not ``"sdtm"`` or ``"adam"``.
+
+    Examples:
+        List the SDTM algorithms::
+
+            import fleet
+
+            names = fleet.spec_algorithms("SDTM")
+    """
+    key = standard.lower() if isinstance(standard, str) else standard
+    if key not in _DECLARED:
+        raise ValueError(f"Unknown standard {standard!r}: use 'sdtm' or 'adam'.")
+    return algorithm_names(key)
 
 
 def model_for(standard: str, name: str) -> type[SpecVariableBase]:

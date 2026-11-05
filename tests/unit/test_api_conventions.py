@@ -107,3 +107,46 @@ def test_keyword_only_after_target(qualname):
         f"if the shape is a deliberate decision — add it to _POSITIONAL_ALLOWANCE "
         f"with a reason."
     )
+
+
+# ------------------------------------------------------------------ #
+# The package root (c1-699)                                            #
+# ------------------------------------------------------------------ #
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "FleetError",
+        "DerivationError",
+        "SpecError",
+        "ValidationError",
+        "ComparisonError",
+        "PinError",
+        "PKNamespace",
+        "TTENamespace",
+    ],
+)
+def test_the_package_root_exports_the_name(name: str) -> None:
+    """``except fleet.DerivationError:`` works after a bare ``import fleet``."""
+    assert name in fleet.__all__
+    assert getattr(fleet, name) is not None
+
+
+def test_a_fleet_error_is_caught_through_the_package_root() -> None:
+    from fleet.core.exceptions import DerivationError
+
+    with pytest.raises(fleet.FleetError):
+        raise DerivationError("x")
+
+
+@pytest.mark.parametrize("standard", ["sdtm", "SDTM", "adam", "ADaM"])
+def test_spec_algorithms_takes_the_standard_in_any_case(standard: str) -> None:
+    from fleet.core.spec_registry import algorithm_names
+
+    assert fleet.spec_algorithms(standard) == algorithm_names(standard.lower())
+
+
+def test_spec_algorithms_names_the_valid_standards() -> None:
+    with pytest.raises(ValueError, match="'sdtm' or 'adam'"):
+        fleet.spec_algorithms("send")
