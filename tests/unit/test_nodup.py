@@ -93,7 +93,7 @@ class TestNodupDedup:
         )
         assert row_01_headache["ASEQ"].to_list() == [2]
 
-    def test_keep_last_descending(self, df_with_dups, capsys):
+    def test_keep_first_descending(self, df_with_dups, capsys):
         result = df_with_dups.sdtm.nodup(
             subset=["USUBJID", "AEDECOD"],
             sort_by=["ASEQ"],
@@ -106,6 +106,20 @@ class TestNodupDedup:
             (pl.col("USUBJID") == "01-001") & (pl.col("AEDECOD") == "HEADACHE")
         )
         assert row_01_headache["ASEQ"].to_list() == [2]
+
+    def test_keep_last_descending(self, df_with_dups, capsys):
+        result = df_with_dups.sdtm.nodup(
+            subset=["USUBJID", "AEDECOD"],
+            sort_by=["ASEQ"],
+            keep="last",
+            descending=True,
+        ).to_frame()
+        # Descending sort + keep last = keep the lowest ASEQ
+        assert len(result) == 4
+        row_01_headache = result.filter(
+            (pl.col("USUBJID") == "01-001") & (pl.col("AEDECOD") == "HEADACHE")
+        )
+        assert row_01_headache["ASEQ"].to_list() == [1]
 
     def test_output_message_shows_action(self, df_with_dups, capsys):
         df_with_dups.sdtm.nodup(

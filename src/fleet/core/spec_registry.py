@@ -53,7 +53,18 @@ import re
 import types
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
-from typing import Annotated, Any, ClassVar, Literal, Union, get_args, get_origin
+from typing import (
+    Annotated,
+    Any,
+    ClassVar,
+    Literal,
+    TypedDict,
+    Union,
+    get_args,
+    get_origin,
+    get_type_hints,
+    is_typeddict,
+)
 
 import polars as pl
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, create_model, model_validator
@@ -355,6 +366,12 @@ def _yaml_type(tp: Any) -> tuple[Any, str | None]:
         return str, "pin"
     if tp is type:
         return str, None
+    if is_typeddict(tp):
+        # A dict of fixed keys (a case_when branch): each key gets its YAML type.
+        keys = {k: _yaml_type(v)[0] for k, v in get_type_hints(tp).items()}
+        yaml_dict = TypedDict(tp.__name__, keys)  # type: ignore[misc]
+        yaml_dict.__pydantic_config__ = ConfigDict(extra="forbid")  # type: ignore[attr-defined]
+        return yaml_dict, None
     origin = get_origin(tp)
     if origin in (Union, types.UnionType):
         members: list[Any] = []

@@ -110,6 +110,16 @@ class ComparisonError(FleetError, ValueError):
     """
 
 
+class ComparisonFailed(ComparisonError):  # noqa: N818
+    """Raised by ``.compare(..., on_fail="raise")`` when the datasets differ.
+
+    This is the QC finding: the comparison ran and the result is NOT
+    EQUAL.  A comparison that could not run raises the parent
+    :class:`ComparisonError`, so ``except ComparisonFailed`` catches the
+    finding only.
+    """
+
+
 class TLGError(FleetError):
     """Raised when TLG namespace operations fail."""
 

@@ -28,7 +28,7 @@ import re
 import sys
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast, overload
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, TypedDict, cast, overload
 
 import polars as pl
 import yaml
@@ -37,7 +37,7 @@ from fleet.core import log as fleet_log
 from fleet.core.define_spec import DefineSpec, load_define_spec
 from fleet.core.dtc import date_part, datetime_part, refuse_number, to_day, warn_on_collect
 from fleet.core.exceptions import (
-    ComparisonError,
+    ComparisonFailed,
     DerivationError,
     SpecError,
     ValidationError,
@@ -69,6 +69,16 @@ _ON_FAIL_VALUES = ("warn", "raise", "ignore")
 
 #: Metadata attributes of a generated codelist class (``fleet.ct.generator``), not terms.
 _CODELIST_META = frozenset({"_concept_id", "_cdisc_url", "_preferred_term"})
+
+#: The keys of one ``case_when`` branch.
+_CASE_WHEN_KEYS = ("condition", "value")
+
+
+class CaseWhenBranch(TypedDict):
+    """One ``case_when`` branch: a condition and the value it gives."""
+
+    condition: str | pl.Expr
+    value: Any
 
 
 def _check_on_fail(verb: str, on_fail: str) -> None:
@@ -300,6 +310,24 @@ def _indent_yaml(text: str, spaces: int) -> str:
     return "\n".join(pad + ln if ln.strip() else ln for ln in text.rstrip().splitlines())
 
 
+#: Verbs that call ``to_frame()`` to hand the final frame on: the FK check runs.
+_TERMINAL_VERBS = frozenset({"to_dataset_json", "write_parquet", "validate", "compare"})
+
+#: Packages whose verbs collect a frame mid-chain.
+_VERB_PACKAGES = ("fleet.core.", "fleet.adam.", "fleet.sdtm.")
+
+
+def _is_internal_collect() -> bool:
+    """Whether the caller of ``to_frame()`` is a verb that collects mid-chain.
+
+    The foreign-key check reads the final frame only, so a verb such as
+    ``merge_adsl`` or ``count_events`` that collects to continue skips it.
+    """
+    frame = sys._getframe(2)  # skip this function and to_frame
+    module = str(frame.f_globals.get("__name__", ""))
+    return module.startswith(_VERB_PACKAGES) and frame.f_code.co_name not in _TERMINAL_VERBS
+
+
 def _verb_origin(klass: type) -> str:
     """Return the path a programmer types to reach the namespace *klass* defines.
 
@@ -476,10 +504,12 @@ class SharedVerbsMixin:
                 None,
             )
             if named is None:
-                raise
+                raise self._polars_error(err) from err
             raise DerivationError(named) from err
-        run_checks = getattr(self, "_run_pending_fk_checks", None)
-        if run_checks is not None:
+        except pl.exceptions.PolarsError as err:
+            raise self._polars_error(err) from err
+        run_checks = getattr(self, "_run_fk_checks", None)
+        if run_checks is not None and not _is_internal_collect():
             run_checks(df)
         join_checks = getattr(self, "_pending_join_checks", [])
         # Rebind, never mutate: earlier chain copies keep their own queue.
@@ -507,6 +537,16 @@ class SharedVerbsMixin:
                     srcs = ", ".join(node.sources) if node.sources else "literal"
                     lines.append(f"  - {node.name} ← {node.verb}({srcs})")
         return DerivationError("\n".join(lines))
+
+    def _polars_error(self, err: Exception) -> DerivationError:
+        """Wrap any other Polars collect error in a DerivationError that names the chain verbs."""
+        raw = str(err)
+        first_line = raw.splitlines()[0] if raw else type(err).__name__
+        verbs = list(dict.fromkeys(node.verb for node in getattr(self, "_lineage", [])))
+        shown = f" Verbs in the chain: {', '.join(verbs)}." if verbs else ""
+        return DerivationError(
+            f"Pipeline collection failed ({type(err).__name__}): {first_line.rstrip('.')}.{shown}"
+        )
 
     def to_dataset_json(
         self,
@@ -807,7 +847,6 @@ class SharedVerbsMixin:
             ct_validator=ct_validator,
             validate_values=validate_values,
             verb="assign",
-            fk=True,
         )
 
     def _assign_impl(
@@ -821,14 +860,19 @@ class SharedVerbsMixin:
         ct_validator: CTValidator | None = None,
         validate_values: bool | None = None,
         verb: str = "assign",
-        fk: bool = True,
     ) -> Self:
         """Implementation behind ``assign``.
 
         *verb* is recorded in lineage/errors (spec-driven runs attribute
-        the spec algorithm); *fk* controls the automatic foreign-key check.
+        the spec algorithm).
         """
-        if (source is None) == (value is None):
+        if source is None and value is None:
+            raise DerivationError(
+                f"{verb}('{target}'): pass exactly one of source= or value=. "
+                f"value=None is not a value: for a null column use "
+                f'derivation("{target}", expression=pl.lit(None).cast(pl.String)).'
+            )
+        if source is not None and value is not None:
             raise DerivationError(f"{verb}('{target}'): pass exactly one of source= or value=.")
         if value is not None and ct_map is not None:
             raise VerbUsageError(
@@ -875,8 +919,6 @@ class SharedVerbsMixin:
             ns = self._chain(pl.lit(value).alias(target), verb=verb, params=lineage_params)
             if target == "DOMAIN":
                 ns._domain = str(value)
-            if fk:
-                ns._auto_fk_check(target)
             return ns
 
         # ── source path ──
@@ -887,8 +929,6 @@ class SharedVerbsMixin:
                 {str(k): v for k, v in ct_map.items()}, default=text, return_dtype=pl.String
             )
             ns = self._chain(mapped.alias(target), verb=verb, params=lineage_params)
-            if fk:
-                ns._auto_fk_check(target)
             if validate_values is not False and ct_id:
                 if ct_validator is None:
                     from fleet.ct.validator import get_validator
@@ -909,8 +949,6 @@ class SharedVerbsMixin:
             return ns
 
         ns = self._chain(pl.col(source).alias(target), verb=verb, params=lineage_params)
-        if fk:
-            ns._auto_fk_check(target)
 
         if not ct_mode or validate_values is False:
             return ns
@@ -1014,33 +1052,44 @@ class SharedVerbsMixin:
         self,
         target: str,
         *,
-        when: list[dict[str, Any]],
+        when: list[CaseWhenBranch],
         else_: Any = None,
     ) -> Self:
         """Multi-branch conditional derivation (first matching branch wins).
 
-        The one canonical conditional verb.
+        The one canonical conditional verb.  A condition that is null
+        (``AGE < 65`` on a missing AGE) matches no branch, so the row
+        takes *else_*.  Write closed bands and keep *else_* for the
+        missing category.
 
         Args:
             target: Name of the output variable.
             when: Ordered list of ``{"condition": expr, "value": any}``
-                dicts.  ``condition`` may be a Polars expression or an
-                expression string.
-            else_: Fallback value when no branch matches.
+                dicts, with no other key.  ``condition`` may be a Polars
+                expression or an expression string.  Inline, ``value``
+                may be a Polars expression (a column value).
+            else_: Fallback value when no branch matches.  Inline, a
+                Polars expression is accepted.
 
         Returns:
             Self: The namespace with *target* appended; call
                 ``.to_frame()`` to materialise.
 
+        Raises:
+            DerivationError: When a branch has a key other than
+                ``condition`` and ``value``, or misses one of them.
+
         Examples:
-            Derive an age group::
+            Derive an age group, with closed bands and a missing
+            category::
 
                 adsl = (
                     dm_df.adam.adsl
                     .case_when("AGEGR1", when=[
                         {"condition": 'pl.col("AGE") < 65', "value": "<65"},
-                        {"condition": 'pl.col("AGE") < 75', "value": "65-74"},
-                    ], else_=">=75")
+                        {"condition": 'pl.col("AGE").is_between(65, 74)', "value": "65-74"},
+                        {"condition": 'pl.col("AGE") >= 75', "value": ">=75"},
+                    ], else_="Missing")
                     .to_frame()
                 )
         """
@@ -1062,14 +1111,37 @@ class SharedVerbsMixin:
         def _cond(raw: Any) -> pl.Expr:
             return raw if isinstance(raw, pl.Expr) else parse_expression(str(raw), schema)
 
+        def _value(raw: Any) -> pl.Expr:
+            return raw if isinstance(raw, pl.Expr) else pl.lit(raw)
+
+        for nr, branch in enumerate(when, start=1):
+            where = f"{verb}('{target}') branch {nr}"
+            if not isinstance(branch, dict):
+                raise DerivationError(
+                    f"{where}: a branch is a dict with condition and value, "
+                    f"got {type(branch).__name__}."
+                )
+            for key in branch:
+                if key in _CASE_WHEN_KEYS:
+                    continue
+                if key in ("else", "else_", "otherwise"):
+                    hint = "; else_ is a top-level argument."
+                else:
+                    close = difflib.get_close_matches(str(key), _CASE_WHEN_KEYS, n=1)
+                    hint = f". Did you mean '{close[0]}'?" if close else "."
+                raise DerivationError(f"{where}: unknown key '{key}'{hint}")
+            missing = [k for k in _CASE_WHEN_KEYS if k not in branch]
+            if missing:
+                raise DerivationError(f"{where}: missing key '{missing[0]}'.")
+
         params = {"target": target, "when": when, "else_": else_}
         if not when:
-            return self._chain(pl.lit(else_).alias(target), verb=verb, params=params)
+            return self._chain(_value(else_).alias(target), verb=verb, params=params)
         first = when[0]
-        chain = pl.when(_cond(first["condition"])).then(pl.lit(first["value"]))
+        chain = pl.when(_cond(first["condition"])).then(_value(first["value"]))
         for branch in when[1:]:
-            chain = chain.when(_cond(branch["condition"])).then(pl.lit(branch["value"]))
-        return self._chain(chain.otherwise(pl.lit(else_)).alias(target), verb=verb, params=params)
+            chain = chain.when(_cond(branch["condition"])).then(_value(branch["value"]))
+        return self._chain(chain.otherwise(_value(else_)).alias(target), verb=verb, params=params)
 
     def merge(
         self,
@@ -1193,6 +1265,7 @@ class SharedVerbsMixin:
             nulls_equal=True,
             coalesce=True if how == "full" else None,
             validate=validate or "m:m",
+            maintain_order="left_right" if how in ("left", "inner", "full") else None,
         )
         new = self._with_lazy(joined)
         if adds_columns:
@@ -1861,10 +1934,10 @@ class SharedVerbsMixin:
         """Derive a 1-based sequence number within each group.
 
         Generates a 1-based integer sequence that uniquely identifies each
-        record within a grouping partition.  The dataset is sorted by
-        *order_by* columns within each *by* partition before numbering
-        — ensuring deterministic, reproducible sequence values.  The
-        sort and the window numbering are appended to the lazy plan.
+        record within a grouping partition.  With *order_by*, the rows
+        are sorted by the *by* columns, then *order_by*, as PROC SORT
+        BY USUBJID AESTDTC, before numbering.  The sort and the window
+        numbering are appended to the lazy plan.
 
         Args:
             target: Name of the output sequence variable (e.g. ``"AESEQ"``,
@@ -1904,7 +1977,7 @@ class SharedVerbsMixin:
 
         lf = self._lazy
         if order_by:
-            lf = lf.sort(order_by, maintain_order=True)
+            lf = lf.sort(list(dict.fromkeys([*grps, *order_by])), maintain_order=True)
 
         if check_uniqueness and order_by:
             key_cols = grps + list(order_by)
@@ -1959,6 +2032,7 @@ class SharedVerbsMixin:
     def validate(
         self,
         dataset_or_domain: str,
+        *,
         version: str | None = None,
         rules_engine_path: Path | None = None,
         custom_rules: str | Path | None = None,
@@ -2180,7 +2254,7 @@ class SharedVerbsMixin:
             on_fail: What to do when the datasets differ — ``"warn"``
                 (default) emits a ``UserWarning`` and continues,
                 ``"raise"`` raises
-                :class:`~fleet.core.exceptions.ComparisonError`,
+                :class:`~fleet.core.exceptions.ComparisonFailed`,
                 ``"ignore"`` continues silently.
 
         Returns:
@@ -2188,9 +2262,10 @@ class SharedVerbsMixin:
                 ``last_comparison`` (for continued chaining).
 
         Raises:
-            ComparisonError: When the datasets differ and
-                ``on_fail="raise"``, or when the comparison cannot run
-                (a key missing, duplicated or of an incompatible type).
+            ComparisonFailed: When the datasets differ and
+                ``on_fail="raise"``.  A subclass of ``ComparisonError``.
+            ComparisonError: When the comparison cannot run (a key
+                missing, duplicated or of an incompatible type).
             DerivationError: On an invalid *on_fail* value.
 
         Examples:
@@ -2279,7 +2354,7 @@ class SharedVerbsMixin:
         new._last_comparison = report
         if not report.is_equal:
             summary = f"{report.summary}. Access details via .last_comparison."
-            _settle_on_fail(on_fail, summary, ComparisonError)
+            _settle_on_fail(on_fail, summary, ComparisonFailed)
         return new
 
     # ------------------------------------------------------------------ #
@@ -2969,7 +3044,9 @@ class SharedVerbsMixin:
         Returns:
             Self: A fresh namespace wrapping the (optionally deduplicated)
                 frame, carrying the duplicates in ``last_nodup_report``;
-                call ``.to_frame()`` to materialise.
+                call ``.to_frame()`` to materialise.  With *keep*, the rows
+                are always sorted by *subset*, then *sort_by*, as PROC SORT
+                NODUPKEY, also when no duplicate exists.
 
         Raises:
             DerivationError: If ``keep`` is set but ``sort_by`` is not
@@ -3009,6 +3086,17 @@ class SharedVerbsMixin:
 
         fleet_log.ensure_default_handler()
         df = self._lazy.collect()
+        if keep is not None:
+            # As PROC SORT NODUPKEY: always sort by the key, then sort_by, so the
+            # row order does not depend on whether a duplicate exists.  A missing
+            # value is lowest, as SAS (ADR-0023); ties keep input order.
+            flags = (
+                list(descending) if isinstance(descending, list) else [descending] * len(sort_by)
+            )
+            all_flags = [False] * len(subset) + flags
+            df = df.sort(
+                [*subset, *sort_by], descending=all_flags, nulls_last=all_flags, maintain_order=True
+            )
 
         # Detect duplicates
         dup_mask = df.select(pl.struct(subset).is_duplicated()).to_series()
@@ -3050,9 +3138,7 @@ class SharedVerbsMixin:
             new._nodup_report = dup_rows
             return new
 
-        # Sort then deduplicate: a missing value is lowest, as SAS (ADR-0023); ties keep input order.
-        flags = list(descending) if isinstance(descending, list) else [descending] * len(sort_by)
-        df = df.sort(sort_by, descending=flags, nulls_last=flags, maintain_order=True)
+        # Deduplicate the sorted frame.
         df = df.unique(subset=subset, keep=keep, maintain_order=True)
 
         logger.info(

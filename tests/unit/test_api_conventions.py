@@ -21,6 +21,8 @@ import fleet  # noqa: F401 — registers namespaces and loads all verb classes
 from fleet.adam._mixins import SharedADaMVerbsMixin
 from fleet.sdtm._tdd_mixin import TrialDesignMixin
 from fleet.sdtm.namespace import SDTMNamespace
+from fleet.tlg import NAMESPACE_CLASSES
+from fleet.tlg.namespace import TLGNamespace
 
 #: Method name → allowed count of positional (positional-only or
 #: positional-or-keyword) parameters after ``self``.  Default is 1.
@@ -33,11 +35,6 @@ _POSITIONAL_ALLOWANCE: dict[str, int] = {
     "repin": 2,
     # (dataset, path) — dataset selection plus optional output path.
     "to_spec_yaml": 2,
-    # (path/spec, dataset-ish) legacy two-positional readers.
-    "from_spec": 2,
-    # Largest legacy deviation: 6 positional-or-keyword params, shipped shape.
-    # Candidate for keyword-only tightening in a future deprecation cycle.
-    "validate": 6,
     # (paramcd, param) — the PARAMCD/PARAM pair is the target of a TTE param.
     "param": 2,
     # TDD multi-target verbs: the target is a column pair, both positional.
@@ -48,8 +45,14 @@ _POSITIONAL_ALLOWANCE: dict[str, int] = {
 
 
 def _namespace_classes() -> list[type]:
-    """Every verb-bearing class: SDTM, TDD, and all ADaM (sub)namespaces."""
-    classes: set[type] = {SDTMNamespace, TrialDesignMixin, SharedADaMVerbsMixin}
+    """Every verb-bearing class: SDTM, TDD, all ADaM (sub)namespaces and TLG."""
+    classes: set[type] = {
+        SDTMNamespace,
+        TrialDesignMixin,
+        SharedADaMVerbsMixin,
+        TLGNamespace,
+        *NAMESPACE_CLASSES.values(),
+    }
     stack = [SharedADaMVerbsMixin]
     while stack:
         for sub in stack.pop().__subclasses__():

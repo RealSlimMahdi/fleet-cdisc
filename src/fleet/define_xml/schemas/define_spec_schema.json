@@ -1351,10 +1351,9 @@
           "type": "string"
         },
         "when": {
-          "description": "Ordered list of ``{\"condition\": expr, \"value\": any}`` dicts.",
+          "description": "Ordered list of ``{\"condition\": expr, \"value\": any}`` dicts, with no other key.",
           "items": {
-            "additionalProperties": true,
-            "type": "object"
+            "$ref": "#/$defs/CaseWhenBranch"
           },
           "title": "When",
           "type": "array"
@@ -2979,6 +2978,24 @@
       "title": "ADAMWhereclausesSpec",
       "type": "object"
     },
+    "CaseWhenBranch": {
+      "additionalProperties": false,
+      "properties": {
+        "condition": {
+          "title": "Condition",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value"
+        }
+      },
+      "required": [
+        "condition",
+        "value"
+      ],
+      "title": "CaseWhenBranch",
+      "type": "object"
+    },
     "SDTMAeAerelSpec": {
       "additionalProperties": false,
       "properties": {
@@ -3096,10 +3113,9 @@
           "type": "string"
         },
         "when": {
-          "description": "Ordered list of ``{\"condition\": expr, \"value\": any}`` dicts.",
+          "description": "Ordered list of ``{\"condition\": expr, \"value\": any}`` dicts, with no other key.",
           "items": {
-            "additionalProperties": true,
-            "type": "object"
+            "$ref": "#/$defs/CaseWhenBranch"
           },
           "title": "When",
           "type": "array"

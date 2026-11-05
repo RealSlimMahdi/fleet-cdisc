@@ -16,7 +16,7 @@ observation on each side, and the outcome is a **comparison report**.
 Decision record: ``docs/adr/0002-own-comparison-engine-in-pure-polars.md``.
 """
 
-from fleet.core.exceptions import ComparisonError
+from fleet.core.exceptions import ComparisonError, ComparisonFailed
 
 from .engine import compare
 from .report import (
@@ -39,6 +39,7 @@ from .report import (
 __all__ = [
     "compare",
     "ComparisonError",
+    "ComparisonFailed",
     "ComparisonReport",
     "ComparisonSettings",
     "DatasetSummary",
