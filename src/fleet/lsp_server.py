@@ -32,6 +32,8 @@ without a running server.
 from __future__ import annotations
 
 import re
+from fnmatch import fnmatch
+from pathlib import PurePath
 from typing import Any, get_args
 
 import yaml
@@ -49,6 +51,16 @@ _STANDARDS = get_args(Standard)
 # ────────────────────────────────────────────────────────────────────── #
 # Pure helpers (no pygls dependency)                                      #
 # ────────────────────────────────────────────────────────────────────── #
+
+
+def is_define_yaml(path: str) -> bool:
+    """Return True when *path* names a spec file (``define*.yaml`` or ``.yml``).
+
+    Many LSP clients attach by file type, not by name, so the server gives
+    every other YAML file (``study_config.yaml``) an empty diagnostic list.
+    """
+    name = PurePath(path).name
+    return fnmatch(name, "define*.yaml") or fnmatch(name, "define*.yml")
 
 
 def _safe_load(text: str) -> dict[str, Any]:
@@ -478,11 +490,16 @@ def create_server():
         doc = ls.workspace.get_text_document(uri)
         if doc.version != version:
             return  # superseded by a newer edit
+        diagnostics = (
+            _to_lsp(doc.source, compute_diagnostics(doc.source, doc.path))
+            if is_define_yaml(doc.path)
+            else []
+        )
         ls.text_document_publish_diagnostics(
             types.PublishDiagnosticsParams(
                 uri=uri,
                 version=doc.version,
-                diagnostics=_to_lsp(doc.source, compute_diagnostics(doc.source, doc.path)),
+                diagnostics=diagnostics,
             )
         )
 

@@ -222,3 +222,19 @@ class TestStandardInference:
 
     def test_both_standards_when_nothing_says(self):
         assert infer_standards({}) == ("sdtm", "adam")
+
+
+@pytest.mark.parametrize(
+    ("path", "checked"),
+    [
+        ("/study/metadata/sdtm/define.yaml", True),
+        ("/study/metadata/adam/define_adam.yml", True),
+        ("/study/study_config.yaml", False),
+        ("/study/.github/workflows/ci.yml", False),
+    ],
+)
+def test_only_define_yaml_files_get_diagnostics(path, checked):
+    """c1-665: a client that attaches to every YAML file gets diagnostics only on define*.yaml."""
+    from fleet.lsp_server import is_define_yaml
+
+    assert is_define_yaml(path) is checked
