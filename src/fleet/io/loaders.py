@@ -267,8 +267,7 @@ def _load_r(file_path: Path, *, dataset_name: str | None = None, **kwargs) -> pl
         import pyreadr
     except ImportError as exc:
         raise ImportError(
-            "pyreadr is required for R file support. "
-            "Install it with: uv add pyreadr (or uv sync --extra clinical-io)"
+            "pyreadr is required for R file support. Install it with: uv add pyreadr"
         ) from exc
 
     result = pyreadr.read_r(str(file_path), **kwargs)

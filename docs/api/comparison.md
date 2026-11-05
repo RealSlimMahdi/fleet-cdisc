@@ -1,6 +1,6 @@
 # Comparison
 
-`fleet.compare` pairs a **candidate** dataset against a **base** on **keys**, matches variables by name and returns a comparison report; differences never raise. The `.compare()` verb on every namespace ([`SharedVerbsMixin`](core.md#sharedverbsmixin)) wraps it for pipelines, and `fleet compare` wraps it for the shell. See [Comparing Datasets](../concepts/comparison.md) for the rules of equality and the exit codes. A comparison that cannot run raises [`ComparisonError`][fleet.core.exceptions.ComparisonError], documented with the other [exceptions](core.md#exceptions).
+`fleet.compare` pairs a **candidate** dataset against a **base** on **keys**, matches variables by name and returns a comparison report; differences never raise. The `.compare()` verb on the SDTM and ADaM namespaces (`df.sdtm`, `df.adam` and its sub-namespaces, [`SharedVerbsMixin`](core.md#sharedverbsmixin); not `df.tlg`) wraps it for pipelines, and `fleet compare` wraps it for the shell. See [Comparing Datasets](../concepts/comparison.md) for the rules of equality and the exit codes. A comparison that cannot run raises [`ComparisonError`][fleet.core.exceptions.ComparisonError], documented with the other [exceptions](core.md#exceptions).
 
 ## compare
 

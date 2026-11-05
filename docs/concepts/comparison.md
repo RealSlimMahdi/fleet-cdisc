@@ -462,7 +462,7 @@ The verb speaks the same failure vocabulary as `.validate()`:
 | --- | --- |
 | `"warn"` (default) | Emit a `UserWarning` and continue the chain. |
 | `"raise"` | Raise `ComparisonError` (a `FleetError`). |
-| `"ignore"` | Continue silently; the report is still on `last_comparison`. |
+| `"ignore"` | No warning and no error. The report is still printed and stays on `last_comparison`. |
 
 ```python
 adsl = (

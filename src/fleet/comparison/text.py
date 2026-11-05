@@ -242,7 +242,7 @@ def _listing_section(report: ComparisonReport, limits: PrintLimits) -> list[str]
         lines.append(
             f"  (showing {shown.height} of {listing.height} unequal values; "
             f"limits: {_limit(limits.per_variable)} per variable, "
-            f"{_limit(limits.total)} overall; max_print=None prints all)"
+            f"{_limit(limits.total)} overall; max_print=None (CLI: --all) prints all)"
         )
     else:
         lines.append(f"  (showing all {listing.height} unequal values)")
