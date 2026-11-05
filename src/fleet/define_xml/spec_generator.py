@@ -128,6 +128,127 @@ def _row_steps_text(steps: list[dict[str, Any]]) -> str:
     return "Record selection, in derivation order: " + "; ".join(parts) + "."
 
 
+def _is_qualifier(var: dict[str, Any]) -> bool:
+    """A non-standard variable: ``role: qualifier`` or ``algorithm: nsv``."""
+    return var.get("role") == "qualifier" or (var.get("derivation") or {}).get("algorithm") == "nsv"
+
+
+def _supp_problems(
+    ds: dict[str, Any], qualifiers: list[dict[str, Any]], declared: set[str]
+) -> list[str]:
+    """Why the qualifiers of *ds* cannot move to a generated SUPP-- dataset."""
+    name = ds["name"]
+    names = {v["name"] for v in ds.get("variables", [])}
+    problems = [
+        f"{name}.{var} is not declared" for var in ("STUDYID", "USUBJID") if var not in names
+    ]
+    if name != "DM" and f"{name}SEQ" not in names:
+        problems.append(f"{name}.{name}SEQ (the IDVAR) is not declared")
+    if f"SUPP{name}" in declared:
+        problems.append("the spec also declares it (keep the qualifiers in one place)")
+    for var in qualifiers:
+        where = f"{name}.{var['name']}"
+        if len(var["name"]) > 8:
+            problems.append(f"{where}: a QNAM has at most 8 characters")
+        if len(var.get("label") or "") > 40:
+            problems.append(f"{where}: a QLABEL has at most 40 characters")
+        if var["name"] in (ds.get("keys") or []):
+            problems.append(f"{where} is a key of {name}")
+    return problems
+
+
+def _supp_dataset(ds: dict[str, Any], qualifiers: list[dict[str, Any]]) -> dict[str, Any]:
+    """The SUPP-- dataset entry that holds the qualifiers of *ds*, with value-level QVAL.
+
+    IDVAR is ``<DOMAIN>SEQ`` (null for DM), the rule of ``fleet run``.
+
+    References:
+        SDTMIG 3.4, section 8.4 (SUPPQUAL variables and keys); Define-XML 2.1,
+        example ``defineV21-SDTM.xml`` (SUPPAE, value-level metadata on QVAL
+        by QNAM); ADR-0044.
+    """
+    name = ds["name"]
+    parent = {v["name"]: v for v in ds["variables"]}
+    seq = parent.get(f"{name}SEQ")
+
+    def text(var: str, label: str, length: int | None, role: str, **extra: Any) -> dict[str, Any]:
+        entry = {"name": var, "label": label, "type": "text", "sdtm_role": role, **extra}
+        return entry if length is None else {**entry, "length": length}
+
+    def predecessor(var: str) -> dict[str, Any]:
+        source = parent[var]
+        return text(
+            var,
+            source["label"],
+            source.get("length"),
+            "Identifier",
+            origin="Predecessor",
+            predecessor=f"{name}.{var}",
+            mandatory=True,
+        )
+
+    def assigned(var: str, label: str, length: int, role: str, **extra: Any) -> dict[str, Any]:
+        return text(var, label, length, role, origin="Assigned", **extra)
+
+    if seq is not None:
+        idvar = assigned("IDVAR", "Identifying Variable", 8, "Identifier", comment=f"{name}SEQ")
+        idvarval = text(
+            "IDVARVAL",
+            "Identifying Variable Value",
+            seq.get("length") or 8,
+            "Identifier",
+            origin="Derived",
+            comment=f"The {name}SEQ value of the related {name} record, as text.",
+        )
+    else:
+        note = "Null: the qualifier applies to the subject."
+        idvar = assigned("IDVAR", "Identifying Variable", 8, "Identifier", comment=note)
+        idvarval = assigned("IDVARVAL", "Identifying Variable Value", 8, "Identifier", comment=note)
+
+    lengths = [q.get("length") for q in qualifiers]
+    origins = {(q.get("origin", "Derived"), q.get("origin_source")) for q in qualifiers}
+    origin, source = origins.pop() if len(origins) == 1 else ("Derived", None)
+    qval = text("QVAL", "Data Value", None, "Result Qualifier", origin=origin, mandatory=True)
+    qval["length"] = max(lengths) if None not in lengths else 200
+    if source:
+        qval["origin_source"] = source
+    keep = ("label", "type", "length", "significant_digits", "codelist", "origin")
+    keep += ("origin_source", "predecessor", "comment", "derivation", "crf_pages")
+    files: dict[str, Any] = {k: ds[k] for k in ("output_format",) if ds.get(k)}
+    if ds.get("output"):
+        output = Path(ds["output"])
+        files["output"] = str(output.with_name(f"supp{name.lower()}{output.suffix}"))
+    return {
+        "name": f"SUPP{name}",
+        "label": f"Supplemental Qualifiers for {name}",
+        "class": "RELATIONSHIP",
+        "structure": "One record per IDVAR, IDVARVAL, and QNAM value per subject",
+        "keys": ["STUDYID", "RDOMAIN", "USUBJID", "IDVAR", "IDVARVAL", "QNAM"],
+        **files,
+        "variables": [
+            predecessor("STUDYID"),
+            assigned("RDOMAIN", "Related Domain Abbreviation", 2, "Identifier", mandatory=True),
+            predecessor("USUBJID"),
+            idvar,
+            idvarval,
+            assigned("QNAM", "Qualifier Variable Name", 8, "Topic", mandatory=True),
+            assigned("QLABEL", "Qualifier Variable Label", 40, "Synonym Qualifier", mandatory=True),
+            qval,
+            assigned("QORIG", "Origin", 20, "Record Qualifier", mandatory=True),
+            assigned("QEVAL", "Evaluator", 40, "Record Qualifier"),
+        ],
+        "value_level": [
+            {
+                "where": {"variable": "QNAM", "value": q["name"]},
+                "variables": [
+                    {"name": "QVAL", "mandatory": True, **{k: q[k] for k in keep if k in q}}
+                ],
+            }
+            for q in qualifiers
+        ],
+    }
+
+
 def _strip_rest_markup(text: str) -> str:
     return _REST_MARKUP.sub(lambda m: next(g for g in m.groups() if g is not None), text)
 
@@ -195,6 +316,8 @@ class DefineSpecGenerator:
         self._value_list_refs: dict[str, str] = {}
         if validate_schema:
             self._validate()
+        #: Why a qualifier cannot move to SUPP--; _build_odm refuses the define.
+        self._qualifier_problems: list[str] = self._move_qualifiers_to_supp()
         # Resolve the CRF page map once (merges external page_map with
         # inline crf_pages; inline takes precedence).
         self._page_map: dict[str, dict[str, Any]] = self._load_page_map()
@@ -598,48 +721,69 @@ class DefineSpecGenerator:
                 "the reference."
             )
 
-    def _refuse_parent_qualifiers(self) -> None:
-        """Refuse an SDTMIG 3.4 (or earlier) spec with a qualifier in its parent domain.
+    def _move_qualifiers_to_supp(self) -> list[str]:
+        """Describe each SDTMIG 3.4 (or earlier) qualifier in a generated SUPP-- dataset.
 
         Up to SDTMIG 3.4, a non-standard variable goes to SUPP--, not to
-        the parent domain.  Fleet does not build SUPP-- metadata itself:
-        the spec author moves the variable to a declared SUPP-- dataset.
+        the parent domain.  The parent dataset of the spec may keep it for
+        the derivation (``fleet run`` writes it to ``SUPP<domain>``).  The
+        define then leaves it out of the parent and adds ``SUPP<domain>``,
+        with value-level metadata on QVAL by QNAM.
 
         References:
             SDTMIG 3.4, section 8.4 (Relating Non-Standard Variable Values
-            to a Parent Domain); ADR-0041.
+            to a Parent Domain); ADR-0041; ADR-0044.
+
+        Returns:
+            list[str]: Why a qualifier cannot move, one line per problem.
+                Empty when every qualifier moved.
+        """
+        study = self._data.get("study") or {}
+        if study.get("standard") != "SDTMIG":
+            return []
+        version = tuple(int(p) for p in str(study.get("standard_version")).split(".")[:2])
+        if version > (3, 4):
+            return []
+        datasets: list[dict[str, Any]] = self._data.get("datasets") or []
+        declared = {ds["name"] for ds in datasets}
+        problems: list[str] = []
+        result: list[dict[str, Any]] = []
+        for ds in datasets:
+            qualifiers = [] if ds["name"].startswith("SUPP") else ds.get("variables", [])
+            qualifiers = [v for v in qualifiers if _is_qualifier(v)]
+            result.append(ds)
+            if not qualifiers:
+                continue
+            found = _supp_problems(ds, qualifiers, declared)
+            if found:
+                problems.extend(f"SUPP{ds['name']}: {p}" for p in found)
+                continue
+            result[-1] = {**ds, "variables": [v for v in ds["variables"] if not _is_qualifier(v)]}
+            result.append(_supp_dataset(ds, qualifiers))
+        self._data["datasets"] = result
+        return problems
+
+    def _refuse_parent_qualifiers(self) -> None:
+        """Refuse a define with a qualifier that cannot move to SUPP--.
+
+        References:
+            SDTMIG 3.4, section 8.4; ADR-0041; ADR-0044.
 
         Raises:
-            SpecError: Naming each DATASET.VARIABLE and its SUPP-- dataset.
+            SpecError: Naming each problem and the fix.
         """
-        study = self._data["study"]
-        if study["standard"] != "SDTMIG":
-            return
-        version = tuple(int(p) for p in str(study["standard_version"]).split(".")[:2])
-        if version > (3, 4):
-            return
-        hits = [
-            (ds["name"], var["name"])
-            for ds in self._data.get("datasets", [])
-            if not ds["name"].startswith("SUPP")
-            for var in ds.get("variables", [])
-            if var.get("role") == "qualifier"
-            or (var.get("derivation") or {}).get("algorithm") == "nsv"
-        ]
-        if hits:
-            names = ", ".join(f"{ds}.{var}" for ds, var in hits)
-            supps = ", ".join(dict.fromkeys(f"SUPP{ds}" for ds, _ in hits))
+        if self._qualifier_problems:
             raise SpecError(
-                f"{self._path}: {names} has role qualifier (a non-standard variable). "
-                f"SDTMIG {study['standard_version']} puts it in {supps}, not in the parent "
-                f"domain. Declare {supps} in this spec, move the variable there, then "
-                "generate the Define-XML again."
+                f"{self._path}: a role qualifier (non-standard) variable cannot move to its "
+                f"SUPP-- dataset: {'; '.join(self._qualifier_problems)}. SDTMIG "
+                f"{self._data['study']['standard_version']} does not allow it in the parent "
+                "domain. Correct the spec, then generate the Define-XML again."
             )
 
     def _build_odm(self) -> ET.Element:
+        self._refuse_parent_qualifiers()
         self._validate_codelist_refs()
         self._validate_variable_refs()
-        self._refuse_parent_qualifiers()
         self._warn_predecessor_candidates()
         # Import the spec's derivations_module so short-name `callable:`
         # derivations are registered before their MethodDefs are resolved

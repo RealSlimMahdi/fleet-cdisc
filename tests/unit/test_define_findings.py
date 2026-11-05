@@ -238,15 +238,24 @@ def test_c1_561_trial_design_dm_and_adsl_defaults(tmp_path):
 # --------------------------------------------------------------------- #
 
 
-def _ae_with_qualifier(tmp_path, version: str) -> Path:
+def _ae_with_qualifier(tmp_path, version: str, *, seq: bool = True) -> Path:
     return _write(
         tmp_path,
         [
             _dataset(
                 "AE",
                 [
+                    _var("STUDYID", origin="Assigned"),
                     _var("USUBJID", origin="Assigned"),
-                    _var("AETRTEM", role="qualifier", evaluator="INVESTIGATOR", origin="Assigned"),
+                    *([_var("AESEQ", type="integer", origin="Assigned")] if seq else []),
+                    _var(
+                        "AETRTEM",
+                        label="Treatment Emergent Flag",
+                        length=1,
+                        role="qualifier",
+                        evaluator="INVESTIGATOR",
+                        origin="Assigned",
+                    ),
                 ],
             )
         ],
@@ -254,9 +263,95 @@ def _ae_with_qualifier(tmp_path, version: str) -> Path:
     )
 
 
-def test_c1_562_a_qualifier_in_the_parent_domain_is_refused_for_ig_3_4(tmp_path):
-    with pytest.raises(SpecError, match=r"AE\.AETRTEM has role qualifier.*SUPPAE"):
-        DefineSpecGenerator(_ae_with_qualifier(tmp_path, "3.4")).to_xml_string()
+def test_c1_562_a_qualifier_that_cannot_move_to_supp_is_refused_for_ig_3_4(tmp_path):
+    with pytest.raises(SpecError, match=r"cannot move.*SUPPAE: AE\.AESEQ \(the IDVAR\)"):
+        DefineSpecGenerator(_ae_with_qualifier(tmp_path, "3.4", seq=False)).to_xml_string()
+
+
+def test_c1_105_a_parent_qualifier_is_described_in_a_generated_supp_dataset(tmp_path):
+    root = _root(_ae_with_qualifier(tmp_path, "3.4"))
+    groups = _by_oid(root, f"{ODM}ItemGroupDef")
+    ae_refs = [r.get("ItemOID") for r in groups["IG.AE"].iter(f"{ODM}ItemRef")]
+    supp = groups["IG.SUPPAE"]
+    supp_refs = {r.get("ItemOID"): r.get("KeySequence") for r in supp.iter(f"{ODM}ItemRef")}
+    items = _by_oid(root, f"{ODM}ItemDef")
+    where = _by_oid(root, f"{DEF}WhereClauseDef")["WC.SUPPAE.QNAM.AETRTEM"]
+    value_list = _by_oid(root, f"{DEF}ValueListDef")["VL.SUPPAE.QVAL"]
+
+    assert ae_refs == ["IT.AE.STUDYID", "IT.AE.USUBJID", "IT.AE.AESEQ"]
+    assert (supp.get("Domain"), supp.find(f"{DEF}Class").get("Name")) == ("AE", "RELATIONSHIP")
+    assert supp_refs == {
+        "IT.SUPPAE.STUDYID": "1",
+        "IT.SUPPAE.RDOMAIN": "2",
+        "IT.SUPPAE.USUBJID": "3",
+        "IT.SUPPAE.IDVAR": "4",
+        "IT.SUPPAE.IDVARVAL": "5",
+        "IT.SUPPAE.QNAM": "6",
+        "IT.SUPPAE.QLABEL": None,
+        "IT.SUPPAE.QVAL": None,
+        "IT.SUPPAE.QORIG": None,
+        "IT.SUPPAE.QEVAL": None,
+    }
+    assert where.find(f"{ODM}RangeCheck").get(f"{DEF}ItemOID") == "IT.SUPPAE.QNAM"
+    assert [c.text for c in where.iter(f"{ODM}CheckValue")] == ["AETRTEM"]
+    assert value_list.find(f"{ODM}ItemRef").get("ItemOID") == "IT.SUPPAE.QVAL.AETRTEM"
+    qval = items["IT.SUPPAE.QVAL.AETRTEM"]
+    assert qval.find(f"{ODM}Description/{ODM}TranslatedText").text == "Treatment Emergent Flag"
+    assert qval.find(f"{DEF}Origin").get("Type") == "Assigned"
+    assert "IT.AE.AETRTEM" not in items
+
+
+def test_c1_105_dm_qualifiers_have_no_idvar(tmp_path):
+    path = _write(
+        tmp_path,
+        [
+            _dataset(
+                "DM",
+                [
+                    _var("STUDYID", origin="Assigned"),
+                    _var("USUBJID", origin="Assigned"),
+                    _var("COMPLT16", label="Completers of Week 16", length=1, role="qualifier"),
+                ],
+            )
+        ],
+        study=_study(standard="SDTMIG", standard_version="3.4"),
+    )
+    idvar = _by_oid(_root(path), f"{ODM}ItemDef")["IT.SUPPDM.IDVAR"]
+    text = idvar.find(f"{DEF}Origin/{ODM}Description/{ODM}TranslatedText").text
+    assert text == "Null: the qualifier applies to the subject."
+
+
+def test_c1_105_a_declared_supp_and_a_parent_qualifier_together_are_refused(tmp_path):
+    path = _ae_with_qualifier(tmp_path, "3.4")
+    spec = yaml.safe_load(path.read_text())
+    spec["datasets"].append(_dataset("SUPPAE", [_var("USUBJID", origin="Assigned")]))
+    path.write_text(yaml.safe_dump(spec, sort_keys=False), encoding="utf-8")
+    with pytest.raises(SpecError, match=r"SUPPAE: the spec also declares it"):
+        DefineSpecGenerator(path).to_xml_string()
+
+
+def test_c1_105_one_define_serves_run_define_xml_and_check(tmp_path):
+    path = _ae_with_qualifier(tmp_path, "3.4")
+    ae = pl.from_repr("""
+┌─────────┬─────────┬───────┬─────────┐
+│ STUDYID ┆ USUBJID ┆ AESEQ ┆ AETRTEM │
+│ ---     ┆ ---     ┆ ---   ┆ ---     │
+│ str     ┆ str     ┆ i64   ┆ str     │
+╞═════════╪═════════╪═══════╪═════════╡
+│ S01     ┆ S01-1   ┆ 1     ┆ Y       │
+└─────────┴─────────┴───────┴─────────┘
+""")
+    # What fleet run writes from the same define.
+    suppae = ae.sdtm.export_supp(spec=path, dataset="AE", idvar="AESEQ", domain="AE")
+    gen = DefineSpecGenerator(path, strict=True, import_study_code=False)  # as fleet check
+    items = _by_oid(ET.fromstring(gen.to_xml_string()), f"{ODM}ItemDef")
+
+    assert suppae.select("IDVAR", "QNAM", "QLABEL").row(0) == (
+        items["IT.SUPPAE.IDVAR"].find(f"{DEF}Origin/{ODM}Description/{ODM}TranslatedText").text,
+        "AETRTEM",
+        items["IT.SUPPAE.QVAL.AETRTEM"].find(f"{ODM}Description/{ODM}TranslatedText").text,
+    )
+    assert gen.leaf_hrefs()["SUPPAE"] == "suppae.parquet"
 
 
 def test_c1_562_a_supp_dataset_describes_its_parent_domain(tmp_path):

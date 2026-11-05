@@ -7,7 +7,7 @@ The alpha audit of 2 November 2026 (package define) found two dataset-level defa
 - **Repeating.** With no `repeating:` key, DM, ADSL and the trial design datasets (TA, TE, TV, TI, TS, TD, TM) are `Repeating="No"`. Every other dataset is `Repeating="Yes"`. `fleet init define` writes the same rule.
 - **IsReferenceData.** With no `is_reference_data:` key (a new dataset key), TA, TE, TV, TI, TS, TD, TM and a dataset of class `TRIAL DESIGN` are `IsReferenceData="Yes"`. Every other dataset is `No`.
 - **An explicit key wins** over both defaults.
-- **A qualifier in its parent domain is refused** (Mahdi, c1-562 B). For `standard: SDTMIG` and `standard_version` 3.4 or earlier, a variable with `role: qualifier` (or `algorithm: nsv`) in a dataset that is not SUPP-- gives a `SpecError` that names `AE.AETRTEM` and `SUPPAE`. The author declares SUPPAE and moves the variable there.
+- **A qualifier in its parent domain is refused** (Mahdi, c1-562 B). For `standard: SDTMIG` and `standard_version` 3.4 or earlier, a variable with `role: qualifier` (or `algorithm: nsv`) in a dataset that is not SUPP-- gives a `SpecError` that names `AE.AETRTEM` and `SUPPAE`. The author declares SUPPAE and moves the variable there. Changed by ADR-0044: the generator now moves such a variable to a generated `SUPPAE`, and refuses only a qualifier that cannot move.
 - **A SUPP-- dataset describes its parent.** A dataset named `SUPPAE` gets `Domain="AE"`, as in the official example.
 
 ## Considered options
@@ -18,7 +18,7 @@ The alpha audit of 2 November 2026 (package define) found two dataset-level defa
 
 ## Consequences
 
-- A spec that runs `export_supp(spec=...)` from `role: qualifier` variables in the parent dataset cannot give an SDTMIG 3.4 define from the same file. The define spec must hold SUPP-- datasets.
+- A spec that runs `export_supp(spec=...)` from `role: qualifier` variables in the parent dataset could not give an SDTMIG 3.4 define from the same file. ADR-0044 removes this conflict: the define describes the qualifier in a generated `SUPP<domain>` ItemGroupDef, so one define.yaml serves `fleet run`, `fleet define-xml` and `fleet check`. The refusal stays for a qualifier that cannot move (for example a parent with no `--SEQ`, or a declared `SUPP<domain>` as well). No qualifier is described as a parent-domain variable.
 - Specs that relied on the old `Repeating="Yes"` default for DM, ADSL or a trial design dataset now give `No`. Set `repeating: true` to keep the old value.
 
 ## References
