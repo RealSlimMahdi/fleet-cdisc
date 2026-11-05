@@ -671,3 +671,81 @@ class TestBoundaryRules:
 
         assert "TRTSDT" not in out.columns
         assert out["ASTDY"].to_list() == [-1, 1, 2]
+
+
+class TestUncoveredPaths:
+    """c1-86: tests for functions that had unexecuted lines."""
+
+    def test_t_abnormal_counts_only_on_treatment_records(self):
+        adlb = pl.from_repr("""\
+┌─────────┬──────┬─────────┬───────┬─────────┬────────┬────────┐
+│ USUBJID ┆ TRTA ┆ PARAMCD ┆ ABLFL ┆ ONTRTFL ┆ ANRIND ┆ BNRIND │
+│ ---     ┆ ---  ┆ ---     ┆ ---   ┆ ---     ┆ ---    ┆ ---    │
+│ str     ┆ str  ┆ str     ┆ str   ┆ str     ┆ str    ┆ str    │
+╞═════════╪══════╪═════════╪═══════╪═════════╪════════╪════════╡
+│ S1      ┆ A    ┆ ALT     ┆ Y     ┆ null    ┆ NORMAL ┆ NORMAL │
+│ S1      ┆ A    ┆ ALT     ┆ null  ┆ Y       ┆ HIGH   ┆ NORMAL │
+│ S2      ┆ A    ┆ ALT     ┆ Y     ┆ null    ┆ NORMAL ┆ NORMAL │
+│ S2      ┆ A    ┆ ALT     ┆ null  ┆ null    ┆ HIGH   ┆ NORMAL │
+└─────────┴──────┴─────────┴───────┴─────────┴────────┴────────┘
+""")
+        ard = adlb.with_columns(PARAM=pl.col("PARAMCD")).tlg.lb.t_abnormal(groupby="TRTA")
+
+        high = ard.filter(pl.col("variable_level") == "High")
+        stats = dict(zip(high["stat_name"], high["stat_fmt"], strict=True))
+        assert (stats["n"], stats["N"]) == ("1", "1")
+
+    def test_exists_after_flags_a_record_with_a_later_source_record(self):
+        advs = pl.from_repr("""\
+┌─────────┬─────┬──────┐
+│ USUBJID ┆ ADY ┆ AVAL │
+│ ---     ┆ --- ┆ ---  │
+│ str     ┆ i64 ┆ f64  │
+╞═════════╪═════╪══════╡
+│ S1      ┆ 1   ┆ 5.0  │
+│ S1      ┆ 8   ┆ 6.0  │
+│ S2      ┆ 1   ┆ 5.0  │
+└─────────┴─────┴──────┘
+""")
+        later = pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ ADY │
+│ ---     ┆ --- │
+│ str     ┆ i64 │
+╞═════════╪═════╡
+│ S1      ┆ 5   │
+└─────────┴─────┘
+""")
+        out = advs.adam.flag(
+            "AFTFL",
+            criteria="exists_after",
+            from_dataset=later,
+            on=["USUBJID"],
+            condition=pl.col("AVAL") > 0,
+            order_by="ADY",
+        ).to_frame()
+
+        assert out["AFTFL"].to_list() == ["Y", None, None]
+
+    def test_partial_dates_impute_from_a_literal_and_from_a_column(self):
+        from fleet.adam.utils import impute_dtc_to_date
+
+        dm = pl.from_repr("""\
+┌─────────┬────────────┐
+│ DTC     ┆ REF        │
+│ ---     ┆ ---        │
+│ str     ┆ date       │
+╞═════════╪════════════╡
+│ 2021-03 ┆ 2020-07-20 │
+│ 2021    ┆ 2020-07-20 │
+└─────────┴────────────┘
+""")
+        out = dm.select(
+            impute_dtc_to_date(
+                "DTC", "LIT", day_imputation="2024-06-15", month_imputation="2024-06-15"
+            ),
+            impute_dtc_to_date("DTC", "COL", day_imputation="REF", month_imputation="REF"),
+        )
+
+        assert out["LIT"].to_list() == [date(2021, 3, 15), date(2021, 6, 15)]
+        assert out["COL"].to_list() == [date(2021, 3, 20), date(2021, 7, 20)]
