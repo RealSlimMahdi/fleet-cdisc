@@ -61,16 +61,27 @@ raw_dm = pl.from_repr("""
 """)
 
 raw_vs = pl.from_repr("""
-┌────────────┬────────────┬────────┬────────────┐
-│ subject_id ┆ test_name  ┆ result ┆ date       │
-│ ---        ┆ ---        ┆ ---    ┆ ---        │
-│ str        ┆ str        ┆ f64    ┆ str        │
-╞════════════╪════════════╪════════╪════════════╡
-│ S001       ┆ Weight     ┆ 80.5   ┆ 2023-01-01 │
-│ S001       ┆ Heart Rate ┆ 72.0   ┆ 2023-01-01 │
-│ S002       ┆ Weight     ┆ 65.0   ┆ 2023-01-02 │
-│ S002       ┆ Heart Rate ┆ 88.0   ┆ 2023-01-02 │
-└────────────┴────────────┴────────┴────────────┘
+┌────────────┬────────────┬────────┬────────────┬───────┬───────┐
+│ subject_id ┆ test_name  ┆ result ┆ date       ┆ low   ┆ high  │
+│ ---        ┆ ---        ┆ ---    ┆ ---        ┆ ---   ┆ ---   │
+│ str        ┆ str        ┆ f64    ┆ str        ┆ f64   ┆ f64   │
+╞════════════╪════════════╪════════╪════════════╪═══════╪═══════╡
+│ S001       ┆ Weight     ┆ 80.5   ┆ 2023-01-01 ┆ null  ┆ null  │
+│ S001       ┆ Heart Rate ┆ 72.0   ┆ 2023-01-01 ┆ 60.0  ┆ 100.0 │
+│ S002       ┆ Weight     ┆ 65.0   ┆ 2023-01-02 ┆ null  ┆ null  │
+│ S002       ┆ Heart Rate ┆ 108.0  ┆ 2023-01-02 ┆ 60.0  ┆ 100.0 │
+└────────────┴────────────┴────────┴────────────┴───────┴───────┘
+""")
+
+raw_ex = pl.from_repr("""
+┌────────────┬────────────┬────────────┐
+│ subject_id ┆ start      ┆ end        │
+│ ---        ┆ ---        ┆ ---        │
+│ str        ┆ str        ┆ str        │
+╞════════════╪════════════╪════════════╡
+│ S001       ┆ 2023-01-01 ┆ 2023-03-01 │
+│ S002       ┆ 2023-01    ┆ 2023-03-02 │
+└────────────┴────────────┴────────────┘
 """)
 
 raw_ae = pl.from_repr("""
@@ -102,6 +113,36 @@ dm = (
 )
 ```
 
+A `--DTC` column is text (`pl.String`) in ISO 8601. `.date()` keeps a
+partial value partial (`2023-01`) and never guesses the day (SDTMIG 3.4
+section 4.4). A `*DT` target (`TRTSDT`) is a `pl.Date`.
+
+### EX (Exposure) and the reference dates
+
+```python
+ex = (
+    raw_ex.sdtm.assign("STUDYID", value="STUDY01")
+    .assign("DOMAIN", value="EX")
+    .assign("USUBJID", source="subject_id")
+    .date("EXSTDTC", source="start")
+    .date("EXENDTC", source="end")
+    .to_frame()
+)
+```
+
+`RFXSTDTC` and `RFXENDTC` are the first and last exposure dates in EX. The
+subject-level verbs `first_date` and `last_date` take them from EX. On a
+`*DTC` target they keep the text of the earliest (or latest) record. A
+partial value is left out with a warning, so S002 gets no `RFXSTDTC`:
+
+```python
+dm = (
+    dm.adam.adsl.first_date("RFXSTDTC", from_dataset=ex, date_col="EXSTDTC")
+    .last_date("RFXENDTC", from_dataset=ex, date_col="EXENDTC")
+    .to_frame()
+)
+```
+
 ### VS (Vital Signs) — with a cross-domain pin
 
 `study_day()` needs DM's `RFSTDTC`; instead of merging DM in, **pin** it —
@@ -119,6 +160,8 @@ vs = (
         ct_map={"Weight": "WEIGHT", "Heart Rate": "HR"},
     )
     .assign("VSSTRESN", source="result")
+    .assign("VSSTNRLO", source="low")
+    .assign("VSSTNRHI", source="high")
     .date("VSDTC", source="date")
     .pin("DM", dm)
     .study_day("VSDY", date_col="VSDTC")  # resolves DM.RFSTDTC via the pin
@@ -145,17 +188,25 @@ ae = (
 
 ### ADSL (Subject-Level Analysis)
 
+`TRTSDT` is the date of first exposure, so it comes from EX, not from
+another domain (ADaMIG 1.3, ADSL). The EX start of S002 is partial. With
+`impute="first"` (the rule of the SAP) `first_date` imputes the day and
+writes `TRTSDTF`; with no `impute=` the partial value is left out:
+
 ```python
 adsl = (
     dm.adam.adsl.source("STUDYID", "USUBJID", "ARM", "SEX")
     .assign("TRT01P", source="ARM")
-    .date("TRTSDT", source="RFSTDTC")
-    .first_date("AESTDT", from_dataset=ae, date_col="AESTDTC")  # first AE date
+    .first_date("TRTSDT", from_dataset=ex, date_col="EXSTDTC", impute="first")
+    .last_date("TRTEDT", from_dataset=ex, date_col="EXENDTC")
     .to_frame()
 )
 ```
 
 ### ADVS (BDS) — pin ADSL, carry columns, derive baseline
+
+`BNRIND` is the `ANRIND` of the baseline record. `baseline()` carries any
+column, text included:
 
 ```python
 advs = (
@@ -163,9 +214,13 @@ advs = (
     .source("STUDYID", "USUBJID", "VSTESTCD")
     .assign("PARAMCD", source="VSTESTCD")
     .assign("AVAL", source="VSSTRESN")
+    .assign("ANRLO", source="VSSTNRLO")
+    .assign("ANRHI", source="VSSTNRHI")
+    .nrind("ANRIND", value="AVAL", low="ANRLO", high="ANRHI")
     .join_adsl("TRT01P", "TRTSDT")  # carry forward on the ADSL pin's key
     .flag("ABLFL", criteria='pl.col("VSDY") <= 1', by=["USUBJID", "PARAMCD"])
     .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
+    .baseline("BNRIND", aval="ANRIND", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
     .chg("CHG", aval="AVAL", base="BASE")
     .to_frame()
 )
@@ -188,17 +243,19 @@ advs_ns = (
 ```
 
 ```text
-Variable trail (5 derivation(s)):
-┌───┬──────────┬───────────┬───────────────────────────┬────────┐
-│ # ┆ Variable ┆ Verb      ┆ Origin                    ┆ Domain │
-╞═══╪══════════╪═══════════╪═══════════════════════════╪════════╡
-│ 1 ┆ STUDYID  ┆ source    ┆ STUDYID                   ┆ ADVS   │
-│ 2 ┆ USUBJID  ┆ source    ┆ USUBJID                   ┆ ADVS   │
-│ 3 ┆ VSTESTCD ┆ source    ┆ VSTESTCD                  ┆ ADVS   │
-│ 4 ┆ AVAL     ┆ assign    ┆ VSSTRESN                  ┆ ADVS   │
-│ 5 ┆ TRTSDT   ┆ join_adsl ┆ ADSL.TRTSDT [carry_forward] ┆ ADVS │
-└───┴──────────┴───────────┴───────────────────────────┴────────┘
+Variable trail (4 derivation(s)):
+┌───┬──────────┬────────┬──────────┐
+│ # ┆ Variable ┆ Verb   ┆ Origin   │
+╞═══╪══════════╪════════╪══════════╡
+│ 1 ┆ STUDYID  ┆ source ┆ STUDYID  │
+│ 2 ┆ USUBJID  ┆ source ┆ USUBJID  │
+│ 3 ┆ VSTESTCD ┆ source ┆ VSTESTCD │
+│ 4 ┆ AVAL     ┆ assign ┆ VSSTRESN │
+└───┴──────────┴────────┴──────────┘
 ```
+
+`join_adsl` does not record a trail row yet: the pin itself is recorded,
+and `TRTSDT` does not show in this table.
 
 This is the machine-checkable answer to "where did this number come from" —
 the same lineage feeds `to_spec_yaml()` (pipeline → define.yaml round-trip)
@@ -209,6 +266,8 @@ and the Define-XML method descriptions.
 Validation is a **verb** — chain `.validate()` right where the dataset is
 born and the CDISC Rules Engine report prints without breaking the pipeline
 (`fleet install-engine` once, first). Revisiting the AE chain from step 3:
+
+<!-- docs:no-run -->
 
 ```python
 ae = (
@@ -228,15 +287,36 @@ ae = (
 ======================================================================
 CDISC Validation Report: AE
 ======================================================================
+Standard:     SDTMIG (namespace)
+IG version:   3.4 (default)
+...
 Dataset Type: sdtmig v3.4
-Status: PASS
-Total Issues: 0
+Status: FAIL
+Rules (engine run, official): 75 executed, 340 skipped, 15 could not run
+Total Issues: 19
+  Errors: 17, Warnings (accepted): 0, Info: 2
 ----------------------------------------------------------------------
+
+ERRORS (9 unique, 17 total):
+
+1. [CORE-000182] (official) Variable name length is greater than 8.
+   Variable: variable_name
+...
+3. [CORE-000355] (official) At least one required variable is missing from dataset
+   Variable: AESEQ, AETERM
+...
 ```
+
+This is a real run (CORE 0.15.0). The toy AE has no `AESEQ` and no
+`AETERM`, and it keeps the raw columns (`subject_id` is longer than 8
+characters), so CORE reports them. The report is a warning: the chain
+continues.
 
 For a CI pipeline, make compliance a hard gate — `on_fail="raise"` turns
 a finding that `validation.accepted` does not list into a `ValidationError`
 instead of a warning:
+
+<!-- docs:no-run -->
 
 ```python
 adsl = (
@@ -286,6 +366,8 @@ text, or a numeric variable with no `length:`).
 The same define.yaml files describe the dependency graph. Fleet gives it as
 data that an orchestrator can read. Fleet does not write a Snakefile or an
 Airflow DAG file: each step of a study run is `fleet run --dataset ...`.
+
+<!-- docs:no-run -->
 
 ```python
 from fleet import build_dag

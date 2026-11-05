@@ -410,3 +410,55 @@ def test_no_run_marker_is_respected():
     runnable = [b for lang, b, run in blocks if run]
     assert len(runnable) == 1
     assert "x = 1" in runnable[0]
+
+
+def _run_page(rel_path: str, tmp_path, monkeypatch) -> tuple[dict, int]:
+    """Run every python block of a docs page that is not marked no-run, in an empty folder.
+
+    Indented fences (generated-file samples inside list items) are output, not code.
+    The pilot ``codelists.py`` stands in for the study one.
+    """
+    text = (REPO_ROOT / "docs" / rel_path).read_text(encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.syspath_prepend(str(REPO_ROOT / "examples" / "cdiscpilot01" / "sdtm"))
+    ns: dict = {}
+    ran = 0
+    for lang, body, run in _iter_blocks(text):
+        if run and lang == "python" and not body[:1].isspace():
+            exec(compile(body, f"<{rel_path}>", "exec"), ns)  # noqa: S102 — trusted doc source
+            ran += 1
+    return ns, ran
+
+
+def test_ct_page_blocks_execute(tmp_path, monkeypatch):
+    """c1-640: the CT validation example of docs/api/ct.md runs and warns as the page shows."""
+    ns, ran = _run_page("api/ct.md", tmp_path, monkeypatch)
+    assert ran == 1
+    messages = [str(w.message) for w in ns["caught"]]
+    assert messages[0].startswith("SEX: column 'sex' contains values not in codelist 'C66731'")
+    assert messages[1].startswith("Value 'YRS' not in codelist 'C66781'")
+
+
+def test_troubleshooting_page_blocks_execute(tmp_path, monkeypatch, capsys):
+    """c1-668 c1-669: the debug snippets of troubleshooting.md run; no private attribute."""
+    ns, ran = _run_page("getting-started/troubleshooting.md", tmp_path, monkeypatch)
+    assert ran == 2
+    assert ns["debug_df"].columns == ["patient_id", "DOMAIN"]
+    out = capsys.readouterr().out
+    assert 'col("patient_id").alias("USUBJID")' in out
+    assert "Variable trail (2 derivation(s))" in out
+
+
+def test_full_pipeline_page_blocks_execute(tmp_path, monkeypatch):
+    """c1-594: reference dates from EX, a partial date, BNRIND and the --DTC type, as the page shows."""
+    import fleet.ct
+
+    monkeypatch.setattr(fleet.ct, "import_codelists", lambda *a, **k: None)
+    ns, ran = _run_page("examples/full_pipeline.md", tmp_path, monkeypatch)
+    assert ran == 9
+    assert ns["ex"]["EXSTDTC"].dtype == pl.String
+    assert ns["dm"]["RFXSTDTC"].to_list() == ["2023-01-01", None]
+    adsl = ns["adsl"]
+    assert adsl["TRTSDT"].cast(pl.String).to_list() == ["2023-01-01", "2023-01-01"]
+    assert adsl["TRTSDTF"].to_list() == [None, "D"]
+    assert ns["advs"]["BNRIND"].to_list() == [None, "NORMAL", None, "HIGH"]
