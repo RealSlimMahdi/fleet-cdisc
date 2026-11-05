@@ -15,6 +15,9 @@ e.g. ``df.sdtm.verbs()``, for the always-current catalogue):
   - ``df.adam.vaccine``   — Vaccine (admiralvaccine)
   - ``df.adam.metabolic`` — Metabolic (admiralmetabolic)
   - ``df.adam.neuro``     — Neuroscience (admiralneuro)
+  - ``df.adam.pk``        — Pharmacokinetics (ADPC, ADPP)
+  - ``df.adam.tte``       — Time-to-event (ADTTE)
+  - ``df.tlg``            — Tables, listings and their ARDs (``df.tlg.ae``, …)
 
 The ``sdtm``, ``adam``, ``adsl``, and ``occds`` namespaces are also
 registered on ``pl.LazyFrame``, so ``pl.scan_parquet(...).sdtm`` chains

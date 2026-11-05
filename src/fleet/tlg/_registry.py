@@ -441,7 +441,7 @@ def register_template(meta: TemplateMeta, fn: TemplateFunc) -> TemplateMeta:
                     cdisc_class=tlg.CDISCClass.EVENTS, namespace="ae",
                     method="my_shell", output_type=tlg.OutputType.TABLE,
                     domains=("ADSL", "ADAE"), source_ref="sponsor",
-                    status=tlg.Status.DONE,
+                    status=tlg.Status.DONE, spec_cls=tlg.AESummarySpec,
                 ),
                 my_shell,
             )

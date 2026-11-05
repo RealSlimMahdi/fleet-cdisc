@@ -37,7 +37,10 @@ from ._registry import (
     OutputType,
     Status,
     TemplateMeta,
+    by_class,
+    by_namespace,
     catalog,
+    get,
     register_template,
     unregister_template,
 )
@@ -178,6 +181,9 @@ __all__ = [
     "OutputType",
     "Status",
     "catalog",
+    "get",
+    "by_class",
+    "by_namespace",
     "register_template",
     "unregister_template",
     # YAML workflow

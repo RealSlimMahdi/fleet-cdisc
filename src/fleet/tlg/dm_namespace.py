@@ -18,6 +18,7 @@ from ._ard import (
 )
 from ._ard import (
     expand_pools,
+    nan_to_null,
     prepare_frame,
     restrict_to_population,
     summarize_ard,
@@ -35,8 +36,10 @@ from ._specs import (
     SummarySpecBase,
 )
 
-#: Statistics describing a continuous variable (e.g. age).
+#: Statistics describing a continuous variable (e.g. age), n first as
+#: PROC MEANS N and tern ``analyze_vars``.
 _CONTINUOUS_STATS: list[Statistic] = [
+    Statistic.N_SUBJECTS,
     Statistic.MEAN,
     Statistic.SD,
     Statistic.MEDIAN,
@@ -52,27 +55,38 @@ class DMSummarySpec(SummarySpecBase):
     demographics table mixing continuous age statistics with categorical
     breakdowns of sex, race, ethnicity and age group.  A subject with a
     null category value counts in a ``"Missing"`` row, last in the
-    block (``missing``).  The default arm is the ADSL arm: ``TRT01A``,
+    block (``missing``).  Each continuous block starts with n, the count
+    of subjects with a value.  The default arm is the ADSL arm: ``TRT01A``,
     else ``TRT01P`` when ADSL has no ``TRT01A``.  Each field's
     ``description`` documents it (rendered by mkdocstrings) — a docstring
     ``Args:`` section would duplicate them and confuse griffe, since
-    Pydantic fields are not ``__init__`` parameters.
+    Pydantic fields are not ``__init__`` parameters.  ``rows`` and
+    ``value_col`` do not apply: set ``categorical_vars`` and
+    ``continuous_vars``.
 
     References:
         ADaMIG 1.3, section 3.1.4: ADSL carries the arm as TRTxxP and
         TRTxxA; TRTA and TRTP are BDS and OCCDS variables.  ADR-0046.
+        tern ``analyze_vars`` and SAS PROC MEANS N (n row); ADR-0055.
     """
 
     context: ClassVar[str] = "t_dm_summary"
     arm_fallback: ClassVar[tuple[str, ...]] = ADSL_ARM_FALLBACK
+    _unconsumed_spec_fields: ClassVar[frozenset[str]] = frozenset({"rows", "value_col"})
 
     missing: MissingLevel | None = Field(
         default_factory=lambda: MissingLevel(columns=["SEX", "AGEGR1", "RACE", "ETHNIC"]),
     )
 
-    age_var: str = Field(
-        default="AGE",
-        description="Continuous age column to summarise (``AGE`` or ``AAGE``).",
+    continuous_vars: dict[str, str] = Field(
+        default_factory=lambda: {"AGE": "Age (yr)"},
+        description=(
+            "Continuous columns to summarise, each with its block label "
+            '(e.g. ``{"AGE": "Age (yr)", "HEIGHTBL": "Height (cm)"}``).  '
+            "Each block shows n, Mean, SD, Median, Min and Max.  Every "
+            "column must be in ADSL.  Set inline via "
+            "[`TLGBuilder.continuous()`][fleet.tlg.TLGBuilder.continuous]."
+        ),
     )
     categorical_vars: list[str] = Field(
         default_factory=lambda: ["SEX", "AGEGR1", "RACE", "ETHNIC"],
@@ -94,8 +108,11 @@ class DMSummarySpec(SummarySpecBase):
         ),
     )
     required_columns: list[str] = Field(
-        default_factory=lambda: ["USUBJID", "TRT01A", "AGE", "SEX"],
-        description="Columns required in the analysis dataset for this spec.",
+        default_factory=lambda: ["USUBJID", "TRT01A", "SEX"],
+        description=(
+            "Columns required in the analysis dataset for this spec.  The "
+            "columns of ``continuous_vars`` are required too."
+        ),
     )
 
 
@@ -128,9 +145,10 @@ class DMTLGNamespace(BuilderVerbsMixin):
     ) -> pl.DataFrame:
         """Produce a demographic summary ARD (Analysis Results Dataset).
 
-        Computes big-N from *adsl* (or the primary DataFrame), continuous
-        statistics for the age variable, then categorical n (%) for sex,
-        age group, race and ethnicity.
+        Computes big-N from *adsl* (or the primary DataFrame), categorical
+        n (%) for sex, age group, race and ethnicity, then one block of
+        n, Mean, SD, Median, Min and Max per ``continuous_vars`` entry
+        (default age).
 
         Args:
             groupby: Treatment arm column name.  Overrides
@@ -155,6 +173,28 @@ class DMTLGNamespace(BuilderVerbsMixin):
 
         # --- Validation ---
         spec.validate_dataframe(self._df, group_col=group_col)
+        absent = [v for v in spec.continuous_vars if v not in self._df.columns]
+        if absent:
+            raise SchemaError(
+                f"continuous_vars {absent} are not in the analysis dataset. "
+                f"Available: {sorted(self._df.columns)}"
+            )
+        not_numeric = [v for v in spec.continuous_vars if not self._df[v].dtype.is_numeric()]
+        if not_numeric:
+            v = not_numeric[0]
+            raise SchemaError(
+                f"Continuous statistics need a numeric {v}; {v} is "
+                f"{self._df[v].dtype}. Cast it: pl.col('{v}').cast(pl.Float64)"
+            )
+        count_stats = (Statistic.N_SUBJECTS, Statistic.N_PCT, Statistic.N_EVENTS)
+        cont_stats = [s for s in spec.statistics if s not in count_stats]
+        if cont_stats:
+            raise SchemaError(
+                f"DM statistics {[s.value for s in cont_stats]} do not apply: "
+                "statistics set the categorical rows (counts), and each "
+                "continuous_vars block (age) always shows n, Mean, SD, Median, "
+                "Min and Max. Remove them."
+            )
 
         # For demographics the analysis dataset IS the population, so the
         # population filter applies to numerators and continuous stats
@@ -190,48 +230,38 @@ class DMTLGNamespace(BuilderVerbsMixin):
             adsl_group_col=spec.adsl_group_col,
         )
 
-        # --- Continuous age statistics ---
+        # --- Continuous statistics, one block per continuous_vars entry ---
         df = expand_pools(analysis_df, spec.pools, group_col, strict=False)
+        df = df.with_columns(pl.col(group_col).cast(pl.Utf8))
 
         # Same arm universe (and order) as the engine's big-N rows, so an
-        # arm without analysis records keeps its column in the age block.
+        # arm without analysis records keeps its column in the block.
         arms = cat_ard.filter(pl.col("stat_name") == "N")["group1_level"].to_list()
 
-        age_var = spec.age_var if spec.age_var in df.columns else None
-        if age_var is None:
-            if not spec.uses_default("age_var"):
-                raise SchemaError(
-                    f"age_var '{spec.age_var}' is not in the analysis dataset. "
-                    f"Available: {sorted(df.columns)}"
-                )
-            return cat_ard
-        if not df[age_var].dtype.is_numeric():
-            raise SchemaError(
-                f"Age statistics need a numeric {age_var}; {age_var} is "
-                f"{df[age_var].dtype}. Cast it: pl.col('{age_var}').cast(pl.Float64)"
-            )
-
         fmt = spec.decimals or {}
-        age_rows: list[dict[str, Any]] = []
-        for arm in arms:
-            ages = df.filter(pl.col(group_col) == arm)[age_var]
-            for stat_type in _CONTINUOUS_STATS:
-                stat_name, stat_label, value = _continuous_stat(stat_type, ages)
-                age_rows.append(
-                    _ard_row(
-                        group_col,
-                        arm,
-                        age_var,
-                        spec.category_labels.get(age_var, "Age (yr)"),
-                        stat_name,
-                        stat_label,
-                        value,
-                        spec.context,
-                        fmt_fn=fmt.get(stat_name),
+        cont_rows: list[dict[str, Any]] = []
+        for var, label in spec.continuous_vars.items():
+            values_df = nan_to_null(df, var)
+            for arm in arms:
+                values = values_df.filter(pl.col(group_col) == arm)[var]
+                for stat_type in _CONTINUOUS_STATS:
+                    stat_name, stat_label, value = _continuous_stat(stat_type, values)
+                    cont_rows.append(
+                        _ard_row(
+                            group_col,
+                            arm,
+                            var,
+                            label,
+                            stat_name,
+                            stat_label,
+                            value,
+                            spec.context,
+                            fmt_fn=fmt.get(stat_name),
+                        )
                     )
-                )
-
-        return pl.concat([cat_ard, _rows_to_ard(age_rows)], how="vertical_relaxed")
+        if not cont_rows:
+            return cat_ard
+        return pl.concat([cat_ard, _rows_to_ard(cont_rows)], how="vertical_relaxed")
 
     # ------------------------------------------------------------------ #
     # Pre-validation diagnostic                                            #
@@ -262,16 +292,26 @@ class DMTLGNamespace(BuilderVerbsMixin):
         diagnostics = spec.check(self._df, group_col=groupby)
 
         available = set(self._df.columns)
-        if spec.age_var not in available:
-            diagnostics.append(
-                f"WARNING: Age column '{spec.age_var}' not present — "
-                "age statistics will be skipped."
-            )
+        for var in spec.continuous_vars:
+            if var not in available:
+                diagnostics.append(
+                    f"MISSING CONTINUOUS COLUMN: '{var}' (continuous_vars) not present — "
+                    "the table stops."
+                )
         for field in spec.categorical_vars:
             if field not in available:
                 diagnostics.append(
                     f"WARNING: Column '{field}' not present — "
                     f"'{spec.category_labels.get(field, field)}' breakdown will be skipped."
+                )
+        # ADSL has one record per subject; a duplicate weights the mean.
+        group_col = groupby or spec.default_group_col(self._df.columns)
+        if {"USUBJID", group_col} <= available:
+            dup = self._df.group_by(["USUBJID", group_col]).len().filter(pl.col("len") > 1)
+            if dup.height:
+                diagnostics.append(
+                    f"ERROR: ADSL has {dup.height} duplicate USUBJID + {group_col} "
+                    "record(s); the table stops. ADSL has one record per subject."
                 )
         return diagnostics
 
@@ -290,6 +330,7 @@ def _continuous_stat(
         Tuple of (stat_name, stat_label, value).
     """
     names: dict[Statistic, tuple[str, str]] = {
+        Statistic.N_SUBJECTS: ("n", "n"),
         Statistic.MEAN: ("mean", "Mean"),
         Statistic.SD: ("sd", "SD"),
         Statistic.MEDIAN: ("median", "Median"),
@@ -298,6 +339,8 @@ def _continuous_stat(
     }
     name, label = names.get(stat_type, (stat_type.value, stat_type.value))
     clean = values.drop_nulls()
+    if stat_type == Statistic.N_SUBJECTS:
+        return (name, label, len(clean))
     if len(clean) == 0:
         return (name, label, None)
     if stat_type == Statistic.MEAN:

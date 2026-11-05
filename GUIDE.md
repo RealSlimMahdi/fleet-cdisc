@@ -1169,10 +1169,14 @@ html = (
 )
 ```
 
-PDF export requires WeasyPrint (`uv add weasyprint` or `pip install fleet-cdisc[tlg-pdf]`):
+PDF export requires WeasyPrint (`uv add weasyprint` or `pip install fleet-cdisc[tlg-pdf]`).
+WeasyPrint also needs the Pango system libraries; when they are missing, the export stops
+with an `ImportError` that names them (`fleet doctor` reports "not usable"). Every physical
+PDF page shows "Page X of Y", and the PDF loads no external resource (a logo in an HTML
+wrapper is left out, with a warning):
 
 ```python
-path = builder.to_pdf("ae_summary.pdf", metadata=meta)
+path = builder.to_pdf("ae_summary.pdf", metadata=meta, rows_per_page=25)
 ```
 
 PPTX slide export requires python-pptx (`uv add python-pptx` or `pip install fleet-cdisc[tlg-pptx]`).

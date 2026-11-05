@@ -282,11 +282,13 @@ class TestUnconsumedBuilderState:
             )
 
     def test_t_shift_method_rejects_header_rows_like_t_abnormal(self) -> None:
+        from pydantic import ValidationError
+
         from fleet.tlg import LBShiftSpec
 
-        spec = LBShiftSpec(header_rows=[OverallStat(label="Any")])
-        with pytest.raises(SchemaError, match="header_rows"):
-            ADLB.tlg.lb.t_shift(groupby="TRTA", adsl=ADSL, spec=spec)
+        # c1-465: the spec refuses the unused field at construction.
+        with pytest.raises(ValidationError, match="header_rows"):
+            LBShiftSpec(header_rows=[OverallStat(label="Any")])
 
     def test_template_after_row_verbs_warns(self) -> None:
         with pytest.warns(UserWarning, match="reinterpreted"):

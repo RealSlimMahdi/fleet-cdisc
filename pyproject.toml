@@ -35,9 +35,10 @@ io = [
     "pyreadstat>=1.3.3",
 ]
 
-# TLG-PDF: PDF export via WeasyPrint
+# TLG-PDF: PDF export via WeasyPrint (70.0: URLFetcher refuses every protocol,
+# so a PDF loads no external resource)
 tlg-pdf = [
-    "weasyprint>=62.0",
+    "weasyprint>=70.0",
 ]
 
 # TLG-PPTX: slide deck export via python-pptx

@@ -722,6 +722,23 @@ def _check_extras() -> list[tuple[str, bool, str]]:
     for module, (extra, purpose) in _OPTIONAL_EXTRAS.items():
         installed = _module_available(module)
         hint = f"{purpose} — install with: uv sync --extra {extra}"
+        if installed and module == "weasyprint":
+            # find_spec passes a package whose native libraries fail at load.
+            import contextlib
+            import io
+
+            try:
+                with (
+                    contextlib.redirect_stdout(io.StringIO()),
+                    contextlib.redirect_stderr(io.StringIO()),
+                ):
+                    importlib.import_module(module)
+            except OSError:
+                installed = False
+                hint = (
+                    f"{purpose} — installed but not usable: its system libraries "
+                    "(Pango) are missing; see the WeasyPrint install page"
+                )
         results.append((module.split(".")[0], installed, hint))
     return results
 
@@ -1554,6 +1571,7 @@ def _render_output(
         render_pptx,
         render_rtf,
     )
+    from fleet.tlg.render.html import html_document
 
     page_kwargs: dict[str, Any] = {}
     if rows_per_page is not None:
@@ -1561,12 +1579,14 @@ def _render_output(
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
+    def write_html(fragment: str) -> None:
+        doc = fragment if html_wrapper is not None else html_document(fragment, rmeta.title)
+        out_path.write_text(doc, encoding="utf-8")
+
     if is_listing:
         lmodel = listing_to_model(result, rmeta)
         listing_dispatch: dict[str, Callable[[], Any]] = {
-            "html": lambda: out_path.write_text(
-                render_listing_html(lmodel, **page_kwargs), encoding="utf-8"
-            ),
+            "html": lambda: write_html(render_listing_html(lmodel, **page_kwargs)),
             "rtf": lambda: render_listing_rtf(lmodel, out_path, **page_kwargs),
             "pdf": lambda: render_listing_pdf(lmodel, out_path, **page_kwargs),
             "pptx": lambda: render_listing_pptx(lmodel, out_path, **page_kwargs),
@@ -1576,9 +1596,7 @@ def _render_output(
 
     model = ard_to_table_model(result, rmeta)
     table_dispatch: dict[str, Callable[[], Any]] = {
-        "html": lambda: out_path.write_text(
-            render_html(model, html_wrapper=html_wrapper, **page_kwargs), encoding="utf-8"
-        ),
+        "html": lambda: write_html(render_html(model, html_wrapper=html_wrapper, **page_kwargs)),
         "rtf": lambda: render_rtf(model, out_path, **page_kwargs),
         "pdf": lambda: render_pdf(model, out_path, html_wrapper=html_wrapper, **page_kwargs),
         "pptx": lambda: render_pptx(model, out_path, **page_kwargs),
@@ -1675,6 +1693,11 @@ def _tlg_run_once(args: argparse.Namespace) -> None:
             spec_path, meta, named_data, default_data, adsl_df, args.adsl, ctx
         )
         groupby = None if is_listing else _spec_groupby(spec, data_df, args.groupby)
+        if is_listing and args.page_by:
+            _fail(
+                f"{spec_path}: --page-by applies to tables only; '{meta.id}' is a "
+                "listing. Remove --page-by."
+            )
 
         result = run_spec(spec, data_df, adsl=population, groupby=groupby)
 
@@ -1832,6 +1855,8 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
     # HTML wrapper
     html_wrapper: str | None = None
     if args.wrap:
+        if fmt not in ("html", "pdf"):
+            _fail(f"--wrap applies to html and pdf only, not {fmt}. Remove --wrap.")
         wp = Path(args.wrap)
         if not wp.is_file():
             _fail(f"wrapper template not found: {wp}")
@@ -2972,6 +2997,17 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
     migrate.set_defaults(func=_run_migrate)
 
 
+def _positive_int(value: str) -> int:
+    """Argparse type: an integer of 1 or more."""
+    try:
+        number = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{value!r} is not an integer") from None
+    if number < 1:
+        raise argparse.ArgumentTypeError("must be 1 or more")
+    return number
+
+
 def _tlg_domain_choices() -> list[str]:
     """TLG sub-namespaces available for ``tlg export`` (from the registry)."""
     from fleet.tlg import NAMESPACE_CLASSES
@@ -3159,14 +3195,14 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
     )
     tlg_run.add_argument(
         "--rows-per-page",
-        type=int,
+        type=_positive_int,
         default=None,
         help="Maximum body rows per page (model-layer pagination).",
     )
     tlg_run.add_argument(
         "--page-by",
         default=None,
-        help="ARD variable to page-break on (e.g. PARAMCD).",
+        help="ARD row variable to page-break on (e.g. PARAMCD). Tables only.",
     )
     tlg_run.add_argument(
         "--watch",
@@ -3331,7 +3367,7 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
     )
     tlg_export.add_argument(
         "--rows-per-page",
-        type=int,
+        type=_positive_int,
         default=None,
         help="Maximum body rows per page (model-layer pagination).",
     )
@@ -3343,7 +3379,11 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
     tlg_export.add_argument(
         "--wrap",
         default=None,
-        help="Path to an HTML wrapper template with {table} placeholder.",
+        help=(
+            "Path to an HTML wrapper template with {table} placeholder (html and "
+            "pdf only). A PDF loads no external resource: a logo or style sheet "
+            "the wrapper links is left out, with a warning."
+        ),
     )
     tlg_export.set_defaults(func=_run_tlg_export)
 
