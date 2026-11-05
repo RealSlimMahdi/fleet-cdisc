@@ -176,7 +176,12 @@ or image. It reads top-down the way a review goes:
 The page is never truncated: every unequal value is on it, whatever
 `max_print` the comparison ran with. With [BY groups](#by-groups) it gains a
 **Groups** section with the per-group counts and sections the unequal values
-per group. For listings beyond a few thousand rows, the
+per group. The summary statistics span all groups, so the page then draws them
+once per variable, above the group sections, with the caption "over all
+groups". A listed value that would read the same as another one is quoted:
+`"M "` against `M`, `"null"` against a missing `null`, `""` against `null`.
+The text report quotes the same way; the JSON document and the parquet keep
+the raw values. For listings beyond a few thousand rows, the
 [parquet listing](#the-parquet-listing) is the better archive.
 
 ## Machine-readable outputs
@@ -212,7 +217,7 @@ version and no ceiling. The top-level keys, in order (`fleet.comparison.JSON_KEY
 | `datasets` | `base` and `candidate`, each with `name`, `rows` and `variables`. |
 | `variables` | `common`, `compared`, `base_only`, `candidate_only`, then `type_conflicts` and `dtype_differences` as `{variable, base_dtype, candidate_dtype}` with the dtypes as text. |
 | `observations` | `matched`, `base_only`, `candidate_only`, the one-sided key values as `base_only_keys` and `candidate_only_keys` (capped at the per-variable print limit; `truncated` says whether a cap applied), `base_duplicates` and `candidate_duplicates`, the per-group counts as `per_group`, and the one-sided group labels as `base_only_groups` and `candidate_only_groups`. |
-| `values` | `per_variable` as `{variable, differences}`, `variables_with_differences`, `observations_with_differences`, `total_differences`, and `per_group`. |
+| `values` | `per_variable` as `{variable, differences}`, `variables_with_differences`, `observations_with_differences`, `total_differences`, `per_group`, and `within_tolerance` (values equal under a tolerance or `ignore_trailing_whitespace` but not exactly equal). |
 | `statistics` | One object per differing variable, with the columns of `fleet.comparison.STATISTICS_COLUMNS`; the measures are `null` for a variable that is not numeric. See [summary statistics](#summary-statistics). |
 | `listing` | `columns`, `rows` (one object per differing value, within the print limits), `shown`, `total` and `truncated`. |
 | `settings` | Every option the comparison ran with: `keys`, `by`, `pairs`, `variables`, `abs_tol`, `rel_tol`, `ignore_trailing_whitespace`, `allow_duplicates`, `max_print`, `base_name`, `candidate_name`. |
@@ -329,6 +334,11 @@ What the options do **not** change:
   `" M"` never does.
 - **The listing shows the values as they are.** A difference that survives the
   tolerance is reported with the original base and candidate values, unstripped.
+- **What the rule absorbed is counted.** `report.values.within_tolerance` (and
+  `within_tolerance` in the JSON `values` block) counts the values equal under
+  the rule but not exactly equal, as the `PROC COMPARE` note does. The text
+  report then says `All compared values are within the rule in effect; 3 of
+  them are not exactly equal.`
 - **A tolerant comparison is arithmetic in `Float64`.** Integers and decimals
   beyond `2**53` are therefore compared at that precision; the exact default
   compares them in their own dtype.
@@ -438,7 +448,12 @@ A pair whose candidate variable is **absent** reports the base one as missing
 from the candidate, exactly as an unpaired variable would. A pair whose base
 variable the base does not carry, one that renames a key, and two pairs
 pointing at the same candidate variable are refused with a `ComparisonError`:
-the pairing could not be honoured as written.
+the pairing could not be honoured as written. So is a pair whose candidate
+variable a base variable of the same name also matches by name: with base `A`
+and `B`, `pairs={"A": "B"}` is refused, and the swap
+`pairs={"A": "B", "B": "A"}` is legal. A candidate variable that no pair uses
+and that no base variable matches by name is reported as extra: with
+`pairs={"AVAL": "RESULT"}`, a candidate `AVAL` is a candidate-only variable.
 
 **`variables` restricts the universe**, in base names. What is outside the list
 is ignored entirely, on both sides: not compared, and not reported as missing

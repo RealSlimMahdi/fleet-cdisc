@@ -6,7 +6,9 @@ and any other raised flag) are chips at the top.  Below, only the mismatched
 observations are listed, base and candidate side by side with both cells
 highlighted, one collapsible block per differing variable, each opening on
 that variable's summary statistics.  Sections appear per group as soon as the
-listing's ``group`` column is populated.  The page carries every difference
+listing's ``group`` column is populated; with BY variables the statistics,
+which span all groups, are drawn once per variable above the group sections.
+The page carries every difference
 (it is never truncated) and embeds its own style; it fetches no script,
 stylesheet, font or image.
 """
@@ -22,9 +24,11 @@ from .report import (
     _MEASURE_LABELS,
     _SIDE_LABELS,
     VariableDtypes,
+    _figure,
     _has_measures,
     _key_label,
     _plural,
+    _shown_value,
 )
 
 if TYPE_CHECKING:
@@ -78,6 +82,7 @@ th, td { border: 1px solid #d0d7de; padding: 4px 10px; text-align: left; vertica
 th { background: #f0f2f5; font-weight: 600; }
 td.number { text-align: right; }
 td.null { color: #8c959f; font-style: italic; }
+td.base, td.candidate { white-space: pre-wrap; }
 td.base.changed { background: #ffebe9; }
 td.candidate.changed { background: #dafbe1; }
 details { margin: 10px 0; background: #fff; border: 1px solid #d0d7de; border-radius: 6px; }
@@ -269,26 +274,54 @@ def _listing_sections(report: ComparisonReport) -> list[str]:
     lines = ["<h2>Unequal values</h2>"]
     if listing.height == 0:
         lines.append("<p>No unequal values.</p>")
+        within = report.values.within_tolerance
+        if within:
+            lines.append(
+                f"<p>All compared values are within the rule in effect; {within} of them "
+                f"{'is' if within == 1 else 'are'} not exactly equal.</p>"
+            )
         return lines
     groups = listing["group"].unique(maintain_order=True).to_list()
     if groups == [None]:
-        lines.append(f"<p>{_counts(report, listing)}</p>")
+        lines.append(
+            f"<p>{_counts(report, listing, report.values.observations_with_differences)}</p>"
+        )
         return lines + _variable_blocks(report, listing)
+    if report.settings.by:
+        lines += _statistics_over_all_groups(report, listing)
+    per_group = dict(
+        report.values.per_group.select("group", "observations_with_differences").iter_rows()
+    )
     for group in groups:
         rows = listing.filter(
             pl.col("group").is_null() if group is None else pl.col("group") == group
         )
         name = "(no group)" if group is None else str(group)
-        lines.append(
-            f'<h3>Group {escape(name)}<span class="count">{_counts(report, rows)}</span></h3>'
-        )
+        counts = _counts(report, rows, per_group.get(group))
+        lines.append(f'<h3>Group {escape(name)}<span class="count">{counts}</span></h3>')
         lines += _variable_blocks(report, rows)
     return lines
 
 
-def _counts(report: ComparisonReport, rows: pl.DataFrame) -> str:
-    """``N unequal values in M observations, K variables`` over *rows*."""
-    observations = rows.select(report.settings.keys).n_unique()
+def _statistics_over_all_groups(report: ComparisonReport, listing: pl.DataFrame) -> list[str]:
+    """One statistics table per numeric variable, over all BY groups together."""
+    lines: list[str] = []
+    for variable in listing["variable"].unique(maintain_order=True).to_list():
+        table = _statistics_table(report, variable, all_groups=True)
+        if table:
+            lines += [f"<h3>{escape(variable)}</h3>", *table]
+    return ["<h3>Summary statistics over all groups</h3>", *lines] if lines else []
+
+
+def _counts(report: ComparisonReport, rows: pl.DataFrame, observations: int | None = None) -> str:
+    """``N unequal values in M observations, K variables`` over *rows*.
+
+    *observations* is the count from the values summary, which also counts
+    duplicate keys paired by position; without it the listing's distinct
+    keys are counted.
+    """
+    if observations is None:
+        observations = rows.select(report.settings.keys).n_unique()
     return (
         f"{_plural(rows.height, 'unequal value')} in {_plural(observations, 'observation')}, "
         f"{_plural(rows['variable'].n_unique(), 'variable')}"
@@ -313,7 +346,7 @@ def _variable_blocks(report: ComparisonReport, rows: pl.DataFrame) -> list[str]:
             f"<summary>{escape(variable)}"
             f'<span class="count">{_plural(block.height, "unequal value")}</span></summary>',
             "<div>",
-            *_statistics_table(report, variable),
+            *([] if report.settings.by else _statistics_table(report, variable)),
             *_block_table(report, block),
             "</div>",
             "</details>",
@@ -321,13 +354,16 @@ def _variable_blocks(report: ComparisonReport, rows: pl.DataFrame) -> list[str]:
     return lines
 
 
-def _statistics_table(report: ComparisonReport, variable: str) -> list[str]:
+def _statistics_table(
+    report: ComparisonReport, variable: str, *, all_groups: bool = False
+) -> list[str]:
     """How far apart the two sides are on *variable*; nothing unless it is numeric.
 
     The measures span every matched observation, not only the unequal ones
     the block below lists, which is what lets a reviewer read a systematic
-    offset out of them.  The caption says so, because with BY groups the
-    same table appears in each group's block.
+    offset out of them.  With BY groups they also span every group, so the
+    table is drawn once above the group sections and its caption says
+    "over all groups" (*all_groups*).
     """
     row = report.statistics.filter(pl.col("variable") == variable)
     if row.height == 0:
@@ -335,10 +371,11 @@ def _statistics_table(report: ComparisonReport, variable: str) -> list[str]:
     measures = row.row(0, named=True)
     if not _has_measures(measures):
         return []
+    scope = " over all groups" if all_groups else ""
     lines = [
         "<table>",
         "<caption>Summary statistics over the matched observations where both sides "
-        "are finite (not null, NaN or inf)</caption>",
+        f"are finite (not null, NaN or inf){scope}</caption>",
         "<tr><th>Statistic</th>"
         + "".join(f"<th>{escape(m)}</th>" for m in _MEASURE_LABELS.values())
         + "</tr>",
@@ -359,8 +396,8 @@ def _block_table(report: ComparisonReport, block: pl.DataFrame) -> list[str]:
     lines = ["<table>", "<tr>" + "".join(f"<th>{escape(h)}</th>" for h in header) + "</tr>"]
     for row in block.to_dicts():
         cells = [_td(row[k]) for k in keys]
-        cells.append(_td(row["base"], "base changed"))
-        cells.append(_td(row["candidate"], "candidate changed"))
+        cells.append(_value_td(row["base"], "base changed"))
+        cells.append(_value_td(row["candidate"], "candidate changed"))
         if numeric:
             cells.append(_td(_number(row["difference"]), "number"))
             cells.append(_td(_number(row["percent_difference"]), "number"))
@@ -378,5 +415,12 @@ def _td(value: Any, css_class: str = "") -> str:
     return f"<td{attribute}>{escape(str(value))}</td>"
 
 
+def _value_td(value: str | None, css_class: str) -> str:
+    """A listed base or candidate cell, quoted where the raw text would mislead."""
+    if value is None:
+        return _td(None, css_class)
+    return f'<td class="{css_class}">{escape(_shown_value(value))}</td>'
+
+
 def _number(value: float | None) -> str | None:
-    return None if value is None else f"{value:g}"
+    return None if value is None else _figure(value)
