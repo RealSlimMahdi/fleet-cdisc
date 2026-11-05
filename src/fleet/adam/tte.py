@@ -343,6 +343,12 @@ def select_tte(
         chosen = extra if chosen.is_empty() else pl.concat([chosen, extra], how="diagonal_relaxed")
 
     pooled = [p for p in (event_pool, censor_pool) if not p.is_empty()]
+    if by and not pooled:
+        raise DerivationError(
+            f"select_tte(): by={by} is set, but no event or censor record is left in "
+            f"{[lb for lb, _, _, _ in sources]}, so no stratum exists. Check the source "
+            "frames and the stop_at dates."
+        )
     if by and pooled:
         strata = pl.concat([p.select(by) for p in pooled], how="vertical_relaxed").unique(
             maintain_order=True

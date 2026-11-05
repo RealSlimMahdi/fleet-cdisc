@@ -563,9 +563,13 @@ class TestAvalAndKm:
 
 
 class TestInspectability:
-    def test_explain_trace_logged(self, adsl, caplog):
+    def test_explain_trace_logged(self, adsl, caplog, monkeypatch):
         import logging
 
+        from fleet.core import log as fleet_log
+
+        # Keep the console handler off, so no later capsys test loses its output.
+        monkeypatch.setattr(fleet_log, "_auto_checked", True)
         with caplog.at_level(logging.INFO, logger="fleet"):
             _os(adsl.adam.tte, adsl, retain="censor_at_start", explain=True)
         text = caplog.text
@@ -575,8 +579,10 @@ class TestInspectability:
 
     def test_lineage_records_param(self, adsl):
         ns = _os(adsl.adam.tte, adsl, retain="censor_at_start")
-        names = [node.name for node in ns._lineage]
-        assert "OS" in names
+        nodes = {node.name: node for node in ns._lineage if node.verb == "param"}
+        assert "OS" not in nodes
+        assert {"STARTDT", "ADT", "CNSR", "EVNTDESC", "PARAMCD", "PARAM"} <= set(nodes)
+        assert nodes["ADT"].sources == ["TRTSDT"]
 
 
 class TestKmDataGrouping:

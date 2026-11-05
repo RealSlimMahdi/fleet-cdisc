@@ -19,16 +19,21 @@ Polars frame with ``USUBJID`` and ``ADT``::
 from __future__ import annotations
 
 import logging
+import warnings
 from typing import Any, Literal
 
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
 from fleet.adam.tte import param_label, select_tte
+from fleet.core import log as fleet_log
 from fleet.core.dtc import to_day
 from fleet.core.exceptions import DerivationError
 
 logger = logging.getLogger("fleet")
+
+#: Columns that param() derives; set_values_to cannot overwrite them.
+_DERIVED = frozenset({"CNSR", "ADT", "ADTM", "STARTDT", "STARTDTM"})
 
 #: Days per unit — CDISC conventions (SDTMIG/ADaMIG durations).
 _UNIT_DAYS: dict[str, float] = {
@@ -118,7 +123,8 @@ class TTENamespace(SharedADaMVerbsMixin):
                 per-stratum PARAMCD as an expression in *set_values_to*.
             set_values_to: Extra constant or expression columns on the new
                 rows (PARAMN, PARCAT1, ...). A static PARAMCD with several
-                strata raises (1:1 guard).
+                strata raises (1:1 guard). CNSR, ADT, ADTM, STARTDT and
+                STARTDTM are derived, so they raise here.
             subject_keys: Subject identifiers (default: the ADSL pin's join
                 key, usually ``["USUBJID"]``).
             create_datetime: Give ``ADTM``/``STARTDTM`` instead of dates.
@@ -166,6 +172,12 @@ class TTENamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
+        reserved = sorted(_DERIVED & set(set_values_to or {}))
+        if reserved:
+            raise DerivationError(
+                f"param(): {reserved} cannot be set in set_values_to. CNSR comes from the "
+                "censors= key, and ADT/ADTM/STARTDT/STARTDTM come from the source frames."
+            )
         base = self.to_frame()
         pinned = getattr(self, "_pinned", {})
         universe = pinned["ADSL"][0] if "ADSL" in pinned else base
@@ -209,6 +221,7 @@ class TTENamespace(SharedADaMVerbsMixin):
                 )
 
         if explain and not trace.is_empty():
+            fleet_log.ensure_default_handler()
             with pl.Config(
                 tbl_hide_dataframe_shape=True, tbl_hide_column_data_types=True, tbl_rows=-1
             ):
@@ -216,10 +229,14 @@ class TTENamespace(SharedADaMVerbsMixin):
 
         # Accumulate: a base frame that already carries PARAMCD holds prior
         # ADTTE rows → append (with collision guard); otherwise replace.
+        added = [c for c in rows.columns if c not in base.columns]
         if "PARAMCD" in base.columns and base.height:
-            if (base.get_column("PARAMCD") == paramcd).any():
+            clash = set(rows.get_column("PARAMCD").drop_nulls()) & set(
+                base.get_column("PARAMCD").drop_nulls()
+            )
+            if clash:
                 raise DerivationError(
-                    f"param(): PARAMCD '{paramcd}' already exists in the dataset — "
+                    f"param(): PARAMCD '{sorted(clash)[0]}' already exists in the dataset — "
                     "the PARAMCD ↔ PARAM mapping must stay one-to-one."
                 )
             for c in base.columns:
@@ -238,9 +255,10 @@ class TTENamespace(SharedADaMVerbsMixin):
             new = new.pin("ADSL", universe, join_on=keys)
         from fleet.core.lineage import record_lineage
 
+        date_cols = pl.struct([start, *(stop_at or [])])
         record_lineage(
             new,
-            (pl.col(start).alias(paramcd),),
+            tuple(date_cols.alias(c) for c in added),
             verb="param",
             params={
                 "param": param,
@@ -276,7 +294,8 @@ class TTENamespace(SharedADaMVerbsMixin):
             unit: Output unit (default ``"days"``).
             add_one: Include both endpoints (CDISC day convention).
             avalu: Also stamp the ``AVALU`` unit variable (default True —
-                a required BDS variable admiral leaves to the user).
+                a required BDS variable admiral leaves to the user). AVALU
+                is null where AVAL is null (admiral ``derive_vars_duration``).
 
         Returns:
             TTENamespace: The namespace with ``AVAL`` (and ``AVALU``)
@@ -315,7 +334,7 @@ class TTENamespace(SharedADaMVerbsMixin):
             days = pl.when(days >= 0).then(days + 1).otherwise(days)
         exprs = [(days / _UNIT_DAYS[unit]).alias("AVAL")]
         if avalu:
-            exprs.append(pl.lit(unit.upper()).alias("AVALU"))
+            exprs.append(pl.when(days.is_not_null()).then(pl.lit(unit.upper())).alias("AVALU"))
         return self._chain(*exprs, verb="aval")
 
     # ------------------------------------------------------------------ #
@@ -342,12 +361,17 @@ class TTENamespace(SharedADaMVerbsMixin):
                 ADSL automatically.
 
         Returns:
-            pl.DataFrame: ``USUBJID | duration | event [| by...]``.
+            pl.DataFrame: ``<subject keys> | duration | event [| by...]``;
+                the subject keys are the ADSL pin's join key, else
+                ``USUBJID``.
 
         Raises:
             DerivationError: When AVAL/CNSR are missing (call ``aval()``
-                first) or several parameters are present and *paramcd* is
-                not given.
+                first), several parameters are present and *paramcd* is
+                not given, or *paramcd* is not in the PARAMCD values.
+
+        Warns:
+            UserWarning: When rows of the parameter have a null AVAL.
 
         Examples:
             Fit a KM curve per treatment arm::
@@ -363,17 +387,28 @@ class TTENamespace(SharedADaMVerbsMixin):
                 "param() and aval() first."
             )
         if paramcd is not None:
+            if "PARAMCD" not in df.columns:
+                raise DerivationError(
+                    f"km_data(): paramcd='{paramcd}' given, but the frame has no PARAMCD column."
+                )
+            present = df.get_column("PARAMCD").unique(maintain_order=True).to_list()
+            if paramcd not in present:
+                raise DerivationError(
+                    f"km_data(): PARAMCD '{paramcd}' not found; present: {present}"
+                )
             df = df.filter(pl.col("PARAMCD") == paramcd)
         elif "PARAMCD" in df.columns and df.get_column("PARAMCD").n_unique() > 1:
             raise DerivationError(
                 "km_data(): several parameters present — pass paramcd= to pick one."
             )
 
+        pinned = getattr(self, "_pinned", {})
+        id_cols = self._pin_join_key("ADSL") if "ADSL" in pinned else ["USUBJID"]
+
         # Group columns absent from the ADTTE rows resolve from the pinned
         # ADSL (the admiral template's post-hoc derive_vars_merged, built in).
         needed = [c for c in (by or []) if c not in df.columns]
         if needed:
-            pinned = getattr(self, "_pinned", {})
             if "ADSL" not in pinned:
                 raise DerivationError(
                     f"km_data(): column(s) {needed} not on the ADTTE rows and no "
@@ -393,8 +428,18 @@ class TTENamespace(SharedADaMVerbsMixin):
                 nulls_equal=True,
             )
 
+        null_aval = df.filter(pl.col("AVAL").is_null())
+        if null_aval.height:
+            ids = null_aval.get_column(id_cols[-1]).head(5).to_list()
+            warnings.warn(
+                f"km_data(): {null_aval.height} row(s) have a null AVAL (duration), for "
+                f"example {ids}. Survival fits drop them. Check STARTDT and ADT, and call "
+                "aval() after the last param().",
+                UserWarning,
+                stacklevel=2,
+            )
         cols = [
-            pl.col("USUBJID"),
+            *[pl.col(c) for c in id_cols],
             pl.col("AVAL").alias("duration"),
             (pl.col("CNSR") == 0).alias("event"),
         ]
