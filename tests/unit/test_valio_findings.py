@@ -511,3 +511,223 @@ class TestPinnedEngine:
         assert "[WARN] rules engine" in out
         assert "tools/core/core" in out
         assert "[PASS] rules engine" not in out
+
+
+# ── c1-265 c1-267 c1-831: reading the engine report ──
+
+
+def _validator(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, report: dict) -> Any:
+    import json
+    import subprocess
+
+    from fleet.validation import official
+
+    exe = tmp_path / "core"
+    exe.touch()
+
+    def fake(cmd: list[str], *, cwd: str, timeout: float) -> Any:
+        out = Path(cmd[cmd.index("-o") + 1]).with_suffix(".json")
+        out.write_text(json.dumps(report), encoding="utf-8")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(official, "_run_command", fake)
+    return official.OfficialCDISCValidator(exe)
+
+
+def _detail(rule: str, dataset: str, **extra: Any) -> dict:
+    return {"core_id": rule, "message": f"{rule} fired", "dataset": dataset, **extra}
+
+
+def _frames(*names: str) -> dict:
+    import polars as pl
+
+    return {name: pl.DataFrame({"USUBJID": ["S1-001"]}) for name in names}
+
+
+class TestEngineReport:
+    def test_an_issue_reported_rule_with_no_readable_finding_could_not_run(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        report = {
+            "Rules_Report": [{"core_id": "CORE-1", "status": "ISSUE REPORTED"}],
+            "IssueDetails": [_detail("CORE-1", "AE.json")],
+        }
+
+        result = _validator(tmp_path, monkeypatch, report).validate_datasets(
+            _frames("AE"), standard="sdtmig", version="3-4"
+        )["AE"]
+
+        assert result.could_not_run is not None
+        assert "cannot read this CORE report format" in result.could_not_run
+        assert not result.is_valid
+
+    def test_a_split_pair_is_attached_once_and_summary_rules_add_nothing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        report = {
+            "Rules_Report": [
+                {"core_id": rid, "status": "ISSUE_REPORTED"} for rid in ("CORE-1", "CORE-2")
+            ],
+            "Issue_Details": [
+                _detail("CORE-1", "AE.json"),
+                _detail("CORE-2", "LBCH.JSON, LBHM"),
+                _detail("CORE-1", "STUDY"),
+            ],
+            "Issue_Summary": [
+                {"core_id": "CORE-9", "dataset": "LBCH.JSON, LBHM", "message": "x", "issues": 1}
+            ],
+        }
+
+        results = _validator(tmp_path, monkeypatch, report).validate_datasets(
+            _frames("AE", "LBCH", "LBHM"), standard="sdtmig", version="3-4"
+        )
+
+        assert sorted(results) == ["AE", "LBCH", "LBHM", "STUDY"]
+        assert sum(len(r.errors) for r in results.values()) == 3
+        (pair,) = results["LBCH"].errors
+        assert (pair.rule_id, pair.message) == ("CORE-2", "CORE-2 fired (also: LBHM)")
+
+    def test_a_finding_keeps_the_record_the_engine_names(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        detail = _detail(
+            "CORE-1", "AE.json", USUBJID="S1-002", SEQ=1, row=3, variables=["AESER"], values=["YES"]
+        )
+        report = {"Rules_Report": [{"core_id": "CORE-1", "status": "SUCCESS"}]}
+        report["Issue_Details"] = [detail]
+
+        (issue,) = (
+            _validator(tmp_path, monkeypatch, report)
+            .validate_datasets(_frames("AE"), standard="sdtmig", version="3-4")["AE"]
+            .errors
+        )
+
+        assert (issue.row, issue.usubjid, issue.seq, issue.values) == (3, "S1-002", 1, ["YES"])
+        assert issue.variable == "AESER"
+        assert "USUBJID: S1-002" in str(issue)
+
+    @pytest.mark.parametrize(
+        ("variables", "values", "expected"),
+        [
+            (
+                ["AESTDY", "AESTDTC", "$val_stdy", "RFSTDTC"],
+                ["1", "a", "2", "b"],
+                "AESTDY, AESTDTC, RFSTDTC",
+            ),
+            (["$records_in_dataset"], [0], None),
+            (["variable_name"], ["AETERM"], None),
+        ],
+    )
+    def test_the_variable_field_holds_only_dataset_variables(
+        self, variables: list, values: list, expected: str | None
+    ) -> None:
+        from fleet.validation.official import _resolve_variable_field
+
+        item = {"core_id": "CORE-7", "variables": variables, "values": values}
+
+        assert _resolve_variable_field(item) == expected
+
+
+# ── c1-832: the HTML page groups identical findings ──
+
+
+def test_identical_findings_give_one_html_row(tmp_path: Path) -> None:
+    from fleet.validation.models import (
+        Severity,
+        ValidationIssue,
+        ValidationResult,
+        write_html_report,
+    )
+
+    issues = [
+        ValidationIssue(
+            Severity.ERROR, "CORE-000701", "EPOCH", variable="EPOCH", row=n, usubjid=f"S-{n}"
+        )
+        for n in range(1, 1001)
+    ]
+    result = ValidationResult("LB", "sdtmig", "3-4", total_issues=1000, errors=issues)
+
+    page = Path(write_html_report([result], tmp_path / "r.html")).read_text(encoding="utf-8")
+
+    assert page.count("<td>CORE-000701</td>") == 1
+    assert "<td>1-1000 (1000)</td>" in page
+    assert "S-20; and 980 more" in page
+    assert "S-21" not in page
+
+
+# ── c1-830: a finding on several variables names the verbs ──
+
+
+class TestLineageJoin:
+    def _issue(self, variable: str) -> Any:
+        from fleet.validation.models import Severity, ValidationIssue, ValidationResult
+
+        issue = ValidationIssue(Severity.ERROR, "CORE-000544", "m", variable=variable)
+        return issue, ValidationResult("AE", "sdtmig", "3-4", errors=[issue])
+
+    def _lineage(self) -> list:
+        from types import SimpleNamespace
+
+        return [
+            SimpleNamespace(name=n, verb="assign", method="fleet.x.assign")
+            for n in ("AESER", "AESEQ", "USUBJID")
+        ]
+
+    def test_several_variables_name_each_verb_with_its_variables(self) -> None:
+        from fleet.validation.lineage_join import enrich_with_lineage
+
+        issue, result = self._issue("AESEQ, USUBJID, POOLID")
+        enrich_with_lineage(result, self._lineage())
+
+        assert issue.producing_verb == "assign (AESEQ, USUBJID)"
+        assert issue.verb_method == "fleet.x.assign"
+
+    def test_one_variable_keeps_the_bare_verb(self) -> None:
+        from fleet.validation.lineage_join import enrich_with_lineage
+
+        issue, result = self._issue("AESER")
+        enrich_with_lineage(result, self._lineage())
+
+        assert issue.producing_verb == "assign"
+
+    def test_more_than_five_names_get_no_verb(self) -> None:
+        from fleet.validation.lineage_join import enrich_with_lineage
+
+        issue, result = self._issue("AESER, AESEQ, USUBJID, A, B, C")
+        enrich_with_lineage(result, self._lineage())
+
+        assert issue.producing_verb is None
+
+
+# ── c1-267: the MCP tool returns the study-level findings ──
+
+
+def test_fleet_validate_mcp_returns_study_issues(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import polars as pl
+
+    from fleet import mcp_server
+    from fleet.validation import ValidationService
+    from fleet.validation.models import Severity, ValidationIssue, ValidationResult
+
+    exe = tmp_path / "core"
+    exe.touch()
+    monkeypatch.setenv("FLEET_RULES_ENGINE", str(exe))
+    data = tmp_path / "ae.parquet"
+    pl.DataFrame({"USUBJID": ["S1-001"]}).write_parquet(data)
+    study = ValidationIssue(Severity.ERROR, "CORE-000400", "TS is missing")
+
+    def fake(self: Any, datasets: dict, **kwargs: Any) -> dict:
+        return {
+            "AE": ValidationResult("AE", "sdtmig", "3-4", rules_executed=1),
+            "STUDY": ValidationResult("STUDY", "sdtmig", "3-4", errors=[study]),
+        }
+
+    monkeypatch.setattr(ValidationService, "__init__", lambda self, **kw: None)
+    monkeypatch.setattr(ValidationService, "validate_datasets", fake)
+
+    out = mcp_server.fleet_validate(str(data))
+
+    assert [i["rule_id"] for i in out["study_issues"]] == ["CORE-000400"]
+    assert out["issues"] == []

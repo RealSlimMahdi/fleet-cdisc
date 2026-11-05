@@ -1135,8 +1135,9 @@ def _run_validate(args: argparse.Namespace) -> None:
     passed = sum(1 for r in results if r.status == "PASS")
     accepted = sum(len(r.warnings) for r in results)
     findings = sum(len(r.errors) for r in results) + accepted
-    datasets = sum(1 for r in results if r.dataset_name != "STUDY")
-    study = " and the study-level rules" if datasets < len(results) else ""
+    given = {d.name for d in sweep.datasets}
+    datasets = sum(1 for r in results if r.dataset_name in given)
+    study = " and the study-level rules" if any(r.dataset_name == "STUDY" for r in results) else ""
     print()
     print(
         f"Validated {datasets} dataset(s){study}: {passed} passed, "
