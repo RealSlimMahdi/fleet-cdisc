@@ -219,6 +219,12 @@ class TestMmseCategory:
         ).to_frame()
         assert result["MMSECG"].to_list() == ["Normal", "Mild", "Mild", "Moderate"]
 
+    def test_a_nan_score_has_no_category(self):
+        """c1-855: NaN is a missing score; it is not above every cut-off."""
+        df = pl.DataFrame({"MMSE": [float("nan"), 28.0, None]})
+        result = df.adam.neuro.mmse_category("MMSECG", score_col="MMSE").to_frame()
+        assert result["MMSECG"].to_list() == [None, "Normal", None]
+
 
 class TestCdrsob:
     """Test 3: CDR Sum-of-Boxes = sum of 6 domain scores."""
@@ -292,6 +298,12 @@ class TestMocaCategory:
 """)
         result = df.adam.neuro.moca_category("MOACG", score_col="MOCA").to_frame()
         assert result["MOACG"].to_list() == ["Normal", "MCI", "Impaired"]
+
+    def test_a_nan_score_has_no_category(self):
+        """c1-855: NaN is a missing score; it is not above every cut-off."""
+        df = pl.DataFrame({"MOCA": [float("nan"), 28.0, None]})
+        result = df.adam.neuro.moca_category("MOACG", score_col="MOCA").to_frame()
+        assert result["MOACG"].to_list() == [None, "Normal", None]
 
 
 class TestPanssTotal:

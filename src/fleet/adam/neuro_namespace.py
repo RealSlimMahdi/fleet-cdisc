@@ -179,7 +179,7 @@ class NeuroNamespace(SharedADaMVerbsMixin):
             9 and below severe). Other schemes are in use, for example mild 21-26
             and moderate 10-20; take the cut-offs from the SAP.
         """
-        score = pl.col(score_col)
+        score = pl.col(score_col).cast(pl.Float64).fill_nan(None)
         return self._chain(
             pl.when(score >= normal_threshold)
             .then(pl.lit("Normal"))
@@ -272,7 +272,7 @@ class NeuroNamespace(SharedADaMVerbsMixin):
             Soc. 2005;53:695-699: a total of 26 or more is normal. The MCI lower
             bound of 18 is not fixed by the instrument; check the SAP.
         """
-        score = pl.col(score_col)
+        score = pl.col(score_col).cast(pl.Float64).fill_nan(None)
         return self._chain(
             pl.when(score >= normal_threshold)
             .then(pl.lit("Normal"))
