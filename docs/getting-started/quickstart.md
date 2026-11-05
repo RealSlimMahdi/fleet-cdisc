@@ -4,6 +4,7 @@
 
 - Python 3.12 to 3.14
 - Fleet installed — see [Installation](installation.md)
+- Coming from SAS? Read [Coming from SAS](from-sas.md) first: a null in a condition does not behave as a SAS missing value.
 
 ---
 

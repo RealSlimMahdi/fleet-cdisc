@@ -104,6 +104,7 @@ nav:
       - Why Fleet?: why-fleet.md
       - Installation: getting-started/installation.md
       - Quickstart: getting-started/quickstart.md
+      - Coming from SAS: getting-started/from-sas.md
       - CLI Reference: getting-started/cli.md
       - IDE & AI Tooling: getting-started/ide-tooling.md
       - Troubleshooting Guide: getting-started/troubleshooting.md

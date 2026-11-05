@@ -405,7 +405,7 @@ Then run it on the `dm_raw` frame of the block above:
 dm = dm_raw.sdtm.from_spec("define.yaml", dataset="DM").to_frame()
 ```
 
-_For complete end-to-end examples, see the [examples/](https://github.com/RealSlimMahdi/fleet-cdisc/tree/main/examples) directory and the [full Guide](https://github.com/RealSlimMahdi/fleet-cdisc/blob/main/GUIDE.md)._
+_For complete end-to-end examples, see the [examples/](https://github.com/RealSlimMahdi/fleet-cdisc/tree/main/examples) directory and the [full Guide](https://github.com/RealSlimMahdi/fleet-cdisc/blob/main/GUIDE.md). Coming from SAS? See [Coming from SAS](https://realslimmahdi.github.io/fleet-cdisc/latest/getting-started/from-sas/) for the statement map and the null rules._
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
