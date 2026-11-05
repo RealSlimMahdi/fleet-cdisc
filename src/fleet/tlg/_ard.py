@@ -15,8 +15,12 @@ Polars adaptation notes vs. R {cards}:
     In Polars there are no list-columns, so:
       stat     → Float64 (numeric) or Utf8 (string stats via stat_fmt)
       fmt_fn   → Utf8 format specifier (e.g. "xx.x", "xx.x%", "xx")
-      warning  → Utf8 (null when clean)
-      error    → Utf8 (null when clean)
+      warning  → Utf8.  Filled in two cases only: a header-row filter
+                 column that is null or blank on every record, and the
+                 count of a missing level with ``MissingLevel(label=None)``
+                 (ADR-0038).  A null does not mean that a check ran.
+      error    → Utf8, always null.  It is reserved for the {cards}
+                 layout; no Fleet check fills it.
 """
 
 from __future__ import annotations
@@ -32,6 +36,7 @@ import polars as pl
 
 from ._specs import (
     NO_CODING_LABEL,
+    Column,
     GroupPool,
     MissingLevel,
     OverallStat,
@@ -39,7 +44,9 @@ from ._specs import (
     SchemaError,
     Statistic,
     SummarySpecBase,
+    TLGSpec,
     blank_filter_columns,
+    check_listing_columns,
     resolve_filter,
 )
 
@@ -131,6 +138,27 @@ _DEFAULT_FMT: dict[str, str] = {
     "q3": "xx.x",
     "p": "xx.x",
 }
+
+
+def level_text(value: Any) -> str:
+    """Print a row level or a listing value as SAS BEST. and R ``as.character`` do.
+
+    A whole float prints as an integer (``2.0`` gives ``2``), another
+    float with 12 significant digits (``13.565999999999999`` gives
+    ``13.566``).  Other values print with ``str``.
+
+    Args:
+        value: The value to print.
+
+    Returns:
+        str: The display text.
+
+    Examples:
+        ``level_text(701.0) == "701"``
+    """
+    if isinstance(value, float) and math.isfinite(value):
+        return str(int(value)) if value.is_integer() else f"{value:.12g}"
+    return str(value)
 
 
 def default_fmt_fn(stat_name: str) -> str:
@@ -432,6 +460,153 @@ def expand_pools(
     return pl.concat(parts, how="vertical_relaxed")
 
 
+def check_text_arm(frame: pl.DataFrame, group_col: str, source: str) -> None:
+    """Raise when the arm column is not text.
+
+    A numeric arm (TRTAN) prints its codes as column headers, and a
+    Float64 code from an XPT file gives the level ``1.0``.
+
+    Args:
+        frame: The dataset that holds the arm column.
+        group_col: The arm column.
+        source: The dataset name for the message (``"adsl"``).
+
+    Raises:
+        SchemaError: If the column is not String, Categorical or Enum.
+
+    Examples:
+        ``check_text_arm(adae, "TRTA", "the analysis dataset")``
+    """
+    dtype = frame.schema[group_col]
+    if dtype.base_type() not in (pl.String, pl.Categorical, pl.Enum, pl.Null):
+        raise SchemaError(
+            f"The arm column '{group_col}' in {source} is {dtype}; it must be text. "
+            "Use the text arm (TRTA, not TRTAN) and set column_order for the "
+            "display order."
+        )
+
+
+def enum_arms(frame: pl.DataFrame | None, group_col: str) -> list[str] | None:
+    """Return the categories of an Enum arm column, or ``None``.
+
+    The categories give the column order, and an arm with no subject
+    keeps its column with N=0, as a SAS format with PRELOADFMT.
+
+    Args:
+        frame: The dataset, or ``None``.
+        group_col: The arm column.
+
+    Returns:
+        list[str] | None: The categories in their order.
+
+    Examples:
+        ``enum_arms(adsl, "TRT01A")``
+    """
+    if frame is None or group_col not in frame.columns:
+        return None
+    dtype = frame.schema[group_col]
+    if isinstance(dtype, pl.Enum):
+        return dtype.categories.to_list()
+    return None
+
+
+def order_arms(
+    arms: set[str],
+    pools: Sequence[GroupPool],
+    categories: Sequence[str] | None,
+    column_order: Sequence[str] | None,
+    known: set[str],
+) -> list[str]:
+    """Order the columns of a table: arms first, then pools.
+
+    The arms follow the Enum *categories* when given, else text order.
+    The pools follow, in their definition order.  *column_order* then
+    moves its entries to the front.
+
+    Args:
+        arms: Arm and pool labels of the table.
+        pools: Pool definitions.
+        categories: Enum categories of the arm column, or ``None``.
+        column_order: The requested order, or ``None``.
+        known: Every arm and pool label that *column_order* may name
+            (arms emptied by a filter included).
+
+    Returns:
+        list[str]: The column order.
+
+    Raises:
+        SchemaError: If *column_order* names a label that is not in
+            *known*.
+
+    References:
+        SAS PROC REPORT ``ORDER=``; ADR-0055.
+
+    Examples:
+        ``order_arms({"A", "B", "Total"}, pools, None, ["B"], {"A", "B", "Total"})``
+    """
+    pool_labels = [p.label for p in pools]
+    plain = arms - set(pool_labels)
+    rank = {c: i for i, c in enumerate(categories or [])}
+    ordered = sorted(plain, key=lambda a: (rank.get(a, len(rank)), a))
+    ordered += [p for p in dict.fromkeys(pool_labels) if p in arms]
+    if not column_order:
+        return ordered
+    unknown = [c for c in column_order if c not in known]
+    if unknown:
+        real_arms = sorted(known - set(pool_labels))
+        raise SchemaError(
+            f"column_order {unknown[0]!r} is not an arm or pool. "
+            f"Arms: {', '.join(real_arms)}."
+            + (f" Pools: {', '.join(pool_labels)}." if pool_labels else "")
+        )
+    return [a for a in column_order if a in ordered] + [a for a in ordered if a not in column_order]
+
+
+def nan_to_null(df: pl.DataFrame, value_col: str) -> pl.DataFrame:
+    """Count a NaN value as missing, and refuse an infinite value.
+
+    SAS has no NaN: PROC MEANS and R ``mean(na.rm = TRUE)`` leave the
+    value out.  A NaN becomes null with one ``UserWarning`` that gives
+    the count.  An infinite value has no SAS form and would print
+    ``inf``, so it raises.
+
+    Args:
+        df: The analysis dataset.
+        value_col: The analysis-value column.
+
+    Returns:
+        pl.DataFrame: *df* with NaN set to null.
+
+    Raises:
+        SchemaError: If *value_col* holds ``inf`` or ``-inf``.
+
+    References:
+        SAS PROC MEANS (missing values are left out); ADR-0056.
+
+    Examples:
+        ``adlb = nan_to_null(adlb, "AVAL")``
+    """
+    if value_col not in df.columns or not df.schema[value_col].is_float():
+        return df
+    col = pl.col(value_col)
+    n_inf = df.select(col.is_infinite().sum()).item()
+    if n_inf:
+        raise SchemaError(
+            f"{value_col} has {n_inf} infinite value(s) (inf or -inf). SAS has no "
+            "infinite value: correct the derivation, or set the value to null."
+        )
+    n_nan = df.select(col.is_nan().sum()).item()
+    if n_nan:
+        warnings.warn(
+            f"{value_col} has {n_nan} NaN value(s); they count as missing (null), "
+            "as SAS and R mean(na.rm = TRUE) leave them out.",
+            UserWarning,
+            stacklevel=3,
+        )
+        df = df.with_columns(col.fill_nan(None))
+    return df
+
+
 def compute_big_n(
     adsl: pl.DataFrame,
     group_col: str,
@@ -445,6 +620,11 @@ def compute_big_n(
     out of every N, a ``"*"`` pool included, with one ``UserWarning``
     that names the column and the count (ADR-0038).
 
+    ADSL has one record per subject: a duplicate USUBJID + arm record
+    raises.  A subject in two arms (a crossover ADSL read by period)
+    counts in each arm, with one ``UserWarning``.  An Enum arm column
+    gives every category a count, 0 for a category with no subject.
+
     Args:
         adsl: The ADSL DataFrame.
         group_col: Treatment arm column.
@@ -454,15 +634,41 @@ def compute_big_n(
     Returns:
         dict[str, int]: Mapping from arm label to subject count.
 
+    Raises:
+        SchemaError: If ADSL has a duplicate USUBJID + arm record.
+
     References:
-        SAS PROC FREQ, missing class levels; ADR-0038.
+        SAS PROC FREQ, missing class levels; ADR-0038.  ADaMIG v1.3,
+        section 3.1: ADSL has one record per subject; ADR-0056.
 
     Examples:
         ``compute_big_n(adsl, "TRT01A", [], filter_expr=pl.col("SAFFL") == "Y")``
     """
-    df = adsl
+    categories = enum_arms(adsl, group_col)
+    df = adsl.with_columns(pl.col(group_col).cast(pl.Utf8))
     if filter_expr is not None:
         df = df.filter(filter_expr)
+    dup = df.group_by(["USUBJID", group_col]).len().filter(pl.col("len") > 1)
+    if dup.height:
+        ids = dup.sort("USUBJID")["USUBJID"].head(5).to_list()
+        raise SchemaError(
+            f"ADSL has {dup.height} duplicate USUBJID + {group_col} ({', '.join(map(str, ids))}). "
+            "ADSL has one record per subject: remove the duplicate records."
+        )
+    two_arms = (
+        df.filter(pl.col(group_col).is_not_null())
+        .group_by("USUBJID")
+        .agg(pl.col(group_col).n_unique().alias("__k"))
+        .filter(pl.col("__k") > 1)
+    )
+    if two_arms.height:
+        ids = two_arms.sort("USUBJID")["USUBJID"].head(5).to_list()
+        warnings.warn(
+            f"{two_arms.height} subject(s) are in more than one {group_col} arm and "
+            f"count in each arm: {ids}. Check ADSL, or use the arm of one period.",
+            UserWarning,
+            stacklevel=3,
+        )
     no_arm = df.filter(pl.col(group_col).is_null())
     if no_arm.height:
         ids = no_arm["USUBJID"].unique(maintain_order=True)
@@ -478,7 +684,9 @@ def compute_big_n(
     # unfiltered arm universe; a filter may legitimately empty an arm.
     df = expand_pools(df, pools, group_col, strict=False)
     counts = df.group_by(group_col).agg(pl.col("USUBJID").n_unique().alias("N")).sort(group_col)
-    return dict(zip(counts[group_col].to_list(), counts["N"].to_list()))
+    big_n = dict.fromkeys(categories or [], 0)
+    big_n.update(zip(counts[group_col].to_list(), counts["N"].to_list()))
+    return big_n
 
 
 def restrict_to_population(
@@ -939,6 +1147,7 @@ def _level_rows(
     fmt_overrides: dict[str, str] | None = None,
     count_values: bool = False,
     missing_label: str | None = None,
+    order_cols: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """Stats per arm × level combination of *fields*, with explicit zero cells.
 
@@ -952,20 +1161,33 @@ def _level_rows(
     at a level with continuous statistics it is the count of non-missing
     *value_col* values; at a parent level it is the count of subjects
     with a non-missing value.  A level equal to *missing_label* sorts
-    last within its parent.
+    last within its parent.  A field with an order column in
+    *order_cols* sorts on the minimum of that column within its parent
+    level (nulls last, ties by text), as SAS sorts BY AVISITN.
     """
     # Deduplicate for select/group_by: a row field may repeat or equal
     # group_col (e.g. a per-arm breakdown) — the lookup tuples below are
     # built from named rows, so duplicates stay consistent either way.
     select_fields = list(dict.fromkeys(fields))
-    sort_keys: list[Any] = list(select_fields)
-    if missing_label is not None:
-        sort_keys = [
-            key
-            for f in select_fields
-            for key in (pl.col(f).cast(pl.Utf8).eq_missing(missing_label), pl.col(f))
-        ]
-    combos = frame.select(select_fields).drop_nulls().unique().sort(sort_keys)
+    order_cols = {f: c for f, c in (order_cols or {}).items() if f in select_fields}
+    keyed = frame.drop_nulls(subset=select_fields).with_columns(
+        pl.col(order_cols[f]).min().over(select_fields[: i + 1]).alias(f"__ord_{i}")
+        for i, f in enumerate(select_fields)
+        if f in order_cols
+    )
+    sort_keys: list[Any] = []
+    for i, f in enumerate(select_fields):
+        if missing_label is not None:
+            sort_keys.append(pl.col(f).cast(pl.Utf8).eq_missing(missing_label))
+        if f in order_cols:
+            sort_keys.append(pl.col(f"__ord_{i}"))
+        sort_keys.append(pl.col(f))
+    ord_names = [f"__ord_{i}" for i, f in enumerate(select_fields) if f in order_cols]
+    combos = (
+        keyed.select([*select_fields, *ord_names])
+        .unique(subset=select_fields)
+        .sort(sort_keys, nulls_last=True)
+    )
     if combos.height == 0:
         return []
 
@@ -1003,13 +1225,13 @@ def _level_rows(
                         group_col,
                         arm,
                         variable,
-                        str(combo[variable]),
+                        level_text(combo[variable]),
                         sn,
                         sl,
                         sv,
                         context,
                         group2=parent or "",
-                        group2_level=str(combo[parent]) if parent else "",
+                        group2_level=level_text(combo[parent]) if parent else "",
                         variable_label=variable_label,
                         fmt_fn=fmt_overrides.get(sn),
                     )
@@ -1077,6 +1299,75 @@ def _adsl_arm_error(adsl_col: str, adsl: pl.DataFrame, explicit: bool) -> str:
     )
 
 
+def resolve_arms(
+    data_arms: set[str],
+    group_col: str,
+    *,
+    adsl: pl.DataFrame | None,
+    adsl_group_col: str | None,
+    adsl_filter: Any | None,
+    pools: list[GroupPool],
+    column_order: Sequence[str] | None,
+    known_arms: set[str],
+    categories: Sequence[str] | None,
+) -> tuple[list[str], dict[str, int]]:
+    """Return the column order and the big N of a table.
+
+    The arm universe comes from *adsl* when given: an arm emptied by
+    ``adsl_filter`` or with no analysis record keeps its column with
+    N=0, and an arm in the data but absent from ADSL raises.  Without
+    *adsl* the arms are the arms of the data and there is no big N.
+
+    Args:
+        data_arms: Arms of the analysis records that are counted.
+        group_col: Arm column of the analysis dataset.
+        adsl: The population, or ``None``.
+        adsl_group_col: Arm column of *adsl* when it differs.
+        adsl_filter: The population filter.
+        pools: Pool definitions.
+        column_order: The requested column order, or ``None``.
+        known_arms: Arms that *column_order* may name (the arms of the
+            unfiltered analysis dataset).
+        categories: Enum categories of the arm column, or ``None``.
+
+    Returns:
+        tuple[list[str], dict[str, int]]: The column order and the big
+            N per column (empty without *adsl*).
+
+    Raises:
+        SchemaError: On an arm column absent from *adsl*, an unknown
+            pool arm, an arm without a denominator, or an unknown
+            *column_order* entry.
+
+    Examples:
+        ``arms, big_n = resolve_arms({"A"}, "TRTA", adsl=adsl, adsl_group_col="TRT01A", ...)``
+    """
+    if adsl is not None:
+        adsl_col = adsl_group_col or group_col
+        if adsl_col not in adsl.columns:
+            raise SchemaError(_adsl_arm_error(adsl_col, adsl, adsl_group_col is not None))
+        adsl_arms = set(adsl[adsl_col].cast(pl.Utf8).drop_nulls().unique().to_list())
+        _validate_pool_arms(pools, adsl_arms, adsl_col, source="adsl")
+        big_n = compute_big_n(adsl, adsl_col, pools, filter_expr=resolve_filter(adsl_filter))
+        unknown = sorted(a for a in data_arms if a not in big_n)
+        if unknown:
+            raise SchemaError(
+                f"Arm(s) {unknown} in the analysis dataset have no denominator "
+                f"in ADSL (after adsl_filter). Align {group_col} between the "
+                "datasets or filter the analysis dataset to the population."
+            )
+        # An arm or pool emptied by adsl_filter keeps its column with N=0
+        # (and null percentages) rather than silently vanishing.
+        universe = set(big_n) | adsl_arms | {p.label for p in pools}
+        big_n = {arm: big_n.get(arm, 0) for arm in universe}
+    else:
+        big_n = {}
+        _validate_pool_arms(pools, data_arms, group_col, source="the analysis dataset")
+        universe = data_arms | {p.label for p in pools}
+    arms = order_arms(universe, pools, categories, column_order, known_arms | universe)
+    return arms, big_n
+
+
 def summarize_ard(
     df: pl.DataFrame,
     *,
@@ -1121,11 +1412,15 @@ def summarize_ard(
         df: Analysis dataset.
         rows: Row fields — names or ``Row`` objects (honouring
             ``Row.filter_value``), e.g. ``["AEBODSYS", "AEDECOD"]``.
+            Levels sort by ``Row.order_by``, else by ``<field>N`` when
+            the dataset has it (AVISIT by AVISITN), else as text.
         stats: Statistics computed per arm × level.
         context: ARD context tag written to every row.
         group_col: Treatment-arm column.
         pools: Composite arms; ``None`` for none.
-        column_order: Explicit arm ordering; remaining arms keep sort order.
+        column_order: Explicit arm ordering; remaining arms keep their
+            order: arms first (Enum category order, else text order),
+            then pools.  A name that is not an arm or pool raises.
         adsl: Population source for big-N denominators and the arm
             universe.  Analysis records of subjects outside the filtered
             ADSL are left out of every count (ADR-0016).
@@ -1134,7 +1429,8 @@ def summarize_ard(
             them, the analysis records for n.  Requires *adsl*.
         dataset_filter: Filter applied to *df* before counting
             (``pl.Expr`` or expression string).
-        prefilter: Extra *df* filter (e.g. ``DTHFL == "Y"``).
+        prefilter: Extra *df* filter (e.g. ``DTHFL == "Y"``), a
+            ``pl.Expr`` or an expression string.
         header_rows: ``OverallStat`` aggregate rows emitted above the
             hierarchy (``variable=""``, ``variable_level=label``).
         nested: When ``True``, *rows* is a hierarchy: count statistics
@@ -1174,14 +1470,16 @@ def summarize_ard(
     Raises:
         SchemaError: On missing group column, missing percentage
             denominator, missing or non-numeric *value_col* with
-            continuous statistics requested, missing *label_col*, a row
-            field absent from *df*, unknown arms/pools, or ARD schema
-            violations.
+            continuous statistics requested, an infinite *value_col*
+            value, missing *label_col*, a row field absent from *df*,
+            a numeric arm column, an unknown *column_order* entry,
+            unknown arms/pools, or ARD schema violations.
 
     References:
-        ADaMIG v1.3 (TRTxxA on ADSL, TRTA on OCCDS/BDS); FDA CDER
+        ADaMIG v1.3 (TRTxxA on ADSL, TRTA on OCCDS/BDS; AVISITN is the
+        sort key of AVISIT); FDA CDER
         Standard Safety Tables and Figures IG v2.0, 2.1.2 (missing row);
-        ADR-0038.
+        ADR-0038; ADR-0055 (row and column order); ADR-0056 (NaN, inf).
 
     Examples:
         ``summarize_ard(adae, rows=["AEBODSYS", "AEDECOD"], stats=[Statistic.N_PCT],
@@ -1202,12 +1500,31 @@ def summarize_ard(
             f"Row field(s) {absent_rows} are not in the analysis dataset. "
             f"Available: {sorted(df.columns)}"
         )
+    absent_order = [r.order_by for r in row_defs if r.order_by and r.order_by not in df.columns]
+    if absent_order:
+        raise SchemaError(
+            f"Row order_by column(s) {absent_order} are not in the analysis dataset. "
+            f"Available: {sorted(df.columns)}"
+        )
+    order_cols = {}
+    for r in row_defs:
+        order_col = r.order_by or f"{r.field}N"
+        if order_col in df.columns:
+            order_cols[r.field] = order_col
+    check_text_arm(df, group_col, "the analysis dataset")
+    adsl_col = adsl_group_col or group_col
+    if adsl is not None and adsl_col in adsl.columns:
+        check_text_arm(adsl, adsl_col, "adsl")
+    categories = enum_arms(adsl, adsl_col) or enum_arms(df, group_col)
+    df = df.with_columns(pl.col(group_col).cast(pl.Utf8))
+    known_arms = set(df[group_col].drop_nulls().unique().to_list())
 
     dataset_filter_expr = resolve_filter(dataset_filter)
     if dataset_filter_expr is not None:
         df = df.filter(dataset_filter_expr)
-    if prefilter is not None:
-        df = df.filter(prefilter)
+    prefilter_expr = resolve_filter(prefilter)
+    if prefilter_expr is not None:
+        df = df.filter(prefilter_expr)
     if leaf_rank is not None and row_defs:
         check_rank_values(
             df,
@@ -1258,6 +1575,8 @@ def summarize_ard(
             f"{value_col} is {df[value_col].dtype}. Cast it: "
             f"pl.col('{value_col}').cast(pl.Float64)"
         )
+    if cont_requested:
+        df = nan_to_null(df, value_col)
     if label_col is not None and label_col not in df.columns:
         raise SchemaError(
             f"label_col '{label_col}' not found in the analysis dataset. "
@@ -1265,36 +1584,21 @@ def summarize_ard(
         )
 
     data_arms = set(df[group_col].drop_nulls().unique().to_list())
-    if adsl is not None:
-        adsl_col = adsl_group_col or group_col
-        if adsl_col not in adsl.columns:
-            raise SchemaError(_adsl_arm_error(adsl_col, adsl, adsl_group_col is not None))
-        adsl_arms = set(adsl[adsl_col].drop_nulls().unique().to_list())
-        _validate_pool_arms(pools, adsl_arms, adsl_col, source="adsl")
-        big_n = compute_big_n(adsl, adsl_col, pools, filter_expr=resolve_filter(adsl_filter))
-        unknown = sorted(a for a in data_arms if a not in big_n)
-        if unknown:
-            raise SchemaError(
-                f"Arm(s) {unknown} in the analysis dataset have no denominator "
-                f"in ADSL (after adsl_filter). Align {group_col} between the "
-                "datasets or filter the analysis dataset to the population."
-            )
-        # An arm or pool emptied by adsl_filter keeps its column with N=0
-        # (and null percentages) rather than silently vanishing.
-        universe = set(big_n) | adsl_arms | {p.label for p in pools}
-        big_n = {arm: big_n.get(arm, 0) for arm in universe}
-        arms = sorted(universe)
-    else:
-        big_n = {}
-        _validate_pool_arms(pools, data_arms, group_col, source="the analysis dataset")
-        arms = sorted(data_arms | {p.label for p in pools})
+    arms, big_n = resolve_arms(
+        data_arms,
+        group_col,
+        adsl=adsl,
+        adsl_group_col=adsl_group_col,
+        adsl_filter=adsl_filter,
+        pools=pools,
+        column_order=column_order,
+        known_arms=known_arms,
+        categories=categories,
+    )
 
     df, missing_notes = _apply_missing(df, missing)
     missing_label = missing.label if missing is not None else None
     df = expand_pools(df, pools, group_col, strict=False)
-
-    if column_order:
-        arms = [a for a in column_order if a in arms] + [a for a in arms if a not in column_order]
 
     ard_rows: list[dict[str, Any]] = []
     table_fmt = decimals or {}
@@ -1406,6 +1710,7 @@ def summarize_ard(
                 fmt_overrides={**table_fmt, **(present[depth].decimals or {})},
                 count_values=bool(cont_requested),
                 missing_label=missing_label,
+                order_cols=order_cols,
             )
     else:
         for row_def in present:
@@ -1425,6 +1730,7 @@ def summarize_ard(
                 fmt_overrides={**table_fmt, **(row_def.decimals or {})},
                 count_values=bool(cont_requested),
                 missing_label=missing_label,
+                order_cols=order_cols,
             )
 
     ard = rows_to_ard(ard_rows)
@@ -1451,7 +1757,10 @@ def prepare_frame(df: pl.DataFrame, spec: SummarySpecBase) -> pl.DataFrame:
     the dataset filter, then the template's prefilter.  The seam
     (:func:`summarize_spec`) calls it; a composite table that does its
     own work between the filter and the engine calls it first and then
-    passes no ``dataset_filter`` to :func:`summarize_ard`.
+    passes no ``dataset_filter`` to :func:`summarize_ard`.  A prefilter
+    that keeps no record of a non-empty frame gives a ``UserWarning``
+    with the values of its columns, as a SAS log NOTE for a WHERE with
+    no match.
 
     Args:
         df: The analysis dataset.
@@ -1474,8 +1783,111 @@ def prepare_frame(df: pl.DataFrame, spec: SummarySpecBase) -> pl.DataFrame:
         df = df.filter(dataset_filter)
     prefilter = resolve_filter(spec.prefilter)
     if prefilter is not None:
+        before = df
         df = df.filter(prefilter)
+        if before.height and not df.height:
+            seen = "; ".join(
+                f"{c} values: "
+                + ", ".join(level_text(v) for v in before[c].unique(maintain_order=True).head(10))
+                for c in dict.fromkeys(prefilter.meta.root_names())
+                if c in before.columns
+            )
+            warnings.warn(
+                f"prefilter {spec.prefilter} kept 0 of {before.height} records; {seen}. "
+                "Set the prefilter to the study's values, or prefilter=None.",
+                UserWarning,
+                stacklevel=3,
+            )
     return df
+
+
+def _format_listing_column(series: pl.Series, fmt: str, field: str) -> pl.Series:
+    """Print one listing column through its ``Column.format``."""
+    temporal = series.dtype.is_temporal()
+    if not temporal and "{" not in fmt:
+        raise SchemaError(
+            f"Listing column '{field}' format {fmt!r} is not a Python format string; "
+            "use e.g. '{:.2f}' for a number or '%Y-%m-%d' for a date."
+        )
+    out: list[str | None] = []
+    for value in series.to_list():
+        if value is None or (isinstance(value, float) and math.isnan(value)):
+            out.append(None)
+            continue
+        try:
+            out.append(value.strftime(fmt) if temporal else fmt.format(value))
+        except (ValueError, TypeError, IndexError, KeyError, AttributeError) as exc:
+            raise SchemaError(
+                f"Listing column '{field}' format {fmt!r} cannot print {value!r}: {exc}"
+            ) from None
+    return pl.Series(series.name, out, dtype=pl.Utf8)
+
+
+def listing_frame(
+    df: pl.DataFrame,
+    spec: TLGSpec,
+    *,
+    fallback: dict[str, str] | None = None,
+) -> pl.DataFrame:
+    """Sort, format, select and label the records of a listing.
+
+    The order follows PROC SORT BY then PROC PRINT VAR: the frame is
+    sorted on ``sort_by`` first, so a key need not be a displayed
+    column, and ties keep the input order.  A sort key may name a field
+    or a column label.  Each column with a ``Column.format`` prints
+    through it (a Python format string for a number, a strftime pattern
+    for a date); a null or NaN prints empty.
+
+    Args:
+        df: The filtered listing records.
+        spec: A listing spec with ``columns`` and ``sort_by``.
+        fallback: Default column to use when a default column is absent
+            (``{"PARAM": "PARAMCD"}``).
+
+    Returns:
+        pl.DataFrame: The listing, columns renamed to their labels.
+
+    Raises:
+        SchemaError: If a column or sort key that the user set is not in
+            *df*, or a format cannot print a value.
+
+    Examples:
+        ``listing = listing_frame(adae.filter(pl.col("AESER") == "Y"), AEListingSpec())``
+    """
+    available = set(df.columns)
+    columns: list[Column] = list(getattr(spec, "columns", []))
+    sort_by: list[str] = list(getattr(spec, "sort_by", []))
+    if fallback and spec.uses_default("columns"):
+        columns = [
+            c.model_copy(update={"field": fallback[c.field]})
+            if c.field in fallback and c.field not in available and fallback[c.field] in available
+            else c
+            for c in columns
+        ]
+    if fallback and spec.uses_default("sort_by"):
+        sort_by = [
+            fallback[s] if s in fallback and s not in available and fallback[s] in available else s
+            for s in sort_by
+        ]
+    check_listing_columns(spec, available)
+    label_to_field = {c.label: c.field for c in columns if c.label}
+    keys = [s if s in available else label_to_field.get(s, s) for s in sort_by]
+    if not spec.uses_default("sort_by"):
+        unknown = [s for s, k in zip(sort_by, keys) if k not in available]
+        if unknown:
+            raise SchemaError(
+                f"sort_by {unknown} are not in the analysis dataset. Available: {sorted(available)}"
+            )
+    keys = [k for k in dict.fromkeys(keys) if k in available]
+    if keys:
+        df = df.sort(keys, maintain_order=True)
+    present = [c for c in columns if c.field in available]
+    df = df.with_columns(
+        _format_listing_column(df[c.field], c.format, c.field) for c in present if c.format
+    )
+    df = df.select(list(dict.fromkeys(c.field for c in present)))
+    rename_map = {c.field: c.label for c in present if c.label}
+    return df.rename(rename_map) if rename_map else df
 
 
 def summarize_spec(
@@ -1543,14 +1955,31 @@ def _apply_label_col(
 
     Applied to ``variable_level`` (where the field is the variable) and
     ``group2_level`` (where it is the parent).  Codes without a label
-    pass through unchanged.
+    pass through unchanged.  ADaM maps one code to one label (PARAMCD to
+    PARAM), so a code with two labels raises: a mean over two units
+    must not print under one unit.
     """
     pairs = (
-        df.select(pl.col(field).cast(pl.Utf8), pl.col(label_col).cast(pl.Utf8))
+        df.select(pl.col(field), pl.col(label_col).cast(pl.Utf8))
         .drop_nulls()
-        .unique(subset=[field], keep="first", maintain_order=True)
+        .unique(maintain_order=True)
     )
-    mapping = dict(zip(pairs[field].to_list(), pairs[label_col].to_list()))
+    conflicts = (
+        pairs.group_by(field, maintain_order=True)
+        .agg(pl.col(label_col))
+        .filter(pl.col(label_col).list.len() > 1)
+    )
+    if conflicts.height:
+        code, labels = conflicts.row(0)
+        raise SchemaError(
+            f"{field} {level_text(code)!r} has {len(labels)} {label_col} labels: "
+            f"{labels}. ADaM maps one {field} to one {label_col}: give each "
+            f"label its own {field}."
+        )
+    mapping = {
+        level_text(code): label
+        for code, label in zip(pairs[field].to_list(), pairs[label_col].to_list())
+    }
     if not mapping:
         return ard
     return ard.with_columns(

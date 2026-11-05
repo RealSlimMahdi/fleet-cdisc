@@ -482,7 +482,9 @@ def test_c1_436_an_explicit_dm_variable_must_exist() -> None:
             groupby="TRT01A", spec=DMSummarySpec(categorical_vars=["SEXX"])
         )
     with pytest.raises(SchemaError, match="AAGE"):
-        ADSL_TRT01A.tlg.dm.t_summary(groupby="TRT01A", spec=DMSummarySpec(age_var="AAGE"))
+        ADSL_TRT01A.tlg.dm.t_summary(
+            groupby="TRT01A", spec=DMSummarySpec(continuous_vars={"AAGE": "Age (yr)"})
+        )
 
 
 def test_c1_436_default_dm_rows_absent_from_adsl_are_left_out() -> None:

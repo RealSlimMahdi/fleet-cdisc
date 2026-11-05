@@ -609,7 +609,9 @@ def test_tlg_explore_default_matches_tlg_run_output(
     assert _run(["tlg", "run", str(spec), *common, "-o", str(run_dir)]) == 0
     assert _run(["tlg", "explore", str(spec), *common, "-o", str(out)]) == 0
 
-    batch_html = (run_dir / "aet01.html").read_text(encoding="utf-8")
+    batch_doc = (run_dir / "aet01.html").read_text(encoding="utf-8")
+    assert batch_doc.startswith("<!DOCTYPE html>")  # c1-814: a complete document
+    batch_html = batch_doc.split("<body>\n", 1)[1].rsplit("\n</body>", 1)[0]
     explorer_html = out.read_text(encoding="utf-8")
     assert f'id="var-aet01-v0">\n{batch_html}' in explorer_html
 

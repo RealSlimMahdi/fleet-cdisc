@@ -266,7 +266,7 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | `--subtitle` | `""` | Output subtitle. |
 | `--footnote` | _(none)_ | Footnote (repeatable). |
 | `--rows-per-page` | _(none)_ | Maximum body rows per page (model-layer pagination). |
-| `--page-by` | _(none)_ | ARD variable to page-break on (e.g. PARAMCD). |
+| `--page-by` | _(none)_ | ARD row variable to page-break on (e.g. PARAMCD). Tables only. |
 | `--watch` | _(none)_ | Re-run whenever a spec file changes (requires the 'watch' extra). |
 
 ### `fleet tlg explore`
@@ -304,7 +304,7 @@ PROC COMPARE analogue: pair the two datasets on --keys, match variables by name 
 | `--footnote` | _(none)_ | Footnote (repeatable). |
 | `--rows-per-page` | _(none)_ | Maximum body rows per page (model-layer pagination). |
 | `--page-by` | _(none)_ | ARD variable to page-break on (e.g. PARAMCD). |
-| `--wrap` | _(none)_ | Path to an HTML wrapper template with {table} placeholder. |
+| `--wrap` | _(none)_ | Path to an HTML wrapper template with {table} placeholder (html and pdf only). A PDF loads no external resource: a logo or style sheet the wrapper links is left out, with a warning. |
 
 ---
 

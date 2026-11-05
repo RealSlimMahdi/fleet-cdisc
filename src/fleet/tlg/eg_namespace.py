@@ -76,8 +76,9 @@ class EGChgSpec(EGSummarySpec):
 
     Prefilter rule: the baseline record (``ABLFL`` = Y) and records
     with no change value are dropped before summarising, so ``ABLFL``
-    is a required column.  Unless set, the prefilter follows
-    ``value_col``; ``prefilter=None`` switches the rule off.
+    and the ``value_col`` column are required.  Unless set, the
+    prefilter follows ``value_col``; ``prefilter=None`` switches the
+    rule off.
     """
 
     context: ClassVar[str] = "t_eg_chg"
@@ -87,7 +88,7 @@ class EGChgSpec(EGSummarySpec):
         description="Analysis-value column summarized (change from baseline).",
     )
     required_columns: list[str] = Field(
-        default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVISIT", "CHG"],
+        default_factory=lambda: ["USUBJID", "TRTA", "PARAMCD", "AVISIT"],
     )
 
     @model_validator(mode="after")
