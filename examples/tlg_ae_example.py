@@ -157,6 +157,8 @@ adsl = (
     .source("RACE")
     .source("ARM")
     .assign("TRT01P", source="ARM")
+    # The raw DM has no actual arm, so the actual arm is the planned arm here.
+    .assign("TRT01A", source="ARM")
     .date("TRTSDT", source="RFSTDTC")
     .date("TRTEDT", source="RFENDTC")
     .derivation(
@@ -165,11 +167,9 @@ adsl = (
     )
     .to_frame()
 )
-# Use TRT01P as TRTA for summary tables
-adsl = adsl.with_columns(pl.col("TRT01P").alias("TRTA"))
 
 print(f"   {adsl.shape[0]} subjects × {adsl.shape[1]} variables")
-print(f"   Arms: {sorted(adsl['TRTA'].unique().to_list())}")
+print(f"   Arms: {sorted(adsl['TRT01A'].unique().to_list())}")
 print(f"   SAFFL=Y: {(adsl['SAFFL'] == 'Y').sum()} / {adsl.shape[0]}")
 
 
@@ -177,7 +177,7 @@ print(f"   SAFFL=Y: {(adsl['SAFFL'] == 'Y').sum()} / {adsl.shape[0]}")
 # 5. Derive ADAE (from SDTM AE + ADSL treatment info)
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 5. ADAE ═════════════════════════════════════════════════════════════")
-_adsl_trt = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "TRTA", "SAFFL"])
+_adsl_trt = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01A", "SAFFL"])
 ae_with_trt = fleet.frame(ae.join(_adsl_trt, on="USUBJID", how="left"))
 
 adae = (
@@ -191,7 +191,8 @@ adae = (
     .source("AEREL")
     .source("AEOUT")
     .source("AEACN")
-    .source("TRTA")
+    # Parallel design: the actual arm of the record is the ADSL actual arm.
+    .assign("TRTA", source="TRT01A")
     .source("SAFFL")
     # admiral ad_adae.R: partial start to the first day but not before TRTSDT,
     # partial end to the last day. The SAP decides the rule.
@@ -237,10 +238,15 @@ print(f"   Body systems: {sorted(adae['AEBODSYS'].unique().to_list())}")
 # 6. AE Summary — DEFAULT spec (zero-config)
 # ════════════════════════════════════════════════════════════════════════════
 print("\n══ 6. AE Summary — DEFAULT (zero-config) ═══════════════════════════════")
-print("   adae.tlg.ae.t_summary(groupby='TRTA', adsl=adsl)")
+print(
+    "   adae.tlg.ae.t_summary(groupby='TRTA', adsl=adsl, spec=AESummarySpec(adsl_group_col='TRT01A'))"
+)
 print()
 
-ard_default = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl)
+# ADAE holds the arm as TRTA, ADSL as TRT01A: adsl_group_col names the ADSL arm.
+ard_default = adae.tlg.ae.t_summary(
+    groupby="TRTA", adsl=adsl, spec=AESummarySpec(adsl_group_col="TRT01A")
+)
 
 print(ard_default)
 print(f"\n   ARD shape: {ard_default.shape[0]} rows × {ard_default.shape[1]} cols")
@@ -266,6 +272,7 @@ custom_spec = AESummarySpec(
         OverallStat(label="Subjects with at least one serious AE", filter='pl.col("AESER") == "Y"'),
     ],
     columns=["TRTA"],
+    adsl_group_col="TRT01A",
     statistics=[Statistic.N_SUBJECTS, Statistic.N_PCT, Statistic.N_EVENTS],
     pools=[
         GroupPool(label="All Xanomeline", arms=["Xanomeline Low Dose", "Xanomeline High Dose"]),
@@ -305,7 +312,7 @@ for row in big_n_rows.iter_rows(named=True):
 print("\n══ 7b. AE Summary — INLINE BUILDER (with header rows) ═════════════════")
 
 ard_builder = (
-    adae.tlg.ae.population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
+    adae.tlg.ae.population(adsl, adsl_filter=pl.col("SAFFL") == "Y", group_col="TRT01A")
     .by("TRTA")
     .header_rows(
         [
@@ -407,6 +414,8 @@ print(
     f"→ {type(overview_spec).__name__}"
 )
 
+# ADSL holds the arm as TRT01A: the CLI flag --adsl-groupby TRT01A does the same.
+overview_spec = overview_spec.model_copy(update={"adsl_group_col": "TRT01A"})
 ard_overview = tlg.run_spec(overview_spec, adae, adsl=adsl)
 print(ard_overview.filter(pl.col("stat_name").is_in(["n", "pct"])))
 print(
@@ -440,7 +449,7 @@ print(f"   Model: {len(model.columns)} columns, {len(model.rows)} display rows")
 print("\n══ 12. Builder .to_html() shortcut ═════════════════════════════════════")
 
 builder_html = (
-    adae.tlg.ae.population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
+    adae.tlg.ae.population(adsl, adsl_filter=pl.col("SAFFL") == "Y", group_col="TRT01A")
     .by("TRTA")
     .header_rows(
         [
@@ -494,7 +503,7 @@ print("\n══ 14. PPTX export — editable slide deck ════════
 
 try:
     pptx_path = (
-        adae.tlg.ae.population(adsl, adsl_filter=pl.col("SAFFL") == "Y")
+        adae.tlg.ae.population(adsl, adsl_filter=pl.col("SAFFL") == "Y", group_col="TRT01A")
         .by("TRTA")
         .header_rows(
             [

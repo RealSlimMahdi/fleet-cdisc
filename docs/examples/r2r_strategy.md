@@ -119,9 +119,8 @@ Load the pre-built ADSL and the raw AE extract:
 import polars as pl
 import fleet  # registers .sdtm / .adam / .tlg namespaces
 
-# ADSL is produced by a separate governed program
+# ADSL is produced by a separate governed program; it holds the arm as TRT01A
 adsl = pl.read_csv("outputs/cdiscpilot01/adsl_admiral.csv", try_parse_dates=True)
-adsl = adsl.with_columns(pl.col("TRT01P").alias("TRTA"))
 
 # Raw AE — the only raw data this script owns (your study's file)
 ae_raw = pl.read_csv("data/raw/ae_raw.csv")
@@ -152,14 +151,14 @@ treatment-emergent flags, and worst-severity flags:
 
 ```python
 # Merge ADSL treatment dates & population flags into SDTM AE
-_adsl_trt = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01P", "TRTA", "SAFFL"])
+_adsl_trt = adsl.select(["USUBJID", "TRTSDT", "TRTEDT", "TRT01A", "SAFFL"])
 ae_with_trt = ae.join(_adsl_trt, on="USUBJID", how="left")
 
 adae = (
     ae_with_trt.adam.source("STUDYID")
     .source("USUBJID")
     .source("AETERM")
-    .source("TRTA")
+    .assign("TRTA", source="TRT01A")  # parallel design: TRTA is the ADSL actual arm
     .source("SAFFL")
     .date("ASTDT", source="AESTDTC")
     .study_day("ADY", date_col="ASTDT", ref_col="TRTSDT")
@@ -265,7 +264,7 @@ adae = (
     ae_with_trt.adam.source("STUDYID")
     .source("USUBJID")
     .source("AETERM")
-    .source("TRTA")
+    .assign("TRTA", source="TRT01A")
     .source("SAFFL")
     .date("ASTDT", source="AESTDTC")
     .study_day("ADY", date_col="ASTDT", ref_col="TRTSDT")
@@ -384,6 +383,7 @@ spec = AESummarySpec(
         Row(field="AEDECOD", label="Preferred Term"),
     ],
     statistics=[Statistic.N_SUBJECTS, Statistic.N_PCT],
+    adsl_group_col="TRT01A",  # ADAE arm is TRTA, ADSL arm is TRT01A
 )
 
 ard = adae.tlg.ae.t_summary(spec=spec, adsl=adsl)

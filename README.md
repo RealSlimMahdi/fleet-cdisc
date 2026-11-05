@@ -471,7 +471,7 @@ uv run fleet run --dataset ADVS --out outputs/          # define.yaml -> from_sp
 uv run fleet validate data/sdtm --custom-rules metadata/custom_rules
 uv run fleet check                                       # one CI gate: config + define.yaml schema + run setup (IG versions, rules dir) + custom rules (engine/API key as warnings)
 uv run fleet tlg list                                    # registered TLG templates
-uv run fleet tlg run specs/aet01.yaml --data ADAE=adae.parquet --adsl adsl.parquet --format rtf --rows-per-page 40
+uv run fleet tlg run specs/aet01.yaml --data ADAE=adae.parquet --adsl adsl.parquet --adsl-groupby TRT01A --format rtf --rows-per-page 40
 uv run fleet tdd build                                   # trial design datasets + conformance audit (paths from study_config.yaml)
 uv run fleet tdd ctgov NCT04280705 --write               # seed TS parameters from ClinicalTrials.gov into trial_design.yaml
 uv run fleet migrate src/ --write                        # rewrite removed pre-alpha verb/kwarg spellings
