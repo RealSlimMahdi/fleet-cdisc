@@ -846,7 +846,7 @@ variable), `listing` (`columns`, `rows`, `shown`, `total`, `truncated` — trunc
 limits, unlike the parquet), `settings` (every option in effect), `version`. Strict JSON: \
 non-finite numbers are null, temporal keys are ISO 8601 strings.
 
-### Pipeline verb (every namespace: `df.sdtm`, `df.adam`, `df.adam.adsl`, `df.adam.occds`, …)
+### Pipeline verb (`df.sdtm`, `df.adam`, `df.adam.adsl`, `df.adam.occds`, …; not `df.tlg`)
 
 The chain is the candidate, the argument is the base. `on_fail` is `"warn"` (default, \
 `UserWarning`), `"raise"` (`ComparisonError`) or `"ignore"`, exactly as for `.validate()`; the \
@@ -985,7 +985,7 @@ ae = (
 # Via ValidationService
 from fleet.validation.service import ValidationService
 svc = ValidationService()
-result = svc.validate_sdtm(ae, domain="AE", custom_rules="metadata/custom_rules")
+result = svc.validate_sdtm(ae, domain="AE", version="3.4", custom_rules="metadata/custom_rules")
 result.print_report()
 ```
 

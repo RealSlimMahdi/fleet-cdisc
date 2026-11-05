@@ -21,7 +21,7 @@ The findings of both runs join into one report per dataset. Each finding
 names its source, `official` or `custom`:
 
 ```text
-1. [CORE-000001] (official) AESTDTC is after AEENDTC
+1. [CORE-000718] (official) AESTDTC falls after  AEENDTC.
 2. [FLEET-AE-001] (custom) AESEV is missing for a serious AE
 ```
 
