@@ -874,3 +874,183 @@ def test_c1_701_an_edited_criteria_file_is_read_again(tmp_path):
     path.write_text(json.dumps(raw), encoding="utf-8")
     second = pl.from_repr(LB_K).adam.atoxgr("G", **kw).to_frame()["G"][0]
     assert (first, second) == ("3", "1")
+
+
+# ------------------------------------------------------------------ #
+# BDS formulas, ADSL age, dates, study day, docs                       #
+# ------------------------------------------------------------------ #
+
+
+def test_c1_80_pchg_follows_adamig_sign_on_a_negative_baseline():
+    admb = pl.from_repr("""
+┌──────┬───────┐
+│ AVAL ┆ BASE  │
+│ ---  ┆ ---   │
+│ f64  ┆ f64   │
+╞══════╪═══════╡
+│ -2.0 ┆ -2.5  │
+│ -5.0 ┆ -10.0 │
+└──────┴───────┘
+""")
+    out = admb.adam.pchg("PCHG").to_frame()
+    assert out["PCHG"].to_list() == [-20.0, -50.0]
+    from fleet.adam.namespace import AdamNamespace
+
+    assert "abs(BASE)" in (AdamNamespace.pchg.__doc__ or "")
+
+
+def test_c1_82_bsa_accepts_admiral_dubois_dubois():
+    advs = pl.from_repr("""
+┌───────┬──────┐
+│ H     ┆ W    │
+│ ---   ┆ ---  │
+│ f64   ┆ f64  │
+╞═══════╪══════╡
+│ 170.0 ┆ 70.0 │
+└───────┴──────┘
+""")
+    a = advs.adam.bsa("BSA", height="H", weight="W", method="DuBois").to_frame()
+    b = advs.adam.bsa("BSA", height="H", weight="W", method="DuBois-DuBois").to_frame()
+    assert a["BSA"].to_list() == b["BSA"].to_list()
+    assert round(b["BSA"][0], 6) == 1.809708
+
+
+def test_c1_83_age_years_weeks_hours_and_unknown_unit_warns():
+    dm = pl.from_repr("""
+┌───────┬───────┐
+│ AGE   ┆ AGEU  │
+│ ---   ┆ ---   │
+│ f64   ┆ str   │
+╞═══════╪═══════╡
+│ 587.0 ┆ WEEKS │
+│ 24.0  ┆ HOURS │
+│ 5.0   ┆ YEAR  │
+└───────┴───────┘
+""")
+    with pytest.warns(UserWarning, match=r"1 row\(s\) have an AGEU.*\['YEAR'\]"):
+        out = dm.adam.adsl.age_years("AAGE", age_col="AGE", age_unit_col="AGEU").to_frame()
+    assert out["AAGE"].to_list() == [587 * 7 / 365.25, 24 / 8766, None]
+    rounded = dm.head(1).adam.adsl.age_years("AAGE", round_digits=1).to_frame()["AAGE"].to_list()
+    assert rounded == [11.2]
+
+
+def test_c1_85_pchg_base_zero_is_null():
+    df = pl.from_repr("""
+┌──────┬──────┐
+│ AVAL ┆ BASE │
+│ ---  ┆ ---  │
+│ f64  ┆ f64  │
+╞══════╪══════╡
+│ 5.0  ┆ 0.0  │
+│ 6.0  ┆ 4.0  │
+└──────┴──────┘
+""")
+    assert df.adam.pchg("PCHG").to_frame()["PCHG"].to_list() == [None, 50.0]
+
+
+@pytest.mark.parametrize(("stat", "expected"), [("min", 1.0), ("median", 2.0)])
+def test_c1_85_summary_records_min_and_median(stat, expected):
+    df = pl.from_repr("""
+┌─────────┬─────────┬──────┐
+│ USUBJID ┆ PARAMCD ┆ AVAL │
+│ ---     ┆ ---     ┆ ---  │
+│ str     ┆ str     ┆ f64  │
+╞═════════╪═════════╪══════╡
+│ 01      ┆ SYSBP   ┆ 1.0  │
+│ 01      ┆ SYSBP   ┆ 2.0  │
+│ 01      ┆ SYSBP   ┆ 9.0  │
+└─────────┴─────────┴──────┘
+""")
+    out = df.adam.derive_summary_records(
+        by=["USUBJID", "PARAMCD"], set_values_to={"DTYPE": "AVERAGE"}, stat=stat
+    ).to_frame()
+    assert out.filter(pl.col("DTYPE") == "AVERAGE")["AVAL"].to_list() == [expected]
+
+
+def test_c1_85_derive_param_gives_no_row_without_a_source_parameter():
+    df = pl.from_repr("""
+┌─────────┬─────────┬───────┐
+│ USUBJID ┆ PARAMCD ┆ AVAL  │
+│ ---     ┆ ---     ┆ ---   │
+│ str     ┆ str     ┆ f64   │
+╞═════════╪═════════╪═══════╡
+│ 01      ┆ WEIGHT  ┆ 70.0  │
+│ 01      ┆ HEIGHT  ┆ 170.0 │
+│ 02      ┆ WEIGHT  ┆ 80.0  │
+└─────────┴─────────┴───────┘
+""")
+    out = df.adam.derive_param(
+        by=["USUBJID"],
+        set_values_to={"PARAMCD": "BMI"},
+        parameter_filter={"WEIGHT": "WEIGHT", "HEIGHT": "HEIGHT"},
+        analysis_value=pl.col("WEIGHT") / (pl.col("HEIGHT") / 100) ** 2,
+    ).to_frame()
+    assert out.filter(pl.col("PARAMCD") == "BMI")["USUBJID"].to_list() == ["01"]
+
+
+def test_c1_87_cdisc_day_has_no_day_zero():
+    from fleet.core.dtc import cdisc_day
+
+    df = pl.DataFrame({"d": [-2, -1, 0, 1]})
+    assert df.select(cdisc_day(pl.col("d")))["d"].to_list() == [-2, -1, 1, 2]
+    import importlib.util
+
+    from fleet.adam import utils
+
+    assert importlib.util.find_spec("fleet.core.seq") is None
+    assert not hasattr(utils, "study_day")
+
+
+@pytest.mark.parametrize(
+    ("target", "value"),
+    [("RFSTDT", "15JAN2024"), ("ADT", "2024-02-30"), ("ADTM", "2024-01-15 08:30")],
+)
+def test_c1_71_date_literal_that_is_not_iso_raises(target, value):
+    df = pl.DataFrame({"USUBJID": ["01"]})
+    with pytest.raises(DerivationError, match=rf"date\('{target}'\): value '{value}' is not ISO"):
+        df.adam.date(target, value=value)
+
+
+def test_c1_71_date_literal_with_time():
+    df = pl.DataFrame({"USUBJID": ["01"]})
+    out = (
+        df.adam.date("ADTM", value="2024-01-15T08:30")
+        .date("ADT", value="2024-01-15T08:30:00")
+        .to_frame()
+    )
+    assert str(out["ADTM"][0]) == "2024-01-15 08:30:00"
+    assert str(out["ADT"][0]) == "2024-01-15"
+
+
+def test_c1_71_sdtm_dtc_literal_must_be_iso_but_may_be_partial():
+    df = pl.DataFrame({"USUBJID": ["01"]})
+    with pytest.raises(DerivationError, match="not an ISO 8601 --DTC value"):
+        df.sdtm.date("RFSTDTC", value="15JAN2024")
+    assert df.sdtm.date("RFSTDTC", value="2024-01").to_frame()["RFSTDTC"].to_list() == ["2024-01"]
+
+
+def test_c1_73_hhmm_time_gives_tmf_s():
+    ae = pl.from_repr("""
+┌──────────────────┐
+│ AESTDTC          │
+│ ---              │
+│ str              │
+╞══════════════════╡
+│ 2021-03-15T10:30 │
+└──────────────────┘
+""")
+    out = ae.adam.date("ASTDTM", source="AESTDTC").to_frame()
+    assert str(out["ASTDTM"][0]) == "2021-03-15 10:30:00"
+    assert out["ASTTMF"].to_list() == ["S"]
+    from fleet.adam._mixins import SharedADaMVerbsMixin
+
+    assert "ignore_seconds_flag" in (SharedADaMVerbsMixin.date.__doc__ or "")
+
+
+def test_c1_721_transform_algorithm_has_a_rename_hint():
+    from fleet.tools.migrate_spec import ALGORITHM_RENAMES
+
+    assert ALGORITHM_RENAMES["transform"] == "derivation"
+    from fleet.adam import transforms
+
+    assert "algorithm: transform" not in (transforms.__doc__ or "")

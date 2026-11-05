@@ -229,16 +229,18 @@ class TestAgeInYears:
 
     def test_weeks(self):
         df = pl.from_repr("""\
-┌─────────┬───────┐
-│ AGE     ┆ AGEU  │
-│ ---     ┆ ---   │
-│ f64     ┆ str   │
-╞═════════╪═══════╡
-│ 52.1775 ┆ WEEKS │
-└─────────┴───────┘
+┌───────┬───────┐
+│ AGE   ┆ AGEU  │
+│ ---   ┆ ---   │
+│ f64   ┆ str   │
+╞═══════╪═══════╡
+│ 587.0 ┆ WEEKS │
+│ 24.0  ┆ HOURS │
+└───────┴───────┘
 """)
         result = df.select(age_in_years("AGE", "AGEU"))
-        assert result["AAGE"][0] == pytest.approx(1.0)
+        # admiral compute_age_years: 587 * 7 / 365.25 = 11.249829, 24 / 8766 = 0.002738.
+        assert result["AAGE"].to_list() == [587 * 7 / 365.25, 24 / 8766]
 
     def test_case_insensitive(self):
         df = pl.from_repr("""\

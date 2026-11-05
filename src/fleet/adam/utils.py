@@ -20,20 +20,6 @@ from fleet.core.dtc import (
 from fleet.core.exceptions import DerivationError, VerbUsageError
 
 
-def study_day(analysis_date: str, reference_date: str, target: str = "ADY") -> pl.Expr:
-    """
-    Compute study day: (ADT - TRTSDT) with day 1 = reference date.
-
-    Study day is 1-based: day 0 is mapped to day -1 (pre-treatment).
-    """
-    expr = (
-        pl.col(analysis_date).cast(pl.Date) - pl.col(reference_date).cast(pl.Date)
-    ).dt.total_days()
-
-    # CDISC convention: no day 0; positive days +1, negative days unchanged
-    return pl.when(expr >= 0).then(expr + 1).otherwise(expr).cast(pl.Int64).alias(target)
-
-
 def baseline(
     aval: str,
     baseline_flag_col: str = "ABLFL",
@@ -64,7 +50,11 @@ def chg(aval: str = "AVAL", base: str = "BASE", target: str = "CHG") -> pl.Expr:
 
 
 def pchg(aval: str = "AVAL", base: str = "BASE", target: str = "PCHG") -> pl.Expr:
-    """Percent change from baseline: PCHG = (AVAL - BASE) / BASE * 100, as Float64."""
+    """Percent change from baseline: PCHG = (AVAL - BASE) / BASE * 100, as Float64.
+
+    ADaMIG formula. admiral ``derive_var_pchg`` divides by abs(BASE), so the
+    sign differs on a negative baseline.
+    """
     a = pl.col(aval).cast(pl.Float64)
     b = pl.col(base).cast(pl.Float64)
     return pl.when(b.is_not_null() & (b != 0)).then((a - b) / b * 100).otherwise(None).alias(target)
@@ -184,7 +174,8 @@ def bsa(
     Supported *method* values:
 
     - ``"Mosteller"`` (default): ``sqrt(height_cm * weight_kg / 3600)``
-    - ``"DuBois"``: ``0.007184 * height_cm^0.725 * weight_kg^0.425``
+    - ``"DuBois"`` (or admiral's name ``"DuBois-DuBois"``):
+      ``0.007184 * height_cm^0.725 * weight_kg^0.425``
     - ``"Haycock"``: ``0.024265 * height_cm^0.3964 * weight_kg^0.5378``
     - ``"Gehan-George"``: ``0.0235 * height_cm^0.42246 * weight_kg^0.51456``
     """
@@ -193,7 +184,7 @@ def bsa(
     method_lower = method.lower()
     if method_lower == "mosteller":
         expr = (h * w / 3600.0).sqrt()
-    elif method_lower == "dubois":
+    elif method_lower in ("dubois", "dubois-dubois"):
         expr = 0.007184 * h.pow(0.725) * w.pow(0.425)
     elif method_lower == "haycock":
         expr = 0.024265 * h.pow(0.3964) * w.pow(0.5378)
@@ -201,7 +192,8 @@ def bsa(
         expr = 0.0235 * h.pow(0.42246) * w.pow(0.51456)
     else:
         raise DerivationError(
-            f"Unknown BSA method '{method}'. Supported: Mosteller, DuBois, Haycock, Gehan-George."
+            f"Unknown BSA method '{method}'. Supported: Mosteller, DuBois (DuBois-DuBois), "
+            "Haycock, Gehan-George."
         )
     return sas_round(expr, round_digits).alias(target)
 
@@ -286,8 +278,9 @@ def age_in_years(
     """
     Convert age to years, handling common unit strings.
 
-    Recognises *AGEU* values: ``YEARS``, ``MONTHS``, ``WEEKS``, ``DAYS``
-    (case-insensitive).  Unknown units return null.
+    Recognises *AGEU* values: ``YEARS``, ``MONTHS``, ``WEEKS``, ``DAYS``,
+    ``HOURS`` (case-insensitive), with admiral's year of 12 months, 365.25/7
+    weeks, 365.25 days or 8766 hours.  Unknown units return null.
     """
     age = pl.col(age_col).cast(pl.Float64)
     unit = pl.col(age_unit_col).str.to_uppercase()
@@ -297,9 +290,11 @@ def age_in_years(
         .when(unit == "MONTHS")
         .then(age / 12.0)
         .when(unit == "WEEKS")
-        .then(age / 52.1775)
+        .then(age * 7 / 365.25)
         .when(unit == "DAYS")
         .then(age / 365.25)
+        .when(unit == "HOURS")
+        .then(age / 8766.0)
         .otherwise(None)
     )
     return sas_round(years, round_digits).alias(target)
@@ -869,6 +864,19 @@ def _apply_bounds(
     return expr
 
 
+_DATE_LITERAL = re.compile(r"^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?$")
+
+
+def _parse_date_literal(value: str) -> datetime | None:
+    """``YYYY-MM-DD`` or ``YYYY-MM-DDThh:mm[:ss]`` as a datetime; else None."""
+    if not _DATE_LITERAL.match(value):
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
 def impute_and_flag(
     source: str | pl.Expr | None,
     target: str,
@@ -912,20 +920,23 @@ def impute_and_flag(
             else:  # dtc
                 return [pl.lit(value.isoformat()).alias(target)]
         else:
-            # String literal
+            # String literal: ISO 8601 or an error, never a silent null column.
             if output_type == "dtc":
+                if not pl.select(is_iso8601(pl.lit(value))).item():
+                    raise DerivationError(
+                        f"date('{target}'): value '{value}' is not an ISO 8601 --DTC value "
+                        "(SDTMIG 3.4 section 4.4, for example 2024-01-15 or 2024-01)."
+                    )
                 return [pl.lit(value).alias(target)]
-            elif output_type == "dt":
-                parsed = pl.lit(value).str.to_date("%Y-%m-%d", strict=False)
-                return [parsed.alias(target)]
-            else:  # dtm
-                parsed = pl.coalesce(
-                    pl.lit(value).str.to_datetime(
-                        "%Y-%m-%dT%H:%M:%S", time_unit="us", strict=False
-                    ),
-                    pl.lit(value).str.to_date("%Y-%m-%d", strict=False).cast(pl.Datetime("us")),
+            parsed_value = _parse_date_literal(value)
+            if parsed_value is None:
+                raise DerivationError(
+                    f"date('{target}'): value '{value}' is not ISO 8601 "
+                    "(YYYY-MM-DD or YYYY-MM-DDThh:mm[:ss])"
                 )
-                return [parsed.alias(target)]
+            if output_type == "dt":
+                return [pl.lit(parsed_value.date()).alias(target)]
+            return [pl.lit(parsed_value, dtype=pl.Datetime("us")).alias(target)]
 
     assert source is not None, "Either source or value must be provided"
 

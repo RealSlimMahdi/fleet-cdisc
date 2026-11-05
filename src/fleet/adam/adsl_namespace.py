@@ -23,6 +23,7 @@ Usage
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, Literal, Self
 
 import polars as pl
@@ -70,9 +71,10 @@ class ADSLNamespace(SharedADaMVerbsMixin):
     ) -> Self:
         """Convert age to years, handling common unit strings.
 
-        Recognises *AGEU* values: ``YEARS``, ``MONTHS``, ``WEEKS``, ``DAYS``
-        (case-insensitive).  Unknown units produce null.  The value keeps full
-        precision (AGE 7 MONTHS gives 0.5833...).
+        Recognises *AGEU* values: ``YEARS``, ``MONTHS``, ``WEEKS``, ``DAYS``,
+        ``HOURS`` (case-insensitive).  Unknown units produce null and a
+        warning with their count.  The value keeps full precision (AGE 7
+        MONTHS gives 0.5833...).
 
         Args:
             target: Name of the output column (default ``"AAGE"``).
@@ -86,8 +88,9 @@ class ADSLNamespace(SharedADaMVerbsMixin):
 
         References:
             admiral ``compute_age_years`` (pharmaverse): full precision; one year is
-            12 months, 52.1775 weeks or 365.25 days.
-            ADR-0025: a derived value is rounded only when the call says so.
+            12 months, 365.25/7 weeks, 365.25 days or 8766 hours. CDISC CT
+            C66781 (AGEU). ADR-0025: a derived value is rounded only when the
+            call says so. ADR-0053: the week and hour divisors.
 
         Examples:
             Derive age in years from DM variables::
@@ -100,6 +103,23 @@ class ADSLNamespace(SharedADaMVerbsMixin):
         """
         from fleet.adam.utils import age_in_years as _age_in_years_expr
 
+        if age_unit_col in self._lazy.collect_schema().names():
+            unit = pl.col(age_unit_col).cast(pl.String).str.to_uppercase()
+            known = ["YEARS", "MONTHS", "WEEKS", "DAYS", "HOURS"]
+            bad = (
+                self._lazy.filter(unit.is_not_null() & ~unit.is_in(known))
+                .select(pl.col(age_unit_col).cast(pl.String))
+                .collect()
+                .get_column(age_unit_col)
+            )
+            if bad.len():
+                warnings.warn(
+                    f"age_years(): {bad.len()} row(s) have an {age_unit_col} that is not "
+                    f"{', '.join(known)} (for example {bad.unique(maintain_order=True).head(3).to_list()}); "
+                    f"{target} is null on them.",
+                    UserWarning,
+                    stacklevel=2,
+                )
         return self._chain(
             _age_in_years_expr(
                 age_col=age_col,

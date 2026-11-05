@@ -23,7 +23,7 @@ import polars as pl
 import yaml
 
 from fleet.core.define_spec import load_spec_yaml
-from fleet.core.dtc import date_part, datetime_part, to_day
+from fleet.core.dtc import cdisc_day, date_part, datetime_part, to_day
 from fleet.core.exceptions import DerivationError
 from fleet.sdtm.tdd import (
     Epoch,
@@ -776,7 +776,7 @@ class TrialDesignMixin:
             to_day(pl.col(date_col), ref.schema[date_col])
             - to_day(pl.col(ref_date), ref.schema[ref_date])
         ).dt.total_days()
-        return ref.select(pl.when(diff >= 0).then(diff + 1).otherwise(diff)).to_series()
+        return ref.select(cdisc_day(diff)).to_series()
 
     def element_boundaries(
         self,

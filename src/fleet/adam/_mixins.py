@@ -1062,7 +1062,13 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         Dispatches behavior based on the CDISC suffix of *target* (DT, DTM)
         or an explicit *output* override.  Supports both column references
-        (``source=``) and literal values (``value=``).
+        (``source=``) and literal values (``value=``).  A literal must be
+        ISO 8601 (``YYYY-MM-DD`` or ``YYYY-MM-DDThh:mm[:ss]``); another text
+        raises.
+
+        An hh:mm time gives TMF ``S`` (ADR-0045); admiral gives NA by default
+        (``ignore_seconds_flag = TRUE``). Drop or null the TMF column if the
+        SAP follows admiral.
 
         Args:
             target: Name of the output column.
