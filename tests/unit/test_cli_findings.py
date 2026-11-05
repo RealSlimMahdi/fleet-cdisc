@@ -671,3 +671,94 @@ class TestAddCt:
         assert _run(["add-ct", "--domains", "DM"]) == 1
 
         assert f"was generated from {self.PINNED}, not sdtmct-2023-12-15" in capsys.readouterr().err
+
+
+_ADAE = """\
+┌─────────┬─────────┬───────┬──────────────────┬──────────┬──────────┐
+│ USUBJID ┆ TRTA    ┆ AESER ┆ AEACN            ┆ AEBODSYS ┆ AEDECOD  │
+│ ---     ┆ ---     ┆ ---   ┆ ---              ┆ ---      ┆ ---      │
+│ str     ┆ str     ┆ str   ┆ str              ┆ str      ┆ str      │
+╞═════════╪═════════╪═══════╪══════════════════╪══════════╪══════════╡
+│ S001    ┆ Placebo ┆ N     ┆ DOSE NOT CHANGED ┆ CARDIAC  ┆ PALPIT   │
+│ S002    ┆ Drug A  ┆ Y     ┆ DRUG WITHDRAWN   ┆ NERVOUS  ┆ HEADACHE │
+└─────────┴─────────┴───────┴──────────────────┴──────────┴──────────┘
+"""
+_ADSL_ARMS = """\
+┌─────────┬─────────┬───────┐
+│ USUBJID ┆ TRTA    ┆ SAFFL │
+│ ---     ┆ ---     ┆ ---   │
+│ str     ┆ str     ┆ str   │
+╞═════════╪═════════╪═══════╡
+│ S001    ┆ Placebo ┆ Y     │
+│ S002    ┆ Drug A  ┆ Y     │
+└─────────┴─────────┴───────┘
+"""
+
+
+@pytest.fixture
+def ae_files(tmp_path: Path) -> list[str]:
+    adae, adsl = tmp_path / "adae.csv", tmp_path / "adsl.csv"
+    pl.from_repr(_ADAE).write_csv(adae)
+    pl.from_repr(_ADSL_ARMS).write_csv(adsl)
+    return ["tlg", "export", "--domain", "ae", "--data", str(adae), "--adsl", str(adsl)]
+
+
+class TestTlg:
+    @pytest.mark.parametrize("value", ["0", "-1", "x"])
+    def test_c1_312_rows_per_page_must_be_positive(self, value: str, ae_files, capsys) -> None:
+        assert _run([*ae_files, "--rows-per-page", value]) == 2
+
+        assert "--rows-per-page" in capsys.readouterr().err
+
+    @pytest.mark.parametrize("fmt", ["rtf", "pptx"])
+    def test_c1_312_wrap_is_refused_for_rtf_and_pptx(
+        self, fmt: str, ae_files, tmp_path: Path, capsys
+    ) -> None:
+        wrap = tmp_path / "w.html"
+        wrap.write_text("<main>{table}</main>", encoding="utf-8")
+
+        code = _run([*ae_files, "--format", fmt, "--wrap", str(wrap), "-o", str(tmp_path / "x")])
+
+        assert code == 1
+        assert "--wrap is an HTML template" in capsys.readouterr().err
+
+    def test_c1_312_a_wrapper_with_no_placeholder_is_refused(
+        self, ae_files, tmp_path: Path, capsys
+    ) -> None:
+        wrap = tmp_path / "w.html"
+        wrap.write_text("<main>no placeholder</main>", encoding="utf-8")
+        out = tmp_path / "x.html"
+
+        assert _run([*ae_files, "--wrap", str(wrap), "-o", str(out)]) == 1
+
+        assert "has no {table} placeholder" in capsys.readouterr().err
+        assert not out.exists()
+
+    def test_c1_312_render_html_refuses_a_wrapper_with_no_placeholder(self) -> None:
+        from fleet.tlg import RenderMetadata, ard_to_table_model, render_html
+
+        adae, adsl = pl.from_repr(_ADAE), pl.from_repr(_ADSL_ARMS)
+        ard = adae.tlg.ae.t_summary(groupby="TRTA", adsl=adsl)
+        model = ard_to_table_model(ard, RenderMetadata(title="T"))
+
+        with pytest.raises(ValueError, match="no \\{table\\} placeholder"):
+            render_html(model, html_wrapper="<main></main>")
+
+    def test_c1_312_a_page_by_with_no_group_row_warns(
+        self, ae_files, tmp_path: Path, capsys
+    ) -> None:
+        assert _run([*ae_files, "--page-by", "NOSUCH", "-o", str(tmp_path / "x.html")]) == 0
+
+        assert "--page-by NOSUCH matches no group row" in capsys.readouterr().err
+
+    def test_c1_306_tlg_export_takes_config(
+        self, study: Path, ae_files, tmp_path: Path, monkeypatch
+    ) -> None:
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        monkeypatch.chdir(elsewhere)
+        argv = [a for a in ae_files if a != "-o"]
+
+        assert _run([*argv, "--config", str(study / "study_config.yaml")]) == 0
+
+        assert (study / "outputs" / "ae_summary.html").is_file()

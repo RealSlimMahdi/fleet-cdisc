@@ -145,6 +145,17 @@ def _config_flag_hint(config_path: Path) -> str:
 # ────────────────────────────────────────────────────────────────────── #
 
 
+def _positive_int(text: str) -> int:
+    """An argparse type: a whole number of at least 1."""
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r} is not a whole number") from None
+    if value < 1:
+        raise argparse.ArgumentTypeError(f"{value} is less than 1")
+    return value
+
+
 def _parse_domains(raw: str) -> list[str]:
     return [d.strip().upper() for d in raw.split(",") if d.strip()]
 
@@ -547,7 +558,7 @@ def _run_add_ct(args: argparse.Namespace) -> None:
     )
 
     domains = _parse_domains(args.domains)
-    ctx = _try_ctx()
+    ctx = _try_ctx(args.config)
     output = (
         Path(args.output) if args.output else (ctx.codelists_file if ctx else Path("codelists.py"))
     )
@@ -1799,6 +1810,10 @@ def _render_output(
         return
 
     model = ard_to_table_model(result, rmeta)
+    if rmeta.page_by and not any(
+        row.variable == rmeta.page_by and row.row_type in ("group", "section") for row in model.rows
+    ):
+        _err(f"warning: --page-by {rmeta.page_by} matches no group row; no page break is made.")
     table_dispatch: dict[str, Callable[[], Any]] = {
         "html": lambda: out_path.write_text(
             render_html(model, html_wrapper=html_wrapper, **page_kwargs), encoding="utf-8"
@@ -1884,7 +1899,7 @@ def _tlg_run_once(args: argparse.Namespace) -> None:
 
     spec_paths = _collect_spec_paths(args.spec)
     named_data, default_data = _parse_data_args(args.data)
-    ctx = _try_ctx()
+    ctx = _try_ctx(args.config)
     out_dir = Path(args.output) if args.output else (ctx.outputs_dir if ctx else Path("."))
     fmt: str = args.fmt
 
@@ -1938,7 +1953,7 @@ def _tlg_explore_once(args: argparse.Namespace) -> None:
 
     spec_paths = _collect_spec_paths(args.spec)
     named_data, default_data = _parse_data_args(args.data)
-    ctx = _try_ctx()
+    ctx = _try_ctx(args.config)
 
     adsl_df: pl.DataFrame | None = None
     if args.adsl:
@@ -1999,7 +2014,7 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
 
     domain: str = args.domain
     fmt: str = args.fmt
-    ctx = _try_ctx()
+    ctx = _try_ctx(args.config)
 
     # Resolve datasets: explicit paths, else the study's configured data dirs.
     # The default dataset comes from the registry: the namespace's t_summary
@@ -2056,10 +2071,14 @@ def _run_tlg_export(args: argparse.Namespace) -> None:
     # HTML wrapper
     html_wrapper: str | None = None
     if args.wrap:
+        if fmt in ("rtf", "pptx"):
+            _fail(f"--wrap is an HTML template; it applies to html and pdf, not {fmt}.")
         wp = Path(args.wrap)
         if not wp.is_file():
             _fail(f"wrapper template not found: {wp}")
         html_wrapper = wp.read_text(encoding="utf-8")
+        if "{table}" not in html_wrapper:
+            _fail(f"the HTML wrapper {wp} has no {{table}} placeholder.")
 
     # Detect the treatment-arm column against the DATA frame (not ADSL).
     # A subject-level table (dm, ds) takes the ADSL arm, TRT01A then TRT01P.
@@ -2633,6 +2652,7 @@ def _add_ct_parsers(sub: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Omit definitions and preferred terms from generated code.",
     )
+    _add_config_flag(add)
     add.set_defaults(func=_run_add_ct)
 
 
@@ -3434,7 +3454,7 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
     )
     tlg_run.add_argument(
         "--rows-per-page",
-        type=int,
+        type=_positive_int,
         default=None,
         help="Maximum body rows per page (model-layer pagination).",
     )
@@ -3448,6 +3468,7 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Re-run whenever a spec file changes (requires the 'watch' extra).",
     )
+    _add_config_flag(tlg_run)
     tlg_run.set_defaults(func=_run_tlg_run)
 
     # -- tlg explore --------------------------------------------------------- #
@@ -3518,6 +3539,7 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Rebuild whenever a spec file changes (requires the 'watch' extra).",
     )
+    _add_config_flag(tlg_explore)
     tlg_explore.set_defaults(func=_run_tlg_explore)
 
     # -- tlg export ---------------------------------------------------------- #
@@ -3606,7 +3628,7 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
     )
     tlg_export.add_argument(
         "--rows-per-page",
-        type=int,
+        type=_positive_int,
         default=None,
         help="Maximum body rows per page (model-layer pagination).",
     )
@@ -3618,8 +3640,12 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
     tlg_export.add_argument(
         "--wrap",
         default=None,
-        help="Path to an HTML wrapper template with {table} placeholder.",
+        help=(
+            "Path to an HTML wrapper template with a {table} placeholder (html and pdf "
+            "only; refused for rtf and pptx)."
+        ),
     )
+    _add_config_flag(tlg_export)
     tlg_export.set_defaults(func=_run_tlg_export)
 
 

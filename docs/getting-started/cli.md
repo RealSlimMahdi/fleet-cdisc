@@ -283,6 +283,7 @@ Create a new study in the folder ./STUDY_ID: the study_config.yaml and the folde
 | `--rows-per-page` | _(none)_ | Maximum body rows per page (model-layer pagination). |
 | `--page-by` | _(none)_ | ARD variable to page-break on (e.g. PARAMCD). |
 | `--watch` | _(none)_ | Re-run whenever a spec file changes (requires the 'watch' extra). |
+| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 
 ### `fleet tlg explore`
 
@@ -301,6 +302,7 @@ Create a new study in the folder ./STUDY_ID: the study_config.yaml and the folde
 | `--subtitle` | `""` | Output subtitle. |
 | `--footnote` | _(none)_ | Footnote (repeatable). |
 | `--watch` | _(none)_ | Rebuild whenever a spec file changes (requires the 'watch' extra). |
+| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 
 ### `fleet tlg export`
 
@@ -319,7 +321,8 @@ Create a new study in the folder ./STUDY_ID: the study_config.yaml and the folde
 | `--footnote` | _(none)_ | Footnote (repeatable). |
 | `--rows-per-page` | _(none)_ | Maximum body rows per page (model-layer pagination). |
 | `--page-by` | _(none)_ | ARD variable to page-break on (e.g. PARAMCD). |
-| `--wrap` | _(none)_ | Path to an HTML wrapper template with {table} placeholder. |
+| `--wrap` | _(none)_ | Path to an HTML wrapper template with a {table} placeholder (html and pdf only; refused for rtf and pptx). |
+| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 
 ---
 
@@ -361,6 +364,7 @@ Generate Define-XML 2.1 from a define.yaml specification. This imports the spec'
 | `--package` | _(none)_ | CT package version. Default: ct.package from the discovered study_config.yaml, else the package of the existing codelists.py, else sdtmct-2023-12-15. Refused when it differs from the package an existing codelists.py was generated from. |
 | `--output` / `-o` | _(none)_ | Path to the existing codelists.py. Default: <metadata_sdtm>/codelists.py from the discovered study_config.yaml (./codelists.py outside a study). |
 | `--no-docs` | _(none)_ | Omit definitions and preferred terms from generated code. |
+| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 
 ---
 

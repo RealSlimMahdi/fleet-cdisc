@@ -274,6 +274,12 @@ def _table_page_parts(model: TableModel, page_footer: str | None = None) -> list
     return parts
 
 
+def _check_wrapper(html_wrapper: str | None) -> None:
+    """Refuse a wrapper with no ``{table}`` placeholder: the page would hold no table."""
+    if html_wrapper is not None and "{table}" not in html_wrapper:
+        raise ValueError("the HTML wrapper has no {table} placeholder")
+
+
 def render_html(
     model: TableModel,
     *,
@@ -292,7 +298,8 @@ def render_html(
         html_wrapper: Optional HTML template string.  If given, the
             generated ``<table>`` block replaces the ``{table}`` placeholder,
             enabling embedding in sponsor portals, Quarto documents, or
-            interactive dashboards.
+            interactive dashboards.  A wrapper with no ``{table}`` raises
+            ``ValueError``.
         rows_per_page: Maximum body rows per page; ``None`` disables
             row-count splitting.
         page_by: ARD variable to page-break on (e.g. ``"PARAMCD"``).
@@ -310,6 +317,7 @@ def render_html(
             model = ard_to_table_model(ard, RenderMetadata(title="Table 14.3.1.1"))
             html = render_html(model)
     """
+    _check_wrapper(html_wrapper)
     pages = paginate(model, rows_per_page=rows_per_page, page_by=page_by)
 
     parts: list[str] = ['<div class="fleet-table-container">', _SUMMARY_CSS]
@@ -389,7 +397,7 @@ def render_listing_html(
     Args:
         model: The display-ready listing model from ``listing_to_model()``.
         html_wrapper: Optional HTML template string with ``{table}``
-            placeholder.
+            placeholder; a wrapper with no ``{table}`` raises ``ValueError``.
         rows_per_page: Maximum data rows per page; each page repeats
             title, column headers, and footnotes with a ``Page X of Y``
             footer.  ``None`` renders one continuous listing.
@@ -404,6 +412,7 @@ def render_listing_html(
             model = listing_to_model(listing, RenderMetadata(title="Listing 16.2.7"))
             html = render_listing_html(model)
     """
+    _check_wrapper(html_wrapper)
     pages = paginate_listing(model, rows_per_page=rows_per_page)
 
     parts: list[str] = ['<div class="fleet-listing-container">', _LISTING_CSS]
