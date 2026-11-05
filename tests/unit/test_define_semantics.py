@@ -69,9 +69,9 @@ class TestRegistryRendering:
             for shape_keys, template in algo.method_text:
                 keys = set(re.findall(r"{(\w+)}", template)) | set(shape_keys)
                 declared = {p.name for p in algo.params} | {"target"}
-            assert keys <= declared, (
-                f"{standard}:{algo.name} template names unknown params {keys - declared}"
-            )
+                assert keys <= declared, (
+                    f"{standard}:{algo.name} template names unknown params {keys - declared}"
+                )
 
     def test_comment_free_defaults_read_as_submission_text(self):
         assert (
