@@ -1947,6 +1947,13 @@ def _collect_spec_paths(spec_arg: str) -> list[Path]:
         return specs
     if p.is_file():
         return [p]
+    from fleet.tlg import TEMPLATES
+
+    if spec_arg in TEMPLATES:
+        _fail(
+            f"{spec_arg} is a template id, not a spec file. "
+            f"Create {spec_arg}.yaml with the line: template: {spec_arg}"
+        )
     _fail(f"spec path not found: {spec_arg}")
     raise AssertionError("unreachable")
 
@@ -2741,6 +2748,7 @@ def _add_ct_parsers(sub: argparse._SubParsersAction) -> None:
         "add-ct",
         help="Add domains to an existing codelists.py (preserves existing).",
     )
+    _add_config_flag(add)
     add.add_argument(
         "--domains",
         required=True,
@@ -2779,7 +2787,6 @@ def _add_ct_parsers(sub: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Omit definitions and preferred terms from generated code.",
     )
-    _add_config_flag(add)
     add.set_defaults(func=_run_add_ct)
 
 
@@ -3539,6 +3546,7 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
         "run",
         help="Execute YAML TLG spec(s) against datasets and render outputs.",
     )
+    _add_config_flag(tlg_run)
     tlg_run.add_argument(
         "spec",
         help="A spec .yaml file or a directory of spec files.",
@@ -3615,7 +3623,6 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Re-run whenever a spec file changes (requires the 'watch' extra).",
     )
-    _add_config_flag(tlg_run)
     tlg_run.set_defaults(func=_run_tlg_run)
 
     # -- tlg explore --------------------------------------------------------- #
@@ -3627,6 +3634,7 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
             "byte-identical to `tlg run`'s output)."
         ),
     )
+    _add_config_flag(tlg_explore)
     tlg_explore.add_argument(
         "spec",
         help="A spec .yaml file or a directory of spec files.",
@@ -3686,7 +3694,6 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Rebuild whenever a spec file changes (requires the 'watch' extra).",
     )
-    _add_config_flag(tlg_explore)
     tlg_explore.set_defaults(func=_run_tlg_explore)
 
     # -- tlg export ---------------------------------------------------------- #
@@ -3694,6 +3701,7 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
         "export",
         help="Render a domain summary (t_summary) to HTML, RTF, PDF, or slides.",
     )
+    _add_config_flag(tlg_export)
     tlg_export.add_argument(
         "--domain",
         required=True,
@@ -3793,7 +3801,6 @@ def _add_tlg_parsers(sub: argparse._SubParsersAction) -> None:
             "or style sheet the wrapper links is left out, with a warning."
         ),
     )
-    _add_config_flag(tlg_export)
     tlg_export.set_defaults(func=_run_tlg_export)
 
 

@@ -174,7 +174,7 @@ class Row(BaseModel):
         default=None,
         description=(
             "Display label for this row group (the ARD ``variable_label``).  "
-            "``None`` gives no label."
+            "With no label, the row group has no heading."
         ),
     )
     filter_value: str | None = Field(
@@ -223,7 +223,7 @@ class Column(BaseModel):
     )
     label: str | None = Field(
         default=None,
-        description="Display label for this column.  Defaults to *field*.",
+        description="Display label for this column.",
     )
     format: str | None = Field(
         default=None,

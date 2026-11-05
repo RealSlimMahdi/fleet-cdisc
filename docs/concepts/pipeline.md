@@ -80,16 +80,17 @@ and `.explain()` (print the Polars query plan). See
 ## Lazy evaluation
 
 ```
-df.sdtm
+df.sdtm                              one LazyFrame (df.lazy())
   │
-  ├─ .assign("USUBJID", source=...)  →  [Expr("patient_id".alias("USUBJID"))]
-  ├─ .assign("SEX", ct=...)          →  [..., Expr(when/then.alias("SEX"))]
-  └─ .to_frame()
-       │
-       └─ df.with_columns(*exprs)   ← one Polars plan for these verbs
+  ├─ .assign("USUBJID", source=...)  →  plan + with_columns(USUBJID)
+  ├─ .assign("SEX", ct=...)          →  plan + with_columns(SEX)
+  ├─ .explain()                      →  prints the plan, the chain continues
+  └─ .to_frame()                     →  plan.collect(): one Polars query
 ```
 
-This means you pay no cost for columns you don't chain. Expression ordering mirrors declaration order.
+Each verb adds one step to the plan of one LazyFrame. Nothing runs until
+`to_frame()`. Polars then optimises the full plan and runs it once. The steps
+run in the order of the chain.
 The verbs that read data before the chain continues are listed in the GUIDE
 laziness table ("What is lazy, and what checkpoints").
 
@@ -132,7 +133,7 @@ laziness table ("What is lazy, and what checkpoints").
 | `qtc(target, qt, rr, method, rr_unit)`      | Corrected QT (QT in ms, RR in ms by default) |
 | `derive_summary_records(by, ...)`           | Aggregate by group, append summary rows   |
 | `derive_locf_records(dataset_ref, by, order_by, ...)` | Add LOCF records for the expected visits |
-| `derive_param(by_vars, ...)`                | Derive a new parameter and append as rows |
+| `derive_param(by=, set_values_to=, ...)`    | Derive a new parameter and append as rows |
 | `to_frame()`                                | Materialise                               |
 
 ---
@@ -148,20 +149,20 @@ laziness table ("What is lazy, and what checkpoints").
 | `flag(target, criteria)`                            | `"Y"` flag (expression, first/last/max/min/exists) |
 | `count_events(target, from_dataset, where)`         | Event count per subject                            |
 | `age_years(target, age_col, age_unit_col)`          | Unit-aware age conversion to years                 |
-| `derive_period(periods, start_date)`                | Subperiod/Phase variables (APxxSDT, etc.)          |
+| `derive_period(periods=)`                           | Subperiod/Phase variables (APxxSDT, etc.)          |
 | `to_frame()`                                        | Materialise                                        |
 
 ---
 
 ## OCCDS verbs at a glance
 
-| Verb                                        | Purpose                                                       |
-| ------------------------------------------- | ------------------------------------------------------------- |
-| `source(target)`                            | Pass-through column                                           |
-| `first_occ(target, date_col, groups)`       | Flag first occurrence within group                            |
-| `flag(target, criteria, value_col, groups)` | Generalised \"Y\" flag (max/min/first/last/exists/expression) |
-| `any_flag(target, col, value, groups)`      | `"Y"` if event exists in group                                |
-| `to_frame()`                                | Materialise                                                   |
+| Verb                                          | Purpose                                                    |
+| --------------------------------------------- | ---------------------------------------------------------- |
+| `source(target)`                              | Pass-through column                                        |
+| `flag(target, criteria=, by=)`                | `"Y"` flag (max/min/first/last/exists/expression)           |
+| `flag_first(target, order_by=, by=)`          | Flag the first record in each `by` group                   |
+| `flag_exists(target, from_dataset=, on=)`     | `"Y"` when a matching record exists in another dataset      |
+| `to_frame()`                                  | Materialise                                                |
 
 ---
 
@@ -178,8 +179,8 @@ fleet init ct     --config ./studies/STUDY01/study_config.yaml  # reads define.y
 ```
 
 !!! note
-When `--root` points to a non-current directory, pass `--config <root>/study_config.yaml`
-to `init define` and `init ct`, or `cd` into the root directory before running them.
+    When `--root` points to a non-current directory, pass `--config <root>/study_config.yaml`
+    to `init define` and `init ct`, or `cd` into the root directory before running them.
 
 See the [CLI Reference](../getting-started/cli.md) for full details.
 

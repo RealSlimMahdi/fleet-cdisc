@@ -247,6 +247,14 @@ class TestBuildDagOutputs:
         assert dag.nodes["DM"].path == str(tmp_path / "out" / "dm.xpt")
         assert dag.nodes["AE"].path == str(tmp_path / "out" / "ae.json")
 
+    def test_unknown_output_format_is_refused(self, tmp_path):
+        """c1-647: ``output_format: json`` is not silently written as parquet."""
+        from fleet.core.exceptions import SpecError
+
+        p = self._write_spec(tmp_path, output_format="json")
+        with pytest.raises(SpecError, match="output_format"):
+            build_dag(p, output_dir=tmp_path / "out")
+
 
 class TestSpecDispatchAttribution:
     def test_spec_duration_records_the_verb_and_its_block(self, tmp_path):

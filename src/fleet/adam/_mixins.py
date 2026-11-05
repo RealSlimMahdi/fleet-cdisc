@@ -606,7 +606,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                     # String → parse as expression or column reference.
                     # parse_expression handles both: bare names ("AEENDTC")
                     # become pl.col("AEENDTC"); expression strings like
-                    # 'pl.lit("Y")' are evaluated via sandboxed AST.
+                    # 'pl.lit("Y")' are checked against an allow-list.
                     set_exprs.append(parse_expression(val).alias(tgt))
                 else:
                     # Literal value

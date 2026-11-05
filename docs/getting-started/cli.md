@@ -271,6 +271,7 @@ Create a new study in the folder ./STUDY_ID: the study_config.yaml and the folde
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
+| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 | `--data` | _(none)_ | Analysis dataset path, repeatable. Plain PATH applies to every spec; NAME=PATH (e.g. ADAE=adae.parquet) targets the template's analysis domain. |
 | `--adsl` | _(none)_ | ADSL dataset path (population denominators for tables). |
 | `--output` / `-o` | _(none)_ | Output directory. Default: the configured outputs directory (current directory outside a study workspace). |
@@ -293,6 +294,7 @@ Create a new study in the folder ./STUDY_ID: the study_config.yaml and the folde
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
+| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 | `--data` | _(none)_ | Analysis dataset path, repeatable. Plain PATH applies to every spec; NAME=PATH (e.g. ADAE=adae.parquet) targets the template's analysis domain. |
 | `--adsl` | _(none)_ | ADSL dataset path (population denominators for tables). |
 | `--output` / `-o` | _(none)_ | Output HTML file. Default: explorer.html in the configured outputs directory (current directory outside a study workspace). |
@@ -308,6 +310,7 @@ Create a new study in the folder ./STUDY_ID: the study_config.yaml and the folde
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
+| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 | `--domain` | _(required)_ | TLG sub-namespace to summarise. Choices: `ae`, `cm`, `dm`, `ds`, `eg`, `ex`, `lb`, `mh`, `vs`. |
 | `--format` | `html` | Output format (default: html). Choices: `html`, `rtf`, `pdf`, `pptx`. |
 | `--data` | _(none)_ | Path to the primary analysis dataset. Default: the analysis dataset the domain's t_summary template declares (e.g. ADAE for ae, ADSL for dm/ds), found in the configured data directories. |
@@ -359,6 +362,7 @@ Generate Define-XML 2.1 from a define.yaml specification. This imports the spec'
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |
+| `--config` / `-c` | _(none)_ | Path to study_config.yaml. Default: discovered by walking up from the current directory (git-style). |
 | `--domains` | _(required)_ | Comma-separated SDTM domain abbreviations to add. |
 | `--ig` | _(none)_ | SDTM IG version. Default: sdtm.ig_version from the discovered study_config.yaml (3-4 outside a study). |
 | `--package` | _(none)_ | CT package version. Default: ct.package from the discovered study_config.yaml, else the package of the existing codelists.py, else sdtmct-2023-12-15. Refused when it differs from the package an existing codelists.py was generated from. |

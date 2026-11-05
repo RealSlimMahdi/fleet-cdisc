@@ -13,15 +13,15 @@ Fleet provides three layers for working with CDISC Controlled Terminology:
 The `CDISCClient` wraps `httpx` to authenticate against the CDISC Library REST API. It requires an API key set via a `.env` file or the `CDISC_API_KEY` environment variable.
 
 ::: fleet.ct.CDISCClient
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
 
 ::: fleet.ct.CDISCClientConfig
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3
 
 ---
 
@@ -41,6 +41,8 @@ fleet add-ct --domains LB,CM --output specs/my_study/sdtm/codelists.py
 
 ### Programmatic usage
 
+<!-- docs:no-run: calls the CDISC Library API -->
+
 ```python
 from fleet.ct.api import CDISCClient
 from fleet.ct.generator import CodelistGenerator
@@ -59,7 +61,7 @@ with CDISCClient() as client:
 
 The generated `codelists.py` contains:
 
-- **One class per codelist** with `_concept_id`, `_cdisc_url`, and submission-value constants:
+- **One class per codelist** with `_concept_id`, `_cdisc_url`, `_terms` and submission-value constants:
 
   ```python
   class C66731:
@@ -68,18 +70,23 @@ The generated `codelists.py` contains:
       The assemblage of physical properties or qualities by which male is
       distinguished from female.
 
-      See: https://library.cdisc.org/browser/#/codelist/C66731
+      See: https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66731
       """
 
       _concept_id = "C66731"
-      _cdisc_url = "https://library.cdisc.org/browser/#/codelist/C66731"
+      _cdisc_url = "https://library.cdisc.org/browser/#/mdr/ct/2023-12-15/packages/sdtmct-2023-12-15/codelists/C66731"
+      _preferred_term = "CDISC SDTM Sex of Individual Terminology"
+
+      _terms = ("F", "INTERSEX", "M", "U")
+
       F = "F"
+      INTERSEX = "INTERSEX"
       M = "M"
       U = "U"
   ```
 
   !!! tip "Direct line to the source of truth"
-  The `_cdisc_url` attribute and the `See:` line in each docstring point to the codelist's entry in the **CDISC Library Browser**. When a reviewer or auditor reads pipeline code, hovering `SEX` in an IDE shows the URL; clicking the link in the docs site takes them straight to the authoritative CDISC definition. There is no separate lookup table to maintain — the URL is constructed from the NCI concept ID at generation time.
+      The `_cdisc_url` attribute and the `See:` line in each docstring point to the codelist's entry in the **CDISC Library Browser**. When a reviewer or auditor reads pipeline code, hovering `SEX` in an IDE shows the URL; clicking the link in the docs site takes them straight to the authoritative CDISC definition. There is no separate lookup table to maintain. The URL is built from the NCI concept ID and the CT package at generation time.
 
 - **Human-readable aliases** derived from the CDISC submission value:
 
@@ -109,6 +116,8 @@ The generated `codelists.py` contains:
 When your study lives in its own directory (not inside the Fleet repo), the
 generated `codelists.py` isn't on the Python path by default.
 Use [`import_codelists()`][fleet.ct.import_codelists] to load it dynamically:
+
+<!-- docs:no-run: needs a study codelists.py -->
 
 ```python
 from fleet.ct import import_codelists
@@ -145,6 +154,8 @@ ct = import_codelists("/absolute/path/to/codelists.py")
 
 ### Using generated codelists in pipelines
 
+<!-- docs:no-run: needs a study codelists.py -->
+
 ```python
 from fleet.ct import import_codelists
 
@@ -160,10 +171,10 @@ dm = (
 `assign(ct=...)` accepts either a codelist class (`SEX`) or a raw NCI concept ID string (`"C66731"`). The class form is preferred for readability and auto-completion.
 
 ::: fleet.ct.CodelistGenerator
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
 
 ---
 
@@ -174,9 +185,9 @@ generated `codelists.py` from your study workspace, removing the need for `sys.p
 manipulation or package-relative imports.
 
 ::: fleet.ct.import_codelists
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3
 
 ---
 
@@ -186,68 +197,91 @@ The singleton `CTValidator` provides runtime validation of values against loaded
 
 ### How CT validation works
 
-**Validation fires at pipeline-build time** — when you call `.assign(ct=...)` in
-Python, not when you call `.to_frame()`. The check happens during the method call itself, before
-any data is processed.
+**The check runs when you call the verb**, not when you call `.to_frame()`.
 
-**The validator is opt-in via initialization.** Fleet ships a module-level singleton that starts
-empty. You must load CT data into it before using `ct=` parameters. If the singleton
-has no data loaded, validation is silently skipped and the value is assigned as-is — no error,
-no warning.
+**A codelist class holds its terms.** The generated `codelists.py` writes the
+submission values of each codelist into the class (`_terms`). With `ct=SEX`,
+`assign` checks the values against these terms. You do not load anything.
+This is true for `source=` (the distinct values of the column) and for
+`value=` (the literal).
 
-**Failures warn, they do not block.** If a value is not a valid CDISC submission term, a Python
-`UserWarning` is emitted via `warnings.warn()`. The pipeline continues and the value is still
-written to the output. This design keeps pipelines runnable during development even before CT
-packages are fully loaded.
+**A concept ID string needs loaded CT.** With `ct="C66731"`, the check reads
+the validator cache. Load it once with `get_validator().load_ct_file(path)`.
+If the cache does not hold the codelist, `assign` warns
+`codelist 'C66731' not found / CT not loaded` and writes the values
+unchecked.
 
-#### Step-by-step — enabling CT validation
+**Failures warn, they do not block.** A value that is not a submission term
+gives a `UserWarning`. The pipeline continues and the value is written as
+it is. Null and blank values are never findings.
+
+#### Example: check against the codelist classes
+
+`import_codelists()` puts the study `codelists.py` on the import path (see
+[Importing codelists](#importing-codelists-in-standalone-study-projects)).
 
 ```python
 import warnings
-from fleet import load_controlled_terminology, get_validator
 
-# 1. Load the CT package once, at script/session start.
-#    The file is a YAML or CSV produced by `fleet init ct` or `fleet add-ct`.
-load_controlled_terminology("examples/cdiscpilot01/sdtm/ct_package.yaml")
+import polars as pl
 
-# 2. Import the generated codelist classes.
-from fleet.ct import import_codelists
+import fleet
+from codelists import AGEU, SEX
 
-ct = import_codelists()
-AGEU = ct.AGEU
-SEX = ct.SEX
-
-# 3. Build your pipeline — validation fires here on each verb call.
-import warnings
+raw_df = pl.from_repr("""
+┌────────────┬─────┐
+│ subject_id ┆ sex │
+│ ---        ┆ --- │
+│ str        ┆ str │
+╞════════════╪═════╡
+│ S1         ┆ M   │
+│ S2         ┆ Q   │
+└────────────┴─────┘
+""")
 
 with warnings.catch_warnings(record=True) as caught:
     warnings.simplefilter("always")
     dm = (
-        raw_df.sdtm.assign("AGEU", value="YEARS", ct=AGEU)  # OK — valid term
-        .assign("AGEU", value="YRS", ct=AGEU)  # Warns immediately
+        raw_df.sdtm.assign("SEX", source="sex", ct=SEX)  # Q is not a SEX term
+        .assign("AGEU", value="YRS", ct=AGEU)  # YRS is not an AGEU term
         .to_frame()
     )
 
-# Any invalid values produce a warning at the .assign(ct=...) call site,
-# not when .to_frame() runs.
 for w in caught:
     print(w.message)
-# UserWarning: Value 'YRS' not in codelist 'C66781'. Valid values: DAYS, HOURS, MINUTES, MONTHS, WEEKS, YEARS
+# SEX: column 'sex' contains values not in codelist 'C66731': ['Q']. Valid values:
+#   ['F', 'INTERSEX', 'M', 'U']. Consider providing a ct_map parameter.
+# assign('AGEU'): value 'YRS' not in codelist 'C66781'. Valid values:
+#   ['DAYS', 'HOURS', 'MONTHS', 'WEEKS', 'YEARS']
 ```
 
-#### Inspecting the validator state
+#### Optional: load a CT file for concept ID strings
+
+`get_validator().load_ct_file(path)` fills the validator cache. The file is
+one of:
+
+- YAML: one key per codelist, each a mapping of code to decoded value.
+- CSV: the columns `codelist`, `code` and `value`, one row per term.
+
+<!-- docs:no-run: needs a CT file on disk -->
 
 ```python
+from pathlib import Path
+
 from fleet import get_validator
 
-v = get_validator()
-print(v.get_cache_info())
-# {'codelists_loaded': ['C66781', 'C66731', ...], 'aliases': {'AGEU': 'C66781', ...},
-#  'ct_path': 'specs/.../ct_package.yaml', 'initialized': True}
+Path("ct.yaml").write_text("C66731:\n  F: Female\n  M: Male\n  U: Unknown\n")
 
-# Check all valid terms for a codelist
-print(v.get_valid_values("C66781"))  # ['DAYS', 'HOURS', 'MINUTES', 'MONTHS', 'WEEKS', 'YEARS']
+v = get_validator()
+v.load_ct_file("ct.yaml", aliases={"SEX": "C66731"})
+print(v.get_cache_info())
+# {'codelists_loaded': ['C66731'], 'aliases': {'SEX': 'C66731'},
+#  'ct_path': 'ct.yaml', 'initialized': True}
+print(v.get_valid_values("SEX"))  # ['F', 'M', 'U']
 ```
+
+`load_controlled_terminology(path)` reads the same file formats and only
+returns a dict (`{codelist: {code: value}}`). It does not fill the validator.
 
 #### ADaM namespaces
 
@@ -258,21 +292,21 @@ inline. Passing `ct=` still works on any namespace since `assign` is shared.
 ---
 
 ::: fleet.ct.CTValidator
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
 
 ## load_controlled_terminology
 
 ::: fleet.ct.load_controlled_terminology
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3
 
 ## get_validator
 
 ::: fleet.ct.get_validator
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3

@@ -26,7 +26,7 @@ Fleet is pre-alpha. Only pre-release versions are on PyPI, so tell the installer
 
 | Extra  | Installs         | When to use                    |
 | ------ | ---------------- | ------------------------------ |
-| `io`   | `pyreadstat`     | Reading SAS XPT (`.xpt`) files |
+| `io`   | `pyreadstat`     | Reading SAS files (`.xpt`, `.sas7bdat`) and writing XPT |
 | `all`  | All extras       | Full feature set               |
 | `docs` | MkDocs + plugins | Building this documentation    |
 | `dev`  | pytest, ruff, io | Contributing to Fleet          |
@@ -185,6 +185,6 @@ DefineSpecGenerator("examples/cdiscpilot01/adam/define.yaml").generate(
 ## Next steps
 
 - [Quickstart](quickstart.md)
-- [Full ADSL pipeline example (notebook)](../examples/02_spec_driven_pipeline.ipynb)
+- [Full pipeline walkthrough](../examples/full_pipeline.md)
 - [define.yaml concept guide](../concepts/define-yaml.md)
 - [API reference](../api/index.md)

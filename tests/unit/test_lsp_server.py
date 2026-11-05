@@ -452,3 +452,19 @@ def test_c1_612_c1_613_the_server_over_stdio():
     finally:
         server.kill()
         server.wait(timeout=10)
+
+
+@pytest.mark.parametrize(
+    ("path", "checked"),
+    [
+        ("/study/metadata/sdtm/define.yaml", True),
+        ("/study/metadata/adam/define_adam.yml", True),
+        ("/study/study_config.yaml", False),
+        ("/study/.github/workflows/ci.yml", False),
+    ],
+)
+def test_only_define_yaml_files_get_diagnostics(path, checked):
+    """c1-665: a client that attaches to every YAML file gets diagnostics only on define*.yaml."""
+    from fleet.lsp_server import is_define_yaml
+
+    assert is_define_yaml(path) is checked

@@ -6,7 +6,7 @@ generated from the CDISC Library by [`CodelistGenerator`][fleet.ct.CodelistGener
 and is regenerated whenever a new domain is added.
 
 !!! tip "One source of truth — three audiences served"
-The same Python module powers:
+    The same Python module powers:
 
     - **IDE auto-completion** for programmers writing pipelines (`SEX.M`, `RACE.WHITE`).
     - **Live runtime validation** through
@@ -89,13 +89,13 @@ give one name, each name ends with the term NCI code, so no term is lost.
 ## Generated module
 
 ::: examples.cdiscpilot01.sdtm.codelists
-options:
-show_root_heading: false
-show_root_toc_entry: false
-heading_level: 3
-members_order: source
-show_source: false
-filters: ["!^_"]
-show_bases: false
-show_if_no_docstring: true
-docstring_section_style: list
+    options:
+        show_root_heading: false
+        show_root_toc_entry: false
+        heading_level: 3
+        members_order: source
+        show_source: false
+        filters: ["!^_"]
+        show_bases: false
+        show_if_no_docstring: true
+        docstring_section_style: list

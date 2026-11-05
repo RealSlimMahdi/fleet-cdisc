@@ -134,7 +134,7 @@ def _check_standard(standard: str) -> None:
 def algorithms(standard: Standard) -> tuple[AlgorithmInfo, ...]:
     """Return every algorithm registered for *standard*.
 
-    Not cached: ``spec_algorithm()`` is public, so an algorithm registered
+    Not cached: ``spec_verb()`` is public, so an algorithm registered
     after the first call must still show up in completions.
 
     Args:
@@ -165,7 +165,7 @@ def get_algorithm(standard: Standard, name: str) -> AlgorithmInfo | None:
 
     Args:
         standard: ``"sdtm"`` or ``"adam"``.
-        name: Algorithm name or accepted alias.
+        name: Algorithm name.
 
     Returns:
         AlgorithmInfo | None: The algorithm, or ``None`` when *name* is

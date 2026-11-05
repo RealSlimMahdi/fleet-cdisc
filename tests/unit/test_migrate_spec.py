@@ -8,7 +8,7 @@ import pytest
 
 from fleet.cli import main as cli_main
 from fleet.core.define_spec import load_spec_yaml
-from fleet.tools.migrate_spec import migrate_spec_text, unmigrated_blocks
+from fleet.tools.migrate_spec import migrate_block, migrate_spec_text, unmigrated_blocks
 
 OLD_DEFINE = """\
 # yaml-language-server: $schema=define_spec_schema.json
@@ -200,6 +200,8 @@ class TestReviewFindings:
         new, changes = migrate_spec_text(text, set_version=False)
         assert "ct_codelist: C66731" in new
         assert any("resolve by hand" in c for c in changes)
+        _, block_changes = migrate_block({"algorithm": "assign_ct", "ct_codelist": "A", "ct": "B"})
+        assert any("resolve by hand" in c for c in block_changes)
 
 
 FLOW_DEFINE = """\
@@ -264,3 +266,30 @@ class TestAuditFindings:
         assert "specs/define.yaml" in out
         assert ".venv" not in out
         assert "env/lib" not in out
+
+
+def test_an_old_flow_style_block_is_reported_and_keeps_the_version():
+    """c1-647: a flow block with old names is reported; the version is not raised."""
+    text = (
+        "datasets:\n"
+        "  - name: DM\n"
+        "    variables:\n"
+        "      - name: SEX\n"
+        "        derivation: {algorithm: assign_ct, source: sex, ct_codelist: C66731}\n"
+    )
+    new_text, changes = migrate_spec_text(text)
+    assert (new_text, changes) == (text, [])
+    assert unmigrated_blocks(text) == ["DM.SEX"]
+
+
+def test_a_current_flow_style_block_is_not_reported():
+    text = (
+        "datasets:\n"
+        "  - name: DM\n"
+        "    variables:\n"
+        "      - name: SEX\n"
+        "        derivation: {algorithm: assign, source: sex}\n"
+    )
+    new_text, changes = migrate_spec_text(text)
+    assert "fleet_spec_version: 2" in new_text
+    assert not any("flow-style" in c for c in changes)

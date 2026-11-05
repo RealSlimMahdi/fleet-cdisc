@@ -35,29 +35,15 @@ GitHub Actions runs these checks:
 
 ## Test structure
 
-```
-tests/
-├── conftest.py          # Shared fixtures (raw DataFrames, SDTM domains)
-├── fixtures/
-│   ├── ct/              # Sample controlled terminology YAML
-│   ├── raw/             # ae_raw.csv, dm_raw.csv, vs_raw.csv
-│   └── specs/           # define_adam.yaml, define_sdtm.yaml
-└── unit/
-    ├── test_adam_namespace.py
-    ├── test_adsl_namespace.py
-    ├── test_ct_validation.py
-    ├── test_define_xml.py
-    ├── test_metabolic_namespace.py
-    ├── test_neuro_namespace.py
-    ├── test_occds_namespace.py
-    ├── test_onco_namespace.py
-    ├── test_ophtha_namespace.py
-    ├── test_peds_namespace.py
-    ├── test_sdtm_namespace.py
-    └── test_vaccine_namespace.py
-```
+The tests sit in [`tests/unit`](https://github.com/RealSlimMahdi/fleet-cdisc/tree/main/tests/unit),
+one file per module or finding group, with shared fixtures in `tests/conftest.py`
+and sample files in `tests/fixtures/`. Run `uv run pytest --collect-only -q`
+for the current list.
 
 ## Coverage targets
+
+These are goals. CI does not enforce them; run the coverage report above to
+see the current values.
 
 | Module       | Target |
 | ------------ | ------ |

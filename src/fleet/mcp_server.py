@@ -95,10 +95,10 @@ def fleet_impacted_by(spec_paths: list[str], node: str) -> list[str]:
 def fleet_lineage(dag_json_path: str, dataset: str) -> dict[str, Any]:
     """Return one dataset's node record from a ``pipeline_dag.json`` file.
 
-    The file is written by ``build_dag(...).generate(path)`` after a
-    pipeline run; dataset records carry ``inputs``, ``path`` and — when
-    the pipeline was materialised — per-variable lineage (producing
-    verb, source columns, dotted method path).
+    The file is written by ``build_dag(...).generate(path)``; dataset
+    records carry ``inputs`` and ``path``.  A record carries per-variable
+    lineage (producing verb, source columns, dotted method path) only when
+    ``dag.inject_lineage(namespace, dataset)`` ran before ``generate``.
 
     Args:
         dag_json_path: Path to a generated ``pipeline_dag.json``.

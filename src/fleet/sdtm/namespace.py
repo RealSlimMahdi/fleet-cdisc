@@ -88,8 +88,8 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
     """
     Immutable pipeline builder for SDTM derivations.
 
-    Each verb appends to a lazy expression list; `to_frame()` materialises
-    everything in one ``with_columns`` call.  Accepts both ``pl.DataFrame``
+    Each verb adds one step to the plan of one LazyFrame; `to_frame()`
+    collects the plan once.  Accepts both ``pl.DataFrame``
     and ``pl.LazyFrame`` inputs, so scanned sources stay lazy end-to-end.
     """
 

@@ -284,4 +284,4 @@ pfs = (
   frame carries the `by` columns.
 - The full verb reference lives in the
   [cheat sheet](../api/cheat_sheet.md#time-to-event-dfadamtte) and the
-  [TA API page](../api/ta.md#time-to-event--dfadamtte).
+  [TA API page](../api/ta.md#time-to-event-dfadamtte).

@@ -10,13 +10,14 @@
 ## Your first SDTM domain — zero setup
 
 No API key, no config file, no network. Import `fleet` and chain verbs on any
-Polars DataFrame:
+Polars DataFrame. `fleet.frame()` returns its input unchanged; it only lets the
+editor see `.sdtm` and `.adam` (see [IDE tooling](ide-tooling.md)):
 
 ```python
 import fleet
 import polars as pl
 
-raw = pl.from_repr("""
+raw = fleet.frame(pl.from_repr("""
 ┌────────────┬─────────┬────────────┐
 │ patient_id ┆ sex_raw ┆ birth_date │
 │ ---        ┆ ---     ┆ ---        │
@@ -26,7 +27,7 @@ raw = pl.from_repr("""
 │ 002        ┆ Female  ┆ 1985-11-02 │
 │ 003        ┆ Male    ┆ 1960-07-30 │
 └────────────┴─────────┴────────────┘
-""")
+"""))
 
 dm = (
     raw.sdtm.assign("DOMAIN", value="DM")
@@ -98,7 +99,7 @@ through and validated as-is.
 ## Your first ADaM BDS dataset
 
 ```python
-vs_sdtm = pl.from_repr("""
+vs_sdtm = fleet.frame(pl.from_repr("""
 ┌─────────┬──────────┬─────────┬───────┬────────────┬────────────┐
 │ USUBJID ┆ VISITNUM ┆ PARAMCD ┆ AVAL  ┆ ADT        ┆ TRTSDT     │
 │ ---     ┆ ---      ┆ ---     ┆ ---   ┆ ---        ┆ ---        │
@@ -108,7 +109,7 @@ vs_sdtm = pl.from_repr("""
 │ 001-01  ┆ 2        ┆ SYSBP   ┆ 115.0 ┆ 2024-02-10 ┆ 2024-01-10 │
 │ 001-01  ┆ 3        ┆ SYSBP   ┆ 118.0 ┆ 2024-03-10 ┆ 2024-01-10 │
 └─────────┴──────────┴─────────┴───────┴────────────┴────────────┘
-""")
+"""))
 
 advs = (
     vs_sdtm.adam.source("USUBJID", "PARAMCD", "AVAL")
@@ -130,7 +131,7 @@ reference date, no day 0).
 ## ADSL — one row per subject
 
 ```python
-dm_sdtm = pl.from_repr("""
+dm_sdtm = fleet.frame(pl.from_repr("""
 ┌─────────┬─────┬─────┐
 │ USUBJID ┆ AGE ┆ SEX │
 │ ---     ┆ --- ┆ --- │
@@ -139,7 +140,7 @@ dm_sdtm = pl.from_repr("""
 │ 001-01  ┆ 63  ┆ F   │
 │ 001-02  ┆ 71  ┆ M   │
 └─────────┴─────┴─────┘
-""")
+"""))
 ex_sdtm = pl.from_repr("""
 ┌─────────┬────────────┬────────┬────────────┬────────────┐
 │ USUBJID ┆ EXTRT      ┆ EXDOSE ┆ EXSTDTC    ┆ EXENDTC    │
@@ -253,7 +254,10 @@ ctx = load_study_context(Path("./studies/MYSTUDY01/study_config.yaml"))
 
 ## Full pipeline example
 
-See the [ADSL Pipeline notebook](../examples/02_spec_driven_pipeline.ipynb) for a complete, pre-executed walkthrough using the CDISCPILOT01 dataset — covering all 10 admiral-equivalent steps from raw data to final ADSL.
+See [`examples/cdiscpilot01_spec_driven.py`](https://github.com/RealSlimMahdi/fleet-cdisc/blob/main/examples/cdiscpilot01_spec_driven.py)
+for the CDISCPILOT01 pipeline driven by `define.yaml`: SDTM DM, then ADSL,
+ADVS, ADAE and ADEX with `from_spec()`. Run it from the repository root with
+`uv run python examples/cdiscpilot01_spec_driven.py`.
 
 ---
 

@@ -504,3 +504,95 @@ def test_every_yaml_block_loads(page: Path):
 def test_every_no_run_marker_gives_a_reason(page: Path):
     bare = [line for line, _, _, no_run, reason in _page_blocks(page) if no_run and not reason]
     assert not bare, f"{_ids(page)}: docs:no-run without a reason before lines {bare}"
+
+
+def _run_page(rel_path: str, tmp_path, monkeypatch) -> tuple[dict, int]:
+    """Run every python block of a docs page that is not marked no-run, in an empty folder.
+
+    Indented fences (generated-file samples inside list items) are output, not code.
+    The pilot ``codelists.py`` stands in for the study one.
+    """
+    text = (REPO_ROOT / "docs" / rel_path).read_text(encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.syspath_prepend(str(REPO_ROOT / "examples" / "cdiscpilot01" / "sdtm"))
+    ns: dict = {}
+    ran = 0
+    for lang, body, run in _iter_blocks(text):
+        if run and lang == "python" and not body[:1].isspace():
+            exec(compile(body, f"<{rel_path}>", "exec"), ns)  # noqa: S102 — trusted doc source
+            ran += 1
+    return ns, ran
+
+
+def test_ct_page_blocks_execute(tmp_path, monkeypatch):
+    """c1-640: the CT validation example of docs/api/ct.md runs and warns as the page shows."""
+    ns, ran = _run_page("api/ct.md", tmp_path, monkeypatch)
+    assert ran == 1
+    messages = [str(w.message) for w in ns["caught"]]
+    assert messages[0].startswith("SEX: column 'sex' contains values not in codelist 'C66731'")
+    assert messages[1].startswith("assign('AGEU'): value 'YRS' not in codelist 'C66781'")
+
+
+def test_troubleshooting_page_blocks_execute(tmp_path, monkeypatch, capsys):
+    """c1-668 c1-669: the debug snippets of troubleshooting.md run; no private attribute."""
+    ns, ran = _run_page("getting-started/troubleshooting.md", tmp_path, monkeypatch)
+    assert ran == 2
+    assert ns["debug_df"].columns == ["patient_id", "DOMAIN"]
+    out = capsys.readouterr().out
+    assert 'col("patient_id").alias("USUBJID")' in out
+    assert "Variable trail (2 derivation(s))" in out
+
+
+def test_full_pipeline_page_blocks_execute(tmp_path, monkeypatch):
+    """c1-594: reference dates from EX, a partial date, BNRIND and the --DTC type, as the page shows."""
+    import fleet.ct
+
+    monkeypatch.setattr(fleet.ct, "import_codelists", lambda *a, **k: None)
+    ns, ran = _run_page("examples/full_pipeline.md", tmp_path, monkeypatch)
+    assert ran == 9
+    assert ns["ex"]["EXSTDTC"].dtype == pl.String
+    assert ns["dm"]["RFXSTDTC"].to_list() == ["2023-01-01", None]
+    adsl = ns["adsl"]
+    assert adsl["TRTSDT"].cast(pl.String).to_list() == ["2023-01-01", "2023-01-01"]
+    assert adsl["TRTSDTF"].to_list() == [None, "D"]
+    assert ns["advs"]["BNRIND"].to_list() == [None, "NORMAL", None, "HIGH"]
+
+
+def test_tdd_page_blocks_execute(tmp_path, monkeypatch):
+    """c1-654: the SE and EPOCH blocks of tdd.md define their inputs and run."""
+    ns, ran = _run_page("concepts/tdd.md", tmp_path, monkeypatch)
+    assert ran == 7
+    se = ns["se"]
+    assert se["SESTDTC"].to_list() == ["2024-01-01", "2024-01-15"]
+    assert se["SEENDTC"].to_list() == ["2024-01-15", None]
+    assert se["SESEQ"].to_list() == [1, 2]
+    assert ns["ae"]["EPOCH"].to_list() == ["SCREENING", "TREATMENT"]
+
+
+def test_code_driven_notebook_cells_execute(tmp_path, monkeypatch):
+    """c1-655: every code cell of the kept notebook runs, in order, in an empty folder."""
+    import json
+
+    nb = json.loads(
+        (REPO_ROOT / "docs" / "examples" / "01_code_driven_pipeline.ipynb").read_text(
+            encoding="utf-8"
+        )
+    )
+    monkeypatch.chdir(tmp_path)
+    ns: dict = {}
+    cells = [c for c in nb["cells"] if c["cell_type"] == "code"]
+    for cell in cells:
+        exec(compile("".join(cell["source"]), "<notebook 01>", "exec"), ns)  # noqa: S102
+    assert len(cells) >= 3
+    assert "AGE40FL" in ns["adsl"].columns
+
+
+def test_coming_from_sas_page_blocks_execute(tmp_path, monkeypatch):
+    """c1-688: each SAS-trap sample of coming-from-sas.md runs and gives the value it states."""
+    ns, ran = _run_page("concepts/coming-from-sas.md", tmp_path, monkeypatch)
+    assert ran == 6
+    assert ns["crit"]["CRIT1FL"].to_list() == ["Y", None]
+    assert ns["worst"]["AESEVN"].to_list() == [2]
+    assert ns["apply_fmt_fn"](5 / 16 * 100, "xx.x") == "31.3"
+    assert ns["ae_dm"].columns == ["USUBJID", "AETERM", "AGE"]
+    assert ns["ex"]["EXSTDTC"].to_list() == ["2024-03-15", "2024-03"]

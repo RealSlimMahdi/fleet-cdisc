@@ -410,3 +410,16 @@ def test_initialize_handshake_announces_the_fleet_version() -> None:
 
     assert server.name == "fleet-lsp"
     assert server.version == fleet.__version__
+
+
+def test_every_public_name_is_on_the_api_page():
+    """c1-641: the introspect API page names every entry of ``__all__``."""
+    from pathlib import Path
+
+    import fleet.introspect
+
+    page = (Path(__file__).resolve().parents[2] / "docs" / "api" / "introspect.md").read_text(
+        encoding="utf-8"
+    )
+    missing = [name for name in fleet.introspect.__all__ if f"## {name}\n" not in page]
+    assert missing == []

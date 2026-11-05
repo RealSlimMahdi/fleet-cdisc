@@ -16,7 +16,7 @@ from __future__ import annotations
 import difflib
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -116,6 +116,9 @@ INPUT_NAME = r"^[A-Za-z][A-Za-z0-9_]*$"
 #: SDTMIG trial design datasets: reference data, not records per subject.
 TRIAL_DESIGN_DATASETS = frozenset({"TA", "TE", "TV", "TI", "TS", "TD", "TM"})
 
+#: The export formats of a dataset (``output_format:``).
+OutputFormat = Literal["parquet", "xpt", "dataset-json"]
+
 
 def default_repeating(name: str) -> bool:
     """Return the Define-XML ``Repeating`` default of a dataset with no ``repeating:`` key.
@@ -179,7 +182,7 @@ class DatasetEntry(BaseModel):
     variables: list[VariableEntry] = Field(default_factory=list)
     inputs: list[dict[str, Any]] = Field(default_factory=list)
     output: str | None = None
-    output_format: str | None = None
+    output_format: OutputFormat | None = None
     label: str | None = None
     structure: str | None = None
     repeating: Any = None
@@ -228,7 +231,7 @@ class DefineSpec(BaseModel):
     fleet_spec_version: int | None = None
     derivations_module: str | None = None
     ct: CTBlock = Field(default_factory=CTBlock)
-    output_format: str = "parquet"
+    output_format: OutputFormat = "parquet"
 
     # Simplified single-dataset format.
     domain: str | None = None

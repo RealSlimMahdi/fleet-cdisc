@@ -2140,7 +2140,7 @@ ae = (
 # Via ValidationService
 from fleet.validation.service import ValidationService
 svc = ValidationService()
-result = svc.validate_sdtm(ae, domain="AE", custom_rules="metadata/custom_rules")
+result = svc.validate_sdtm(ae, domain="AE", version="3.4", custom_rules="metadata/custom_rules")
 result.print_report()
 ```
 
@@ -2191,7 +2191,7 @@ Rules: equality is exact by default; null equals null, NaN equals NaN, null agai
 
 JSON contract (`fleet.comparison.JSON_KEYS`, additive-only within a major version — keys are added, never removed or renamed): `is_equal`, `summary`, `flags`, `warnings`, `datasets`, `variables`, `observations` (with `per_group`, `base_only_groups`, `candidate_only_groups` and the duplicate counts), `values` (with `per_group`), `statistics` (one record per differing variable), `listing` (`columns`, `rows`, `shown`, `total`, `truncated` — truncated to the print limits, unlike the parquet), `settings` (every option in effect), `version`. Strict JSON: non-finite numbers are null, temporal keys are ISO 8601 strings.
 
-### Pipeline verb (every namespace: `df.sdtm`, `df.adam`, `df.adam.adsl`, `df.adam.occds`, …)
+### Pipeline verb (`df.sdtm`, `df.adam`, `df.adam.adsl`, `df.adam.occds`, …; not `df.tlg`)
 
 The chain is the candidate, the argument is the base. `on_fail` is `"warn"` (default, `UserWarning`), `"raise"` (`ComparisonError`) or `"ignore"`, exactly as for `.validate()`; the report stays on the namespace as `.last_comparison` and the chain continues.
 

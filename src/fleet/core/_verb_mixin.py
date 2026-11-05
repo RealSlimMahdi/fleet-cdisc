@@ -975,7 +975,8 @@ class SharedVerbsMixin:
                 class (e.g. ``SEX``) or an NCI concept ID string
                 (e.g. ``"C66731"``).  With *source* and no *ct_map*,
                 values are passed through and validated; with *value*,
-                the literal is validated at pipeline-build time.
+                the literal is validated at pipeline-build time.  A class
+                holds its terms, so it checks values with no CT loaded.
             ct_map: Explicit ``{raw_value: ct_value}`` mapping applied to
                 *source* (raw codes that need remapping).  Requires
                 *source*.  Keys match the text form of the value, so
@@ -1603,7 +1604,7 @@ class SharedVerbsMixin:
 
         Four call forms are supported:
 
-        **Case 1 — string (AST-sandboxed, YAML-compatible)**::
+        **Case 1 — string (checked against an allow-list, YAML-compatible)**::
 
             .derivation("COL", expression="pl.col('src').cast(pl.String)")
 
@@ -1706,7 +1707,7 @@ class SharedVerbsMixin:
                 )
             return self._chain(expr.alias(target), verb="derivation", params=params)
 
-        # Case 1: string through AST sandbox.
+        # Case 1: string checked against an allow-list.
         return self._chain(
             parse_expression(str(expression), self._lazy.collect_schema()).alias(target),
             verb="derivation",

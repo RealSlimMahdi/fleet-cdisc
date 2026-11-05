@@ -17,7 +17,7 @@ progressing from simple record-level checks to advanced cross-domain validations
 Custom rules are executed using the `-lr` (local rules) flag:
 
 ```bash
-fleet validate --datasets ./data --local-rules ./metadata/custom_rules/
+fleet validate ./data --custom-rules ./metadata/custom_rules/
 ```
 
 Or with the engine directly:
