@@ -1,6 +1,6 @@
 # Spec: fleet.validation, as built
 
-Status: DRAFT for grilling. Derived from the code at commit `0425f6a` (fleet 0.1.2.dev7) and from probe runs against CORE engine 0.15.0 on 2026-09-11. Sections marked **OPEN (Qn)** wait for a grilling decision. Sections marked **AS BUILT** describe what the code does today, even where the docs say otherwise.
+Status: decided and built (issues #121 and #124 to #127, ADR-0003). Kept as the design record; the code is the reference now. Derived from the code at commit `0425f6a` (fleet 0.1.2.dev7) and from probe runs against CORE engine 0.15.0 on 2026-09-11. Sections marked **OPEN (Qn)** wait for a grilling decision. Sections marked **AS BUILT** describe what the code does today, even where the docs say otherwise.
 
 Related: `docs/validation-strategy.md`, `docs/concepts/validation-core.md`, `docs/concepts/custom-rules.md`, issues #97 and #119.
 
