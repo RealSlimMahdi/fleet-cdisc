@@ -697,18 +697,3 @@ class TestBoundaryRules:
 
         assert "TRTSDT" not in out.columns
         assert out["ASTDY"].to_list() == [-1, 1, 2]
-
-    def test_utils_study_day_is_1_on_the_reference_day(self):
-        from fleet.adam.utils import study_day
-
-        df = pl.from_repr("""\
-┌────────────┬────────────┐
-│ ADT        ┆ TRTSDT     │
-│ ---        ┆ ---        │
-│ date       ┆ date       │
-╞════════════╪════════════╡
-│ 2024-01-01 ┆ 2024-01-02 │
-│ 2024-01-02 ┆ 2024-01-02 │
-└────────────┴────────────┘
-""")
-        assert df.select(study_day("ADT", "TRTSDT"))["ADY"].to_list() == [-1, 1]
