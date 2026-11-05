@@ -113,7 +113,7 @@ def tlg_data(tmp_path: Path) -> tuple[Path, Path]:
     adsl = pl.DataFrame(
         {
             "USUBJID": [f"S{i:03d}" for i in range(1, 9)],
-            "TRTA": (["Placebo"] * 4) + (["Drug A"] * 4),
+            "TRT01A": (["Placebo"] * 4) + (["Drug A"] * 4),
             "SAFFL": ["Y"] * 8,
         }
     )
@@ -530,6 +530,8 @@ def test_tlg_run_happy_path(
             str(adae_path),
             "--adsl",
             str(adsl_path),
+            "--adsl-groupby",
+            "TRT01A",
             "-o",
             str(out_dir),
             "--format",
@@ -554,6 +556,8 @@ def test_tlg_run_rtf_format(tmp_path: Path, tlg_data: tuple[Path, Path]) -> None
             f"ADAE={adae_path}",
             "--adsl",
             str(adsl_path),
+            "--adsl-groupby",
+            "TRT01A",
             "-o",
             str(out_dir),
             "--format",
@@ -585,6 +589,8 @@ def test_tlg_explore_happy_path(
             str(adae_path),
             "--adsl",
             str(adsl_path),
+            "--adsl-groupby",
+            "TRT01A",
             "-o",
             str(out),
         ]
@@ -606,7 +612,7 @@ def test_tlg_explore_default_matches_tlg_run_output(
     spec = Path("examples/tlg_specs/aet01.yaml").resolve()
     run_dir = tmp_path / "run"
     out = tmp_path / "explorer.html"
-    common = ["--data", str(adae_path), "--adsl", str(adsl_path)]
+    common = ["--data", str(adae_path), "--adsl", str(adsl_path), "--adsl-groupby", "TRT01A"]
     assert _run(["tlg", "run", str(spec), *common, "-o", str(run_dir)]) == 0
     assert _run(["tlg", "explore", str(spec), *common, "-o", str(out)]) == 0
 
@@ -935,7 +941,7 @@ def test_tlg_run_defaults_from_config(
     nested.mkdir(parents=True)
     monkeypatch.chdir(nested)
 
-    code = _run(["tlg", "run", str(spec), "--format", "html"])
+    code = _run(["tlg", "run", str(spec), "--format", "html", "--adsl-groupby", "TRT01A"])
     assert code == 0
     assert (study / "outputs" / "aet01.html").is_file()
     assert not list(nested.iterdir())  # nothing written to the cwd
@@ -1802,3 +1808,83 @@ def test_compare_json_settings_carry_the_pairs_and_the_restriction(
     assert code == 0
     assert settings["pairs"] == {"AGE": "AGEN"}
     assert settings["variables"] == ["AGE", "SEX"]
+
+
+# ------------------------------------------------------------------ #
+# First run: fleet new, then fleet check and fleet define-xml (c1-856) #
+# ------------------------------------------------------------------ #
+
+
+class _FakeCDISCLibrary:
+    """The CDISC Library for one SDTM codelist (SEX); no network."""
+
+    def __enter__(self) -> _FakeCDISCLibrary:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        return None
+
+    def get_codelist(self, concept_id: str, *, package: str) -> dict:
+        from fleet.core.exceptions import CTNotFoundError
+
+        if concept_id != "C66731":
+            raise CTNotFoundError(f"Resource not found: {package}/{concept_id}")
+        return {
+            "conceptId": "C66731",
+            "name": "Sex",
+            "submissionValue": "SEX",
+            "terms": [
+                {"submissionValue": "F", "preferredTerm": "Female"},
+                {"submissionValue": "M", "preferredTerm": "Male"},
+            ],
+        }
+
+
+_NEW_DM = {
+    "name": "DM",
+    "label": "Demographics",
+    "structure": "One record per subject",
+    "keys": ["USUBJID"],
+    "variables": [
+        {
+            "name": "USUBJID",
+            "label": "Unique Subject Identifier",
+            "type": "text",
+            "length": 20,
+            "mandatory": True,
+            "origin": "Collected",
+        },
+        {
+            "name": "SEX",
+            "label": "Sex",
+            "type": "text",
+            "length": 2,
+            "mandatory": True,
+            "origin": "Collected",
+            "codelist": "C66731",
+        },
+    ],
+}
+
+
+def test_new_then_check_then_define_xml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from fleet.core.scaffolder import DefineScaffolder
+
+    monkeypatch.setenv("CDISC_API_KEY", "test-key")
+    monkeypatch.setattr("fleet.ct.api.CDISCClient", _FakeCDISCLibrary)
+    monkeypatch.setattr(DefineScaffolder, "_fetch_sdtm_datasets", lambda *_: [_NEW_DM])
+    # The CORE rules cache needs the network; this test covers the define and CT steps.
+    monkeypatch.setattr(cli, "_run_init_rules", lambda args: None)
+    root = tmp_path / "s01"
+
+    argv = ["new", "S01", "--root", str(root), "--yes", "--domains", "DM"]
+    argv += ["--description", "Phase II study", "--company", "Pharma Inc"]
+    assert _run(argv) == 0
+    monkeypatch.chdir(root)
+
+    assert _run(["check"]) == 0
+    assert _run(["define-xml", "--no-preview"]) == 0
+
+    xml = next(root.rglob("define_sdtm.xml")).read_text(encoding="utf-8")
+    assert 'OID="IG.DM"' in xml
+    assert 'CodedValue="M"' in xml
