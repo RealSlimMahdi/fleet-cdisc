@@ -100,7 +100,7 @@ docs = [
 [project.urls]
 Homepage = "https://realslimmahdi.github.io/fleet-cdisc/"
 Documentation = "https://realslimmahdi.github.io/fleet-cdisc/"
-Changelog = "https://realslimmahdi.github.io/fleet-cdisc/changelog/"
+Changelog = "https://realslimmahdi.github.io/fleet-cdisc/latest/changelog/"
 Repository = "https://github.com/RealSlimMahdi/fleet-cdisc"
 Issues = "https://github.com/RealSlimMahdi/fleet-cdisc/issues"
 

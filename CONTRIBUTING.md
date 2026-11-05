@@ -250,6 +250,7 @@ We welcome thoughtful contributions regardless of whether you used AI tools to h
 
 5. If the `pypi` environment has required reviewers, approve the deployment in the GitHub Actions run.
 6. Check the project page on pypi.org, then run `pip install --pre fleet-cdisc` in a clean environment.
+7. Open each docs-site link and image of the PyPI page. A link to the docs site must contain `/latest/`, or it gives 404.
 
 A bad release cannot be replaced. PyPI refuses to take the same version number twice. Yank the bad version on pypi.org and tag the next number.
 
