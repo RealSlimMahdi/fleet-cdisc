@@ -188,9 +188,14 @@ def _capture_verb_params(owner: Any, verb: str) -> dict[str, Any] | None:
             if name not in frame.f_locals:
                 continue
             value = frame.f_locals[name]
-            if param.default is not inspect.Parameter.empty:
+            default = param.default
+            if default is None or value is None:
+                # A Polars frame or expression == None warns: test None by identity.
+                if value is default:
+                    continue
+            elif default is not inspect.Parameter.empty:
                 try:
-                    if bool(value == param.default):
+                    if bool(value == default):
                         continue
                 except Exception:
                     pass  # rich objects (pl.Expr, frames) — keep and sanitise

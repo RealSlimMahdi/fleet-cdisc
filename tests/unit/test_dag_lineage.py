@@ -16,6 +16,7 @@ Covers §4.3 items:
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 import polars as pl
@@ -287,6 +288,44 @@ class TestSpecDispatchAttribution:
         ns = df.adam.duration("ADY", start="TRTSDT", end="ADT")
         (node,) = [n for n in lineage_of(ns) if n.name == "ADY"]
         assert node.verb == "duration"
+
+    def test_a_frame_argument_is_recorded_without_a_polars_warning(self):
+        """A frame against a None default is compared by identity, not with ==.
+
+        Not filterwarnings("error"): the capture swallows exceptions, so an
+        error would hide the comparison.
+        """
+        adsl = pl.from_repr("""\
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ P1      │
+│ P2      │
+└─────────┘
+""")
+        ex = pl.from_repr("""\
+┌─────────┬────────┐
+│ USUBJID ┆ EXDOSE │
+│ ---     ┆ ---    │
+│ str     ┆ i64    │
+╞═════════╪════════╡
+│ P1      ┆ 54     │
+│ P2      ┆ 0      │
+└─────────┴────────┘
+""")
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            ns = adsl.adam.adsl.flag_exists(
+                "SAFFL", from_dataset=ex, on=["USUBJID"], source_filter=pl.col("EXDOSE") > 0
+            )
+
+        assert [str(w.message) for w in caught if "None" in str(w.message)] == []
+        assert ns.to_frame()["SAFFL"].to_list() == ["Y", None]
+        (node,) = [n for n in lineage_of(ns) if n.name == "SAFFL"]
+        assert node.verb == "flag"
 
 
 class TestOrchestrationExports:
