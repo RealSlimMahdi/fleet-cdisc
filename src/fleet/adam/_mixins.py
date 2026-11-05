@@ -79,14 +79,16 @@ from typing import TYPE_CHECKING, Any, Self
 
 import polars as pl
 
-from fleet.core._flag_mixin import (
-    _FLAG_CRITERIA_KEYWORDS,  # noqa: F401  — backward-compat re-export
-    FlagCriterionMixin,
-)
+from fleet.core._flag_mixin import FlagCriterionMixin
 from fleet.core._pin_mixin import PinMixin
 from fleet.core._verb_mixin import SharedVerbsMixin
 from fleet.core.exceptions import DerivationError
-from fleet.core.joins import refuse_repeated_keys, refuse_shared_columns, require_columns
+from fleet.core.joins import (
+    refuse_repeated_keys,
+    refuse_shared_columns,
+    require_columns,
+    require_frames,
+)
 
 if TYPE_CHECKING:
     pass
@@ -687,6 +689,10 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         Returns:
             Self: A fresh namespace wrapping the filtered frame.
 
+        Raises:
+            DerivationError: When *where* reads a column that is not in
+                the frame.
+
         Examples:
             Subset to on-treatment records only::
 
@@ -698,8 +704,9 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         """
         from fleet.sdtm.utils import parse_expression
 
-        df = self.to_frame()
         filter_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
+        self._require_expr_columns("whereclauses(where=...)", filter_expr)
+        df = self.to_frame()
         from fleet.core.lineage import record_row_step
 
         return record_row_step(
@@ -910,8 +917,12 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         from fleet.sdtm.utils import parse_expression
 
         verb = "first_date" if agg_fn == "min" else "last_date"
+        require_frames(f"{verb}('{target}')", from_dataset)
         grps = by or ["USUBJID"]
         src = from_dataset
+        require_columns(
+            f"{verb}('{target}', date_col=...)", [date_col], src.columns, where="from_dataset"
+        )
         if where is not None:
             where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
             src = src.filter(where_expr)
@@ -1020,6 +1031,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         """
         from fleet.sdtm.utils import parse_expression
 
+        require_frames(f"count_events('{target}')", from_dataset)
         grps = by or ["USUBJID"]
         src = from_dataset
         if where is not None:
@@ -1190,15 +1202,3 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             flag=flag,
         )
         return self._chain(*exprs, verb="date")
-
-
-class MultiRowMixin:
-    """
-    Mixin for ADaM datasets with multiple rows per subject (OCCDS, PK, etc.).
-
-    Previously provided ``seq()`` which has been moved to
-    ``SharedVerbsMixin``.  Retained as a marker interface for multi-row
-    namespace classes (OCCDS, PK, etc.).
-    """
-
-    pass

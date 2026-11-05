@@ -1789,7 +1789,7 @@ Registered on every `pl.DataFrame` **and** `pl.LazyFrame` (so `pl.scan_parquet(.
 - `ae_aerel(target: str = 'AEREL', *, source: str = 'ae_relationship', aerel_map: dict[str, str] | None = None) -> SDTMNamespace` — Map free-text AE causality strings to ``AEREL`` values.
 - `merge(dataset: pl.DataFrame | pl.LazyFrame | None = None, *, on: str | list[str] | None = None, how: str = 'left', keep: list[str] | None = None, where: str | pl.Expr | None = None, validate: "Literal['m:1', '1:m', '1:1'] | None" = None) -> Self` — Join *dataset* into the pipeline using key column(s) *on*.
 - `keep(*columns: str | list[str]) -> Self` — Restrict the frame to *columns*, in the given order.
-- `nodup(*, subset: list[str], sort_by: list[str] | None = None, keep: "Literal['first', 'last'] | None" = None, descending: bool | list[bool] = False) -> Self` — Detect duplicate rows and optionally deduplicate after sorting.
+- `nodup(*, subset: str | list[str], sort_by: str | list[str] | None = None, keep: "Literal['first', 'last'] | None" = None, descending: bool | list[bool] = False) -> Self` — Detect duplicate rows and optionally deduplicate after sorting.
 - `group_by(*, by: list[str], agg: list[pl.Expr]) -> SDTMNamespace` — Group by *by* and apply *agg* aggregations (lazily).
 - `notsubmitted(*targets: str) -> SDTMNamespace` — Mark one or more variables as not submitted (set to null).
 - `multiple_responses(target: str, *, source: str, delimiter: str = '|') -> SDTMNamespace` — Explode a delimited multi-response field into separate rows.

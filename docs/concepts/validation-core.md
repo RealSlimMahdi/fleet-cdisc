@@ -80,7 +80,8 @@ uv run fleet validate --report findings.html   # HTML findings report
   `ValidationResult.save_html_report()` writes the same page for one
   dataset. Every cell is HTML-escaped.
 - **Could not run**: a dataset whose directory and file name disagree
-  (`data/sdtm/adsl.parquet`), or an unsupported IG version, is not validated.
+  (`data/sdtm/adsl.parquet`), an unsupported IG version, or no rules engine
+  (none installed, or a pinned engine path that does not exist), is not validated.
   The reason is printed, and the other datasets still run. An engine that
   crashes, writes no report, or does not finish within the timeout also
   gives "could not run", not a data failure.

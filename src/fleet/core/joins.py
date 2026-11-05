@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from fleet.core.exceptions import DerivationError
+from fleet.core.exceptions import DerivationError, VerbUsageError
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -47,6 +47,18 @@ def require_columns(
             f"{verb}: column(s) {name_hints(missing, available)} not found in {where}. "
             f"Available columns: {list(available)}"
         )
+
+
+def require_frames(verb: str, value: object, *, name: str = "from_dataset") -> None:
+    """Raise ``VerbUsageError`` unless *value* is a DataFrame or a non-empty list of them."""
+    items = value if isinstance(value, list) else [value]
+    if items and all(isinstance(item, pl.DataFrame) for item in items):
+        return
+    shown = f" {value!r}" if isinstance(value, str) else ""
+    raise VerbUsageError(
+        f"{verb}: {name} must be a DataFrame or a list of DataFrames, got "
+        f"{type(value).__name__}{shown}. Pass the frame itself, not its name."
+    )
 
 
 def refuse_shared_columns(

@@ -817,6 +817,9 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
             SDTMNamespace: A fresh namespace continuing from the grouped
                 plan.
 
+        Raises:
+            DerivationError: When a column of *by* is not in the frame.
+
         Examples:
             Compute max vital-sign result per subject and test::
 
@@ -829,6 +832,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                     .to_frame()
                 )
         """
+        self._require_columns("group_by(by=...)", by)
         return self._with_lazy(self._lazy.group_by(by, maintain_order=True).agg(agg))
 
     # ------------------------------------------------------------------ #

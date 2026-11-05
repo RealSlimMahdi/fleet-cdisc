@@ -156,6 +156,54 @@ def migrate_block(
     return new, changes
 
 
+#: The sentence a load error ends with when the spec uses the old vocabulary.
+MIGRATE_HINT = (
+    " This spec uses pre-ADR-0008 keys; rewrite the file with "
+    "`fleet migrate --spec <define.yaml> --write`."
+)
+
+
+def _old_block(block: Any) -> bool:
+    if not isinstance(block, Mapping):
+        return False
+    try:
+        return bool(migrate_block(block)[1])
+    except Exception:
+        return False
+
+
+def migrate_hint(spec: Any) -> str:
+    """Return :data:`MIGRATE_HINT` when *spec* is in the pre-ADR-0008 vocabulary.
+
+    Args:
+        spec: A parsed define.yaml (full or simplified format) or one
+            ``derivation:`` block.
+
+    Returns:
+        str: :data:`MIGRATE_HINT` when ``fleet_spec_version`` is 1 or a
+            block would change under ``fleet migrate --spec``, else ``""``.
+
+    Examples:
+        An old key under an unchanged algorithm name::
+
+            hint = migrate_hint({"algorithm": "seq", "groups": ["USUBJID"]})
+            assert "fleet migrate --spec" in hint
+    """
+    if not isinstance(spec, Mapping):
+        return ""
+    if "algorithm" in spec or "callable" in spec:
+        return MIGRATE_HINT if _old_block(spec) else ""
+    if spec.get("fleet_spec_version") == 1:
+        return MIGRATE_HINT
+    blocks: list[Any] = list(spec.get("variables") or [])
+    for dataset in spec.get("datasets") or []:
+        if isinstance(dataset, Mapping):
+            for var in dataset.get("variables") or []:
+                if isinstance(var, Mapping):
+                    blocks.append(var.get("derivation"))
+    return MIGRATE_HINT if any(_old_block(b) for b in blocks) else ""
+
+
 # --------------------------------------------------------------------- #
 # Text rewriting                                                          #
 # --------------------------------------------------------------------- #
