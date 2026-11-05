@@ -36,7 +36,6 @@ _DEFAULT_THEME: dict[str, Any] = {
     "header_fg": "FFFFFF",  # White
     "group_bg": "D9E2F3",  # Light blue
     "alt_row_bg": "F2F2F2",  # Light grey
-    "bold_header_rows": True,
 }
 
 
@@ -46,6 +45,46 @@ def _resolve_theme(overrides: dict[str, Any] | None) -> dict[str, Any]:
     if overrides:
         theme.update(overrides)
     return theme
+
+
+def _add_title_block(slide: Any, metadata: Any, th: dict[str, Any]) -> Any:
+    """Add the title and subtitle text boxes; return the top of the table."""
+    from pptx.util import Inches, Pt  # type: ignore[import-untyped]
+
+    top = Inches(0.3)
+    for text, size, bold, height in (
+        (metadata.title, th["font_size_title"], True, 0.45),
+        (metadata.subtitle, th["font_size_subtitle"], False, 0.4),
+    ):
+        if not text:
+            continue
+        txbox = slide.shapes.add_textbox(Inches(0.5), top, Inches(12), Inches(height))
+        tf = txbox.text_frame
+        tf.word_wrap = True
+        p = tf.paragraphs[0]
+        p.text = text
+        p.font.size = Pt(size)
+        p.font.bold = bold
+        p.font.name = th["font_name"]
+        top += Inches(height)
+    return top + Inches(0.1)
+
+
+def _add_footnotes(slide: Any, footnotes: list[str], top: Any, th: dict[str, Any]) -> None:
+    """Add the footnote text box below the table."""
+    if not footnotes:
+        return
+    from pptx.dml.color import RGBColor  # type: ignore[import-untyped]
+    from pptx.util import Inches, Pt  # type: ignore[import-untyped]
+
+    txbox = slide.shapes.add_textbox(Inches(0.5), top + Inches(0.15), Inches(12), Inches(0.8))
+    tf = txbox.text_frame
+    tf.word_wrap = True
+    p = tf.paragraphs[0]
+    p.text = "\n".join(footnotes)
+    p.font.size = Pt(th["font_size_footnote"])
+    p.font.name = th["font_name"]
+    p.font.color.rgb = RGBColor.from_string("666666")
 
 
 # ── Summary table slide ──────────────────────────────────────────── #
@@ -122,31 +161,7 @@ def render_pptx(
     for page in pages:
         slide_layout = prs.slide_layouts[6]  # Blank layout
         slide = prs.slides.add_slide(slide_layout)
-
-        # ── Title + subtitle ──
-        top = Inches(0.3)
-        if page.metadata.title:
-            txbox = slide.shapes.add_textbox(Inches(0.5), top, Inches(12), Inches(0.5))
-            tf = txbox.text_frame
-            tf.word_wrap = True
-            p = tf.paragraphs[0]
-            p.text = page.metadata.title
-            p.font.size = Pt(th["font_size_title"])
-            p.font.bold = True
-            p.font.name = th["font_name"]
-            top += Inches(0.45)
-
-        if page.metadata.subtitle:
-            txbox = slide.shapes.add_textbox(Inches(0.5), top, Inches(12), Inches(0.4))
-            tf = txbox.text_frame
-            tf.word_wrap = True
-            p = tf.paragraphs[0]
-            p.text = page.metadata.subtitle
-            p.font.size = Pt(th["font_size_subtitle"])
-            p.font.name = th["font_name"]
-            top += Inches(0.4)
-
-        top += Inches(0.1)
+        top = _add_title_block(slide, page.metadata, th)
 
         # ── Table dimensions ──
         n_cols = 1 + len(page.columns)  # stub + arms
@@ -179,7 +194,6 @@ def render_pptx(
             bg: str | None = None,
             fg: str | None = None,
             align: Any = PP_ALIGN.LEFT,
-            indent: int = 0,
             table: Any = table,
         ) -> None:
             cell = table.cell(row_idx, col_idx)
@@ -195,8 +209,6 @@ def render_pptx(
             if bg:
                 cell.fill.solid()
                 cell.fill.fore_color.rgb = RGBColor.from_string(bg)
-            if indent:
-                p.level = min(indent, 8)
 
         # ── Column headers ──
         _set_cell(0, 0, page.stub_label, bold=True, bg=th["header_bg"], fg=th["header_fg"])
@@ -221,40 +233,16 @@ def render_pptx(
             else:
                 bg = None
 
-            # Stub cell
+            # Stub cell; the row model alone decides bold, as in HTML and RTF.
             indent_spaces = "  " * row.indent
-            _set_cell(
-                ri,
-                0,
-                f"{indent_spaces}{row.label}",
-                bold=row.bold or row.row_type == "header",
-                bg=bg,
-            )
+            _set_cell(ri, 0, f"{indent_spaces}{row.label}", bold=row.bold, bg=bg)
 
             # Value cells
             for ci, col in enumerate(page.columns, start=1):
                 val = row.cells.get(col.label, "")
-                _set_cell(
-                    ri,
-                    ci,
-                    val,
-                    bold=row.bold or row.row_type == "header",
-                    bg=bg,
-                    align=PP_ALIGN.CENTER,
-                )
+                _set_cell(ri, ci, val, bold=row.bold, bg=bg, align=PP_ALIGN.CENTER)
 
-        # ── Footnotes ──
-        if page.metadata.footnotes:
-            fn_top = top + table_height + Inches(0.15)
-            fn_text = "\n".join(page.metadata.footnotes)
-            txbox = slide.shapes.add_textbox(Inches(0.5), fn_top, Inches(12), Inches(0.8))
-            tf = txbox.text_frame
-            tf.word_wrap = True
-            p = tf.paragraphs[0]
-            p.text = fn_text
-            p.font.size = Pt(th["font_size_footnote"])
-            p.font.name = th["font_name"]
-            p.font.color.rgb = RGBColor.from_string("666666")
+        _add_footnotes(slide, page.metadata.footnotes, top + table_height, th)
 
     # ── Write ──
     p_out = Path(path)
@@ -325,31 +313,7 @@ def render_listing_pptx(
     for page in pages:
         slide_layout = prs.slide_layouts[6]  # Blank
         slide = prs.slides.add_slide(slide_layout)
-
-        # ── Title + subtitle ──
-        top = Inches(0.3)
-        if page.metadata.title:
-            txbox = slide.shapes.add_textbox(Inches(0.5), top, Inches(12), Inches(0.5))
-            tf = txbox.text_frame
-            tf.word_wrap = True
-            p = tf.paragraphs[0]
-            p.text = page.metadata.title
-            p.font.size = Pt(th["font_size_title"])
-            p.font.bold = True
-            p.font.name = th["font_name"]
-            top += Inches(0.45)
-
-        if page.metadata.subtitle:
-            txbox = slide.shapes.add_textbox(Inches(0.5), top, Inches(12), Inches(0.4))
-            tf = txbox.text_frame
-            tf.word_wrap = True
-            p = tf.paragraphs[0]
-            p.text = page.metadata.subtitle
-            p.font.size = Pt(th["font_size_subtitle"])
-            p.font.name = th["font_name"]
-            top += Inches(0.4)
-
-        top += Inches(0.1)
+        top = _add_title_block(slide, page.metadata, th)
 
         # ── Table ──
         n_cols = len(page.column_labels)
@@ -397,18 +361,7 @@ def render_listing_pptx(
                     cell.fill.solid()
                     cell.fill.fore_color.rgb = RGBColor.from_string(bg)
 
-        # ── Footnotes ──
-        if page.metadata.footnotes:
-            fn_top = top + table_height + Inches(0.15)
-            fn_text = "\n".join(page.metadata.footnotes)
-            txbox = slide.shapes.add_textbox(Inches(0.5), fn_top, Inches(12), Inches(0.8))
-            tf = txbox.text_frame
-            tf.word_wrap = True
-            p = tf.paragraphs[0]
-            p.text = fn_text
-            p.font.size = Pt(th["font_size_footnote"])
-            p.font.name = th["font_name"]
-            p.font.color.rgb = RGBColor.from_string("666666")
+        _add_footnotes(slide, page.metadata.footnotes, top + table_height, th)
 
     # ── Write ──
     p_out = Path(path)
