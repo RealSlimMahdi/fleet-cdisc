@@ -4,7 +4,7 @@ Transform registry for custom ADaM derivations.
 Statistical programmers register named transforms so that:
 
 1. **Inline pipelines** can reference them by name or pass them directly.
-2. **YAML specs** can invoke them via ``algorithm: transform`` / ``callable: "<name>"``.
+2. **YAML specs** can invoke them via ``algorithm: derivation`` / ``callable: "<name>"``.
 
 Usage
 -----
@@ -39,7 +39,7 @@ Or in a YAML spec::
     - name: AGEGR1
       label: Pooled Age Group 1
       derivation:
-        algorithm: transform
+        algorithm: derivation
         callable: derive_agegr1
 
 Contract
