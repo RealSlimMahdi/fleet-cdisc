@@ -188,3 +188,30 @@ class TestReviewFindings:
         assert any("resolve by hand" in c for c in changes)
         _, block_changes = migrate_block({"algorithm": "assign_ct", "ct_codelist": "A", "ct": "B"})
         assert any("resolve by hand" in c for c in block_changes)
+
+
+def test_an_old_flow_style_block_is_reported_and_keeps_the_version():
+    """c1-647: a flow block with old names is reported; the version is not raised."""
+    text = (
+        "datasets:\n"
+        "  - name: DM\n"
+        "    variables:\n"
+        "      - name: SEX\n"
+        "        derivation: {algorithm: assign_ct, source: sex, ct_codelist: C66731}\n"
+    )
+    new_text, changes = migrate_spec_text(text)
+    assert new_text == text
+    assert changes == ["line 5: flow-style derivation block left as is — rewrite it by hand"]
+
+
+def test_a_current_flow_style_block_is_not_reported():
+    text = (
+        "datasets:\n"
+        "  - name: DM\n"
+        "    variables:\n"
+        "      - name: SEX\n"
+        "        derivation: {algorithm: assign, source: sex}\n"
+    )
+    new_text, changes = migrate_spec_text(text)
+    assert "fleet_spec_version: 2" in new_text
+    assert not any("flow-style" in c for c in changes)

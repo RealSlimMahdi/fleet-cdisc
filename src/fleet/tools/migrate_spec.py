@@ -22,7 +22,8 @@ Programmatic API (used by the ``fleet migrate --spec`` CLI subcommand)::
 The rewriter works line by line, so comments and layout survive.  It
 handles block-style ``derivation:`` mappings and the simplified
 single-dataset format; a flow-style block (``derivation: {algorithm: ...}``)
-is left as is and reported.
+with old names is left as is and reported, and ``fleet_spec_version`` stays
+as it is while such a block remains.
 
 What gets rewritten
 -------------------
@@ -46,6 +47,8 @@ import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 #: The dialect this module writes.
 SPEC_VERSION = 2
@@ -163,6 +166,7 @@ def migrate_block(
 _KEY_LINE = re.compile(r"^(\s*)(- )?([A-Za-z_][\w]*):(.*)$")
 _ALGO_LINE = re.compile(r"""^(\s*)(- )?algorithm:\s*["']?([\w.]+)["']?(\s*#.*)?\s*$""")
 _VERSION_LINE = re.compile(r"^fleet_spec_version:\s*\d+(\s*#.*)?\s*$")
+_FLOW_BLOCK = re.compile(r"^\s*(?:- )?derivation:\s*(\{.*\})\s*(?:#.*)?$")
 _SCALAR = re.compile(r"""^\s*(?:"([^"]*)"|'([^']*)'|([^\s#]+))""")
 
 
@@ -293,8 +297,21 @@ def migrate_spec_text(text: str, *, set_version: bool = True) -> tuple[str, list
                 out[j] = ""
                 changes.append(f"line {j + 1}: ct: {codelist} dropped (the variable's codelist:)")
         i = end
+    flow_left = 0
+    for j, line in enumerate(lines):
+        flow = _FLOW_BLOCK.match(line.rstrip("\n"))
+        if flow is None:
+            continue
+        try:
+            block = yaml.safe_load(flow.group(1))
+        except yaml.YAMLError:
+            block = None
+        if isinstance(block, dict) and not migrate_block(block)[1]:
+            continue
+        flow_left += 1
+        changes.append(f"line {j + 1}: flow-style derivation block left as is — rewrite it by hand")
     text_out = "".join(out)
-    if set_version:
+    if set_version and not flow_left:
         text_out, version_change = _set_version(text_out)
         if version_change:
             changes.append(version_change)

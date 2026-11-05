@@ -101,8 +101,10 @@ strict in the other direction too: `source` and `value` exclude each other on
 a misspelled key is rejected.
 
 A spec written before ADR-0008 (`assign_ct`, `hardcode_no_ct`, `if_then_else`,
-`ct_codelist`, `else_value`, `groups`, …) fails at load with a message that
-names the fix: `fleet migrate --spec <define.yaml> --write` rewrites the file
+`ct_codelist`, `else_value`, `groups`, …) fails at load. An old algorithm
+name gets a message that names the fix. An old key on a current algorithm
+(`groups:` on `seq`) gets `Extra inputs are not permitted`. In both cases
+`fleet migrate --spec <define.yaml> --write` rewrites the file
 line by line and sets `fleet_spec_version: 2`.
 
 The complete, always-current list is one call away (and `df.sdtm.verbs()` /
@@ -202,7 +204,7 @@ identical across studies and unstable across Fleet versions. The
 submission and the exact code that produced the data. The verb is named
 after the class that defines it, the way the run's lineage records it in
 `VariableNode.method`, so an ADaM `study_day` reads
-`fleet.core._verb_mixin.SharedVerbsMixin.duration('ADY', end='ASTDT', start='TRTSDT')`
+`fleet.core._verb_mixin.SharedVerbsMixin.duration('ADY', start='TRTSDT', end='ASTDT')`
 in the define and in the lineage of the dataset it documents.
 
 ### Example — TRTSDT (date of first dose)
@@ -679,9 +681,10 @@ src/fleet/define_xml/schemas/define_spec_schema.json
 This schema is **generated from the algorithm registry** — its `algorithm:`
 enum, per-algorithm required fields, and the `fleet_spec_version` /
 `derivations_module` properties are derived from the same declarations that
-drive execution, and a CI test fails if the checked-in schema drifts. So the
-editor red-squiggles you see match exactly what `from_spec()` will accept —
-including the `callable` escape hatch and every algorithm the engine can run.
+drive execution, and a CI test fails if the checked-in schema drifts. The
+schema checks keys, types and required fields. `from_spec()` also checks
+the exclusive groups (`source` or `value` on `assign`) and the codelist
+rule, so some errors appear only at run time.
 Regenerate it after registry changes with:
 
 ```bash
@@ -917,6 +920,20 @@ study:
 ```
 
 These emit `<def:SupplementalDoc>` and corresponding `<def:leaf>` elements.
+
+---
+
+## Trust: a study folder is code
+
+Treat a `define.yaml` or a `study_config.yaml` from another party as code,
+not as data. Read it before you run it.
+
+- `callable:` and `derivations_module:` import a Python module and run it.
+- `validation.engine_path` in `study_config.yaml` starts a program.
+- An `expression:` string is checked against an allow-list of Polars names
+  and methods. The allow-list stops mistakes. It is not a security boundary.
+
+To report a security problem, see `SECURITY.md` at the root of the repository.
 
 ---
 

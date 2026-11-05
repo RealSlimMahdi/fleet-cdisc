@@ -4,7 +4,7 @@ Transform registry for custom ADaM derivations.
 Statistical programmers register named transforms so that:
 
 1. **Inline pipelines** can reference them by name or pass them directly.
-2. **YAML specs** can invoke them via ``algorithm: transform`` / ``callable: "<name>"``.
+2. **YAML specs** can invoke them via ``callable: "<name>"``.
 
 Usage
 -----
@@ -17,8 +17,8 @@ Register with the decorator::
         \"\"\"Classify AGE into age group bands.\"\"\"
         return df.with_columns(
             pl.when(pl.col("AGE") < 65).then(pl.lit("<65"))
-              .otherwise(pl.lit(">=65"))
-              .alias("AGEGR1")
+              .when(pl.col("AGE") >= 65).then(pl.lit(">=65"))
+              .alias("AGEGR1")  # a missing AGE stays missing
         )
 
 Or register imperatively::
@@ -39,7 +39,6 @@ Or in a YAML spec::
     - name: AGEGR1
       label: Pooled Age Group 1
       derivation:
-        algorithm: transform
         callable: derive_agegr1
 
 Contract
