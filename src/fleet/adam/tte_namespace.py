@@ -124,7 +124,8 @@ class TTENamespace(SharedADaMVerbsMixin):
                 the observation: records after it are dropped.
             by: Stratum columns, present in every event frame. A censor
                 frame with none of them (for example from ADSL) is crossed
-                with the strata of the event frames. Give a per-stratum
+                with the strata of the event frames, as in admiral
+                ``derive_param_tte`` with ``by_vars``. Give a per-stratum
                 PARAMCD as an expression in *set_values_to*.
             set_values_to: Extra constant or expression columns on the new
                 rows (PARAMN, PARCAT1, ...). A static PARAMCD with several

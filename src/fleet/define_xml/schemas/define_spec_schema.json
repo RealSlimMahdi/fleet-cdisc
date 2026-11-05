@@ -1076,7 +1076,7 @@
             }
           ],
           "default": null,
-          "description": "CDISC CT codelist for validation \u2014 a generated codelist class (e.g.",
+          "description": "CDISC CT codelist for validation \u2014 a generated codelist class (e.g. ``SEX``) or an NCI concept ID string (e.g. ``\"C66731\"``).",
           "title": "Ct"
         },
         "ct_map": {
@@ -1113,7 +1113,7 @@
         },
         "system": {
           "default": "ctcae_v5",
-          "description": "Grading system name (e.g.",
+          "description": "Grading system name (e.g. ``\"ctcae_v5\"``, ``\"daids\"``) or path to a custom JSON criteria file (schema version 2).",
           "title": "System",
           "type": "string"
         },
@@ -1132,7 +1132,7 @@
           "type": "string"
         },
         "unit_var": {
-          "description": "Column holding the unit of measure (e.g.",
+          "description": "Column holding the unit of measure (e.g. ``\"AVALU\"``).",
           "title": "Unit Var",
           "type": "string"
         },
@@ -2582,12 +2582,12 @@
           "type": "string"
         },
         "baseline_cat": {
-          "description": "Column with baseline category (e.g.",
+          "description": "Column with baseline category (e.g. ``\"BNRIND\"``).",
           "title": "Baseline Cat",
           "type": "string"
         },
         "post_cat": {
-          "description": "Column with post-baseline category (e.g.",
+          "description": "Column with post-baseline category (e.g. ``\"NRIND\"``).",
           "title": "Post Cat",
           "type": "string"
         },
@@ -2727,7 +2727,7 @@
             }
           ],
           "default": null,
-          "description": "CDISC CT codelist for validation \u2014 a generated codelist class (e.g.",
+          "description": "CDISC CT codelist for validation \u2014 a generated codelist class (e.g. ``SEX``) or an NCI concept ID string (e.g. ``\"C66731\"``).",
           "title": "Ct"
         },
         "ct_map": {
@@ -2952,7 +2952,7 @@
             }
           ],
           "default": null,
-          "description": "``strptime`` layout of the raw text (DTC only), e.g.",
+          "description": "``strptime`` layout of the raw text (DTC only), e.g. ``\"%m/%d/%Y\"``.",
           "title": "Format"
         }
       },

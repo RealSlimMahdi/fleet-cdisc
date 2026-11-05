@@ -246,8 +246,8 @@ class TestNodupRealisticDuplicates:
             order_by=["AESEQ"],
             keep="last",
         ).to_frame()
-        # True tie on sort key — last physical row kept
-        assert result.height == 1
+        # True tie on sort key: the last physical record stays, as PROC SORT EQUALS.
+        assert result["AEENDTC"].to_list() == ["2014-01-12"]
 
     def test_dedup_with_null_in_subset_key(self, capsys):
         """Null values in subset columns — two nulls should be treated as equal."""
@@ -292,3 +292,34 @@ class TestNodupRealisticDuplicates:
         ).to_frame()
         # Should have fewer rows than input (01-701-1015 has dup AESEQ=1)
         assert result.height < df.height
+
+
+# A tie on two sort columns and a null (c1-857). Expected order as SAS PROC SORT
+# with EQUALS: a missing value sorts first, tied records keep their input order.
+_TIED = pl.from_repr("""
+┌─────────┬──────────┬──────────┬────────────┬─────┐
+│ USUBJID ┆ VSTESTCD ┆ VISITNUM ┆ VSDTC      ┆ REC │
+│ ---     ┆ ---      ┆ ---      ┆ ---        ┆ --- │
+│ str     ┆ str      ┆ i64      ┆ str        ┆ str │
+╞═════════╪══════════╪══════════╪════════════╪═════╡
+│ S1      ┆ SYSBP    ┆ 3        ┆ 2014-02-01 ┆ a   │
+│ S1      ┆ SYSBP    ┆ 3        ┆ null       ┆ b   │
+│ S1      ┆ SYSBP    ┆ 3        ┆ 2014-02-01 ┆ c   │
+│ S1      ┆ SYSBP    ┆ 3        ┆ 2014-01-01 ┆ d   │
+└─────────┴──────────┴──────────┴────────────┴─────┘
+""")
+
+
+@pytest.mark.parametrize(("keep", "kept"), [("first", "b"), ("last", "c")])
+def test_nodup_breaks_a_two_column_tie_by_input_order(keep: str, kept: str) -> None:
+    result = _TIED.sdtm.nodup(
+        subset=["USUBJID", "VSTESTCD"], order_by=["VISITNUM", "VSDTC"], keep=keep
+    ).to_frame()
+
+    assert result["REC"].to_list() == [kept]
+
+
+def test_seq_numbers_a_two_column_tie_in_input_order() -> None:
+    result = _TIED.sdtm.seq("VSSEQ", by=["USUBJID"], order_by=["VISITNUM", "VSDTC"]).to_frame()
+
+    assert result.select("REC", "VSSEQ").rows() == [("b", 1), ("d", 2), ("a", 3), ("c", 4)]

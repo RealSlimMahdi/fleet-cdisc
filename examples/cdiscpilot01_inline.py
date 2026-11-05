@@ -410,7 +410,7 @@ adsl = (
 )
 
 print(f"   {adsl.shape[0]} subjects × {adsl.shape[1]} variables")
-print(f"   EOSSTT counts: {adsl['EOSSTT'].value_counts().to_dicts()}")
+print(f"   EOSSTT counts: {adsl['EOSSTT'].value_counts().sort('EOSSTT').to_dicts()}")
 
 # ════════════════════════════════════════════════════════════════════════════
 # 7. Age Grouping (AGEGR1)
@@ -458,8 +458,8 @@ adsl = (
     .to_frame()
 )
 
-print(f"   SAFFL : {adsl['SAFFL'].value_counts().to_dicts()}")
-print(f"   ITTFL : {adsl['ITTFL'].value_counts().to_dicts()}")
+print(f"   SAFFL : {adsl['SAFFL'].value_counts().sort('SAFFL').to_dicts()}")
+print(f"   ITTFL : {adsl['ITTFL'].value_counts().sort('ITTFL').to_dicts()}")
 assert (adsl["SAFFL"] == "Y").sum() == adsl.height, "every pilot subject took a dose"
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -878,7 +878,7 @@ adex_final = adex.select([c for c in ADEX_COLS if c in adex.columns])
 adex_final.write_parquet(OUT / "adex_admiral.parquet")
 
 print(f"   Shape        : {adex_final.shape[0]} records × {adex_final.shape[1]} variables")
-print(f"   Treatments   : {adex_final['EXTRT'].unique().to_list()}")
+print(f"   Treatments   : {adex_final['EXTRT'].unique().sort().to_list()}")
 print(f"   EXDURD range : {adex_final['EXDURD'].min()} – {adex_final['EXDURD'].max()} days")
 
 # ════════════════════════════════════════════════════════════════════════════

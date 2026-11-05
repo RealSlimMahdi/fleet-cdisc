@@ -1036,11 +1036,14 @@ class TestTolerances:
         assert compare(b, c, keys="ID", rel_tol=0.99).is_equal is False
         assert compare(b, c, keys="ID", rel_tol=0.99, abs_tol=0.5).is_equal is True
 
-    def test_tolerances_apply_to_integer_and_decimal_variables(self):
-        b = pl.DataFrame({"ID": [1], "N": pl.Series([100], dtype=pl.Int64)})
-        c = pl.DataFrame({"ID": [1], "N": pl.Series([101], dtype=pl.Int64)})
+    @pytest.mark.parametrize("dtype", [pl.Int64, pl.Decimal(10, 1)], ids=["int", "decimal"])
+    def test_tolerances_apply_to_integer_and_decimal_variables(self, dtype):
+        b = pl.DataFrame({"ID": [1], "N": pl.Series([100]).cast(dtype)})
+        c = pl.DataFrame({"ID": [1], "N": pl.Series([101]).cast(dtype)})
         assert compare(b, c, keys="ID", abs_tol=1.0).is_equal is True
         assert compare(b, c, keys="ID", abs_tol=0.5).is_equal is False
+        assert compare(b, c, keys="ID", rel_tol=0.01).is_equal is True
+        assert compare(b, c, keys="ID").is_equal is False
 
     def test_tolerances_survive_a_numeric_dtype_difference(self, base):
         c = base.with_columns((pl.col("AGE").cast(pl.Float64) + 0.4).alias("AGE"))
@@ -1716,7 +1719,7 @@ class TestMatchingSettingsOnEverySurface:
 
     def test_the_text_report_names_the_pairs_and_the_restriction(self, report):
         text = report.to_text()
-        assert "Pairs:     WT = WEIGHT" in text
+        assert re.search(r"Pairs:\s+WT = WEIGHT", text)
         assert "Variables: AGE, WT" in text
 
     def test_an_ordinary_comparison_says_nothing_about_either(self, base):

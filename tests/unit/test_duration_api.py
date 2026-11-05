@@ -61,7 +61,33 @@ class TestAdamDuration:
         result = date_df.adam.duration(
             "TRTDURD", start="TRTSDT", end="ADT", add_one=False
         ).to_frame()
-        assert "TRTDURD" in result.columns
+        assert result["TRTDURD"].to_list() == [9, 0, -2]
+
+    # Month and year lengths are averages: a year is 365.25 days, a month is 365.25 / 12
+    # days. add_one counts both end days, so 2020-01-01 to 2021-01-01 is 367 days.
+    @pytest.mark.parametrize(
+        ("unit", "add_one", "expected"),
+        [
+            ("months", True, 367 / (365.25 / 12)),  # 12.0575
+            ("months", False, 366 / (365.25 / 12)),  # 12.0246
+            ("years", True, 367 / 365.25),  # 1.0048
+            ("years", False, 366 / 365.25),  # 1.0021
+        ],
+    )
+    def test_months_and_years(self, unit: str, add_one: bool, expected: float) -> None:
+        df = pl.from_repr("""
+        ┌────────────┬────────────┐
+        │ TRTSDT     ┆ TRTEDT     │
+        │ ---        ┆ ---        │
+        │ date       ┆ date       │
+        ╞════════════╪════════════╡
+        │ 2020-01-01 ┆ 2021-01-01 │
+        └────────────┴────────────┘
+        """)
+        result = df.adam.duration(
+            "DUR", start="TRTSDT", end="TRTEDT", unit=unit, add_one=add_one
+        ).to_frame()
+        assert result["DUR"][0] == pytest.approx(expected, abs=1e-9)
 
     def test_hours(self) -> None:
         df = pl.from_repr("""\
@@ -87,8 +113,7 @@ class TestAdamDuration:
 
     def test_iso8601_output(self, date_df: pl.DataFrame) -> None:
         result = date_df.adam.duration("DUR", start="TRTSDT", end="ADT", out="iso8601").to_frame()
-        assert "DUR" in result.columns
-        assert result["DUR"][0].startswith("P")
+        assert result["DUR"].to_list() == ["P9D", "P0D", "-P2D"]
 
 
 # ── SDTM .duration() ─────────────────────────────────────────────────

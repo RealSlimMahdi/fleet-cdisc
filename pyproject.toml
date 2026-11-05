@@ -21,24 +21,27 @@ classifiers = [
 
 # CORE DEPENDENCIES
 dependencies = [
-    "polars>=1.41,<2",
-    "pydantic>=2.0.0",
-    "pyyaml>=6.0",
+    "polars>=1.41.1,<2",
+    "pydantic>=2.11",
+    "pyyaml>=6.0.1",
     "httpx>=0.27,<1",
-    "jsonschema>=4.26.0",
+    "jsonschema>=4.20",
     "lxml>=5.0.0",
+    # Floor above the release with a critical advisory; the CDISC API key goes through this store.
+    "certifi>=2026.10.19",
 ]
 
 [project.optional-dependencies]
-# I/O: SAS XPT support (1.3.3: the first tested release that reads and writes Polars frames)
+# I/O: SAS XPT support (1.3.7: reads ISO 8601 formats as dates and skips deleted SAS records)
 io = [
-    "pyreadstat>=1.3.3",
+    "pyreadstat>=1.3.7",
 ]
 
 # TLG-PDF: PDF export via WeasyPrint (70.0: URLFetcher refuses every protocol,
 # so a PDF loads no external resource)
 tlg-pdf = [
     "weasyprint>=70.0",
+    "brotli>=1.2.1; platform_python_implementation == 'CPython'",
 ]
 
 # TLG-PPTX: slide deck export via python-pptx
@@ -64,7 +67,7 @@ lsp = [
 
 # MCP: `fleet mcp --stdio` Model Context Protocol server
 mcp = [
-    "mcp>=1.2",
+    "mcp>=1.26",
 ]
 
 # FULL: All extras
@@ -123,7 +126,7 @@ local_scheme = "no-local-version"
 packages = ["src/fleet"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/fleet", "tests", "README.md", "LICENSE", "pyproject.toml"]
+include = ["src/fleet", "README.md", "LICENSE", "pyproject.toml"]
 
 
 [tool.ruff]

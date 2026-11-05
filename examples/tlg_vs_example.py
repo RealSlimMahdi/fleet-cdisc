@@ -137,7 +137,7 @@ for subj in subjects:
 advs = fleet.frame(pl.DataFrame(vs_records))
 print(f"   {advs.shape[0]} records × {advs.shape[1]} variables")
 print(f"   Parameters: {sorted(advs['PARAMCD'].unique().to_list())}")
-print(f"   Visits: {advs['AVISIT'].unique().to_list()}")
+print(f"   Visits: {advs['AVISIT'].unique().sort().to_list()}")
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -174,7 +174,7 @@ ard_builder = (
 print(ard_builder)
 print(f"\n   ARD shape: {ard_builder.shape[0]} rows × {ard_builder.shape[1]} cols")
 print(
-    f"   Parameters in output: {ard_builder.filter(pl.col('variable') != '')['variable_level'].unique().to_list()}"
+    f"   Parameters in output: {ard_builder.filter(pl.col('variable') != '')['variable_level'].unique().sort().to_list()}"
 )
 
 

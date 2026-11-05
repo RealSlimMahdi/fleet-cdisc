@@ -293,6 +293,7 @@ class OphthaNamespace(SharedADaMVerbsMixin):
                 )
         """
         direction = direction.lower()
+        # NaN is a missing score, not one above every threshold.
         col = pl.col(value_col).cast(pl.Float64).fill_nan(None)
         if direction == "ge":
             cond = col >= threshold

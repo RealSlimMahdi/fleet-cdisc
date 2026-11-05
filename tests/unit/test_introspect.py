@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import ast
 import dataclasses
+import inspect
 import subprocess
 import sys
 from pathlib import Path
@@ -58,18 +59,27 @@ def _fleet_imports(source: Path) -> set[str]:
     *source* is a top-level module of the ``fleet`` package, so a relative
     ``from .core import ...`` resolves against ``fleet`` itself — it is the
     natural spelling from inside the package and must not slip the sweep.
+    ``from fleet import X`` counts as ``fleet.X`` (``__version__`` excepted),
+    and a private name counts as ``module._name``.
     """
     tree = ast.parse(source.read_text(encoding="utf-8"))
     modules: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
-            if node.level and not node.module:
-                modules.update(f"fleet.{alias.name}" for alias in node.names)
+            if node.level:
+                module = f"fleet.{node.module}" if node.module else "fleet"
+            else:
+                module = node.module or ""
+            if module != "fleet" and not module.startswith("fleet."):
                 continue
-            base = "fleet." if node.level else ""
-            module = f"{base}{node.module}"
-            if module == "fleet" or module.startswith("fleet."):
-                modules.add(module)
+            for alias in node.names:
+                name = alias.name
+                if name.startswith("_") and name != "__version__":
+                    modules.add(f"{module}.{name}")
+                elif module == "fleet" and name != "__version__":
+                    modules.add(f"fleet.{name}")
+                else:
+                    modules.add(module)
         elif isinstance(node, ast.Import):
             for alias in node.names:
                 if alias.name == "fleet" or alias.name.startswith("fleet."):
@@ -150,6 +160,50 @@ def test_algorithm_doc_returns_summary_and_verb_path() -> None:
 
 def test_algorithm_doc_returns_none_for_unknown_name() -> None:
     assert introspect.algorithm_doc("not_an_algorithm") is None
+
+
+@pytest.mark.parametrize(
+    ("name", "standard", "verb_path"),
+    [
+        ("seq", "sdtm", "fleet.sdtm.namespace.SDTMNamespace.seq"),
+        ("seq", "adam", "fleet.adam.namespace.AdamNamespace.seq"),
+        ("date", "sdtm", "fleet.sdtm.namespace.SDTMNamespace.date"),
+        ("date", "adam", "fleet.adam.namespace.AdamNamespace.date"),
+    ],
+)
+def test_algorithm_doc_names_the_verb_of_the_standard(
+    name: str, standard: str, verb_path: str
+) -> None:
+    """c1-780: an ADaM hover names the verb that runs in ADaM, not the SDTM verb."""
+    doc = introspect.algorithm_doc(name, standard=standard)
+
+    assert doc is not None
+    assert doc.verb_path == verb_path
+
+
+def test_algorithm_doc_refuses_an_unknown_standard() -> None:
+    with pytest.raises(ValueError, match="sdtm.*adam|adam.*sdtm"):
+        introspect.algorithm_doc("seq", standard="send")  # type: ignore[arg-type]
+
+
+def test_parameter_text_keeps_an_e_g_example_whole() -> None:
+    """c1-780: the first sentence of a parameter text does not end at "(e.g."."""
+    algo = introspect.get_algorithm("sdtm", "assign")
+
+    assert algo is not None
+    ct = next(param for param in algo.params if param.name == "ct")
+    assert ct.description.endswith('(e.g. ``"C66731"``).')
+
+
+def test_no_parameter_text_ends_inside_an_abbreviation() -> None:
+    cut = [
+        (algo.standard, algo.name, param.name)
+        for standard in ("sdtm", "adam")
+        for algo in introspect.algorithms(standard)
+        for param in algo.params
+        if param.description.endswith(("e.g.", "i.e."))
+    ]
+    assert cut == []
 
 
 def test_suggest_algorithm_finds_the_near_miss() -> None:
@@ -257,6 +311,38 @@ def test_algorithm_info_rejects_mutation() -> None:
         algo.name = "hacked"  # type: ignore[misc]
 
 
+@pytest.mark.parametrize(
+    ("dto", "fields"),
+    [
+        (introspect.ParamInfo, {"name", "required", "description"}),
+        (introspect.AlgorithmInfo, {"name", "standard", "description", "params"}),
+        (introspect.AlgorithmDoc, {"summary", "verb_path"}),
+    ],
+    ids=lambda value: getattr(value, "__name__", "fields"),
+)
+def test_dto_field_names_are_part_of_the_contract(dto: type, fields: set[str]) -> None:
+    """c1-851: a renamed field breaks a shipped client; fields may only be added."""
+    assert fields <= {field.name for field in dataclasses.fields(dto)}
+
+
+@pytest.mark.parametrize(
+    ("function", "params"),
+    [
+        ("algorithms", ["standard"]),
+        ("get_algorithm", ["standard", "name"]),
+        ("suggest_algorithm", ["standard", "name"]),
+        ("algorithm_doc", ["name", "standard"]),
+        ("define_schema", []),
+    ],
+)
+def test_function_parameter_names_are_part_of_the_contract(
+    function: str, params: list[str]
+) -> None:
+    """c1-851: keyword names are the contract too; new ones may only be appended."""
+    names = list(inspect.signature(getattr(introspect, function)).parameters)
+    assert names[: len(params)] == params
+
+
 # ------------------------------------------------------------------ #
 # The import boundary                                                  #
 # ------------------------------------------------------------------ #
@@ -270,6 +356,26 @@ def test_lsp_server_imports_only_the_surface() -> None:
         f"{LSP_SERVER_SOURCE.name} reaches past the introspection surface: {offenders}. "
         "Add the name to fleet.introspect, or grandfather it in IMPORT_ALLOWANCE with a reason."
     )
+
+
+@pytest.mark.parametrize(
+    ("line", "offender"),
+    [
+        ("from fleet import core", "fleet.core"),
+        ("from fleet import _version", "fleet._version"),
+        ("from fleet.introspect import _to_info", "fleet.introspect._to_info"),
+        ("from .core.spec_registry import _DECLARED", "fleet.core.spec_registry._DECLARED"),
+        ("from . import cli", "fleet.cli"),
+    ],
+)
+def test_the_import_sweep_catches_a_reach_past_the_surface(
+    tmp_path: Path, line: str, offender: str
+) -> None:
+    """c1-851: the sweep itself must see these spellings."""
+    source = tmp_path / "adapter.py"
+    source.write_text(f"{line}\nfrom fleet import introspect, __version__\n", encoding="utf-8")
+
+    assert _fleet_imports(source) - ALLOWED_IMPORTS == {offender}
 
 
 def test_introspect_imports_without_the_lsp_extra() -> None:

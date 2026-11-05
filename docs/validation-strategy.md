@@ -76,12 +76,12 @@ Each link is a versioned, reviewable artefact stored alongside the study specifi
 | `TestBSA`                  | DuBois, Mosteller, Haycock, Gehan-George (4 methods)                               |
 | `TestMeanArterialPressure` | Standard MAP formula                                                               |
 | `TestQTc`                  | Bazett, Fridericia (2 methods)                                                     |
-| `TestAgeInYears`           | Day-accurate age in years, months, weeks                                           |
+| `TestAgeInYears`           | AGE converted to years from its AGEU unit (years, months, weeks, days)             |
 | `TestDeriveSummaryRecords` | Mean aggregation by parameter group (BDS record generation)                        |
 | `TestDeriveLOCFRecords`    | Last-observation-carried-forward imputation                                        |
 | `TestDeriveParam`          | BMI derivation from height/weight                                                  |
 | `TestADSLAgeYears`         | Age derivations on ADSL frame                                                      |
-| `TestADSLDerivePeriod`     | Exposure period flags                                                              |
+| `TestADSLDerivePeriod`     | Period start, end and planned treatment copied to APxxSDT, APxxEDT and TRTxxP      |
 | `TestANL01FLAdmiralParity` | `restrict_derivation` + `derive_var_extreme_flag` (last-valid-row ANL01FL pattern) |
 
 **No R runtime is required.** The parity tests work in two ways:

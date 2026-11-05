@@ -84,6 +84,7 @@ __all__ = [
     "parse_variable_spec",
     "render_formal_expression",
     "render_method_text",
+    "spec_algorithms",
     "spec_verb",
     "suggest_algorithm",
     "variable_spec_union",
@@ -262,6 +263,8 @@ def _build_model(algo: SpecAlgorithm) -> type[SpecVariableBase]:
 
 _SECTION_RE = re.compile(r"^[A-Z][A-Za-z ]*:\s*$")
 _ARG_RE = re.compile(r"^(\*{0,2}\w+)(?:\s*\([^)]*\))?:\s*(.*)$")
+# A full stop then a space ends a sentence, unless it closes "e.g.", "i.e.", "etc." or "vs.".
+_SENTENCE_END_RE = re.compile(r"(?<!\be\.g)(?<!\bi\.e)(?<!\betc)(?<!\bvs)\. ")
 _FRAME_TYPES: tuple[type, ...] = (pl.DataFrame, pl.LazyFrame)
 
 
@@ -357,8 +360,8 @@ def _docstring_arg_descriptions(fn: Any) -> dict[str, str]:
         elif current is not None:
             out[current] = f"{out[current]} {stripped}".strip()
     for name, text in out.items():
-        head, sep, _ = text.partition(". ")
-        out[name] = f"{head}." if sep else text
+        end = _SENTENCE_END_RE.search(text)
+        out[name] = text[: end.start() + 1] if end else text
     return out
 
 
@@ -577,6 +580,31 @@ def algorithms(standard: str) -> list[SpecAlgorithm]:
 def algorithm_names(standard: str) -> list[str]:
     """Return the sorted ``algorithm:`` values for *standard*."""
     return sorted(_DECLARED[standard])
+
+
+def spec_algorithms(standard: str) -> list[str]:
+    """Return the sorted ``algorithm:`` values a ``define.yaml`` accepts for *standard*.
+
+    Args:
+        standard: ``"sdtm"`` or ``"adam"``, in any letter case.
+
+    Returns:
+        list[str]: The algorithm names, sorted.
+
+    Raises:
+        ValueError: If *standard* is not ``"sdtm"`` or ``"adam"``.
+
+    Examples:
+        List the SDTM algorithms::
+
+            import fleet
+
+            names = fleet.spec_algorithms("SDTM")
+    """
+    key = standard.lower() if isinstance(standard, str) else standard
+    if key not in _DECLARED:
+        raise ValueError(f"Unknown standard {standard!r}: use 'sdtm' or 'adam'.")
+    return algorithm_names(key)
 
 
 def model_for(standard: str, name: str) -> type[SpecVariableBase]:

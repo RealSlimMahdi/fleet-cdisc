@@ -1,0 +1,13 @@
+Files made by other tools, read by tests/unit/test_real_files.py (c2-972).
+
+ts.xpt, te.xpt, tv.xpt
+  CDISCPILOT01 SDTM trial design datasets, SAS transport version 5, written by SAS.
+  Source: https://github.com/phuse-org/phuse-scripts, data/sdtm/cdiscpilot01/
+  Licence: MIT (phuse-org/phuse-scripts). ts.xpt is Windows-1252 text.
+
+adsl.json
+  CDISC ADaM MSG ADSL as Dataset-JSON 1.1, written by the CDISC Dataset-JSON team.
+  Source: https://github.com/cdisc-org/DataExchange-DatasetJson, examples/adam/adsl.json
+  Licence: MIT (cdisc-org/DataExchange-DatasetJson).
+
+Copied unchanged on 5 Nov 2026.

@@ -120,7 +120,7 @@ POSITIONAL_LIST_TO_KEEP: frozenset[str] = frozenset({"merge", "lookup"})
 
 #: Removed verbs with no automatic rewrite → the note printed for a call.
 MANUAL_REWRITES: dict[str, str] = {
-    "remove_dup": "use .nodup(subset=..., sort_by=..., keep=...) and choose the kept row",
+    "remove_dup": "use .nodup(subset=..., order_by=..., keep=...) and choose the kept row",
 }
 
 #: Old verb names that only Fleet used: reported when used as a value, not called.

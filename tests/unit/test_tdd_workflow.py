@@ -415,39 +415,40 @@ class TestTrialCriteriaCollection:
 
 
 class TestCrossDomainFK:
-    def test_add_arms_with_valid_te(self, te_rows, ta_rows):
-        """FK check passes when all TA.ETCD values exist in TE."""
-        valid_etcds = {e.etcd for e in te_rows.elements}
-        for a in ta_rows.arms:
-            assert a.etcd in valid_etcds
+    """The TA FK on TE is tested through add_arms in test_ta_pipeline_fk_fails."""
 
-    def test_add_arms_with_invalid_te_raises(self, te_rows):
-        """FK check catches orphaned ETCD."""
-        bad_arms = TrialArms(
-            arms=[
-                TrialArm(
-                    armcd="PBO",
-                    arm="Placebo",
-                    taetord=1,
-                    etcd="MISSING",
-                    element="Unknown",
-                    epoch=Epoch.SCREENING,
-                ),
+    @patch("fleet.sdtm._tdd_mixin.TrialDesignMixin._fetch_ig_domain", return_value=MOCK_TE_META)
+    def test_add_visits_refuses_an_armcd_that_ta_does_not_hold(self, mock_fetch, ta_rows):
+        visits = TrialVisits(visits=[TrialVisit(visitnum=1, visit="Week 1", armcd="GHOST")])
+
+        with pytest.raises(
+            ValueError, match="TV.ARMCD 'GHOST' not found in TA. Valid: \\['PBO'\\]"
+        ):
+            (
+                pl.DataFrame()
+                .sdtm.fetch_structure("TV")
+                .study_header("CDISCPILOT01", "TV")
+                .add_visits(visits, ta=ta_rows)
+            )
+
+    @patch("fleet.sdtm._tdd_mixin.TrialDesignMixin._fetch_ig_domain", return_value=MOCK_TE_META)
+    def test_add_visits_accepts_a_known_or_blank_armcd(self, mock_fetch, ta_rows):
+        visits = TrialVisits(
+            visits=[
+                TrialVisit(visitnum=1, visit="Screening", armcd=""),
+                TrialVisit(visitnum=2, visit="Week 1", armcd="PBO"),
             ]
         )
-        # Simulate the validation that add_arms performs
-        valid_etcds = {e.etcd for e in te_rows.elements}
-        with pytest.raises(ValueError, match="not found in TE"):
-            for a in bad_arms.arms:
-                if a.etcd not in valid_etcds:
-                    raise ValueError(
-                        f"TA.ETCD '{a.etcd}' not found in TE. Valid: {sorted(valid_etcds)}"
-                    )
 
-    def test_add_arms_without_te_skips_fk(self, ta_rows):
-        """Omitting te= skips FK check (no error)."""
-        # This should not raise — structural validation only
-        assert len(ta_rows.arms) == 3
+        result = (
+            pl.DataFrame()
+            .sdtm.fetch_structure("TV")
+            .study_header("CDISCPILOT01", "TV")
+            .add_visits(visits, ta=ta_rows)
+            .to_frame()
+        )
+
+        assert result["VISITNUM"].to_list() == [1, 2]
 
 
 # ================================================================== #

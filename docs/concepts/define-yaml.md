@@ -1,7 +1,7 @@
 <!--
 Runnable examples on this page are executed by tests/unit/test_docs_examples.py.
 A fenced python or yaml block is run unless the line immediately before its
-opening fence is the HTML comment "docs:no-run" (used for illustrative
+opening fence is the HTML comment "docs:no-run: <reason>" (used for illustrative
 fragments that reference files or study data not present in the test harness).
 -->
 
@@ -18,7 +18,7 @@ fragments that reference files or study data not present in the test harness).
 
 ## File Layout
 
-<!-- docs:no-run -->
+<!-- docs:no-run: a full spec with placeholder values -->
 
 ```yaml
 # yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json
@@ -277,7 +277,7 @@ print(adsl)  # TRTSDT = 2014-01-05 for S1 (earliest dosed date), 2014-02-01 for 
 
 The equivalent hand-written pipeline calls the same verb directly:
 
-<!-- docs:no-run -->
+<!-- docs:no-run: the same verb as the spec above, without its input frames -->
 
 ```python
 treated = (
@@ -340,7 +340,7 @@ graph TD
 `from_spec` is the execution entry point. Pin any datasets the spec references
 by name, then build each dataset:
 
-<!-- docs:no-run -->
+<!-- docs:no-run: reads parquet files of a built study -->
 
 ```python
 import polars as pl
@@ -372,7 +372,7 @@ uv run fleet define-xml -s specs/define.yaml -o out.xml --strict
 
 The same generation from Python:
 
-<!-- docs:no-run -->
+<!-- docs:no-run: writes into outputs/ of a built study -->
 
 ```python
 from fleet import DefineSpecGenerator
@@ -488,7 +488,7 @@ A codelist whose `oid` is an NCI code (`C66731`) gets
 `def:StandardOID="STD.CT"` when `study.ct_version` is set; `standard_oid:`
 sets another declared standard (`STD.CT.ADAM` with `study.adam_ct_version`).
 
-<!-- docs:no-run -->
+<!-- docs:no-run: a fragment of a define.yaml -->
 
 ```yaml
 codelists:
@@ -515,7 +515,7 @@ A spec step and its inline call check the same terms. Inside a study, the
 absent, resolves to the class of that ID in the study's `codelists.py`, the
 module `fleet init ct` generates. So this entry:
 
-<!-- docs:no-run -->
+<!-- docs:no-run: a fragment of a define.yaml -->
 
 ```yaml
 - name: AESEV
@@ -589,7 +589,7 @@ without a check. Add a top-level `ct:` block to check every `assign` with a
 codelist, mapped ones included; out-of-codelist values emit a warning
 naming the dataset, variable, and codelist:
 
-<!-- docs:no-run -->
+<!-- docs:no-run: a fragment of a study_config.yaml -->
 
 ```yaml
 ct:
@@ -636,7 +636,7 @@ What it catches:
 Errors are wrapped in a `SpecError` that names **file → dataset → variable**.
 Here is the real message for a typo'd key (`ct_mp` instead of `ct_map`):
 
-<!-- docs:no-run -->
+<!-- docs:no-run: shows the error a typo gives -->
 
 ```python
 # derivation block with a typo:
@@ -729,7 +729,7 @@ uv run python -m fleet.define_xml.schema_builder
 Add this comment to the top of every spec file to activate YAML language-server auto-complete in
 VS Code or any LSP-enabled editor:
 
-<!-- docs:no-run -->
+<!-- docs:no-run: an editor directive, not a spec -->
 
 ```yaml
 # yaml-language-server: $schema=../../../src/fleet/define_xml/schemas/define_spec_schema.json
@@ -758,7 +758,7 @@ ItemGroupDef and add a `SUPP<domain>` ItemGroupDef (ADR 0044):
 - IDVAR text `<domain>SEQ` (for DM: null), the rule of `fleet run`;
 - the leaf `supp<domain>` in the format of the parent.
 
-<!-- docs:no-run -->
+<!-- docs:no-run: a fragment of a define.yaml -->
 
 ```yaml
 - name: AE

@@ -202,7 +202,7 @@ class TestBodyFatPct:
 
 
 class TestVisceralFatFlag:
-    """Test 4: Visceral fat flag using sex-specific IDF thresholds."""
+    """Test 4: Visceral fat flag using the sex-specific ATP III / NCEP thresholds."""
 
     def test_male_above_threshold_flagged(self):
         df = pl.from_repr("""\

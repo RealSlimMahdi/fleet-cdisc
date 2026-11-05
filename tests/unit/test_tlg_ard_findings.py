@@ -887,3 +887,71 @@ def test_c2_962_blank_filter_column_warns_and_marks_the_row() -> None:
     others = ard.filter(pl.col("variable_level") != label)
     assert others["warning"].null_count() == others.height
     assert any("AEACN" in line for line in AEOverviewSpec().check(ADAE_BLANK))
+
+
+# ── c2-975: time points (ATPT) and derived records (DTYPE) per visit ──────────
+
+_ADSL_975 = pl.from_repr("""
+┌─────────┬────────┬───────┐
+│ USUBJID ┆ TRT01A ┆ SAFFL │
+│ ---     ┆ ---    ┆ ---   │
+│ str     ┆ str    ┆ str   │
+╞═════════╪════════╪═══════╡
+│ S1      ┆ A      ┆ Y     │
+│ S2      ┆ A      ┆ Y     │
+│ S3      ┆ B      ┆ Y     │
+└─────────┴────────┴───────┘
+""")
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="c2-975: egt01 counts every ATPT and the DTYPE AVERAGE record (n = 8, not 2)",
+)
+def test_c2_975_egt01_counts_one_record_per_subject_and_visit():
+    from fleet.tlg import EGSummarySpec
+
+    # Each subject: three triplicate ECGs at WEEK 2 and one DTYPE AVERAGE record.
+    # The visit summary takes one value per subject: arm A has 2 subjects, arm B 1.
+    rows = []
+    for subject, arm, qtcf in [("S1", "A", 400.0), ("S2", "A", 410.0), ("S3", "B", 420.0)]:
+        for atpt, delta in [("TRIPLICATE 1", 0.0), ("TRIPLICATE 2", 3.0), ("TRIPLICATE 3", 6.0)]:
+            rows.append((subject, arm, "QTCF", "QTcF (msec)", "WEEK 2", atpt, None, qtcf + delta))
+        rows.append((subject, arm, "QTCF", "QTcF (msec)", "WEEK 2", None, "AVERAGE", qtcf + 3.0))
+    adeg = pl.DataFrame(
+        rows,
+        schema=["USUBJID", "TRTA", "PARAMCD", "PARAM", "AVISIT", "ATPT", "DTYPE", "AVAL"],
+        orient="row",
+    )
+
+    ard = adeg.tlg.eg.t_summary(
+        groupby="TRTA", adsl=_ADSL_975, spec=EGSummarySpec(adsl_group_col="TRT01A")
+    )
+
+    assert _stat(ard, arm="A", level="WEEK 2") == 2
+    assert _stat(ard, arm="B", level="WEEK 2") == 1
+
+
+def test_c2_975_lbt03_counts_each_subject_once_over_time_points():
+    from fleet.tlg import LBShiftSpec
+
+    # Three ATPT records per subject at WEEK 2; only the 2H record is HIGH. The worst
+    # post-baseline shift per subject is NORMAL to HIGH: arm A 2 subjects, arm B 1.
+    rows = [
+        (s, arm, "ALT", "ALT (U/L)", "WEEK 2", atpt, "NORMAL", "HIGH" if atpt == "2H" else "NORMAL")
+        for s, arm in [("S1", "A"), ("S2", "A"), ("S3", "B")]
+        for atpt in ["PRE-DOSE", "2H", "6H"]
+    ]
+    adlb = pl.DataFrame(
+        rows,
+        schema=["USUBJID", "TRTA", "PARAMCD", "PARAM", "AVISIT", "ATPT", "BNRIND", "ANRIND"],
+        orient="row",
+    ).with_columns(ONTRTFL=pl.lit("Y"), ABLFL=pl.lit(None, pl.String))
+
+    ard = adlb.tlg.lb.t_shift(
+        groupby="TRTA", adsl=_ADSL_975, spec=LBShiftSpec(adsl_group_col="TRT01A")
+    )
+
+    assert _stat(ard, arm="A", level="NORMAL to HIGH") == 2
+    assert _stat(ard, arm="B", level="NORMAL to HIGH") == 1
+    assert _stat(ard, arm="A", level="ALT") == 2

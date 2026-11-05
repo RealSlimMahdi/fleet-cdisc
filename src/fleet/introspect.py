@@ -332,7 +332,7 @@ def standard_of(study_standard: object, path: str = "") -> Standard | None:
     return _standard_of(study_standard, path)  # type: ignore[return-value]
 
 
-def algorithm_doc(name: str) -> AlgorithmDoc | None:
+def algorithm_doc(name: str, standard: Standard | None = None) -> AlgorithmDoc | None:
     """Return the docstring summary of the verb *name* dispatches to.
 
     Kept separate from :class:`AlgorithmInfo` on purpose: resolving a
@@ -341,22 +341,30 @@ def algorithm_doc(name: str) -> AlgorithmDoc | None:
 
     Args:
         name: Canonical algorithm name.
+        standard: ``"sdtm"`` or ``"adam"``: resolve the verb of that
+            standard only. ``seq`` and ``date`` exist in both, with
+            different verbs. ``None`` takes the SDTM verb first.
 
     Returns:
         AlgorithmDoc | None: Summary and dotted verb path, or ``None``
             when the algorithm has no resolvable verb.
+
+    Raises:
+        ValueError: If *standard* is not a known CDISC standard.
 
     Examples:
         Add the verb's own words to a hover card::
 
             from fleet import introspect
 
-            doc = introspect.algorithm_doc("baseline")
+            doc = introspect.algorithm_doc("baseline", standard="adam")
             markdown = f"{doc.summary}\\n\\nVerb: `{doc.verb_path}`" if doc else ""
     """
     from fleet.core.algorithm_resolver import resolve_algorithm_docstring
 
-    summary, verb_path = resolve_algorithm_docstring(name)
+    if standard is not None:
+        _check_standard(standard)
+    summary, verb_path = resolve_algorithm_docstring(name, standard)
     if summary is None or verb_path is None:
         return None
     return AlgorithmDoc(summary=summary, verb_path=verb_path)

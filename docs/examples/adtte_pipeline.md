@@ -194,7 +194,7 @@ km = adtte_ns.km_data("OS", by=["TRT01P"])
 └─────────┴──────────┴───────┴─────────┘
 ```
 
-<!-- docs:no-run -->
+<!-- docs:no-run: needs lifelines, not a Fleet dependency -->
 
 ```python
 from lifelines import KaplanMeierFitter  # optional — not a Fleet dependency
