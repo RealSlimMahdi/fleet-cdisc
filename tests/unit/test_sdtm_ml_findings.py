@@ -266,3 +266,14 @@ def test_c1_107_ref_col_and_testcd_col_are_required() -> None:
 def test_c1_92_boolean_without_parentheses_names_the_fix(text: str) -> None:
     with pytest.raises(DerivationError, match=r"write \(AGE > 20\) & \(AGE < 75\)"):
         parse_expression(text)
+
+
+# ── c1-231 docstring convention ────────────────────────────────────────── #
+
+
+def test_c1_231_no_bare_example_section_in_the_source() -> None:
+    from pathlib import Path
+
+    src = Path(fleet.__file__).parent
+    bare = [str(f.relative_to(src)) for f in src.rglob("*.py") if "Example::" in f.read_text()]
+    assert bare == []

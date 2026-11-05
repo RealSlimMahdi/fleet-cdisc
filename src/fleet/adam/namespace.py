@@ -654,6 +654,19 @@ class AdamNamespace(SharedADaMVerbsMixin):
 
         Materialises the current pipeline before concatenation.
 
+        Args:
+            by: Group columns of the summary.
+            analysis_var: Column to summarise (default ``"AVAL"``).
+            set_values_to: Constant columns on each new record.
+            stat: Summary statistic.
+            where: Filter on the source records of the summary.
+
+        Returns:
+            AdamNamespace: The namespace with the summary records appended.
+
+        Raises:
+            DerivationError: When *stat* is not a supported statistic.
+
         Examples:
             Compute mean AVAL per subject and parameter::
 
@@ -891,6 +904,19 @@ class AdamNamespace(SharedADaMVerbsMixin):
         missing value.
 
         Materialises the pipeline before appending.
+
+        Args:
+            by: Group columns that identify one new record.
+            set_values_to: Constant columns on the new records.
+            parameter_filter: ``{alias: PARAMCD}`` pairs of the source
+                records.
+            analysis_value: Expression of the aliases that gives AVAL.
+            from_dataset: Optional BDS frame to read the source records from.
+            where: Optional filter on the source records.
+
+        Returns:
+            AdamNamespace: The namespace with the new parameter records
+                appended.
 
         Examples:
             Derive BMI as a new PARAMCD from WEIGHT and HEIGHT::
