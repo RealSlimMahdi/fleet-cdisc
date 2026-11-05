@@ -6,7 +6,7 @@
 
 ## 1. Executive Summary
 
-Fleet is a Python library that generates CDISC SDTM and ADaM datasets for clinical statistical programming. It is built entirely on [Polars](https://pola.rs/) through a namespace extension API, and is designed to run inside a sponsor's existing validated Python infrastructure. This document defines Fleet's validation strategy using the risk-based framework established by the R Validation Hub and the software-agnostic regulatory context articulated by the FDA. The strategy is structured around four complementary pillars: standards traceability through the CDISC Library API, cross-language benchmark parity against `{admiral}`, regulatory-grade validation via the official CDISC Rules Engine (CORE), and automated unit testing with static analysis.
+Fleet is a Python library that generates CDISC SDTM and ADaM datasets for clinical statistical programming. It is built entirely on [Polars](https://pola.rs/) through a namespace extension API, and is designed to run inside a sponsor's existing validated Python infrastructure. This document defines Fleet's validation strategy using the risk-based framework established by the R Validation Hub and the software-agnostic regulatory context articulated by the FDA. The strategy is structured around five complementary pillars: standards traceability through the CDISC Library API, cross-language benchmark parity against `{admiral}`, regulatory-grade validation via the official CDISC Rules Engine (CORE), automated unit testing with static analysis, and a local snapshot of the CORE rules.
 
 ---
 
@@ -67,7 +67,7 @@ Each link is a versioned, reviewable artefact stored alongside the study specifi
 
 ### Pillar 2 — Cross-Language Benchmark: `{admiral}` Parity
 
-`{admiral}`[^4] is the Roche/Atorus R package for ADaM derivations; it is the de-facto gold standard in R-based clinical programming and is documented in multiple regulatory submissions. Fleet's test suite contains `tests/unit/test_admiral_parity.py`: 39 tests that check selected `{admiral}` formulas and patterns, adapted to Polars, against expected values written into the tests. They do not cover every ADaM verb. The known differences are listed below.
+`{admiral}`[^4] is the R package for ADaM derivations developed by Roche and GSK with the pharmaverse community; it is the de-facto gold standard in R-based clinical programming and is documented in multiple regulatory submissions. Fleet's test suite contains `tests/unit/test_admiral_parity.py`: 39 tests that check selected `{admiral}` formulas and patterns, adapted to Polars, against expected values written into the tests. They do not cover every ADaM verb. The known differences are listed below.
 
 **Coverage as of v0.1.0:**
 
@@ -126,7 +126,7 @@ assert result["ANL01FL"].to_list() == [None, "Y", None, "Y", None, "Y"]
 
 ### Pillar 3 — Official CDISC Rules Engine (CORE)
 
-Fleet integrates the **official CDISC Rules Engine (CORE)**[^5] — the open-source validation binary published by CDISC and used by FDA as the reference conformance checker for SDTM and SEND submissions. (ADaM standard/version selection is supported by the engine, but CDISC has not yet published an executable ADaMIG rule set — ADaM validation today runs custom rules; see [Validation with CORE](concepts/validation-core.md).) Fleet manages the engine lifecycle through its own CLI and wraps it via a Python API.
+Fleet integrates the **official CDISC Rules Engine (CORE)**[^5] — the open-source validation binary published by CDISC, which runs CDISC conformance rules and FDA business rules. (ADaM standard/version selection is supported by the engine, but CDISC has not yet published an executable ADaMIG rule set — ADaM validation today runs custom rules; see [Validation with CORE](concepts/validation-core.md).) Fleet manages the engine lifecycle through its own CLI and wraps it via a Python API.
 
 #### Installation and health check
 
@@ -185,7 +185,7 @@ uv run ruff check              # style and lint (PEP 8, import ordering, type hi
 uv run ruff format --check     # formatting consistency
 ```
 
-In addition, all five example scripts in `examples/` are treated as **integration smoke tests** and must execute without error after every feature change:
+In addition, the eight example scripts in `examples/` that CI runs are treated as **integration smoke tests** and must execute without error after every feature change:
 
 ```bash
 uv run python examples/full_pipeline_example.py
@@ -249,9 +249,25 @@ Applying the R Validation Hub risk-based framework to Fleet:
 | **Consequence of inaccuracy** | Incorrect derivations could affect safety/efficacy conclusions; however, CORE validation provides an independent runtime check before submission | Mitigated by Pillar 3                   |
 | **Testability**               | 2,900+ unit tests; 39 parity tests with frozen admiral values and a weekly admiral oracle job; CORE conformance checking; example scripts in CI; ruff static analysis | High testability → lowers residual risk |
 | **Open source provenance**    | Public GitHub repository; MIT license; full source inspectable by sponsor QA                                                                     | Transparent                             |
-| **Dependency surface**        | Polars ≥ 1.0, Pydantic ≥ 2.0, PyYAML, httpx, lxml; all actively maintained, no high-CVE dependencies (check at installation)                     | Low-medium                              |
+| **Dependency surface**        | Polars ≥ 1.41 (< 2), Pydantic ≥ 2.0, PyYAML ≥ 6.0, httpx ≥ 0.27 (< 1), jsonschema ≥ 4.26, lxml ≥ 5.0. Advisory scan on 5 Nov 2026 with `pip-audit` over `uv export --frozen --no-dev` (scope: the lock file): 4 packages with known advisories (anyio, certifi, idna, lxml), each fixed in a later release. Repeat the scan at installation; see the dependency statement below | Medium until the lock file takes the fixed releases |
 
-**Overall risk classification: Medium** (high criticality, but substantially mitigated by the four pillars above). This places Fleet in the same tier as `{admiral}`, `tern`, and other commonly qualified open-source clinical packages.
+**Overall risk classification: Medium** (high criticality, but substantially mitigated by the five pillars above). Each sponsor assigns its own risk tier in its qualification.
+
+### Dependency statement
+
+The exact dependency set is the lock file `uv.lock`. Two commands give it as
+files for a QA record:
+
+```bash
+uv export --frozen --no-dev --no-hashes > requirements.txt   # pinned versions
+uv export --frozen --no-dev --format cyclonedx1.5 --preview > sbom.json   # CycloneDX SBOM
+```
+
+The CycloneDX export is a uv preview feature and has no licence fields. So
+the licence summary is written by hand, with its date: Fleet is MIT; on 5 Nov
+2026 its direct runtime dependencies were MIT (Polars, Pydantic, PyYAML,
+jsonschema), BSD-3-Clause (httpx) and BSD-3-Clause (lxml). Check the
+transitive licences in the SBOM against your policy.
 
 ---
 
@@ -283,6 +299,6 @@ Applying the R Validation Hub risk-based framework to Fleet:
 
 [^3]: CDISC (2024). _CDISC Library API._ Available from: <https://library.cdisc.org/api>
 
-[^4]: Atorus Research & Roche (2021–present). _{admiral}: ADaM in R Asset Library._ CRAN. Available from: <https://cran.r-project.org/package=admiral>
+[^4]: Roche, GSK and the pharmaverse community (2021–present). _{admiral}: ADaM in R Asset Library._ CRAN. Available from: <https://cran.r-project.org/package=admiral>
 
 [^5]: CDISC (2022–present). _CDISC Rules Engine (CORE)._ Open-source reference implementation for CDISC conformance checking. Available from: <https://github.com/cdisc-org/cdisc-rules-engine>

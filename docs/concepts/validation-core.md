@@ -5,7 +5,7 @@ Fleet's conformance validation is built on **CORE** — the open-source
 official executable implementation of CDISC's conformance rules. Fleet
 manages the engine lifecycle (download, discovery, health check) and wraps
 execution behind one CLI command and one namespace verb, so validation runs
-with the same rules a regulator's reviewer tooling references.
+with the same rules that CDISC publishes for the engine.
 
 ## One-time setup
 

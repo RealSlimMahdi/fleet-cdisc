@@ -62,7 +62,6 @@
 </div>
 
 [![Build Status](https://img.shields.io/badge/build-passing-success?style=for-the-badge)](https://github.com/RealSlimMahdi/fleet-cdisc/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-100%25-success?style=for-the-badge)](https://github.com/RealSlimMahdi/fleet-cdisc)
 [![GitHub](https://img.shields.io/badge/GitHub-fleet--cdisc-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/RealSlimMahdi/fleet-cdisc)
 [![Docs](https://img.shields.io/badge/docs-passing-success?style=for-the-badge)](https://realslimmahdi.github.io/fleet-cdisc/)
 [![PyPI](https://img.shields.io/pypi/v/fleet-cdisc?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/fleet-cdisc/)
