@@ -5,16 +5,14 @@ The alpha audit of November 2026 found two gaps in `derive_param` against admira
 ## The decision
 
 ```python
-advs = (
-    vs.adam.derive_param(
-        by=["USUBJID", "AVISIT"],
-        constant_by=["USUBJID"],
-        constant_parameters={"H": "HEIGHT"},
-        parameter_filter={"W": "WEIGHT"},
-        set_values_to={"PARAMCD": "BMI", "PARAM": "Body Mass Index"},
-        analysis_value=pl.col("W") / (pl.col("H") / 100) ** 2,
-    ).to_frame()
-)
+advs = vs.adam.derive_param(
+    by=["USUBJID", "AVISIT"],
+    constant_by=["USUBJID"],
+    constant_parameters={"H": "HEIGHT"},
+    parameter_filter={"W": "WEIGHT"},
+    set_values_to={"PARAMCD": "BMI", "PARAM": "Body Mass Index"},
+    analysis_value=pl.col("W") / (pl.col("H") / 100) ** 2,
+).to_frame()
 ```
 
 - **`keep_nas=False` is the default.** A new record whose AVAL is null is not added. This includes an AVAL that is infinite or NaN (a division by zero): it becomes null with a warning, and the record is not added. `keep_nas=True` keeps the record with a null AVAL, as before.
