@@ -53,7 +53,8 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
 
     Inherits shared verbs from ``SharedADaMVerbsMixin``
     (source, derivation, assign, recode, case_when,
-    whereclauses, merge_adsl) and ``MultiRowMixin`` (seq), and adds
+    whereclauses, merge_adsl, seq; ``MultiRowMixin`` only marks a
+    multi-row dataset), and adds
     PK-specific verbs for BLQ handling, time derivation, and
     dose normalisation.
     """

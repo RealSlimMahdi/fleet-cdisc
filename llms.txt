@@ -1832,7 +1832,7 @@ Row models: `TrialElement`, `TrialArm`, `TrialVisit`, `TrialParameter`, `TrialCr
 
 These verbs are defined once in `SharedADaMVerbsMixin` (`src/fleet/adam/_mixins.py`) and inherited by every ADaM sub-namespace: `adsl`, `occds`, `onco`, `ophtha`, `peds`, `vaccine`, `metabolic`, `neuro`, `pk`. Call them directly on any sub-namespace without switching back to the base `adam` namespace. (`assign` replaced the removed `assigned`/`rename`; `case_when` replaced `condderivation`; `merge` replaced `lookup`.)
 
-- `source(*targets: str, from_col: str | None = None) -> Self` — Carry one or more source columns into the ADaM dataset.
+- `source(*targets: str) -> Self` — Carry one or more source columns into the ADaM dataset.
 - `assign(target: str, *, source: str | None = None, value: Any | None = None, ct: str | type | None = None, ct_map: dict[str, str] | None = None, ct_validator: CTValidator | None = None, validate_values: bool | None = None) -> Self` — Assign *target* from a source column or a literal value.
 - `case_when(target: str, *, when: list[CaseWhenBranch], else_: Any = None) -> Self` — Multi-branch conditional derivation (first matching branch wins).
 - `derivation(target: str | Derivation | None = None, *, expression: str | pl.Expr | Callable[[], pl.Expr] | None = None) -> Self` — Derive *target* using an expression, lambda, or ``Derivation`` object.

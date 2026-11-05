@@ -14,7 +14,7 @@ All ADaM sub-structures and extensions are accessed via properties:
 
 Usage
 -----
-    import fleet  # triggers registration of df.adam, df.adsl, df.occds
+    import fleet  # registers df.adam; df.adam.adsl, df.adam.occds, ... are its sub-namespaces
 
     result = (
         vs_sdtm.adam

@@ -336,7 +336,7 @@ class TestSourceRoundTrip:
 """)
 
     def test_source_freezes_as_assign_and_reruns(self, dm, tmp_path):
-        ns = dm.adam.source("USUBJID", "AGE").source("AGE2", from_col="age")
+        ns = dm.adam.source("USUBJID", "AGE").assign("AGE2", source="age")
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             text = ns.to_spec_yaml(dataset="ADSL", path=tmp_path / "define.yaml")

@@ -1152,3 +1152,22 @@ def test_c1_43_a_transform_that_drops_rows_is_noted(caplog):
     with caplog.at_level(logging.INFO, logger="fleet"):
         _AGES.adam.transform(lambda d: d.filter(pl.col("AGE") > 60)).to_frame()
     assert "2 -> 1 rows" in _log_text(caplog)
+
+
+# --------------------------------------------------------------------- #
+# c1-755: one vocabulary; the TTE namespace keeps its dataset name        #
+# --------------------------------------------------------------------- #
+
+
+def test_c1_755_source_from_col_is_removed():
+    with pytest.raises(TypeError, match="from_col"):
+        pl.DataFrame({"a": [1]}).adam.source("b", from_col="a")
+    out = pl.DataFrame({"a": [1]}).adam.assign("b", source="a").to_frame()
+    assert out.columns == ["a", "b"]
+
+
+def test_c1_755_tte_namespace_keeps_adtte():
+    ns = pl.DataFrame({"USUBJID": ["S1"]}).lazy().adam.tte
+    assert ns._domain == "ADTTE"
+    text = ns.assign("STUDYID", value="S").to_spec_yaml()
+    assert "name: ADTTE" in text
