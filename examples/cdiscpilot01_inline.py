@@ -474,11 +474,20 @@ assert (adsl["SAFFL"] == "Y").sum() == adsl.height, "every pilot subject took a 
 #    A tie on the date goes to the first listed event.
 #
 #    Sources:
-#      a) AE end dates   (AEENDTC)  — most clinically recent contact
-#      b) AE start dates (AESTDTC)  — if AE end is missing
-#      c) Treatment end  (TRTEDT)   — fallback from ADSL itself
+#      a) AE end dates   (AENDT from AEENDTC)  — most clinically recent contact
+#      b) AE start dates (ASTDT from AESTDTC)  — if AE end is missing
+#      c) Treatment end  (TRTEDT)              — fallback from ADSL itself
+#    Every event sets a date: pick() refuses a mix of dates and DTC text.
+#    admiral: convert_dtc_to_dt(AESTDTC, highest_imputation = "M").
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── 9. Last date known alive (LSTALVDT) — via pick() ─────────────────────")
+
+ae_dates = (
+    fleet.frame(ae)
+    .adam.date("AENDT", source="AEENDTC", flag=False)
+    .date("ASTDT", source="AESTDTC", flag=False)
+    .to_frame()
+)
 
 adsl = (
     fleet.frame(adsl)
@@ -486,15 +495,15 @@ adsl = (
         "LSTALVDT",
         events=[
             {
-                "when": pl.col("AEENDTC").is_not_null(),
-                "set": {"LSTALVDT": "AEENDTC"},
-                "source": ae,
+                "when": pl.col("AENDT").is_not_null(),
+                "set": {"LSTALVDT": "AENDT"},
+                "source": ae_dates,
                 "label": "AE end date (latest contact)",
             },
             {
-                "when": pl.col("AESTDTC").is_not_null(),
-                "set": {"LSTALVDT": "AESTDTC"},
-                "source": ae,
+                "when": pl.col("ASTDT").is_not_null(),
+                "set": {"LSTALVDT": "ASTDT"},
+                "source": ae_dates,
                 "label": "AE start date (fallback)",
             },
             {
