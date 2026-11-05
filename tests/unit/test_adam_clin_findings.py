@@ -180,6 +180,7 @@ def test_derive_param_nulls_a_non_finite_aval_with_a_warning():
             set_values_to={"PARAMCD": "RATIO"},
             parameter_filter={"X": "X", "Y": "Y"},
             analysis_value='pl.col("X") / pl.col("Y")',
+            keep_nas=True,
         ).to_frame()
     ratio = out.filter(pl.col("PARAMCD") == "RATIO").sort("USUBJID")
     assert ratio["AVAL"].to_list() == [None, 2.0]

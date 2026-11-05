@@ -151,13 +151,16 @@ def grade_dataset(
         pl.DataFrame: *df* with *target* added.
 
     Raises:
-        DerivationError: When *direction* is not ``"L"`` or ``"H"``, a term
-            has criteria for several units and *unit_var* is ``None``, or a
-            column the criteria need is missing.
+        DerivationError: When *direction* is not ``"L"`` or ``"H"``,
+            *signif_dig* is not a positive integer, a term has criteria for
+            several units and *unit_var* is ``None``, or a column the
+            criteria need is missing.
 
     Warns:
         UserWarning: Once per term, with the count of rows whose unit
             matches no criteria entry of the term (their grade is null).
+            Once per call, with the terms that have no criteria in any
+            direction.
 
     Examples:
         Grade the high direction::
@@ -171,12 +174,27 @@ def grade_dataset(
         raise DerivationError(
             f"atoxgr: direction={direction!r} is not supported. Use 'L' (low) or 'H' (high)."
         )
+    if isinstance(signif_dig, bool) or not isinstance(signif_dig, int) or signif_dig < 1:
+        raise DerivationError(
+            f"atoxgr: signif_dig={signif_dig!r} is not supported. Give a positive integer "
+            "(admiral default 15)."
+        )
     by_term: dict[str, list[TermCriteria]] = {}
     for entry in criteria_file.criteria:
         if entry.direction == direction:
             by_term.setdefault(entry.term.upper(), []).append(entry)
 
     data_terms = df.get_column(term_var).cast(pl.String).drop_nulls().unique().sort().to_list()
+    known = {e.term.upper() for e in criteria_file.criteria}
+    unknown = [t for t in data_terms if t.upper() not in known]
+    if unknown:
+        more = f" (+{len(unknown) - 10} more)" if len(unknown) > 10 else ""
+        warnings.warn(
+            f"atoxgr: {len(unknown)} {term_var} value(s) have no criteria in any direction, "
+            f"so their grade is null: {unknown[:10]}{more}. The term must be a criteria "
+            "term (ATOXDSCL or ATOXDSCH), not a PARAMCD.",
+            stacklevel=3,
+        )
     ind = indicators or {}
     chain = None
     for data_term in data_terms:

@@ -470,6 +470,7 @@ def _adam_verbs_section() -> str:
         "derive_locf_records",
         "derive_param",
         "atoxgr",
+        "combine_grades",
         "transform",
         "from_spec",
     ]

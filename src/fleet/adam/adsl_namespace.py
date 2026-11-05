@@ -23,12 +23,14 @@ Usage
 
 from __future__ import annotations
 
+import difflib
 from typing import Any, Literal, Self
 
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
 from fleet.core.dtc import to_day
+from fleet.core.exceptions import DerivationError
 
 
 @pl.api.register_lazyframe_namespace("adsl")
@@ -190,10 +192,16 @@ class ADSLNamespace(SharedADaMVerbsMixin):
 
         Args:
             periods: List of dicts each with ``"number"``, ``"start"``,
-                ``"end"``, and optionally ``"treatment"``.
+                ``"end"``, and optionally ``"treatment"`` (a column name)
+                or ``"treatment_value"`` (a literal).
 
         Returns:
             Self: The namespace with period columns appended.
+
+        Raises:
+            DerivationError: If a ``"treatment"`` column is not in the
+                pipeline (with a did-you-mean suggestion), or a period
+                gives both ``"treatment"`` and ``"treatment_value"``.
 
         Examples:
             Define two treatment periods::
@@ -212,6 +220,7 @@ class ADSLNamespace(SharedADaMVerbsMixin):
                 )
         """
         exprs: list[pl.Expr] = []
+        names = self._lazy.collect_schema().names()
         for period in periods:
             n = period["number"]
             prefix = f"AP{n:02d}"
@@ -222,11 +231,23 @@ class ADSLNamespace(SharedADaMVerbsMixin):
             exprs.append(pl.col(edt_col).alias(f"{prefix}EDT"))
 
             trt = period.get("treatment")
+            trt_value = period.get("treatment_value")
+            trt_target = f"TRT{n:02d}P"
+            if trt is not None and trt_value is not None:
+                raise DerivationError(
+                    f"derive_period(): period {n} gives both 'treatment' and "
+                    "'treatment_value'. Give a column or a literal, not both."
+                )
             if trt is not None:
-                trt_target = f"TRT{n:02d}P"
-                if trt in self._lazy.collect_schema().names():
-                    exprs.append(pl.col(trt).alias(trt_target))
-                else:
-                    exprs.append(pl.lit(trt).alias(trt_target))
+                if trt not in names:
+                    close = difflib.get_close_matches(str(trt), names, n=1)
+                    raise DerivationError(
+                        f"derive_period(): period {n} treatment column {trt!r} not found."
+                        + (f" Did you mean {close[0]!r}?" if close else "")
+                        + " For a literal value, use 'treatment_value'."
+                    )
+                exprs.append(pl.col(trt).alias(trt_target))
+            elif trt_value is not None:
+                exprs.append(pl.lit(trt_value).alias(trt_target))
 
         return self._chain(*exprs)

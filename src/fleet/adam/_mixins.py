@@ -75,7 +75,7 @@ from __future__ import annotations
 import copy
 import difflib
 import warnings
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, Self, TypeVar
 
 import polars as pl
 
@@ -91,10 +91,13 @@ from fleet.core.joins import (
 )
 
 if TYPE_CHECKING:
-    pass
+    from fleet.adam.namespace import AdamNamespace
 
 #: What to do when an aggregation target is already a pipeline column.
 _CLASH_HINT = "Drop the column from the pipeline first, or choose another target name."
+
+#: The ``impute=`` values of ``date()``.
+_IMPUTE_CHOICES = ("first", "mid", "last", "none")
 
 
 def _value_kind(value: Any) -> str:
@@ -103,6 +106,9 @@ def _value_kind(value: Any) -> str:
         if isinstance(value, kind):
             return kind.__name__
     return type(value).__name__
+
+
+_SubNS = TypeVar("_SubNS", bound="SharedADaMVerbsMixin")
 
 
 class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
@@ -145,6 +151,45 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         self._pinned: dict[str, tuple[pl.DataFrame, list[str]]] = {}
         self._pin_lineage: list = []
         self._pending_fk_checks: list[tuple[str, str, str, str]] = []
+
+    def _sub_namespace(self, cls: type[_SubNS]) -> _SubNS:
+        """Hand the whole instance state over to another namespace class.
+
+        The lazy plan is passed through unchanged (no materialisation).
+        Every instance attribute carries over (pins, lineage, row steps,
+        pending checks, and the last comparison, validation and nodup
+        reports), with lists and dicts copied so the two do not share
+        them.  A namespace that sets its own domain (ADSL) keeps it.
+        """
+        new = cls(self._lazy)
+        own_domain = getattr(new, "_domain", None)
+        for name, value in vars(self).items():
+            if isinstance(value, list | dict):
+                value = copy.copy(value)
+            setattr(new, name, value)
+        if own_domain is not None:
+            new._domain = own_domain
+        return new
+
+    @property
+    def adam(self) -> AdamNamespace:
+        """The BDS namespace, with the pins, lineage and domain of this chain.
+
+        Examples:
+            Flag on-treatment records after an OCCDS verb::
+
+                adae = (
+                    ae_df.adam.occds("ADAE")
+                    .treatment_emergent("TRTEMFL", start_date="ASTDT",
+                                        end_date="AENDT", trtsdt="TRTSDT")
+                    .adam.on_treatment("ONTRTFL", adt="ASTDT",
+                                       trtsdt="TRTSDT", trtedt="TRTEDT")
+                    .to_frame()
+                )
+        """
+        from fleet.adam.namespace import AdamNamespace
+
+        return self._sub_namespace(AdamNamespace)
 
     def __call__(self, domain: str) -> Self:
         """Return a copy of this namespace with *domain* set for CDISC lineage.
@@ -367,25 +412,30 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         *,
         events: list[dict[str, Any]],
         by: str | list[str] | None = None,
-        order: str | list[str] | None = None,
+        order_by: str | list[str] | None = None,
         mode: str = "first",
     ) -> Self:
         """Derive targets from one event per group, chosen across the events.
 
         Each event in the list defines a candidate source, a filter
         condition, and values to set when that event is selected.  Within
-        each event's matching records, the event's *order* and *mode* (or
+        each event's matching records, the event's *order_by* and *mode* (or
         the top-level ones) select one record.  Then one event wins:
 
-        - with a top-level *order*, every event's record competes on that
+        - with a top-level *order_by*, every event's record competes on that
           order and *mode*, as admiral ``derive_vars_extreme_event`` does:
-          ``order=["LSTALVDT"], mode="last"`` gives the latest date over all
+          ``order_by=["LSTALVDT"], mode="last"`` gives the latest date over all
           sources.  A tie goes to the first listed event.
-        - with no top-level *order*, the first listed event with a matching
+        - with no top-level *order_by*, the first listed event with a matching
           record wins (a priority cascade, as the admiral DTHCAUS template).
 
         This is Fleet's answer to multi-source derivations such as
         last-date-known-alive (LSTALVDT) or death cause (DTHCAUS).
+
+        A target that is already a pipeline column is replaced.  A subject
+        with no event gets null, and the target keeps the type of its
+        source columns, also when no event has a record.  All events must
+        set a target from one type: a date column and a DTC text raise.
 
         Event dict keys:
 
@@ -393,22 +443,22 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
           filtering which records qualify.
         - ``"set"`` (required): ``dict[str, str | pl.Expr | Any]`` mapping
           each target name to a column reference, expression, or literal.
-          Column references use bare names (``"DTHDT"``); literals must be
-          wrapped in ``pl.lit()``.
+          Each key must be a target.  Column references use bare names
+          (``"DTHDT"``); literals must be wrapped in ``pl.lit()``.
         - ``"source"`` (optional): External ``pl.DataFrame`` to scan for
           this event.  When omitted, the current pipeline frame is used.
         - ``"mode"`` (optional): Override the top-level *mode* for this
           event only (``"first"`` | ``"last"``).
-        - ``"order"`` (optional): Override the top-level *order* for this
+        - ``"order_by"`` (optional): Override the top-level *order_by* for this
           event only.
         - ``"label"`` (optional): Documentation-only description.
 
         Args:
             targets: Target column name(s) to derive.
             events: List of event dicts.  List position breaks ties and,
-                with no top-level *order*, decides the winner.
+                with no top-level *order_by*, decides the winner.
             by: Grouping columns (default ``["USUBJID"]``).
-            order: Sort column(s).  Within an event they select the record;
+            order_by: Sort column(s).  Within an event they select the record;
                 at top level they also select the event (see above).  An
                 event with more than one matching record in a group needs
                 an order (its own or the top-level one).  A missing order
@@ -417,7 +467,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                 record, as SAS ``LAST.``; a warning names a tie whose
                 records set different values.
             mode: ``"first"`` or ``"last"`` — which record to select
-                after sorting by *order* (default ``"first"``).
+                after sorting by *order_by* (default ``"first"``).
 
         Returns:
             Self: A fresh namespace with *targets* added; call
@@ -425,14 +475,18 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         Raises:
             DerivationError: If *events* is empty, a required key is
-                missing, an event contains an unknown key (with a
-                did-you-mean suggestion), or an event with no order has
-                more than one matching record in a group.  Also catchable
-                as ``ValueError``.
+                missing, an event contains an unknown key or sets a name
+                that is not a target (with a did-you-mean suggestion), a
+                ``set`` names a column that is not in the source, two
+                events set one target from text and from another type, or
+                an event with no order has more than one matching record
+                in a group.  Also catchable as ``ValueError``.
 
         References:
             admiral ``derive_vars_extreme_event`` (``order`` is required)
             and SAS ``FIRST.``/``LAST.`` after PROC SORT EQUALS; ADR-0024.
+            ADaMIG 1.3: a ``*DT`` variable is a numeric date (admiral stops
+            with "Can't combine <date> and <character>").
 
         Examples:
             Derive last date known alive from death, AE, and treatment::
@@ -446,15 +500,15 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                             {"when": pl.col("DTHDT").is_not_null(),
                              "set": {"LSTALVDT": "DTHDT", "DTHFL": pl.lit("Y")},
                              "source": adsl_df, "label": "Death date"},
-                            {"when": pl.col("AEENDTC").is_not_null(),
-                             "set": {"LSTALVDT": "AEENDTC", "DTHFL": pl.lit("N")},
-                             "source": ae, "mode": "last", "order": ["AEENDTC"]},
+                            {"when": pl.col("AENDT").is_not_null(),
+                             "set": {"LSTALVDT": "AENDT", "DTHFL": pl.lit("N")},
+                             "source": adae, "mode": "last", "order_by": ["AENDT"]},
                             {"when": pl.col("TRTEDT").is_not_null(),
                              "set": {"LSTALVDT": "TRTEDT", "DTHFL": pl.lit("N")},
                              "source": adsl_df},
                         ],
                         by=["USUBJID"],
-                        order=["LSTALVDT"],
+                        order_by=["LSTALVDT"],
                         mode="last",
                     )
                     .to_frame()
@@ -469,10 +523,10 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                         events=[
                             {"when": 'pl.col("AEOUT") == "FATAL"',
                              "set": {"DTHCAUS": "AEDECOD"},
-                             "source": ae, "order": ["AESTDTC", "AESEQ"]},
+                             "source": ae, "order_by": ["AESTDTC", "AESEQ"]},
                             {"when": 'pl.col("DSDECOD") == "DEATH"',
                              "set": {"DTHCAUS": "DSTERM"},
-                             "source": ds, "order": ["DSSTDTC", "DSSEQ"]},
+                             "source": ds, "order_by": ["DSSTDTC", "DSSEQ"]},
                         ],
                         by=["USUBJID"],
                     )
@@ -491,7 +545,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         target_list = [targets] if isinstance(targets, str) else list(targets)
         by_vars = [by] if isinstance(by, str) else (list(by) if by else ["USUBJID"])
         global_order: list[str] | None = (
-            [order] if isinstance(order, str) else list(order) if order else None
+            [order_by] if isinstance(order_by, str) else list(order_by) if order_by else None
         )
 
         df = self.to_frame()
@@ -499,7 +553,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         # Collect one candidate row per event per group.
         candidate_frames: list[pl.DataFrame] = []
 
-        valid_event_keys = {"when", "set", "source", "mode", "order", "label"}
+        valid_event_keys = {"when", "set", "source", "mode", "order_by", "label"}
         for event_nr, event in enumerate(events):
             unknown = sorted(set(event) - valid_event_keys)
             if unknown:
@@ -516,6 +570,14 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                     f"Event #{event_nr} must contain 'when' and 'set' keys. "
                     f"Got keys: {list(event.keys())}"
                 )
+            for key in event["set"]:
+                if key not in target_list:
+                    close = difflib.get_close_matches(str(key), target_list, n=1)
+                    raise DerivationError(
+                        f"pick() event #{event_nr} sets {key!r}, which is not a target. "
+                        + (f"Did you mean {close[0]!r}? " if close else "")
+                        + f"Targets: {target_list}."
+                    )
 
             # Resolve source frame
             source_df: pl.DataFrame = event.get("source", df)
@@ -526,10 +588,8 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                 when_raw if isinstance(when_raw, pl.Expr) else parse_expression(str(when_raw))
             )
 
-            # Filter candidates
+            # An event with no record stays in the stack, so the targets keep their dtype.
             candidates = source_df.filter(when_expr)
-            if candidates.is_empty():
-                continue
 
             # Build set-values expressions
             set_exprs: list[pl.Expr] = []
@@ -553,10 +613,17 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                     set_exprs.append(pl.lit(val).alias(tgt))
 
             # Apply set expressions + add event priority marker
-            candidates = candidates.with_columns(
-                *set_exprs,
-                pl.lit(event_nr).cast(pl.UInt32).alias("__pick_event_nr__"),
-            )
+            try:
+                candidates = candidates.with_columns(
+                    *set_exprs,
+                    pl.lit(event_nr).cast(pl.UInt32).alias("__pick_event_nr__"),
+                )
+            except pl.exceptions.ColumnNotFoundError as err:
+                raise DerivationError(
+                    f"pick() event #{event_nr}: 'set' names a column that is not in the "
+                    f"event source ({str(err).splitlines()[0]}). Wrap a literal value in "
+                    'pl.lit(), for example pl.lit("Y").'
+                ) from err
 
             # Resolve per-event mode/order
             evt_mode = event.get("mode", mode)
@@ -565,7 +632,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                     f"pick() event #{event_nr} mode={evt_mode!r} is not supported. "
                     "Choose 'first' or 'last'."
                 )
-            evt_order_raw = event.get("order", global_order)
+            evt_order_raw = event.get("order_by", global_order)
             evt_order: list[str] | None = (
                 [evt_order_raw] if isinstance(evt_order_raw, str) else evt_order_raw
             )
@@ -594,7 +661,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                     raise DerivationError(
                         f"pick() event #{event_nr} has no order and {multi.height} group(s) "
                         f"with more than one matching record (first: {key}, "
-                        f"{first['len']} records). Give 'order' in the event or at top "
+                        f"{first['len']} records). Give 'order_by' in the event or at top "
                         "level, so the record does not depend on row order."
                     )
                 candidates = candidates.group_by(by_vars, maintain_order=True).first()
@@ -606,10 +673,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
             candidate_frames.append(candidates)
 
-        # No events matched at all — set all targets to null
-        if not candidate_frames:
-            null_exprs = [pl.lit(None).alias(t) for t in target_list]
-            return self._materialise_then(df.with_columns(null_exprs))
+        self._refuse_pick_text_mix(candidate_frames, target_list)
 
         # Each event gave at most one row per group.  A top-level order makes
         # them compete (admiral derive_vars_extreme_event); a tie goes to the
@@ -634,6 +698,25 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         result = df.join(winners, on=by_vars, how="left", nulls_equal=True)
         return self._materialise_then(result)
+
+    @staticmethod
+    def _refuse_pick_text_mix(frames: list[pl.DataFrame], targets: list[str]) -> None:
+        """Raise when one event sets a target from text and another from a non-text type."""
+        for tgt in targets:
+            kinds = {
+                i: f.schema[tgt]
+                for i, f in enumerate(frames)
+                if tgt in f.columns and f.schema[tgt] != pl.Null
+            }
+            text = [i for i, d in kinds.items() if d == pl.String]
+            other = [i for i, d in kinds.items() if d != pl.String]
+            if text and other:
+                raise DerivationError(
+                    f"pick(): event #{other[0]} sets {tgt} from a {kinds[other[0]]} column "
+                    f"and event #{text[0]} from a String column. Set every event from one "
+                    "type: for a date, use a date column (for example AENDT from .date()), "
+                    "not the DTC text."
+                )
 
     @staticmethod
     def _warn_pick_ties(
@@ -663,7 +746,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         warnings.warn(
             f"pick() event #{event_nr}: {differ.height} group(s) have records that tie on "
             f"{order} and set different values (first: {key}). mode={mode!r} takes the "
-            f"{mode} input record of the tie. Add a key to 'order' to break the tie.",
+            f"{mode} input record of the tie. Add a key to 'order_by' to break the tie.",
             stacklevel=3,
         )
 
@@ -1062,6 +1145,10 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
     ) -> Self:
         """Parse, convert, impute, and flag a date or datetime column.
 
+        By default a partial date is imputed to the first day or month
+        (ADR-0021).  Give ``highest="n"`` for no imputation, as the admiral
+        ``derive_vars_dt`` default.
+
         Dispatches behavior based on the CDISC suffix of *target* (DT, DTM)
         or an explicit *output* override.  Supports both column references
         (``source=``) and literal values (``value=``).
@@ -1078,10 +1165,11 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                 with the date from *source* (DTM targets only).
             impute: Imputation strategy for missing date components:
                 ``"first"`` (default), ``"mid"``, ``"last"``, ``"none"``.
+                Another value raises.
             impute_time: Override for time-part imputation, separate from
                 *impute*.  Only relevant for DTM targets.
-            highest: Maximum imputation ceiling (``"D"``, ``"M"``, ``"Y"``,
-                ``"h"``, ``"m"``, ``"s"``).  Rows that exceed the ceiling
+            highest: Maximum imputation ceiling (``"n"`` for none, ``"D"``,
+                ``"M"``, ``"h"``, ``"m"``, ``"s"``).  Rows that exceed the ceiling
                 are set to null.
             flag: ``True`` to auto-generate DTF/TMF flag columns,
                 ``False`` to suppress, or a string to name the DTF flag
@@ -1173,6 +1261,13 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
 
         # source= path: one engine for both namespaces; time= first, then imputation
         assert source is not None
+        if impute not in _IMPUTE_CHOICES:
+            close = difflib.get_close_matches(str(impute), _IMPUTE_CHOICES, n=1)
+            raise DerivationError(
+                f"date('{target}'): impute={impute!r} is not supported. "
+                + (f"Did you mean {close[0]!r}? " if close else "")
+                + f"Choose one of {list(_IMPUTE_CHOICES)}; impute_time= can name a column."
+            )
         from fleet.adam.utils import dtm_source_text, source_text
 
         schema = self._lazy.collect_schema()

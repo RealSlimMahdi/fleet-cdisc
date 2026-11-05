@@ -229,19 +229,22 @@ class PedsNamespace(SharedADaMVerbsMixin):
         age_days_col: str,
         gestational_weeks_col: str,
         term_weeks: int = 40,
+        round_digits: int | None = None,
     ) -> Self:
         """Compute gestational-corrected age in decimal years.
 
-        Corrected age = chronological age − (term_weeks − gestational_weeks) / 52.18.
-        No correction when gestational weeks >= *term_weeks*.  A null or NaN
-        gestational age gives a null result; if the SAP assumes term birth,
-        fill the column with *term_weeks* before the call.
+        Corrected age = (age in days − 7 × (term_weeks − gestational_weeks)) /
+        365.25.  No correction when gestational weeks >= *term_weeks*.  A null
+        or NaN gestational age gives a null result; if the SAP assumes term
+        birth, fill the column with *term_weeks* before the call.
 
         Args:
             target: Name of the output column.
             age_days_col: Column containing age in days.
             gestational_weeks_col: Column containing gestational age in weeks.
             term_weeks: Full-term threshold (default ``40``).
+            round_digits: Decimal places, SAS ``ROUND`` (half away from
+                zero).  ``None`` (default) keeps full precision (ADR-0025).
 
         Returns:
             Self: The namespace with *target* appended.
@@ -260,12 +263,14 @@ class PedsNamespace(SharedADaMVerbsMixin):
             American Academy of Pediatrics, Committee on Fetus and Newborn. Age
             terminology during the perinatal period. Pediatrics. 2004;114(5):1362-1364:
             corrected age = chronological age minus the weeks born before 40 weeks.
-            52.18 weeks per year = 365.25 / 7.
+            One year = 365.25 days, as admiral ``compute_age_years``. ADR-0025.
         """
+        from fleet.adam.utils import sas_round
+
         ga = pl.col(gestational_weeks_col).cast(pl.Float64).fill_nan(None)
-        prematurity_years = pl.when(ga >= term_weeks).then(0.0).otherwise((term_weeks - ga) / 52.18)
-        chron_age_years = pl.col(age_days_col) / 365.25
-        return self._chain((chron_age_years - prematurity_years).round(4).alias(target))
+        premature_days = pl.when(ga >= term_weeks).then(0.0).otherwise(7 * (term_weeks - ga))
+        years = (pl.col(age_days_col) - premature_days) / 365.25
+        return self._chain(sas_round(years, round_digits).alias(target))
 
     # ------------------------------------------------------------------ #
     # 5. prematurity_flag — flag infants born prematurely                 #

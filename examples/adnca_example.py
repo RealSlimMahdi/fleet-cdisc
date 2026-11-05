@@ -418,6 +418,7 @@ adppk = (
     .amt("AMT", dose_col="DOSEP", evid_col="EVID")
     # ── CMT — Compartment number ─────────────────────────────────────────────
     # admiral: mutate(CMT = case_when(EVID == 1 ~ 1, PCSPEC == "PLASMA" ~ 2, TRUE ~ 3))
+    # The data hold plasma records only, so the admiral rule reduces to this call.
     .cmt("CMT", evid_col="EVID", dose_cmt=1, conc_cmt=2)
     # ── BLQ flags ─────────────────────────────────────────────────────────────
     # admiral: mutate(BLQFL = …, BLQFN = …)

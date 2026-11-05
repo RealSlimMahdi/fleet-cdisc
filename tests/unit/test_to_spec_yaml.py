@@ -470,7 +470,7 @@ class TestRowStepsRoundTrip:
         ns = (
             raw.adam.source("STUDYID", "USUBJID", "AGE")
             .whereclauses(where='pl.col("AGE") > 45')
-            .nodup(subset=["USUBJID"], sort_by=["USUBJID", "ADT"], keep="first")
+            .nodup(subset=["USUBJID"], order_by=["USUBJID", "ADT"], keep="first")
             .seq("ASEQ", by=["STUDYID"], order_by=["USUBJID"])
         )
         with warnings.catch_warnings(record=True) as caught:
@@ -484,7 +484,7 @@ class TestRowStepsRoundTrip:
             {
                 "algorithm": "nodup",
                 "subset": ["USUBJID"],
-                "sort_by": ["USUBJID", "ADT"],
+                "order_by": ["USUBJID", "ADT"],
                 "keep": "first",
                 "after": "AGE",
             },

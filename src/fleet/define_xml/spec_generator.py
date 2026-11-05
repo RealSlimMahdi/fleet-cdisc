@@ -117,10 +117,10 @@ def _row_steps_text(steps: list[dict[str, Any]]) -> str:
         if step.get("algorithm") == "whereclauses":
             action = f"keep the records where {step.get('where')}"
         elif step.get("algorithm") == "nodup":
-            sort_by = ", ".join(step.get("sort_by") or [])
+            order_by = ", ".join(step.get("order_by") or [])
             action = (
                 f"keep the {step.get('keep')} record per {', '.join(step.get('subset') or [])}"
-                f" sorted by {sort_by}"
+                f" sorted by {order_by}"
             )
         else:
             action = f"a record step by {step.get('verb')} that the spec does not describe yet"
@@ -535,17 +535,10 @@ class DefineSpecGenerator:
     # ------------------------------------------------------------------ #
 
     def _check_spec_version(self) -> None:
-        """Raise ``SpecError`` when the spec declares an unknown future version."""
-        from fleet.core._verb_mixin import SUPPORTED_SPEC_VERSION
-        from fleet.tools.migrate_spec import migrate_hint
+        """Raise ``SpecError`` when the spec declares another version (1 names ``fleet migrate``)."""
+        from fleet.core.define_spec import check_spec_version
 
-        version = self._data.get("fleet_spec_version")
-        if version is not None and version != SUPPORTED_SPEC_VERSION:
-            raise SpecError(
-                f"{self._path}: unsupported fleet_spec_version {version!r}. "
-                f"This Fleet version supports fleet_spec_version {SUPPORTED_SPEC_VERSION}."
-                f"{migrate_hint(self._data)}"
-            )
+        check_spec_version(self._data.get("fleet_spec_version"), source=str(self._path))
 
     def _validate(self) -> None:
         from fleet.core.exceptions import SpecSchemaError

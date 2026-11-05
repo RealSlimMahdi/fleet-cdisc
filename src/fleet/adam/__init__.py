@@ -6,7 +6,6 @@ from fleet.adam.adsl_namespace import ADSLNamespace  # accessed via df.adam.adsl
 # Grading sub-package
 from fleet.adam.grading import GradingSystem
 from fleet.adam.metabolic_namespace import MetabolicNamespace
-from fleet.adam.models import ADAMAlgorithm, ADAMVariableSpec
 from fleet.adam.namespace import AdamNamespace
 from fleet.adam.neuro_namespace import NeuroNamespace
 from fleet.adam.occds_namespace import OCCDSNamespace  # accessed via df.adam.occds
@@ -29,9 +28,6 @@ __all__ = [
     # Mixins
     "FlagCriterionMixin",
     "SharedADaMVerbsMixin",
-    # Spec models
-    "ADAMAlgorithm",
-    "ADAMVariableSpec",
     "AdamNamespace",
     "ADSLNamespace",
     "OCCDSNamespace",

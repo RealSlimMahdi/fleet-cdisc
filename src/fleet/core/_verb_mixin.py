@@ -34,7 +34,12 @@ import polars as pl
 import yaml
 
 from fleet.core import log as fleet_log
-from fleet.core.define_spec import DefineSpec, load_define_spec
+from fleet.core.define_spec import (
+    SUPPORTED_SPEC_VERSION,
+    DefineSpec,
+    check_spec_version,
+    load_define_spec,
+)
 from fleet.core.dtc import date_part, datetime_part, refuse_number, to_day, warn_on_collect
 from fleet.core.exceptions import (
     ComparisonFailed,
@@ -166,29 +171,9 @@ def _iso_days(days: pl.Expr, unit: str, *, add_one: bool, call: str, target: str
     )
 
 
-#: Spec-format version this Fleet build writes (``fleet_spec_version``).
-#: Version 2 is the verb vocabulary of ADR-0008.
-SUPPORTED_SPEC_VERSION = 2
-
-
 def _check_spec_version(spec: DefineSpec, *, source: str) -> None:
-    """Raise ``SpecError`` when the spec declares another dialect version.
-
-    Version 1 is the pre-ADR-0008 vocabulary; ``fleet migrate --spec``
-    rewrites it.
-    """
-    version = spec.fleet_spec_version
-    if version is None or version == SUPPORTED_SPEC_VERSION:
-        return
-    hint = (
-        " Rewrite the file with `fleet migrate --spec <define.yaml> --write`."
-        if version == 1
-        else ""
-    )
-    raise SpecError(
-        f"{source}: unsupported fleet_spec_version {version!r}. "
-        f"This Fleet version supports fleet_spec_version {SUPPORTED_SPEC_VERSION}.{hint}"
-    )
+    """Raise ``SpecError`` when the spec declares another dialect version."""
+    check_spec_version(spec.fleet_spec_version, source=source)
 
 
 #: The ``derivations_module`` names already announced on stderr in this process.
@@ -2160,8 +2145,8 @@ class SharedVerbsMixin:
         self,
         target: str = "ASEQ",
         *,
-        order_by: list[str] | None = None,
-        by: list[str] | None = None,
+        order_by: str | list[str] | None = None,
+        by: str | list[str] | None = None,
         start_at: int = 1,
         check_uniqueness: bool = False,
     ) -> Self:
@@ -2212,7 +2197,9 @@ class SharedVerbsMixin:
                     .to_frame()
                 )
         """
-        grps = by or list(self._SEQ_DEFAULT_GROUPS)
+        grps = [by] if isinstance(by, str) else list(by or self._SEQ_DEFAULT_GROUPS)
+        if isinstance(order_by, str):
+            order_by = [order_by]
         names = self._lazy.collect_schema().names()
         absent = [c for c in grps if c not in names]
         if absent and not by:
@@ -3352,7 +3339,7 @@ class SharedVerbsMixin:
         self,
         *,
         subset: str | list[str],
-        sort_by: str | list[str] | None = None,
+        order_by: str | list[str] | None = None,
         keep: Literal["first", "last"] | None = None,
         descending: bool | list[bool] = False,
     ) -> Self:
@@ -3369,15 +3356,15 @@ class SharedVerbsMixin:
 
         Args:
             subset: Column(s) that define the uniqueness key.
-            sort_by: Column(s) to sort by before deduplication.  Required
+            order_by: Column(s) to sort by before deduplication.  Required
                 when ``keep`` is not ``None``.
             keep: Which duplicate to retain after sorting:
                 ``"first"``, ``"last"``, or ``None`` (report only, no removal).
-            descending: Sort direction(s) for *sort_by*.  A single ``bool``
-                applies to all columns; a list must match *sort_by* length.
+            descending: Sort direction(s) for *order_by*.  A single ``bool``
+                applies to all columns; a list must match *order_by* length.
                 A missing value is the lowest value, as SAS: it sorts
                 first when ascending and last when descending.  Records
-                that tie on *sort_by* keep their input order, as PROC SORT
+                that tie on *order_by* keep their input order, as PROC SORT
                 EQUALS, so ``keep="last"`` takes the last input record of a
                 tie.
 
@@ -3385,13 +3372,13 @@ class SharedVerbsMixin:
             Self: A fresh namespace wrapping the (optionally deduplicated)
                 frame, carrying the duplicates in ``last_nodup_report``;
                 call ``.to_frame()`` to materialise.  With *keep*, the rows
-                are always sorted by *subset*, then *sort_by*, as PROC SORT
+                are always sorted by *subset*, then *order_by*, as PROC SORT
                 NODUPKEY, also when no duplicate exists.
 
         Raises:
-            DerivationError: If ``keep`` is set but ``sort_by`` is not
+            DerivationError: If ``keep`` is set but ``order_by`` is not
                 provided, ``keep`` is not one of the accepted values, or a
-                column of *subset* or *sort_by* is not in the frame.
+                column of *subset* or *order_by* is not in the frame.
 
         References:
             SAS PROC SORT with EQUALS and NODUPKEY; ADR-0023 for the place
@@ -3413,36 +3400,39 @@ class SharedVerbsMixin:
                     ae_df.adam.occds
                     .nodup(
                         subset=["USUBJID", "AEDECOD"],
-                        sort_by=["ASTDT", "ASEQ"],
+                        order_by=["ASTDT", "ASEQ"],
                         keep="first",
                         descending=True,
                     )
                     .to_frame()
                 )
         """
-        if keep is not None and sort_by is None:
-            raise DerivationError("sort_by is required when keep is set.")
+        if keep is not None and order_by is None:
+            raise DerivationError("order_by is required when keep is set.")
         if keep is not None and keep not in ("first", "last"):
             raise DerivationError(f"keep must be 'first', 'last', or None — got {keep!r}.")
         subset = [subset] if isinstance(subset, str) else list(subset)
-        if isinstance(sort_by, str):
-            sort_by = [sort_by]
+        if isinstance(order_by, str):
+            order_by = [order_by]
         self._require_columns("nodup(subset=...)", subset)
-        if sort_by:
-            self._require_columns("nodup(sort_by=...)", sort_by)
+        if order_by:
+            self._require_columns("nodup(order_by=...)", order_by)
 
         fleet_log.ensure_default_handler()
         df = self._collect_checked()
         if keep is not None:
-            # As PROC SORT NODUPKEY: always sort by the key, then sort_by, so the
+            # As PROC SORT NODUPKEY: always sort by the key, then order_by, so the
             # row order does not depend on whether a duplicate exists.  A missing
             # value is lowest, as SAS (ADR-0023); ties keep input order.
             flags = (
-                list(descending) if isinstance(descending, list) else [descending] * len(sort_by)
+                list(descending) if isinstance(descending, list) else [descending] * len(order_by)
             )
             all_flags = [False] * len(subset) + flags
             df = df.sort(
-                [*subset, *sort_by], descending=all_flags, nulls_last=all_flags, maintain_order=True
+                [*subset, *order_by],
+                descending=all_flags,
+                nulls_last=all_flags,
+                maintain_order=True,
             )
 
         # Detect duplicates
@@ -3454,7 +3444,7 @@ class SharedVerbsMixin:
             logger.info("[NODUP] No duplicates found (subset: %s)", ", ".join(subset))
             new = self._materialise_then(df)
             new._nodup_report = dup_rows
-            return self._record_nodup(new, subset, sort_by, keep, descending)
+            return self._record_nodup(new, subset, order_by, keep, descending)
 
         # Summarise duplicate groups
         dup_groups = (
@@ -3491,19 +3481,19 @@ class SharedVerbsMixin:
         logger.info(
             "[NODUP] Action: keeping '%s' after sorting by %s (descending=%s)",
             keep,
-            sort_by,
+            order_by,
             descending,
         )
         logger.info("[NODUP] Result: %d rows (removed %d)", len(df), n_dup - n_groups)
         new = self._materialise_then(df)
         new._nodup_report = dup_rows
-        return self._record_nodup(new, subset, sort_by, keep, descending)
+        return self._record_nodup(new, subset, order_by, keep, descending)
 
     @staticmethod
     def _record_nodup(
         new: Any,
         subset: list[str],
-        sort_by: list[str] | None,
+        order_by: list[str] | None,
         keep: str | None,
         descending: bool | list[bool],
     ) -> Any:
@@ -3512,7 +3502,7 @@ class SharedVerbsMixin:
             return new
         from fleet.core.lineage import record_row_step
 
-        params: dict[str, Any] = {"subset": subset, "sort_by": sort_by, "keep": keep}
+        params: dict[str, Any] = {"subset": subset, "order_by": order_by, "keep": keep}
         if descending:
             params["descending"] = descending
         return record_row_step(new, "nodup", params)

@@ -70,7 +70,7 @@ class TestNodupDedup:
     def test_keep_first(self, df_with_dups, capsys):
         result = df_with_dups.sdtm.nodup(
             subset=["USUBJID", "AEDECOD"],
-            sort_by=["ASEQ"],
+            order_by=["ASEQ"],
             keep="first",
         ).to_frame()
         # Should keep first occurrence per key group
@@ -84,7 +84,7 @@ class TestNodupDedup:
     def test_keep_last(self, df_with_dups, capsys):
         result = df_with_dups.sdtm.nodup(
             subset=["USUBJID", "AEDECOD"],
-            sort_by=["ASEQ"],
+            order_by=["ASEQ"],
             keep="last",
         ).to_frame()
         assert len(result) == 4
@@ -96,7 +96,7 @@ class TestNodupDedup:
     def test_keep_first_descending(self, df_with_dups, capsys):
         result = df_with_dups.sdtm.nodup(
             subset=["USUBJID", "AEDECOD"],
-            sort_by=["ASEQ"],
+            order_by=["ASEQ"],
             keep="first",
             descending=True,
         ).to_frame()
@@ -110,7 +110,7 @@ class TestNodupDedup:
     def test_keep_last_descending(self, df_with_dups, capsys):
         result = df_with_dups.sdtm.nodup(
             subset=["USUBJID", "AEDECOD"],
-            sort_by=["ASEQ"],
+            order_by=["ASEQ"],
             keep="last",
             descending=True,
         ).to_frame()
@@ -124,7 +124,7 @@ class TestNodupDedup:
     def test_output_message_shows_action(self, df_with_dups, capsys):
         df_with_dups.sdtm.nodup(
             subset=["USUBJID", "AEDECOD"],
-            sort_by=["ASEQ"],
+            order_by=["ASEQ"],
             keep="first",
         ).to_frame()
         captured = capsys.readouterr()
@@ -136,12 +136,14 @@ class TestNodupValidation:
     """Tests for argument validation."""
 
     def test_keep_without_sort_by_raises(self, df_with_dups):
-        with pytest.raises(ValueError, match="sort_by is required"):
+        with pytest.raises(ValueError, match="order_by is required"):
             df_with_dups.sdtm.nodup(subset=["USUBJID"], keep="first").to_frame()
 
     def test_invalid_keep_raises(self, df_with_dups):
         with pytest.raises(ValueError, match="keep must be"):
-            df_with_dups.sdtm.nodup(subset=["USUBJID"], sort_by=["ASEQ"], keep="invalid").to_frame()
+            df_with_dups.sdtm.nodup(
+                subset=["USUBJID"], order_by=["ASEQ"], keep="invalid"
+            ).to_frame()
 
 
 class TestNodupAdam:
@@ -150,7 +152,7 @@ class TestNodupAdam:
     def test_nodup_on_adam_occds(self, df_with_dups, capsys):
         result = df_with_dups.adam.occds.nodup(
             subset=["USUBJID", "AEDECOD"],
-            sort_by=["ASEQ"],
+            order_by=["ASEQ"],
             keep="last",
         ).to_frame()
         assert len(result) == 4
@@ -196,7 +198,7 @@ class TestNodupRealisticDuplicates:
 """)
         result = df.sdtm.nodup(
             subset=["USUBJID", "AEDECOD", "AESTDTC"],
-            sort_by=["AESEQ"],
+            order_by=["AESEQ"],
             keep="first",
         ).to_frame()
         # Only the HEADACHE pair is a dup on (USUBJID, AEDECOD, AESTDTC)
@@ -221,7 +223,7 @@ class TestNodupRealisticDuplicates:
 """)
         result = df.sdtm.nodup(
             subset=["USUBJID", "VSTESTCD", "VSDTC"],
-            sort_by=["VISITNUM"],
+            order_by=["VISITNUM"],
             keep="first",
         ).to_frame()
         assert result.height == 2
@@ -241,7 +243,7 @@ class TestNodupRealisticDuplicates:
 """)
         result = df.sdtm.nodup(
             subset=["USUBJID", "AEDECOD", "AESTDTC", "AESEQ"],
-            sort_by=["AESEQ"],
+            order_by=["AESEQ"],
             keep="last",
         ).to_frame()
         # True tie on sort key — last physical row kept
@@ -261,7 +263,7 @@ class TestNodupRealisticDuplicates:
 """)
         result = df.sdtm.nodup(
             subset=["USUBJID", "AEDECOD"],
-            sort_by=["AESEQ"],
+            order_by=["AESEQ"],
             keep="first",
         ).to_frame()
         # Two rows with null AEDECOD for 01-001 should be treated as dups
@@ -285,7 +287,7 @@ class TestNodupRealisticDuplicates:
 """)
         result = df.sdtm.nodup(
             subset=["USUBJID", "AESEQ"],
-            sort_by=["AESEQ"],
+            order_by=["AESEQ"],
             keep="first",
         ).to_frame()
         # Should have fewer rows than input (01-701-1015 has dup AESEQ=1)

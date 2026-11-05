@@ -4,6 +4,7 @@ import polars as pl
 import pytest
 
 import fleet  # noqa: F401 — triggers namespace registration
+from fleet.core.exceptions import DerivationError
 
 
 @pytest.fixture
@@ -354,6 +355,22 @@ class TestBmiCategoryAdult:
             "BMICG", bmi_col="BMI", labels={"Low": 18.5, "High": 30.0}
         ).to_frame()
         assert result["BMICG"].to_list() == ["Low", "High", None, None]
+
+    def test_custom_labels_that_do_not_ascend_raise(self):
+        """c1-162: a descending dict would give wrong classes."""
+        df = pl.from_repr("""\
+┌──────┐
+│ BMI  │
+│ ---  │
+│ f64  │
+╞══════╡
+│ 17.0 │
+└──────┘
+""")
+        with pytest.raises(DerivationError, match="do not strictly ascend"):
+            df.adam.metabolic.bmi_category_adult(
+                "BMICG", bmi_col="BMI", labels={"Obese": float("inf"), "Normal": 25.0}
+            )
 
     def test_all_null_column_keeps_string(self):
         df = pl.DataFrame({"BMI": [None, None]}, schema={"BMI": pl.Float64})

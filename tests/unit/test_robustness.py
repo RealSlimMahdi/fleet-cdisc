@@ -97,12 +97,12 @@ class TestNodupDeterminism:
 └─────────┴─────────┴───────┘
 """)
         result1 = df.sdtm.nodup(
-            subset=["USUBJID", "AEDECOD"], sort_by=["AESEQ"], keep="first"
+            subset=["USUBJID", "AEDECOD"], order_by=["AESEQ"], keep="first"
         ).to_frame()
         capsys.readouterr()
         result2 = (
             shuffle_rows(df, seed=seed)
-            .sdtm.nodup(subset=["USUBJID", "AEDECOD"], sort_by=["AESEQ"], keep="first")
+            .sdtm.nodup(subset=["USUBJID", "AEDECOD"], order_by=["AESEQ"], keep="first")
             .to_frame()
         )
         capsys.readouterr()

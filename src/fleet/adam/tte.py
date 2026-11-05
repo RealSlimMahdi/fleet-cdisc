@@ -18,6 +18,7 @@ import polars as pl
 
 from fleet.core.define_spec import load_spec_yaml
 from fleet.core.exceptions import DerivationError
+from fleet.core.joins import refuse_repeated_keys
 from fleet.core.study_context import StudyConfigError, find_study_config, load_study_context
 
 #: Columns that a source frame carries onto the selected ADTTE row.
@@ -74,46 +75,55 @@ def _candidates(
     stops: pl.DataFrame | None,
     subject_keys: list[str],
     date_dtype: pl.DataType,
-) -> pl.DataFrame:
-    """One record per subject (and stratum) from one source frame."""
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """One record per subject (and stratum) from one source frame.
+
+    Also returns the records after the stop date, for the decision trace.
+    """
     df = frame.filter(pl.col("ADT").is_not_null()).with_columns(
         pl.col("ADT").cast(date_dtype).alias(_ADT)
     )
-    if stops is not None:
-        df = (
-            df.join(stops, on=subject_keys, how="left", nulls_equal=True)
-            .filter(pl.col(_STOP).is_null() | (pl.col(_ADT) <= pl.col(_STOP)))
-            .drop(_STOP)
-        )
-    if df.is_empty():
-        return pl.DataFrame()
-
-    if "SRCSEQ" not in df.columns:
-        dup = df.group_by(keys + [_ADT]).len().filter(pl.col("len") > 1)
-        if dup.height:
-            warnings.warn(
-                f"TTE source {label}: {dup.height} group(s) have several records on the "
-                "selected date and no SRCSEQ column. The record is chosen by a sort on "
-                'all columns. Carry SRCSEQ (for example SRCSEQ="AESEQ") to control this.',
-                UserWarning,
-                stacklevel=4,
-            )
-    order = ["SRCSEQ"] if "SRCSEQ" in df.columns else []
-    residual = sorted(c for c in df.columns if c not in {*keys, _ADT, *order})
-    grouped = df.sort(keys + [_ADT] + order + residual).group_by(keys, maintain_order=True)
-    picked = grouped.first() if kind == "event" else grouped.last()
-
-    carried = [c for c in CARRIED_COLUMNS if c in df.columns]
     stamps = [
         pl.lit(kind).alias(_KIND),
         pl.lit(cnsr).cast(pl.Int64).alias(_CNSR),
         pl.lit(label).alias(_SRC),
         pl.lit(index).cast(pl.Int64).alias(_IDX),
     ]
+    after = pl.DataFrame()
+    if stops is not None:
+        df = df.join(stops, on=subject_keys, how="left", nulls_equal=True)
+        late = pl.col(_STOP).is_not_null() & (pl.col(_ADT) > pl.col(_STOP))
+        after = df.filter(late).with_columns(stamps).select(keys + [_ADT, _KIND, _SRC])
+        df = df.filter(~late).drop(_STOP)
+    if df.is_empty():
+        return pl.DataFrame(), after
+
+    order = ["SRCSEQ"] if "SRCSEQ" in df.columns else []
+    dup = df.group_by(keys + [_ADT] + order).len().filter(pl.col("len") > 1)
+    if dup.height:
+        cols = ", ".join([*keys, "ADT", *order])
+        fix = (
+            "The record is chosen by a sort on all columns. Carry SRCSEQ (for example "
+            'SRCSEQ="AESEQ") to control this.'
+            if not order
+            else "The record is chosen by a sort on the other columns."
+        )
+        warnings.warn(
+            f"TTE source {label}: {dup.height} group(s) have duplicate records with respect "
+            f"to {cols}{'' if order else ' (no SRCSEQ column)'}. {fix}",
+            UserWarning,
+            stacklevel=4,
+        )
+    residual = sorted(c for c in df.columns if c not in {*keys, _ADT, *order})
+    grouped = df.sort(keys + [_ADT] + order + residual).group_by(keys, maintain_order=True)
+    picked = grouped.first() if kind == "event" else grouped.last()
+
+    carried = [c for c in CARRIED_COLUMNS if c in df.columns]
     if kind == "event":
         carried = [c for c in carried if c != "EVNTDESC"] + ["EVNTDESC"]
         stamps.append(pl.lit(label).alias("EVNTDESC"))
-    return picked.with_columns(stamps).select(keys + [_ADT, _KIND, _CNSR, _SRC, _IDX] + carried)
+    picked = picked.with_columns(stamps).select(keys + [_ADT, _KIND, _CNSR, _SRC, _IDX] + carried)
+    return picked, after
 
 
 def _sources(
@@ -249,20 +259,29 @@ def select_tte(
         subject_keys: Subject identifier columns (usually ``["USUBJID"]``).
         stop_at: Date columns in *universe*; the earliest non-null one
             ends the observation of the subject.
-        by: Stratum columns, present in every source frame.
+        by: Stratum columns, present in every event frame.  A censor frame
+            with none of them (for example from ADSL) is crossed with the
+            strata of the event frames; a frame with only some raises.
         create_datetime: Give ``ADTM``/``STARTDTM`` instead of dates.
         retain: ``"drop"`` (a subject with no record left is dropped with a
             warning) or ``"censor_at_start"`` (censored at ``STARTDT`` with
             ``EVNTDESC = "NO EVENT OBSERVED"``).
 
+    ADSL flags of *start* go onto the rows: ``<start>DTF`` as STARTDTF and,
+    with *create_datetime*, ``<start>TMF`` as STARTTMF (admiral rules
+    ``(DT|DTM)$`` to ``DTF`` and ``DTM$`` to ``TMF``).
+
     Returns:
         tuple[pl.DataFrame, pl.DataFrame]: The selected rows, and the
             decision trace (one row per candidate: ``kind``, ``source``,
-            ``date``, ``selected``, ``reason``).
+            ``date``, ``selected``, ``reason``; also a row per record after
+            the stop date and per subject with no record).
 
     Raises:
         DerivationError: On a missing column (with a did-you-mean hint), a
-            date column that is not Date/Datetime, or a bad dict key.
+            date column that is not Date/Datetime, a bad dict key, a
+            *retain* value other than ``"drop"`` or ``"censor_at_start"``,
+            or a subject with two different rows in ADSL.
 
     References:
         admiral 1.5 ``derive_param_tte`` (``end_dates``,
@@ -281,6 +300,10 @@ def select_tte(
                 stop_at=["EOSDT", "NACTDT"],
             )
     """
+    if retain not in ("drop", "censor_at_start"):
+        raise DerivationError(
+            f"retain={retain!r} is not supported. Choose 'drop' or 'censor_at_start'."
+        )
     by = by or []
     stop_at = stop_at or []
     sources = _sources(events, censors)
@@ -301,26 +324,38 @@ def select_tte(
         _check_date("ADSL", universe, col)
 
     date_dtype: pl.DataType = pl.Datetime("us") if create_datetime else pl.Date
-    base = universe.select(subject_keys + [pl.col(start).cast(date_dtype).alias(_START)]).unique(
-        subject_keys, maintain_order=True
+    flags = _start_flags(universe.columns, start, create_datetime)
+    adsl = refuse_repeated_keys(
+        "param()",
+        universe.select(list(dict.fromkeys([*subject_keys, start, *stop_at, *flags]))),
+        subject_keys,
+        source="ADSL",
+    )
+    base = adsl.select(
+        subject_keys
+        + [pl.col(start).cast(date_dtype).alias(_START)]
+        + [pl.col(src).alias(dst) for src, dst in flags.items()]
     )
     stops = (
-        universe.select(
+        adsl.select(
             subject_keys
             + [pl.min_horizontal([pl.col(c).cast(date_dtype) for c in stop_at]).alias(_STOP)]
-        ).unique(subject_keys, maintain_order=True)
+        )
         if stop_at
         else None
     )
 
+    frames = _cross_strata(sources, by, keys)
     pools: dict[str, list[pl.DataFrame]] = {"event": [], "censor": []}
-    for index, (label, kind, cnsr, frame) in enumerate(sources):
-        where = f"TTE {kind} {label}"
-        _check_columns(where, frame, keys + ["ADT"])
-        _check_date(where, frame, "ADT")
-        cand = _candidates(label, kind, cnsr, index, frame, keys, stops, subject_keys, date_dtype)
+    late: list[pl.DataFrame] = []
+    for index, (label, kind, cnsr, frame) in enumerate(frames):
+        cand, after = _candidates(
+            label, kind, cnsr, index, frame, keys, stops, subject_keys, date_dtype
+        )
         if not cand.is_empty():
             pools[kind].append(cand)
+        if not after.is_empty():
+            late.append(after)
     event_pool, censor_pool = (
         pl.concat(pools[k], how="diagonal_relaxed") if pools[k] else pl.DataFrame()
         for k in ("event", "censor")
@@ -376,12 +411,19 @@ def select_tte(
         else:
             ids = unresolved.get_column(subject_keys[-1]).unique(maintain_order=True)
             window = " on or before the first stop_at date" if stop_at else ""
+            fix = (
+                f"Add a censor frame: a frame with none of the by columns {by} is crossed "
+                f'with the strata, for example {{3: adsl.select("USUBJID", ADT="EOSDT")}}. '
+                "retain='censor_at_start' censors them at the start date instead."
+                if by
+                else "Add a censor frame on the start date "
+                f'(for example {{3: adsl.select("USUBJID", ADT="{start}")}}) or use '
+                "retain='censor_at_start'."
+            )
             warnings.warn(
                 f"select_tte(): {ids.len()} subject(s) have no event and no censor "
                 f"record{window} and were dropped: {ids.head(5).to_list()}"
-                f"{' ...' if ids.len() > 5 else ''}. Add a censor frame on the start date "
-                f'(for example {{3: adsl.select("USUBJID", ADT="{start}")}}) or use '
-                "retain='censor_at_start'.",
+                f"{' ...' if ids.len() > 5 else ''}. {fix}",
                 UserWarning,
                 stacklevel=3,
             )
@@ -394,18 +436,39 @@ def select_tte(
     )
 
     trace = _trace(pooled, rows, keys, date_dtype)
-    if unresolved.height and retain == "drop":
-        dropped = unresolved.select(
+    extra = [
+        frame.select(
             keys
             + [
-                pl.lit(None, dtype=pl.String).alias("kind"),
-                pl.lit(None, dtype=pl.String).alias("source"),
-                pl.lit(None, dtype=date_dtype).alias("date"),
+                pl.col(_KIND).alias("kind"),
+                pl.col(_SRC).alias("source"),
+                pl.col(_ADT).cast(date_dtype).alias("date"),
                 pl.lit(False).alias("selected"),
-                pl.lit("dropped: no event or censor record").alias("reason"),
+                pl.lit("after the stop date").alias("reason"),
             ]
         )
-        trace = pl.concat([trace, dropped], how="diagonal_relaxed") if trace.height else dropped
+        for frame in late
+    ]
+    if unresolved.height:
+        kept = retain == "censor_at_start"
+        extra.append(
+            unresolved.select(
+                keys
+                + [
+                    pl.lit("censor" if kept else None, dtype=pl.String).alias("kind"),
+                    pl.lit("ADSL" if kept else None, dtype=pl.String).alias("source"),
+                    (pl.col(_START) if kept else pl.lit(None)).cast(date_dtype).alias("date"),
+                    pl.lit(kept).alias("selected"),
+                    pl.lit(
+                        "censored at STARTDT: no record"
+                        if kept
+                        else "dropped: no event or censor record"
+                    ).alias("reason"),
+                ]
+            )
+        )
+    if extra:
+        trace = pl.concat([trace, *extra] if trace.height else extra, how="diagonal_relaxed")
 
     start_name, adt_name = ("STARTDTM", "ADTM") if create_datetime else ("STARTDT", "ADT")
     rows = rows.rename({_START: start_name, _ADT: adt_name, _CNSR: "CNSR"}).drop(
@@ -422,6 +485,55 @@ def select_tte(
             "STUDYID", pl.exclude("STUDYID")
         )
     return rows, trace
+
+
+def _start_flags(columns: list[str], start: str, create_datetime: bool) -> dict[str, str]:
+    """The imputation flags of *start* in ADSL, as admiral: ``(DT|DTM)$`` to ``DTF``, ``DTM$`` to ``TMF``."""
+    import re
+
+    rules = [(r"(DT|DTM)$", "DTF", "STARTDTF")]
+    if create_datetime:
+        rules.append((r"DTM$", "TMF", "STARTTMF"))
+    flags: dict[str, str] = {}
+    for pattern, suffix, target in rules:
+        name = re.sub(pattern, suffix, start)
+        if name != start and name in columns:
+            flags[name] = target
+    return flags
+
+
+def _cross_strata(
+    sources: list[tuple[str, Literal["event", "censor"], int, pl.DataFrame]],
+    by: list[str],
+    keys: list[str],
+) -> list[tuple[str, Literal["event", "censor"], int, pl.DataFrame]]:
+    """Check each source; cross a censor frame with none of the *by* columns with the strata.
+
+    The strata are the *by* values of the event frames (admiral ``derive_param_tte``
+    with ``by_vars`` and a censor source from ADSL).
+    """
+    for label, kind, _, frame in sources:
+        where = f"TTE {kind} {label}"
+        _check_columns(where, frame, [*keys[: len(keys) - len(by)], "ADT"])
+        _check_date(where, frame, "ADT")
+    if not by:
+        return sources
+    events = [fr for _, kd, _, fr in sources if kd == "event" and set(by) <= set(fr.columns)]
+    strata = (
+        pl.concat([fr.select(by) for fr in events], how="vertical_relaxed").unique(
+            maintain_order=True
+        )
+        if events
+        else pl.DataFrame(schema=dict.fromkeys(by, pl.String))
+    )
+    out = []
+    for label, kind, cnsr, frame in sources:
+        if kind == "censor" and not set(by) & set(frame.columns):
+            frame = frame.join(strata, how="cross")
+        else:
+            _check_columns(f"TTE {kind} {label}", frame, by)
+        out.append((label, kind, cnsr, frame))
+    return out
 
 
 def _trace(

@@ -174,7 +174,7 @@ def test_c1_16_inner_merge_keeps_the_left_order_for_any_right_size():
 
 
 # --------------------------------------------------------------------- #
-# c1-20: nodup with keep= always sorts by subset + sort_by               #
+# c1-20: nodup with keep= always sorts by subset + order_by              #
 # --------------------------------------------------------------------- #
 
 _AE_NODUP = pl.from_repr("""\
@@ -194,7 +194,7 @@ _AE_NODUP = pl.from_repr("""\
 def test_c1_20_nodup_order_does_not_depend_on_a_duplicate():
     def run(df: pl.DataFrame) -> list[tuple[str, int]]:
         out = (
-            df.sdtm.nodup(subset=["USUBJID", "AETERM"], sort_by=["AESEQ"], keep="first")
+            df.sdtm.nodup(subset=["USUBJID", "AETERM"], order_by=["AESEQ"], keep="first")
             .seq("SEQ", by=["USUBJID"])
             .to_frame()
         )
@@ -207,7 +207,7 @@ def test_c1_20_nodup_order_does_not_depend_on_a_duplicate():
 
 def test_c1_20_descending_does_not_reverse_the_key():
     out = _AE_NODUP.sdtm.nodup(
-        subset=["USUBJID", "AETERM"], sort_by=["AESEQ"], keep="first", descending=True
+        subset=["USUBJID", "AETERM"], order_by=["AESEQ"], keep="first", descending=True
     ).to_frame()
     assert out["USUBJID"].to_list() == ["S1", "S2", "S2", "S3"]
 
@@ -777,7 +777,7 @@ def test_c1_215_pick_by_string():
         "X",
         events=[{"when": pl.col("AVALC") == "PD", "set": {"X": "AVISITN"}}],
         by="USUBJID",
-        order="AVISITN",
+        order_by="AVISITN",
     ).to_frame()
     assert out["X"].to_list() == [2, 2, 2, 2, None, None]
 

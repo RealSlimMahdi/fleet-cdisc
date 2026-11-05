@@ -586,16 +586,25 @@ assert (adsl["SAFFL"] == "Y").sum() == adsl.height, "every pilot subject took a 
 # 9. Last Date Known Alive (LSTALVDT)
 #    Admiral: derive_vars_extreme_event(ae, lb, adsl; order=last)
 #    Fleet: pick() — the latest date over all sources.  Within each event
-#    the latest record is kept; then the top-level order=["LSTALVDT"],
+#    the latest record is kept; then the top-level order_by=["LSTALVDT"],
 #    mode="last" makes the events compete on the date, as admiral does.
 #    A tie on the date goes to the first listed event.
 #
 #    Sources:
-#      a) AE end dates   (AEENDTC)  — most clinically recent contact
-#      b) AE start dates (AESTDTC)  — if AE end is missing
-#      c) Treatment end  (TRTEDT)   — fallback from ADSL itself
+#      a) AE end dates   (AENDT from AEENDTC)  — most clinically recent contact
+#      b) AE start dates (ASTDT from AESTDTC)  — if AE end is missing
+#      c) Treatment end  (TRTEDT)              — fallback from ADSL itself
+#    Every event sets a date: pick() refuses a mix of dates and DTC text.
+#    admiral: convert_dtc_to_dt(AESTDTC, highest_imputation = "M").
 # ════════════════════════════════════════════════════════════════════════════
 print("\n── 9. Last date known alive (LSTALVDT) — via pick() ─────────────────────")
+
+ae_dates = (
+    fleet.frame(ae)
+    .adam.date("AENDT", source="AEENDTC", flag=False)
+    .date("ASTDT", source="AESTDTC", flag=False)
+    .to_frame()
+)
 
 adsl = (
     fleet.frame(adsl)
@@ -603,15 +612,15 @@ adsl = (
         "LSTALVDT",
         events=[
             {
-                "when": pl.col("AEENDTC").is_not_null(),
-                "set": {"LSTALVDT": "AEENDTC"},
-                "source": ae,
+                "when": pl.col("AENDT").is_not_null(),
+                "set": {"LSTALVDT": "AENDT"},
+                "source": ae_dates,
                 "label": "AE end date (latest contact)",
             },
             {
-                "when": pl.col("AESTDTC").is_not_null(),
-                "set": {"LSTALVDT": "AESTDTC"},
-                "source": ae,
+                "when": pl.col("ASTDT").is_not_null(),
+                "set": {"LSTALVDT": "ASTDT"},
+                "source": ae_dates,
                 "label": "AE start date (fallback)",
             },
             {
@@ -621,7 +630,7 @@ adsl = (
             },
         ],
         by=["USUBJID"],
-        order=["LSTALVDT"],
+        order_by=["LSTALVDT"],
         mode="last",
     )
     .to_frame()
@@ -801,7 +810,7 @@ advs = (
     .merge(dataset=_trtsdt_map, on="USUBJID", how="left")
     .duration("ADY", start="TRTSDT", end="ADT")
     # admiral: flag_variables — last pre-dose visit (vsdy ≤ 0)
-    .flag("ABLFL", criteria='pl.col("vsdy") <= 0')
+    .flag("ABLFL", criteria='pl.col("vsdy") <= 0', by=["USUBJID", "PARAMCD"])
     .to_frame()  # materialise — ABLFL must exist before baseline() window fn
     .adam.baseline(  # admiral: derive_var_base
         "BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"]
@@ -1272,7 +1281,7 @@ print(f"   {adsl.shape[0]} subjects × {adsl.shape[1]} variables")
 
 # ════════════════════════════════════════════════════════════════════════════
 # 6. ADaM ADVS — spec-driven
-#    The variables run in spec order, so each one reads the columns above it:
+#    depends_on: in the spec triggers auto-flush between dependent batches:
 #      ADT → ADY,  ABLFL → BASE,  BASE → CHG / PCHG
 #    The define declares `inputs: [VS, ADSL]`: the subject-level variables it
 #    lists (SUBJID … ITTFL) are merged in from the ADSL built above, exactly
@@ -1781,19 +1790,19 @@ Registered on every `pl.DataFrame` **and** `pl.LazyFrame` (so `pl.scan_parquet(.
 `assign` is the one assignment verb (the pre-alpha `assign_no_ct`/`assign_ct`/`hardcode_no_ct`/`hardcode_ct`/`dataset_level` spellings were removed); `case_when` replaces `if_then_else`.
 
 - `assign(target: str, *, source: str | None = None, value: Any | None = None, ct: str | type | None = None, ct_map: dict[str, str] | None = None, ct_validator: CTValidator | None = None, validate_values: bool | None = None) -> Self` — Assign *target* from a source column or a literal value.
-- `case_when(target: str, *, when: list[CaseWhenBranch], else_: Any = None) -> Self` — Multi-branch conditional derivation (first matching branch wins).
-- `date(target: str, *, source: str | None = None, value: str | None = None, output: str | None = None, time: str | None = None, impute: str = 'first', impute_time: str | None = None, highest: str | None = None, flag: bool | str = True, min_date: str | None = None, max_date: str | None = None, format: str | None = None) -> SDTMNamespace` — Parse, convert, impute, and flag a date or datetime column.
+- `case_when(target: str, *, when: list[dict[str, Any]], else_: Any = None) -> Self` — Multi-branch conditional derivation (first matching branch wins).
+- `date(target: str, *, source: str | None = None, value: str | None = None, output: str | None = None, time: str | None = None, impute: str = 'first', impute_time: str | None = None, highest: str | None = None, flag: bool | str = True, min_date: str | None = None, max_date: str | None = None, format: str | None = None) -> Self` — Parse, convert, impute, and flag a date or datetime column.
 - `duration(target: str, *, start: str | pl.Expr, end: str | pl.Expr, unit: "Literal['seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years']" = 'days', add_one: bool | None = None, out: "Literal['numeric', 'iso8601']" = 'numeric') -> Self` — Compute the duration between two date/datetime columns.
 - `derivation(target: str | Derivation | None = None, *, expression: str | pl.Expr | Callable[[], pl.Expr] | None = None) -> Self` — Derive *target* using an expression, lambda, or ``Derivation`` object.
-- `condition_add(target: str, *, condition: str | pl.Expr, then_value: Any) -> SDTMNamespace` — Set *target* to *then_value* where *condition* is true, else null.
-- `ae_aerel(target: str = 'AEREL', *, source: str = 'ae_relationship', aerel_map: dict[str, str] | None = None) -> SDTMNamespace` — Map free-text AE causality strings to ``AEREL`` values.
+- `condition_add(target: str, *, condition: str | pl.Expr, then_value: Any) -> Self` — Set *target* to *then_value* where *condition* is true, else null.
+- `ae_aerel(target: str = 'AEREL', *, source: str = 'ae_relationship', aerel_map: dict[str, str] | None = None) -> Self` — Map free-text AE causality strings to ``AEREL`` values.
 - `merge(dataset: pl.DataFrame | pl.LazyFrame | None = None, *, on: str | list[str] | None = None, how: str = 'left', keep: list[str] | None = None, where: str | pl.Expr | None = None, validate: "Literal['m:1', '1:m', '1:1'] | None" = None) -> Self` — Join *dataset* into the pipeline using key column(s) *on*.
 - `keep(*columns: str | list[str]) -> Self` — Restrict the frame to *columns*, in the given order.
-- `nodup(*, subset: str | list[str], sort_by: str | list[str] | None = None, keep: "Literal['first', 'last'] | None" = None, descending: bool | list[bool] = False) -> Self` — Detect duplicate rows and optionally deduplicate after sorting.
-- `group_by(*, by: list[str], agg: list[pl.Expr]) -> SDTMNamespace` — Group by *by* and apply *agg* aggregations (lazily).
-- `notsubmitted(*targets: str) -> SDTMNamespace` — Mark one or more variables as not submitted (set to null).
-- `multiple_responses(target: str, *, source: str, delimiter: str = '|') -> SDTMNamespace` — Explode a delimited multi-response field into separate rows.
-- `flag(target: str, *, criteria: str | pl.Expr, by: list[str] | None = None, order_by: str | list[str] | None = None, value_col: str | None = None, where: str | pl.Expr | None = None, from_dataset: pl.DataFrame | list[pl.DataFrame] | None = None, on: list[str] | None = None, source_filter: str | pl.Expr | None = None, condition: str | pl.Expr | None = None, inclusive: bool = True, flag_no_ref_groups: bool = True, flag_all: bool = False, flag_value: str = 'Y', false_value: str | None = None) -> Self` — Set *target* to *flag_value* for records matching *criteria*.
+- `nodup(*, subset: list[str], order_by: list[str] | None = None, keep: "Literal['first', 'last'] | None" = None, descending: bool | list[bool] = False) -> Self` — Detect duplicate rows and optionally deduplicate after sorting.
+- `group_by(*, by: list[str], agg: list[pl.Expr]) -> Self` — Group by *by* and apply *agg* aggregations (lazily).
+- `notsubmitted(*targets: str) -> Self` — Mark one or more variables as not submitted (set to null).
+- `multiple_responses(target: str, *, source: str, delimiter: str = '|') -> Self` — Explode a delimited multi-response field into separate rows.
+- `flag(target: str, *, criteria: str | pl.Expr, by: list[str] | None = None, order_by: str | list[str] | None = None, value_col: str | None = None, where: str | pl.Expr | None = None, from_dataset: pl.DataFrame | list[pl.DataFrame] | None = None, on: list[str] | None = None, source_filter: pl.Expr | None = None, condition: pl.Expr | None = None, inclusive: bool = True, flag_no_ref_groups: bool = True, flag_all: bool = False, flag_value: str = 'Y', false_value: str | None = None) -> Self` — Set *target* to *flag_value* for records matching *criteria*.
 - `to_frame() -> DataFrame` — Materialise the accumulated pipeline into a Polars DataFrame.
 
 ## Trial Design Domain (TDD) verbs
@@ -1832,40 +1841,41 @@ Row models: `TrialElement`, `TrialArm`, `TrialVisit`, `TrialParameter`, `TrialCr
 
 These verbs are defined once in `SharedADaMVerbsMixin` (`src/fleet/adam/_mixins.py`) and inherited by every ADaM sub-namespace: `adsl`, `occds`, `onco`, `ophtha`, `peds`, `vaccine`, `metabolic`, `neuro`, `pk`. Call them directly on any sub-namespace without switching back to the base `adam` namespace. (`assign` replaced the removed `assigned`/`rename`; `case_when` replaced `condderivation`; `merge` replaced `lookup`.)
 
-- `source(*targets: str) -> Self` — Carry one or more source columns into the ADaM dataset.
+- `source(*targets: str, from_col: str | None = None) -> Self` — Carry one or more source columns into the ADaM dataset.
 - `assign(target: str, *, source: str | None = None, value: Any | None = None, ct: str | type | None = None, ct_map: dict[str, str] | None = None, ct_validator: CTValidator | None = None, validate_values: bool | None = None) -> Self` — Assign *target* from a source column or a literal value.
-- `case_when(target: str, *, when: list[CaseWhenBranch], else_: Any = None) -> Self` — Multi-branch conditional derivation (first matching branch wins).
+- `case_when(target: str, *, when: list[dict[str, Any]], else_: Any = None) -> Self` — Multi-branch conditional derivation (first matching branch wins).
 - `derivation(target: str | Derivation | None = None, *, expression: str | pl.Expr | Callable[[], pl.Expr] | None = None) -> Self` — Derive *target* using an expression, lambda, or ``Derivation`` object.
 - `recode(target: str, *, source: str, recode_map: dict[Any, Any], default: Any = None) -> Self` — Map values in *source* to recoded values in *target*.
 - `merge(dataset: pl.DataFrame | pl.LazyFrame | None = None, *, on: str | list[str] | None = None, how: str = 'left', keep: list[str] | None = None, where: str | pl.Expr | None = None, validate: "Literal['m:1', '1:m', '1:1'] | None" = None) -> Self` — Join *dataset* into the pipeline using key column(s) *on*.
 - `keep(*columns: str | list[str]) -> Self` — Restrict the frame to *columns*, in the given order.
 - `whereclauses(*, where: str | pl.Expr) -> Self` — Filter records by a *where* expression.
-- `merge_adsl(adsl: pl.DataFrame, *, by: str | list[str] | None = None, keep: list[str] | None = None) -> Self` — Left-join ADSL columns onto the current dataset.
+- `merge_adsl(adsl: pl.DataFrame, *, by: list[str] | None = None, keep: list[str] | None = None) -> Self` — Left-join ADSL columns onto the current dataset.
 - `date(target: str, *, source: str | None = None, value: str | None = None, output: str | None = None, time: str | None = None, impute: str = 'first', impute_time: str | None = None, highest: str | None = None, flag: bool | str = True, min_date: str | None = None, max_date: str | None = None) -> Self` — Parse, convert, impute, and flag a date or datetime column.
 - `duration(target: str, *, start: str | pl.Expr, end: str | pl.Expr, unit: "Literal['seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years']" = 'days', add_one: bool | None = None, out: "Literal['numeric', 'iso8601']" = 'numeric') -> Self` — Compute the duration between two date/datetime columns.
-- `flag(target: str, *, criteria: str | pl.Expr, by: list[str] | None = None, order_by: str | list[str] | None = None, value_col: str | None = None, where: str | pl.Expr | None = None, from_dataset: pl.DataFrame | list[pl.DataFrame] | None = None, on: list[str] | None = None, source_filter: str | pl.Expr | None = None, condition: str | pl.Expr | None = None, inclusive: bool = True, flag_no_ref_groups: bool = True, flag_all: bool = False, flag_value: str = 'Y', false_value: str | None = None) -> Self` — Set *target* to *flag_value* for records matching *criteria*.
-- `pick(targets: str | list[str], *, events: list[dict[str, Any]], by: str | list[str] | None = None, order: str | list[str] | None = None, mode: str = 'first') -> Self` — Derive targets from one event per group, chosen across the events.
+- `flag(target: str, *, criteria: str | pl.Expr, by: list[str] | None = None, order_by: str | list[str] | None = None, value_col: str | None = None, where: str | pl.Expr | None = None, from_dataset: pl.DataFrame | list[pl.DataFrame] | None = None, on: list[str] | None = None, source_filter: pl.Expr | None = None, condition: pl.Expr | None = None, inclusive: bool = True, flag_no_ref_groups: bool = True, flag_all: bool = False, flag_value: str = 'Y', false_value: str | None = None) -> Self` — Set *target* to *flag_value* for records matching *criteria*.
+- `pick(targets: str | list[str], *, events: list[dict[str, Any]], by: list[str] | None = None, order_by: str | list[str] | None = None, mode: str = 'first') -> Self` — Derive targets from one event per group, chosen across the events.
 
 ## ADaM verbs
 
 Available on `df.adam` (BDS base namespace). Shared verbs (source, assign, case_when, derivation, recode, merge, keep, whereclauses, merge_adsl, date, duration, flag) are also available here via the shared mixin.
 
-- `flag(target: str, *, criteria: str | pl.Expr, by: list[str] | None = None, order_by: str | list[str] | None = None, value_col: str | None = None, where: str | pl.Expr | None = None, from_dataset: pl.DataFrame | list[pl.DataFrame] | None = None, on: list[str] | None = None, source_filter: str | pl.Expr | None = None, condition: str | pl.Expr | None = None, inclusive: bool = True, flag_no_ref_groups: bool = True, flag_all: bool = False, flag_value: str = 'Y', false_value: str | None = None) -> Self` — Set *target* to *flag_value* for records matching *criteria*.
-- `baseline(target: str, *, aval: str = 'AVAL', baseline_flag: str = 'ABLFL', by: list[str] | None = None, strict: bool = True) -> AdamNamespace` — Derive BASE as the AVAL where the baseline flag equals ``"Y"``.
-- `chg(target: str, *, aval: str = 'AVAL', base: str = 'BASE') -> AdamNamespace` — Compute change from baseline: ``CHG = AVAL - BASE``.
-- `pchg(target: str, *, aval: str = 'AVAL', base: str = 'BASE') -> AdamNamespace` — Compute percent change from baseline.
-- `bmi(target: str, *, weight: str, height: str, round_digits: int | None = None) -> AdamNamespace` — Derive Body Mass Index: ``weight_kg / (height_cm / 100) ** 2``.
-- `bsa(target: str, *, weight: str, height: str, method: str = 'Mosteller', round_digits: int | None = None) -> AdamNamespace` — Derive Body Surface Area in m², at full precision.
-- `map(target: str = 'MAP', *, systolic: str = 'SYSBP', diastolic: str = 'DIABP', round_digits: int | None = None) -> AdamNamespace` — Derive Mean Arterial Pressure: ``DBP + (SBP - DBP) / 3``, at full precision.
-- `qtc(target: str = 'QTC', *, qt: str = 'QT', rr: str = 'RR', method: str = 'Fridericia', rr_unit: str = 'ms', round_digits: int | None = None) -> AdamNamespace` — Derive corrected QT interval, as admiral ``compute_qtc``, at full precision.
-- `nrind(target: str, *, value: str, low: str, high: str, signif_dig: int = 15) -> AdamNamespace` — Categorise *value* relative to normal range: LOW / NORMAL / HIGH.
-- `on_treatment(target: str = 'ONTRTFL', *, adt: str, trtsdt: str, trtedt: str, open_ended: bool = True) -> AdamNamespace` — Set *target* to ``"Y"`` when *adt* is within [trtsdt, trtedt].
-- `shift(target: str, *, baseline_cat: str, post_cat: str, sep: str = ' to ') -> AdamNamespace` — Derive a categorical shift label: ``"<baseline><sep><post>"``.
-- `derive_summary_records(*, by: list[str], analysis_var: str = 'AVAL', set_values_to: dict[str, Any], stat: "Literal['mean', 'sum', 'min', 'max', 'median', 'count']" = 'mean', where: str | pl.Expr | None = None) -> AdamNamespace` — Compute a summary statistic per group and append the results as new records.
-- `derive_locf_records(*, dataset_ref: pl.DataFrame, by: list[str], order_by: str | list[str], analysis_var: str = 'AVAL', imputation: "Literal['add', 'update', 'update_add']" = 'add', keep_vars: list[str] | None = None) -> AdamNamespace` — Add LOCF records for missed visits and for a null *analysis_var*.
-- `derive_param(*, by: list[str] | None = None, set_values_to: dict[str, Any], parameter_filter: dict[str, str], analysis_value: pl.Expr | str, from_dataset: pl.DataFrame | None = None, where: str | pl.Expr | None = None) -> AdamNamespace` — Derive a new parameter (e.g. BMI) from existing records and append
-- `atoxgr(target: str, *, system: str = 'ctcae_v5', direction: "Literal['L', 'H']", term_var: str, unit_var: str, signif_dig: int = 15, indicators: dict[str, list[str]] | None = None) -> AdamNamespace` — Derive a toxicity grade, as admiral ``derive_var_atoxgr_dir``.
-- `transform(fn: str | Callable[[pl.DataFrame], pl.DataFrame], *, label: str | None = None) -> AdamNamespace` — Apply an arbitrary ``(pl.DataFrame) -> pl.DataFrame`` function.
+- `flag(target: str, *, criteria: str | pl.Expr, by: list[str] | None = None, order_by: str | list[str] | None = None, value_col: str | None = None, where: str | pl.Expr | None = None, from_dataset: pl.DataFrame | list[pl.DataFrame] | None = None, on: list[str] | None = None, source_filter: pl.Expr | None = None, condition: pl.Expr | None = None, inclusive: bool = True, flag_no_ref_groups: bool = True, flag_all: bool = False, flag_value: str = 'Y', false_value: str | None = None) -> Self` — Set *target* to *flag_value* for records matching *criteria*.
+- `baseline(target: str, *, aval: str = 'AVAL', baseline_flag: str = 'ABLFL', by: str | list[str] | None = None, strict: bool = True) -> Self` — Derive BASE as the AVAL where the baseline flag equals ``"Y"``.
+- `chg(target: str, *, aval: str = 'AVAL', base: str = 'BASE') -> Self` — Compute change from baseline: ``CHG = AVAL - BASE``.
+- `pchg(target: str, *, aval: str = 'AVAL', base: str = 'BASE') -> Self` — Compute percent change from baseline.
+- `bmi(target: str, *, weight: str, height: str, round_digits: int | None = None) -> Self` — Derive Body Mass Index: ``weight_kg / (height_cm / 100) ** 2``.
+- `bsa(target: str, *, weight: str, height: str, method: str = 'Mosteller', round_digits: int | None = None) -> Self` — Derive Body Surface Area in m², at full precision.
+- `map(target: str = 'MAP', *, systolic: str = 'SYSBP', diastolic: str = 'DIABP', round_digits: int | None = None) -> Self` — Derive Mean Arterial Pressure: ``DBP + (SBP - DBP) / 3``, at full precision.
+- `qtc(target: str = 'QTC', *, qt: str = 'QT', rr: str = 'RR', method: str = 'Fridericia', rr_unit: str = 'ms', round_digits: int | None = None) -> Self` — Derive corrected QT interval, as admiral ``compute_qtc``, at full precision.
+- `nrind(target: str, *, value: str, low: str, high: str, signif_dig: int = 15) -> Self` — Categorise *value* relative to normal range: LOW / NORMAL / HIGH.
+- `on_treatment(target: str = 'ONTRTFL', *, adt: str, trtsdt: str, trtedt: str, open_ended: bool = True) -> Self` — Set *target* to ``"Y"`` when *adt* is within [trtsdt, trtedt].
+- `shift(target: str, *, baseline_cat: str, post_cat: str, sep: str = ' to ') -> Self` — Derive a categorical shift label: ``"<baseline><sep><post>"``.
+- `derive_summary_records(*, by: list[str], analysis_var: str = 'AVAL', set_values_to: dict[str, Any], stat: "Literal['mean', 'sum', 'min', 'max', 'median', 'count']" = 'mean', where: str | pl.Expr | None = None) -> Self` — Compute a summary statistic per group and append the results as new records.
+- `derive_locf_records(*, dataset_ref: pl.DataFrame, by: str | list[str], order_by: str | list[str], analysis_var: str = 'AVAL', imputation: "Literal['add', 'update', 'update_add']" = 'add', keep_vars: list[str] | None = None) -> Self` — Add LOCF records for missed visits and for a null *analysis_var*.
+- `derive_param(*, by: str | list[str] | None = None, set_values_to: dict[str, Any], parameter_filter: dict[str, str], analysis_value: pl.Expr | str, from_dataset: pl.DataFrame | None = None, where: str | pl.Expr | None = None, constant_by: str | list[str] | None = None, constant_parameters: dict[str, str] | None = None, keep_nas: bool = False) -> Self` — Derive a new parameter (e.g. BMI) from existing records and append
+- `atoxgr(target: str, *, system: str = 'ctcae_v5', direction: "Literal['L', 'H']", term_var: str, unit_var: str, signif_dig: int = 15, indicators: dict[str, list[str]] | None = None) -> Self` — Derive a toxicity grade, as admiral ``derive_var_atoxgr_dir``.
+- `combine_grades(target: str = 'ATOXGR', *, low_var: str = 'ATOXGRL', high_var: str = 'ATOXGRH', low_desc_var: str = 'ATOXDSCL', high_desc_var: str = 'ATOXDSCH') -> Self` — Combine low and high toxicity grades into a signed grade, as admiral.
+- `transform(fn: str | Callable[[pl.DataFrame], pl.DataFrame], *, label: str | None = None) -> Self` — Apply an arbitrary ``(pl.DataFrame) -> pl.DataFrame`` function.
 - `from_spec(spec_path: str | Path, *, dataset: str | None = None, only: list[str] | None = None, omit: list[str] | None = None, strict: bool = True, overwrite: bool = False) -> Self` — Build a derivation pipeline from a YAML specification file.
 
 ## ADSL verbs
@@ -1883,7 +1893,7 @@ Available on `df.adam.occds` (and `df.adam.pk` for sequence). Shared verbs (sour
 
 - `treatment_emergent(target: str = 'TRTEMFL', *, start_date: str, end_date: str | None, trtsdt: str, trtedt: str | None = None, end_window: int | None = None, offset_days: int = 0) -> Self` — Set *target* to ``"Y"`` for treatment-emergent events, as admiral ``derive_var_trtemfl``.
 - `onset_recovery(target: str, *, start_date: str, end_date: str, ref_date: str) -> Self` — Flag events that started on/after the reference date and have recovered.
-- `seq(target: str = 'ASEQ', *, order_by: list[str] | None = None, by: list[str] | None = None, start_at: int = 1, check_uniqueness: bool = False) -> Self` — Derive a 1-based sequence number within each group.
+- `seq(target: str = 'ASEQ', *, order_by: str | list[str] | None = None, by: str | list[str] | None = None, start_at: int = 1, check_uniqueness: bool = False) -> Self` — Derive a 1-based sequence number within each group.
 
 ## Operation → Fleet Verb Mapping
 
@@ -2196,7 +2206,7 @@ JSON contract (`fleet.comparison.JSON_KEYS`, additive-only within a major versio
 
 ### Pipeline verb (every namespace: `df.sdtm`, `df.adam`, `df.adam.adsl`, `df.adam.occds`, …)
 
-The chain is the candidate, the argument is the base. `on_fail` is `"warn"` (default, `UserWarning`), `"raise"` (`ComparisonFailed`, a `ComparisonError`) or `"ignore"`, exactly as for `.validate()`; the report stays on the namespace as `.last_comparison` and the chain continues.
+The chain is the candidate, the argument is the base. `on_fail` is `"warn"` (default, `UserWarning`), `"raise"` (`ComparisonError`) or `"ignore"`, exactly as for `.validate()`; the report stays on the namespace as `.last_comparison` and the chain continues.
 
 - `compare(base: pl.DataFrame | pl.LazyFrame, *, keys: str | Sequence[str], by: str | Sequence[str] | None = None, pairs: Mapping[str, str] | None = None, variables: str | Sequence[str] | None = None, abs_tol: float = 0.0, rel_tol: float = 0.0, ignore_trailing_whitespace: bool = False, blank_is_missing: bool = False, allow_duplicates: bool = False, max_print: MaxPrint = 50, base_name: str | None = None, candidate_name: str | None = None, on_fail: "Literal['warn', 'raise', 'ignore']" = 'warn') -> Self` — Compare the chain against a base dataset, PROC COMPARE style.
 

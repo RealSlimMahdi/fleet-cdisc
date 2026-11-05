@@ -70,21 +70,21 @@ class TestPickOrder:
 
     def test_last_on_a_tie_takes_the_last_record_and_warns(self, fatal_ae):
         adsl = pl.DataFrame({"USUBJID": ["S1"]})
-        event = _dthcaus(fatal_ae, order=["AEENDTC"])
+        event = _dthcaus(fatal_ae, order_by=["AEENDTC"])
         with pytest.warns(UserWarning, match="tie on \\['AEENDTC'\\]"):
             result = adsl.adam.pick("DTHCAUS", by=["USUBJID"], events=[event], mode="last")
         assert result.to_frame()["DTHCAUS"].to_list() == ["PE"]
 
     def test_last_on_a_tie_follows_input_order(self, fatal_ae):
         adsl = pl.DataFrame({"USUBJID": ["S1"]})
-        event = _dthcaus(fatal_ae.reverse(), order=["AEENDTC"])
+        event = _dthcaus(fatal_ae.reverse(), order_by=["AEENDTC"])
         with pytest.warns(UserWarning):
             result = adsl.adam.pick("DTHCAUS", by=["USUBJID"], events=[event], mode="last")
         assert result.to_frame()["DTHCAUS"].to_list() == ["MI"]
 
     def test_first_with_a_unique_minimum_does_not_warn(self, fatal_ae):
         adsl = pl.DataFrame({"USUBJID": ["S1"]})
-        event = _dthcaus(fatal_ae, order=["AEENDTC"])
+        event = _dthcaus(fatal_ae, order_by=["AEENDTC"])
         with warnings.catch_warnings():
             warnings.simplefilter("error")
             result = adsl.adam.pick("DTHCAUS", by=["USUBJID"], events=[event]).to_frame()
@@ -108,7 +108,7 @@ class TestPickOrder:
                 ["PICKV"],
                 events=[{"when": pl.lit(True), "set": {"PICKV": "AVAL"}, "source": lb}],
                 by=["USUBJID"],
-                order=["ADT"],
+                order_by=["ADT"],
                 mode="last",
             ).to_frame()
         assert result["PICKV"].to_list() == [30.0]
@@ -146,7 +146,7 @@ class TestNodupOrder:
     def test_missing_is_the_lowest_value(self, ae, keep, descending, expected):
         result = (
             ae.sdtm.nodup(
-                subset=["USUBJID", "AEDECOD"], sort_by=["AESEVN"], keep=keep, descending=descending
+                subset=["USUBJID", "AEDECOD"], order_by=["AESEVN"], keep=keep, descending=descending
             )
             .to_frame()
             .sort("USUBJID")
@@ -157,7 +157,7 @@ class TestNodupOrder:
     def test_ties_keep_input_order(self, keep, agg):
         df = _ties()
         result = df.sdtm.nodup(
-            subset=["USUBJID", "AEDECOD"], sort_by=["USUBJID", "AEDECOD"], keep=keep
+            subset=["USUBJID", "AEDECOD"], order_by=["USUBJID", "AEDECOD"], keep=keep
         ).to_frame()
         expected = df.group_by(["USUBJID", "AEDECOD"]).agg(getattr(pl.col("ROWID"), agg)())
         assert sorted(result["ROWID"].to_list()) == sorted(expected["ROWID"].to_list())

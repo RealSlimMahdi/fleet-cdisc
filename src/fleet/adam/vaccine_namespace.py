@@ -10,6 +10,10 @@ Key derivations, inspired by pharmaverse/admiralvaccine (not ports; values can d
   - ``aval_adis``           — AVAL derivation with LLOQ/ULOQ handling (ADIS)
   - ``event_flag``          — group-level reactogenicity event flag
 
+A float NaN compares above every threshold in Polars.  ``load_raw_data``
+reads a CSV ``NaN`` cell as null, but a NaN from a user expression (for
+example 0/0) passes as a number: fill it with ``fill_nan(None)`` first.
+
 Usage
 -----
     import fleet  # triggers registration

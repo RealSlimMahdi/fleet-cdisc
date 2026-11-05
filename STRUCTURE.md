@@ -127,7 +127,7 @@ The core of Fleet for SDTM work. Registers `df.sdtm` on every Polars DataFrame.
 
 | File           | Purpose                                                                                                                         |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `models.py`    | `SDTMAlgorithm` enum (verb names, kept in sync with `spec_registry`), `SDTMVariableSpec`                       |
+| `models.py`    | `NSVMeta`, the metadata of a Non-Standard Variable; the verb names live in `core/spec_registry.py`                              |
 | `utils.py`     | Internal helpers — `to_iso8601_date`, `to_iso8601_datetime`, `parse_expression(str) → pl.Expr` (AST whitelist; bare names in arithmetic resolve to `pl.col`) |
 | `namespace.py` | `SDTMNamespace` — the SDTM namespace class + `_tdd_mixin` for Trial Design domains                                              |
 | `tdd.py`       | Trial Design row/collection Pydantic models (TE/TA/TV/TS/TI/TD/TM), `TrialVisits.from_schedule`, `TrialParameters.from_ctgov`, Mermaid parser |
@@ -166,7 +166,7 @@ Renamed in pre-alpha (removed outright, `fleet migrate` rewrites old scripts): `
 | `to_frame()`                | **Materialise** — execute the whole pipeline and return a `pl.DataFrame` |
 
 **How the pipeline works:**  
-Every verb returns a _new_ namespace instance (via `copy.copy(self)`) with its expression appended to an internal lazy plan. Most verbs are pure lazy `with_columns` and only run at `to_frame()`; a few (window functions like `baseline`, cross-domain joins, `date`-with-time) checkpoint internally via `_materialise_then` and re-wrap the collected frame so the **chain is never broken** — `flag → baseline → chg` is a single pipeline. The namespaces are registered on both `pl.DataFrame` and `pl.LazyFrame`, so `pl.scan_parquet(...).sdtm` stays lazy. Both `_chain` and `_materialise_then` use `copy.copy` to preserve all instance state (lineage, pins, domain) across chaining calls and sub-namespace switches.
+Every verb returns a _new_ namespace instance (via `copy.copy(self)`) with its expression appended to an internal lazy plan. Most verbs are pure lazy `with_columns` and only run at `to_frame()`. A few read data at their own line: `baseline` runs a side check for two flagged baseline records and then appends its window expression to the plan (it does not re-wrap a collected frame); `assign(ct=)` and `date` read their column for a check; cross-domain joins and row-reshaping verbs checkpoint via `_materialise_then` and re-wrap the collected frame, so the **chain is never broken** — `flag → baseline → chg` is a single pipeline. The namespaces are registered on both `pl.DataFrame` and `pl.LazyFrame`, so `pl.scan_parquet(...).sdtm` stays lazy. Both `_chain` and `_materialise_then` use `copy.copy` to preserve all instance state (lineage, pins, domain, the last comparison and validation reports) across chaining calls. A sub-namespace switch (`.occds`, `.adsl`, and `.adam` back to the BDS namespace) copies every instance attribute too, with its own lists and dicts.
 
 ---
 
@@ -176,7 +176,6 @@ Registers `df.adam` on every Polars DataFrame.
 
 | File           | Purpose                                                                                                                                                                                                       |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `models.py`    | `ADAMAlgorithm` enum (verb names, kept in sync with `spec_registry`), `ADAMVariableSpec`                                                                                                   |
 | `_mixins.py`   | `SharedADaMVerbsMixin` — the shared verbs available on **every** ADaM sub-namespace (`assign`, `case_when`, `merge`, `source`, `derivation`, `recode`, `whereclauses`, `merge_adsl`, `date`, `duration`, `pick`, `first_date`, `last_date`, `count_events`, `join_adsl`, …) |
 | `utils.py`     | Standard ADaM calculation functions — all return `pl.Expr`: `study_day`, `baseline`, `chg`, `pchg`, `bmi`, `bsa`, `mean_arterial_pressure`, `qtc`, `age_in_years`, `nrind`, `on_treatment`, `shift`           |
 | `namespace.py` | `AdamNamespace` — the BDS namespace; BDS-specific verbs (`baseline`, `chg`, `pchg`, `bmi`, `bsa`, `map`, `qtc`, `nrind`, `on_treatment`, `shift`), record-generating verbs (`derive_summary_records`, `derive_locf_records`, `derive_param`), toxicity grading (`atoxgr`, `combine_grades`), `transform`, and the sub-namespace properties (`adsl`, `occds`, `onco`, …) |

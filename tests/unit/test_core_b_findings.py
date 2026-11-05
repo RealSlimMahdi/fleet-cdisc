@@ -111,8 +111,8 @@ def test_seq_check_uniqueness_is_silent_on_a_unique_key():
         ),
         (lambda ns, r: ns.nodup(subset=["USUBJID", "AETERMX"]), r"nodup\(subset=...\).*AETERMX"),
         (
-            lambda ns, r: ns.nodup(subset=["USUBJID", "AETERM"], sort_by=["AESEQX"], keep="first"),
-            r"nodup\(sort_by=...\).*AESEQX",
+            lambda ns, r: ns.nodup(subset=["USUBJID", "AETERM"], order_by=["AESEQX"], keep="first"),
+            r"nodup\(order_by=...\).*AESEQX",
         ),
     ],
 )
@@ -1032,7 +1032,7 @@ def test_derivations_from_source_keeps_joins_filters_and_reshapes():
 
     source = (
         "out = (raw.adam.pin('ADSL', adsl).merge(adsl, on='USUBJID')"
-        ".whereclauses(where='x').pick(['A', 'B'], order=['ADT'])"
+        ".whereclauses(where='x').pick(['A', 'B'], order_by=['ADT'])"
         ".assign('aval_raw', source='x').trail().to_frame())"
     )
     rows = derivations_from_source(source)

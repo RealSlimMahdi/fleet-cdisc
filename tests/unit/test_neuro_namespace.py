@@ -29,6 +29,8 @@ _MMSE_CATEGORY_CASES = [
     (10, "Moderate"),  # boundary: ≥10
     (9, "Severe"),
     (0, "Severe"),
+    (31, None),  # c1-716: above the scale maximum
+    (99, None),
 ]
 
 # ---------------------------------------------------------------------------
@@ -41,6 +43,8 @@ _MOCA_CATEGORY_CASES = [
     (18, "MCI"),  # boundary: ≥18
     (17, "Impaired"),
     (0, "Impaired"),
+    (31, None),  # c1-716: above the scale maximum
+    (99, None),
 ]
 
 

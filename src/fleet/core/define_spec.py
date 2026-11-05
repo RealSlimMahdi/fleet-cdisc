@@ -23,6 +23,29 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from fleet.core.exceptions import SpecError
 
+#: Spec-format version this Fleet build writes (``fleet_spec_version``).
+#: Version 2 is the verb vocabulary of ADR-0008.
+SUPPORTED_SPEC_VERSION = 2
+
+
+def check_spec_version(version: Any, *, source: str) -> None:
+    """Raise ``SpecError`` when a spec declares another dialect version.
+
+    Version 1 is the pre-ADR-0008 vocabulary; the message names
+    ``fleet migrate --spec``, which rewrites it.
+    """
+    if version is None or version == SUPPORTED_SPEC_VERSION:
+        return
+    hint = (
+        " Rewrite the file with `fleet migrate --spec <define.yaml> --write`."
+        if version == 1
+        else ""
+    )
+    raise SpecError(
+        f"{source}: unsupported fleet_spec_version {version!r}. "
+        f"This Fleet version supports fleet_spec_version {SUPPORTED_SPEC_VERSION}.{hint}"
+    )
+
 
 class CTBlock(BaseModel):
     """Top-level ``ct:`` block — opts a spec into CT validation."""

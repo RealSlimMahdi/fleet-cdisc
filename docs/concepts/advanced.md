@@ -198,15 +198,17 @@ This pattern ensures you are never bottlenecked by the package API: if you can w
 
 ## Subclassing Namespaces
 
-If your organisation uses standard proprietary derivations across multiple datasets, you can extend Fleet namespaces by subclassing them.
+If your organisation uses standard proprietary derivations across multiple datasets, you can extend Fleet namespaces by subclassing them. Every Fleet verb returns `Self`, so a chain of Fleet verbs keeps the subclass type.
 
 ```python
+from typing import Self
+
 from fleet.adam.namespace import AdamNamespace
 import polars as pl
 
 
 class CompanyAdamNamespace(AdamNamespace):
-    def proprietary_flag(self, target_col: str, condition: str) -> "CompanyAdamNamespace":
+    def proprietary_flag(self, target_col: str, condition: str) -> Self:
         """Re-usable custom flag for your company."""
         expr = pl.when(pl.col(condition) == "Y").then(pl.lit("Y")).otherwise(pl.lit(None))
         return self._chain(expr.alias(target_col))
