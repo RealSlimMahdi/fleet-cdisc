@@ -9,7 +9,7 @@ Schema location is resolved in the same order Fleet uses for the rules
 engine, so a site can override the packaged copy without reinstalling:
 
 1. ``FLEET_DEFINE_XSD`` environment variable.
-2. ``~/.fleet/xsd/`` (populated by ``fleet install-xsd``).
+2. ``~/.fleet/xsd/`` (placed there by hand).
 3. The copy shipped inside this package.
 
 The files must keep the directory layout CDISC publishes them in:

@@ -26,7 +26,7 @@ Fleet is pre-alpha. Only pre-release versions are on PyPI, so tell the installer
 
 | Extra  | Installs         | When to use                    |
 | ------ | ---------------- | ------------------------------ |
-| `io`   | `pyreadstat`     | Reading SAS XPT (`.xpt`) files |
+| `io`   | `pyreadstat`     | Reading SAS files (`.xpt`, `.sas7bdat`) and writing XPT |
 | `all`  | All extras       | Full feature set               |
 | `docs` | MkDocs + plugins | Building this documentation    |
 | `dev`  | pytest, ruff, io | Contributing to Fleet          |

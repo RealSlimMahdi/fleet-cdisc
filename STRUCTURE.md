@@ -112,7 +112,7 @@ The `assign` SDTM verb (with `ct=`) and the `recode` ADaM verb use the singleton
 | Function            | Signature                          | What it does                                                |
 | ------------------- | ---------------------------------- | ----------------------------------------------------------- |
 | `load_raw_data`     | `(file_path, file_type=None)`      | Returns a `pl.LazyFrame` — auto-detects CSV, Excel, Parquet |
-| `load_datasets`     | `(directory, pattern="*.csv")`     | Loads all matching files in a directory                     |
+| `load_datasets`     | `(file_paths: dict, file_type=None)` | Loads each named file (`{"DM": "dm.csv"}`) |
 | `download_raw_data` | `(url, destination)`               | Downloads a file from a URL                                 |
 | `save_parquet`      | `(df, path)`                       | Writes a Polars DataFrame to Parquet                        |
 | `save_xpt`          | `(df, path)`                       | Writes to SAS XPT (requires `pyreadstat`)                   |
