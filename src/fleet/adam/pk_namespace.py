@@ -29,7 +29,7 @@ from typing import Self
 
 import polars as pl
 
-from fleet.adam._mixins import MultiRowMixin, SharedADaMVerbsMixin
+from fleet.adam._mixins import SharedADaMVerbsMixin
 from fleet.core.exceptions import DerivationError
 from fleet.sdtm.utils import to_char
 
@@ -44,7 +44,7 @@ _UNIT_SCALE: dict[str, float] = {
 BLQ_TEXT = r"(?i)^\s*(<|(BLQ|BQL|BLOQ|LLOQ)\s*$)"
 
 
-class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
+class PKNamespace(SharedADaMVerbsMixin):
     """
     Immutable pipeline builder for PK (pharmacokinetics) derivations.
 
@@ -53,7 +53,7 @@ class PKNamespace(SharedADaMVerbsMixin, MultiRowMixin):
 
     Inherits shared verbs from ``SharedADaMVerbsMixin``
     (source, derivation, assign, recode, case_when,
-    whereclauses, merge_adsl) and ``MultiRowMixin`` (seq), and adds
+    whereclauses, merge_adsl, seq), and adds
     PK-specific verbs for BLQ handling, time derivation, and
     dose normalisation.
     """

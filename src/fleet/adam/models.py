@@ -11,8 +11,6 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel
-
 from fleet.core.spec_registry import (
     SpecVariableBase,
     parse_variable_spec,
@@ -88,14 +86,3 @@ def ADAMVariableSpec(**data: Any) -> SpecVariableBase:  # noqa: N802 — back-co
             )
     """
     return parse_variable_spec("adam", data)
-
-
-class ADAMDatasetSpec(BaseModel):
-    """Full specification for an ADaM dataset derivation."""
-
-    dataset: str
-    description: str | None = None
-    fleet_spec_version: int | None = None
-    variables: list[ADAMVariableSpecUnion]
-
-    model_config = {"extra": "allow"}

@@ -78,10 +78,15 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         such as FDA grade 4 (> 40.0 °C).  With ``inclusive=False`` and the
         default threshold, a record of 38.0 °C gets no flag.
 
-        Example::
+        Examples:
+            Flag fever, and grade 4 fever::
 
-            .fever_flag("FEVFL", temp_col="TEMP")
-            .fever_flag("G4FEVFL", temp_col="TEMP", threshold=40.0, inclusive=False)
+                adface = (
+                    vs_df.adam.vaccine
+                    .fever_flag("FEVFL", temp_col="TEMP")
+                    .fever_flag("G4FEVFL", temp_col="TEMP", threshold=40.0, inclusive=False)
+                    .to_frame()
+                )
 
         References:
             FDA, Guidance for Industry: Toxicity Grading Scale for Healthy Adult and
@@ -130,12 +135,17 @@ class VaccineNamespace(SharedADaMVerbsMixin):
 
         Rows that do not meet the rule get null.
 
-        Example::
+        Examples:
+            Seroconversion with the LLOQ rule, and a two-fold rise::
 
-            .seroconversion_flag("SRCONVFL", aval_col="AVAL", base_col="BASE",
-                                  lloq_col="ISLLOQ")
-            .seroconversion_flag("SRCONV2FL", aval_col="AVAL", base_col="BASE",
-                                  lloq_col=None, fold_rise=2.0)
+                adis = (
+                    is_df.adam.vaccine
+                    .seroconversion_flag("SRCONVFL", aval_col="AVAL", base_col="BASE",
+                                         lloq_col="ISLLOQ")
+                    .seroconversion_flag("SRCONV2FL", aval_col="AVAL", base_col="BASE",
+                                         lloq_col=None, fold_rise=2.0)
+                    .to_frame()
+                )
 
         References:
             FDA CBER, Guidance for Industry: Clinical Data Needed to Support the
@@ -178,9 +188,14 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         """
         Set *target* to *flag_value* when *aval_col* ≥ *threshold*.
 
-        Example::
+        Examples:
+            Flag a titre of 40 or more::
 
-            .seroresponse_flag("SRSFL", aval_col="AVAL", threshold=40.0)
+                adis = (
+                    is_df.adam.vaccine
+                    .seroresponse_flag("SRSFL", aval_col="AVAL", threshold=40.0)
+                    .to_frame()
+                )
         """
         return self._chain(
             pl.when(pl.col(aval_col) >= threshold)
@@ -222,11 +237,16 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         *lloq_rule*: ``"half"`` (LLOQ ÷ 2) or ``"lloq"`` (retain LLOQ value).
         Any other text raises ``DerivationError``.
 
-        Example::
+        Examples:
+            ADIS AVAL with the LLOQ and ULOQ rules::
 
-            .aval_adis("AVAL", stresn_col="ISSTRESN",
-                       lloq_col="ISLLOQ", uloq_col="ISULOQ",
-                       orres_col="ISORRES")
+                adis = (
+                    is_df.adam.vaccine
+                    .aval_adis("AVAL", stresn_col="ISSTRESN",
+                               lloq_col="ISLLOQ", uloq_col="ISULOQ",
+                               orres_col="ISORRES")
+                    .to_frame()
+                )
 
         References:
             admiralvaccine ``derive_var_aval_adis`` (pharmaverse): the rule set this
@@ -318,10 +338,15 @@ class VaccineNamespace(SharedADaMVerbsMixin):
 
         Based on ``admiralvaccine::derive_vars_event_flag`` (new_var1 behaviour).
 
-        Example::
+        Examples:
+            Flag any event per subject, object and time point::
 
-            .event_flag("EVENTFL", aval_col="AVAL", cutoff=2.5,
-                        by=["USUBJID", "FAOBJ", "ATPTREF"])
+                adface = (
+                    face_df.adam.vaccine
+                    .event_flag("EVENTFL", aval_col="AVAL", cutoff=2.5,
+                                by=["USUBJID", "FAOBJ", "ATPTREF"])
+                    .to_frame()
+                )
 
         References:
             admiralvaccine ``derive_vars_event_flag`` (pharmaverse), ``new_var1``:

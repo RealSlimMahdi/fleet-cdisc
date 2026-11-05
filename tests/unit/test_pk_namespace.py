@@ -148,7 +148,7 @@ class TestMergeAdsl:
 
 
 # ---------------------------------------------------------------------------
-# TestSeq — seq() sourced from MultiRowMixin
+# TestSeq — seq() shared by every namespace
 # ---------------------------------------------------------------------------
 
 
