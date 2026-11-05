@@ -148,7 +148,9 @@ def extract_ig_concept_ids(
     Returns:
         Set of NCI concept ID strings.
     """
-    ig = client._get(f"/mdr/sdtmig/{ig_version}/datasets")
+    from fleet.core.rules_scaffolder import normalise_ig_version
+
+    ig = client._get(f"/mdr/sdtmig/{normalise_ig_version(ig_version)}/datasets")
     ds_links = ig.get("_links", {}).get("datasets", [])
     domains_upper = {d.upper() for d in domains}
 

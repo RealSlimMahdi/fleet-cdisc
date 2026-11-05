@@ -1059,3 +1059,34 @@ def test_c1_60_importing_study_code_prints_a_notice(tmp_path, capsys, monkeypatc
     assert "importing study code derivations_module 'ml_core_a_study_mod'" in (
         capsys.readouterr().err
     )
+
+
+# --------------------------------------------------------------------- #
+# c1-547: the CDISC Library path takes 3.4 and 3-4                       #
+# --------------------------------------------------------------------- #
+
+
+class _RecordingClient:
+    def __init__(self) -> None:
+        self.paths: list[str] = []
+
+    def _get(self, path: str) -> dict:
+        self.paths.append(path)
+        return {}
+
+
+@pytest.mark.parametrize("version", ["3.4", "3-4"])
+def test_c1_547_library_paths_use_the_dashed_version(version):
+    from fleet.core.scaffolder import DefineScaffolder
+    from fleet.ct.generator import extract_ig_concept_ids
+
+    client = _RecordingClient()
+    scaffolder = DefineScaffolder(client)
+    scaffolder._fetch_sdtm_datasets(version, ["DM"])
+    scaffolder._fetch_adam_datasets(version.replace("3", "1"), [])
+    extract_ig_concept_ids(client, version, ["DM"])
+    assert client.paths == [
+        "/mdr/sdtmig/3-4/datasets",
+        "/mdr/adam/adamig-1-4",
+        "/mdr/sdtmig/3-4/datasets",
+    ]
