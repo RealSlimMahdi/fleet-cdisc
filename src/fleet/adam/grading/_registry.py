@@ -70,8 +70,9 @@ def load_criteria(system: str | GradingSystem | Path) -> CriteriaFile:
         CriteriaFile: Validated criteria ready for the grading engine.
 
     Raises:
-        ValueError: If *system* is a string that does not match any
-            registered ``GradingSystem`` and is not a file path.
+        DerivationError: If *system* is a string that does not match any
+            registered ``GradingSystem`` and is not a file path.  It is a
+            ``ValueError`` too.
         FileNotFoundError: If the resolved JSON file does not exist.
 
     Examples:
@@ -101,8 +102,12 @@ def load_criteria(system: str | GradingSystem | Path) -> CriteriaFile:
     try:
         gs = GradingSystem(system)
     except ValueError:
+        from fleet.core.exceptions import DerivationError
+
         known = ", ".join(s.value for s in GradingSystem)
-        raise ValueError(f"Unknown grading system {system!r}. Available systems: {known}") from None
+        raise DerivationError(
+            f"Unknown grading system {system!r}. Available systems: {known}"
+        ) from None
 
     path = _CRITERIA_DIR / _REGISTRY[gs]
     return _load_from_path(str(path.resolve()))

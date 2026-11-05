@@ -14,7 +14,7 @@ import httpx
 import polars as pl
 import polars.selectors as cs
 
-from fleet.core.exceptions import IOError as FleetIOError
+from fleet.core.exceptions import FleetIOError
 
 _IO_EXTRA_HINT = 'Install it with: uv add "fleet-cdisc[io]"'
 
@@ -229,11 +229,6 @@ def _load_sas(file_path: Path, **kwargs) -> pl.LazyFrame:
         )
         .with_columns(cs.string().replace("", None))
     )
-
-    # Attach SAS labels as a retrievable attribute on the LazyFrame
-    # (the profiler checks for this when building ColumnProfiles)
-    if meta.column_names_to_labels:
-        lf._sas_labels = meta.column_names_to_labels  # type: ignore[attr-defined]
 
     return lf
 

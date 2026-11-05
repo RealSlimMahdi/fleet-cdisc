@@ -15,7 +15,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from fleet.core.exceptions import IOError as FleetIOError
+from fleet.core.exceptions import FleetIOError
 from fleet.io import load_raw_data, save_xpt
 
 pyreadstat = pytest.importorskip("pyreadstat")

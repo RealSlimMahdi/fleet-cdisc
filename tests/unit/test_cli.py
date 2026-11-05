@@ -450,7 +450,7 @@ def test_checker_write_xpt_carries_the_define_labels(study: Path) -> None:
 
 
 def test_checker_write_xpt_refuses_a_file_named_after_another_dataset(study: Path) -> None:
-    from fleet.core.exceptions import IOError as FleetIOError
+    from fleet.core.exceptions import FleetIOError
     from fleet.define_xml import DatasetChecker
 
     checker = DatasetChecker(study / "metadata" / "sdtm" / "define.yaml")

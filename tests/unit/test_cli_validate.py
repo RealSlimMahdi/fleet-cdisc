@@ -356,6 +356,29 @@ class TestCheck:
         assert "[WARN] rules engine" in out
         assert "0 failure(s)" in out
 
+    def test_a_missing_pinned_engine_warns_even_with_a_managed_engine(
+        self,
+        study: Path,
+        engine: FakeEngine,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture,
+    ) -> None:
+        """c1-543: the managed engine never stands in for a pinned one."""
+        (study / "bin" / "core").unlink()
+        managed = study / "managed"
+        (managed / "core").mkdir(parents=True)
+        (managed / "core" / "core").touch()
+        monkeypatch.setattr("fleet.validation.engine.ENGINE_DIR", managed)
+
+        assert _run(["check"]) == 0
+        out = capsys.readouterr().out
+        assert "[WARN] rules engine" in out
+        assert f"pinned engine {study / 'bin' / 'core'}" in out
+
+        assert _run(["validate"]) == 2
+        assert "pinned engine" in capsys.readouterr().err
+        assert engine.calls == []
+
 
 # ── Frozen real CORE 0.15.0 reports (c1-842) ────────────────────────────────
 #

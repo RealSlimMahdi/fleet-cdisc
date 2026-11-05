@@ -334,6 +334,12 @@ def build_sweep(
                 "`fleet install-engine` or set validation.engine_path / FLEET_RULES_ENGINE."
             )
             datasets.append(SweepDataset(path, None, reason))
+        elif not setup.engine.value.is_file():
+            reason = (
+                f"Could not run: the pinned engine {setup.engine.value} "
+                f"({setup.engine.source}) is not found."
+            )
+            datasets.append(SweepDataset(path, None, reason))
         elif key in seen:
             reason = f"Could not run: another file in the sweep is already dataset {key[1]}."
             datasets.append(SweepDataset(path, None, reason))
