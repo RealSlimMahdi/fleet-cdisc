@@ -987,9 +987,9 @@ class SharedVerbsMixin:
                 if not validated:
                     warnings.warn(
                         f"{verb}('{target}'): codelist '{ct_id}' not found / CT not "
-                        f"loaded — values mapped from '{source}' are unvalidated. Load CT "
-                        "via fleet.get_validator().load_ct_file(...), or pass "
-                        "validate_values=False to silence this warning.",
+                        f"loaded — values mapped from '{source}' are unvalidated. Run "
+                        "`fleet init ct` in the study and pass the codelist class as ct=, "
+                        "or pass validate_values=False to silence this warning.",
                         stacklevel=3,
                     )
             return ns
@@ -1012,8 +1012,8 @@ class SharedVerbsMixin:
         if not validated:
             warnings.warn(
                 f"{verb}('{target}'): codelist '{ct_id}' not found / CT not "
-                f"loaded — values from '{source}' copied unvalidated. Load CT via "
-                "fleet.get_validator().load_ct_file(...), pass an explicit ct_map, "
+                f"loaded — values from '{source}' copied unvalidated. Run `fleet init ct` "
+                "in the study and pass the codelist class as ct=, pass an explicit ct_map, "
                 "or pass validate_values=False to silence this warning.",
                 stacklevel=3,
             )

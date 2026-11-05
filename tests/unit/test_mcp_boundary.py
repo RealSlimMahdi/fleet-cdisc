@@ -49,6 +49,7 @@ class TestMcpImportBoundary:
         "fleet",
         "fleet.core.dag",
         "fleet.core.spec_source",  # static spec <-> code conversion tools (#139)
+        "fleet.ct.terms",  # one term lookup across the CT stores (c1-35)
         "fleet.ct.validator",
         "fleet.define_xml",
         "fleet.io",

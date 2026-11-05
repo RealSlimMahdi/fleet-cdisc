@@ -1221,3 +1221,33 @@ def test_c1_737_a_plain_overwrite_still_writes_its_block():
         warnings.simplefilter("ignore")
         text = ns.to_spec_yaml("DM")
     assert _blocks(text)["COL"] == {"algorithm": "assign", "source": "b"}
+
+
+# --------------------------------------------------------------------- #
+# c1-35: one term lookup across the CT stores                            #
+# --------------------------------------------------------------------- #
+
+
+class _SEX:
+    _concept_id = "C66731"
+    M = "M"
+    F = "F"
+
+
+def test_c1_35_terms_for_asks_the_stores_in_order():
+    from fleet.ct.terms import terms_for
+    from fleet.ct.validator import CTValidator
+
+    empty = CTValidator()
+    assert terms_for(_SEX, validator=empty) == {"M", "F"}
+    assert terms_for("C66731", validator=empty, study_classes={"C66731": _SEX}) == {"M", "F"}
+    assert terms_for("C1", define_items={"C1": ["A", "B"]}) == {"A", "B"}
+    assert terms_for("C2", validator=empty) is None
+
+
+def test_c1_35_mcp_ct_terms_reads_the_study_classes(monkeypatch):
+    from fleet import mcp_server
+    from fleet.ct import terms
+
+    monkeypatch.setattr(terms, "study_codelist_classes", lambda: {"C99997": _SEX})
+    assert mcp_server.fleet_ct_terms("C99997") == ["F", "M"]

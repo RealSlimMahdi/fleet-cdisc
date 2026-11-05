@@ -234,8 +234,10 @@ def _could_not_run(reason: str) -> dict[str, Any]:
 def fleet_ct_terms(codelist: str, ct_path: str | None = None) -> list[str]:
     """Return the valid submission values of a controlled-terminology codelist.
 
-    Uses the process-wide ``CTValidator`` cache; pass *ct_path* to load a
-    CT file (YAML/CSV) into the cache first.
+    Asks the process-wide ``CTValidator`` cache first, then the
+    ``codelists.py`` classes of the study found from the working
+    directory (``fleet init ct``).  Pass *ct_path* to load a CT file
+    (YAML/CSV) into the cache first.
 
     Args:
         codelist: Codelist name, alias, or NCI concept ID (e.g. ``C66731``).
@@ -244,16 +246,19 @@ def fleet_ct_terms(codelist: str, ct_path: str | None = None) -> list[str]:
     Returns:
         list[str]: Sorted valid coded values.
     """
+    from fleet.ct.terms import study_codelist_classes, terms_for
     from fleet.ct.validator import get_validator
 
     validator = get_validator()
     if ct_path:
         validator.load_ct_file(ct_path)
-    if not validator.has_codelist(codelist):
+    terms = terms_for(codelist, validator=validator, study_classes=study_codelist_classes())
+    if terms is None:
         raise ValueError(
-            f"codelist {codelist!r} is not loaded. Pass ct_path=<CT yaml/csv> to load it."
+            f"codelist {codelist!r} is not loaded. Pass ct_path=<CT yaml/csv> to load it, "
+            "or run `fleet init ct` in the study."
         )
-    return validator.get_valid_values(codelist)
+    return sorted(terms)
 
 
 def fleet_tlg_catalog() -> list[dict[str, Any]]:
