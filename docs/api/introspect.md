@@ -58,6 +58,18 @@ items = [
         show_root_heading: true
         heading_level: 3
 
+## load_spec_yaml
+
+::: fleet.introspect.load_spec_yaml
+    options:
+        show_root_heading: true
+        heading_level: 3
+
+## Standard
+
+`Standard` is the type of the *standard* argument: `Literal["sdtm", "adam"]`.
+Any other value raises `ValueError`.
+
 ---
 
 ## AlgorithmInfo
