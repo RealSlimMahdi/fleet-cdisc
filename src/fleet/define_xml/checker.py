@@ -328,7 +328,7 @@ class DatasetChecker:
         }
 
         # Labels always populated regardless of other flags
-        result.labels = {name: v["label"] for name, v in vars_by_name.items()}
+        result.labels = {name: v.get("label", "") for name, v in vars_by_name.items()}
 
         # Actual DataFrame columns excluding private _-prefix columns
         actual_cols: set[str] = {c for c in df.columns if not c.startswith("_")}
@@ -353,7 +353,11 @@ class DatasetChecker:
         ds_def = self._datasets.get(dataset.upper())
         if ds_def is None:
             return {}
-        return {v["name"]: v["label"] for v in ds_def["variables"] if not v["name"].startswith("_")}
+        return {
+            v["name"]: v.get("label", "")
+            for v in ds_def["variables"]
+            if not v["name"].startswith("_")
+        }
 
     # ------------------------------------------------------------------ #
     # Check runners                                                        #

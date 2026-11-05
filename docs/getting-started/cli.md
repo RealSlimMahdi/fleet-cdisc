@@ -144,7 +144,7 @@ CI gate: parse the study config, check each define.yaml against its schema, chec
 
 ## `fleet compare`
 
-PROC COMPARE analogue: pair the two datasets on --keys, match variables by name and print the comparison report. --pairs compares variables named differently on each side and --variables restricts the comparison to the ones that matter. Equality is exact unless --abs-tol, --rel-tol or --ignore-trailing-whitespace widens it. --by sections the report per group and --allow-duplicates pairs duplicate keys by position. Exit 0 when the datasets are equal, 1 when they differ, 2 when the comparison could not run (unreadable file, missing keys, duplicate keys without --allow-duplicates, a negative tolerance, a --variables list of keys only, --out or --report not writable).
+PROC COMPARE analogue: pair the two datasets on --keys, match variables by name and print the comparison report. --pairs compares variables named differently on each side and --variables restricts the comparison to the ones that matter. Equality is exact unless --abs-tol, --rel-tol or --ignore-trailing-whitespace widens it. --by sections the report per group and --allow-duplicates pairs duplicate keys by position. Exit 0 when the datasets are equal, 1 when they differ, 2 when the comparison could not run (unreadable file, missing keys, duplicate keys without --allow-duplicates, a negative tolerance, a --variables list of keys only, --out or --report not writable or naming an input file, an internal error; FLEET_DEBUG=1 prints its traceback).
 
 | Argument | Description |
 | -------- | ----------- |
@@ -384,6 +384,8 @@ Generate Define-XML 2.1 from a define.yaml specification. This imports the spec'
 ---
 
 ## `fleet doctor`
+
+Check the Fleet setup: the study config, codelists.py, the rules engine, CDISC_API_KEY and the optional extras. Exit 1 when the study config or the rules engine has a cross; the API key and the extras are information only.
 
 | Option | Default | Description |
 | ------ | ------- | ----------- |

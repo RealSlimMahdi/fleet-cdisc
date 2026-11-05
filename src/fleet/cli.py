@@ -37,7 +37,9 @@ import importlib.util
 import json
 import keyword
 import os
+import re
 import sys
+from itertools import takewhile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn, get_args, get_type_hints
 
@@ -116,7 +118,7 @@ def _load_ctx(config_arg: str | None) -> StudyContext:
 
 
 def _try_ctx(config_arg: str | None = None) -> StudyContext | None:
-    """Best-effort study context — ``None`` when no config is discoverable.
+    """The study context, or ``None`` when no config is discoverable.
 
     For commands that also work standalone on explicit paths: inside a
     study workspace they resolve defaults from the config, outside one
@@ -125,12 +127,10 @@ def _try_ctx(config_arg: str | None = None) -> StudyContext | None:
     cfg = Path(config_arg) if config_arg else find_study_config()
     if cfg is None or not cfg.is_file():
         return None
-    from fleet.core.study_context import StudyConfigError, load_study_context
+    from fleet.core.study_context import load_study_context
 
-    try:
-        return load_study_context(cfg)
-    except StudyConfigError:
-        return None
+    # A config that is found but invalid is an error, not "no study".
+    return load_study_context(cfg)
 
 
 def _config_flag_hint(config_path: Path) -> str:
@@ -727,21 +727,15 @@ def _check_extras() -> list[tuple[str, bool, str]]:
     return results
 
 
-def _print_codelists_status(config_path: Path) -> None:
+def _print_codelists_status(ctx: StudyContext) -> None:
     """The doctor line of the study's codelists.py: its CT package, or each problem."""
-    from fleet.core.exceptions import SpecError
-    from fleet.core.study_context import StudyConfigError, load_study_context
     from fleet.ct.study_codelists import check_codelists, load_codelists
 
     try:
-        ctx = load_study_context(config_path)
-    except StudyConfigError:
-        return  # fleet check reports the invalid config
-    try:
         problems = check_codelists(ctx)
         packages = load_codelists(ctx.codelists_file)[0] if ctx.codelists_file.is_file() else ()
-    except SpecError as exc:
-        print(f"  ✗ codelists.py ....... {exc}")
+    except Exception as exc:  # a codelists.py or define.yaml that does not load, as in fleet check
+        print(f"  ✗ codelists.py ....... {_error_line(exc)}")
         return
     for problem in problems:
         print(f"  ✗ codelists.py ....... {problem}")
@@ -754,39 +748,51 @@ def _print_codelists_status(config_path: Path) -> None:
 
 
 def _run_doctor(args: argparse.Namespace) -> None:
+    """Print the setup checks; exit 1 when the study config or the rules engine has a cross."""
     from fleet.core.exceptions import ValidationSetupError
+    from fleet.core.study_context import StudyConfigError, load_study_context
     from fleet.validation import build_run_setup
     from fleet.validation.engine import discover_engine, doctor
 
-    config_path = Path(args.config) if getattr(args, "config", None) else find_study_config()
+    config_path = Path(args.config) if args.config else find_study_config()
 
     print("Fleet Doctor")
     print("=" * 52)
 
+    failed = False
     if config_path and config_path.is_file():
-        print(f"  ✓ study config ....... {config_path}")
-        _print_codelists_status(config_path)
+        try:
+            ctx = load_study_context(config_path)
+        except StudyConfigError as exc:
+            print(f"  ✗ study config ....... {' '.join(str(exc).split())}")
+            failed = True
+        else:
+            print(f"  ✓ study config ....... {config_path}")
+            _print_codelists_status(ctx)
     else:
         print("  ✗ study config ....... not found (run `fleet init cfg`)")
+        failed = True
 
     # A run setup with no datasets: the standard only fills the record.
     try:
         setup = build_run_setup(standard="sdtm", config=config_path)
         engine, where = setup.engine.value, f" ({setup.engine.source})"
-    except ValidationSetupError as exc:
-        print(f"  ✗ run setup .......... {exc}")
+    except (ValidationSetupError, StudyConfigError) as exc:
+        print(f"  ✗ run setup .......... {' '.join(str(exc).split())}")
         study_root = config_path.parent if config_path and config_path.is_file() else None
         engine, where = discover_engine(study_root), ""
 
     if engine is None:
         print("  ✗ rules engine ....... NOT FOUND — run `fleet install-engine`")
+        failed = True
     else:
         checks = doctor(engine=engine)
         print(f"  ✓ rules engine ....... {engine}{where}")
         print(f"      version: {checks['version']}")
         print(f"      type: {checks['type']}")
-        status_mark = "✓" if checks["status"].startswith("OK") else "✗"
-        print(f"  {status_mark} engine status ...... {checks['status']}")
+        status_ok = checks["status"].startswith("OK")
+        print(f"  {'✓' if status_ok else '✗'} engine status ...... {checks['status']}")
+        failed = failed or not status_ok
 
     api_key_set = bool(os.environ.get("CDISC_API_KEY"))
     if api_key_set:
@@ -806,6 +812,8 @@ def _run_doctor(args: argparse.Namespace) -> None:
         else:
             print(f"  ✗ {name:.<20s} {hint}")
     print()
+    if failed:
+        sys.exit(1)
 
 
 # ────────────────────────────────────────────────────────────────────── #
@@ -844,9 +852,105 @@ def _generate_define_xml(args: argparse.Namespace) -> None:
             print(f"HTML preview → {preview}")
 
 
-def _run_add_acrf(args: argparse.Namespace) -> None:
+def _content(line: str) -> bool:
+    """Whether a YAML line holds content (not blank, not a comment)."""
+    stripped = line.strip()
+    return bool(stripped) and not stripped.startswith("#")
+
+
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
+
+
+def _yaml_block(
+    lines: list[str], key: str, lo: int, hi: int, indent: int
+) -> tuple[int, int] | None:
+    """``(key line, end)`` of the block-style ``key:`` at *indent* in ``lines[lo:hi]``.
+
+    The end is the line after the last content line of the block, so trailing
+    comments stay where they are.  A key with an inline value is not a block.
+    """
+    pattern = re.compile(rf"^ {{{indent}}}{re.escape(key)}:\s*(#.*)?$")
+    for i in range(lo, hi):
+        if not pattern.match(lines[i].rstrip("\r\n")):
+            continue
+        end = i + 1
+        for j in range(i + 1, hi):
+            if not _content(lines[j]):
+                continue
+            inside = _indent(lines[j]) > indent or (
+                _indent(lines[j]) == indent and lines[j].lstrip().startswith("-")
+            )
+            if not inside:
+                break
+            end = j + 1
+        return i, end
+    return None
+
+
+def _child_indent(lines: list[str], start: int, end: int, default: int) -> int:
+    """The indent of the first content line inside a block, else *default*."""
+    return next((_indent(line) for line in lines[start + 1 : end] if _content(line)), default)
+
+
+def _yaml_lines(value: Any, indent: int) -> list[str]:
     import yaml
 
+    text = yaml.dump(value, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    return [" " * indent + line for line in text.splitlines(keepends=True)]
+
+
+def _write_yaml_edit(
+    path: Path, text: str, edited: str | None, data: Any, load: Callable[[str], Any]
+) -> None:
+    """Write *edited* when it reads back as *data*; else dump *data* and warn about lost comments.
+
+    The text edit keeps every comment.  The YAML dump is the fallback for a
+    layout the edit does not handle (a flow-style mapping): only the leading
+    comment header survives it.
+    """
+    import yaml
+
+    if edited is not None:
+        try:
+            same = load(edited) == data
+        except Exception:  # the edit broke the document: use the dump
+            same = False
+        if same:
+            path.write_text(edited, encoding="utf-8")
+            return
+    lines = text.splitlines(keepends=True)
+    header = list(takewhile(lambda line: not _content(line), lines))
+    lost = sum("#" in line for line in lines[len(header) :])
+    if lost:
+        _err(f"warning: {path} is rewritten through YAML; {lost} line(s) with a comment are lost.")
+    body = yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    path.write_text("".join(header) + body, encoding="utf-8")
+
+
+def _acrf_edit(text: str, acrf: dict[str, Any]) -> str | None:
+    """*text* with ``study.documents.annotated_crf`` set to *acrf*, as a text edit."""
+    lines = text.splitlines(keepends=True)
+    if lines and not lines[-1].endswith("\n"):
+        lines[-1] += "\n"
+    study = _yaml_block(lines, "study", 0, len(lines), 0)
+    if study is None:
+        return None
+    start, end = study
+    indent = _child_indent(lines, start, end, 2)
+    docs = _yaml_block(lines, "documents", start + 1, end, indent)
+    if docs is None:
+        new = [" " * indent + "documents:\n", *_yaml_lines({"annotated_crf": acrf}, indent * 2)]
+        return "".join(lines[:end] + new + lines[end:])
+    inner = _child_indent(lines, docs[0], docs[1], indent * 2)
+    new = _yaml_lines({"annotated_crf": acrf}, inner)
+    crf = _yaml_block(lines, "annotated_crf", docs[0] + 1, docs[1], inner)
+    if crf is None:
+        return "".join(lines[: docs[1]] + new + lines[docs[1] :])
+    return "".join(lines[: crf[0]] + new + lines[crf[1] :])
+
+
+def _run_add_acrf(args: argparse.Namespace) -> None:
     ctx = _load_ctx(args.config)
     standards = ["sdtm", "adam"] if args.standard == "both" else [args.standard]
     touched = 0
@@ -857,14 +961,6 @@ def _run_add_acrf(args: argparse.Namespace) -> None:
             print(f"  {std}: no define.yaml at {spec_path} — skipped")
             continue
         text = spec_path.read_text(encoding="utf-8")
-        # Preserve the leading comment header (e.g. the yaml-language-server
-        # schema hint) — yaml round-trips drop comments.
-        header: list[str] = []
-        for line in text.splitlines():
-            if line.startswith("#") or not line.strip():
-                header.append(line)
-            else:
-                break
         data = load_spec_yaml(text) or {}
         acrf = (
             data.setdefault("study", {}).setdefault("documents", {}).setdefault("annotated_crf", {})
@@ -875,9 +971,7 @@ def _run_add_acrf(args: argparse.Namespace) -> None:
         acrf.setdefault("title", "Annotated Case Report Form")
         if args.page_map:
             acrf["page_map"] = args.page_map
-        body = yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True)
-        prefix = "\n".join(header) + "\n" if header else ""
-        spec_path.write_text(prefix + body, encoding="utf-8")
+        _write_yaml_edit(spec_path, text, _acrf_edit(text, acrf), data, load_spec_yaml)
         print(f"  {std}: annotated_crf ({args.href}) → {spec_path}")
         touched += 1
     if not touched:
@@ -932,7 +1026,10 @@ def _run_run(args: argparse.Namespace) -> None:
     :class:`~fleet.core.exceptions.StudyRunError` is turned into exit 1
     by :func:`main`.
     """
+    import polars as pl
+
     from fleet.core.define_spec import load_define_spec
+    from fleet.core.exceptions import StudyRunError
     from fleet.io import save_dataset_json, save_parquet, save_xpt
     from fleet.io.dataset_json import metadata_from_define
     from fleet.run import plan_study, run_study
@@ -974,7 +1071,15 @@ def _run_run(args: argparse.Namespace) -> None:
         print(f"  [{i}/{total}] {step.dataset} ({step.standard}, {step.define.name})")
     print()
 
-    for i, built in enumerate(run_study(plan, strict=args.strict), start=1):
+    builds = run_study(plan, strict=args.strict)
+    for i, planned in enumerate(plan.steps, start=1):
+        try:
+            built = next(builds)
+        except pl.exceptions.PolarsError as exc:
+            # A corrupt input or a failing expression: name the dataset, not the plan text.
+            if _debug():
+                raise
+            raise StudyRunError(f"{planned.dataset}: {_error_line(exc)}") from exc
         step = built.step
         _check_built(built.frame, step.define, step.dataset, strict=args.strict)
         out_dir = out_override or ctx.data_dir(step.standard)
@@ -1988,19 +2093,46 @@ def _run_tdd_ctgov(args: argparse.Namespace) -> None:
         )
     from fleet.sdtm.design import load_strict_yaml
 
-    data = load_strict_yaml(design_path.read_text(encoding="utf-8"))
+    text = design_path.read_text(encoding="utf-8")
+    data = load_strict_yaml(text)
+    if not isinstance(data, dict):
+        _fail(f"{design_path}: the file is empty or is not a mapping of trial design sections.")
     root = data.get("trial_design", data)
     existing = {(p.get("tsparmcd"), p.get("tsseq", 1)) for p in root.get("parameters") or []}
     added = [p for p in params if (p["tsparmcd"], p.get("tsseq", 1)) not in existing]
+    if not added:
+        print(f"0 parameter(s) from {args.nct_id} are new; {design_path} is not changed.")
+        return
     root.setdefault("parameters", []).extend(added)
-    design_path.write_text(
-        yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True),
-        encoding="utf-8",
-    )
+    edited = _parameters_edit(text, added, wrapped="trial_design" in data)
+    _write_yaml_edit(design_path, text, edited, data, load_strict_yaml)
     print(
         f"{len(added)} parameter(s) from {args.nct_id} merged into {design_path} "
         f"({len(params) - len(added)} already present)."
     )
+
+
+def _parameters_edit(text: str, added: list[dict], *, wrapped: bool) -> str | None:
+    """*text* with *added* appended to its ``parameters:`` list, as a text edit."""
+    lines = text.splitlines(keepends=True)
+    if lines and not lines[-1].endswith("\n"):
+        lines[-1] += "\n"
+    lo, hi, indent = 0, len(lines), 0
+    if wrapped:
+        design = _yaml_block(lines, "trial_design", 0, len(lines), 0)
+        if design is None:
+            return None
+        lo, hi = design[0] + 1, design[1]
+        indent = _child_indent(lines, design[0], design[1], 2)
+    block = _yaml_block(lines, "parameters", lo, hi, indent)
+    if block is None:
+        new = [" " * indent + "parameters:\n", *_yaml_lines(added, indent + 2)]
+        return "".join(lines[:hi] + new + lines[hi:])
+    item = next(
+        (_indent(line) for line in lines[block[0] + 1 : block[1]] if line.lstrip().startswith("-")),
+        indent + 2,
+    )
+    return "".join(lines[: block[1]] + _yaml_lines(added, item) + lines[block[1] :])
 
 
 def _load_design(design_path: Path):
@@ -2010,10 +2142,16 @@ def _load_design(design_path: Path):
         _fail(
             f"trial design spec not found: {design_path}. Create it there or pass --design <path>."
         )
+    from pydantic import ValidationError
+
     try:
-        return StudyDesign.from_yaml(design_path)
+        design = StudyDesign.from_yaml(design_path)
+        design.domains()  # the section models validate here: duplicate VISITNUM, ARMCD
+    except ValidationError as exc:
+        _fail(f"{design_path}: {_validation_message(exc)}")
     except Exception as exc:
         _fail(f"invalid trial design spec {design_path}:\n{exc}")
+    return design
 
 
 def _print_findings(findings) -> int:
@@ -2568,6 +2706,11 @@ def _add_engine_parsers(sub: argparse._SubParsersAction) -> None:
     doctor = sub.add_parser(
         "doctor",
         help="Check Fleet setup: engine, API key, codelists.py, optional extras.",
+        description=(
+            "Check the Fleet setup: the study config, codelists.py, the rules engine, "
+            "CDISC_API_KEY and the optional extras. Exit 1 when the study config or the "
+            "rules engine has a cross; the API key and the extras are information only."
+        ),
     )
     _add_config_flag(doctor)
     doctor.set_defaults(func=_run_doctor)
@@ -3486,6 +3629,10 @@ def main(argv: Sequence[str] | None = None) -> None:
     if "" not in sys.path and os.getcwd() not in sys.path:
         sys.path.append(os.getcwd())
 
+    import polars as pl
+    import yaml
+    from pydantic import ValidationError
+
     from fleet.core.exceptions import FleetError
     from fleet.core.study_context import StudyConfigError
 
@@ -3500,6 +3647,47 @@ def main(argv: Sequence[str] | None = None) -> None:
         # Optional-dependency errors carry their own install hint —
         # surface it as one clean line instead of a traceback.
         _fail(" ".join(str(exc).split()))
+    except (
+        ValidationError,
+        yaml.YAMLError,
+        OSError,
+        UnicodeDecodeError,
+        pl.exceptions.PolarsError,
+    ) as exc:
+        # A bad input file, folder or model value: one line; FLEET_DEBUG=1 keeps the traceback.
+        if _debug():
+            raise
+        _fail(_error_line(exc))
+
+
+def _error_line(exc: BaseException) -> str:
+    """One line for a YAML, pydantic, file or Polars error."""
+    import yaml
+    from pydantic import ValidationError
+
+    if isinstance(exc, ValidationError):
+        return _validation_message(exc)
+    if isinstance(exc, yaml.MarkedYAMLError) and exc.problem_mark is not None:
+        mark = exc.problem_mark
+        where = "" if mark.name.startswith("<") else f"{mark.name} "
+        return (
+            f"invalid YAML: {where}line {mark.line + 1}, column {mark.column + 1}: "
+            f"{exc.problem or exc.context}"
+        )
+    if isinstance(exc, yaml.YAMLError):
+        return f"invalid YAML: {' '.join(str(exc).split())}"
+    first = next((line for line in str(exc).splitlines() if line.strip()), "")
+    return f"{type(exc).__name__}: {first.strip()}"
+
+
+def _validation_message(exc: Any) -> str:
+    """A pydantic ValidationError as one line: the model, then each location and message."""
+    parts = []
+    for error in exc.errors():
+        loc = ".".join(str(p) for p in error["loc"])
+        msg = error["msg"].removeprefix("Value error, ")
+        parts.append(f"{loc}: {msg}" if loc else msg)
+    return f"invalid {exc.title}: {'; '.join(parts)}"
 
 
 if __name__ == "__main__":
