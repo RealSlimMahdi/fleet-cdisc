@@ -1212,6 +1212,10 @@ fleet tlg export --domain ae --format pptx --data adae.csv --adsl adsl.csv \
     --title "Table 14.3.1.1" --output ae.pptx
 ```
 
+A conformant ADSL holds the arm as `TRT01A`, not `TRTA`. Add
+`--adsl-groupby TRT01A` so the big N reads it. The ADSL domains `dm` and
+`ds` group by `TRT01A`, else `TRT01P` (ADR-0046).
+
 ---
 
 ## Part 12 — CDISC Validation

@@ -80,13 +80,13 @@ def test_table_supports_pooled_total(meta) -> None:
     ids=lambda m: m.id,
 )
 def test_table_matches_golden(meta) -> None:
-    """The default-by ARD equals the checked-in golden, cell for cell."""
+    """The default-arm ARD equals the checked-in golden, cell for cell."""
     golden_path = GOLDEN_DIR / f"{meta.id}.parquet"
     assert golden_path.exists(), (
         f"No golden for {meta.id} — run scripts/regen_tlg_goldens.py and review the new file."
     )
     ns = getattr(_frame_for(meta).tlg, meta.namespace)
-    ard = getattr(ns, meta.method)(groupby="TRTA", adsl=ADSL)
+    ard = getattr(ns, meta.method)(adsl=ADSL)
     golden = pl.read_parquet(golden_path)
     assert_frame_equal(ard, golden, check_exact=False, rel_tol=1e-9)
 

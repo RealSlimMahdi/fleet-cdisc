@@ -59,11 +59,15 @@ NAMESPACE_CLASSES: dict[str, type[Any]] = {
 GROUPBY_CANDIDATES: tuple[str, ...] = ("TRTA", "TRT01A", "TRT01P")
 
 
-def detect_groupby(columns: Iterable[str]) -> str | None:
-    """The first :data:`GROUPBY_CANDIDATES` column present in *columns*.
+def detect_groupby(
+    columns: Iterable[str], candidates: Iterable[str] = GROUPBY_CANDIDATES
+) -> str | None:
+    """The first *candidates* column present in *columns*.
 
     Args:
         columns: Column names of the analysis dataset.
+        candidates: Arm columns to try, in order.  Default:
+            :data:`GROUPBY_CANDIDATES`.
 
     Returns:
         str | None: The detected treatment-arm column, or ``None`` when the
@@ -75,7 +79,7 @@ def detect_groupby(columns: Iterable[str]) -> str | None:
             detect_groupby(adae.columns)  # -> 'TRTA'
     """
     present = set(columns)
-    return next((c for c in GROUPBY_CANDIDATES if c in present), None)
+    return next((c for c in candidates if c in present), None)
 
 
 def resolve_groupby(
@@ -87,7 +91,9 @@ def resolve_groupby(
 
     The order is: the explicit flag, then the ``columns:`` field that
     the spec declares (``None`` is returned, so the spec decides), then
-    auto-detection.  ``fleet tlg run``, ``fleet tlg explore`` and the
+    auto-detection.  A subject-level spec (DM, DS on ADSL) detects its
+    own arm, ``TRT01A`` then ``TRT01P`` (ADR-0046), so ``None`` is
+    returned for it too.  ``fleet tlg run``, ``fleet tlg explore`` and the
     MCP tool share this rule, so one YAML file gives one table.
 
     Args:
@@ -109,6 +115,8 @@ def resolve_groupby(
     if explicit:
         return explicit, "flag"
     if "columns" in spec.model_fields_set and "statistics" in type(spec).model_fields:
+        return None, "spec"
+    if getattr(spec, "arm_fallback", ()):
         return None, "spec"
     detected = detect_groupby(columns)
     return detected, "detected" if detected is not None else "none"

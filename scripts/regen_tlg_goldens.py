@@ -5,7 +5,8 @@ Usage::
     uv run python scripts/regen_tlg_goldens.py
 
 Each DONE table template runs on tests/fixtures/study.py with the
-default configuration (groupby="TRTA", adsl=ADSL) and its ARD is written
+default configuration (the template's default arm: TRTA, or TRT01A for
+the ADSL templates; adsl=ADSL) and its ARD is written
 to tests/fixtures/goldens/tlg/<id>.parquet.  Parquet preserves dtypes
 and the null vs "" distinction that CSV flattens — both are semantically
 load-bearing in an ARD.  The continuous templates vst01/lbt01 also get a
@@ -41,7 +42,7 @@ def main() -> None:
             continue
         frame = FRAMES[meta.domains[-1]]
         ns = getattr(frame.tlg, meta.namespace)
-        ard = getattr(ns, meta.method)(groupby="TRTA", adsl=ADSL)
+        ard = getattr(ns, meta.method)(adsl=ADSL)
         path = GOLDEN_DIR / f"{meta.id}.parquet"
         ard.write_parquet(path)
         print(f"  {meta.id:8s} {ard.height:4d} rows -> {path.relative_to(ROOT)}")

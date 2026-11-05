@@ -314,6 +314,94 @@ def test_c1_273_mcp_groups_by_the_spec_columns(tmp_path: Path) -> None:
     assert "(N=3)" not in html
 
 
+# ── c1-432: a subject-level table takes the ADSL arm (ADR-0046) ─────────
+
+
+ADSL_ARMS = pl.from_repr("""
+┌─────────┬─────────┬─────────┬──────────────┬─────────┬───────┬────────┬────────┬─────┬─────┐
+│ USUBJID ┆ TRT01P  ┆ TRT01A  ┆ EOSSTT       ┆ DCSREAS ┆ DTHFL ┆ DTHCAT ┆ SITEID ┆ AGE ┆ SEX │
+│ ---     ┆ ---     ┆ ---     ┆ ---          ┆ ---     ┆ ---   ┆ ---    ┆ ---    ┆ --- ┆ --- │
+│ str     ┆ str     ┆ str     ┆ str          ┆ str     ┆ str   ┆ str    ┆ str    ┆ i64 ┆ str │
+╞═════════╪═════════╪═════════╪══════════════╪═════════╪═══════╪════════╪════════╪═════╪═════╡
+│ S1      ┆ Drug A  ┆ Drug A  ┆ COMPLETED    ┆ null    ┆ N     ┆ null   ┆ 701    ┆ 40  ┆ F   │
+│ S2      ┆ Placebo ┆ Drug A  ┆ DISCONTINUED ┆ DEATH   ┆ Y     ┆ AE     ┆ 701    ┆ 50  ┆ M   │
+│ S3      ┆ Placebo ┆ Placebo ┆ COMPLETED    ┆ null    ┆ N     ┆ null   ┆ 702    ┆ 60  ┆ F   │
+│ S4      ┆ Drug A  ┆ Drug A  ┆ COMPLETED    ┆ null    ┆ N     ┆ null   ┆ 702    ┆ 70  ┆ M   │
+└─────────┴─────────┴─────────┴──────────────┴─────────┴───────┴────────┴────────┴─────┴─────┘
+""")
+
+SUBJECT_LEVEL = ["dm.t_summary", "ds.t_summary", "ds.t_deaths", "ds.t_enrollment"]
+
+
+def _big_n(ard: pl.DataFrame) -> dict[str, float]:
+    rows = ard.filter((pl.col("stat_name") == "N") & (pl.col("variable") == ""))
+    return dict(zip(rows["group1_level"], rows["stat"]))
+
+
+@pytest.mark.parametrize("method", SUBJECT_LEVEL)
+def test_c1_432_subject_level_tables_default_to_trt01a(method: str) -> None:
+    ns, name = method.split(".")
+    ard = getattr(getattr(ADSL_ARMS.tlg, ns), name)()
+    assert set(ard["group1"].to_list()) == {"TRT01A"}
+    assert _big_n(ard) == {"Drug A": 3.0, "Placebo": 1.0}
+
+
+@pytest.mark.parametrize("method", SUBJECT_LEVEL)
+def test_c1_432_without_trt01a_the_planned_arm_is_taken(method: str) -> None:
+    adsl = ADSL_ARMS.drop("TRT01A").with_columns(pl.col("TRT01P").alias("TRTA"))
+    ns, name = method.split(".")
+    ard = getattr(getattr(adsl.tlg, ns), name)()
+    assert set(ard["group1"].to_list()) == {"TRT01P"}
+    assert _big_n(ard) == {"Drug A": 2.0, "Placebo": 2.0}
+
+
+def test_c1_432_a_named_arm_never_falls_back() -> None:
+    adsl = ADSL_ARMS.drop("TRT01A")
+    with pytest.raises(SchemaError, match="TRT01A"):
+        adsl.tlg.dm.t_summary(spec=DMSummarySpec(columns=["TRT01A"]))
+
+
+def test_c1_432_dm_check_reads_the_fallback_arm() -> None:
+    adsl = ADSL_ARMS.drop("TRT01A")
+    assert not [m for m in adsl.tlg.dm.check() if m.startswith("MISSING COLUMNS")]
+    assert any("TRT01A" in m for m in adsl.tlg.dm.check(groupby="TRT01A"))
+
+
+def test_c1_432_cli_dm_table_takes_trt01a(tmp_path: Path) -> None:
+    adsl = ADSL_ARMS.with_columns(pl.col("TRT01P").alias("TRTA"))
+    adsl.write_parquet(tmp_path / "adsl.parquet")
+    spec = tmp_path / "dmt01.yaml"
+    spec.write_text("template: dmt01\n", encoding="utf-8")
+    assert tlg.resolve_groupby(tlg.load_spec(spec), adsl.columns) == (None, "spec")
+    argv = ["tlg", "run", str(spec), "--data", str(tmp_path / "adsl.parquet")]
+    argv += ["--adsl", str(tmp_path / "adsl.parquet"), "-o", str(tmp_path / "out")]
+    assert _run(argv) == 0
+    html = (tmp_path / "out" / "dmt01.html").read_text(encoding="utf-8")
+    assert "(N=3)" in html
+    assert "(N=2)" not in html
+
+
+def test_c1_432_cli_export_adsl_groupby(tmp_path: Path) -> None:
+    ADAE_TRTA.write_parquet(tmp_path / "adae.parquet")
+    ADSL_TRT01A.write_parquet(tmp_path / "adsl.parquet")
+    out = tmp_path / "ae.html"
+    argv = ["tlg", "export", "--domain", "ae", "--data", str(tmp_path / "adae.parquet")]
+    argv += ["--adsl", str(tmp_path / "adsl.parquet"), "-o", str(out)]
+    assert _run(argv) == 1
+    assert _run([*argv, "--adsl-groupby", "TRT01A"]) == 0
+    assert "(N=1)" in out.read_text(encoding="utf-8")
+
+
+def test_c1_432_cli_export_dm_takes_trt01a(tmp_path: Path) -> None:
+    adsl = ADSL_ARMS.with_columns(pl.col("TRT01P").alias("TRTA"))
+    adsl.write_parquet(tmp_path / "adsl.parquet")
+    out = tmp_path / "dm.html"
+    argv = ["tlg", "export", "--domain", "dm", "--data", str(tmp_path / "adsl.parquet")]
+    argv += ["--adsl", str(tmp_path / "adsl.parquet"), "-o", str(out)]
+    assert _run(argv) == 0
+    assert "(N=3)" in out.read_text(encoding="utf-8")
+
+
 # ── c1-435: continuous statistics need a numeric value column ───────────
 
 

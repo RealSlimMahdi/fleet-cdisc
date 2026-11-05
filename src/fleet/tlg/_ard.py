@@ -1490,7 +1490,8 @@ def summarize_spec(
     The spec is the whole engine contract: every :func:`summarize_ard`
     argument is read from its fields, and the cards ``context`` tag and
     the ``nested`` flag from its class.  The group column is *groupby*,
-    else the spec's first column, else ``"TRTA"``; the frame is
+    else :meth:`SummarySpecBase.default_group_col` (the spec's first
+    column, or the first ``arm_fallback`` column in the data); the frame is
     validated against the spec, then prepared by :func:`prepare_frame`.
 
     Args:
@@ -1509,7 +1510,7 @@ def summarize_spec(
     Examples:
         ``ard = summarize_spec(admh, MHSummarySpec(), groupby="TRTA", adsl=adsl)``
     """
-    group_col = groupby or (spec.columns[0] if spec.columns else "TRTA")
+    group_col = groupby or spec.default_group_col(df.columns)
     spec.validate_dataframe(df, group_col=group_col)
     return summarize_ard(
         prepare_frame(df, spec),
