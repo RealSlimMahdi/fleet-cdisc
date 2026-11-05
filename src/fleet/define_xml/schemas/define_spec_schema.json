@@ -1182,6 +1182,9 @@
         "by": {
           "anyOf": [
             {
+              "type": "string"
+            },
+            {
               "items": {
                 "type": "string"
               },
@@ -1641,7 +1644,7 @@
             }
           ],
           "default": null,
-          "description": "Maximum imputation ceiling (``\"D\"``, ``\"M\"``, ``\"Y\"``, ``\"h\"``, ``\"m\"``, ``\"s\"``).",
+          "description": "Maximum imputation ceiling (``\"n\"`` for none, ``\"D\"``, ``\"M\"``, ``\"h\"``, ``\"m\"``, ``\"s\"``).",
           "title": "Highest"
         },
         "flag": {
@@ -2836,6 +2839,9 @@
         "order_by": {
           "anyOf": [
             {
+              "type": "string"
+            },
+            {
               "items": {
                 "type": "string"
               },
@@ -2851,6 +2857,9 @@
         },
         "by": {
           "anyOf": [
+            {
+              "type": "string"
+            },
             {
               "items": {
                 "type": "string"
