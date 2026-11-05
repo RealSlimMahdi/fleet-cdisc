@@ -264,6 +264,7 @@ def run_study(
     *,
     inputs: Mapping[str, pl.DataFrame] | None = None,
     strict: bool = True,
+    overwrite: bool = False,
 ) -> Iterator[BuiltDataset]:
     """Build every step of a study plan, in order, and yield each built dataset.
 
@@ -275,6 +276,8 @@ def run_study(
             is used before any file.
         strict: Raise on an unknown spec algorithm (default).  ``False``
             warns and skips, as ``from_spec`` does.
+        overwrite: Let a spec derivation replace a column the input
+            already has, as ``from_spec(overwrite=True)``.  Default off.
 
     Yields:
         BuiltDataset: One per step, as soon as it is built.
@@ -323,7 +326,7 @@ def run_study(
             ns = ns.pin(declared.name.upper(), extra)
         try:
             built_frame = (
-                ns.from_spec(step.define, dataset=step.dataset, strict=strict)
+                ns.from_spec(step.define, dataset=step.dataset, strict=strict, overwrite=overwrite)
                 .select(spec=step.define, dataset=step.dataset)
                 .to_frame()
             )

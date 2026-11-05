@@ -46,7 +46,7 @@ from fleet.core.study_context import find_study_config
 from fleet.run import find_dataset_file
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Iterator, Sequence
 
     import polars as pl
 
@@ -1004,7 +1004,9 @@ def _run_run(args: argparse.Namespace) -> None:
         print(f"  [{i}/{total}] {step.dataset} ({step.standard}, {step.define.name})")
     print()
 
-    for i, built in enumerate(run_study(plan, strict=args.strict), start=1):
+    for i, built in enumerate(
+        _cli_spec_hints(run_study(plan, strict=args.strict, overwrite=args.overwrite)), start=1
+    ):
         step = built.step
         _check_built(built.frame, step.define, step.dataset, strict=args.strict)
         out_dir = out_override or ctx.data_dir(step.standard)
@@ -1026,6 +1028,28 @@ def _run_run(args: argparse.Namespace) -> None:
 
     print()
     print(f"Done — {total} dataset(s) written.")
+
+
+def _cli_spec_hints[T](built: Iterator[T]) -> Iterator[T]:
+    """Yield from *built*; a SpecError names the ``fleet run`` flag, not the Python argument."""
+    import re
+
+    from fleet.core.exceptions import SpecError
+
+    try:
+        yield from built
+    except SpecError as exc:
+        text = str(exc).replace(
+            "Pass strict=False to warn and skip instead.",
+            "Pass --no-strict to warn and skip instead.",
+        )
+        text = re.sub(
+            r"Pass overwrite=True to allow spec overwrites, or omit=\[.*?\] to keep the "
+            r"inline derivation\.",
+            "Pass --overwrite to allow spec overwrites (omit= has no fleet run form).",
+            text,
+        )
+        raise SpecError(text) from exc
 
 
 def _check_built(frame: pl.DataFrame, define: Path, dataset: str, *, strict: bool) -> None:
@@ -2627,6 +2651,14 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Raise on unknown spec algorithms (default). --no-strict warns and skips.",
+    )
+    run.add_argument(
+        "--overwrite",
+        action="store_true",
+        help=(
+            "Let a spec derivation replace a column that the input already has. "
+            "Default off, so a QC run keeps the guard."
+        ),
     )
     run.set_defaults(func=_run_run)
 
