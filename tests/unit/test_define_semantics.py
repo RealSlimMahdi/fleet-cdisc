@@ -7,7 +7,7 @@ Locks in the method/origin conformance contract:
 * every registry algorithm renders clean submission text (no unfilled
   placeholders, no API markup) — a new algorithm cannot ship without
   reviewer-safe text;
-* the committed example defines (``outputs/cdiscpilot01/define_*.xml``)
+* the golden example defines (``tests/fixtures/goldens/define/define_*.xml``)
   are reproducible from their specs — any change to submission-facing
   text lands as a reviewed diff on the real artifact, never as silent
   drift (same pattern as the JSON-schema sync test);
@@ -35,9 +35,10 @@ ODM = "{http://www.cdisc.org/ns/odm/v1.3}"
 DEF = "{http://www.cdisc.org/ns/def/v2.1}"
 
 EXAMPLES = Path(__file__).parent.parent.parent / "examples" / "cdiscpilot01"
-OUTPUTS = Path(__file__).parent.parent.parent / "outputs" / "cdiscpilot01"
+GOLDENS = Path(__file__).parent.parent / "fixtures" / "goldens" / "define"
 
 schemas_present = pytest.mark.skipif(bool(missing_files()), reason="CDISC schema set not installed")
+examples_present = pytest.mark.skipif(not EXAMPLES.exists(), reason="examples/ is not shipped here")
 
 
 # ===================================================================== #
@@ -472,17 +473,19 @@ class TestGeneratorSemantics:
 
 
 @schemas_present
+@examples_present
 @pytest.mark.parametrize("standard", ["sdtm", "adam"])
 def test_committed_define_outputs_are_reproducible(standard):
-    """The committed define.xml must match what the code generates from its spec.
+    """The golden define.xml must match what the code generates from its spec.
 
-    Same pattern as the JSON-schema sync test: ``outputs/cdiscpilot01`` is a
-    build artifact of ``examples/``.  A template, renderer, or spec change
-    fails here until the artifact is regenerated —
-    ``uv run python examples/cdiscpilot01_spec_driven.py`` — so every change
-    to submission-facing content is reviewed on the real define.xml diff.
+    Same pattern as the JSON-schema sync test.  A template, renderer, or
+    spec change fails here until the golden is regenerated: run
+    ``uv run python examples/cdiscpilot01_spec_driven.py`` and copy
+    ``outputs/cdiscpilot01/define_*.xml`` to ``tests/fixtures/goldens/define/``,
+    so every change to submission-facing content is reviewed on the real
+    define.xml diff.
     """
-    committed = (OUTPUTS / f"define_{standard}.xml").read_text(encoding="utf-8")
+    committed = (GOLDENS / f"define_{standard}.xml").read_text(encoding="utf-8")
     regenerated = DefineSpecGenerator(
         EXAMPLES / standard / "define.yaml", enrich_methods=True
     ).to_xml_string()
@@ -495,12 +498,14 @@ def test_committed_define_outputs_are_reproducible(standard):
         return etree.canonicalize(xml_data=stamped, strip_text=True)
 
     assert stamp_free(regenerated) == stamp_free(committed), (
-        f"outputs/cdiscpilot01/define_{standard}.xml is stale — regenerate with "
-        "`uv run python examples/cdiscpilot01_spec_driven.py` and review the diff"
+        f"tests/fixtures/goldens/define/define_{standard}.xml is stale — run "
+        "`uv run python examples/cdiscpilot01_spec_driven.py`, copy "
+        f"outputs/cdiscpilot01/define_{standard}.xml there and review the diff"
     )
 
 
 @schemas_present
+@examples_present
 @pytest.mark.parametrize("standard", ["sdtm", "adam"])
 def test_examples_pass_the_semantic_lint(standard):
     xml = DefineSpecGenerator(
@@ -515,6 +520,7 @@ def test_examples_pass_the_semantic_lint(standard):
 
 
 @schemas_present
+@examples_present
 def test_the_adam_example_define_names_no_sdtm_class():
     xml = DefineSpecGenerator(EXAMPLES / "adam" / "define.yaml", enrich_methods=True)
     expressions = [
