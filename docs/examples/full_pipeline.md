@@ -164,7 +164,14 @@ advs = (
     .assign("PARAMCD", source="VSTESTCD")
     .assign("AVAL", source="VSSTRESN")
     .join_adsl("TRT01P", "TRTSDT")  # carry forward on the ADSL pin's key
-    .flag("ABLFL", criteria='pl.col("VSDY") <= 1', by=["USUBJID", "PARAMCD"])
+    # the last pre-dose record per subject and parameter
+    .flag(
+        "ABLFL",
+        criteria="last",
+        order_by="VSDTC",
+        where='pl.col("VSDY") <= 1',
+        by=["USUBJID", "PARAMCD"],
+    )
     .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
     .chg("CHG", aval="AVAL", base="BASE")
     .to_frame()
