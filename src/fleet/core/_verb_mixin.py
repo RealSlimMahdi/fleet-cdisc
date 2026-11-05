@@ -297,6 +297,36 @@ def _check_row_steps(steps: list[dict[str, Any]], names: list[str], context: str
             )
 
 
+def _spec_order_hazards(nodes: list[Any]) -> dict[str, str]:
+    """Targets whose frozen block cannot give the inline value, with the reason.
+
+    ``to_spec_yaml`` writes the last step of each target, in frame order.
+    That loses the inline value when a target is changed after another
+    step read it, or when its last step reads the target itself after an
+    earlier step wrote it (``AVAL`` from ``LBSTRESN``, then
+    ``AVAL.round(2)``).
+    """
+    writes: dict[str, list[int]] = {}
+    for i, node in enumerate(nodes):
+        writes.setdefault(node.name, []).append(i)
+    hazards: dict[str, str] = {}
+    for name, idx in writes.items():
+        if len(idx) < 2:
+            continue
+        readers = sorted(
+            {
+                nodes[j].name
+                for j in range(idx[0] + 1, idx[-1])
+                if name in nodes[j].sources and nodes[j].name != name
+            }
+        )
+        if readers:
+            hazards[name] = f"{name} is changed after {', '.join(readers)} read it"
+        elif name in nodes[idx[-1]].sources:
+            hazards[name] = f"the last step of {name} reads {name}, which an earlier step wrote"
+    return hazards
+
+
 def _dtype_to_spec_type(dtype: pl.DataType | None) -> str:
     """Map a Polars dtype onto the define-spec ``type`` vocabulary."""
     if dtype is None:
@@ -2877,7 +2907,7 @@ class SharedVerbsMixin:
                 adsl_ns.to_spec_yaml(dataset="ADSL", predecessor="DM")
         """
         from fleet.core import spec_registry
-        from fleet.core.lineage import latest_lineage_of
+        from fleet.core.lineage import latest_lineage_of, lineage_of
         from fleet.validation.run_setup import DEFAULT_IG_VERSIONS
 
         standard = self._VALIDATE_STANDARD
@@ -2899,6 +2929,7 @@ class SharedVerbsMixin:
 
         schema = self._lazy.collect_schema()
         derived = {n.name: n for n in latest_lineage_of(self)}
+        hazards = _spec_order_hazards(lineage_of(self))
         name_pattern = re.compile(r"^[A-Z_][A-Z0-9_]{0,7}$")
         # The columns at the start of the chain: only they can be a carry-through
         # or a Predecessor; a column a verb added with no lineage node is a stub.
@@ -2921,6 +2952,13 @@ class SharedVerbsMixin:
                     f"TODO: column {col} was added by a verb that records no lineage "
                     "(for example merge) — replace this stub with a registered "
                     "derivation (algorithm: derivation, callable: <name>)."
+                )
+                entry["derivation"] = {"algorithm": "derivation", "callable": f"TODO_{col}"}
+            elif node is not None and col in hazards:
+                comment = (
+                    f"TODO: {hazards[col]}, so a block run in order gives another value "
+                    "than the inline chain — write the derivation of the value the "
+                    "dataset holds (algorithm: derivation, callable: <name>)."
                 )
                 entry["derivation"] = {"algorithm": "derivation", "callable": f"TODO_{col}"}
             elif node is not None:
@@ -2969,6 +3007,30 @@ class SharedVerbsMixin:
             raise DerivationError(
                 "to_spec_yaml(): nothing to serialise — the frame has no derived "
                 "variables and no CDISC-named columns."
+            )
+
+        if hazards:
+            warnings.warn(
+                "to_spec_yaml: the spec cannot give the inline values of "
+                + "; ".join(f"{name} ({why})" for name, why in hazards.items())
+                + ". Their blocks are TODO stubs.",
+                stacklevel=2,
+            )
+        # from_spec runs the blocks in frame order: a block that reads a variable a
+        # later block creates reads it before that block runs.
+        position = {entry["name"]: i for i, (entry, _) in enumerate(entries)}
+        late = [
+            f"{name} reads {src}"
+            for name, node in derived.items()
+            if name in position
+            for src in node.sources
+            if src != name and src in derived and position.get(src, -1) > position[name]
+        ]
+        if late:
+            warnings.warn(
+                f"to_spec_yaml: {'; '.join(late)}, which a later block of the spec "
+                "creates. from_spec runs the blocks in this order, so check the values.",
+                stacklevel=2,
             )
 
         stubs = [entry["name"] for entry, comment in entries if comment]

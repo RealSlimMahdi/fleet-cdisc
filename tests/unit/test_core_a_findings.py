@@ -1171,3 +1171,53 @@ def test_c1_755_tte_namespace_keeps_adtte():
     assert ns._domain == "ADTTE"
     text = ns.assign("STUDYID", value="S").to_spec_yaml()
     assert "name: ADTTE" in text
+
+
+# --------------------------------------------------------------------- #
+# c1-202 / c1-737: to_spec_yaml never writes a block that changes values #
+# --------------------------------------------------------------------- #
+
+
+def _blocks(text: str) -> dict:
+    import yaml
+
+    return {
+        v["name"]: v.get("derivation") for v in yaml.safe_load(text)["datasets"][0]["variables"]
+    }
+
+
+def test_c1_202_a_target_changed_after_a_read_is_a_stub():
+    df = pl.DataFrame({"USUBJID": ["S1", "S2"]})
+    ns = (
+        df.adam.assign("FLG", value="A")
+        .derivation("COPY", expression="pl.col('FLG')")
+        .assign("FLG", value="B")
+    )
+    with pytest.warns(UserWarning, match="FLG is changed after COPY read it"):
+        text = ns.to_spec_yaml("ADX")
+    assert _blocks(text)["FLG"] == {"algorithm": "derivation", "callable": "TODO_FLG"}
+
+
+def test_c1_737_a_target_derived_from_itself_is_a_stub():
+    adlb = pl.from_repr("""\
+┌─────────┬──────────┐
+│ USUBJID ┆ LBSTRESN │
+│ ---     ┆ ---      │
+│ str     ┆ f64      │
+╞═════════╪══════════╡
+│ A       ┆ 1.234    │
+└─────────┴──────────┘
+""")
+    ns = adlb.adam.assign("AVAL", source="LBSTRESN").derivation("AVAL", expression="AVAL.round(2)")
+    with pytest.warns(UserWarning, match="the last step of AVAL reads AVAL"):
+        text = ns.to_spec_yaml("ADLB")
+    assert _blocks(text)["AVAL"]["callable"] == "TODO_AVAL"
+
+
+def test_c1_737_a_plain_overwrite_still_writes_its_block():
+    df = pl.DataFrame({"USUBJID": ["S1"], "a": ["x"], "b": ["y"]})
+    ns = df.sdtm.assign("COL", source="a").assign("COL", source="b")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        text = ns.to_spec_yaml("DM")
+    assert _blocks(text)["COL"] == {"algorithm": "assign", "source": "b"}
