@@ -306,3 +306,260 @@ class TestSubNamespaceState:
         assert back._pinned is not ns._pinned
         out = back.chg("CHG", aval="AVAL2", base="AVAL").to_frame()
         assert out["CHG"].to_list() == [0.0, 0.0]
+
+
+_TTE_ADSL = """\
+┌─────────┬────────────┬─────────┬────────────┬────────────┐
+│ USUBJID ┆ TRTSDT     ┆ TRTSDTF ┆ EOSDT      ┆ NACTDT     │
+│ ---     ┆ ---        ┆ ---     ┆ ---        ┆ ---        │
+│ str     ┆ date       ┆ str     ┆ date       ┆ date       │
+╞═════════╪════════════╪═════════╪════════════╪════════════╡
+│ 01      ┆ 2023-01-01 ┆ D       ┆ 2023-05-05 ┆ null       │
+│ 02      ┆ 2023-01-01 ┆ null    ┆ 2023-06-30 ┆ 2023-01-15 │
+│ 03      ┆ 2023-01-01 ┆ null    ┆ 2023-03-31 ┆ null       │
+└─────────┴────────────┴─────────┴────────────┴────────────┘
+"""
+
+_TTE_AE = """\
+┌─────────┬─────────┬────────────┐
+│ USUBJID ┆ AEDECOD ┆ ADT        │
+│ ---     ┆ ---     ┆ ---        │
+│ str     ┆ str     ┆ date       │
+╞═════════╪═════════╪════════════╡
+│ 01      ┆ FATIGUE ┆ 2023-02-01 │
+│ 03      ┆ NAUSEA  ┆ 2023-02-15 │
+└─────────┴─────────┴────────────┘
+"""
+
+
+class TestTimeToEvent:
+    """c1-356 to c1-370: tte.param() strata, flags, trace, ties and arguments."""
+
+    @pytest.fixture
+    def adsl(self) -> pl.DataFrame:
+        return pl.from_repr(_TTE_ADSL)
+
+    @pytest.fixture
+    def adae(self) -> pl.DataFrame:
+        return pl.from_repr(_TTE_AE)
+
+    def _tt(self, adsl, adae, **kwargs) -> pl.DataFrame:
+        set_values = {"PARAMCD": pl.concat_str(pl.lit("TT"), pl.col("AEDECOD").str.head(3))}
+        return (
+            adsl.adam.tte.param(
+                "TT",
+                "Time to AE",
+                start="TRTSDT",
+                events={"AE": adae},
+                by=["AEDECOD"],
+                set_values_to=set_values,
+                **kwargs,
+            )
+            .aval()
+            .to_frame()
+            .sort("AEDECOD", "USUBJID")
+        )
+
+    def test_an_adsl_censor_is_crossed_with_the_strata(self, adsl, adae):
+        eos = adsl.select("USUBJID", ADT="EOSDT", EVNTDESC=pl.lit("END OF STUDY"))
+
+        out = self._tt(adsl, adae, censors={1: eos})
+
+        assert out.select("USUBJID", "AEDECOD", "CNSR", "AVAL").rows() == [
+            ("01", "FATIGUE", 0, 32.0),
+            ("02", "FATIGUE", 1, 181.0),
+            ("03", "FATIGUE", 1, 90.0),
+            ("01", "NAUSEA", 1, 125.0),
+            ("02", "NAUSEA", 1, 181.0),
+            ("03", "NAUSEA", 0, 46.0),
+        ]
+
+    def test_a_censor_with_only_some_by_columns_raises(self, adsl, adae):
+        adae = adae.with_columns(pl.lit("GEN").alias("AEBODSYS"))
+        partial = adae.select("USUBJID", "AEDECOD", "ADT", EVNTDESC=pl.lit("C"))
+        with pytest.raises(DerivationError, match="column 'AEBODSYS' not found"):
+            adsl.adam.tte.param(
+                "TT",
+                "Time to AE",
+                start="TRTSDT",
+                events={"AE": adae},
+                censors={1: partial},
+                by=["AEDECOD", "AEBODSYS"],
+            )
+
+    def test_the_drop_warning_under_by_names_the_cross(self, adsl, adae):
+        with pytest.warns(UserWarning, match=r"none of the by columns \['AEDECOD'\] is crossed"):
+            self._tt(adsl, adae)
+
+    def test_startdtf_comes_from_the_start_flag(self, adsl, adae):
+        rows = (
+            adsl.adam.tte.param(
+                "TTAE",
+                "Time to AE",
+                start="TRTSDT",
+                events={"AE": adae},
+                censors={1: adsl.select("USUBJID", ADT="EOSDT", EVNTDESC=pl.lit("EOS"))},
+            )
+            .to_frame()
+            .sort("USUBJID")
+        )
+
+        assert rows["STARTDTF"].to_list() == ["D", None, None]
+
+    def test_starttmf_comes_with_create_datetime(self):
+        adsl = pl.from_repr("""\
+┌─────────┬─────────────────────┬──────────┬──────────┐
+│ USUBJID ┆ TRTSDTM             ┆ TRTSDTF  ┆ TRTSTMF  │
+│ ---     ┆ ---                 ┆ ---      ┆ ---      │
+│ str     ┆ datetime[μs]        ┆ str      ┆ str      │
+╞═════════╪═════════════════════╪══════════╪══════════╡
+│ 01      ┆ 2023-01-01 00:00:00 ┆ D        ┆ H        │
+└─────────┴─────────────────────┴──────────┴──────────┘
+""")
+        event = pl.from_repr("""\
+┌─────────┬─────────────────────┐
+│ USUBJID ┆ ADT                 │
+│ ---     ┆ ---                 │
+│ str     ┆ datetime[μs]        │
+╞═════════╪═════════════════════╡
+│ 01      ┆ 2023-01-05 09:30:00 │
+└─────────┴─────────────────────┘
+""")
+        rows = adsl.adam.tte.param(
+            "TTAE", "Time to AE", start="TRTSDTM", events={"AE": event}, create_datetime=True
+        ).to_frame()
+
+        assert rows.select("STARTDTF", "STARTTMF").row(0) == ("D", "H")
+        assert rows["ADTM"].dt.strftime("%H:%M").to_list() == ["09:30"]
+
+    def test_the_trace_shows_retained_subjects_and_records_after_the_stop(self, adsl):
+        late = pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ ADT        │
+│ ---     ┆ ---        │
+│ str     ┆ date       │
+╞═════════╪════════════╡
+│ 02      ┆ 2023-02-05 │
+└─────────┴────────────┘
+""")
+        from fleet.adam.tte import select_tte
+
+        rows, trace = select_tte(
+            universe=adsl,
+            start="TRTSDT",
+            events={"AE": late},
+            censors={},
+            subject_keys=["USUBJID"],
+            stop_at=["NACTDT"],
+            retain="censor_at_start",
+        )
+
+        assert sorted(trace.select("USUBJID", "reason").rows()) == [
+            ("01", "censored at STARTDT: no record"),
+            ("02", "after the stop date"),
+            ("02", "censored at STARTDT: no record"),
+            ("03", "censored at STARTDT: no record"),
+        ]
+        retained = rows.filter(pl.col("USUBJID") == "01")
+        assert retained.select("SRCDOM", "SRCVAR").row(0) == ("ADSL", "TRTSDT")
+
+    def test_a_wrong_retain_raises(self, adsl, adae):
+        with pytest.raises(DerivationError, match="retain='censor_at_star' is not supported"):
+            adsl.adam.tte.param(
+                "TTAE",
+                "Time to AE",
+                start="TRTSDT",
+                events={"AE": adae},
+                retain="censor_at_star",
+            )
+
+    def test_a_tie_on_srcseq_warns(self, adsl):
+        ae = pl.from_repr("""\
+┌─────────┬────────────┬────────┐
+│ USUBJID ┆ ADT        ┆ SRCSEQ │
+│ ---     ┆ ---        ┆ ---    │
+│ str     ┆ date       ┆ i64    │
+╞═════════╪════════════╪════════╡
+│ 01      ┆ 2023-01-05 ┆ 3      │
+│ 01      ┆ 2023-01-05 ┆ 3      │
+└─────────┴────────────┴────────┘
+""")
+        with pytest.warns(UserWarning, match="with respect to USUBJID, ADT, SRCSEQ"):
+            adsl.adam.tte.param("TTAE", "Time to AE", start="TRTSDT", events={"AE": ae})
+
+    def test_a_tie_on_another_date_names_the_columns(self, adsl):
+        ae = pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ ADT        │
+│ ---     ┆ ---        │
+│ str     ┆ date       │
+╞═════════╪════════════╡
+│ 01      ┆ 2023-01-05 │
+│ 01      ┆ 2023-01-10 │
+│ 01      ┆ 2023-01-10 │
+└─────────┴────────────┘
+""")
+        with pytest.warns(UserWarning, match=r"with respect to USUBJID, ADT \(no SRCSEQ"):
+            adsl.adam.tte.param("TTAE", "Time to AE", start="TRTSDT", events={"AE": ae})
+
+    def test_srcseq_breaks_a_date_tie(self, adsl):
+        src = pl.from_repr("""\
+┌─────────┬────────────┬────────┐
+│ USUBJID ┆ ADT        ┆ SRCSEQ │
+│ ---     ┆ ---        ┆ ---    │
+│ str     ┆ date       ┆ i64    │
+╞═════════╪════════════╪════════╡
+│ 01      ┆ 2023-01-05 ┆ 2      │
+│ 01      ┆ 2023-01-05 ┆ 1      │
+└─────────┴────────────┴────────┘
+""")
+        event = adsl.adam.tte.param(
+            "TTE1", "Event", start="TRTSDT", events={"AE": src}, retain="censor_at_start"
+        ).to_frame()
+        censor = adsl.adam.tte.param(
+            "TTE2",
+            "Censor",
+            start="TRTSDT",
+            events={"X": src.clear()},
+            censors={1: src.with_columns(EVNTDESC=pl.lit("C"))},
+            retain="censor_at_start",
+        ).to_frame()
+
+        assert event.filter(pl.col("USUBJID") == "01")["SRCSEQ"].to_list() == [1]
+        assert censor.filter(pl.col("USUBJID") == "01")["SRCSEQ"].to_list() == [2]
+
+    def test_a_repeated_adsl_subject_raises(self):
+        adsl = pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ TRTSDT     │
+│ ---     ┆ ---        │
+│ str     ┆ date       │
+╞═════════╪════════════╡
+│ 01      ┆ 2023-01-01 │
+│ 01      ┆ 2023-02-01 │
+│ 02      ┆ 2023-01-01 │
+└─────────┴────────────┘
+""")
+        event = adsl.select("USUBJID", ADT="TRTSDT")
+        with pytest.raises(DerivationError, match="more than one row.*01"):
+            adsl.adam.tte.param("OS", "Overall Survival", start="TRTSDT", events={"D": event})
+
+    def test_km_data_counts_a_subject_once(self):
+        adsl = pl.from_repr("""\
+┌─────────┬────────────┬────────┐
+│ USUBJID ┆ TRTSDT     ┆ TRT01P │
+│ ---     ┆ ---        ┆ ---    │
+│ str     ┆ date       ┆ str    │
+╞═════════╪════════════╪════════╡
+│ 01      ┆ 2023-01-01 ┆ A      │
+│ 01      ┆ 2023-01-01 ┆ A      │
+│ 02      ┆ 2023-01-01 ┆ B      │
+└─────────┴────────────┴────────┘
+""")
+        event = adsl.select("USUBJID", ADT="TRTSDT").unique()
+        ns = adsl.adam.tte.param(
+            "OS", "Overall Survival", start="TRTSDT", events={"D": event}
+        ).aval()
+
+        assert ns.to_frame().height == 2
+        assert ns.km_data("OS", by=["TRT01P"]).height == 2

@@ -27,6 +27,7 @@ from fleet.adam._mixins import SharedADaMVerbsMixin
 from fleet.adam.tte import param_label, select_tte
 from fleet.core.dtc import to_day
 from fleet.core.exceptions import DerivationError
+from fleet.core.joins import refuse_repeated_keys
 
 logger = logging.getLogger("fleet")
 
@@ -114,8 +115,10 @@ class TTENamespace(SharedADaMVerbsMixin):
             censors: ``CNSR -> frame`` of censor records (CNSR >= 1).
             stop_at: Date columns in ADSL. The earliest non-null one ends
                 the observation: records after it are dropped.
-            by: Stratum columns, present in every source frame. Give a
-                per-stratum PARAMCD as an expression in *set_values_to*.
+            by: Stratum columns, present in every event frame. A censor
+                frame with none of them (for example from ADSL) is crossed
+                with the strata of the event frames. Give a per-stratum
+                PARAMCD as an expression in *set_values_to*.
             set_values_to: Extra constant or expression columns on the new
                 rows (PARAMN, PARCAT1, ...). A static PARAMCD with several
                 strata raises (1:1 guard).
@@ -386,8 +389,11 @@ class TTENamespace(SharedADaMVerbsMixin):
                     f"km_data(): column(s) {missing} not found on the ADTTE rows "
                     "nor in the pinned ADSL."
                 )
+            ref = refuse_repeated_keys(
+                "km_data()", adsl_df.select(list(join_on) + needed), list(join_on), source="ADSL"
+            )
             df = df.join(
-                adsl_df.select(list(join_on) + needed),
+                ref,
                 on=list(join_on),
                 how="left",
                 nulls_equal=True,
