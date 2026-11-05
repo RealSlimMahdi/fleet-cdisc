@@ -70,7 +70,12 @@ first.
 Each source is one `select`. The date goes to `ADT`. A source may also
 carry `SRCDOM`, `SRCVAR`, `SRCSEQ`, `CNSDTDSC` and (censors only)
 `EVNTDESC`; they go onto the selected row. `SRCSEQ` also breaks a tie on
-one date.
+one date. A censor frame without `EVNTDESC` gives a null `EVNTDESC` and a
+warning: the reason of the censoring is study text.
+
+Without a PARAM label, `.param()` reads it from the study CT: the decode
+of PARAMCD in the codelist of `ADTTE.PARAMCD` in the ADaM `define.yaml`.
+If there is no such decode, it raises and asks for `param=`.
 
 ```python
 death = adsl.filter(pl.col("DTHFL") == "Y").select(
@@ -231,7 +236,9 @@ adrs = pl.from_repr("""
 │ B       ┆ 2024-03-10 ┆ PD    │
 └─────────┴────────────┴───────┘
 """)
-last_assessment = adrs.select("USUBJID", "ADT", CNSDTDSC=pl.lit("LAST ASSESSMENT"))
+last_assessment = adrs.select(
+    "USUBJID", "ADT", EVNTDESC=pl.lit("NO PROGRESSION"), CNSDTDSC=pl.lit("LAST ASSESSMENT")
+)
 no_assessment = adsl_pfs.select("USUBJID", ADT="TRTSDT", EVNTDESC=pl.lit("NO ASSESSMENT"))
 
 pfs = (
@@ -249,13 +256,13 @@ pfs = (
 ```
 
 ```text
-┌─────────┬────────────┬────────────┬──────┬───────────────┬─────────────────┬──────┐
-│ USUBJID ┆ STARTDT    ┆ ADT        ┆ CNSR ┆ EVNTDESC      ┆ CNSDTDSC        ┆ AVAL │
-╞═════════╪════════════╪════════════╪══════╪═══════════════╪═════════════════╪══════╡
-│ A       ┆ 2024-01-01 ┆ 2024-03-01 ┆ 2    ┆ null          ┆ LAST ASSESSMENT ┆ 61.0 │
-│ B       ┆ 2024-01-01 ┆ 2024-02-01 ┆ 2    ┆ null          ┆ LAST ASSESSMENT ┆ 32.0 │
-│ C       ┆ 2024-01-01 ┆ 2024-01-01 ┆ 3    ┆ NO ASSESSMENT ┆ null            ┆ 1.0  │
-└─────────┴────────────┴────────────┴──────┴───────────────┴─────────────────┴──────┘
+┌─────────┬────────────┬────────────┬──────┬────────────────┬─────────────────┬──────┐
+│ USUBJID ┆ STARTDT    ┆ ADT        ┆ CNSR ┆ EVNTDESC       ┆ CNSDTDSC        ┆ AVAL │
+╞═════════╪════════════╪════════════╪══════╪════════════════╪═════════════════╪══════╡
+│ A       ┆ 2024-01-01 ┆ 2024-03-01 ┆ 2    ┆ NO PROGRESSION ┆ LAST ASSESSMENT ┆ 61.0 │
+│ B       ┆ 2024-01-01 ┆ 2024-02-01 ┆ 2    ┆ NO PROGRESSION ┆ LAST ASSESSMENT ┆ 32.0 │
+│ C       ┆ 2024-01-01 ┆ 2024-01-01 ┆ 3    ┆ NO ASSESSMENT  ┆ null            ┆ 1.0  │
+└─────────┴────────────┴────────────┴──────┴────────────────┴─────────────────┴──────┘
 ```
 
 - Subject A has no progression: ADT is the last assessment (2024-03-01),

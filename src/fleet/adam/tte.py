@@ -11,11 +11,14 @@ from __future__ import annotations
 
 import difflib
 import warnings
+from pathlib import Path
 from typing import Literal
 
 import polars as pl
 
+from fleet.core.define_spec import load_spec_yaml
 from fleet.core.exceptions import DerivationError
+from fleet.core.study_context import StudyConfigError, find_study_config, load_study_context
 
 #: Columns that a source frame carries onto the selected ADTTE row.
 CARRIED_COLUMNS = ("EVNTDESC", "CNSDTDSC", "SRCDOM", "SRCVAR", "SRCSEQ")
@@ -142,6 +145,75 @@ def _sources(
     ]
 
 
+def param_label(paramcd: str, domain: str = "ADTTE") -> str:
+    """Return the PARAM of *paramcd* from the study's controlled terminology.
+
+    The study is the first ``study_config.yaml`` in the working directory
+    or above it. The label is the ``decode`` of the *paramcd* item in a
+    codelist that a ``PARAMCD`` variable of the ADaM ``define.yaml``
+    references (the *domain* dataset first, then the others). ``fleet init
+    ct`` writes the CDISC CT preferred terms as these decodes, so a PARAMCD
+    in a pinned CDISC CT codelist resolves here too.
+
+    Args:
+        paramcd: The parameter code, for example ``"OS"``.
+        domain: The dataset whose ``PARAMCD`` codelist is read first.
+
+    Returns:
+        str: The decode, for example ``"Overall Survival"``.
+
+    Raises:
+        DerivationError: When no source gives a label. The message names
+            *paramcd*, the places searched and the fix (``param=``).
+
+    References:
+        ADaMIG v1.3, BDS analysis parameter variables: PARAM and PARAMCD
+        map one to one. CDISC
+        ADaM CT (NCI EVS) has no time-to-event PARAMCD codelist; its
+        parameter codelists are questionnaire and scale codes. ADR-0043.
+
+    Examples:
+        The label of OS in a study whose ADTTE.PARAMCD has a codelist::
+
+            label = param_label("OS")  # "Overall Survival"
+    """
+    searched: list[str] = []
+    config = find_study_config()
+    if config is None:
+        searched.append(f"no study_config.yaml in {Path.cwd()} or above it")
+    else:
+        try:
+            define = load_study_context(config).metadata_adam_dir / "define.yaml"
+        except StudyConfigError as err:
+            searched.append(f"{config} (cannot be read: {err})")
+        else:
+            label = _define_decode(define, paramcd, domain) if define.is_file() else None
+            if label is not None:
+                return label
+            searched.append(f"the PARAMCD codelists of {define}")
+    searched.append("CDISC ADaM CT (it has no time-to-event PARAMCD codelist)")
+    raise DerivationError(
+        f"param(): no PARAM label for PARAMCD '{paramcd}'. Searched: {'; '.join(searched)}. "
+        f'Pass param=, for example param("{paramcd}", "Overall Survival", ...), or add '
+        f"'{paramcd}' with a decode to the PARAMCD codelist of {domain} in the ADaM define.yaml."
+    )
+
+
+def _define_decode(define: Path, paramcd: str, domain: str) -> str | None:
+    """The decode of *paramcd* in a codelist a PARAMCD variable of *define* references."""
+    spec = load_spec_yaml(define.read_text(encoding="utf-8")) or {}
+    codelists = {str(cl.get("oid")): cl for cl in spec.get("codelists") or []}
+    datasets = sorted(spec.get("datasets") or [], key=lambda ds: ds.get("name") != domain)
+    for ds in datasets:
+        for var in ds.get("variables") or []:
+            if var.get("name") != "PARAMCD" or not var.get("codelist"):
+                continue
+            for item in codelists.get(str(var["codelist"]), {}).get("items") or []:
+                if str(item.get("coded_value")) == paramcd and item.get("decode"):
+                    return str(item["decode"])
+    return None
+
+
 def select_tte(
     *,
     universe: pl.DataFrame,
@@ -160,8 +232,9 @@ def select_tte(
     *universe*. Event and censor records after it are dropped. The first
     event left wins (``CNSR = 0``, ``EVNTDESC`` = its key). A subject
     without an event takes the last censor record left (``CNSR`` = its
-    key); on a date tie the censor frame given last wins. A date before the
-    start date is set to the start date.
+    key); on a date tie the censor frame given last wins. An event or
+    censor date before the start date is set to the start date; the CNSR
+    does not change.
 
     Args:
         universe: Subject-level frame (ADSL) with *start*, *stop_at* and the
@@ -172,7 +245,7 @@ def select_tte(
             and ``ADT``.
         censors: ``CNSR -> frame`` (CNSR >= 1). Each frame holds the
             subject keys and ``ADT``; ``EVNTDESC`` comes from a frame
-            column, else it is null.
+            column, else it is null and a warning names the frame.
         subject_keys: Subject identifier columns (usually ``["USUBJID"]``).
         stop_at: Date columns in *universe*; the earliest non-null one
             ends the observation of the subject.
@@ -212,6 +285,16 @@ def select_tte(
     stop_at = stop_at or []
     sources = _sources(events, censors)
     keys = subject_keys + by
+
+    no_desc = [lb for lb, kd, _, fr in sources if kd == "censor" and "EVNTDESC" not in fr.columns]
+    if no_desc:
+        warnings.warn(
+            f"TTE censor frame(s) {', '.join(no_desc)} have no EVNTDESC column, so EVNTDESC "
+            "is null on their rows. Give the reason of the censoring on the frame, for "
+            'example adsl.select("USUBJID", ADT="LSTALVDT", EVNTDESC=pl.lit("ALIVE")).',
+            UserWarning,
+            stacklevel=3,
+        )
 
     _check_columns("ADSL", universe, subject_keys + [start, *stop_at])
     for col in [start, *stop_at]:
