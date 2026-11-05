@@ -89,6 +89,28 @@ Always use generated codelist classes (`SEX`, `RACE`, …) — never raw NCI con
 
 Fleet uses **Polars exclusively**. Never introduce Pandas as a dependency or use it in implementation code.
 
+### Add a verb
+
+A verb that a `define.yaml` can call (`algorithm: <verb>`) needs five edits.
+The test in brackets fails until the step is done.
+
+1. **Method.** Add the verb to its namespace class or mixin. It returns `Self` and uses
+   `self._chain(...)` or `self._materialise_then(df)`. Add unit tests with `pl.from_repr` data.
+2. **Registry.** Declare it with `spec_verb("<verb>", standard="sdtm" | "adam", ...)` in
+   `src/fleet/core/spec_registry.py`. A verb that cannot run from a spec goes into
+   `SPEC_UNSUPPORTED` instead, with a reason
+   (`test_every_public_verb_is_registered_or_allowlisted`).
+3. **Enum.** Add the verb name to `SDTMAlgorithm` (`src/fleet/sdtm/models.py`) or
+   `ADAMAlgorithm` (`src/fleet/adam/models.py`) (`test_enum_matches_registry`).
+4. **JSON schema.** Run `uv run python -m fleet.define_xml.schema_builder` and commit
+   `define_spec_schema.json` (`test_json_schema_in_sync`).
+5. **Round trip.** Add a `Case(...)` to `SDTM_CASES` or `ADAM_CASES` in
+   `tests/unit/test_spec_parity.py` (`test_round_trip_cases_cover_every_algorithm`).
+
+All four tests are in `tests/unit/test_spec_parity.py`. Then regenerate `llms.txt`
+(see the PR checklist). A verb that encodes a clinical rule must also pass the admission
+bar of `docs/adr/0009-an-admission-bar-for-clinical-verbs.md`.
+
 ---
 
 ## Docstring Convention
