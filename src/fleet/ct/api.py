@@ -182,6 +182,9 @@ class CDISCClient:
             raise CTError(f"CDISC API request failed ({status}): {exc}") from exc
         except httpx.HTTPError as exc:
             raise CTError(f"Network error contacting CDISC Library: {exc}") from exc
+        except ValueError as exc:
+            # A proxy or a sign-in page can answer 200 with HTML.
+            raise CTError(f"CDISC Library answer for {path} is not JSON: {exc}") from exc
 
     def close(self) -> None:
         """Close the underlying HTTP transport."""
