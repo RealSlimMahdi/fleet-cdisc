@@ -482,7 +482,10 @@ The engine compares **values**, not metadata: a Polars frame carries no
 labels, formats or lengths, so comparing those would need a define.yaml-aware
 mode. Keys are mandatory on all three surfaces — there is no positional
 matching, and no lookup of keys from define.yaml or the study configuration.
-A comparison takes exactly two datasets, never a batch of directories. The
+A comparison takes exactly two datasets, never a batch of directories. A SAS
+special missing value (`.A` to `.Z` and `._`) in an XPT or SAS7BDAT file reads
+as null and its letter is lost, so `.A` against `.R` compares equal, which
+SAS PROC COMPARE reports as unequal. The
 [compare spec](https://github.com/RealSlimMahdi/fleet-cdisc/issues/99) tracks
 what is deliberately left out and what may follow it, including an MCP tool
 and a diff view in the editor extension built on the JSON contract above.

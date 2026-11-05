@@ -64,6 +64,8 @@ def _dtype_to_dsj_type(dtype: pl.DataType) -> str:
         return "float"
     if dtype == pl.Float64:
         return "double"
+    if isinstance(dtype, pl.Decimal):
+        return "decimal"
     if dtype == pl.Boolean:
         return "boolean"
     if dtype == pl.Date:
@@ -153,6 +155,26 @@ def _finite(df: pl.DataFrame, dom: str) -> pl.DataFrame:
     return df.with_columns(pl.when(pl.col(c).is_finite()).then(pl.col(c)).alias(c) for c in bad)
 
 
+#: Rows serialised per slice: memory stays flat as the dataset grows.
+_SLICE_ROWS = 50_000
+
+
+def _refuse_ndjson(path: Path) -> None:
+    """Refuse an ``.ndjson`` path: Fleet reads and writes only the JSON form."""
+    if path.suffix.lower() == ".ndjson":
+        raise FleetIOError(
+            f"{path.name}: NDJSON is not supported, use .json (Dataset-JSON 1.1 in JSON form)."
+        )
+
+
+def _default_file_oid(df: pl.DataFrame, dom: str, created: str) -> str:
+    """``<STUDYID>.<domain>.<creation time>``, without the study when no STUDYID is set."""
+    study = None
+    if "STUDYID" in df.columns:
+        study = df["STUDYID"].cast(pl.String).drop_nulls().first()
+    return ".".join(str(part) for part in (study, dom, created) if part)
+
+
 def save_dataset_json(
     df: pl.DataFrame,
     path: str | Path,
@@ -173,17 +195,23 @@ def save_dataset_json(
     SAS display format, so :func:`read_dataset_json` gives the date back.
     NaN and infinity are written as null with a warning, because JSON has
     no such number (RFC 8259).  A string column with no value gets no
-    ``length``.
+    ``length``.  A ``pl.Decimal`` column is ``decimal`` (its values are
+    text); a ``pl.Float32`` value is written with the digits it shows
+    (``1.1``, not ``1.100000023841858``).  ``sourceSystem`` names Fleet;
+    the creation time is UTC with a ``Z``.  The rows are written in slices
+    of 50,000, so memory does not grow with the dataset.
 
     Args:
         df: The DataFrame to serialize.
-        path: Destination file path (should end in ``.json``).
+        path: Destination file path (``.json``; ``.ndjson`` is refused).
         domain: Dataset / domain name (e.g. ``"DM"``, ``"ADSL"``).
             Used for ``name``, ``itemGroupOID``, and column ``itemOID``.
         label: Human-readable dataset label.  Defaults to
             ``"<domain> dataset"`` if omitted.
         originator: Organisation that created the file.
-        file_oid: Unique file identifier.  Defaults to the file stem.
+        file_oid: Unique file identifier.  Defaults to
+            ``<STUDYID>.<domain>.<creation time>``; without a STUDYID
+            value, ``<domain>.<creation time>``.
         columns: Define metadata by column name.  Each entry may hold
             ``label``, ``targetDataType``, ``length``, ``displayFormat``
             and ``keySequence``; a given value wins over the one Fleet
@@ -196,8 +224,8 @@ def save_dataset_json(
         Path to the written file.
 
     Raises:
-        FleetIOError: When a column holds a duration, or a ``columns``
-            entry holds an unknown key.
+        FleetIOError: When a column holds a duration, a ``columns``
+            entry holds an unknown key, or *path* ends in ``.ndjson``.
 
     Examples:
         Export an SDTM DM dataset with its define labels::
@@ -214,6 +242,7 @@ def save_dataset_json(
             )
     """
     path = Path(path)
+    _refuse_ndjson(path)
     dom = domain.upper()
     durations = [c for c, dtype in df.schema.items() if isinstance(dtype, pl.Duration)]
     if durations:
@@ -223,23 +252,27 @@ def save_dataset_json(
         )
     path.parent.mkdir(parents=True, exist_ok=True)
 
+    created = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S")
     lbl = label or f"{dom} dataset"
-    foid = file_oid or path.stem
+    foid = file_oid or _default_file_oid(df, dom, created)
     meta = columns or {}
 
     col_defs = [_column_def(df, dom, n, t, meta.get(n, {})) for n, t in df.schema.items()]
-    rows: list[list[Any]] = [
-        [_serialize_value(v) for v in row] for row in _finite(df, dom).iter_rows()
-    ]
+    float32 = [c for c, dtype in df.schema.items() if dtype == pl.Float32]
+    # The shortest text of a Float32 is the value the programmer sees: 1.1, not 1.100000023841858.
+    data = _finite(df, dom)
+    if float32:
+        data = data.with_columns(pl.col(float32).cast(pl.String))
+    as_float = [c in float32 for c in df.columns]
 
     from fleet._version import __version__
 
     payload: dict[str, Any] = {
-        "datasetJSONCreationDateTime": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S"),
+        "datasetJSONCreationDateTime": f"{created}Z",
         "datasetJSONVersion": "1.1.0",
         "fileOID": foid,
         "originator": originator,
-        "sourceSystem": {"name": originator, "version": __version__},
+        "sourceSystem": {"name": "Fleet", "version": __version__},
     }
     if study_oid:
         payload["studyOID"] = study_oid
@@ -251,10 +284,25 @@ def save_dataset_json(
         "name": dom,
         "label": lbl,
         "columns": col_defs,
-        "rows": rows,
     }
 
-    path.write_text(_json.dumps(payload, ensure_ascii=False, allow_nan=False), encoding="utf-8")
+    head = _json.dumps(payload, ensure_ascii=False, allow_nan=False)
+    with path.open("w", encoding="utf-8") as fh:
+        fh.write(head[:-1] + ', "rows": [')
+        sep = ""
+        for chunk in data.iter_slices(_SLICE_ROWS):
+            rows = [
+                [
+                    float(v) if f and v is not None else _serialize_value(v)
+                    for v, f in zip(row, as_float)
+                ]
+                for row in chunk.iter_rows()
+            ]
+            if not rows:
+                continue
+            fh.write(sep + _json.dumps(rows, ensure_ascii=False, allow_nan=False)[1:-1])
+            sep = ", "
+        fh.write("]}")
     return path
 
 
@@ -373,7 +421,9 @@ def read_dataset_json(path: str | Path) -> pl.DataFrame:
     Raises:
         FleetIOError: When a value does not fit its column type, for
             example ``2.5`` in an integer column or a partial date in a
-            numeric date column.
+            numeric date column; when ``records`` is not the number of
+            rows; when a row has more or fewer cells than there are
+            columns; or when *path* ends in ``.ndjson``.
 
     Examples:
         Round-trip a dataset::
@@ -384,11 +434,21 @@ def read_dataset_json(path: str | Path) -> pl.DataFrame:
             dm_back = read_dataset_json("dm.json")
     """
     path = Path(path)
+    _refuse_ndjson(path)
     raw = _json.loads(path.read_text(encoding="utf-8"))
     rows: list[list[Any]] = raw.get("rows", [])
+    columns = raw["columns"]
+    records = raw.get("records")
+    if records is not None and records != len(rows):
+        raise FleetIOError(f"{path.name}: records {records}, rows {len(rows)}.")
+    for n, row in enumerate(rows, 1):
+        if len(row) != len(columns):
+            raise FleetIOError(
+                f"{path.name}, row {n}: {len(row)} cell(s) for {len(columns)} column(s)."
+            )
     return pl.DataFrame(
         [
-            _read_column(col["name"], col, [row[i] if i < len(row) else None for row in rows], path)
-            for i, col in enumerate(raw["columns"])
+            _read_column(col["name"], col, [row[i] for row in rows], path)
+            for i, col in enumerate(columns)
         ]
     )

@@ -386,7 +386,7 @@ class StudyContext:
         return ctx
 
 
-def load_study_context(config_path: Path) -> StudyContext:
+def load_study_context(config_path: str | Path) -> StudyContext:
     """Load study configuration and return a resolved context.
 
     Args:
@@ -398,6 +398,7 @@ def load_study_context(config_path: Path) -> StudyContext:
     Raises:
         StudyConfigError: If the config file is missing or invalid
     """
+    config_path = Path(config_path)
     if not config_path.exists():
         raise StudyConfigError(f"Study configuration file not found: {config_path}")
 

@@ -731,3 +731,203 @@ def test_fleet_validate_mcp_returns_study_issues(
 
     assert [i["rule_id"] for i in out["study_issues"]] == ["CORE-000400"]
     assert out["issues"] == []
+
+
+# ── io: c1-580 c1-581 c1-582 c1-583 c1-584 Dataset-JSON ──
+
+_DM = """\
+┌─────────┬─────────┬─────┐
+│ STUDYID ┆ USUBJID ┆ AGE │
+│ ---     ┆ ---     ┆ --- │
+│ str     ┆ str     ┆ i64 │
+╞═════════╪═════════╪═════╡
+│ S1      ┆ S1-001  ┆ 63  │
+│ S1      ┆ S1-002  ┆ 70  │
+│ S1      ┆ S1-003  ┆ 55  │
+└─────────┴─────────┴─────┘
+"""
+
+
+class TestDatasetJson:
+    def _saved(self, tmp_path: Path) -> tuple[Path, dict]:
+        import json
+
+        import polars as pl
+
+        from fleet.io.dataset_json import save_dataset_json
+
+        path = save_dataset_json(pl.from_repr(_DM), tmp_path / "dm.json", domain="DM")
+        return path, json.loads(path.read_text(encoding="utf-8"))
+
+    @pytest.mark.parametrize(
+        ("edit", "match"),
+        [
+            (lambda raw: raw["rows"].pop(), "records 3, rows 2"),
+            (lambda raw: raw.update(records=1), "records 1, rows 3"),
+            (lambda raw: raw["rows"][0].append("extra"), "row 1: 4 cell"),
+            (lambda raw: raw["rows"][1].pop(), "row 2: 2 cell"),
+        ],
+    )
+    def test_a_malformed_file_is_refused(self, tmp_path: Path, edit: Any, match: str) -> None:
+        import json
+
+        from fleet.core.exceptions import IOError as FleetIOError
+        from fleet.io.dataset_json import read_dataset_json
+
+        path, raw = self._saved(tmp_path)
+        edit(raw)
+        path.write_text(json.dumps(raw), encoding="utf-8")
+
+        with pytest.raises(FleetIOError, match=match):
+            read_dataset_json(path)
+
+    def test_zero_records_with_no_rows_reads(self, tmp_path: Path) -> None:
+        import polars as pl
+
+        from fleet.io.dataset_json import read_dataset_json, save_dataset_json
+
+        empty = pl.from_repr(_DM).head(0)
+        path = save_dataset_json(empty, tmp_path / "dm.json", domain="DM")
+
+        assert read_dataset_json(path).height == 0
+
+    def test_ndjson_is_refused_on_write_and_read(self, tmp_path: Path) -> None:
+        import polars as pl
+
+        from fleet.core.exceptions import IOError as FleetIOError
+        from fleet.io.dataset_json import read_dataset_json, save_dataset_json
+
+        with pytest.raises(FleetIOError, match="NDJSON is not supported"):
+            save_dataset_json(pl.from_repr(_DM), tmp_path / "w.ndjson", domain="DM")
+        (tmp_path / "r.ndjson").write_text("{}\n{}\n", encoding="utf-8")
+        with pytest.raises(FleetIOError, match="NDJSON is not supported"):
+            read_dataset_json(tmp_path / "r.ndjson")
+
+    def test_decimal_and_float32_are_written_as_shown(self, tmp_path: Path) -> None:
+        import json
+        from decimal import Decimal
+
+        import polars as pl
+
+        from fleet.io.dataset_json import read_dataset_json, save_dataset_json
+
+        df = pl.DataFrame(
+            {
+                "C_DEC": pl.Series([Decimal("1.25")], dtype=pl.Decimal(20, 13)),
+                "C_F32": pl.Series([1.1], dtype=pl.Float32),
+            }
+        )
+        path = save_dataset_json(df, tmp_path / "x.json", domain="X")
+        raw = json.loads(path.read_text(encoding="utf-8"))
+
+        types = {c["name"]: c["dataType"] for c in raw["columns"]}
+        assert types == {"C_DEC": "decimal", "C_F32": "float"}
+        assert raw["rows"][0][1] == 1.1
+        assert read_dataset_json(path)["C_DEC"].to_list() == [1.25]
+
+    def test_header_names_fleet_utc_and_a_unique_file_oid(self, tmp_path: Path) -> None:
+        import polars as pl
+
+        from fleet.io.dataset_json import save_dataset_json
+
+        path = save_dataset_json(
+            pl.from_repr(_DM), tmp_path / "dm2.json", domain="DM", originator="ACME Pharma"
+        )
+        import json
+
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        created = raw["datasetJSONCreationDateTime"]
+
+        assert raw["sourceSystem"]["name"] == "Fleet"
+        assert raw["originator"] == "ACME Pharma"
+        assert created.endswith("Z")
+        assert raw["fileOID"] == f"S1.DM.{created[:-1]}"
+
+    def test_a_multi_slice_file_reads_back_equal(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import polars as pl
+        from polars.testing import assert_frame_equal
+
+        from fleet.io import dataset_json
+        from fleet.io.dataset_json import read_dataset_json, save_dataset_json
+
+        monkeypatch.setattr(dataset_json, "_SLICE_ROWS", 2)
+        dm = pl.from_repr(_DM)
+
+        path = save_dataset_json(dm, tmp_path / "dm.json", domain="DM")
+
+        assert_frame_equal(read_dataset_json(path), dm)
+
+
+# ── io: c1-240 c1-243 c2-948 c1-239 loaders ──
+
+
+class TestLoaders:
+    @pytest.mark.parametrize("suffix", [".parquet", ".csv"])
+    def test_glob_characters_in_a_file_name_are_literal(self, tmp_path: Path, suffix: str) -> None:
+        import polars as pl
+
+        from fleet.io.loaders import load_raw_data
+
+        for name, x in ((f"adsl[1]{suffix}", 1), (f"adsl1{suffix}", 999)):
+            frame = pl.DataFrame({"X": [x]})
+            if suffix == ".csv":
+                frame.write_csv(tmp_path / name)
+            else:
+                frame.write_parquet(tmp_path / name)
+
+        out = load_raw_data(tmp_path / f"adsl[1]{suffix}").collect()
+
+        assert out["X"].to_list() == [1]
+
+    @pytest.mark.parametrize("as_text", [True, False])
+    def test_load_study_context_takes_a_text_path(self, tmp_path: Path, as_text: bool) -> None:
+        from fleet.core.study_context import load_study_context
+
+        cfg = _write_study(tmp_path)
+
+        ctx = load_study_context(str(cfg) if as_text else cfg)
+
+        assert ctx.study_root == tmp_path
+
+    @pytest.mark.parametrize("as_text", [True, False])
+    def test_download_raw_data_takes_a_text_path(self, tmp_path: Path, as_text: bool) -> None:
+        from fleet.io.loaders import download_raw_data
+
+        existing = tmp_path / "dm.csv"
+        existing.write_text("A\n1\n", encoding="utf-8")
+
+        out = download_raw_data("https://unused", str(existing) if as_text else existing)
+
+        assert out == existing
+
+    def test_file_type_xpt_reads_a_renamed_transport_file(self, tmp_path: Path) -> None:
+        import polars as pl
+
+        pyreadstat = pytest.importorskip("pyreadstat")
+        from fleet.io.loaders import load_raw_data
+
+        te = tmp_path / "te.sas7bdat"
+        pyreadstat.write_xport(
+            pl.DataFrame({"ETCD": ["SCRN"]}), str(te), file_format_version=5, table_name="TE"
+        )
+
+        assert load_raw_data(te, file_type="xpt").collect()["ETCD"].to_list() == ["SCRN"]
+
+    def test_a_special_missing_value_reads_as_null(self, tmp_path: Path) -> None:
+        import polars as pl
+
+        pyreadstat = pytest.importorskip("pyreadstat")
+        from fleet.io.loaders import load_raw_data
+
+        qs = tmp_path / "qs.xpt"
+        frame = pl.DataFrame({"QSSTRESN": [None]}, schema={"QSSTRESN": pl.Float64})
+        pyreadstat.write_xport(frame, str(qs), file_format_version=5, table_name="QS")
+        data = bytearray(qs.read_bytes())
+        missing = data.rfind(b".\x00\x00\x00\x00\x00\x00\x00")
+        assert missing > 0
+        data[missing] = ord("A")  # .A: SAS special missing "not asked"
+        qs.write_bytes(bytes(data))
+
+        assert load_raw_data(qs).collect()["QSSTRESN"].to_list() == [None]
