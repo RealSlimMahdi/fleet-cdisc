@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from datetime import date
 
 import polars as pl
@@ -192,3 +193,72 @@ class TestByAsString:
         out = ae.adam.seq("ASEQ", order_by="ASTDY", by="USUBJID").to_frame()
 
         assert out.sort("USUBJID", "ASEQ").rows() == [("S1", 2, 1), ("S1", 5, 2), ("S2", 1, 1)]
+
+
+class TestGradingArguments:
+    """c1-331, c1-332, c1-391: grading stops or warns on a value it cannot grade."""
+
+    @pytest.fixture
+    def lb(self) -> pl.DataFrame:
+        return pl.from_repr("""\
+┌──────────┬─────────┬───────┬───────┐
+│ ATOXDSCL ┆ AVAL    ┆ AVALU ┆ ANRLO │
+│ ---      ┆ ---     ┆ ---   ┆ ---   │
+│ str      ┆ f64     ┆ str   ┆ f64   │
+╞══════════╪═════════╪═══════╪═══════╡
+│ HGB      ┆ 99.9996 ┆ g/L   ┆ 120.0 │
+└──────────┴─────────┴───────┴───────┘
+""")
+
+    def test_a_term_with_no_criteria_warns(self, lb):
+        with pytest.warns(UserWarning, match=r"no criteria in any direction.*\['HGB'\]"):
+            out = lb.adam.atoxgr(
+                "ATOXGRL", direction="L", term_var="ATOXDSCL", unit_var="AVALU"
+            ).to_frame()
+        assert out["ATOXGRL"].to_list() == [None]
+
+    def test_a_term_with_criteria_in_the_other_direction_does_not_warn(self, lb):
+        lb = lb.with_columns(pl.lit("Anemia").alias("ATOXDSCL"))
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            lb.adam.atoxgr("ATOXGRH", direction="H", term_var="ATOXDSCL", unit_var="AVALU")
+
+    @pytest.mark.parametrize("signif_dig", [0, -1, 2.5])
+    def test_signif_dig_must_be_a_positive_integer(self, lb, signif_dig):
+        with pytest.raises(DerivationError, match="signif_dig"):
+            lb.adam.atoxgr(
+                "ATOXGRL",
+                direction="L",
+                term_var="ATOXDSCL",
+                unit_var="AVALU",
+                signif_dig=signif_dig,
+            )
+
+    def test_combine_grades_rejects_a_grade_outside_0_to_4(self):
+        adlb = pl.from_repr("""\
+┌─────────┬─────────┬──────────┬──────────┐
+│ ATOXGRL ┆ ATOXGRH ┆ ATOXDSCL ┆ ATOXDSCH │
+│ ---     ┆ ---     ┆ ---      ┆ ---      │
+│ str     ┆ str     ┆ str      ┆ str      │
+╞═════════╪═════════╪══════════╪══════════╡
+│ G3      ┆ 0       ┆ Anemia   ┆ Hgb incr │
+│ -1      ┆ 0       ┆ Anemia   ┆ Hgb incr │
+│ 10      ┆ 0       ┆ Anemia   ┆ Hgb incr │
+│ 5       ┆ 0       ┆ Anemia   ┆ Hgb incr │
+└─────────┴─────────┴──────────┴──────────┘
+""")
+        with pytest.raises(DerivationError, match=r"ATOXGRL holds \['-1', '10', '5', 'G3'\]"):
+            adlb.adam.combine_grades("ATOXGR")
+
+    def test_combine_grades_rejects_a_numeric_grade(self):
+        adlb = pl.from_repr("""\
+┌─────────┬─────────┬──────────┬──────────┐
+│ ATOXGRL ┆ ATOXGRH ┆ ATOXDSCL ┆ ATOXDSCH │
+│ ---     ┆ ---     ┆ ---      ┆ ---      │
+│ i64     ┆ str     ┆ str      ┆ str      │
+╞═════════╪═════════╪══════════╪══════════╡
+│ 3       ┆ 0       ┆ Anemia   ┆ Hgb incr │
+└─────────┴─────────┴──────────┴──────────┘
+""")
+        with pytest.raises(DerivationError, match="ATOXGRL is Int64, not text"):
+            adlb.adam.combine_grades("ATOXGR")

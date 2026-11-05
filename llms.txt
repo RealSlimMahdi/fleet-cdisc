@@ -1851,7 +1851,7 @@ These verbs are defined once in `SharedADaMVerbsMixin` (`src/fleet/adam/_mixins.
 Available on `df.adam` (BDS base namespace). Shared verbs (source, assign, case_when, derivation, recode, merge, keep, whereclauses, merge_adsl, date, duration, flag) are also available here via the shared mixin.
 
 - `flag(target: str, *, criteria: str | pl.Expr, by: list[str] | None = None, order_by: str | list[str] | None = None, value_col: str | None = None, where: str | pl.Expr | None = None, from_dataset: pl.DataFrame | list[pl.DataFrame] | None = None, on: list[str] | None = None, source_filter: pl.Expr | None = None, condition: pl.Expr | None = None, inclusive: bool = True, flag_no_ref_groups: bool = True, flag_all: bool = False, flag_value: str = 'Y', false_value: str | None = None) -> Self` — Set *target* to *flag_value* for records matching *criteria*.
-- `baseline(target: str, *, aval: str = 'AVAL', baseline_flag: str = 'ABLFL', by: list[str] | None = None, strict: bool = True) -> AdamNamespace` — Derive BASE as the AVAL where the baseline flag equals ``"Y"``.
+- `baseline(target: str, *, aval: str = 'AVAL', baseline_flag: str = 'ABLFL', by: str | list[str] | None = None, strict: bool = True) -> AdamNamespace` — Derive BASE as the AVAL where the baseline flag equals ``"Y"``.
 - `chg(target: str, *, aval: str = 'AVAL', base: str = 'BASE') -> AdamNamespace` — Compute change from baseline: ``CHG = AVAL - BASE``.
 - `pchg(target: str, *, aval: str = 'AVAL', base: str = 'BASE') -> AdamNamespace` — Compute percent change from baseline.
 - `bmi(target: str, *, weight: str, height: str, round_digits: int | None = None) -> AdamNamespace` — Derive Body Mass Index: ``weight_kg / (height_cm / 100) ** 2``.
@@ -1862,9 +1862,10 @@ Available on `df.adam` (BDS base namespace). Shared verbs (source, assign, case_
 - `on_treatment(target: str = 'ONTRTFL', *, adt: str, trtsdt: str, trtedt: str, open_ended: bool = True) -> AdamNamespace` — Set *target* to ``"Y"`` when *adt* is within [trtsdt, trtedt].
 - `shift(target: str, *, baseline_cat: str, post_cat: str, sep: str = ' to ') -> AdamNamespace` — Derive a categorical shift label: ``"<baseline><sep><post>"``.
 - `derive_summary_records(*, by: list[str], analysis_var: str = 'AVAL', set_values_to: dict[str, Any], stat: "Literal['mean', 'sum', 'min', 'max', 'median', 'count']" = 'mean', where: str | pl.Expr | None = None) -> AdamNamespace` — Compute a summary statistic per group and append the results as new records.
-- `derive_locf_records(*, dataset_ref: pl.DataFrame, by: list[str], order_by: str | list[str], analysis_var: str = 'AVAL', imputation: "Literal['add', 'update', 'update_add']" = 'add', keep_vars: list[str] | None = None) -> AdamNamespace` — Add LOCF records for missed visits and for a null *analysis_var*.
-- `derive_param(*, by: list[str] | None = None, set_values_to: dict[str, Any], parameter_filter: dict[str, str], analysis_value: pl.Expr | str, from_dataset: pl.DataFrame | None = None, where: str | pl.Expr | None = None) -> AdamNamespace` — Derive a new parameter (e.g. BMI) from existing records and append
+- `derive_locf_records(*, dataset_ref: pl.DataFrame, by: str | list[str], order_by: str | list[str], analysis_var: str = 'AVAL', imputation: "Literal['add', 'update', 'update_add']" = 'add', keep_vars: list[str] | None = None) -> AdamNamespace` — Add LOCF records for missed visits and for a null *analysis_var*.
+- `derive_param(*, by: str | list[str] | None = None, set_values_to: dict[str, Any], parameter_filter: dict[str, str], analysis_value: pl.Expr | str, from_dataset: pl.DataFrame | None = None, where: str | pl.Expr | None = None, constant_by: str | list[str] | None = None, constant_parameters: dict[str, str] | None = None, keep_nas: bool = False) -> AdamNamespace` — Derive a new parameter (e.g. BMI) from existing records and append
 - `atoxgr(target: str, *, system: str = 'ctcae_v5', direction: "Literal['L', 'H']", term_var: str, unit_var: str, signif_dig: int = 15, indicators: dict[str, list[str]] | None = None) -> AdamNamespace` — Derive a toxicity grade, as admiral ``derive_var_atoxgr_dir``.
+- `combine_grades(target: str = 'ATOXGR', *, low_var: str = 'ATOXGRL', high_var: str = 'ATOXGRH', low_desc_var: str = 'ATOXDSCL', high_desc_var: str = 'ATOXDSCH') -> AdamNamespace` — Combine low and high toxicity grades into a signed grade, as admiral.
 - `transform(fn: str | Callable[[pl.DataFrame], pl.DataFrame], *, label: str | None = None) -> AdamNamespace` — Apply an arbitrary ``(pl.DataFrame) -> pl.DataFrame`` function.
 - `from_spec(spec_path: str | Path, *, dataset: str | None = None, only: list[str] | None = None, omit: list[str] | None = None, strict: bool = True, overwrite: bool = False) -> Self` — Build a derivation pipeline from a YAML specification file.
 
@@ -1883,7 +1884,7 @@ Available on `df.adam.occds` (and `df.adam.pk` for sequence). Shared verbs (sour
 
 - `treatment_emergent(target: str = 'TRTEMFL', *, start_date: str, end_date: str | None, trtsdt: str, trtedt: str | None = None, end_window: int | None = None, offset_days: int = 0) -> Self` — Set *target* to ``"Y"`` for treatment-emergent events, as admiral ``derive_var_trtemfl``.
 - `onset_recovery(target: str, *, start_date: str, end_date: str, ref_date: str) -> Self` — Flag events that started on/after the reference date and have recovered.
-- `seq(target: str = 'ASEQ', *, order_by: list[str] | None = None, by: list[str] | None = None, start_at: int = 1, check_uniqueness: bool = False) -> Self` — Derive a 1-based sequence number within each group.
+- `seq(target: str = 'ASEQ', *, order_by: str | list[str] | None = None, by: str | list[str] | None = None, start_at: int = 1, check_uniqueness: bool = False) -> Self` — Derive a 1-based sequence number within each group.
 
 ## Operation → Fleet Verb Mapping
 

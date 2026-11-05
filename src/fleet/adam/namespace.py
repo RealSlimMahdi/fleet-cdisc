@@ -89,6 +89,9 @@ if TYPE_CHECKING:
 
 _SubNS = TypeVar("_SubNS", bound=SharedADaMVerbsMixin)
 
+#: The grades that ``combine_grades`` accepts (admiral ``derive_var_atoxgr``).
+_GRADES = frozenset({"0", "1", "2", "3", "4"})
+
 
 @pl.api.register_dataframe_namespace("adam")
 @pl.api.register_lazyframe_namespace("adam")
@@ -1163,8 +1166,13 @@ class AdamNamespace(SharedADaMVerbsMixin):
             AdamNamespace: A fresh namespace wrapping the graded frame.
 
         Raises:
-            DerivationError: When *direction* is not ``"L"`` or ``"H"``, or a
-                needed column is missing.
+            DerivationError: When *direction* is not ``"L"`` or ``"H"``,
+                *signif_dig* is not a positive integer, or a needed column
+                is missing.
+
+        Warns:
+            UserWarning: Once, with the *term_var* values that have no
+                criteria in any direction (their grade is null).
 
         References:
             admiral ``derive_var_atoxgr_dir`` and the metadata tables
@@ -1178,7 +1186,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 adlb = (
                     lb_raw.adam
                     .atoxgr("ATOXGRL", system="ctcae_v5",
-                            direction="L", term_var="PARAMCD",
+                            direction="L", term_var="ATOXDSCL",
                             unit_var="AVALU")
                     .to_frame()
                 )
@@ -1241,11 +1249,14 @@ class AdamNamespace(SharedADaMVerbsMixin):
             AdamNamespace: The namespace with *target* appended.
 
         Raises:
-            DerivationError: When a grade or description column is missing.
+            DerivationError: When a grade or description column is missing,
+                a grade column is not text, or a grade is not ``"0"`` to
+                ``"4"`` or null.
 
         References:
             admiral ``derive_var_atoxgr`` (admiral 1.4.1): ``lowgrade == "0" |
-            is.na(lowdesc)`` and the same for high give "0". ADR-0028.
+            is.na(lowdesc)`` and the same for high give "0"; a grade other
+            than "0" to "4" or NA stops. ADR-0028.
 
         Examples:
             Combine low/high grades into ATOXGR::
@@ -1270,6 +1281,23 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 "descriptions tell a direction with no criteria from an unknown grade; "
                 "for a one-direction study add the other description as a null column."
             )
+        schema = self._lazy.collect_schema()
+        for col in (low_var, high_var):
+            if schema[col] != pl.String:
+                raise DerivationError(
+                    f"combine_grades('{target}'): {col} is {schema[col]}, not text. A grade "
+                    'is "0", "1", "2", "3", "4" or null; cast it with pl.col(...).cast(pl.String).'
+                )
+        seen = self._lazy.select(
+            pl.col(low_var).unique().implode(), pl.col(high_var).unique().implode()
+        ).collect()
+        for col in (low_var, high_var):
+            bad = sorted(v for v in seen[col][0] if v is not None and v not in _GRADES)
+            if bad:
+                raise DerivationError(
+                    f"combine_grades('{target}'): {col} holds {bad}. A grade is "
+                    '"0", "1", "2", "3", "4" or null.'
+                )
         return self._chain(
             combine_grades_expr(
                 low_var,
