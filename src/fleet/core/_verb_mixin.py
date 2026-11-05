@@ -1853,8 +1853,8 @@ class SharedVerbsMixin:
         self,
         target: str = "ASEQ",
         *,
-        order_by: list[str] | None = None,
-        by: list[str] | None = None,
+        order_by: str | list[str] | None = None,
+        by: str | list[str] | None = None,
         start_at: int = 1,
         check_uniqueness: bool = False,
     ) -> Self:
@@ -1900,7 +1900,9 @@ class SharedVerbsMixin:
                     .to_frame()
                 )
         """
-        grps = by or list(self._SEQ_DEFAULT_GROUPS)
+        grps = [by] if isinstance(by, str) else list(by or self._SEQ_DEFAULT_GROUPS)
+        if isinstance(order_by, str):
+            order_by = [order_by]
 
         lf = self._lazy
         if order_by:

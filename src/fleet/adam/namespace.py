@@ -38,6 +38,7 @@ Discover every available verb programmatically with ``df.adam.verbs()``.
 
 from __future__ import annotations
 
+import difflib
 import warnings
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
@@ -115,7 +116,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         *,
         aval: str = "AVAL",
         baseline_flag: str = "ABLFL",
-        by: list[str] | None = None,
+        by: str | list[str] | None = None,
         strict: bool = True,
     ) -> AdamNamespace:
         """Derive BASE as the AVAL where the baseline flag equals ``"Y"``.
@@ -155,7 +156,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         """
         import warnings
 
-        grps = by or ["USUBJID", "PARAMCD"]
+        grps = [by] if isinstance(by, str) else list(by or ["USUBJID", "PARAMCD"])
         schema_names = self._lazy.collect_schema().names()
         if baseline_flag not in schema_names or any(g not in schema_names for g in grps):
             # Missing columns — defer to _chain's verb-attributed error.
@@ -640,7 +641,11 @@ class AdamNamespace(SharedADaMVerbsMixin):
         Compute a summary statistic per group and append the results as new records.
 
         *set_values_to*: column → value mapping applied to every new record
-        (e.g. ``{"PARAMCD": "AVGBP", "DTYPE": "AVERAGE"}``).
+        (e.g. ``{"PARAMCD": "AVGBP", "DTYPE": "AVERAGE"}``).  A ``pl.Expr``
+        value is evaluated per *by* group and must give one value, as
+        admiral ``set_values_to = exprs(ADT = min(ADT))``; other values are
+        constants.  Put PARAM in *by* (or in *set_values_to*), so the new
+        record has a PARAM.
 
         *stat*: ``"mean"`` (default), ``"sum"``, ``"min"``, ``"max"``, ``"median"``,
         ``"count"``. A group with only null values gives null for every stat
@@ -655,14 +660,14 @@ class AdamNamespace(SharedADaMVerbsMixin):
         Materialises the current pipeline before concatenation.
 
         Examples:
-            Compute mean AVAL per subject and parameter::
+            Compute mean AVAL per subject and parameter, dated at the first record::
 
                 advs = (
                     vs_raw.adam
                     .derive_summary_records(
-                        by=["USUBJID", "PARAMCD"],
+                        by=["USUBJID", "PARAMCD", "PARAM"],
                         analysis_var="AVAL",
-                        set_values_to={"DTYPE": "AVERAGE"},
+                        set_values_to={"DTYPE": "AVERAGE", "ADT": pl.col("ADT").min()},
                         stat="mean",
                     )
                     .to_frame()
@@ -695,12 +700,14 @@ class AdamNamespace(SharedADaMVerbsMixin):
                 stacklevel=2,
             )
         summary = source.group_by(by, maintain_order=True).agg(
-            agg_map[stat_lower].alias(analysis_var)
+            agg_map[stat_lower].alias(analysis_var),
+            *(v.alias(k) for k, v in set_values_to.items() if isinstance(v, pl.Expr)),
         )
 
         # Apply constant values to the summary rows
         for col_name, col_val in set_values_to.items():
-            summary = summary.with_columns(pl.lit(col_val).alias(col_name))
+            if not isinstance(col_val, pl.Expr):
+                summary = summary.with_columns(pl.lit(col_val).alias(col_name))
 
         # Align schemas before concat: add missing columns as null in both directions
         for c in df.columns:
@@ -726,7 +733,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         self,
         *,
         dataset_ref: pl.DataFrame,
-        by: list[str],
+        by: str | list[str],
         order_by: str | list[str],
         analysis_var: str = "AVAL",
         imputation: Literal["add", "update", "update_add"] = "add",
@@ -788,6 +795,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
             admiral ``derive_locf_records`` (pharmaverse) defines the three
             imputation modes. ADR-0029.
         """
+        by = [by] if isinstance(by, str) else list(by)
         order = [order_by] if isinstance(order_by, str) else list(order_by)
         keep = list(keep_vars or [])
         if imputation not in ("add", "update", "update_add"):
@@ -847,12 +855,15 @@ class AdamNamespace(SharedADaMVerbsMixin):
     def derive_param(
         self,
         *,
-        by: list[str] | None = None,
+        by: str | list[str] | None = None,
         set_values_to: dict[str, Any],
         parameter_filter: dict[str, str],
         analysis_value: pl.Expr | str,
         from_dataset: pl.DataFrame | None = None,
         where: str | pl.Expr | None = None,
+        constant_by: str | list[str] | None = None,
+        constant_parameters: dict[str, str] | None = None,
+        keep_nas: bool = False,
     ) -> AdamNamespace:
         """
         Derive a new parameter (e.g. BMI) from existing records and append
@@ -862,7 +873,18 @@ class AdamNamespace(SharedADaMVerbsMixin):
         records to pivot on (e.g. ``{"WEIGHT": "WEIGHT", "HEIGHT": "HEIGHT"}``).
         Each key is a local alias; the value is the ``PARAMCD`` it matches.
         Every source parameter must be unique per *by* group — duplicates
-        raise instead of silently multiplying the derived rows.
+        raise instead of silently multiplying the derived rows.  The parts
+        join on *by* with an inner join: a *by* group without every source
+        parameter gives no new record.  A code with no record warns.
+
+        *constant_parameters*: ``{alias: PARAMCD}`` pairs measured once per
+        *constant_by* group, for example height at screening only.  They
+        join on *constant_by*, which must be a subset of *by*
+        (admiral ``constant_by_vars``), so a per-visit BMI takes the one
+        height.
+
+        *keep_nas*: with ``False`` (default, as admiral), a new record whose
+        AVAL is null is not added.  ``True`` keeps it.
 
         *analysis_value*: a Polars expression (or YAML-friendly string)
         referencing the aliases to compute the new AVAL
@@ -872,6 +894,7 @@ class AdamNamespace(SharedADaMVerbsMixin):
         parameter-level identifiers ``PARAM``, ``PARAMN``, ``PARCATy`` /
         ``PARCATyN``, and ``DTYPE`` (e.g. ``{"PARAMCD": "BMI",
         "PARAM": "Body Mass Index", "PARAMN": 3, "PARCAT1": "ANTHRO"}``).
+        An expression raises: give constants only.
         Columns that don't exist yet are added to the dataset.  The new
         ``PARAMCD`` must not already exist in the dataset: appending under
         an existing code would break the PARAMCD ↔ PARAM/PARAMN one-to-one
@@ -891,6 +914,12 @@ class AdamNamespace(SharedADaMVerbsMixin):
         missing value.
 
         Materialises the pipeline before appending.
+
+        References:
+            admiral ``derive_param_computed`` (``constant_by_vars``,
+            ``keep_nas = FALSE``, and the warning for a filter with no
+            observations).  ADR-0051
+            (docs/adr/0051-derive-param-adds-no-record-with-a-null-aval.md).
 
         Examples:
             Derive BMI as a new PARAMCD from WEIGHT and HEIGHT::
@@ -925,13 +954,53 @@ class AdamNamespace(SharedADaMVerbsMixin):
                     )
                     .to_frame()
                 )
+
+            BMI per visit with the height of the screening visit::
+
+                advs = (
+                    vs_raw.adam
+                    .derive_param(
+                        by=["USUBJID", "AVISIT"],
+                        constant_by=["USUBJID"],
+                        constant_parameters={"HEIGHT": "HEIGHT"},
+                        parameter_filter={"WEIGHT": "WEIGHT"},
+                        set_values_to={"PARAMCD": "BMI",
+                                       "PARAM": "Body Mass Index"},
+                        analysis_value=(
+                            pl.col("WEIGHT") / (pl.col("HEIGHT") / 100) ** 2
+                        ),
+                    )
+                    .to_frame()
+                )
         """
         from fleet.sdtm.utils import parse_expression
 
         if not parameter_filter:
             raise DerivationError("derive_param() requires at least one parameter_filter entry.")
+        exprs = [k for k, v in set_values_to.items() if isinstance(v, pl.Expr)]
+        if exprs:
+            raise DerivationError(
+                f"derive_param(): set_values_to holds an expression for {exprs}. Give a "
+                "constant for each column; compute AVAL with analysis_value=."
+            )
 
-        grps = by or ["USUBJID"]
+        grps = [by] if isinstance(by, str) else list(by or ["USUBJID"])
+        const_grps = [constant_by] if isinstance(constant_by, str) else list(constant_by or [])
+        constants = dict(constant_parameters or {})
+        if constants and not const_grps:
+            raise DerivationError("derive_param(): constant_parameters needs constant_by=.")
+        outside = [c for c in const_grps if c not in grps]
+        if outside:
+            raise DerivationError(
+                f"derive_param(): constant_by {outside} is not in by {grps}. constant_by "
+                "must be a subset of by."
+            )
+        shared = sorted(set(constants) & set(parameter_filter))
+        if shared:
+            raise DerivationError(
+                f"derive_param(): alias(es) {shared} are in parameter_filter and in "
+                "constant_parameters. Give each alias once."
+            )
         df = self.to_frame()
 
         # Guard the BDS one-to-one parameter mapping: appending rows under an
@@ -961,26 +1030,41 @@ class AdamNamespace(SharedADaMVerbsMixin):
             where_expr = where if isinstance(where, pl.Expr) else parse_expression(str(where))
             source = source.filter(where_expr)
 
-        # Pivot: for each alias in parameter_filter, get AVAL as that alias
-        pivoted_parts = []
-        for alias, paramcd_val in parameter_filter.items():
+        # Pivot: for each alias, get AVAL as that alias, unique on its own key
+        codes = source.get_column("PARAMCD").drop_nulls().unique().sort().to_list()
+
+        def pivot(alias: str, paramcd_val: str, keys: list[str]) -> pl.DataFrame:
             part = source.filter(pl.col("PARAMCD") == paramcd_val).select(
-                grps + [pl.col("AVAL").alias(alias)]
+                keys + [pl.col("AVAL").alias(alias)]
             )
-            dup = part.group_by(grps).len().filter(pl.col("len") > 1)
+            if part.height == 0:
+                close = difflib.get_close_matches(str(paramcd_val), codes, n=1)
+                warnings.warn(
+                    f"derive_param(): no record has PARAMCD {paramcd_val!r}."
+                    + (f" Did you mean {close[0]!r}?" if close else "")
+                    + " No new records were added.",
+                    UserWarning,
+                    stacklevel=3,
+                )
+            dup = part.group_by(keys).len().filter(pl.col("len") > 1)
             if dup.height:
                 raise DerivationError(
                     f"derive_param(): PARAMCD '{paramcd_val}' has multiple records for "
-                    f"{dup.height} {grps} group(s) (e.g. {dup.select(grps).row(0)}). "
+                    f"{dup.height} {keys} group(s) (e.g. {dup.select(keys).row(0)}). "
                     "The derived rows would multiply — deduplicate the source, extend "
                     "by=, or narrow the records with where=."
                 )
-            pivoted_parts.append(part)
+            return part
 
-        # Join all pivoted parts on the by keys
+        pivoted_parts = [pivot(a, p, grps) for a, p in parameter_filter.items()]
+        constant_parts = [pivot(a, p, const_grps) for a, p in constants.items()]
+
+        # Join the by-keyed parts on by, then the constant parts on constant_by
         joined = pivoted_parts[0]
         for part in pivoted_parts[1:]:
             joined = joined.join(part, on=grps, how="inner", nulls_equal=True)
+        for part in constant_parts:
+            joined = joined.join(part, on=const_grps, how="inner", nulls_equal=True)
 
         # Compute the new AVAL
         aval_expr = (
@@ -992,16 +1076,17 @@ class AdamNamespace(SharedADaMVerbsMixin):
         if new_rows.schema["AVAL"].is_float():
             non_finite = new_rows.select((~pl.col("AVAL").is_finite()).sum()).item()
             if non_finite:
-                import warnings
-
                 warnings.warn(
                     f"derive_param(): {non_finite} new AVAL value(s) are infinite or NaN "
-                    "(for example a division by zero) and are set to null.",
+                    "(for example a division by zero) and are set to null"
+                    + ("." if keep_nas else ", so their records are not added."),
                     stacklevel=2,
                 )
                 new_rows = new_rows.with_columns(
                     pl.when(pl.col("AVAL").is_finite()).then(pl.col("AVAL")).alias("AVAL")
                 )
+        if not keep_nas:
+            new_rows = new_rows.filter(pl.col("AVAL").is_not_null())
 
         # Apply set_values_to constants
         for col_name, col_val in set_values_to.items():
