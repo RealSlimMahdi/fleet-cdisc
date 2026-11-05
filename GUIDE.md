@@ -658,35 +658,15 @@ import polars as pl
 design = fleet.StudyDesign(
     study_id="CDISCPILOT01",
     elements=[
-        {
-            "etcd": "SCRN",
-            "element": "Screening",
-            "tedur": "P14D",
-            "epoch": "SCREENING",
-            "testrl": "INFORMED CONSENT",
-            "teenrl": "RANDOMIZATION - 1",
-        },
-        {
-            "etcd": "PBO",
-            "element": "Placebo Treatment",
-            "tedur": "P84D",
-            "epoch": "TREATMENT",
-            "testrl": "RANDOMIZATION",
-        },
-        {
-            "etcd": "XANLO",
-            "element": "Xanomeline Low Dose",
-            "tedur": "P84D",
-            "epoch": "TREATMENT",
-            "testrl": "RANDOMIZATION",
-        },
-        {
-            "etcd": "FU",
-            "element": "Follow-up",
-            "tedur": "P28D",
-            "epoch": "FOLLOW-UP",
-            "testrl": "END OF TREATMENT + 1",
-        },
+        {"etcd": "SCRN", "element": "Screening", "tedur": "P14D",
+         "epoch": "SCREENING", "testrl": "INFORMED CONSENT",
+         "teenrl": "RANDOMIZATION - 1"},
+        {"etcd": "PBO", "element": "Placebo Treatment", "tedur": "P84D",
+         "epoch": "TREATMENT", "testrl": "RANDOMIZATION"},
+        {"etcd": "XANLO", "element": "Xanomeline Low Dose", "tedur": "P84D",
+         "epoch": "TREATMENT", "testrl": "RANDOMIZATION"},
+        {"etcd": "FU", "element": "Follow-up", "tedur": "P28D",
+         "epoch": "FOLLOW-UP", "testrl": "END OF TREATMENT + 1"},
     ],
     arms={"PBO": ["SCRN", "PBO", "FU"], "XAN_LO": ["SCRN", "XANLO", "FU"]},
     arm_names={"PBO": "Placebo", "XAN_LO": "Xanomeline Low Dose"},
@@ -696,8 +676,8 @@ design = fleet.StudyDesign(
     ],
 )
 
-ta = design.to_ta()  # one domain
-frames = design.domains()  # every populated domain: {"TE": df, ...}
+ta = design.to_ta()               # one domain
+frames = design.domains()          # every populated domain: {"TE": df, ...}
 assert ta.filter(pl.col("TABRANCH") != "")["ETCD"].to_list() == ["SCRN", "SCRN"]
 ```
 
@@ -815,30 +795,12 @@ terms are accepted alongside the `Epoch` enum (C99079 is extensible):
 ```python
 ta_rows = TrialArms(
     arms=[
-        TrialArm(
-            armcd="PBO",
-            arm="Placebo",
-            taetord=1,
-            etcd="SCRN",
-            element="Screening",
-            epoch=Epoch.SCREENING,
-        ),
-        TrialArm(
-            armcd="PBO",
-            arm="Placebo",
-            taetord=2,
-            etcd="TRT",
-            element="Treatment",
-            epoch=Epoch.TREATMENT,
-        ),
-        TrialArm(
-            armcd="PBO",
-            arm="Placebo",
-            taetord=3,
-            etcd="FU",
-            element="Follow-up",
-            epoch=Epoch.FOLLOW_UP,
-        ),
+        TrialArm(armcd="PBO", arm="Placebo", taetord=1,
+                 etcd="SCRN", element="Screening", epoch=Epoch.SCREENING),
+        TrialArm(armcd="PBO", arm="Placebo", taetord=2,
+                 etcd="TRT", element="Treatment", epoch=Epoch.TREATMENT),
+        TrialArm(armcd="PBO", arm="Placebo", taetord=3,
+                 etcd="FU", element="Follow-up", epoch=Epoch.FOLLOW_UP),
     ]
 )
 
@@ -884,26 +846,13 @@ repeating parameters (e.g. one `FCNTRY` row per country) plus `TSGRPID`,
 ts_rows = TrialParameters(
     parameters=[
         TrialParameter(tsparmcd="TITLE", tsparm="Trial Title", tsval="Demo study"),
-        TrialParameter(
-            tsparmcd="FCNTRY",
-            tsparm="Planned Country of Investigational Sites",
-            tsval="USA",
-            tsseq=1,
-        ),
-        TrialParameter(
-            tsparmcd="FCNTRY",
-            tsparm="Planned Country of Investigational Sites",
-            tsval="DEU",
-            tsseq=2,
-        ),
-        TrialParameter(
-            tsparmcd="INDIC",
-            tsparm="Trial Disease/Condition Indication",
-            tsval="Alzheimer's disease",
-            tsvalcd="26929004",
-            tsvcdref="SNOMED CT",
-            tsvcdver="2014-03-01",
-        ),
+        TrialParameter(tsparmcd="FCNTRY", tsparm="Planned Country of Investigational Sites",
+                       tsval="USA", tsseq=1),
+        TrialParameter(tsparmcd="FCNTRY", tsparm="Planned Country of Investigational Sites",
+                       tsval="DEU", tsseq=2),
+        TrialParameter(tsparmcd="INDIC", tsparm="Trial Disease/Condition Indication",
+                       tsval="Alzheimer's disease", tsvalcd="26929004",
+                       tsvcdref="SNOMED CT", tsvcdver="2014-03-01"),
     ]
 )
 
@@ -938,10 +887,10 @@ uv run fleet tdd ctgov NCT00048217 --write   # merge into trial_design.yaml
 ```python
 ti_rows = TrialCriteria(
     criteria=[
-        TrialCriterion(ietestcd="INCL01", ietest="Age 50-80 years at screening", iecat="INCLUSION"),
-        TrialCriterion(
-            ietestcd="EXCL01", ietest="Pregnancy or lactation", iecat="EXCLUSION", tivers="2.0"
-        ),
+        TrialCriterion(ietestcd="INCL01", ietest="Age 50-80 years at screening",
+                       iecat="INCLUSION"),
+        TrialCriterion(ietestcd="EXCL01", ietest="Pregnancy or lactation",
+                       iecat="EXCLUSION", tivers="2.0"),
     ]
 )
 
@@ -968,21 +917,11 @@ td = (
     pl.DataFrame()
     .sdtm.fetch_structure("TD")
     .study_header("CDISCPILOT01", "TD")
-    .add_disease_assessments(
-        TrialDiseaseAssessments(
-            assessments=[
-                TrialDiseaseAssessment(
-                    tdorder=1,
-                    tdancvar="TDANCH01",
-                    tdstoff="P0D",
-                    tdtgtpai="P8W",
-                    tdminpai="P7W",
-                    tdmaxpai="P9W",
-                    tdnumrpt=6,
-                ),
-            ]
-        )
-    )
+    .add_disease_assessments(TrialDiseaseAssessments(assessments=[
+        TrialDiseaseAssessment(tdorder=1, tdancvar="TDANCH01", tdstoff="P0D",
+                               tdtgtpai="P8W", tdminpai="P7W", tdmaxpai="P9W",
+                               tdnumrpt=6),
+    ]))
     .to_frame()
 )
 
@@ -990,15 +929,10 @@ tm = (
     pl.DataFrame()
     .sdtm.fetch_structure("TM")
     .study_header("CDISCPILOT01", "TM")
-    .add_milestones(
-        TrialMilestones(
-            milestones=[
-                TrialMilestone(
-                    midstype="DIAGNOSIS", tmdef="Initial diagnosis of disease", tmrpt="N"
-                ),
-            ]
-        )
-    )
+    .add_milestones(TrialMilestones(milestones=[
+        TrialMilestone(midstype="DIAGNOSIS",
+                       tmdef="Initial diagnosis of disease", tmrpt="N"),
+    ]))
     .to_frame()
 )
 ```
@@ -1009,17 +943,16 @@ tm = (
 own element intervals — the cross-domain consistency P21 checks against SE:
 
 ```python
-se = pl.DataFrame(
-    {
-        "USUBJID": ["001", "001"],
-        "SESTDTC": ["2014-01-01", "2014-01-15"],
-        "SEENDTC": ["2014-01-14", None],
-        "EPOCH": ["SCREENING", "TREATMENT"],
-    }
-)
+se = pl.DataFrame({
+    "USUBJID": ["001", "001"],
+    "SESTDTC": ["2014-01-01", "2014-01-15"],
+    "SEENDTC": ["2014-01-14", None],
+    "EPOCH": ["SCREENING", "TREATMENT"],
+})
 
 ae_epoch = (
-    pl.DataFrame({"USUBJID": ["001", "001"], "AESTDTC": ["2014-01-05", "2014-02-01"]})
+    pl.DataFrame({"USUBJID": ["001", "001"],
+                  "AESTDTC": ["2014-01-05", "2014-02-01"]})
     .sdtm.epoch_assign("EPOCH", date_col="AESTDTC", se=se)
     .to_frame()
 )
