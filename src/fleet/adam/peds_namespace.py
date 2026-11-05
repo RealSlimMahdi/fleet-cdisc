@@ -37,6 +37,7 @@ from typing import Literal, Self
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
+from fleet.adam.utils import sas_round
 from fleet.core.dtc import to_day
 from fleet.core.exceptions import VerbUsageError
 
@@ -464,7 +465,7 @@ class PedsNamespace(SharedADaMVerbsMixin):
             return pl.when(frac == 0).then(lo).otherwise(lo + frac * (hi - lo))
 
         lam, mu, sigma = _interp("L"), _interp("M"), _interp("S")
-        z = (((pl.col("__bmi__") / mu).pow(lam) - 1) / (lam * sigma)).round(2)
+        z = sas_round(((pl.col("__bmi__") / mu).pow(lam) - 1) / (lam * sigma), 2)
         return joined.with_columns(
             pl.when(z.is_null())
             .then(pl.lit(None, dtype=pl.String))

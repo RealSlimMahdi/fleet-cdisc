@@ -91,6 +91,9 @@ def load_raw_data(
     ``schema_overrides={"SITEID": pl.String}`` for a text column, the
     equivalent of a SAS ``$`` informat; the caller's types always win.
 
+    A float NaN in a CSV (the text ``NaN``) or Parquet file reads as null,
+    as a SAS missing value, so no NaN reaches a comparison.
+
     Args:
         file_path: Path to the data file.
         file_type: Explicit file type override.
@@ -140,11 +143,11 @@ def load_raw_data(
 
     try:
         if file_type == "csv":
-            return _load_csv(file_path, **kwargs)
+            return _load_csv(file_path, **kwargs).with_columns(cs.float().fill_nan(None))
         elif file_type == "excel":
             return pl.read_excel(file_path, **kwargs).lazy()
         elif file_type == "parquet":
-            return pl.scan_parquet(file_path, **kwargs)
+            return pl.scan_parquet(file_path, **kwargs).with_columns(cs.float().fill_nan(None))
         elif file_type in ("sas", "xpt"):
             return _load_sas(file_path, **kwargs)
         elif file_type in ("rds", "rdata"):

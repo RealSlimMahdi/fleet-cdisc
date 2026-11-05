@@ -70,6 +70,7 @@ ALGORITHM_RENAMES: dict[str, str] = {
     "lookup": "merge",
     "study_day": "duration",
     "callable": "derivation",
+    "transform": "derivation",
     "count": "count_events",
     "mean_arterial_pressure": "map",
 }

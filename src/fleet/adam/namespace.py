@@ -241,7 +241,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
         """Compute percent change from baseline.
 
         ``PCHG = (AVAL - BASE) / BASE * 100``.  Returns null when BASE is
-        null or zero.
+        null or zero.  ADaMIG formula. admiral ``derive_var_pchg`` divides
+        by abs(BASE), so the sign differs on a negative baseline: AVAL -2,
+        BASE -2.5 gives PCHG -20 here and 20 in admiral.
 
         Args:
             target: Name of the output column (e.g. ``"PCHG"``).
@@ -472,8 +474,9 @@ class AdamNamespace(SharedADaMVerbsMixin):
             target: Name of the output column.
             weight: Column containing weight in kg.
             height: Column containing height in cm.
-            method: Formula to use — ``"Mosteller"`` (default), ``"DuBois"``,
-                ``"Haycock"``, or ``"Gehan-George"``.
+            method: Formula to use — ``"Mosteller"`` (default), ``"DuBois"``
+                (admiral's ``"DuBois-DuBois"`` also works), ``"Haycock"``, or
+                ``"Gehan-George"``.
             round_digits: Decimal places, rounded as SAS ``ROUND`` (half away
                 from zero).  Default ``None``: no rounding.
 

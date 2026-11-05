@@ -316,7 +316,7 @@ print(dm.select("STUDYID", "DOMAIN", "USUBJID", "SEX", "RACE", "ARMCD", "RFSTDTC
 
 > **Renamed in pre-alpha.** The old spellings (`assign_no_ct` / `assign_ct` /
 > `hardcode_no_ct` / `hardcode_ct` / `dataset_level` / `if_then_else`, …) were
-> removed outright — `assign` / `case_when` / `merge` with `by=` / `keep=` are
+> removed outright — `assign` / `case_when` / `merge` with `on=` / `keep=` are
 > the only spellings. Run `python -m fleet.tools.migrate <files...> --write`
 > (or `fleet migrate`) to rewrite old external scripts automatically.
 

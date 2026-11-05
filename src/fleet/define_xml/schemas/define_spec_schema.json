@@ -1243,7 +1243,7 @@
         },
         "method": {
           "default": "Mosteller",
-          "description": "Formula to use \u2014 ``\"Mosteller\"`` (default), ``\"DuBois\"``, ``\"Haycock\"``, or ``\"Gehan-George\"``.",
+          "description": "Formula to use \u2014 ``\"Mosteller\"`` (default), ``\"DuBois\"`` (admiral's ``\"DuBois-DuBois\"`` also works), ``\"Haycock\"``, or ``\"Gehan-George\"``.",
           "title": "Method",
           "type": "string"
         },

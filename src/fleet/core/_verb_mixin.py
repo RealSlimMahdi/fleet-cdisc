@@ -40,7 +40,14 @@ from fleet.core.define_spec import (
     check_spec_version,
     load_define_spec,
 )
-from fleet.core.dtc import date_part, datetime_part, refuse_number, to_day, warn_on_collect
+from fleet.core.dtc import (
+    cdisc_day,
+    date_part,
+    datetime_part,
+    refuse_number,
+    to_day,
+    warn_on_collect,
+)
 from fleet.core.exceptions import (
     ComparisonFailed,
     DerivationError,
@@ -1934,14 +1941,12 @@ class SharedVerbsMixin:
         if add_one is None:
             if target.endswith("DY") and unit == "days":
                 # CDISC study day: +1 if >= 0, no day 0
-                result_expr = (
-                    (pl.when(diff >= 0).then(diff + 1).otherwise(diff)).cast(pl.Int64).alias(target)
-                )
+                result_expr = cdisc_day(diff).cast(pl.Int64).alias(target)
                 return self._chain(result_expr, verb="duration", params=duration_params)
             add_one = not sub_day
 
         if add_one and sub_day:
-            result_expr = pl.when(diff >= 0).then(diff + 1).otherwise(diff).alias(target)
+            result_expr = cdisc_day(diff).alias(target)
         elif add_one:
             inclusive = pl.when(diff_days >= 0).then(diff_days + 1).otherwise(diff_days)
             result_expr = (
@@ -2067,7 +2072,7 @@ class SharedVerbsMixin:
             date_expr = to_day(pl.col(date_col), schema.get(date_col), verb="study_day")
             ref_expr = to_day(pl.col(_ref_col), schema.get(_ref_col), verb="study_day")
             diff = (date_expr - ref_expr).dt.total_days()
-            study_day_expr = pl.when(diff >= 0).then(diff + 1).otherwise(diff).alias(target)
+            study_day_expr = cdisc_day(diff).alias(target)
             return self._chain(
                 study_day_expr,
                 verb="study_day",
@@ -2098,7 +2103,7 @@ class SharedVerbsMixin:
         ref_expr = to_day(pl.col(_ref_tmp), df.schema.get(_ref_tmp), verb="study_day")
 
         diff = (date_expr - ref_expr).dt.total_days()
-        study_day_expr = pl.when(diff >= 0).then(diff + 1).otherwise(diff).alias(target)
+        study_day_expr = cdisc_day(diff).alias(target)
         df = df.with_columns(study_day_expr).drop(_ref_tmp)
 
         new = self._materialise_then(df)

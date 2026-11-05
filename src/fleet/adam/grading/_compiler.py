@@ -12,6 +12,7 @@ import warnings
 from typing import TYPE_CHECKING
 
 import polars as pl
+import polars.selectors as cs
 
 from fleet.adam.grading._expr import compile_node, node_names
 from fleet.core.exceptions import DerivationError
@@ -134,7 +135,8 @@ def grade_dataset(
     a term's entries, the first population filter that holds is used (a
     null filter gives a null grade), then the entry whose unit matches the
     row's unit without case.  A row with another unit, a null unit or no
-    entry gets a null grade.  Every row stays, in its order.
+    entry gets a null grade.  A NaN in a float column reads as null, as
+    admiral's NA.  Every row stays, in its order.
 
     Args:
         df: Lab dataset.
@@ -229,7 +231,9 @@ def grade_dataset(
         chain = pl.when(cond).then(term_expr) if chain is None else chain.when(cond).then(term_expr)
 
     grade = _NULL if chain is None else chain.otherwise(_NULL)
-    return df.with_columns(grade.alias(target))
+    # admiral grades a NaN as NA: read every float column with NaN as null.
+    filled = df.with_columns(cs.float().fill_nan(None))
+    return df.with_columns(filled.select(grade.alias(target)).get_column(target))
 
 
 # ---------------------------------------------------------------------------

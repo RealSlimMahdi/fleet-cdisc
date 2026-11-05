@@ -35,6 +35,7 @@ from typing import Self
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
+from fleet.adam.utils import sas_round
 from fleet.core.exceptions import DerivationError
 
 # Centiloid calibration table (tracer + pipeline + ref_region → slope, intercept)
@@ -74,6 +75,9 @@ class NeuroNamespace(SharedADaMVerbsMixin):
 
         ``Centiloid = slope * SUVR + intercept``.  Provide either *slope* and
         *intercept* directly or *tracer* + *pipeline* for a built-in lookup.
+        A SUVR of zero or below gives a null value (admiralneuro
+        ``compute_centiloid`` stops on it). The value is rounded half away
+        from zero (SAS ``ROUND``, ADR-0025).
 
         Args:
             target: Name of the output column.
@@ -87,6 +91,10 @@ class NeuroNamespace(SharedADaMVerbsMixin):
 
         Returns:
             Self: The namespace with *target* appended.
+
+        Raises:
+            DerivationError: When only one of *slope* and *intercept* is
+                given, or the tracer and pipeline have no calibration.
 
         Examples:
             Convert SUVR to Centiloid with custom parameters::
@@ -104,6 +112,8 @@ class NeuroNamespace(SharedADaMVerbsMixin):
             tracer and pipeline calibrations follow admiralneuro
             ``derive_param_centiloid`` (pharmaverse).
         """
+        if (slope is None) != (intercept is None):
+            raise DerivationError("centiloid(): slope and intercept must be given together.")
         if slope is not None and intercept is not None:
             s, i = slope, intercept
         elif tracer and pipeline:
@@ -119,10 +129,9 @@ class NeuroNamespace(SharedADaMVerbsMixin):
         else:
             raise DerivationError("Provide either (slope, intercept) or (tracer, pipeline).")
 
-        expr = pl.lit(s) * pl.col(suvr_col) + pl.lit(i)
-        if round_digits is not None:
-            expr = expr.round(round_digits)
-        return self._chain(expr.alias(target))
+        suvr = pl.col(suvr_col).cast(pl.Float64).fill_nan(None)
+        expr = pl.when(suvr > 0).then(pl.lit(s) * suvr + pl.lit(i))
+        return self._chain(sas_round(expr, round_digits).alias(target))
 
     # ------------------------------------------------------------------ #
     # 2. mmse_category — MMSE severity categories                        #
@@ -179,7 +188,7 @@ class NeuroNamespace(SharedADaMVerbsMixin):
             9 and below severe). Other schemes are in use, for example mild 21-26
             and moderate 10-20; take the cut-offs from the SAP.
         """
-        score = pl.col(score_col)
+        score = pl.col(score_col).cast(pl.Float64).fill_nan(None)
         return self._chain(
             pl.when(score > 30)
             .then(pl.lit(None, dtype=pl.String))
@@ -209,15 +218,24 @@ class NeuroNamespace(SharedADaMVerbsMixin):
         """Compute CDR Sum of Boxes (CDR-SoB) from domain box scores.
 
         Standard domains: Memory, Orientation, Judgment, Community Affairs,
-        Home & Hobbies, Personal Care (6 boxes, each 0–3).
+        Home & Hobbies, Personal Care (6 boxes, each 0–3). A null box gives a
+        null total.
 
         Args:
             target: Name of the output column.
-            domain_cols: List of CDR domain score columns.
-            round_digits: Decimal places to round to (default ``1``).
+            domain_cols: The 6 CDR box score columns.
+            round_digits: Decimal places to round to (default ``1``), half
+                away from zero (SAS ``ROUND``, ADR-0025).
 
         Returns:
             Self: The namespace with *target* appended.
+
+        Raises:
+            DerivationError: When *domain_cols* does not name 6 columns.
+
+        References:
+            Morris JC. The Clinical Dementia Rating (CDR). Neurology.
+            1993;43:2412-2414: the Sum of Boxes adds the 6 box scores.
 
         Examples:
             Derive CDR-SoB total from 6 domains::
@@ -230,10 +248,12 @@ class NeuroNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
-        total = sum(pl.col(c) for c in domain_cols)  # type: ignore[arg-type]
-        if round_digits is not None:
-            total = total.round(round_digits)
-        return self._chain(total.alias(target))
+        if len(domain_cols) != 6:
+            raise DerivationError(f"cdrsob_total(): give the 6 CDR boxes, got {len(domain_cols)}.")
+        total = pl.col(domain_cols[0])
+        for col in domain_cols[1:]:
+            total = total + pl.col(col)
+        return self._chain(sas_round(total, round_digits).alias(target))
 
     # ------------------------------------------------------------------ #
     # 4. moca_category — MoCA severity categories                        #
@@ -275,7 +295,7 @@ class NeuroNamespace(SharedADaMVerbsMixin):
             Soc. 2005;53:695-699: a total of 26 or more is normal. The MCI lower
             bound of 18 is not fixed by the instrument; check the SAP.
         """
-        score = pl.col(score_col)
+        score = pl.col(score_col).cast(pl.Float64).fill_nan(None)
         return self._chain(
             pl.when(score > 30)
             .then(pl.lit(None, dtype=pl.String))
@@ -312,6 +332,10 @@ class NeuroNamespace(SharedADaMVerbsMixin):
         Returns:
             Self: The namespace with *target* appended.
 
+        Raises:
+            DerivationError: When a subscale column is not numeric (for
+                example String); cast it to a number first.
+
         Examples:
             Derive PANSS total score::
 
@@ -323,6 +347,13 @@ class NeuroNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
+        schema = self._lazy.collect_schema()
+        for col in (positive_col, negative_col, general_col):
+            dtype = schema.get(col)
+            if dtype is not None and not (dtype.is_numeric() or dtype == pl.Null):
+                raise DerivationError(
+                    f"panss_total(): column '{col}' is {dtype}; cast it to a number first."
+                )
         return self._chain(
             (pl.col(positive_col) + pl.col(negative_col) + pl.col(general_col)).alias(target)
         )
