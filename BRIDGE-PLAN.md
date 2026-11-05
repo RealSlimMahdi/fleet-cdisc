@@ -1,14 +1,14 @@
 # Fleet Interactive TLG — Strategy & Design Options (Bridge, v2)
 
-> **Status:** design, not implemented as a whole (rechecked 2026-11-05). Open; tracked in [issue #144](https://github.com/RealSlimMahdi/fleet-cdisc/issues/144) and the ideas tracker.
-
 > Rewritten after an adversarial review of v1. This is an **options document
 > with recommendations**, not a single-path plan. It answers three questions
 > in order: (1) should TLG live inside Fleet at all, (2) what should the
 > interactive tool be, (3) how does each option feel to **create**, to
 > **maintain**, and to **put in production** in a pharma environment.
 
-**Status:** design, pre-implementation. Decisions marked ⬜ are open; ✅ are
+**Status:** design, pre-implementation (rechecked 2026-11-05). Open; tracked in
+[issue #144](https://github.com/RealSlimMahdi/fleet-cdisc/issues/144) and the
+ideas tracker. Decisions marked ⬜ are open; ✅ are
 recommended defaults that stand unless overruled.
 
 ---
