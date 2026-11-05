@@ -404,3 +404,39 @@ class TestAssignCTValidateValues:
             # Restore validator state
             validator._ct_cache = old_cache
             validator._initialized = old_init
+
+
+class TestAssignValueChecksTheClassTerms:
+    """c1-640: assign(value=, ct=<class>) checks the literal against the class terms."""
+
+    class _Ageu:
+        _concept_id = "CTEST640"
+        _terms = ("DAYS", "YEARS")
+
+    _ONE_ROW = """\
+┌─────┐
+│ x   │
+│ --- │
+│ i64 │
+╞═════╡
+│ 1   │
+└─────┘
+"""
+
+    def _warnings(self, value):
+        import warnings
+
+        df = pl.from_repr(self._ONE_ROW)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            out = df.sdtm.assign("AGEU", value=value, ct=self._Ageu).to_frame()
+        assert out["AGEU"].to_list() == [value]
+        return [str(w.message) for w in caught]
+
+    def test_a_value_outside_the_class_warns_with_the_valid_terms(self):
+        assert self._warnings("YRS") == [
+            "Value 'YRS' not in codelist 'CTEST640'. Valid values: DAYS, YEARS"
+        ]
+
+    def test_a_value_of_the_class_gives_no_warning(self):
+        assert self._warnings("YEARS") == []

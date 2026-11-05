@@ -71,6 +71,19 @@ _ON_FAIL_VALUES = ("warn", "raise", "ignore")
 _CODELIST_META = frozenset({"_concept_id", "_cdisc_url", "_preferred_term"})
 
 
+def _codelist_class_terms(cls: type) -> set[str]:
+    """Return the submission values of a generated codelist class.
+
+    A term that starts with a digit (10^9/L) has an attribute name that
+    starts with "_", so only the class metadata is left out.
+    """
+    return set(getattr(cls, "_terms", ())) or {
+        v
+        for k, v in vars(cls).items()
+        if not k.startswith("__") and k not in _CODELIST_META and isinstance(v, str)
+    }
+
+
 def _check_on_fail(verb: str, on_fail: str) -> None:
     """Raise ``DerivationError`` if *on_fail* is not one of :data:`_ON_FAIL_VALUES`."""
     if on_fail not in _ON_FAIL_VALUES:
@@ -762,7 +775,8 @@ class SharedVerbsMixin:
                 class (e.g. ``SEX``) or an NCI concept ID string
                 (e.g. ``"C66731"``).  With *source* and no *ct_map*,
                 values are passed through and validated; with *value*,
-                the literal is validated at pipeline-build time.
+                the literal is validated at pipeline-build time.  A class
+                holds its terms, so it checks values with no CT loaded.
             ct_map: Explicit ``{raw_value: ct_value}`` mapping applied to
                 *source* (raw codes that need remapping).  Requires
                 *source*.  Keys match the text form of the value, so
@@ -860,10 +874,18 @@ class SharedVerbsMixin:
                 from fleet.ct.validator import get_validator
 
                 validator = ct_validator or get_validator()
+                class_terms = _codelist_class_terms(ct_cls) if ct_cls is not None else set()
                 if ct_id is not None and validator.has_codelist(ct_id):
                     valid, msg = validator.validate_value(ct_id, str(value))
                     if not valid:
                         warnings.warn(msg, stacklevel=3)
+                elif class_terms:
+                    if str(value) not in class_terms and str(value) != "":
+                        warnings.warn(
+                            f"Value '{value}' not in codelist '{ct_id}'. "
+                            f"Valid values: {', '.join(sorted(class_terms))}",
+                            stacklevel=3,
+                        )
                 else:
                     warnings.warn(
                         f"{verb}('{target}'): codelist '{ct_id}' not found / CT not "
@@ -967,14 +989,8 @@ class SharedVerbsMixin:
             valid_values = set(ct_validator.get_valid_values(ct_codelist))
 
         # Strategy 2: introspect the codelist class (works without CT loaded).
-        # A term that starts with a digit (10^9/L) has an attribute name that
-        # starts with "_", so only the class metadata is left out.
         if not valid_values and ct_codelist_cls is not None:
-            valid_values = set(getattr(ct_codelist_cls, "_terms", ())) or {
-                v
-                for k, v in vars(ct_codelist_cls).items()
-                if not k.startswith("__") and k not in _CODELIST_META and isinstance(v, str)
-            }
+            valid_values = _codelist_class_terms(ct_codelist_cls)
 
         if not valid_values:
             return False
