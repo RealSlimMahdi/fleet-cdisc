@@ -5,6 +5,9 @@ on:
     branches: [main, master]
   pull_request: # every PR, also one stacked on another branch (c1-619)
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -50,8 +53,7 @@ jobs:
         run: |
           uv run ruff check
           uv run ruff format --check
-          rc=0; uv run blacken-docs --check --line-length 100 $(find docs -name '*.md') || rc=$?
-          if [ "$rc" -eq 1 ]; then echo "Code blocks need formatting"; exit 1; fi
+          uv run blacken-docs --check --line-length 100 $(find docs -name '*.md')
 
       - name: Check llms.txt is up-to-date
         if: matrix.python-version == '3.12'
@@ -62,7 +64,7 @@ jobs:
         run: uv run python scripts/gen_cli_docs.py --check
 
       - name: Run tests
-        run: uv run pytest --cov=fleet --cov-report=xml --cov-report=term-missing
+        run: uv run pytest --cov=fleet --cov-report=term-missing
 
       - name: Run the examples (AGENTS.md, c1-621)
         if: matrix.python-version == '3.12'
@@ -73,12 +75,6 @@ jobs:
             uv run python "examples/$example.py"
             echo "::endgroup::"
           done
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v5
-        with:
-          files: coverage.xml
-          fail_ci_if_error: false
 
   io-extra-only:
     # A user's install of the io extra: no pandas and no pyarrow. The test job

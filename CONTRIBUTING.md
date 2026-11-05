@@ -239,6 +239,8 @@ We welcome thoughtful contributions regardless of whether you used AI tools to h
    uv build && uvx twine check --strict dist/*
    ```
 
+   Before the first tag only, run `uv run mike delete --push latest` once. A push to `main` deploys the docs as `dev`; only a release tag writes `latest`.
+
 5. Tag `main` and push the tag:
 
    ```bash
