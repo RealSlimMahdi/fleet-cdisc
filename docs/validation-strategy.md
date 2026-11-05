@@ -100,6 +100,7 @@ This approach means the validation does not depend on an R installation, a speci
 | Record structure   | `derive_locf_records` fills the null values in place and adds no DTYPE.   | `derive_locf_records` adds new records with `DTYPE = "LOCF"`.  |
 | Missing values     | `pchg` gives null when BASE is 0.                                         | Same: `NA` when BASE is 0.                                     |
 | Units              | `qtc` reads RR in ms (ADR-0013).                                          | Same: RR in ms.                                                |
+| Grading boundary   | `atoxgr` CTCAE v5 GGT, high baseline: AVAL = 2 x BASE gives grade 0, as admiral (ADR-0014). The CTCAE text gives grade 1; ALP at the same boundary gives 1. | `atoxgr_criteria_ctcv5` GGT uses `>`, ALP uses `>=`. |
 
 ```python
 # Example: ANL01FL last-valid-row parity test

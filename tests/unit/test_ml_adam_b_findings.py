@@ -788,3 +788,89 @@ def test_c1_415_vaccine_cutoff_and_lloq_half_without_uloq():
 """)
     out = is_.adam.vaccine.aval_adis("AVAL", uloq_col=None).to_frame()
     assert out["AVAL"].to_list() == [2.0, 10.0]
+
+
+# ------------------------------------------------------------------ #
+# Grading                                                              #
+# ------------------------------------------------------------------ #
+
+
+def test_c1_390_nan_gives_a_null_grade():
+    lb = pl.from_repr("""
+┌──────────────┬───────┬───────┬───────┬────────┬───────┐
+│ T            ┆ AVAL  ┆ ANRLO ┆ ANRHI ┆ AVALU  ┆ BASE  │
+│ ---          ┆ ---   ┆ ---   ┆ ---   ┆ ---    ┆ ---   │
+│ str          ┆ f64   ┆ f64   ┆ f64   ┆ str    ┆ f64   │
+╞══════════════╪═══════╪═══════╪═══════╪════════╪═══════╡
+│ Hyperkalemia ┆ NaN   ┆ 3.5   ┆ 5.0   ┆ mmol/L ┆ 4.0   │
+│ Hyperkalemia ┆ 5.2   ┆ 3.5   ┆ NaN   ┆ mmol/L ┆ 4.0   │
+│ Hyperkalemia ┆ 6.5   ┆ 3.5   ┆ 5.0   ┆ mmol/L ┆ 4.0   │
+└──────────────┴───────┴───────┴───────┴────────┴───────┘
+""")
+    hi = lb.adam.atoxgr("ATOXGRH", direction="H", term_var="T", unit_var="AVALU").to_frame()
+    assert hi["ATOXGRH"].to_list() == [None, None, "3"]
+    assert hi["AVAL"].is_nan().to_list() == [True, False, False]
+    lo = lb.with_columns(pl.lit("Hypokalemia").alias("T"))
+    out = lo.adam.atoxgr("ATOXGRL", direction="L", term_var="T", unit_var="AVALU").to_frame()
+    assert out["ATOXGRL"][0] is None
+
+
+def _hyperkalemia_file(tmp_path, **changes):
+    import json
+    from pathlib import Path
+
+    from fleet.adam.grading import _registry
+
+    raw = json.loads(
+        (Path(_registry.__file__).parent / "criteria" / "ctcae_v5.json").read_text("utf-8")
+    )
+    entry = next(
+        e for e in raw["criteria"] if e["term"] == "Hyperkalemia" and e["direction"] == "H"
+    )
+    entry.update(changes)
+    raw["criteria"] = [entry]
+    path = tmp_path / "my_criteria.json"
+    path.write_text(json.dumps(raw), encoding="utf-8")
+    return path, raw
+
+
+LB_K = """
+┌──────────────┬───────┬───────┬───────┬────────┐
+│ T            ┆ AVAL  ┆ ANRLO ┆ ANRHI ┆ AVALU  │
+│ ---          ┆ ---   ┆ ---   ┆ ---   ┆ ---    │
+│ str          ┆ f64   ┆ f64   ┆ f64   ┆ str    │
+╞══════════════╪═══════╪═══════╪═══════╪════════╡
+│ Hyperkalemia ┆ 6.5   ┆ 3.5   ┆ 5.0   ┆ mmol/L │
+└──────────────┴───────┴───────┴───────┴────────┘
+"""
+
+
+def test_c1_700_mistyped_key_raises(tmp_path):
+    from pydantic import ValidationError
+
+    path, _ = _hyperkalemia_file(tmp_path, filtr=None)
+    with pytest.raises(ValidationError, match="filtr"):
+        pl.from_repr(LB_K).adam.atoxgr(
+            "ATOXGRH", system=str(path), direction="H", term_var="T", unit_var="AVALU"
+        )
+
+
+def test_c1_700_bad_json_names_the_file(tmp_path):
+    path = tmp_path / "bad.json"
+    path.write_text("{ nope", encoding="utf-8")
+    with pytest.raises(ValueError, match=r"bad.json: not valid JSON \(line 1, column 3\)"):
+        pl.from_repr(LB_K).adam.atoxgr(
+            "ATOXGRH", system=str(path), direction="H", term_var="T", unit_var="AVALU"
+        )
+
+
+def test_c1_701_an_edited_criteria_file_is_read_again(tmp_path):
+    import json
+
+    path, raw = _hyperkalemia_file(tmp_path)
+    kw = dict(system=str(path), direction="H", term_var="T", unit_var="AVALU")
+    first = pl.from_repr(LB_K).adam.atoxgr("G", **kw).to_frame()["G"][0]
+    raw["criteria"][0]["arms"] = [{"when": True, "then": "1"}]
+    path.write_text(json.dumps(raw), encoding="utf-8")
+    second = pl.from_repr(LB_K).adam.atoxgr("G", **kw).to_frame()["G"][0]
+    assert (first, second) == ("3", "1")
