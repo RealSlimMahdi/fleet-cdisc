@@ -531,15 +531,10 @@ class DefineSpecGenerator:
     # ------------------------------------------------------------------ #
 
     def _check_spec_version(self) -> None:
-        """Raise ``SpecError`` when the spec declares an unknown future version."""
-        from fleet.core._verb_mixin import SUPPORTED_SPEC_VERSION
+        """Raise ``SpecError`` when the spec declares another version (1 names ``fleet migrate``)."""
+        from fleet.core.define_spec import check_spec_version
 
-        version = self._data.get("fleet_spec_version")
-        if version is not None and version != SUPPORTED_SPEC_VERSION:
-            raise SpecError(
-                f"{self._path}: unsupported fleet_spec_version {version!r}. "
-                f"This Fleet version supports fleet_spec_version {SUPPORTED_SPEC_VERSION}."
-            )
+        check_spec_version(self._data.get("fleet_spec_version"), source=str(self._path))
 
     def _validate(self) -> None:
         from fleet.core.exceptions import SpecSchemaError

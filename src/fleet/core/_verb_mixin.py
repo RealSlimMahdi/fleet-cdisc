@@ -34,7 +34,12 @@ import polars as pl
 import yaml
 
 from fleet.core import log as fleet_log
-from fleet.core.define_spec import DefineSpec, load_define_spec
+from fleet.core.define_spec import (
+    SUPPORTED_SPEC_VERSION,
+    DefineSpec,
+    check_spec_version,
+    load_define_spec,
+)
 from fleet.core.dtc import date_part, datetime_part, refuse_number, to_day, warn_on_collect
 from fleet.core.exceptions import (
     ComparisonError,
@@ -136,29 +141,9 @@ def _iso_days(days: pl.Expr, unit: str, *, add_one: bool, call: str, target: str
     )
 
 
-#: Spec-format version this Fleet build writes (``fleet_spec_version``).
-#: Version 2 is the verb vocabulary of ADR-0008.
-SUPPORTED_SPEC_VERSION = 2
-
-
 def _check_spec_version(spec: DefineSpec, *, source: str) -> None:
-    """Raise ``SpecError`` when the spec declares another dialect version.
-
-    Version 1 is the pre-ADR-0008 vocabulary; ``fleet migrate --spec``
-    rewrites it.
-    """
-    version = spec.fleet_spec_version
-    if version is None or version == SUPPORTED_SPEC_VERSION:
-        return
-    hint = (
-        " Rewrite the file with `fleet migrate --spec <define.yaml> --write`."
-        if version == 1
-        else ""
-    )
-    raise SpecError(
-        f"{source}: unsupported fleet_spec_version {version!r}. "
-        f"This Fleet version supports fleet_spec_version {SUPPORTED_SPEC_VERSION}.{hint}"
-    )
+    """Raise ``SpecError`` when the spec declares another dialect version."""
+    check_spec_version(spec.fleet_spec_version, source=source)
 
 
 def _import_derivations_module(spec: DefineSpec, *, source: str) -> None:

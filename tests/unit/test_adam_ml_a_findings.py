@@ -604,3 +604,15 @@ class TestAgeConstants:
 └───────┴───────┘
 """)
         assert df.select(age_in_years())["AAGE"][0] == pytest.approx(52 * 7 / 365.25, rel=1e-12)
+
+
+def test_define_xml_on_a_version_1_spec_names_fleet_migrate(tmp_path):
+    """c1-142: DefineSpecGenerator gives the same hint as from_spec."""
+    from fleet.core.exceptions import SpecError
+    from fleet.define_xml import DefineSpecGenerator
+
+    path = tmp_path / "define.yaml"
+    path.write_text("fleet_spec_version: 1\nstudy:\n  name: S01\ndatasets: []\n")
+
+    with pytest.raises(SpecError, match="fleet migrate --spec"):
+        DefineSpecGenerator(path)
