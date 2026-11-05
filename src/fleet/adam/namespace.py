@@ -22,8 +22,7 @@ Usage
         .date("ADT", source="VSDTC")
         .derivation("AVAL", expression="VSSTRESN")
         .duration("ADY", start="TRTSDT", end="ADT")
-        .flag("ABLFL", criteria='pl.col("VISITNUM") == 1',
-              by=["USUBJID", "PARAMCD"])
+        .flag("ABLFL", criteria='pl.col("VISITNUM") == 1')
         .baseline("BASE", aval="AVAL", baseline_flag="ABLFL")
         .chg("CHG", aval="AVAL", base="BASE")
         .pchg("PCHG", aval="AVAL", base="BASE")

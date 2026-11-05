@@ -1953,7 +1953,7 @@
             }
           ],
           "default": null,
-          "description": "Partition columns (default ``[\"USUBJID\"]``).",
+          "description": "Partition columns (default ``[\"USUBJID\"]``) for ``\"first\"``/``\"last\"``, ``\"max\"``/``\"min\"`` and ``\"before\"``/``\"after\"``.",
           "title": "By"
         },
         "order_by": {
@@ -2046,7 +2046,7 @@
             }
           ],
           "default": null,
-          "description": "Filter applied to *from_dataset* before key extraction or join.",
+          "description": "Filter applied to *from_dataset* before key extraction or join; an expression string is parsed as *where* is.",
           "title": "Source Filter"
         },
         "condition": {
@@ -2059,7 +2059,7 @@
             }
           ],
           "default": null,
-          "description": "Boolean expression identifying landmark rows for ``\"before\"``/``\"after\"`` or the current-row condition for ``\"exists_after\"``/``\"exists_before\"``.",
+          "description": "Boolean expression (or expression string) identifying landmark rows for ``\"before\"``/``\"after\"`` or the current-row condition for ``\"exists_after\"``/``\"exists_before\"``.",
           "title": "Condition"
         },
         "inclusive": {
@@ -2622,6 +2622,9 @@
         },
         "by": {
           "anyOf": [
+            {
+              "type": "string"
+            },
             {
               "items": {
                 "type": "string"

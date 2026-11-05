@@ -790,7 +790,6 @@ ADAM_CASES: list[Case] = [
                 "target": "ABLFL",
                 "algorithm": "flag",
                 "criteria": 'pl.col("VISITNUM") == 1',
-                "by": ["USUBJID"],
             }
         ],
         lambda df: df.sort("USUBJID", "VISITNUM")["ABLFL"].to_list() == ["Y", None, "Y"],

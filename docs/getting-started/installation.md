@@ -110,7 +110,7 @@ advs = (
     .assign("AVAL", source="VSSTRESN")
     .date("ADT", source="VSDTC")
     .study_day("ADY", date_col="ADT", ref_col="TRTSDT")
-    .flag("ABLFL", criteria='pl.col("VISITNUM") == 1', by=["USUBJID", "PARAMCD"])
+    .flag("ABLFL", criteria='pl.col("VISITNUM") == 1')
     .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
     .chg("CHG", aval="AVAL", base="BASE")
     .pchg("PCHG", aval="AVAL", base="BASE")

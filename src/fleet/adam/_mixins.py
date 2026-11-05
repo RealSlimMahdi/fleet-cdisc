@@ -374,7 +374,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         targets: str | list[str],
         *,
         events: list[dict[str, Any]],
-        by: list[str] | None = None,
+        by: str | list[str] | None = None,
         order: str | list[str] | None = None,
         mode: str = "first",
     ) -> Self:
@@ -497,7 +497,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
             )
 
         target_list = [targets] if isinstance(targets, str) else list(targets)
-        by_vars = by or ["USUBJID"]
+        by_vars = [by] if isinstance(by, str) else (list(by) if by else ["USUBJID"])
         global_order: list[str] | None = (
             [order] if isinstance(order, str) else list(order) if order else None
         )
@@ -710,7 +710,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
         self,
         adsl: pl.DataFrame,
         *,
-        by: list[str] | None = None,
+        by: str | list[str] | None = None,
         keep: list[str] | None = None,
     ) -> Self:
         """Left-join ADSL columns onto the current dataset.
@@ -749,7 +749,7 @@ class SharedADaMVerbsMixin(SharedVerbsMixin, PinMixin, FlagCriterionMixin):
                     .to_frame()
                 )
         """
-        join_keys = by if by is not None else ["USUBJID"]
+        join_keys = [by] if isinstance(by, str) else (list(by) if by is not None else ["USUBJID"])
         if keep is not None:
             require_columns("merge_adsl(keep=...)", keep, adsl.columns, where="ADSL")
             adsl = adsl.select(list(dict.fromkeys(keep + join_keys)))

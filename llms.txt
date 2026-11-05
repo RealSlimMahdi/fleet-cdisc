@@ -801,7 +801,7 @@ advs = (
     .merge(dataset=_trtsdt_map, on="USUBJID", how="left")
     .duration("ADY", start="TRTSDT", end="ADT")
     # admiral: flag_variables — last pre-dose visit (vsdy ≤ 0)
-    .flag("ABLFL", criteria='pl.col("vsdy") <= 0', by=["USUBJID", "PARAMCD"])
+    .flag("ABLFL", criteria='pl.col("vsdy") <= 0')
     .to_frame()  # materialise — ABLFL must exist before baseline() window fn
     .adam.baseline(  # admiral: derive_var_base
         "BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"]
@@ -1781,7 +1781,7 @@ Registered on every `pl.DataFrame` **and** `pl.LazyFrame` (so `pl.scan_parquet(.
 `assign` is the one assignment verb (the pre-alpha `assign_no_ct`/`assign_ct`/`hardcode_no_ct`/`hardcode_ct`/`dataset_level` spellings were removed); `case_when` replaces `if_then_else`.
 
 - `assign(target: str, *, source: str | None = None, value: Any | None = None, ct: str | type | None = None, ct_map: dict[str, str] | None = None, ct_validator: CTValidator | None = None, validate_values: bool | None = None) -> Self` — Assign *target* from a source column or a literal value.
-- `case_when(target: str, *, when: list[dict[str, Any]], else_: Any = None) -> Self` — Multi-branch conditional derivation (first matching branch wins).
+- `case_when(target: str, *, when: list[CaseWhenBranch], else_: Any = None) -> Self` — Multi-branch conditional derivation (first matching branch wins).
 - `date(target: str, *, source: str | None = None, value: str | None = None, output: str | None = None, time: str | None = None, impute: str = 'first', impute_time: str | None = None, highest: str | None = None, flag: bool | str = True, min_date: str | None = None, max_date: str | None = None, format: str | None = None) -> SDTMNamespace` — Parse, convert, impute, and flag a date or datetime column.
 - `duration(target: str, *, start: str | pl.Expr, end: str | pl.Expr, unit: "Literal['seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years']" = 'days', add_one: bool | None = None, out: "Literal['numeric', 'iso8601']" = 'numeric') -> Self` — Compute the duration between two date/datetime columns.
 - `derivation(target: str | Derivation | None = None, *, expression: str | pl.Expr | Callable[[], pl.Expr] | None = None) -> Self` — Derive *target* using an expression, lambda, or ``Derivation`` object.
@@ -1793,7 +1793,7 @@ Registered on every `pl.DataFrame` **and** `pl.LazyFrame` (so `pl.scan_parquet(.
 - `group_by(*, by: list[str], agg: list[pl.Expr]) -> SDTMNamespace` — Group by *by* and apply *agg* aggregations (lazily).
 - `notsubmitted(*targets: str) -> SDTMNamespace` — Mark one or more variables as not submitted (set to null).
 - `multiple_responses(target: str, *, source: str, delimiter: str = '|') -> SDTMNamespace` — Explode a delimited multi-response field into separate rows.
-- `flag(target: str, *, criteria: str | pl.Expr, by: list[str] | None = None, order_by: str | list[str] | None = None, value_col: str | None = None, where: str | pl.Expr | None = None, from_dataset: pl.DataFrame | list[pl.DataFrame] | None = None, on: list[str] | None = None, source_filter: pl.Expr | None = None, condition: pl.Expr | None = None, inclusive: bool = True, flag_no_ref_groups: bool = True, flag_all: bool = False, flag_value: str = 'Y', false_value: str | None = None) -> Self` — Set *target* to *flag_value* for records matching *criteria*.
+- `flag(target: str, *, criteria: str | pl.Expr, by: list[str] | None = None, order_by: str | list[str] | None = None, value_col: str | None = None, where: str | pl.Expr | None = None, from_dataset: pl.DataFrame | list[pl.DataFrame] | None = None, on: list[str] | None = None, source_filter: str | pl.Expr | None = None, condition: str | pl.Expr | None = None, inclusive: bool = True, flag_no_ref_groups: bool = True, flag_all: bool = False, flag_value: str = 'Y', false_value: str | None = None) -> Self` — Set *target* to *flag_value* for records matching *criteria*.
 - `to_frame() -> DataFrame` — Materialise the accumulated pipeline into a Polars DataFrame.
 
 ## Trial Design Domain (TDD) verbs
@@ -1834,23 +1834,23 @@ These verbs are defined once in `SharedADaMVerbsMixin` (`src/fleet/adam/_mixins.
 
 - `source(*targets: str, from_col: str | None = None) -> Self` — Carry one or more source columns into the ADaM dataset.
 - `assign(target: str, *, source: str | None = None, value: Any | None = None, ct: str | type | None = None, ct_map: dict[str, str] | None = None, ct_validator: CTValidator | None = None, validate_values: bool | None = None) -> Self` — Assign *target* from a source column or a literal value.
-- `case_when(target: str, *, when: list[dict[str, Any]], else_: Any = None) -> Self` — Multi-branch conditional derivation (first matching branch wins).
+- `case_when(target: str, *, when: list[CaseWhenBranch], else_: Any = None) -> Self` — Multi-branch conditional derivation (first matching branch wins).
 - `derivation(target: str | Derivation | None = None, *, expression: str | pl.Expr | Callable[[], pl.Expr] | None = None) -> Self` — Derive *target* using an expression, lambda, or ``Derivation`` object.
 - `recode(target: str, *, source: str, recode_map: dict[Any, Any], default: Any = None) -> Self` — Map values in *source* to recoded values in *target*.
 - `merge(dataset: pl.DataFrame | pl.LazyFrame | None = None, *, on: str | list[str] | None = None, how: str = 'left', keep: list[str] | None = None, where: str | pl.Expr | None = None, validate: "Literal['m:1', '1:m', '1:1'] | None" = None) -> Self` — Join *dataset* into the pipeline using key column(s) *on*.
 - `keep(*columns: str | list[str]) -> Self` — Restrict the frame to *columns*, in the given order.
 - `whereclauses(*, where: str | pl.Expr) -> Self` — Filter records by a *where* expression.
-- `merge_adsl(adsl: pl.DataFrame, *, by: list[str] | None = None, keep: list[str] | None = None) -> Self` — Left-join ADSL columns onto the current dataset.
+- `merge_adsl(adsl: pl.DataFrame, *, by: str | list[str] | None = None, keep: list[str] | None = None) -> Self` — Left-join ADSL columns onto the current dataset.
 - `date(target: str, *, source: str | None = None, value: str | None = None, output: str | None = None, time: str | None = None, impute: str = 'first', impute_time: str | None = None, highest: str | None = None, flag: bool | str = True, min_date: str | None = None, max_date: str | None = None) -> Self` — Parse, convert, impute, and flag a date or datetime column.
 - `duration(target: str, *, start: str | pl.Expr, end: str | pl.Expr, unit: "Literal['seconds', 'minutes', 'hours', 'days', 'weeks', 'months', 'years']" = 'days', add_one: bool | None = None, out: "Literal['numeric', 'iso8601']" = 'numeric') -> Self` — Compute the duration between two date/datetime columns.
-- `flag(target: str, *, criteria: str | pl.Expr, by: list[str] | None = None, order_by: str | list[str] | None = None, value_col: str | None = None, where: str | pl.Expr | None = None, from_dataset: pl.DataFrame | list[pl.DataFrame] | None = None, on: list[str] | None = None, source_filter: pl.Expr | None = None, condition: pl.Expr | None = None, inclusive: bool = True, flag_no_ref_groups: bool = True, flag_all: bool = False, flag_value: str = 'Y', false_value: str | None = None) -> Self` — Set *target* to *flag_value* for records matching *criteria*.
-- `pick(targets: str | list[str], *, events: list[dict[str, Any]], by: list[str] | None = None, order: str | list[str] | None = None, mode: str = 'first') -> Self` — Derive targets from one event per group, chosen across the events.
+- `flag(target: str, *, criteria: str | pl.Expr, by: list[str] | None = None, order_by: str | list[str] | None = None, value_col: str | None = None, where: str | pl.Expr | None = None, from_dataset: pl.DataFrame | list[pl.DataFrame] | None = None, on: list[str] | None = None, source_filter: str | pl.Expr | None = None, condition: str | pl.Expr | None = None, inclusive: bool = True, flag_no_ref_groups: bool = True, flag_all: bool = False, flag_value: str = 'Y', false_value: str | None = None) -> Self` — Set *target* to *flag_value* for records matching *criteria*.
+- `pick(targets: str | list[str], *, events: list[dict[str, Any]], by: str | list[str] | None = None, order: str | list[str] | None = None, mode: str = 'first') -> Self` — Derive targets from one event per group, chosen across the events.
 
 ## ADaM verbs
 
 Available on `df.adam` (BDS base namespace). Shared verbs (source, assign, case_when, derivation, recode, merge, keep, whereclauses, merge_adsl, date, duration, flag) are also available here via the shared mixin.
 
-- `flag(target: str, *, criteria: str | pl.Expr, by: list[str] | None = None, order_by: str | list[str] | None = None, value_col: str | None = None, where: str | pl.Expr | None = None, from_dataset: pl.DataFrame | list[pl.DataFrame] | None = None, on: list[str] | None = None, source_filter: pl.Expr | None = None, condition: pl.Expr | None = None, inclusive: bool = True, flag_no_ref_groups: bool = True, flag_all: bool = False, flag_value: str = 'Y', false_value: str | None = None) -> Self` — Set *target* to *flag_value* for records matching *criteria*.
+- `flag(target: str, *, criteria: str | pl.Expr, by: list[str] | None = None, order_by: str | list[str] | None = None, value_col: str | None = None, where: str | pl.Expr | None = None, from_dataset: pl.DataFrame | list[pl.DataFrame] | None = None, on: list[str] | None = None, source_filter: str | pl.Expr | None = None, condition: str | pl.Expr | None = None, inclusive: bool = True, flag_no_ref_groups: bool = True, flag_all: bool = False, flag_value: str = 'Y', false_value: str | None = None) -> Self` — Set *target* to *flag_value* for records matching *criteria*.
 - `baseline(target: str, *, aval: str = 'AVAL', baseline_flag: str = 'ABLFL', by: list[str] | None = None, strict: bool = True) -> AdamNamespace` — Derive BASE as the AVAL where the baseline flag equals ``"Y"``.
 - `chg(target: str, *, aval: str = 'AVAL', base: str = 'BASE') -> AdamNamespace` — Compute change from baseline: ``CHG = AVAL - BASE``.
 - `pchg(target: str, *, aval: str = 'AVAL', base: str = 'BASE') -> AdamNamespace` — Compute percent change from baseline.
@@ -2196,7 +2196,7 @@ JSON contract (`fleet.comparison.JSON_KEYS`, additive-only within a major versio
 
 ### Pipeline verb (every namespace: `df.sdtm`, `df.adam`, `df.adam.adsl`, `df.adam.occds`, …)
 
-The chain is the candidate, the argument is the base. `on_fail` is `"warn"` (default, `UserWarning`), `"raise"` (`ComparisonError`) or `"ignore"`, exactly as for `.validate()`; the report stays on the namespace as `.last_comparison` and the chain continues.
+The chain is the candidate, the argument is the base. `on_fail` is `"warn"` (default, `UserWarning`), `"raise"` (`ComparisonFailed`, a `ComparisonError`) or `"ignore"`, exactly as for `.validate()`; the report stays on the namespace as `.last_comparison` and the chain continues.
 
 - `compare(base: pl.DataFrame | pl.LazyFrame, *, keys: str | Sequence[str], by: str | Sequence[str] | None = None, pairs: Mapping[str, str] | None = None, variables: str | Sequence[str] | None = None, abs_tol: float = 0.0, rel_tol: float = 0.0, ignore_trailing_whitespace: bool = False, blank_is_missing: bool = False, allow_duplicates: bool = False, max_print: MaxPrint = 50, base_name: str | None = None, candidate_name: str | None = None, on_fail: "Literal['warn', 'raise', 'ignore']" = 'warn') -> Self` — Compare the chain against a base dataset, PROC COMPARE style.
 

@@ -146,7 +146,6 @@ class TestFlag:
         result = vs_frame.adam.flag(
             "ABLFL2",
             criteria='pl.col("ABLFL") == "Y"',
-            by=["USUBJID", "PARAMCD"],
         ).to_frame()
         assert result["ABLFL2"][0] == "Y"
 
@@ -310,7 +309,7 @@ class TestChaining:
 └─────────┴─────────┴──────┴──────┘
 """)
         advs = (
-            vs.adam.flag("ABLFL", criteria='pl.col("vsdy") <= 0', by=["USUBJID", "PARAMCD"])
+            vs.adam.flag("ABLFL", criteria='pl.col("vsdy") <= 0')
             .baseline("BASE", aval="AVAL", baseline_flag="ABLFL", by=["USUBJID", "PARAMCD"])
             .chg("CHG", aval="AVAL", base="BASE")
             .pchg("PCHG", aval="AVAL", base="BASE")

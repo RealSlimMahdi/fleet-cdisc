@@ -607,3 +607,192 @@ def test_c1_201_a_pin_on_a_branch_does_not_reach_the_parent():
     branch = base.join_adsl("AGE").study_day("ASTDY", date_col="AESTDTC")
     assert all(not n.pin_sources for n in lineage_of(base))
     assert any(n.pin_sources for n in lineage_of(branch))
+
+
+# --------------------------------------------------------------------- #
+# c1-214: flag() refuses by= where no mode uses it                        #
+# --------------------------------------------------------------------- #
+
+_EX = pl.from_repr("""\
+┌─────────┬────────┐
+│ USUBJID ┆ EXDOSE │
+│ ---     ┆ ---    │
+│ str     ┆ f64    │
+╞═════════╪════════╡
+│ S1      ┆ 0.0    │
+│ S1      ┆ 54.0   │
+└─────────┴────────┘
+""")
+
+
+def test_c1_214_expression_flag_with_by_raises():
+    from fleet.core.exceptions import VerbUsageError
+
+    with pytest.raises(VerbUsageError, match="by"):
+        _EX.sdtm.flag("SAFFL", criteria=pl.col("EXDOSE") > 0, by=["USUBJID"])
+
+
+def test_c1_214_exists_flag_with_by_raises():
+    from fleet.core.exceptions import VerbUsageError
+
+    with pytest.raises(VerbUsageError, match="by"):
+        _EX.adam.flag("F", criteria="exists", from_dataset=_EX, on=["USUBJID"], by=["PARAMCD"])
+
+
+def test_c1_214_expression_flag_without_by_is_a_row_flag():
+    out = _EX.sdtm.flag("SAFFL", criteria=pl.col("EXDOSE") > 0).to_frame()
+    assert out["SAFFL"].to_list() == [None, "Y"]
+
+
+# --------------------------------------------------------------------- #
+# c1-208 / c1-217: flag_relative and the untested flag paths              #
+# --------------------------------------------------------------------- #
+
+_RS = pl.from_repr("""\
+┌─────────┬─────────┬───────┬───────┬───────┐
+│ USUBJID ┆ AVISITN ┆ AVALC ┆ AVAL  ┆ ANLFL │
+│ ---     ┆ ---     ┆ ---   ┆ ---   ┆ ---   │
+│ str     ┆ i64     ┆ str   ┆ f64   ┆ str   │
+╞═════════╪═════════╪═══════╪═══════╪═══════╡
+│ S1      ┆ 3       ┆ SD    ┆ 10.0  ┆ N     │
+│ S1      ┆ 1       ┆ SD    ┆ 5.0   ┆ Y     │
+│ S1      ┆ 2       ┆ PD    ┆ 3.0   ┆ Y     │
+│ S1      ┆ 4       ┆ PD    ┆ 1.0   ┆ Y     │
+│ S2      ┆ 1       ┆ SD    ┆ 2.0   ┆ Y     │
+│ S2      ┆ 2       ┆ SD    ┆ 4.0   ┆ Y     │
+└─────────┴─────────┴───────┴───────┴───────┘
+""")
+
+
+@pytest.mark.parametrize(
+    ("when", "inclusive", "no_ref", "expected"),
+    [
+        ("before", True, True, [None, "Y", "Y", None, "Y", "Y"]),
+        ("before", False, True, [None, "Y", None, None, "Y", "Y"]),
+        ("after", True, True, ["Y", None, "Y", "Y", "Y", "Y"]),
+        ("after", False, False, ["Y", None, None, "Y", None, None]),
+    ],
+)
+def test_c1_208_c1_217_flag_relative_by_hand(when, inclusive, no_ref, expected):
+    out = _RS.adam.flag_relative(
+        "F",
+        when=when,
+        condition=pl.col("AVALC") == "PD",
+        order_by="AVISITN",
+        by=["USUBJID"],
+        inclusive=inclusive,
+        flag_no_ref_groups=no_ref,
+    ).to_frame()
+    assert out["F"].to_list() == expected
+    assert out.columns == [*_RS.columns, "F"]
+
+
+def test_c1_208_a_condition_with_its_own_window():
+    out = _RS.adam.flag_relative(
+        "F",
+        when="before",
+        condition=pl.col("AVAL") == pl.col("AVAL").max().over("USUBJID"),
+        order_by="AVISITN",
+        by=["USUBJID"],
+    ).to_frame()
+    # S1 max AVAL is at visit 3; S2 max AVAL is at visit 2.
+    assert out["F"].to_list() == ["Y", "Y", "Y", None, "Y", "Y"]
+
+
+def test_c1_208_lineage_names_the_condition_columns():
+    from fleet.core.lineage import lineage_of
+
+    ns = _RS.adam.flag_relative(
+        "F", when="before", condition=pl.col("AVALC") == "PD", order_by="AVISITN"
+    )
+    node = lineage_of(ns)[-1]
+    assert "AVALC" in node.sources
+    assert not any(s.startswith("__") for s in node.sources)
+
+
+def test_c1_217_flag_extreme_with_where_skips_the_global_max():
+    out = _RS.adam.flag_extreme(
+        "F", value_col="AVAL", by=["USUBJID"], where=pl.col("ANLFL") == "Y"
+    ).to_frame()
+    assert out["F"].to_list() == [None, "Y", None, None, None, "Y"]
+
+
+def test_c1_217_flag_expression_with_where():
+    out = _RS.adam.flag("F", criteria=pl.col("AVAL") > 2, where=pl.col("ANLFL") == "Y").to_frame()
+    assert out["F"].to_list() == [None, "Y", "Y", None, None, "Y"]
+
+
+def test_c1_217_flag_exists_before_one_key_no_by():
+    adae = pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ ADY │
+│ ---     ┆ --- │
+│ str     ┆ i64 │
+╞═════════╪═════╡
+│ S1      ┆ 5   │
+│ S1      ┆ 1   │
+│ S2      ┆ 5   │
+└─────────┴─────┘
+""")
+    cm = pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ ADY │
+│ ---     ┆ --- │
+│ str     ┆ i64 │
+╞═════════╪═════╡
+│ S1      ┆ 3   │
+└─────────┴─────┘
+""")
+    out = adae.adam.flag(
+        "F",
+        criteria="exists_before",
+        from_dataset=cm,
+        on=["USUBJID"],
+        order_by="ADY",
+        condition=pl.lit(True),
+    ).to_frame()
+    assert out["F"].to_list() == ["Y", None, None]
+
+
+def test_c1_217_join_adsl_keeps_a_subject_not_in_adsl():
+    ae = pl.DataFrame({"USUBJID": ["S1", "S9"]})
+    out = ae.adam.occds.pin("ADSL", _ADSL_DAYS).join_adsl("AGE").to_frame()
+    assert out["USUBJID"].to_list() == ["S1", "S9"]
+    assert out["AGE"].to_list() == [50, None]
+
+
+# --------------------------------------------------------------------- #
+# c1-215: a string key or condition is accepted                           #
+# --------------------------------------------------------------------- #
+
+
+def test_c1_215_merge_adsl_by_string():
+    ae = pl.DataFrame({"USUBJID": ["S1", "S2"]})
+    out = ae.adam.merge_adsl(_ADSL_DAYS, by="USUBJID", keep=["AGE"]).to_frame()
+    assert out["AGE"].to_list() == [50, 60]
+
+
+def test_c1_215_pick_by_string():
+    out = _RS.adam.pick(
+        "X",
+        events=[{"when": pl.col("AVALC") == "PD", "set": {"X": "AVISITN"}}],
+        by="USUBJID",
+        order="AVISITN",
+    ).to_frame()
+    assert out["X"].to_list() == [2, 2, 2, 2, None, None]
+
+
+def test_c1_215_string_condition_and_source_filter():
+    by_expr = _RS.adam.flag_relative(
+        "F", when="before", condition=pl.col("AVALC") == "PD", order_by="AVISITN"
+    ).to_frame()
+    by_text = _RS.adam.flag_relative(
+        "F", when="before", condition='pl.col("AVALC") == "PD"', order_by="AVISITN"
+    ).to_frame()
+    assert by_text.equals(by_expr)
+    out = _RS.adam.flag_exists(
+        "F", from_dataset=_RS, on=["USUBJID"], source_filter="pl.col('AVAL') > 5"
+    ).to_frame()
+    assert out["F"].to_list() == ["Y"] * 4 + [None] * 2
+    crit = _RS.adam.criterion(1, condition="pl.col('AVAL') > 5", description="AVAL > 5")
+    assert crit.to_frame()["CRIT1FL"].to_list() == ["Y", "N", "N", "N", "N", "N"]

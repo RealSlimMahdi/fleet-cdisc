@@ -372,10 +372,10 @@ datasets:
         length: 2
         mandatory: false
         origin: Derived
+        comment: Y for the records on or before study day 0; else null.
         derivation:
           algorithm: flag
           criteria: "pl.col('vsdy') <= 0"
-          by: [USUBJID, PARAMCD]
 
       - name: BASE
         label: Baseline Value
