@@ -201,3 +201,45 @@ def test_a_missing_key_matches_a_missing_key_as_sas_merge() -> None:
 
     # MERGE BY USUBJID PARAMCD ATPT: a missing ATPT matches a missing ATPT.
     assert out["BASE"].to_list() == [121.0, 119.0]
+
+
+# ── Pilot TV and SE shapes: a decimal VISITNUM and an unplanned element (c2-974) ──
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="c2-974: TrialVisit types VISITNUM as an integer and refuses 3.5; TV cluster open",
+)
+def test_pilot_tv_rows_load_with_a_decimal_visitnum():
+    from fleet.sdtm.tdd import TrialVisit, TrialVisits
+
+    # CDISCPILOT01 TV: an unscheduled visit between visits 3 and 4 is 3.5.
+    rows = [(1.0, "SCREENING 1"), (3.5, "UNSCHEDULED 3.1"), (13.0, "WEEK 26")]
+    rows += [(101.0, "RETRIEVAL"), (201.0, "AMBUL ECG REMOVAL"), (501.0, "RETRIEVAL")]
+
+    tv = TrialVisits(visits=[TrialVisit(visitnum=n, visit=v) for n, v in rows]).to_polars()
+
+    assert tv["VISITNUM"].to_list() == [n for n, _ in rows]
+
+
+def test_a_date_in_an_unplanned_element_gets_no_epoch():
+    # SDTMIG 3.4 SE: an unplanned element (ETCD UNPLAN) has a null EPOCH.
+    se = pl.from_repr("""
+        ┌─────────┬────────┬────────────┬────────────┬───────────┐
+        │ USUBJID ┆ ETCD   ┆ SESTDTC    ┆ SEENDTC    ┆ EPOCH     │
+        │ ---     ┆ ---    ┆ ---        ┆ ---        ┆ ---       │
+        │ str     ┆ str    ┆ str        ┆ str        ┆ str       │
+        ╞═════════╪════════╪════════════╪════════════╪═══════════╡
+        │ 001     ┆ SCRN   ┆ 2014-01-01 ┆ 2014-01-14 ┆ SCREENING │
+        │ 001     ┆ PBO    ┆ 2014-01-14 ┆ 2014-03-01 ┆ TREATMENT │
+        │ 001     ┆ UNPLAN ┆ 2014-03-01 ┆ 2014-03-10 ┆ null      │
+        │ 001     ┆ FU     ┆ 2014-03-10 ┆ 2014-04-10 ┆ FOLLOW-UP │
+        └─────────┴────────┴────────────┴────────────┴───────────┘
+        """)
+    ae = pl.DataFrame(
+        {"USUBJID": ["001"] * 3, "AESTDTC": ["2014-02-01", "2014-03-05", "2014-03-20"]}
+    )
+
+    result = ae.sdtm.epoch_assign("EPOCH", date_col="AESTDTC", se=se).to_frame()
+
+    assert result["EPOCH"].to_list() == ["TREATMENT", None, "FOLLOW-UP"]
