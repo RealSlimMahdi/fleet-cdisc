@@ -38,11 +38,14 @@ Files under `docs/api/` contain **mkdocstrings directives** — special YAML blo
 
 ```markdown
 ::: fleet.<module>.<ClassName>
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
 ```
+
+Indent `options:` by 4 spaces and each key by 8. If `options:` is at column 0,
+MkDocs prints it as text and ignores every option.
 
 ## Known Corruption
 

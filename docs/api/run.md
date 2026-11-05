@@ -5,39 +5,39 @@ A **study run** reads the study's define files, builds every dataset they declar
 ## plan_study
 
 ::: fleet.run.plan_study
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3
 
 ## run_study
 
 ::: fleet.run.run_study
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3
 
 ## Records
 
 ::: fleet.run.StudyPlan
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
 
 ::: fleet.run.Step
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
 
 ::: fleet.run.BuiltDataset
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
 
 ::: fleet.run.ResolvedInput
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]

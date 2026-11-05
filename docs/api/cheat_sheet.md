@@ -3,7 +3,7 @@
 This cheat sheet summarises the most common verbs across Fleet namespaces. **Every verb name in this page is a clickable link to its docstring**, rendered directly from the source code in the corresponding namespace page.
 
 !!! tip "Single source of truth"
-Fleet's documentation is generated directly from Python docstrings via [mkdocstrings](https://mkdocstrings.github.io/) and cross-linked with [autorefs](https://mkdocstrings.github.io/autorefs/). The verb name you click here resolves to the exact method signature, parameters, and examples that the runtime executes — there is no separately maintained reference that can drift out of sync. Renaming a parameter in the source automatically updates this page on the next build.
+    Fleet's documentation is generated directly from Python docstrings via [mkdocstrings](https://mkdocstrings.github.io/) and cross-linked with [autorefs](https://mkdocstrings.github.io/autorefs/). The verb name you click here resolves to the exact method signature, parameters, and examples that the runtime executes — there is no separately maintained reference that can drift out of sync. Renaming a parameter in the source automatically updates this page on the next build.
 
 ## Core verbs (available everywhere)
 

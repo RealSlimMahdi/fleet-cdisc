@@ -17,7 +17,7 @@ Fleet is a Python library that generates CDISC SDTM and ADaM datasets for clinic
 The FDA's 2015 Statistical Software Clarifying Statement[^1] explicitly states that the agency **does not require nor endorse any specific software** for analyzing data from clinical investigations. Sponsors are responsible for ensuring that any software used produces accurate results and for maintaining adequate documentation of that accuracy. This places the validation obligation on the sponsor's qualified infrastructure — of which Fleet is one component — rather than on the software vendor alone.
 
 !!! note "Implication for Fleet"
-Fleet does not need to be independently validated by a regulatory body. Sponsors qualify Fleet by demonstrating it produces accurate, traceable, and reproducible CDISC-compliant outputs within their own validated environment.
+    Fleet does not need to be independently validated by a regulatory body. Sponsors qualify Fleet by demonstrating it produces accurate, traceable, and reproducible CDISC-compliant outputs within their own validated environment.
 
 ### 2.2 R Validation Hub Framework
 

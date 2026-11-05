@@ -5,50 +5,50 @@
 ## compare
 
 ::: fleet.comparison.compare
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3
 
 ## ComparisonReport
 
 ::: fleet.comparison.ComparisonReport
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
 
 ## Summaries
 
 ::: fleet.comparison.DatasetSummary
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
 
 ::: fleet.comparison.VariablesSummary
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
 
 ::: fleet.comparison.ObservationSummary
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
 
 ::: fleet.comparison.ValuesSummary
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
 
 ## Settings
 
 The options a comparison ran with, so a run can be reproduced. `abs_tol`, `rel_tol` and `ignore_trailing_whitespace` are the three that change what counts as equal — see [tolerances and trailing whitespace](../concepts/comparison.md#tolerances-and-trailing-whitespace). `by` sections the report per [BY group](../concepts/comparison.md#by-groups), `allow_duplicates` pairs [duplicate keys](../concepts/comparison.md#duplicate-keys) by position, and `pairs` and `variables` rename and restrict what is compared — see [variable pairs and restriction](../concepts/comparison.md#variable-pairs-and-restriction).
 
 ::: fleet.comparison.ComparisonSettings
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]

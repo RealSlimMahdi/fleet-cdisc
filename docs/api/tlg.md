@@ -128,40 +128,40 @@ returns a template's JSON schema for editor auto-complete, and
 `register_template` adds a study-specific template to the open registry.
 
 ::: fleet.tlg.load_spec
-options:
-show_root_heading: true
-heading_level: 4
+    options:
+        show_root_heading: true
+        heading_level: 4
 
 ::: fleet.tlg.run_spec
-options:
-show_root_heading: true
-heading_level: 4
+    options:
+        show_root_heading: true
+        heading_level: 4
 
 ::: fleet.tlg.spec_schema
-options:
-show_root_heading: true
-heading_level: 4
+    options:
+        show_root_heading: true
+        heading_level: 4
 
 ::: fleet.tlg.register_template
-options:
-show_root_heading: true
-heading_level: 4
+    options:
+        show_root_heading: true
+        heading_level: 4
 
 ::: fleet.tlg.catalog
-options:
-show_root_heading: true
-heading_level: 4
+    options:
+        show_root_heading: true
+        heading_level: 4
 
 ---
 
 ## Root namespace
 
 ::: fleet.tlg.TLGNamespace
-options:
-show_root_heading: true
-heading_level: 3
-members_order: source
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        members_order: source
+        filters: ["!^_"]
 
 ---
 
@@ -170,105 +170,105 @@ filters: ["!^_"]
 ### AE — `df.tlg.ae`
 
 ::: fleet.tlg.AETLGNamespace
-options:
-show_root_heading: true
-heading_level: 4
-members_order: source
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 4
+        members_order: source
+        filters: ["!^_"]
 
 ### VS — `df.tlg.vs`
 
 ::: fleet.tlg.VSTLGNamespace
-options:
-show_root_heading: true
-heading_level: 4
-members_order: source
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 4
+        members_order: source
+        filters: ["!^_"]
 
 ### LB — `df.tlg.lb`
 
 ::: fleet.tlg.LBTLGNamespace
-options:
-show_root_heading: true
-heading_level: 4
-members_order: source
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 4
+        members_order: source
+        filters: ["!^_"]
 
 ### EG — `df.tlg.eg`
 
 ::: fleet.tlg.EGTLGNamespace
-options:
-show_root_heading: true
-heading_level: 4
-members_order: source
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 4
+        members_order: source
+        filters: ["!^_"]
 
 ### CM — `df.tlg.cm`
 
 ::: fleet.tlg.CMTLGNamespace
-options:
-show_root_heading: true
-heading_level: 4
-members_order: source
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 4
+        members_order: source
+        filters: ["!^_"]
 
 ### EX — `df.tlg.ex`
 
 ::: fleet.tlg.EXTLGNamespace
-options:
-show_root_heading: true
-heading_level: 4
-members_order: source
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 4
+        members_order: source
+        filters: ["!^_"]
 
 ### DM — `df.tlg.dm`
 
 ::: fleet.tlg.DMTLGNamespace
-options:
-show_root_heading: true
-heading_level: 4
-members_order: source
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 4
+        members_order: source
+        filters: ["!^_"]
 
 ### DS — `df.tlg.ds`
 
 ::: fleet.tlg.DSTLGNamespace
-options:
-show_root_heading: true
-heading_level: 4
-members_order: source
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 4
+        members_order: source
+        filters: ["!^_"]
 
 ### MH — `df.tlg.mh`
 
 ::: fleet.tlg.MHTLGNamespace
-options:
-show_root_heading: true
-heading_level: 4
-members_order: source
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 4
+        members_order: source
+        filters: ["!^_"]
 
 ---
 
 ## Fluent builder
 
 ::: fleet.tlg.TLGBuilder
-options:
-show_root_heading: true
-heading_level: 3
-members_order: source
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        members_order: source
+        filters: ["!^_"]
 
 ---
 
 ## Spec models
 
 !!! tip "Inline builder ↔ YAML spec — same surface, two front doors"
-Every field on the spec models below is also settable via the fluent
-[`TLGBuilder`][fleet.tlg.TLGBuilder]. The cross-references in each
-field's description (e.g. _Set inline via [`TLGBuilder.rows()`]…_)
-link straight to the matching builder method, so reviewers can
-move freely between the YAML and Python views without grepping.
+    Every field on the spec models below is also settable via the fluent
+    [`TLGBuilder`][fleet.tlg.TLGBuilder]. The cross-references in each
+    field's description (e.g. _Set inline via [`TLGBuilder.rows()`]…_)
+    link straight to the matching builder method, so reviewers can
+    move freely between the YAML and Python views without grepping.
 
     The descriptions are sourced from `pydantic.Field(description=...)`
     on the spec classes — the base classes and building blocks in
@@ -300,65 +300,67 @@ move freely between the YAML and Python views without grepping.
 ### TLGSpec (base)
 
 ::: fleet.tlg.TLGSpec
-options:
-show_root_heading: true
-heading_level: 4
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 4
+        filters: ["!^_"]
 
 ### SummarySpecBase
 
 ::: fleet.tlg.SummarySpecBase
-options:
-show_root_heading: true
-heading_level: 4
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 4
+        filters: ["!^_"]
 
 ### AESummarySpec
 
 ::: fleet.tlg.AESummarySpec
-options:
-show_root_heading: true
-heading_level: 4
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 4
+        filters: ["!^_"]
 
 ### AEListingSpec
 
 ::: fleet.tlg.AEListingSpec
-options:
-show_root_heading: true
-heading_level: 4
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 4
+        filters: ["!^_"]
 
 ### VSSummarySpec
 
 ::: fleet.tlg.VSSummarySpec
-options:
-show_root_heading: true
-heading_level: 4
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 4
+        filters: ["!^_"]
 
 ### OverallStat
 
 ::: fleet.tlg.OverallStat
-options:
-show_root_heading: true
-heading_level: 4
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 4
+        filters: ["!^_"]
 
 ### Uncoded
 
 ::: fleet.tlg.Uncoded
-options:
-show_root_heading: true
-heading_level: 4
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 4
+        filters: ["!^_"]
+
 ### MissingLevel
 
 ::: fleet.tlg.MissingLevel
-options:
-show_root_heading: true
-heading_level: 4
-filters: ["!^\_"]
+    options:
+        show_root_heading: true
+        heading_level: 4
+        filters: ["!^_"]
+
 ---
 
 ## Building blocks
@@ -366,33 +368,33 @@ filters: ["!^\_"]
 ### Statistic
 
 ::: fleet.tlg.Statistic
-options:
-show_root_heading: true
-heading_level: 4
+    options:
+        show_root_heading: true
+        heading_level: 4
 
 ### GroupPool
 
 ::: fleet.tlg.GroupPool
-options:
-show_root_heading: true
-heading_level: 4
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 4
+        filters: ["!^_"]
 
 ### Row
 
 ::: fleet.tlg.Row
-options:
-show_root_heading: true
-heading_level: 4
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 4
+        filters: ["!^_"]
 
 ### Column
 
 ::: fleet.tlg.Column
-options:
-show_root_heading: true
-heading_level: 4
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 4
+        filters: ["!^_"]
 
 ---
 
@@ -407,14 +409,13 @@ lab shift table, call `prepare_frame` and then `summarize_ard` with
 keyword arguments. User-registered templates may call either.
 
 ::: fleet.tlg
-options:
-show_root_heading: false
-heading_level: 3
-members:
-
-- summarize_spec
-- prepare_frame
-- summarize_ard
+    options:
+        show_root_heading: false
+        heading_level: 3
+        members:
+          - summarize_spec
+          - prepare_frame
+          - summarize_ard
 
 ---
 
@@ -428,21 +429,20 @@ that rounds to zero prints `0.0`, never `-0.0` (ADR-0037).
 <!-- mkdocstrings: reference public re-exports, not the private _ard module -->
 
 ::: fleet.tlg
-options:
-show_root_heading: false
-heading_level: 3
-members:
-
-- ARD_SCHEMA
-- ARD_COLUMNS
-- ARD_COLUMN_ORDER
-- ARD_REQUIRED_COLUMNS
-- ARD_GROUP_COLUMNS
-- build_ard_row
-- validate_ard
-- format_ard
-- apply_fmt_fn
-- default_fmt_fn
+    options:
+        show_root_heading: false
+        heading_level: 3
+        members:
+          - ARD_SCHEMA
+          - ARD_COLUMNS
+          - ARD_COLUMN_ORDER
+          - ARD_REQUIRED_COLUMNS
+          - ARD_GROUP_COLUMNS
+          - build_ard_row
+          - validate_ard
+          - format_ard
+          - apply_fmt_fn
+          - default_fmt_fn
 
 ---
 
@@ -454,47 +454,47 @@ artifacts: HTML tables, PDF documents, and editable PPTX slide decks.
 ### RenderMetadata
 
 ::: fleet.tlg.render.RenderMetadata
-options:
-show_root_heading: true
-heading_level: 4
+    options:
+        show_root_heading: true
+        heading_level: 4
 
 ### TableModel
 
 ::: fleet.tlg.render.TableModel
-options:
-show_root_heading: true
-heading_level: 4
+    options:
+        show_root_heading: true
+        heading_level: 4
 
 ### ListingModel
 
 ::: fleet.tlg.render.ListingModel
-options:
-show_root_heading: true
-heading_level: 4
+    options:
+        show_root_heading: true
+        heading_level: 4
 
 ### Shaping functions
 
 ::: fleet.tlg.render.ard_to_table_model
-options:
-show_root_heading: true
-heading_level: 4
+    options:
+        show_root_heading: true
+        heading_level: 4
 
 ::: fleet.tlg.render.listing_to_model
-options:
-show_root_heading: true
-heading_level: 4
+    options:
+        show_root_heading: true
+        heading_level: 4
 
 ### HTML renderer
 
 ::: fleet.tlg.render.html.render_html
-options:
-show_root_heading: true
-heading_level: 4
+    options:
+        show_root_heading: true
+        heading_level: 4
 
 ::: fleet.tlg.render.html.render_listing_html
-options:
-show_root_heading: true
-heading_level: 4
+    options:
+        show_root_heading: true
+        heading_level: 4
 
 ### RTF renderer
 
@@ -502,40 +502,40 @@ Built-in (no optional dependency). `paginate` / `paginate_listing` split a long
 table across pages for RTF/PDF output.
 
 ::: fleet.tlg.render.rtf.render_rtf
-options:
-show_root_heading: true
-heading_level: 4
+    options:
+        show_root_heading: true
+        heading_level: 4
 
 ::: fleet.tlg.render.rtf.render_listing_rtf
-options:
-show_root_heading: true
-heading_level: 4
+    options:
+        show_root_heading: true
+        heading_level: 4
 
 ::: fleet.tlg.render.paginate
-options:
-show_root_heading: true
-heading_level: 4
+    options:
+        show_root_heading: true
+        heading_level: 4
 
 ### PDF renderer
 
 ::: fleet.tlg.render.pdf.render_pdf
-options:
-show_root_heading: true
-heading_level: 4
+    options:
+        show_root_heading: true
+        heading_level: 4
 
 ::: fleet.tlg.render.pdf.render_listing_pdf
-options:
-show_root_heading: true
-heading_level: 4
+    options:
+        show_root_heading: true
+        heading_level: 4
 
 ### PPTX renderer
 
 ::: fleet.tlg.render.slides.render_pptx
-options:
-show_root_heading: true
-heading_level: 4
+    options:
+        show_root_heading: true
+        heading_level: 4
 
 ::: fleet.tlg.render.slides.render_listing_pptx
-options:
-show_root_heading: true
-heading_level: 4
+    options:
+        show_root_heading: true
+        heading_level: 4

@@ -13,15 +13,15 @@ Fleet provides three layers for working with CDISC Controlled Terminology:
 The `CDISCClient` wraps `httpx` to authenticate against the CDISC Library REST API. It requires an API key set via a `.env` file or the `CDISC_API_KEY` environment variable.
 
 ::: fleet.ct.CDISCClient
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
 
 ::: fleet.ct.CDISCClientConfig
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3
 
 ---
 
@@ -160,10 +160,10 @@ dm = (
 `assign(ct=...)` accepts either a codelist class (`SEX`) or a raw NCI concept ID string (`"C66731"`). The class form is preferred for readability and auto-completion.
 
 ::: fleet.ct.CodelistGenerator
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
 
 ---
 
@@ -174,9 +174,9 @@ generated `codelists.py` from your study workspace, removing the need for `sys.p
 manipulation or package-relative imports.
 
 ::: fleet.ct.import_codelists
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3
 
 ---
 
@@ -258,21 +258,21 @@ inline. Passing `ct=` still works on any namespace since `assign` is shared.
 ---
 
 ::: fleet.ct.CTValidator
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
 
 ## load_controlled_terminology
 
 ::: fleet.ct.load_controlled_terminology
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3
 
 ## get_validator
 
 ::: fleet.ct.get_validator
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3

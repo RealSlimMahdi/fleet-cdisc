@@ -26,60 +26,60 @@ items = [
 ## algorithms
 
 ::: fleet.introspect.algorithms
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3
 
 ## get_algorithm
 
 ::: fleet.introspect.get_algorithm
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3
 
 ## suggest_algorithm
 
 ::: fleet.introspect.suggest_algorithm
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3
 
 ## algorithm_doc
 
 ::: fleet.introspect.algorithm_doc
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3
 
 ## define_schema
 
 ::: fleet.introspect.define_schema
-options:
-show_root_heading: true
-heading_level: 3
+    options:
+        show_root_heading: true
+        heading_level: 3
 
 ---
 
 ## AlgorithmInfo
 
 ::: fleet.introspect.AlgorithmInfo
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
 
 ## ParamInfo
 
 ::: fleet.introspect.ParamInfo
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
 
 ## AlgorithmDoc
 
 ::: fleet.introspect.AlgorithmDoc
-options:
-show_root_heading: true
-heading_level: 3
-filters: ["!^_"]
+    options:
+        show_root_heading: true
+        heading_level: 3
+        filters: ["!^_"]
