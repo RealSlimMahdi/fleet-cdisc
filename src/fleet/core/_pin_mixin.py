@@ -11,8 +11,10 @@ Duplicate-pin guard (Option C — warn + ``.repin()`` hybrid):
 * ``.pin("DM", df).pin("DM", df2)`` → emits ``UserWarning``, proceeds
 * ``.repin("DM", df2)`` → silent replacement (explicit intent)
 
-Every pin access is recorded in ``_pin_lineage`` via
-``record_pin_lineage()`` so lineage / DAG integration is automatic.
+A verb that consumes a pin records the read in ``_pin_lineage`` with
+``record_pin_lineage()``.  A frame passed directly to a verb
+(``study_day(adsl=...)``, ``merge``) leaves no pin record, so lineage
+shows what was read through a pin, not every input of the pipeline.
 """
 
 from __future__ import annotations
@@ -281,7 +283,7 @@ class PinMixin:
     ) -> pl.DataFrame:
         """Retrieve a pinned DataFrame or raise an actionable error.
 
-        Records the access in ``_pin_lineage`` automatically.
+        The calling verb records the read with ``record_pin_lineage()``.
 
         Args:
             domain: Upper-cased domain name (e.g. ``"DM"``).

@@ -7,8 +7,9 @@ across the entire pipeline chain.
 
 The capture path is intentionally lightweight: a single frame walk per
 call to retrieve the verb name and its keyword arguments, plus Polars
-expression metadata for column names.  No verb code needs to be
-modified.
+expression metadata for column names.  Verbs that go through ``_chain``
+need no lineage code; verbs that sort, join or materialise record their
+node themselves (``append_verb_node``, ``record_pin_lineage``).
 
 Re-derivation policy (documented contract): ``_lineage`` keeps the
 **full history** — a target derived twice has two entries in pipeline
@@ -32,6 +33,7 @@ Examples:
 
 from __future__ import annotations
 
+import dataclasses
 import inspect
 import sys
 from typing import TYPE_CHECKING, Any
@@ -56,6 +58,10 @@ UNSERIALISABLE = _Unserialisable()
 
 #: Maximum frames walked above ``_chain`` when locating the verb frame.
 _MAX_FRAME_WALK = 6
+
+#: Values never compared with ``==`` to a default: Polars answers with an
+#: expression or a frame, and may warn.
+_POLARS_OBJECTS = (pl.Expr, pl.DataFrame, pl.LazyFrame, pl.Series)
 
 
 def _expr_output_name(expr: pl.Expr) -> str | None:
@@ -193,12 +199,12 @@ def _capture_verb_params(owner: Any, verb: str) -> dict[str, Any] | None:
                 # A Polars frame or expression == None warns: test None by identity.
                 if value is default:
                     continue
-            elif default is not inspect.Parameter.empty:
+            elif default is not inspect.Parameter.empty and not isinstance(value, _POLARS_OBJECTS):
                 try:
                     if bool(value == default):
                         continue
                 except Exception:
-                    pass  # rich objects (pl.Expr, frames) — keep and sanitise
+                    pass  # rich objects — keep and sanitise
             captured[name] = value
         return sanitise_params(captured)
     except Exception:
@@ -338,12 +344,16 @@ def record_pin_lineage(
     pin_lineage.append(pin_dep)
     owner._pin_lineage = pin_lineage
 
-    # Also populate pin_sources on the matching VariableNode in _lineage
-    # so it's available immediately without needing inject_lineage()
+    # Also populate pin_sources on the matching VariableNode in _lineage, on a
+    # copy of the node: the parent namespace and sibling branches share it.
     existing_lineage: list = list(getattr(owner, "_lineage", []))
-    for vnode in reversed(existing_lineage):  # last-write-wins
+    for idx in range(len(existing_lineage) - 1, -1, -1):  # last-write-wins
+        vnode = existing_lineage[idx]
         if vnode.name == target_col:
-            vnode.pin_sources.append(pin_dep)
+            existing_lineage[idx] = dataclasses.replace(
+                vnode, pin_sources=[*vnode.pin_sources, pin_dep]
+            )
+            owner._lineage = existing_lineage
             break
 
 

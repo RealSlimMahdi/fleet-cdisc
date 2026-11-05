@@ -692,36 +692,41 @@ class SharedVerbsMixin:
 
         fleet_log.ensure_default_handler()
         nodes = lineage_of(self)
-        if not nodes:
+        # A pin read that made no lineage node (join_adsl) still gets its own row.
+        named = {node.name for node in nodes}
+        nodeless = [dep for dep in pin_lineage_of(self) if dep.target_col not in named]
+        if not nodes and not nodeless:
             logger.info("Variable trail: (empty — no derivations recorded yet)")
             return self
 
-        # Group cross-domain pin sources by the variable they feed.
-        pin_origins: dict[str, list[str]] = {}
-        pinned_cols: dict[str, set[str]] = {}
-        for dep in pin_lineage_of(self):
+        def _label(dep: Any) -> str:
             cols = ", ".join(dep.source_cols) if dep.source_cols else "*"
             label = f"{dep.source_domain}.{cols}"
             if dep.relationship != "derivation":
                 label += f" [{dep.relationship}]"
-            pin_origins.setdefault(dep.target_col, []).append(label)
-            pinned_cols.setdefault(dep.target_col, set()).update(dep.source_cols)
+            return label
 
-        has_domain = any(node.domain for node in nodes)
-        rows: list[dict[str, object]] = []
-        for i, node in enumerate(nodes, start=1):
+        entries: list[tuple[str, str, list[str], str | None]] = []
+        for node in nodes:
             # Drop bare local sources already attributed to a pinned domain.
-            covered = pinned_cols.get(node.name, set())
+            covered = {col for dep in node.pin_sources for col in dep.source_cols}
             local = [src for src in node.sources if src not in covered]
-            origins = list(dict.fromkeys([*local, *pin_origins.get(node.name, [])]))
+            labels = [_label(dep) for dep in node.pin_sources]
+            entries.append((node.name, node.verb, [*local, *labels], node.domain))
+        for dep in nodeless:
+            entries.append((dep.target_col, dep.verb, [_label(dep)], dep.target_domain))
+        has_domain = any(entry[3] for entry in entries)
+        rows: list[dict[str, object]] = []
+        for i, (name, verb, origins, domain) in enumerate(entries, start=1):
+            shown = list(dict.fromkeys(origins))
             row: dict[str, object] = {
                 "#": i,
-                "Variable": node.name,
-                "Verb": node.verb,
-                "Origin": ", ".join(origins) if origins else "(literal)",
+                "Variable": name,
+                "Verb": verb,
+                "Origin": ", ".join(shown) if shown else "(literal)",
             }
             if has_domain:
-                row["Domain"] = node.domain or "—"
+                row["Domain"] = domain or "—"
             rows.append(row)
 
         table = pl.DataFrame(rows)
@@ -1044,7 +1049,7 @@ class SharedVerbsMixin:
                 f"{where}: column '{source}' contains values not in codelist "
                 f"'{ct_codelist}': {invalid}. "
                 f"Valid values: {sorted(valid_values)}. {hint}",
-                stacklevel=3,
+                stacklevel=4,  # _warn_invalid_values, _assign_impl, assign, the user line
             )
         return True
 
@@ -1791,8 +1796,10 @@ class SharedVerbsMixin:
                 ``_STUDY_DAY_REF_PIN`` class constant (``DM`` on SDTM,
                 ``ADSL`` on ADaM).
             ref_df: Optional explicit DataFrame override — bypasses pinning.
-            dm: Alias of *ref_df* (SDTM vocabulary).
-            adsl: Alias of *ref_df* (ADaM vocabulary).
+                Lineage records no pinned domain for it, unless *ref_pin*
+                names one.
+            dm: Alias of *ref_df* (SDTM vocabulary); lineage records DM.
+            adsl: Alias of *ref_df* (ADaM vocabulary); lineage records ADSL.
 
         Returns:
             Self: The namespace with *target* appended; call
@@ -1833,6 +1840,15 @@ class SharedVerbsMixin:
                 f"study_day() accepts only one of ref_df= / dm= / adsl= — got {len(provided)}."
             )
         ref_df = provided[0] if provided else None
+        # The domain a reference frame stands for: dm= is DM, adsl= is ADSL on both
+        # namespaces; an anonymous ref_df= is no pinned domain unless ref_pin= names one.
+        ref_domain: str | None = None
+        if dm is not None:
+            ref_domain = "DM"
+        elif adsl is not None:
+            ref_domain = "ADSL"
+        elif ref_df is not None and ref_pin is not None:
+            ref_domain = ref_pin.upper()
 
         # Resolve defaults from class constants
         _ref_col = ref_col if ref_col is not None else self._STUDY_DAY_REF_COL
@@ -1840,10 +1856,14 @@ class SharedVerbsMixin:
 
         schema = self._lazy.collect_schema()
 
-        # Resolve reference date source
+        # Resolve reference date source: explicit frame, then pin, then frame column.
         if ref_df is not None:
             source_df = ref_df
             join_key = ["USUBJID"]
+        elif _ref_pin.upper() in getattr(self, "_pinned", {}):
+            source_df = self._require_pin(_ref_pin.upper(), "study_day", columns=[_ref_col])
+            join_key = self._pin_join_key(_ref_pin.upper())
+            ref_domain = _ref_pin.upper()
         elif _ref_col in schema.names():
             # ref_col already in frame — no join needed; stays lazy.
             date_expr = to_day(pl.col(date_col), schema.get(date_col), verb="study_day")
@@ -1868,13 +1888,13 @@ class SharedVerbsMixin:
                 [c for c in dict.fromkeys(join_key + [_ref_col]) if c in source_df.columns]
             ),
             join_key,
-            source=_ref_pin.upper() if ref_df is None else "the reference frame",
+            source=ref_domain or "the reference frame",
         )
 
         _ref_tmp = f"__pin_{_ref_col}__"
         ref_slim = ref_slim.rename({_ref_col: _ref_tmp})
 
-        df = df.join(ref_slim, on=join_key, how="left", nulls_equal=True)
+        df = df.join(ref_slim, on=join_key, how="left", nulls_equal=True, maintain_order="left")
 
         date_expr = to_day(pl.col(date_col), df.schema.get(date_col), verb="study_day")
         ref_expr = to_day(pl.col(_ref_tmp), df.schema.get(_ref_tmp), verb="study_day")
@@ -1887,7 +1907,13 @@ class SharedVerbsMixin:
 
         # Record variable lineage
         from fleet.core.dag import VariableNode
+        from fleet.core.lineage import sanitise_params
 
+        node_params: dict[str, Any] = {"target": target, "date_col": date_col, "ref_col": _ref_col}
+        if ref_domain is not None:
+            node_params["ref_pin"] = ref_domain
+        if ref_df is not None and ref_domain is None:
+            node_params["ref_df"] = ref_df  # an anonymous frame: to_spec_yaml writes a stub
         var_lineage: list = list(getattr(new, "_lineage", []))
         var_lineage.append(
             VariableNode(
@@ -1896,26 +1922,21 @@ class SharedVerbsMixin:
                 sources=[date_col, _ref_col],
                 method=f"{self.__class__.__module__}.{self.__class__.__qualname__}.study_day",
                 domain=getattr(new, "_domain", None),
-                params={
-                    "target": target,
-                    "date_col": date_col,
-                    "ref_col": _ref_col,
-                    "ref_pin": _ref_pin,
-                },
+                params=sanitise_params(node_params),
             )
         )
         new._lineage = var_lineage
 
-        # Record pin lineage
-        record_pin_lineage(
-            new,
-            target_col=target,
-            verb="study_day",
-            source_domain=_ref_pin.upper(),
-            source_cols=[_ref_col],
-            join_key=join_key,
-            relationship="derivation",
-        )
+        if ref_domain is not None:
+            record_pin_lineage(
+                new,
+                target_col=target,
+                verb="study_day",
+                source_domain=ref_domain,
+                source_cols=[_ref_col],
+                join_key=join_key,
+                relationship="derivation",
+            )
         return new
 
     # ------------------------------------------------------------------ #

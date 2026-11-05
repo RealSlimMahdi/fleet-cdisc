@@ -459,8 +459,22 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
         """
         import warnings
 
-        from fleet.core.lineage import record_pin_lineage
+        from fleet.core.lineage import record_pin_lineage, sanitise_params
 
+        # The call as given, for to_spec_yaml (result_col is resolved below).
+        call_params = sanitise_params(
+            {
+                "target": target,
+                "date_col": date_col,
+                "testcd_col": testcd_col,
+                "ref_col": ref_col,
+                "ref_pin": ref_pin,
+                "dm": dm,
+                "by": by,
+                "result_col": result_col,
+                "order_by": order_by,
+            }
+        )
         df = self._lazy.collect()
 
         prefix = next(
@@ -599,6 +613,7 @@ class SDTMNamespace(SharedVerbsMixin, PinMixin, FlagCriterionMixin, TrialDesignM
                 sources=[date_col, ref_col, result_col],
                 method="fleet.sdtm.namespace.SDTMNamespace.baseline_flag",
                 domain=getattr(new, "_domain", None),
+                params=call_params,
             )
         )
         new._lineage = var_lineage

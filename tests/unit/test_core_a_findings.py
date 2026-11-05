@@ -402,3 +402,208 @@ def test_c1_197_an_internal_collect_does_not_check():
         .whereclauses(where=pl.col("USUBJID") != "ORPH")
     )
     assert ns.to_frame()["USUBJID"].to_list() == ["S1"]
+
+
+# --------------------------------------------------------------------- #
+# c1-8 / c1-11: study_day reference resolution and its lineage           #
+# --------------------------------------------------------------------- #
+
+
+def test_c1_8_study_day_takes_the_pinned_reference_before_the_frame_column():
+    ae = pl.from_repr("""\
+┌─────────┬────────────┬────────────┐
+│ USUBJID ┆ AESTDTC    ┆ RFSTDTC    │
+│ ---     ┆ ---        ┆ ---        │
+│ str     ┆ str        ┆ str        │
+╞═════════╪════════════╪════════════╡
+│ 01-701  ┆ 2021-03-20 ┆ 2021-03-10 │
+└─────────┴────────────┴────────────┘
+""")
+    dm = pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ RFSTDTC    │
+│ ---     ┆ ---        │
+│ str     ┆ str        │
+╞═════════╪════════════╡
+│ 01-701  ┆ 2021-03-01 │
+└─────────┴────────────┘
+""")
+    out = ae.sdtm.pin("DM", dm).study_day("AESTDY", date_col="AESTDTC", ref_pin="DM").to_frame()
+    assert out["AESTDY"].to_list() == [20]
+    assert out.columns == ["USUBJID", "AESTDTC", "RFSTDTC", "AESTDY"]
+
+
+_ADAE_ADT = pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ ADT        │
+│ ---     ┆ ---        │
+│ str     ┆ date       │
+╞═════════╪════════════╡
+│ 01-701  ┆ 2021-03-20 │
+└─────────┴────────────┘
+""")
+
+_REF_XDT = pl.from_repr("""\
+┌─────────┬────────────┐
+│ USUBJID ┆ XDT        │
+│ ---     ┆ ---        │
+│ str     ┆ date       │
+╞═════════╪════════════╡
+│ 01-701  ┆ 2021-03-01 │
+└─────────┴────────────┘
+""")
+
+
+@pytest.mark.parametrize(
+    ("namespace", "kwargs", "expected"),
+    [
+        ("adam", {"ref_df": _REF_XDT}, []),
+        ("sdtm", {"ref_df": _REF_XDT}, []),
+        ("adam", {"adsl": _REF_XDT}, [("ADSL", ["XDT"])]),
+        ("adam", {"dm": _REF_XDT}, [("DM", ["XDT"])]),
+        ("sdtm", {"dm": _REF_XDT}, [("DM", ["XDT"])]),
+        ("sdtm", {"adsl": _REF_XDT}, [("ADSL", ["XDT"])]),
+        ("adam", {"ref_df": _REF_XDT, "ref_pin": "QS"}, [("QS", ["XDT"])]),
+    ],
+)
+def test_c1_11_study_day_records_only_a_named_reference(namespace, kwargs, expected):
+    from fleet.core.lineage import pin_lineage_of
+
+    ns = getattr(_ADAE_ADT, namespace).study_day("ADY", date_col="ADT", ref_col="XDT", **kwargs)
+    assert ns.to_frame()["ADY"].to_list() == [20]
+    assert [(d.source_domain, d.source_cols) for d in pin_lineage_of(ns)] == expected
+
+
+# --------------------------------------------------------------------- #
+# c1-203: trail reads the node pin sources                               #
+# --------------------------------------------------------------------- #
+
+
+def _trail_text(ns, caplog) -> str:
+    import logging
+
+    caplog.clear()
+    with caplog.at_level(logging.INFO, logger="fleet"):
+        ns.trail()
+    return "\n".join(r.getMessage() for r in caplog.records)
+
+
+def test_c1_203_a_literal_after_a_pin_shows_literal(caplog):
+    ns = (
+        _AE_DAYS.sdtm.pin("DM", _DM_DAYS)
+        .study_day("AESTDY", date_col="AESTDTC")
+        .assign("AESTDY", value=1)
+    )
+    rows = _trail_text(ns, caplog).splitlines()
+    assert any("study_day" in r and "DM.RFSTDTC" in r for r in rows)
+    assert any("assign" in r and "(literal)" in r for r in rows)
+    assert not any("assign" in r and "DM.RFSTDTC" in r for r in rows)
+
+
+def test_c1_203_join_adsl_shows_in_trail(caplog):
+    ns = _AE_DAYS.adam.occds.pin("ADSL", _ADSL_DAYS).join_adsl("AGE")
+    text = _trail_text(ns, caplog)
+    assert "AGE" in text and "ADSL.AGE" in text and "(empty" not in text
+
+
+def test_c1_203_baseline_flag_records_its_params():
+    from fleet.core.lineage import lineage_of
+
+    vs = pl.from_repr("""\
+┌─────────┬──────────┬────────────┬─────────┐
+│ USUBJID ┆ VSTESTCD ┆ VSDTC      ┆ VSORRES │
+│ ---     ┆ ---      ┆ ---        ┆ ---     │
+│ str     ┆ str      ┆ str        ┆ str     │
+╞═════════╪══════════╪════════════╪═════════╡
+│ S1      ┆ SYSBP    ┆ 2021-02-20 ┆ 120     │
+└─────────┴──────────┴────────────┴─────────┘
+""")
+    ns = vs.sdtm.pin("DM", _DM_DAYS).baseline_flag(
+        "VSBLFL", date_col="VSDTC", testcd_col="VSTESTCD"
+    )
+    node = lineage_of(ns)[-1]
+    assert node.params == {
+        "target": "VSBLFL",
+        "date_col": "VSDTC",
+        "testcd_col": "VSTESTCD",
+        "ref_col": "RFSTDTC",
+        "ref_pin": "DM",
+    }
+
+
+# --------------------------------------------------------------------- #
+# c1-199 / c1-200 / c1-201: lineage capture                              #
+# --------------------------------------------------------------------- #
+
+_FLAGS = pl.from_repr("""\
+┌─────────┬─────────┬───────┬──────┬────────┐
+│ USUBJID ┆ AVISITN ┆ ANLFL ┆ AVAL ┆ AVALC  │
+│ ---     ┆ ---     ┆ ---   ┆ ---  ┆ ---    │
+│ str     ┆ i64     ┆ str   ┆ f64  ┆ str    │
+╞═════════╪═════════╪═══════╪══════╪════════╡
+│ S1      ┆ 1       ┆ Y     ┆ 1.0  ┆ SD     │
+│ S1      ┆ 2       ┆ Y     ┆ 2.0  ┆ PD     │
+└─────────┴─────────┴───────┴──────┴────────┘
+""")
+
+
+def _lineage_warnings(record) -> list[str]:
+    return [str(w.message) for w in record if w.filename.endswith("lineage.py")]
+
+
+def test_c1_199_no_lineage_warning_on_an_expression_argument():
+    ex = pl.from_repr("""\
+┌─────────┬────────┐
+│ USUBJID ┆ EXDOSE │
+│ ---     ┆ ---    │
+│ str     ┆ f64    │
+╞═════════╪════════╡
+│ S1      ┆ 54.0   │
+└─────────┴────────┘
+""")
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        _FLAGS.adam.flag_first("F", order_by="AVISITN", where=pl.col("ANLFL") == "Y")
+        _FLAGS.adam.flag_exists(
+            "SAFFL", from_dataset=ex, on="USUBJID", source_filter=pl.col("EXDOSE") > 0
+        )
+        _FLAGS.adam.flag_relative(
+            "R",
+            when="before",
+            order_by="AVISITN",
+            condition=pl.col("AVALC") == "PD",
+            by=["USUBJID"],
+        )
+    assert _lineage_warnings(record) == []
+
+
+def test_c1_200_the_ct_warning_names_the_user_line():
+    dm = pl.from_repr("""\
+┌─────────┬─────┐
+│ USUBJID ┆ sex │
+│ ---     ┆ --- │
+│ str     ┆ str │
+╞═════════╪═════╡
+│ S1      ┆ X   │
+└─────────┴─────┘
+""")
+
+    class SEX:
+        _concept_id = "C66731"
+        M = "M"
+        F = "F"
+
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        dm.sdtm.assign("SEX", source="sex", ct=SEX)
+    found = [w for w in record if "not in codelist" in str(w.message)]
+    assert found and found[0].filename == __file__
+
+
+def test_c1_201_a_pin_on_a_branch_does_not_reach_the_parent():
+    from fleet.core.lineage import lineage_of
+
+    base = _AE_DAYS.adam.occds.pin("ADSL", _ADSL_DAYS).assign("TRTSDT", value="x")
+    branch = base.join_adsl("AGE").study_day("ASTDY", date_col="AESTDTC")
+    assert all(not n.pin_sources for n in lineage_of(base))
+    assert any(n.pin_sources for n in lineage_of(branch))
