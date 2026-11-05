@@ -536,3 +536,255 @@ def test_c1_411_vertical_adrs_filtered_to_one_parameter():
     from fleet.adam import onco_namespace
 
     assert 'source="OVRLRESP"' not in (onco_namespace.__doc__ or "")
+
+
+# ------------------------------------------------------------------ #
+# Neuro, metabolic, ophtha, vaccine, peds                              #
+# ------------------------------------------------------------------ #
+
+PET = """
+┌──────┐
+│ SUVR │
+│ ---  │
+│ f64  │
+╞══════╡
+│ 0.0  │
+│ -1.0 │
+│ 1.2  │
+│ NaN  │
+└──────┘
+"""
+
+
+def test_c1_717_centiloid_suvr_zero_or_below_is_null():
+    out = (
+        pl.from_repr(PET)
+        .adam.neuro.centiloid("CL", suvr_col="SUVR", slope=183.07, intercept=-177.26)
+        .to_frame()
+    )
+    assert out["CL"].to_list() == [None, None, 42.42, None]
+
+
+def test_c1_717_centiloid_half_pair_raises():
+    with pytest.raises(DerivationError, match="slope and intercept must be given together"):
+        pl.from_repr(PET).adam.neuro.centiloid(
+            "CL",
+            suvr_col="SUVR",
+            slope=200.0,
+            tracer="18F-Florbetapir",
+            pipeline="AVID FBP SUVR PIPELINE",
+        )
+
+
+def test_c1_714_panss_total_refuses_string_columns():
+    qs = pl.from_repr("""
+┌──────────┬──────────┬──────────┐
+│ PANSSPOS ┆ PANSSNEG ┆ PANSSGEN │
+│ ---      ┆ ---      ┆ ---      │
+│ str      ┆ str      ┆ str      │
+╞══════════╪══════════╪══════════╡
+│ 14       ┆ 16       ┆ 30       │
+└──────────┴──────────┴──────────┘
+""")
+    with pytest.raises(DerivationError, match="column 'PANSSPOS' is String; cast it"):
+        qs.adam.neuro.panss_total(
+            "PANSSTOT", positive_col="PANSSPOS", negative_col="PANSSNEG", general_col="PANSSGEN"
+        )
+
+
+CDR6 = """
+┌────────┬─────────┬─────────┬─────────┬─────────┬─────────┐
+│ CDRMEM ┆ CDRORNT ┆ CDRJDGM ┆ CDRCOMM ┆ CDRHOME ┆ CDRPERS │
+│ ---    ┆ ---     ┆ ---     ┆ ---     ┆ ---     ┆ ---     │
+│ f64    ┆ f64     ┆ f64     ┆ f64     ┆ f64     ┆ f64     │
+╞════════╪═════════╪═════════╪═════════╪═════════╪═════════╡
+│ 1.0    ┆ 1.0     ┆ 1.0     ┆ 1.0     ┆ 1.0     ┆ 1.0     │
+└────────┴─────────┴─────────┴─────────┴─────────┴─────────┘
+"""
+
+
+@pytest.mark.parametrize("n", [5, 0])
+def test_c1_715_cdrsob_needs_six_boxes(n):
+    cols = ["CDRMEM", "CDRORNT", "CDRJDGM", "CDRCOMM", "CDRHOME", "CDRPERS"][:n]
+    with pytest.raises(DerivationError, match=f"give the 6 CDR boxes, got {n}"):
+        pl.from_repr(CDR6).adam.neuro.cdrsob_total("CDRSOB", domain_cols=cols)
+
+
+def test_c1_715_cdrsob_six_boxes():
+    cols = ["CDRMEM", "CDRORNT", "CDRJDGM", "CDRCOMM", "CDRHOME", "CDRPERS"]
+    out = pl.from_repr(CDR6).adam.neuro.cdrsob_total("CDRSOB", domain_cols=cols).to_frame()
+    assert out["CDRSOB"].to_list() == [6.0]
+
+
+NAN_ROW = """
+┌──────┬────────┬─────┐
+│ AVAL ┆ WSTCIR ┆ SEX │
+│ ---  ┆ ---    ┆ --- │
+│ f64  ┆ f64    ┆ str │
+╞══════╪════════╪═════╡
+│ NaN  ┆ NaN    ┆ M   │
+│ 28.0 ┆ 110.0  ┆ M   │
+└──────┴────────┴─────┘
+"""
+
+
+def test_c1_713_nan_gives_no_category_or_flag():
+    out = (
+        pl.from_repr(NAN_ROW)
+        .adam.neuro.mmse_category("MMSECG", score_col="AVAL")
+        .moca_category("MOCACG", score_col="AVAL")
+        .to_frame()
+    )
+    assert out["MMSECG"].to_list() == [None, "Normal"]
+    assert out["MOCACG"].to_list() == [None, "Normal"]
+    flag = (
+        pl.from_repr(NAN_ROW)
+        .adam.metabolic.visceral_fat_flag("ABDFL", waist_col="WSTCIR", sex_col="SEX")
+        .to_frame()
+    )
+    assert flag["ABDFL"].to_list() == [None, "Y"]
+    bcva = (
+        pl.from_repr(NAN_ROW)
+        .adam.ophtha.bcva_criterion("CRITFL", value_col="AVAL", threshold=24, direction="ge")
+        .to_frame()
+    )
+    assert bcva["CRITFL"].to_list() == [None, "Y"]
+
+
+@pytest.mark.parametrize("suffix", ["csv", "parquet"])
+def test_c1_713_loader_reads_nan_as_null(tmp_path, suffix):
+    path = tmp_path / f"x.{suffix}"
+    frame = pl.DataFrame({"AVAL": [float("nan"), 1.0]})
+    if suffix == "csv":
+        path.write_text("AVAL\nNaN\n1.0\n", encoding="utf-8")
+    else:
+        frame.write_parquet(path)
+    out = fleet.load_raw_data(path).collect()
+    assert out["AVAL"].to_list() == [None, 1.0]
+
+
+def test_c1_707_ta_verbs_round_ties_half_away_from_zero():
+    advs = pl.from_repr("""
+┌──────┬─────┬─────┬────────┬────────┬──────┐
+│ BMI  ┆ AGE ┆ SEX ┆ WSTCIR ┆ HIPCIR ┆ SUVR │
+│ ---  ┆ --- ┆ --- ┆ ---    ┆ ---    ┆ ---  │
+│ f64  ┆ i64 ┆ str ┆ f64    ┆ f64    ┆ f64  │
+╞══════╪═════╪═════╪════════╪════════╪══════╡
+│ 15.0 ┆ 25  ┆ M   ┆ 52.0   ┆ 64.0   ┆ 1.25 │
+│ 20.0 ┆ 40  ┆ F   ┆ 80.0   ┆ 100.0  ┆ 1.5  │
+└──────┴─────┴─────┴────────┴────────┴──────┘
+""")
+    out = (
+        advs.adam.metabolic.body_fat_pct("BFPCT", bmi_col="BMI", age_col="AGE", sex_col="SEX")
+        .waist_hip_ratio("WHR", waist_col="WSTCIR", hip_col="HIPCIR")
+        .to_frame()
+    )
+    assert out["BFPCT"].to_list() == [7.6, 27.8]
+    assert out["WHR"].to_list() == [0.813, 0.8]
+    cl = advs.adam.neuro.centiloid(
+        "CL", suvr_col="SUVR", tracer="18F-Florbetaben", pipeline="AVID FBB SUVR PIPELINE"
+    ).to_frame()
+    assert cl["CL"].to_list() == [46.95, 85.96]
+
+
+SC_718 = """
+┌─────────┬──────────┬──────────┐
+│ USUBJID ┆ SCTESTCD ┆ SCSTRESC │
+│ ---     ┆ ---      ┆ ---      │
+│ str     ┆ str      ┆ str      │
+╞═════════╪══════════╪══════════╡
+│ P01     ┆ FOCID    ┆ OS       │
+│ P01     ┆ ACOHORT  ┆ COHORT 1 │
+│ P02     ┆ FOCID    ┆ OD       │
+│ P02     ┆ ACOHORT  ┆ COHORT 2 │
+└─────────┴──────────┴──────────┘
+"""
+
+
+def test_c1_718_study_eye_on_focid_records_merges_one_row_per_subject():
+    adsl = pl.from_repr("""
+┌─────────┐
+│ USUBJID │
+│ ---     │
+│ str     │
+╞═════════╡
+│ P01     │
+│ P02     │
+│ P03     │
+└─────────┘
+""")
+    sc = pl.from_repr(SC_718)
+    se = (
+        sc.filter(pl.col("SCTESTCD") == "FOCID")
+        .adam.ophtha.study_eye("STUDYEYE", source="SCSTRESC")
+        .to_frame()
+    )
+    out = adsl.adam.merge(se, on="USUBJID", keep=["STUDYEYE"], validate="m:1").to_frame()
+    assert out.sort("USUBJID")["STUDYEYE"].to_list() == ["LEFT", "RIGHT", None]
+    from fleet.adam.ophtha_namespace import OphthaNamespace
+
+    assert 'pl.col("SCTESTCD") == "FOCID"' in (OphthaNamespace.study_eye.__doc__ or "")
+
+
+def test_c1_421_seroresponse_docstring_states_the_threshold_rule():
+    from fleet.adam.vaccine_namespace import VaccineNamespace
+
+    doc = VaccineNamespace.seroresponse_flag.__doc__ or ""
+    assert "seroconversion_flag" in doc and "References:" in doc
+    adis = pl.from_repr("""
+┌─────────┬──────┬──────┐
+│ USUBJID ┆ BASE ┆ AVAL │
+│ ---     ┆ ---  ┆ ---  │
+│ str     ┆ f64  ┆ f64  │
+╞═════════╪══════╪══════╡
+│ S01     ┆ 40.0 ┆ 40.0 │
+└─────────┴──────┴──────┘
+""")
+    out = adis.adam.vaccine.seroresponse_flag("SRSFL", aval_col="AVAL", threshold=40.0)
+    assert out.to_frame()["SRSFL"].to_list() == ["Y"]
+
+
+def test_c1_415_ophtha_default_digits_and_bilateral_study_eye():
+    df = pl.from_repr("""
+┌───────┬──────────┬───────┬───────┐
+│ ETDRS ┆ STUDYEYE ┆ AELOC ┆ AELAT │
+│ ---   ┆ ---      ┆ ---   ┆ ---   │
+│ f64   ┆ str      ┆ str   ┆ str   │
+╞═══════╪══════════╪═══════╪═══════╡
+│ 57.3  ┆ BILATERAL┆ EYE   ┆ LEFT  │
+└───────┴──────────┴───────┴───────┘
+""")
+    out = (
+        df.adam.ophtha.etdrs_to_logmar("LOGMAR", source="ETDRS")
+        .affected_eye("AFEYE", loc_col="AELOC", lat_col="AELAT")
+        .to_frame()
+    )
+    assert out["LOGMAR"].to_list() == [0.554]
+    assert out["AFEYE"].to_list() == ["Study Eye"]
+
+
+def test_c1_415_vaccine_cutoff_and_lloq_half_without_uloq():
+    fa = pl.from_repr("""
+┌─────────┬──────┬───────┐
+│ USUBJID ┆ AVAL ┆ AVALC │
+│ ---     ┆ ---  ┆ ---   │
+│ str     ┆ f64  ┆ str   │
+╞═════════╪══════╪═══════╡
+│ S1      ┆ 2.5  ┆ NONE  │
+│ S2      ┆ 2.6  ┆ NONE  │
+└─────────┴──────┴───────┘
+""")
+    ev = fa.adam.vaccine.event_flag("EVENTFL", aval_col="AVAL", cutoff=2.5, by=["USUBJID"])
+    assert ev.to_frame()["EVENTFL"].to_list() == ["N", "Y"]
+    is_ = pl.from_repr("""
+┌──────────┬────────┬─────────┐
+│ ISSTRESN ┆ ISLLOQ ┆ ISORRES │
+│ ---      ┆ ---    ┆ ---     │
+│ f64      ┆ f64    ┆ str     │
+╞══════════╪════════╪═════════╡
+│ null     ┆ 4.0    ┆ <4      │
+│ 10.0     ┆ 4.0    ┆ 10      │
+└──────────┴────────┴─────────┘
+""")
+    out = is_.adam.vaccine.aval_adis("AVAL", uloq_col=None).to_frame()
+    assert out["AVAL"].to_list() == [2.0, 10.0]

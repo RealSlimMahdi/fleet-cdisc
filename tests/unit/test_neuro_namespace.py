@@ -241,29 +241,29 @@ class TestCdrsob:
 
     def test_all_zeros(self):
         df = pl.from_repr("""\
-┌─────┬─────┬─────┐
-│ A   ┆ B   ┆ C   │
-│ --- ┆ --- ┆ --- │
-│ f64 ┆ f64 ┆ f64 │
-╞═════╪═════╪═════╡
-│ 0.0 ┆ 0.0 ┆ 0.0 │
-└─────┴─────┴─────┘
+┌─────┬─────┬─────┬─────┬─────┬─────┐
+│ A   ┆ B   ┆ C   ┆ D   ┆ E   ┆ F   │
+│ --- ┆ --- ┆ --- ┆ --- ┆ --- ┆ --- │
+│ f64 ┆ f64 ┆ f64 ┆ f64 ┆ f64 ┆ f64 │
+╞═════╪═════╪═════╪═════╪═════╪═════╡
+│ 0.0 ┆ 0.0 ┆ 0.0 ┆ 0.0 ┆ 0.0 ┆ 0.0 │
+└─────┴─────┴─────┴─────┴─────┴─────┘
 """)
-        result = df.adam.neuro.cdrsob_total("TOT", domain_cols=["A", "B", "C"]).to_frame()
+        result = df.adam.neuro.cdrsob_total("TOT", domain_cols=list("ABCDEF")).to_frame()
         assert result["TOT"][0] == pytest.approx(0.0)
 
     def test_null_propagates_to_total(self):
         """Any null domain score should make the total null (strict null-safety)."""
         df = pl.from_repr("""\
-┌─────┬──────┐
-│ A   ┆ B    │
-│ --- ┆ ---  │
-│ f64 ┆ null │
-╞═════╪══════╡
-│ 1.0 ┆ null │
-└─────┴──────┘
+┌─────┬──────┬─────┬─────┬─────┬─────┐
+│ A   ┆ B    ┆ C   ┆ D   ┆ E   ┆ F   │
+│ --- ┆ ---  ┆ --- ┆ --- ┆ --- ┆ --- │
+│ f64 ┆ null ┆ f64 ┆ f64 ┆ f64 ┆ f64 │
+╞═════╪══════╪═════╪═════╪═════╪═════╡
+│ 1.0 ┆ null ┆ 1.0 ┆ 1.0 ┆ 1.0 ┆ 1.0 │
+└─────┴──────┴─────┴─────┴─────┴─────┘
 """)
-        result = df.adam.neuro.cdrsob_total("TOT", domain_cols=["A", "B"]).to_frame()
+        result = df.adam.neuro.cdrsob_total("TOT", domain_cols=list("ABCDEF")).to_frame()
         assert result["TOT"][0] is None
 
 

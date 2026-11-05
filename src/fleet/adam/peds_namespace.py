@@ -37,6 +37,7 @@ from typing import Literal, Self
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
+from fleet.adam.utils import sas_round
 from fleet.core.dtc import to_day
 from fleet.core.exceptions import VerbUsageError
 
@@ -265,7 +266,7 @@ class PedsNamespace(SharedADaMVerbsMixin):
         ga = pl.col(gestational_weeks_col).cast(pl.Float64).fill_nan(None)
         prematurity_years = pl.when(ga >= term_weeks).then(0.0).otherwise((term_weeks - ga) / 52.18)
         chron_age_years = pl.col(age_days_col) / 365.25
-        return self._chain((chron_age_years - prematurity_years).round(4).alias(target))
+        return self._chain(sas_round(chron_age_years - prematurity_years, 4).alias(target))
 
     # ------------------------------------------------------------------ #
     # 5. prematurity_flag — flag infants born prematurely                 #
@@ -459,7 +460,7 @@ class PedsNamespace(SharedADaMVerbsMixin):
             return pl.when(frac == 0).then(lo).otherwise(lo + frac * (hi - lo))
 
         lam, mu, sigma = _interp("L"), _interp("M"), _interp("S")
-        z = (((pl.col("__bmi__") / mu).pow(lam) - 1) / (lam * sigma)).round(2)
+        z = sas_round(((pl.col("__bmi__") / mu).pow(lam) - 1) / (lam * sigma), 2)
         return joined.with_columns(
             pl.when(z.is_null())
             .then(pl.lit(None, dtype=pl.String))

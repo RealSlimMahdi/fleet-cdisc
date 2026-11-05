@@ -46,6 +46,7 @@ from typing import Literal, Self
 import polars as pl
 
 from fleet.adam._mixins import SharedADaMVerbsMixin
+from fleet.adam.utils import sas_round
 from fleet.core.exceptions import DerivationError
 
 
@@ -175,12 +176,37 @@ class VaccineNamespace(SharedADaMVerbsMixin):
         threshold: float,
         flag_value: str = "Y",
     ) -> Self:
-        """
-        Set *target* to *flag_value* when *aval_col* ≥ *threshold*.
+        """Set *target* to *flag_value* when *aval_col* ≥ *threshold*.
 
-        Example::
+        A threshold rule on AVAL only, not a response to vaccination: a
+        subject at the threshold before the dose is flagged too. Study
+        definitions of seroresponse differ (a fold rise, a threshold); use
+        :meth:`seroconversion_flag` for a fold rise. Take the threshold from
+        the SAP.
 
-            .seroresponse_flag("SRSFL", aval_col="AVAL", threshold=40.0)
+        Args:
+            target: Name of the output flag column.
+            aval_col: Column containing the titer.
+            threshold: Titer at or above which the record is flagged.
+            flag_value: Value to assign (default ``"Y"``).
+
+        Returns:
+            Self: The namespace with *target* appended.
+
+        Examples:
+            Flag titers of 1:40 or more::
+
+                adis = (
+                    is_raw.adam.vaccine
+                    .seroresponse_flag("SRSFL", aval_col="AVAL", threshold=40.0)
+                    .to_frame()
+                )
+
+        References:
+            No standard fixes the rule; the caller supplies the threshold
+            (ADR-0009 keeps the verb as grandfathered). For influenza HI, EMA
+            CPMP/BWP/214/96 (1997) uses a titer of 1:40 as seroprotection and
+            a fourfold rise as seroconversion. Check the SAP.
         """
         return self._chain(
             pl.when(pl.col(aval_col) >= threshold)
@@ -278,10 +304,7 @@ class VaccineNamespace(SharedADaMVerbsMixin):
 
             expr = pl.when(stresn.is_not_null()).then(stresn_rule).otherwise(missing_rule)
 
-        if round_digits is not None:
-            expr = expr.round(round_digits)
-
-        return self._chain(expr.alias(target))
+        return self._chain(sas_round(expr, round_digits).alias(target))
 
     # ------------------------------------------------------------------ #
     # 5. event_flag — reactogenicity event occurrence flags               #
