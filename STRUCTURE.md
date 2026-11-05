@@ -317,6 +317,7 @@ The pilot study root. Its `study_config.yaml` names the two define files.
 ```
 examples/cdiscpilot01/
 ├── study_config.yaml
+├── define2-1.xsl        # CDISC stylesheet for the Define-XML HTML preview
 ├── raw/                  # small synthetic CSV inputs (dm_raw, ae_raw, vs_raw, ex_raw)
 ├── sdtm/
 │   ├── define.yaml       # SDTM Define-XML spec + DM/AE/VS/EX derivations
@@ -365,6 +366,7 @@ tests/
 ├── conftest.py                          # Shared pytest fixtures
 ├── fixtures/
 │   ├── ct/cdisc_ct_sample.yaml          # Sample CT for CT validator tests
+│   ├── goldens/define/                  # golden define_sdtm.xml, define_adam.xml (fixed stamp)
 │   └── specs/                           # define_sdtm.yaml, define_adam.yaml
 └── unit/
     ├── test_sdtm_namespace.py           # SDTM verbs
