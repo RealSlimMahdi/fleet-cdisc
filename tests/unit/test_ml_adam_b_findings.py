@@ -1054,3 +1054,13 @@ def test_c1_721_transform_algorithm_has_a_rename_hint():
     from fleet.adam import transforms
 
     assert "algorithm: transform" not in (transforms.__doc__ or "")
+
+
+def test_c1_414_third_party_notice_ships_in_the_package():
+    from importlib.resources import files
+
+    text = (files("fleet") / "THIRD_PARTY_NOTICES").read_text(encoding="utf-8")
+    assert "admiralophtha" in text and "Apache License" in text
+    from fleet.adam import ophtha_namespace
+
+    assert "ported from" not in (ophtha_namespace.__doc__ or "")

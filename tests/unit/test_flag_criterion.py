@@ -3,7 +3,7 @@
 Covers all criteria modes: first/last, max/min, exists, before/after,
 exists_after/exists_before, and the criterion() triple-output verb.
 
-Test cases ported from admiral's MIT-licensed test suite.
+Test cases ported from admiral's Apache-2.0-licensed test suite (see src/fleet/THIRD_PARTY_NOTICES).
 """
 
 import polars as pl
