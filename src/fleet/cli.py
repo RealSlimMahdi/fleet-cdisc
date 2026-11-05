@@ -1127,11 +1127,15 @@ _COMPARE_IMPOSSIBLE = 2
 
 
 def _scan_comparison_side(path_str: str, side: str, encoding: str | None) -> pl.LazyFrame:
-    """Open one side through the raw-data loader; an unreadable file is exit 2.
+    """Read one side through the raw-data loader; an unreadable file is exit 2.
 
-    A CSV side is read as text: :func:`fleet.comparison.csv_types.type_csv_sides`
-    types it against the other side.
+    The side is read here, not in the engine, so a corrupt Parquet file or a
+    ragged CSV file is named with its side and path.  A CSV side is read as
+    text: :func:`fleet.comparison.csv_types.type_csv_sides` types it against
+    the other side.
     """
+    import polars as pl
+
     from fleet.core.exceptions import FleetError
     from fleet.io import load_raw_data
 
@@ -1140,8 +1144,8 @@ def _scan_comparison_side(path_str: str, side: str, encoding: str | None) -> pl.
     if path.suffix.lower() == ".csv":
         options["infer_schema"] = False
     try:
-        return load_raw_data(path, **options)
-    except (FleetError, ImportError) as exc:
+        return load_raw_data(path, **options).collect().lazy()
+    except (FleetError, ImportError, OSError, UnicodeError, pl.exceptions.PolarsError) as exc:
         _fail(
             f"cannot read the {side} {path_str}: {' '.join(str(exc).split())}",
             code=_COMPARE_IMPOSSIBLE,
@@ -1160,13 +1164,36 @@ def _parse_variable_pairs(text: str) -> dict[str, str]:
     pairs: dict[str, str] = {}
     for item in (i.strip() for i in text.split(",") if i.strip()):
         base, _, candidate = item.partition("=")
+        if "=" in candidate:
+            _fail(f"--pairs: {item!r} has more than one '='", code=_COMPARE_IMPOSSIBLE)
         if not base.strip() or not candidate.strip():
             _fail(
                 f"--pairs expects BASE=CANDIDATE pairs separated by commas, got {item!r}",
                 code=_COMPARE_IMPOSSIBLE,
             )
+        if base.strip() in pairs:
+            _fail(f"--pairs: {base.strip()} is given twice", code=_COMPARE_IMPOSSIBLE)
         pairs[base.strip()] = candidate.strip()
     return pairs
+
+
+def _refuse_overwritten_inputs(args: argparse.Namespace) -> None:
+    """Exit 2 when --out or --report names an input file, or both name one file."""
+    sides = {"base": args.base, "candidate": args.candidate}
+    outputs = {"--out": args.out, "--report": args.report}
+    for flag, out in outputs.items():
+        if out is None:
+            continue
+        for side, path in sides.items():
+            if Path(out).resolve() == Path(path).resolve():
+                _fail(f"{flag} is the {side} file {path}", code=_COMPARE_IMPOSSIBLE)
+    if args.out and args.report and Path(args.out).resolve() == Path(args.report).resolve():
+        _fail(f"--out and --report name the same file {args.out}", code=_COMPARE_IMPOSSIBLE)
+
+
+def _debug() -> bool:
+    """``FLEET_DEBUG=1``: let an unexpected exception end in its traceback."""
+    return os.environ.get("FLEET_DEBUG", "") not in ("", "0")
 
 
 def _run_compare(args: argparse.Namespace) -> None:
@@ -1184,6 +1211,7 @@ def _run_compare(args: argparse.Namespace) -> None:
         [v.strip() for v in args.variables.split(",") if v.strip()] if args.variables else None
     )
     text = [t.strip() for t in args.text.split(",") if t.strip()] if args.text else []
+    _refuse_overwritten_inputs(args)
     base = _scan_comparison_side(args.base, "base", args.encoding)
     candidate = _scan_comparison_side(args.candidate, "candidate", args.encoding)
     base_csv, candidate_csv = (
@@ -1211,11 +1239,19 @@ def _run_compare(args: argparse.Namespace) -> None:
             base_name=args.base,
             candidate_name=args.candidate,
         )
-    except (FleetError, pl.exceptions.PolarsError) as exc:
+    except FleetError as exc:
         # Keys missing, duplicated or incompatible; a tolerance that is not
-        # a tolerance; or a file that scanned but could not be read.
-        # Differences never raise.
+        # a tolerance.  Differences never raise.
         _fail(" ".join(str(exc).split()), code=_COMPARE_IMPOSSIBLE)
+    except Exception as exc:
+        # Exit 1 means "the datasets differ": a defect must not say that.
+        if _debug():
+            raise
+        _fail(
+            f"internal error in fleet compare: {type(exc).__name__}: {' '.join(str(exc).split())} "
+            "(set FLEET_DEBUG=1 for the traceback)",
+            code=_COMPARE_IMPOSSIBLE,
+        )
 
     if args.out:
         _save_comparison_file(args.out, report.save_listing, "value listing")
@@ -2697,7 +2733,8 @@ def _add_exec_parsers(sub: argparse._SubParsersAction) -> None:
             "the datasets are equal, 1 when they differ, 2 when the comparison could not run "
             "(unreadable file, missing keys, duplicate keys without --allow-duplicates, a "
             "negative tolerance, a --variables list of keys only, --out or --report not "
-            "writable)."
+            "writable or naming an input file, an internal error; FLEET_DEBUG=1 prints its "
+            "traceback)."
         ),
     )
     compare_parser.add_argument(
@@ -3431,8 +3468,9 @@ def main(argv: Sequence[str] | None = None) -> None:
             clean message on stderr), ``2`` on argparse usage errors.
     """
     # A cp1252 pipe on Windows cannot encode a check mark; print \u2713 instead of crashing.
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(errors="backslashreplace")
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="backslashreplace")
     parser = _build_parser()
     args = parser.parse_args(argv)
 

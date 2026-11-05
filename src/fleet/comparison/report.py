@@ -580,7 +580,7 @@ class ComparisonReport:
         """Write :meth:`to_json` to *path* (UTF-8, trailing newline).
 
         Args:
-            path: Where to write the document.
+            path: Where to write the document; a missing parent folder is created.
             max_print: As for :meth:`to_json`.
 
         Examples:
@@ -589,6 +589,7 @@ class ComparisonReport:
                 report = fleet.compare(adsl_prod, adsl_qc, keys=["USUBJID"])
                 report.save_json("build/adsl_compare.json")
         """
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
         Path(path).write_text(self.to_json(max_print) + "\n", encoding="utf-8")
 
     def to_html(self) -> str:
@@ -623,7 +624,7 @@ class ComparisonReport:
         """Write :meth:`to_html` to *path* (UTF-8).
 
         Args:
-            path: Where to write the page.
+            path: Where to write the page; a missing parent folder is created.
 
         Examples:
             Produce the sign-off page at the end of a QC comparison::
@@ -631,6 +632,7 @@ class ComparisonReport:
                 report = fleet.compare(adae_prod, adae_qc, keys=["USUBJID", "AESEQ"])
                 report.save_html_report("build/adae_compare.html")
         """
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
         Path(path).write_text(self.to_html(), encoding="utf-8")
 
     def save_listing(self, path: str | Path) -> None:
@@ -643,7 +645,7 @@ class ComparisonReport:
         empty frame with the same schema.
 
         Args:
-            path: Where to write the parquet file.
+            path: Where to write the parquet file; a missing parent folder is created.
 
         Examples:
             Keep every difference for a reviewer, then query it lazily::
@@ -654,6 +656,7 @@ class ComparisonReport:
                     pl.col("percent_difference").abs() > 10
                 )
         """
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
         self.listing.write_parquet(path)
 
     def _print_limits(self, max_print: MaxPrint | _Unset) -> PrintLimits:
