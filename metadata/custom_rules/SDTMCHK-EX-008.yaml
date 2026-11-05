@@ -65,3 +65,6 @@ Authorities:
       - Cited Guidance: check_ex_exstdtc_after_dd
         Document: pharmaverse sdtmchecks
         Section: EX Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [EX]

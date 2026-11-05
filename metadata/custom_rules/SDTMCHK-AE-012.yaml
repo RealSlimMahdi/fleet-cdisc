@@ -52,3 +52,6 @@ Authorities:
       - Cited Guidance: check_ae_aelat
         Document: pharmaverse sdtmchecks
         Section: AE Domain (OPHTH)
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [AE]

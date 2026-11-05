@@ -41,7 +41,8 @@ Outcome:
   - $ds_death_dates
 Description: 'Flags: AEDTHDTC equals none of the DS death dates (DSSTDTC where DSDECOD = ''DEATH''). Based
   on sdtmchecks::check_dd_ae_aedthdtc_ds_dsstdtc. Difference from the R function: The rule fires when
-  AEDTHDTC equals none of the DS death dates. R fires for each DS death date that differs.'
+  AEDTHDTC equals none of the DS death dates. R fires for each DS death date that differs.
+  Needs AEDTHDTC (sponsor variable, not in SDTMIG 3.4 AE); on standard data see CORE-000253, CORE-000254, CORE-000841.'
 Sensitivity: Record
 Executability: Fully Executable
 Authorities:
@@ -59,3 +60,6 @@ Authorities:
       - Cited Guidance: check_dd_ae_aedthdtc_ds_dsstdtc
         Document: pharmaverse sdtmchecks
         Section: Death Date Checks
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [AE]

@@ -405,9 +405,14 @@ class OfficialCDISCValidator:
 
     @staticmethod
     def _write_dataset_json(df: pl.DataFrame, path: Path, *, domain: str) -> None:
+        """Write the engine input; a null text value is written as "".
+
+        A SAS transport file has no null text, and CORE operators such as
+        ``max_date`` stop on a null (c2-887).
+        """
         from fleet.io.dataset_json import save_dataset_json
 
-        save_dataset_json(df, path, domain=domain)
+        save_dataset_json(df.with_columns(pl.col(pl.String).fill_null("")), path, domain=domain)
 
     @staticmethod
     def _parse_validation_result(

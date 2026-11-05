@@ -48,3 +48,6 @@ Authorities:
               - Cited Guidance: check_mi_mispec
                 Document: pharmaverse sdtmchecks
                 Section: MI Domain
+    Category:
+      Purpose: Data quality check from sdtmchecks
+      Keywords: [MI]

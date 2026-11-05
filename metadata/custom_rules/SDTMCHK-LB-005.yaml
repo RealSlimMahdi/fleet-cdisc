@@ -46,3 +46,6 @@ Authorities:
       - Cited Guidance: check_lb_missing_month
         Document: pharmaverse sdtmchecks
         Section: LB Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [LB]

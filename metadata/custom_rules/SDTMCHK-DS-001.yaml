@@ -49,6 +49,9 @@ Authorities:
       - Cited Guidance: check_ds_dsdecod_dsstdtc
         Document: pharmaverse sdtmchecks
         Section: DS Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [DS]
 Operations:
 - operator: max_date
   domain: DS

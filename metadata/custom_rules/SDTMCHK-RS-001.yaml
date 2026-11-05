@@ -50,3 +50,6 @@ Authorities:
               - Cited Guidance: check_rs_rscat_rsscat
                 Document: pharmaverse sdtmchecks
                 Section: RS Domain (ONC)
+    Category:
+      Purpose: Data quality check from sdtmchecks
+      Keywords: [RS]

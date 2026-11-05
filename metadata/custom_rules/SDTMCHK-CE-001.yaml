@@ -60,3 +60,6 @@ Authorities:
       - Cited Guidance: check_ce_missing_month
         Document: pharmaverse sdtmchecks
         Section: CE Domain
+  Category:
+    Purpose: Data quality check from sdtmchecks
+    Keywords: [CE]
