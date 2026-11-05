@@ -10,6 +10,11 @@ Strategy:
 
 Usage:
     uv run python benchmark/inflate_data.py [--target-gb 2.0]
+    uv run python benchmark/inflate_data.py --dense-rows 2000000 --dense-subjects 50000
+
+The dense mode writes ae_dense.parquet and adsl_dense.parquet: copy i of the
+64 raw rows goes to subject group i modulo G, so each subject holds many
+records (about rows / subjects) instead of 1 to 3.
 """
 
 from __future__ import annotations
@@ -120,8 +125,51 @@ def inflate(target_gb: float = 2.0) -> None:
     print(f"  adsl_inflated.parquet : {adsl.height:,} rows")
 
 
+def inflate_dense(rows: int, subjects: int) -> None:
+    ae = pl.read_csv(RAW_AE)
+    dm = pl.read_csv(RAW_DM)
+    ex = pl.read_csv(RAW_EX)
+    n_copies = math.ceil(rows / ae.height)
+    n_groups = math.ceil(subjects / ae["subject_id"].n_unique())
+
+    def prefixed(df: pl.DataFrame, i: int) -> pl.DataFrame:
+        return df.with_columns((pl.lit(f"B{i:06d}_") + pl.col("subject_id")).alias("subject_id"))
+
+    ae_big = pl.concat([prefixed(ae, i % n_groups) for i in range(n_copies)]).head(rows)
+    ae_big.write_parquet(OUT / "ae_dense.parquet", compression="snappy")
+
+    ex_big = pl.concat([prefixed(ex, i) for i in range(n_groups)])
+    trt_dates = ex_big.group_by("subject_id").agg(
+        pl.col("administration_date").min().alias("TRTSDT_str"),
+        pl.col("administration_date").max().alias("TRTEDT_str"),
+    )
+    adsl = (
+        pl.concat([prefixed(dm, i) for i in range(n_groups)])
+        .join(trt_dates, on="subject_id", how="left")
+        .select(
+            pl.lit("STUDY001").alias("STUDYID"),
+            pl.col("subject_id").alias("USUBJID"),
+            pl.col("TRTSDT_str").str.to_date("%Y-%m-%d").alias("TRTSDT"),
+            pl.col("TRTEDT_str").str.to_date("%Y-%m-%d").alias("TRTEDT"),
+            pl.lit("Treatment A").alias("TRT01P"),
+            pl.lit("Y").alias("SAFFL"),
+        )
+    )
+    adsl.write_parquet(OUT / "adsl_dense.parquet", compression="snappy")
+    n_subj = ae_big["subject_id"].n_unique()
+    print(
+        f"✓ Dense data: {ae_big.height:,} AE rows, {n_subj:,} subjects "
+        f"({ae_big.height / n_subj:.1f} records per subject)"
+    )
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--target-gb", type=float, default=2.0)
+    parser.add_argument("--dense-rows", type=int, default=None)
+    parser.add_argument("--dense-subjects", type=int, default=50_000)
     args = parser.parse_args()
-    inflate(args.target_gb)
+    if args.dense_rows:
+        inflate_dense(args.dense_rows, args.dense_subjects)
+    else:
+        inflate(args.target_gb)

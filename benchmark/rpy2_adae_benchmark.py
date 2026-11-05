@@ -159,12 +159,13 @@ def run_pipeline_rpy2(n_rows: int, ae_parquet: str, adsl_parquet: str) -> dict:
       ) %>%
       admiral::derive_var_extreme_flag(
         by_vars = admiral::exprs(USUBJID, AETERM),
-        order   = admiral::exprs(AESEVN),
+        order   = admiral::exprs(AESEVN, AESEQ),
         new_var = ANL01FL,
         mode    = "last"
       ) %>%
       admiral::derive_var_obs_number(
         by_vars = admiral::exprs(USUBJID),
+        order   = admiral::exprs(AESEQ),
         new_var = ASEQ
       )
     """)
@@ -178,7 +179,7 @@ def run_pipeline_rpy2(n_rows: int, ae_parquet: str, adsl_parquet: str) -> dict:
 
     # R memory info
     R("invisible(gc())")
-    peak_mem = float(R("sum(gc()[, 6])")[0])
+    peak_mem = float(R("g <- gc(); sum(g[, ncol(g)])")[0])
 
     return {
         "n_rows": n_ae,
