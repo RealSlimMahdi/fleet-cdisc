@@ -49,8 +49,8 @@ def design() -> StudyDesign:
         arms={"PBO": ["SCRN", "PBO", "FU"], "XAN_LO": ["SCRN", "XANLO", "FU"]},
         arm_names={"PBO": "Placebo", "XAN_LO": "Xanomeline Low Dose"},
         visits=[
-            {"visitnum": 1, "visit": "Screening", "visitdy": -14},
-            {"visitnum": 2, "visit": "Baseline", "visitdy": 1},
+            {"visitnum": 1, "visit": "Screening", "visitdy": -14, "tvstrl": "INFORMED CONSENT"},
+            {"visitnum": 2, "visit": "Baseline", "visitdy": 1, "tvstrl": "RANDOMIZATION"},
         ],
         parameters=[{"tsparmcd": "TITLE", "tsparm": "Trial Title", "tsval": "Demo"}],
     )
@@ -75,6 +75,7 @@ class TestStudyDesignValidation:
                 study_id="S1",
                 elements=[{"etcd": "SCRN", "element": "Screening", "epoch": "SCREENING"}],
                 arms={"PBO": ["SCRN"]},
+                arm_names={"PBO": "Placebo"},
                 visits=[{"visitnum": 1, "visit": "V1", "armcd": "GHOST"}],
             )
 
@@ -98,6 +99,7 @@ class TestStudyDesignDerivation:
             study_id="S1",
             elements=[e.model_dump() for e in design.elements],
             arms={"A": ["SCRN", "FU"], "B": ["SCRN", "FU"]},
+            arm_names={"A": "Arm A", "B": "Arm B"},
         )
         assert (same.to_ta()["TABRANCH"] == "").all()
 
@@ -137,8 +139,13 @@ class TestStudyDesignDerivation:
 class TestAudit:
     def test_clean_design_audits_clean_except_ts_profile(self, design):
         findings = design.audit()
-        # Only the TS FDA-profile gaps should fire on a structurally sound design.
-        assert set(findings["domain"].to_list()) == {"TS"}
+        # Only the TS FDA-profile gaps are errors on a structurally sound design;
+        # the design has no criteria, so TI is not built (c1-251).
+        errors = findings.filter(pl.col("severity") == "error")
+        assert set(errors["domain"].to_list()) == {"TS"}
+        assert findings.filter(pl.col("severity") == "warning")["rule_id"].to_list() == [
+            "FLEETTD09"
+        ]
 
     def test_taetord_not_unique_within_arm(self):
         ta = pl.from_repr("""
@@ -418,6 +425,7 @@ def test_audit_flags_ts_profile_even_without_parameters_section():
             }
         ],
         arms={"A1": ["SCRN"]},
+        arm_names={"A1": "Arm 1"},
     )
     findings = design.audit()
     rule_ids = findings["rule_id"].to_list()

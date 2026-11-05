@@ -832,6 +832,8 @@ trial_design:
        testrl: RANDOMIZATION}
   arms:
     A1: [SCRN, TRT]
+  arm_names:
+    A1: Treatment Arm
   parameters:
     - {tsparmcd: TITLE, tsparm: Trial Title, tsval: Demo}
     - {tsparmcd: SSTDTC, tsparm: Study Start Date, tsval: 2026-01-01}

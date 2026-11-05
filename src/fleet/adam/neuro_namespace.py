@@ -217,6 +217,9 @@ class NeuroNamespace(SharedADaMVerbsMixin):
         Returns:
             Self: The namespace with *target* appended.
 
+        Raises:
+            DerivationError: When *domain_cols* is empty.
+
         Examples:
             Derive CDR-SoB total from 6 domains::
 
@@ -228,6 +231,10 @@ class NeuroNamespace(SharedADaMVerbsMixin):
                     .to_frame()
                 )
         """
+        if not domain_cols:
+            raise DerivationError(
+                "cdrsob_total: domain_cols is empty. Name the CDR domain columns."
+            )
         total = sum(pl.col(c) for c in domain_cols)  # type: ignore[arg-type]
         if round_digits is not None:
             total = total.round(round_digits)

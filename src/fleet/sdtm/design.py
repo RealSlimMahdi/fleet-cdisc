@@ -222,6 +222,34 @@ def _usdm_criteria(study: dict, version: dict, sd: dict) -> list[TrialCriterion]
     return criteria
 
 
+def _usdm_chain(items: list[dict]) -> list[dict]:
+    """*items* in previousId/nextId order when the chain is complete, else in array order."""
+    by_id = {i.get("id"): i for i in items}
+    heads = [i for i in items if i.get("previousId") not in by_id]
+    if len(heads) != 1 or not all("nextId" in i or "previousId" in i for i in items):
+        return list(items)
+    ordered, seen, item = [], set(), heads[0]
+    while item is not None and item.get("id") not in seen:
+        ordered.append(item)
+        seen.add(item.get("id"))
+        item = by_id.get(item.get("nextId"))
+    return ordered if len(ordered) == len(items) else list(items)
+
+
+def _usdm_study_id(version: dict) -> str | None:
+    """The identifier whose scope organization is the sponsor, else the first identifier."""
+    orgs = {o.get("id"): o for o in version.get("organizations") or [] if isinstance(o, dict)}
+    idents = [i for i in version.get("studyIdentifiers") or [] if isinstance(i, dict)]
+
+    def org_type(ident: dict) -> str:
+        org = ident.get("studyIdentifierScope") or orgs.get(ident.get("scopeId")) or {}
+        kind = org.get("organizationType") or org.get("type") or {}
+        return str(kind.get("decode", "") if isinstance(kind, dict) else kind)
+
+    ordered = sorted(idents, key=lambda i: org_type(i) != "Clinical Study Sponsor")
+    return next((i.get("studyIdentifier") or i.get("text") for i in ordered), None)
+
+
 class StudyDesign(BaseModel):
     """Typed aggregate of a study's trial design.
 
@@ -237,6 +265,13 @@ class StudyDesign(BaseModel):
     every arm shares, or on the *randomized_at* element when it is given.
     A step's *tabranch* replaces that text: state the real rule when the
     branch is not a randomization.
+
+    Each arm needs its protocol name in *arm_names* (TA.ARM); an arm with
+    no name raises.
+
+    References:
+        SDTMIG 3.4 TA (ARM is the protocol name of the arm);
+        ``docs/adr/0058-a-trial-design-arm-needs-its-protocol-name.md``.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -265,6 +300,12 @@ class StudyDesign(BaseModel):
         stray_names = sorted(set(self.arm_names) - set(self.arms))
         if stray_names:
             raise ValueError(f"arm_names holds ARMCD(s) that are not in arms: {stray_names}")
+        unnamed = [armcd for armcd in self.arms if not self.arm_names.get(armcd)]
+        if unnamed:
+            raise ValueError(
+                f"arm(s) {unnamed} have no name in arm_names. TA.ARM is the protocol name "
+                "of the arm (SDTMIG 3.4): give arm_names={ARMCD: name}."
+            )
         if self.randomized_at is not None and self.randomized_at not in known:
             raise ValueError(f"randomized_at '{self.randomized_at}' is not a defined element")
         for visit in self.visits:
@@ -325,7 +366,7 @@ class StudyDesign(BaseModel):
         branch_at = None if self.randomized_at else self._branch_index()
         rows = []
         for armcd, path in self.arms.items():
-            arm = self.arm_names.get(armcd) or armcd.replace("_", " ").title()
+            arm = self.arm_names[armcd]
             codes = [_etcd(e) for e in path]
             randomized = codes.index(self.randomized_at) if self.randomized_at in codes else None
             for order, entry in enumerate(path, start=1):
@@ -467,7 +508,9 @@ class StudyDesign(BaseModel):
 
         Two design checks come first: arms with the same path
         (``FLEETTD04``), and an element that repeats in one arm with no
-        per-position epoch (``FLEETTD05``).
+        per-position epoch (``FLEETTD05``).  An empty elements or arms
+        section is an error, and an empty visits or criteria section a
+        warning (``FLEETTD09``).
 
         Args:
             dm: Optional DM domain for cross-checking ARMCD assignments.
@@ -494,12 +537,30 @@ class StudyDesign(BaseModel):
             ts=frames.get("TS", self.to_ts()),
             ti=frames.get("TI"),
             dm=dm,
+            td=frames.get("TD"),
+            tm=frames.get("TM"),
         )
         return pl.concat([pl.DataFrame(self._design_findings(), schema=findings.schema), findings])
 
     def _design_findings(self) -> list[dict[str, str]]:
         """Findings on the arm paths that the derived domains cannot show."""
         found = []
+        sections = (
+            ("TE", self.elements, "error"),
+            ("TA", self.arms, "error"),
+            ("TV", self.visits, "warning"),
+            ("TI", self.criteria, "warning"),
+        )
+        for domain, section, severity in sections:
+            if not section:
+                found.append(
+                    {
+                        "rule_id": "FLEETTD09",
+                        "severity": severity,
+                        "domain": domain,
+                        "message": f"The design has no {domain} records, so {domain} is not built.",
+                    }
+                )
         by_path: dict[tuple[str, ...], list[str]] = {}
         for armcd, path in self.arms.items():
             by_path.setdefault(tuple(_etcd(e) for e in path), []).append(armcd)
@@ -707,6 +768,13 @@ class StudyDesign(BaseModel):
         dictionary and XHTML removed.  An identifier that starts with a
         digit takes an IN or EX prefix (SDTMIG 3.4 section 4.5.3).
 
+        Epochs and encounters follow their previousId/nextId chain when it
+        is complete, else the array order.  An encounter's transition rules
+        give TVSTRL and TVENRL; one warning counts the visits with no start
+        rule.  Only the first study design is mapped, with a warning when
+        there are more.  A study cell with an unknown armId, epochId or
+        elementId raises.
+
         ponytail: schedule timelines, objectives/endpoints, and biomedical
         concepts are intentionally not mapped — extend when a consumer needs
         them.
@@ -714,16 +782,18 @@ class StudyDesign(BaseModel):
         Args:
             data: Parsed USDM JSON (the ``{"study": ...}`` wrapper or the
                 study object itself).
-            study_id: Override for STUDYID; defaults to the first study
-                identifier found in the USDM document.
+            study_id: Override for STUDYID; defaults to the study
+                identifier whose scope organization type is "Clinical
+                Study Sponsor", else the first study identifier.
 
         Returns:
             StudyDesign: Design with the mapped structural subset.
 
         Raises:
-            ValueError: When a criterion has no text or no inclusion or
-                exclusion category, a tag cannot be resolved, or two
-                criteria give the same IETESTCD.
+            ValueError: When the version has no study design, a study cell
+                holds an unknown reference, a criterion has no text or no
+                inclusion or exclusion category, a tag cannot be resolved,
+                or two criteria give the same IETESTCD.
 
         Examples:
             Import an OpenStudyBuilder / DDF export::
@@ -738,20 +808,25 @@ class StudyDesign(BaseModel):
         versions = study.get("versions") or study.get("studyVersions") or [study]
         version = versions[0]
         designs = version.get("studyDesigns") or []
-        sd = designs[0] if designs else {}
+        if not designs:
+            raise ValueError("from_usdm: the study version has no studyDesigns")
+        if len(designs) > 1:
+            warnings.warn(
+                f"from_usdm: the study version has {len(designs)} study designs; only the "
+                f"first ('{designs[0].get('id', '')}') is mapped.",
+                stacklevel=2,
+            )
+        sd = designs[0]
 
         if study_id is None:
-            idents = version.get("studyIdentifiers") or []
-            study_id = next(
-                (i.get("studyIdentifier") or i.get("text") for i in idents if isinstance(i, dict)),
-                None,
-            ) or (study.get("name") or "STUDY")
+            study_id = _usdm_study_id(version) or (study.get("name") or "STUDY")
 
         def label(obj: dict) -> str:
             return obj.get("label") or obj.get("name") or obj.get("id", "")
 
-        epoch_order = [e["id"] for e in sd.get("epochs", [])]
-        epoch_label = {e["id"]: label(e).upper() for e in sd.get("epochs", [])}
+        epochs = _usdm_chain(sd.get("epochs", []))
+        epoch_order = [e["id"] for e in epochs]
+        epoch_label = {e["id"]: label(e).upper() for e in epochs}
         taken: set[str] = set()
         etcd_by_id: dict[str, str] = {}
         element_models: dict[str, dict] = {}
@@ -770,31 +845,49 @@ class StudyDesign(BaseModel):
         armcd_by_id = {aid: _sdtm_code(name, 20, arm_taken) for aid, name in arm_label.items()}
 
         arms: dict[str, list[str | ArmStep]] = {}
-        cells = sorted(
-            sd.get("studyCells", []),
-            key=lambda c: epoch_order.index(c["epochId"]) if c.get("epochId") in epoch_order else 0,
-        )
+        for cell in sd.get("studyCells", []):
+            cell_id = cell.get("id", "")
+            if cell.get("armId") not in armcd_by_id:
+                raise ValueError(f"from_usdm: study cell '{cell_id}' has an unknown armId")
+            if cell.get("epochId") not in epoch_label:
+                raise ValueError(f"from_usdm: study cell '{cell_id}' has an unknown epochId")
+            unknown = [e for e in cell.get("elementIds", []) if e not in element_models]
+            if unknown:
+                raise ValueError(
+                    f"from_usdm: study cell '{cell_id}' has unknown elementIds {unknown}"
+                )
+        cells = sorted(sd.get("studyCells", []), key=lambda c: epoch_order.index(c["epochId"]))
         for cell in cells:
-            armcd = armcd_by_id.get(cell.get("armId", ""))
-            if armcd is None:
-                continue
-            cell_epoch = epoch_label.get(cell.get("epochId", ""), "TREATMENT")
+            armcd = armcd_by_id[cell["armId"]]
+            cell_epoch = epoch_label[cell["epochId"]]
             for element_id in cell.get("elementIds", []):
-                if element_id in element_models:
-                    epoch = element_models[element_id].setdefault("epoch", cell_epoch)
-                    etcd = etcd_by_id[element_id]
-                    arms.setdefault(armcd, []).append(
-                        etcd if epoch == cell_epoch else ArmStep(etcd=etcd, epoch=cell_epoch)
-                    )
+                epoch = element_models[element_id].setdefault("epoch", cell_epoch)
+                etcd = etcd_by_id[element_id]
+                arms.setdefault(armcd, []).append(
+                    etcd if epoch == cell_epoch else ArmStep(etcd=etcd, epoch=cell_epoch)
+                )
 
         elements = [
             TrialElement(**{"epoch": "TREATMENT", **model}) for model in element_models.values()
         ]
 
+        encounters = _usdm_chain(sd.get("encounters", []))
         visits = [
-            TrialVisit(visitnum=num, visit=label(enc)[:200])
-            for num, enc in enumerate(sd.get("encounters", []), start=1)
+            TrialVisit(
+                visitnum=num,
+                visit=label(enc)[:200],
+                tvstrl=(enc.get("transitionStartRule") or {}).get("text", "")[:2000],
+                tvenrl=(enc.get("transitionEndRule") or {}).get("text", "")[:2000],
+            )
+            for num, enc in enumerate(encounters, start=1)
         ]
+        no_start = sum(1 for v in visits if not v.tvstrl)
+        if no_start:
+            warnings.warn(
+                f"from_usdm: {no_start} visit(s) have no transitionStartRule, so TVSTRL is "
+                "blank. TVSTRL is Req in TV (SDTMIG 3.4): add the rule.",
+                stacklevel=2,
+            )
 
         return cls(
             study_id=study_id,
